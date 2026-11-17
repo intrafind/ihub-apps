@@ -43,6 +43,7 @@ import defaultInteractionService from '../loop/InteractionService.js';
 import { authorizeInteraction as defaultAuthorizeInteraction } from '../loop/runAccess.js';
 import { APPROVAL_DECISIONS, APPROVAL_GRANTS } from '../../../shared/toolApproval.js';
 import { boundCarriedBasis } from './answerBasis.js';
+import { publicPendingConnect } from './chatConnectResume.js';
 
 const COMPONENT = 'ChatToolApproval';
 
@@ -251,10 +252,19 @@ export function chatApprovalState(chat) {
  * @returns {Object|null}
  */
 export function publicChatView(chat) {
-  if (!chat || !chat.toolApproval || typeof chat.toolApproval !== 'object') return chat;
+  if (!chat) return chat;
+  // The record that resumes a call after a connect (#3752) holds raw
+  // arguments and tool results: the client sees only its id and integrations.
+  let visible = chat;
+  if (chat.pendingConnect) {
+    const { pendingConnect, ...rest } = chat;
+    const shown = publicPendingConnect(pendingConnect);
+    visible = shown ? { ...rest, pendingConnect: shown } : rest;
+  }
+  if (!chat.toolApproval || typeof chat.toolApproval !== 'object') return visible;
   const { grants, pending } = chatApprovalState(chat);
   return {
-    ...chat,
+    ...visible,
     toolApproval: {
       grants,
       pending: pending

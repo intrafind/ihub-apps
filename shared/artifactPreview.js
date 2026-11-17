@@ -93,6 +93,52 @@ export function isAllowedScriptUrl(url, scriptHosts) {
   return Boolean(match) && scriptHosts.includes(match[1].toLowerCase());
 }
 
+/** `type` of the message an artifact posts to its host to ask a follow-up question. */
+export const ARTIFACT_SEND_PROMPT_MESSAGE = 'ihub-artifact:send-prompt';
+
+/** Longest follow-up question an artifact may hand the chat, in characters. */
+export const ARTIFACT_PROMPT_MAX_LENGTH = 2000;
+
+/**
+ * The script that gives an artifact `sendPrompt(text)`: a click in the page
+ * asks the chat a follow-up question. It only posts a message to the parent;
+ * the frame stays without `allow-same-origin`, and the host decides what
+ * happens (the chat asks the user to confirm before anything is sent). Where
+ * no chat is around (a shared link, the standalone page) `sendPrompt` exists
+ * but does nothing and `sendPrompt.available` is `false`, so a page can hide
+ * its "ask" controls.
+ *
+ * @param {boolean} available - Whether the host listens.
+ * @returns {string} One inline `<script>` element.
+ */
+function promptBridgeScript(available) {
+  const body = available
+    ? 'var t=String(text==null?"":text).trim();' +
+      `if(!t)return false;parent.postMessage({type:'${ARTIFACT_SEND_PROMPT_MESSAGE}',text:t.slice(0,${ARTIFACT_PROMPT_MAX_LENGTH})},'*');return true;`
+    : 'return false;';
+  return (
+    `<script>(function(){function sendPrompt(text){${body}}` +
+    `sendPrompt.available=${available ? 'true' : 'false'};` +
+    'window.sendPrompt=sendPrompt;})()</script>'
+  );
+}
+
+/**
+ * The text of a follow-up question an artifact posted, or `null` when the
+ * message is not one (a library's own `postMessage`, a malformed payload).
+ *
+ * @param {unknown} data - `MessageEvent.data`.
+ * @returns {string|null}
+ */
+export function artifactPromptFromMessage(data) {
+  if (!data || typeof data !== 'object' || data.type !== ARTIFACT_SEND_PROMPT_MESSAGE) return null;
+  if (typeof data.text !== 'string') return null;
+  // Control characters other than line breaks and tabs have no place in a question.
+
+  const text = data.text.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '').trim();
+  return text ? text.slice(0, ARTIFACT_PROMPT_MAX_LENGTH) : null;
+}
+
 /**
  * Put the preview CSP — and, when given, the viewer's theme — in front of an
  * HTML artifact's markup. A leading doctype stays first so the document does
@@ -104,16 +150,20 @@ export function isAllowedScriptUrl(url, scriptHosts) {
  * styles `:root[data-theme="dark"]` (as the web-artifacts skill asks) matches
  * the app around it.
  *
+ * `sendPrompt` is defined in every preview (see `promptBridgeScript`); with
+ * `promptBridge` it posts to the parent, without it it is a no-op.
+ *
  * @param {unknown} html - Artifact markup.
- * @param {{scriptHosts?: string[], theme?: 'light'|'dark'}} [options]
+ * @param {{scriptHosts?: string[], theme?: 'light'|'dark', promptBridge?: boolean}} [options]
  * @returns {string}
  */
-export function prepareHtmlPreview(html, { scriptHosts = [], theme } = {}) {
+export function prepareHtmlPreview(html, { scriptHosts = [], theme, promptBridge = false } = {}) {
   const source = String(html ?? '');
   let head = `<meta http-equiv="Content-Security-Policy" content="${artifactPreviewCsp(scriptHosts)}">`;
   if (theme === 'dark' || theme === 'light') {
     head += `<script>document.documentElement.setAttribute('data-theme','${theme}')</script>`;
   }
+  head += promptBridgeScript(promptBridge === true);
   const doctype = source.match(/^\s*<!doctype[^>]*>/i);
   if (!doctype) return head + source;
   return doctype[0] + head + source.slice(doctype[0].length);

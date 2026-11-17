@@ -282,7 +282,7 @@ serves would offer actions that cannot work. A source with a `ref` is always pri
   `{ items, queries, supports }` for every loop caller: chat, workflows, agents, app-as-tool and
   MCP `tools/call`. See [Agent Loop](agent-loop.md).
 - **SSE and ledger**: one event, `sources/added { step?, callId?, toolId?, items, queries?,
-  supports?, scopes? }`. It is written to the run ledger, so a re-sync replays it. See [SSE v2](sse-v2.md).
+  supports?, scopes? }`. It is written to the run ledger, so a re-sync replays it. See [Streaming Events](streaming-events.md).
   A tool call's frame carries its `callId`, and the tool activity rows list each call's own
   sources from it.
 - **Stored answer**: `sources: { items, queries, scopes? }`, bounded to 256 KB (passages go first, then

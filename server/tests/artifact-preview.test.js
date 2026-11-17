@@ -9,8 +9,11 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  ARTIFACT_PROMPT_MAX_LENGTH,
+  ARTIFACT_SEND_PROMPT_MESSAGE,
   DEFAULT_ARTIFACT_SCRIPT_HOSTS,
   artifactPreviewCsp,
+  artifactPromptFromMessage,
   isAllowedScriptUrl,
   normalizeScriptHosts,
   prepareHtmlPreview
@@ -91,10 +94,89 @@ describe('the preview CSP', () => {
     });
     assert.match(
       html,
-      /^<!DOCTYPE html><meta http-equiv="Content-Security-Policy" content="[^"]*https:\/\/unpkg\.com[^"]*"><script>document\.documentElement\.setAttribute\('data-theme','dark'\)<\/script><html>/
+      /^<!DOCTYPE html><meta http-equiv="Content-Security-Policy" content="[^"]*https:\/\/unpkg\.com[^"]*"><script>document\.documentElement\.setAttribute\('data-theme','dark'\)<\/script><script>[^<]*<\/script><html>/
     );
     assert.doesNotMatch(prepareHtmlPreview('<p>x</p>', { theme: 'evil' }), /data-theme/);
     assert.doesNotMatch(prepareHtmlPreview('<p>x</p>'), /data-theme/);
+  });
+});
+
+/**
+ * Runs the bridge script `prepareHtmlPreview` put in front of the markup with a
+ * stand-in `window` and `parent`, and returns what the page would see.
+ */
+function runBridge(options) {
+  const html = prepareHtmlPreview('<p>x</p>', options);
+  // The bridge is the one script element that defines sendPrompt; cut it out by position.
+  const open = '<script>';
+  const start = html.lastIndexOf(open, html.indexOf('function sendPrompt'));
+  assert.ok(start >= 0, 'the preview defines sendPrompt');
+  const bridge = html.slice(start + open.length, html.indexOf('</script>', start));
+  const posted = [];
+  const window = {};
+  const parent = { postMessage: (data, origin) => posted.push({ data, origin }) };
+  new Function('window', 'parent', bridge)(window, parent);
+  return { sendPrompt: window.sendPrompt, posted };
+}
+
+describe('the sendPrompt bridge', () => {
+  it('posts the question to the parent when the host listens', () => {
+    const { sendPrompt, posted } = runBridge({ promptBridge: true });
+    assert.equal(sendPrompt.available, true);
+    assert.equal(sendPrompt('  Why did Q3 drop?  '), true);
+    assert.deepEqual(posted, [
+      { data: { type: ARTIFACT_SEND_PROMPT_MESSAGE, text: 'Why did Q3 drop?' }, origin: '*' }
+    ]);
+    assert.equal(sendPrompt('   '), false);
+    assert.equal(posted.length, 1);
+  });
+
+  it('cuts an overlong question in the frame already', () => {
+    const { sendPrompt, posted } = runBridge({ promptBridge: true });
+    sendPrompt('x'.repeat(ARTIFACT_PROMPT_MAX_LENGTH + 50));
+    assert.equal(posted[0].data.text.length, ARTIFACT_PROMPT_MAX_LENGTH);
+  });
+
+  it('exists but does nothing where no chat listens (shared links)', () => {
+    const { sendPrompt, posted } = runBridge({});
+    assert.equal(sendPrompt.available, false);
+    assert.equal(sendPrompt('Hello'), false);
+    assert.deepEqual(posted, []);
+  });
+
+  it('reads only its own, well-formed messages on the host side', () => {
+    assert.equal(
+      artifactPromptFromMessage({
+        type: ARTIFACT_SEND_PROMPT_MESSAGE,
+        text: ' Explain\u0007 this '
+      }),
+      'Explain this'
+    );
+    assert.equal(
+      artifactPromptFromMessage({ type: ARTIFACT_SEND_PROMPT_MESSAGE, text: 'a\nb' }),
+      'a\nb'
+    );
+    assert.equal(artifactPromptFromMessage({ type: 'other', text: 'x' }), null);
+    assert.equal(artifactPromptFromMessage({ type: ARTIFACT_SEND_PROMPT_MESSAGE, text: 42 }), null);
+    assert.equal(
+      artifactPromptFromMessage({ type: ARTIFACT_SEND_PROMPT_MESSAGE, text: '  ' }),
+      null
+    );
+    assert.equal(artifactPromptFromMessage('ihub-artifact:send-prompt'), null);
+    assert.equal(artifactPromptFromMessage(null), null);
+    assert.equal(
+      artifactPromptFromMessage({
+        type: ARTIFACT_SEND_PROMPT_MESSAGE,
+        text: 'y'.repeat(ARTIFACT_PROMPT_MAX_LENGTH + 1)
+      }).length,
+      ARTIFACT_PROMPT_MAX_LENGTH
+    );
+  });
+
+  it('passes the inline-script check create_web_artifact runs', () => {
+    // The injected script must parse: a syntax error would break every preview.
+    assert.doesNotThrow(() => runBridge({ promptBridge: true }));
+    assert.doesNotThrow(() => runBridge({ promptBridge: false }));
   });
 });
 

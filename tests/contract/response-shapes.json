@@ -5337,6 +5337,16 @@
       "type": "null"
     }
   },
+  "GET /api/integrations/:id/icon": {
+    "status": 404,
+    "shape": {
+      "code": "string",
+      "detail": "string",
+      "status": "number",
+      "title": "string",
+      "type": "string"
+    }
+  },
   "GET /api/integrations/:integration/files": {
     "status": 404,
     "shape": {

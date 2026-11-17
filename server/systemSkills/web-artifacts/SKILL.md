@@ -3,7 +3,7 @@ name: web-artifacts
 description: Build interactive, self-contained HTML web artifacts (.html) — live dashboards, calculators, ROI/pricing simulators, interactive data explorers, clickable UI prototypes, HTML5 Canvas/generative visualizations — and standalone vector graphics (.svg) that render live in the chat's Artifacts panel. Use whenever the user asks for an interactive web app, dashboard, calculator, UI prototype, interactive visualization or standalone SVG graphic. Do not use for static print PDFs/posters (use pdf), multi-file code repositories (use files/create_zip), or quick inline chat flowcharts (use a ```mermaid code block in chat).
 metadata:
   author: IntraFind
-  version: '1.1'
+  version: '1.2'
 allowed-tools: create_web_artifact
 ---
 
@@ -30,8 +30,31 @@ Every `.html` artifact renders inside `<iframe sandbox="allow-scripts" referrerP
    - **Pin an exact version** in the URL (`https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js`), never `@latest` or a bare package name.
    - A library still needs the viewer to reach the CDN. If `create_web_artifact` warns that a URL will not load, the host is not allowed here: inline the code instead.
 3. **Sandbox storage safety**: because the preview iframe runs without `allow-same-origin`, accessing `localStorage`, `sessionStorage`, or `document.cookie` throws a `SecurityError` unless guarded. Always keep primary state in memory and wrap any persistence helper in `try { … } catch {}`.
-4. **No dead links**: the preview cannot leave the file and opens no new tabs or windows, so a link to anything outside the file does nothing. Never use `href="#"`, external URLs, file paths, `target="_blank"` or `window.open()` unless the user explicitly asks for a link to a given address. Everything a link, button, menu item, tab, "Sources" / "Quellen" or "Details" control points to must exist **inside the same file**: give it a real in-page target — a `#id` anchor to a section that exists, or a click handler that switches a view, opens a drawer, modal or dialog and shows the content (sample sources, details, a detail page, a help text). Navigation items must switch to a view, even a short one. If something is not part of the prototype, do not render it as a link or clickable control; show it as plain text or disable it.
+4. **No dead links**: the preview cannot leave the file and opens no new tabs or windows, so a link to anything outside the file does nothing. To let the user ask about something, use `sendPrompt` (next section) instead of a link. Never use `href="#"`, external URLs, file paths, `target="_blank"` or `window.open()` unless the user explicitly asks for a link to a given address. Everything a link, button, menu item, tab, "Sources" / "Quellen" or "Details" control points to must exist **inside the same file**: give it a real in-page target — a `#id` anchor to a section that exists, or a click handler that switches a view, opens a drawer, modal or dialog and shows the content (sample sources, details, a detail page, a help text). Navigation items must switch to a view, even a short one. If something is not part of the prototype, do not render it as a link or clickable control; show it as plain text or disable it.
 5. **Complete implementation**: never leave `// TODO` or `// rest of code here` placeholders. Pre-load realistic sample data so the dashboard, calculator, or explorer is immediately useful on first render, and include controls to edit or reset the data.
+
+## Follow-up questions from the artifact: `sendPrompt`
+
+The preview defines `sendPrompt(text)`. Calling it from a click asks the chat a follow-up question: the user sees the text, confirms it, and it is sent as their next message. Use it to make an artifact conversational: a node of a diagram, a bar of a chart, a row of a table or an "Explain this" button asks about exactly that item.
+
+- **Only on a click** the user makes, never on load, on a timer or in a loop. Nothing is sent without the user's confirmation, and a second question is ignored while one waits.
+- **Write the question as the user would**, complete and specific, in the user's language, naming the item and its figures: `sendPrompt('Why did revenue in Q3 2026 drop by 12 %?')`, not `sendPrompt('q3')`. At most 2000 characters.
+- **Mark what asks**: a short hint ("Click a bar to ask about it") and `cursor: pointer`, and use a `<button>` (or `role="button"` with `tabindex="0"` and an Enter/Space handler) so it works with the keyboard.
+- **Guard it**: `sendPrompt` does nothing where no chat is around (a shared link: `sendPrompt.available` is `false`) and does not exist in a downloaded file. Show the ask controls only when `window.sendPrompt && sendPrompt.available`, and never hide information behind it: what an item shows must be readable without asking.
+- **Local interaction stays local**: filtering, sorting, tabs and sliders are plain JavaScript in the page. Use `sendPrompt` only when the answer needs the model (an explanation, a deeper analysis, a next artifact).
+
+```html
+<button type="button" class="ask" data-q="Explain the drop in Q3 2026 revenue (-12 % vs. Q2).">
+  Ask why
+</button>
+<script>
+  const canAsk = Boolean(window.sendPrompt && sendPrompt.available);
+  document.querySelectorAll('.ask').forEach(btn => {
+    if (!canAsk) btn.hidden = true;
+    else btn.addEventListener('click', () => sendPrompt(btn.dataset.q));
+  });
+</script>
+```
 
 If `create_web_artifact` returns `warnings` (such as a relative script/link, a URL the preview will not load, a dead link, unguarded `localStorage`, JavaScript that does not parse, a file that was cut off, or a missing `viewBox`), fix the issue and call `create_web_artifact` again. A file that was cut off is too long: write a more compact one rather than the same one again.
 
@@ -68,4 +91,4 @@ For ready-to-use patterns (interactive calculators, KPI dashboards, sortable tab
 
 ## Answer
 
-After `create_web_artifact` runs, answer briefly: name the artifact, summarize its interactive controls, and let the user know they can interact with it in the **Artifacts** panel (**Preview | Code**). Do not paste the HTML/SVG source into the chat and do not add a link.
+After `create_web_artifact` runs, answer briefly: name the artifact, summarize its interactive controls (and which elements ask a follow-up question), and let the user know they can interact with it in the **Artifacts** panel (**Preview | Code**). Do not paste the HTML/SVG source into the chat and do not add a link.

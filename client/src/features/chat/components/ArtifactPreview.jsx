@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import DOMPurify from 'dompurify';
 import { highlightCode, renderMarkdown } from '../../../config/marked.config';
@@ -11,11 +11,13 @@ import useDocumentTheme from '../../../shared/hooks/useDocumentTheme';
 import {
   MAX_PREVIEW_BYTES,
   artifactDisplayName,
+  artifactPromptFromMessage,
   codeLanguageOf,
   formatBytes,
   previewTypeOf,
   withPreviewCsp
 } from '../utils/artifactFiles';
+import ArtifactPromptRequest from './ArtifactPromptRequest';
 
 // A preview that fills the full-screen pane scrolls behind the composer dock; the workspace sets
 // `--workspace-dock-clearance` (0 without a dock) so the last lines can still be scrolled clear.
@@ -176,13 +178,18 @@ function FillRoot({ children, type }) {
  * @param {'preview'|'code'} [props.viewMode] - Controlled Preview/Code state. When given, the
  *   component draws no toggle of its own: the parent (the viewer toolbar) owns it.
  * @param {(mode: 'preview'|'code') => void} [props.onViewModeChange] - Needed with `viewMode`.
+ * @param {{ send: (text: string) => void, isProcessing: boolean }|null} [props.promptHost] - The
+ *   chat an HTML artifact's `sendPrompt(text)` asks: the question is shown for the user to
+ *   confirm, then `send` posts it. Without it (shared links, the standalone page) `sendPrompt`
+ *   does nothing.
  */
 export default function ArtifactPreview({
   artifact,
   getBlob,
   mode = 'panel',
   viewMode: controlledViewMode,
-  onViewModeChange
+  onViewModeChange,
+  promptHost = null
 }) {
   const { t } = useTranslation();
   const { platformConfig } = usePlatformConfig();
@@ -205,6 +212,28 @@ export default function ArtifactPreview({
   const maxTall = fill ? 'flex-1 min-h-0' : 'max-h-[60vh]';
   const Root = fill ? FillRoot : Fragment;
   const rootProps = fill ? { type } : {};
+  const iframeRef = useRef(null);
+  // The question the artifact asked to send, waiting for the user's decision. It belongs to the
+  // artifact that asked: the viewer keys this component by artifact id, so a switch drops it.
+  const [promptRequest, setPromptRequest] = useState(null);
+  const promptBridge = type === 'html' && Boolean(promptHost);
+
+  // `sendPrompt` in the frame posts a message; only this frame's are taken, and
+  // while one question waits a second is ignored, so the text the user reads
+  // cannot be swapped under the Send button.
+  useEffect(() => {
+    if (!promptBridge) return undefined;
+    const onMessage = event => {
+      const frame = iframeRef.current;
+      // A frame sandboxed without `allow-same-origin` has an opaque origin, which a message
+      // reports as the string "null"; anything else is not this artifact.
+      if (!frame || event.source !== frame.contentWindow || event.origin !== 'null') return;
+      const text = artifactPromptFromMessage(event.data);
+      if (text) setPromptRequest(current => current ?? text);
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, [promptBridge]);
 
   useEffect(() => {
     if (!controlled) setOwnViewMode('preview');
@@ -349,10 +378,23 @@ export default function ArtifactPreview({
         <Root {...rootProps}>
           {truncatedNote}
           {modeToggle}
+          {promptRequest && (
+            <ArtifactPromptRequest
+              text={promptRequest}
+              busy={Boolean(promptHost?.isProcessing)}
+              onSend={() => {
+                const text = promptRequest;
+                setPromptRequest(null);
+                promptHost?.send(text);
+              }}
+              onCancel={() => setPromptRequest(null)}
+            />
+          )}
           <iframe
+            ref={iframeRef}
             sandbox="allow-scripts"
             referrerPolicy="no-referrer"
-            srcDoc={withPreviewCsp(state.text, { scriptHosts, theme })}
+            srcDoc={withPreviewCsp(state.text, { scriptHosts, theme, promptBridge })}
             title={name}
             className={`w-full ${tall} ${frame} bg-white`}
           />

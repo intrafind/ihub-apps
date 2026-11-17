@@ -472,8 +472,13 @@ their first use of it (the list is built as tokens are used, not at start).
 - **One Connect card:** when a request needs an integration the user has not connected, the chat
   explains why iHub must act as the user, what that covers in read and write terms and where the
   sign-in happens, with **Connect** and **Not now**. After consent the user returns to the same
-  chat and the request is retried once; a call that failed for another reason is never retried.
-  **Reconnect** appears when a connection expired or lacks a permission, also when an MCP server
+  chat and the server runs the call that was waiting once more, with the same arguments, and the
+  answer continues from its result: no message is sent on the user's behalf. A request waits 15
+  minutes for the connection; closing the tab or declining at the vendor runs nothing and the card
+  stays. A call that failed for another reason is never run again, and a call that needs approval
+  still asks first. Cards from chats stored before this release connect the account but do not
+  re-run the question. The call that runs after a connect is written to the audit log
+  (`connection.resume`, no arguments). **Reconnect** appears when a connection expired or lacks a permission, also when an MCP server
   asks for more scopes. The cloud file pickers show the same card.
 - **Scheduled tasks** use their owner's connection; with none, the run fails with
   `INTEGRATION_AUTH_REQUIRED`, naming the integration, the reason and a **Reconnect** link.
@@ -1686,7 +1691,7 @@ what is happening.
 
 For integrators: SSE v2 gains three `tool/progress` phases, `args`, `args.ended` and
 `model.waiting`. They are additive, `tool/started` is unchanged and nothing is added to saved chats.
-See [SSE v2](../../sse-v2.md) and [Accessibility](../../accessibility.md).
+See [Streaming Events](../../streaming-events.md) and [Accessibility](../../accessibility.md).
 
 ## Translations: One Key for the Product Name, and No More Untranslatable Texts
 
@@ -2259,3 +2264,16 @@ requests per minute.
   the shipped 100 requests per minute. A limit or period you changed is kept (the server log says
   so). See **Admin → Security → Rate limits**.
 - New installations start with 500.
+
+## Chat: Interactive Artifacts Can Ask Follow-up Questions
+
+An HTML artifact can now turn a click into a question in the chat: a bar of a chart, a node of a
+diagram or an "Explain this" button asks about exactly that item. The question is shown above the
+artifact first, and nothing is sent until the user clicks **Send**.
+
+- **Built by the `web-artifacts` skill.** It adds such questions where the answer needs the model;
+  filtering, sorting and tabs stay inside the page.
+- **The user decides.** One question waits at a time, it cannot be sent while an answer is still
+  being written, and **Cancel** or Esc drops it.
+- **Sandbox unchanged.** The artifact still runs isolated from iHub; it can only propose a
+  question. In shared links and on the standalone artifact page the controls do nothing.

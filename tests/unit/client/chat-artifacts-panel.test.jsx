@@ -144,10 +144,10 @@ describe('artifact helpers', () => {
 
   it('prepends a Content Security Policy to HTML previews without breaking doctype', () => {
     expect(withPreviewCsp('<h1>Hello</h1>')).toMatch(
-      /<meta http-equiv="Content-Security-Policy"[^>]*><h1>Hello<\/h1>/
+      /<meta http-equiv="Content-Security-Policy"[^>]*><script>[^<]*sendPrompt[^<]*<\/script><h1>Hello<\/h1>/
     );
     expect(withPreviewCsp('<!DOCTYPE html><html><body>Hi</body></html>')).toMatch(
-      /^<!DOCTYPE html><meta http-equiv="Content-Security-Policy"[^>]*><html>/i
+      /^<!DOCTYPE html><meta http-equiv="Content-Security-Policy"[^>]*><script>[^<]*<\/script><html>/i
     );
   });
 
@@ -157,7 +157,9 @@ describe('artifact helpers', () => {
       theme: 'dark'
     });
     expect(html).toMatch(/script-src 'unsafe-inline' 'unsafe-eval' https:\/\/cdn\.jsdelivr\.net;/);
-    expect(html).toMatch(/setAttribute\('data-theme','dark'\)<\/script><html>/);
+    expect(html).toMatch(
+      /setAttribute\('data-theme','dark'\)<\/script><script>[^<]*<\/script><html>/
+    );
     // Without hosts the preview stays offline.
     expect(withPreviewCsp('<p>x</p>')).not.toMatch(/https:/);
   });

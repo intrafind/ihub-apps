@@ -1537,7 +1537,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
    *           type: string
    *     responses:
    *       200:
-   *         description: SSE stream established (SSE v2 envelopes, see docs/sse-v2.md)
+   *         description: SSE stream established (SSE v2 envelopes, see docs/streaming-events.md)
    *         content:
    *           text/event-stream:
    *             schema:

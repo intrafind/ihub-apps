@@ -170,6 +170,8 @@ Every conversation is stored on the server. With chat history enabled, it is kep
 shows what each answer was based on — the searches it ran, the documents it read and the tools it
 used. Chats can be renamed and deleted from the sidebar.
 
+![Your chats: the full history grouped by date, with search and a Shared with me tab](assets/screenshots/chats-list.png)
+
 A **temporary chat** is never listed or shared and is deleted a while after its last activity (24
 hours by default), or as soon as you start a new chat. Switch on **Incognito mode** (the ghost icon
 next to **Send**) for one; switching it off again keeps the chat. Without chat history, and for
@@ -305,3 +307,11 @@ extension also list your chat history.
 
 The **iHub Support Bot** app answers questions about iHub itself, including what changed in each
 release. The **Documentation** link in the sidebar opens this documentation.
+
+## Next steps
+
+- [Prompt Library](prompts.md) — save and reuse prompts.
+- [Projects](projects.md) — keep chats and files for one topic together.
+- [Chat Sharing](chat-sharing.md) — share a conversation or an app link.
+- [Scheduled Tasks](scheduled-tasks.md) — run an app on a schedule.
+- [Troubleshooting](troubleshooting.md) — fix common problems.

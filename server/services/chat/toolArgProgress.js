@@ -21,7 +21,7 @@
  *
  * No frame carries any part of the arguments. This module is the logic; the
  * chat seam (`chatSeams.js`, `chatToolSeam`) only feeds it chunks and emits
- * what it returns. Wire contract: `docs/sse-v2.md`.
+ * what it returns. Wire contract: `docs/streaming-events.md`.
  *
  * @module services/chat/toolArgProgress
  */

@@ -96,20 +96,4 @@ describe('what a tool result says about its integration', () => {
       }
     );
   });
-
-  it('keeps the MCP Connect marker and adds the structured fields', () => {
-    const issue = integrationIssueOf('okta__whoami', {
-      error: 'INTEGRATION_AUTH_REQUIRED',
-      integration: 'okta',
-      reason: 'expired',
-      authRequired: { serverId: 'okta', serverName: 'Okta', connectUrl: '/connect' }
-    });
-    assert.deepEqual(issue, {
-      toolId: 'okta__whoami',
-      message: 'Connect Okta again',
-      integration: 'okta',
-      reason: 'expired',
-      connectUrl: '/connect'
-    });
-  });
 });

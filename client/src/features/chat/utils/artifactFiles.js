@@ -4,6 +4,8 @@
 import { generatedFileKind, TEXT_FILE_MEDIA_TYPES } from '../../../../../shared/generatedFiles.js';
 import { prepareHtmlPreview } from '../../../../../shared/artifactPreview.js';
 
+export { artifactPromptFromMessage } from '../../../../../shared/artifactPreview.js';
+
 /**
  * Helpers for the files a chat produced (its artifacts): how they are named,
  * shown and previewed. Shared by the download cards (`GeneratedFiles`) and the
@@ -130,7 +132,7 @@ export function isTextArtifact(artifact) {
  * page and the server's `create_web_artifact` checks.
  *
  * @param {unknown} html
- * @param {{scriptHosts?: string[], theme?: 'light'|'dark'}} [options]
+ * @param {{scriptHosts?: string[], theme?: 'light'|'dark', promptBridge?: boolean}} [options]
  * @returns {string}
  */
 export function withPreviewCsp(html, options) {
