@@ -9,6 +9,11 @@
 
 import { guardedResourceOf } from '../../../client/src/api/adminConfigRevision.js';
 
+// A linear scan takes a few ms here even cold on a loaded CI runner; the
+// quadratic regexes these replace took 700-1400 ms. 250 ms separates the two
+// without depending on runner speed.
+const LINEAR_TIME_LIMIT_MS = 250;
+
 describe('guardedResourceOf', () => {
   it.each([
     ['/admin/configs/platform', 'platform'],
@@ -29,6 +34,6 @@ describe('guardedResourceOf', () => {
     const url = `${'/'.repeat(50000)}x`;
     const start = performance.now();
     expect(guardedResourceOf(url)).toBeNull();
-    expect(performance.now() - start).toBeLessThan(50);
+    expect(performance.now() - start).toBeLessThan(LINEAR_TIME_LIMIT_MS);
   });
 });

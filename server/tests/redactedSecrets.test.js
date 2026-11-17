@@ -9,6 +9,11 @@
 
 import { describe, test, expect } from '@jest/globals';
 
+// A linear scan takes a few ms here even cold on a loaded CI runner; the
+// quadratic regexes these replace took 700-1400 ms. 250 ms separates the two
+// without depending on runner speed.
+const LINEAR_TIME_LIMIT_MS = 250;
+
 const {
   SECRET_MARKER,
   assertNoMarkers,
@@ -276,7 +281,7 @@ describe('URL masks are found in linear time (Sonar S8786)', () => {
     [`?${'?='.repeat(25000)}REDACTEDx`],
     [`?${' '.repeat(50000)}`]
   ])('a %#. adversarial 50k-character input finishes fast', value => {
-    expect(timeOf(() => isRedactedValue(value))).toBeLessThan(50);
-    expect(timeOf(() => maskUrlCredentials(value))).toBeLessThan(50);
+    expect(timeOf(() => isRedactedValue(value))).toBeLessThan(LINEAR_TIME_LIMIT_MS);
+    expect(timeOf(() => maskUrlCredentials(value))).toBeLessThan(LINEAR_TIME_LIMIT_MS);
   });
 });

@@ -9,6 +9,11 @@
 
 import { describe, test, expect } from '@jest/globals';
 
+// A linear scan takes a few ms here even cold on a loaded CI runner; the
+// quadratic regexes these replace took 700-1400 ms. 250 ms separates the two
+// without depending on runner speed.
+const LINEAR_TIME_LIMIT_MS = 250;
+
 const { redactUrlSecrets } = await import('../utils/urlSecrets.js');
 
 describe('redactUrlSecrets', () => {
@@ -64,6 +69,6 @@ describe('redactUrlSecrets', () => {
   ])('a %#. adversarial 50k-character input finishes fast', url => {
     const start = performance.now();
     redactUrlSecrets(url);
-    expect(performance.now() - start).toBeLessThan(50);
+    expect(performance.now() - start).toBeLessThan(LINEAR_TIME_LIMIT_MS);
   });
 });
