@@ -245,6 +245,16 @@ for (const theme of THEMES) {
         await page.goto(`${BASE}${path}`, { waitUntil: 'domcontentloaded' });
         await page.waitForLoadState('networkidle').catch(() => {});
         await expect(page.locator('#admin-main-content')).toBeVisible();
+        // Pages that load their data after the shell (Localization) render
+        // their fields late: wait for them before measuring.
+        if (route.minFields > 0) {
+          await page
+            .locator('#admin-main-content')
+            .locator('input:visible, select:visible, textarea:visible')
+            .first()
+            .waitFor({ timeout: 15_000 })
+            .catch(() => {});
+        }
 
         const fields = await page.evaluate(measureFields);
         if (fields.length < route.minFields) {
