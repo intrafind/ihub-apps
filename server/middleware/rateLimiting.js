@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { recordRateLimitHit } from '../telemetry/metrics.js';
 import { ClusterRateLimitStore } from '../utils/clusterRateLimitStore.js';
 
@@ -72,12 +72,51 @@ export function isReadOnlyAuthRequest(req) {
 }
 
 /**
+ * Rate-limit key of the admin API limiter: one bucket per caller instead of
+ * one per address.
+ *
+ * Admins behind one corporate NAT address or reverse proxy share `req.ip`, so
+ * counting per address let one busy admin page (which fires many requests on
+ * load) spend the budget of every other admin. The limiter therefore runs after
+ * the authentication chain and counts per identity:
+ *
+ *   - a signed-in user (local, LDAP, OIDC, proxy, NTLM, Teams, a personal API
+ *     key, or an OAuth token issued on a user's behalf) → `user:<user id>`;
+ *   - an OAuth client (client_credentials) or a static API key, whose
+ *     `req.user.id` is the client id → `client:<client id>`;
+ *   - no signed-in user (no `req.user`, or the anonymous principal) → the
+ *     client address, `ip:<address>`. IPv6 addresses are reduced to their /56
+ *     subnet by `ipKeyGenerator`, as the library's default key does, so one
+ *     host cannot side-step the limit by rotating through its own addresses.
+ *
+ * The prefixes keep the three kinds apart, so a user id that looks like an
+ * address never shares a bucket with that address.
+ *
+ * @param {import('express').Request} req - Request after authentication.
+ * @returns {string} The bucket key.
+ * @example
+ * adminApiRateLimitKey({ user: { id: 'alice' }, ip: '10.0.0.1' }); // 'user:alice'
+ * adminApiRateLimitKey({ user: null, ip: '10.0.0.1' }); // 'ip:10.0.0.1'
+ */
+export function adminApiRateLimitKey(req) {
+  const user = req.user;
+  if (user?.id && user.id !== 'anonymous') {
+    return user.isOAuthClient ? `client:${user.id}` : `user:${user.id}`;
+  }
+  return `ip:${ipKeyGenerator(req.ip || '')}`;
+}
+
+/**
  * Create a rate limiter with given configuration
  * @param {Object} config - Rate limiter configuration
  * @param {Object} defaults - Default configuration to merge with
  * @param {string} type - Type of rate limiter for error messages
  * @param {(req: import('express').Request) => boolean} [skip] - Predicate that
  *   exempts a request from this limiter entirely
+ * @param {Object} [options]
+ * @param {boolean} [options.shared=false] - Count across all cluster workers.
+ * @param {(req: import('express').Request) => string} [options.keyGenerator] -
+ *   Bucket key; the library's per-address key when omitted.
  * @returns {Function} Express rate limiter middleware
  */
 function createRateLimiter(
@@ -85,19 +124,22 @@ function createRateLimiter(
   defaults = {},
   type = 'API',
   skip = undefined,
-  { shared = false } = {}
+  { shared = false, keyGenerator = undefined } = {}
 ) {
   const finalConfig = { ...defaults, ...config };
 
   return rateLimit({
     ...(skip ? { skip } : {}),
+    ...(keyGenerator ? { keyGenerator } : {}),
     // Counted across all cluster workers, so the limit means what it says.
     ...(shared ? { store: new ClusterRateLimitStore(type) } : {}),
     windowMs: finalConfig.windowMs || 1 * 60 * 1000, // 1 minute default
     limit: finalConfig.limit || 500, // 500 requests default
     message:
       finalConfig.message ||
-      `Too many ${type.toLowerCase()} requests from this IP, please try again later.`,
+      (keyGenerator
+        ? `Too many ${type.toLowerCase()} requests, please try again later.`
+        : `Too many ${type.toLowerCase()} requests from this IP, please try again later.`),
     standardHeaders: finalConfig.standardHeaders !== undefined ? finalConfig.standardHeaders : true,
     legacyHeaders: finalConfig.legacyHeaders !== undefined ? finalConfig.legacyHeaders : false,
     skipSuccessfulRequests:
@@ -218,7 +260,11 @@ export function createRateLimiters(platformConfig = {}) {
   const configs = resolveRateLimitConfigs(platformConfig);
 
   return {
-    adminApiLimiter: createRateLimiter(configs.adminApi, {}, 'admin API'),
+    // Counted per signed-in user or API client, per address only without a
+    // sign-in. Mount it after the authentication chain (see setup.js).
+    adminApiLimiter: createRateLimiter(configs.adminApi, {}, 'admin API', undefined, {
+      keyGenerator: adminApiRateLimitKey
+    }),
     publicApiLimiter: createRateLimiter(configs.publicApi, {}, 'public API'),
     // Read-only auth endpoints skip the strict credential limiter; they are
     // still bounded by the public API limiter mounted on the same path.

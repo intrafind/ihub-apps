@@ -514,8 +514,8 @@ export function setupMiddleware(app, platformConfig = {}) {
   // Read aloud calls a paid speech model on every request.
   app.use(buildApiPath('/voice/speech'), rateLimiters.inferenceApiLimiter);
 
-  // Admin API rate limiter for administrative endpoints (most restrictive)
-  app.use(buildApiPath('/admin'), rateLimiters.adminApiLimiter);
+  // The admin API limiter is mounted after the authentication chain below: it
+  // counts per signed-in user / API client, so it needs req.user.
 
   // OAuth rate limiters, two layers like /api/auth: this one bounds the volume
   // per address; the token limiter (mounted by routes/oauth.js) counts the
@@ -552,6 +552,12 @@ export function setupMiddleware(app, platformConfig = {}) {
       platformConfig // Pass platform config to respect NTLM requirements
     )
   );
+
+  // Admin API rate limiter. Runs after authentication so it can count per
+  // signed-in user or API client (adminApiRateLimitKey); admins behind one
+  // NAT address or proxy no longer share one budget. Requests without a
+  // sign-in are counted per address.
+  app.use(buildApiPath('/admin'), rateLimiters.adminApiLimiter);
 
   // Populate the request logging context with the authenticated identity so
   // every subsequent log line carries userId / oauthClientId. The store was

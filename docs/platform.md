@@ -955,7 +955,7 @@ iHub Apps enforces rate limits per route category to protect against abuse and e
     },
     "adminApi": {
       "windowMs": 60000,
-      "limit": 100,
+      "limit": 500,
       "skipFailedRequests": true
     },
     "publicApi": {
@@ -992,7 +992,7 @@ iHub Apps enforces rate limits per route category to protect against abuse and e
 | Category       | Applies To                             | Default Window | Default Limit |
 | -------------- | -------------------------------------- | -------------- | ------------- |
 | `default`      | All routes not covered by other groups | 60 s           | 100           |
-| `adminApi`     | `/api/admin/**` admin endpoints        | 60 s           | 100           |
+| `adminApi`     | `/api/admin/**` admin endpoints, per signed-in user | 60 s | 500 |
 | `publicApi`    | Public read-only endpoints             | 60 s           | 500           |
 | `authApi`      | `/api/auth/**` login/logout/token      | 900 s (15 min) | 30            |
 | `oauthApi`     | `/api/oauth/**` OAuth server endpoints | 60 s           | 300           |
@@ -1006,7 +1006,7 @@ Each category accepts the following fields. Partial overrides inherit unset valu
 | Field                    | Type    | Default | Description                                                                     |
 | ------------------------ | ------- | ------- | ------------------------------------------------------------------------------- |
 | `windowMs`               | Number  | 900000  | Time window in milliseconds. Minimum: `1000`                                    |
-| `limit`                  | Number  | 100     | Maximum requests allowed per window per IP. Minimum: `1`                        |
+| `limit`                  | Number  | 100     | Maximum requests allowed per window per IP (per user for `adminApi`). Minimum: `1` |
 | `message`                | String  | -       | Custom error message returned when the limit is exceeded                        |
 | `standardHeaders`        | Boolean | `true`  | Include `RateLimit-*` headers in responses                                      |
 | `legacyHeaders`          | Boolean | `false` | Include legacy `X-RateLimit-*` headers                                          |

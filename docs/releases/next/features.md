@@ -2243,3 +2243,17 @@ popup and of the hint under the chat input, the hint text and link (previously o
 `ui.json`) and a **Show again to everyone** button. The popup now remembers the version a visitor
 confirmed, so raising the version shows it again, as the setting always promised; visitors who confirmed
 earlier are not asked again until the next change. See [UI Configuration](../../ui.md#disclaimer-configuration).
+
+## Admin API Rate Limit Counts per User and Allows 500 Requests per Minute
+
+Admin pages send many requests while they load, and admins behind one office address or reverse
+proxy shared a single budget, so working through a few admin pages could end in "Too many
+requests". The admin API limit now counts per signed-in user, and its shipped value is 500
+requests per minute.
+
+- Each signed-in user has their own budget; an OAuth client or static API key counts per client.
+  Requests without a sign-in still count per address.
+- Upgrades: migration `V254` raises `rateLimit.adminApi` from 100 to 500 only where it still has
+  the shipped 100 requests per minute. A limit or period you changed is kept (the server log says
+  so). See **Admin → Security → Rate limits**.
+- New installations start with 500.

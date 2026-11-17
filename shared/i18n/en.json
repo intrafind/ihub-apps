@@ -2296,7 +2296,7 @@
           },
           "adminApi": {
             "name": "Admin API",
-            "description": "Everything under /api/admin."
+            "description": "Everything under /api/admin. Counted per signed-in user or API client; only requests without a sign-in count per address."
           },
           "authApi": {
             "name": "Sign-in",
