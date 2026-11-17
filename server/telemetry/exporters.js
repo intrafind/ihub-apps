@@ -10,6 +10,32 @@ import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-http';
 import { PrometheusExporter } from '@opentelemetry/exporter-prometheus';
 import { ConsoleSpanExporter } from '@opentelemetry/sdk-trace';
 import { ConsoleMetricExporter } from '@opentelemetry/sdk-metrics';
+import { createAgent } from '../utils/httpConfig.js';
+
+/**
+ * Options for an OTLP/HTTP exporter that sends to `endpoint` + `signalPath`.
+ *
+ * The connection goes through the server's own agent (`createAgent`), so it
+ * honours the platform's outbound settings like every other outbound call: a
+ * collector on `ssl.domainWhitelist` (with "ignore invalid certificates" on)
+ * may use a certificate from a private CA, and the configured proxy applies.
+ * Certificates are verified for every other host.
+ *
+ * The agent is built by a factory, so the exporter asks for it on its first
+ * export — after the platform config has been loaded.
+ *
+ * @param {Object} otlpConfig - `telemetry.exporters.otlp` (`endpoint`, `headers`).
+ * @param {string} signalPath - `/v1/traces` or `/v1/metrics`.
+ * @returns {{url: string, headers: Object, httpAgentOptions: Function}} Exporter options.
+ */
+export function otlpExporterOptions(otlpConfig, signalPath) {
+  const url = `${otlpConfig.endpoint}${signalPath}`;
+  return {
+    url,
+    headers: otlpConfig.headers || {},
+    httpAgentOptions: () => createAgent(url)
+  };
+}
 
 /**
  * Create trace exporter based on configuration.
@@ -30,10 +56,7 @@ export function createTraceExporter(config) {
   switch (provider) {
     case 'otlp':
       if (config.exporters?.otlp) {
-        return new OTLPTraceExporter({
-          url: `${config.exporters.otlp.endpoint}/v1/traces`,
-          headers: config.exporters.otlp.headers || {}
-        });
+        return new OTLPTraceExporter(otlpExporterOptions(config.exporters.otlp, '/v1/traces'));
       }
       return undefined;
 
@@ -62,10 +85,7 @@ export function createMetricExporter(config) {
   switch (provider) {
     case 'otlp':
       if (config.exporters?.otlp) {
-        return new OTLPMetricExporter({
-          url: `${config.exporters.otlp.endpoint}/v1/metrics`,
-          headers: config.exporters.otlp.headers || {}
-        });
+        return new OTLPMetricExporter(otlpExporterOptions(config.exporters.otlp, '/v1/metrics'));
       }
       break;
 

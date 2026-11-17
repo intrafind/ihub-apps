@@ -9,6 +9,10 @@ import { makeAdminApiCall } from '../../../api/adminApi';
 function SsrfConfig() {
   const { t } = useTranslation();
   const [allowedHosts, setAllowedHosts] = useState([]);
+  // Hosts on the TLS whitelist (ssl.domainWhitelist): the SSRF guard trusts
+  // them too. Shown read-only; they are edited on the SSL card. Null until
+  // loaded, or when they could not be loaded.
+  const [tlsTrustedHosts, setTlsTrustedHosts] = useState(null);
   const [newHost, setNewHost] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -33,7 +37,19 @@ function SsrfConfig() {
         setLoading(false);
       }
     };
+    const fetchTlsWhitelist = async () => {
+      try {
+        const response = await makeAdminApiCall('/admin/ssl/config', { method: 'GET' });
+        setTlsTrustedHosts(
+          Array.isArray(response.data?.domainWhitelist) ? response.data.domainWhitelist : []
+        );
+      } catch {
+        // Informational only: without it the card still shows its own list.
+        setTlsTrustedHosts(null);
+      }
+    };
     void fetchConfig();
+    void fetchTlsWhitelist();
   }, [t]);
 
   const handleAddHost = () => {
@@ -219,6 +235,38 @@ function SsrfConfig() {
               'No hosts allowed. Outbound calls to private/internal IPs are blocked.'
             )}
           </p>
+        </div>
+      )}
+
+      {/* Hosts trusted through the TLS whitelist (read-only) */}
+      {tlsTrustedHosts !== null && (
+        <div className="mb-6" data-testid="ssrf-tls-trusted-hosts">
+          <h3 className="text-md font-semibold text-gray-900 dark:text-gray-100 mb-1">
+            {t('admin.system.ssrf.tlsTrustedTitle', 'Also trusted: SSL domain whitelist')}
+          </h3>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+            {t(
+              'admin.system.ssrf.tlsTrustedDesc',
+              'Hosts on the SSL domain whitelist are trusted by the SSRF guard as well, whether or not "Ignore Invalid SSL Certificates" is on. They are edited on the SSL card.'
+            )}
+          </p>
+          {tlsTrustedHosts.length > 0 ? (
+            <ul className="space-y-2">
+              {tlsTrustedHosts.map(host => (
+                <li
+                  key={host}
+                  className="flex items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-md"
+                >
+                  <Icon name="lock" className="w-4 h-4 text-gray-500 dark:text-gray-400 mr-2" />
+                  <span className="text-sm text-gray-900 dark:text-gray-100 font-mono">{host}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-gray-600 dark:text-gray-400 italic">
+              {t('admin.system.ssrf.tlsTrustedNone', 'The SSL domain whitelist is empty.')}
+            </p>
+          )}
         </div>
       )}
 

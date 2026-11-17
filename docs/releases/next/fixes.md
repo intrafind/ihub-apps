@@ -824,3 +824,25 @@ dark mode was selected; only pages reached from the chat were dark.
 The warnings at the top of the admin area (demo accounts with their shipped passwords, low disk
 space) showed one word per line on a narrow screen and filled the whole screen. The text now uses
 the full width and the links move below it.
+
+## Secrets Stay Out of Caches and Logs: OAuth Client Secrets, Backups and Environment Overrides
+
+- **No caching of secrets:** the answers that carry a new OAuth client secret (creating a client,
+  rotating its secret) and the configuration backup download (which holds the encryption key, the
+  JWT signing keys and password hashes) are sent with `Cache-Control: no-store`, so no browser or
+  proxy cache keeps a copy.
+- **Backup export log:** the "Adding to archive" line, written once per file with user ids in the
+  paths, is now a `debug` message; the export still logs its start, the file count and its end.
+- **Environment overrides:** the startup log line for each `IHUB_PLATFORM__…` / `IHUB_UI__…`
+  variable still names the setting it changes, but masks the value when the setting looks like a
+  credential (`…__JWT_SECRET`, `…__CLIENT_SECRET`, `…__SUBSCRIPTION_KEY`, …) and masks such keys
+  inside JSON values. Earlier log files may still contain those values; rotate or purge them.
+
+## OpenTelemetry Export Honors the SSL Whitelist and the Proxy
+
+An OTLP collector with a certificate from a private CA failed with "unable to verify the first
+certificate", even when its host was listed in **Admin → Security → SSL / TLS → Domain Whitelist**
+with **Ignore Invalid SSL Certificates** on, and the export ignored the configured outbound proxy.
+Trace and metric export now use the same connection settings as every other outbound call; hosts
+that are not whitelisted are still verified. Changing these settings takes effect for the exporter
+after a restart.

@@ -24,7 +24,11 @@ import { initTelemetry } from '../telemetry.js';
 import { setupMiddleware } from '../middleware/setup.js';
 import errorHandler from '../middleware/errorHandler.js';
 import { validateApiKeys, cleanupInactiveClients } from '../serverHelpers.js';
-import { getProxyConfig, redactUrlSecrets } from '../utils/httpConfig.js';
+import {
+  getProxyConfig,
+  redactUrlSecrets,
+  warnSsrfTrustViaTlsWhitelist
+} from '../utils/httpConfig.js';
 import {
   getBasePath,
   basePathDetectionMiddleware,
@@ -662,6 +666,15 @@ export async function startWorker({ stickyRouting }) {
   projectActivityTracker.start();
   await initConfigCache();
   logProxyConfig();
+  // TLS whitelist hosts are SSRF-trusted too (PL-B12): name them once at boot.
+  try {
+    warnSsrfTrustViaTlsWhitelist(configCache.getPlatform?.() || {});
+  } catch (error) {
+    logger.warn('Failed to check SSRF trust of the SSL whitelist', {
+      component: 'Server',
+      error: error.message
+    });
+  }
 
   // Process-wide singletons run once per cluster: on the worker in slot 0
   // (`WORKER_INDEX`, stable across respawns — `cluster.worker.id` is never

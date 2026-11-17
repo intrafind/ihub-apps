@@ -209,18 +209,40 @@ function SSLConfig() {
         </div>
       </div>
 
-      {/* Domain Whitelist */}
-      {config.ignoreInvalidCertificates && (
-        <div className="mb-6">
-          <h3 className="text-md font-semibold text-gray-900 dark:text-gray-100 mb-2">
-            {t('admin.system.ssl.domainWhitelist')}
-          </h3>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-            {t('admin.system.ssl.domainWhitelistDesc')}
-          </p>
+      {/* Domain Whitelist. Shown whether or not invalid certificates are
+          ignored: the SSRF guard trusts these hosts either way. */}
+      <div className="mb-6">
+        <h3 className="text-md font-semibold text-gray-900 dark:text-gray-100 mb-2">
+          {t('admin.system.ssl.domainWhitelist')}
+        </h3>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+          {t('admin.system.ssl.domainWhitelistDesc')}
+        </p>
 
-          {/* Info message if whitelist is empty - this is now the secure default */}
-          {config.domainWhitelist && config.domainWhitelist.length === 0 && (
+        {/* These hosts also bypass the SSRF guard's private-address rule. */}
+        <div
+          role="note"
+          data-testid="ssl-ssrf-trust-notice"
+          className="mb-4 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg"
+        >
+          <div className="flex">
+            <Icon
+              name="ExclamationTriangleIcon"
+              className="w-5 h-5 text-amber-700 dark:text-amber-400 mt-0.5 mr-3 shrink-0"
+            />
+            <p className="text-sm text-amber-800 dark:text-amber-300">
+              {t(
+                'admin.system.ssl.ssrfTrustNotice',
+                'These hosts are also trusted by the SSRF guard: tools, MCP servers, web sources and the page reader may reach them even when they resolve to private network addresses. This applies whether or not "Ignore Invalid SSL Certificates" is on.'
+              )}
+            </p>
+          </div>
+        </div>
+
+        {/* Info message if whitelist is empty - this is now the secure default */}
+        {config.ignoreInvalidCertificates &&
+          config.domainWhitelist &&
+          config.domainWhitelist.length === 0 && (
             <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
               <div className="flex">
                 <Icon
@@ -234,64 +256,63 @@ function SSLConfig() {
             </div>
           )}
 
-          {/* Add Domain Input */}
-          <div className="flex gap-2 mb-4">
-            <input
-              type="text"
-              value={newDomain}
-              onChange={e => setNewDomain(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder={t('admin.system.ssl.domainWhitelistPlaceholder')}
-              className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 text-sm"
-            />
-            <button
-              onClick={handleAddDomain}
-              disabled={!newDomain.trim()}
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-xs text-white bg-blue-600 hover:bg-blue-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
-            >
-              <Icon name="PlusIcon" className="w-4 h-4 mr-1" />
-              {t('admin.system.ssl.addDomain')}
-            </button>
-          </div>
-
-          {/* Domain Pattern Help */}
-          <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-            {t('admin.system.ssl.domainPatternHelp')}
-          </p>
-
-          {/* Domain List */}
-          {config.domainWhitelist && config.domainWhitelist.length > 0 ? (
-            <div className="space-y-2">
-              {config.domainWhitelist.map((domain, index) => (
-                <div
-                  key={index}
-                  className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-md"
-                >
-                  <div className="flex items-center">
-                    <Icon
-                      name="GlobeAltIcon"
-                      className="w-4 h-4 text-gray-500 dark:text-gray-400 mr-2"
-                    />
-                    <span className="text-sm text-gray-900 dark:text-gray-100">{domain}</span>
-                  </div>
-                  <button
-                    onClick={() => handleRemoveDomain(domain)}
-                    className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 text-sm font-medium"
-                  >
-                    {t('admin.system.ssl.removeDomain')}
-                  </button>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-md text-center">
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                {t('admin.system.ssl.noDomains')}
-              </p>
-            </div>
-          )}
+        {/* Add Domain Input */}
+        <div className="flex gap-2 mb-4">
+          <input
+            type="text"
+            value={newDomain}
+            onChange={e => setNewDomain(e.target.value)}
+            onKeyPress={handleKeyPress}
+            placeholder={t('admin.system.ssl.domainWhitelistPlaceholder')}
+            className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 text-sm"
+          />
+          <button
+            onClick={handleAddDomain}
+            disabled={!newDomain.trim()}
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-xs text-white bg-blue-600 hover:bg-blue-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
+          >
+            <Icon name="PlusIcon" className="w-4 h-4 mr-1" />
+            {t('admin.system.ssl.addDomain')}
+          </button>
         </div>
-      )}
+
+        {/* Domain Pattern Help */}
+        <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+          {t('admin.system.ssl.domainPatternHelp')}
+        </p>
+
+        {/* Domain List */}
+        {config.domainWhitelist && config.domainWhitelist.length > 0 ? (
+          <div className="space-y-2">
+            {config.domainWhitelist.map((domain, index) => (
+              <div
+                key={index}
+                className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-md"
+              >
+                <div className="flex items-center">
+                  <Icon
+                    name="GlobeAltIcon"
+                    className="w-4 h-4 text-gray-500 dark:text-gray-400 mr-2"
+                  />
+                  <span className="text-sm text-gray-900 dark:text-gray-100">{domain}</span>
+                </div>
+                <button
+                  onClick={() => handleRemoveDomain(domain)}
+                  className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 text-sm font-medium"
+                >
+                  {t('admin.system.ssl.removeDomain')}
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-md text-center">
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              {t('admin.system.ssl.noDomains')}
+            </p>
+          </div>
+        )}
+      </div>
 
       {/* Save Button */}
       <div className="flex justify-end">

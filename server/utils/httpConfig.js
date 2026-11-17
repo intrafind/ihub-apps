@@ -164,6 +164,60 @@ export function isSsrfTrustedHost(hostname) {
 }
 
 /**
+ * The `ssl.domainWhitelist` entries that the SSRF guard trusts only because
+ * they are on the TLS whitelist: not also on `ssrf.allowedHosts` (as the same
+ * pattern, or, for a plain host name, through a pattern there). Today the TLS
+ * whitelist doubles as SSRF trust ({@link isSsrfTrustedHost}); this names the
+ * hosts an admin may not realise can reach private addresses.
+ *
+ * @param {Object} platformConfig - The platform config (`ssl`, `ssrf`).
+ * @returns {string[]} The entries, trimmed, in whitelist order, without duplicates.
+ */
+export function hostsSsrfTrustedOnlyViaTlsWhitelist(platformConfig) {
+  const whitelist = Array.isArray(platformConfig?.ssl?.domainWhitelist)
+    ? platformConfig.ssl.domainWhitelist
+    : [];
+  const allowedHosts = Array.isArray(platformConfig?.ssrf?.allowedHosts)
+    ? platformConfig.ssrf.allowedHosts
+    : [];
+  const allowedPatterns = new Set(
+    allowedHosts.filter(h => typeof h === 'string').map(h => h.trim().toLowerCase())
+  );
+  const out = [];
+  for (const entry of whitelist) {
+    if (typeof entry !== 'string') continue;
+    const pattern = entry.trim();
+    if (!pattern || out.includes(pattern)) continue;
+    const lower = pattern.toLowerCase();
+    if (allowedPatterns.has(lower)) continue;
+    const isPlainHost = !lower.startsWith('*.') && !lower.startsWith('.');
+    if (isPlainHost && isDomainWhitelisted(lower, allowedHosts)) continue;
+    out.push(pattern);
+  }
+  return out;
+}
+
+/**
+ * Warn at startup about hosts the SSRF guard trusts only through
+ * `ssl.domainWhitelist`, so an admin who added a host for its certificate
+ * learns it may also reach private network addresses. Logging only; trust is
+ * unchanged.
+ *
+ * @param {Object} platformConfig - The platform config.
+ * @returns {string[]} The hosts warned about (empty when none).
+ */
+export function warnSsrfTrustViaTlsWhitelist(platformConfig) {
+  const hosts = hostsSsrfTrustedOnlyViaTlsWhitelist(platformConfig);
+  if (hosts.length > 0) {
+    logger.warn(
+      'Hosts on ssl.domainWhitelist are also trusted by the SSRF guard and may reach private network addresses. Review them, or list them on ssrf.allowedHosts to make the trust explicit.',
+      { component: 'HttpConfig', hosts }
+    );
+  }
+  return hosts;
+}
+
+/**
  * Determine if SSL certificate validation should be ignored for a specific URL
  * @param {string} url - The URL to check
  * @param {Object} sslConfig - SSL configuration object

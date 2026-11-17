@@ -198,14 +198,21 @@ export default function registerAdminOAuthRoutes(app) {
    *                   type: string
    *               allowedApps:
    *                 type: array
+   *                 description: >-
+   *                   App ids the client may use. For client-credentials tokens this list is the
+   *                   grant - empty or missing means no apps, `["*"]` means all apps. For
+   *                   authorization-code tokens it narrows the user's group permissions, and empty
+   *                   means no restriction. Stored as sent; never widened to `["*"]`.
    *                 items:
    *                   type: string
    *               allowedModels:
    *                 type: array
+   *                 description: Model ids; same semantics as `allowedApps`.
    *                 items:
    *                   type: string
    *               allowedPrompts:
    *                 type: array
+   *                 description: Prompt ids; same semantics as `allowedApps`.
    *                 items:
    *                   type: string
    *               tokenExpirationMinutes:
@@ -260,12 +267,14 @@ export default function registerAdminOAuthRoutes(app) {
       name: name.trim(),
       description: description?.trim() || '',
       scopes: Array.isArray(scopes) ? scopes : [],
-      // Default to ["*"] (allow all) if not specified, making it clear to admins
-      allowedApps: Array.isArray(allowedApps) && allowedApps.length > 0 ? allowedApps : ['*'],
-      allowedModels:
-        Array.isArray(allowedModels) && allowedModels.length > 0 ? allowedModels : ['*'],
-      allowedPrompts:
-        Array.isArray(allowedPrompts) && allowedPrompts.length > 0 ? allowedPrompts : ['*'],
+      // Stored as sent; a missing list is stored empty. For a client-credentials
+      // token the lists ARE the grant, so empty means no access and only an
+      // explicit ["*"] grants everything (see enhanceUserWithPermissions in
+      // utils/authorization.js). For an authorization-code token an empty list
+      // means no client-level restriction on the user's group permissions.
+      allowedApps: Array.isArray(allowedApps) ? allowedApps : [],
+      allowedModels: Array.isArray(allowedModels) ? allowedModels : [],
+      allowedPrompts: Array.isArray(allowedPrompts) ? allowedPrompts : [],
       allowedGroups: Array.isArray(allowedGroups) ? allowedGroups : [],
       tokenExpirationMinutes:
         tokenExpirationMinutes || oauthConfig.defaultTokenExpirationMinutes || 60,
@@ -291,7 +300,9 @@ export default function registerAdminOAuthRoutes(app) {
       summary: `Created OAuth client "${newClient.name}"`
     });
 
-    // Return client with plain text secret (only time it's shown)
+    // Return client with plain text secret (only time it's shown). The body
+    // carries a secret, so no cache (browser, proxy) may keep it.
+    res.setHeader('Cache-Control', 'no-store');
     sendCreated(res, `/api/admin/oauth/clients/${segment(newClient.clientId)}`, {
       clientId: newClient.clientId,
       clientSecret: newClient.clientSecret, // Plain text - only shown once
@@ -553,6 +564,8 @@ export default function registerAdminOAuthRoutes(app) {
         summary: `Rotated client secret for ${clientId}`
       });
 
+      // The body carries the new secret, so no cache may keep it.
+      res.setHeader('Cache-Control', 'no-store');
       res.json({
         clientId: result.clientId,
         clientSecret: result.clientSecret, // Plain text - only shown once

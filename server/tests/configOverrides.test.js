@@ -6,8 +6,10 @@ import assert from 'node:assert/strict';
 import {
   applyIhubEnvOverrides,
   envOverridePath,
-  ENV_VAR_SKIP_PATHS_BY_KEY
+  ENV_VAR_SKIP_PATHS_BY_KEY,
+  overrideValueForLog
 } from '../utils/configOverrides.js';
+import logger from '../utils/logger.js';
 import { decryptIfEncrypted, decryptPlatformSecrets } from '../utils/configSecrets.js';
 import tokenStorageService from '../services/TokenStorageService.js';
 
@@ -60,6 +62,69 @@ describe('applyIhubEnvOverrides', () => {
     assert.deepEqual(ENV_VAR_SKIP_PATHS_BY_KEY['config/integrations.json'], [
       'installed[].values.jwtSubjectField'
     ]);
+  });
+});
+
+describe('IHUB env override logging', () => {
+  const touched = [];
+  const lines = [];
+  let originalInfo;
+  before(() => {
+    originalInfo = logger.info;
+    logger.info = message => {
+      lines.push(String(message));
+    };
+  });
+  after(() => {
+    logger.info = originalInfo;
+  });
+  afterEach(() => {
+    for (const key of touched.splice(0)) delete process.env[key];
+    lines.splice(0);
+  });
+  const setEnv = (key, value) => {
+    touched.push(key);
+    process.env[key] = value;
+  };
+
+  it('logs the path of a secret override but never its value', () => {
+    setEnv('IHUB_PLATFORM__LOCAL_AUTH__JWT_SECRET', 'super-secret-value-123');
+    const platform = applyIhubEnvOverrides('config/platform.json', {});
+    assert.equal(platform.localAuth.jwtSecret, 'super-secret-value-123', 'still applied');
+    const line = lines.find(l => l.includes('IHUB_PLATFORM__LOCAL_AUTH__JWT_SECRET'));
+    assert.ok(line, 'the override is logged');
+    assert.ok(line.includes('localAuth.jwtSecret'), 'with its path');
+    assert.ok(!line.includes('super-secret-value-123'), 'without its value');
+    assert.ok(line.includes('[redacted]'));
+  });
+
+  it('masks credential-like keys inside a JSON override value', () => {
+    setEnv(
+      'IHUB_PLATFORM__OIDC_AUTH__PROVIDERS',
+      '[{"name":"corp","clientSecret":"s3cr3t-abcdef"}]'
+    );
+    applyIhubEnvOverrides('config/platform.json', {});
+    const line = lines.find(l => l.includes('oidcAuth.providers'));
+    assert.ok(line);
+    assert.ok(!line.includes('s3cr3t-abcdef'));
+    assert.ok(line.includes('corp'), 'non-secret fields stay readable');
+  });
+
+  it('keeps ordinary values readable', () => {
+    setEnv('IHUB_PLATFORM__AUTH__MODE', 'local');
+    applyIhubEnvOverrides('config/platform.json', {});
+    assert.ok(lines.some(l => l.includes('auth.mode = "local"')));
+    assert.equal(overrideValueForLog(['rateLimit', 'default', 'limit'], 200), '200');
+    assert.equal(overrideValueForLog(['defaultLanguage'], 'de'), '"de"');
+  });
+
+  it('masks keys platform.json names *Key, at the leaf and inside objects', () => {
+    assert.equal(overrideValueForLog(['speech', 'azure', 'subscriptionKey'], 'k'), '[redacted]');
+    assert.equal(overrideValueForLog(['jira', 'clientSecret'], 'x'), '[redacted]');
+    assert.equal(
+      overrideValueForLog(['speech'], { azure: { subscriptionKey: 'abc', region: 'eu' } }),
+      '{"azure":{"subscriptionKey":"[redacted]","region":"eu"}}'
+    );
   });
 });
 

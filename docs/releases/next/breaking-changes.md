@@ -940,3 +940,25 @@ went: site title, logo, favicon, tagline and PWA settings → **Branding**; the 
 
 Nothing changes in `ui.json` or the REST API for existing settings. `PUT /api/admin/ui/disclaimer` is
 new and saves the disclaimer on its own; `POST /api/admin/ui/config` still takes the whole configuration.
+
+## OAuth Clients: An Empty App, Model or Prompt List Grants Nothing to a Client-Credentials Client
+
+For a client-credentials (machine-to-machine) client, the allowed apps, models and prompts are the
+whole grant: there is no user behind the token. `POST /api/admin/oauth/clients` now stores these
+lists exactly as sent. An empty or missing list is stored as `[]` and means **no access**; only an
+explicit `["*"]` grants every app, model or prompt. Until now the server turned an empty or missing
+list into `["*"]`, so a client created without lists could use everything.
+
+- **Admin UI:** a new client starts with nothing selected and needs at least one app (or **All
+  (\*)**, which now shows a warning) before it can be saved. The hint explains that the lists are
+  the grant for client credentials and a filter on the signed-in user's permissions for
+  authorization code, and the editor warns when the grant types of a client change.
+- **Authorization-code clients are unchanged:** an empty list still means no extra restriction on
+  the user's group permissions.
+- **Existing clients keep what is stored.** Nothing is migrated, and no stored client loses access:
+  the server already treated a stored `[]` as "nothing" for client-credentials tokens. A client
+  created through the old defaults holds `["*"]` and still has access to everything.
+
+**Before upgrading:** scripts that create OAuth clients through the admin API and relied on the
+`["*"]` default must send `"allowedApps": ["*"]` (and the same for models and prompts), or better
+list only what the client needs. Review clients that hold `["*"]` under **Admin → OAuth → Clients**.

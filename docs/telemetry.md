@@ -105,6 +105,11 @@ The `telemetry` block in `contents/config/platform.json` (and the matching admin
 }
 ```
 
+The OTLP exporters connect like every other outbound call: a collector whose host is on
+`ssl.domainWhitelist` (with `ssl.ignoreInvalidCertificates` on) may use a certificate from a
+private CA, and the outbound proxy settings apply. See [SSL certificates](ssl-certificates.md) and
+[Proxy configuration](proxy-configuration.md).
+
 ### Hot-reload behaviour
 
 | Setting | Restart required |
