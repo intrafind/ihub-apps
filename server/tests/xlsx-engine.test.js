@@ -396,7 +396,7 @@ describe('Web artifacts skill tool (create_web_artifact) & PDF AcroForm extracti
     assert.match(held.data.toString('utf8'), /--brand-primary:\s*#1d4ed8/);
   });
 
-  it('tells the model to fix and resubmit when the artifact has warnings', async () => {
+  it('reports a dead link as a note, never as a reason to write the file again', async () => {
     clearHeldGeneratedFiles();
     const res = await runCreateWebArtifact({
       filename: 'dead.html',
@@ -405,8 +405,26 @@ describe('Web artifacts skill tool (create_web_artifact) & PDF AcroForm extracti
       chatId: 'chat-dead'
     });
     assert.equal(res.success, true);
+    assert.equal(res.warnings, undefined);
+    assert.equal(res.notes.length, 1);
+    assert.doesNotMatch(res.message, /Do NOT answer yet/);
+    assert.match(res.message, /Do not create the file again/);
+    clearHeldGeneratedFiles();
+  });
+
+  it('sends the model to edit_web_artifact for a problem that breaks the preview', async () => {
+    clearHeldGeneratedFiles();
+    const res = await runCreateWebArtifact({
+      filename: 'broken.html',
+      content: '<!DOCTYPE html><html><body><script>let x = ;</script></body></html>',
+      user: { id: 'u-broken' },
+      chatId: 'chat-broken'
+    });
+    assert.equal(res.success, true);
     assert.equal(res.warnings.length, 1);
+    assert.equal(res.notes, undefined);
     assert.match(res.message, /Do NOT answer yet/);
+    assert.match(res.message, /edit_web_artifact with filename "broken\.html"/);
     clearHeldGeneratedFiles();
   });
 
@@ -469,7 +487,7 @@ describe('Web artifacts skill tool (create_web_artifact) & PDF AcroForm extracti
     const img = '<img src="https://img.example/a.png">';
     assert.match(
       inspectWebArtifact(img, 'html').join(' '),
-      /will not load "https:\/\/img\.example/
+      /"https:\/\/img\.example\/a\.png" will not show/
     );
     assert.deepEqual(inspectWebArtifact('<img src="data:image/png;base64,AAAA">', 'html'), []);
     // An allowlisted CDN loads; an image from it still does not.

@@ -48,8 +48,8 @@
         "de": "Erstellte Datei lesen"
       },
       "description": {
-        "en": "Read the content of a file created in this chat, by its id or name from chat_artifacts_list: the text of code and text files, the extracted text of PDF, Word, PowerPoint and Excel files. Images and archives cannot be read as text. A long file comes in parts: when the result has nextOffset, call again with that offset for the rest. To change a file, create a new one with the changes.",
-        "de": "Den Inhalt einer in diesem Chat erstellten Datei lesen, anhand ihrer ID oder ihres Namens aus chat_artifacts_list: den Text von Code- und Textdateien, den extrahierten Text von PDF-, Word-, PowerPoint- und Excel-Dateien. Bilder und Archive können nicht als Text gelesen werden. Eine lange Datei kommt in Teilen: Enthält das Ergebnis nextOffset, mit diesem Offset erneut aufrufen. Um eine Datei zu ändern, eine neue mit den Änderungen erstellen."
+        "en": "Read the content of a file created in this chat, by its id or name from chat_artifacts_list: the text of code and text files, the extracted text of PDF, Word, PowerPoint and Excel files. Images and archives cannot be read as text. A long file comes in parts: when the result has nextOffset, call again with that offset for the rest. To change a web artifact (.html, .svg), use edit_web_artifact with text copied from here; to change any other file, create a new one with the changes.",
+        "de": "Den Inhalt einer in diesem Chat erstellten Datei lesen, anhand ihrer ID oder ihres Namens aus chat_artifacts_list: den Text von Code- und Textdateien, den extrahierten Text von PDF-, Word-, PowerPoint- und Excel-Dateien. Bilder und Archive können nicht als Text gelesen werden. Eine lange Datei kommt in Teilen: Enthält das Ergebnis nextOffset, mit diesem Offset erneut aufrufen. Ein Web-Artefakt (.html, .svg) mit edit_web_artifact und von hier kopiertem Text ändern; jede andere Datei durch eine neue mit den Änderungen ersetzen."
       },
       "parameters": {
         "type": "object",
