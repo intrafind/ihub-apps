@@ -325,6 +325,35 @@ describe('extraction in worker threads', () => {
     assert.equal(extractionPoolStats().threads, 0);
   });
 
+  it('parses a crawled page inline instead of waiting behind a file extraction', async () => {
+    configureExtractionPool({ ...SETTINGS, threads: 1 });
+    const html = '<html><head><title>T</title></head><body><a href="/a">A</a></body></html>';
+    const file = extractText({ bytes: bigXlsx(), name: 'slow.xlsx' });
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(extractionPoolStats().busy, 1);
+    const parsed = await parseCrawledPage(Buffer.from(html), 'text/html', 'https://x.com/');
+    assert.equal(parsed.title, 'T');
+    assert.equal(extractionPoolStats().busy, 1, 'the extraction is still running');
+    assert.equal(extractionPoolStats().queued, 0, 'the page did not queue');
+    await file;
+  });
+
+  it('drops a queued job whose caller stopped waiting', async () => {
+    configureExtractionPool({ ...SETTINGS, threads: 1 });
+    const html = Buffer.from('<html><head><title>T</title></head></html>');
+    const controller = new AbortController();
+    const first = parseCrawledPage(Buffer.from(html), 'text/html', 'https://x.com/');
+    const second = parseCrawledPage(Buffer.from(html), 'text/html', 'https://x.com/', {
+      signal: controller.signal
+    });
+    assert.equal(extractionPoolStats().queued, 1, 'the second page waits for the first');
+    controller.abort();
+    await assert.rejects(second, error => error.code === 'aborted');
+    assert.equal(extractionPoolStats().queued, 0, 'the abandoned page left the queue');
+    assert.equal((await first).title, 'T');
+    await shutdownExtractionPool();
+  });
+
   it('reads on the event loop with threads: 0', async () => {
     configureExtractionPool({ ...SETTINGS, threads: 0 });
     const result = await extractText({ bytes: Buffer.from('inline'), name: 'a.txt' });

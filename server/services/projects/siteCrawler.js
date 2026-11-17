@@ -26,7 +26,7 @@ import {
 import { HTML_MIME, acceptedTypeOf } from './extractText.js';
 import { DOCUMENT_EXTENSIONS } from './webFileDownload.js';
 import { decodeHtml, extractPageLinks, normalizeCrawlUrl } from './crawledPage.js';
-import { parseCrawledPage } from './extractionPool.js';
+import { ExtractionPoolError, parseCrawledPage } from './extractionPool.js';
 
 /** Defaults and upper bounds of a crawl request. */
 export const CRAWL_DEFAULT_MAX_PAGES = 50;
@@ -37,7 +37,8 @@ export const CRAWL_MAX_DEPTH = 3;
 /**
  * Pages fetched at the same time, and how long a whole crawl may take: below
  * the client's 30-second request timeout, so the list found so far always
- * reaches the user. Fetches still running at the deadline are cancelled.
+ * reaches the user. Fetches still running at the deadline are cancelled, and
+ * so is the wait for a page parsed on an extraction thread.
  */
 const CRAWL_CONCURRENCY = 4;
 export const CRAWL_DEADLINE_MS = 25_000;
@@ -570,8 +571,12 @@ export async function crawlSite(
 
   /** A fetched page's HTML, title and links; kept for the add step on the way. */
   const readPage = async (pageUrl, page) => {
+    // A parse on a thread ends with the crawl, like the fetches.
     const read = page.bytes
-      ? await parseCrawledPage(page.bytes, page.contentType, pageUrl)
+      ? await parseCrawledPage(page.bytes, page.contentType, pageUrl, {
+          signal,
+          timeoutMs: Math.max(1, deadline - now())
+        })
       : { html: page.html, ...extractPageLinks(page.html, pageUrl) };
     await keep(pageUrl, page, read.html);
     return { title: read.title, links: read.links };
@@ -598,7 +603,15 @@ export async function crawlSite(
       }
       throw new Error(`The page is not a web page (${first.contentType || 'unknown type'})`);
     }
-    const firstPage = await readPage(firstUrl, first);
+    let firstPage;
+    try {
+      firstPage = await readPage(firstUrl, first);
+    } catch (error) {
+      if (signal.aborted || (error instanceof ExtractionPoolError && error.code === 'timeout')) {
+        throw stoppedError();
+      }
+      throw error;
+    }
     const scope = crawlScope(firstUrl, { samePath, links: firstPage.links });
     const listed = [{ url: firstUrl, title: firstPage.title, depth: 0, type: 'page' }];
     if (depthLimit === 0) return { pages: listed, truncated: false, robotsExcluded: 0, scope };
