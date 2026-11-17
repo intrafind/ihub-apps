@@ -11,8 +11,9 @@ an email.
   initial concept, scope, architecture, reuse strategy, and phased rollout
   plan. Start here.
 - [`2026-11-17 Local Browser Bridge.md`](./2026-11-17%20Local%20Browser%20Bridge.md) —
-  idea: let the cloud agent act in the user's own browser through the
-  extension ("device tools"). The design doc for the plan's Phase 3.
+  idea: let the cloud agent act in the user's own browser, with the
+  extension as a host for client-executed tools. The design doc for the
+  plan's Phase 3.
 
 ## Status
 
