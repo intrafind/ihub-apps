@@ -47,6 +47,7 @@
  */
 import fs from 'node:fs';
 import os from 'node:os';
+import v8 from 'node:v8';
 
 /** Workers without a memory limit, and the ceiling of a derived count. */
 export const DEFAULT_WORKERS = 4;
@@ -295,4 +296,22 @@ export function workerExecArgv(sizing, execArgv = process.execArgv) {
   if (sizing?.heapMb) flags.push(`--max-old-space-size=${sizing.heapMb}`);
   if (sizing?.semiSpaceMb) flags.push(`--max-semi-space-size=${sizing.semiSpaceMb}`);
   return flags;
+}
+
+/**
+ * Let this process's worker threads use their own heap limits.
+ *
+ * V8 heap flags are process-wide: a `--max-old-space-size` or
+ * `--max-semi-space-size` given to a process (by {@link workerExecArgv},
+ * `NODE_OPTIONS` or the command line) also overrides the `resourceLimits` of
+ * every worker thread it starts — a thread asking for 256 MB got the worker's
+ * whole heap limit. The main isolate reads the flags once, when it is created,
+ * so resetting them to V8's "not set" afterwards keeps this process's own
+ * limits and lets each thread's `resourceLimits` apply again. Call it before
+ * the first thread starts. Node calls `v8.setFlagsFromString` after startup
+ * unsupported; `server/tests/thread-heap-limits.test.js` pins the behaviour.
+ */
+export function releaseThreadHeapFlags() {
+  v8.setFlagsFromString('--max-old-space-size=0');
+  v8.setFlagsFromString('--max-semi-space-size=0');
 }

@@ -20,6 +20,7 @@ import './utils/clusterRateLimitStore.js';
 import './utils/loginLockout.js';
 import './services/quota/QuotaLedger.js';
 import config from './config.js';
+import { releaseThreadHeapFlags } from './utils/workerSizing.js';
 // `startup/primary.js` and `startup/worker.js` are imported below, each only in
 // the process that runs it. A static import of `worker.js` loaded the whole
 // application — routes, services, every library they use — into the cluster
@@ -28,6 +29,10 @@ import config from './config.js';
 
 // Initialize environment variables
 dotenv.config();
+
+// The heap flags of this process must not become every worker thread's limit
+// (extraction, search, document rendering set their own); see workerSizing.js.
+releaseThreadHeapFlags();
 
 // Trust the OS certificate store (company CAs) unless NODE_USE_SYSTEM_CA=0.
 // After dotenv so a .env file can opt out; before the first outbound connection.

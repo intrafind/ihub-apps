@@ -216,6 +216,11 @@ At startup the server reads the container's memory limit from the cgroup
   young generation collects them before they reach the old generation, whose
   collections pause a worker for up to a second under load.
 
+Worker threads inside a worker (file extraction, project search, document
+rendering) keep their own heap limits: V8's heap flags are process-wide and
+would otherwise override them, so the server resets the flags after its own
+heap is set up. The threads' memory counts toward the 600 MB outside the heap.
+
 When an explicit `WORKERS` leaves a worker less than 512 MB of heap after
 these deductions, the workers do not fit: each gets what is left (at least
 256 MB) and the decision is logged as a warning naming the share and what a
