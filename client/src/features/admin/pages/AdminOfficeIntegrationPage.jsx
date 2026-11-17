@@ -16,6 +16,7 @@ import { getLocalizedContent } from '../../../utils/localizeContent';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
 import { useSavedBaseline } from '../hooks/useSavedBaseline';
+import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 
 /** The values the task pane's landing view accepts; mirrored in server/utils/officeStartPage.js. */
 const START_PAGE_CHOICES = new Set(['start', 'apps']);
@@ -142,6 +143,7 @@ function AdminOfficeIntegrationPage() {
   const [saving, setSaving] = useState(false);
   const [toggling, setToggling] = useState(false);
   const [regeneratingId, setRegeneratingId] = useState(false);
+  const [confirmingRegenerate, setConfirmingRegenerate] = useState(false);
   const [message, setMessage] = useState(null);
   const [status, setStatus] = useState(null);
 
@@ -407,18 +409,10 @@ function AdminOfficeIntegrationPage() {
     }
   };
 
+  /** "Generate new ID" asks first (ConfirmDialog); the dialog calls this. */
   const handleRegenerateAddinId = async () => {
+    setConfirmingRegenerate(false);
     if (!ready) return;
-    if (
-      !window.confirm(
-        t(
-          'admin.officeIntegration.regenerateAddinIdConfirm',
-          'Outlook treats a manifest with a new ID as a different add-in. Everyone using the add-in must install the new manifest, and the old one keeps pointing at this server until it is removed. Continue?'
-        )
-      )
-    ) {
-      return;
-    }
     try {
       setRegeneratingId(true);
       setMessage(null);
@@ -851,7 +845,7 @@ function AdminOfficeIntegrationPage() {
                   </div>
                   <button
                     type="button"
-                    onClick={handleRegenerateAddinId}
+                    onClick={() => setConfirmingRegenerate(true)}
                     disabled={regeneratingId}
                     className="shrink-0 rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
                   >
@@ -1646,6 +1640,18 @@ function AdminOfficeIntegrationPage() {
         )}
       </div>
       <UnsavedChangesDialog blocker={blocker} />
+      <ConfirmDialog
+        isOpen={confirmingRegenerate}
+        title={t('admin.officeIntegration.regenerateAddinIdTitle', 'Generate a new add-in ID?')}
+        message={t(
+          'admin.officeIntegration.regenerateAddinIdConsequence',
+          'Outlook treats a manifest with a new ID as a different add-in. Everyone using the add-in must install the new manifest, and the old one keeps pointing at this server until it is removed.'
+        )}
+        confirmLabel={t('admin.officeIntegration.regenerateAddinId', 'Generate new ID')}
+        danger
+        onConfirm={handleRegenerateAddinId}
+        onDeny={() => setConfirmingRegenerate(false)}
+      />
     </div>
   );
 }

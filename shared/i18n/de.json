@@ -176,6 +176,28 @@
     "details": "Details",
     "tryAgain": "Erneut versuchen",
     "done": "Fertig",
+    "dismiss": "Ausblenden",
+    "confirmDialog": {
+      "irreversible": "Das kann nicht rückgängig gemacht werden.",
+      "typeToConfirm": "Geben Sie zur Bestätigung ein:",
+      "copyToken": "Kopieren",
+      "busy": "Wird ausgeführt …"
+    },
+    "discardDialog": {
+      "title": "Änderungen verwerfen?",
+      "body": "Ihre Eingaben gehen verloren.",
+      "bodyNamed": "Ihre Eingaben in „{{title}}“ gehen verloren.",
+      "keepEditing": "Weiter bearbeiten",
+      "discard": "Verwerfen"
+    },
+    "secretReveal": {
+      "onlyOnce": "Das Geheimnis wird nur dieses eine Mal angezeigt. Speichern Sie es jetzt.",
+      "fieldLabel": "Geheimnis",
+      "copied": "Kopiert",
+      "copyFailed": "Kopieren nicht möglich. Markieren Sie den Text und kopieren Sie ihn.",
+      "notCopiedWarning": "Sie haben das Geheimnis noch nicht kopiert. Trotzdem schließen?",
+      "closeAnyway": "Trotzdem schließen"
+    },
     "note": "Hinweis"
   },
   "chatActions": {
@@ -1861,7 +1883,6 @@
         "presets": "Vorlage-Stimmen ({{count}})",
         "useDefault": "Als Stimme verwenden",
         "useFor": "Für {{language}} verwenden",
-        "deleteConfirm": "Die Stimme „{{name}}“ im Anbieterkonto löschen? Modelle, die sie verwenden, können dann nicht mehr mit ihr sprechen.",
         "deleteError": "Die Stimme konnte nicht gelöscht werden",
         "createTitle": "Eigene Stimme anlegen",
         "createHint": "Nehmen Sie 10–30 Sekunden einer Person auf, die natürlich spricht, ohne Musik oder Hintergrundgeräusche, oder laden Sie eine solche Aufnahme hoch. Die Stimme wird sofort im Anbieterkonto angelegt; sie liest jede Sprache, mit dem Akzent der Aufnahme.",
@@ -1883,7 +1904,9 @@
         "create": "Stimme anlegen",
         "creating": "Wird angelegt…",
         "createError": "Die Stimme konnte nicht angelegt werden",
-        "created": "Stimme „{{name}}“ angelegt ({{id}}). Verwenden Sie sie unten und speichern Sie dann das Modell."
+        "created": "Stimme „{{name}}“ angelegt ({{id}}). Verwenden Sie sie unten und speichern Sie dann das Modell.",
+        "deleteTitle": "Stimme „{{name}}“ löschen?",
+        "deleteConsequence": "Die Stimme wird im Anbieterkonto gelöscht. Modelle, die sie verwenden, können dann nicht mehr mit ihr sprechen."
       },
       "import": {
         "button": "Von URL importieren",
@@ -1997,7 +2020,9 @@
         "done": "(erledigt)",
         "todo": "(offen)"
       },
-      "moreActions": "Weitere Modell-Aktionen"
+      "moreActions": "Weitere Modell-Aktionen",
+      "disableAllDefault": "Die Einstellung für das Standardmodell wird entfernt. Werden Modelle wieder aktiviert, wird das erste Chat-Modell der Liste zum Standard.",
+      "disableAllDefaultNamed": "Die Einstellung für das Standardmodell wird entfernt (derzeit „{{name}}“). Werden Modelle wieder aktiviert, wird das erste Chat-Modell der Liste zum Standard, nicht unbedingt „{{name}}“."
     },
     "chat": {
       "title": "Chat",
@@ -2300,6 +2325,13 @@
           "tokenExpirationHelp": "Zugleich das Zeitfenster, bis eine Sperre greift: ein bereits ausgestelltes Access-Token bleibt bis zu seinem Ablauf gültig.",
           "unblock": "Entsperren",
           "unblocked": "{{name}} entsperrt"
+        },
+        "redirectUriInvalid": "Nicht hinzugefügt: Weiterleitungs-URIs müssen HTTPS verwenden (oder http://localhost für die Entwicklung).",
+        "rotateSecretNamedTitle": "Geheimnis von „{{name}}“ erneuern?",
+        "rotateSecretAction": "Geheimnis erneuern",
+        "secretReveal": {
+          "title": "Neues Geheimnis für „{{name}}“",
+          "createdTitle": "Client „{{name}}“ angelegt"
         }
       },
       "ldap": {
@@ -2503,9 +2535,10 @@
       "addinId": "Add-in-ID",
       "addinIdShared": "Jede iHub-Installation liefert diese ID aus. Erzeugen Sie eine neue, um diesen Server neben einem anderen (zum Beispiel Entwicklung und Produktion) im selben Outlook zu installieren.",
       "regenerateAddinId": "Neue ID erzeugen",
-      "regenerateAddinIdConfirm": "Outlook behandelt ein Manifest mit neuer ID als anderes Add-in. Alle Nutzer müssen das neue Manifest installieren, und das alte zeigt weiter auf diesen Server, bis es entfernt wird. Fortfahren?",
       "regenerateAddinIdDone": "Neue Add-in-ID erzeugt. Laden Sie das Manifest herunter und stellen Sie es erneut bereit.",
       "regenerateAddinIdError": "Neue Add-in-ID konnte nicht erzeugt werden",
+      "regenerateAddinIdTitle": "Neue Add-in-ID erzeugen?",
+      "regenerateAddinIdConsequence": "Outlook behandelt ein Manifest mit neuer ID als anderes Add-in. Alle Nutzer müssen das neue Manifest installieren, und das alte zeigt weiter auf diesen Server, bis es entfernt wird.",
       "resource": "Einstellungen der Office-Integration"
     },
     "nextcloudEmbed": {
@@ -2561,7 +2594,7 @@
       "forceTitle": "Client-Aktualisierung erzwingen",
       "forceDesc": "Eine erzwungene Aktualisierung für alle Clients auslösen. Dies löscht alle Browser-Caches, localStorage und zwingt Clients, alle Assets (JS, CSS, Schriften, Konfigurationen) ohne Browser-Cache neu zu laden. Die Disclaimer-Akzeptanz bleibt erhalten.",
       "warningTitle": "Warnung",
-      "warningDesc": "Diese Aktion zwingt alle verbundenen Clients, ihre Browser bei der nächsten Seiteninteraktion neu zu laden. Verwenden Sie dies bei der Bereitstellung kritischer Updates oder wenn Clients zwischengespeicherte Daten löschen müssen.",
+      "warningDesc": "Jeder Browser, der iHub verwendet, löscht seine zwischengespeicherten Dateien und lädt neu, wenn iHub darin das nächste Mal geladen wird. Verwenden Sie dies bei der Bereitstellung kritischer Updates oder wenn Clients zwischengespeicherte Daten löschen müssen.",
       "trigger": "Aktualisierung erzwingen",
       "triggering": "Aktualisierung wird erzwungen...",
       "triggerSuccess": "Erzwungene Aktualisierung erfolgreich ausgelöst! Neuer Salt: {{salt}}. Alle Clients werden beim nächsten Seitenladen aktualisiert.",
@@ -2759,7 +2792,13 @@
         "securityWarning": "Sicherheitswarnung",
         "securityWarningDesc": "Das Deaktivieren des Secure-Cookie-Flags ermöglicht die Übertragung von Cookies über unverschlüsselte HTTP-Verbindungen. Dies macht Ihre Authentifizierungs-Tokens anfällig für Abfangen. Verwenden Sie dies nur in sicheren, internen Netzwerkumgebungen ohne SSL.",
         "defaultBehavior": "Standardmäßig werden Cookies in Produktionsumgebungen als sicher markiert, was bedeutet, dass sie nur über HTTPS-Verbindungen gesendet werden. Dies ist die empfohlene Sicherheitseinstellung."
-      }
+      },
+      "forceRefreshConfirmTitle": "Aktualisierung für alle Benutzer erzwingen?",
+      "forceRefreshConfirmMessage": "Jeder Browser, der iHub verwendet, löscht seine zwischengespeicherten Dateien und lokal gespeicherten Daten und lädt neu, wenn iHub darin das nächste Mal geladen wird. Gerade geöffnete Seiten werden nicht unterbrochen.",
+      "forceRefreshConfirmKept": "Die Zustimmung zum Hinweis bleibt erhalten; andere nur im Browser gespeicherte Einstellungen werden gelöscht.",
+      "forceRefreshConfirmSignIn": "Benutzer, deren Anmeldung im Browser gespeichert ist, müssen sich eventuell erneut anmelden.",
+      "forceRefreshConfirmAction": "Aktualisierung erzwingen",
+      "forceRefreshDone": "Aktualisierung ausgelöst. Jeder Browser löscht seine zwischengespeicherten Dateien und lädt neu, wenn iHub darin das nächste Mal geladen wird."
     },
     "security": {
       "description": "SSL, CORS, Cookie-Einstellungen, Ratenbegrenzung, ausgehender Proxy und Verschlüsselung",
@@ -3323,7 +3362,11 @@
           "removePin": "Festlegung entfernen",
           "addPin": "Festlegung hinzufügen",
           "pinInvalid": "Jede Festlegung braucht einen Eintrag als <Typ>:<Name> (zum Beispiel integration:org.ckan__open-data-portal) und einen Versionsbereich."
-        }
+        },
+        "deleteConsequence": "Ihr Katalog verschwindet aus dem Marktplatz, und die zwischengespeicherten Katalogdaten werden entfernt. Bereits daraus installierte Elemente bleiben installiert.",
+        "deleteShipped": "Diese Registry wird mit iHub ausgeliefert. Es gibt kein „Standard wiederherstellen“: Um sie zurückzubekommen, müssen Sie sie von Hand erneut hinzufügen.",
+        "refreshFailed": "Aktualisierung fehlgeschlagen",
+        "updateFailed": "Änderung fehlgeschlagen"
       },
       "detail": {
         "description": "Beschreibung",
@@ -3881,10 +3924,14 @@
         "connectedAt": "seit {{date}}",
         "expired": "abgelaufen",
         "disconnect": "Trennen",
-        "disconnectConfirm": "„{{user}}“ von {{label}} trennen? Die Person muss sich erneut anmelden, um es zu nutzen.",
         "resetRegistration": "OAuth-Client-Registrierung zurücksetzen",
-        "resetConfirm": "OAuth-Client-Registrierung von {{label}} zurücksetzen? Die nächste Anmeldung registriert iHub neu; verbundene Benutzer müssen sich eventuell erneut verbinden.",
-        "resetDone": "OAuth-Client-Registrierung zurückgesetzt"
+        "resetDone": "OAuth-Client-Registrierung zurückgesetzt",
+        "disconnectTitle": "„{{user}}“ von {{label}} trennen?",
+        "disconnectAction": "Trennen",
+        "resetTitle": "OAuth-Client-Registrierung von {{label}} zurücksetzen?",
+        "resetAction": "Registrierung zurücksetzen",
+        "disconnectConsequence": "Die Person muss sich erneut anmelden, um {{label}} zu nutzen.",
+        "resetConsequence": "Die nächste Anmeldung registriert iHub neu; verbundene Benutzer müssen sich eventuell erneut verbinden."
       },
       "runsCode": "Führt Code auf diesem Server aus",
       "incompatibleReason": "Diese Installation bietet keine Aktionen: ihre Definition {{reason}}.",
@@ -4971,7 +5018,9 @@
       "backedUp": "Konfiguration gesichert unter: {{path}}",
       "missingSection": "Der Konfiguration fehlt der Abschnitt „{{section}}“.",
       "assets": {
-        "savedNotice": "Uploads und Löschungen wirken sofort und gehören nicht zu den ungespeicherten Änderungen. Den Pfad einer hochgeladenen Datei tragen Sie in den anderen Tabs ein."
+        "savedNotice": "Uploads und Löschungen wirken sofort und gehören nicht zu den ungespeicherten Änderungen. Den Pfad einer hochgeladenen Datei tragen Sie in den anderen Tabs ein.",
+        "deleteConsequence": "Seiten, Stile und Einstellungen, die auf diese Datei verweisen, zeigen dann einen defekten Link.",
+        "deleted": "Datei gelöscht"
       },
       "footer": {
         "title": "Fußzeile",
@@ -5010,7 +5059,11 @@
       },
       "linkTarget": "Link öffnen in",
       "styles": {
-        "colorPicker": "{{name}} (Farbwähler)"
+        "colorPicker": "{{name}} (Farbwähler)",
+        "variableName": "Name (ohne --)",
+        "variableValue": "Wert",
+        "addVariableRequired": "Geben Sie einen Namen und einen Wert für die Variable ein.",
+        "addVariableConfirm": "Variable hinzufügen"
       },
       "resource": "UI-Einstellungen",
       "title": "UI-Anpassung",
@@ -5220,7 +5273,10 @@
         "noGroups": "Keine",
         "moreDetails": "Weitere Details",
         "rawEntry": "Roher Eintrag (JSON)"
-      }
+      },
+      "cleanupConfirmTitle": "Audit-Einträge löschen, die älter als {{date}} sind?",
+      "cleanupConfirmMessage": "Die Audit-Log-Dateien, die älter als die Aufbewahrungsfrist ({{days}} Tage) sind, werden jetzt vom Server gelöscht statt bei der nächsten geplanten Bereinigung.",
+      "cleanupConfirmAction": "Alte Einträge löschen"
     },
     "filters": {
       "multiSelect": {
@@ -5502,7 +5558,11 @@
           "anonymousDesc": "Benutzer und Unterhaltungen werden als nicht umkehrbare Fingerabdrücke erfasst.",
           "pseudonymousDesc": "Jede Unterhaltung wird als eigener Benutzer erfasst; Benutzer-IDs werden nicht gespeichert.",
           "identifiedDesc": "Einträge nennen die echte Benutzer-ID.",
-          "label": "Erfassungsmodus"
+          "label": "Erfassungsmodus",
+          "confirmTitle": "Erfassungsmodus auf „{{mode}}“ ändern?",
+          "confirmScope": "Gilt ab jetzt für alle neu geschriebenen Nutzungsdatensätze, für alle Benutzer.",
+          "confirmAction": "Erfassungsmodus ändern",
+          "changed": "Erfassungsmodus auf „{{mode}}“ geändert."
         },
         "subtitle": "Anfragen und Tokens jedes Modellaufrufs – Chats, Agenten, Workflows, geplante Aufgaben und die API.",
         "surface": {
@@ -5691,7 +5751,8 @@
       "systemTooltip": "Wird mit iHub ausgeliefert. Kann nicht geändert oder gelöscht werden.",
       "systemNotice": "Dies ist ein System-Skill, der mit iHub ausgeliefert wird. Er wird mit iHub aktualisiert und kann hier weder geändert noch gelöscht werden. Aktivieren Sie ihn für eine App in den Skill-Einstellungen der App.",
       "providedTools": "Werkzeuge dieses Skills:",
-      "view": "Ansehen"
+      "view": "Ansehen",
+      "deletedNamed": "Skill „{{name}}“ gelöscht."
     },
     "scheduledTasks": {
       "all": "Alle",
@@ -5746,9 +5807,12 @@
       "memory": {
         "summary": "{{chars}} Zeichen · v{{version}} · {{updatedAt}}",
         "clear": "Gedächtnis leeren",
-        "confirmClear": "Das Gedächtnis von „{{name}}“ von {{owner}} leeren? Der Eigentümer verliert diese Notizen."
+        "clearTitle": "Gedächtnis von „{{name}}“ löschen?",
+        "clearAction": "Notizen löschen",
+        "clearConsequence": "Der Eigentümer, {{owner}}, verliert die Notizen, die diese Aufgabe bisher geschrieben hat."
       },
-      "memoryEnabledHint": "Aus: Läufe lesen und aktualisieren die Notizen einer Aufgabe nicht (die Notizen bleiben erhalten), und „Nur bei Änderungen“ benachrichtigt nach jedem Lauf."
+      "memoryEnabledHint": "Aus: Läufe lesen und aktualisieren die Notizen einer Aufgabe nicht (die Notizen bleiben erhalten), und „Nur bei Änderungen“ benachrichtigt nach jedem Lauf.",
+      "deleteConsequence": "Die Aufgabe wird nicht mehr ausgeführt, und ihr Besitzer kann sie und ihre Läufe nicht mehr sehen."
     },
     "overview": {
       "storage": {
@@ -7309,6 +7373,84 @@
       "relatedAck": "KI-Bestätigung",
       "relatedAckText": "– die Bestätigung vor der ersten Nachricht, beim Benutzer gespeichert"
     },
+    "common": {
+      "enableAll": "Alle aktivieren",
+      "disableAll": "Alle deaktivieren"
+    },
+    "confirm": {
+      "deleteTitle": "{{type}} „{{name}}“ löschen?",
+      "deleteMessage": "Der Eintrag wird für alle Benutzer entfernt.",
+      "delete": "Löschen",
+      "failed": "Die Aktion ist fehlgeschlagen.",
+      "andMore_one": "und {{count}} weiterer",
+      "andMore_other": "und {{count}} weitere",
+      "types": {
+        "app": "App",
+        "model": "Modell",
+        "prompt": "Prompt",
+        "provider": "Anbieter",
+        "skill": "Skill",
+        "workflow": "Workflow",
+        "registry": "Registry",
+        "asset": "Datei",
+        "credential": "Zugangsdaten"
+      },
+      "plural": {
+        "apps": "Apps",
+        "models": "Modelle",
+        "prompts": "Prompts"
+      },
+      "bulk": {
+        "enableTitle": "Alle {{items}} aktivieren?",
+        "disableTitle": "Alle {{items}} deaktivieren?",
+        "enableMessage_one": "{{count}} von {{total}} {{items}} ist derzeit deaktiviert und wird aktiviert. Benutzer mit Zugriff sehen sie sofort:",
+        "enableMessage_other": "{{count}} von {{total}} {{items}} sind derzeit deaktiviert und werden aktiviert. Benutzer mit Zugriff sehen sie sofort:",
+        "disableMessage_one": "{{count}} von {{total}} {{items}} ist derzeit aktiviert und wird deaktiviert. Benutzer verlieren sofort den Zugriff:",
+        "disableMessage_other": "{{count}} von {{total}} {{items}} sind derzeit aktiviert und werden deaktiviert. Benutzer verlieren sofort den Zugriff:",
+        "nothingToEnable": "Alle {{total}} {{items}} sind bereits aktiviert.",
+        "nothingToDisable": "Alle {{total}} {{items}} sind bereits deaktiviert."
+      }
+    },
+    "backup": {
+      "sensitivity": {
+        "title": "Bewahren Sie den Export wie einen Schlüssel auf",
+        "body": "Der Export ist nicht verschlüsselt. Er enthält den Schlüssel für gespeicherte Geheimnisse, die JWT-Signaturschlüssel und die Passwort-Hashes der Benutzer. Wer die Datei hat, kann jedes gespeicherte Geheimnis entschlüsseln und gültige Anmelde-Token erzeugen. Bewahren Sie sie so auf, dass nur Administratoren sie lesen können, und löschen Sie Kopien, die Sie nicht mehr brauchen."
+      },
+      "importConfirm": {
+        "title": "Gesamten Inhalt durch „{{name}}“ ersetzen?",
+        "message": "Der Import ersetzt alles in contents/ auf diesem Server: Konfiguration, Benutzer und Gruppen, Schlüssel, Chats und hochgeladene Daten.",
+        "file": "Datei: {{name}} ({{size}})",
+        "preImportCopy": "Der aktuelle Inhalt bleibt als Kopie vor dem Import in contents/.backups erhalten (die letzten 3 werden aufbewahrt).",
+        "signIn": "Benutzer, Passwörter und Schlüssel stammen aus der Datei: Möglicherweise müssen Sie sich neu anmelden.",
+        "typeHost": "Geben Sie zur Bestätigung die Adresse dieses Servers ein:",
+        "action": "Importieren und ersetzen"
+      }
+    },
+    "credentials": {
+      "usageUnknown": "Es konnte nicht geprüft werden, welche Integrationen „{{id}}“ verwenden.",
+      "usageIncomplete": "Es konnte nicht vollständig geprüft werden, welche Integrationen „{{id}}“ verwenden: {{count}} installierte Integrationen konnten nicht gelesen werden. Prüfen Sie diese vor dem Löschen.",
+      "usedBy_one": "Wird von {{count}} installierten Integration verwendet, die dann nicht mehr funktioniert:",
+      "usedBy_other": "Wird von {{count}} installierten Integrationen verwendet, die dann nicht mehr funktionieren:",
+      "notUsedByIntegrations": "Keine installierte Integration verwendet sie.",
+      "notChecked": "Tools, MCP-Server und Anmeldeeinstellungen, die darauf verweisen, werden hier nicht geprüft; sie schlagen fehl, bis sie andere Zugangsdaten erhalten.",
+      "deleteNamed": "Zugangsdaten „{{id}}“ löschen",
+      "deleted": "Zugangsdaten gelöscht",
+      "deleteError": "Löschen fehlgeschlagen: {{error}}"
+    },
+    "editor": {
+      "resetTitle": "Alle Änderungen zurücksetzen?",
+      "resetAction": "Änderungen zurücksetzen",
+      "switchToJsonTitle": "Zum JSON-Editor wechseln?",
+      "switchToFormTitle": "Zum Formular-Editor wechseln?",
+      "switchAction": "Editor wechseln",
+      "resetConsequence": "Ihre nicht gespeicherten Änderungen werden verworfen.",
+      "switchConsequence": "Sie haben nicht gespeicherte Änderungen. Beim Wechsel des Editors können einige davon verloren gehen."
+    },
+    "pages": {
+      "fields": {
+        "idRequired": "Die ID ist erforderlich."
+      }
+    },
     "settingsPage": {
       "sectionsNav": "Einstellungsabschnitte",
       "sectionUnsaved": "(ungespeicherte Änderungen)",
@@ -7933,7 +8075,6 @@
       "chatVisible": "Fortschritt im Chat anzeigen",
       "config": "Konfiguration",
       "configJson": "Konfiguration (JSON)",
-      "confirmDeleteNode": "Diesen Knoten löschen?",
       "copied": "kopiert",
       "deleteEdge": "Verbindung löschen",
       "deleteNode": "Knoten löschen",
@@ -8098,7 +8239,9 @@
           "wait": "Warten, bis das Dokument bereit ist",
           "outputHelp": "Zustandsvariable für das gespeicherte Dokument. Standard: {{name}}. Lassen Sie „Warten“ an, wenn ein späterer Schritt das Dokument liest."
         }
-      }
+      },
+      "deleteNodeTitle": "Knoten „{{name}}“ löschen?",
+      "deleteNodeConsequence": "Der Knoten, die darin verschachtelten Schritte und ihre Verbindungen werden entfernt. Der Workflow behält seine gespeicherte Fassung, bis Sie speichern."
     },
     "checkpointAwaiting": "Wartet auf Ihre Eingabe",
     "join": "Beitreten",
@@ -9666,11 +9809,13 @@
     "save": "Speichern",
     "saving": "Speichern…",
     "clear": "Leeren",
-    "clearConfirm": "Alle Notizen leeren? Das entfernt alles, was bisher geschrieben wurde.",
     "reload": "Neu laden (meine Änderungen verwerfen)",
     "keepEditing": "Weiter bearbeiten",
     "versionConflict": "Konflikt: Das Gedächtnis wurde an anderer Stelle geändert. Neu laden, um den aktuellen Stand zu sehen.",
-    "staleNotice": "Die Notizen haben sich geändert, seit Sie mit dem Bearbeiten begonnen haben (ein Lauf hat sie evtl. aktualisiert)."
+    "staleNotice": "Die Notizen haben sich geändert, seit Sie mit dem Bearbeiten begonnen haben (ein Lauf hat sie evtl. aktualisiert).",
+    "clearTitle": "Alle Notizen löschen?",
+    "clearAction": "Notizen löschen",
+    "clearConsequence": "Alles bisher Geschriebene wird entfernt."
   },
   "usageGuide": {
     "question": "Wie nutze ich diese App?",

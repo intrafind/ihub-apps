@@ -157,6 +157,14 @@ export function useFocusTrap(
         const elementToRestore = previousFocusRef.current;
         previousFocusRef.current = null;
         queueMicrotask(() => {
+          // Focus that something moved on purpose to an element outside the
+          // trap (the page heading after a confirmed delete, another dialog
+          // that opened meanwhile) stays there. Focus that was inside the
+          // removed container has fallen to <body> and is restored.
+          const active = document.activeElement;
+          const movedAway =
+            active && active !== document.body && active.isConnected && !container.contains(active);
+          if (movedAway) return;
           if (elementToRestore && typeof elementToRestore.focus === 'function') {
             elementToRestore.focus();
           }

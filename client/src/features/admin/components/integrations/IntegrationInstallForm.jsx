@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { use, useEffect, useMemo, useState } from 'react';
+import { use, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../../shared/components/Icon';
 import LoadingSpinner from '../../../../shared/components/LoadingSpinner';
@@ -148,6 +148,8 @@ const NO_TAKEN_IDS = [];
  * @param {(definition: Object) => void} [props.onLoaded] - the definition was loaded
  * @param {() => void} props.onCancel
  * @param {(instance: Object) => void} props.onSaved - with the saved installation
+ * @param {(dirty: boolean) => void} [props.onDirtyChange] - whether the form differs
+ *   from what it loaded (the install dialog asks before discarding it)
  */
 function IntegrationInstallForm({
   definitionId,
@@ -158,11 +160,16 @@ function IntegrationInstallForm({
   variant = 'dialog',
   onLoaded,
   onCancel,
-  onSaved
+  onSaved,
+  onDirtyChange
 }) {
   const { t, i18n } = useTranslation();
   const lang = i18n.language || 'en';
   const isEdit = Boolean(instanceId);
+  // The form as loaded (JSON), to tell whether the admin changed anything.
+  const loadedFormRef = useRef(null);
+  const onDirtyChangeRef = useRef(onDirtyChange);
+  onDirtyChangeRef.current = onDirtyChange;
   const inDialog = variant === 'dialog';
   const formId = inDialog ? 'integration-install-form' : 'integration-settings-form';
 
@@ -194,6 +201,7 @@ function IntegrationInstallForm({
     void (async () => {
       setLoading(true);
       setLoadError(null);
+      loadedFormRef.current = null;
       try {
         const [def, groupsResult, existing] = await Promise.all([
           preloaded?.definition || fetchIntegrationDefinition(definitionId),
@@ -259,6 +267,18 @@ function IntegrationInstallForm({
     // `onLoaded` is a notification; a new function identity must not reload the form.
     // eslint-disable-next-line @eslint-react/exhaustive-deps
   }, [definitionId, instanceId, isEdit, lang, takenIds, prefill, preloaded]);
+
+  // Report whether the form differs from what was loaded (IN-B12). The first
+  // form after a load is the baseline; the secret field counts too.
+  useEffect(() => {
+    if (!form) return;
+    // `checkedActions` is a Set, which JSON.stringify would write as {}.
+    const snapshot = JSON.stringify(form, (_key, value) =>
+      value instanceof Set ? [...value].sort((a, b) => String(a).localeCompare(String(b))) : value
+    );
+    if (loadedFormRef.current === null) loadedFormRef.current = snapshot;
+    onDirtyChangeRef.current?.(snapshot !== loadedFormRef.current);
+  }, [form]);
 
   const secretField = useMemo(
     () => secretFieldForMode(definition, form?.authMode),

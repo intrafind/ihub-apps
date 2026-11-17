@@ -80,6 +80,27 @@ describe('ChangeHistoryDrawer as a dialog', () => {
     expect(onClose).not.toHaveBeenCalled();
     expect(screen.getByRole('dialog', { name: 'Change History' })).toBeInTheDocument();
   });
+
+  test('Escape with focus on <body> cancels only the rollback confirmation', async () => {
+    const user = userEvent.setup();
+    const onClose = jest.fn();
+    render(<ChangeHistoryDrawer isOpen onClose={onClose} resource="apps" resourceId="chat" />);
+
+    await user.click(await screen.findByText(/by ada/));
+    await user.click(await screen.findByRole('button', { name: 'Rollback to this version' }));
+    expect(screen.getByRole('alertdialog', { name: 'Confirm Rollback' })).toBeInTheDocument();
+
+    // Focus was lost (e.g. a click on non-focusable backdrop content).
+    document.activeElement.blur();
+    expect(document.body).toHaveFocus();
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+
+    // The next Escape belongs to the drawer.
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
 });
 
 // jsdom has no layout, which the focus trap reads as "not rendered". Give

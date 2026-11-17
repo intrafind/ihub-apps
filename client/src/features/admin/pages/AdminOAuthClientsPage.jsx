@@ -18,6 +18,12 @@ import {
   KIND_DEFAULT_LABELS,
   KIND_DEFAULT_HELP
 } from '../utils/oauthClientKind';
+import {
+  setSecretRequestPending,
+  showSecretReveal,
+  useSecretRequestBlocked
+} from '../state/secretReveal';
+import { useConfirmAction } from '../hooks/useConfirmAction';
 
 function AdminOAuthClientsPage() {
   const { t } = useTranslation();
@@ -37,6 +43,15 @@ function AdminOAuthClientsPage() {
   const [selectedClientForToken, setSelectedClientForToken] = useState(null);
   const [isGeneratingToken, setIsGeneratingToken] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState(null);
+  // A rotated secret waiting to be acknowledged. It lives above the routes
+  // (AdminSecretRevealHost), so leaving the page mid-request cannot lose it.
+  // Blocked while a rotation runs or its secret is not saved yet, also after
+  // the page was left and opened again.
+  const secretRequestBlocked = useSecretRequestBlocked();
+  // Rotation runs inside its confirmation, which stays open and busy until the
+  // server answered: the new secret cannot get lost behind a closed dialog.
+  const { requestConfirm: requestRotateConfirm, dialogProps: rotateDialogProps } =
+    useConfirmAction();
 
   useEffect(() => {
     void checkOAuthStatus();
@@ -337,36 +352,58 @@ function AdminOAuthClientsPage() {
     });
   };
 
-  const handleRotateSecret = clientId => {
-    setConfirmDialog({
-      title: t('admin.auth.oauth.rotateSecretTitle', 'Rotate Client Secret'),
+  /**
+   * Named confirmation, then rotation. The new secret is shown once in the
+   * SecretRevealDialog (ID-B15), never in a native alert.
+   *
+   * The confirmation stays open, busy and modal until the POST finished, so
+   * the page cannot be left while the new secret is on its way. A failure is
+   * shown in the confirmation. No second rotation starts while a new secret
+   * is still shown: it would replace the one not saved yet.
+   *
+   * @param {{ clientId: string, name?: string }} client
+   */
+  const handleRotateSecret = client => {
+    if (secretRequestBlocked) return;
+    const name = client.name || client.clientId;
+    requestRotateConfirm({
+      title: t('admin.auth.oauth.rotateSecretNamedTitle', {
+        name,
+        defaultValue: 'Rotate the secret of "{{name}}"?'
+      }),
       message: t(
         'admin.auth.oauth.rotateSecretConfirm',
         'Are you sure you want to rotate the secret? The old secret will stop working immediately.'
       ),
+      confirmLabel: t('admin.auth.oauth.rotateSecretAction', 'Rotate secret'),
       danger: true,
-      onConfirm: async () => {
-        setConfirmDialog(null);
+      action: async () => {
+        setSecretRequestPending(true);
+        let response;
         try {
-          const response = await makeAdminApiCall(
-            `/admin/oauth/clients/${clientId}/rotate-secret`,
+          response = await makeAdminApiCall(
+            `/admin/oauth/clients/${client.clientId}/rotate-secret`,
             {
               method: 'POST'
             }
           );
-          const data = response.data;
-          const newSecret = data.clientSecret;
-          // Show the new secret — intentional alert so the admin can copy it before dismissing
-          alert(
-            `${t('admin.auth.oauth.rotateSecretSuccess', 'Secret rotated successfully. Save the new secret now.')}\n\n${t('admin.auth.oauth.clientSecret', 'Client Secret')}: ${newSecret}\n\n${t('admin.auth.oauth.clientSecretWarning', 'Save this secret now. It will not be shown again.')}`
-          );
-          void loadClients();
-        } catch (error) {
-          setMessage({
-            type: 'error',
-            text: `Failed to rotate secret: ${error.message}`
-          });
+        } catch (err) {
+          setSecretRequestPending(false);
+          throw err;
         }
+        showSecretReveal({
+          title: t('admin.auth.oauth.secretReveal.title', {
+            name,
+            defaultValue: 'New secret for "{{name}}"'
+          }),
+          description: t(
+            'admin.auth.oauth.rotateSecretSuccess',
+            'Secret rotated successfully. Save the new secret now.'
+          ),
+          fieldLabel: t('admin.auth.oauth.clientSecret', 'Client Secret'),
+          secret: response.data.clientSecret
+        });
+        void loadClients();
       }
     });
   };
@@ -843,7 +880,7 @@ function AdminOAuthClientsPage() {
                           <Icon name="key" size="sm" />
                         </button>
                         <button
-                          onClick={() => handleRotateSecret(client.clientId)}
+                          onClick={() => handleRotateSecret(client)}
                           className="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 shadow-xs text-sm leading-4 font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                           title={t('admin.auth.oauth.rotateSecret', 'Rotate Secret')}
                         >
@@ -1026,10 +1063,12 @@ function AdminOAuthClientsPage() {
         isOpen={!!confirmDialog}
         title={confirmDialog?.title ?? ''}
         message={confirmDialog?.message ?? ''}
+        confirmLabel={confirmDialog?.confirmLabel}
         danger={confirmDialog?.danger}
         onConfirm={() => confirmDialog?.onConfirm()}
         onDeny={() => setConfirmDialog(null)}
       />
+      <ConfirmDialog {...rotateDialogProps} />
     </div>
   );
 }

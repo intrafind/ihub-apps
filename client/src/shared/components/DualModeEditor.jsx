@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import MonacoJsonEditor from './MonacoJsonEditor';
 import Icon from './Icon';
 import useDarkMode from '../../hooks/useDarkMode';
+import ConfirmDialog from './ConfirmDialog';
 
 /**
  * DualModeEditor - A component that provides dual-mode editing (Form + JSON)
@@ -49,6 +50,8 @@ const DualModeEditor = ({
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [validationState, setValidationState] = useState({ isValid: true, errors: [] });
   const initialValueRef = useRef(JSON.stringify(value));
+  // Pending question: { kind: 'switch', mode } or { kind: 'reset' } (no window.confirm).
+  const [pendingConfirm, setPendingConfirm] = useState(null);
 
   // Track changes to detect unsaved modifications
   useEffect(() => {
@@ -63,16 +66,7 @@ const DualModeEditor = ({
     if (newMode === editingMode) return;
 
     if (hasUnsavedChanges) {
-      const shouldSwitch = window.confirm(
-        t(
-          'admin.editor.unsavedChangesWarning',
-          'You have unsaved changes. Switching modes may cause data loss. Continue?'
-        )
-      );
-
-      if (shouldSwitch) {
-        performModeSwitch(newMode);
-      }
+      setPendingConfirm({ kind: 'switch', mode: newMode });
     } else {
       performModeSwitch(newMode);
     }
@@ -115,19 +109,25 @@ const DualModeEditor = ({
    * Reset to initial state
    */
   const handleReset = () => {
-    const shouldReset = window.confirm(
-      t('admin.editor.resetConfirmation', 'Are you sure you want to reset all changes?')
-    );
+    setPendingConfirm({ kind: 'reset' });
+  };
 
-    if (shouldReset) {
-      try {
-        const initialValue = JSON.parse(initialValueRef.current);
-        handleDataChange(initialValue);
-        setHasUnsavedChanges(false);
-      } catch (error) {
-        console.error('Error resetting to initial value:', error);
-      }
+  /** Discards the edits since the last mode switch (after confirmation). */
+  const performReset = () => {
+    try {
+      const initialValue = JSON.parse(initialValueRef.current);
+      handleDataChange(initialValue);
+      setHasUnsavedChanges(false);
+    } catch (error) {
+      console.error('Error resetting to initial value:', error);
     }
+  };
+
+  const confirmPending = () => {
+    const pending = pendingConfirm;
+    setPendingConfirm(null);
+    if (pending?.kind === 'switch') performModeSwitch(pending.mode);
+    if (pending?.kind === 'reset') performReset();
   };
 
   return (
@@ -285,6 +285,32 @@ const DualModeEditor = ({
           </div>
         </div>
       )}
+      <ConfirmDialog
+        isOpen={Boolean(pendingConfirm)}
+        title={
+          pendingConfirm?.kind === 'reset'
+            ? t('admin.editor.resetTitle', 'Reset all changes?')
+            : pendingConfirm?.mode === 'json'
+              ? t('admin.editor.switchToJsonTitle', 'Switch to the JSON editor?')
+              : t('admin.editor.switchToFormTitle', 'Switch to the form editor?')
+        }
+        message={
+          pendingConfirm?.kind === 'reset'
+            ? t('admin.editor.resetConsequence', 'Your unsaved changes are discarded.')
+            : t(
+                'admin.editor.switchConsequence',
+                'You have unsaved changes. Switching editors may lose some of them.'
+              )
+        }
+        confirmLabel={
+          pendingConfirm?.kind === 'reset'
+            ? t('admin.editor.resetAction', 'Reset changes')
+            : t('admin.editor.switchAction', 'Switch editor')
+        }
+        danger={pendingConfirm?.kind === 'reset'}
+        onConfirm={confirmPending}
+        onDeny={() => setPendingConfirm(null)}
+      />
     </div>
   );
 };

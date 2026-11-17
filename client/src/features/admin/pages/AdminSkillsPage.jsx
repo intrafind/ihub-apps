@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useFilterState } from '../hooks/useFilterState';
 import { useTranslation } from 'react-i18next';
@@ -17,6 +17,10 @@ import {
   toggleSkill
 } from '../../../api/adminApi';
 import AdminLoadError from '../components/AdminLoadError';
+import ConfirmDialog from '../../../shared/components/ConfirmDialog';
+import AdminStatusNotice from '../components/AdminStatusNotice';
+import { useConfirmAction } from '../hooks/useConfirmAction';
+import { deleteConfirmText } from '../utils/confirmText';
 /** The tabs of the page, as `?tab=` names them. */
 const TABS = ['skills', 'user'];
 
@@ -45,6 +49,11 @@ function AdminSkillsPage() {
   const [searchTerm, setSearchTerm] = useFilterState('q', '');
   const [filterEnabled, setFilterEnabled] = useFilterState('enabled', 'all');
   const [uploading, setUploading] = useState(false);
+  const [notice, setNotice] = useState('');
+  const headingRef = useRef(null);
+  // Id of the latest list request (see loadSkills).
+  const loadRequestRef = useRef(0);
+  const { requestConfirm, dialogProps: confirmDialogProps } = useConfirmAction();
 
   useEffect(() => {
     void loadSkills();
@@ -65,13 +74,19 @@ function AdminSkillsPage() {
 
   /**
    * Fetches the full list of skills from the admin API and stores
-   * them in local state.
+   * them in local state. Only the first load shows the full-page spinner
+   * (`loading` starts true); a reload after a change keeps the page, and with
+   * it an open confirmation, mounted.
    */
   const loadSkills = async () => {
+    // Toggles in quick succession start overlapping reloads; only the latest
+    // one may set the list, or an older response could overwrite a newer one.
+    const requestId = ++loadRequestRef.current;
+    const isLatest = () => requestId === loadRequestRef.current;
     try {
-      setLoading(true);
       setError(null);
       const data = await fetchAdminSkills();
+      if (!isLatest()) return;
       const skillsArray = Array.isArray(data) ? data : [];
       setSkills(skillsArray);
 
@@ -79,11 +94,12 @@ function AdminSkillsPage() {
         console.warn('No skills returned from API');
       }
     } catch (err) {
+      if (!isLatest()) return;
       console.error('Error loading skills:', err);
       setError(getAdminApiErrorMessage(err));
       setSkills([]);
     } finally {
-      setLoading(false);
+      if (isLatest()) setLoading(false);
     }
   };
 
@@ -101,22 +117,27 @@ function AdminSkillsPage() {
   };
 
   /**
-   * Deletes a skill after user confirmation, then reloads the list.
+   * Asks for a named confirmation, then deletes the skill and reloads the list.
+   * A failure stays in the dialog; success is announced in the status line.
    * @param {string} skillName - The unique name identifier of the skill
    */
-  const handleDeleteSkill = async skillName => {
-    if (!confirm(t('admin.skills.deleteConfirm', 'Are you sure you want to delete this skill?'))) {
-      return;
-    }
-
-    try {
-      await deleteSkill(skillName);
-      await loadSkills();
-      alert(t('admin.skills.deleteSuccess', 'Skill deleted successfully'));
-    } catch (err) {
-      console.error('Error deleting skill:', err);
-      alert(err.message || 'Failed to delete skill');
-    }
+  const handleDeleteSkill = skillName => {
+    setNotice('');
+    requestConfirm({
+      ...deleteConfirmText({ typeKey: 'skill', typeFallback: 'skill', name: skillName, t }),
+      action: async () => {
+        await deleteSkill(skillName);
+        await loadSkills();
+        setNotice(
+          t('admin.skills.deletedNamed', {
+            name: skillName,
+            defaultValue: 'Skill "{{name}}" deleted.'
+          })
+        );
+      },
+      // The row's Delete button is gone: keep keyboard focus on the page.
+      focusAfterSuccess: headingRef
+    });
   };
 
   /**
@@ -228,7 +249,11 @@ function AdminSkillsPage() {
         {/* Page header */}
         <div className="sm:flex sm:items-center">
           <div className="sm:flex-auto">
-            <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
+            <h1
+              ref={headingRef}
+              tabIndex={-1}
+              className="text-2xl font-semibold text-gray-900 dark:text-gray-100 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 rounded-sm"
+            >
               {activeTab === 'user'
                 ? t('admin.skills.userSkills.title', 'User Skills')
                 : t('admin.skills.title', 'Skill Management')}
@@ -319,6 +344,8 @@ function AdminSkillsPage() {
                 action={{ label: t('common.dismiss', 'Dismiss'), onClick: () => setError(null) }}
               />
             )}
+
+            <AdminStatusNotice message={notice} onDismiss={() => setNotice('')} className="mt-4" />
 
             {/* Search and filter controls */}
             <div className="mt-8 flex flex-col sm:flex-row gap-4">
@@ -557,6 +584,7 @@ function AdminSkillsPage() {
           </>
         )}
       </div>
+      <ConfirmDialog {...confirmDialogProps} />
     </div>
   );
 }

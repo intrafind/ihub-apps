@@ -67,8 +67,9 @@ Restart the server after editing the file by hand.
 ### Step 1: Create an OAuth Client
 
 In the admin UI, open **Admin → OAuth → Clients** and click **Create OAuth Client**. Set the name,
-the token expiration and the allowed apps, models and prompts. The client ID and secret are shown
-once, after saving.
+the token expiration and the allowed apps, models and prompts. After saving, a dialog shows the
+client ID and the secret, with **Copy**. The secret is shown only this once; **Done** warns if you
+have not copied it yet.
 
 Or use the admin API:
 

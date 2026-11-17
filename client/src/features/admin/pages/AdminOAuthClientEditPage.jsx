@@ -11,6 +11,7 @@ import ResourceSelector from '../components/ResourceSelector';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
+import SecretRevealDialog from '../../../shared/components/SecretRevealDialog';
 
 function AdminOAuthClientEditPage() {
   const { t } = useTranslation();
@@ -29,6 +30,8 @@ function AdminOAuthClientEditPage() {
   const [availablePrompts, setAvailablePrompts] = useState([]);
   const [redirectUriInput, setRedirectUriInput] = useState('');
   const [postLogoutUriInput, setPostLogoutUriInput] = useState('');
+  // Inline validation message per redirect-URI field (no native alert).
+  const [uriErrors, setUriErrors] = useState({});
   const [initialData, setInitialData] = useState(null);
 
   const [formData, setFormData] = useState({
@@ -214,19 +217,29 @@ function AdminOAuthClientEditPage() {
    *
    * @param {'redirectUris'|'postLogoutRedirectUris'} field - The formData field to append to
    * @param {string} value - The raw URI string entered by the admin
+   * @returns {boolean} true when the URI was added (the caller then clears the
+   *   input); false keeps the input so the admin can fix it, with an inline error.
    */
   const handleRedirectUriAdd = (field, value) => {
     const trimmed = value.trim();
-    if (!trimmed) return;
+    if (!trimmed) return false;
     // Validate: must be https:// or http://localhost
     if (!trimmed.startsWith('https://') && !trimmed.match(/^http:\/\/localhost(:\d+)?/)) {
-      alert('Redirect URIs must use HTTPS (or http://localhost for development)');
-      return;
+      setUriErrors(prev => ({
+        ...prev,
+        [field]: t(
+          'admin.auth.oauth.redirectUriInvalid',
+          'Not added: redirect URIs must use HTTPS (or http://localhost for development).'
+        )
+      }));
+      return false;
     }
+    setUriErrors(prev => ({ ...prev, [field]: null }));
     setFormData(prev => ({
       ...prev,
       [field]: [...(prev[field] || []), trimmed]
     }));
+    return true;
   };
 
   /**
@@ -258,16 +271,9 @@ function AdminOAuthClientEditPage() {
     });
   };
 
-  const copyToClipboard = async text => {
-    try {
-      await navigator.clipboard.writeText(text);
-    } catch (error) {
-      console.error('Failed to copy to clipboard:', error);
-    }
-  };
-
   const handleModalClose = () => {
     setShowSecretModal(false);
+    setNewClientSecret('');
     markSaved();
     navigate('/admin/oauth/clients');
   };
@@ -601,6 +607,10 @@ function AdminOAuthClientEditPage() {
                             type="text"
                             value={redirectUriInput}
                             onChange={e => setRedirectUriInput(e.target.value)}
+                            aria-invalid={uriErrors.redirectUris ? 'true' : undefined}
+                            aria-describedby={
+                              uriErrors.redirectUris ? 'redirectUris-error' : undefined
+                            }
                             placeholder={t(
                               'admin.auth.oauth.redirectUriPlaceholder',
                               'https://yourapp.com/callback'
@@ -609,22 +619,33 @@ function AdminOAuthClientEditPage() {
                             onKeyDown={e => {
                               if (e.key === 'Enter') {
                                 e.preventDefault();
-                                handleRedirectUriAdd('redirectUris', redirectUriInput);
-                                setRedirectUriInput('');
+                                if (handleRedirectUriAdd('redirectUris', redirectUriInput)) {
+                                  setRedirectUriInput('');
+                                }
                               }
                             }}
                           />
                           <button
                             type="button"
                             onClick={() => {
-                              handleRedirectUriAdd('redirectUris', redirectUriInput);
-                              setRedirectUriInput('');
+                              if (handleRedirectUriAdd('redirectUris', redirectUriInput)) {
+                                setRedirectUriInput('');
+                              }
                             }}
                             className="px-3 py-2 border border-gray-300 rounded-md text-sm hover:bg-gray-50"
                           >
                             {t('common.add', 'Add')}
                           </button>
                         </div>
+                        {uriErrors.redirectUris && (
+                          <p
+                            id="redirectUris-error"
+                            role="alert"
+                            className="text-sm text-red-700 dark:text-red-300"
+                          >
+                            {uriErrors.redirectUris}
+                          </p>
+                        )}
                         <p className="text-xs text-gray-500 dark:text-gray-400">
                           {t(
                             'admin.auth.oauth.redirectUriHint',
@@ -658,6 +679,12 @@ function AdminOAuthClientEditPage() {
                             type="text"
                             value={postLogoutUriInput}
                             onChange={e => setPostLogoutUriInput(e.target.value)}
+                            aria-invalid={uriErrors.postLogoutRedirectUris ? 'true' : undefined}
+                            aria-describedby={
+                              uriErrors.postLogoutRedirectUris
+                                ? 'postLogoutRedirectUris-error'
+                                : undefined
+                            }
                             placeholder={t(
                               'admin.auth.oauth.postLogoutUriPlaceholder',
                               'https://yourapp.com/logged-out'
@@ -666,22 +693,37 @@ function AdminOAuthClientEditPage() {
                             onKeyDown={e => {
                               if (e.key === 'Enter') {
                                 e.preventDefault();
-                                handleRedirectUriAdd('postLogoutRedirectUris', postLogoutUriInput);
-                                setPostLogoutUriInput('');
+                                if (
+                                  handleRedirectUriAdd('postLogoutRedirectUris', postLogoutUriInput)
+                                ) {
+                                  setPostLogoutUriInput('');
+                                }
                               }
                             }}
                           />
                           <button
                             type="button"
                             onClick={() => {
-                              handleRedirectUriAdd('postLogoutRedirectUris', postLogoutUriInput);
-                              setPostLogoutUriInput('');
+                              if (
+                                handleRedirectUriAdd('postLogoutRedirectUris', postLogoutUriInput)
+                              ) {
+                                setPostLogoutUriInput('');
+                              }
                             }}
                             className="px-3 py-2 border border-gray-300 rounded-md text-sm hover:bg-gray-50"
                           >
                             {t('common.add', 'Add')}
                           </button>
                         </div>
+                        {uriErrors.postLogoutRedirectUris && (
+                          <p
+                            id="postLogoutRedirectUris-error"
+                            role="alert"
+                            className="text-sm text-red-700 dark:text-red-300"
+                          >
+                            {uriErrors.postLogoutRedirectUris}
+                          </p>
+                        )}
                       </div>
                     </div>
 
@@ -751,82 +793,25 @@ function AdminOAuthClientEditPage() {
 
       <UnsavedChangesDialog blocker={blocker} />
 
-      {/* Secret Modal */}
-      {showSecretModal && (
-        <div className="fixed inset-0 bg-gray-600/50 dark:bg-gray-900/75 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
-          <div className="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full mx-4">
-            <div className="p-6">
-              <div className="flex items-center mb-4">
-                <Icon name="check" className="h-6 w-6 text-green-500 mr-3" />
-                <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
-                  {t('admin.auth.oauth.createSuccess', 'OAuth client created successfully')}
-                </h3>
-              </div>
-
-              <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 rounded-md p-4 mb-4">
-                <div className="flex">
-                  <Icon name="warning" className="h-5 w-5 text-yellow-400 mr-3 mt-0.5" />
-                  <div>
-                    <h4 className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
-                      {t(
-                        'admin.auth.oauth.clientSecretWarning',
-                        'Save this secret now. It will not be shown again.'
-                      )}
-                    </h4>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    {t('admin.auth.oauth.clientId', 'Client ID')}
-                  </label>
-                  <div className="flex gap-2">
-                    <code className="flex-1 bg-gray-100 dark:bg-gray-700 px-3 py-2 rounded-sm text-sm break-all text-gray-900 dark:text-gray-100">
-                      {newClientId}
-                    </code>
-                    <button
-                      type="button"
-                      onClick={() => copyToClipboard(newClientId)}
-                      className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm hover:bg-gray-50 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300"
-                    >
-                      <Icon name="clipboard" size="sm" />
-                    </button>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    {t('admin.auth.oauth.clientSecret', 'Client Secret')}
-                  </label>
-                  <div className="flex gap-2">
-                    <code className="flex-1 bg-gray-100 dark:bg-gray-700 px-3 py-2 rounded-sm text-sm break-all text-gray-900 dark:text-gray-100">
-                      {newClientSecret}
-                    </code>
-                    <button
-                      type="button"
-                      onClick={() => copyToClipboard(newClientSecret)}
-                      className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm hover:bg-gray-50 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300"
-                    >
-                      <Icon name="clipboard" size="sm" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-6 flex justify-end">
-                <button
-                  onClick={handleModalClose}
-                  className="px-4 py-2 border border-transparent rounded-md shadow-xs text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  {t('common.close', 'Close')}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* The new client's secret, shown once (ID-B15). The secret leaves state on Done. */}
+      <SecretRevealDialog
+        isOpen={showSecretModal}
+        title={t('admin.auth.oauth.secretReveal.createdTitle', {
+          name: formData.name || newClientId,
+          defaultValue: 'Client "{{name}}" created'
+        })}
+        description={
+          <p>
+            {t('admin.auth.oauth.clientId', 'Client ID')}:{' '}
+            <code className="font-mono break-all text-gray-900 dark:text-gray-100">
+              {newClientId}
+            </code>
+          </p>
+        }
+        fieldLabel={t('admin.auth.oauth.clientSecret', 'Client Secret')}
+        secret={newClientSecret}
+        onDone={handleModalClose}
+      />
     </>
   );
 }

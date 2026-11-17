@@ -99,6 +99,8 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
   const [updateReport, setUpdateReport] = useState(null);
   // Why the update was refused (shown in the update dialog instead of an alert).
   const [updateError, setUpdateError] = useState(null);
+  // Failure of install / replace / uninstall / detach, shown in the drawer (not alert()).
+  const [actionError, setActionError] = useState(null);
 
   // Resolve localized text for the current language
   const lang = i18n.language?.split('-')[0] || 'en';
@@ -151,6 +153,7 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
    */
   const handleAction = async action => {
     setActionLoading(action);
+    setActionError(null);
     if (action === 'update') setUpdateError(null);
     try {
       if (action === 'install') {
@@ -192,7 +195,7 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
           message: data?.detail || err?.message || ''
         });
       } else {
-        alert(apiErrorMessage(err, t, `${action} failed`));
+        setActionError(apiErrorMessage(err, t, `${action} failed`));
       }
     } finally {
       setActionLoading(null);
@@ -522,7 +525,13 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
                 disabled={!!actionLoading}
                 className="px-3 py-1.5 bg-red-600 text-white rounded-sm text-sm disabled:opacity-50"
               >
-                {actionLoading === confirmAction ? '...' : t('common.confirm', 'Confirm')}
+                {actionLoading === confirmAction
+                  ? '...'
+                  : confirmAction === 'replace'
+                    ? t('admin.marketplace.replaceLocal', 'Replace local copy')
+                    : confirmAction === 'uninstall'
+                      ? t('admin.marketplace.uninstall', 'Uninstall')
+                      : t('admin.marketplace.detach', 'Detach')}
               </button>
               <button
                 onClick={() => setConfirmAction(null)}
@@ -531,6 +540,16 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
                 {t('common.cancel', 'Cancel')}
               </button>
             </div>
+          </div>
+        )}
+
+        {actionError && (
+          <div
+            role="alert"
+            className="mx-6 my-3 p-3 rounded-md border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/30 text-sm text-red-800 dark:text-red-200 break-words"
+            data-testid="action-error"
+          >
+            {actionError}
           </div>
         )}
 
