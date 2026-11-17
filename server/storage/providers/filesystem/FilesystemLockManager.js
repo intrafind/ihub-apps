@@ -497,8 +497,8 @@ export class FilesystemLockManager extends LockManager {
    *   slow requests for many minutes after it ended. Paced, it drains such a
    *   backlog in the background over hours, and a day's idle counters in minutes.
    * @returns {Promise<{removed: number, scratch: number, busy: number}>}
-   *   Counters removed, scratch files removed, counters skipped because their
-   *   name was locked
+   *   Counters removed, scratch files and stale want markers removed, counters
+   *   skipped because their name was locked
    */
   async sweepIdleFences({
     idleMs = DEFAULT_FENCE_IDLE_MS,
@@ -532,12 +532,16 @@ export class FilesystemLockManager extends LockManager {
     for (const entry of names) {
       if (shouldStop()) break;
       const match = LOCK_FILE_NAME.exec(entry);
-      if (!match || match[2] !== 'fence') continue;
+      const wantMarker = match?.[2] === 'lock' && match[3] === '.want';
+      if (!match || (match[2] !== 'fence' && !wantMarker)) continue;
       const file = containedPath(this._baseDir, LOCKS_DIR, entry);
       if (!(await isIdle(file))) continue;
       await pace();
       if (shouldStop()) break;
-      if (match[3]) {
+      if (wantMarker || match[3]) {
+        // `<digest>.lock.want`: a waiter's request (see `signalWant` in
+        // fileLock.js) left by a process that died waiting; a live one lasts
+        // one lock wait.
         // `<digest>.fence.<pid>-<uuid>`: a counter write that never reached
         // its rename. A live one is milliseconds old.
         if (await removeIfExists(file)) outcome.scratch += 1;
