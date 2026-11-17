@@ -140,7 +140,10 @@ describe('tools of system skills', () => {
       ['create_web_artifact', 'dashboard'],
       ['create_xlsx', 'xlsx'],
       ['create_zip', 'files'],
+      ['edit_docx', 'docx'],
+      ['edit_pptx', 'pptx'],
       ['edit_web_artifact', 'web-artifacts'],
+      ['edit_xlsx', 'xlsx'],
       ['preview_pdf', 'pdf'],
       ['restyle_pptx', 'pptx']
     ]);
@@ -160,7 +163,10 @@ describe('tools of system skills', () => {
       create_xlsx: 'workbook',
       create_zip: 'archive',
       // An edit changes a file; the row reads "Edit web artifact", not "Creating …".
+      edit_docx: null,
+      edit_pptx: null,
       edit_web_artifact: null,
+      edit_xlsx: null,
       preview_pdf: null,
       restyle_pptx: 'presentation'
     });

@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
+import { filenameParameter, settingsParameter, textEditsParameter } from '../editToolParameters.js';
+
 /**
  * Definition of the tool the `docx` system skill brings (see
  * `server/systemSkills/docx`). Plain data: the handler lives in
@@ -93,5 +95,27 @@ export const CREATE_DOCX_TOOL = {
       }
     },
     required: ['filename', 'title', 'markdown']
+  }
+};
+
+export const EDIT_DOCX_TOOL = {
+  id: 'edit_docx',
+  name: { en: 'Edit Word document', de: 'Word-Dokument bearbeiten' },
+  description: {
+    en: 'Change a Word document this chat created with create_docx instead of writing it again: exact text replacements in its Markdown ("edits"), new settings ("set": title, subtitle, author, date, header, footer, toc, coverPage, pageNumbers, …), or both. Each oldText must occur exactly once; all edits apply or none. The document is rendered again under the same name, in the same template. If you do not have its Markdown, read it with chat_artifacts_read first. Use create_docx only for a new document or a rewrite.',
+    de: 'Ändert ein Word-Dokument, das dieser Chat mit create_docx erstellt hat, statt es neu zu schreiben: exakte Textersetzungen im Markdown ("edits"), neue Einstellungen ("set": title, subtitle, author, date, header, footer, toc, coverPage, pageNumbers, …) oder beides. Jeder oldText muss genau einmal vorkommen; alle Änderungen werden übernommen oder keine. Das Dokument wird unter demselben Namen in derselben Vorlage neu erzeugt. Fehlt das Markdown, zuerst mit chat_artifacts_read lesen. create_docx nur für ein neues Dokument oder eine Neufassung.'
+  },
+  parameters: {
+    type: 'object',
+    properties: {
+      filename: filenameParameter('quarterly-report.docx', 'document'),
+      edits: textEditsParameter(
+        'Replacements in the Markdown, applied in order. Keep each oldText short but unique: a heading, a sentence or a table row, copied exactly.'
+      ),
+      set: settingsParameter(
+        'Settings to change, as in create_docx (e.g. {"title": "Q3 Report", "toc": true}); null removes one. The Markdown changes through "edits".'
+      )
+    },
+    required: ['filename']
   }
 };

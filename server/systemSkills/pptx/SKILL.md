@@ -1,10 +1,10 @@
 ---
 name: pptx
-description: Create PowerPoint presentations (.pptx) on demand — pitch decks, status updates, board and project reviews, trainings, workshop agendas, results summaries — on the company's slide template, with bullet slides, KPI metric cards, tables, native editable charts, pictures, two-column comparisons, section slides and speaker notes. Use whenever the user asks for slides, a deck, a presentation or a PowerPoint file. Do not activate only to summarize or answer questions about an uploaded .pptx (its extracted text is already in the conversation).
+description: Create PowerPoint presentations (.pptx) on demand — pitch decks, status updates, board and project reviews, trainings, workshop agendas, results summaries — on the company's slide template, with bullet slides, KPI metric cards, tables, native editable charts, pictures, two-column comparisons, section slides and speaker notes. Use whenever the user asks for slides, a deck, a presentation or a PowerPoint file. Also use it to change a deck this chat already made. Do not activate only to summarize or answer questions about an uploaded .pptx (its extracted text is already in the conversation).
 metadata:
   author: IntraFind
-  version: '1.4'
-allowed-tools: create_pptx restyle_pptx
+  version: '1.5'
+allowed-tools: create_pptx restyle_pptx edit_pptx
 ---
 
 # Creating presentations
@@ -45,7 +45,17 @@ When the user uploads a `.pptx` and wants **that deck itself** in the company de
 4. **Call `create_pptx`** with a descriptive `filename`, the deck `title`, the `language` of the content (e.g. `en-US`, `de-DE`) and the `slides`.
 5. **Answer briefly**: name the file, the number of slides and the storyline in one or two sentences. Do not paste the slides into the chat and do not add a link: the download card is already there.
 
-If `create_pptx` returns `warnings`, read them: a table was cut, text was shrunk to fit, an image was skipped. Fix it (split the slide, shorten the text) and create the deck again.
+If `create_pptx` returns `warnings`, read them: a table was cut, text was shrunk to fit, an image was skipped. Fix it (split the slide, shorten the text) with `edit_pptx`.
+
+## Changing a deck: `edit_pptx`, not a new one
+
+Once a deck exists, change it with `edit_pptx` instead of writing every slide again: the `filename`, and any of
+
+- `changes`, slide operations applied in order: `{"op":"update","slide":3,"set":{"title":"…"}}` (only the named fields; `null` removes one), `{"op":"replace","slide":3,"with":{…}}`, `{"op":"insert","after":4,"slide":{…}}` (`after: 0` puts it first), `{"op":"delete","slide":5}`, `{"op":"move","slide":6,"to":2}`. Slide numbers count from 1 and refer to the deck as the operations before left it.
+- `edits`, exact text replacements in the slide texts (a title, a bullet, a table cell, a note); each `oldText` must occur once in the whole deck.
+- `set`, deck settings (`title`, `footer`, `slideNumbers`, `aspectRatio`).
+
+All changes apply or none; the deck is built again under the same name, on the same template. When you do not have the slides (the deck was made in an earlier turn), read them with `chat_artifacts_read`, which returns them as JSON. A deck made before edits were possible, or one the user uploaded, cannot be edited this way: create it again with `create_pptx`.
 
 ## Slides
 
