@@ -789,7 +789,10 @@ Verfügung", like the rest of the German interface.
 
 - The other German texts that still said *du* use *Sie* as well: the chat input placeholder, the
   question before a chat is cleared, the empty chat, the feedback dialog, the sender name of your own
-  messages ("Sie"), the Nextcloud embed settings and the integration action details.
+  messages ("Sie"), the Nextcloud embed settings and the integration action details. Instructions
+  such as "Wähle eine App" and "Gib eine Zahl ein" now read "Wählen Sie eine App" and "Geben Sie
+  eine Zahl ein", in the app picker, the integration catalog, the tool parameter fields and the
+  answer rating.
 
 ## Source Cards Get the Search Profile Name and the "Uploaded" or "Picked" Marker Again
 

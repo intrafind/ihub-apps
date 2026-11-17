@@ -237,4 +237,16 @@ describe('German translations', () => {
       .map(([key, value]) => `${key}: ${value}`);
     expect(informal).toEqual([]);
   });
+
+  // Informal imperatives ("Wähle …", "Gib … ein") address the reader as "du" without the pronoun.
+  // Sentence starts only, and only verbs that are never a progress status ("Prüfe…", "Lade…").
+  const INFORMAL_IMPERATIVE =
+    /(?:^|[.!?:]\s+)(Baue|Bestätige|Bewerte|Entferne|Füge|Gehe|Gib|Klicke|Öffne|Richte|Trage|Wähle)\s(?!Sie\b)/;
+
+  it('use the formal imperative ("Wählen Sie"), not "Wähle"', () => {
+    const informal = leaves(de)
+      .filter(([, value]) => INFORMAL_IMPERATIVE.test(value))
+      .map(([key, value]) => `${key}: ${value}`);
+    expect(informal).toEqual([]);
+  });
 });
