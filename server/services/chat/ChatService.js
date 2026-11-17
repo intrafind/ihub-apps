@@ -1099,7 +1099,16 @@ class ChatService {
       // The calls that stopped on a missing connection stay with the chat, so
       // the connect can run them once (#3752). Before the answer is stored:
       // a client that reopens the chat at once finds the record.
-      if (!approvalGate && persist && result.status === 'completed' && connectCalls.length > 0) {
+      // Not for a headless turn (the inference API, a scheduled run) nor a
+      // temporary chat: nobody can come back to continue them.
+      if (
+        !approvalGate &&
+        !headless &&
+        persist &&
+        persist.temporary !== true &&
+        result.status === 'completed' &&
+        connectCalls.length > 0
+      ) {
         await this._storePendingConnect({
           repository: persist.repository,
           chatId,
@@ -1108,6 +1117,7 @@ class ChatService {
           calls: connectCalls,
           messages: result.messages,
           startMessage: turnStartMessage,
+          continues: connectResume?.answerRunIds || [],
           basis: carriedBasis({ prior: resume?.basis || connectResume?.basis, result })
         });
       }
@@ -1331,13 +1341,21 @@ class ChatService {
     calls,
     messages,
     startMessage,
+    continues = [],
     basis = null
   }) {
     // A person with a connection of their own: no record for an anonymous or
     // guest owner (they cannot hold one), nor for a delegated caller.
     if (!user?.id || user.id === 'anonymous') return false;
     try {
-      const record = buildPendingConnect({ runId, calls, messages, startMessage, basis });
+      const record = buildPendingConnect({
+        runId,
+        calls,
+        messages,
+        startMessage,
+        basis,
+        continues
+      });
       if (!record) {
         logger.info('Failed calls are not resumable after a connect', {
           component: COMPONENT,

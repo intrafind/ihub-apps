@@ -547,7 +547,8 @@ test('not connected → Connect → consent → back in the same chat → answer
   // The stub approves at once; the callback sends the browser back to the chat.
   await page.waitForURL(url => url.pathname === new URL(chatUrl).pathname, { timeout: 60_000 });
   expect(vendor.authorizeRequests.at(-1)?.code_challenge_method).toBe('S256');
-  expect(page.url()).not.toContain('integration_connected');
+  // The result parameters are removed from the URL once the page has mounted.
+  await expect.poll(() => page.url()).not.toContain('integration_connected');
 
   // The server continued the stored call: the answer appears with no message
   // of the user's own in between, and the vendor was called once.

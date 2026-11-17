@@ -113,10 +113,19 @@ function stepTranscript(messages, startMessage, firstCallId, lastCallId) {
  * @param {Array<Object>} params.messages - `result.messages` of the loop
  * @param {Object|null} params.startMessage - The last message the turn started with
  * @param {Object|null} [params.basis] - What the turn had used
+ * @param {string[]} [params.continues] - Run ids of the earlier answers this turn continues
  * @param {Date} [params.now]
  * @returns {Object|null}
  */
-export function buildPendingConnect({ runId, calls, messages, startMessage, basis = null, now }) {
+export function buildPendingConnect({
+  runId,
+  calls,
+  messages,
+  startMessage,
+  basis = null,
+  continues = [],
+  now
+}) {
   const list = Array.isArray(calls) ? calls : [];
   if (!runId || list.length === 0 || list.length > MAX_CONNECT_CALLS) return null;
   if (!list.every(c => c?.id && c.toolId && c.integration && argsKeptWhole(c.args))) return null;
@@ -132,6 +141,11 @@ export function buildPendingConnect({ runId, calls, messages, startMessage, basi
   return {
     id: crypto.randomBytes(16).toString('hex'),
     runId,
+    // The answers of the earlier runs this one continues (a resume that failed
+    // again): all of them leave the prompt of the next resume.
+    continues: (Array.isArray(continues) ? continues : [])
+      .filter(id => typeof id === 'string')
+      .slice(-5),
     integrations: [...new Set(list.map(c => c.integration))],
     calls: list.map(c => ({
       id: String(c.id),
@@ -155,8 +169,10 @@ export function buildPendingConnect({ runId, calls, messages, startMessage, basi
  * @param {Object|null} record
  * @returns {{id: string, integrations: string[], callIds: string[], expiresAt: string}|null}
  */
-export function publicPendingConnect(record) {
+export function publicPendingConnect(record, now = Date.now()) {
   if (!record || typeof record !== 'object' || typeof record.id !== 'string') return null;
+  // An expired record is not offered: nothing will run for it.
+  if (!record.expiresAt || Date.parse(record.expiresAt) <= now) return null;
   return {
     id: record.id,
     integrations: Array.isArray(record.integrations) ? record.integrations.map(String) : [],
@@ -297,7 +313,7 @@ export async function prepareConnectResume({
   }
 
   const request = parseConnectResume(raw);
-  if (!request) {
+  if (!request || lastMessage?.approvalResponse !== undefined) {
     result.refusal = {
       status: 400,
       code: 'INVALID_CONNECT_RESUME',
@@ -367,6 +383,8 @@ export async function prepareConnectResume({
       resume: {
         id: taken.id,
         runId: taken.runId,
+        // Every answer that leaves the prompt: this run's and the ones it continued.
+        answerRunIds: [...(Array.isArray(taken.continues) ? taken.continues : []), taken.runId],
         integration: connectedIntegration,
         calls,
         transcript: Array.isArray(taken.transcript) ? taken.transcript : [],

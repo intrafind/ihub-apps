@@ -37,12 +37,17 @@ import { getConnectResumeStatus, setConnectResumeStatus } from './connectResumeS
 export function useConnectResume({ chatId, pendingConnect, ready, busy, resume }) {
   const connected = useConnectResult(result => result.connected);
   const doneRef = useRef(false);
+  // The chat the page came back to: a later switch to another chat must not
+  // run that chat's record for the same integration.
+  const returnChatRef = useRef(null);
   const resumeRef = useRef(resume);
   useEffect(() => {
     resumeRef.current = resume;
   });
 
   useEffect(() => {
+    if (chatId && !returnChatRef.current) returnChatRef.current = chatId;
+    if (chatId && returnChatRef.current !== chatId) doneRef.current = true;
     if (doneRef.current || !connected || !ready || busy || !chatId) return;
     // Hydration has not reported the record yet, or there is none.
     if (!pendingConnect?.id || !pendingConnect.integrations?.includes(connected)) return;

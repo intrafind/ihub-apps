@@ -645,3 +645,55 @@ test('connectResumeMessages appends the stored step after the history and does n
   assert.deepEqual(resume.toolCalls[0].args, { a: 1 });
   assert.equal(resume.toolCalls[0].toolCall.function.arguments, '{"a":1}');
 });
+
+// ───────────────────────── review follow-ups ─────────────────────────
+
+test('a headless turn (the inference API) or a temporary chat leaves no record', async t => {
+  for (const extra of [{ headless: true }, { persistence: { temporary: true } }]) {
+    const chatId = newChatId('nokeep');
+    captureFrames(t, chatId);
+    const repository = await chatStore(t);
+    const { service } = makeService([toolTurn('jira_search', ARGS), textTurn('Connect please.')], {
+      runTool: connectLater()
+    });
+    await turn(service, {
+      chatId,
+      prepData: prep(),
+      ...extra,
+      persistence: { ...persistenceFor(repository), ...(extra.persistence || {}) }
+    });
+    assert.ok(!(await repository.getChat(chatId))?.pendingConnect);
+  }
+});
+
+test('a resume that fails again chains: the next resume drops every answer of the chain', async t => {
+  const setup = await failedTurn(t);
+  const first = (await setup.repository.getChat(setup.chatId)).pendingConnect;
+  const resumed = await resumeTurn(t, setup, {
+    runTool: async () => ({ ...AUTH_REQUIRED }),
+    script: [textTurn('Still not connected.')]
+  });
+  assert.deepEqual(resumed.committed.resume.answerRunIds, [first.runId]);
+  const second = (await setup.repository.getChat(setup.chatId)).pendingConnect;
+  assert.deepEqual(second.continues, [first.runId]);
+  const prepared = await preparing(setup);
+  const committed = await prepared.commit();
+  assert.deepEqual(committed.resume.answerRunIds, [first.runId, second.runId]);
+});
+
+test('connectResume together with an approval answer is refused; an expired record is not offered', async t => {
+  const setup = await failedTurn(t);
+  const chat = await setup.repository.getChat(setup.chatId);
+  const both = await preparing(setup, {
+    lastMessage: {
+      connectResume: { id: chat.pendingConnect.id },
+      approvalResponse: { interactionId: 'x', decision: 'approve' }
+    }
+  });
+  assert.equal(both.refusal.code, 'INVALID_CONNECT_RESUME');
+  assert.ok(publicPendingConnect(chat.pendingConnect));
+  assert.equal(
+    publicPendingConnect(chat.pendingConnect, Date.now() + CONNECT_RESUME_TTL_MS + 1),
+    null
+  );
+});

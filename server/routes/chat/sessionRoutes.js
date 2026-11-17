@@ -1141,15 +1141,24 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
         let forkStoredId = null;
         let replacedMessage = null;
         if (connectResumePrep.record) {
-          // The answer that carries the card is the last message of the chat;
-          // the continuation is built from the question before it.
+          // The answer that carries the card is the last message of the chat
+          // (a resume that failed again left a chain of them); the
+          // continuation is built from the question before them.
+          const record = connectResumePrep.record;
+          const answerRuns = new Set([...(record.continues || []), record.runId]);
           const last = history[history.length - 1];
-          if (last?.role !== 'assistant' || last.runId !== connectResumePrep.record.runId) {
+          if (replaceFromMessageId || last?.role !== 'assistant' || last.runId !== record.runId) {
             throw refusal(409, 'Nothing is waiting to be continued in this chat', {
               code: 'CONNECT_RESUME_NOT_PENDING'
             });
           }
-          history = history.slice(0, -1);
+          while (
+            history.length > 0 &&
+            history[history.length - 1].role === 'assistant' &&
+            answerRuns.has(history[history.length - 1].runId)
+          ) {
+            history = history.slice(0, -1);
+          }
         }
         if (replaceFromMessageId) {
           // Either id the client can know this message by: the stored id it
