@@ -31,7 +31,8 @@ const DANGER_BUTTON = `${BUTTON_BASE} bg-red-600 hover:bg-red-700 text-white foc
  *   the label says so; styled neutral because it never touches anyone else's
  *   saved work.
  * - **Keep my changes and overwrite on next save**: re-reads the current
- *   revision (the read stores its `ETag`), so the next save goes through and
+ *   revision into the refused form's own revision holder (the event carries
+ *   it; no other form's revision changes), so that form's next save goes through and
  *   replaces the newer version, including the other person's change. That
  *   destroys someone else's saved work, so it is styled as the dangerous
  *   action and only ever happens on an explicit click. A further change by
@@ -50,6 +51,8 @@ const DANGER_BUTTON = `${BUTTON_BASE} bg-red-600 hover:bg-red-700 text-white foc
 export default function AdminConfigConflictNotice({ onReload }) {
   const { t } = useTranslation();
   const [resource, setResource] = useState(null);
+  // The refused form's revision holder, from the conflict event.
+  const revisionRef = useRef(null);
   const containerRef = useRef(null);
   const closeButtonRef = useRef(null);
   const isOpen = resource !== null;
@@ -61,7 +64,10 @@ export default function AdminConfigConflictNotice({ onReload }) {
   });
 
   useEffect(() => {
-    const onConflict = event => setResource(event.detail?.resource || 'platform');
+    const onConflict = event => {
+      revisionRef.current = event.detail?.revision ?? null;
+      setResource(event.detail?.resource || 'platform');
+    };
     window.addEventListener(CONFIG_CONFLICT_EVENT, onConflict);
     return () => window.removeEventListener(CONFIG_CONFLICT_EVENT, onConflict);
   }, []);
@@ -83,11 +89,13 @@ export default function AdminConfigConflictNotice({ onReload }) {
 
   const keepAndOverwrite = useCallback(() => {
     const url = revisionReadUrlOf(resource);
+    const revision = revisionRef.current;
     setResource(null);
-    if (!url) return;
-    // Only the revision matters: `makeAdminApiCall` remembers the ETag of the
-    // read. If it fails, the next save is refused again and this dialog returns.
-    makeAdminApiCall(url, { method: 'GET' }).catch(error => {
+    if (!url || !revision) return;
+    // Only the revision matters: `makeAdminApiCall` stores the ETag of the read
+    // in the refused form's holder, and in no other. If the read fails, the
+    // next save is refused again and this dialog returns.
+    makeAdminApiCall(url, { method: 'GET', revision }).catch(error => {
       console.warn('Could not re-read the configuration revision:', error);
     });
   }, [resource]);

@@ -4,7 +4,7 @@
 import { apiClient } from './client.js';
 import { CRAWL_REQUEST_TIMEOUT_MS } from './endpoints/projects.js';
 import { buildApiUrl } from '../utils/runtimeBasePath';
-import { rememberRevision, reportConfigConflict, withIfMatch } from './adminConfigRevision.js';
+import { captureRevision, reportConfigConflict, withIfMatch } from './adminConfigRevision.js';
 
 const isPlainObjectForBody = value =>
   value !== null &&
@@ -16,12 +16,22 @@ const isPlainObjectForBody = value =>
 export const getAdminApiErrorMessage = err =>
   err?.response?.data?.detail || err?.message || 'An unexpected error occurred';
 
-// Utility function to make authenticated API calls to admin endpoints
+/**
+ * Make an authenticated call to an admin endpoint.
+ *
+ * @param {string} url - Admin API path (`/admin/...`)
+ * @param {Object} [options] - `method`, `headers`, `body` and other axios options
+ * @param {{current: string|null}} [options.revision] - The revision holder of the
+ *   form this call loads or saves (platform or UI config only; see
+ *   `api/adminConfigRevision.js`). A `GET` or `POST` stores the response `ETag`
+ *   in it; a `POST` sends the held revision as `If-Match`.
+ * @returns {Promise<Object>} The axios response
+ */
 export const makeAdminApiCall = async (url, options = {}) => {
   // Handle admin token for anonymous mode
   const adminToken = localStorage.getItem('adminToken');
 
-  const { method = 'GET', headers = {}, ...axiosOptions } = options;
+  const { method = 'GET', headers = {}, revision, ...axiosOptions } = options;
 
   // Create axios config from supported options
   const axiosConfig = {
@@ -87,17 +97,17 @@ export const makeAdminApiCall = async (url, options = {}) => {
     axiosConfig.headers.Authorization = `Bearer ${adminToken}`;
   }
 
-  // Platform and UI config saves carry the revision they were based on, so a
+  // Platform and UI config saves carry the revision their own form loaded, so a
   // save over someone else's newer change is refused (412) instead of erasing it.
-  axiosConfig.headers = withIfMatch(axiosConfig.url, method, axiosConfig.headers);
+  axiosConfig.headers = withIfMatch(axiosConfig.url, method, axiosConfig.headers, revision);
 
   try {
     const response = await apiClient(axiosConfig);
-    rememberRevision(axiosConfig.url, response, method);
+    captureRevision(axiosConfig.url, response, method, revision);
     return response;
   } catch (error) {
     const status = error.response?.status;
-    reportConfigConflict(axiosConfig.url, error);
+    reportConfigConflict(axiosConfig.url, error, revision);
 
     // Handle admin-specific auth failures
     if (status === 401 || status === 403) {

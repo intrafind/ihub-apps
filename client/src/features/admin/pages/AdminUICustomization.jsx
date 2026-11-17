@@ -97,6 +97,9 @@ function AdminUICustomization() {
   // The newest form state, so a save can tell whether the admin kept editing
   // while its requests ran.
   const latestConfigRef = useRef(config);
+  // The revision of the configuration this form loaded (or last saved): its
+  // save sends exactly this as If-Match, whatever other reads in the tab saw.
+  const revisionRef = useRef(null);
   latestConfigRef.current = config;
 
   // The tab is part of the address, so a reload or a shared link keeps it.
@@ -114,7 +117,7 @@ function AdminUICustomization() {
     let cancelled = false;
     const loadConfig = async () => {
       try {
-        const response = await makeAdminApiCall('/admin/ui/config');
+        const response = await makeAdminApiCall('/admin/ui/config', { revision: revisionRef });
         if (cancelled) return;
         setSavedConfig(response.data);
         setConfig(response.data);
@@ -152,7 +155,8 @@ function AdminUICustomization() {
       await makeAdminApiCall('/admin/ui/config', {
         method: 'POST',
         body: { config: toSave },
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
+        revision: revisionRef
       });
       // The save keeps the stored page registry, whatever the form sent, so
       // pages created elsewhere since this page loaded are read back for the

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../../utils/localizeContent';
@@ -562,6 +562,9 @@ function VariablesTabContent() {
   const { t } = useTranslation();
   const [platformConfig, setPlatformConfig] = useState(null);
   const [globalPromptVariables, setGlobalPromptVariables] = useState(null);
+  // The revision of the configuration this form loaded (or last saved): its
+  // save sends exactly this as If-Match, whatever other reads in the tab saw.
+  const revisionRef = useRef(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -575,7 +578,9 @@ function VariablesTabContent() {
     try {
       setLoading(true);
       setError(null);
-      const response = await makeAdminApiCall('/admin/configs/platform');
+      const response = await makeAdminApiCall('/admin/configs/platform', {
+        revision: revisionRef
+      });
       setPlatformConfig(response.data);
       setGlobalPromptVariables(
         response.data.globalPromptVariables || { context: '', variables: {} }
@@ -602,7 +607,8 @@ function VariablesTabContent() {
       // left out (the proxy JWT providers' `jwkUrl`, for one).
       await makeAdminApiCall('/admin/configs/platform', {
         method: 'POST',
-        body: { globalPromptVariables }
+        body: { globalPromptVariables },
+        revision: revisionRef
       });
       setPlatformConfig(previous => ({ ...previous, globalPromptVariables }));
       setHasChanges(false);

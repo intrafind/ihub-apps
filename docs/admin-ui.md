@@ -533,8 +533,10 @@ The warning also appears if you try to close or refresh the browser tab while a 
 
 ### When someone else saved first
 
-**Authentication**, **MCP gateway** and **UI Customization** remember which version of the
-settings they loaded. If another administrator, another browser tab or a script saved the same
+**Authentication**, **MCP gateway**, **UI Customization**, **Localization** and the global prompt
+variables on **Prompts** remember which version of the settings they loaded. Each page checks its
+save against its own loaded version only; another page or card that reads the same settings later
+does not change it. If another administrator, another browser tab or a script saved the same
 settings after you opened the page, your save is refused and a dialog says **This changed since
 you opened it**. Nothing was saved, and your edits are still on the page:
 

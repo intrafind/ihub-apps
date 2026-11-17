@@ -92,8 +92,8 @@ function hasUrlMask(value) {
     at !== -1;
     at = value.indexOf(QUERY_VALUE_MASK, at + 1)
   ) {
-    const after = value[at + QUERY_VALUE_MASK.length];
-    const endsValue = after === undefined || after === '&' || after === '#';
+    const end = at + QUERY_VALUE_MASK.length;
+    const endsValue = end === value.length || value[end] === '&' || value[end] === '#';
     if (endsValue && endsQueryParamName(value, at)) return true;
   }
   return false;

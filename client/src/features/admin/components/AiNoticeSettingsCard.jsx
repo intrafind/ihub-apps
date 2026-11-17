@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import { createConfigRevision } from '../../../api/adminConfigRevision';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import EuAiActCard from './euAiAct/EuAiActCard';
 import EuAiActStateNote from './euAiAct/EuAiActStateNote';
@@ -52,7 +53,12 @@ function AiNoticeSettingsCard({ onSaved }) {
     setMessage(null);
     try {
       // Read-modify-write: platform.json carries settings this card does not show.
-      const response = await makeAdminApiCall('/admin/configs/platform', { method: 'GET' });
+      // This save's own read: its POST sends the read's ETag as If-Match.
+      const revision = createConfigRevision();
+      const response = await makeAdminApiCall('/admin/configs/platform', {
+        method: 'GET',
+        revision
+      });
       const platform = response.data || {};
       // The read is redacted (proxy JWT provider `jwkUrl` values are left out), and the route
       // keeps the stored proxyAuth when none is sent: posting the redacted one would erase them.
@@ -69,7 +75,11 @@ function AiNoticeSettingsCard({ onSaved }) {
         },
         guardrail: { ...platform.aiDisclosure?.guardrail, text: guardrailText.trim() }
       };
-      await makeAdminApiCall('/admin/configs/platform', { method: 'POST', body: platform });
+      await makeAdminApiCall('/admin/configs/platform', {
+        method: 'POST',
+        body: platform,
+        revision
+      });
       setMessage({ type: 'success', text: t('admin.aiDisclosure.saved', 'AI notice saved') });
       refreshConfig();
       onSaved?.();

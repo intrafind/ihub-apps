@@ -2253,7 +2253,8 @@ earlier are not asked again until the next change. See [UI Configuration](../../
 
 When two administrators, two browser tabs or a script change the platform settings or **UI
 Customization** at the same time, the later save no longer silently overwrites the earlier one.
-This applies to **Authentication**, **MCP gateway** and **UI Customization**: the save is refused
+This applies to **Authentication**, **MCP gateway**, **UI Customization**, **Localization** and the
+global prompt variables on **Prompts**, each checked against the version it loaded: the save is refused
 with a dialog, **This changed since you opened it**; your edits stay on the page. **Reload and
 discard my changes** loads the current settings, and **Keep my changes and overwrite on next save**
 lets you save over the newer version deliberately. **Close** (or Escape) only closes the dialog:

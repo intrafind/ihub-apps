@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import DualModeEditor from '../../../shared/components/DualModeEditor';
@@ -38,6 +38,9 @@ function AdminAuthPage() {
   const [availableGroups, setAvailableGroups] = useState([]);
   // The configuration as last loaded or saved, to tell unsaved edits apart.
   const [savedConfig, setSavedConfig] = useState(null);
+  // The revision of the configuration this form loaded (or last saved): its
+  // save sends exactly this as If-Match, whatever other reads in the tab saw.
+  const revisionRef = useRef(null);
   const [config, setConfig] = useState({
     auth: {
       mode: 'proxy',
@@ -107,7 +110,9 @@ function AdminAuthPage() {
 
   const loadConfiguration = async () => {
     try {
-      const response = await makeAdminApiCall('/admin/configs/platform');
+      const response = await makeAdminApiCall('/admin/configs/platform', {
+        revision: revisionRef
+      });
       const data = response.data;
 
       setConfig(prevConfig => ({
@@ -137,7 +142,8 @@ function AdminAuthPage() {
         headers: {
           'Content-Type': 'application/json'
         },
-        body: data
+        body: data,
+        revision: revisionRef
       });
 
       // Success - axios doesn't have response.ok, successful responses are returned directly

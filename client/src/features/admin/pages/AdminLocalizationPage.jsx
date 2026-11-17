@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
@@ -32,6 +32,9 @@ function AdminLocalizationPage() {
   // form still holds its initial 'en', and saving would write that over whatever
   // the install had configured.
   const [loaded, setLoaded] = useState(false);
+  // The revision of the configuration this form loaded (or last saved): its
+  // save sends exactly this as If-Match, whatever other reads in the tab saw.
+  const revisionRef = useRef(null);
 
   /**
    * The languages this install actually has, derived the same way the end-user
@@ -58,7 +61,10 @@ function AdminLocalizationPage() {
   const loadConfiguration = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await makeAdminApiCall('/admin/configs/platform', { method: 'GET' });
+      const response = await makeAdminApiCall('/admin/configs/platform', {
+        method: 'GET',
+        revision: revisionRef
+      });
       const config = response.data || {};
       setDefaultLanguage(config.defaultLanguage || 'en');
       setLoaded(true);
@@ -91,7 +97,8 @@ function AdminLocalizationPage() {
       // logins. (Several older admin pages do echo it; see the note in the PR.)
       await makeAdminApiCall('/admin/configs/platform', {
         method: 'POST',
-        body: { defaultLanguage }
+        body: { defaultLanguage },
+        revision: revisionRef
       });
 
       // The UI config carries defaultLanguage to the client and is cached for

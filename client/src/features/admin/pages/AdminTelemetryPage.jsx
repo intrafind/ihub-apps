@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import { createConfigRevision } from '../../../api/adminConfigRevision';
 
 const DEFAULT_TELEMETRY = {
   enabled: false,
@@ -94,10 +95,19 @@ function AdminTelemetryPage() {
     try {
       setSaving(true);
       setMessage('');
-      const response = await makeAdminApiCall('/admin/configs/platform', { method: 'GET' });
+      // This save's own read: its POST sends the read's ETag as If-Match.
+      const revision = createConfigRevision();
+      const response = await makeAdminApiCall('/admin/configs/platform', {
+        method: 'GET',
+        revision
+      });
       const platform = response.data || {};
       platform.telemetry = config;
-      await makeAdminApiCall('/admin/configs/platform', { method: 'POST', body: platform });
+      await makeAdminApiCall('/admin/configs/platform', {
+        method: 'POST',
+        body: platform,
+        revision
+      });
       setMessage({
         type: 'success',
         text: t(

@@ -4,11 +4,14 @@
 /**
  * Optimistic locking of platform and UI config saves on the client (decision 6).
  *
- * `makeAdminApiCall` remembers the `ETag` of each read and successful write of
- * `/admin/configs/platform` and `/admin/ui/config`, sends it as `If-Match` on
- * the next POST of that file, and on `412 PRECONDITION_FAILED` raises one
- * conflict dialog. The dialog keeps the admin's edits (nothing on the page is
- * touched), offers Reload, and never retries.
+ * A form passes its own revision holder to `makeAdminApiCall` for the read that
+ * fills it and for its save of `/admin/configs/platform` or `/admin/ui/config`.
+ * The holder takes the `ETag` of that read and of each successful save, and the
+ * save sends it as `If-Match`; a read by another page or card in the same tab
+ * never changes it. On `412 PRECONDITION_FAILED` one conflict dialog opens. The
+ * dialog keeps the admin's edits (nothing on the page is touched), offers
+ * Reload, re-reads only the refused form's revision on "Keep my changes", and
+ * never retries.
  *
  * Also: the scoped saves (Advanced → onboarding toggle, Logging → privacy card)
  * send only their own fields.
@@ -49,11 +52,26 @@ jest.mock('../../../client/src/features/admin/components/AdminDemoAccountsAlert'
   __esModule: true,
   default: () => null
 }));
+jest.mock('../../../client/src/shared/components/DualModeEditor', () => ({
+  __esModule: true,
+  default: () => null
+}));
+jest.mock('../../../client/src/features/admin/components/PlatformFormEditor', () => ({
+  __esModule: true,
+  default: () => null
+}));
+jest.mock('../../../client/src/shared/components/LoadingSpinner', () => ({
+  __esModule: true,
+  default: () => <span>Loading</span>
+}));
+jest.mock('../../../client/src/utils/schemaService', () => ({
+  getSchemaByType: async () => ({})
+}));
 
 const { makeAdminApiCall } = require('../../../client/src/api/adminApi');
 const {
   CONFIG_CONFLICT_EVENT,
-  resetConfigRevisions
+  createConfigRevision
 } = require('../../../client/src/api/adminConfigRevision');
 const AdminConfigConflictNotice =
   require('../../../client/src/features/admin/components/AdminConfigConflictNotice').default;
@@ -61,6 +79,7 @@ const AdminAdvancedPage =
   require('../../../client/src/features/admin/pages/AdminAdvancedPage').default;
 const CookieSettingsConfig =
   require('../../../client/src/features/admin/components/CookieSettingsConfig').default;
+const AdminAuthPage = require('../../../client/src/features/admin/pages/AdminAuthPage').default;
 
 const ok = (data, etag) => ({ status: 200, data, headers: etag ? { etag } : {} });
 const conflict = () => {
@@ -80,16 +99,16 @@ const sentHeaders = call => mockRequest.mock.calls[call][0].headers;
 
 beforeEach(() => {
   mockRequest.mockReset();
-  resetConfigRevisions();
   localStorage.clear();
 });
 
 describe('makeAdminApiCall: If-Match for platform and UI config saves', () => {
-  test('a POST of the platform config sends the ETag of the last read', async () => {
+  test("a POST of the platform config sends the ETag of the form's own read", async () => {
     mockRequest.mockResolvedValueOnce(ok({}, '"rev-1"')).mockResolvedValueOnce(ok({}, '"rev-2"'));
+    const revision = createConfigRevision();
 
-    await makeAdminApiCall('/admin/configs/platform');
-    await makeAdminApiCall('/admin/configs/platform', { method: 'POST', body: { a: 1 } });
+    await makeAdminApiCall('/admin/configs/platform', { revision });
+    await makeAdminApiCall('/admin/configs/platform', { method: 'POST', body: { a: 1 }, revision });
 
     expect(sentHeaders(0)['If-Match']).toBeUndefined();
     expect(sentHeaders(1)['If-Match']).toBe('"rev-1"');
@@ -101,11 +120,34 @@ describe('makeAdminApiCall: If-Match for platform and UI config saves', () => {
       .mockResolvedValueOnce(ok({}, '"rev-2"'))
       .mockResolvedValueOnce(ok({}, '"rev-3"'));
 
-    await makeAdminApiCall('/admin/configs/platform');
-    await makeAdminApiCall('/admin/configs/platform', { method: 'POST', body: {} });
-    await makeAdminApiCall('/admin/configs/platform', { method: 'POST', body: {} });
+    const revision = createConfigRevision();
+    await makeAdminApiCall('/admin/configs/platform', { revision });
+    await makeAdminApiCall('/admin/configs/platform', { method: 'POST', body: {}, revision });
+    await makeAdminApiCall('/admin/configs/platform', { method: 'POST', body: {}, revision });
 
     expect(sentHeaders(2)['If-Match']).toBe('"rev-2"');
+  });
+
+  test("another read of the same file in the tab does not change the form's If-Match", async () => {
+    // The form loaded rev-1. Another admin saved; another page's read then
+    // finished with rev-2. The form never saw that change: its save must send
+    // rev-1 and be refused, not carry rev-2 and overwrite the change.
+    mockRequest
+      .mockResolvedValueOnce(ok({}, '"rev-1"'))
+      .mockResolvedValueOnce(ok({}, '"rev-2"'))
+      .mockResolvedValueOnce(ok({}, '"rev-2"'))
+      .mockRejectedValueOnce(conflict());
+    const form = createConfigRevision();
+
+    await makeAdminApiCall('/admin/configs/platform', { revision: form });
+    await makeAdminApiCall('/admin/configs/platform', { revision: createConfigRevision() });
+    await makeAdminApiCall('/admin/configs/platform');
+    await expect(
+      makeAdminApiCall('/admin/configs/platform', { method: 'POST', body: {}, revision: form })
+    ).rejects.toMatchObject({ response: { status: 412 } });
+
+    expect(sentHeaders(3)['If-Match']).toBe('"rev-1"');
+    expect(form.current).toBe('"rev-1"');
   });
 
   test('UI config and platform config keep separate revisions', async () => {
@@ -114,19 +156,32 @@ describe('makeAdminApiCall: If-Match for platform and UI config saves', () => {
       .mockResolvedValueOnce(ok({}, '"platform-1"'))
       .mockResolvedValueOnce({ status: 204, data: '', headers: { etag: '"ui-2"' } });
 
-    await makeAdminApiCall('/admin/ui/config');
-    await makeAdminApiCall('/admin/configs/platform');
-    await makeAdminApiCall('/admin/ui/config', { method: 'POST', body: { config: {} } });
+    const uiForm = createConfigRevision();
+    const platformForm = createConfigRevision();
+    await makeAdminApiCall('/admin/ui/config', { revision: uiForm });
+    await makeAdminApiCall('/admin/configs/platform', { revision: platformForm });
+    await makeAdminApiCall('/admin/ui/config', {
+      method: 'POST',
+      body: { config: {} },
+      revision: uiForm
+    });
 
     expect(sentHeaders(2)['If-Match']).toBe('"ui-1"');
+    expect(uiForm.current).toBe('"ui-2"');
+    expect(platformForm.current).toBe('"platform-1"');
   });
 
   test('scoped PATCH and other endpoints are not guarded', async () => {
     mockRequest.mockResolvedValue(ok({}, '"rev-1"'));
+    const revision = createConfigRevision();
 
-    await makeAdminApiCall('/admin/configs/platform');
-    await makeAdminApiCall('/admin/configs/platform', { method: 'PATCH', body: { setup: {} } });
-    await makeAdminApiCall('/admin/apps/x', { method: 'POST', body: {} });
+    await makeAdminApiCall('/admin/configs/platform', { revision });
+    await makeAdminApiCall('/admin/configs/platform', {
+      method: 'PATCH',
+      body: { setup: {} },
+      revision
+    });
+    await makeAdminApiCall('/admin/apps/x', { method: 'POST', body: {}, revision });
 
     expect(sentHeaders(1)['If-Match']).toBeUndefined();
     expect(sentHeaders(2)['If-Match']).toBeUndefined();
@@ -142,20 +197,29 @@ describe('makeAdminApiCall: If-Match for platform and UI config saves', () => {
       .mockResolvedValueOnce(ok({}, '"rev-3"'))
       .mockResolvedValueOnce(ok({}, '"rev-4"'));
 
-    await makeAdminApiCall('/admin/configs/platform');
+    const form = createConfigRevision();
+    await makeAdminApiCall('/admin/configs/platform', { revision: form });
     await makeAdminApiCall('/admin/configs/platform', {
       method: 'PATCH',
-      body: { cookieSettings: { disableSecure: true } }
+      body: { cookieSettings: { disableSecure: true } },
+      revision: form
     });
-    await makeAdminApiCall('/admin/configs/platform', { method: 'POST', body: {} });
+    await makeAdminApiCall('/admin/configs/platform', { method: 'POST', body: {}, revision: form });
 
     expect(sentHeaders(2)['If-Match']).toBe('"rev-1"');
   });
 
-  test('no read yet: no If-Match (the save behaves as before)', async () => {
-    mockRequest.mockResolvedValueOnce(ok({}));
+  test('no read yet, or no revision holder: no If-Match (the save behaves as before)', async () => {
+    mockRequest.mockResolvedValue(ok({}, '"rev-1"'));
+    await makeAdminApiCall('/admin/configs/platform', {
+      method: 'POST',
+      body: {},
+      revision: createConfigRevision()
+    });
+    await makeAdminApiCall('/admin/configs/platform');
     await makeAdminApiCall('/admin/configs/platform', { method: 'POST', body: {} });
     expect(sentHeaders(0)['If-Match']).toBeUndefined();
+    expect(sentHeaders(2)['If-Match']).toBeUndefined();
   });
 
   test('a 412 raises the conflict event once, is rethrown, and is not retried', async () => {
@@ -163,14 +227,15 @@ describe('makeAdminApiCall: If-Match for platform and UI config saves', () => {
     const listener = event => events.push(event.detail);
     window.addEventListener(CONFIG_CONFLICT_EVENT, listener);
     mockRequest.mockResolvedValueOnce(ok({}, '"rev-1"')).mockRejectedValueOnce(conflict());
+    const revision = createConfigRevision();
 
-    await makeAdminApiCall('/admin/configs/platform');
+    await makeAdminApiCall('/admin/configs/platform', { revision });
     await expect(
-      makeAdminApiCall('/admin/configs/platform', { method: 'POST', body: {} })
+      makeAdminApiCall('/admin/configs/platform', { method: 'POST', body: {}, revision })
     ).rejects.toMatchObject({ response: { status: 412 } });
 
     window.removeEventListener(CONFIG_CONFLICT_EVENT, listener);
-    expect(events).toEqual([{ resource: 'platform' }]);
+    expect(events).toEqual([{ resource: 'platform', revision }]);
     expect(mockRequest).toHaveBeenCalledTimes(2);
   });
 });
@@ -212,14 +277,20 @@ describe('AdminConfigConflictNotice', () => {
 
   test('after "Keep my changes" the next save goes through with the current revision (R7)', async () => {
     // Loaded rev-1; someone else saved rev-2; the save with rev-1 is refused.
-    mockRequest.mockResolvedValueOnce(ok({}, '"rev-1"'));
-    await makeAdminApiCall('/admin/ui/config');
-    mockRequest.mockRejectedValueOnce(conflict());
-    await makeAdminApiCall('/admin/ui/config', { method: 'POST', body: { config: {} } }).catch(
-      () => {}
-    );
+    const form = createConfigRevision();
+    const otherForm = createConfigRevision();
+    otherForm.current = '"other-1"';
     render(<AdminConfigConflictNotice onReload={jest.fn()} />);
-    raise('ui');
+    mockRequest.mockResolvedValueOnce(ok({}, '"rev-1"'));
+    await makeAdminApiCall('/admin/ui/config', { revision: form });
+    mockRequest.mockRejectedValueOnce(conflict());
+    await act(async () => {
+      await makeAdminApiCall('/admin/ui/config', {
+        method: 'POST',
+        body: { config: {} },
+        revision: form
+      }).catch(() => {});
+    });
 
     mockRequest.mockResolvedValueOnce(ok({}, '"rev-2"'));
     fireEvent.click(
@@ -227,23 +298,37 @@ describe('AdminConfigConflictNotice', () => {
     );
     await waitFor(() => expect(mockRequest).toHaveBeenCalledTimes(3));
     expect(mockRequest.mock.calls[2][0]).toMatchObject({ url: '/admin/ui/config', method: 'GET' });
+    await waitFor(() => expect(form.current).toBe('"rev-2"'));
+    // Only the refused form's revision was re-read.
+    expect(otherForm.current).toBe('"other-1"');
 
     mockRequest.mockResolvedValueOnce({ status: 204, data: '', headers: { etag: '"rev-3"' } });
-    await makeAdminApiCall('/admin/ui/config', { method: 'POST', body: { config: {} } });
+    await makeAdminApiCall('/admin/ui/config', {
+      method: 'POST',
+      body: { config: {} },
+      revision: form
+    });
     expect(sentHeaders(3)['If-Match']).toBe('"rev-2"');
   });
 
+  /** The form whose save the dialog was opened for. */
+  let staleForm;
+
   /** Load rev-1, have a save refused, and open the dialog. */
   const openStaleConflict = async () => {
-    mockRequest.mockResolvedValueOnce(ok({}, '"rev-1"'));
-    await makeAdminApiCall('/admin/ui/config');
-    mockRequest.mockRejectedValueOnce(conflict());
-    await makeAdminApiCall('/admin/ui/config', { method: 'POST', body: { config: {} } }).catch(
-      () => {}
-    );
+    staleForm = createConfigRevision();
     const onReload = jest.fn();
     render(<AdminConfigConflictNotice onReload={onReload} />);
-    raise('ui');
+    mockRequest.mockResolvedValueOnce(ok({}, '"rev-1"'));
+    await makeAdminApiCall('/admin/ui/config', { revision: staleForm });
+    mockRequest.mockRejectedValueOnce(conflict());
+    await act(async () => {
+      await makeAdminApiCall('/admin/ui/config', {
+        method: 'POST',
+        body: { config: {} },
+        revision: staleForm
+      }).catch(() => {});
+    });
     return onReload;
   };
 
@@ -255,11 +340,13 @@ describe('AdminConfigConflictNotice', () => {
     mockRequest.mockRejectedValueOnce(conflict());
     let saveError;
     await act(async () => {
-      await makeAdminApiCall('/admin/ui/config', { method: 'POST', body: { config: {} } }).catch(
-        error => {
-          saveError = error;
-        }
-      );
+      await makeAdminApiCall('/admin/ui/config', {
+        method: 'POST',
+        body: { config: {} },
+        revision: staleForm
+      }).catch(error => {
+        saveError = error;
+      });
     });
     expect(saveError).toMatchObject({ response: { status: 412 } });
     expect(sentHeaders(2)['If-Match']).toBe('"rev-1"');
@@ -302,6 +389,7 @@ describe('AdminConfigConflictNotice', () => {
 
   test('end to end: a stale save keeps the form state and opens the dialog', async () => {
     mockRequest.mockResolvedValueOnce(ok({ setup: { disabled: false } }, '"rev-1"'));
+    const revision = createConfigRevision();
     function Form() {
       return (
         <>
@@ -309,9 +397,11 @@ describe('AdminConfigConflictNotice', () => {
           <button
             type="button"
             onClick={() =>
-              makeAdminApiCall('/admin/configs/platform', { method: 'POST', body: {} }).catch(
-                () => {}
-              )
+              makeAdminApiCall('/admin/configs/platform', {
+                method: 'POST',
+                body: {},
+                revision
+              }).catch(() => {})
             }
           >
             Save
@@ -320,7 +410,7 @@ describe('AdminConfigConflictNotice', () => {
         </>
       );
     }
-    await makeAdminApiCall('/admin/configs/platform');
+    await makeAdminApiCall('/admin/configs/platform', { revision });
     mockRequest.mockRejectedValueOnce(conflict());
     render(<Form />);
     fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'My edit' } });
@@ -329,6 +419,45 @@ describe('AdminConfigConflictNotice', () => {
 
     expect(await screen.findByRole('alertdialog')).toBeInTheDocument();
     expect(screen.getByLabelText('Title')).toHaveValue('My edit');
+  });
+});
+
+describe('a full-config form saves against the revision it loaded', () => {
+  test('Authentication: a later read elsewhere in the tab does not let its save overwrite (412)', async () => {
+    // 1. The Authentication page loads rev-1.
+    // 2. Another admin saves; another page's read of the platform config then
+    //    finishes with rev-2, which includes that change.
+    // 3. Authentication saves its rev-1-based form: it must send rev-1 and be
+    //    refused, not send rev-2 and overwrite the other admin's change.
+    let platformReads = 0;
+    mockRequest.mockImplementation(async config => {
+      if (config.url === '/admin/groups') return ok({ groups: {} });
+      if (config.method === 'GET') {
+        platformReads += 1;
+        return ok({ auth: { mode: 'local' } }, platformReads === 1 ? '"rev-1"' : '"rev-2"');
+      }
+      throw conflict();
+    });
+    render(
+      <>
+        <AdminAuthPage />
+        <AdminConfigConflictNotice onReload={jest.fn()} />
+      </>
+    );
+    const save = await screen.findByRole('button', { name: 'Save Configuration' });
+    expect(platformReads).toBe(1);
+
+    await act(async () => {
+      await makeAdminApiCall('/admin/configs/platform', { method: 'GET' });
+    });
+    expect(platformReads).toBe(2);
+
+    fireEvent.click(save);
+
+    expect(await screen.findByRole('alertdialog')).toBeInTheDocument();
+    const posts = mockRequest.mock.calls.filter(([config]) => config.method === 'POST');
+    expect(posts).toHaveLength(1);
+    expect(posts[0][0].headers['If-Match']).toBe('"rev-1"');
   });
 });
 
