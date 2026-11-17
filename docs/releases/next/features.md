@@ -2256,7 +2256,8 @@ Customization** at the same time, the later save no longer silently overwrites t
 This applies to **Authentication**, **MCP gateway** and **UI Customization**: the save is refused
 with a dialog, **This changed since you opened it**; your edits stay on the page. **Reload and
 discard my changes** loads the current settings, and **Keep my changes and overwrite on next save**
-lets you save over the newer version deliberately. See
+lets you save over the newer version deliberately. **Close** (or Escape) only closes the dialog:
+nothing is overwritten and the next save is refused again. See
 [Admin UI → When someone else saved first](../../admin-ui.md#when-someone-else-saved-first).
 
 For scripts, `GET /api/admin/configs/platform` and `GET /api/admin/ui/config` return an `ETag`;

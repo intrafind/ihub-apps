@@ -481,7 +481,10 @@ async function applyPlatformChange(req, body, { mode }) {
   // A changed OIDC provider (token URL, client) invalidates the iFinder
   // tokens exchanged through it. The iFinder installation itself lives in
   // integrations.json and resets its caches from there.
-  if (JSON.stringify(existingConfig.oidcAuth) !== JSON.stringify(newConfig.oidcAuth)) {
+  // Compared with the merged body (what was written), not `newConfig`: a
+  // PATCH or a partial POST names only some sections, and a section it leaves
+  // out is unchanged, not removed.
+  if (JSON.stringify(existingConfig.oidcAuth) !== JSON.stringify(mergedConfig.oidcAuth)) {
     try {
       const { clearExchangedTokenCache } =
         await import('../../services/integrations/iFinderTokenProvider.js');
@@ -494,8 +497,9 @@ async function applyPlatformChange(req, body, { mode }) {
     }
   }
 
-  // Reconfigure authentication methods dynamically where possible
-  const reconfigResults = reconfigureAuthenticationMethods(existingConfig, newConfig);
+  // Reconfigure authentication methods dynamically where possible; against
+  // the merged body for the same reason as above.
+  const reconfigResults = reconfigureAuthenticationMethods(existingConfig, mergedConfig);
 
   if (reconfigResults.reconfigured.length > 0) {
     logger.info('Reconfigured authentication methods', {

@@ -588,7 +588,8 @@ stored ones, are checked: a marker-like value already stored elsewhere does not 
 **Concurrent changes.** Send the `ETag` of your `GET` as `If-Match` on the `POST` or `PATCH`. When
 the file changed since (another admin, another script, a hand edit), the answer is `412`
 `PRECONDITION_FAILED` and nothing is written; read again and reapply your change. A successful
-write answers with the new `ETag`. `If-Match: *` only requires the file to exist. Without
+write answers with the new `ETag`. `If-Match: *` only requires the file to exist. A weak tag
+(`W/"…"`, as a compressing proxy may turn the `ETag` into) is compared by its value. Without
 `If-Match` a write behaves as before. The same applies to `GET` and `POST /api/admin/ui/config`;
 that `POST` never changes `pages`, which belong to `/api/admin/pages`, so its `ETag` leaves `pages`
 out: creating or editing a page does not make a UI save fail.

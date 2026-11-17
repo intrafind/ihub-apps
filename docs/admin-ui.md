@@ -538,10 +538,14 @@ settings they loaded. If another administrator, another browser tab or a script 
 settings after you opened the page, your save is refused and a dialog says **This changed since
 you opened it**. Nothing was saved, and your edits are still on the page:
 
+- **Close** (also Escape or a click outside the dialog) only closes it. Your edits stay, nothing
+  is overwritten, and your next save is refused again with the same dialog. Use it to copy your
+  edits somewhere before you reload, or to check **History** first.
 - **Reload and discard my changes** loads the current settings; make your changes again and save.
 - **Keep my changes and overwrite on next save** closes the dialog and keeps your edits. Your next
   save goes through and replaces the newer version, including what the other person changed in
-  the settings this page saves. Check **History** first if you are not sure what that was.
+  the settings this page saves. Check **History** first if you are not sure what that was. Only
+  this button overwrites; the dialog never chooses it for you.
 
 Other settings pages (Telemetry, Voice Input, Feedback, Logging, the AI notice and
 acknowledgement cards, OAuth) read the current settings right before they save, so they are not

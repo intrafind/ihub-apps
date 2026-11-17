@@ -40,8 +40,14 @@ jest.unstable_mockModule('../configCache.js', () => ({
   }
 }));
 
+const reconfigureOidcProviders = jest.fn();
 jest.unstable_mockModule('../middleware/oidcAuth.js', () => ({
-  reconfigureOidcProviders: () => {}
+  reconfigureOidcProviders
+}));
+
+const clearExchangedTokenCache = jest.fn();
+jest.unstable_mockModule('../services/integrations/iFinderTokenProvider.js', () => ({
+  clearExchangedTokenCache
 }));
 
 jest.unstable_mockModule('../services/TokenStorageService.js', () => ({
@@ -142,6 +148,8 @@ const patch = (body, options = {}) => {
 };
 
 beforeEach(async () => {
+  reconfigureOidcProviders.mockClear();
+  clearExchangedTokenCache.mockClear();
   auditEntries.length = 0;
   snapshots.length = 0;
   state.rootDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-patch-'));
@@ -437,4 +445,44 @@ describe('review fixes: marker scope and unsafe keys', () => {
       expect({}.polluted).toBeUndefined();
     }
   );
+});
+
+describe('runtime reconfiguration follows what changed, not what the request named', () => {
+  const post = body => request(appFor(LOCAL_ADMIN)).post('/api/admin/configs/platform').send(body);
+
+  test('a PATCH of setup reconfigures no sign-in method and keeps the iFinder tokens', async () => {
+    await patch({ setup: { disabled: true } }).expect(200);
+
+    expect(reconfigureOidcProviders).not.toHaveBeenCalled();
+    expect(clearExchangedTokenCache).not.toHaveBeenCalled();
+  });
+
+  test('a partial POST (Cookies) reports no auth method as changed or needing a restart', async () => {
+    const response = await post({ cookieSettings: { disableSecure: true } });
+
+    expect(response.status).toBe(200);
+    expect(response.body.reconfiguration).toEqual({
+      reconfigured: [],
+      requiresRestart: [],
+      notes: []
+    });
+    expect(reconfigureOidcProviders).not.toHaveBeenCalled();
+    expect(clearExchangedTokenCache).not.toHaveBeenCalled();
+  });
+
+  test('a PATCH that changes oidcAuth still reconfigures OIDC and clears the iFinder tokens', async () => {
+    await patch({ oidcAuth: { enabled: true } }).expect(200);
+
+    expect(reconfigureOidcProviders).toHaveBeenCalledTimes(1);
+    expect(clearExchangedTokenCache).toHaveBeenCalledTimes(1);
+  });
+
+  test('a partial POST that changes ntlmAuth still says it needs a restart, and only that', async () => {
+    const response = await post({ ntlmAuth: { enabled: false, domain: 'EXAMPLE' } });
+
+    expect(response.status).toBe(200);
+    expect(response.body.reconfiguration.requiresRestart).toEqual(['NTLM authentication']);
+    expect(response.body.reconfiguration.reconfigured).toEqual([]);
+    expect(reconfigureOidcProviders).not.toHaveBeenCalled();
+  });
 });

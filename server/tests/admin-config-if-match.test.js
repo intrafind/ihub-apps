@@ -227,10 +227,20 @@ describe('platform config: ETag and optional If-Match', () => {
     expect(JSON.parse(await readText('platform.json')).defaultLanguage).toBe('de');
   });
 
-  test('a weak tag never matches (strong comparison)', async () => {
+  test('a tag a proxy weakened (W/) still matches its revision', async () => {
     const app = appFor();
     const etag = (await getPlatform(app)).headers.etag;
-    await savePlatform(app, { defaultLanguage: 'de' }, `W/${etag}`).expect(412);
+    await savePlatform(app, { defaultLanguage: 'de' }, `W/${etag}`).expect(200);
+    expect(JSON.parse(await readText('platform.json')).defaultLanguage).toBe('de');
+  });
+
+  test('a weakened tag of a stale revision is still 412', async () => {
+    const app = appFor();
+    const stale = (await getPlatform(app)).headers.etag;
+    await savePlatform(app, { defaultLanguage: 'fr' }).expect(200);
+
+    await savePlatform(app, { defaultLanguage: 'de' }, `W/${stale}`).expect(412);
+    expect(JSON.parse(await readText('platform.json')).defaultLanguage).toBe('fr');
   });
 
   test('the revision changes when only a secret changed, although the read looks the same', async () => {
@@ -347,5 +357,36 @@ describe('UI config: ETag, optional If-Match and pages (CU-B3)', () => {
     await saveUI(app, { ...read.body, pages: { injected: { title: { en: 'X' } } } }).expect(204);
 
     expect(JSON.parse(await readText('ui.json')).pages).toEqual(UI.pages);
+  });
+
+  test('a save repairs a ui.json that cannot be parsed, with or without the ETag of the read', async () => {
+    const app = appFor();
+    // Hand-broken file; the runtime cache still holds the last good body.
+    state.staleUI = structuredClone(UI);
+    await fs.writeFile(file('ui.json'), '{ "title": { "en": "iHub" }, ');
+
+    const read = await getUI(app);
+    expect(read.status).toBe(200);
+    const saved = await saveUI(app, { ...read.body, title: { en: 'Repaired' } }, read.headers.etag);
+
+    expect(saved.status).toBe(204);
+    const repaired = JSON.parse(await readText('ui.json'));
+    expect(repaired.title).toEqual({ en: 'Repaired' });
+    expect(repaired.pages).toEqual(UI.pages);
+    state.staleUI = null;
+    expect(saved.headers.etag).toBe((await getUI(app)).headers.etag);
+
+    await fs.writeFile(file('ui.json'), 'not json');
+    await saveUI(app, { ...UI, title: { en: 'Again' } }).expect(204);
+    expect(JSON.parse(await readText('ui.json')).title).toEqual({ en: 'Again' });
+  });
+
+  test('a stale If-Match on an unparseable ui.json is still 412 and leaves the file as it is', async () => {
+    const app = appFor();
+    const stale = (await getUI(app)).headers.etag;
+    await fs.writeFile(file('ui.json'), 'not json');
+
+    await saveUI(app, { ...UI, title: { en: 'Late' } }, stale).expect(412);
+    expect(await readText('ui.json')).toBe('not json');
   });
 });

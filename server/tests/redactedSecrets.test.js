@@ -158,7 +158,7 @@ describe('configRevision', () => {
     expect(parseIfMatch('  ')).toBeNull();
     expect(parseIfMatch(undefined)).toBeNull();
     expect(parseIfMatch(' * ')).toBe('*');
-    expect(parseIfMatch('"a", W/"b"')).toEqual(['a', 'W/"b"']);
+    expect(parseIfMatch('"a", W/"b"')).toEqual(['a', 'b']);
   });
 });
 

@@ -213,6 +213,63 @@ describe('AdminConfigConflictNotice', () => {
     expect(sentHeaders(3)['If-Match']).toBe('"rev-2"');
   });
 
+  /** Load rev-1, have a save refused, and open the dialog. */
+  const openStaleConflict = async () => {
+    mockRequest.mockResolvedValueOnce(ok({}, '"rev-1"'));
+    await makeAdminApiCall('/admin/ui/config');
+    mockRequest.mockRejectedValueOnce(conflict());
+    await makeAdminApiCall('/admin/ui/config', { method: 'POST', body: { config: {} } }).catch(
+      () => {}
+    );
+    const onReload = jest.fn();
+    render(<AdminConfigConflictNotice onReload={onReload} />);
+    raise('ui');
+    return onReload;
+  };
+
+  /** After a dismissal: nothing re-read, and the next save still sends the stale revision. */
+  const expectNoOverwrite = async onReload => {
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(onReload).not.toHaveBeenCalled();
+    expect(mockRequest).toHaveBeenCalledTimes(2);
+    mockRequest.mockRejectedValueOnce(conflict());
+    let saveError;
+    await act(async () => {
+      await makeAdminApiCall('/admin/ui/config', { method: 'POST', body: { config: {} } }).catch(
+        error => {
+          saveError = error;
+        }
+      );
+    });
+    expect(saveError).toMatchObject({ response: { status: 412 } });
+    expect(sentHeaders(2)['If-Match']).toBe('"rev-1"');
+    // The refusal brings the dialog back.
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+  };
+
+  test('the initial focus is on Close, not on overwrite or reload', async () => {
+    await openStaleConflict();
+    expect(screen.getByRole('button', { name: 'Close' })).toHaveFocus();
+  });
+
+  test('Escape only closes: the next save still sends the old revision and gets 412', async () => {
+    const onReload = await openStaleConflict();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    await expectNoOverwrite(onReload);
+  });
+
+  test('a backdrop click only closes: the next save still gets 412', async () => {
+    const onReload = await openStaleConflict();
+    fireEvent.click(screen.getByTestId('config-conflict-backdrop'));
+    await expectNoOverwrite(onReload);
+  });
+
+  test('Close (the focused button) only closes: the next save still gets 412', async () => {
+    const onReload = await openStaleConflict();
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    await expectNoOverwrite(onReload);
+  });
+
   test('"Reload" reloads', () => {
     const onReload = jest.fn();
     render(<AdminConfigConflictNotice onReload={onReload} />);

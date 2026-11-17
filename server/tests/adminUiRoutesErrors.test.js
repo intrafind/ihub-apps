@@ -38,6 +38,7 @@ jest.unstable_mockModule('../middleware/authRequired.js', () => ({
 jest.unstable_mockModule('../services/config/ConfigStore.js', () => ({
   default: {
     readJson: async () => structuredClone(state.stored),
+    exists: async () => state.stored !== null,
     writeJson: async (_path, data) => {
       if (state.writeError) throw state.writeError;
       state.written = data;

@@ -138,8 +138,15 @@ export function setRevisionHeaders(res, revision) {
  * The entity tags of an `If-Match` header.
  *
  * @param {string|undefined} header
+ * A weak tag counts as its strong value: `W/"abc"` is read as `abc`. These
+ * tags are revisions this server minted (keyed HMACs of the stored body), never
+ * a cache validator of a byte representation; a weak tag only means a proxy on
+ * the way weakened the server's strong `ETag` (nginx does that when it gzips a
+ * response). Keeping the prefix would make every guarded save from behind such
+ * a proxy fail with 412, and the client's "keep my changes" would loop.
+ *
  * @returns {null|'*'|string[]} `null` when absent, `'*'`, or the listed tags
- *   (quotes removed; weak tags keep their `W/` prefix and so never match)
+ *   (`W/` prefix and quotes removed)
  */
 export function parseIfMatch(header) {
   // `req.get()` answers a string or `undefined`; anything else is no header.
@@ -151,6 +158,7 @@ export function parseIfMatch(header) {
     .split(',')
     .map(tag => tag.trim())
     .filter(Boolean)
+    .map(tag => (tag.startsWith('W/') ? tag.slice(2) : tag))
     .map(tag => (tag.startsWith('"') && tag.endsWith('"') ? tag.slice(1, -1) : tag));
 }
 
@@ -159,7 +167,9 @@ export function parseIfMatch(header) {
  *
  * Call it inside the update lock with the body the write is computed from.
  * No header: nothing is checked (today's behaviour). `*`: the file must exist.
- * Comparison is strong, as RFC 9110 requires for `If-Match`.
+ * The revision itself is compared exactly; a `W/` prefix is ignored (see
+ * {@link parseIfMatch}), unlike the strong comparison RFC 9110 prescribes,
+ * because a proxy may weaken the `ETag` this server sent.
  *
  * @param {import('express').Request} req
  * @param {unknown} stored - The stored body, as read under the lock (`null` when missing)
