@@ -14,13 +14,17 @@
  *
  * - `step/delta` text is appended to its step; thinking to the run's thought
  *   list, merged the way the client reducer merges it (`appendThought`).
- * - `step/completed` drops that step's text (the ledger has it now) and keeps
- *   its thinking (the ledger has none).
+ * - `step/completed` drops that step's text (the ledger has it now, and the
+ *   text no longer counts against the cap) and keeps its thinking (the ledger
+ *   has none).
  * - `run/ended` / `run/paused` drop the run. A paused run continues later as a
  *   new segment, which starts empty.
- * - Caps per run: past them the head is kept, the run is marked `truncated`
- *   and nothing more is appended; the transcript re-read at the end of the
+ * - Caps per run, text and thinking each: past one, the head is kept, the step
+ *   where it was cut gets a `…` and nothing more of that kind is appended (text
+ *   again from the next step on); the transcript re-read at the end of the
  *   turn fills the rest in. Images are not kept.
+ * - Only frames numbered for the chat stream (`rseq`) are kept: a run streamed
+ *   to an in-process sink (an API response, a recorder) is never resumed.
  *
  * @module services/loop/partialRunState
  */
@@ -37,24 +41,23 @@ const TRUNCATION_MARK = '…';
 
 /**
  * runId → `{ streamId, steps: Map<step, text>, thoughts: [{ step, name?, content }],
- * textBytes, thinkingBytes, truncated }`. Map order doubles as LRU order.
+ * textBytes, thinkingBytes, textCut, thinkingCut }` (`*Cut`: the step where
+ * that kind was cut, or null). Map order doubles as LRU order: a run is moved
+ * to the end when it starts, not on every frame.
  */
 const runs = new Map();
 
-function entryFor(runId, streamId) {
-  let entry = runs.get(runId);
-  if (entry) {
-    runs.delete(runId);
-  } else {
-    entry = {
-      streamId,
-      steps: new Map(),
-      thoughts: [],
-      textBytes: 0,
-      thinkingBytes: 0,
-      truncated: false
-    };
-  }
+function createEntry(runId, streamId) {
+  runs.delete(runId);
+  const entry = {
+    streamId,
+    steps: new Map(),
+    thoughts: [],
+    textBytes: 0,
+    thinkingBytes: 0,
+    textCut: null,
+    thinkingCut: null
+  };
   runs.set(runId, entry);
   // ponytail: LRU by count like the seq map; a byte budget if leaked runs ever matter.
   while (runs.size > MAX_TRACKED_STREAMS) runs.delete(runs.keys().next().value);
@@ -62,19 +65,25 @@ function entryFor(runId, streamId) {
 }
 
 function appendText(entry, step, content) {
-  if (entry.truncated) return;
+  if (entry.textCut !== null) return;
   if (entry.textBytes + content.length > MAX_PARTIAL_TEXT_BYTES) {
-    entry.truncated = true;
+    entry.textCut = step;
     return;
   }
   entry.textBytes += content.length;
   entry.steps.set(step, (entry.steps.get(step) || '') + content);
 }
 
+function completeStep(entry, step) {
+  entry.textBytes -= (entry.steps.get(step) || '').length;
+  entry.steps.delete(step);
+  if (entry.textCut === step) entry.textCut = null;
+}
+
 function appendThinking(entry, step, content, name) {
-  if (entry.truncated) return;
+  if (entry.thinkingCut !== null) return;
   if (entry.thinkingBytes + content.length > MAX_PARTIAL_THINKING_BYTES) {
-    entry.truncated = true;
+    entry.thinkingCut = step;
     return;
   }
   entry.thinkingBytes += content.length;
@@ -93,25 +102,28 @@ function appendThinking(entry, step, content, name) {
  */
 export function recordEnvelope(envelope, streamId) {
   const { runId, type, data } = envelope || {};
-  if (!runId) return;
+  if (!runId || !envelope.rseq) return;
   switch (type) {
     case SSE_V2_EVENTS.RUN_STARTED:
       // Tracked from its start, so a re-attach during a tool call before any
       // text still finds the worker running it.
-      entryFor(runId, streamId);
+      createEntry(runId, streamId);
       break;
     case SSE_V2_EVENTS.STEP_DELTA: {
       const step = Number.isInteger(data?.step) ? data.step : 0;
+      const entry = () => runs.get(runId) ?? createEntry(runId, streamId);
       if (data.kind === 'text' && data.content) {
-        appendText(entryFor(runId, streamId), step, data.content);
+        appendText(entry(), step, data.content);
       } else if (data.kind === 'thinking' && (data.content || data.meta?.name)) {
-        appendThinking(entryFor(runId, streamId), step, data.content || '', data.meta?.name);
+        appendThinking(entry(), step, data.content || '', data.meta?.name);
       }
       break;
     }
-    case SSE_V2_EVENTS.STEP_COMPLETED:
-      runs.get(runId)?.steps.delete(data?.step ?? 0);
+    case SSE_V2_EVENTS.STEP_COMPLETED: {
+      const entry = runs.get(runId);
+      if (entry) completeStep(entry, data?.step ?? 0);
       break;
+    }
     case SSE_V2_EVENTS.RUN_ENDED:
     case SSE_V2_EVENTS.RUN_PAUSED:
       runs.delete(runId);
@@ -144,7 +156,10 @@ export function trackedStream(runId) {
 export function snapshotRun(runId, streamId) {
   const entry = runs.get(runId);
   if (!entry || entry.streamId !== streamId) return { frames: [], truncated: false };
+  const { textCut, thinkingCut } = entry;
   const steps = new Set([...entry.thoughts.map(t => t.step), ...entry.steps.keys()]);
+  if (textCut !== null) steps.add(textCut);
+  if (thinkingCut !== null) steps.add(thinkingCut);
   const delta = data => buildEnvelope({ streamId, runId, type: SSE_V2_EVENTS.STEP_DELTA, data });
   const frames = [];
   for (const step of [...steps].sort((a, b) => a - b)) {
@@ -159,14 +174,14 @@ export function snapshotRun(runId, streamId) {
         })
       );
     }
+    if (thinkingCut === step) {
+      frames.push(delta({ step, kind: 'thinking', content: TRUNCATION_MARK }));
+    }
     const text = entry.steps.get(step);
     if (text) frames.push(delta({ step, kind: 'text', content: text }));
+    if (textCut === step) frames.push(delta({ step, kind: 'text', content: TRUNCATION_MARK }));
   }
-  if (entry.truncated && frames.length > 0) {
-    const last = Math.max(...steps);
-    frames.push(delta({ step: last, kind: 'text', content: TRUNCATION_MARK }));
-  }
-  return { frames, truncated: entry.truncated };
+  return { frames, truncated: textCut !== null || thinkingCut !== null };
 }
 
 /** Test seam. */

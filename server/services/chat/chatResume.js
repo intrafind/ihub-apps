@@ -8,11 +8,16 @@
  * with `resumeRun` and the last ledger seq it replayed (`afterLedgerSeq`). The
  * GET asks the worker producing the run for:
  *
- * 1. the run's partial state — the text of unfinished steps and the run's
+ * 1. the ledger events after the client's cursor, read after a flush, so a
+ *    step that completed after the client's replay is not missed;
+ * 2. the run's partial state — the text of unfinished steps and the run's
  *    thinking (`services/loop/partialRunState.js`) — as `step/delta` frames,
- *    taken together with the run frame counter they cover (`upTo`);
- * 2. the ledger events after the client's cursor, read after a flush, so a
- *    step that completed after the client's replay is not missed.
+ *    taken together with the run frame counter they cover (`upTo`), without
+ *    the text of a step the ledger above already completed.
+ *
+ * Ledger first: a step that completed after the client's replay must be
+ * completed before the text of the next step is appended, or the reducer
+ * would put that text in front of the completed step's.
  *
  * The snapshot is taken first and synchronously with `upTo`, so nothing is in
  * both the snapshot and a live frame above `upTo`. A ledger event written while
@@ -23,7 +28,7 @@
  * the GET registers its stream before it asks, and the primary forwards both
  * messages in order: the producer already relays live frames to the GET when
  * it builds the snapshot. Across pods without a shared bus there is no resume
- * (a known limit, see `docs/sse-v2.md`).
+ * (a known limit, see `docs/streaming-events.md`).
  *
  * @module services/chat/chatResume
  */
@@ -31,6 +36,7 @@ import { hasRemote, request, respond } from '../../clusterBus.js';
 import runLog from '../loop/RunLog.js';
 import { currentRseq, flushStream, projectLedgerEvent } from '../loop/RunStream.js';
 import { snapshotRun, trackedStream } from '../loop/partialRunState.js';
+import { SSE_V2_EVENTS } from '../../../shared/runEvents.js';
 import logger from '../../utils/logger.js';
 
 export const CHAT_RESUME_CHANNEL = 'chat:resume';
@@ -74,7 +80,13 @@ export async function buildChatResume({ chatId, runId, afterLedgerSeq = 0 }) {
       error: error.message
     });
   }
-  return { frames: [...frames, ...ledger], upTo, truncated };
+  // The snapshot was taken before the ledger was read: a step completing in
+  // between is in both. Its completed text is the ledger's.
+  const completed = new Set(
+    ledger.filter(f => f.type === SSE_V2_EVENTS.STEP_COMPLETED).map(f => f.data?.step ?? 0)
+  );
+  const partial = frames.filter(f => !(f.data.kind === 'text' && completed.has(f.data.step)));
+  return { frames: [...ledger, ...partial], upTo, truncated };
 }
 
 /**
