@@ -120,4 +120,25 @@ export function installationsUsingCredential(installations, credentialId, fields
     .map(item => ({ id: item.id, label: item.label || item.id }));
 }
 
+/**
+ * The installations whose definition could not be loaded, so their credential
+ * fields are only guessed by name. When there are any, a usage list is not
+ * complete and must not be presented as "nothing uses it".
+ *
+ * @param {Array<{ id: string, label?: string, definition?: string }>} installations
+ * @param {Map<string, Set<string>>} fieldsByDefinition - From {@link credentialFieldsByDefinition}.
+ * @returns {Array<{ id: string, label: string }>} In list order.
+ */
+export function installationsWithUnknownFields(installations, fieldsByDefinition) {
+  if (!Array.isArray(installations)) return [];
+  return installations
+    .filter(
+      item =>
+        typeof item?.definition === 'string' &&
+        item.definition !== '' &&
+        !fieldsByDefinition?.has(item.definition)
+    )
+    .map(item => ({ id: item.id, label: item.label || item.id }));
+}
+
 export default installationsUsingCredential;

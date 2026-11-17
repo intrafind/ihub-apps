@@ -7399,6 +7399,7 @@
     },
     "credentials": {
       "usageUnknown": "Es konnte nicht geprüft werden, welche Integrationen „{{id}}“ verwenden.",
+      "usageIncomplete": "Es konnte nicht vollständig geprüft werden, welche Integrationen „{{id}}“ verwenden: {{count}} installierte Integrationen konnten nicht gelesen werden. Prüfen Sie diese vor dem Löschen.",
       "usedBy_one": "Wird von {{count}} installierten Integration verwendet, die dann nicht mehr funktioniert:",
       "usedBy_other": "Wird von {{count}} installierten Integrationen verwendet, die dann nicht mehr funktionieren:",
       "notUsedByIntegrations": "Keine installierte Integration verwendet sie.",

@@ -20,7 +20,8 @@ import { useConfirmAction } from '../hooks/useConfirmAction';
 import { deleteConfirmText, namedList } from '../utils/confirmText';
 import {
   credentialFieldsByDefinition,
-  installationsUsingCredential
+  installationsUsingCredential,
+  installationsWithUnknownFields
 } from '../utils/credentialUsage';
 
 /**
@@ -460,6 +461,9 @@ function AdminCredentialsPage() {
     checkingRef.current = id;
     setCheckingId(id);
     let usedBy = null;
+    // Installations whose definition did not load: their credential fields are
+    // only guessed by name, so the list may miss one of them.
+    let unchecked = [];
     try {
       const installed = await fetchInstalledIntegrations();
       // The definitions say which fields are credential fields.
@@ -468,6 +472,7 @@ function AdminCredentialsPage() {
         fetchIntegrationDefinition
       );
       usedBy = installationsUsingCredential(installed?.items, id, fields);
+      unchecked = installationsWithUnknownFields(installed?.items, fields);
     } catch {
       usedBy = null;
     } finally {
@@ -481,21 +486,25 @@ function AdminCredentialsPage() {
             id,
             defaultValue: 'Couldn\'t check which integrations use "{{id}}".'
           })
-        : usedBy.length > 0
-          ? t('admin.credentials.usedBy', {
-              count: usedBy.length,
-              defaultValue: 'Used by {{count}} installed integrations, which stop working:'
+        : unchecked.length > 0
+          ? t('admin.credentials.usageIncomplete', {
+              id,
+              count: unchecked.length,
+              defaultValue:
+                'Couldn\'t fully check which integrations use "{{id}}": {{count}} installed integrations could not be read. Check them before deleting.'
             })
-          : t('admin.credentials.notUsedByIntegrations', 'No installed integration uses it.');
+          : usedBy.length > 0
+            ? t('admin.credentials.usedBy', {
+                count: usedBy.length,
+                defaultValue: 'Used by {{count}} installed integrations, which stop working:'
+              })
+            : t('admin.credentials.notUsedByIntegrations', 'No installed integration uses it.');
 
     requestConfirm({
       ...deleteConfirmText({ typeKey: 'credential', typeFallback: 'credential', name: id, t }),
       message: usageMessage,
       consequences: [
-        ...namedList(
-          (usedBy || []).map(item => item.label),
-          t
-        ),
+        ...namedList([...new Set([...(usedBy || []), ...unchecked].map(item => item.label))], t),
         t(
           'admin.credentials.notChecked',
           'Tools, MCP servers and sign-in settings that reference it are not checked here; they fail until they get another credential.'

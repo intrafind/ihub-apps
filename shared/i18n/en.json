@@ -6918,6 +6918,7 @@
     },
     "credentials": {
       "usageUnknown": "Couldn't check which integrations use \"{{id}}\".",
+      "usageIncomplete": "Couldn't fully check which integrations use \"{{id}}\": {{count}} installed integrations could not be read. Check them before deleting.",
       "usedBy_one": "Used by {{count}} installed integration, which stops working:",
       "usedBy_other": "Used by {{count}} installed integrations, which stop working:",
       "notUsedByIntegrations": "No installed integration uses it.",

@@ -246,6 +246,28 @@ describe('credential delete (IN-B3, client part)', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
   });
 
+  it('says the check is incomplete when a definition cannot be read', async () => {
+    mockAdminApi.listCredentials.mockResolvedValue([{ id: 'k', name: 'Key', type: 'secret' }]);
+    // `apiKey` is a credential field, but its definition fails to load, so the
+    // name rule cannot see it: the dialog must not claim nothing uses `k`.
+    mockFetchInstalled.mockResolvedValue({
+      items: [{ id: 'svc', label: 'Search service', definition: 'gone', values: { apiKey: 'k' } }]
+    });
+    mockFetchDefinition.mockRejectedValue(new Error('404'));
+    render(<AdminCredentialsPage />);
+    const remove = await screen.findByRole('button', { name: 'Delete credential "k"' });
+    await act(async () => {
+      fireEvent.click(remove);
+    });
+    const dialog = screen.getByRole('alertdialog', { name: 'Delete credential "k"?' });
+    expect(dialog).not.toHaveTextContent('No installed integration uses it.');
+    expect(dialog).toHaveTextContent(
+      'Couldn\'t fully check which integrations use "k": 1 installed integrations could not be read.'
+    );
+    expect(dialog).toHaveTextContent('Search service');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+  });
+
   it('lists the installations that use the credential in the dialog', async () => {
     mockAdminApi.listCredentials.mockResolvedValue([
       { id: 'brave-key', name: 'Brave key', type: 'secret' }
