@@ -2178,25 +2178,38 @@ export class ChatRepository {
       // scope rather than copied — so an edit that drops a message from the
       // live chat must not take a picture away from a link the owner already
       // sent. Those payloads go when the chat goes, with the share.
-      const orphaned = artifactIdsOfMessages(discarded);
-      if (orphaned.length > 0) {
-        const retained = await this.shareStore().artifactIdsRetainedByShares(chatId);
-        const deletable = orphaned.filter(id => !retained.has(id));
-        if (deletable.length > 0) {
-          await this.artifactStore().deleteMany(this.artifactScope(chatId), deletable);
+      //
+      // Best effort: the write above is committed (with the run's release, if
+      // any). A failure here reported as a failed append made the caller
+      // retry or abandon a turn that was stored; a payload left behind is
+      // swept when the chat is deleted.
+      try {
+        const orphaned = artifactIdsOfMessages(discarded);
+        if (orphaned.length > 0) {
+          const retained = await this.shareStore().artifactIdsRetainedByShares(chatId);
+          const deletable = orphaned.filter(id => !retained.has(id));
+          if (deletable.length > 0) {
+            await this.artifactStore().deleteMany(this.artifactScope(chatId), deletable);
+          }
         }
-      }
 
-      const orphanedFiles = fileIdsOfMessages(discarded);
-      if (orphanedFiles.length > 0) {
-        const stillUsedFiles = new Set(fileIdsOfMessages(messages));
-        const retainedFiles = await this.shareStore().fileIdsRetainedByShares(chatId);
-        const deletableFiles = orphanedFiles.filter(
-          id => !stillUsedFiles.has(id) && !retainedFiles.has(id)
-        );
-        if (deletableFiles.length > 0) {
-          await this.fileStore().deleteMany(this.fileScope(chatId), deletableFiles);
+        const orphanedFiles = fileIdsOfMessages(discarded);
+        if (orphanedFiles.length > 0) {
+          const stillUsedFiles = new Set(fileIdsOfMessages(messages));
+          const retainedFiles = await this.shareStore().fileIdsRetainedByShares(chatId);
+          const deletableFiles = orphanedFiles.filter(
+            id => !stillUsedFiles.has(id) && !retainedFiles.has(id)
+          );
+          if (deletableFiles.length > 0) {
+            await this.fileStore().deleteMany(this.fileScope(chatId), deletableFiles);
+          }
         }
+      } catch (error) {
+        this.logger.warn('Could not remove the payloads of removed messages', {
+          component: COMPONENT,
+          chatId,
+          error
+        });
       }
 
       this._deleteEvidenceOf(chatId, discarded);
