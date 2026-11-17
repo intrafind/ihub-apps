@@ -14,6 +14,7 @@ import ProjectPicker from '../components/ProjectPicker';
 import GroupMultiSelect from '../components/GroupMultiSelect';
 import MonacoJsonEditor from '../../../shared/components/MonacoJsonEditor';
 import useDarkMode from '../../../hooks/useDarkMode';
+import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import {
   fetchAdminApps,
@@ -117,6 +118,9 @@ const TOP_LEVEL_FIELDS = new Set([
 
 export default function AdminAgentEditPage() {
   const { t, i18n } = useTranslation();
+  // Skills are an optional feature: without it /api/skills answers 403, so the
+  // field is not offered (stored skills stay in the profile untouched).
+  const skillsEnabled = useFeatureFlags().isEnabled('skills', false);
   const currentLanguage = i18n.language;
   const navigate = useNavigate();
   const { profileId } = useParams();
@@ -615,25 +619,27 @@ export default function AdminAgentEditPage() {
                   />
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    {t('admin.agents.edit.skills', 'Skills (instructional knowledge)')}
-                  </label>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                    {t(
-                      'admin.agents.edit.skillsHint',
-                      'Skills describe HOW to do something (e.g. "for person research, do these steps"). The planner sees the list and can pre-activate skills via the plan JSON; task workers can also activate them mid-run via the activate_skill tool. The runtime injects activated skill bodies into the system prompt so the agent follows them.'
-                    )}
-                  </p>
-                  <SkillsSelector
-                    selectedSkills={profile.skills || []}
-                    onSkillsChange={skills => handleField('skills', skills)}
-                    helperText={t(
-                      'admin.agents.edit.skillsHelper',
-                      'Search and select skills to add to this agent. Click on selected skills to remove them.'
-                    )}
-                  />
-                </div>
+                {skillsEnabled && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      {t('admin.agents.edit.skills', 'Skills (instructional knowledge)')}
+                    </label>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                      {t(
+                        'admin.agents.edit.skillsHint',
+                        'Skills describe HOW to do something (e.g. "for person research, do these steps"). The planner sees the list and can pre-activate skills via the plan JSON; task workers can also activate them mid-run via the activate_skill tool. The runtime injects activated skill bodies into the system prompt so the agent follows them.'
+                      )}
+                    </p>
+                    <SkillsSelector
+                      selectedSkills={profile.skills || []}
+                      onSkillsChange={skills => handleField('skills', skills)}
+                      helperText={t(
+                        'admin.agents.edit.skillsHelper',
+                        'Search and select skills to add to this agent. Click on selected skills to remove them.'
+                      )}
+                    />
+                  </div>
+                )}
               </div>
             </Section>
 

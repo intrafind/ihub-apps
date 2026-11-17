@@ -250,3 +250,35 @@ describe('German translations', () => {
     expect(informal).toEqual([]);
   });
 });
+
+/** Every client source file, the admin area included. */
+function allSourceFiles(dir, out = []) {
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) allSourceFiles(full, out);
+    else if (/\.(jsx?|tsx?)$/.test(entry.name)) out.push(full);
+  }
+  return out;
+}
+
+describe('translation keys used anywhere in the frontend, admin included', () => {
+  // A key that names a group of keys (an object) renders as
+  // "key '…' returned an object instead of string" instead of the fallback.
+  // Calls that pass `returnObjects` ask for the object on purpose.
+  const objectKeys = allSourceFiles(SRC).flatMap(file => {
+    const text = fs.readFileSync(file, 'utf8');
+    return literalKeys(file)
+      .filter(({ key }) => {
+        const value = key
+          .split('.')
+          .reduce((node, part) => (node && typeof node === 'object' ? node[part] : undefined), en);
+        return value !== null && typeof value === 'object';
+      })
+      .filter(({ line }) => !/returnObjects/.test(text.split('\n')[line - 1] || ''))
+      .map(({ key, line }) => `${key} (${path.relative(SRC, file)}:${line})`);
+  });
+
+  it('name a text, not a group of keys', () => {
+    expect(objectKeys).toEqual([]);
+  });
+});

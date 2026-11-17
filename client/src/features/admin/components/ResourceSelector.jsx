@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useMemo } from 'react';
+import { useId, useState, useMemo } from 'react';
 import Icon from '../../../shared/components/Icon';
 import { CHECKBOX_CLASS } from './formStyles';
 
@@ -16,6 +16,10 @@ function ResourceSelector({
 }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
+  // The field label names the search input; the "All (*)" checkbox is named
+  // by its own label text plus the field label, so several selectors on one
+  // page stay distinguishable for screen readers.
+  const searchId = useId();
 
   const isWildcard = selectedResources.includes('*');
 
@@ -87,19 +91,23 @@ function ResourceSelector({
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+        <label
+          htmlFor={searchId}
+          className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+        >
           {label}
         </label>
         {allowWildcard && (
-          <div className="flex items-center">
+          <label className="flex items-center cursor-pointer">
             <input
               type="checkbox"
               checked={isWildcard}
               onChange={e => handleWildcardToggle(e.target.checked)}
+              aria-label={typeof label === 'string' && label ? `${label}: All (*)` : undefined}
               className={`${CHECKBOX_CLASS} mr-2`}
             />
             <span className="text-sm text-gray-700 dark:text-gray-300">All (*)</span>
-          </div>
+          </label>
         )}
       </div>
 
@@ -137,6 +145,7 @@ function ResourceSelector({
         <div className="relative">
           <div className="relative">
             <input
+              id={searchId}
               type="text"
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
