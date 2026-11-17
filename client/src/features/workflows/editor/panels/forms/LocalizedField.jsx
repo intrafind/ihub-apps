@@ -35,7 +35,7 @@ function LocalizedField({
 }) {
   const { t } = useTranslation();
   const fieldId = useId();
-  const isObject = value !== null && typeof value === 'object' && !Array.isArray(value);
+  const isObject = Boolean(value) && typeof value === 'object' && !Array.isArray(value);
   const langs = isObject ? Object.keys(value) : [];
   const [activeLang, setActiveLang] = useState(langs[0] || 'en');
 
