@@ -7,7 +7,8 @@ type: reference
 # Streaming Events
 
 Every run-scoped stream the server offers speaks the same dialect: the chat
-stream (`GET /api/apps/:appId/chat/:chatId`), the workflow execution stream
+stream (`GET /api/apps/:appId/chat/:chatId`, or the chat POST itself, see
+[A chat turn on its own POST](#a-chat-turn-on-its-own-post)), the workflow execution stream
 (`GET /api/workflows/executions/:id/stream`) and the agent run stream
 (`GET /api/agents/runs/:id/stream`). Each frame is
 
@@ -305,6 +306,67 @@ replaces the earlier one.
 `knowledge_*` call; `sources` is what an admin configured.
 `tool/completed.knowledgeSource` and `step/completed.sources` are per-tool and
 per-step detail, not the answer's basis.
+
+## A chat turn on its own POST
+
+A client can also read a turn from the request that sends it, without opening
+the GET first: `POST /api/apps/:appId/chat/:chatId` with
+`Accept: text/event-stream`. Without that header the POST answers exactly as
+before (`{ status: 'streaming', chatId }` once the turn has ended, frames on
+the GET).
+
+- **Before the turn starts** every refusal keeps its status and
+  `application/problem+json` body: authentication, validation, an unknown chat,
+  `CLIENT_HISTORY_NOT_ALLOWED`, `AI_ACKNOWLEDGEMENT_REQUIRED` (428),
+  `CHAT_STORAGE_UNAVAILABLE` (503) and the rest. The SSE headers go out only
+  once the turn is committed (its run is named).
+- **After that** the answer is `200 text/event-stream`: `stream/connected`, then
+  the same frames as on the GET (tool progress, the wait for outdated documents,
+  a workflow a tool launched), ending after the turn's `run/ended` or
+  `run/paused`. The stream numbers its own `seq` from its `stream/connected`. A
+  preparation failure is the failed run (`run/started`, `stream/error`,
+  `run/ended`). A refusal after the commit point is a `stream/error` frame with
+  the refusal's `code` (and `details.status`), then the end.
+- An `@workflow` mention is still answered with JSON; its frames come over the
+  GET, which backfills what it missed when it connects.
+- Closing the response stops a temporary chat's turn (cause
+  `client_disconnected`, via `POST stream closed`); a kept chat's turn keeps
+  running and is stored, like a closed GET.
+- The frames of such a turn are written by the worker that holds the POST, so
+  they never cross the cluster bus. The 30-second `: heartbeat` comment keeps
+  proxies from timing out a long turn.
+
+Every frame a turn emits carries `rseq`, a counter per run assigned where the
+frame is produced, and is written with an SSE `id: {runId}:{rseq}` line. The
+stream `seq` stays as described above.
+
+### Re-attaching mid-step
+
+The ledger has no `step/delta` frames and no thinking. A client that re-attaches
+to a running turn (a reload, a second tab, a POST stream that broke) replays the
+ledger, then opens the GET with `?resumeRun={runId}&afterLedgerSeq={last ledger seq replayed}`.
+The worker producing the run answers, before the stream goes live, with:
+
+1. the run's partial state as ordinary `step/delta` frames: the thinking of
+   every step so far and the text of each step that has not completed (at most
+   256 KB of text and 512 KB of thinking per run; past that a `…` marks the cut
+   and the transcript re-read at the end fills it in);
+2. the ledger events after `afterLedgerSeq`, read after a flush.
+
+Live frames of that run numbered at or below the snapshot are dropped, so
+nothing is doubled; the client additionally drops a frame whose `rseq` it has
+already seen on the connection. Across workers this is one bus request and one
+reply per re-attach (`services/chat/chatResume.js`).
+
+Known limits without sticky sessions across pods: Stop reaches a turn only on
+its own pod, a re-attach on another pod gets the ledger but neither the partial
+text nor the live tail, and `/status.processing` is per pod. Within one pod,
+while a turn's POST stream is still open its frames go to the POST, not to a GET
+opened on the same chat (a second tab sees the snapshot, then the end through
+the transcript re-read).
+
+The SPA uses the POST stream when the `chatPostStream` feature is on
+(Admin → Features); turning it off takes effect on the next message.
 
 ## A workflow run on the wire
 
