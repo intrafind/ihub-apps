@@ -6,7 +6,7 @@
  * on. With it off, `/api/skills` answers 403, and the field used to request
  * it anyway and log errors.
  */
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 
 let mockSkillsOn = false;
@@ -74,7 +74,7 @@ const AdminAgentEditPage =
 test('no Skills field (and no skills request) while the feature is off', async () => {
   mockSkillsOn = false;
   render(<AdminAgentEditPage />);
-  await waitFor(() => expect(screen.getByText(/Decomposition/)).toBeInTheDocument());
+  expect(await screen.findByText(/Decomposition/)).toBeInTheDocument();
   expect(screen.queryByTestId('skills-selector')).not.toBeInTheDocument();
 });
 
