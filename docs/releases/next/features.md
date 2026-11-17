@@ -2246,13 +2246,15 @@ earlier are not asked again until the next change. See [UI Configuration](../../
 
 ## Security: SSL Whitelist Hosts Are Shown as Trusted by the SSRF Guard
 
-Hosts on the SSL domain whitelist are also trusted by the SSRF guard, so tools, MCP servers, web
-sources and the page reader may reach them even when they resolve to private network addresses.
+Hosts on the SSL domain whitelist are also trusted by the SSRF guard, so web sources, website
+crawls, the page reader and the watermark detector may reach them even when they resolve to private
+network addresses (tools and MCP servers do not use this list).
 This was not visible anywhere. Nothing about the trust changes; it is now shown:
 
 - **Admin → Security → SSL / TLS** shows the domain whitelist even while **Ignore Invalid SSL
   Certificates** is off, with a notice that these hosts are SSRF-trusted.
-- **Admin → Security → SSRF allowlist** lists the same hosts read-only.
+- **Admin → Security → SSRF allowlist** lists the same hosts read-only, updated when the SSL card
+  is saved.
 - At startup the server logs a warning naming the hosts that are SSRF-trusted only through the SSL
-  whitelist. Add them to the SSRF allowlist to make that trust explicit, or remove them from the
-  whitelist.
+  whitelist. Add them to the SSRF allowlist (the same entry or a broader pattern) to make that trust
+  explicit, or remove them from the whitelist.

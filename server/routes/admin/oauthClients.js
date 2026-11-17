@@ -650,6 +650,8 @@ export default function registerAdminOAuthRoutes(app) {
         summary: `Generated static API key for ${clientId} (expires in ${expirationDays} days)`
       });
 
+      // The body is a long-lived API key in plain text: never cache it.
+      res.setHeader('Cache-Control', 'no-store');
       sendCreated(res, `/api/admin/oauth/clients/${segment(clientId)}`, { ...apiKeyResult });
     }
   );

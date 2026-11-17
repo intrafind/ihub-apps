@@ -17,6 +17,7 @@ import config from '../config.js';
 import logger from './logger.js';
 import { guardedLookup } from './dnsGuard.js';
 import tokenStorageService from '../services/TokenStorageService.js';
+import { redactUrlSecrets } from './secretNames.js';
 
 /**
  * Workaround for `https-proxy-agent` >=7.0.0 (verified through 9.0.0).
@@ -48,9 +49,16 @@ import tokenStorageService from '../services/TokenStorageService.js';
  * to verify on dependency upgrades.
  */
 export class TlsForwardingHttpsProxyAgent extends HttpsProxyAgent {
-  constructor(proxy, opts = {}) {
+  /**
+   * @param {string} proxy - The proxy URL.
+   * @param {Object} [opts] - Agent options; `rejectUnauthorized` also applies to
+   *   the destination handshake.
+   * @param {Object} [destinationTlsOptions] - Further TLS options (`ca`, `cert`,
+   *   `key`) for the destination handshake only, never for the proxy connection.
+   */
+  constructor(proxy, opts = {}, destinationTlsOptions = {}) {
     super(proxy, opts);
-    this._destinationTlsOptions = {};
+    this._destinationTlsOptions = { ...destinationTlsOptions };
     if (typeof opts.rejectUnauthorized === 'boolean') {
       this._destinationTlsOptions.rejectUnauthorized = opts.rejectUnauthorized;
     }
@@ -164,9 +172,43 @@ export function isSsrfTrustedHost(hostname) {
 }
 
 /**
+ * The domain a subdomain pattern (`*.example.com` or `.example.com`) covers,
+ * or null for a plain host name.
+ *
+ * @param {string} pattern - A whitelist entry, trimmed and lower case.
+ * @returns {string|null} `example.com`, or null.
+ */
+function wildcardDomain(pattern) {
+  if (pattern.startsWith('*.')) return pattern.slice(2) || null;
+  if (pattern.startsWith('.')) return pattern.slice(1) || null;
+  return null;
+}
+
+/**
+ * Whether `ssrf.allowedHosts` already trusts every host a whitelist entry
+ * matches. A plain host is covered when a pattern there matches it. A subdomain
+ * pattern for `example.com` is covered by an equivalent pattern
+ * (`*.example.com` / `.example.com`) or a broader one (`*.com`); a list of some
+ * of its hosts (`api.example.com`) covers it only partly, which does not count.
+ *
+ * @param {string} pattern - A whitelist entry, trimmed and lower case.
+ * @param {string[]} allowedHosts - `ssrf.allowedHosts`.
+ * @returns {boolean}
+ */
+function coveredByAllowedHosts(pattern, allowedHosts) {
+  const domain = wildcardDomain(pattern);
+  if (domain === null) return isDomainWhitelisted(pattern, allowedHosts);
+  const allowedDomains = allowedHosts
+    .filter(h => typeof h === 'string')
+    .map(h => wildcardDomain(h.trim().toLowerCase()))
+    .filter(Boolean);
+  return allowedDomains.some(d => domain === d || domain.endsWith(`.${d}`));
+}
+
+/**
  * The `ssl.domainWhitelist` entries that the SSRF guard trusts only because
- * they are on the TLS whitelist: not also on `ssrf.allowedHosts` (as the same
- * pattern, or, for a plain host name, through a pattern there). Today the TLS
+ * they are on the TLS whitelist: not also covered by `ssrf.allowedHosts` (see
+ * {@link coveredByAllowedHosts}). Today the TLS
  * whitelist doubles as SSRF trust ({@link isSsrfTrustedHost}); this names the
  * hosts an admin may not realise can reach private addresses.
  *
@@ -180,18 +222,13 @@ export function hostsSsrfTrustedOnlyViaTlsWhitelist(platformConfig) {
   const allowedHosts = Array.isArray(platformConfig?.ssrf?.allowedHosts)
     ? platformConfig.ssrf.allowedHosts
     : [];
-  const allowedPatterns = new Set(
-    allowedHosts.filter(h => typeof h === 'string').map(h => h.trim().toLowerCase())
-  );
+  const allowedStrings = allowedHosts.filter(h => typeof h === 'string');
   const out = [];
   for (const entry of whitelist) {
     if (typeof entry !== 'string') continue;
     const pattern = entry.trim();
     if (!pattern || out.includes(pattern)) continue;
-    const lower = pattern.toLowerCase();
-    if (allowedPatterns.has(lower)) continue;
-    const isPlainHost = !lower.startsWith('*.') && !lower.startsWith('.');
-    if (isPlainHost && isDomainWhitelisted(lower, allowedHosts)) continue;
+    if (coveredByAllowedHosts(pattern.toLowerCase(), allowedStrings)) continue;
     out.push(pattern);
   }
   return out;
@@ -785,6 +822,39 @@ export function createAgent(
 }
 
 /**
+ * An agent for `url` like `createAgent` builds (proxy routing, the SSL
+ * whitelist bypass, the DNS guard), that also presents caller-supplied TLS
+ * material to the destination: a private root CA (`ca`) and a client
+ * certificate and key for mutual TLS (`cert`, `key`).
+ *
+ * The agent is always a new one, so the material never reaches the shared
+ * agents other outbound calls use. Without TLS material this is `createAgent(url)`.
+ *
+ * @param {string} url - The destination URL.
+ * @param {{ca?: Buffer|string, cert?: Buffer|string, key?: Buffer|string}} [tlsOptions] -
+ *   TLS material for the destination. Missing entries are left out.
+ * @returns {http.Agent|https.Agent|HttpProxyAgent|HttpsProxyAgent|undefined}
+ *
+ * @example
+ * createAgentWithTls('https://collector.internal:4318/v1/traces', { ca, cert, key });
+ */
+export function createAgentWithTls(url = '', tlsOptions = {}) {
+  const material = Object.fromEntries(
+    Object.entries(tlsOptions || {}).filter(([, value]) => value != null)
+  );
+  const isHttps = url.startsWith('https://');
+  if (!isHttps || Object.keys(material).length === 0) return createAgent(url);
+
+  // Bypass only for a whitelisted host, exactly as createAgent decides it.
+  const bypass = getTlsBypassOptions(url);
+  const routing = describeProxyRouting(url, getProxyConfig());
+  if (routing.decision === 'proxied') {
+    return new TlsForwardingHttpsProxyAgent(routing.proxyUrl, bypass, material);
+  }
+  return new https.Agent({ keepAlive: true, ...material, ...bypass, lookup: guardedLookup });
+}
+
+/**
  * Enhance fetch options with SSL and proxy configuration
  * @param {Object} options - Existing fetch options
  * @param {string} url - Request URL
@@ -812,25 +882,10 @@ export function enhanceFetchOptions(
   return enhancedOptions;
 }
 
-/**
- * Redact secret-looking parts of a URL so it can be safely included in logs and
- * error messages. Credentials ride along in a URL two ways: query parameters
- * (Google's `?key=`, plus `token` / `api_key` / `client_secret` / ...) and
- * basic-auth userinfo (`http://user:pass@host`). Both are masked; non-strings
- * are returned unchanged.
- *
- * @param {string} url - The URL to sanitize
- * @returns {string} URL with any embedded secrets replaced by `REDACTED`
- */
-export function redactUrlSecrets(url) {
-  if (typeof url !== 'string') return url;
-  return url
-    .replace(/(\/\/)[^/@\s]+@/, '$1REDACTED@')
-    .replace(
-      /([?&](?:api[-_]?key|access[-_]?token|client[-_]?secret|key|token|password|secret)=)[^&#\s]*/gi,
-      '$1REDACTED'
-    );
-}
+// `redactUrlSecrets` lives in the dependency-free `secretNames.js` so the
+// env-override log (which runs while the config cache loads) can use it too;
+// it is re-exported here for the existing callers.
+export { redactUrlSecrets };
 
 /**
  * Fetch wrapper that automatically applies proxy and SSL configuration.

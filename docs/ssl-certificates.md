@@ -152,8 +152,9 @@ The whitelist applies to every outbound connection to a configurable URL: HTTP(S
 
 > [!IMPORTANT]
 > Hosts on `domainWhitelist` are also trusted by the SSRF guard, **whether or not
-> `ignoreInvalidCertificates` is on**: tools, MCP servers, web sources and the page reader may reach
-> them even when they resolve to private network addresses. **Admin → Security → SSL / TLS** shows
+> `ignoreInvalidCertificates` is on**: web sources, website crawls, the page reader (Preview) and
+> the watermark detector may reach them even when they resolve to private network addresses. Tools
+> and MCP servers do not use this list. **Admin → Security → SSL / TLS** shows
 > the list with a notice, **Admin → Security → SSRF Allowlist** lists the same hosts read-only, and
 > the server logs a warning at startup naming every host that is SSRF-trusted only through this
 > list. To make that trust explicit, add the host to the SSRF allowlist (`ssrf.allowedHosts`) as

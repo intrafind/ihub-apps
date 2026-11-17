@@ -107,8 +107,12 @@ The `telemetry` block in `contents/config/platform.json` (and the matching admin
 
 The OTLP exporters connect like every other outbound call: a collector whose host is on
 `ssl.domainWhitelist` (with `ssl.ignoreInvalidCertificates` on) may use a certificate from a
-private CA, and the outbound proxy settings apply. See [SSL certificates](ssl-certificates.md) and
-[Proxy configuration](proxy-configuration.md).
+private CA, and the outbound proxy settings apply. A CA, client certificate and key set through
+`OTEL_EXPORTER_OTLP_CERTIFICATE`, `OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE` and
+`OTEL_EXPORTER_OTLP_CLIENT_KEY` (or their `_TRACES_` / `_METRICS_` variants) still apply, so a
+collector that requires mutual TLS keeps working. Exports that run before the configuration has
+finished loading at startup are dropped rather than sent without these settings. See
+[SSL certificates](ssl-certificates.md) and [Proxy configuration](proxy-configuration.md).
 
 ### Hot-reload behaviour
 

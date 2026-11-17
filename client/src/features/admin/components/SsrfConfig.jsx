@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import { SSL_CONFIG_SAVED_EVENT } from '../utils/sslConfigEvents';
 
 function SsrfConfig() {
   const { t } = useTranslation();
@@ -50,6 +51,10 @@ function SsrfConfig() {
     };
     void fetchConfig();
     void fetchTlsWhitelist();
+    // Both cards stay mounted on the Security page: reload the whitelist when
+    // the SSL card saves it (only saved changes are announced).
+    window.addEventListener(SSL_CONFIG_SAVED_EVENT, fetchTlsWhitelist);
+    return () => window.removeEventListener(SSL_CONFIG_SAVED_EVENT, fetchTlsWhitelist);
   }, [t]);
 
   const handleAddHost = () => {
@@ -230,10 +235,7 @@ function SsrfConfig() {
       ) : (
         <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-md text-center mb-6">
           <p className="text-sm text-gray-600 dark:text-gray-400">
-            {t(
-              'admin.system.ssrf.noHosts',
-              'No hosts allowed. Outbound calls to private/internal IPs are blocked.'
-            )}
+            {t('admin.system.ssrf.noHosts', 'No hosts explicitly added to the SSRF allowlist.')}
           </p>
         </div>
       )}
@@ -247,7 +249,7 @@ function SsrfConfig() {
           <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
             {t(
               'admin.system.ssrf.tlsTrustedDesc',
-              'Hosts on the SSL domain whitelist are trusted by the SSRF guard as well, whether or not "Ignore Invalid SSL Certificates" is on. They are edited on the SSL card.'
+              'Hosts on the SSL domain whitelist are trusted as well by web sources, website crawls, the page reader and the watermark detector (not by tools and MCP servers), whether or not "Ignore Invalid SSL Certificates" is on. They are edited on the SSL card.'
             )}
           </p>
           {tlsTrustedHosts.length > 0 ? (

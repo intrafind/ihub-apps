@@ -7,7 +7,7 @@
  * For a client-credentials (machine) client the allowed apps, models and
  * prompts ARE the grant: an empty list means nothing, and only an explicit
  * "All (*)" grants everything. So a new client starts with nothing selected,
- * needs at least one app before it can be saved, warns when "All (*)" is
+ * needs at least one app, model or prompt before it can be saved, warns when "All (*)" is
  * chosen, and the editor warns when the grant types change on an existing
  * client, because that changes what the lists mean.
  */
@@ -32,6 +32,7 @@ jest.mock('react-i18next', () => ({
 }));
 
 const {
+  clientGrantWarnings,
   grantTypesChanged,
   isMachineClient,
   validateClientGrants
@@ -79,6 +80,10 @@ function allCheckbox(index) {
   return screen.getAllByText('All (*)')[index].previousSibling;
 }
 
+function putCalls() {
+  return mockMakeAdminApiCall.mock.calls.filter(([, options]) => options?.method === 'PUT');
+}
+
 function postCalls() {
   return mockMakeAdminApiCall.mock.calls.filter(
     ([url, options]) => url === '/admin/oauth/clients' && options?.method === 'POST'
@@ -93,19 +98,72 @@ describe('oauthClientGrants', () => {
     expect(isMachineClient(undefined)).toBe(false);
   });
 
-  test('a machine client needs at least one app; "*" counts', () => {
+  test('a machine client needs at least one app, model or prompt; "*" counts', () => {
     expect(validateClientGrants({ grantTypes: ['client_credentials'], allowedApps: [] })).toBe(
-      'admin.auth.oauth.machineClientNeedsApp'
+      'admin.auth.oauth.machineClientNeedsGrant'
     );
     expect(validateClientGrants({ grantTypes: ['client_credentials'] })).toBe(
-      'admin.auth.oauth.machineClientNeedsApp'
+      'admin.auth.oauth.machineClientNeedsGrant'
     );
+    // A client of the OpenAI-compatible API needs only models.
+    expect(
+      validateClientGrants({ grantTypes: ['client_credentials'], allowedModels: ['gpt-x'] })
+    ).toBeNull();
+    expect(
+      clientGrantWarnings({ grantTypes: ['client_credentials'], allowedModels: ['gpt-x'] })
+    ).toEqual([]);
+    expect(
+      validateClientGrants({ grantTypes: ['client_credentials'], allowedPrompts: ['p1'] })
+    ).toBeNull();
     expect(
       validateClientGrants({ grantTypes: ['client_credentials'], allowedApps: ['*'] })
     ).toBeNull();
     expect(
       validateClientGrants({ grantTypes: ['authorization_code'], allowedApps: [] })
     ).toBeNull();
+  });
+
+  test('a personal API key is never a machine client', () => {
+    expect(isMachineClient(['client_credentials'], { personal: true })).toBe(false);
+    expect(
+      validateClientGrants(
+        { grantTypes: ['client_credentials'], allowedApps: [] },
+        { isNew: false, initialLists: { allowedApps: ['chat'] }, personal: true }
+      )
+    ).toBeNull();
+    expect(
+      clientGrantWarnings(
+        { grantTypes: ['client_credentials'], allowedApps: [] },
+        { personal: true }
+      )
+    ).toEqual([]);
+  });
+
+  test('an inactive machine client may be saved without apps', () => {
+    expect(
+      validateClientGrants({ grantTypes: ['client_credentials'], allowedApps: [], active: false })
+    ).toBeNull();
+  });
+
+  test('an existing machine client blocks only when its lists are all emptied', () => {
+    const empty = { grantTypes: ['client_credentials'], allowedApps: [] };
+    expect(validateClientGrants(empty, { isNew: false, initialLists: {} })).toBeNull();
+    expect(
+      validateClientGrants(empty, { isNew: false, initialLists: { allowedApps: ['chat'] } })
+    ).toBe('admin.auth.oauth.machineClientNeedsGrant');
+    expect(
+      validateClientGrants(empty, { isNew: false, initialLists: { allowedModels: ['gpt-x'] } })
+    ).toBe('admin.auth.oauth.machineClientNeedsGrant');
+  });
+
+  test('a machine client with apps but no models is warned, not blocked', () => {
+    const form = { grantTypes: ['client_credentials'], allowedApps: ['chat'], allowedModels: [] };
+    expect(validateClientGrants(form)).toBeNull();
+    expect(clientGrantWarnings(form)).toEqual(['admin.auth.oauth.machineClientHasNoModels']);
+    expect(clientGrantWarnings({ ...form, allowedModels: ['*'] })).toEqual([]);
+    expect(
+      clientGrantWarnings({ grantTypes: ['authorization_code'], allowedApps: ['chat'] })
+    ).toEqual([]);
   });
 
   test('grant type changes ignore order', () => {
@@ -142,7 +200,7 @@ describe('new machine client', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Create' }));
 
     expect(
-      await screen.findByText(/A client-credentials client needs at least one app/)
+      await screen.findByText(/A client-credentials client needs at least one app, model or prompt/)
     ).toBeInTheDocument();
     expect(postCalls()).toHaveLength(0);
   });
@@ -194,5 +252,70 @@ describe('existing client', () => {
     // With both grant types, both meanings of the lists are explained.
     expect(screen.getByText(/these lists ARE the grant/)).toBeInTheDocument();
     expect(screen.getByText(/the token acts as the signed-in user/)).toBeInTheDocument();
+  });
+
+  test('an existing machine client whose apps were already empty can be renamed', async () => {
+    renderEditor('svc-2', { ...STORED, clientId: 'svc-2', allowedApps: [] });
+
+    const name = await screen.findByDisplayValue('Reporting');
+    expect(
+      screen.getByText(/has no apps, models or prompts, so its tokens can do nothing/)
+    ).toBeInTheDocument();
+    fireEvent.change(name, { target: { value: 'Reporting (parked)' } });
+    fireEvent.click(screen.getByRole('button', { name: /Update|Save/ }));
+
+    await waitFor(() => expect(putCalls()).toHaveLength(1));
+    expect(putCalls()[0][1].body.name).toBe('Reporting (parked)');
+    expect(screen.queryByText(/needs at least one app, model or prompt/)).toBeNull();
+  });
+
+  test('an existing machine client cannot have all its lists emptied while active', async () => {
+    renderEditor('svc-1', STORED);
+    await screen.findByDisplayValue('Reporting');
+
+    // The chip's remove button (an icon only) sits inside the chip.
+    fireEvent.click(screen.getByText('Chat').querySelector('button'));
+    fireEvent.click(screen.getByRole('button', { name: /Update|Save/ }));
+
+    expect(await screen.findByText(/needs at least one app, model or prompt/)).toBeInTheDocument();
+    expect(putCalls()).toHaveLength(0);
+  });
+
+  test('warns when a machine client has apps but no models', async () => {
+    renderEditor('svc-1', STORED);
+    expect(await screen.findByText(/This client has apps but no models/)).toBeInTheDocument();
+  });
+
+  test('a personal API key is edited as a delegated client', async () => {
+    renderEditor('pk-1', {
+      ...STORED,
+      clientId: 'pk-1',
+      name: 'My key',
+      personal: true,
+      allowedApps: []
+    });
+
+    expect(await screen.findByDisplayValue('My key')).toBeInTheDocument();
+    expect(screen.getByText(/Personal API key: the token acts as the user/)).toBeInTheDocument();
+    expect(screen.queryByText(/these lists ARE the grant/)).toBeNull();
+    expect(screen.queryByText('Nothing selected: this client can use no apps.')).toBeNull();
+    expect(
+      screen.queryByText(/has no apps, models or prompts, so its tokens can do nothing/)
+    ).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: /Update|Save/ }));
+    await waitFor(() => expect(putCalls()).toHaveLength(1));
+  });
+
+  test('"All (*)" on a delegated client is not presented as harmless', async () => {
+    renderEditor('web-1', {
+      ...STORED,
+      clientId: 'web-1',
+      grantTypes: ['authorization_code', 'refresh_token'],
+      allowedApps: ['*']
+    });
+
+    expect(await screen.findByText(/All \(\*\) sets no client-level limit/)).toBeInTheDocument();
+    expect(screen.queryByText(/"All \(\*\)" adds no restriction/)).toBeNull();
   });
 });

@@ -10,30 +10,91 @@ import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-http';
 import { PrometheusExporter } from '@opentelemetry/exporter-prometheus';
 import { ConsoleSpanExporter } from '@opentelemetry/sdk-trace';
 import { ConsoleMetricExporter } from '@opentelemetry/sdk-metrics';
-import { createAgent } from '../utils/httpConfig.js';
+import fs from 'node:fs';
+import path from 'node:path';
+import configCache from '../configCache.js';
+import { createAgentWithTls } from '../utils/httpConfig.js';
+import logger from '../utils/logger.js';
+
+/**
+ * Reads a TLS file named by an OTel environment variable, the signal-specific
+ * one first (`OTEL_EXPORTER_OTLP_TRACES_CERTIFICATE`), then the general one
+ * (`OTEL_EXPORTER_OTLP_CERTIFICATE`), relative to the working directory like
+ * the OTel SDK does.
+ *
+ * @param {string} signal - `TRACES` or `METRICS`.
+ * @param {string} suffix - `CERTIFICATE`, `CLIENT_CERTIFICATE` or `CLIENT_KEY`.
+ * @returns {Buffer|undefined} The file, or undefined when none is set or it cannot be read.
+ */
+function readOtelTlsFile(signal, suffix) {
+  const filePath =
+    process.env[`OTEL_EXPORTER_OTLP_${signal}_${suffix}`] ??
+    process.env[`OTEL_EXPORTER_OTLP_${suffix}`];
+  if (!filePath) return undefined;
+  try {
+    return fs.readFileSync(path.resolve(process.cwd(), filePath));
+  } catch (error) {
+    logger.warn('Failed to read OTLP TLS file', {
+      component: 'Telemetry',
+      variable: suffix,
+      error: error.message
+    });
+    return undefined;
+  }
+}
+
+/**
+ * The TLS material the OTel SDK reads from its environment variables: a root
+ * CA (`…_CERTIFICATE`) and a client certificate and key for mutual TLS
+ * (`…_CLIENT_CERTIFICATE`, `…_CLIENT_KEY`), each with a signal-specific variant.
+ * Supplying our own agent replaces the SDK's, which is where it would apply
+ * them, so they are read here and passed to that agent instead.
+ *
+ * @param {string} signal - `TRACES` or `METRICS`.
+ * @returns {{ca?: Buffer, cert?: Buffer, key?: Buffer}} The material that is set.
+ */
+export function otlpTlsOptionsFromEnv(signal) {
+  const material = {
+    ca: readOtelTlsFile(signal, 'CERTIFICATE'),
+    cert: readOtelTlsFile(signal, 'CLIENT_CERTIFICATE'),
+    key: readOtelTlsFile(signal, 'CLIENT_KEY')
+  };
+  return Object.fromEntries(Object.entries(material).filter(([, value]) => value !== undefined));
+}
 
 /**
  * Options for an OTLP/HTTP exporter that sends to `endpoint` + `signalPath`.
  *
- * The connection goes through the server's own agent (`createAgent`), so it
- * honours the platform's outbound settings like every other outbound call: a
- * collector on `ssl.domainWhitelist` (with "ignore invalid certificates" on)
+ * The connection goes through the server's own agent (`createAgentWithTls`), so
+ * it honours the platform's outbound settings like every other outbound call:
+ * a collector on `ssl.domainWhitelist` (with "ignore invalid certificates" on)
  * may use a certificate from a private CA, and the configured proxy applies.
- * Certificates are verified for every other host.
+ * Certificates are verified for every other host. The CA and client
+ * certificate from the `OTEL_EXPORTER_OTLP_*` variables still apply.
  *
- * The agent is built by a factory, so the exporter asks for it on its first
- * export — after the platform config has been loaded.
+ * The exporter asks the factory for its agent on its first export and keeps
+ * that agent for its whole life. Telemetry starts before the platform config
+ * is loaded, so until then the factory throws: that export fails and the next
+ * one asks again, instead of an agent built without the SSL and proxy settings
+ * sticking until the server restarts.
  *
  * @param {Object} otlpConfig - `telemetry.exporters.otlp` (`endpoint`, `headers`).
  * @param {string} signalPath - `/v1/traces` or `/v1/metrics`.
+ * @param {string} [signal] - `TRACES` or `METRICS`, for the signal-specific TLS variables.
  * @returns {{url: string, headers: Object, httpAgentOptions: Function}} Exporter options.
  */
-export function otlpExporterOptions(otlpConfig, signalPath) {
+export function otlpExporterOptions(otlpConfig, signalPath, signal = 'TRACES') {
   const url = `${otlpConfig.endpoint}${signalPath}`;
+  const tlsOptions = otlpTlsOptionsFromEnv(signal);
   return {
     url,
     headers: otlpConfig.headers || {},
-    httpAgentOptions: () => createAgent(url)
+    httpAgentOptions: () => {
+      if (!configCache.getPlatform()) {
+        throw new Error('OTLP export deferred: the platform configuration is not loaded yet');
+      }
+      return createAgentWithTls(url, tlsOptions);
+    }
   };
 }
 
@@ -56,7 +117,9 @@ export function createTraceExporter(config) {
   switch (provider) {
     case 'otlp':
       if (config.exporters?.otlp) {
-        return new OTLPTraceExporter(otlpExporterOptions(config.exporters.otlp, '/v1/traces'));
+        return new OTLPTraceExporter(
+          otlpExporterOptions(config.exporters.otlp, '/v1/traces', 'TRACES')
+        );
       }
       return undefined;
 
@@ -85,7 +148,9 @@ export function createMetricExporter(config) {
   switch (provider) {
     case 'otlp':
       if (config.exporters?.otlp) {
-        return new OTLPMetricExporter(otlpExporterOptions(config.exporters.otlp, '/v1/metrics'));
+        return new OTLPMetricExporter(
+          otlpExporterOptions(config.exporters.otlp, '/v1/metrics', 'METRICS')
+        );
       }
       break;
 

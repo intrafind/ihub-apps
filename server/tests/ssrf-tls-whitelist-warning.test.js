@@ -42,6 +42,28 @@ describe('hostsSsrfTrustedOnlyViaTlsWhitelist', () => {
     ).toEqual([]);
   });
 
+  test('treats a wildcard covered by an equivalent or broader allowedHosts pattern as trusted', () => {
+    expect(
+      hostsSsrfTrustedOnlyViaTlsWhitelist({
+        ssl: { domainWhitelist: ['*.corp.example', '.lab.example', '*.eu.cloud.example'] },
+        // `.corp.example` is the same set as `*.corp.example`; `*.example`
+        // covers every subdomain of lab.example; `.cloud.example` is broader.
+        ssrf: { allowedHosts: ['.corp.example', '*.example', '.cloud.example'] }
+      })
+    ).toEqual([]);
+  });
+
+  test('keeps warning about a wildcard only partly covered', () => {
+    expect(
+      hostsSsrfTrustedOnlyViaTlsWhitelist({
+        ssl: { domainWhitelist: ['*.corp.example', '*.example'] },
+        // A host of the domain, a narrower pattern and an unrelated suffix do
+        // not cover every host the TLS entry matches.
+        ssrf: { allowedHosts: ['api.corp.example', '*.eu.corp.example', 'corp.example', '*.ample'] }
+      })
+    ).toEqual(['*.corp.example', '*.example']);
+  });
+
   test('is empty without a whitelist, and ignores malformed entries', () => {
     expect(hostsSsrfTrustedOnlyViaTlsWhitelist({})).toEqual([]);
     expect(

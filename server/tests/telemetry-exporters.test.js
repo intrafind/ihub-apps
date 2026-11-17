@@ -13,11 +13,16 @@
  */
 
 import { afterEach, beforeEach, describe, expect, test } from '@jest/globals';
+import fs from 'node:fs';
+import https from 'node:https';
+import os from 'node:os';
+import path from 'node:path';
 import configCache from '../configCache.js';
 import {
   createMetricExporter,
   createTraceExporter,
   otlpExporterOptions,
+  otlpTlsOptionsFromEnv,
   parseOTLPEnvVars
 } from '../telemetry/exporters.js';
 
@@ -97,6 +102,20 @@ describe('OTLP exporters and the SSL whitelist', () => {
     return null;
   }
 
+  /** Finds the exporter's HTTP transport, which caches the agent it is given. */
+  function findTransport(root) {
+    const seen = new Set();
+    const stack = [root];
+    while (stack.length > 0) {
+      const node = stack.pop();
+      if (!node || typeof node !== 'object' || seen.has(node)) continue;
+      seen.add(node);
+      if (typeof node._loadUtils === 'function') return node;
+      for (const value of Object.values(node)) stack.push(value);
+    }
+    return null;
+  }
+
   const ssl = { ignoreInvalidCertificates: true, domainWhitelist: ['collector.internal'] };
 
   beforeEach(() => {
@@ -165,5 +184,124 @@ describe('OTLP exporters and the SSL whitelist', () => {
       expect(agent.options.rejectUnauthorized).toBe(false);
       await exporter.shutdown?.();
     }
+  });
+
+  test('refuses to build an agent until the platform config is loaded, then builds one', async () => {
+    configCache.cache.delete('config/platform.json');
+    expect(configCache.getPlatform()).toBeNull();
+    const options = otlpExporterOptions(
+      { endpoint: 'https://collector.internal:4318' },
+      '/v1/traces'
+    );
+    expect(() => options.httpAgentOptions('https:')).toThrow(/not loaded/);
+
+    configCache.setCacheEntry('config/platform.json', { ssl, proxy: { enabled: false } });
+    const agent = await options.httpAgentOptions('https:');
+    expect(agent.options.rejectUnauthorized).toBe(false);
+  });
+
+  test('an exporter whose first export ran before the config loaded does not keep a wrong agent', async () => {
+    configCache.cache.delete('config/platform.json');
+    const exporter = createTraceExporter({
+      provider: 'otlp',
+      exporters: { otlp: { endpoint: 'https://collector.internal:4318' } }
+    });
+    const transport = findTransport(exporter);
+    await expect(transport._loadUtils()).rejects.toThrow(/not loaded/);
+    expect(transport._utils).toBeNull();
+
+    configCache.setCacheEntry('config/platform.json', { ssl, proxy: { enabled: false } });
+    const { agent } = await transport._loadUtils();
+    expect(agent.options.rejectUnauthorized).toBe(false);
+    await exporter.shutdown?.();
+  });
+});
+
+/**
+ * The CA and client certificate the OTel SDK reads from `OTEL_EXPORTER_OTLP_*`
+ * still reach the collector when the server supplies the agent, in a
+ * dedicated agent (never a shared one).
+ */
+describe('OTLP exporters and the OTel TLS variables', () => {
+  const VARS = [
+    'OTEL_EXPORTER_OTLP_CERTIFICATE',
+    'OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE',
+    'OTEL_EXPORTER_OTLP_CLIENT_KEY',
+    'OTEL_EXPORTER_OTLP_TRACES_CERTIFICATE'
+  ];
+  let dir;
+
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ihub-otlp-tls-'));
+    for (const [name, body] of [
+      ['ca.pem', 'GENERAL-CA'],
+      ['traces-ca.pem', 'TRACES-CA'],
+      ['client.pem', 'CLIENT-CERT'],
+      ['client.key', 'CLIENT-KEY']
+    ]) {
+      fs.writeFileSync(path.join(dir, name), body);
+    }
+    configCache.setCacheEntry('config/platform.json', { proxy: { enabled: false } });
+  });
+
+  afterEach(() => {
+    for (const name of VARS) delete process.env[name];
+    fs.rmSync(dir, { recursive: true, force: true });
+    configCache.setCacheEntry('config/platform.json', {});
+  });
+
+  test('reads the CA, client certificate and key, preferring the signal-specific variable', () => {
+    process.env.OTEL_EXPORTER_OTLP_CERTIFICATE = path.join(dir, 'ca.pem');
+    process.env.OTEL_EXPORTER_OTLP_TRACES_CERTIFICATE = path.join(dir, 'traces-ca.pem');
+    process.env.OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE = path.join(dir, 'client.pem');
+    process.env.OTEL_EXPORTER_OTLP_CLIENT_KEY = path.join(dir, 'client.key');
+
+    const traces = otlpTlsOptionsFromEnv('TRACES');
+    expect(String(traces.ca)).toBe('TRACES-CA');
+    expect(String(traces.cert)).toBe('CLIENT-CERT');
+    expect(String(traces.key)).toBe('CLIENT-KEY');
+    expect(String(otlpTlsOptionsFromEnv('METRICS').ca)).toBe('GENERAL-CA');
+  });
+
+  test('no variables, no material', () => {
+    expect(otlpTlsOptionsFromEnv('TRACES')).toEqual({});
+  });
+
+  test('the agent presents the material, and it is a dedicated agent', async () => {
+    process.env.OTEL_EXPORTER_OTLP_CERTIFICATE = path.join(dir, 'ca.pem');
+    process.env.OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE = path.join(dir, 'client.pem');
+    process.env.OTEL_EXPORTER_OTLP_CLIENT_KEY = path.join(dir, 'client.key');
+    const options = otlpExporterOptions(
+      { endpoint: 'https://collector.mtls:4318' },
+      '/v1/metrics',
+      'METRICS'
+    );
+
+    const first = await options.httpAgentOptions('https:');
+    const second = await options.httpAgentOptions('https:');
+    expect(String(first.options.ca)).toBe('GENERAL-CA');
+    expect(String(first.options.cert)).toBe('CLIENT-CERT');
+    expect(String(first.options.key)).toBe('CLIENT-KEY');
+    // Not whitelisted: verification stays on.
+    expect(first.options.rejectUnauthorized).not.toBe(false);
+    expect(first).not.toBe(second);
+    expect(first).not.toBe(https.globalAgent);
+  });
+
+  test('behind the proxy, the material goes to the collector handshake only', async () => {
+    process.env.OTEL_EXPORTER_OTLP_CERTIFICATE = path.join(dir, 'ca.pem');
+    configCache.setCacheEntry('config/platform.json', {
+      proxy: {
+        enabled: true,
+        https: 'http://proxy.example:3128',
+        http: 'http://proxy.example:3128'
+      }
+    });
+    const agent = await otlpExporterOptions(
+      { endpoint: 'https://collector.mtls:4318' },
+      '/v1/traces'
+    ).httpAgentOptions('https:');
+    expect(agent.constructor.name).toBe('TlsForwardingHttpsProxyAgent');
+    expect(String(agent._destinationTlsOptions.ca)).toBe('GENERAL-CA');
   });
 });

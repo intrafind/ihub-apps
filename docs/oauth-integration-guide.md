@@ -72,12 +72,21 @@ once, after saving.
 
 For a client-credentials client the allowed apps, models and prompts **are the grant**: the token
 has no user behind it, so the client can use exactly what is listed and nothing of a kind whose list
-is empty. A new client therefore starts with nothing selected and cannot be saved without at least
-one app. **All (\*)** grants every app, model or prompt, including ones added later, and shows a
-warning; prefer listing only what the client needs. For an authorization-code client the same lists
-narrow what the signed-in user's groups allow, and an empty list adds no restriction. The editor
-warns when you change the grant types of an existing client, because that changes what the lists
-mean.
+is empty. A new client therefore starts with nothing selected and cannot be saved active without at
+least one app, model or prompt (a client of the OpenAI-compatible API needs only models); the editor
+also warns when it has apps but no models, because every app call needs a model. An existing client
+whose lists were all empty already, or an inactive one, can still be saved (for example to rename
+it). **All (\*)** grants every app, model or prompt, including ones added
+later, and shows a warning; prefer listing only what the client needs. For an authorization-code
+client the same lists narrow what the signed-in user's groups allow: an empty list adds no
+restriction, and **All (\*)** sets no limit at all, which the editor warns about too. A user's
+personal API key is edited the same way: it acts as its owner, so its lists narrow the owner's
+permissions. The editor warns when you change the grant types of an existing client, because that
+changes what the lists mean.
+
+The token endpoint issues a client-credentials token only to a client whose grant types include
+**Client Credentials**. A client registered for the authorization code flow only gets
+`400 unauthorized_client`, even with a valid secret.
 
 Or use the admin API:
 
@@ -123,7 +132,8 @@ The answer is `201 Created`, with a `Location` header and the new client:
 
 > [!WARNING]
 > Save the `clientSecret` immediately. It is never shown again. The answer (and the one of
-> `POST /api/admin/oauth/clients/{clientId}/rotate-secret`) is sent with `Cache-Control: no-store`.
+> `POST /api/admin/oauth/clients/{clientId}/rotate-secret`) is sent with `Cache-Control: no-store`,
+> like the static API key from `POST /api/admin/oauth/clients/{clientId}/generate-token`.
 
 ### Step 2: Configure Your Application
 

@@ -949,8 +949,10 @@ lists exactly as sent. An empty or missing list is stored as `[]` and means **no
 explicit `["*"]` grants every app, model or prompt. Until now the server turned an empty or missing
 list into `["*"]`, so a client created without lists could use everything.
 
-- **Admin UI:** a new client starts with nothing selected and needs at least one app (or **All
-  (\*)**, which now shows a warning) before it can be saved. The hint explains that the lists are
+- **Admin UI:** a new client starts with nothing selected and needs at least one app, model or
+  prompt (or **All (\*)**, which now shows a warning) before it can be saved; a client that only
+  calls the OpenAI-compatible API needs only models. An existing client whose lists are all empty,
+  or a suspended one, can still be saved for other edits. The hint explains that the lists are
   the grant for client credentials and a filter on the signed-in user's permissions for
   authorization code, and the editor warns when the grant types of a client change.
 - **Authorization-code clients are unchanged:** an empty list still means no extra restriction on
@@ -961,4 +963,21 @@ list into `["*"]`, so a client created without lists could use everything.
 
 **Before upgrading:** scripts that create OAuth clients through the admin API and relied on the
 `["*"]` default must send `"allowedApps": ["*"]` (and the same for models and prompts), or better
-list only what the client needs. Review clients that hold `["*"]` under **Admin → OAuth → Clients**.
+list only what the client needs. Review clients that hold `["*"]` under **Admin → OAuth → Clients**,
+including authorization-code clients: there **All (\*)** means users of the client reach everything
+their groups allow.
+
+## OAuth Token Endpoint: Client Credentials Only for Clients Registered for It
+
+`POST /api/oauth/token` with `grant_type=client_credentials` now answers `400` with
+`"error": "unauthorized_client"` for a client whose grant types do not include **Client
+Credentials**. Until now any confidential client with a valid secret could get a machine token,
+including one registered only for the authorization code flow (user login). That token was granted
+the client's lists without any user behind it: for a client created with the old `["*"]` default,
+every app, model and prompt.
+
+- Clients created as client-credentials clients, and older clients stored without grant types, are
+  unaffected.
+- **Before upgrading:** if an integration fetches tokens with client credentials using a client that
+  is set up for authorization code only, open the client under **Admin → OAuth → Clients** and add
+  the **Client Credentials** grant type, and give it only the apps, models and prompts it needs.

@@ -12,6 +12,7 @@ import ResourceSelector from '../components/ResourceSelector';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import {
+  clientGrantWarnings,
   emptyResourceLists,
   grantTypesChanged,
   grantsAll,
@@ -38,6 +39,10 @@ function AdminOAuthClientEditPage() {
   const [redirectUriInput, setRedirectUriInput] = useState('');
   const [postLogoutUriInput, setPostLogoutUriInput] = useState('');
   const [initialData, setInitialData] = useState(null);
+  // A personal API key acts as its owner, whatever its grant types, so its
+  // lists narrow the owner's permissions. Kept out of formData: it is not
+  // editable and is not sent on save.
+  const [personal, setPersonal] = useState(false);
 
   const [formData, setFormData] = useState(() => ({
     name: '',
@@ -129,6 +134,7 @@ function AdminOAuthClientEditPage() {
         consentRequired: client.consentRequired !== false,
         trusted: client.trusted || false
       };
+      setPersonal(client.personal === true);
       setFormData(loadedFormData);
       setInitialData(loadedFormData);
     } catch (error) {
@@ -145,13 +151,19 @@ function AdminOAuthClientEditPage() {
     e.preventDefault();
     setMessage('');
 
-    // The only problem validateClientGrants reports: a machine client without apps.
-    if (validateClientGrants(formData)) {
+    // The only problem validateClientGrants reports: a machine client granted nothing.
+    if (
+      validateClientGrants(formData, {
+        isNew,
+        initialLists: initialData,
+        personal
+      })
+    ) {
       setMessage({
         type: 'error',
         text: t(
-          'admin.auth.oauth.machineClientNeedsApp',
-          'A client-credentials client needs at least one app. Select the apps it may use, or choose "All (*)".'
+          'admin.auth.oauth.machineClientNeedsGrant',
+          'A client-credentials client needs at least one app, model or prompt. Select what it may use, or choose "All (*)".'
         )
       });
       return;
@@ -292,8 +304,10 @@ function AdminOAuthClientEditPage() {
     navigate('/admin/oauth/clients');
   };
 
-  const machineClient = isMachineClient(formData.grantTypes);
-  const delegatedClient = isDelegatedClient(formData.grantTypes);
+  const machineClient = isMachineClient(formData.grantTypes, { personal });
+  // A personal key's lists narrow its owner's permissions, like a delegated client's.
+  const delegatedClient = personal || isDelegatedClient(formData.grantTypes);
+  const grantWarnings = clientGrantWarnings(formData, { personal });
   const grantTypesEdited =
     !isNew &&
     initialData !== null &&
@@ -357,22 +371,56 @@ function AdminOAuthClientEditPage() {
   };
 
   /**
-   * A warning shown under a list set to "All (*)" on a machine client, which
-   * then reaches every resource of that kind, including ones added later.
+   * A warning shown under a list set to "All (*)". On a machine client it then
+   * reaches every resource of that kind; on a user-delegated client (or a
+   * personal key) it sets no client-level limit, so its users reach everything
+   * their groups allow. Both include resources added later.
    *
    * @param {string[]} list - The resource list.
    * @returns {JSX.Element|null} The warning, or null when it does not apply.
    */
   const renderAllWarning = list =>
-    machineClient && grantsAll(list) ? (
+    grantsAll(list) ? (
       <p role="note" className="mt-2 flex items-start text-sm text-amber-800 dark:text-amber-200">
         <Icon name="warning" size="sm" className="mr-2 mt-0.5 shrink-0" />
-        {t(
-          'admin.auth.oauth.allGrantWarning',
-          'All (*) gives this client-credentials client every item of this kind, including items added later. Prefer listing only what it needs.'
-        )}
+        {machineClient
+          ? t(
+              'admin.auth.oauth.allGrantWarning',
+              'All (*) gives this client-credentials client every item of this kind, including items added later. Prefer listing only what it needs.'
+            )
+          : t(
+              'admin.auth.oauth.allGrantWarningDelegated',
+              'All (*) sets no client-level limit: users of this client reach every item of this kind their groups allow, including items added later. Prefer listing only what it needs.'
+            )}
       </p>
     ) : null;
+
+  /**
+   * A non-blocking warning about a machine client's lists (see
+   * `clientGrantWarnings`), shown under the list it is about.
+   *
+   * @param {string} key - The warning's i18n key.
+   * @returns {JSX.Element|null} The warning, or null when it is not raised.
+   */
+  const renderGrantWarning = key => {
+    if (!grantWarnings.includes(key)) return null;
+    const text = {
+      'admin.auth.oauth.machineClientHasNoGrant': t(
+        'admin.auth.oauth.machineClientHasNoGrant',
+        'This client-credentials client has no apps, models or prompts, so its tokens can do nothing. Select what it may use, or choose "All (*)".'
+      ),
+      'admin.auth.oauth.machineClientHasNoModels': t(
+        'admin.auth.oauth.machineClientHasNoModels',
+        'This client has apps but no models. Every app call needs a model the client may use, so these calls will fail. Select the models it may use, or choose "All (*)".'
+      )
+    }[key];
+    return (
+      <p role="note" className="mt-2 flex items-start text-sm text-amber-800 dark:text-amber-200">
+        <Icon name="warning" size="sm" className="mr-2 mt-0.5 shrink-0" />
+        {text}
+      </p>
+    );
+  };
 
   if (loading) {
     return (
@@ -548,11 +596,19 @@ function AdminOAuthClientEditPage() {
                       )}
                     </p>
                   )}
-                  {delegatedClient && (
+                  {personal && (
+                    <p>
+                      {t(
+                        'admin.auth.oauth.permissionsHintPersonal',
+                        'Personal API key: the token acts as the user who owns the key. These lists narrow what that user\'s groups allow; an empty list adds no restriction. "All (*)" sets no limit, so the key reaches everything the owner\'s groups allow, including items added later.'
+                      )}
+                    </p>
+                  )}
+                  {delegatedClient && !personal && (
                     <p className={machineClient ? 'mt-2' : undefined}>
                       {t(
                         'admin.auth.oauth.permissionsHintDelegated',
-                        'Authorization code (user login): the token acts as the signed-in user. These lists narrow what that user\'s groups allow; an empty list or "All (*)" adds no restriction.'
+                        'Authorization code (user login): the token acts as the signed-in user. These lists narrow what that user\'s groups allow; an empty list adds no restriction. "All (*)" sets no limit, so users reach everything their groups allow, including items added later.'
                       )}
                     </p>
                   )}
@@ -583,6 +639,7 @@ function AdminOAuthClientEditPage() {
                 allowWildcard={true}
               />
               {renderAllWarning(formData.allowedApps)}
+              {renderGrantWarning('admin.auth.oauth.machineClientHasNoGrant')}
             </div>
 
             {/* Allowed Models */}
@@ -600,6 +657,7 @@ function AdminOAuthClientEditPage() {
                 allowWildcard={true}
               />
               {renderAllWarning(formData.allowedModels)}
+              {renderGrantWarning('admin.auth.oauth.machineClientHasNoModels')}
             </div>
 
             {/* Allowed Prompts */}

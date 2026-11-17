@@ -7,9 +7,12 @@
  *
  * - The SSL card shows the whitelist even while "Ignore Invalid SSL
  *   Certificates" is off, with a notice that the SSRF guard trusts these hosts.
- * - The SSRF card lists the same hosts read-only.
+ * - The SSRF card lists the same hosts read-only, and reloads them after the
+ *   SSL card saved (both cards stay mounted on the Security page); unsaved SSL
+ *   edits never show there.
+ * - The texts name only the callers that honour the whitelist as SSRF trust.
  */
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 
 const mockMakeAdminApiCall = jest.fn();
@@ -30,7 +33,8 @@ const SsrfConfig = require('../../../client/src/features/admin/components/SsrfCo
 
 function answer(routes) {
   mockMakeAdminApiCall.mockReset();
-  mockMakeAdminApiCall.mockImplementation(async url => {
+  mockMakeAdminApiCall.mockImplementation(async (url, options = {}) => {
+    if (options.method === 'PUT') return { data: {} };
     if (url in routes) {
       const value = routes[url];
       if (value instanceof Error) throw value;
@@ -49,9 +53,11 @@ describe('SSL card', () => {
 
     expect(await screen.findByText('llm.internal')).toBeInTheDocument();
     expect(screen.getByText('admin.system.ssl.domainWhitelist')).toBeInTheDocument();
-    expect(screen.getByTestId('ssl-ssrf-trust-notice')).toHaveTextContent(
-      /also trusted by the SSRF guard/
-    );
+    const notice = screen.getByTestId('ssl-ssrf-trust-notice');
+    expect(notice).toHaveTextContent(/also trusted by the SSRF guard/);
+    // Only the callers that use isSsrfTrustedHost are named as trusting it.
+    expect(notice).toHaveTextContent(/web sources, website crawls, the page reader/);
+    expect(notice).toHaveTextContent(/Tools and MCP servers do not use this list/);
   });
 });
 
@@ -85,5 +91,53 @@ describe('SSRF card', () => {
 
     expect(await screen.findByText('tools.internal')).toBeInTheDocument();
     expect(screen.queryByTestId('ssrf-tls-trusted-hosts')).toBeNull();
+  });
+
+  test('says no hosts were added, not that none are trusted, when its own list is empty', async () => {
+    answer({
+      '/admin/ssrf/config': { allowedHosts: [] },
+      '/admin/ssl/config': { domainWhitelist: ['llm.internal'] }
+    });
+    render(<SsrfConfig />);
+
+    expect(
+      await screen.findByText('No hosts explicitly added to the SSRF allowlist.')
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/No hosts allowed/)).toBeNull();
+  });
+
+  test('reloads the SSL whitelist after the SSL card saved, never showing unsaved edits', async () => {
+    let saved = ['llm.internal'];
+    mockMakeAdminApiCall.mockReset();
+    mockMakeAdminApiCall.mockImplementation(async (url, options = {}) => {
+      if (url === '/admin/ssl/config' && options.method === 'PUT') {
+        saved = options.body.domainWhitelist;
+        return { data: {} };
+      }
+      if (url === '/admin/ssl/config') {
+        return { data: { ignoreInvalidCertificates: false, domainWhitelist: saved } };
+      }
+      if (url === '/admin/ssrf/config') return { data: { allowedHosts: [] } };
+      return { data: {} };
+    });
+    render(
+      <>
+        <SSLConfig />
+        <SsrfConfig />
+      </>
+    );
+
+    const section = await screen.findByTestId('ssrf-tls-trusted-hosts');
+    expect(await within(section).findByText('llm.internal')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText('admin.system.ssl.domainWhitelistPlaceholder'), {
+      target: { value: 'new.internal' }
+    });
+    fireEvent.click(screen.getByText('admin.system.ssl.addDomain'));
+    // Added on the SSL card, not saved yet: the SSRF card does not show it.
+    expect(within(section).queryByText('new.internal')).toBeNull();
+
+    fireEvent.click(screen.getByText('admin.system.ssl.saveConfig'));
+    await waitFor(() => expect(within(section).getByText('new.internal')).toBeInTheDocument());
   });
 });

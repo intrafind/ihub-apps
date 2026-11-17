@@ -11,8 +11,8 @@
  *   nothing; `["*"]` reaches everything.
  * - A user-delegated (authorization-code) token keeps today's meaning: an empty
  *   client list is no extra restriction on the user's group permissions.
- * - The create and rotate-secret responses carry a plain-text secret and are
- *   sent with `Cache-Control: no-store`.
+ * - The create, rotate-secret and generate-token responses carry a plain-text
+ *   secret or API key and are sent with `Cache-Control: no-store`.
  *
  * The client manager is the real one, writing to a temporary file.
  *
@@ -44,7 +44,12 @@ jest.unstable_mockModule('../services/oauth/CimdGovernanceService.js', () => ({
 const cacheEntries = new Map();
 jest.unstable_mockModule('../configCache.js', () => ({
   default: {
-    getPlatform: () => ({ oauth: { enabled: { clients: true }, clientsFile } }),
+    getPlatform: () => ({
+      oauth: { enabled: { clients: true }, clientsFile },
+      // HS256 with a test secret, so generate-token can sign a key.
+      jwt: { algorithm: 'HS256' },
+      auth: { jwtSecret: 'test-secret-for-least-privilege' }
+    }),
     get: key => cacheEntries.get(key) ?? null,
     setCacheEntry: (key, data) => cacheEntries.set(key, { data })
   }
@@ -181,6 +186,20 @@ describe('admin OAuth clients: secrets are not cached', () => {
 
     expect(res.status).toBe(200);
     expect(typeof res.body.clientSecret).toBe('string');
+    expect(res.headers['cache-control']).toBe('no-store');
+  });
+
+  it('sends the generate-token response with Cache-Control: no-store', async () => {
+    const created = await request(app)
+      .post('/api/admin/oauth/clients')
+      .send({ name: 'Static key', allowedApps: ['chat'] });
+
+    const res = await request(app)
+      .post(`/api/admin/oauth/clients/${created.body.clientId}/generate-token`)
+      .send({ expirationDays: 30 });
+
+    expect(res.status).toBe(201);
+    expect(typeof res.body.api_key).toBe('string');
     expect(res.headers['cache-control']).toBe('no-store');
   });
 });

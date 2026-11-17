@@ -126,6 +126,47 @@ describe('IHUB env override logging', () => {
       '{"azure":{"subscriptionKey":"[redacted]","region":"eu"}}'
     );
   });
+
+  it('masks the password in a proxy URL override', () => {
+    setEnv('IHUB_PLATFORM__PROXY__HTTPS', 'http://user:S3cret-proxy@proxy.example:3128');
+    const platform = applyIhubEnvOverrides('config/platform.json', {});
+    assert.equal(platform.proxy.https, 'http://user:S3cret-proxy@proxy.example:3128', 'applied');
+    const line = lines.find(l => l.includes('proxy.https'));
+    assert.ok(line);
+    assert.ok(!line.includes('S3cret-proxy'), 'without the password');
+    assert.ok(!line.includes('user:'), 'without the user info');
+    assert.ok(line.includes('proxy.example:3128'), 'the host stays readable');
+  });
+
+  it('masks credentials in URLs inside a JSON proxy override', () => {
+    setEnv(
+      'IHUB_PLATFORM__PROXY',
+      '{"enabled":true,"http":"http://u:Pw-http@p:8080","https":"https://p:8443/?token=Tk-123"}'
+    );
+    applyIhubEnvOverrides('config/platform.json', {});
+    const line = lines.find(l => l.includes('→ proxy ='));
+    assert.ok(line);
+    assert.ok(!line.includes('Pw-http'));
+    assert.ok(!line.includes('Tk-123'));
+    assert.ok(line.includes('"enabled":true'));
+  });
+
+  it('masks every header value, whatever the header is called', () => {
+    setEnv(
+      'IHUB_PLATFORM__TELEMETRY__EXPORTERS__OTLP__HEADERS',
+      '{"x-honeycomb-team":"HKEY-123","x-honeycomb-dataset":"prod"}'
+    );
+    applyIhubEnvOverrides('config/platform.json', {});
+    const line = lines.find(l => l.includes('telemetry.exporters.otlp.headers'));
+    assert.ok(line);
+    assert.ok(!line.includes('HKEY-123'));
+    assert.ok(line.includes('x-honeycomb-team'), 'header names stay readable');
+    assert.equal(
+      overrideValueForLog(['telemetry', 'exporters', 'otlp'], { headers: { 'x-team': 'v' } }),
+      '{"headers":{"x-team":"[redacted]"}}'
+    );
+    assert.equal(overrideValueForLog(['otlp', 'headers', 'xHoneycombTeam'], 'v'), '[redacted]');
+  });
 });
 
 describe('configSecrets', () => {

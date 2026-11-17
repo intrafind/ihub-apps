@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import Switch from '../../../shared/components/Switch';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import { announceSslConfigSaved } from '../utils/sslConfigEvents';
 
 function SSLConfig() {
   const { t } = useTranslation();
@@ -90,6 +91,8 @@ function SSLConfig() {
         method: 'PUT',
         body: config
       });
+      // The SSRF card lists the saved whitelist; let it reload.
+      announceSslConfigSaved();
 
       setMessage({
         type: 'success',
@@ -233,7 +236,7 @@ function SSLConfig() {
             <p className="text-sm text-amber-800 dark:text-amber-300">
               {t(
                 'admin.system.ssl.ssrfTrustNotice',
-                'These hosts are also trusted by the SSRF guard: tools, MCP servers, web sources and the page reader may reach them even when they resolve to private network addresses. This applies whether or not "Ignore Invalid SSL Certificates" is on.'
+                'These hosts are also trusted by the SSRF guard of web sources, website crawls, the page reader and the watermark detector: these may reach them even when they resolve to private network addresses. This applies whether or not "Ignore Invalid SSL Certificates" is on. Tools and MCP servers do not use this list.'
               )}
             </p>
           </div>
