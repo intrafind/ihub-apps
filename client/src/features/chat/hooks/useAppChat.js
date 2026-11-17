@@ -1263,7 +1263,9 @@ function useAppChat({
             messageId: exchangeId,
             connectResume: { id }
           }),
-          params: { ...params, ...takeProtocolParams() }
+          // The viewer's history setting rides along as on any turn: the default
+          // `true` would be stored over a chat that opted out.
+          params: { ...params, ...takeProtocolParams(params.sendChatHistory) }
         };
         initEventSource(buildApiUrl(`apps/${appId}/chat/${chatId}`));
         return true;

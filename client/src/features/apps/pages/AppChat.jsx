@@ -2765,7 +2765,7 @@ function AppChat({
       isTranscribing ||
       isRecordingTranscription ||
       fileUploadHandler.isAttachmentProcessing,
-    resume: request => submitConnectResume(request, clarificationParams())
+    resume: request => submitConnectResume(request, clarificationParams({ sendChatHistory }))
   });
   // The answer to a question the app asked, spoken.
   const answerVoiceClarification = answer =>
