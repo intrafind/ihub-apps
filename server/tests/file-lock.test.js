@@ -458,3 +458,32 @@ describe('withFileLock: release', () => {
     await releaseLease(lockPath, 'thief', 'thief');
   });
 });
+
+describe('withFileLock: a waiter that gives up during a hand-off', () => {
+  it('releases the lease when the last local waiter times out while the holder looks at the want marker', async () => {
+    const lockPath = lockPathFor();
+    // Slow the look at the want marker so the waiter's timeout lands inside it.
+    const unlink = fs.unlink;
+    const slowed = mock.method(fs, 'unlink', async (file, ...rest) => {
+      if (String(file).endsWith('.want')) await sleep(300);
+      return unlink.call(fs, file, ...rest);
+    });
+    try {
+      // Held past the hand-off bound (75 ms), so the holder checks the marker.
+      const holder = withFileLock(lockPath, () => sleep(150), { timeoutMs: 5000, staleMs: 1500 });
+      await sleep(10);
+      await assert.rejects(
+        withFileLock(lockPath, () => 'ran', { timeoutMs: 250, staleMs: 1500 }),
+        /Timed out/
+      );
+      await holder;
+    } finally {
+      slowed.mock.restore();
+    }
+    assert.equal(fsSync.existsSync(lockPath), false, 'no lease left behind');
+    assert.equal(
+      await withFileLock(lockPath, () => 'next', { timeoutMs: 500, staleMs: 1500 }),
+      'next'
+    );
+  });
+});

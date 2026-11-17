@@ -583,7 +583,10 @@ export function startLeaseRenewal(
  * mtime and for the time between this check and the unlink running.
  * ponytail: the margin assumes the unlink runs within ~2/3 TTL of the check
  * (10 s at 15 s); a thread pool stalled longer than that could remove a lease
- * taken over meanwhile. Shorten the window if such stalls are ever seen.
+ * taken over meanwhile. Shorten the window if such stalls are ever seen. The
+ * age is judged against the file's mtime by other processes, possibly on other
+ * hosts sharing the directory: clock skew between them eats into the same
+ * margin, so hosts must keep their clocks in sync (NTP) to well under 10 s.
  *
  * @param {{writtenAt: number, ttlMs: number}} [clock] - When this holder last
  *   wrote the lease (`performance.now()` before the write) and its TTL
@@ -708,6 +711,10 @@ async function passTurn(lockPath, line, name, component, pollMs) {
       line.heldSince = performance.now();
     }
   }
+  // The last local waiter may have timed out during the look at the marker:
+  // with nobody to hand to, the lease must go, or its renewal keeps the name
+  // locked for every process until this one exits.
+  if (handOff && line.waiters.length === 0) handOff = false;
   if (handOff) {
     line.handoffs += 1;
   } else if (lease) {
