@@ -405,19 +405,23 @@ function runPendingNavigation(navigator, pending) {
  * <UnsavedChangesDialog blocker={blocker} />
  */
 export function useUnsavedChanges(initialData, currentData) {
-  const savedRef = useRef(false);
+  // markSaved() records the value that was saved. The page counts as clean while
+  // the edited value still equals it, and turns dirty on the very next edit: the
+  // comparison happens during render, so no effect has to clear a flag first
+  // (an effect would run after that render and leave the first edit unguarded).
+  const savedRef = useRef({ saved: false, value: undefined });
+  const currentDataRef = useRef(currentData);
+  currentDataRef.current = currentData;
   // Outside a router (an editor rendered on its own, e.g. in a test) there is no
   // navigation to block; the beforeunload prompt still works.
   const navigator = useContext(NavigationContext)?.navigator;
   const pendingNavRef = useRef(null);
   const [blockerState, setBlockerState] = useState('unblocked');
 
-  // Reset saved flag when data changes after a save
-  useEffect(() => {
-    savedRef.current = false;
-  }, [currentData]);
-
-  const isDirty = !savedRef.current && initialData !== null && !deepEqual(initialData, currentData);
+  const isDirty =
+    initialData !== null &&
+    !deepEqual(initialData, currentData) &&
+    !(savedRef.current.saved && deepEqual(savedRef.current.value, currentData));
 
   // Live ref so the navigation interceptor reads the current dirty state at
   // call-time. markSaved() typically runs synchronously right before navigate()
@@ -427,7 +431,7 @@ export function useUnsavedChanges(initialData, currentData) {
   isDirtyRef.current = isDirty;
 
   const markSaved = useCallback(() => {
-    savedRef.current = true;
+    savedRef.current = { saved: true, value: currentDataRef.current };
     isDirtyRef.current = false;
   }, []);
 

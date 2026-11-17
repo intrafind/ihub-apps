@@ -156,6 +156,46 @@ describe('useUnsavedChanges (real hook, real router)', () => {
     expect(screen.getByText('other page')).toBeInTheDocument();
   });
 
+  it('guards the first edit after a save that stays on the page', () => {
+    function SaveInPlace() {
+      const [value, setValue] = useState('a');
+      const [baseline, setBaseline] = useState('a');
+      const { isDirty, blocker, markSaved } = useUnsavedChanges(baseline, value);
+      return (
+        <div>
+          <input
+            aria-label="inplace-field"
+            value={value}
+            onChange={e => setValue(e.target.value)}
+          />
+          <span data-testid="inplace-dirty">{String(isDirty)}</span>
+          <button
+            type="button"
+            onClick={() => {
+              setBaseline(value);
+              markSaved();
+            }}
+          >
+            save
+          </button>
+          <Link to="/other">inplace-link</Link>
+          {blocker.state === 'blocked' && <div role="alertdialog" aria-label="inplace-prompt" />}
+        </div>
+      );
+    }
+    renderInMemory(<SaveInPlace />);
+    fireEvent.change(screen.getByLabelText('inplace-field'), { target: { value: 'b' } });
+    fireEvent.click(screen.getByText('save'));
+    expect(screen.getByTestId('inplace-dirty')).toHaveTextContent('false');
+
+    // One edit after the save: dirty at once, and leaving asks.
+    fireEvent.change(screen.getByLabelText('inplace-field'), { target: { value: 'c' } });
+    expect(screen.getByTestId('inplace-dirty')).toHaveTextContent('true');
+    fireEvent.click(screen.getByText('inplace-link'));
+    expect(screen.getByRole('alertdialog', { name: 'inplace-prompt' })).toBeInTheDocument();
+    expect(screen.queryByText('other page')).not.toBeInTheDocument();
+  });
+
   it('is never dirty while the baseline is null (loading or load failed)', () => {
     function Loading() {
       const { isDirty } = useUnsavedChanges(null, { a: 1 });
