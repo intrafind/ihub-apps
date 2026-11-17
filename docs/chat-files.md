@@ -28,6 +28,8 @@ optionally the original. Scopes:
 
 ## In the UI
 
+![An attached file under the composer: name, size and the text extracted from it](assets/screenshots/chat-file-attached.png)
+
 - **Composer.** A file is uploaded in the background as soon as it is attached (not when the message is
   sent) and the message then names it by id. In `client_text_only` mode only the text the browser
   extracted is uploaded.

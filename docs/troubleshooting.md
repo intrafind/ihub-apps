@@ -6,21 +6,127 @@ type: troubleshooting
 
 # Troubleshooting
 
-This comprehensive troubleshooting guide helps you diagnose and resolve common issues with iHub Apps across installation, configuration, authentication, runtime, and deployment scenarios.
+This guide helps you diagnose and resolve common issues with iHub Apps. It starts with quick fixes by symptom, for users and admins, and continues with detailed sections on installation, configuration, authentication, runtime, and deployment.
+
+## Quick fixes by symptom
+
+Start here when you see a problem but do not yet know the cause. Each entry lists the likely causes and fixes, and links to the detailed section or page. The error names in `code` come from the API's [error responses](error-responses.md); the message text is localized, so the wording you see may differ from the examples below.
+
+### Sign-in fails with "Invalid credentials"
+
+**If you are a user**
+
+- Check the user name and password, then try again. The local and LDAP logins answer `401 Invalid credentials` when they do not match.
+- If every sign-in attempt is refused with `429`, the sign-in limiter (`rateLimit.authApi`, which covers `/api/auth`, including the local and LDAP logins) has been reached for your network address. Wait for the window to pass (15 minutes in the shipped configuration) and try once more. If it keeps happening for many users, see [Everything returns 429](#everything-returns-429): a shared address behind a proxy without the right `trustProxy` is the usual cause.
+
+**If you are an admin**
+
+- Confirm `auth.authMode` and the enabled `auth.authMethods` in `contents/config/platform.json` match the login you expect. See [Login Failures](#login-failures).
+- For local accounts, check that the entry in `users.json` has a `passwordHash`. The same section describes the rehash utility.
+- For SSO, see [OIDC/SSO Authentication Problems](#oidcsso-authentication-problems). For LDAP, see [LDAP group lookup and mapping](LDAP-GROUP-LOOKUP-QUICKSTART.md#troubleshooting).
+
+### A model is unavailable or answers with an error
+
+**If you are a user**
+
+- Pick another model in the model selector, or retry after a moment. Errors such as `MODEL_DISABLED` ("This model is switched off."), `MODEL_ACCESS_DENIED` ("You do not have access to this model.") and `QUOTA_EXCEEDED` ("Your usage limit is reached.") are decided by your administrator, not by a fault on your side.
+- If the message says the provider could not be reached or did not answer in time (`TIMEOUT`, HTTP 504), retry later and tell your admin if it persists.
+
+**If you are an admin**
+
+- Check that the model has `enabled: true` in Admin → Models (a disabled model is hidden), and that the user's group lists it in `permissions.models`. See [Models](models.md) and [Permission Denied (403) Errors](#permission-denied-403-errors).
+- Check the provider's API key and network reach from the server. See [Chat/LLM Request Failures](#chatllm-request-failures) and [LLM Provider Problems](#llm-provider-problems).
+- If the user hit a budget, review [usage limits](usage-limits.md).
+
+### A response stops in the middle
+
+**If you are a user**
+
+- Send the request again. A stream is also ended with an error when the provider stops sending data (see the deadlines below), so a cut-off answer is usually a provider problem, not a problem with your text.
+- The chat also marks an answer as cut off when the provider reports that the model reached its output limit (finish reason `length`). Shorten the request or ask for the rest in a follow-up message.
+
+**If you are an admin**
+
+- The server ends a model call when the provider does not connect within 30 s (60 s for image models), does not send the first chunk within the call's `timeoutMs` (5 minutes), or is silent for 60 s between two chunks (`STREAM_IDLE_TIMEOUT`). See [Stream deadlines](llm-client.md#stream-deadlines).
+- A reverse proxy in front of iHub that buffers or times out streams can also cut a response. See [Production reverse proxy guide](production-reverse-proxy-guide.md) and [Chat/LLM Request Failures](#chatllm-request-failures).
+
+### File upload fails
+
+**If you are a user**
+
+- Check the size. Each file type has its own limit (by default 20 MB for documents, 10 MB for images, 20 MB for audio, 50 MB for video). The message names the limit that applied.
+- If the message says file uploads are switched off (`UPLOADS_DISABLED`) or the app shows no upload button, the app or the platform does not allow uploads. Ask your admin.
+
+**If you are an admin**
+
+- The app's `upload` section sets the type and `maxFileSizeMB`; see [File upload size limits](file-upload-feature.md#size-limits).
+- The server also applies `platform.uploads` quotas (per file, chat, user and server; the code default for one file, `quotas.maxFileBytes`, is 25 MB) and `requestBodyLimitMB` (50 MB by default). A file refused with `413` (`UPLOAD_TOO_LARGE`, `PAYLOAD_TOO_LARGE`) usually hit one of these. See [Chat files](chat-files.md#platform-settings-platformuploads).
+
+### Unexpectedly signed out
+
+**If you are a user**
+
+- Sign in again. A session ends when its token expires.
+- If you are signed out repeatedly within a short time, tell your admin.
+
+**If you are an admin**
+
+- The session length is `auth.sessionTimeoutMinutes` in `platform.json`. Raise it if sessions are too short. Changes to platform and auth settings need a server restart.
+- With several servers, every instance must share the same configuration and signing secret. See [Multi-server deployment](multi-server-deployment.md).
+- If a client sends its own token (browser extension, Teams tab) together with the cookie, see [Authentication architecture](authentication-architecture.md) for which one wins.
+
+### No access to an app or feature
+
+**If you are a user**
+
+- A `403` with `APP_ACCESS_DENIED`, `MODEL_ACCESS_DENIED` or `FORBIDDEN` means your account's groups do not include it. Ask your admin for the right group. Signing in may give you more groups than staying anonymous.
+
+**If you are an admin**
+
+- Check the user's groups, then the group's `permissions` (apps, models, and so on) and its `inherits` chain in `groups.json`. See [Permission Denied (403) Errors](#permission-denied-403-errors).
+- If anonymous users get `401`, check `auth.anonymousAuth` in `platform.json`. See [Anonymous Authentication Issues](#anonymous-authentication-issues).
+
+### Everything returns 429
+
+**If you are a user**
+
+- Wait a minute and retry. `429` means too many requests came from your network address; the response carries a `Retry-After` header.
+- A `QUOTA_EXCEEDED` answer is a different thing: your token budget is used up. The **My usage** panel in the user menu shows the budget closest to its limit and when it resets; it only appears when usage data is available.
+
+**If you are an admin**
+
+- If the whole platform answers `429`, probes fail, or all users share one counter, follow [Everything Returns 429 / Health Probes Fail](#everything-returns-429--health-probes-fail): set `trustProxy` to your number of proxy hops and point health probes at `/api/health`.
+- To change the limits, see [rate limiting](rate-limiting.md). For budgets, see [usage limits](usage-limits.md).
+
+### Integration says sign in again
+
+**If you are a user**
+
+- Use the **Connect** card in the chat (it offers **Reconnect** when a connection expired or lacks a permission), or **Settings → Integrations**, and sign in at the service. Your access expired, was revoked, or lacks a permission. After a connect from the chat card, the chat sends one follow-up message to retry the request. See [Integrations](integrations.md#connections).
+
+**If you are an admin**
+
+- The error code is `INTEGRATION_AUTH_REQUIRED`. A connection becomes `expired` when the vendor refuses the refresh token, and `needs-reconnect` when the installation was repointed to another server or client. Users then connect again. See [Integrations](integrations.md).
+- If users cannot reconnect, check the installation's OAuth client settings in Admin → Integrations, for example after the client secret was rotated. A refresh that fails because of a client problem an admin can fix keeps the tokens and reports the integration as temporarily unavailable. A scheduled run that meets this error fails with the same code and shows a **Reconnect** link.
+- If the sign-in redirect fails, the browser returns with `integration_error=<code>`; the codes are listed in [Integrations](integrations.md).
+
+---
+
 
 ## Table of Contents
 
-1. [Installation Issues](#installation-issues)
-2. [Configuration Problems](#configuration-problems)
-3. [Authentication Troubles](#authentication-troubles)
-4. [Runtime Errors](#runtime-errors)
-5. [Performance Problems](#performance-problems)
-6. [Source Handlers Issues](#source-handlers-issues)
-7. [LLM Provider Problems](#llm-provider-problems)
-8. [Browser/Client Issues](#browserclient-issues)
-9. [SSL/TLS Certificate Issues](#ssltls-certificate-issues)
-10. [Docker/Deployment Issues](#dockerdeployment-issues)
-11. [Development Environment](#development-environment)
+1. [Quick fixes by symptom](#quick-fixes-by-symptom)
+2. [Installation Issues](#installation-issues)
+3. [Configuration Problems](#configuration-problems)
+4. [Authentication Troubles](#authentication-troubles)
+5. [Runtime Errors](#runtime-errors)
+6. [Performance Problems](#performance-problems)
+7. [Source Handlers Issues](#source-handlers-issues)
+8. [LLM Provider Problems](#llm-provider-problems)
+9. [Browser/Client Issues](#browserclient-issues)
+10. [SSL/TLS Certificate Issues](#ssltls-certificate-issues)
+11. [Docker/Deployment Issues](#dockerdeployment-issues)
+12. [Development Environment](#development-environment)
 
 ---
 
