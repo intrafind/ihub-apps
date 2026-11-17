@@ -144,9 +144,10 @@ const MAX_OWNER_CHATS = 1000;
 /**
  * Lock lease for one chat write. Short: the critical section is two document
  * writes, and a lease held longer than that means a dead worker whose lock we
- * want taken over quickly.
+ * want taken over quickly. Unfenced: no section reads the fencing token, and
+ * every write is etag-conditional already.
  */
-const LOCK_OPTIONS = { ttlMs: 15000, waitMs: 5000 };
+const LOCK_OPTIONS = { ttlMs: 15000, waitMs: 5000, fence: false };
 
 /** Fields a patch may never change — identity and the owner index depend on them. */
 const PROTECTED_CHAT_FIELDS = new Set([
