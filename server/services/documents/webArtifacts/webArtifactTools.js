@@ -228,7 +228,22 @@ export function inspectWebArtifactFindings(content, format, { scriptHosts = [] }
     }
     return findings;
   }
+  htmlFindings(text, { truncated, scriptHosts, problem, note });
+  return findings;
+}
 
+/**
+ * The HTML-only part of {@link inspectWebArtifactFindings}: self-containment,
+ * remote resources, script syntax, links, storage and placeholders.
+ *
+ * @param {string} text
+ * @param {Object} options
+ * @param {boolean} options.truncated - The file was cut off (its scripts are not parsed then).
+ * @param {string[]} options.scriptHosts
+ * @param {(text: string) => void} options.problem - Records a finding that breaks the preview.
+ * @param {(text: string) => void} options.note - Records a finding that does not.
+ */
+function htmlFindings(text, { truncated, scriptHosts, problem, note }) {
   const relScript = RELATIVE_SCRIPT_RE.exec(text);
   if (relScript) {
     problem(
@@ -280,7 +295,6 @@ export function inspectWebArtifactFindings(content, format, { scriptHosts = [] }
       'The artifact appears to contain placeholder comments (e.g. "// TODO" or "// rest of code"). Always write the complete working implementation.'
     );
   }
-  return findings;
 }
 
 /**
@@ -572,11 +586,9 @@ export async function runEditWebArtifact(params) {
       intent: 'read'
     });
     const [target] = selectChatFiles(candidates, [wanted], false);
-    const format = /\.svg$/i.test(target.name)
-      ? 'svg'
-      : /\.html?$/i.test(target.name)
-        ? 'html'
-        : null;
+    let format = null;
+    if (/\.svg$/i.test(target.name)) format = 'svg';
+    else if (/\.html?$/i.test(target.name)) format = 'html';
     if (!format) {
       throw new GeneratedFileError(
         `"${target.name}" is not a web artifact (.html or .svg). edit_web_artifact changes only those; create other files again with their own tool.`,
