@@ -18,6 +18,7 @@ services:
     environment:
       WORKERS: ${IHUB_WORKERS:-2}
       NODE_ENV: production
+      NODE_OPTIONS: ${IHUB_NODE_OPTIONS:-}
       # Load from one IP must not hit the per-IP limits. For the `ratelimits`
       # profile, start with the shipped values instead:
       #   IHUB_PUBLIC_API_LIMIT=500 IHUB_ADMIN_API_LIMIT=100 IHUB_INFERENCE_API_LIMIT=500

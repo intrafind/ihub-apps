@@ -1,0 +1,9 @@
+# CPU profiles of the iHub workers: one .cpuprofile per process in contents/prof
+# (written when the process exits, so stop the stack with `down`, not `kill`).
+#   docker compose -f tests/load/docker-compose.yml -f tests/load/docker-compose.prof.yml up -d
+#   docker compose -f tests/load/docker-compose.yml cp ihub:/app/contents/prof ./prof
+# Open the files in Chrome DevTools (Performance) or speedscope.
+services:
+  ihub:
+    environment:
+      NODE_OPTIONS: --cpu-prof --cpu-prof-dir=/app/contents/prof --cpu-prof-interval=2000

@@ -18,6 +18,12 @@
  *   <label>.tools         tool calls in the turn (knowledge_search …)
  *   counters: <label>.turn.ok | <label>.turn.error | <label>.streamMiss
  * Per model (when the turn names one): model.<id>.turn.ok | .turn.error, model.<id>.ttft
+ *
+ * LT_POST_STREAM=1: the browser's `chatPostStream` mode instead. No GET; each
+ * turn is one POST with `Accept: text/event-stream` whose response carries the
+ * turn's frames (`stream/connected` … `run/ended`). Same metrics; refusals
+ * before the turn starts are still problem+json (428 counted as chat.ack428).
+ * `http.<label>.post` is then send → end of the streamed response.
  */
 
 import { performance } from 'node:perf_hooks';
@@ -25,6 +31,9 @@ import { randomUUID } from 'node:crypto';
 import { readSse, EventPuller } from './sse.mjs';
 
 const CONNECT_TIMEOUT_MS = 15_000;
+
+/** Turns stream on their own POST (`Accept: text/event-stream`), no GET. */
+export const POST_STREAM = process.env.LT_POST_STREAM === '1';
 
 export function newChatId() {
   return `chat-lt-${randomUUID()}`;
@@ -54,6 +63,8 @@ export class ChatSession {
   }
 
   async open() {
+    // The POST stream mode opens nothing up front: every turn is its own stream.
+    if (POST_STREAM) return this;
     const { client, metrics } = this.ctx;
     const t0 = performance.now();
     let res;
@@ -107,6 +118,8 @@ export class ChatSession {
       ...(typeof config.thinking === 'boolean' ? { thinkingEnabled: config.thinking } : {}),
       ...body
     };
+
+    if (POST_STREAM) return this.postStreamTurn(payload);
 
     const tSend = performance.now();
     let postResult = null;
@@ -221,24 +234,190 @@ export class ChatSession {
       // Do not leave the POST dangling into the next turn.
       await Promise.race([postSettled, new Promise(r => setTimeout(r, 10_000))]);
     }
+    return this.finishTurn({
+      tSend,
+      tEnd,
+      ttft,
+      firstAny,
+      firstAt,
+      thinkingChars,
+      chars,
+      tools,
+      ended,
+      streamError,
+      modelId: payload.modelId,
+      fatalCodes: ['SSE_CLOSED', 'STREAM_TIMEOUT']
+    });
+  }
+
+  /**
+   * One turn in the POST stream mode: the POST answers with the turn's frames.
+   * @param {object} payload  the chat POST body
+   */
+  async postStreamTurn(payload) {
+    const { client, metrics, config } = this.ctx;
+    const label = this.label;
+    const turnTimeoutMs = (config.turnTimeoutSec ?? 300) * 1000;
+    const idleTimeoutMs = (config.streamIdleTimeoutSec ?? 120) * 1000;
+    const stop = new AbortController();
+    const signal = AbortSignal.any([
+      this.abort.signal,
+      stop.signal,
+      AbortSignal.timeout(turnTimeoutMs)
+    ]);
+
+    let ttft = null;
+    let firstAny = null;
+    let thinkingChars = 0;
+    let firstAt = null;
+    let chars = 0;
+    let tools = 0;
+    let ended = null;
+    let streamError = null;
+
+    const tSend = performance.now();
+    let res = null;
+    try {
+      res = await client.raw('POST', this.path, {
+        headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+        body: JSON.stringify(payload),
+        signal
+      });
+    } catch (err) {
+      metrics.error(`${label}.post`, err.name === 'TimeoutError' ? 'timeout' : 'network');
+      streamError = { code: err.code || err.name || 'POST_FAILED' };
+    }
+
+    if (res && !res.ok) {
+      // Refused before the turn started: problem+json, as without the header.
+      let body = null;
+      try {
+        body = await res.json();
+      } catch {
+        /* not JSON */
+      }
+      if (res.status === 428) metrics.count('chat.ack428');
+      metrics.error(`${label}.post`, body?.code || `HTTP_${res.status}`);
+      streamError = { code: body?.code || `HTTP_${res.status}` };
+    } else if (res && !(res.headers.get('content-type') || '').includes('text/event-stream')) {
+      // JSON instead of a stream (an @workflow mention): not a turn this harness sends.
+      const body = await res.json().catch(() => null);
+      streamError = { code: body?.code || 'POST_NOT_STREAMED' };
+    } else if (res) {
+      const puller = new EventPuller(readSse(res.body));
+      const deadline = tSend + turnTimeoutMs;
+      while (!ended && !streamError) {
+        if (performance.now() > deadline) {
+          streamError = { code: 'TURN_TIMEOUT' };
+          break;
+        }
+        let ev;
+        try {
+          ev = await puller.next(idleTimeoutMs);
+        } catch (err) {
+          streamError = { code: err.code || 'STREAM_TIMEOUT' };
+          break;
+        }
+        if (!ev) {
+          streamError = { code: 'SSE_CLOSED' };
+          break;
+        }
+        const data = ev.data?.data ?? {};
+        switch (ev.event) {
+          case 'step/delta':
+            if (firstAny === null) firstAny = performance.now() - tSend;
+            if (data.kind === 'thinking' && typeof data.content === 'string') {
+              thinkingChars += data.content.length;
+            }
+            if (data.kind === 'text' && typeof data.content === 'string') {
+              if (ttft === null) {
+                firstAt = performance.now();
+                ttft = firstAt - tSend;
+              }
+              chars += data.content.length;
+            }
+            break;
+          case 'tool/started':
+            tools += 1;
+            break;
+          case 'stream/error':
+            streamError = { code: data.code || 'STREAM_ERROR' };
+            break;
+          case 'run/paused':
+            ended = { status: 'paused' };
+            break;
+          case 'run/ended':
+            if (!data.parentRunId) ended = data;
+            break;
+          default:
+            break;
+        }
+      }
+      // The server ends the response right after the turn's end frame.
+      try {
+        while (await puller.next(5_000));
+      } catch {
+        /* did not end in time: aborted below */
+      }
+    }
+    const tEnd = performance.now();
+    stop.abort();
+    if (res) {
+      metrics.trend(`http.${label}.post`, tEnd - tSend);
+      metrics.count(`http.${label}.post.status.${res.status}`);
+    }
+    return this.finishTurn({
+      tSend,
+      tEnd,
+      ttft,
+      firstAny,
+      firstAt,
+      thinkingChars,
+      chars,
+      tools,
+      ended,
+      streamError,
+      modelId: payload.modelId,
+      // Each turn has its own stream: a broken one does not end the session.
+      fatalCodes: []
+    });
+  }
+
+  /** Record one turn's metrics, or throw its error. */
+  finishTurn({
+    tSend,
+    tEnd,
+    ttft,
+    firstAny,
+    firstAt,
+    thinkingChars,
+    chars,
+    tools,
+    ended,
+    streamError,
+    modelId,
+    fatalCodes
+  }) {
+    const { metrics } = this.ctx;
+    const label = this.label;
     this.turns += 1;
 
     if (streamError || (ended && ended.status && ended.status !== 'completed')) {
       const code = streamError?.code || `RUN_${String(ended.status).toUpperCase()}`;
       metrics.count(`${label}.turn.error`);
-      if (payload.modelId) metrics.count(`model.${payload.modelId}.turn.error`);
+      if (modelId) metrics.count(`model.${modelId}.turn.error`);
       metrics.error(label, code);
       const err = new Error(`${label} turn failed: ${code}`);
       err.code = code;
-      err.fatal = code === 'SSE_CLOSED' || code === 'STREAM_TIMEOUT';
+      err.fatal = fatalCodes.includes(code);
       throw err;
     }
 
     metrics.count(`${label}.turn.ok`);
     if (ttft !== null) metrics.trend(`${label}.ttft`, ttft);
-    if (payload.modelId) {
-      metrics.count(`model.${payload.modelId}.turn.ok`);
-      if (ttft !== null) metrics.trend(`model.${payload.modelId}.ttft`, ttft);
+    if (modelId) {
+      metrics.count(`model.${modelId}.turn.ok`);
+      if (ttft !== null) metrics.trend(`model.${modelId}.ttft`, ttft);
     }
     if (firstAny !== null) metrics.trend(`${label}.firstToken`, firstAny);
     if (thinkingChars) metrics.trend(`${label}.thinkingChars`, thinkingChars);

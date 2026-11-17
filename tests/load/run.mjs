@@ -101,7 +101,10 @@ async function loginUser(idx) {
   );
   // A restored state may have no acknowledgements: confirm before the clock starts,
   // or the enforced 428 guard blocks every chat of this user.
-  if (await ensureAiAcknowledged(client)) aiAcknowledged += 1;
+  // A real user whose confirmation failed (503 lock timeout, 409) clicks again:
+  // retry; each retry prints "[retry] ai-ack …" to the shard log.
+  if (await withRetry(() => ensureAiAcknowledged(client), { label: `ai-ack ${username}` }))
+    aiAcknowledged += 1;
   client.metrics = metrics;
   client.rate = { tracker: rateTracker, user: username };
   let projects = { own: [], shared: [] };
@@ -287,9 +290,12 @@ if (cfg.results.toStdout) {
   // For Kubernetes: `kubectl logs` is the collection channel (see k8s/collect.sh).
   const b64 = zlib.gzipSync(JSON.stringify(shardResult)).toString('base64');
   const size = 60_000;
+  // Synchronous: on a pipe (kubectl logs) console.log is asynchronous, and the process exits
+  // before the last 64 KB line is flushed, which truncated larger shard results.
   for (let i = 0; i * size < b64.length; i++) {
-    console.log(
-      `##LT-RESULT## ${cfg.runId} ${shardIndex} ${i} ${Math.ceil(b64.length / size)} ${b64.slice(i * size, (i + 1) * size)}`
+    fs.writeSync(
+      1,
+      `##LT-RESULT## ${cfg.runId} ${shardIndex} ${i} ${Math.ceil(b64.length / size)} ${b64.slice(i * size, (i + 1) * size)}\n`
     );
   }
 }
