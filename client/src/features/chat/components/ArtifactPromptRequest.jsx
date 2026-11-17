@@ -37,20 +37,15 @@ export default function ArtifactPromptRequest({ text, busy, onSend, onCancel }) 
   }, [text]);
 
   return (
-    <div
-      role="group"
-      aria-labelledby="artifact-prompt-request-label"
+    <fieldset
       data-testid="artifact-prompt-request"
-      className="flex-none border-b border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/40 px-3 py-2 text-sm"
+      className="m-0 min-w-0 flex-none border-0 border-b border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/40 px-3 py-2 text-sm"
     >
-      <p
-        id="artifact-prompt-request-label"
-        className="text-xs font-medium text-indigo-900 dark:text-indigo-200"
-      >
+      <legend className="float-left w-full p-0 text-xs font-medium text-indigo-900 dark:text-indigo-200">
         {t('chatArtifacts.promptRequest', 'The artifact wants to ask in the chat:')}
-      </p>
+      </legend>
       <p
-        className="mt-1 line-clamp-4 whitespace-pre-wrap break-words text-gray-900 dark:text-gray-100"
+        className="clear-left mt-1 line-clamp-4 whitespace-pre-wrap break-words text-gray-900 dark:text-gray-100"
         title={text}
       >
         {text}
@@ -76,14 +71,14 @@ export default function ArtifactPromptRequest({ text, busy, onSend, onCancel }) 
           {t('common.cancel', 'Cancel')}
         </button>
         {busy && (
-          <span className="text-xs text-gray-600 dark:text-gray-300" role="status">
+          <output className="text-xs text-gray-600 dark:text-gray-300">
             {t(
               'chatArtifacts.promptBusy',
               'An answer is still being written. Send once it is done.'
             )}
-          </span>
+          </output>
         )}
       </div>
-    </div>
+    </fieldset>
   );
 }

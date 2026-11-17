@@ -40,9 +40,9 @@ async function frameOf() {
 }
 
 /** What `parent.postMessage` in the frame delivers to the page. */
-function postFrom(source, data) {
+function postFrom(source, data, origin = 'null') {
   act(() => {
-    window.dispatchEvent(new MessageEvent('message', { data, source }));
+    window.dispatchEvent(new MessageEvent('message', { data, source, origin }));
   });
 }
 
@@ -109,6 +109,8 @@ describe('the sendPrompt bridge of an HTML artifact', () => {
     postFrom(null, ask('From nowhere'));
     postFrom(frame.contentWindow, { type: 'other', text: 'x' });
     postFrom(frame.contentWindow, ask('   '));
+    // The frame's own window, but not an opaque origin: not the sandboxed artifact.
+    postFrom(frame.contentWindow, ask('Same window, wrong origin'), 'https://evil.example');
     expect(screen.queryByTestId('artifact-prompt-request')).not.toBeInTheDocument();
   });
 
@@ -125,6 +127,7 @@ describe('the sendPrompt bridge of an HTML artifact', () => {
     postFrom(frame.contentWindow, ask('Later'));
     expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
     expect(screen.getByRole('status')).toHaveTextContent('still being written');
+    expect(screen.getByRole('group', { name: /wants to ask/ })).toBeInTheDocument();
   });
 
   it('without a chat the frame gets a no-op sendPrompt and nothing is listened to', async () => {

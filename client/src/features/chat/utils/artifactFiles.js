@@ -2,12 +2,9 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { generatedFileKind, TEXT_FILE_MEDIA_TYPES } from '../../../../../shared/generatedFiles.js';
-import {
-  artifactPromptFromMessage,
-  prepareHtmlPreview
-} from '../../../../../shared/artifactPreview.js';
+import { prepareHtmlPreview } from '../../../../../shared/artifactPreview.js';
 
-export { artifactPromptFromMessage };
+export { artifactPromptFromMessage } from '../../../../../shared/artifactPreview.js';
 
 /**
  * Helpers for the files a chat produced (its artifacts): how they are named,

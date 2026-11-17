@@ -225,7 +225,9 @@ export default function ArtifactPreview({
     if (!promptBridge) return undefined;
     const onMessage = event => {
       const frame = iframeRef.current;
-      if (!frame || event.source !== frame.contentWindow) return;
+      // A frame sandboxed without `allow-same-origin` has an opaque origin, which a message
+      // reports as the string "null"; anything else is not this artifact.
+      if (!frame || event.source !== frame.contentWindow || event.origin !== 'null') return;
       const text = artifactPromptFromMessage(event.data);
       if (text) setPromptRequest(current => current ?? text);
     };
