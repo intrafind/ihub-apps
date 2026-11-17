@@ -1287,14 +1287,17 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
                     : entry
                 )
                 .filter(entry => entry.fileData || (entry.content || '').trim());
-        conversation = connectResumePrep.record
-          ? // No new message: the history ends with the question that failed.
+        if (connectResumePrep.record) {
+          // No new message: the history ends with the question that failed.
+          conversation =
             includeHistory && dedupedHistory.length > 0
-            ? historyForPrompt(dedupedHistory)
-            : [{ role: 'user', content: connectResumePrep.record.question || '' }]
-          : includeHistory
-            ? [...historyForPrompt(dedupedHistory), preparedPromptMessage]
-            : [preparedPromptMessage];
+              ? historyForPrompt(dedupedHistory)
+              : [{ role: 'user', content: connectResumePrep.record.question || '' }];
+        } else if (includeHistory) {
+          conversation = [...historyForPrompt(dedupedHistory), preparedPromptMessage];
+        } else {
+          conversation = [preparedPromptMessage];
+        }
 
         persistence = {
           repository,

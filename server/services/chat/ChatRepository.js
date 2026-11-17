@@ -1516,7 +1516,7 @@ export class ChatRepository {
     return this._withChatLock(chatId, async () => {
       const { chat: existing, etag } = await this._loadChat(chatId);
       const pending = existing?.pendingConnect;
-      if (!pending || pending.id !== recordId) return null;
+      if (pending?.id !== recordId) return null;
       await this._writeChat(applyChatPatch(existing, { pendingConnect: null }), etag);
       // Expiry is decided here too, under the lock: a record that expired
       // between the request's checks and this take does not run.
@@ -1541,7 +1541,7 @@ export class ChatRepository {
     if (!this._usable(chatId, 'setPendingConnect')) return false;
     return this._withChatLock(chatId, async () => {
       const { chat: existing, etag } = await this._loadChat(chatId);
-      if (!existing || existing.activeRunId !== runId) return false;
+      if (existing?.activeRunId !== runId) return false;
       await this._writeChat(applyChatPatch(existing, { pendingConnect: record }), etag);
       return true;
     });

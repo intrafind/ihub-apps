@@ -447,14 +447,11 @@ export class AgentLoop {
       // A resume after a connect (#3752) names several calls (`toolCalls`);
       // they run in order, each once, and the first one a seam ends (an
       // approval it asks for) ends the run, as it does for any call.
-      const resumedCalls =
-        toolExecution !== 'server'
-          ? []
-          : Array.isArray(request.resume?.toolCalls)
-            ? request.resume.toolCalls
-            : request.resume?.toolCall
-              ? [request.resume]
-              : [];
+      let resumedCalls = [];
+      if (toolExecution === 'server') {
+        if (Array.isArray(request.resume?.toolCalls)) resumedCalls = request.resume.toolCalls;
+        else if (request.resume?.toolCall) resumedCalls = [request.resume];
+      }
       for (const [position, resumed] of resumedCalls.entries()) {
         const call = resumed.toolCall;
         // The model found the tool with `search_tools` in the request that

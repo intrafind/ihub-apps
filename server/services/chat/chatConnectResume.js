@@ -136,13 +136,13 @@ export function buildPendingConnect({
     m =>
       m?.role === 'assistant' &&
       Array.isArray(m.tool_calls) &&
-      m.tool_calls.some(c => c?.id === list[list.length - 1].id)
+      m.tool_calls.some(c => c?.id === list.at(-1).id)
   );
   if (stepAt < 0) return null;
   let afterStep = stepAt + 1;
   while (messages[afterStep]?.role === 'tool') afterStep++;
   if (messages.slice(afterStep).some(m => m?.role === 'tool')) return null;
-  const transcript = stepTranscript(messages, startMessage, list[0].id, list[list.length - 1].id);
+  const transcript = stepTranscript(messages, startMessage, list[0].id, list.at(-1).id);
   if (!transcript) return null;
   // A transcript call whose arguments were cut is not the call that failed.
   const stored = transcript.flatMap(m => (Array.isArray(m.tool_calls) ? m.tool_calls : []));
@@ -281,6 +281,76 @@ export function resetResumeLimitForTests() {
 }
 
 /**
+ * The `commit()` of a prepared resume: take the record once and hand over what
+ * the continuation needs (see {@link prepareConnectResume}).
+ * @private
+ */
+function makeCommit({ repository, chatId, stored, user, connectedIntegration }) {
+  return async () => {
+    // Exactly one request takes the record off the chat.
+    const taken = await repository.takePendingConnect(chatId, stored.id);
+    if (!taken) return { resume: null, refusal: { ...NOT_PENDING }, restore: null };
+    if (taken.expired) {
+      return {
+        resume: null,
+        refusal: {
+          status: 410,
+          code: 'CONNECT_RESUME_EXPIRED',
+          message: 'The request waited too long for the connection; ask again'
+        },
+        restore: null
+      };
+    }
+    const calls = taken.calls.filter(c => c.integration === connectedIntegration);
+    logger.info('Chat call resumed after a connect', {
+      component: COMPONENT,
+      chatId,
+      recordId: taken.id,
+      userId: user.id,
+      integration: connectedIntegration,
+      toolIds: calls.map(c => c.toolId)
+    });
+    return {
+      refusal: null,
+      resume: {
+        id: taken.id,
+        runId: taken.runId,
+        // Every answer that leaves the prompt: this run's and the ones it continued.
+        answerRunIds: [...(Array.isArray(taken.continues) ? taken.continues : []), taken.runId],
+        integration: connectedIntegration,
+        calls,
+        transcript: Array.isArray(taken.transcript) ? taken.transcript : [],
+        question: typeof taken.question === 'string' ? taken.question : null,
+        basis: boundCarriedBasis(taken.basis)
+      },
+      // A turn refused before its loop started puts the record back so the
+      // same request can be sent again. Never after the loop started.
+      restore: async () => {
+        try {
+          return await repository.restorePendingConnect(chatId, taken);
+        } catch (err) {
+          logger.warn('The pending call could not be put back after a refused turn', {
+            component: COMPONENT,
+            chatId,
+            recordId: taken.id,
+            error: err.message
+          });
+          return false;
+        }
+      }
+    };
+  };
+}
+
+/** The first of the record's integrations the user has a usable connection for, or null. */
+async function firstConnected(userId, integrations, isConnected) {
+  for (const integration of integrations) {
+    if (await isConnected(userId, integration)) return integration;
+  }
+  return null;
+}
+
+/**
  * Check a `connectResume` message without changing anything, and drop a
  * record that any other message supersedes.
  *
@@ -347,7 +417,7 @@ export async function prepareConnectResume({
     };
     return result;
   }
-  if (!stored || stored.id !== request.id || (chat.appId && appId && chat.appId !== appId)) {
+  if (!stored || stored.id !== request.id || (chat?.appId && appId && chat.appId !== appId)) {
     result.refusal = { ...NOT_PENDING };
     return result;
   }
@@ -360,14 +430,11 @@ export async function prepareConnectResume({
     };
     return result;
   }
-  const integrations = Array.isArray(stored.integrations) ? stored.integrations : [];
-  let connectedIntegration = null;
-  for (const integration of integrations) {
-    if (await isConnected(String(user.id), integration)) {
-      connectedIntegration = integration;
-      break;
-    }
-  }
+  const connectedIntegration = await firstConnected(
+    String(user.id),
+    Array.isArray(stored.integrations) ? stored.integrations : [],
+    isConnected
+  );
   if (!connectedIntegration) {
     result.refusal = {
       status: 409,
@@ -378,59 +445,6 @@ export async function prepareConnectResume({
   }
 
   result.record = stored;
-  result.commit = async () => {
-    // Exactly one request takes the record off the chat.
-    const taken = await repository.takePendingConnect(chatId, stored.id);
-    if (!taken) return { resume: null, refusal: { ...NOT_PENDING }, restore: null };
-    if (taken.expired) {
-      return {
-        resume: null,
-        refusal: {
-          status: 410,
-          code: 'CONNECT_RESUME_EXPIRED',
-          message: 'The request waited too long for the connection; ask again'
-        },
-        restore: null
-      };
-    }
-    const calls = taken.calls.filter(c => c.integration === connectedIntegration);
-    logger.info('Chat call resumed after a connect', {
-      component: COMPONENT,
-      chatId,
-      recordId: taken.id,
-      userId: user.id,
-      integration: connectedIntegration,
-      toolIds: calls.map(c => c.toolId)
-    });
-    return {
-      refusal: null,
-      resume: {
-        id: taken.id,
-        runId: taken.runId,
-        // Every answer that leaves the prompt: this run's and the ones it continued.
-        answerRunIds: [...(Array.isArray(taken.continues) ? taken.continues : []), taken.runId],
-        integration: connectedIntegration,
-        calls,
-        transcript: Array.isArray(taken.transcript) ? taken.transcript : [],
-        question: typeof taken.question === 'string' ? taken.question : null,
-        basis: boundCarriedBasis(taken.basis)
-      },
-      // A turn refused before its loop started puts the record back so the
-      // same request can be sent again. Never after the loop started.
-      restore: async () => {
-        try {
-          return await repository.restorePendingConnect(chatId, taken);
-        } catch (err) {
-          logger.warn('The pending call could not be put back after a refused turn', {
-            component: COMPONENT,
-            chatId,
-            recordId: taken.id,
-            error: err.message
-          });
-          return false;
-        }
-      }
-    };
-  };
+  result.commit = makeCommit({ repository, chatId, stored, user, connectedIntegration });
   return result;
 }
