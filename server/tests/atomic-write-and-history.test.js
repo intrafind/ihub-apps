@@ -13,7 +13,7 @@ fsSync.mkdirSync(path.join(ROOT, 'contents'), { recursive: true });
 process.env.APP_ROOT_DIR = ROOT;
 process.env.CONTENTS_DIR = 'contents';
 
-const { atomicWriteFile, atomicWriteJSON, writeInDirectory } =
+const { atomicCreateJSON, atomicWriteFile, atomicWriteJSON, writeInDirectory } =
   await import('../utils/atomicWrite.js');
 const { saveSnapshot, listSnapshots } = await import('../services/ChangeHistoryService.js');
 
@@ -61,6 +61,30 @@ describe('atomicWrite permissions', { skip: process.platform === 'win32' }, () =
       }),
       /denied/
     );
+  });
+
+  it('atomicCreateJSON publishes the file whole, never opening the target to write it', async () => {
+    const dir = path.join(ROOT, 'create');
+    await fs.mkdir(dir);
+    const file = path.join(dir, 'doc.json');
+    const real = { open: fs.open, writeFile: fs.writeFile };
+    const opened = [];
+    for (const name of Object.keys(real)) {
+      fs[name] = (target, ...rest) => {
+        opened.push(String(target));
+        return real[name](target, ...rest);
+      };
+    }
+    try {
+      await atomicCreateJSON(file, { a: 1 });
+    } finally {
+      Object.assign(fs, real);
+    }
+    assert.equal(opened.includes(file), false, 'a reader cannot catch it half-written');
+    assert.deepEqual(JSON.parse(await fs.readFile(file, 'utf8')), { a: 1 });
+    await assert.rejects(atomicCreateJSON(file, { a: 2 }), error => error.code === 'EEXIST');
+    assert.deepEqual(JSON.parse(await fs.readFile(file, 'utf8')), { a: 1 });
+    assert.deepEqual(await fs.readdir(dir), ['doc.json'], 'no temp file left behind');
   });
 
   it('leaves no temp file behind', async () => {

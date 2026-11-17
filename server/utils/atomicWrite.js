@@ -147,9 +147,18 @@ export async function atomicWriteJSON(filePath, data, options = {}) {
  *
  * Used by admin "create" handlers (agent profiles, etc.) where two
  * concurrent POSTs could otherwise race past an `fs.access` existence
- * check and the second write would silently overwrite the first.
- * Throws an Error whose `.code === 'EEXIST'` when the file already
- * exists; callers should map that to HTTP 409 Conflict.
+ * check and the second write would silently overwrite the first, and by the
+ * document store for a create-only `put`. Throws an Error whose
+ * `.code === 'EEXIST'` when the file already exists; callers should map that
+ * to HTTP 409 Conflict.
+ *
+ * The content is written to a temp file and fsynced first, then hard-linked
+ * onto the target: `link` fails with EEXIST when the target exists, so it is
+ * the same create-or-fail as `O_EXCL`, but the name appears with its whole
+ * content. Writing through an `O_EXCL` handle on the target itself left a
+ * moment in which the file existed empty or half-written, and a reader that
+ * caught it (a second worker's `get` of a chat being created) failed on
+ * "Unexpected end of JSON input".
  *
  * NOTE: `filePath` is trusted — caller-validated path (same contract as
  * `atomicWriteFile`).
@@ -160,9 +169,22 @@ export async function atomicWriteJSON(filePath, data, options = {}) {
  */
 export async function atomicCreateJSON(filePath, data) {
   const jsonData = JSON.stringify(data, null, 2);
-  // `wx` opens the file for writing only if it does not already exist —
-  // Node's fs maps it to O_CREAT|O_EXCL so the create-or-fail check is
-  // atomic at the filesystem level.
+  const dir = dirname(filePath);
+  const tempPath = join(dir, `.tmp_${randomBytes(8).toString('hex')}`);
   // lgtm[js/path-injection] -- caller-validated path; see function doc.
-  await fs.writeFile(filePath, jsonData, { encoding: 'utf8', flag: 'wx' });
+  const handle = await fs.open(tempPath, 'wx');
+  try {
+    try {
+      await handle.writeFile(jsonData, 'utf8');
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+    // lgtm[js/path-injection] -- caller-validated path; see function doc.
+    await fs.link(tempPath, filePath);
+  } finally {
+    // lgtm[js/path-injection] -- caller-validated path; see function doc.
+    await fs.unlink(tempPath).catch(() => {});
+  }
+  await syncDirectory(dir);
 }
