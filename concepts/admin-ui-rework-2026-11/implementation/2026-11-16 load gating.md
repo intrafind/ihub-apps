@@ -43,7 +43,9 @@ that does neither; its `KNOWN_UNGATED` list (with reasons) may only shrink.
 ## Tests
 
 - Unit: `admin-config-load.test.jsx` (hook + gate), `admin-auth-page-load-failure.test.jsx`,
-  `admin-overview-load-failure.test.jsx`, `admin-load-gate-coverage.test.jsx`.
+  `admin-overview-load-failure.test.jsx`, `admin-load-gate-coverage.test.jsx`,
+  `admin-load-error.test.jsx`, `admin-llm-timeouts.test.jsx`, `admin-retry-countdown.test.jsx`,
+  `admin-load-error-i18n.test.jsx`.
 - E2E (not run in the parallel worktree; run sequentially): `tests/e2e/admin-load-gating.spec.js`.
 
 ## Open points
@@ -51,4 +53,22 @@ that does neither; its `KNOWN_UNGATED` list (with reasons) may only shrink.
 - Security page has no "n of m sections couldn't load · Retry all" summary banner (ux.md §2 PR1
   item 6); each card has its own Retry.
 - Focus is not moved to the H1 after a successful Retry (ux.md item 4).
-- The Overview error banner has no Retry-After countdown.
+- R2 of the review (proxy `jwtProviders[].jwkUrl` erased by pages that post the whole
+  platform GET body) is pre-existing and fixed server-side in a separate PR.
+
+## Review follow-ups (2026-11-17)
+
+- **R1** Turning on a sign-in method whose block is missing from `platform.json` seeds it from
+  `components/platform-form/authMethodDefaults.js` (mirrors the server schema prefaults; NTLM
+  needs `generateJwtToken: true`). Only on that toggle, never at load time.
+- **R3** The Authentication page no longer calls `markSaved()` after a save; an edit typed while
+  the request ran stays "unsaved".
+- **R5** `AdminLoadError`: only title and text are `role="alert"`; the button is outside the
+  live region and is `aria-disabled` (not `disabled`) while it waits, so it keeps focus.
+- **R6** `hooks/useRetryCountdown.js` counts the Retry-After wait down for `AdminEditPageShell`
+  (App/Model editors) and the Overview banner.
+- **R7** LLM timeouts card: a failed load shows one error panel with Retry under the title
+  (the Edit toggle and the collapsed body are hidden).
+- **R4/R8** German load-error titles are "Laden fehlgeschlagen: …" / "Kein Zugriff: …" with
+  article-free labels; missing keys added. `admin-load-error-i18n.test.jsx` checks every
+  `resourceLabel` key exists in en and de.

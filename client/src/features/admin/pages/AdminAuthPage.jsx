@@ -71,7 +71,7 @@ function AdminAuthPage() {
   });
   const ready = load.status === 'ready';
 
-  const { blocker, markSaved } = useUnsavedChanges(savedConfig, config);
+  const { blocker } = useUnsavedChanges(savedConfig, config);
 
   const handleSave = async () => {
     // Never save what was not loaded: the form is not shown then, and a stale
@@ -91,7 +91,8 @@ function AdminAuthPage() {
         body: data
       });
 
-      markSaved();
+      // The saved data is the new baseline. No markSaved(): an edit made while
+      // the request ran must still count as unsaved.
       setSavedConfig(data);
       setMessage({
         type: 'success',

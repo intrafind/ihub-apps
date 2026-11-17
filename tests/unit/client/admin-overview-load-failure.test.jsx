@@ -135,7 +135,7 @@ describe('AdminOverview with a failed apps request', () => {
   test('shows the error with Retry instead of the getting-started checklist', async () => {
     const { render, screen, fireEvent } = await import('@testing-library/react');
     const { MemoryRouter } = await import('react-router-dom');
-    mockFetchAdminApps.mockRejectedValue(rateLimited());
+    mockFetchAdminApps.mockRejectedValue(new Error('Network Error'));
     // The other dashboard requests answer, without platform details.
     mockMakeAdminApiCall.mockResolvedValue({ data: null });
 
@@ -155,5 +155,44 @@ describe('AdminOverview with a failed apps request', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
     expect(mockFetchAdminApps).toHaveBeenCalledTimes(2);
+  });
+
+  test('after a 429, Retry counts the Retry-After wait down before it loads again (R6)', async () => {
+    const { render, screen, fireEvent } = await import('@testing-library/react');
+    const { MemoryRouter } = await import('react-router-dom');
+    jest.useFakeTimers();
+    try {
+      mockFetchAdminApps.mockRejectedValue(rateLimited()); // Retry-After: 5
+      mockMakeAdminApiCall.mockResolvedValue({ data: null });
+
+      const { default: AdminOverview } =
+        await import('../../../client/src/features/admin/pages/AdminOverview');
+      render(
+        <MemoryRouter>
+          <AdminOverview />
+        </MemoryRouter>
+      );
+
+      const waiting = await screen.findByRole('button', { name: 'Retry in 5 s' });
+      expect(waiting).toHaveAttribute('aria-disabled', 'true');
+      fireEvent.click(waiting);
+      expect(mockFetchAdminApps).toHaveBeenCalledTimes(1);
+
+      for (let second = 0; second < 5; second += 1) {
+        await act(async () => {
+          jest.advanceTimersByTime(1000);
+        });
+      }
+      const retry = screen.getByRole('button', { name: 'Retry' });
+      expect(retry).not.toHaveAttribute('aria-disabled');
+
+      mockFetchAdminApps.mockResolvedValue([{ id: 'chat', enabled: true }]);
+      await act(async () => {
+        fireEvent.click(retry);
+      });
+      expect(mockFetchAdminApps).toHaveBeenCalledTimes(2);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });

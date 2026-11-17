@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 
 const RETRY_BUTTON_CLASS =
-  'mt-3 inline-flex items-center gap-1.5 rounded-md border border-red-300 dark:border-red-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm font-medium text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/40 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-red-600 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900 disabled:cursor-not-allowed disabled:opacity-60';
+  'mt-3 inline-flex items-center gap-1.5 rounded-md border border-red-300 dark:border-red-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm font-medium text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/40 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-red-600 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900 aria-disabled:cursor-not-allowed aria-disabled:opacity-60';
 
 const NEUTRAL_BUTTON_CLASS =
   'mt-3 inline-flex items-center gap-1.5 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900';
@@ -16,13 +16,18 @@ const NEUTRAL_BUTTON_CLASS =
  * failed. One look everywhere, announced to screen readers as an alert, with
  * text that meets the contrast ratio on the red panel.
  *
+ * Only the title and the text are the live region (`role="alert"`); the button
+ * is outside it, so a "Retry in N s" countdown is not re-announced every second.
+ * While Retry waits it is `aria-disabled` (not `disabled`), so a focused Retry
+ * keeps focus after its own click hit a 429.
+ *
  * Two ways to use it:
  * - **Load failure of a named resource** (pass `resourceLabel`): the title reads
  *   "Couldn't load {resource}" and the text ends with "Nothing was changed.".
  *   `status` 403 shows a neutral "You can't view {resource}" without Retry,
  *   404 a neutral "not found" (pass `action` for "Back to …"), 429 a
  *   "Too many requests" text. Prefer `onRetry`, which re-runs the failed load in
- *   place; `retryAfterSeconds` disables Retry with a "Retry in N s" countdown.
+ *   place; `retryAfterSeconds` makes Retry inert with a "Retry in N s" countdown.
  * - **Free text** (`title` + `message`), as before.
  *
  * Without `onRetry` and `action`, the button reloads the page (the old default).
@@ -128,7 +133,7 @@ function AdminLoadError({
       <button
         type="button"
         onClick={handleRetry}
-        disabled={waiting}
+        aria-disabled={waiting || undefined}
         aria-busy={busy || undefined}
         className={RETRY_BUTTON_CLASS}
       >
@@ -146,7 +151,6 @@ function AdminLoadError({
 
   const panel = (
     <div
-      role="alert"
       data-testid="admin-load-error"
       className={`${
         neutral
@@ -163,22 +167,24 @@ function AdminLoadError({
           aria-hidden="true"
         />
         <div className="ml-3">
-          <h3
-            className={`text-sm font-semibold ${
-              neutral ? 'text-gray-900 dark:text-gray-100' : 'text-red-800 dark:text-red-200'
-            }`}
-          >
-            {heading}
-          </h3>
-          {body && (
-            <p
-              className={`mt-1 text-sm ${
-                neutral ? 'text-gray-700 dark:text-gray-300' : 'text-red-700 dark:text-red-300'
+          <div role="alert">
+            <h3
+              className={`text-sm font-semibold ${
+                neutral ? 'text-gray-900 dark:text-gray-100' : 'text-red-800 dark:text-red-200'
               }`}
             >
-              {body}
-            </p>
-          )}
+              {heading}
+            </h3>
+            {body && (
+              <p
+                className={`mt-1 text-sm ${
+                  neutral ? 'text-gray-700 dark:text-gray-300' : 'text-red-700 dark:text-red-300'
+                }`}
+              >
+                {body}
+              </p>
+            )}
+          </div>
           {button}
         </div>
       </div>

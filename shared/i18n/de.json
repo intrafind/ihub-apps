@@ -175,7 +175,8 @@
     "expandObject": "Objekt aufklappen ({{count}} Felder)",
     "details": "Details",
     "tryAgain": "Erneut versuchen",
-    "done": "Fertig"
+    "done": "Fertig",
+    "note": "Hinweis"
   },
   "chatActions": {
     "menu": "Aktionsmenü",
@@ -1406,7 +1407,7 @@
         "tryFlagOff": "Aktivieren Sie zuerst die Vorschau-Funktion „Sprachmodus“",
         "tryItHint": "Startet in diesem Browser eine Sprachsitzung mit dem unter „Spracheingabe“ oben gewählten Dienst, dem Sprachausgabemodell und den Einstellungen dieses Formulars, ohne sie zu speichern. Bei einem Transkriptionsmodell muss „Sprachmodus aktivieren“ einmal gespeichert sein; es braucht das Mikrofon und ein aktiviertes Sprachausgabemodell."
       },
-      "resource": "die Spracheinstellungen"
+      "resource": "Spracheinstellungen"
     },
     "agents": {
       "memory": {
@@ -2175,7 +2176,7 @@
           "enabledSuccess": "Autorisierungsserver erfolgreich aktiviert",
           "disabledSuccess": "Autorisierungsserver erfolgreich deaktiviert",
           "toggleError": "Fehler beim Aktualisieren des Autorisierungsservers",
-          "resource": "die Einstellungen des Autorisierungsservers"
+          "resource": "Einstellungen des Autorisierungsservers"
         },
         "personalKeys": {
           "enable": "Persönliche API-Schlüssel",
@@ -2364,7 +2365,7 @@
         "sharedSecretLabel": "Gemeinsames Geheimnis",
         "sharedSecretHelp": "Ein Geheimnis, das der Proxy im Header für das gemeinsame Geheimnis sendet. Ist es gesetzt, werden die Header nur bei Anfragen verwendet, die es enthalten. Zusammen mit vertrauenswürdigen Proxys müssen beide zutreffen: Für einen Proxy an anderer Stelle tragen Sie oben seine Adresse ein oder leeren die Liste, um sich allein auf das Geheimnis zu verlassen."
       },
-      "resource": "die Authentifizierungseinstellungen",
+      "resource": "Authentifizierungseinstellungen",
       "subtitle": "Konfigurieren Sie mehrere Anmeldemethoden und den Benutzerzugriff. Aktivieren Sie mehrere Methoden gleichzeitig für maximale Flexibilität.",
       "save": "Konfiguration speichern",
       "saving": "Wird gespeichert...",
@@ -2494,7 +2495,7 @@
       "regenerateAddinIdConfirm": "Outlook behandelt ein Manifest mit neuer ID als anderes Add-in. Alle Nutzer müssen das neue Manifest installieren, und das alte zeigt weiter auf diesen Server, bis es entfernt wird. Fortfahren?",
       "regenerateAddinIdDone": "Neue Add-in-ID erzeugt. Laden Sie das Manifest herunter und stellen Sie es erneut bereit.",
       "regenerateAddinIdError": "Neue Add-in-ID konnte nicht erzeugt werden",
-      "resource": "die Einstellungen der Office-Integration"
+      "resource": "Einstellungen der Office-Integration"
     },
     "nextcloudEmbed": {
       "title": "Nextcloud-Embed",
@@ -2538,7 +2539,7 @@
       "step2": "Füge deinen Nextcloud-Ursprung (z. B. https://cloud.beispiel.de) oben hinzu, damit die Embed-Seite iframe und postMessage akzeptiert.",
       "step3": "Baue und installiere das mitgelieferte Nextcloud-App-Skelett (siehe nextcloud-app/README.md im iHub-Repo).",
       "step4": "Nutzer klicken in Nextcloud Files mit der rechten Maustaste auf eine Datei → „Mit iHub chatten“ — das Embed öffnet sich mit den vorausgewählten Dokumenten.",
-      "resource": "die Einstellungen der Nextcloud-Einbettung"
+      "resource": "Einstellungen der Nextcloud-Einbettung"
     },
     "cloudStorage": {
       "office365": "Microsoft Office 365",
@@ -2941,7 +2942,8 @@
       "note3": "Niedrigere Level (error, warn) zeigen weniger Nachrichten, höhere Level (debug, silly) mehr",
       "note4": "Verwenden Sie \"info\" Level für Produktion, \"debug\" für Entwicklung",
       "note5": "Authentifizierungs-Debug-Logging ist separat und erfordert Neustart",
-      "resource": "die Protokollierungseinstellungen"
+      "resource": "Protokollierungseinstellungen",
+      "currentLevel": "Aktuelle Stufe"
     },
     "nav": {
       "chatHistory": "Chatverlauf",
@@ -3046,7 +3048,10 @@
         "cimdApprovalAuto": "Automatisch verbinden",
         "a2aDefaultSkill": "A2A-Standard-Skill",
         "a2aDefaultSkillDesc": "Die App oder der Workflow, den eine Nachricht ausführt, wenn der A2A-Client keinen Skill nennt, als app__<appId> oder workflow__<workflowId>. Clients können jederzeit einen Skill über metadata.skillId oder den Skill-Endpunkt /a2a/skills/<skillId> wählen. Leer lassen, um eine Auswahl zu verlangen (ein Aufrufer mit genau einem Skill braucht keine).",
-        "resource": "die Einstellungen des MCP-Gateways"
+        "resource": "Einstellungen des MCP-Gateways",
+        "discoveryLabel": "Discovery:",
+        "endpointLabel": "Endpunkt:",
+        "transportStateless": "Zustandsloser Modus"
       }
     },
     "telemetry": {
@@ -3090,7 +3095,7 @@
       "referenceTitle": "Referenz",
       "refEnvHint": "Standard-OTEL_*-Umgebungsvariablen (OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_SERVICE_NAME, ...) werden beim Start berücksichtigt.",
       "refMetricsHint": "Eigene iHub-Metriken: ihub.app.usage, ihub.prompt.usage, ihub.errors, ihub.conversations, ihub.active.users, ihub.active.chats.",
-      "resource": "die Telemetrie-Einstellungen"
+      "resource": "Telemetrie-Einstellungen"
     },
     "systemResources": {
       "title": "Systemressourcen",
@@ -5000,7 +5005,9 @@
       "styles": {
         "colorPicker": "{{name}} (Farbwähler)"
       },
-      "resource": "die UI-Einstellungen"
+      "resource": "UI-Einstellungen",
+      "title": "UI-Anpassung",
+      "description": "Passen Sie das Erscheinungsbild und Branding von $t(product.name) an"
     },
     "groupSelect": {
       "placeholder": "Gruppen suchen oder Namen eingeben…",
@@ -5293,7 +5300,7 @@
         "unavailable": "Feedback-Statistiken sind nicht verfügbar.",
         "range": "Bewertungen der letzten 90 Tage."
       },
-      "resource": "die Feedback-Einstellungen"
+      "resource": "Feedback-Einstellungen"
     },
     "usage": {
       "reviewFeedback": "Feedback ansehen",
@@ -5759,9 +5766,10 @@
       "users": {
         "active": "{{count}} aktiv (30 T.)"
       },
-      "resource": "die Übersicht",
+      "resource": "Übersicht",
       "apps": {
-        "unavailable": "nicht geladen"
+        "unavailable": "nicht geladen",
+        "enabledCount": "{{count}} aktiviert"
       }
     },
     "copilotAgent": {
@@ -5829,7 +5837,7 @@
       "download": "Agentenpaket herunterladen",
       "prereqHttps": "Die öffentliche Adresse von iHub verwendet HTTPS",
       "prereqHttpsOff": "Die öffentliche Adresse von iHub ist kein HTTPS, und Copilot ruft nur HTTPS-Adressen auf – setzen Sie die Public URL des MCP-Gateways (oder leiten Sie X-Forwarded-Proto im Proxy weiter)",
-      "resource": "die Einstellungen des Copilot-Agenten"
+      "resource": "Einstellungen des Copilot-Agenten"
     },
     "apiKeyStatus": {
       "ok": "Schlüssel gefunden",
@@ -6527,7 +6535,7 @@
       "newOrChangedHelp": "Eine Aktion, die seit der letzten Prüfung hinzugekommen ist oder deren Wirkung oder Eingabe sich geändert hat, fragt mindestens so, bis Sie sie als geprüft markieren. Gilt, sobald an dieser Integration eine Freigabe eingestellt ist.",
       "presetAlwaysHelp": "Vorausgewählt: immer fragen. Diese Integration sendet Daten nach außen und gibt nicht verlässlich an, welche ihrer Aktionen nur lesen. Sie können das jetzt oder später auf der Seite der Integration ändern.",
       "presetWritesHelp": "Vorausgewählt: fragen, außer eine Aktion liest nur. Sie können das jetzt oder später auf der Seite der Integration ändern.",
-      "resource": "die Einstellungen zur Werkzeugfreigabe"
+      "resource": "Einstellungen zur Werkzeugfreigabe"
     },
     "integrationBuilder": {
       "a2a": {
@@ -7305,20 +7313,23 @@
       "relatedAckText": "– die Bestätigung vor der ersten Nachricht, beim Benutzer gespeichert"
     },
     "load": {
-      "title": "{{resource}} konnte nicht geladen werden",
+      "title": "Laden fehlgeschlagen: {{resource}}",
       "nothingChanged": "Es wurde nichts geändert.",
       "rateLimited": "Gerade zu viele Anfragen.",
       "retry": "Erneut versuchen",
       "retrying": "Wird erneut versucht…",
       "retryIn": "Erneut versuchen in {{seconds}} s",
-      "forbiddenTitle": "Sie können {{resource}} nicht ansehen",
+      "forbiddenTitle": "Kein Zugriff: {{resource}}",
       "forbidden": "Ihr Konto hat keinen Zugriff auf diese Seite.",
       "notFoundTitle": "Nicht gefunden: {{resource}}",
       "notFound": "Es wurde möglicherweise gelöscht oder umbenannt.",
-      "resourceFallback": "diesen Eintrag"
+      "resourceFallback": "Eintrag"
     },
     "browserExtension": {
-      "resource": "die Einstellungen der Browser-Erweiterung"
+      "resource": "Einstellungen der Browser-Erweiterung"
+    },
+    "cors": {
+      "title": "CORS-Konfiguration"
     }
   },
   "cloudStorage": {

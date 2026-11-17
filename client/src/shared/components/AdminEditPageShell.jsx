@@ -3,6 +3,7 @@
 import { useTranslation } from 'react-i18next';
 import AdminBreadcrumb from '../../features/admin/components/AdminBreadcrumb';
 import AdminLoadError from '../../features/admin/components/AdminLoadError';
+import { useRetryCountdown } from '../../features/admin/hooks/useRetryCountdown';
 import ConfirmDialog from './ConfirmDialog';
 import LoadingSpinner from './LoadingSpinner';
 
@@ -71,6 +72,8 @@ function AdminEditPageShell({
   notFoundAction
 }) {
   const { t } = useTranslation();
+  // After a 429, Retry counts the Retry-After wait down instead of re-hitting the limit.
+  const retryAfterSeconds = useRetryCountdown(loadError);
 
   if (loading) {
     return (
@@ -92,6 +95,7 @@ function AdminEditPageShell({
           status={loadError.status ?? null}
           message={loadError.detail}
           onRetry={onRetry}
+          retryAfterSeconds={retryAfterSeconds}
           action={loadError.status === 404 ? notFoundAction : undefined}
         />
       </div>

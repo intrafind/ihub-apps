@@ -319,7 +319,7 @@ describe('AdminLoadGate', () => {
       await flush();
 
       const button = screen.getByRole('button', { name: 'Retry in 12 s' });
-      expect(button).toBeDisabled();
+      expect(button).toHaveAttribute('aria-disabled', 'true');
       expect(screen.getByRole('alert')).toHaveTextContent('Too many requests right now.');
     } finally {
       jest.useRealTimers();

@@ -173,7 +173,8 @@
     "expandObject": "Expand object ({{count}} fields)",
     "details": "Details",
     "tryAgain": "Try again",
-    "done": "Done"
+    "done": "Done",
+    "note": "Note"
   },
   "chatActions": {
     "menu": "Actions menu",
@@ -2460,7 +2461,8 @@
       "note3": "Lower levels (error, warn) show fewer messages, higher levels (debug, silly) show more",
       "note4": "Use \"info\" level for production, \"debug\" for development",
       "note5": "Authentication debug logging is separate and requires restart",
-      "resource": "logging settings"
+      "resource": "logging settings",
+      "currentLevel": "Current Level"
     },
     "nav": {
       "chatHistory": "Chat History",
@@ -2565,7 +2567,10 @@
         "cimdApprovalAuto": "Connect automatically",
         "a2aDefaultSkill": "A2A default skill",
         "a2aDefaultSkillDesc": "The app or workflow a message runs when the A2A client names none, as app__<appId> or workflow__<workflowId>. Clients can always choose a skill with metadata.skillId or by using the per-skill endpoint /a2a/skills/<skillId>. Leave empty to require a choice (a caller with exactly one skill needs none).",
-        "resource": "MCP gateway settings"
+        "resource": "MCP gateway settings",
+        "discoveryLabel": "Discovery:",
+        "endpointLabel": "Endpoint:",
+        "transportStateless": "Stateless mode"
       }
     },
     "telemetry": {
@@ -4519,7 +4524,9 @@
       "styles": {
         "colorPicker": "{{name}} (color picker)"
       },
-      "resource": "UI settings"
+      "resource": "UI settings",
+      "title": "UI Customization",
+      "description": "Customize the appearance and branding of $t(product.name)"
     },
     "groupSelect": {
       "placeholder": "Search groups or type a name…",
@@ -5280,7 +5287,8 @@
       },
       "resource": "the overview",
       "apps": {
-        "unavailable": "not loaded"
+        "unavailable": "not loaded",
+        "enabledCount": "{{count}} enabled"
       }
     },
     "copilotAgent": {
@@ -6838,6 +6846,9 @@
     },
     "browserExtension": {
       "resource": "browser extension settings"
+    },
+    "cors": {
+      "title": "CORS Configuration"
     }
   },
   "cloudStorage": {

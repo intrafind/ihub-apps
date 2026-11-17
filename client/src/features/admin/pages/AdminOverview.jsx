@@ -26,6 +26,7 @@ import AdminDemoAccountsAlert from '../components/AdminDemoAccountsAlert';
 import AdminLoadError from '../components/AdminLoadError';
 import { useOverviewData } from '../hooks/useOverviewData';
 import { useUpdateCheck } from '../hooks/useUpdateCheck';
+import { useRetryCountdown } from '../hooks/useRetryCountdown';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
@@ -619,6 +620,9 @@ export default function AdminOverview() {
       contentAdminOnly: isContentAdminOnly
     });
 
+  // After a 429, Retry counts the Retry-After wait down instead of re-hitting the limit.
+  const retryAfterSeconds = useRetryCountdown(loadError);
+
   // A failed apps request is an error with Retry, never the fresh-install view (SH-B2).
   const loadErrorBanner = loadError ? (
     <AdminLoadError
@@ -628,6 +632,7 @@ export default function AdminOverview() {
       status={loadError.status}
       message={loadError.detail}
       onRetry={retry}
+      retryAfterSeconds={retryAfterSeconds}
     />
   ) : null;
 

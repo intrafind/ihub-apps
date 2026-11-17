@@ -145,7 +145,9 @@ describe('AdminAuthPage after a failed load', () => {
     const alert = screen.getByRole('alert');
     expect(alert).toHaveTextContent("Couldn't load authentication settings");
     expect(alert).toHaveTextContent('Nothing was changed.');
-    expect(within(alert).getByRole('button', { name: /Retry/ })).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId('admin-load-error')).getByRole('button', { name: /Retry/ })
+    ).toBeInTheDocument();
 
     expect(screen.queryByRole('button', { name: /Save/ })).not.toBeInTheDocument();
     expect(screen.queryByText('All valid')).not.toBeInTheDocument();
@@ -249,5 +251,99 @@ describe('AdminAuthPage unsaved-changes guard (ID-B11)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Stay' }));
     expect(screen.getByDisplayValue('60')).toBeInTheDocument();
+  });
+});
+
+describe('AdminAuthPage turning on a method whose block is missing (R1)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    routeApi({
+      platform: ok(PLATFORM), // no ntlmAuth / ldapAuth block
+      groups: ok({ groups: {} }),
+      schema: () => Promise.resolve({})
+    });
+  });
+
+  /** The checkbox in the auth-method row titled `label`. */
+  const methodCheckbox = label =>
+    screen.getByText(label).closest('.flex.items-start').querySelector('input[type="checkbox"]');
+
+  it('posts the NTLM defaults (JWT session on), not a bare { enabled: true }', async () => {
+    renderPage();
+    await flush();
+
+    fireEvent.click(methodCheckbox('NTLM Authentication'));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save Configuration' }));
+    });
+    await flush();
+
+    expect(writes()).toHaveLength(1);
+    const { body } = writes()[0][1];
+    expect(body.ntlmAuth).toEqual({
+      enabled: true,
+      debug: false,
+      defaultGroups: [],
+      sessionTimeoutMinutes: 480,
+      generateJwtToken: true
+    });
+    // Nothing else was seeded: blocks the admin did not touch stay absent.
+    expect(body).not.toHaveProperty('ldapAuth');
+    expect(body.localAuth).toEqual(PLATFORM.localAuth);
+  });
+
+  it('keeps an existing block as it is and only flips enabled', async () => {
+    routeApi({
+      platform: ok({ ...PLATFORM, ntlmAuth: { enabled: false, domain: 'CORP' } }),
+      groups: ok({ groups: {} }),
+      schema: () => Promise.resolve({})
+    });
+    renderPage();
+    await flush();
+
+    fireEvent.click(methodCheckbox('NTLM Authentication'));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save Configuration' }));
+    });
+    await flush();
+
+    expect(writes()[0][1].body.ntlmAuth).toEqual({ enabled: true, domain: 'CORP' });
+  });
+});
+
+describe('AdminAuthPage edits made while saving (R3)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('still asks before leaving when a field changed during the save request', async () => {
+    let finishSave;
+    makeAdminApiCall.mockImplementation((url, options = {}) => {
+      if (options.method === 'POST') {
+        return new Promise(resolve => {
+          finishSave = () => resolve({ data: {} });
+        });
+      }
+      if (url === '/admin/configs/platform') return Promise.resolve({ data: PLATFORM });
+      if (url === '/admin/groups') return Promise.resolve({ data: { groups: {} } });
+      return Promise.reject(httpError(404));
+    });
+    getSchemaByType.mockResolvedValue({});
+    renderPage();
+    await flush();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save Configuration' }));
+    });
+    // The form stays editable while the request runs.
+    fireEvent.change(screen.getByDisplayValue('480'), { target: { value: '60' } });
+    await act(async () => {
+      finishSave();
+    });
+    await flush();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Go to users' }));
+    expect(screen.queryByRole('heading', { name: 'Users page' })).not.toBeInTheDocument();
+    expect(screen.getByText('You have unsaved changes. Leave anyway?')).toBeInTheDocument();
   });
 });
