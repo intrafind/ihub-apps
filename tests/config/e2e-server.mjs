@@ -20,17 +20,18 @@
  * defaults are the values above:
  *
  * - `E2E_CONTENTS_DIR` - the contents directory (default `contents-e2e`)
- * - `E2E_FRESH_CONTENTS=1` - delete that directory first, for a fresh install
+ * - `E2E_FRESH_CONTENTS=1` - delete that directory first, for a fresh install (only a
+ *   directory inside the repository named `contents-e2e*`; anything else is refused)
  * - `E2E_SERVER_PORT` - the API server's port (default: the server's own, 3000)
  * - `E2E_CLIENT_PORT` - the Vite dev server's port (default: Vite's, 5173)
  * - `E2E_LLM_PORT` - the model stub's port (default 8979)
  */
 
-import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { prepareE2eContents } from './e2e-contents.mjs';
+import { removeDisposableContents } from './e2e-fresh-contents.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const CONTENTS_DIR = process.env.E2E_CONTENTS_DIR || 'contents-e2e';
@@ -41,7 +42,8 @@ const CLIENT_PORT = Number(process.env.E2E_CLIENT_PORT) || null;
 process.chdir(root);
 process.env.CONTENTS_DIR = CONTENTS_DIR;
 if (process.env.E2E_FRESH_CONTENTS === '1') {
-  fs.rmSync(path.resolve(root, CONTENTS_DIR), { recursive: true, force: true });
+  // Only a `contents-e2e*` directory inside the repository; anything else throws.
+  removeDisposableContents(root, CONTENTS_DIR);
 }
 
 await prepareE2eContents({ root, contentsDir: CONTENTS_DIR, llmPort: LLM_PORT });

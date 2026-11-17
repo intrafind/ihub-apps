@@ -16,6 +16,7 @@ import {
   assertGroupsResolvable,
   assertPlatformChangeKeepsAccess
 } from '../../utils/adminGuards.js';
+import { withAdminInvariantLock } from '../../utils/adminInvariantLock.js';
 
 const VALID_RESOURCES = new Set([
   'app',
@@ -131,15 +132,17 @@ export default function registerAdminChangesRoutes(app) {
           //
           // The rolled-back body must resolve (a snapshot can name a parent
           // deleted since) and must leave an administrator who can sign in.
-          await configStore.updateJson('config/groups.json', async current => {
-            const config = current || { groups: {} };
-            if (!config.groups || typeof config.groups !== 'object') config.groups = {};
-            const previous = structuredClone(config);
-            config.groups[id] = beforeState;
-            assertGroupsResolvable(config);
-            await assertGroupChangeKeepsAdmin(previous, config, { groupId: id });
-            return config;
-          });
+          await withAdminInvariantLock(() =>
+            configStore.updateJson('config/groups.json', async current => {
+              const config = current || { groups: {} };
+              if (!config.groups || typeof config.groups !== 'object') config.groups = {};
+              const previous = structuredClone(config);
+              config.groups[id] = beforeState;
+              assertGroupsResolvable(config, previous);
+              await assertGroupChangeKeepsAdmin(previous, config, { groupId: id });
+              return config;
+            })
+          );
           await configCache.refreshCacheEntry('config/groups.json');
           break;
         }

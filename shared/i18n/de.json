@@ -10749,7 +10749,7 @@
     "COPILOT_PUBLIC_HTTPS_REQUIRED": "Der Copilot-Agent benötigt eine öffentliche HTTPS-Adresse.",
     "INTEGRATION_AUTH_REQUIRED": "Verbinden Sie Ihr Konto, um diese Integration zu nutzen.",
     "AI_ACKNOWLEDGEMENT_REQUIRED": "Bitte bestätigen Sie den KI-Hinweis, bevor Sie Nachrichten senden.",
-    "AUTH_LOCKOUT": "Diese Änderung würde die Anmeldemethode abschalten, mit der Sie angemeldet sind, oder keinen Administrator übrig lassen, der sich anmelden kann. Es wurde nichts geändert. So wechseln Sie die Methode: Aktivieren Sie die neue Methode und speichern Sie, melden Sie sich damit als Administrator an und schalten Sie erst dann die alte Methode ab.",
+    "AUTH_LOCKOUT": "Diese Änderung würde die Anmeldemethode abschalten, mit der Sie angemeldet sind, oder keinen Administrator übrig lassen, der sich anmelden kann. Es wurde nichts geändert. So wechseln Sie die Methode: Aktivieren Sie die neue Methode und speichern Sie, melden Sie sich einmal damit an, geben Sie diesem Benutzer auf der Seite „Benutzer“ eine Administratorgruppe (eine Gruppenzuordnung des Identitätsanbieters allein zählt nicht), melden Sie sich damit als dieser Administrator an und schalten Sie erst dann die alte Methode ab.",
     "LAST_ADMIN": "Diese Änderung würde keinen aktiven Administrator übrig lassen, der sich anmelden kann. Es wurde nichts geändert. Geben Sie zuerst einem anderen aktiven Benutzer Administratorrechte.",
     "SELF_LOCKOUT": "Sie können Ihr eigenes Konto nicht deaktivieren oder löschen. Bitten Sie einen anderen Administrator darum.",
     "GROUP_IN_USE": "Die Gruppe „{{groupId}}“ kann nicht gelöscht werden, weil andere Gruppen von ihr erben. Entfernen Sie sie zuerst aus deren geerbten Gruppen.",

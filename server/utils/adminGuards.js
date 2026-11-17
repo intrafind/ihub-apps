@@ -14,7 +14,7 @@
  *   rollback. 409 `AUTH_LOCKOUT`.
  * - {@link assertUserChangeKeepsAdmin}: user update and delete. 409
  *   `SELF_LOCKOUT` / `LAST_ADMIN` (delete keeps its 403 `FORBIDDEN`).
- * - {@link assertGroupChangeKeepsAdmin}: group update and rollback. 409
+ * - {@link assertGroupChangeKeepsAdmin}: group update, delete and rollback. 409
  *   `LAST_ADMIN`.
  * - {@link assertGroupsResolvable} / {@link assertGroupNotInherited}: every
  *   groups.json writer; group delete. 400 / 409 `GROUP_IN_USE`.
@@ -29,14 +29,31 @@
  * that goes wrong while evaluating them refuses the change with 503
  * `ADMIN_CHECK_FAILED`; it never lets it through.
  *
+ * A stored groups.json that does not resolve (a cycle or a missing parent,
+ * from a hand edit) is not "unevaluable": the runtime keeps enforcing the last
+ * groups that did resolve (`configCache`), so the guards evaluate against
+ * those ({@link resolveGroupsAsEnforced}). Without that, every platform auth
+ * save, every edit of an admin user and the group PUT that would repair the
+ * cycle answered 503, and the only way out was a disk edit. Only when there is
+ * no last good copy either (nothing resolved since start) does it stay 503.
+ *
+ * The writers that call these guards run under {@link withAdminInvariantLock}
+ * (see `adminInvariantLock.js`), so a platform save and a user or group edit
+ * in the same process cannot each pass on the other's old file.
+ *
  * @module server/utils/adminGuards
  */
 
+import fs from 'fs/promises';
 import configStore from '../services/config/ConfigStore.js';
+import configCache from '../configCache.js';
 import { resolveGroupInheritance } from './authorization.js';
+import { locateConfigFile } from './configFileLocation.js';
+import { localUsersFile } from './contentsPath.js';
 import {
   adminGroupIds,
   authConfigChanged,
+  callerRecordId,
   countUsableAdmins,
   dependantsOf,
   effectivePlatformConfig,
@@ -49,13 +66,20 @@ import {
 import { ServiceError } from './ServiceError.js';
 import logger from './logger.js';
 
-const USERS_FILE = 'config/users.json';
 const GROUPS_FILE = 'config/groups.json';
 const PLATFORM_FILE = 'config/platform.json';
 
 /** The safe path, repeated in every lockout refusal. */
 const SAFE_SWITCH_HINT =
   'To switch sign-in methods: enable the new method and save, sign in with it as an administrator, then turn off the old one.';
+
+/**
+ * What is missing when no administrator would remain: the usual case is an
+ * administrator who gets admin rights only from an identity-provider group
+ * mapping, which is not counted (the admin rescue does not count it either).
+ */
+const ADMIN_GROUP_HINT =
+  'An administrator counts only when their user record has an administrator group: on the Users page, give your own account (or another user who signs in with a method that stays enabled) an administrator group such as "admins", then make this change again. A group mapping from the identity provider alone is not enough.';
 
 /**
  * Run `check`, turning any failure that is not already a refusal into
@@ -96,13 +120,61 @@ async function readStored(relPath) {
 }
 
 /**
+ * Read the users file that sign-in and the admin rescue read:
+ * `localAuth.usersFile` when it is set, `config/users.json` otherwise. A file
+ * inside the contents directory goes through the store; one outside it is
+ * read from disk. Missing is `null`; present but unreadable throws.
+ *
+ * @param {Object} platform - Effective platform configuration
+ * @returns {Promise<Object|null>}
+ */
+async function readUsersFor(platform) {
+  const { relPath, fullPath } = locateConfigFile(localUsersFile(platform?.localAuth));
+  if (relPath) return readStored(relPath);
+  let text;
+  try {
+    text = await fs.readFile(fullPath, 'utf8');
+  } catch (error) {
+    if (error?.code === 'ENOENT') return null;
+    throw error;
+  }
+  return JSON.parse(text);
+}
+
+/**
  * Resolve group inheritance; a missing groups file is no groups.
  *
  * @param {Object|null} groupsData - groups.json
  * @returns {Object} `{ groups }` with permissions merged from parents
+ * @throws {Error} When the inheritance does not resolve
  */
 function resolveGroups(groupsData) {
   return resolveGroupInheritance(groupsData?.groups ? groupsData : { groups: {} });
+}
+
+/**
+ * The groups the runtime enforces for a stored groups.json: the body itself,
+ * resolved, or, when it does not resolve, the last groups that did (the cache
+ * keeps serving those after a failed reload). Throws only when there is no
+ * last good copy, which the caller turns into 503.
+ *
+ * @param {Object|null} groupsData - groups.json as stored
+ * @param {string} what - For the log
+ * @returns {Object} Resolved groups
+ * @throws {Error} When neither the body nor a cached copy resolves
+ */
+function resolveGroupsAsEnforced(groupsData, what) {
+  try {
+    return resolveGroups(groupsData);
+  } catch (error) {
+    const lastGood = configCache.getGroups?.()?.data;
+    if (!lastGood?.groups) throw error;
+    logger.warn(
+      'Stored groups.json does not resolve; checking admin access against the groups in force',
+      { component: 'AdminGuards', check: what, error: error?.message }
+    );
+    return lastGood;
+  }
 }
 
 /**
@@ -143,21 +215,30 @@ export async function assertPlatformChangeKeepsAccess(
   if (!authConfigChanged(storedBefore, next)) return;
 
   await failClosed('platform', async () => {
-    const [usersData, groupsData] = await Promise.all([
-      readStored(USERS_FILE),
-      readStored(GROUPS_FILE)
-    ]);
-    const resolvedGroups = resolveGroups(groupsData);
     const before = effectivePlatformConfig(storedBefore, env);
     const after = effectivePlatformConfig(next, env);
+    // Each side reads the users file it names (`localAuth.usersFile`), the one
+    // sign-in and the rescue read; usually both are the same file.
+    const sameUsersFile = localUsersFile(before.localAuth) === localUsersFile(after.localAuth);
+    const [usersBefore, usersAfterRead, groupsData] = await Promise.all([
+      readUsersFor(before),
+      sameUsersFile ? null : readUsersFor(after),
+      readStored(GROUPS_FILE)
+    ]);
+    const usersAfter = sameUsersFile ? usersBefore : usersAfterRead;
+    const resolvedGroups = resolveGroupsAsEnforced(groupsData, 'platform');
     const route = signInRouteOf(user);
 
     if (!route.machine) {
-      const users = usersData?.users || {};
-      const record = user?.id && Object.hasOwn(users, user.id) ? users[user.id] : undefined;
+      const recordIn = usersData => {
+        const id = callerRecordId(usersData, user);
+        return id === undefined ? undefined : usersData.users[id];
+      };
       const known = KNOWN_SIGN_IN_MODES.includes(route.mode);
       const losesRoute =
-        !known || (routeSurvives(route, before, record) && !routeSurvives(route, after, record));
+        !known ||
+        (routeSurvives(route, before, recordIn(usersBefore)) &&
+          !routeSurvives(route, after, recordIn(usersAfter)));
       if (losesRoute) {
         throw new ServiceError(
           'AUTH_LOCKOUT',
@@ -175,12 +256,12 @@ export async function assertPlatformChangeKeepsAccess(
       }
     }
 
-    const adminsBefore = countUsableAdmins(usersData, resolvedGroups, before);
-    const adminsAfter = countUsableAdmins(usersData, resolvedGroups, after);
+    const adminsBefore = countUsableAdmins(usersBefore, resolvedGroups, before);
+    const adminsAfter = countUsableAdmins(usersAfter, resolvedGroups, after);
     if (adminsAfter === 0 && adminsBefore > 0) {
       throw new ServiceError(
         'AUTH_LOCKOUT',
-        `After this change no active administrator could sign in, and the next person to sign in would be made an administrator. Nothing was changed. Keep the sign-in method of at least one administrator enabled. ${SAFE_SWITCH_HINT}`,
+        `After this change no active administrator could sign in, and the next person to sign in would be made an administrator. Nothing was changed. ${ADMIN_GROUP_HINT}`,
         {
           details: {
             reason: 'noAdminSignIn',
@@ -239,7 +320,9 @@ export async function assertUserChangeKeepsAdmin(
 ) {
   const before = usersBefore?.users?.[userId];
   const after = action === 'delete' ? undefined : usersAfter?.users?.[userId];
-  const isSelf = Boolean(user?.id) && user.id === userId;
+  // Also a legacy provider token whose id is the IdP subject, not the key.
+  const isSelf =
+    Boolean(user?.id) && (user.id === userId || callerRecordId(usersBefore, user) === userId);
 
   if (isSelf && action === 'delete') {
     throw new ServiceError(
@@ -265,7 +348,7 @@ export async function assertUserChangeKeepsAdmin(
       readStored(GROUPS_FILE),
       readStored(PLATFORM_FILE)
     ]);
-    const resolvedGroups = resolveGroups(groupsData);
+    const resolvedGroups = resolveGroupsAsEnforced(groupsData, 'user');
     const platform = effectivePlatformConfig(storedPlatform, env);
 
     if (!isUsableAdmin(before, resolvedGroups, platform)) return;
@@ -294,7 +377,10 @@ export async function assertUserChangeKeepsAdmin(
  *
  * Only evaluated when a group that granted admin access (after resolution)
  * no longer does. Call it with a body that resolves
- * ({@link assertGroupsResolvable} first).
+ * ({@link assertGroupsResolvable} first). A `groupsBefore` that does not
+ * resolve is compared as the groups in force (the cache's last good copy), so
+ * the edit that repairs a broken file is evaluated, not refused. Group update,
+ * delete and rollback call it.
  *
  * @param {Object} groupsBefore - groups.json as read under the lock (unchanged copy)
  * @param {Object} groupsAfter - groups.json about to be stored
@@ -310,17 +396,15 @@ export async function assertGroupChangeKeepsAdmin(
   { groupId, env = process.env } = {}
 ) {
   await failClosed('group', async () => {
-    const resolvedBefore = resolveGroups(groupsBefore);
+    const resolvedBefore = resolveGroupsAsEnforced(groupsBefore, 'group');
     const resolvedAfter = resolveGroups(groupsAfter);
     const adminAfter = adminGroupIds(resolvedAfter);
     const lost = [...adminGroupIds(resolvedBefore)].filter(id => !adminAfter.has(id));
     if (lost.length === 0) return;
 
-    const [usersData, storedPlatform] = await Promise.all([
-      readStored(USERS_FILE),
-      readStored(PLATFORM_FILE)
-    ]);
+    const storedPlatform = await readStored(PLATFORM_FILE);
     const platform = effectivePlatformConfig(storedPlatform, env);
+    const usersData = await readUsersFor(platform);
     const before = countUsableAdmins(usersData, resolvedBefore, platform);
     const after = countUsableAdmins(usersData, resolvedAfter, platform);
     if (after === 0 && before > 0) {
@@ -337,18 +421,31 @@ export async function assertGroupChangeKeepsAdmin(
  * Refuse a groups.json body whose inheritance does not resolve (a missing
  * parent, a cycle). 400 `BAD_REQUEST`.
  *
+ * Pass the body as read (`groupsBefore`) so the message can say when the
+ * stored file was already broken before this change (a hand edit): the admin's
+ * own edit is then not the cause, and the message says to repair the stored
+ * problem first. A write whose result resolves is never refused here, even
+ * when the stored body did not resolve; that is how a broken file is repaired.
+ *
  * @param {Object} groupsData - groups.json about to be stored
+ * @param {Object|null} [groupsBefore] - groups.json as read under the lock (unchanged copy)
  * @returns {void}
  * @throws {ServiceError}
  */
-export function assertGroupsResolvable(groupsData) {
+export function assertGroupsResolvable(groupsData, groupsBefore) {
   const problem = groupsResolutionError(groupsData);
-  if (problem) {
+  if (!problem) return;
+  const storedProblem = groupsBefore ? groupsResolutionError(groupsBefore) : null;
+  if (storedProblem) {
     throw new ServiceError(
       'BAD_REQUEST',
-      `The group configuration would not resolve: ${problem}. Nothing was changed.`
+      `The stored group configuration already does not resolve: ${storedProblem}. Nothing was changed. Fix that first (edit the inherited groups of the groups named there), then make this change.`
     );
   }
+  throw new ServiceError(
+    'BAD_REQUEST',
+    `The group configuration would not resolve: ${problem}. Nothing was changed.`
+  );
 }
 
 /**

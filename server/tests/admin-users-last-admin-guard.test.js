@@ -24,7 +24,7 @@ import os from 'os';
 import path from 'path';
 
 // A root before the first test: modules read it while they load.
-const state = { rootDir: os.tmpdir() };
+const state = { rootDir: os.tmpdir(), lastGoodGroups: null };
 
 jest.unstable_mockModule('../pathUtils.js', () => ({
   getRootDir: () => state.rootDir
@@ -38,6 +38,7 @@ jest.unstable_mockModule('../configCache.js', () => ({
   default: {
     getPlatform: () => ({}),
     get: () => null,
+    getGroups: () => (state.lastGoodGroups ? { data: state.lastGoodGroups } : null),
     refreshCacheEntry: async () => {},
     setCacheEntry: () => undefined
   }
@@ -98,6 +99,7 @@ async function seedUsers(users) {
 
 beforeEach(async () => {
   state.rootDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-last-admin-'));
+  state.lastGoodGroups = null;
   await fs.mkdir(path.join(state.rootDir, 'contents', 'config'), { recursive: true });
   await writeConfig('groups.json', ADMIN_GROUPS);
   await writeConfig('platform.json', {
@@ -327,5 +329,70 @@ describe('active is a boolean (ID-B3)', () => {
 
     expect(res.status).toBe(400);
     expect(Object.keys((await readUsers()).users)).toEqual(['a']);
+  });
+});
+
+describe('user guard edge cases', () => {
+  const oidcAdmin = (id, subject) => ({
+    id,
+    username: id,
+    active: true,
+    authMethods: ['oidc'],
+    oidcData: { subject },
+    internalGroups: ['admins']
+  });
+  /** A token minted before the persisted id became the subject: id is the IdP subject. */
+  const legacyOidcCaller = subject => ({
+    id: subject,
+    username: 'o',
+    groups: ['admins'],
+    authMode: 'oidc',
+    authProvider: 'entra',
+    isAdmin: true
+  });
+
+  beforeEach(async () => {
+    await writeConfig('platform.json', {
+      localAuth: { enabled: true },
+      oidcAuth: { enabled: true, providers: [{ name: 'entra' }] }
+    });
+  });
+
+  test('a legacy OIDC token cannot delete its own record (SELF_LOCKOUT)', async () => {
+    await seedUsers({ a: localAdmin('a'), user_o: oidcAdmin('user_o', 'sub-1') });
+
+    const res = await del(legacyOidcCaller('sub-1'), 'user_o');
+
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe('SELF_LOCKOUT');
+    expect((await readUsers()).users.user_o).toBeDefined();
+  });
+
+  test('a legacy OIDC token cannot deactivate its own record (SELF_LOCKOUT)', async () => {
+    await seedUsers({ a: localAdmin('a'), user_o: oidcAdmin('user_o', 'sub-1') });
+
+    const res = await put(legacyOidcCaller('sub-1'), 'user_o', { active: false });
+
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe('SELF_LOCKOUT');
+  });
+
+  test('a stored groups.json with a cycle does not block user edits (groups in force are used)', async () => {
+    await writeConfig('groups.json', {
+      groups: {
+        ...ADMIN_GROUPS.groups,
+        x: { id: 'x', name: 'X', inherits: ['y'], permissions: {} },
+        y: { id: 'y', name: 'Y', inherits: ['x'], permissions: {} }
+      }
+    });
+    state.lastGoodGroups = ADMIN_GROUPS;
+    await seedUsers({ a: localAdmin('a'), b: localAdmin('b') });
+
+    const ok = await put(caller('b'), 'a', { internalGroups: ['users'] });
+    expect(ok.status).toBe(200);
+
+    const refused = await put(caller('a'), 'b', { internalGroups: ['users'] });
+    expect(refused.status).toBe(409);
+    expect(refused.body.code).toBe('LAST_ADMIN');
   });
 });

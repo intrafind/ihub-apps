@@ -12,6 +12,7 @@ import { ServiceError } from '../../utils/ServiceError.js';
 import { assertValidId } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
 import { assertUserChangeKeepsAdmin } from '../../utils/adminGuards.js';
+import { withAdminInvariantLock } from '../../utils/adminInvariantLock.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import { startUserCleanup } from '../../services/userDeletion.js';
 import { deleteLoginTokens } from '../../services/integrations/iFinderTokenProvider.js';
@@ -542,47 +543,49 @@ export default function registerAdminAuthRoutes(app) {
     // Read, change and write run under the file lock; see the create route.
     let user;
     let deactivated = false;
-    await configStore.updateJson(USERS_FILE, async usersData => {
-      if (!usersData) {
-        throw new ServiceError('NOT_FOUND', 'Users file not found');
-      }
+    await withAdminInvariantLock(() =>
+      configStore.updateJson(USERS_FILE, async usersData => {
+        if (!usersData) {
+          throw new ServiceError('NOT_FOUND', 'Users file not found');
+        }
 
-      // Check if user exists
-      if (!Object.hasOwn(usersData.users || {}, userId)) {
-        throw new ServiceError('NOT_FOUND', 'User not found');
-      }
+        // Check if user exists
+        if (!Object.hasOwn(usersData.users || {}, userId)) {
+          throw new ServiceError('NOT_FOUND', 'User not found');
+        }
 
-      const usersBefore = structuredClone(usersData);
-      const target = usersData.users[userId];
-      deactivated = active === false && target.active !== false;
+        const usersBefore = structuredClone(usersData);
+        const target = usersData.users[userId];
+        deactivated = active === false && target.active !== false;
 
-      // Update fields
-      if (email !== undefined) target.email = email;
-      if (name !== undefined) target.name = name;
-      if (internalGroups !== undefined)
-        target.internalGroups = Array.isArray(internalGroups) ? internalGroups : [];
-      if (active !== undefined) target.active = active;
-      if (limits) {
-        if (limits.value) target.usageLimits = limits.value;
-        else delete target.usageLimits;
-      }
-      if (newPasswordHash) target.passwordHash = newPasswordHash;
+        // Update fields
+        if (email !== undefined) target.email = email;
+        if (name !== undefined) target.name = name;
+        if (internalGroups !== undefined)
+          target.internalGroups = Array.isArray(internalGroups) ? internalGroups : [];
+        if (active !== undefined) target.active = active;
+        if (limits) {
+          if (limits.value) target.usageLimits = limits.value;
+          else delete target.usageLimits;
+        }
+        if (newPasswordHash) target.passwordHash = newPasswordHash;
 
-      // On the body held under the lock, so two admins demoting the last two
-      // administrators at once cannot both succeed: 409 SELF_LOCKOUT for
-      // deactivating yourself, 409 LAST_ADMIN when no administrator who can
-      // sign in would remain.
-      await assertUserChangeKeepsAdmin(req.user, usersBefore, usersData, {
-        userId,
-        action: 'update'
-      });
+        // On the body held under the lock, so two admins demoting the last two
+        // administrators at once cannot both succeed: 409 SELF_LOCKOUT for
+        // deactivating yourself, 409 LAST_ADMIN when no administrator who can
+        // sign in would remain.
+        await assertUserChangeKeepsAdmin(req.user, usersBefore, usersData, {
+          userId,
+          action: 'update'
+        });
 
-      target.updatedAt = new Date().toISOString();
-      if (!usersData.metadata) usersData.metadata = { version: '2.0.0' };
-      usersData.metadata.lastUpdated = new Date().toISOString();
-      user = target;
-      return usersData;
-    });
+        target.updatedAt = new Date().toISOString();
+        if (!usersData.metadata) usersData.metadata = { version: '2.0.0' };
+        usersData.metadata.lastUpdated = new Date().toISOString();
+        user = target;
+        return usersData;
+      })
+    );
 
     // A new password ends a lockout from failed sign-ins.
     if (newPasswordHash) await clearFailedLogins(lockoutKey(user));
@@ -674,32 +677,34 @@ export default function registerAdminAuthRoutes(app) {
 
     // Read, change and write run under the file lock; see the create route.
     let username;
-    await configStore.updateJson(USERS_FILE, async usersData => {
-      if (!usersData) {
-        throw new ServiceError('NOT_FOUND', 'Users file not found');
-      }
+    await withAdminInvariantLock(() =>
+      configStore.updateJson(USERS_FILE, async usersData => {
+        if (!usersData) {
+          throw new ServiceError('NOT_FOUND', 'Users file not found');
+        }
 
-      // Check if user exists
-      if (!Object.hasOwn(usersData.users || {}, userId)) {
-        throw new ServiceError('NOT_FOUND', 'User not found');
-      }
+        // Check if user exists
+        if (!Object.hasOwn(usersData.users || {}, userId)) {
+          throw new ServiceError('NOT_FOUND', 'User not found');
+        }
 
-      username = usersData.users[userId].username;
-      const usersBefore = structuredClone(usersData);
+        username = usersData.users[userId].username;
+        const usersBefore = structuredClone(usersData);
 
-      // Remove user
-      delete usersData.users[userId];
+        // Remove user
+        delete usersData.users[userId];
 
-      // On the body held under the lock: never your own account (409
-      // SELF_LOCKOUT), never the last administrator who can sign in (403).
-      await assertUserChangeKeepsAdmin(req.user, usersBefore, usersData, {
-        userId,
-        action: 'delete'
-      });
-      if (!usersData.metadata) usersData.metadata = { version: '2.0.0' };
-      usersData.metadata.lastUpdated = new Date().toISOString();
-      return usersData;
-    });
+        // On the body held under the lock: never your own account (409
+        // SELF_LOCKOUT), never the last administrator who can sign in (403).
+        await assertUserChangeKeepsAdmin(req.user, usersBefore, usersData, {
+          userId,
+          action: 'delete'
+        });
+        if (!usersData.metadata) usersData.metadata = { version: '2.0.0' };
+        usersData.metadata.lastUpdated = new Date().toISOString();
+        return usersData;
+      })
+    );
 
     // Refresh cache to ensure deleted user is removed from cache
     await configCache.refreshCacheEntry('config/users.json');

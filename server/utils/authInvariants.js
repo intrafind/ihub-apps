@@ -11,7 +11,12 @@
  * failed rule into the refusal.
  *
  * Every function here fails closed: a sign-in method it does not know is a
- * method that does not survive, never one that does.
+ * method that does not survive, never one that does. "Enabled" means exactly
+ * what the runtime means by it: a truthy `enabled` ({@link isMethodEnabled}),
+ * so a `"true"` string from a `${VAR}` placeholder or an environment override
+ * counts as on here too. Treating it as off would make the guard fail open:
+ * the relative checks would never protect a route, or count an admin, that
+ * the runtime lets sign in.
  *
  * What the runtime actually checks (verified, 2026-11):
  * - `auth.mode` is a label. No sign-in path is gated on it; `proxyAuth.js`
@@ -118,12 +123,31 @@ export function effectivePlatformConfig(stored, env = process.env) {
 }
 
 /**
+ * Whether a sign-in method block is on, the way the runtime gates it: every
+ * sign-in path tests `if (block.enabled)` (truthiness), not `=== true`
+ * (`jwtAuth.js`, `proxyAuth.js`, `oidcAuth.js`, `ldapAuth.js`, `ntlmAuth.js`,
+ * `teamsAuth.js`, `routes/auth.js`).
+ *
+ * @param {Object|undefined} block - `localAuth`, `oidcAuth`, …
+ * @returns {boolean}
+ *
+ * @example
+ * isMethodEnabled({ enabled: 'true' }); // true, as at runtime
+ * isMethodEnabled({ enabled: false }); // false
+ */
+export function isMethodEnabled(block) {
+  return Boolean(block?.enabled);
+}
+
+/**
  * Whether one of a persisted user's sign-in methods is enabled.
  *
- * The rule the admin rescue has always used (`adminRescue.hasAnyAdmin`): a
- * record with no `authMethods` is a legacy local user when it has a password
- * hash; an unknown method counts as enabled there, because the rescue must not
- * fire for a method it does not understand.
+ * The rule the admin rescue uses (`adminRescue.hasAnyAdmin`): a record with no
+ * `authMethods` is a legacy local user when it has a password hash; an unknown
+ * method counts as enabled there, because the rescue must not fire for a
+ * method it does not understand. A method is enabled as the runtime reads it
+ * ({@link isMethodEnabled}); the rescue used `=== true` before, which made it
+ * fire while a `"true"`-string method still let its administrators sign in.
  *
  * @param {Object} user - A users.json record
  * @param {Object} platform - Effective platform configuration
@@ -134,7 +158,7 @@ export function isUserAuthMethodEnabled(user, platform) {
 
   if (authMethods.length === 0) {
     if (user.passwordHash) {
-      return platform.localAuth?.enabled === true;
+      return isMethodEnabled(platform.localAuth);
     }
     return true;
   }
@@ -142,17 +166,17 @@ export function isUserAuthMethodEnabled(user, platform) {
   return authMethods.some(method => {
     switch (method) {
       case 'local':
-        return platform.localAuth?.enabled === true;
+        return isMethodEnabled(platform.localAuth);
       case 'oidc':
-        return platform.oidcAuth?.enabled === true;
+        return isMethodEnabled(platform.oidcAuth);
       case 'proxy':
-        return platform.proxyAuth?.enabled === true;
+        return isMethodEnabled(platform.proxyAuth);
       case 'ntlm':
-        return platform.ntlmAuth?.enabled === true;
+        return isMethodEnabled(platform.ntlmAuth);
       case 'ldap':
-        return platform.ldapAuth?.enabled === true;
+        return isMethodEnabled(platform.ldapAuth);
       case 'teams':
-        return platform.teamsAuth?.enabled === true;
+        return isMethodEnabled(platform.teamsAuth);
       default:
         return true;
     }
@@ -225,7 +249,7 @@ export function listUsableAdmins(usersData, resolvedGroups, platform) {
   }
 
   const ldap = platform.ldapAuth;
-  if (ldap?.enabled === true && Array.isArray(ldap.providers)) {
+  if (isMethodEnabled(ldap) && Array.isArray(ldap.providers)) {
     for (const provider of ldap.providers) {
       const defaults = Array.isArray(provider?.defaultGroups) ? provider.defaultGroups : [];
       if (defaults.some(groupId => grantsAdmin(resolvedGroups, groupId))) {
@@ -235,7 +259,7 @@ export function listUsableAdmins(usersData, resolvedGroups, platform) {
   }
 
   const ntlm = platform.ntlmAuth;
-  if (ntlm?.enabled === true && Array.isArray(ntlm.defaultGroups)) {
+  if (isMethodEnabled(ntlm) && Array.isArray(ntlm.defaultGroups)) {
     if (ntlm.defaultGroups.some(groupId => grantsAdmin(resolvedGroups, groupId))) {
       routes.push('ntlm');
     }
@@ -280,6 +304,45 @@ export function signInRouteOf(user) {
   };
 }
 
+/**
+ * Token modes whose users.json record may be keyed by something other than the
+ * token subject; the same set `tokenUser.js` (`PROVIDER_MODES`) uses.
+ */
+const SUBJECT_KEYED_MODES = new Set(['oidc', 'ldap', 'teams', 'ntlm']);
+
+/**
+ * The users.json key of the caller's own record, found the way
+ * `tokenUser.findRecord` finds it for every request: the id itself, or, for a
+ * provider token, the record whose `<mode>Data.subject` is the id. The second
+ * case is a token minted before the persisted id became the subject: its
+ * `req.user.id` is the IdP subject, not the users.json key, and comparing ids
+ * alone would let that admin deactivate or delete their own record.
+ *
+ * @param {Object|null} usersData - users.json
+ * @param {Object|null|undefined} user - `req.user`
+ * @returns {string|undefined} The key, or undefined when the caller has no record
+ *
+ * @example
+ * callerRecordId({ users: { u1: { authMethods: ['oidc'], oidcData: { subject: 's' } } } },
+ *   { id: 's', authMode: 'oidc' }); // 'u1'
+ */
+export function callerRecordId(usersData, user) {
+  const users = usersData?.users && typeof usersData.users === 'object' ? usersData.users : {};
+  const id = user?.id;
+  if (typeof id !== 'string' || !id) return undefined;
+  if (Object.hasOwn(users, id)) return id;
+  const mode = user.authMode || user.authMethod;
+  if (!SUBJECT_KEYED_MODES.has(mode)) return undefined;
+  return Object.keys(users).find(key => {
+    const record = users[key];
+    return (
+      Array.isArray(record?.authMethods) &&
+      record.authMethods.includes(mode) &&
+      record[`${mode}Data`]?.subject === id
+    );
+  });
+}
+
 /** The sign-in methods {@link routeSurvives} knows. Anything else never survives. */
 export const KNOWN_SIGN_IN_MODES = Object.freeze([
   'local',
@@ -310,7 +373,7 @@ function usableProviders(block) {
  * @returns {boolean}
  */
 function providerSurvives(block, provider) {
-  if (block?.enabled !== true) return false;
+  if (!isMethodEnabled(block)) return false;
   const providers = usableProviders(block);
   return provider ? providers.some(p => p.name === provider) : providers.length > 0;
 }
@@ -344,7 +407,7 @@ export function routeSurvives(route, platform, userRecord) {
   switch (route.mode) {
     case 'local':
       return (
-        p.localAuth?.enabled === true &&
+        isMethodEnabled(p.localAuth) &&
         Boolean(userRecord) &&
         typeof userRecord.passwordHash === 'string' &&
         userRecord.passwordHash.length > 0
@@ -354,11 +417,11 @@ export function routeSurvives(route, platform, userRecord) {
     case 'ldap':
       return providerSurvives(p.ldapAuth, route.provider);
     case 'ntlm':
-      return p.ntlmAuth?.enabled === true;
+      return isMethodEnabled(p.ntlmAuth);
     case 'proxy':
-      return p.proxyAuth?.enabled === true;
+      return isMethodEnabled(p.proxyAuth);
     case 'teams':
-      return p.teamsAuth?.enabled === true;
+      return isMethodEnabled(p.teamsAuth);
     default:
       return false;
   }

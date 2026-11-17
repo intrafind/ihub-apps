@@ -12,11 +12,14 @@
 import { describe, test, expect } from '@jest/globals';
 import {
   authConfigChanged,
+  callerRecordId,
   countUsableAdmins,
   dependantsOf,
   effectivePlatformConfig,
   groupsResolutionError,
+  isMethodEnabled,
   isUsableAdmin,
+  isUserAuthMethodEnabled,
   listUsableAdmins,
   routeSurvives,
   signInRouteOf
@@ -88,9 +91,14 @@ describe('routeSurvives', () => {
     expect(routeSurvives({ mode, provider }, platform, record)).toBe(expected);
   });
 
-  test('a string "true" is not an enabled method (fails closed)', () => {
+  test('a truthy non-boolean enables a method, as the runtime reads it (no fail-open)', () => {
+    // jwtAuth: `if (localAuth.enabled)`. Reading "true" as off would make the
+    // relative checks never protect this route.
     expect(routeSurvives({ mode: 'local' }, { localAuth: { enabled: 'true' } }, localAdmin)).toBe(
-      false
+      true
+    );
+    expect(routeSurvives({ mode: 'proxy' }, { proxyAuth: { enabled: 'True' } }, undefined)).toBe(
+      true
     );
   });
 });
@@ -222,5 +230,51 @@ describe('group graph', () => {
     const broken = structuredClone(raw);
     delete broken.groups.p;
     expect(groupsResolutionError(broken)).toMatch(/p/);
+  });
+});
+
+describe('isMethodEnabled', () => {
+  test.each([
+    [{ enabled: true }, true],
+    [{ enabled: 'true' }, true],
+    [{ enabled: 'True' }, true],
+    [{ enabled: 1 }, true],
+    [{ enabled: false }, false],
+    [{ enabled: '' }, false],
+    [{}, false],
+    [undefined, false]
+  ])('%j → %s (truthiness, as every sign-in path tests it)', (block, expected) => {
+    expect(isMethodEnabled(block)).toBe(expected);
+  });
+
+  test('a user whose method is on through a "true" string counts (the rescue does not fire)', () => {
+    const user = { authMethods: ['oidc'] };
+    expect(isUserAuthMethodEnabled(user, { oidcAuth: { enabled: 'true' } })).toBe(true);
+  });
+});
+
+describe('callerRecordId', () => {
+  const users = {
+    users: {
+      user_o: { authMethods: ['oidc'], oidcData: { subject: 'sub-1' } },
+      user_l: { authMethods: ['local'], passwordHash: 'h' }
+    }
+  };
+
+  test('finds the record by id', () => {
+    expect(callerRecordId(users, { id: 'user_l', authMode: 'local' })).toBe('user_l');
+  });
+
+  test('finds a legacy provider token by its subject', () => {
+    expect(callerRecordId(users, { id: 'sub-1', authMode: 'oidc' })).toBe('user_o');
+  });
+
+  test('a local caller is never matched by subject', () => {
+    expect(callerRecordId(users, { id: 'sub-1', authMode: 'local' })).toBeUndefined();
+  });
+
+  test('no record, no users file', () => {
+    expect(callerRecordId(users, { id: 'nobody', authMode: 'oidc' })).toBeUndefined();
+    expect(callerRecordId(null, { id: 'x', authMode: 'oidc' })).toBeUndefined();
   });
 });

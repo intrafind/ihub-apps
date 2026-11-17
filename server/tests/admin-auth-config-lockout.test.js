@@ -22,7 +22,7 @@ import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
 
-const state = { rootDir: null, snapshot: null };
+const state = { rootDir: null, snapshot: null, lastGoodGroups: null };
 
 jest.unstable_mockModule('../pathUtils.js', () => ({
   getRootDir: () => state.rootDir
@@ -35,7 +35,9 @@ jest.unstable_mockModule('../storage/bootstrap.js', () => ({
 jest.unstable_mockModule('../configCache.js', () => ({
   default: {
     refreshCacheEntry: async () => {},
-    getPlatform: () => ({})
+    getPlatform: () => ({}),
+    // The groups the runtime enforces (the last body that resolved).
+    getGroups: () => (state.lastGoodGroups ? { data: state.lastGoodGroups } : null)
   }
 }));
 
@@ -146,6 +148,7 @@ beforeEach(async () => {
   await writeConfig('groups.json', GROUPS);
   await writeConfig('users.json', { users: { user_local: LOCAL_RECORD }, metadata: {} });
   state.snapshot = null;
+  state.lastGoodGroups = null;
 });
 
 afterEach(async () => {
@@ -222,6 +225,10 @@ describe('POST /api/admin/configs/platform lockout guard', () => {
 
     expect(res.status).toBe(409);
     expect(res.body.details.reason).toBe('noAdminSignIn');
+    // Says what is missing, not the steps the admin just followed (R3).
+    expect(res.body.detail).toMatch(/administrator group/);
+    expect(res.body.detail).toMatch(/group mapping from the identity provider alone is not enough/);
+    expect(res.body.detail).not.toMatch(/enable the new method and save/);
   });
 
   test('a method forced on by IHUB_PLATFORM__ overrides counts as on', async () => {
@@ -276,6 +283,73 @@ describe('POST /api/admin/configs/platform lockout guard', () => {
 
     expect(res.status).toBe(403);
     expect(await readText('platform.json')).toBe(before);
+  });
+});
+
+describe('platform guard edge cases', () => {
+  const CYCLE = {
+    groups: {
+      ...GROUPS.groups,
+      a: { id: 'a', name: 'A', inherits: ['b'], permissions: {} },
+      b: { id: 'b', name: 'B', inherits: ['a'], permissions: {} }
+    }
+  };
+
+  test('a stored groups.json with a cycle is checked against the groups in force, not 503', async () => {
+    await writeConfig('groups.json', CYCLE);
+    state.lastGoodGroups = GROUPS;
+
+    const ok = await save(LOCAL_ADMIN, { ...BASE_PLATFORM, proxyAuth: { enabled: true } });
+    expect(ok.status).toBe(200);
+
+    // The lockout itself is still caught.
+    const refused = await save(LOCAL_ADMIN, { ...BASE_PLATFORM, localAuth: { enabled: false } });
+    expect(refused.status).toBe(409);
+    expect(refused.body.code).toBe('AUTH_LOCKOUT');
+  });
+
+  test('a stored cycle with no groups in force is unevaluable: 503, nothing written', async () => {
+    await writeConfig('groups.json', CYCLE);
+    const before = await readText('platform.json');
+
+    const res = await save(LOCAL_ADMIN, { ...BASE_PLATFORM, proxyAuth: { enabled: true } });
+
+    expect(res.status).toBe(503);
+    expect(res.body.code).toBe('ADMIN_CHECK_FAILED');
+    expect(await readText('platform.json')).toBe(before);
+  });
+
+  test('admins are read from localAuth.usersFile, the file sign-in reads', async () => {
+    // The admin lives only in the relocated file; config/users.json is gone.
+    await fs.rm(file('users.json'));
+    await fs.mkdir(path.join(state.rootDir, 'contents', 'secrets'), { recursive: true });
+    await fs.writeFile(
+      path.join(state.rootDir, 'contents', 'secrets', 'users.json'),
+      JSON.stringify({ users: { user_local: LOCAL_RECORD } })
+    );
+    const relocated = {
+      ...BASE_PLATFORM,
+      localAuth: { enabled: true, usersFile: 'contents/secrets/users.json' }
+    };
+    await writeConfig('platform.json', relocated);
+
+    const res = await save(LOCAL_ADMIN, {
+      ...relocated,
+      localAuth: { ...relocated.localAuth, enabled: false }
+    });
+
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe('AUTH_LOCKOUT');
+  });
+
+  test('a "true" string enables a method, as at runtime (the guard must not fail open)', async () => {
+    // jwtAuth tests `if (localAuth.enabled)`: a string keeps local sign-in on.
+    await writeConfig('platform.json', { ...BASE_PLATFORM, localAuth: { enabled: 'true' } });
+
+    const res = await save(LOCAL_ADMIN, { ...BASE_PLATFORM, localAuth: { enabled: false } });
+
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe('AUTH_LOCKOUT');
   });
 });
 
