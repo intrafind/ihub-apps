@@ -21,11 +21,12 @@ import path from 'node:path';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { FilesystemStorageProvider } from '../storage/providers/filesystem/index.js';
-import { ChatRepository } from '../services/chat/ChatRepository.js';
+import { CHATS_NAMESPACE, ChatRepository } from '../services/chat/ChatRepository.js';
 import {
   boundStoredAuthPrompts,
   materializeAssistantTurn,
   materializeUserTurn,
+  settleAssistantTurn,
   settleUserTurn
 } from '../services/chat/chatMaterializer.js';
 import {
@@ -591,15 +592,12 @@ describe('chatMaterializer: nothing to write to', () => {
 
 describe('chatMaterializer: the order the two writes become visible', () => {
   it('stores the answer before the chat is announced idle with unseen activity', async () => {
-    // `releaseRun` publishes "idle, and there is something new to read"
-    // (activeRunId: null + hasUnseenActivity) while `appendMessage` stores the
-    // answer, and the two take the chat lock separately — so whatever a reader
-    // sees between them is a real state the API can serve. Releasing first
-    // exposes a settled chat whose answer is missing: opening it there clears
-    // the unseen flag and returns a transcript without the answer, and the
-    // flag never comes back. This pins the safe order rather than the timing
-    // that happens to make a `waitFor` pass.
-    await withRepository(async ({ repository }) => {
+    // "Idle, and there is something new to read" (activeRunId: null +
+    // hasUnseenActivity) must never be visible before the answer is stored:
+    // opening the chat there clears the unseen flag and returns a transcript
+    // without the answer, and the flag never comes back. The release now rides
+    // in the append's own chat write, which follows the transcript write.
+    await withRepository(async ({ repository, provider }) => {
       await userTurn(repository);
 
       const seen = [];
@@ -609,18 +607,24 @@ describe('chatMaterializer: the order the two writes become visible', () => {
         return repository.appendMessage(...args);
       };
       spy.releaseRun = async (...args) => {
-        // What a concurrent reader would observe at the instant the chat is
-        // declared idle. Read through the real repository, not the spy.
-        const messages = await repository.getMessages(CHAT_ID);
-        seen.push(
-          messages.messages.some(m => m.role === 'assistant')
-            ? 'release-after-answer'
-            : 'release-before-answer'
-        );
+        seen.push('release');
         return repository.releaseRun(...args);
       };
+      const realPut = provider.documents.put.bind(provider.documents);
+      const puts = [];
+      provider.documents.put = async (ns, key, data, opts) => {
+        if (ns === CHATS_NAMESPACE && data.activeRunId === null) {
+          const messages = await repository.getMessages(CHAT_ID);
+          puts.push(
+            messages.messages.some(m => m.role === 'assistant')
+              ? 'idle-after-answer'
+              : 'idle-before-answer'
+          );
+        }
+        return realPut(ns, key, data, opts);
+      };
 
-      await materializeAssistantTurn({
+      const outcome = await settleAssistantTurn({
         repository: spy,
         chatId: CHAT_ID,
         runId: RUN_ID,
@@ -628,7 +632,9 @@ describe('chatMaterializer: the order the two writes become visible', () => {
         clientConnected: false
       });
 
-      assert.deepEqual(seen, ['append', 'release-after-answer']);
+      assert.deepEqual(seen, ['append'], 'released with the answer, no second lock');
+      assert.deepEqual(puts, ['idle-after-answer']);
+      assert.equal(outcome.released, true);
 
       // And the settled document agrees with the transcript it points at.
       const chat = await repository.getChat(CHAT_ID);
@@ -650,6 +656,139 @@ describe('chatMaterializer: the order the two writes become visible', () => {
       assert.equal(message, null);
       const chat = await repository.getChat(CHAT_ID);
       assert.equal(chat.activeRunId, null);
+    });
+  });
+});
+
+describe('chatMaterializer: one chat lock per half of a turn', () => {
+  /** Count named locks and document puts on the provider while `fn` runs. */
+  async function counting(provider, fn) {
+    const counts = { locks: [], puts: [] };
+    const realLock = provider.locks.withLock.bind(provider.locks);
+    const realPut = provider.documents.put.bind(provider.documents);
+    provider.locks.withLock = (name, ...rest) => {
+      counts.locks.push(name.split(':')[0]);
+      return realLock(name, ...rest);
+    };
+    provider.documents.put = (ns, ...rest) => {
+      counts.puts.push(ns);
+      return realPut(ns, ...rest);
+    };
+    try {
+      await fn();
+    } finally {
+      provider.locks.withLock = realLock;
+      provider.documents.put = realPut;
+    }
+    return counts;
+  }
+
+  it('takes the chat lock twice and writes the chat twice for a follow-up turn', async () => {
+    await withRepository(async ({ repository, provider }) => {
+      await userTurn(repository);
+      await assistantTurn(repository);
+      const next = { runId: 'chat-run-2' };
+      const counts = await counting(provider, async () => {
+        await userTurn(repository, { ...next, content: 'And the backup key?' });
+        await materializeAssistantTurn({
+          repository,
+          chatId: CHAT_ID,
+          runId: next.runId,
+          summary: { status: 'success', content: 'Same script.' },
+          clientConnected: true
+        });
+      });
+      assert.deepEqual(counts.locks, ['chat', 'chat']);
+      assert.deepEqual(
+        counts.puts.filter(ns => ns === CHATS_NAMESPACE).length,
+        2,
+        'one chat write per half'
+      );
+      assert.equal(counts.puts.filter(ns => ns !== CHATS_NAMESPACE).length, 2, 'two transcripts');
+      const chat = await repository.getChat(CHAT_ID);
+      assert.equal(chat.activeRunId, null);
+      assert.equal(chat.status, 'active');
+      assert.equal(chat.messageCount, 4);
+      assert.deepEqual(chat.runIds, [RUN_ID, next.runId]);
+    });
+  });
+
+  it('marks the chat running even when the question cannot be appended', async () => {
+    await withRepository(async ({ repository }) => {
+      await userTurn(repository);
+      await assistantTurn(repository);
+      const failing = Object.create(repository);
+      failing.appendMessage = async () => {
+        throw new Error('disk full');
+      };
+      assert.equal(await userTurn(failing, { runId: 'chat-run-2' }), null);
+      const chat = await repository.getChat(CHAT_ID);
+      assert.equal(chat.activeRunId, 'chat-run-2');
+      assert.equal(chat.status, 'running');
+    });
+  });
+
+  it('releases the run when the answer cannot be appended', async () => {
+    await withRepository(async ({ repository }) => {
+      await userTurn(repository);
+      const failing = Object.create(repository);
+      failing.appendMessage = async () => {
+        throw new Error('disk full');
+      };
+      const outcome = await settleAssistantTurn({
+        repository: failing,
+        chatId: CHAT_ID,
+        runId: RUN_ID,
+        summary: { status: 'success', content: 'lost' },
+        clientConnected: true
+      });
+      assert.equal(outcome.released, true);
+      const chat = await repository.getChat(CHAT_ID);
+      assert.equal(chat.activeRunId, null);
+      assert.equal(chat.status, 'active');
+    });
+  });
+
+  it('releases the run when the answer is skipped because the run was answered', async () => {
+    await withRepository(async ({ repository }) => {
+      await userTurn(repository);
+      await assistantTurn(repository);
+      // Somebody claims the chat for the same run again, then a second writer
+      // settles it with onlyIfUnanswered: nothing is appended, the run is
+      // still released.
+      await repository.updateChat(CHAT_ID, { activeRunId: RUN_ID, status: 'running' });
+      const outcome = await settleAssistantTurn({
+        repository,
+        chatId: CHAT_ID,
+        runId: RUN_ID,
+        summary: { status: 'success', content: 'again' },
+        clientConnected: true,
+        onlyIfUnanswered: true
+      });
+      assert.equal(outcome.skipped, true);
+      assert.equal(outcome.released, true);
+      const chat = await repository.getChat(CHAT_ID);
+      assert.equal(chat.activeRunId, null);
+      assert.equal((await repository.getMessages(CHAT_ID)).messages.length, 2);
+    });
+  });
+
+  it('stores a superseded answer without releasing the run that replaced it', async () => {
+    await withRepository(async ({ repository }) => {
+      await userTurn(repository);
+      await userTurn(repository, { runId: 'chat-run-2', content: 'Never mind, other question' });
+      const outcome = await settleAssistantTurn({
+        repository,
+        chatId: CHAT_ID,
+        runId: RUN_ID,
+        summary: { status: 'success', content: 'late answer' },
+        clientConnected: true
+      });
+      assert.ok(outcome.message);
+      assert.equal(outcome.released, false);
+      const chat = await repository.getChat(CHAT_ID);
+      assert.equal(chat.activeRunId, 'chat-run-2');
+      assert.equal(chat.status, 'running');
     });
   });
 });

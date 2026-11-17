@@ -1618,7 +1618,18 @@ function recordingChats(projectId) {
       writes.push({ chatId, patch: merged, markersBefore: markers.map(marker => marker.chatId) });
       return { chat: { id: chatId, ...merged }, conflict: false };
     },
-    appendMessage: async (chatId, message) => ({ message: { id: `m-${chatId}`, ...message } })
+    // A turn without projects hands its chat patch to the append.
+    appendMessage: async (chatId, message, { chatPatch } = {}) => {
+      if (chatPatch) {
+        const markers = await repo.listChatMarkers(projectId);
+        writes.push({
+          chatId,
+          patch: chatPatch,
+          markersBefore: markers.map(marker => marker.chatId)
+        });
+      }
+      return { message: { id: `m-${chatId}`, ...message } };
+    }
   };
   const repository = new Proxy(known, {
     get: (target, key) => (key in target ? target[key] : async () => null)

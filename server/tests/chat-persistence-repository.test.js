@@ -1248,3 +1248,84 @@ describe('ChatRepository: conditional writes', () => {
     });
   });
 });
+
+describe('ChatRepository: a chat patch and a release written with the append', () => {
+  const user = runId => ({
+    role: 'user',
+    content: 'question',
+    ts: new Date().toISOString(),
+    runId
+  });
+  const answer = runId => ({
+    role: 'assistant',
+    content: 'answer',
+    ts: new Date().toISOString(),
+    runId
+  });
+  const idle = { activeRunId: null, status: 'active', hasUnseenActivity: true };
+
+  it('applies the chat patch in the append’s chat write, the derived title included', async () => {
+    await withRepository(async ({ repository }) => {
+      await seedChat(repository);
+      const appended = await repository.appendMessage(CHAT_ID, user('run-1'), {
+        chatPatch: { activeRunId: 'run-1', status: 'running', title: 'From the turn' }
+      });
+      assert.equal(appended.chat.activeRunId, 'run-1');
+      const chat = await repository.getChat(CHAT_ID);
+      assert.equal(chat.status, 'running');
+      assert.equal(chat.messageCount, 1);
+      assert.deepEqual(chat.runIds, ['run-1']);
+    });
+  });
+
+  it('writes nothing, the chat patch included, on a project conflict', async () => {
+    await withRepository(async ({ repository }) => {
+      await seedChat(repository);
+      await repository.updateChat(CHAT_ID, { projectId: 'prj_a' });
+      const before = await repository.getChat(CHAT_ID);
+      const appended = await repository.appendMessage(CHAT_ID, user('run-1'), {
+        expectedProjectId: null,
+        chatPatch: { activeRunId: 'run-1', status: 'running' }
+      });
+      assert.equal(appended.conflict, true);
+      assert.equal(appended.chat, undefined);
+      assert.deepEqual(await repository.getChat(CHAT_ID), before);
+    });
+  });
+
+  it('releases only while the run is the active one', async () => {
+    await withRepository(async ({ repository }) => {
+      await seedChat(repository);
+      await repository.updateChat(CHAT_ID, { activeRunId: 'run-2', status: 'running' });
+      const superseded = await repository.appendMessage(CHAT_ID, answer('run-1'), {
+        release: { runId: 'run-1', patch: idle }
+      });
+      assert.equal(superseded.released, false);
+      assert.equal((await repository.getChat(CHAT_ID)).activeRunId, 'run-2');
+
+      const current = await repository.appendMessage(CHAT_ID, answer('run-2'), {
+        release: { runId: 'run-2', patch: idle }
+      });
+      assert.equal(current.released, true);
+      const chat = await repository.getChat(CHAT_ID);
+      assert.equal(chat.activeRunId, null);
+      assert.equal(chat.hasUnseenActivity, true);
+      assert.equal(chat.messageCount, 2);
+    });
+  });
+
+  it('releases nothing when the append is skipped', async () => {
+    await withRepository(async ({ repository }) => {
+      await seedChat(repository);
+      await repository.updateChat(CHAT_ID, { activeRunId: 'run-1', status: 'running' });
+      await repository.appendMessage(CHAT_ID, answer('run-1'));
+      const skipped = await repository.appendMessage(CHAT_ID, answer('run-1'), {
+        unlessAnswered: true,
+        release: { runId: 'run-1', patch: idle }
+      });
+      assert.equal(skipped.skipped, true);
+      assert.equal(skipped.released, undefined);
+      assert.equal((await repository.getChat(CHAT_ID)).activeRunId, 'run-1');
+    });
+  });
+});

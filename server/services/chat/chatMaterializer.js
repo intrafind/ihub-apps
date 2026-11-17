@@ -428,7 +428,10 @@ export async function settleUserTurn({
       // two disagreed on where a repeated id lands in the list.
     };
     let stored = null;
-    if (projects && typeof projects === 'object') {
+    // Without projects the turn's patch rides along with the question: one
+    // chat lock and one chat write instead of two of each.
+    const coalesced = !(projects && typeof projects === 'object');
+    if (!coalesced) {
       const applied = await repository.updateChatProjects(chatId, projects, turnPatch);
       if (applied?.conflict) {
         logRefusal(chatId, runId, applied.chat);
@@ -447,28 +450,38 @@ export async function settleUserTurn({
           private: projects.privateContainer === true
         });
       }
-    } else {
-      stored = await repository.updateChat(chatId, turnPatch);
     }
     // A resume after a connect (#3752) claims the chat for its run but stores
-    // no user message: nobody wrote one.
-    if (silent) return { message: null, refusal: null };
-    const appended = await repository.appendMessage(
-      chatId,
-      {
-        ...(message && typeof message === 'object' ? message : {}),
-        role: 'user',
-        content: text,
-        ts: new Date().toISOString(),
-        runId,
-        ...(clientMessageId ? { clientMessageId: String(clientMessageId) } : {}),
-        ...(descriptors.length > 0 ? { attachments: descriptors } : {})
-      },
-      {
+    // no user message: nobody wrote one. Without projects nothing above wrote
+    // the turn's patch, so the claim is that patch on its own.
+    if (silent) {
+      if (coalesced) await repository.updateChat(chatId, turnPatch);
+      return { message: null, refusal: null };
+    }
+    const userMessage = {
+      ...(message && typeof message === 'object' ? message : {}),
+      role: 'user',
+      content: text,
+      ts: new Date().toISOString(),
+      runId,
+      ...(clientMessageId ? { clientMessageId: String(clientMessageId) } : {}),
+      ...(descriptors.length > 0 ? { attachments: descriptors } : {})
+    };
+    let appended;
+    try {
+      appended = await repository.appendMessage(chatId, userMessage, {
         ...(replaceFromMessageId ? { replaceFromMessageId } : {}),
-        ...(preparedProjectId !== undefined ? { expectedProjectId: preparedProjectId } : {})
-      }
-    );
+        ...(preparedProjectId !== undefined ? { expectedProjectId: preparedProjectId } : {}),
+        ...(coalesced ? { chatPatch: turnPatch } : {})
+      });
+    } catch (appendError) {
+      // The run goes ahead without its question stored; the chat still says
+      // it is running, as it did when the patch was written first, so the
+      // answer's release finds the run it has to release.
+      if (coalesced) await repository.updateChat(chatId, turnPatch).catch(() => {});
+      throw appendError;
+    }
+    if (coalesced) stored = appended?.chat ?? null;
     if (appended?.conflict) {
       // The container changed between this turn's patch and its question (a
       // racing first turn claimed it): nothing is appended, and the chat is
@@ -713,6 +726,13 @@ export async function settleAssistantTurn({
         ? insertSupportMarkers(content, summary.sources.supports)
         : content;
 
+    const releasePatch = {
+      activeRunId: null,
+      status: status === 'error' ? 'error' : 'active',
+      // Nobody was watching when the answer landed, so the history list marks
+      // the chat until it is opened.
+      hasUnseenActivity: !clientConnected
+    };
     let appended = null;
     if (!pausedWithoutAnswer) {
       try {
@@ -743,9 +763,15 @@ export async function settleAssistantTurn({
           },
           // The end of the transcript for an ordinary turn, and the position
           // right after this run's own question for a superseded one.
-          supersedeMessageId
-            ? { supersedeMessageId }
-            : { insertAfterRunId: runId, unlessAnswered: onlyIfUnanswered }
+          // The release rides along: same lock, same chat write, written
+          // after the transcript, applied only while this run is still the
+          // chat's active one.
+          {
+            ...(supersedeMessageId
+              ? { supersedeMessageId }
+              : { insertAfterRunId: runId, unlessAnswered: onlyIfUnanswered }),
+            release: { runId, patch: releasePatch }
+          }
         );
         // The chat is gone: whatever evidence a racing write left goes too.
         if (appended === null && typeof repository.evidenceStore === 'function') {
@@ -770,13 +796,12 @@ export async function settleAssistantTurn({
       }
     }
 
-    const { chat, released } = await repository.releaseRun(chatId, runId, {
-      activeRunId: null,
-      status: status === 'error' ? 'error' : 'active',
-      // Nobody was watching when the answer landed, so the history list marks
-      // the chat until it is opened.
-      hasUnseenActivity: !clientConnected
-    });
+    // Released with the answer when it was written; on its own otherwise —
+    // a paused turn, a skipped or failed append — so the chat never stays
+    // claimed by a run that has ended.
+    const { chat, released } = appended?.chat
+      ? { chat: appended.chat, released: appended.released === true }
+      : await repository.releaseRun(chatId, runId, releasePatch);
     outcome.released = released === true;
     // The evidence record, off the answer path: after the answer is stored and
     // the run released, never awaited (#3687).

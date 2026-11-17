@@ -1362,6 +1362,12 @@ export class ChatRepository {
     temporary = false
   } = {}) {
     if (!this._usable(chatId, 'ensureChat') || !ownerId) return null;
+    // Nearly every turn finds its chat: answer that from a plain read, without
+    // the lock. The chat may change or go right after either way — the lock
+    // only ever covered the read — and a turn whose chat was deleted meanwhile
+    // gets null from `appendMessage`. Only a create needs the lock.
+    const found = await this._readChat(chatId);
+    if (found) return found;
     return this._withChatLock(chatId, async () => {
       const { chat: existing, etag } = await this._loadChat(chatId);
       if (existing) return existing;
@@ -2024,12 +2030,22 @@ export class ChatRepository {
    *   checked under the chat lock: a question is stored only in the container
    *   its turn was prepared for, never in one a racing turn claimed since.
    *   Omitted, the container is not checked.
-   * @returns {Promise<{message: Object|null, messages: Object[], skipped?: true,
-   *   conflict?: true}|null>}
+   * @param {Object|null} [options.chatPatch=null] - Further chat fields to set
+   *   in the same chat write as the append ({@link ChatRepository#updateChat}
+   *   in one lock instead of two). Applied only when the message is written.
+   * @param {{runId: string, patch: Object}|null} [options.release=null] - Apply
+   *   `patch` in the same chat write as the append, but only while `runId` is
+   *   the chat's active run ({@link ChatRepository#releaseRun} in the same
+   *   lock). Nothing is released when the message is not written; the caller
+   *   releases separately then.
+   * @returns {Promise<{message: Object|null, messages: Object[], chat?: Object,
+   *   released?: boolean, skipped?: true, conflict?: true}|null>}
    *   Null when the chat does not exist or cannot be stored; `skipped` when
    *   `unlessAnswered` found the run answered (`message` is that answer), or
    *   `supersedeMessageId` is gone (`message` is the run's answer, if any);
    *   `conflict` when the chat is not in `expectedProjectId` (nothing written).
+   *   When the message was written, `chat` is the stored chat and `released`
+   *   whether `release.patch` was applied.
    * @throws {StorageError} Code `UNKNOWN_MESSAGE` when `replaceFromMessageId`
    *   is not in the stored history.
    */
@@ -2041,13 +2057,15 @@ export class ChatRepository {
       insertAfterRunId = null,
       unlessAnswered = false,
       supersedeMessageId = null,
-      expectedProjectId
+      expectedProjectId,
+      chatPatch = null,
+      release = null
     } = {}
   ) {
     if (!this._usable(chatId, 'appendMessage')) return null;
     return this._withChatLock(chatId, async () => {
-      const { chat, etag: chatEtag } = await this._loadChat(chatId);
-      if (!chat) {
+      const { chat: storedChat, etag: chatEtag } = await this._loadChat(chatId);
+      if (!storedChat) {
         this.logger.warn('Cannot append to a chat that was never created', {
           component: COMPONENT,
           chatId
@@ -2055,9 +2073,15 @@ export class ChatRepository {
         return null;
       }
 
+      // Checked against the chat as stored, before `chatPatch`.
+      const released = Boolean(release) && storedChat.activeRunId === release.runId;
+      // What the turn's own patch sets is in place before the append's fields
+      // are derived, as it was when the patch was a write of its own.
+      const chat = chatPatch ? applyChatPatch(storedChat, chatPatch) : storedChat;
+
       const { stored, etag: messagesEtag } = await this._loadMessages(chatId);
       let messages = stored.messages;
-      if (chatProjectConflict(chat, { expectedContainer: expectedProjectId })) {
+      if (chatProjectConflict(storedChat, { expectedContainer: expectedProjectId })) {
         return { message: null, messages, conflict: true };
       }
       if (unlessAnswered && message?.runId) {
@@ -2139,7 +2163,10 @@ export class ChatRepository {
         const derived = deriveChatTitle(entry.content);
         if (derived) patch.title = derived;
       }
-      await this._writeChat(applyChatPatch(chat, patch), chatEtag);
+      const savedChat = await this._writeChat(
+        applyChatPatch(chat, released ? { ...patch, ...release.patch } : patch),
+        chatEtag
+      );
 
       // After the transcript is written, never before: an artifact that is
       // gone while the descriptor is still stored renders as a broken picture
@@ -2173,7 +2200,7 @@ export class ChatRepository {
       }
 
       this._deleteEvidenceOf(chatId, discarded);
-      return { message: entry, messages };
+      return { message: entry, messages, chat: savedChat, released };
     });
   }
 
