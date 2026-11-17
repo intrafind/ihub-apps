@@ -134,6 +134,45 @@ test('the workers get the heap flag after the primary’s own flags', () => {
     '--max-old-space-size=620'
   ]);
   assert.deepEqual(workerExecArgv({ heapMb: null }, ['--x']), ['--x']);
+  assert.deepEqual(workerExecArgv({ heapMb: 1038, semiSpaceMb: 64 }, []), [
+    '--max-old-space-size=1038',
+    '--max-semi-space-size=64'
+  ]);
+});
+
+test('the young generation follows the memory share of a worker', () => {
+  const sized = (limitMb, workers, flags = {}) =>
+    decideWorkerSizing({
+      explicitWorkers: workers,
+      memoryLimitBytes: limitMb * MiB,
+      cpus: 16,
+      heapFlagSet: false,
+      ...flags
+    });
+  // The measured lab: 8 GB, 6 workers → ~1.3 GB each → 64 MB (128 MB was killed there).
+  assert.equal(sized(8192, 6).semiSpaceMb, 64);
+  assert.equal(sized(8192, 6).heapMb, 1038);
+  assert.equal(sized(4096, 4).semiSpaceMb, 32);
+  assert.equal(sized(2048, 4).semiSpaceMb, null, 'a small share keeps the Node default');
+  assert.equal(sized(8192, 1).semiSpaceMb, null, 'a single process keeps the Node default');
+  assert.equal(sized(8192, 6, { semiSpaceFlagSet: true }).semiSpaceMb, null, 'an admin flag wins');
+  assert.equal(
+    sized(8192, 6, { heapFlagSet: true }).semiSpaceMb,
+    null,
+    'an admin heap flag leaves both sizes to the admin'
+  );
+});
+
+test('a semi-space flag in NODE_OPTIONS is respected', () => {
+  const sizing = workerSizingForProcess({
+    explicitWorkers: 6,
+    env: { NODE_OPTIONS: '--max-semi-space-size=16' },
+    execArgv: [],
+    memoryLimit: () => 8192 * MiB,
+    availableParallelism: () => 8
+  });
+  assert.equal(sizing.heapMb, 1038);
+  assert.equal(sizing.semiSpaceMb, null);
 });
 
 test('the decision is logged with its inputs', () => {
@@ -147,8 +186,9 @@ test('the decision is logged with its inputs', () => {
   );
   assert.equal(
     line.message,
-    'Worker sizing: 2 worker(s) (memory limit), heap per worker 620 MB (memory limit)'
+    'Worker sizing: 2 worker(s) (memory limit), heap per worker 620 MB (memory limit), young generation 32 MB semi-space'
   );
+  assert.equal(line.semiSpaceMb, 32);
   assert.equal(line.memoryLimitMb, 2000);
   assert.equal(line.cpus, 4);
 });

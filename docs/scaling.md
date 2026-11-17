@@ -205,20 +205,29 @@ At startup the server reads the container's memory limit from the cgroup
   worker as `--max-old-space-size`. V8 then collects garbage before the
   container reaches its limit instead of being killed by it. A single process
   keeps Node's own default, which already follows the container limit.
+- **Young generation per worker**, unless `--max-semi-space-size` (or
+  `--max-old-space-size`) is given: 64 MB semi-space from about 1.2 GB per
+  worker, 32 MB from 800 MB, otherwise Node's default, passed as
+  `--max-semi-space-size`. Chat turns create many short-lived objects; a larger
+  young generation collects them before they reach the old generation, whose
+  collections pause a worker for up to a second under load. The young
+  generation takes about three times the semi-space, out of the 300 MB outside
+  the heap, so larger values need more memory per worker than the sizing plans.
 
 An explicit setting always wins. The decision is logged once at startup:
 
 ```
-Worker sizing: 2 worker(s) (memory limit), heap per worker 620 MB (memory limit) { memoryLimitMb: 2000, cpus: 4 }
+Worker sizing: 2 worker(s) (memory limit), heap per worker 620 MB (memory limit), young generation 32 MB semi-space { memoryLimitMb: 2000, cpus: 4 }
 ```
 
-| Container memory limit | CPUs | Workers | Heap per worker |
-| ---------------------- | ---- | ------- | --------------- |
-| none                   | any  | 4       | Node default    |
-| 1 GiB                  | 4    | 1       | Node default    |
-| 2000 MiB               | 4    | 2       | 620 MB          |
-| 4 GiB                  | 4    | 4       | 684 MB          |
-| 4 GiB                  | 2    | 2       | 1668 MB         |
+| Container memory limit | CPUs | Workers | Heap per worker | Semi-space   |
+| ---------------------- | ---- | ------- | --------------- | ------------ |
+| none                   | any  | 4       | Node default    | Node default |
+| 1 GiB                  | 4    | 1       | Node default    | Node default |
+| 2000 MiB               | 4    | 2       | 620 MB          | 32 MB        |
+| 4 GiB                  | 4    | 4       | 684 MB          | 32 MB        |
+| 4 GiB                  | 2    | 2       | 1668 MB         | 64 MB        |
+| 8 GiB (`WORKERS=6`)    | 7    | 6       | 1038 MB         | 64 MB        |
 
 ### Picking a value
 
