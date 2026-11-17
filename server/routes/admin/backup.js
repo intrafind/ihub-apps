@@ -270,6 +270,9 @@ export async function exportConfig(req, res, next) {
 
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    // The archive holds the encryption key, the JWT signing keys and password
+    // hashes: no browser or proxy cache may keep a copy.
+    res.setHeader('Cache-Control', 'no-store');
 
     const archive = new ZipArchive({
       zlib: { level: 9 } // Maximum compression
@@ -303,8 +306,8 @@ export async function exportConfig(req, res, next) {
           ...path.relative(contentsPath, filePath).split(path.sep)
         );
 
-        // Debug logging
-        logger.info('Adding to archive', { component: 'AdminBackup', relativePath, filePath });
+        // One line per file (user ids in the paths): debug only.
+        logger.debug('Adding to archive', { component: 'AdminBackup', relativePath, filePath });
 
         // Add file to archive
         archive.file(filePath, { name: relativePath });

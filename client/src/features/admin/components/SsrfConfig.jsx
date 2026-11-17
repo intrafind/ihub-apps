@@ -1,13 +1,14 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import AdminLoadGate from './AdminLoadGate';
 import { useAdminConfigLoad } from '../hooks/useAdminConfigLoad';
 import { useDirtyReport } from '../hooks/useDirtyReport';
+import { SSL_CONFIG_SAVED_EVENT } from '../utils/sslConfigEvents';
 
 /**
  * @param {Object} props
@@ -19,6 +20,10 @@ function SsrfConfig({ onDirtyChange }) {
   // The allowlist as last loaded or saved; null until it loaded.
   const [savedHosts, setSavedHosts] = useState(null);
   useDirtyReport(savedHosts, allowedHosts, onDirtyChange);
+  // Hosts on the TLS whitelist (ssl.domainWhitelist): the SSRF guard trusts
+  // them too. Shown read-only; they are edited on the SSL card. Null until
+  // loaded, or when they could not be loaded.
+  const [tlsTrustedHosts, setTlsTrustedHosts] = useState(null);
   const [newHost, setNewHost] = useState('');
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
@@ -38,6 +43,26 @@ function SsrfConfig({ onDirtyChange }) {
     }
   });
   const ready = load.status === 'ready';
+
+  // The TLS whitelist is informational only, so it is not part of the load
+  // gate: without it the card still shows (and saves) its own list.
+  useEffect(() => {
+    const fetchTlsWhitelist = async () => {
+      try {
+        const response = await makeAdminApiCall('/admin/ssl/config', { method: 'GET' });
+        setTlsTrustedHosts(
+          Array.isArray(response.data?.domainWhitelist) ? response.data.domainWhitelist : []
+        );
+      } catch {
+        setTlsTrustedHosts(null);
+      }
+    };
+    void fetchTlsWhitelist();
+    // Both cards stay mounted on the Security page: reload the whitelist when
+    // the SSL card saves it (only saved changes are announced).
+    window.addEventListener(SSL_CONFIG_SAVED_EVENT, fetchTlsWhitelist);
+    return () => window.removeEventListener(SSL_CONFIG_SAVED_EVENT, fetchTlsWhitelist);
+  }, []);
 
   const handleAddHost = () => {
     const trimmed = newHost.trim();
@@ -225,11 +250,40 @@ function SsrfConfig({ onDirtyChange }) {
       ) : (
         <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-md text-center mb-6">
           <p className="text-sm text-gray-600 dark:text-gray-400">
+            {t('admin.system.ssrf.noHosts', 'No hosts explicitly added to the SSRF allowlist.')}
+          </p>
+        </div>
+      )}
+
+      {/* Hosts trusted through the TLS whitelist (read-only) */}
+      {tlsTrustedHosts !== null && (
+        <div className="mb-6" data-testid="ssrf-tls-trusted-hosts">
+          <h3 className="text-md font-semibold text-gray-900 dark:text-gray-100 mb-1">
+            {t('admin.system.ssrf.tlsTrustedTitle', 'Also trusted: SSL domain whitelist')}
+          </h3>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
             {t(
-              'admin.system.ssrf.noHosts',
-              'No hosts allowed. Outbound calls to private/internal IPs are blocked.'
+              'admin.system.ssrf.tlsTrustedDesc',
+              'Hosts on the SSL domain whitelist are trusted as well by web sources, website crawls, the page reader and the watermark detector (not by tools and MCP servers), whether or not "Ignore Invalid SSL Certificates" is on. They are edited on the SSL card.'
             )}
           </p>
+          {tlsTrustedHosts.length > 0 ? (
+            <ul className="space-y-2">
+              {tlsTrustedHosts.map(host => (
+                <li
+                  key={host}
+                  className="flex items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-md"
+                >
+                  <Icon name="lock" className="w-4 h-4 text-gray-500 dark:text-gray-400 mr-2" />
+                  <span className="text-sm text-gray-900 dark:text-gray-100 font-mono">{host}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-gray-600 dark:text-gray-400 italic">
+              {t('admin.system.ssrf.tlsTrustedNone', 'The SSL domain whitelist is empty.')}
+            </p>
+          )}
         </div>
       )}
 

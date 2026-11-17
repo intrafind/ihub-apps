@@ -1087,3 +1087,30 @@ base language (`en`, `de`).
   input variables the run dialog sends no message, so the Variables tab marks `{{input}}` as
   "chat runs only".
 - A failed run names the step by its name ("Step "Summarise" failed: …") instead of an internal ID.
+
+## Secrets Stay Out of Caches and Logs: OAuth Client Secrets, Backups and Environment Overrides
+
+- **No caching of secrets:** the answers that carry a new OAuth client secret (creating a client,
+  rotating its secret), a generated static API key, and the configuration backup download (which holds the encryption key, the
+  JWT signing keys and password hashes) are sent with `Cache-Control: no-store`, so no browser or
+  proxy cache keeps a copy.
+- **Backup export log:** the "Adding to archive" line, written once per file with user ids in the
+  paths, is now a `debug` message; the export still logs its start, the file count and its end.
+- **Environment overrides:** the startup log line for each `IHUB_PLATFORM__…` / `IHUB_UI__…`
+  variable still names the setting it changes, but masks the value when the setting looks like a
+  credential (`…__JWT_SECRET`, `…__CLIENT_SECRET`, `…__SUBSCRIPTION_KEY`, …) and masks such keys
+  inside JSON values. It also masks the user and password in a URL (`IHUB_PLATFORM__PROXY__HTTPS=
+  http://user:pass@proxy:3128`, also inside a JSON value), secret query parameters such as
+  `?token=`, and every value under `headers` (for example an OTLP exporter's vendor API key header).
+  Earlier log files may still contain those values; rotate or purge them.
+
+## OpenTelemetry Export Honors the SSL Whitelist and the Proxy
+
+An OTLP collector with a certificate from a private CA failed with "unable to verify the first
+certificate", even when its host was listed in **Admin → Security → SSL / TLS → Domain Whitelist**
+with **Ignore Invalid SSL Certificates** on, and the export ignored the configured outbound proxy.
+Trace and metric export now use the same connection settings as every other outbound call; hosts
+that are not whitelisted are still verified. A CA, client certificate and key from the
+`OTEL_EXPORTER_OTLP_*CERTIFICATE` / `*CLIENT_KEY` variables still apply, so collectors that require
+mutual TLS keep working. Changing these settings takes effect for the exporter
+after a restart.

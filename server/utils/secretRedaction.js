@@ -20,48 +20,14 @@
  */
 import { redactUrlSecrets } from './urlSecrets.js';
 
-/** What a redacted value is replaced with. */
-export const REDACTED = '[redacted]';
+// The name rules live in a module without dependencies, so code that runs
+// while the config cache loads (configOverrides.js) can use them too.
+import { REDACTED, isSecretName } from './secretNames.js';
 
-/** Header names that always carry credentials. */
-const SECRET_HEADERS = new Set([
-  'authorization',
-  'proxy-authorization',
-  'cookie',
-  'set-cookie',
-  'x-api-key',
-  'api-key',
-  'apikey',
-  'x-auth-token',
-  'x-access-token',
-  'x-csrf-token',
-  'x-xsrf-token'
-]);
-
-/**
- * Key names that look like a credential. Anchored on word parts so that
- * `author`, `tokens_used` or `keyword` are not caught, while `apiKey`,
- * `api_key`, `client_secret`, `accessToken`, `password` and `passwd` are.
- */
-const SECRET_KEY_PATTERN =
-  /(^|[_\-.])(pass(word|wd)?|secret|client[_-]?secret|api[_-]?key|apikey|access[_-]?token|refresh[_-]?token|id[_-]?token|auth[_-]?token|token|bearer|authorization|cookie|session[_-]?id|private[_-]?key|credentials?|signature)$/i;
+export { REDACTED, isSecretName };
 
 /** Shortest value treated as a secret by value (shorter ones would redact ordinary words). */
 const MIN_SECRET_LENGTH = 6;
-
-/**
- * Whether a key or header name names a credential.
- * @param {string} name
- * @returns {boolean}
- */
-export function isSecretName(name) {
-  if (typeof name !== 'string' || !name) return false;
-  const lower = name.toLowerCase();
-  if (SECRET_HEADERS.has(lower)) return true;
-  // camelCase → snake for the pattern (`accessToken` → `access_token`).
-  const snake = name.replace(/([a-z0-9])([A-Z])/g, '$1_$2');
-  return SECRET_KEY_PATTERN.test(snake);
-}
 
 /**
  * The secret candidates in a header value: the whole value and, for

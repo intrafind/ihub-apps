@@ -12,6 +12,15 @@ import { makeAdminApiCall } from '../../../api/adminApi';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
 import SecretRevealDialog from '../../../shared/components/SecretRevealDialog';
+import {
+  clientGrantWarnings,
+  emptyResourceLists,
+  grantTypesChanged,
+  grantsAll,
+  isDelegatedClient,
+  isMachineClient,
+  validateClientGrants
+} from '../utils/oauthClientGrants';
 
 function AdminOAuthClientEditPage() {
   const { t } = useTranslation();
@@ -33,14 +42,17 @@ function AdminOAuthClientEditPage() {
   // Inline validation message per redirect-URI field (no native alert).
   const [uriErrors, setUriErrors] = useState({});
   const [initialData, setInitialData] = useState(null);
+  // A personal API key acts as its owner, whatever its grant types, so its
+  // lists narrow the owner's permissions. Kept out of formData: it is not
+  // editable and is not sent on save.
+  const [personal, setPersonal] = useState(false);
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState(() => ({
     name: '',
     description: '',
-    // Default to ["*"] (allow all) for new clients to make it clear to admins
-    allowedApps: isNew ? ['*'] : [],
-    allowedModels: isNew ? ['*'] : [],
-    allowedPrompts: isNew ? ['*'] : [],
+    // New clients start with nothing granted: for a client-credentials client
+    // the lists are the grant, so "All" must be an explicit choice.
+    ...emptyResourceLists(),
     tokenExpirationMinutes: 60,
     active: true,
     clientType: 'confidential',
@@ -49,7 +61,7 @@ function AdminOAuthClientEditPage() {
     postLogoutRedirectUris: [],
     consentRequired: true,
     trusted: false
-  });
+  }));
 
   const { blocker, markSaved } = useUnsavedChanges(initialData, formData);
 
@@ -61,9 +73,7 @@ function AdminOAuthClientEditPage() {
       setInitialData({
         name: '',
         description: '',
-        allowedApps: ['*'],
-        allowedModels: ['*'],
-        allowedPrompts: ['*'],
+        ...emptyResourceLists(),
         tokenExpirationMinutes: 60,
         active: true,
         clientType: 'confidential',
@@ -109,23 +119,25 @@ function AdminOAuthClientEditPage() {
   const loadClient = async () => {
     try {
       const response = await makeAdminApiCall(`/admin/oauth/clients/${clientId}`);
-      const data = response.data;
+      // The server answers with the client record itself (no envelope).
+      const client = response.data || {};
 
       const loadedFormData = {
-        name: data.client.name || '',
-        description: data.client.description || '',
-        allowedApps: data.client.allowedApps || [],
-        allowedModels: data.client.allowedModels || [],
-        allowedPrompts: data.client.allowedPrompts || [],
-        tokenExpirationMinutes: data.client.tokenExpirationMinutes || 60,
-        active: data.client.active !== false,
-        clientType: data.client.clientType || 'confidential',
-        grantTypes: data.client.grantTypes || ['client_credentials'],
-        redirectUris: data.client.redirectUris || [],
-        postLogoutRedirectUris: data.client.postLogoutRedirectUris || [],
-        consentRequired: data.client.consentRequired !== false,
-        trusted: data.client.trusted || false
+        name: client.name || '',
+        description: client.description || '',
+        allowedApps: client.allowedApps || [],
+        allowedModels: client.allowedModels || [],
+        allowedPrompts: client.allowedPrompts || [],
+        tokenExpirationMinutes: client.tokenExpirationMinutes || 60,
+        active: client.active !== false,
+        clientType: client.clientType || 'confidential',
+        grantTypes: client.grantTypes || ['client_credentials'],
+        redirectUris: client.redirectUris || [],
+        postLogoutRedirectUris: client.postLogoutRedirectUris || [],
+        consentRequired: client.consentRequired !== false,
+        trusted: client.trusted || false
       };
+      setPersonal(client.personal === true);
       setFormData(loadedFormData);
       setInitialData(loadedFormData);
     } catch (error) {
@@ -140,8 +152,27 @@ function AdminOAuthClientEditPage() {
 
   const handleSubmit = async e => {
     e.preventDefault();
-    setSaving(true);
     setMessage('');
+
+    // The only problem validateClientGrants reports: a machine client granted nothing.
+    if (
+      validateClientGrants(formData, {
+        isNew,
+        initialLists: initialData,
+        personal
+      })
+    ) {
+      setMessage({
+        type: 'error',
+        text: t(
+          'admin.auth.oauth.machineClientNeedsGrant',
+          'A client-credentials client needs at least one app, model or prompt. Select what it may use, or choose "All (*)".'
+        )
+      });
+      return;
+    }
+
+    setSaving(true);
 
     try {
       if (isNew) {
@@ -153,9 +184,10 @@ function AdminOAuthClientEditPage() {
           body: formData
         });
 
-        const data = response.data;
-        setNewClientId(data.client.clientId);
-        setNewClientSecret(data.client.clientSecret);
+        // The created client, with its secret, is the response body itself.
+        const created = response.data || {};
+        setNewClientId(created.clientId);
+        setNewClientSecret(created.clientSecret);
         setShowSecretModal(true);
       } else {
         await makeAdminApiCall(`/admin/oauth/clients/${clientId}`, {
@@ -276,6 +308,124 @@ function AdminOAuthClientEditPage() {
     setNewClientSecret('');
     markSaved();
     navigate('/admin/oauth/clients');
+  };
+
+  const machineClient = isMachineClient(formData.grantTypes, { personal });
+  // A personal key's lists narrow its owner's permissions, like a delegated client's.
+  const delegatedClient = personal || isDelegatedClient(formData.grantTypes);
+  const grantWarnings = clientGrantWarnings(formData, { personal });
+  const grantTypesEdited =
+    !isNew &&
+    initialData !== null &&
+    grantTypesChanged(initialData.grantTypes, formData.grantTypes);
+
+  /**
+   * The text shown under an empty resource list. What "empty" means depends on
+   * the grant types: nothing for a machine client, no extra restriction for a
+   * user-delegated one, and both when the client has both grant types.
+   *
+   * @param {'apps'|'models'|'prompts'} kind - The resource list.
+   * @returns {string} The translated empty-state text.
+   */
+  const emptyListMessage = kind => {
+    if (machineClient && !delegatedClient) {
+      return {
+        apps: t(
+          'admin.auth.oauth.noAppsSelectedMachine',
+          'Nothing selected: this client can use no apps.'
+        ),
+        models: t(
+          'admin.auth.oauth.noModelsSelectedMachine',
+          'Nothing selected: this client can use no models.'
+        ),
+        prompts: t(
+          'admin.auth.oauth.noPromptsSelectedMachine',
+          'Nothing selected: this client can use no prompts.'
+        )
+      }[kind];
+    }
+    if (delegatedClient && !machineClient) {
+      return {
+        apps: t(
+          'admin.auth.oauth.noAppsSelectedDelegated',
+          'Nothing selected: no client-level restriction (users keep the apps their groups allow).'
+        ),
+        models: t(
+          'admin.auth.oauth.noModelsSelectedDelegated',
+          'Nothing selected: no client-level restriction (users keep the models their groups allow).'
+        ),
+        prompts: t(
+          'admin.auth.oauth.noPromptsSelectedDelegated',
+          'Nothing selected: no client-level restriction (users keep the prompts their groups allow).'
+        )
+      }[kind];
+    }
+    return {
+      apps: t(
+        'admin.auth.oauth.noAppsSelected',
+        'No apps selected — no client-level restriction (user keeps full group permissions; machine-to-machine tokens get no apps)'
+      ),
+      models: t(
+        'admin.auth.oauth.noModelsSelected',
+        'No models selected — no client-level restriction (user keeps full group permissions; machine-to-machine tokens get no models)'
+      ),
+      prompts: t(
+        'admin.auth.oauth.noPromptsSelected',
+        'No prompts selected — no client-level restriction (user keeps full group permissions; machine-to-machine tokens get no prompts)'
+      )
+    }[kind];
+  };
+
+  /**
+   * A warning shown under a list set to "All (*)". On a machine client it then
+   * reaches every resource of that kind; on a user-delegated client (or a
+   * personal key) it sets no client-level limit, so its users reach everything
+   * their groups allow. Both include resources added later.
+   *
+   * @param {string[]} list - The resource list.
+   * @returns {JSX.Element|null} The warning, or null when it does not apply.
+   */
+  const renderAllWarning = list =>
+    grantsAll(list) ? (
+      <p role="note" className="mt-2 flex items-start text-sm text-amber-800 dark:text-amber-200">
+        <Icon name="warning" size="sm" className="mr-2 mt-0.5 shrink-0" />
+        {machineClient
+          ? t(
+              'admin.auth.oauth.allGrantWarning',
+              'All (*) gives this client-credentials client every item of this kind, including items added later. Prefer listing only what it needs.'
+            )
+          : t(
+              'admin.auth.oauth.allGrantWarningDelegated',
+              'All (*) sets no client-level limit: users of this client reach every item of this kind their groups allow, including items added later. Prefer listing only what it needs.'
+            )}
+      </p>
+    ) : null;
+
+  /**
+   * A non-blocking warning about a machine client's lists (see
+   * `clientGrantWarnings`), shown under the list it is about.
+   *
+   * @param {string} key - The warning's i18n key.
+   * @returns {JSX.Element|null} The warning, or null when it is not raised.
+   */
+  const renderGrantWarning = key => {
+    if (!grantWarnings.includes(key)) return null;
+    const text = {
+      'admin.auth.oauth.machineClientHasNoGrant': t(
+        'admin.auth.oauth.machineClientHasNoGrant',
+        'This client-credentials client has no apps, models or prompts, so its tokens can do nothing. Select what it may use, or choose "All (*)".'
+      ),
+      'admin.auth.oauth.machineClientHasNoModels': t(
+        'admin.auth.oauth.machineClientHasNoModels',
+        'This client has apps but no models. Every app call needs a model the client may use, so these calls will fail. Select the models it may use, or choose "All (*)".'
+      )
+    }[key];
+    return (
+      <p role="note" className="mt-2 flex items-start text-sm text-amber-800 dark:text-amber-200">
+        <Icon name="warning" size="sm" className="mr-2 mt-0.5 shrink-0" />
+        {text}
+      </p>
+    );
   };
 
   if (loading) {
@@ -447,12 +597,38 @@ function AdminOAuthClientEditPage() {
                   <p className="font-medium mb-1">
                     {t('admin.auth.oauth.permissionsHintTitle', 'How Resource Restrictions Work')}
                   </p>
-                  <p>
-                    {t(
-                      'admin.auth.oauth.permissionsHint',
-                      'By default, "All (*)" is selected, meaning this OAuth client can access all resources the user has permission for. Selecting specific apps, models, or prompts narrows down access. For example, if a user has 5 apps but you only select 3 here, this OAuth client can only access those 3 apps - acting as a filter on top of the user\'s existing permissions.'
-                    )}
-                  </p>
+                  {machineClient && (
+                    <p>
+                      {t(
+                        'admin.auth.oauth.permissionsHintMachine',
+                        'Client credentials (machine-to-machine): there is no user behind the token, so these lists ARE the grant. The client can use exactly the apps, models and prompts listed here, and none of a kind whose list is empty. "All (*)" grants every one, including ones added later.'
+                      )}
+                    </p>
+                  )}
+                  {personal && (
+                    <p>
+                      {t(
+                        'admin.auth.oauth.permissionsHintPersonal',
+                        'Personal API key: the token acts as the user who owns the key. These lists narrow what that user\'s groups allow; an empty list adds no restriction. "All (*)" sets no limit, so the key reaches everything the owner\'s groups allow, including items added later.'
+                      )}
+                    </p>
+                  )}
+                  {delegatedClient && !personal && (
+                    <p className={machineClient ? 'mt-2' : undefined}>
+                      {t(
+                        'admin.auth.oauth.permissionsHintDelegated',
+                        'Authorization code (user login): the token acts as the signed-in user. These lists narrow what that user\'s groups allow; an empty list adds no restriction. "All (*)" sets no limit, so users reach everything their groups allow, including items added later.'
+                      )}
+                    </p>
+                  )}
+                  {!machineClient && !delegatedClient && (
+                    <p>
+                      {t(
+                        'admin.auth.oauth.permissionsHintNoGrant',
+                        "Select a grant type below. For client credentials these lists are the grant; for authorization code they narrow the signed-in user's permissions."
+                      )}
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
@@ -468,12 +644,11 @@ function AdminOAuthClientEditPage() {
                 selectedResources={formData.allowedApps}
                 onSelectionChange={handleAppsChange}
                 placeholder={t('admin.auth.oauth.searchApps', 'Search apps to add...')}
-                emptyMessage={t(
-                  'admin.auth.oauth.noAppsSelected',
-                  'No apps selected — no client-level restriction (user keeps full group permissions; machine-to-machine tokens get no apps)'
-                )}
+                emptyMessage={emptyListMessage('apps')}
                 allowWildcard={true}
               />
+              {renderAllWarning(formData.allowedApps)}
+              {renderGrantWarning('admin.auth.oauth.machineClientHasNoGrant')}
             </div>
 
             {/* Allowed Models */}
@@ -487,12 +662,11 @@ function AdminOAuthClientEditPage() {
                 selectedResources={formData.allowedModels}
                 onSelectionChange={handleModelsChange}
                 placeholder={t('admin.auth.oauth.searchModels', 'Search models to add...')}
-                emptyMessage={t(
-                  'admin.auth.oauth.noModelsSelected',
-                  'No models selected — no client-level restriction (user keeps full group permissions; machine-to-machine tokens get no models)'
-                )}
+                emptyMessage={emptyListMessage('models')}
                 allowWildcard={true}
               />
+              {renderAllWarning(formData.allowedModels)}
+              {renderGrantWarning('admin.auth.oauth.machineClientHasNoModels')}
             </div>
 
             {/* Allowed Prompts */}
@@ -506,12 +680,10 @@ function AdminOAuthClientEditPage() {
                 selectedResources={formData.allowedPrompts}
                 onSelectionChange={handlePromptsChange}
                 placeholder={t('admin.auth.oauth.searchPrompts', 'Search prompts to add...')}
-                emptyMessage={t(
-                  'admin.auth.oauth.noPromptsSelected',
-                  'No prompts selected — no client-level restriction (user keeps full group permissions; machine-to-machine tokens get no prompts)'
-                )}
+                emptyMessage={emptyListMessage('prompts')}
                 allowWildcard={true}
               />
+              {renderAllWarning(formData.allowedPrompts)}
             </div>
 
             {/* Client Type & Grant Types */}
@@ -553,6 +725,17 @@ function AdminOAuthClientEditPage() {
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     {t('admin.auth.oauth.grantTypes', 'Grant Types')}
                   </label>
+                  {grantTypesEdited && (
+                    <div
+                      role="alert"
+                      className="mb-3 rounded-md border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 p-3 text-sm text-amber-900 dark:text-amber-200"
+                    >
+                      {t(
+                        'admin.auth.oauth.grantTypesChangedWarning',
+                        'You changed the grant types, which changes what the allowed apps, models and prompts mean. For client-credentials tokens an empty list means nothing and the lists are the full grant; for authorization-code tokens an empty list means no extra restriction. Review the lists above before saving.'
+                      )}
+                    </div>
+                  )}
                   <div className="space-y-2">
                     {['client_credentials', 'authorization_code', 'refresh_token'].map(grant => (
                       <label key={grant} className="flex items-center">

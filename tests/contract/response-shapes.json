@@ -2293,10 +2293,10 @@
       "clients": [
         {
           "active": "boolean",
-          "allowedApps": "array",
+          "allowedApps": [],
           "allowedGroups": [],
-          "allowedModels": "array",
-          "allowedPrompts": "array",
+          "allowedModels": [],
+          "allowedPrompts": [],
           "clientId": "string",
           "clientType": "string",
           "connectionCount": "number",
@@ -2329,10 +2329,10 @@
     "status": 200,
     "shape": {
       "active": "boolean",
-      "allowedApps": ["string"],
+      "allowedApps": [],
       "allowedGroups": [],
-      "allowedModels": ["string"],
-      "allowedPrompts": ["string"],
+      "allowedModels": [],
+      "allowedPrompts": [],
       "clientId": "string",
       "clientType": "string",
       "consentRequired": "boolean",

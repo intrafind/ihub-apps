@@ -8,6 +8,7 @@
  */
 
 import logger from './logger.js';
+import { isSecretName, redactUrlSecrets, REDACTED } from './secretNames.js';
 
 /**
  * Convert an UPPER_SNAKE_CASE segment to camelCase
@@ -80,6 +81,84 @@ export const ENV_VAR_SKIP_PATHS_BY_KEY = {
 };
 
 /**
+ * Whether a config setting holds a credential: a name `isSecretName` knows
+ * (`jwtSecret`, `clientSecret`, `apiKey`, `password`, …) or a camelCase name
+ * ending in `Key` (`subscriptionKey`, `encryptionKey`), which platform.json
+ * uses for keys that `isSecretName` alone would let through.
+ *
+ * @param {string} name - A config key, camelCase.
+ * @returns {boolean}
+ */
+function isSecretSetting(name) {
+  return isSecretName(name) || /(^k|[a-z0-9]K)ey$/.test(name);
+}
+
+/**
+ * Whether every value under this key is a credential. Outbound `headers`
+ * (an OTLP exporter's, a model's) carry vendor auth headers whose names follow
+ * no pattern (`x-honeycomb-team`), so all their values are masked.
+ *
+ * @param {string} name - A config key.
+ * @returns {boolean}
+ */
+function holdsOnlySecrets(name) {
+  return typeof name === 'string' && name.toLowerCase() === 'headers';
+}
+
+/**
+ * A copy of a JSON override value with the values of credential-like keys
+ * masked, at any depth, and the credentials embedded in URL-valued strings
+ * (`http://user:pass@proxy`, `?token=`) masked in every string.
+ *
+ * @param {unknown} value - A parsed override value.
+ * @param {number} [depth] - Recursion depth, bounded.
+ * @param {boolean} [maskAll] - Mask every leaf value (inside `headers`).
+ * @returns {unknown}
+ */
+function maskSecretKeys(value, depth = 0, maskAll = false) {
+  if (depth > 12) return REDACTED;
+  if (Array.isArray(value)) return value.map(item => maskSecretKeys(item, depth + 1, maskAll));
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [
+        key,
+        isSecretSetting(key)
+          ? REDACTED
+          : maskSecretKeys(item, depth + 1, maskAll || holdsOnlySecrets(key))
+      ])
+    );
+  }
+  if (maskAll) return REDACTED;
+  if (typeof value === 'string') return redactUrlSecrets(value);
+  return value;
+}
+
+/**
+ * The value of an override as the startup log shows it. The path is always
+ * logged; the value is masked when the overridden setting looks like a
+ * credential (`IHUB_PLATFORM__LOCAL_AUTH__JWT_SECRET`) or is a header, a JSON
+ * object or array value has its credential-like keys and every `headers` value
+ * masked, and credentials embedded in a URL (`http://user:pass@proxy:3128`,
+ * `?token=`) are masked in any string, so a secret never reaches the log.
+ *
+ * @param {string[]} pathParts - The overridden config path, camelCase segments.
+ * @param {unknown} value - The parsed override value.
+ * @returns {string} The value to log.
+ *
+ * @example
+ * overrideValueForLog(['localAuth', 'jwtSecret'], 'abc'); // => '[redacted]'
+ * overrideValueForLog(['auth', 'mode'], 'local'); // => '"local"'
+ */
+export function overrideValueForLog(pathParts, value) {
+  const name = pathParts[pathParts.length - 1];
+  if (isSecretSetting(name)) return REDACTED;
+  // A single header (`…__HEADERS__X_HONEYCOMB_TEAM`) is a credential too.
+  const parent = pathParts[pathParts.length - 2];
+  if (holdsOnlySecrets(parent)) return REDACTED;
+  return JSON.stringify(maskSecretKeys(value, 0, holdsOnlySecrets(name)));
+}
+
+/**
  * Scan process.env for IHUB_* overrides and apply them to the given config object.
  * Only configs listed in IHUB_ENV_PREFIXES are processed.
  * Returns the (potentially mutated) data object.
@@ -96,7 +175,7 @@ export function applyIhubEnvOverrides(configPath, data) {
     setNestedValue(data, pathParts, parsedValue);
 
     logger.info(
-      `Applied IHUB env override: ${envKey} → ${pathParts.join('.')} = ${JSON.stringify(parsedValue)}`,
+      `Applied IHUB env override: ${envKey} → ${pathParts.join('.')} = ${overrideValueForLog(pathParts, parsedValue)}`,
       { component: 'ConfigCache' }
     );
   }

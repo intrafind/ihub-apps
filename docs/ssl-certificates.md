@@ -148,7 +148,17 @@ iHub Apps provides a secure way to handle SSL certificate validation through the
   - **Empty array** (default): SSL validation is **enabled** for all domains (secure default)
   - **With domains**: Only bypasses SSL for explicitly specified domains
 
-The whitelist applies to every outbound connection to a configurable URL: HTTP(S) requests (LLM providers, Gemini batch transcription, tools, MCP servers over HTTP) and `wss://` connections made by realtime voice transcription (for example a vLLM Voxtral `/v1/realtime` endpoint) and by MCP servers on the `websocket` transport. Add the transcription model's hostname to `domainWhitelist` and set `ignoreInvalidCertificates` to `true`; plain `ws://` endpoints have no certificate to verify.
+The whitelist applies to every outbound connection to a configurable URL: HTTP(S) requests (LLM providers, Gemini batch transcription, tools, MCP servers over HTTP) and `wss://` connections made by realtime voice transcription (for example a vLLM Voxtral `/v1/realtime` endpoint) and by MCP servers on the `websocket` transport. OpenTelemetry export to an OTLP collector uses it too, together with the outbound proxy (restart after changing it, like every exporter setting). Add the transcription model's hostname to `domainWhitelist` and set `ignoreInvalidCertificates` to `true`; plain `ws://` endpoints have no certificate to verify.
+
+> [!IMPORTANT]
+> Hosts on `domainWhitelist` are also trusted by the SSRF guard, **whether or not
+> `ignoreInvalidCertificates` is on**: web sources, website crawls, the page reader (Preview) and
+> the watermark detector may reach them even when they resolve to private network addresses. Tools
+> and MCP servers do not use this list. **Admin → Security → SSL / TLS** shows
+> the list with a notice, **Admin → Security → SSRF Allowlist** lists the same hosts read-only, and
+> the server logs a warning at startup naming every host that is SSRF-trusted only through this
+> list. To make that trust explicit, add the host to the SSRF allowlist (`ssrf.allowedHosts`) as
+> well; if a host needs neither, remove it.
 
 **Supported Domain Patterns:**
 - **Exact match**: `api.example.com` - matches only that specific domain
@@ -195,9 +205,10 @@ The whitelist applies to every outbound connection to a configurable URL: HTTP(S
 
 **Admin UI Configuration:**
 
-Navigate to **Admin → Platform → Security** in the iHub Apps interface to configure SSL settings:
+Navigate to **Admin → Security → SSL / TLS** in the iHub Apps interface to configure SSL settings:
 1. Toggle "Ignore Invalid SSL Certificates" to enable/disable
-2. Add domains to the whitelist using the domain input field
+2. Add domains to the whitelist using the domain input field (the list is shown whether or not the
+   switch is on, because its hosts are also trusted by the SSRF guard)
 3. Save configuration
 
 Changes take effect immediately without server restart.
