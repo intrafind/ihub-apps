@@ -174,6 +174,18 @@ function GroupMultiSelect({
     commit(next);
   };
 
+  /**
+   * Adds the typed text as entered by Enter, a comma or the `Add "…"` option.
+   * Text that holds a comma (a pasted `a,b`) is split into one entry per name,
+   * like on blur; otherwise the single term is added.
+   *
+   * @param {string} term - The trimmed text of the search field.
+   */
+  const addTypedText = term => {
+    if (term.includes(',')) commitTypedTerms();
+    else addTerm(term);
+  };
+
   const removeValue = candidate => {
     commit(selected.filter(v => String(v) !== String(candidate)));
   };
@@ -187,7 +199,7 @@ function GroupMultiSelect({
     if (item.type === 'group') {
       addValue(item.option.id);
     } else if (item.type === 'custom') {
-      addTerm(item.term);
+      addTypedText(item.term);
     }
     inputRef.current?.focus();
   };
@@ -217,7 +229,7 @@ function GroupMultiSelect({
       }
       if (trimmedTerm) {
         e.preventDefault();
-        addTerm(trimmedTerm);
+        addTypedText(trimmedTerm);
       } else if (e.key === ',') {
         e.preventDefault();
       }
