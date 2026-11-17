@@ -389,7 +389,7 @@ function ProjectSharingSettingsPanel() {
               id="project-settings-refresh-ttl"
               value={String(draft.refreshTtl)}
               onChange={e => updateRefreshTtl(e.target.value)}
-              className="block w-full max-w-sm rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-gray-100 px-3 py-2"
+              className="block w-full max-w-sm rounded-md border border-admin-control-border dark:border-admin-control-border-dark bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-gray-100 px-3 py-2"
             >
               {refreshTtlChoices(draft.refreshTtl).map(ttl => (
                 <option key={ttl} value={String(ttl)}>
@@ -418,7 +418,7 @@ function ProjectSharingSettingsPanel() {
               value={draft.refreshMode}
               onChange={e => updateRefreshMode(e.target.value)}
               aria-describedby="project-settings-refresh-mode-help"
-              className="block w-full max-w-sm rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-gray-100 px-3 py-2"
+              className="block w-full max-w-sm rounded-md border border-admin-control-border dark:border-admin-control-border-dark bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-gray-100 px-3 py-2"
             >
               {REFRESH_MODES.map(mode => (
                 <option key={mode} value={mode}>
@@ -458,7 +458,7 @@ function ProjectSharingSettingsPanel() {
               value={draft.refreshIdleDays}
               onChange={e => updateRefreshIdleDays(e.target.value)}
               aria-describedby="project-settings-refresh-idle-days-help"
-              className="block w-32 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-gray-100 px-3 py-2"
+              className="block w-32 rounded-md border border-admin-control-border dark:border-admin-control-border-dark bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-gray-100 px-3 py-2"
             />
             <p
               id="project-settings-refresh-idle-days-help"
@@ -543,7 +543,7 @@ function ProjectSharingSettingsPanel() {
                       onChange={e => updateShareInput(key, e.target.value)}
                       aria-invalid={invalid || undefined}
                       aria-describedby={`${id}-help`}
-                      className="block w-full max-w-[12rem] rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-gray-100 px-3 py-2 aria-[invalid=true]:border-red-500"
+                      className="block w-full max-w-[12rem] rounded-md border border-admin-control-border dark:border-admin-control-border-dark bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-gray-100 px-3 py-2 aria-[invalid=true]:border-red-500"
                     />
                     <p id={`${id}-help`} className="text-xs text-gray-500 dark:text-gray-400">
                       {invalid && (
@@ -656,7 +656,7 @@ function ProjectSharingSettingsPanel() {
                     onChange={e => updateLimit(key, e.target.value)}
                     aria-invalid={invalid || undefined}
                     aria-describedby={`${id}-help`}
-                    className="block w-full max-w-[12rem] rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-gray-100 px-3 py-2 aria-[invalid=true]:border-red-500"
+                    className="block w-full max-w-[12rem] rounded-md border border-admin-control-border dark:border-admin-control-border-dark bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-gray-100 px-3 py-2 aria-[invalid=true]:border-red-500"
                   />
                   <p id={`${id}-help`} className="text-xs text-gray-500 dark:text-gray-400">
                     {invalid && (

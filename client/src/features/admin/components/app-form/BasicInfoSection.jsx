@@ -178,7 +178,7 @@ function BasicInfoSection({
                 type="color"
                 value={app.color || '#4F46E5'}
                 onChange={e => handleInputChange('color', e.target.value)}
-                className={`mt-1 block w-full h-10 rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${
+                className={`mt-1 block w-full h-10 rounded-md border-admin-control-border shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${
                   validationErrors.color ? 'border-red-500 dark:border-red-400' : ''
                 }`}
                 aria-invalid={!!validationErrors.color || undefined}

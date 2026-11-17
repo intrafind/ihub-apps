@@ -25,9 +25,7 @@
     "components/ReorderableList.jsx": 1,
     "components/StartPageCustomization.jsx": 2,
     "components/StepDetails.jsx": 1,
-    "components/StyleEditor.jsx": 2,
     "components/app-form/AiNoticeSection.jsx": 1,
-    "components/app-form/BasicInfoSection.jsx": 1,
     "components/app-form/CompareModeSection.jsx": 1,
     "components/app-form/ExportConfigSection.jsx": 1,
     "components/app-form/FeedbackSection.jsx": 1,
@@ -50,8 +48,8 @@
     "components/voice/VoiceInputTestPanel.jsx": 2,
     "pages/AdminAdvancedPage.jsx": 1,
     "pages/AdminAgentApprovalsPage.jsx": 1,
-    "pages/AdminAgentEditPage.jsx": 31,
-    "pages/AdminAgentInboxEditPage.jsx": 5,
+    "pages/AdminAgentEditPage.jsx": 25,
+    "pages/AdminAgentInboxEditPage.jsx": 4,
     "pages/AdminAgentInboxesPage.jsx": 1,
     "pages/AdminAuditLogPage.jsx": 1,
     "pages/AdminChatHistoryPage.jsx": 1,
@@ -59,8 +57,6 @@
     "pages/AdminMcpGatewayPage.jsx": 5,
     "pages/AdminOAuthCimdClientEditPage.jsx": 3,
     "pages/AdminOAuthClientEditPage.jsx": 4,
-    "pages/AdminOAuthClientsPage.jsx": 1,
-    "pages/AdminOAuthServerPage.jsx": 10,
     "pages/AdminOfficeIntegrationPage.jsx": 2,
     "pages/AdminOverview.jsx": 1,
     "pages/AdminProjectsPage.jsx": 1,
@@ -69,7 +65,7 @@
     "pages/AdminScheduledTasksPage.jsx": 2,
     "pages/AdminTelemetryPage.jsx": 9,
     "pages/AdminUpdatesPage.jsx": 1,
-    "pages/AdminWorkflowEditPage.jsx": 2
+    "pages/AdminWorkflowEditPage.jsx": 1
   },
   "primaryRamp": {},
   "grayTextWithoutDark": {

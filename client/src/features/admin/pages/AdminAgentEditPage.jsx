@@ -451,14 +451,14 @@ export default function AdminAgentEditPage() {
                       type="color"
                       value={profile.color || '#6366F1'}
                       onChange={e => handleField('color', e.target.value)}
-                      className="h-9 w-12 rounded-sm border border-gray-300 cursor-pointer"
+                      className="h-9 w-12 rounded-sm border border-admin-control-border cursor-pointer"
                     />
                     <input
                       type="text"
                       value={profile.color || ''}
                       onChange={e => handleField('color', e.target.value)}
                       placeholder="#6366F1"
-                      className="block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm font-mono dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                      className="block w-full rounded-lg border-admin-control-border shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm font-mono dark:bg-gray-700 dark:border-admin-control-border-dark dark:text-gray-100"
                     />
                   </div>
                 </div>
@@ -513,7 +513,7 @@ export default function AdminAgentEditPage() {
                   <select
                     value={profile.preferredModel || ''}
                     onChange={e => handleField('preferredModel', e.target.value)}
-                    className="mt-1 block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                    className="mt-1 block w-full rounded-lg border-admin-control-border shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-admin-control-border-dark dark:text-gray-100"
                   >
                     <option value="">
                       {t('admin.agents.edit.selectModel', 'Pick a text model…')}
@@ -547,7 +547,7 @@ export default function AdminAgentEditPage() {
                     onChange={e =>
                       handleField('maxIterations', Number.parseInt(e.target.value) || 10)
                     }
-                    className="mt-1 block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                    className="mt-1 block w-full rounded-lg border-admin-control-border shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-admin-control-border-dark dark:text-gray-100"
                   />
                 </div>
               </div>
@@ -1103,7 +1103,7 @@ export default function AdminAgentEditPage() {
                 placeholder="*/15 * * * *"
                 value={cron}
                 onChange={e => handleCronSchedule(e.target.value)}
-                className="block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm font-mono dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                className="block w-full rounded-lg border-admin-control-border shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm font-mono dark:bg-gray-700 dark:border-admin-control-border-dark dark:text-gray-100"
               />
             </Section>
 
@@ -1120,7 +1120,7 @@ export default function AdminAgentEditPage() {
                 placeholder="engineering-todos"
                 value={profile.inboxId || ''}
                 onChange={e => handleField('inboxId', e.target.value)}
-                className="block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                className="block w-full rounded-lg border-admin-control-border shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-admin-control-border-dark dark:text-gray-100"
               />
             </Section>
 
@@ -1372,7 +1372,7 @@ function FieldText({ span, label, required, value, onChange, placeholder, disabl
         value={value || ''}
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
-        className="mt-1 block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 disabled:opacity-50"
+        className="mt-1 block w-full rounded-lg border-admin-control-border shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-admin-control-border-dark dark:text-gray-100 disabled:opacity-50"
       />
     </div>
   );

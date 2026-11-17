@@ -444,7 +444,7 @@ function AdminOAuthServerPage() {
                       'admin.auth.oauth.issuerHint',
                       'Leave blank for auto-detection from server origin'
                     )}
-                    className="mt-1 w-full rounded-md border-gray-300 dark:border-gray-600 shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                    className="mt-1 w-full rounded-md border-admin-control-border dark:border-admin-control-border-dark shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                   />
                   <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                     {t(
@@ -468,7 +468,7 @@ function AdminOAuthServerPage() {
                       onChange={e =>
                         updateOAuthConfig('defaultTokenExpirationMinutes', Number(e.target.value))
                       }
-                      className="mt-1 w-full rounded-md border-gray-300 dark:border-gray-600 shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                      className="mt-1 w-full rounded-md border-admin-control-border dark:border-admin-control-border-dark shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                     />
                   </div>
                   <div>
@@ -482,7 +482,7 @@ function AdminOAuthServerPage() {
                       onChange={e =>
                         updateOAuthConfig('maxTokenExpirationMinutes', Number(e.target.value))
                       }
-                      className="mt-1 w-full rounded-md border-gray-300 dark:border-gray-600 shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                      className="mt-1 w-full rounded-md border-admin-control-border dark:border-admin-control-border-dark shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                     />
                   </div>
                 </div>
@@ -545,7 +545,7 @@ function AdminOAuthServerPage() {
                             Number(e.target.value)
                           )
                         }
-                        className="mt-1 w-full sm:w-48 rounded-md border-gray-300 dark:border-gray-600 shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                        className="mt-1 w-full sm:w-48 rounded-md border-admin-control-border dark:border-admin-control-border-dark shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                       />
                     </div>
 
@@ -597,7 +597,7 @@ function AdminOAuthServerPage() {
                           onChange={e =>
                             updateOAuthConfig('consentMemoryDays', Number(e.target.value))
                           }
-                          className="mt-1 w-full sm:w-48 rounded-md border-gray-300 dark:border-gray-600 shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                          className="mt-1 w-full sm:w-48 rounded-md border-admin-control-border dark:border-admin-control-border-dark shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                         />
                         <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                           {t(
@@ -658,7 +658,7 @@ function AdminOAuthServerPage() {
                       onChange={e =>
                         updateOAuthConfig('refreshTokenExpirationDays', Number(e.target.value))
                       }
-                      className="mt-1 w-full sm:w-48 rounded-md border-gray-300 dark:border-gray-600 shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                      className="mt-1 w-full sm:w-48 rounded-md border-admin-control-border dark:border-admin-control-border-dark shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                     />
                   </div>
                 )}
@@ -719,7 +719,7 @@ function AdminOAuthServerPage() {
                             onChange={e =>
                               updatePersonalKeys('maxKeysPerUser', Number(e.target.value))
                             }
-                            className="mt-1 w-full rounded-md border-gray-300 dark:border-gray-600 shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                            className="mt-1 w-full rounded-md border-admin-control-border dark:border-admin-control-border-dark shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                           />
                         </div>
                         <div>
@@ -737,7 +737,7 @@ function AdminOAuthServerPage() {
                             onChange={e =>
                               updatePersonalKeys('defaultExpirationDays', Number(e.target.value))
                             }
-                            className="mt-1 w-full rounded-md border-gray-300 dark:border-gray-600 shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                            className="mt-1 w-full rounded-md border-admin-control-border dark:border-admin-control-border-dark shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                           />
                         </div>
                         <div>
@@ -752,7 +752,7 @@ function AdminOAuthServerPage() {
                             onChange={e =>
                               updatePersonalKeys('maxExpirationDays', Number(e.target.value))
                             }
-                            className="mt-1 w-full rounded-md border-gray-300 dark:border-gray-600 shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                            className="mt-1 w-full rounded-md border-admin-control-border dark:border-admin-control-border-dark shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                           />
                         </div>
                       </div>
@@ -777,7 +777,7 @@ function AdminOAuthServerPage() {
                             'admin.auth.oauth.personalKeys.allowedGroupsPlaceholder',
                             'Leave empty to allow every signed-in user'
                           )}
-                          className="mt-1 w-full rounded-md border-gray-300 dark:border-gray-600 shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                          className="mt-1 w-full rounded-md border-admin-control-border dark:border-admin-control-border-dark shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                         />
                         <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                           {t(

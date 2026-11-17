@@ -242,7 +242,7 @@ export default function AdminAgentInboxEditPage() {
               )}
             </p>
             <textarea
-              className="w-full h-[480px] font-mono text-sm p-3 border rounded-sm dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100"
+              className="w-full h-[480px] font-mono text-sm p-3 border rounded-sm dark:bg-gray-800 dark:border-admin-control-border-dark dark:text-gray-100"
               value={rawBody}
               onChange={e => {
                 setRawBody(e.target.value);
@@ -262,7 +262,7 @@ export default function AdminAgentInboxEditPage() {
                   value={newPriority}
                   onChange={e => setNewPriority(e.target.value)}
                   aria-label={t('admin.agents.inbox.itemPriority', 'Item priority')}
-                  className="rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                  className="rounded-lg border-admin-control-border shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-admin-control-border-dark dark:text-gray-100"
                 >
                   <option value="">{t('admin.agents.inbox.noPriority', 'No priority')}</option>
                   <option value="p1">P1</option>

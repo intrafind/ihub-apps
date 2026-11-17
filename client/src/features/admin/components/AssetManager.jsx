@@ -436,7 +436,7 @@ function AssetManager({ t }) {
                                 type="text"
                                 value={asset.publicUrl}
                                 readOnly
-                                className="flex-1 text-xs bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-sm px-2 py-1 font-mono min-w-0 text-gray-900 dark:text-gray-100"
+                                className="flex-1 text-xs bg-gray-50 dark:bg-gray-800 border border-admin-control-border dark:border-admin-control-border-dark rounded-sm px-2 py-1 font-mono min-w-0 text-gray-900 dark:text-gray-100"
                               />
                               <button
                                 onClick={() => copyToClipboard(asset.publicUrl)}
