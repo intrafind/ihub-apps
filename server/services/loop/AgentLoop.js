@@ -204,6 +204,8 @@ export class AgentLoop {
    *   `{ toolCall: { id, type, function: { name, arguments } }, args }`. Before the
    *   first model call the loop runs this call with `args` (through the seams, like any
    *   call) and puts its result where the transcript's placeholder for `toolCall.id` is.
+   *   A resume after a connect names several: `{ toolCalls: [{ toolCall, args }, …] }`,
+   *   run in order.
    * @returns {Promise<Object>} LoopResult
    */
   async run(request) {
@@ -442,8 +444,18 @@ export class AgentLoop {
       // it. The call runs with exactly the arguments that were approved (the
       // model is not asked to issue it again) and its result takes the
       // placeholder's place; then the model continues as usual.
-      if (request.resume?.toolCall && toolExecution === 'server') {
-        const resumed = request.resume;
+      // A resume after a connect (#3752) names several calls (`toolCalls`);
+      // they run in order, each once, and the first one a seam ends (an
+      // approval it asks for) ends the run, as it does for any call.
+      const resumedCalls =
+        toolExecution !== 'server'
+          ? []
+          : Array.isArray(request.resume?.toolCalls)
+            ? request.resume.toolCalls
+            : request.resume?.toolCall
+              ? [request.resume]
+              : [];
+      for (const [position, resumed] of resumedCalls.entries()) {
         const call = resumed.toolCall;
         // The model found the tool with `search_tools` in the request that
         // paused: this request starts with it left out again, so loading it is
@@ -458,7 +470,7 @@ export class AgentLoop {
           toolDef: approvedTool,
           args: resumed.args && typeof resumed.args === 'object' ? resumed.args : {},
           argsRepaired: false,
-          position: 0
+          position
         };
         ctx.iteration = 0;
         const outcome = await this._executeOne(ctx, item, {

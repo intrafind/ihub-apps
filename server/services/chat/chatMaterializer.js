@@ -376,7 +376,8 @@ export async function settleUserTurn({
   projectId: preparedProjectId,
   origin = null,
   titleText = null,
-  temporary = false
+  temporary = false,
+  silent = false
 }) {
   const none = { message: null, refusal: null };
   if (!repository) return none;
@@ -449,6 +450,9 @@ export async function settleUserTurn({
     } else {
       stored = await repository.updateChat(chatId, turnPatch);
     }
+    // A resume after a connect (#3752) claims the chat for its run but stores
+    // no user message: nobody wrote one.
+    if (silent) return { message: null, refusal: null };
     const appended = await repository.appendMessage(
       chatId,
       {

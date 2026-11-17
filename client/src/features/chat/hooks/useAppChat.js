@@ -26,6 +26,7 @@ import { takeMcpAppModelContext } from '../mcpApps/modelContextStore';
 import { splitFilesForWire } from '../utils/chatFileUpload';
 import { refreshMyUsage } from '../../../shared/hooks/useMyUsage';
 import { useAiAcknowledgement } from '../../../shared/hooks/useAiAcknowledgement';
+import { setConnectResumeStatus } from '../../integrations/connect/connectResumeStatus';
 
 /**
  * Refusals of the chat request the user can do something about, by the code
@@ -40,6 +41,13 @@ const APPROVAL_USED_EVENTS = new Set([
 
 /** Refusals after which an approval card must not ask again: the decision is final. */
 const APPROVAL_FINAL_CODES = new Set(['APPROVAL_ALREADY_ANSWERED', 'APPROVAL_NOT_PENDING']);
+
+/** Refusals of a continuation after a connect (#3752): the Connect card says what happened. */
+const CONNECT_RESUME_CODES = new Set([
+  'CONNECT_RESUME_NOT_PENDING',
+  'CONNECT_RESUME_NOT_CONNECTED',
+  'CONNECT_RESUME_EXPIRED'
+]);
 
 const CHAT_REFUSAL_MESSAGES = {
   CHAT_STORAGE_UNAVAILABLE: [
@@ -159,6 +167,9 @@ function useAppChat({
   // The approval card a sent decision came from, until its turn gets going:
   // `{ messageId, toolApproval }` (#2945). A turn refused before that reopens it.
   const approvalRetryRef = useRef(null);
+  // The continuation after a connect that is in flight (#3752): its integration
+  // and the assistant placeholder it draws into.
+  const connectResumeRef = useRef(null);
   // The run this surface re-attached to after reopening the chat, and what to
   // do when it settles. Set by `reattachToRun`, consumed once by `handleEvent`.
   const reattachedRunRef = useRef(null);
@@ -414,6 +425,22 @@ function useAppChat({
           }
         });
         return;
+      }
+      // The server declined to continue the call after a connect (expired,
+      // already continued, not connected yet): nothing ran, no error bubble —
+      // the Connect card says what happened and the placeholder goes away.
+      const attempt = connectResumeRef.current;
+      if (attempt && CONNECT_RESUME_CODES.has(error?.code)) {
+        connectResumeRef.current = null;
+        if (attempt.placeholderId) removeMessage(attempt.placeholderId);
+        setConnectResumeStatus(attempt.integration, { state: 'refused', code: error.code });
+        detachEventSourceRef.current?.();
+        setProcessing(false);
+        return;
+      }
+      if (attempt) {
+        connectResumeRef.current = null;
+        setConnectResumeStatus(attempt.integration, null);
       }
       if (lastMessageIdRef.current && !isCancellingRef.current) {
         // Only show error if this wasn't a manual cancellation
@@ -1201,6 +1228,58 @@ function useAppChat({
     ]
   );
 
+  /**
+   * Continue the call that waited for a connection (#3752). The chat sends one
+   * message that carries only `connectResume { id }`: no text, no tool, no
+   * arguments (the server holds them). The assistant answers in a new message
+   * and no user message is added.
+   *
+   * @param {{id: string, integration: string}} request - The chat's pending record
+   * @param {Object} [params] - Parameters for the continuation request (model, style, …)
+   * @returns {boolean} Whether the chat took it
+   */
+  const submitConnectResume = useCallback(
+    ({ id, integration }, params = {}) => {
+      if (!id) return false;
+      try {
+        isCancellingRef.current = false;
+        detachEventSource();
+        setProcessing(true);
+        const exchangeId = `msg-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+        lastMessageIdRef.current = exchangeId;
+        addAssistantMessage(exchangeId);
+        connectResumeRef.current = { integration, placeholderId: exchangeId };
+        pendingMessageDataRef.current = {
+          appId,
+          chatId,
+          messages: getMessagesForApi({
+            role: 'user',
+            content: '',
+            messageId: exchangeId,
+            connectResume: { id }
+          }),
+          params: { ...params, ...takeProtocolParams() }
+        };
+        initEventSource(buildApiUrl(`apps/${appId}/chat/${chatId}`));
+        return true;
+      } catch (err) {
+        console.error('Error continuing after a connect:', err);
+        connectResumeRef.current = null;
+        setProcessing(false);
+        return false;
+      }
+    },
+    [
+      detachEventSource,
+      addAssistantMessage,
+      getMessagesForApi,
+      initEventSource,
+      takeProtocolParams,
+      appId,
+      chatId
+    ]
+  );
+
   const resetConversationState = useCallback(() => {
     setConversationTitle(null);
   }, []);
@@ -1329,6 +1408,7 @@ function useAppChat({
     addSystemMessage,
     submitClarificationResponse,
     submitToolApproval,
+    submitConnectResume,
     loadServerMessages,
     reattachToRun,
     resetConversationState,

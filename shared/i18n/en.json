@@ -7664,7 +7664,10 @@
       "failed": "Connecting {{name}} did not succeed. Try again.",
       "failedMessage": "Connecting {{name}} failed: {{message}}",
       "startFailed": "The sign-in to {{name}} could not be started.",
-      "retryMessage": "I connected {{name}}. Please try again.",
+      "resuming": "Continuing your request…",
+      "resumeExpired": "Your request waited too long. Ask again to continue.",
+      "resumeNotPending": "Your request was already continued or replaced by a newer message.",
+      "resumeNotConnected": "{{name}} is not connected yet. Connect it and your request continues.",
       "errors": {
         "access_denied": "{{name}} was not connected because access was not granted. If your organization requires administrator approval for the app, ask your administrator to grant it, then try again.",
         "oauth_failed": "The sign-in to {{name}} did not succeed.",

@@ -7663,7 +7663,10 @@
       "failed": "Die Verbindung mit {{name}} ist nicht gelungen. Versuchen Sie es erneut.",
       "failedMessage": "Die Verbindung mit {{name}} ist fehlgeschlagen: {{message}}",
       "startFailed": "Die Anmeldung bei {{name}} konnte nicht gestartet werden.",
-      "retryMessage": "Ich habe {{name}} verbunden. Bitte versuche es erneut.",
+      "resuming": "Deine Anfrage wird fortgesetzt …",
+      "resumeExpired": "Deine Anfrage hat zu lange gewartet. Frage erneut, um fortzufahren.",
+      "resumeNotPending": "Deine Anfrage wurde bereits fortgesetzt oder durch eine neuere Nachricht ersetzt.",
+      "resumeNotConnected": "{{name}} ist noch nicht verbunden. Verbinde es, dann wird deine Anfrage fortgesetzt.",
       "errors": {
         "access_denied": "{{name}} wurde nicht verbunden, da der Zugriff nicht erteilt wurde. Falls Ihre Organisation eine Administratorgenehmigung für die App verlangt, bitten Sie Ihren Administrator, sie zu erteilen, und versuchen Sie es erneut.",
         "oauth_failed": "Die Anmeldung bei {{name}} war nicht erfolgreich.",
