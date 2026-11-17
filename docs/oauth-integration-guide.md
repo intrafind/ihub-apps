@@ -470,7 +470,7 @@ data: {"v":2,"seq":4,"runId":"chat-7f3a…","ts":"…","type":"run/ended","data"
 | `stream/error` | An error occurred; check `code` and `message` |
 | `run/ended` | Answer complete; `status` and `finishReason` say why |
 
-Full tables: [SSE v2 Streaming](sse-v2.md).
+Full tables: [Streaming Events](streaming-events.md).
 
 #### Multi-turn conversation
 
@@ -779,7 +779,7 @@ Errors of the OAuth endpoints have the form `{ "error": "...", "error_descriptio
 - [OAuth Authorization Code Flow](oauth-authorization-code.md): user login from external apps
 - [Personal API Keys](personal-api-keys.md): keys that act as one user
 - [OpenAI-compatible API](openai-compatible-api.md): the `/api/inference/v1` endpoints
-- [SSE v2 Streaming](sse-v2.md): the event stream in full
+- [Streaming Events](streaming-events.md): the event stream in full
 - [Authentication Architecture](authentication-architecture.md): all sign-in methods
 - [RFC 6749: OAuth 2.0](https://datatracker.ietf.org/doc/html/rfc6749)
 - API reference (Swagger UI): `/api/docs` on your server

@@ -513,7 +513,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
    *             schema:
    *               type: string
    *               description: |
-   *                 SSE v2 (see docs/sse-v2.md). Every frame is `event: <type>` with a
+   *                 SSE v2 (see docs/streaming-events.md). Every frame is `event: <type>` with a
    *                 JSON envelope `{ v: 2, seq, runId, ts, type, data }`. Each message turn is
    *                 one run: `run/started`, `step/delta`, `tool/started`, `tool/completed`,
    *                 `interaction/raised`, `run/paused`, `stream/error`, `run/ended`.
