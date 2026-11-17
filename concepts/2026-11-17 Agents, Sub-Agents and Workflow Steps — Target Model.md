@@ -19,8 +19,8 @@ rules (#3195, #2411), cost per run (#2401), MCP 2026-07-28 and A2A 1.0 migration
 
 ## Decisions
 
-1. **An agent is a lasting entity, not a run.** It has one timeline. A run is one moment it is
-   awake.
+1. **An agent is a lasting entity, not a run.** It has one memory and many threads. A run is
+   one moment it is awake.
 2. **One agent definition, three modes**: free, planned, fixed. They differ only in who decides
    the steps.
 3. **An agent's plan is a workflow.** Planned agents build and amend it; fixed agents follow one
@@ -31,7 +31,7 @@ rules (#3195, #2411), cost per run (#2401), MCP 2026-07-28 and A2A 1.0 migration
    sub-agents.
 6. **A summary never replaces the original.** Full results stay as artifacts; summaries point to
    them.
-7. **The chat is where things persist; the ledger is only for running.** An agent's timeline is
+7. **The chat is where things persist; the ledger is only for running.** Every agent thread is
    a chat, and the chat store is extended for agents and workflows. The existing evidence record
    is the audit record, extended to agent, workflow and sub-agent runs; no second format.
 8. **Self-improvement is gated.** Personal agents apply memory changes with a diary and undo;
@@ -101,19 +101,45 @@ hard-coded off in chat (#2485); tool search sits behind a preview flag (#2889).
 | Identity | Whose rights it runs with |
 | Version | Every change to the above is a version |
 
-**One timeline.** Everything lands in one conversation per agent and user: the user's messages,
-scheduled work, sub-agent reports, incoming triggers. Scheduled runs no longer open a new chat
-each time.
+**One agent, many threads.** What is single is the agent's knowledge, not its conversation. A
+thread is an ordinary chat that belongs to the agent, so every discussion and every piece of work
+stays a chat the user can reopen. There are three kinds:
 
-**Everything that wakes it is an event.** A message, a schedule tick, a webhook and a returning
-sub-agent are handled the same way: the event arrives, the agent wakes, reads it and acts. One run
-per agent is active at a time. A message that arrives while it works reaches it at the next step
-through the existing steering queue (`services/loop/steering.js`).
+| Thread | Started by | Content |
+|---|---|---|
+| Conversation | The user, as many as they like, named | A discussion with the agent |
+| Automation run | A trigger of a standing job of the agent | A fresh thread per run |
+| Handoff | A mention of the agent in another chat | The work the agent took over |
+
+**No timed reset.** A long thread is compacted without deleting anything; a finished topic gets a
+new thread. Nothing is cleared, so a specific discussion can always be found again.
+
+**Automations** are standing jobs of one agent, each with its own goal and trigger, for example a
+competitor review next to the product discussion. Every run starts a fresh thread. It knows what
+was done before through the agent's memory and the automation's own scratchpad: notes the agent
+keeps for this job, plus the result and end state of the last run. A scheduled task becomes an
+automation; a task without a named agent belongs to the user's default assistant.
+
+**Handoff from another chat.** The user mentions the agent in any chat and tells it to take care
+of something. The agent receives the instruction and a read-only snapshot of that chat up to this
+point, and continues in a thread of its own. The source chat gets a link to that thread and a note
+when the work ends. A personal agent may read the snapshot because it runs as the user; an admin
+agent under its own identity sees only what the handoff passes. This is the background sub-agent
+mechanism with a named agent as the target.
+
+**The agent's home** is a view, not a context window: a feed across all its threads showing what
+ran, how it ended and what is open.
+
+**Everything that wakes it is an event.** A message, a schedule tick, a webhook, a handoff and a
+returning sub-agent are handled the same way: the event arrives, the agent wakes in the thread it
+belongs to, reads it and acts. One run per thread is active at a time; threads of the same agent
+run side by side. A message that arrives while a thread works reaches it at the next step through
+the existing steering queue (`services/loop/steering.js`).
 
 **State is assembled per wake, not carried.** Each run starts from: profile, goal and
-instructions; curated memory; open items (todo list or plan); a digest of recent activity; the new
-event. Anything older is fetched with tools that search the agent's own past runs, artifacts and
-conversation.
+instructions; curated memory; open items (todo list or plan); for an automation, its scratchpad;
+the thread's own history; a digest of recent activity in the agent's other threads; the new event.
+Anything else is fetched with tools that search the agent's threads and artifacts.
 
 **Each run ends by writing down what it did**: result, what is open, and an end state of `done`,
 `blocked`, `needs attention` or `no change`. `no change` suppresses the notification. Scheduled
@@ -127,7 +153,7 @@ tasks already do a simpler version (`services/scheduler/tasks/memoryComposer.js`
 | Planned | The agent writes a plan as a workflow, follows and amends it | Evidence record, step graph, plan revisions |
 | Fixed | The admin authors and locks the workflow | Evidence record, step graph, identical every run |
 
-Free mode is the scheduled task grown up. Plan approval before start is a per-agent setting for
+A free-mode automation is the scheduled task grown up. Plan approval before start is a per-agent setting for
 planned mode, off by default for personal agents.
 
 ### Ownership and identity
@@ -150,7 +176,7 @@ A `delegate` tool on every run:
   instructions, model and tools. Without one it gets a worker prompt, the parent's model and a
   subset of the parent's tools.
 - **Fresh context, own budget** taken from the parent's, never more rights than the parent.
-- **Approvals and questions surface in the parent's timeline** instead of being denied.
+- **Approvals and questions surface in the parent's thread** instead of being denied.
 - **It reports through an artifact**: findings, evidence, open questions, what it did not do. The
   tool result is a summary plus the artifact reference. The parent can ask the same child a
   follow-up.
@@ -158,20 +184,23 @@ A `delegate` tool on every run:
 - **Depth 1, capped concurrency per user.** Children cannot write memory or send messages out.
 
 **Background.** The tool returns a handle at once. When the child ends, its report is delivered to
-the timeline and a turn of the parent starts by itself. The parent has tools to list, check,
+the parent's thread and a turn of the parent starts by itself. The parent has tools to list, check,
 message and cancel its children; the UI shows them as running.
 
 ### Memory and improvement
 
 Two layers, as OpenClaw and Hermes both do:
 
-- **Notes**: cheap, dated, written freely by the agent during work.
+- **Notes**: cheap, dated, appended by the agent during work. Notes belong either to the agent
+  or to one automation (its scratchpad).
 - **Curated memory**: small, loaded on every wake, changed only by a background pass.
 
 **The background pass ("dreaming")** runs when the agent is idle. It reads only the owner's own
 turns and the agent's notes, never tool output, web content or other users' turns. The model
 decides add, merge or supersede; the server writes the text from the source with a reference back.
 The previous version is kept, and a rewrite that loses a large share of entries is rejected.
+Because threads only append notes and the pass alone changes curated memory, parallel threads
+cannot overwrite each other.
 
 | What changes | Personal agent | Admin agent |
 |---|---|---|
@@ -194,7 +223,7 @@ and the original is never deleted by summarising.
 **Persistence lives in the chat, not in the ledger.** The run ledger exists so a run can be
 followed, reattached and recovered while it is active; its journal goes once the result is stored
 (#3687). What lasts is the chat: messages, activity, artifacts and the evidence record per answer.
-The agent timeline is a chat, and a workflow or agent run stores its steps, results and evidence
+Every agent thread is a chat, and a workflow or agent run stores its steps, results and evidence
 there. History search reads chats and evidence, never the journal.
 
 No new format. The existing record is extended (#3687 later phases) by:
@@ -275,8 +304,9 @@ From their source and docs, read on 2026-11-17 by a research pass; not re-verifi
    (scoped-down #1495; fixes #2712).
 4. **Sub-agents**, reporting through artifacts (#3196).
 5. **Background sub-agents and wake-up** (#3197, #3198).
-6. **Agent definition, timeline and state**: one definition, event inbox, per-wake assembly,
-   end-of-run log, history search. Free mode ships here; personal agents grow out of scheduled
+6. **Agent definition, threads and state**: one definition; conversations, automations with a
+   scratchpad, handoff from another chat; home view; event inbox; per-wake assembly; end-of-run
+   log; search across threads. Free mode ships here; personal agents grow out of scheduled
    tasks.
 7. **Non-destructive summarisation** (#3192).
 8. **Workflow steps** and the law consultation migration.
@@ -292,8 +322,8 @@ Steps 1–6 give a working free agent. Steps 8–9 give planned and fixed agents
    agent run (steps, plan revisions, sub-agent links) is to be specified with step 6 and step 10.
 2. **Multi-pod.** The run executor's leases must fit the plan in
    `concepts/2026-11-16 Scaling Beyond One Pod Without a Database.md`.
-3. **Shared timelines.** Whether several users may share one agent conversation, and whose input
-   may steer it, is undecided. Default here: one timeline per agent and user.
+3. **Shared threads.** Whether several users may share one agent thread, and whose input may
+   steer it, is undecided. Default here: threads and memory are per agent and user.
 
 ## Sources
 
