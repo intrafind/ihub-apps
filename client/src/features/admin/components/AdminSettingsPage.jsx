@@ -19,8 +19,9 @@ import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
  * say whether it is dirty.
  *
  * Sections that save on their own can pass `dirty` per section: the section nav
- * then marks them with a dot (and a visually hidden "unsaved" label), and the
- * leave guard covers them too. A section component may also guard itself; the
+ * then marks them with a dot (and a visually hidden "unsaved" label), the
+ * section heading gets an "Unsaved changes" badge (the nav is hidden on small
+ * screens), and the leave guard covers them too. A section component may also guard itself; the
  * guards share one prompt.
  *
  * @param {Object} props
@@ -147,9 +148,18 @@ function AdminSettingsPage({
               >
                 <h2
                   id={`settings-heading-${s.id}`}
-                  className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3"
+                  className="flex flex-wrap items-center gap-2 text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3"
                 >
                   {s.label}
+                  {s.dirty && (
+                    <span
+                      className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-900/40 dark:text-amber-200"
+                      data-testid={`settings-section-unsaved-${s.id}`}
+                    >
+                      <span className="h-1.5 w-1.5 rounded-full bg-amber-500" aria-hidden="true" />
+                      {t('admin.settingsPage.sectionUnsavedBadge', 'Unsaved changes')}
+                    </span>
+                  )}
                 </h2>
                 {s.children}
               </section>

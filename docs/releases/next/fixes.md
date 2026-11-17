@@ -835,6 +835,8 @@ like the other editors. The dialog reads the same on every page.
 
 - Browser Back and Forward ask too, and so does the Back button of the visual workflow editor.
 - Switching a tab or a filter on the same page no longer asks (it did on **UI Customization**).
+  Edits on an integration's **Settings** tab and on the **Limits & quotas** tab of **Usage
+  Reports** are kept while you look at another tab.
 - A page that is still loading or failed to load never asks.
-- **Security** marks each section with unsaved changes in its section list, and its save bar now
-  follows the language and the reduced-motion setting.
+- **Security** marks each section with unsaved changes, next to its heading and in its section
+  list.

@@ -7264,7 +7264,8 @@
     },
     "settingsPage": {
       "sectionsNav": "Einstellungsabschnitte",
-      "sectionUnsaved": "(ungespeicherte Änderungen)"
+      "sectionUnsaved": "(ungespeicherte Änderungen)",
+      "sectionUnsavedBadge": "Ungespeicherte Änderungen"
     }
   },
   "cloudStorage": {

@@ -72,6 +72,12 @@ function targetPathname(to) {
   return path.pathname;
 }
 
+/** The browser's current pathname (basename included), normalised; undefined outside a browser. */
+function readWindowPathname() {
+  if (typeof window === 'undefined' || !window.location) return undefined;
+  return normalizePathname(window.location.pathname);
+}
+
 /** The history index React Router stores in `history.state.idx`, or null. */
 function readHistoryIndex() {
   if (typeof window === 'undefined') return null;
@@ -87,12 +93,12 @@ let activePopHandler = null;
 let popGateInstalled = false;
 
 /**
- * Adds the one `popstate` listener the guards use. It must be registered before
- * React Router's own listener: listeners on `window` run in registration order
- * (a capture flag does not move a listener ahead at the target), so a listener
- * added when a guard mounts would run after the router had already rendered the
- * other page. The client entry calls this before the app renders; guards call
- * it too, as a fallback (tests, embeds).
+ * Adds the one `popstate` listener the guards use. The client entry
+ * (`client/src/index.jsx`) calls it before the app renders, so it is registered
+ * before the router's listener and the guard runs first. When it was added later
+ * (on the first guard's mount), it was observed to run after the router in
+ * Chromium: Forward was not blocked. Guards call it too, as a fallback for
+ * renders without the client entry (tests, embeds).
  */
 export function installUnsavedChangesPopGate() {
   if (popGateInstalled || typeof window === 'undefined') return;
@@ -117,6 +123,9 @@ function getRegistry(navigator) {
       // Index of the history entry the app is currently showing; used to work out
       // how far a Back/Forward jumped so it can be undone.
       currentIdx: null,
+      // Pathname of that entry: a Back/Forward that stays on it (only the query
+      // or hash differs) is not leaving the page and passes.
+      currentPathname: undefined,
       // Set while we undo a blocked POP: the popstate our own history.go() causes
       // must not reach the router either.
       swallowNextPop: false,
@@ -151,6 +160,13 @@ function installGuardRegistry(registry) {
   };
   registry.originals = originals;
   registry.currentIdx = readHistoryIndex();
+  registry.currentPathname = readWindowPathname();
+  /** Records the history entry the app shows now (after a navigation passed). */
+  const recordCurrentEntry = () => {
+    registry.currentIdx = readHistoryIndex();
+    registry.currentPathname = readWindowPathname();
+  };
+  registry.recordCurrentEntry = recordCurrentEntry;
 
   const callOriginal = (name, args) => originals[name].apply(navigator, args);
   const currentPathname = () => {
@@ -178,7 +194,7 @@ function installGuardRegistry(registry) {
         }
       }
       const result = callOriginal(name, args);
-      registry.currentIdx = readHistoryIndex();
+      recordCurrentEntry();
       return result;
     };
 
@@ -214,16 +230,19 @@ function installGuardRegistry(registry) {
       const allow = registry.allowPop;
       registry.allowPop = null;
       if (allow && (allow.idx === null || allow.idx === nextIdx)) {
-        registry.currentIdx = nextIdx;
+        recordCurrentEntry();
         return;
       }
       try {
         const guard = firstDirtyGuard(registry);
         const fromIdx = registry.currentIdx;
-        if (!guard || fromIdx === null || nextIdx === null || nextIdx === fromIdx) {
-          // Not dirty, or we cannot tell how far the browser jumped (an entry the
-          // router did not create): let the router handle it as usual.
-          registry.currentIdx = nextIdx;
+        const fromPathname = registry.currentPathname;
+        const samePage = fromPathname !== undefined && readWindowPathname() === fromPathname;
+        if (!guard || fromIdx === null || nextIdx === null || nextIdx === fromIdx || samePage) {
+          // Not dirty; or we cannot tell how far the browser jumped (an entry the
+          // router did not create); or the jump stays on this page (only the
+          // query or hash differs, like a pushed tab): let the router handle it.
+          recordCurrentEntry();
           return;
         }
         const delta = nextIdx - fromIdx;
@@ -238,7 +257,7 @@ function installGuardRegistry(registry) {
         // If anything about POP handling fails, fall back to letting the user
         // navigate rather than trapping them on the page.
         registry.swallowNextPop = false;
-        registry.currentIdx = nextIdx;
+        recordCurrentEntry();
       }
     };
     // Runs through the gate, which is registered before React Router's listener.
@@ -264,6 +283,7 @@ function uninstallGuardRegistry(registry) {
   }
   registry.originals = null;
   registry.onPopState = null;
+  registry.recordCurrentEntry = null;
   registry.swallowNextPop = false;
   registry.allowPop = null;
   registry.afterRestore = null;
@@ -288,7 +308,7 @@ function runPendingNavigation(navigator, pending) {
   };
   if (pending.kind === 'push' || pending.kind === 'replace') {
     fns[pending.kind].apply(navigator, pending.args);
-    if (registry) registry.currentIdx = readHistoryIndex();
+    registry?.recordCurrentEntry?.();
     return;
   }
   if (pending.kind === 'go') {
@@ -387,18 +407,21 @@ export function useUnsavedChanges(initialData, currentData) {
         setBlockerState('blocked');
       }
     };
+    guard.markSaved = markSaved;
     registry.guards.push(guard);
     if (registry.guards.length === 1) installGuardRegistry(registry);
     return () => {
       registry.guards = registry.guards.filter(g => g !== guard);
       if (registry.guards.length === 0) uninstallGuardRegistry(registry);
     };
-  }, [navigator]);
+  }, [navigator, markSaved]);
 
-  // Browser close / reload
+  // Browser close / reload. The handler reads the live ref, so a Discard that
+  // cleared the dirty flag (see proceed) silences it before React re-renders.
   useEffect(() => {
     if (!isDirty) return undefined;
     const handler = e => {
+      if (!isDirtyRef.current) return;
       e.preventDefault();
       e.returnValue = '';
     };
@@ -410,8 +433,18 @@ export function useUnsavedChanges(initialData, currentData) {
     const pending = pendingNavRef.current;
     pendingNavRef.current = null;
     setBlockerState('unblocked');
-    if (pending && navigator) runPendingNavigation(navigator, pending);
-  }, [navigator]);
+    if (!pending || !navigator) return;
+    if (pending.kind === 'go' || pending.kind === 'pop') {
+      // A history jump may leave the document (an entry from before the app
+      // loaded). The admin already chose to drop the edits, so clear every
+      // guard's dirty flag first: otherwise the browser's own "Leave site?"
+      // prompt would ask a second time.
+      const registry = registries.get(navigator);
+      if (registry) registry.guards.forEach(guard => guard.markSaved?.());
+      else markSaved();
+    }
+    runPendingNavigation(navigator, pending);
+  }, [navigator, markSaved]);
 
   const reset = useCallback(() => {
     pendingNavRef.current = null;

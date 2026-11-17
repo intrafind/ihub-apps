@@ -97,6 +97,15 @@ describe('AdminSettingsPage', () => {
     expect(screen.getByRole('alertdialog')).toBeInTheDocument();
   });
 
+  it('marks a dirty section at its heading too (the nav is hidden on small screens)', () => {
+    renderAt(<AdminSettingsPage title="Settings" sections={sections} />);
+    expect(
+      screen.getByRole('heading', { level: 2, name: /Section B.*Unsaved changes/ })
+    ).toBeVisible();
+    expect(screen.getByRole('heading', { level: 2, name: 'Section A' })).toBeInTheDocument();
+    expect(screen.queryByTestId('settings-section-unsaved-a')).not.toBeInTheDocument();
+  });
+
   it('marks a dirty section in the section nav', () => {
     renderAt(<AdminSettingsPage title="Settings" sections={sections} />);
     const nav = screen.getByRole('navigation', { name: 'Settings sections' });

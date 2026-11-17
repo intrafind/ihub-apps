@@ -270,6 +270,10 @@ function InstallationPageContent({ instanceId }) {
   const hasReleases = (definition?.releases?.length || 0) > 0;
   const tabParam = searchParams.get('tab');
   const tab = activeTab(tabParam, hasReleases);
+  // Once opened, the Settings tab stays mounted (hidden on the other tabs), so
+  // switching tabs keeps its unsaved edits; leaving the page still asks.
+  const [settingsOpened, setSettingsOpened] = useState(tab === 'settings');
+  if (tab === 'settings' && !settingsOpened) setSettingsOpened(true);
 
   const setTab = next => {
     const params = new URLSearchParams(searchParams);
@@ -1032,8 +1036,13 @@ function InstallationPageContent({ instanceId }) {
             </div>
           )}
 
-          {tab === 'settings' && (
-            <div role="tabpanel" id="tabpanel-settings" aria-labelledby="tab-settings">
+          {(tab === 'settings' || settingsOpened) && (
+            <div
+              role="tabpanel"
+              id="tabpanel-settings"
+              aria-labelledby="tab-settings"
+              hidden={tab !== 'settings'}
+            >
               <InstallationSettings
                 instance={instance}
                 definition={definition}

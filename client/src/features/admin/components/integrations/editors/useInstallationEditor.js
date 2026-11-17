@@ -215,7 +215,7 @@ export function useInstallationEditorDirty(editor, edited) {
       label: editor.label,
       description: editor.description,
       // A Set has no own keys, so compare the checked actions as a sorted list.
-      actions: [...(editor.checkedActions || [])].sort()
+      actions: [...(editor.checkedActions || [])].sort((a, b) => String(a).localeCompare(String(b)))
     }),
     [edited, editor.label, editor.description, editor.checkedActions]
   );

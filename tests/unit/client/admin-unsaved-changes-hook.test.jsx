@@ -46,6 +46,9 @@ function Editor({ name = 'editor', initial = 'saved', onBlocker }) {
       <button type="button" onClick={() => setSearchParams({ tab: 'b' }, { replace: true })}>
         {`${name}-tab`}
       </button>
+      <button type="button" onClick={() => setSearchParams({ tab: 'c' })}>
+        {`${name}-push-tab`}
+      </button>
       <button
         type="button"
         onClick={() => {
@@ -302,5 +305,64 @@ describe('useUnsavedChanges and browser Back/Forward (POP)', () => {
     await waitFor(() => expect(screen.getByTestId('editor-blocker')).toHaveTextContent('blocked'));
     await waitFor(() => expect(window.location.pathname).toBe('/edit'));
     expect(screen.getByTestId('location')).toHaveTextContent('/edit');
+  });
+
+  it('lets a Back that stays on the same page through (a pushed tab or filter)', async () => {
+    render(<BrowserApp />);
+    fireEvent.click(screen.getByText('open editor'));
+    type('editor', 'x');
+    fireEvent.click(screen.getByText('editor-push-tab'));
+    expect(screen.getByTestId('location')).toHaveTextContent('/edit?tab=c');
+
+    act(() => window.history.back());
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(/^\/edit$/));
+    expect(screen.getByTestId('editor-blocker')).toHaveTextContent('unblocked');
+    expect(screen.getByLabelText('editor-field')).toHaveValue('x');
+  });
+
+  it('lets a POP through when the target entry has no router index (fails open)', async () => {
+    render(<BrowserApp />);
+    fireEvent.click(screen.getByText('open editor'));
+    type('editor', 'x');
+
+    // An entry the router did not create: history.state carries no `idx`.
+    act(() => {
+      window.history.pushState(null, '', '/start');
+      window.dispatchEvent(new PopStateEvent('popstate', { state: null }));
+    });
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/start'));
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  });
+
+  it('Discard on a held navigate(-1) drops the beforeunload prompt before the jump', async () => {
+    render(<BrowserApp />);
+    fireEvent.click(screen.getByText('open editor'));
+    type('editor', 'x');
+    fireEvent.click(screen.getByText('editor-back'));
+    expect(screen.getByTestId('editor-blocker')).toHaveTextContent('blocked');
+
+    fireEvent.click(screen.getByText('Discard changes'));
+    // The jump has not happened yet (history traversal is asynchronous). If it
+    // leaves the document, the browser must not ask a second time.
+    const unload = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(unload);
+    expect(unload.defaultPrevented).toBe(false);
+
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/start'));
+  });
+
+  it('leaves Back alone on pages without a guard', async () => {
+    render(
+      <BrowserRouter>
+        <Routes>
+          <Route path="/start" element={<Link to="/plain">open plain</Link>} />
+          <Route path="/plain" element={<p>plain page</p>} />
+        </Routes>
+        <LocationProbe />
+      </BrowserRouter>
+    );
+    fireEvent.click(screen.getByText('open plain'));
+    act(() => window.history.back());
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/start'));
   });
 });

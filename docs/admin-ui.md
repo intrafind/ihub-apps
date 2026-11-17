@@ -541,7 +541,7 @@ Some things never ask:
 - A page that is still loading, or whose settings could not be loaded: there is nothing of yours to lose.
 - Saving and then leaving.
 
-On pages with several sections that each have their own Save button, such as **Security**, a dot in the section list marks every section with unsaved changes, and one dialog covers them all. On an integration's page and on **Usage Reports**, the edits on the **Settings** and **Limits & quotas** tabs are dropped when you switch to another tab of the same page; save them first.
+On pages with several sections that each have their own Save button, such as **Security**, every section with unsaved changes is marked with **Unsaved changes** next to its heading and a dot in the section list, and one dialog covers them all. On an integration's page and on **Usage Reports**, edits on the **Settings** and **Limits & quotas** tabs are kept when you switch to another tab of the same page and come back; leaving the page asks first.
 
 A few places do not ask yet: the **Authentication** page, the app order on the **Apps** list, the global prompt variables on the **Prompts** list, the OAuth server settings, the CIMD client editor, and forms in dialogs (such as installing an integration).
 

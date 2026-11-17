@@ -6783,7 +6783,8 @@
     },
     "settingsPage": {
       "sectionsNav": "Settings sections",
-      "sectionUnsaved": "(unsaved changes)"
+      "sectionUnsaved": "(unsaved changes)",
+      "sectionUnsavedBadge": "Unsaved changes"
     }
   },
   "cloudStorage": {
