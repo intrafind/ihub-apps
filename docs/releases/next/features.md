@@ -477,7 +477,8 @@ their first use of it (the list is built as tokens are used, not at start).
   minutes for the connection; closing the tab or declining at the vendor runs nothing and the card
   stays. A call that failed for another reason is never run again, and a call that needs approval
   still asks first. Cards from chats stored before this release connect the account but do not
-  re-run the question. **Reconnect** appears when a connection expired or lacks a permission, also when an MCP server
+  re-run the question. The call that runs after a connect is written to the audit log
+  (`connection.resume`, no arguments). **Reconnect** appears when a connection expired or lacks a permission, also when an MCP server
   asks for more scopes. The cloud file pickers show the same card.
 - **Scheduled tasks** use their owner's connection; with none, the run fails with
   `INTEGRATION_AUTH_REQUIRED`, naming the integration, the reason and a **Reconnect** link.

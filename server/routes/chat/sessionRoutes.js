@@ -1105,6 +1105,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           ownerId: owner.id,
           lastMessage: messages[0],
           repository,
+          req,
           isConnected: async (userId, integration) => {
             const resolved = await getIntegrationConnectionService()
               .resolve({ type: 'user', id: userId }, integration)

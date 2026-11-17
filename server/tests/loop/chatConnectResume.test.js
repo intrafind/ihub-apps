@@ -751,3 +751,69 @@ test('a run that no longer owns the chat does not leave its record behind', asyn
   assert.equal(await setup.repository.setPendingConnect(setup.chatId, record.runId, record), false);
   assert.ok(!(await setup.repository.getChat(setup.chatId)).pendingConnect);
 });
+
+// ───────────────────────── audit ─────────────────────────
+
+test('a resume is audited once, with ids and tool names and never the arguments', async t => {
+  const setup = await failedTurn(t);
+  const chat = await setup.repository.getChat(setup.chatId);
+  const entries = [];
+  const request = () =>
+    prepareConnectResume({
+      chatId: setup.chatId,
+      user: { id: 'u1' },
+      appId: 'app1',
+      chat,
+      ownerId: 'u1',
+      lastMessage: { connectResume: { id: chat.pendingConnect.id } },
+      repository: setup.repository,
+      isConnected: connected,
+      req: { ip: '127.0.0.1' },
+      audit: entry => entries.push(entry)
+    }).then(prepared => prepared.commit());
+  // Two requests at once: one takes the record, only that one is audited.
+  await Promise.all([request(), request()]);
+  assert.equal(entries.length, 1);
+  const [entry] = entries;
+  assert.equal(entry.action, 'execute');
+  assert.equal(entry.resource, 'connection');
+  assert.equal(entry.resourceId, 'jira:u1');
+  assert.deepEqual(entry.details.toolIds, ['jira_search']);
+  assert.equal(entry.details.event, 'connection.resume');
+  assert.equal(entry.details.chatId, setup.chatId);
+  assert.doesNotMatch(JSON.stringify(entry), /assignee|currentUser/);
+});
+
+test('a refused resume (not connected, expired, another user) is not audited', async t => {
+  const setup = await failedTurn(t);
+  const entries = [];
+  const chat = await setup.repository.getChat(setup.chatId);
+  const base = {
+    chatId: setup.chatId,
+    appId: 'app1',
+    chat,
+    repository: setup.repository,
+    lastMessage: { connectResume: { id: chat.pendingConnect.id } },
+    audit: entry => entries.push(entry)
+  };
+  await prepareConnectResume({
+    ...base,
+    user: { id: 'u1' },
+    ownerId: 'u1',
+    isConnected: async () => false
+  });
+  await prepareConnectResume({
+    ...base,
+    user: { id: 'u2' },
+    ownerId: 'u2',
+    isConnected: connected
+  });
+  await prepareConnectResume({
+    ...base,
+    user: { id: 'u1' },
+    ownerId: 'u1',
+    isConnected: connected,
+    now: new Date(Date.now() + CONNECT_RESUME_TTL_MS + 1000)
+  });
+  assert.deepEqual(entries, []);
+});

@@ -40,6 +40,7 @@ import crypto from 'node:crypto';
 import logger from '../../utils/logger.js';
 import { pausedTurnQuestion, pausedTurnTranscript } from './chatToolApproval.js';
 import { boundCarriedBasis } from './answerBasis.js';
+import { logAudit } from '../AuditLogService.js';
 
 const COMPONENT = 'ChatConnectResume';
 
@@ -285,7 +286,7 @@ export function resetResumeLimitForTests() {
  * the continuation needs (see {@link prepareConnectResume}).
  * @private
  */
-function makeCommit({ repository, chatId, stored, user, connectedIntegration }) {
+function makeCommit({ repository, chatId, stored, user, connectedIntegration, req, audit }) {
   return async () => {
     // Exactly one request takes the record off the chat.
     const taken = await repository.takePendingConnect(chatId, stored.id);
@@ -302,6 +303,22 @@ function makeCommit({ repository, chatId, stored, user, connectedIntegration }) 
       };
     }
     const calls = taken.calls.filter(c => c.integration === connectedIntegration);
+    // The connect itself is audited (`connection.create`); this is the call
+    // that ran because of it, on the user's behalf. Ids only, never arguments.
+    audit({
+      req,
+      action: 'execute',
+      resource: 'connection',
+      resourceId: `${connectedIntegration}:${user.id}`,
+      summary: `Resumed ${calls.length} call(s) of ${connectedIntegration} after a connect`,
+      details: {
+        event: 'connection.resume',
+        chatId,
+        recordId: taken.id,
+        integration: connectedIntegration,
+        toolIds: calls.map(c => c.toolId)
+      }
+    });
     logger.info('Chat call resumed after a connect', {
       component: COMPONENT,
       chatId,
@@ -369,6 +386,8 @@ async function firstConnected(userId, integrations, isConnected) {
  * @param {Object|null} params.lastMessage - the message of this POST
  * @param {Object} params.repository - ChatRepository
  * @param {(userId: string, integration: string) => Promise<boolean>} params.isConnected
+ * @param {Object} [params.req] - The request, for the audit entry's actor and source
+ * @param {Function} [params.audit] - Audit writer (default `logAudit`), a test seam
  * @param {Date} [params.now]
  * @returns {Promise<{refusal: Object|null, record: Object|null,
  *   commit: (() => Promise<{resume: Object|null, refusal: Object|null, restore: Function|null}>)|null}>}
@@ -382,6 +401,8 @@ export async function prepareConnectResume({
   lastMessage,
   repository,
   isConnected,
+  req = null,
+  audit = logAudit,
   now = new Date()
 }) {
   const result = { refusal: null, record: null, commit: null };
@@ -417,7 +438,7 @@ export async function prepareConnectResume({
     };
     return result;
   }
-  if (!stored || stored.id !== request.id || (chat?.appId && appId && chat.appId !== appId)) {
+  if (stored?.id !== request.id || (chat?.appId && appId && chat.appId !== appId)) {
     result.refusal = { ...NOT_PENDING };
     return result;
   }
@@ -445,6 +466,14 @@ export async function prepareConnectResume({
   }
 
   result.record = stored;
-  result.commit = makeCommit({ repository, chatId, stored, user, connectedIntegration });
+  result.commit = makeCommit({
+    repository,
+    chatId,
+    stored,
+    user,
+    connectedIntegration,
+    req,
+    audit
+  });
   return result;
 }

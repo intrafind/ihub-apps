@@ -707,6 +707,25 @@ test('a second request for the same stored call runs nothing', async ({ page, co
     .toBe(calls + 1);
   await page.waitForTimeout(2000);
   expect(vendor.toolCalls).toBe(calls + 1);
+  // The audit log has the connect and, once, the call that ran because of it
+  // (ids and tool names, never the arguments).
+  const audit = await (
+    await api.get(`${BASE}/api/admin/audit-log?resource=connection&limit=100`)
+  ).json();
+  const forChat = audit.items.filter(item => item.details?.chatId === chatId);
+  expect(forChat).toHaveLength(1);
+  expect(forChat[0]).toMatchObject({
+    action: 'execute',
+    resource: 'connection',
+    resourceId: expect.stringContaining(`${INSTALLATION_ID}:`),
+    details: { event: 'connection.resume', integration: INSTALLATION_ID }
+  });
+  expect(JSON.stringify(forChat[0])).not.toContain(QUESTION);
+  expect(
+    audit.items.some(
+      item => item.action === 'create' && item.resourceId.startsWith(`${INSTALLATION_ID}:`)
+    )
+  ).toBe(true);
   // A third request, after the run: nothing is pending any more.
   const late = await resume();
   expect(late.status()).toBe(409);
