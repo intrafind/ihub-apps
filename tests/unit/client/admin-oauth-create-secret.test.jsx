@@ -23,9 +23,14 @@ jest.mock('../../../client/src/features/admin/components/AdminBreadcrumb', () =>
   __esModule: true,
   default: () => null
 }));
+// A stand-in that can grant "All (*)": a client-credentials client needs at least one grant.
 jest.mock('../../../client/src/features/admin/components/ResourceSelector', () => ({
   __esModule: true,
-  default: () => null
+  default: ({ label, onSelectionChange }) => (
+    <button type="button" onClick={() => onSelectionChange(['*'])}>
+      {`Grant all: ${label}`}
+    </button>
+  )
 }));
 jest.mock('../../../client/src/features/admin/hooks/useUnsavedChanges', () => ({
   useUnsavedChanges: () => ({ blocker: { state: 'unblocked' }, markSaved: jest.fn() })
@@ -48,12 +53,13 @@ const SECRET = 'example-created-client-secret';
 test('creating a client reveals the secret in the SecretRevealDialog and closes after a warning', async () => {
   mockMakeAdminApiCall.mockImplementation(async (url, options) => {
     if (url === '/admin/oauth/clients' && options?.method === 'POST')
-      return { data: { client: { clientId: 'client_abc', clientSecret: SECRET } } };
+      return { data: { clientId: 'client_abc', clientSecret: SECRET } };
     return { data: [] };
   });
 
   render(<AdminOAuthClientEditPage />);
   fireEvent.change(screen.getByLabelText(/Client Name/), { target: { value: 'Reporting bot' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Grant all: Allowed Apps' }));
   await act(async () => {
     fireEvent.submit(screen.getByLabelText(/Client Name/).closest('form'));
   });

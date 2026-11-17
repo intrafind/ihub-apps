@@ -247,7 +247,7 @@ describe('AdminAuthPage unsaved-changes guard (ID-B11)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Go to users' }));
     expect(screen.queryByRole('heading', { name: 'Users page' })).not.toBeInTheDocument();
-    expect(screen.getByText('You have unsaved changes. Leave anyway?')).toBeInTheDocument();
+    expect(screen.getByText('Your changes will be lost.')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Stay' }));
     expect(screen.getByDisplayValue('60')).toBeInTheDocument();
@@ -265,8 +265,7 @@ describe('AdminAuthPage turning on a method whose block is missing (R1)', () => 
   });
 
   /** The checkbox in the auth-method row titled `label`. */
-  const methodCheckbox = label =>
-    screen.getByText(label).closest('.flex.items-start').querySelector('input[type="checkbox"]');
+  const methodCheckbox = label => screen.getByRole('checkbox', { name: label });
 
   it('posts the NTLM defaults (JWT session on), not a bare { enabled: true }', async () => {
     renderPage();
@@ -344,7 +343,7 @@ describe('AdminAuthPage edits made while saving (R3)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Go to users' }));
     expect(screen.queryByRole('heading', { name: 'Users page' })).not.toBeInTheDocument();
-    expect(screen.getByText('You have unsaved changes. Leave anyway?')).toBeInTheDocument();
+    expect(screen.getByText('Your changes will be lost.')).toBeInTheDocument();
   });
 
   it('asks before leaving after a single edit made once the save finished', async () => {
@@ -367,6 +366,6 @@ describe('AdminAuthPage edits made while saving (R3)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Go to users' }));
 
     expect(screen.queryByRole('heading', { name: 'Users page' })).not.toBeInTheDocument();
-    expect(screen.getByText('You have unsaved changes. Leave anyway?')).toBeInTheDocument();
+    expect(screen.getByText('Your changes will be lost.')).toBeInTheDocument();
   });
 });

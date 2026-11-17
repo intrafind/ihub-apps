@@ -63,7 +63,6 @@
   "features/admin/components/AssetManager.jsx": [
     "admin.common.actions",
     "admin.ui.assets.addNew",
-    "admin.ui.assets.confirmDelete",
     "admin.ui.assets.copyUrl",
     "admin.ui.assets.delete",
     "admin.ui.assets.description",
@@ -87,8 +86,7 @@
     "admin.ui.assets.usage.headerLogo",
     "admin.ui.assets.usage.headerLogoDesc",
     "admin.ui.assets.usage.title",
-    "admin.ui.cancel",
-    "common.dismiss"
+    "admin.ui.cancel"
   ],
   "features/admin/components/BrandingCustomization.jsx": [
     "admin.ui.header.favicon",
@@ -136,7 +134,6 @@
     "admin.cors.credentialsDesc",
     "admin.cors.description",
     "admin.cors.envVarHint",
-    "admin.cors.loadError",
     "admin.cors.maxAge",
     "admin.cors.maxAgeDesc",
     "admin.cors.methods",
@@ -146,8 +143,7 @@
     "admin.cors.save",
     "admin.cors.saveError",
     "admin.cors.saved",
-    "admin.cors.saving",
-    "admin.cors.title"
+    "admin.cors.saving"
   ],
   "features/admin/components/ErrorPagesCustomization.jsx": [
     "admin.ui.errorPages.subtitle",
@@ -317,8 +313,6 @@
     "admin.ui.remove",
     "admin.ui.styles.addFirstVariable",
     "admin.ui.styles.addVariable",
-    "admin.ui.styles.addVariableName",
-    "admin.ui.styles.addVariableValue",
     "admin.ui.styles.cssVariables",
     "admin.ui.styles.cssVariablesDescription",
     "admin.ui.styles.cssVariablesTitle",
@@ -394,7 +388,6 @@
     "admin.apps.edit.outputFormat",
     "admin.apps.edit.preferredModel",
     "admin.apps.edit.searchModels",
-    "admin.apps.edit.selectCategory",
     "admin.apps.edit.selectModel",
     "admin.apps.edit.typeChat",
     "admin.apps.edit.typeIframe",
@@ -541,7 +534,6 @@
     "admin.apps.edit.manualMode"
   ],
   "features/admin/hooks/useOverviewData.js": [
-    "admin.overview.apps.enabledCount",
     "admin.overview.chats.period",
     "admin.overview.prompts.label",
     "admin.overview.users.noSessions",
@@ -580,7 +572,6 @@
     "admin.agents.edit.editMemoryFile",
     "admin.agents.edit.enabled",
     "admin.agents.edit.hitl",
-    "admin.agents.edit.hitlHint",
     "admin.agents.edit.icon",
     "admin.agents.edit.id",
     "admin.agents.edit.identity",
@@ -637,8 +628,6 @@
     "admin.agents.edit.reviewStrictnessHint",
     "admin.agents.edit.reviewSystem",
     "admin.agents.edit.reviewVariables",
-    "admin.agents.edit.schedule",
-    "admin.agents.edit.scheduleHint",
     "admin.agents.edit.selectModel",
     "admin.agents.edit.serviceAccount",
     "admin.agents.edit.serviceAccountHint",
@@ -748,8 +737,7 @@
     "admin.apps.edit.titleNew",
     "admin.apps.edit.validationErrorsExist",
     "admin.apps.errorTitle",
-    "admin.apps.loading",
-    "common.dismiss"
+    "admin.apps.loading"
   ],
   "features/admin/pages/AdminAppsPage.jsx": [
     "admin.apps.actions.clone",
@@ -759,8 +747,6 @@
     "admin.apps.actions.toggle",
     "admin.apps.allCategories",
     "admin.apps.createApp",
-    "admin.apps.deleteConfirm",
-    "admin.apps.deleteTitle",
     "admin.apps.filterAll",
     "admin.apps.filterDisabled",
     "admin.apps.filterEnabled",
@@ -777,11 +763,8 @@
     "admin.apps.table.status",
     "admin.apps.title",
     "admin.apps.uploadConfig",
-    "admin.apps.uploading",
-    "admin.common.disableAll",
-    "admin.common.enableAll"
+    "admin.apps.uploading"
   ],
-  "features/admin/pages/AdminAuthPage.jsx": ["admin.auth.save", "admin.auth.saving"],
   "features/admin/pages/AdminBackupPage.jsx": ["admin.backup.description"],
   "features/admin/pages/AdminBrowserExtensionPage.jsx": [
     "admin.browserExtension.addPrompt",
@@ -854,9 +837,6 @@
   "features/admin/pages/AdminCredentialsPage.jsx": [
     "admin.credentials.create",
     "admin.credentials.createTitle",
-    "admin.credentials.deleteConfirm",
-    "admin.credentials.deleteError",
-    "admin.credentials.deleted",
     "admin.credentials.editTitle",
     "admin.credentials.empty",
     "admin.credentials.form.clientId",
@@ -898,8 +878,7 @@
     "admin.ui.content.disclaimerTitle",
     "admin.ui.content.disclaimerUpdated",
     "admin.ui.content.disclaimerVersion",
-    "admin.ui.error",
-    "common.dismiss"
+    "admin.ui.error"
   ],
   "features/admin/pages/AdminDocumentTemplateEditPage.jsx": ["common.create"],
   "features/admin/pages/AdminFeaturesPage.jsx": ["common.saveChanges"],
@@ -930,11 +909,9 @@
   ],
   "features/admin/pages/AdminLoggingPage.jsx": [
     "admin.logging.authDebugDescription",
-    "admin.logging.currentLevel",
     "admin.logging.description",
     "admin.logging.includeRawDataWarning",
-    "admin.logging.title",
-    "common.note"
+    "admin.logging.title"
   ],
   "features/admin/pages/AdminMarketplaceRegistriesPage.jsx": [
     "common.actions",
@@ -943,17 +920,9 @@
   ],
   "features/admin/pages/AdminMcpGatewayPage.jsx": [
     "admin.mcp.gateway.connectionHint",
-    "admin.mcp.gateway.discoveryLabel",
-    "admin.mcp.gateway.endpointLabel",
-    "admin.mcp.gateway.transportStateless",
     "admin.mcp.gateway.transportStatelessDesc"
   ],
-  "features/admin/pages/AdminModelsPage.jsx": [
-    "admin.common.disableAll",
-    "admin.common.enableAll",
-    "admin.models.statusLabel",
-    "admin.models.toggle"
-  ],
+  "features/admin/pages/AdminModelsPage.jsx": ["admin.models.statusLabel", "admin.models.toggle"],
   "features/admin/pages/AdminOAuthClientEditPage.jsx": [
     "admin.auth.oauth.authCodeSection",
     "admin.auth.oauth.clientType",
@@ -976,7 +945,6 @@
   "features/admin/pages/AdminOAuthClientsPage.jsx": [
     "admin.auth.oauth.badgeAuthCode",
     "admin.auth.oauth.deleteTitle",
-    "admin.auth.oauth.rotateSecretTitle",
     "common.copiedToClipboard",
     "common.copyToClipboard",
     "common.disable",
@@ -1037,7 +1005,6 @@
     "admin.pages.fields.content",
     "admin.pages.fields.contentType",
     "admin.pages.fields.id",
-    "admin.pages.fields.idRequired",
     "admin.pages.fields.title"
   ],
   "features/admin/pages/AdminPagesPage.jsx": [
@@ -1052,8 +1019,6 @@
     "admin.pages.title",
     "common.view"
   ],
-  "features/admin/pages/AdminProjectEditPage.jsx": ["common.dismiss"],
-  "features/admin/pages/AdminProjectsPage.jsx": ["common.dismiss"],
   "features/admin/pages/AdminPromptEditPage.jsx": [
     "admin.prompts.edit.backToList",
     "admin.prompts.edit.cancel",
@@ -1068,8 +1033,6 @@
     "admin.prompts.errorTitle"
   ],
   "features/admin/pages/AdminPromptsPage.jsx": [
-    "admin.common.disableAll",
-    "admin.common.enableAll",
     "admin.promptVariables.error",
     "admin.promptVariables.loadError",
     "admin.promptVariables.subtitle",
@@ -1078,7 +1041,6 @@
     "admin.prompts.clone",
     "admin.prompts.createNew",
     "admin.prompts.delete",
-    "admin.prompts.deleteConfirm",
     "admin.prompts.disabled",
     "admin.prompts.download",
     "admin.prompts.enabled",
@@ -1141,7 +1103,6 @@
     "admin.skills.backToList",
     "admin.skills.configOverrides",
     "admin.skills.configOverridesDescription",
-    "admin.skills.deleteConfirm",
     "admin.skills.disable",
     "admin.skills.disabled",
     "admin.skills.documentation",
@@ -1172,8 +1133,6 @@
     "admin.skills.tabs.overview"
   ],
   "features/admin/pages/AdminSkillsPage.jsx": [
-    "admin.skills.deleteConfirm",
-    "admin.skills.deleteSuccess",
     "admin.skills.disable",
     "admin.skills.disabled",
     "admin.skills.enable",
@@ -1193,23 +1152,14 @@
     "admin.skills.table.description",
     "admin.skills.table.status",
     "admin.skills.table.version",
-    "admin.skills.uploading",
-    "common.dismiss"
+    "admin.skills.uploading"
   ],
-  "features/admin/pages/AdminUICustomization.jsx": [
-    "admin.ui.backup",
-    "admin.ui.description",
-    "admin.ui.error",
-    "admin.ui.loading",
-    "admin.ui.title",
-    "common.dismiss"
-  ],
+  "features/admin/pages/AdminUICustomization.jsx": ["admin.ui.backup", "admin.ui.loading"],
   "features/admin/pages/AdminUpdatesPage.jsx": ["admin.system.rollbackTitle"],
   "features/admin/pages/AdminUsersPage.jsx": ["admin.users.deleteTitle"],
   "features/admin/pages/AdminWorkflowEditPage.jsx": [
     "admin.workflows.createDescription",
     "admin.workflows.createNew",
-    "admin.workflows.deleteConfirm",
     "admin.workflows.disabled",
     "admin.workflows.editDescription",
     "admin.workflows.editWorkflow",
@@ -1266,7 +1216,6 @@
     "admin.workflows.cloneExists",
     "admin.workflows.createNew",
     "admin.workflows.delete",
-    "admin.workflows.deleteConfirm",
     "admin.workflows.disabled",
     "admin.workflows.download",
     "admin.workflows.edit",
@@ -1280,7 +1229,6 @@
     "admin.workflows.searchPlaceholder",
     "admin.workflows.statusLabel",
     "admin.workflows.subtitle",
-    "admin.workflows.table.groups",
     "admin.workflows.table.name",
     "admin.workflows.table.nodes",
     "admin.workflows.table.status",
@@ -1440,9 +1388,7 @@
     "admin.editor.noFormComponent",
     "admin.editor.noFormComponentDesc",
     "admin.editor.reset",
-    "admin.editor.resetConfirmation",
     "admin.editor.unsavedChanges",
-    "admin.editor.unsavedChangesWarning",
     "admin.editor.validationErrors",
     "admin.editor.validationSummary"
   ],

@@ -154,9 +154,9 @@ function AdminLoadError({
       data-testid="admin-load-error"
       className={`${
         neutral
-          ? 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700'
-          : 'bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800'
-      } border rounded-md p-4 ${className}`}
+          ? 'border bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700'
+          : 'border bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800'
+      } rounded-md p-4 ${className}`}
     >
       <div className="flex">
         <Icon

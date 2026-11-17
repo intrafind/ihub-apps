@@ -5,9 +5,9 @@ import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import DualModeEditor from '../../../shared/components/DualModeEditor';
-import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import PlatformFormEditor from '../components/PlatformFormEditor';
 import AdminLoadGate from '../components/AdminLoadGate';
+import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
 import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import { getSchemaByType } from '../../../utils/schemaService';
@@ -242,16 +242,7 @@ function AdminAuthPage() {
         </AdminLoadGate>
       </div>
 
-      <ConfirmDialog
-        isOpen={blocker.state === 'blocked'}
-        title={t('admin.unsavedChanges.title', 'Unsaved changes')}
-        message={t('admin.unsavedChanges.message', 'You have unsaved changes. Leave anyway?')}
-        confirmLabel={t('admin.unsavedChanges.leave', 'Leave')}
-        denyLabel={t('admin.unsavedChanges.stay', 'Stay')}
-        danger={false}
-        onConfirm={blocker.proceed}
-        onDeny={blocker.reset}
-      />
+      <UnsavedChangesDialog blocker={blocker} />
     </div>
   );
 }

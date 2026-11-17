@@ -26,8 +26,6 @@ const GUARD = /useUnsavedChanges|useAdminResourceEditor|AdminEditPageShell|Admin
 
 /** Pages with a save control and no guard yet. Shrink-only. */
 const BASELINE = new Map([
-  // Fixed in the load-gating PR (ID-B11), which owns AdminAuthPage.
-  ['AdminAuthPage.jsx', 'fixed in load-gating PR'],
   // Not in the finding lists of the unsaved-guards PR; follow-ups.
   ['AdminAppsPage.jsx', 'app order draft (Save order)'],
   ['AdminPromptsPage.jsx', 'global prompt variables'],

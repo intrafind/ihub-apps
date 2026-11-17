@@ -588,7 +588,7 @@ function StyleEditor({ config, onUpdate, t }) {
                     onChange={e => setNewVariable(prev => ({ ...prev, name: e.target.value }))}
                     aria-invalid={newVariableError ? 'true' : undefined}
                     aria-describedby={newVariableError ? 'new-css-variable-error' : undefined}
-                    className="w-full px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-sm text-sm font-mono bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                    className="w-full px-3 py-1 border border-admin-control-border dark:border-admin-control-border-dark rounded-sm text-sm font-mono bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                   />
                 </div>
                 <div>
@@ -611,7 +611,7 @@ function StyleEditor({ config, onUpdate, t }) {
                     }}
                     aria-invalid={newVariableError ? 'true' : undefined}
                     aria-describedby={newVariableError ? 'new-css-variable-error' : undefined}
-                    className="w-full px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-sm text-sm font-mono bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                    className="w-full px-3 py-1 border border-admin-control-border dark:border-admin-control-border-dark rounded-sm text-sm font-mono bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                   />
                 </div>
               </div>

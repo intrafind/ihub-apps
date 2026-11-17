@@ -225,7 +225,7 @@ describe('new machine client', () => {
 
     // The created client (response body itself) is shown once.
     expect(await screen.findByText('svc-new')).toBeInTheDocument();
-    expect(screen.getByText('shown-once-secret')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('shown-once-secret')).toBeInTheDocument();
   });
 });
 
