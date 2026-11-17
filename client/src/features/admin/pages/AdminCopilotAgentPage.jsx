@@ -1,10 +1,12 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import AdminLoadGate from '../components/AdminLoadGate';
+import { useAdminConfigLoad } from '../hooks/useAdminConfigLoad';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 
 const TEAMS_DEVELOPER_PORTAL_URL = 'https://dev.teams.microsoft.com/tools';
@@ -79,7 +81,7 @@ function Prerequisite({ ok, children }) {
  */
 function AdminCopilotAgentPage() {
   const { t } = useTranslation();
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState(null);
   const [message, setMessage] = useState(null);
   const [toggling, setToggling] = useState(false);
@@ -96,25 +98,32 @@ function AdminCopilotAgentPage() {
 
   const limits = status?.limits || {};
 
+  const fetchStatus = async () =>
+    (await makeAdminApiCall('/admin/copilot-agent/status', { method: 'GET' })).data;
+
+  /** Put a loaded status into the form state. */
+  const applyStatus = data => {
+    setStatus(data);
+    setReferenceId(data.oauthReferenceId || '');
+    setName(data.name || '');
+    setDescription(data.description || '');
+    setInstructions(data.instructions || '');
+    setStarters(
+      Array.isArray(data.conversationStarters)
+        ? data.conversationStarters.map(s => ({
+            _id: crypto.randomUUID(),
+            title: s?.title || '',
+            text: s?.text || ''
+          }))
+        : []
+    );
+  };
+
+  // Reload after Enable/Disable or a save; the first load goes through the gate below.
   const loadStatus = async () => {
     try {
       setLoading(true);
-      const res = await makeAdminApiCall('/admin/copilot-agent/status', { method: 'GET' });
-      const data = res.data;
-      setStatus(data);
-      setReferenceId(data.oauthReferenceId || '');
-      setName(data.name || '');
-      setDescription(data.description || '');
-      setInstructions(data.instructions || '');
-      setStarters(
-        Array.isArray(data.conversationStarters)
-          ? data.conversationStarters.map(s => ({
-              _id: crypto.randomUUID(),
-              title: s?.title || '',
-              text: s?.text || ''
-            }))
-          : []
-      );
+      applyStatus(await fetchStatus());
     } catch {
       setMessage({
         type: 'error',
@@ -125,12 +134,15 @@ function AdminCopilotAgentPage() {
     }
   };
 
-  useEffect(() => {
-    void loadStatus();
-    // eslint-disable-next-line @eslint-react/exhaustive-deps
-  }, []);
+  // No form, Enable or Save until the status loaded: saving after a failed
+  // load would store empty prompts and defaults over the real ones (IN-B6).
+  const load = useAdminConfigLoad({
+    sources: { status: { load: fetchStatus, onLoad: applyStatus } }
+  });
+  const ready = load.status === 'ready';
 
   const handleToggle = async () => {
+    if (!ready) return;
     if (!status) return;
     const action = status.enabled ? '_disable' : '_enable';
     try {
@@ -193,6 +205,7 @@ function AdminCopilotAgentPage() {
   };
 
   const handleSave = async () => {
+    if (!ready) return;
     try {
       setSaving(true);
       setMessage(null);
@@ -224,6 +237,7 @@ function AdminCopilotAgentPage() {
 
   // Step 1's own save: the registration ID only, never step 2's unsaved edits.
   const handleSaveReferenceId = async () => {
+    if (!ready) return;
     try {
       setSaving(true);
       setMessage(null);
@@ -311,7 +325,12 @@ function AdminCopilotAgentPage() {
           </div>
         )}
 
-        {loading && !status ? (
+        {!ready ? (
+          <AdminLoadGate
+            load={load}
+            resourceLabel={t('admin.copilotAgent.resource', 'Copilot agent settings')}
+          />
+        ) : loading && !status ? (
           <div className="flex items-center justify-center py-16">
             <div className="w-8 h-8 border-4 border-gray-200 border-t-indigo-600 rounded-full animate-spin" />
           </div>

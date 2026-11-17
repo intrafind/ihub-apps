@@ -1,11 +1,13 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import Switch from '../../../shared/components/Switch';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import AdminLoadGate from './AdminLoadGate';
+import { useAdminConfigLoad } from '../hooks/useAdminConfigLoad';
 
 function SSLConfig() {
   const { t } = useTranslation();
@@ -14,37 +16,31 @@ function SSLConfig() {
     domainWhitelist: []
   });
   const [newDomain, setNewDomain] = useState('');
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
 
-  // Fetch current SSL configuration on mount
-  useEffect(() => {
-    const fetchSSLConfig = async () => {
-      try {
-        const response = await makeAdminApiCall('/admin/ssl/config', {
-          method: 'GET'
-        });
-        // Ensure domainWhitelist is always an array for backward compatibility
-        setConfig({
-          ignoreInvalidCertificates: response.data.ignoreInvalidCertificates || false,
-          domainWhitelist: Array.isArray(response.data.domainWhitelist)
-            ? response.data.domainWhitelist
-            : []
-        });
-        setMessage('');
-      } catch (error) {
-        setMessage({
-          type: 'error',
-          text: error.message || t('admin.system.ssl.configSaveError')
-        });
-      } finally {
-        setLoading(false);
+  // The card shows no form and no Save until its settings loaded: saving
+  // the defaults after a failed load would overwrite the stored ones (PL-B3).
+  const load = useAdminConfigLoad({
+    sources: {
+      config: {
+        load: async () =>
+          (
+            await makeAdminApiCall('/admin/ssl/config', {
+              method: 'GET'
+            })
+          ).data,
+        onLoad: data => {
+          // Ensure domainWhitelist is always an array for backward compatibility
+          setConfig({
+            ignoreInvalidCertificates: data.ignoreInvalidCertificates || false,
+            domainWhitelist: Array.isArray(data.domainWhitelist) ? data.domainWhitelist : []
+          });
+        }
       }
-    };
-
-    void fetchSSLConfig();
-  }, [t]);
+    }
+  });
+  const ready = load.status === 'ready';
 
   /**
    * Turns "ignore invalid certificates" on or off.
@@ -81,6 +77,7 @@ function SSLConfig() {
   };
 
   const handleSaveConfig = async () => {
+    if (!ready) return;
     setSaving(true);
     setMessage('');
 
@@ -111,13 +108,19 @@ function SSLConfig() {
     }
   };
 
-  if (loading) {
+  if (!ready) {
     return (
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
         <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">
           {t('admin.system.ssl.title')}
         </h2>
-        <p className="text-gray-600 dark:text-gray-400">{t('common.loading', 'Loading...')}</p>
+        <AdminLoadGate
+          load={load}
+          resourceLabel={t('admin.system.ssl.title')}
+          loadingFallback={
+            <p className="text-gray-600 dark:text-gray-400">{t('common.loading', 'Loading...')}</p>
+          }
+        />
       </div>
     );
   }

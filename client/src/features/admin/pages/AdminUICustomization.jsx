@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import BrandingCustomization from '../components/BrandingCustomization';
@@ -16,6 +16,8 @@ import EuAiActCard from '../components/euAiAct/EuAiActCard';
 import AdminTabs from '../components/AdminTabs';
 import AdminSaveBar from '../components/AdminSaveBar';
 import AdminLoadError from '../components/AdminLoadError';
+import AdminLoadGate from '../components/AdminLoadGate';
+import { useAdminConfigLoad } from '../hooks/useAdminConfigLoad';
 import { CALLOUT_CLASS, SECONDARY_BUTTON_CLASS } from '../components/formStyles';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
@@ -89,7 +91,6 @@ function AdminUICustomization() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [savedConfig, setSavedConfig] = useState(null);
   const [config, setConfig] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [successMessage, setSuccessMessage] = useState('');
@@ -113,28 +114,24 @@ function AdminUICustomization() {
 
   // Load the configuration once. A save replaces the form with what was saved;
   // reloading after `refreshUIConfig()` would overwrite edits made meanwhile.
-  useEffect(() => {
-    let cancelled = false;
-    const loadConfig = async () => {
-      try {
-        const response = await makeAdminApiCall('/admin/ui/config', { revision: revisionRef });
-        if (cancelled) return;
-        setSavedConfig(response.data);
-        setConfig(response.data);
-      } catch (err) {
-        console.error('Failed to load UI config:', err);
-        if (!cancelled) setError(err.message || 'Failed to load configuration');
-      } finally {
-        if (!cancelled) setLoading(false);
+  // Until it loaded there is no form and no Save (CU-B5); a failed load shows
+  // the error with Retry (UX-N4).
+  const load = useAdminConfigLoad({
+    sources: {
+      ui: {
+        load: async () =>
+          (await makeAdminApiCall('/admin/ui/config', { revision: revisionRef })).data,
+        onLoad: data => {
+          setSavedConfig(data);
+          setConfig(data);
+        }
       }
-    };
-    void loadConfig();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    }
+  });
+  const ready = load.status === 'ready';
 
   const handleSave = async () => {
+    if (!ready || !config) return;
     const toSave = normalizeUIConfig(config);
     const missing = REQUIRED_SECTIONS.find(section => !Object.hasOwn(toSave, section));
     if (missing) {
@@ -238,7 +235,7 @@ function AdminUICustomization() {
     icon: <Icon name={TAB_ICONS[tab.id]} size="sm" aria-hidden="true" />
   }));
 
-  if (loading) {
+  if (load.status === 'loading') {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
@@ -251,13 +248,21 @@ function AdminUICustomization() {
     );
   }
 
-  if (!config) {
+  if (!ready || !config) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-red-600 dark:text-red-400" role="alert">
-            {error || t('admin.ui.error', 'Failed to load configuration')}
-          </p>
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+        <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+              {t('admin.ui.title', 'UI Customization')}
+            </h1>
+            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+              {t('admin.ui.description', 'Customize the appearance and branding of your iHub Apps')}
+            </p>
+          </div>
+        </div>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <AdminLoadGate load={load} resourceLabel={t('admin.ui.resource', 'UI settings')} />
         </div>
       </div>
     );

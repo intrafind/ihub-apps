@@ -1,11 +1,13 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import Switch from '../../../shared/components/Switch';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import AdminLoadGate from './AdminLoadGate';
+import { useAdminConfigLoad } from '../hooks/useAdminConfigLoad';
 
 const DEFAULT_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'HEAD', 'PATCH'];
 const DEFAULT_HEADERS = [
@@ -30,37 +32,30 @@ function CorsConfig() {
     allowedHeaders: DEFAULT_HEADERS
   });
   const [newOrigin, setNewOrigin] = useState('');
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
 
-  useEffect(() => {
-    const fetchCorsConfig = async () => {
-      try {
-        const response = await makeAdminApiCall('/admin/cors/config', { method: 'GET' });
-        setConfig({
-          origin: Array.isArray(response.data.origin) ? response.data.origin : [],
-          credentials:
-            typeof response.data.credentials === 'boolean' ? response.data.credentials : true,
-          maxAge: typeof response.data.maxAge === 'number' ? response.data.maxAge : 86400,
-          methods: Array.isArray(response.data.methods) ? response.data.methods : DEFAULT_METHODS,
-          allowedHeaders: Array.isArray(response.data.allowedHeaders)
-            ? response.data.allowedHeaders
-            : DEFAULT_HEADERS
-        });
-        setMessage('');
-      } catch (error) {
-        setMessage({
-          type: 'error',
-          text: error.message || t('admin.cors.loadError', 'Failed to load CORS configuration')
-        });
-      } finally {
-        setLoading(false);
+  // The card shows no form and no Save until its settings loaded: saving
+  // the defaults after a failed load would overwrite the stored ones (PL-B3).
+  const load = useAdminConfigLoad({
+    sources: {
+      config: {
+        load: async () => (await makeAdminApiCall('/admin/cors/config', { method: 'GET' })).data,
+        onLoad: data => {
+          setConfig({
+            origin: Array.isArray(data.origin) ? data.origin : [],
+            credentials: typeof data.credentials === 'boolean' ? data.credentials : true,
+            maxAge: typeof data.maxAge === 'number' ? data.maxAge : 86400,
+            methods: Array.isArray(data.methods) ? data.methods : DEFAULT_METHODS,
+            allowedHeaders: Array.isArray(data.allowedHeaders)
+              ? data.allowedHeaders
+              : DEFAULT_HEADERS
+          });
+        }
       }
-    };
-
-    void fetchCorsConfig();
-  }, [t]);
+    }
+  });
+  const ready = load.status === 'ready';
 
   const handleAddOrigin = () => {
     const trimmed = newOrigin.trim();
@@ -80,6 +75,7 @@ function CorsConfig() {
   };
 
   const handleSaveConfig = async () => {
+    if (!ready) return;
     setSaving(true);
     setMessage('');
     try {
@@ -98,13 +94,19 @@ function CorsConfig() {
     }
   };
 
-  if (loading) {
+  if (!ready) {
     return (
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
         <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">
           {t('admin.cors.title', 'CORS Configuration')}
         </h2>
-        <p className="text-gray-600 dark:text-gray-400">{t('common.loading', 'Loading...')}</p>
+        <AdminLoadGate
+          load={load}
+          resourceLabel={t('admin.cors.title', 'CORS Configuration')}
+          loadingFallback={
+            <p className="text-gray-600 dark:text-gray-400">{t('common.loading', 'Loading...')}</p>
+          }
+        />
       </div>
     );
   }

@@ -244,20 +244,16 @@ function AdminUserEditPage() {
   } = useAdminResourceEditor({
     resourceId: userId,
     loadResource: async id => {
-      try {
-        const response = await makeAdminApiCall('/admin/auth/users');
-        const data = response.data;
+      const response = await makeAdminApiCall('/admin/auth/users');
+      const data = response.data;
 
-        // Find the user by ID in the users object
-        const userData = Object.values(data.users || {}).find(u => u.id === id);
-        if (!userData) {
-          throw new Error('User not found');
-        }
-
-        return { ...userData, password: '' };
-      } catch (err) {
-        throw new Error(getAdminApiErrorMessage(err));
+      // Find the user by ID in the users object
+      const userData = Object.values(data.users || {}).find(u => u.id === id);
+      if (!userData) {
+        throw new Error('User not found');
       }
+
+      return { ...userData, password: '' };
     },
     // Initialize new user with generated ID
     makeDefault: () => ({

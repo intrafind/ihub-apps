@@ -41,6 +41,11 @@ jest.mock('../../../client/src/features/admin/components/AdminDemoAccountsAlert'
   __esModule: true,
   default: () => null
 }));
+// The load-error banner's icon pulls in runtimeBasePath (import.meta).
+jest.mock('../../../client/src/shared/components/Icon', () => ({
+  __esModule: true,
+  default: () => null
+}));
 let mockPlatformConfig;
 jest.mock('../../../client/src/shared/contexts/PlatformConfigContext', () => ({
   __esModule: true,

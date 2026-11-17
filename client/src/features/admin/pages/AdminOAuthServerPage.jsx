@@ -1,11 +1,13 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import { createConfigRevision } from '../../../api/adminConfigRevision';
+import AdminLoadGate from '../components/AdminLoadGate';
+import { useAdminConfigLoad } from '../hooks/useAdminConfigLoad';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import Switch from '../../../shared/components/Switch';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
@@ -15,7 +17,6 @@ import OAuthTabsHeader from '../components/OAuthTabsHeader';
 function AdminOAuthServerPage() {
   const { t } = useTranslation();
   const { refreshConfig } = usePlatformConfig();
-  const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
   const [oauthEnabled, setOAuthEnabled] = useState(false);
   const [oauthConfig, setOauthConfig] = useState({
@@ -41,46 +42,40 @@ function AdminOAuthServerPage() {
   const [jwtAlgorithm, setJwtAlgorithm] = useState('RS256');
   const [savingConfig, setSavingConfig] = useState(false);
 
-  useEffect(() => {
-    void loadConfig();
-    // eslint-disable-next-line @eslint-react/exhaustive-deps
-  }, []);
-
-  const loadConfig = async () => {
-    try {
-      const response = await makeAdminApiCall('/admin/configs/platform');
-      const data = response.data;
-      setOAuthEnabled(data?.oauth?.enabled?.authz || false);
-      if (data?.oauth) {
-        setOauthConfig(prev => ({
-          ...prev,
-          issuer: data.oauth.issuer || '',
-          defaultTokenExpirationMinutes: data.oauth.defaultTokenExpirationMinutes ?? 60,
-          maxTokenExpirationMinutes: data.oauth.maxTokenExpirationMinutes ?? 1440,
-          authorizationCodeEnabled: data.oauth.authorizationCodeEnabled ?? false,
-          authorizationCodeExpirationSeconds: data.oauth.authorizationCodeExpirationSeconds ?? 600,
-          refreshTokenEnabled: data.oauth.refreshTokenEnabled ?? false,
-          refreshTokenExpirationDays: data.oauth.refreshTokenExpirationDays ?? 30,
-          consentRequired: data.oauth.consentRequired ?? true,
-          consentMemoryDays: data.oauth.consentMemoryDays ?? 90,
-          personalKeys: {
-            ...prev.personalKeys,
-            ...data.oauth.personalKeys
+  // No settings and no Save until the platform config loaded: saving after a
+  // failed load would write the defaults above over the stored OAuth settings.
+  const load = useAdminConfigLoad({
+    sources: {
+      platform: {
+        load: async () => (await makeAdminApiCall('/admin/configs/platform')).data,
+        onLoad: data => {
+          setOAuthEnabled(data?.oauth?.enabled?.authz || false);
+          if (data?.oauth) {
+            setOauthConfig(prev => ({
+              ...prev,
+              issuer: data.oauth.issuer || '',
+              defaultTokenExpirationMinutes: data.oauth.defaultTokenExpirationMinutes ?? 60,
+              maxTokenExpirationMinutes: data.oauth.maxTokenExpirationMinutes ?? 1440,
+              authorizationCodeEnabled: data.oauth.authorizationCodeEnabled ?? false,
+              authorizationCodeExpirationSeconds:
+                data.oauth.authorizationCodeExpirationSeconds ?? 600,
+              refreshTokenEnabled: data.oauth.refreshTokenEnabled ?? false,
+              refreshTokenExpirationDays: data.oauth.refreshTokenExpirationDays ?? 30,
+              consentRequired: data.oauth.consentRequired ?? true,
+              consentMemoryDays: data.oauth.consentMemoryDays ?? 90,
+              personalKeys: {
+                ...prev.personalKeys,
+                ...data.oauth.personalKeys
+              }
+            }));
           }
-        }));
+          setClientsEnabled(data?.oauth?.enabled?.clients || false);
+          setJwtAlgorithm(data?.jwt?.algorithm || 'RS256');
+        }
       }
-      setClientsEnabled(data?.oauth?.enabled?.clients || false);
-      setJwtAlgorithm(data?.jwt?.algorithm || 'RS256');
-    } catch (error) {
-      console.error('Failed to load OAuth config:', error);
-      setMessage({
-        type: 'error',
-        text: t('admin.auth.oauth.loadError', 'Failed to load configuration')
-      });
-    } finally {
-      setLoading(false);
     }
-  };
+  });
+  const ready = load.status === 'ready';
 
   const updatePersonalKeys = useCallback((field, value) => {
     setOauthConfig(prev => ({
@@ -116,6 +111,7 @@ function AdminOAuthServerPage() {
   );
 
   const handleToggleOAuth = async () => {
+    if (!ready) return;
     const newStatus = !oauthEnabled;
 
     try {
@@ -165,6 +161,7 @@ function AdminOAuthServerPage() {
   };
 
   const handleSaveOAuthConfig = async () => {
+    if (!ready) return;
     setSavingConfig(true);
     setMessage('');
 
@@ -216,13 +213,14 @@ function AdminOAuthServerPage() {
     }
   };
 
-  if (loading) {
+  if (!ready) {
     return (
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <OAuthTabsHeader />
-        <div className="flex items-center justify-center py-16">
-          <LoadingSpinner size="lg" />
-        </div>
+        <AdminLoadGate
+          load={load}
+          resourceLabel={t('admin.auth.oauth.server.resource', 'authorization server settings')}
+        />
       </div>
     );
   }

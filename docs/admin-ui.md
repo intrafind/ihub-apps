@@ -108,7 +108,7 @@ The dashboard (`/admin`) gives a real-time snapshot of your platform.
 
 **Quick actions:** One-click shortcuts to the most common admin tasks.
 
-**Setup checklist:** Shown on fresh installations to guide initial configuration. Disappears once the checklist steps are complete.
+**Setup checklist:** Shown on fresh installations to guide initial configuration. Disappears once the checklist steps are complete. If the list of apps could not be loaded, the dashboard says so and offers **Retry** instead; it never takes a failed request for a fresh installation.
 
 **First-run onboarding:** While the setup wizard has not been completed, a card says whether it is shown to users or hidden for everyone, shows the demo-account status and links to **Platform → Advanced → First-run onboarding**, where the wizard can be switched off (`setup.disabled`). The card disappears once onboarding is completed. See [Getting Started](GETTING_STARTED.md).
 
@@ -560,6 +560,17 @@ settings on **EU AI Act**, and **Save Privacy Settings** on **Logging**, which s
 anonymization and leaves other unsaved logging changes unsaved. Saving **UI Customization** never
 removes content pages created under **Pages** in the meantime, and creating a page while UI
 Customization is open does not make its save fail.
+
+---
+
+## When a page can't load
+
+If a settings page cannot load what it edits — the server is busy ("Too many requests"), restarting, or unreachable — the page keeps its title but shows **Couldn't load …** with the reason and **Nothing was changed.** instead of the form. There is no Save button until the settings have loaded, so a failed load can never save default values over your configuration.
+
+- **Retry** loads again in place; the rest of the page and your browser tab stay as they are. After "Too many requests", Retry counts down (**Retry in 12 s**) until the server accepts requests again.
+- **You can't view …** means your account has no access to that page; Retry is not offered.
+- On pages with several independent sections, such as **Security**, only the section that failed shows the message; the others stay usable.
+- On **Authentication**, the group list and the JSON schema are optional: if only they fail, the form still appears, with less help in the group picker and the JSON view.
 
 ---
 

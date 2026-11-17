@@ -78,7 +78,8 @@ export default defineConfig({
     command: 'node tests/config/e2e-server.mjs',
     // From the repository root (the default is this file's directory).
     cwd: '../..',
-    url: 'http://localhost:5173',
+    // The API behind Vite, not only Vite itself: specs sign in first thing.
+    url: 'http://localhost:5173/api/health',
     reuseExistingServer: !process.env.CI,
     timeout: 120 * 1000
   }

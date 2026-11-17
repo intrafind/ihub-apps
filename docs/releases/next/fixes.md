@@ -892,3 +892,26 @@ Several admin saves wrote back more than they showed, and lost what they could n
   redacted, and rolling back keeps the current secrets instead of restoring older ones.
 
 No action is needed after the upgrade.
+
+## Admin Settings Pages That Failed to Load No Longer Offer Save
+
+When a settings page could not load its settings — the server answered "Too many requests", was
+restarting or could not be reached — most pages showed the error above a form filled with built-in
+defaults, and Save stayed enabled. One click wrote those defaults over the real configuration. On
+**Authentication** that meant Proxy mode with local sign-in off, shown as "All valid", which could
+lock the admin out; elsewhere it could drop the MCP gateway's OAuth settings, wipe the telemetry
+endpoint, switch audit IP anonymization off or empty the SSL, SSRF and CORS allow-lists.
+
+These pages now show **Couldn't load …**, the reason and "Nothing was changed." instead of the form,
+with no Save until the settings have loaded.
+
+- **Retry** loads again in place, without reloading the page; after "Too many requests" it counts
+  down until the server accepts requests again.
+- Affected pages: Authentication, MCP gateway, Office add-in, browser extension, Copilot agent,
+  Nextcloud embed, Telemetry, Logging, the Security cards (SSL, cookies, CORS, rate limits, SSRF,
+  tool approval, outbound proxy), UI Customization, Voice, OAuth server, Feedback settings, the
+  provider timeouts and the app and model editors.
+- On Security, only the card that failed shows the message; the other cards stay usable.
+- **Authentication** asks before you leave the page with unsaved changes.
+- The admin **Overview** no longer turns into a "fresh installation" with the getting-started
+  checklist when the list of apps fails to load; it shows the error with Retry.

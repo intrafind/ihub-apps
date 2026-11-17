@@ -10,6 +10,7 @@ import OidcProvidersSection from './platform-form/OidcProvidersSection';
 import LdapProvidersSection from './platform-form/LdapProvidersSection';
 import LocalAuthSection from './platform-form/LocalAuthSection';
 import NtlmAuthSection from './platform-form/NtlmAuthSection';
+import { withAuthMethodEnabled } from './platform-form/authMethodDefaults';
 import { CredentialRefSelect } from './OpenApiToolEditor';
 
 /** `proxyAuth.trustedProxies` when it is not set, as on the server. */
@@ -106,14 +107,9 @@ function PlatformFormEditor({
     });
   };
 
+  // A method whose block is missing starts from its defaults (see authMethodDefaults).
   const toggleAuthMethod = (method, enabled) => {
-    onChange({
-      ...config,
-      [method]: {
-        ...config[method],
-        enabled
-      }
-    });
+    onChange(withAuthMethodEnabled(config, method, enabled));
   };
 
   const updateNestedConfig = (section, field, value) => {

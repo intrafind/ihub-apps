@@ -1,10 +1,12 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import AdminLoadGate from './AdminLoadGate';
+import { useAdminConfigLoad } from '../hooks/useAdminConfigLoad';
 import AdminLoadError from './AdminLoadError';
 
 const EMPTY_CONFIG = {
@@ -45,7 +47,6 @@ function ProxyConfig() {
   const [unresolvedPlaceholders, setUnresolvedPlaceholders] = useState({});
   const [newNoProxy, setNewNoProxy] = useState('');
   const [newPattern, setNewPattern] = useState('');
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -69,25 +70,19 @@ function ProxyConfig() {
     setUnresolvedPlaceholders(data.unresolvedPlaceholders || {});
   }, []);
 
-  useEffect(() => {
-    const fetchConfig = async () => {
-      try {
-        const response = await makeAdminApiCall('/admin/proxy/config', { method: 'GET' });
-        applyResponse(response.data);
-        setMessage('');
-      } catch (error) {
-        setMessage({
-          type: 'error',
-          text:
-            error.message ||
-            t('admin.system.proxy.configLoadError', 'Failed to load proxy configuration')
-        });
-      } finally {
-        setLoading(false);
+  // The card shows no form and no Save until its settings loaded: saving
+  // the defaults after a failed load would overwrite the stored ones (PL-B3).
+  const load = useAdminConfigLoad({
+    sources: {
+      config: {
+        load: async () => (await makeAdminApiCall('/admin/proxy/config', { method: 'GET' })).data,
+        onLoad: data => {
+          applyResponse(data);
+        }
       }
-    };
-    void fetchConfig();
-  }, [applyResponse, t]);
+    }
+  });
+  const ready = load.status === 'ready';
 
   const invalidPatterns = useMemo(
     () => config.urlPatterns.filter(pattern => !isValidRegex(pattern)),
@@ -215,6 +210,7 @@ function ProxyConfig() {
   };
 
   const handleSave = async () => {
+    if (!ready) return;
     if (invalidPatterns.length > 0) {
       setMessage({
         type: 'error',
@@ -320,13 +316,19 @@ function ProxyConfig() {
     return known[result.classification] || result.classification;
   };
 
-  if (loading) {
+  if (!ready) {
     return (
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
         <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">
           {t('admin.system.proxy.title', 'Outbound Proxy')}
         </h2>
-        <p className="text-gray-600 dark:text-gray-400">{t('common.loading', 'Loading...')}</p>
+        <AdminLoadGate
+          load={load}
+          resourceLabel={t('admin.system.proxy.title', 'Outbound Proxy')}
+          loadingFallback={
+            <p className="text-gray-600 dark:text-gray-400">{t('common.loading', 'Loading...')}</p>
+          }
+        />
       </div>
     );
   }

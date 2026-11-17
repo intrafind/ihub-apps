@@ -1,10 +1,12 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import AdminLoadGate from './AdminLoadGate';
+import { useAdminConfigLoad } from '../hooks/useAdminConfigLoad';
 
 /** The limiters, in the order the server lists them (`RATE_LIMITER_KEYS`). */
 export const RATE_LIMITERS = [
@@ -76,7 +78,6 @@ function RateLimitConfig() {
   const [saved, setSaved] = useState({});
   const [running, setRunning] = useState({});
   const [restartRequired, setRestartRequired] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
 
@@ -87,27 +88,17 @@ function RateLimitConfig() {
     setRestartRequired(Boolean(data?.restartRequired));
   };
 
-  useEffect(() => {
-    let cancelled = false;
-    makeAdminApiCall('/admin/rate-limits', { method: 'GET' })
-      .then(response => {
-        if (!cancelled) apply(response.data);
-      })
-      .catch(error => {
-        if (!cancelled) {
-          setMessage({
-            type: 'error',
-            text: error.message || t('admin.security.rateLimits.loadError')
-          });
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [t]);
+  // No form and no Save until the limits loaded: saving the empty form after a
+  // failed load would send no limiters at all.
+  const load = useAdminConfigLoad({
+    sources: {
+      limits: {
+        load: async () => (await makeAdminApiCall('/admin/rate-limits', { method: 'GET' })).data,
+        onLoad: apply
+      }
+    }
+  });
+  const ready = load.status === 'ready';
 
   const update = (key, field, value) => {
     setForm(prev => ({ ...prev, [key]: { ...prev[key], [field]: value } }));
@@ -116,6 +107,7 @@ function RateLimitConfig() {
   const countsLabel = counts => t(`admin.security.rateLimits.counts.${counts}`);
 
   const handleSave = async () => {
+    if (!ready) return;
     const { limiters, invalid } = toRequest(form);
     if (invalid) {
       setMessage({
@@ -162,8 +154,14 @@ function RateLimitConfig() {
         </div>
       </div>
 
-      {loading ? (
-        <p className="text-gray-600 dark:text-gray-400">{t('common.loading', 'Loading...')}</p>
+      {!ready ? (
+        <AdminLoadGate
+          load={load}
+          resourceLabel={t('admin.security.rateLimits.title')}
+          loadingFallback={
+            <p className="text-gray-600 dark:text-gray-400">{t('common.loading', 'Loading...')}</p>
+          }
+        />
       ) : (
         <>
           {restartRequired && (
