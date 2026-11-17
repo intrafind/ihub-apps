@@ -18,6 +18,7 @@ import { isAdmin } from '../utils/authorization.js';
 import { shortLinkTargetRefusal } from '../utils/shortLinkTarget.js';
 import { ServiceError } from '../utils/ServiceError.js';
 import { buildServerPath, getBasePath } from '../utils/basePath.js';
+import { shortLinkLocation } from '../../shared/shortLinkTargetPath.js';
 import { requireFeature } from '../featureRegistry.js';
 import logger from '../utils/logger.js';
 
@@ -49,20 +50,16 @@ const redirectLimiter = rateLimit({
  *
  * Without this, a link to `/apps/chat` would send a visitor of
  * `https://host/ihub/s/abc` to `https://host/apps/chat`, outside the
- * installation, whenever the proxy does not rewrite `Location`.
+ * installation, whenever the proxy does not rewrite `Location`. A base path
+ * of `/` counts as none, and the result never starts with `//` (an open
+ * redirect to another host); see `shortLinkLocation`.
  *
  * @param {string} target - The link's stored `url`
  * @returns {string}
  */
 export function redirectLocation(target) {
-  const basePath = getBasePath();
-  if (!basePath || !target.startsWith('/') || target.startsWith('//')) return target;
-  const alreadyPrefixed =
-    target === basePath ||
-    target.startsWith(`${basePath}/`) ||
-    target.startsWith(`${basePath}?`) ||
-    target.startsWith(`${basePath}#`);
-  return alreadyPrefixed ? target : `${basePath}${target}`;
+  // A trailing slash is dropped, so a prefix of `/` behaves like the root.
+  return shortLinkLocation(target, getBasePath().replace(/\/+$/, ''));
 }
 
 export default function registerShortLinkRoutes(app) {

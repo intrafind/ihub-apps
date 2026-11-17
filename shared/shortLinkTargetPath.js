@@ -45,3 +45,39 @@ export function hasShortLinkParams(params) {
   if (!params || typeof params !== 'object' || Array.isArray(params)) return false;
   return Object.values(params).some(v => v !== undefined && v !== null && v !== '');
 }
+
+/**
+ * Where a visitor of `/s/<code>` lands: a path on this server gets the
+ * deployment base path in front (`/apps/chat` → `/ihub/apps/chat` under
+ * `/ihub`), unless it already starts with it; a link to another host is left
+ * as it is. Used by the server for the redirect and by the admin editor for
+ * its "Opens:" preview, so both say the same.
+ *
+ * The base path `/` means none. The result never starts with `//`, which a
+ * browser would read as another host.
+ *
+ * Because "already starts with the base path" is a plain prefix test, a
+ * deployment base path that equals an iHub route (`/apps`, `/s`, `/pages`)
+ * makes built targets under that route look prefixed; see docs/platform.md.
+ *
+ * @example
+ * shortLinkLocation('/apps/chat', '/ihub'); // → '/ihub/apps/chat'
+ * shortLinkLocation('/ihub/apps/chat', '/ihub'); // → '/ihub/apps/chat'
+ * shortLinkLocation('/evil.com/x', '/'); // → '/evil.com/x'
+ *
+ * @param {string} target - The link's stored `url`
+ * @param {string} basePath - The deployment base path, '' at the root
+ * @returns {string}
+ */
+export function shortLinkLocation(target, basePath) {
+  if (!basePath || basePath === '/' || !target.startsWith('/') || target.startsWith('//')) {
+    return target;
+  }
+  const alreadyPrefixed =
+    target === basePath ||
+    target.startsWith(`${basePath}/`) ||
+    target.startsWith(`${basePath}?`) ||
+    target.startsWith(`${basePath}#`);
+  const location = alreadyPrefixed ? target : `${basePath}${target}`;
+  return location.startsWith('//') ? target : location;
+}

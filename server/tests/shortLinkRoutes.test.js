@@ -33,6 +33,7 @@ const { default: configCache } = await import('../configCache.js');
 const { default: registerShortLinkRoutes } = await import('../routes/shortLinkRoutes.js');
 const { setupMiddleware } = await import('../middleware/setup.js');
 const { basePathDetectionMiddleware } = await import('../utils/basePath.js');
+const { shortLinkLocation } = await import('../../shared/shortLinkTargetPath.js');
 const { default: errorHandler } = await import('../middleware/errorHandler.js');
 
 const GROUPS = {
@@ -413,11 +414,12 @@ describe('editing a short link changes where it leads (CU-B1)', () => {
 });
 
 describe('a prefilled prompt reaches the link (CU-B2)', () => {
-  test('params sent without includeParams are added to the target and stored', async () => {
+  test('params with includeParams: true are added to the target and stored', async () => {
     const app = buildApp();
     const res = await create(app, 'admin', {
       appId: 'chat',
-      params: { prefill: 'Hello there' }
+      params: { prefill: 'Hello there' },
+      includeParams: true
     });
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({
@@ -427,6 +429,15 @@ describe('a prefilled prompt reaches the link (CU-B2)', () => {
     });
     const visit = await request(app).get(`/s/${res.body.code}`);
     expect(visit.headers.location).toBe('/apps/chat?prefill=Hello+there');
+  });
+
+  test('an API caller that omits includeParams keeps the old default: params left out', async () => {
+    const app = buildApp();
+    const res = await create(app, 'alice', {
+      appId: 'chat',
+      params: { prefill: 'Hello there' }
+    });
+    expect(res.body).toMatchObject({ url: '/apps/chat', includeParams: false });
   });
 
   test('an explicit includeParams: false still leaves the params out', async () => {
@@ -469,7 +480,7 @@ describe('/s/:code under a base path (CU-B10)', () => {
     const { body: link } = await request(app)
       .post('/ihub/api/shortlinks')
       .set('X-Forwarded-Prefix', '/ihub')
-      .send({ appId: 'chat', params: { prefill: 'Hi' } });
+      .send({ appId: 'chat', params: { prefill: 'Hi' }, includeParams: true });
     const res = await request(app).get(`/ihub/s/${link.code}`).set('X-Forwarded-Prefix', '/ihub');
     expect(res.status).toBe(302);
     expect(res.headers.location).toBe('/ihub/apps/chat?prefill=Hi');
@@ -490,5 +501,41 @@ describe('/s/:code under a base path (CU-B10)', () => {
     expect(a.headers.location).toBe('/ihub/apps/chat');
     const b = await request(app).get(`/s/${external.body.code}`).set('X-Forwarded-Prefix', '/ihub');
     expect(b.headers.location).toBe('https://docs.example.com/x');
+  });
+
+  test('X-Forwarded-Prefix "/" is the root: no protocol-relative //host redirect (R1)', async () => {
+    const app = buildPrefixedApp();
+    const local = await request(app).post('/api/shortlinks').send({ appId: 'chat' });
+    // A valid single-slash local path whose first segment looks like a host.
+    const hostLike = await request(app).post('/api/shortlinks').send({ path: '/evil.com/x' });
+    expect(hostLike.status).toBe(200);
+
+    const a = await request(app).get(`/s/${local.body.code}`).set('X-Forwarded-Prefix', '/');
+    expect(a.status).toBe(302);
+    expect(a.headers.location).toBe('/apps/chat');
+    const b = await request(app).get(`/s/${hostLike.body.code}`).set('X-Forwarded-Prefix', '/');
+    expect(b.status).toBe(302);
+    expect(b.headers.location).toBe('/evil.com/x');
+
+    // Under a real base path the same target stays on this server.
+    const c = await request(app).get(`/s/${hostLike.body.code}`).set('X-Forwarded-Prefix', '/ihub');
+    expect(c.headers.location).toBe('/ihub/evil.com/x');
+  });
+});
+
+describe('shortLinkLocation never leaves this server (R1)', () => {
+  test.each([
+    ['/apps/chat', '/', '/apps/chat'],
+    ['/evil.com/x', '/', '/evil.com/x'],
+    ['/evil.com/x', '', '/evil.com/x'],
+    ['/evil.com/x', '/ihub', '/ihub/evil.com/x'],
+    ['/apps/chat', '/ihub', '/ihub/apps/chat'],
+    ['/ihub/apps/chat', '/ihub', '/ihub/apps/chat'],
+    ['/ihub?x=1', '/ihub', '/ihub?x=1'],
+    ['https://docs.example.com/x', '/ihub', 'https://docs.example.com/x']
+  ])('%s under base path %j → %s', (target, basePath, expected) => {
+    const location = shortLinkLocation(target, basePath);
+    expect(location).toBe(expected);
+    expect(location.startsWith('//')).toBe(false);
   });
 });

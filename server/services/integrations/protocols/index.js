@@ -37,6 +37,8 @@ import * as mcp from './mcp/McpAdapter.js';
 import * as a2a from './a2a/A2aAdapter.js';
 import * as http from './http/HttpAdapter.js';
 import logger from '../../../utils/logger.js';
+import { JIRA_DEFINITION_ID } from '../jiraConfig.js';
+import { cloudStorageTypeOfDefinition } from '../cloudStorageConfig.js';
 
 // `script` is the native adapter with the connector loaded from the folder.
 const adapters = { openapi, native, mcp, a2a, http, script: native };
@@ -80,14 +82,34 @@ export function getProtocolAdapter(protocolType) {
 const DEFAULT_SUPPORTED_AUTH_MODES = ['none', 'service-account'];
 
 /**
+ * Whether iHub runs a per-user OAuth sign-in for `definition`: Jira and the
+ * cloud storage providers (Office 365, Google Drive, Nextcloud), see
+ * `auth/connectionProviders.js`. Any other native or script connector has no
+ * such flow, so `oauth-user` is not offered for it.
+ *
+ * @param {Object} definition
+ * @returns {boolean}
+ */
+function hasPerUserSignIn(definition) {
+  return (
+    definition?.id === JIRA_DEFINITION_ID || cloudStorageTypeOfDefinition(definition?.id) !== null
+  );
+}
+
+/**
  * The sign-in modes an installation of `definition` can use in this release,
  * as the install form offers them:
  *
  * - the adapter's `supportedAuthModes`, when it lists them (MCP, A2A, HTTP);
- * - every mode the definition declares for a `native` or `script` connector,
- *   which runs its own sign-in (Jira and the storage providers sign each user
- *   in with OAuth) — the install check accepts all of them too;
+ * - for a `native` or `script` connector, the modes the definition declares
+ *   that iHub has a flow for: `none` and `service-account` (the module gets
+ *   the installation's values and credential), and `oauth-user` only where
+ *   iHub signs each user in itself (`hasPerUserSignIn`: Jira and the storage
+ *   providers). iHub obtains no `oauth-client` token for these connectors, so
+ *   that mode is never offered for them;
  * - otherwise `none` and `service-account`, the modes the OpenAPI runner applies.
+ *
+ * A declared mode left out here is shown in the form as not available yet.
  *
  * @param {Object} definition - A validated integration definition
  * @returns {string[]}
@@ -95,7 +117,12 @@ const DEFAULT_SUPPORTED_AUTH_MODES = ['none', 'service-account'];
 export function supportedAuthModesOf(definition) {
   const adapter = getProtocolAdapter(definition?.protocol?.type);
   if (Array.isArray(adapter?.supportedAuthModes)) return adapter.supportedAuthModes;
-  if (adapter && adapter === native) return [...(definition.auth?.modes || [])];
+  if (adapter && adapter === native) {
+    const declared = definition.auth?.modes || [];
+    return declared.filter(mode =>
+      mode === 'oauth-user' ? hasPerUserSignIn(definition) : mode !== 'oauth-client'
+    );
+  }
   return DEFAULT_SUPPORTED_AUTH_MODES;
 }
 

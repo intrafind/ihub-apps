@@ -2484,7 +2484,7 @@
         },
         "WebSearch": {
           "name": "Web Search",
-          "description": "Web search requests to Brave, Tavily and other search engines"
+          "description": "Web search requests to Brave, Staan, Qwant and other search engines"
         },
         "McpClientManager": {
           "name": "MCP Clients",
@@ -5111,7 +5111,9 @@
         "reset": "Reset to built-in",
         "none": "No keys changed yet. Search above to find a label to change.",
         "noMatches": "No matching translations.",
-        "more": "Show more"
+        "more": "Show more",
+        "languageUnsaved": "{{language}} ({{unsaved}} unsaved)",
+        "unsavedElsewhere": "Unsaved edits in {{languages}}. Switch to that language and save them before you leave this page."
       }
     },
     "prompts": {
@@ -6979,7 +6981,9 @@
       "NOT_A_STRING": "Enter text.",
       "PATTERN_MISMATCH": "The value does not have the expected format.",
       "UNKNOWN_FIELD": "This setting is not known to the integration.",
-      "SENSITIVE_VALUE": "Secret values belong in the credential store."
+      "SENSITIVE_VALUE": "Secret values belong in the credential store.",
+      "TOO_SMALL": "Enter {{min}} or more.",
+      "TOO_LARGE": "Enter {{max}} or less."
     }
   },
   "toolbar": {

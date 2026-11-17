@@ -86,6 +86,13 @@ function TranslationOverridesEditor({ languages, initialLanguage }) {
     });
   const discardDraft = key => setDraft(key, undefined);
 
+  // Languages other than the shown one that still hold unsaved edits (R6):
+  // their drafts are not on screen, so the selector and a note name them.
+  const unsavedCountOf = code => Object.keys(draftsByLanguage[code] || {}).length;
+  const otherLanguagesWithDrafts = languages.filter(
+    code => code !== language && unsavedCountOf(code) > 0
+  );
+
   const save = async (entry, value) => {
     setBusyKey(entry.key);
     try {
@@ -130,7 +137,13 @@ function TranslationOverridesEditor({ languages, initialLanguage }) {
         >
           {languages.map(code => (
             <option key={code} value={code}>
-              {code}
+              {unsavedCountOf(code) > 0
+                ? t('admin.localization.overrides.languageUnsaved', {
+                    defaultValue: '{{language}} ({{unsaved}} unsaved)',
+                    language: code,
+                    unsaved: unsavedCountOf(code)
+                  })
+                : code}
             </option>
           ))}
         </select>
@@ -161,6 +174,17 @@ function TranslationOverridesEditor({ languages, initialLanguage }) {
           {t('admin.localization.overrides.changedOnly', 'Changed only')} ({data.changedCount})
         </label>
       </div>
+
+      <p role="status" className="mt-2 text-sm text-amber-700 dark:text-amber-300 empty:hidden">
+        {otherLanguagesWithDrafts.length > 0 &&
+          t('admin.localization.overrides.unsavedElsewhere', {
+            defaultValue:
+              'Unsaved edits in {{languages}}. Switch to that language and save them before you leave this page.',
+            languages: otherLanguagesWithDrafts
+              .map(code => `${code} (${unsavedCountOf(code)})`)
+              .join(', ')
+          })}
+      </p>
 
       {error && (
         <div
@@ -201,7 +225,10 @@ function TranslationOverridesEditor({ languages, initialLanguage }) {
                 rows={Math.min(4, Math.max(1, Math.ceil(value.length / 80)))}
                 value={value}
                 disabled={busy || entry.unknown}
-                onChange={e => setDraft(entry.key, e.target.value)}
+                onChange={e =>
+                  // Typing the stored text back is no edit: it leaves no draft behind.
+                  setDraft(entry.key, e.target.value === current ? undefined : e.target.value)
+                }
                 aria-label={entry.key}
                 className="mt-1 block w-full rounded-lg border-gray-300 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
               />

@@ -198,7 +198,9 @@ export const basePathDetectionMiddleware = (req, res, next) => {
   if (detectedPath) {
     const normalized =
       detectedPath.endsWith('/') && detectedPath !== '/' ? detectedPath.slice(0, -1) : detectedPath;
-    if (isValidBasePath(normalized)) {
+    // `/` is the root: no base path. Kept as `/`, every path built from it
+    // would start with `//`, which a browser reads as another host.
+    if (normalized !== '/' && isValidBasePath(normalized)) {
       setContext({ basePathPrefix: normalized });
     }
   }

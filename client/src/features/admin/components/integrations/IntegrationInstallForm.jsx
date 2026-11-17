@@ -302,9 +302,14 @@ function IntegrationInstallForm({
    * message above the form.
    */
   const applyError = err => {
+    // A number out of range names the field's limit from the definition.
+    const limitsOf = key => {
+      const field = (definition?.install || []).find(f => f.key === key);
+      return { min: field?.min, max: field?.max };
+    };
     const byField = {
       ...mapProblemErrorsToFields(err, { prefix: '/secrets', t }),
-      ...mapProblemErrorsToFields(err, { prefix: '/values', t })
+      ...mapProblemErrorsToFields(err, { prefix: '/values', t, limitsOf })
     };
     const shown = new Set([...visibleFields.map(f => f.key), secretField?.key].filter(Boolean));
     setFieldErrors(Object.fromEntries(Object.entries(byField).filter(([key]) => shown.has(key))));

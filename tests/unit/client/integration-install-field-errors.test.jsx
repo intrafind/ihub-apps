@@ -5,6 +5,7 @@ import '@testing-library/jest-dom';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import en from '../../../shared/i18n/en.json';
+import de from '../../../shared/i18n/de.json';
 import problem from '../../contract/problem-validation.json';
 import {
   mapProblemErrorsToFields,
@@ -32,7 +33,9 @@ function lookup(key) {
 }
 const mockT = (key, options) => {
   const found = lookup(key);
-  if (typeof found === 'string') return found;
+  if (typeof found === 'string') {
+    return found.replace(/\{\{(\w+)\}\}/g, (_, name) => String(options?.[name] ?? ''));
+  }
   if (typeof options === 'string') return options;
   return options?.defaultValue ?? key;
 };
@@ -90,11 +93,30 @@ describe('mapProblemErrorsToFields', () => {
     expect(mapProblemErrorsToFields(problem)).toMatchObject({ 'values.baseUrl': 'required' });
   });
 
-  test('localizes a known code and keeps the server message for the others', () => {
+  test('localizes a known code; a limit code without the field limit keeps the server message', () => {
     expect(mapProblemErrorsToFields(problem, { prefix: '/values', t: mockT })).toEqual({
       baseUrl: 'Required.',
       maxRows: 'must be at most 50'
     });
+  });
+
+  test('localizes TOO_LARGE / TOO_SMALL with the limit the form knows (R3)', () => {
+    const limitsOf = field => (field === 'maxRows' ? { min: 1, max: 50 } : {});
+    expect(mapProblemErrorsToFields(problem, { prefix: '/values', t: mockT, limitsOf })).toEqual({
+      baseUrl: 'Required.',
+      maxRows: 'Enter 50 or less.'
+    });
+    const small = { errors: [{ pointer: '/values/maxRows', code: 'TOO_SMALL', message: 'x' }] };
+    expect(mapProblemErrorsToFields(small, { prefix: '/values', t: mockT, limitsOf })).toEqual({
+      maxRows: 'Enter 1 or more.'
+    });
+  });
+
+  test('both catalogs translate TOO_SMALL and TOO_LARGE with their limit (R3)', () => {
+    for (const catalog of [en, de]) {
+      expect(catalog.errors.fields.TOO_SMALL).toContain('{{min}}');
+      expect(catalog.errors.fields.TOO_LARGE).toContain('{{max}}');
+    }
   });
 
   test('skips entries outside the prefix and answers {} without errors', () => {
@@ -154,7 +176,8 @@ test('a failed test shows each server error at its field (IN-B4)', async () => {
   expect(within(url.parentElement).getByRole('alert')).toHaveTextContent('Required.');
   const rows = screen.getByLabelText('Rows');
   expect(rows).toHaveAttribute('aria-invalid', 'true');
-  expect(within(rows.parentElement).getByRole('alert')).toHaveTextContent('must be at most 50');
+  // Localized, with the limit from the definition (R3).
+  expect(within(rows.parentElement).getByRole('alert')).toHaveTextContent('Enter 50 or less.');
   // The summary says what kind of failure it is, without repeating the field errors.
   expect(screen.getByText('Some of the entered values are not valid.')).toBeInTheDocument();
 

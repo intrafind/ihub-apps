@@ -898,7 +898,9 @@
       "NOT_A_STRING": "Geben Sie Text ein.",
       "PATTERN_MISMATCH": "Der Wert hat nicht das erwartete Format.",
       "UNKNOWN_FIELD": "Diese Einstellung kennt die Integration nicht.",
-      "SENSITIVE_VALUE": "Geheime Werte gehören in den Zugangsdatenspeicher."
+      "SENSITIVE_VALUE": "Geheime Werte gehören in den Zugangsdatenspeicher.",
+      "TOO_SMALL": "Geben Sie mindestens {{min}} ein.",
+      "TOO_LARGE": "Geben Sie höchstens {{max}} ein."
     }
   },
   "serverErrors": {
@@ -2977,7 +2979,7 @@
         },
         "WebSearch": {
           "name": "Websuche",
-          "description": "Suchanfragen an Brave, Tavily und andere Suchmaschinen"
+          "description": "Suchanfragen an Brave, Staan, Qwant und andere Suchmaschinen"
         },
         "McpClientManager": {
           "name": "MCP-Clients",
@@ -5604,7 +5606,9 @@
         "reset": "Auf Standard zurücksetzen",
         "none": "Noch keine Schlüssel geändert. Suchen Sie oben nach einer Beschriftung.",
         "noMatches": "Keine passenden Übersetzungen.",
-        "more": "Mehr anzeigen"
+        "more": "Mehr anzeigen",
+        "languageUnsaved": "{{language}} ({{unsaved}} nicht gespeichert)",
+        "unsavedElsewhere": "Nicht gespeicherte Änderungen in {{languages}}. Wechseln Sie zu dieser Sprache und speichern Sie sie, bevor Sie die Seite verlassen."
       }
     },
     "prompts": {

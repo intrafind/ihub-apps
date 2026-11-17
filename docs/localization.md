@@ -147,7 +147,9 @@ channel.addEventListener('message', event => {
 text (for example `answerSource`) to find any label, edit it and save; *Reset to built-in* removes
 the override again. Tick *Changed only* to list just the keys that have been changed. An unsaved
 edit belongs to the language it was made in: switching the language shows that language's text,
-and switching back brings the edit back. Edits are written to
+and switching back brings the edit back. The language list shows how many unsaved edits each
+language holds, and a note names the other languages with unsaved edits; save them before you
+leave the page, or they are lost. Edits are written to
 `contents/locales/{lang}.json` — the same files described above — so manual and UI edits
 are interchangeable. Only keys that exist in the built-in locale can be overridden; keys in the
 file that no longer exist are listed as "unknown key" so they can be reset.

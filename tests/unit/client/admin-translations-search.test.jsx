@@ -14,11 +14,17 @@ import { makeAdminApiCall } from '../../../client/src/api/adminApi';
  *   label to change" does not dead-end in "No matching translations".
  * - CU-B8: an unsaved edit belongs to its language. Switching the language
  *   does not show (or save) the English draft in the German row.
+ * - R6: the language selector and a note name the languages that still hold
+ *   unsaved edits, so switching away does not lose them silently.
  */
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key, fallback) => (typeof fallback === 'string' ? fallback : key),
+    t: (key, fallback) => {
+      if (typeof fallback === 'string') return fallback;
+      const text = fallback?.defaultValue ?? key;
+      return text.replace(/\{\{(\w+)\}\}/g, (_, name) => String(fallback?.[name] ?? ''));
+    },
     i18n: { language: 'en', removeResourceBundle: jest.fn() }
   })
 }));
@@ -94,4 +100,27 @@ test('a draft stays with its language when the language changes (CU-B8)', async 
   fireEvent.change(screen.getByLabelText('Language'), { target: { value: 'en' } });
   await settle();
   expect(screen.getByLabelText('common.send')).toHaveValue('Send now');
+});
+
+test('unsaved edits in another language are named, and typing the text back clears them (R6)', async () => {
+  render(<TranslationOverridesEditor languages={['en', 'de']} initialLanguage="en" />);
+  await settle();
+  expect(screen.getByRole('status')).toBeEmptyDOMElement();
+
+  fireEvent.change(screen.getByLabelText('common.send'), { target: { value: 'Send now' } });
+  // The shown language's own draft is on screen; only the selector counts it.
+  expect(screen.getByRole('option', { name: 'en (1 unsaved)' })).toBeInTheDocument();
+  expect(screen.getByRole('status')).toBeEmptyDOMElement();
+
+  fireEvent.change(screen.getByLabelText('Language'), { target: { value: 'de' } });
+  await settle();
+  expect(screen.getByRole('status')).toHaveTextContent('Unsaved edits in en (1).');
+
+  fireEvent.change(screen.getByLabelText('Language'), { target: { value: 'en' } });
+  await settle();
+  fireEvent.change(screen.getByLabelText('common.send'), { target: { value: 'Send' } });
+  expect(screen.getByRole('option', { name: 'en' })).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText('Language'), { target: { value: 'de' } });
+  await settle();
+  expect(screen.getByRole('status')).toBeEmptyDOMElement();
 });

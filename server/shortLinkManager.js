@@ -6,7 +6,7 @@ import { createSharedJsonFile } from './utils/sharedJsonFile.js';
 import { shortLinkTargetRefusal } from './utils/shortLinkTarget.js';
 import { getContentsPath } from './utils/contentsPath.js';
 import { ServiceError } from './utils/ServiceError.js';
-import { buildShortLinkTarget, hasShortLinkParams } from '../shared/shortLinkTargetPath.js';
+import { buildShortLinkTarget } from '../shared/shortLinkTargetPath.js';
 
 const dataFile = getContentsPath('data', 'shortlinks.json');
 
@@ -108,15 +108,23 @@ const EDITABLE_FIELDS = ['appId', 'path', 'params', 'url', 'includeParams', 'exp
  * @throws {ShortLinkTargetError} When the target is not allowed
  */
 export async function createLink(
-  { code, appId, ownerId, path = null, params = null, url = null, includeParams, expiresAt = null },
+  {
+    code,
+    appId,
+    ownerId,
+    path = null,
+    params = null,
+    url = null,
+    includeParams = false,
+    expiresAt = null
+  },
   { allowedHosts = [] } = {}
 ) {
-  // Params sent without saying whether to include them are meant to reach the
-  // link (a prefilled prompt, say); only an explicit `false` leaves them out.
-  const finalIncludeParams =
-    typeof includeParams === 'boolean' ? includeParams : hasShortLinkParams(params);
-  const finalUrl =
-    url || buildShortLinkTarget({ appId, path, params, includeParams: finalIncludeParams });
+  // An API caller that does not say whether to include the params keeps the
+  // long-standing default (`includeParams = false`): they are left out. The
+  // admin editor and the share panel always send an explicit value, on by
+  // default in both.
+  const finalUrl = url || buildShortLinkTarget({ appId, path, params, includeParams });
   assertAllowedTarget(finalUrl, allowedHosts);
 
   return updateLinks(data => {
@@ -138,7 +146,7 @@ export async function createLink(
       path,
       params,
       url: finalUrl,
-      includeParams: finalIncludeParams,
+      includeParams,
       createdAt: now(),
       usage: 0,
       expiresAt

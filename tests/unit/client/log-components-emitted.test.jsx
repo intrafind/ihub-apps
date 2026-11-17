@@ -48,6 +48,26 @@ test.each(LOG_COMPONENTS.map(c => [c.id]))('the server logs with component %s', 
   expect(emitted.has(id)).toBe(true);
 });
 
+test('every table line is a complete entry', () => {
+  for (const component of LOG_COMPONENTS) {
+    expect(component.id).toMatch(/^[A-Za-z0-9_.-]+$/);
+    expect(component.name).toBeTruthy();
+    expect(component.description).toBeTruthy();
+  }
+});
+
+test('the web search engines named are the ones iHub ships (Tavily was removed)', () => {
+  const webSearch = LOG_COMPONENTS.find(c => c.id === 'WebSearch');
+  for (const text of [
+    webSearch.description,
+    lookup(en, webSearch.descriptionKey),
+    lookup(de, webSearch.descriptionKey)
+  ]) {
+    expect(text).not.toMatch(/Tavily/);
+    expect(text).toMatch(/Brave, Staan, Qwant/);
+  }
+});
+
 test('ids are unique', () => {
   const ids = LOG_COMPONENTS.map(c => c.id);
   expect(new Set(ids).size).toBe(ids.length);

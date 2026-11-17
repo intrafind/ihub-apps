@@ -834,10 +834,12 @@ than the form said:
   link's target now follows them, unless a fixed **Redirect URL** is set.
 - A link to an app with a prefilled prompt (`{ "prefill": "…" }`) opened the app without the
   prompt, because **Include Params** was off by default. It is on now, the form warns when params
-  are left out, and **Opens:** shows the target before you save.
+  are left out, and **Opens:** shows the target before you save. A request to
+  `POST /api/shortlinks` that leaves `includeParams` out still keeps the params off the link.
 - On an installation under a base path (`/ihub`), **Copy link**, **Test link**, the details
   popup and **Pages → View** left the base path out, and opening `/ihub/s/<code>` redirected to
-  `/apps/…` outside the installation. Both keep the base path now.
+  `/apps/…` outside the installation. Both keep the base path now, and **Opens:** shows it too.
+  A proxy that reports the prefix `/` counts as having no base path.
 
 ## Logging: The Component Filter No Longer Hides Errors
 

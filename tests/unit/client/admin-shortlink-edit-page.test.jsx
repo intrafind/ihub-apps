@@ -19,6 +19,13 @@ jest.mock('react-i18next', () => ({
   })
 }));
 
+// `runtimeBasePath.js` reads `import.meta`, which jest cannot load; the base
+// path is set per test instead.
+let mockBasePath = '';
+jest.mock('../../../client/src/utils/runtimeBasePath', () => ({
+  getBasePath: () => mockBasePath
+}));
+
 jest.mock('../../../client/src/api/adminApi', () => ({
   makeAdminApiCall: jest.fn(),
   fetchAdminApps: jest.fn()
@@ -59,6 +66,7 @@ async function renderPage(path = '/admin/shortlinks/new') {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockBasePath = '';
   fetchAdminApps.mockResolvedValue([
     { id: 'chat', name: { en: 'Chat' } },
     { id: 'email-composer', name: { en: 'Email Composer' } }
@@ -140,6 +148,44 @@ test('params left out by "Include Params" are called out', async () => {
   fireEvent.click(screen.getByLabelText('Include Params'));
   expect(screen.getByText(/not added to the link/)).toBeInTheDocument();
   expect(preview()).toBe('/');
+});
+
+test('the params warning is announced and describes the fields it is about (R7)', async () => {
+  await renderPage();
+  fireEvent.change(screen.getByLabelText('Params (JSON)'), {
+    target: { value: '{"prefill":"Hi"}' }
+  });
+  const status = screen.getByRole('status');
+  expect(status).toBeEmptyDOMElement();
+  expect(screen.getByLabelText('Params (JSON)')).not.toHaveAttribute('aria-describedby');
+
+  fireEvent.click(screen.getByLabelText('Include Params'));
+  expect(status).toHaveTextContent(/not added to the link/);
+  expect(screen.getByLabelText('Params (JSON)')).toHaveAccessibleDescription(
+    /not added to the link/
+  );
+  expect(screen.getByLabelText('Include Params')).toHaveAccessibleDescription(
+    /not added to the link/
+  );
+});
+
+test('under a base path, "Opens:" shows where the visitor really lands (R7)', async () => {
+  mockBasePath = '/ihub';
+  makeAdminApiCall.mockResolvedValueOnce({
+    data: { code: 'abc', appId: 'chat', url: '/apps/chat', includeParams: false, params: {} }
+  });
+  await renderPage('/admin/shortlinks/abc');
+  expect(preview()).toBe('/ihub/apps/chat');
+
+  // A target that already has the base path, or names another host, is shown as stored.
+  fireEvent.change(screen.getByLabelText('Redirect URL'), {
+    target: { value: '/ihub/pages/faq' }
+  });
+  expect(preview()).toBe('/ihub/pages/faq');
+  fireEvent.change(screen.getByLabelText('Redirect URL'), {
+    target: { value: 'https://docs.example.com/x' }
+  });
+  expect(preview()).toBe('https://docs.example.com/x');
 });
 
 test('editing a link built from its app sends no stale target, so a new app takes effect (CU-B1)', async () => {

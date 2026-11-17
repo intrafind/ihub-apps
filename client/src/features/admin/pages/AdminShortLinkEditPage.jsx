@@ -11,9 +11,11 @@ import { apiErrorMessage } from '../../../utils/apiErrorMessage';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
+import { getBasePath } from '../../../utils/runtimeBasePath';
 import {
   buildShortLinkTarget,
-  hasShortLinkParams
+  hasShortLinkParams,
+  shortLinkLocation
 } from '../../../../../shared/shortLinkTargetPath.js';
 
 /**
@@ -122,10 +124,12 @@ function AdminShortLinkEditPage() {
   }, [code, isNew]);
 
   // Where the link leads once saved: the typed Redirect URL, else the target
-  // built from the app or path and (when included) the params.
+  // built from the app or path and (when included) the params. A visitor of a
+  // path on this server lands under the deployment base path, as /s/:code
+  // redirects there.
   const typedParams = parseParams(paramsText);
   const builtTarget = buildShortLinkTarget({ ...link, params: typedParams || {} });
-  const targetPreview = link.url?.trim() || builtTarget;
+  const targetPreview = shortLinkLocation(link.url?.trim() || builtTarget, getBasePath());
   const paramsLeftOut = !link.url?.trim() && !link.includeParams && hasShortLinkParams(typedParams);
 
   const handleChange = (field, value) => {
@@ -293,6 +297,7 @@ function AdminShortLinkEditPage() {
               id="shortlink-include-params"
               checked={link.includeParams}
               onChange={e => handleChange('includeParams', e.target.checked)}
+              aria-describedby={paramsLeftOut ? 'shortlink-params-left-out' : undefined}
               className="h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded-sm"
             />
             <label
@@ -329,16 +334,21 @@ function AdminShortLinkEditPage() {
               id="shortlink-params"
               value={paramsText}
               onChange={e => setParamsText(e.target.value)}
+              aria-describedby={paramsLeftOut ? 'shortlink-params-left-out' : undefined}
               className="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 font-mono"
             />
-            {paramsLeftOut && (
-              <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
-                {t(
+            {/* Always rendered, so screen readers announce the warning when it appears. */}
+            <p
+              id="shortlink-params-left-out"
+              role="status"
+              className="mt-1 text-xs text-amber-700 dark:text-amber-300 empty:hidden"
+            >
+              {paramsLeftOut &&
+                t(
                   'admin.shortlinks.paramsLeftOut',
                   'These params are not added to the link while “Include Params” is off.'
                 )}
-              </p>
-            )}
+            </p>
           </div>
           <p className="text-sm text-gray-700 dark:text-gray-300">
             {t('admin.shortlinks.targetPreview', 'Opens:')}{' '}

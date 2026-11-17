@@ -47,18 +47,28 @@ export function pointerSegments(pointer) {
 }
 
 /**
+ * Codes whose localized text names a limit of the field (`{{min}}`, `{{max}}`),
+ * which the server entry does not carry: the form passes it in through
+ * `limitsOf`. Without it the server's own message is kept.
+ */
+const LIMIT_OF_CODE = { TOO_SMALL: 'min', TOO_LARGE: 'max' };
+
+/**
  * The message shown for one entry: the localized text of its `code`
  * (`errors.fields.<CODE>`) when there is one, else the server's `message`.
  *
  * @param {{ code?: string, message?: string }} entry
  * @param {Function} [t] - i18next `t`
+ * @param {Object} [limits] - The field's `{ min, max }`, for `TOO_SMALL` / `TOO_LARGE`
  * @returns {string}
  */
-function messageOf(entry, t) {
+function messageOf(entry, t, limits) {
   const fallback = entry.message || entry.code || '';
   if (!t || typeof entry.code !== 'string') return fallback;
+  const limit = LIMIT_OF_CODE[entry.code];
+  if (limit && (limits?.[limit] === undefined || limits?.[limit] === null)) return fallback;
   const key = `errors.fields.${entry.code}`;
-  const text = t(key, { defaultValue: fallback });
+  const text = t(key, { defaultValue: fallback, ...(limit ? { [limit]: limits[limit] } : {}) });
   return text && text !== key ? text : fallback;
 }
 
@@ -75,10 +85,13 @@ function messageOf(entry, t) {
  * @param {string} [options.prefix] - Only pointers below this one (e.g. `/values`),
  *   keyed by the path below it; entries elsewhere are left out
  * @param {Function} [options.t] - i18next `t`, to localize messages by `code`
+ * @param {Function} [options.limitsOf] - `(field) => ({ min, max })` of a field
+ *   (its dotted path below the prefix), so `TOO_SMALL` / `TOO_LARGE` can name
+ *   the limit in the user's language
  * @returns {Object<string, string>} Dotted field path → message; the first
  *   message of a field wins
  */
-export function mapProblemErrorsToFields(problemOrError, { prefix = '', t } = {}) {
+export function mapProblemErrorsToFields(problemOrError, { prefix = '', t, limitsOf } = {}) {
   const prefixSegments = pointerSegments(prefix);
   const fields = {};
   for (const entry of problemErrorsOf(problemOrError)) {
@@ -86,7 +99,7 @@ export function mapProblemErrorsToFields(problemOrError, { prefix = '', t } = {}
     const below = prefixSegments.every((segment, i) => segments[i] === segment);
     if (!below || segments.length <= prefixSegments.length) continue;
     const field = segments.slice(prefixSegments.length).join('.');
-    if (!Object.hasOwn(fields, field)) fields[field] = messageOf(entry, t);
+    if (!Object.hasOwn(fields, field)) fields[field] = messageOf(entry, t, limitsOf?.(field));
   }
   return fields;
 }

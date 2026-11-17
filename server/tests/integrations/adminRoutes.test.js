@@ -250,12 +250,13 @@ describe('catalog', () => {
     expect(detail.body.singleton).toEqual({ instanceId: 'tracker' });
   });
 
-  it('offers a native connector every sign-in mode it declares (IN-B5)', async () => {
+  it('does not offer oauth-user to a native connector iHub signs no user into (IN-B5, R8)', async () => {
     const res = await admin(request(app).get('/api/admin/integrations/catalog')).expect(200);
     const byId = Object.fromEntries(res.body.items.map(i => [i.id, i]));
+    // Declared, but only Jira and the storage providers have a per-user flow.
     expect(byId['com.example/tracker']).toMatchObject({
       authModes: ['oauth-user'],
-      supportedAuthModes: ['oauth-user']
+      supportedAuthModes: []
     });
     // The OpenAPI runner applies no sign-in but these two.
     expect(byId['org.ckan/portal'].supportedAuthModes).toEqual(['none', 'service-account']);
