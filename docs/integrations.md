@@ -779,7 +779,8 @@ The marketplace's update dialog shows the same plan per installation before the 
 | `POST /api/integrations/requests` `{ definition, reason? }` | request one → `201` with the request; `400` for an invalid id or a reason over 500 characters, `401` anonymous, `403` delegated callers, `404` not requestable, `409 REQUEST_EXISTS`, `415` without a JSON body |
 | `GET /api/integrations/requests/:requestId` | read one of your own requests (the `Location` of the create), as the requester sees it; `404 REQUEST_NOT_FOUND` for an unknown id or someone else's request |
 | `GET /api/integrations` | the signed-in user's integrations: every enabled installation their groups allow (never another one), with capabilities, enabled actions and their side effects, and the connection status (see below); `?lang=` |
-| `GET /api/integrations/:id` | one of them, `{ integration }`; `404` for an installation the user may not use |
+| `GET /api/integrations/:id` | one of them (the entry itself, not wrapped); `404` for an installation the user may not use |
+| `GET /api/integrations/:id/icon` | the `icon.svg` the integration's definition ships, for an installation the user may use (the same rule as the listing); served as an image only (`nosniff`, a CSP that allows nothing); `404` when there is none |
 | `POST /api/integrations/:id/_connect` `{ returnUrl? }` | start the sign-in → `{ url }` (the vendor's authorization URL); see [The connect flow for users](#the-connect-flow-for-users) |
 | `POST /api/integrations/:id/_reconnect` `{ returnUrl?, scopes? }` | sign in again; `scopes` are added to the granted ones (step-up), the connection keeps its id |
 | `POST /api/integrations/:id/_disconnect` | revoke at the vendor where supported and delete the caller's tokens → `{ removed, revoked }` |
@@ -800,7 +801,7 @@ Every write is audited with resource `integration`; connects and disconnects wit
   "protocol": "native",                      // native | mcp | openapi | a2a | http | script
   "name": "Atlassian Jira",                  // the installation's label, else the definition's name (localized)
   "description": "…",
-  "icon": null,                              // an http(s) icon URL of the definition, else null
+  "icon": null,                              // an http(s) icon URL of the definition, or `GET /api/integrations/<id>/icon` for the icon file it ships, else null
   "categories": ["ticketing"],              // the definition's categories (Settings → Integrations filters by them)
   "capabilities": ["tools"],                 // from the definition: tools, files, scopes, sources, search, views, model
   "actions": [                               // the enabled actions the models are offered

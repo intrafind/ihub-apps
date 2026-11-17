@@ -1,6 +1,6 @@
 # 2026-11-02 · One connect flow and one Connect card (#2917)
 
-**Status:** Implemented (draft PR for intrafind/ihub-apps#2917, stacked on #3140 / #2914) · Part of [Unified Integrations](README.md) · Builds on [03 · Product concept](03-product-concept.md) §7.3, [04 · Architecture](04-architecture.md) §4 and [Connection service and OAuth client](2026-11-02%20Connection%20service%20and%20OAuth%20client.md)
+**Status:** Implemented and merged (#3147, 2026-11-03); follow-ups of 2026-11-16 below (gap review, e2e run) · Part of [Unified Integrations](README.md) · Builds on [03 · Product concept](03-product-concept.md) §7.3, [04 · Architecture](04-architecture.md) §4 and [Connection service and OAuth client](2026-11-02%20Connection%20service%20and%20OAuth%20client.md)
 
 Implementation notes for the user API of the integrations, the one connect flow and the one Connect card. Written so that the next PR (intrafind/ihub-apps#2922, Settings → Integrations) can build on `GET /api/integrations` without reading the whole diff.
 
@@ -30,7 +30,7 @@ Removed: `useIntegrationAuth.js`, `IntegrationConnectionCard.jsx`, `IntegrationA
 
 ## `GET /api/integrations` (the shape #2922 builds on)
 
-`{ "integrations": [ entry, … ] }`, sorted by name; `GET /api/integrations/:id` answers `{ "integration": entry }` or 404.
+`{ "integrations": [ entry, … ] }`, sorted by name; `GET /api/integrations/:id` answers the entry itself (not wrapped) or 404.
 
 ```jsonc
 {
@@ -40,7 +40,7 @@ Removed: `useIntegrationAuth.js`, `IntegrationConnectionCard.jsx`, `IntegrationA
   "protocol": "native",              // native | mcp | openapi | a2a | script
   "name": "Atlassian Jira",          // label, localized (?lang=, else Accept-Language)
   "description": "…",
-  "icon": null,                      // http(s) icon URL only; companion icons (icon.svg) are not served yet
+  "icon": null,                      // http(s) URL, or GET /api/integrations/<id>/icon for the icon file the definition ships
   "capabilities": ["tools"],
   "actions": [{ "name": "searchTickets", "title": "Search issues", "description": "…", "sideEffect": "read" }],
   "effects": ["read", "write"],
@@ -85,8 +85,17 @@ Rules:
 ## Not in this PR
 
 - Settings → Integrations rebuilt on `GET /api/integrations` (#2922). Here it was switched minimally: one list call, the new connect/disconnect, the new result params; its layout is unchanged.
-- Serving companion icons (`icon.svg`) of definitions: `icon` is only set for http(s) URLs.
-- The MCP `authRequired` branch in `scheduler/tasks/runSeams.js` is dead now (no tool produces the marker); left in place to avoid a conflict with #3136, which rewrites that file.
+- The retry is still a follow-up chat message (see above), not a server-side re-run of the stored call.
+
+## Follow-ups of 2026-11-16 (gap review of #2917)
+
+Running the opt-in e2e for the first time on current main found what the unit tests could not:
+
+- **The retry went out without a model.** After the redirect back to the chat, `useConnectRetry` fired as soon as the chat was hydrated, before the model was selected; the turn was sent with `modelId: null` and the server answered 400. `AppChat` now passes `ready: !hydrating && !modelsLoading && Boolean(selectedModel)`.
+- **The writing worker never re-applied `integrations.json`.** The reload hooks run on workers that *receive* the announcement; the A2A route used to call `markConfigApplied` inline, the installed-integrations service did not do anything. So the worker that handled an admin install kept an MCP client manager without the new installation: one request in N (N workers; every request with one worker) saw it as not connectable, with no tools. `InstalledIntegrationService` now calls `applyConfigReloadHooks` (exported by `configReloadHooks.js`) after every write of `config/integrations.json`.
+- **Definition icons are served.** `GET /api/integrations/:id/icon` returns the `icon.svg` a definition ships (plain file name, ≤ 128 KB, checked when the registry loads), for an installation the user may use; `icon` in the listing and the picker names that route (with the base path). iFinder and iAssistant ship one.
+- **Removed the dead MCP `authRequired` branch** of `scheduler/tasks/runSeams.js` (no tool produces the marker since #3147).
+- **The e2e spec was stale** (never run when written): it set the removed app `tokenLimit`, created the app with `PUT`, gave `supportsTools: true`, ignored the first-visit disclaimer, raced the model selection, expected a tool catalog that a fresh per-user server does not have (the catalog is stored from an authenticated listing, so the spec connects once as the admin and disconnects), and closed the consent tab before it had told the other tabs. It also scans the card with axe (WCAG 2.2 AA, light and dark).
 
 ## How to test
 
@@ -94,4 +103,5 @@ Rules:
 - `node server/tests/oauth-integration-factory.test.js`, `node server/tests/office365-callback-routes.test.js` — security parity through the real routes, 409 from the browse routes.
 - `npx node@24 --experimental-vm-modules node_modules/jest/bin/jest.js tests/mcp/oauthUserRoutes.test.js` (from `server/`; Node 22 cannot load it, `require(esm)`).
 - `npx jest --config tests/config/jest.config.js tests/unit/client/connect-card.test.jsx` — the card, the result reader, retry once and never for adapter failures.
-- E2E: `tests/e2e/integration-connect.spec.js` (opt-in `CONNECT_E2E=1`, Chromium, a throwaway instance; stub model + MCP server + authorization server on port 4178).
+- E2E: `tests/e2e/integration-connect.spec.js` (opt-in `CONNECT_E2E=1`, Chromium, a throwaway instance; stub model + MCP server + authorization server on port 4178; set `PW_CHROMIUM_PATH` when Playwright's own browser is not installed). Three runs: not connected → Connect → consent → back → answer (with an axe scan of the card), expired → Reconnect, and the picker's `Connect →` in a new tab.
+- `node --test server/tests/integrations/integrationIcon.test.js` — the icon file, the listing and the route; `server/tests/integrations/installedWriteReapplies.test.js` and `server/tests/a2a/reloadHook.test.js` (jest) — the writer re-applies.

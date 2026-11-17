@@ -57,8 +57,12 @@ jest.unstable_mockModule('../../services/integrations/iFinderTokenProvider.js', 
   clearExchangedTokenCache: () => {}
 }));
 
-const { registerConfigReloadHooks, markConfigApplied, resetConfigReloadHooksForTests } =
-  await import('../../configReloadHooks.js');
+const {
+  registerConfigReloadHooks,
+  markConfigApplied,
+  applyConfigReloadHooks,
+  resetConfigReloadHooksForTests
+} = await import('../../configReloadHooks.js');
 
 const A = { installed: [{ id: 'x', definition: 'com.intrafind/a2a-agent', enabled: true }] };
 const B = { installed: [{ id: 'x', definition: 'com.intrafind/a2a-agent', enabled: false }] };
@@ -87,5 +91,21 @@ describe('installed integrations reload hook', () => {
     markConfigApplied(ENTRY);
     await hook({ entries: [ENTRY] });
     expect(initializeA2a).not.toHaveBeenCalled();
+  });
+
+  it('re-applies on the worker that wrote the file, once, when it calls applyConfigReloadHooks', async () => {
+    cache.integrations = structuredClone(B);
+    await applyConfigReloadHooks({ entries: [ENTRY] });
+    expect(initializeMcp).toHaveBeenCalledTimes(1);
+    expect(initializeA2a).toHaveBeenCalledTimes(1);
+
+    // The baseline moved with the apply: the same content again is not re-applied.
+    await applyConfigReloadHooks({ entries: [ENTRY] });
+    expect(initializeMcp).toHaveBeenCalledTimes(1);
+
+    // And an announcement that restores the old content is not skipped.
+    cache.integrations = structuredClone(A);
+    await hook({ entries: [ENTRY] });
+    expect(initializeMcp).toHaveBeenCalledTimes(2);
   });
 });

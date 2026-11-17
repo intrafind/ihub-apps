@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { test, expect, request as playwrightRequest } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
 import http from 'node:http';
 import crypto from 'node:crypto';
 
@@ -55,9 +56,10 @@ const MODEL = {
   description: { en: 'Connect flow E2E stub', de: 'Connect flow E2E stub' },
   url: `${STUB}/v1/chat/completions`,
   provider: 'local',
+  modelType: 'chat',
   contextWindow: 32000,
   maxOutputTokens: 4000,
-  supportsTools: true,
+  supportsTools: 'auto',
   enabled: true,
   default: false,
   autoDiscovery: false
@@ -244,7 +246,14 @@ function startStub() {
     }
     if (url.pathname === '/mcp') {
       const bearer = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
-      if (!bearer || vendor.rejectTokens || !vendor.tokens.has(bearer)) {
+      // The shared tool catalog is public (it is what a per-user server lists
+      // before anyone connected); calling a tool needs a user's token.
+      const method = req.method === 'POST' ? JSON.parse(raw || '{}').method : '';
+      const publicCall =
+        method === 'initialize' ||
+        method === 'tools/list' ||
+        String(method).startsWith('notifications/');
+      if (!publicCall && (!bearer || vendor.rejectTokens || !vendor.tokens.has(bearer))) {
         res.writeHead(401, {
           'WWW-Authenticate': `Bearer error="invalid_token", resource_metadata="${STUB}/.well-known/oauth-protected-resource/mcp"`
         });
@@ -277,6 +286,41 @@ test.describe.configure({ mode: 'serial' });
 let stubServer = null;
 let api = null;
 let originalSsrf = null;
+
+/**
+ * A per-user server offers its tools only from its shared catalog, and the
+ * catalog is stored from an authenticated listing. So connect once as the
+ * admin (the same user the runs sign in as), wait for the catalog, and
+ * disconnect: from then on the installation lists `whoami` while nobody is
+ * connected, as it does on a real installation after the first user connected.
+ */
+async function primeCatalog() {
+  const started = await api.post(`/api/integrations/${INSTALLATION_ID}/_connect`, {
+    data: { returnUrl: '/' }
+  });
+  expect(started.ok(), await started.text()).toBeTruthy();
+  const { url } = await started.json();
+  // Consent (approved at once) and the callback, redirects followed.
+  const consent = await api.get(url);
+  expect(consent.ok(), `consent and callback: ${consent.status()}`).toBeTruthy();
+  await expect
+    .poll(
+      async () => {
+        const res = await api.get(`/api/integrations/${INSTALLATION_ID}`);
+        const body = res.ok() ? await res.json() : null;
+        return body?.actions?.length ?? 0;
+      },
+      { timeout: 30_000, message: 'the shared tool catalog is stored after the first connect' }
+    )
+    .toBeGreaterThan(0);
+  await disconnect();
+}
+
+/** The admin (and the browser, same user) starts every run not connected. */
+async function disconnect() {
+  const res = await api.post(`/api/integrations/${INSTALLATION_ID}/_disconnect`, { data: {} });
+  expect(res.ok(), await res.text()).toBeTruthy();
+}
 
 test.beforeAll(async () => {
   test.skip(
@@ -322,7 +366,22 @@ test.beforeAll(async () => {
   });
   expect(installed.ok(), await installed.text()).toBeTruthy();
 
-  const app = await api.put(`/api/admin/apps/${APP_ID}`, {
+  // The MCP manager loads the installation asynchronously; until it has, the
+  // user API shows it without a sign-in and its catalog is empty.
+  await expect
+    .poll(
+      async () => {
+        const res = await api.get(`/api/integrations/${INSTALLATION_ID}`);
+        const body = res.ok() ? await res.json() : null;
+        return Boolean(body?.connection?.connectable);
+      },
+      { timeout: 60_000, message: 'the server shows the MCP installation as connectable' }
+    )
+    .toBe(true);
+
+  await primeCatalog();
+
+  const app = await api.post('/api/admin/apps', {
     data: {
       id: APP_ID,
       name: { en: 'E2E connect' },
@@ -330,7 +389,6 @@ test.beforeAll(async () => {
       color: '#4F46E5',
       icon: 'link',
       system: { en: 'Use the directory tool to answer.' },
-      tokenLimit: 4000,
       preferredModel: MODEL.id,
       enabled: true,
       integrations: { [INSTALLATION_ID]: {} }
@@ -358,22 +416,75 @@ test.afterAll(async () => {
 /** Sign the browser in as the admin (the API context's cookie). */
 async function signIn(context) {
   await context.addCookies((await api.storageState()).cookies);
+  // The first-visit disclaimer would sit over every click.
+  await context.addInitScript(() => {
+    window.localStorage.setItem('ihub-disclaimer-acknowledged', 'true');
+  });
+}
+
+/** The visible chat; the live region next to it repeats every message for screen readers. */
+function chatLog(page) {
+  return page.getByRole('log', { name: 'Chat messages' });
+}
+
+/**
+ * Opens the app and sends the question once the chat knows its model: the
+ * context counter shows the model's window. Sent earlier, the request goes out
+ * without a `modelId` and the server answers 400.
+ */
+async function askQuestion(page) {
+  const modelsLoaded = page.waitForResponse(
+    r => new URL(r.url()).pathname.endsWith('/api/models') && r.ok()
+  );
+  await page.goto(`/apps/${APP_ID}`);
+  await modelsLoaded;
+  await page.waitForLoadState('networkidle');
+  await page.getByRole('textbox').first().fill(QUESTION);
+  await page.keyboard.press('Enter');
 }
 
 // ───────────────────────── the runs ─────────────────────────
+
+// `test.setTimeout` in `beforeAll` only covers the hook; the runs need room too.
+test.describe.configure({ timeout: 150_000 });
 
 test('not connected → Connect → consent → back in the same chat → answer', async ({
   page,
   context
 }) => {
   await signIn(context);
-  await page.goto(`/apps/${APP_ID}`);
-  await page.getByRole('textbox').first().fill(QUESTION);
-  await page.keyboard.press('Enter');
+  await disconnect();
+  await askQuestion(page);
 
   const card = page.getByRole('region', { name: /Connect E2E directory/ });
   await expect(card).toBeVisible({ timeout: 60_000 });
   await expect(card).toContainText('iHub needs to act as you in E2E directory');
+
+  // The card in its "not connected" state meets WCAG 2.2 AA (the tags of
+  // accessibility.spec.js): no axe violation inside the card, and the buttons
+  // are reachable by keyboard with a visible name.
+  await card.evaluate(element => element.setAttribute('data-e2e-connect-card', ''));
+  const axe = await new AxeBuilder({ page })
+    .include('[data-e2e-connect-card]')
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22a', 'wcag22aa'])
+    .analyze();
+  expect(
+    axe.violations.map(v => `${v.id}: ${v.nodes.map(n => n.target.join(' ')).join(', ')}`)
+  ).toEqual([]);
+  // Dark mode follows the system preference; contrast is where it usually breaks.
+  await page.emulateMedia({ colorScheme: 'dark' });
+  // Colors transition; scanning mid-way measures blended in-between values.
+  await page.waitForTimeout(800);
+  const axeDark = await new AxeBuilder({ page })
+    .include('[data-e2e-connect-card]')
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22a', 'wcag22aa'])
+    .analyze();
+  expect(
+    axeDark.violations.map(v => `${v.id}: ${v.nodes.map(n => n.target.join(' ')).join(', ')}`)
+  ).toEqual([]);
+  await page.emulateMedia({ colorScheme: 'light' });
+  await card.getByRole('button', { name: /Connect/ }).focus();
+  await expect(card.getByRole('button', { name: /Connect/ })).toBeFocused();
   const chatUrl = page.url();
 
   await card.getByRole('button', { name: /Connect/ }).click();
@@ -383,15 +494,17 @@ test('not connected → Connect → consent → back in the same chat → answer
   expect(page.url()).not.toContain('integration_connected');
 
   // Retried once, automatically: the follow-up and the answer.
-  await expect(page.getByText(/I connected E2E directory/)).toBeVisible({ timeout: 60_000 });
-  await expect(page.getByText(`You are signed in as ${ACCOUNT}.`)).toBeVisible({
+  await expect(chatLog(page).getByText(/I connected E2E directory/)).toBeVisible({
+    timeout: 60_000
+  });
+  await expect(chatLog(page).getByText(`You are signed in as ${ACCOUNT}.`)).toBeVisible({
     timeout: 60_000
   });
   expect(vendor.toolCalls).toBe(1);
 
   // A reload does not retry again.
   await page.reload();
-  await expect(page.getByText(`You are signed in as ${ACCOUNT}.`)).toBeVisible();
+  await expect(chatLog(page).getByText(`You are signed in as ${ACCOUNT}.`)).toBeVisible();
   await page.waitForTimeout(2000);
   expect(vendor.toolCalls).toBe(1);
 });
@@ -403,9 +516,7 @@ test('expired → Reconnect → back in the chat → answer', async ({ page, con
   vendor.tokens.clear();
   vendor.refreshTokens.clear();
 
-  await page.goto(`/apps/${APP_ID}`);
-  await page.getByRole('textbox').first().fill(QUESTION);
-  await page.keyboard.press('Enter');
+  await askQuestion(page);
 
   const card = page.getByRole('region', { name: /Reconnect E2E directory/ });
   await expect(card).toBeVisible({ timeout: 60_000 });
@@ -414,7 +525,7 @@ test('expired → Reconnect → back in the chat → answer', async ({ page, con
   vendor.rejectTokens = false;
   const calls = vendor.toolCalls;
   await card.getByRole('button', { name: /Reconnect/ }).click();
-  await expect(page.getByText(`You are signed in as ${ACCOUNT}.`)).toBeVisible({
+  await expect(chatLog(page).getByText(`You are signed in as ${ACCOUNT}.`)).toBeVisible({
     timeout: 60_000
   });
   expect(vendor.toolCalls).toBe(calls + 1);
@@ -441,6 +552,14 @@ test('picker → Connect → consent in a new tab → back in the same chat → 
   // The consent opens in a new tab and comes back to the same chat there.
   const [consent] = await Promise.all([context.waitForEvent('page'), row.click()]);
   await consent.waitForURL(url => url.pathname === chatPath, { timeout: 60_000 });
+  // The returning tab tells the other tabs (BroadcastChannel) once its picker
+  // has read the result; closing it earlier would cut that short. The row is
+  // on in that tab too.
+  await consent.waitForLoadState('networkidle');
+  await consent.getByRole('button', { name: 'Actions menu' }).first().click();
+  await expect(
+    consent.getByRole('menu').getByRole('menuitemcheckbox', { name: /E2E directory/ })
+  ).toHaveAttribute('aria-checked', 'true', { timeout: 30_000 });
   await consent.close();
 
   // Back in the first tab: the row is on in this chat.
@@ -456,7 +575,7 @@ test('picker → Connect → consent in a new tab → back in the same chat → 
   const calls = vendor.toolCalls;
   await page.getByRole('textbox').first().fill(QUESTION);
   await page.keyboard.press('Enter');
-  await expect(page.getByText(`You are signed in as ${ACCOUNT}.`)).toBeVisible({
+  await expect(chatLog(page).getByText(`You are signed in as ${ACCOUNT}.`)).toBeVisible({
     timeout: 60_000
   });
   expect(vendor.toolCalls).toBe(calls + 1);

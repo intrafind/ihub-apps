@@ -1,5 +1,19 @@
 # Fixes — Unreleased
 
+## Connecting From the Chat Now Retries the Request, and a New MCP Integration Works at Once
+
+After a user connected an integration from the chat's Connect card, the automatic retry ("I connected X. Please try
+again.") was sent before the chat had selected its model and failed with "Some of the entered data is not valid". The
+retry now waits for the model.
+
+The worker that handled an admin install or change of an integration did not reload its MCP and A2A connections, so a
+newly installed MCP server with per-user sign-in was missing on that worker: with several workers one request in N
+showed it as not connectable and offered no actions, with one worker it stayed that way until the next restart. Every
+worker now applies the change, the one that saved it included. No action is needed after the upgrade.
+
+Integrations whose definition ships an icon (iFinder, iAssistant) now show it in the chat picker and in
+**Settings → Integrations** (`GET /api/integrations/{id}/icon`).
+
 ## Revoking an OAuth Connection Now Sticks, and Several Small Stores Stop Losing Changes
 
 Disconnecting an OAuth client, deleting a user or revoking a client while one of its refresh tokens was being
