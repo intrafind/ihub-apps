@@ -3,7 +3,7 @@ name: web-artifacts
 description: Build and change interactive, self-contained HTML web artifacts (.html) — live dashboards, calculators, ROI/pricing simulators, interactive data explorers, clickable UI prototypes, HTML5 Canvas/generative visualizations — and standalone vector graphics (.svg) that render live in the chat's Artifacts panel. Use whenever the user asks for an interactive web app, dashboard, calculator, UI prototype, interactive visualization or standalone SVG graphic, or for a change to one this chat already made. Do not use for static print PDFs/posters (use pdf), multi-file code repositories (use files/create_zip), or quick inline chat flowcharts (use a ```mermaid code block in chat).
 metadata:
   author: IntraFind
-  version: '1.3'
+  version: '1.4'
 allowed-tools: create_web_artifact edit_web_artifact
 ---
 
@@ -97,6 +97,10 @@ When creating an `.svg` artifact (`format: "svg"`):
 - Always include `xmlns="http://www.w3.org/2000/svg"` and a `viewBox="0 0 W H"` attribute.
 - Use explicit `font-family="system-ui, -apple-system, sans-serif"` and explicit `fill` attributes on `<text>` elements.
 - Include a background `<rect width="100%" height="100%" rx="12" fill="…" />` so dark text remains readable in both light and dark UI themes.
+
+## Examples
+
+Before writing an artifact, read the complete example closest to the job in `references/examples.md` (`read_skill_resource`, `skill_name` `web-artifacts`, `file_path` `references/examples.md`): a KPI overview with a clickable chart, a calculator, a data explorer, a clickable diagram, and an `edit_web_artifact` call. Keep the structure, the theme tokens and the keyboard handling; replace the content. Its figures are invented: never reuse them.
 
 For ready-to-use patterns (interactive calculators, KPI dashboards, sortable tables, inline SVG charts, and seeded HTML5 `<canvas>` generative visuals), read `references/ui-and-charts.md` with `read_skill_resource` (`skill_name` `web-artifacts`, `file_path` `references/ui-and-charts.md`).
 

@@ -39,16 +39,16 @@ The shipped system skills:
 | Skill | Tools | Purpose |
 |---|---|---|
 | `pdf` | `create_pdf`, `preview_pdf` | Create PDF documents on request |
-| `docx` | `create_docx` | Create editable Word documents on request |
-| `pptx` | `create_pptx`, `restyle_pptx` | Create PowerPoint presentations on request; move an uploaded deck into the company design |
-| `xlsx` | `create_xlsx` | Create formatted Excel workbooks with live formulas on request |
+| `docx` | `create_docx`, `edit_docx` | Create editable Word documents on request, and change them in place |
+| `pptx` | `create_pptx`, `restyle_pptx`, `edit_pptx` | Create PowerPoint presentations on request, and change them slide by slide; move an uploaded deck into the company design |
+| `xlsx` | `create_xlsx`, `edit_xlsx` | Create formatted Excel workbooks with live formulas on request, and change cells, rows and sheets |
 | `web-artifacts` | `create_web_artifact`, `edit_web_artifact` | Build interactive HTML pages (calculators, simulators, prototypes) and SVG graphics that run in the chat's workspace pane, and change them in place |
 | `dashboard` | `create_web_artifact` | Turn figures from tools or from the user into a dashboard page (headline, KPI tiles, bar and line charts, tables, method and sources) in the chat's workspace pane |
 | `files` | `create_file`, `create_zip` | Create source code, JSON, YAML, CSV, Markdown and text files, and ZIP archives, on request |
 
 ### Skill access checks
 
-System skills go through the same access check as every other skill (`server/services/skillAccess.js`): `activate_skill`, `read_skill_resource`, `requestedSkills` and `/name` only load a skill that the app (or agent node) lists and the user's groups grant. The tools a system skill brings (`create_pdf`, `preview_pdf`, `create_docx`, `create_pptx`, `restyle_pptx`, `create_xlsx`, `create_web_artifact`, `edit_web_artifact`, `create_file`, `create_zip`) are offered under the same condition.
+System skills go through the same access check as every other skill (`server/services/skillAccess.js`): `activate_skill`, `read_skill_resource`, `requestedSkills` and `/name` only load a skill that the app (or agent node) lists and the user's groups grant. The tools a system skill brings (`create_pdf`, `preview_pdf`, `create_docx`, `edit_docx`, `create_pptx`, `restyle_pptx`, `edit_pptx`, `create_xlsx`, `edit_xlsx`, `create_web_artifact`, `edit_web_artifact`, `create_file`, `create_zip`) are offered under the same condition.
 
 ### Document templates and the tools
 
@@ -196,6 +196,21 @@ The `files` skill hands the user files that are not office documents: source cod
 A new file in `files` replaces an existing file of the same name. A name that is not found is reported back to the model together with the names that exist, so it can correct the call. Duplicate paths get a ` (2)` suffix.
 
 The archive follows the [artifact ZIP limits](artifacts.md#configuration) (`maxZipFiles`, `maxZipBytes`). Because the archive is a generated file, it cannot be larger than 25 MB of content.
+
+## Changing a generated document
+
+A change to a document the chat made is an edit, not the whole document written again. The model sends only what changes, and the server renders the file again from its source:
+
+| Tool | Changes |
+| --- | --- |
+| `edit_web_artifact` | Exact text replacements in the HTML or SVG (see above) |
+| `edit_docx` | Exact text replacements in the Markdown (`edits`), settings such as `title`, `toc`, `coverPage`, `header`, `footer` (`set`) |
+| `edit_pptx` | Slide operations (`changes`: `update`, `replace`, `insert`, `delete`, `move`), text replacements in the slide texts (`edits`), deck settings (`set`) |
+| `edit_xlsx` | Sheet operations (`changes`: `setCells`, `appendRows`, `insertRows`, `deleteRows`, `replaceSheet`, `addSheet`, `deleteSheet`, `renameSheet`), text replacements in cell texts and formulas (`edits`), workbook settings (`set`) |
+
+Every edit works on the newest version of the file in the chat, applies all its changes or none, keeps the file name, template and date, and stores the result as the file's new version; the earlier version stays in the Files list. An `oldText` must occur exactly once, so a replacement never lands in the wrong place. In Excel, formulas are not adjusted when rows move; the tool says so and the model updates the references in the same call.
+
+**Where the source lives.** `create_docx`, `create_pptx` and `create_xlsx` embed their own arguments (the Markdown, the slides, the sheets, the settings; never the user or the chat) in the file as a Custom XML Data part, `customXml/ihubSource.xml`, related to the main part as Office relates any custom XML. It is a standard Office Open XML part that the applications do not display; it adds the size of its source to the file. Because the source travels with the file, a stored artifact and a file of the current turn are edited the same way. `chat_artifacts_read` returns this source (Markdown, or the slides or sheets as JSON) for a document the chat made, so the model can copy `oldText` from it. A document made before this, one the user uploaded, or one saved by Office without the part has no source: the edit tool says so, and the model creates the document again once.
 
 ## Generated files
 

@@ -81,3 +81,110 @@ Replaces the page's own texts. Keys: `asOf`, `sources`, `source`, `tableView`, `
 - Gives every chart a table view with the same numbers, a tooltip on hover and focus, and keyboard access (arrow keys on a line chart).
 - Light and dark colours, a phone layout, and the app's brand colour for the header rule.
 - Shows nothing that is not in the spec; it never fetches anything.
+
+## Example: a trend, a target and a status table
+
+A second complete `data`, in German, using what the example in the skill does not: a `line` block with a gap, `marks` on bars, a `table` with `status` cells and a start `sort`, a `text` verdict and a `notes` line. The figures are invented example data; keep the structure, never the numbers.
+
+```json
+{
+  "lang": "de",
+  "title": "Service-Desk November 2026",
+  "summary": "**1.284** Tickets im November, **6 %** mehr als im Oktober; die Erstlösungsquote liegt mit **71 %** unter dem Ziel von 75 %.",
+  "asOf": "2026-11-30",
+  "notes": ["Alle Tickets der Queues IT und Facility, ohne Spam."],
+  "kpis": [
+    { "label": "Tickets", "value": 1284, "note": "Oktober: 1.211" },
+    { "label": "Erstlösungsquote", "value": 71, "format": "percent", "note": "Ziel 75 %" },
+    { "label": "Ø Lösungszeit (h)", "value": 9.4, "format": "decimal" }
+  ],
+  "blocks": [
+    {
+      "type": "line",
+      "title": "Tickets pro Woche",
+      "x": ["KW 44", "KW 45", "KW 46", "KW 47", "KW 48"],
+      "series": [
+        { "name": "IT", "values": [212, 238, null, 251, 244] },
+        { "name": "Facility", "values": [41, 39, 44, 47, 45] }
+      ],
+      "xHeader": "Woche",
+      "source": "tickets"
+    },
+    {
+      "type": "bars",
+      "title": "Erstlösungsquote nach Team (%)",
+      "format": "percent",
+      "marks": [{ "label": "Ziel", "value": 75 }],
+      "items": [
+        { "label": "Arbeitsplatz", "value": 78 },
+        { "label": "Netzwerk", "value": 64 },
+        { "label": "Anwendungen", "value": 69 },
+        { "label": "Facility", "value": 81 }
+      ],
+      "source": "fcr"
+    },
+    {
+      "type": "table",
+      "title": "Teams im Überblick",
+      "columns": [
+        { "key": "team", "label": "Team" },
+        { "key": "tickets", "label": "Tickets", "format": "int" },
+        { "key": "fcr", "label": "Erstlösung", "format": "percent" },
+        { "key": "state", "label": "Status", "format": "status" }
+      ],
+      "rows": [
+        {
+          "team": "Arbeitsplatz",
+          "tickets": 512,
+          "fcr": 78,
+          "state": { "text": "Im Ziel", "status": "good" }
+        },
+        {
+          "team": "Netzwerk",
+          "tickets": 301,
+          "fcr": 64,
+          "state": { "text": "Deutlich unter Ziel", "status": "critical" }
+        },
+        {
+          "team": "Anwendungen",
+          "tickets": 287,
+          "fcr": 69,
+          "state": { "text": "Unter Ziel", "status": "warning" }
+        },
+        {
+          "team": "Facility",
+          "tickets": 184,
+          "fcr": 81,
+          "state": { "text": "Im Ziel", "status": "good" }
+        }
+      ],
+      "sort": { "key": "fcr", "dir": "asc" }
+    },
+    {
+      "type": "text",
+      "title": "Einschätzung",
+      "paragraphs": [
+        "Das Netzwerk-Team zieht die Quote nach unten: **64 %** bei der zweithöchsten Ticketzahl.",
+        "KW 46 fehlt für die IT-Queue (Exportfehler); die Wochenlinie hat dort eine Lücke."
+      ]
+    }
+  ],
+  "method": {
+    "paragraphs": [
+      "Gezählt sind Tickets mit Eingang im November 2026. Erstlösung heißt: ohne Weiterleitung an ein zweites Team gelöst."
+    ]
+  },
+  "sources": [
+    {
+      "id": "tickets",
+      "name": "Ticket-Export",
+      "description": "Wöchentlicher Export der Queues IT und Facility."
+    },
+    {
+      "id": "fcr",
+      "name": "Erstlösungsquote",
+      "formula": "fcr(team) = gelöst ohne Weiterleitung / alle gelösten Tickets * 100"
+    }
+  ]
+}
+```

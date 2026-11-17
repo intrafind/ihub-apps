@@ -3,7 +3,7 @@ name: dashboard
 description: Turns figures into a dashboard in the chat's Artifacts panel - a headline, KPI tiles, ranked bar charts, line charts, tables, the method and the formulas behind the numbers. Use it as soon as a tool run, an analysis or the user's own data has produced numbers worth looking at (a measurement, a report, a crawl, a query, a comparison, a trend), without waiting to be asked, and whenever the user asks for a dashboard, an overview, a KPI page or charts of data. Do not use it for calculators or clickable prototypes (use web-artifacts), print documents (pdf) or spreadsheets (xlsx).
 metadata:
   author: IntraFind
-  version: '1.0'
+  version: '1.1'
 allowed-tools: create_web_artifact
 ---
 
@@ -123,7 +123,7 @@ Call `create_web_artifact` with `filename` (for example `website-corpus.html`), 
 }
 ```
 
-`data` is a string holding that JSON. Every field, its limits and the other formats are in `references/spec.md` (read it with `read_skill_resource`, `skill_name` `dashboard`, `file_path` `references/spec.md`) when you need a line chart, status cells, `marks` or `labels`.
+`data` is a string holding that JSON. Every field, its limits and the other formats are in `references/spec.md` (read it with `read_skill_resource`, `skill_name` `dashboard`, `file_path` `references/spec.md`) when you need a line chart, status cells, `marks` or `labels`; it ends with a second complete example that uses them.
 
 ## If the tool answers with a problem
 

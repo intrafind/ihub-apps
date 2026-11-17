@@ -264,8 +264,12 @@ test('the built-in creators say what they produce; the server decides, not the i
     restyle_pptx: 'presentation',
     create_xlsx: 'workbook',
     create_web_artifact: 'webArtifact',
-    // Changes a file rather than creating one: its row reads "Edit web artifact".
+    // The edit tools change a file rather than create one: their rows read
+    // "Edit web artifact", "Edit Word document", … instead of "Creating …".
     edit_web_artifact: undefined,
+    edit_docx: undefined,
+    edit_pptx: undefined,
+    edit_xlsx: undefined,
     create_file: 'file',
     create_zip: 'archive'
   });

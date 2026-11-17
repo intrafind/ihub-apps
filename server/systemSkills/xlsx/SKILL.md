@@ -1,10 +1,10 @@
 ---
 name: xlsx
-description: Create formatted Excel workbooks (.xlsx) on demand — financial models, budgets, KPI trackers, cost comparisons, project schedules, multi-sheet data tables with live formulas — styled in the company's corporate design with frozen headers, auto-filters, number formatting and auto-fitted columns. Use whenever the user asks for an Excel file, spreadsheet, .xlsx workbook or financial model. Do not activate only to read or answer questions about an uploaded spreadsheet (its extracted text is already in the conversation), or when the user explicitly asks for a raw .csv file.
+description: Create formatted Excel workbooks (.xlsx) on demand — financial models, budgets, KPI trackers, cost comparisons, project schedules, multi-sheet data tables with live formulas — styled in the company's corporate design with frozen headers, auto-filters, number formatting and auto-fitted columns. Use whenever the user asks for an Excel file, spreadsheet, .xlsx workbook or financial model. Also use it to change a workbook this chat already made. Do not activate only to read or answer questions about an uploaded spreadsheet (its extracted text is already in the conversation), or when the user explicitly asks for a raw .csv file.
 metadata:
   author: IntraFind
-  version: '1.0'
-allowed-tools: create_xlsx
+  version: '1.1'
+allowed-tools: create_xlsx edit_xlsx
 ---
 
 # Creating Excel workbooks
@@ -93,6 +93,16 @@ Pass `sheets` as a JSON array of 1–20 worksheet objects:
   }
 ]
 ```
+
+## Changing a workbook: `edit_xlsx`, not a new one
+
+Once a workbook exists, change it with `edit_xlsx` instead of writing every sheet again: the `filename`, and any of
+
+- `changes`, sheet operations applied in order, `sheet` being a name or a 1-based number: `{"op":"setCells","sheet":"Summary","cell":"B3","values":[[125000,"=B3*1.1"]]}` (row 1 sets column headers), `appendRows`, `insertRows` (`before` a row number), `deleteRows` (`row`, `count`), `replaceSheet` (`with`), `addSheet` (`sheet`, optional `after`), `deleteSheet`, `renameSheet` (`to`).
+- `edits`, exact text replacements in cell texts and formulas; each `oldText` must occur once in the whole workbook.
+- `set`, workbook settings (`title`, `author`, …).
+
+Cells are addressed as in Excel: row 1 is the header, data starts in row 2. **Formulas are not adjusted** when rows are inserted or deleted: update the references (`=SUM(B2:B10)`) in the same call. All changes apply or none. When you do not have the sheets (the workbook was made in an earlier turn), read them with `chat_artifacts_read`, which returns them as JSON. A workbook made before edits were possible, or one the user uploaded, cannot be edited this way: create it again with `create_xlsx`.
 
 ## Answer
 

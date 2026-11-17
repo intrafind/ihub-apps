@@ -1,10 +1,10 @@
 ---
 name: docx
-description: Create editable Word documents (.docx) on demand — reports, proposals, concepts, letters, minutes, specifications, manuals, contract drafts — with real Word headings, lists, tables, callouts, a cover page and a table of contents, in the company's document template. Use whenever the user asks to create, generate or export a Word document, a .docx file, or an editable document they want to keep working on. Do NOT activate just to read, summarize or answer questions about an uploaded .docx file (its extracted text is already in the conversation context).
+description: Create editable Word documents (.docx) on demand — reports, proposals, concepts, letters, minutes, specifications, manuals, contract drafts — with real Word headings, lists, tables, callouts, a cover page and a table of contents, in the company's document template. Use whenever the user asks to create, generate or export a Word document, a .docx file, or an editable document they want to keep working on. Also use it to change a Word document this chat already made. Do NOT activate just to read, summarize or answer questions about an uploaded .docx file (its extracted text is already in the conversation context).
 metadata:
   author: IntraFind
-  version: '1.1'
-allowed-tools: create_docx
+  version: '1.2'
+allowed-tools: create_docx edit_docx
 ---
 
 # Creating Word documents
@@ -42,7 +42,16 @@ If the app uses a **document template**, the server applies it automatically: th
 3. **Call `create_docx`** with a descriptive `filename`, the `title`, the `language` of the content and the `markdown`. Add `subtitle`, `author`, `date`, `showTitle: false` (for letters), `coverPage` (formal documents of more than about three pages) and `toc` (four or more sections) as needed.
 4. **Answer briefly.** Name the file and summarise it in one or two sentences. Do not paste the document into the chat and do not add a link: the download card is already there.
 
-If `create_docx` returns `warnings`, read them. They name content that was skipped (for example an unsupported image). Fix what matters and create the file again.
+If `create_docx` returns `warnings`, read them. They name content that was skipped (for example an unsupported image). Fix what matters with `edit_docx`.
+
+## Changing a document: `edit_docx`, not a new one
+
+Writing a document costs as long as the document is. Once it exists, change it with `edit_docx`: the `filename`, and `edits` (each an `oldText` copied exactly from the Markdown — a heading, a sentence, a table row — and its `newText`), `set` for settings (`title`, `subtitle`, `date`, `toc`, `coverPage`, `header`, `footer`, …), or both. All edits apply or none; the document is rendered again under the same name, in the same template.
+
+- **Use it for every change to part of a document** the user asks for: a new paragraph, a corrected figure, another section order, a shorter summary. Create a new document only when most of it changes or the user wants a new one.
+- **When you do not have the current Markdown** (the document was made in an earlier turn), read it with `chat_artifacts_read`: for a document made here it returns the Markdown it was made from. Copy `oldText` from there.
+- **When an edit is refused**, nothing was changed: copy the text again, or add more of its surroundings so it occurs only once, and call again.
+- A document made before edits were possible, or one the user uploaded, carries no Markdown: `edit_docx` says so. Then create it again with `create_docx`; later changes can be edits.
 
 ## Writing for Word
 

@@ -2,15 +2,19 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { getLocalizedString } from '../utils/localize.js';
-import { CREATE_DOCX_TOOL } from './documents/docx/docxToolDefinitions.js';
+import { CREATE_DOCX_TOOL, EDIT_DOCX_TOOL } from './documents/docx/docxToolDefinitions.js';
 import { CREATE_FILE_TOOL, CREATE_ZIP_TOOL } from './documents/files/fileToolDefinitions.js';
 import { CREATE_PDF_TOOL, PREVIEW_PDF_TOOL } from './documents/pdf/pdfToolDefinitions.js';
-import { CREATE_PPTX_TOOL, RESTYLE_PPTX_TOOL } from './documents/pptx/pptxToolDefinitions.js';
+import {
+  CREATE_PPTX_TOOL,
+  EDIT_PPTX_TOOL,
+  RESTYLE_PPTX_TOOL
+} from './documents/pptx/pptxToolDefinitions.js';
 import {
   CREATE_WEB_ARTIFACT_TOOL,
   EDIT_WEB_ARTIFACT_TOOL
 } from './documents/webArtifacts/webArtifactToolDefinitions.js';
-import { CREATE_XLSX_TOOL } from './documents/xlsx/xlsxToolDefinitions.js';
+import { CREATE_XLSX_TOOL, EDIT_XLSX_TOOL } from './documents/xlsx/xlsxToolDefinitions.js';
 
 /**
  * Built-in tools that system skills bring with them.
@@ -46,6 +50,10 @@ const REGISTRY = new Map([
     { definition: CREATE_DOCX_TOOL, run: async params => (await docxTools()).runCreateDocx(params) }
   ],
   [
+    EDIT_DOCX_TOOL.id,
+    { definition: EDIT_DOCX_TOOL, run: async params => (await docxTools()).runEditDocx(params) }
+  ],
+  [
     CREATE_PPTX_TOOL.id,
     { definition: CREATE_PPTX_TOOL, run: async params => (await pptxTools()).runCreatePptx(params) }
   ],
@@ -57,8 +65,16 @@ const REGISTRY = new Map([
     }
   ],
   [
+    EDIT_PPTX_TOOL.id,
+    { definition: EDIT_PPTX_TOOL, run: async params => (await pptxTools()).runEditPptx(params) }
+  ],
+  [
     CREATE_XLSX_TOOL.id,
     { definition: CREATE_XLSX_TOOL, run: async params => (await xlsxTools()).runCreateXlsx(params) }
+  ],
+  [
+    EDIT_XLSX_TOOL.id,
+    { definition: EDIT_XLSX_TOOL, run: async params => (await xlsxTools()).runEditXlsx(params) }
   ],
   [
     CREATE_WEB_ARTIFACT_TOOL.id,
@@ -154,7 +170,7 @@ function withTemplates(definition, templates, language) {
   };
 }
 
-/** The ids of the tools system skills bring (`create_pdf`, `create_docx`, …). */
+/** The ids of the tools system skills bring (`create_pdf`, `create_docx`, `edit_docx`, …). */
 export const SYSTEM_SKILL_TOOL_IDS = Object.freeze([...REGISTRY.keys()]);
 
 /**

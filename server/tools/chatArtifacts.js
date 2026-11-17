@@ -8,7 +8,10 @@
  * (`chatArtifactCandidates`). See `services/chat/chatContextTools.js`.
  *
  * Artifacts are write-once: the model changes a file by creating a new one
- * (a web artifact through `edit_web_artifact`, which writes the new version).
+ * (a web artifact through `edit_web_artifact`, a Word, PowerPoint or Excel
+ * file through `edit_docx` / `edit_pptx` / `edit_xlsx`, which write the new
+ * version). For such a document the read returns the source it was made from
+ * (its Markdown, slides or sheets), the text those edits are copied from.
  *
  * @module tools/chatArtifacts
  */
@@ -22,6 +25,7 @@ import {
 import { chatArtifactCandidates, selectChatFiles } from '../services/documents/files/fileTools.js';
 import { extractText } from '../services/projects/extractText.js';
 import { TEXT_FILE_MEDIA_TYPES } from '../../shared/generatedFiles.js';
+import { readSource, sourceViewOf } from '../services/documents/editableSource.js';
 
 /** Kinds that hold no text to read. */
 const UNREADABLE_KINDS = new Set(['image', 'archive']);
@@ -168,9 +172,17 @@ export async function read(params) {
     if (!data) {
       return chatContextError(`The file "${candidate.name}" is no longer stored.`, 'ARTIFACT_GONE');
     }
-    const page = pageOfText(await textOf(candidate, data), params.offset);
+    // A document the chat made carries its source: that is what an edit changes.
+    const view = isPlainText(candidate) ? null : sourceViewOf(await readSource(data));
+    const page = pageOfText(view ? view.text : await textOf(candidate, data), params.offset);
     return {
       ...described,
+      ...(view
+        ? {
+            source: view.format,
+            note: `This is the ${view.format === 'markdown' ? 'Markdown' : 'JSON'} the file was made from. Change the file with ${view.editTool}, copying oldText from here.`
+          }
+        : {}),
       ...page,
       ...(page.nextOffset !== undefined
         ? {

@@ -34,3 +34,7 @@ server/defaults/skills/skill-builder/
 # `format` script even though nothing in the repo tracks them.
 .superpowers/
 nextcloud-app/js/
+
+# Compact on purpose: the model reads these artifacts and copies their style, and
+# the edit example quotes them exactly (server/tests/web-artifact-examples.test.js).
+server/systemSkills/web-artifacts/references/examples.md

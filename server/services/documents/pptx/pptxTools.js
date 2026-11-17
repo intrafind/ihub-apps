@@ -8,8 +8,19 @@ import {
   parseStructured,
   toolFailure
 } from '../documentToolHelpers.js';
-import { holdGeneratedFile } from '../generatedFiles.js';
+import {
+  applySettings,
+  applyTextEditsToStrings,
+  editableSourceOf,
+  editResultOf,
+  embedSource,
+  textEditsOf,
+  toolArgsOf
+} from '../editableSource.js';
+import { GeneratedFileError, holdGeneratedFile } from '../generatedFiles.js';
 import { DocumentGenerationError, renderInWorker } from '../renderService.js';
+import { CREATE_PPTX_TOOL } from './pptxToolDefinitions.js';
+import { applySlideChanges } from './pptxEdit.js';
 import { applyTemplateToPptxSpec, templateBundleFor } from '../templates/applyTemplate.js';
 import {
   loadUploadedFileOriginal,
@@ -221,7 +232,10 @@ export async function runCreatePptx(params) {
     const file = holdGeneratedFile({
       user: params.user,
       chatId: params.chatId,
-      data: buffer,
+      data: await embedSource(buffer, 'pptx', {
+        tool: CREATE_PPTX_TOOL.id,
+        args: toolArgsOf(params, CREATE_PPTX_TOOL)
+      }),
       mimeType: PPTX_MIME,
       name: params.filename || params.title,
       meta: { slides }
@@ -239,5 +253,61 @@ export async function runCreatePptx(params) {
     };
   } catch (error) {
     return toolFailure(error, 'The presentation could not be created.');
+  }
+}
+
+/** What `set` may change on a presentation: every argument but its content and name. */
+const SETTINGS = Object.keys(CREATE_PPTX_TOOL.parameters.properties).filter(
+  key => !['slides', 'filename'].includes(key)
+);
+
+/**
+ * `edit_pptx`: change a presentation this chat made — operations on its stored
+ * `slides`, exact text replacements in its texts, new settings — and build it
+ * again under the same name.
+ *
+ * @param {Object} params - `filename`, `changes`, `edits`, `set`, plus the trusted context.
+ * @returns {Promise<Object>}
+ */
+export async function runEditPptx(params) {
+  try {
+    const edits = textEditsOf(params.edits, {
+      required: false,
+      rewriteHint: 'use "changes" or create the deck again with create_pptx'
+    });
+    if (params.changes === undefined && !edits.length && params.set === undefined) {
+      throw new GeneratedFileError(
+        'Give "changes" (slide operations), "edits" (text replacements), "set" (settings), or a combination.',
+        'invalid'
+      );
+    }
+    const { name, args } = await editableSourceOf(params, {
+      tool: CREATE_PPTX_TOOL.id,
+      extension: /\.pptx$/i,
+      what: 'presentation'
+    });
+    const next = applySettings(args, params.set, SETTINGS);
+    const current = parseStructured(args.slides, 'slides', 'a JSON array') || [];
+    let slides = applySlideChanges(current, params.changes);
+    if (edits.length) {
+      slides = applyTextEditsToStrings(slides, edits, {
+        readHint: 'read the deck with chat_artifacts_read, which returns its slides as JSON'
+      });
+    }
+    next.slides = slides;
+    if (JSON.stringify(next) === JSON.stringify({ ...args, slides: current })) {
+      throw new GeneratedFileError('The changes change nothing.', 'invalid');
+    }
+    const result = await runCreatePptx({
+      ...next,
+      filename: name,
+      user: params.user,
+      chatId: params.chatId,
+      appConfig: params.appConfig
+    });
+    const parsedChanges = parseStructured(params.changes, 'changes', 'a list') || [];
+    return editResultOf(result, parsedChanges.length + edits.length + (params.set ? 1 : 0));
+  } catch (error) {
+    return toolFailure(error, 'The presentation could not be changed.');
   }
 }

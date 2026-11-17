@@ -97,3 +97,50 @@ export const CREATE_PPTX_TOOL = {
     required: ['filename', 'title', 'slides']
   }
 };
+
+export const EDIT_PPTX_TOOL = {
+  id: 'edit_pptx',
+  name: { en: 'Edit presentation', de: 'Präsentation bearbeiten' },
+  description: {
+    en: 'Change a presentation this chat created with create_pptx instead of building it again: slide operations ("changes": replace, update, insert, delete or move a slide), exact text replacements in its slide texts ("edits"), new settings ("set": title, footer, slideNumbers, aspectRatio, …), or a combination. Slide numbers are 1-based and refer to the deck as the operations before them left it. All changes apply or none. The deck is built again under the same name, on the same template. If you do not have its slides, read it with chat_artifacts_read first. Use create_pptx only for a new deck or a rewrite.',
+    de: 'Ändert eine Präsentation, die dieser Chat mit create_pptx erstellt hat, statt sie neu zu bauen: Folienoperationen ("changes": eine Folie ersetzen, aktualisieren, einfügen, löschen oder verschieben), exakte Textersetzungen in den Folientexten ("edits"), neue Einstellungen ("set": title, footer, slideNumbers, aspectRatio, …) oder eine Kombination. Foliennummern beginnen bei 1 und beziehen sich auf den Stand nach den vorherigen Operationen. Alle Änderungen werden übernommen oder keine. Die Präsentation wird unter demselben Namen auf derselben Vorlage neu erzeugt. Fehlen die Folien, zuerst mit chat_artifacts_read lesen. create_pptx nur für eine neue Präsentation oder eine Neufassung.'
+  },
+  parameters: {
+    type: 'object',
+    properties: {
+      filename: {
+        type: 'string',
+        description:
+          'The presentation to change: its file name as created (e.g. "strategy-2027.pptx") or its id.'
+      },
+      changes: {
+        type: 'array',
+        description:
+          'Slide operations, applied in order: {"op":"replace","slide":3,"with":{…slide…}}, {"op":"update","slide":2,"set":{"title":"New title","chart":{…}}} (null removes a field), {"op":"insert","after":4,"slide":{…slide…}} (after 0 = first), {"op":"delete","slide":5}, {"op":"move","slide":6,"to":2}. A slide is written as in create_pptx.',
+        items: { type: 'object' }
+      },
+      edits: {
+        type: 'array',
+        description:
+          'Replacements in the texts of the slides (titles, bullets, table cells, notes), applied after "changes". Each oldText must occur exactly once in all of them.',
+        items: {
+          type: 'object',
+          properties: {
+            oldText: { type: 'string', description: 'Text to replace, exactly as it is now.' },
+            newText: {
+              type: 'string',
+              description: 'The replacement; an empty string deletes oldText.'
+            }
+          },
+          required: ['oldText', 'newText']
+        }
+      },
+      set: {
+        type: 'object',
+        description:
+          'Settings to change, as in create_pptx (e.g. {"footer": "Internal"}); null removes one. The slides change through "changes" and "edits".'
+      }
+    },
+    required: ['filename']
+  }
+};

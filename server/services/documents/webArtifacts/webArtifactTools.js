@@ -4,8 +4,8 @@
 import vm from 'node:vm';
 import { isAllowedScriptUrl } from '../../../../shared/artifactPreview.js';
 import { artifactPolicy } from '../../artifacts/artifactPolicy.js';
-import { optionalString, parseStructured, toolFailure } from '../documentToolHelpers.js';
-import { chatArtifactCandidates, selectChatFiles } from '../files/fileTools.js';
+import { optionalString, toolFailure } from '../documentToolHelpers.js';
+import { applyTextEdits, chatFileToEdit, textEditsOf } from '../editableSource.js';
 import { GeneratedFileError, holdGeneratedFile, safeFileName } from '../generatedFiles.js';
 import { templateBundleFor } from '../templates/applyTemplate.js';
 import { DASHBOARD_PRESET, renderDashboard } from './dashboardPreset.js';
@@ -481,86 +481,6 @@ export async function runCreateWebArtifact(params) {
   }
 }
 
-/** Most replacements one `edit_web_artifact` call may carry. */
-export const MAX_ARTIFACT_EDITS = 50;
-
-/** Where `needle` occurs in `text`, at most `limit` times. */
-function occurrencesOf(text, needle, limit = 3) {
-  const found = [];
-  let from = 0;
-  while (found.length < limit) {
-    const at = text.indexOf(needle, from);
-    if (at < 0) break;
-    found.push(at);
-    from = at + needle.length;
-  }
-  return found;
-}
-
-/**
- * The replacements of an `edit_web_artifact` call, checked.
- *
- * @param {unknown} value - `edits`, as a list or its JSON.
- * @returns {Array<{oldText: string, newText: string}>}
- */
-function editsOf(value) {
-  const edits = parseStructured(value, 'edits', 'a list of { oldText, newText }');
-  if (!Array.isArray(edits) || edits.length === 0) {
-    throw new GeneratedFileError(
-      '"edits" must be a non-empty list of { oldText, newText }.',
-      'invalid'
-    );
-  }
-  if (edits.length > MAX_ARTIFACT_EDITS) {
-    throw new GeneratedFileError(
-      `One call can carry at most ${MAX_ARTIFACT_EDITS} edits. For a larger change, create the file again with create_web_artifact.`,
-      'invalid'
-    );
-  }
-  return edits.map((edit, index) => {
-    const oldText = edit?.oldText;
-    const newText = edit?.newText ?? '';
-    if (typeof oldText !== 'string' || oldText === '' || typeof newText !== 'string') {
-      throw new GeneratedFileError(
-        `edits[${index}] needs "oldText" (the exact text to replace, not empty) and "newText" (its replacement; "" deletes it).`,
-        'invalid'
-      );
-    }
-    return { oldText, newText };
-  });
-}
-
-/**
- * Apply exact replacements, all or none. Each `oldText` must occur exactly
- * once in the text as the edits before it left it, so a replacement never
- * lands in the wrong place.
- *
- * @param {string} text
- * @param {Array<{oldText: string, newText: string}>} edits
- * @returns {string}
- * @throws {GeneratedFileError} naming the first edit that does not apply.
- */
-export function applyArtifactEdits(text, edits) {
-  let result = text;
-  edits.forEach(({ oldText, newText }, index) => {
-    const found = occurrencesOf(result, oldText);
-    if (found.length === 0) {
-      throw new GeneratedFileError(
-        `edits[${index}].oldText does not occur in the current file${index ? ' (after the edits before it)' : ''}. Copy it exactly from the file, whitespace and quotes included; if you do not have the current text, read it with chat_artifacts_read. No edit was applied.`,
-        'invalid'
-      );
-    }
-    if (found.length > 1) {
-      throw new GeneratedFileError(
-        `edits[${index}].oldText occurs ${found.length === 3 ? '3 or more' : found.length} times. Include enough surrounding text to make it unique. No edit was applied.`,
-        'invalid'
-      );
-    }
-    result = result.slice(0, found[0]) + newText + result.slice(found[0] + oldText.length);
-  });
-  return result;
-}
-
 /**
  * `edit_web_artifact`: change an `.html` or `.svg` artifact of this chat by
  * exact text replacements and hold the result under the same name, as the
@@ -572,20 +492,10 @@ export function applyArtifactEdits(text, edits) {
  */
 export async function runEditWebArtifact(params) {
   try {
-    const wanted = optionalString(params.filename, 200);
-    if (!wanted) {
-      throw new GeneratedFileError(
-        'Name the artifact to change in "filename" (its name or id in this chat).',
-        'invalid'
-      );
-    }
-    const edits = editsOf(params.edits);
-    const candidates = await chatArtifactCandidates({
-      user: params.user,
-      chatId: params.chatId,
-      intent: 'read'
+    const edits = textEditsOf(params.edits, {
+      rewriteHint: 'create the file again with create_web_artifact'
     });
-    const [target] = selectChatFiles(candidates, [wanted], false);
+    const target = await chatFileToEdit(params);
     let format = null;
     if (/\.svg$/i.test(target.name)) format = 'svg';
     else if (/\.html?$/i.test(target.name)) format = 'html';
@@ -595,12 +505,8 @@ export async function runEditWebArtifact(params) {
         'invalid'
       );
     }
-    const data = await target.load();
-    if (!data) {
-      throw new GeneratedFileError(`The file "${target.name}" is no longer stored.`, 'not-found');
-    }
-    const current = data.toString('utf8');
-    const updated = applyArtifactEdits(current, edits);
+    const current = target.data.toString('utf8');
+    const updated = applyTextEdits(current, edits);
     if (updated === current) {
       throw new GeneratedFileError(
         'The edits change nothing: every newText equals its oldText.',
