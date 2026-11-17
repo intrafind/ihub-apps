@@ -75,7 +75,7 @@ export function createSseChannel({ req, res, id, map, component, heartbeatMs = 3
     const wasCurrent = isCurrent();
     if (wasCurrent) map.delete(id);
     onClose?.({ isCurrent: wasCurrent });
-    logger.info('SSE connection closed', { component, id });
+    logger.debug('SSE connection closed', { component, id });
   });
 
   return { send, isCurrent, entry: myEntry };

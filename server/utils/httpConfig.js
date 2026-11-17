@@ -163,6 +163,11 @@ export function isSsrfTrustedHost(hostname) {
   );
 }
 
+// Hosts already warned about, so a per-request check does not repeat the same
+// warning on every LLM call. ponytail: grows with distinct hosts, which are few.
+const warnedNotWhitelisted = new Set();
+const warnedEmptyWhitelist = new Set();
+
 /**
  * Determine if SSL certificate validation should be ignored for a specific URL
  * @param {string} url - The URL to check
@@ -192,7 +197,9 @@ export function shouldIgnoreSSLForURL(url, sslConfig = null) {
   // Operators upgrading from older versions used to rely on a global bypass when whitelist
   // was empty — that behavior was removed for security. This warning makes the silent skip visible.
   if (!config.domainWhitelist || config.domainWhitelist.length === 0) {
-    logger.warn(
+    const firstTime = !warnedEmptyWhitelist.has(hostname);
+    if (firstTime) warnedEmptyWhitelist.add(hostname);
+    logger[firstTime ? 'warn' : 'debug'](
       'SSL bypass not applied: ignoreInvalidCertificates is true but ssl.domainWhitelist is empty. Add the LLM hostname to ssl.domainWhitelist in platform.json.',
       { component: 'HttpConfig', hostname }
     );
@@ -213,7 +220,10 @@ export function shouldIgnoreSSLForURL(url, sslConfig = null) {
       hostname
     });
   } else {
-    logger.warn(
+    // Called on every outbound request: warn once per host per process, debug after.
+    const firstTime = !warnedNotWhitelisted.has(hostname);
+    if (firstTime) warnedNotWhitelisted.add(hostname);
+    logger[firstTime ? 'warn' : 'debug'](
       'SSL bypass not applied: hostname is not in ssl.domainWhitelist. Self-signed certs will be rejected for this host.',
       { component: 'HttpConfig', hostname, domainWhitelist: config.domainWhitelist }
     );

@@ -564,7 +564,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             // the exception: its answer is stored for the user to come back to,
             // so the helper leaves that one running.
             abortChatRequestOnDisconnect(chatId);
-            logger.info('Client disconnected', { component: 'sessionRoutes', chatId });
+            logger.debug('Client disconnected', { component: 'sessionRoutes', chatId });
           }
         });
         // appId is carried on the entry for parity with the previous shape;
@@ -978,7 +978,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           const lastMessage = messages.at(-1);
           if (lastMessage && lastMessage.messageId) {
             messageId = lastMessage.messageId;
-            logger.info('Using client-provided messageId', {
+            logger.debug('Using client-provided messageId', {
               component: 'sessionRoutes',
               messageId
             });
@@ -1008,7 +1008,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             ...extra
           };
         }
-        logger.info('Processing chat', { component: 'sessionRoutes', language: clientLanguage });
+        logger.debug('Processing chat', { component: 'sessionRoutes', language: clientLanguage });
         if (!messages || !Array.isArray(messages)) {
           const errorMessage = await getLocalizedError('messagesRequired', {}, clientLanguage);
           throw new ServiceError('BAD_REQUEST', errorMessage);

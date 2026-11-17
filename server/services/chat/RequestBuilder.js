@@ -485,7 +485,7 @@ class RequestBuilder {
       // the separate, group-driven allowlist that must also bound which
       // model chat resolution can land on.
       const permittedModels = filterModelsForUser(filteredModels, user);
-      logger.info('Filtered compatible models for app', {
+      logger.debug('Filtered compatible models for app', {
         component: 'RequestBuilder',
         appId: app.id,
         filteredCount: filteredModels.length,
@@ -693,7 +693,7 @@ class RequestBuilder {
       const lastUserMsg = [...llmMessages].reverse().find(m => m.role === 'user');
       const userFileData = lastUserMsg?.fileData || lastUserMsg?.imageData || null;
 
-      logger.info('File data extraction from messages', {
+      logger.debug('File data extraction from messages', {
         component: 'RequestBuilder',
         hasLastUserMsg: !!lastUserMsg,
         hasFileData: !!lastUserMsg?.fileData,
@@ -704,7 +704,7 @@ class RequestBuilder {
 
       llmMessages = attachDocumentPageImages(llmMessages);
 
-      logger.info('Preparing chat request', {
+      logger.debug('Preparing chat request', {
         component: 'RequestBuilder',
         appId: app.id,
         modelId: model.id
@@ -714,7 +714,7 @@ class RequestBuilder {
       // the model's response limit — NOT the context window. Apps no longer
       // configure token limits; they inherit the output cap from the model.
       const finalTokens = resolveMaxOutputTokens(model);
-      logger.info('Max output tokens for request', {
+      logger.debug('Max output tokens for request', {
         component: 'RequestBuilder',
         finalTokens,
         contextWindow: model.contextWindow || null
