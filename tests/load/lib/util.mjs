@@ -62,14 +62,17 @@ export async function mapLimit(items, n, fn) {
 }
 
 /** Retry on HTTP 429 / network errors with backoff (honours Retry-After). */
-export async function withRetry(fn, { attempts = 6, baseMs = 2000, label = 'request' } = {}) {
+export async function withRetry(
+  fn,
+  { attempts = 6, baseMs = 2000, label = 'request', retryStatuses = [429, 503] } = {}
+) {
   let lastErr;
   for (let i = 0; i < attempts; i++) {
     try {
       return await fn();
     } catch (err) {
       lastErr = err;
-      const retryable = err.status === 429 || err.status === 503 || !err.status;
+      const retryable = !err.status || retryStatuses.includes(err.status);
       if (!retryable || i === attempts - 1) break;
       const after = Number(err.retryAfter) * 1000;
       const wait = Number.isFinite(after) && after > 0 ? after : baseMs * 2 ** i;

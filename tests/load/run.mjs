@@ -92,6 +92,24 @@ if (cfg.users.count < cfg.maxVus) {
   );
 }
 
+// Fail fast when setup created fewer users than this shard logs in, instead of 401s mid-run.
+if (userIndexes.length) {
+  const lastUser = userName(cfg, Math.max(...userIndexes));
+  const check = await login({
+    baseUrl: cfg.baseUrl,
+    username: lastUser,
+    password: cfg.users.password
+  }).catch(err => err);
+  if (check?.status === 401) {
+    console.error(
+      `User ${lastUser} cannot log in (401): this run uses ${cfg.users.count} users (${userName(cfg, 0)} … ${userName(cfg, cfg.users.count - 1)}). ` +
+        `Create them with LT_USER_COUNT=${cfg.users.count} node tests/load/setup.mjs --profile ${cfg.name}, ` +
+        'or set LT_USER_COUNT lower so VUs share the users that exist (or check LT_USER_PASSWORD).'
+    );
+    process.exit(2);
+  }
+}
+
 let aiAcknowledged = 0;
 async function loginUser(idx) {
   const username = userName(cfg, idx);
@@ -103,7 +121,12 @@ async function loginUser(idx) {
   // or the enforced 428 guard blocks every chat of this user.
   // A real user whose confirmation failed (503 lock timeout, 409) clicks again:
   // retry; each retry prints "[retry] ai-ack …" to the shard log.
-  if (await withRetry(() => ensureAiAcknowledged(client), { label: `ai-ack ${username}` }))
+  if (
+    await withRetry(() => ensureAiAcknowledged(client), {
+      label: `ai-ack ${username}`,
+      retryStatuses: [409, 429, 503]
+    })
+  )
     aiAcknowledged += 1;
   client.metrics = metrics;
   client.rate = { tracker: rateTracker, user: username };
