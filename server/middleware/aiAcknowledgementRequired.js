@@ -41,15 +41,18 @@ import logger from '../utils/logger.js';
  * "not yet", the signed cookie `POST /me` set counts too, unless it was issued
  * before an admin removed this user's acknowledgements
  * (`aiAcknowledgementsClearedAt`). The cookie also carries a user through a
- * store that cannot be read. An anonymous guest is judged by the cookie alone.
+ * store that cannot be read (fail-open: a cookie of a user whose
+ * acknowledgement an admin removed then counts until the store is readable
+ * again; see docs/ai-act.md). An anonymous guest is judged by the cookie alone.
  *
  * Version bumps and "Remove all" need nothing here: `requiredVersion` and
  * `resetAt` in the settings already rule out older entries and cookies.
  *
  * @param {import('express').Request} req
  * @param {Object} settings - See `getSettings`
- * @returns {Promise<{acknowledged: boolean, record: Object|null}>} `record` is
- *   the user's acknowledgement document, null for a guest or a user without one
+ * @returns {Promise<{acknowledged: boolean, record: Object|null, storeUnreadable?: boolean}>}
+ *   `record` is the user's acknowledgement document, null for a guest or a user
+ *   without one; `storeUnreadable` when the document could not be read
  */
 export async function evaluateAcknowledgement(req, settings) {
   const userId = req.user?.id;
@@ -57,9 +60,11 @@ export async function evaluateAcknowledgement(req, settings) {
     return { acknowledged: hasValidAcknowledgementCookie(req, settings), record: null };
   }
   let record = null;
+  let storeUnreadable = false;
   try {
     record = await getAiAcknowledgementRepository().get(userId);
   } catch (error) {
+    storeUnreadable = true;
     logger.warn('Could not read the AI acknowledgement of a user; only the cookie counts', {
       component: 'AiAcknowledgement',
       userId,
@@ -70,7 +75,7 @@ export async function evaluateAcknowledgement(req, settings) {
   const issuedAt = verifyAcknowledgement(req.cookies?.[ACK_COOKIE], `user:${userId}`, settings);
   const clearedAt = Date.parse(record?.aiAcknowledgementsClearedAt);
   const cookieCounts = issuedAt !== null && (!Number.isFinite(clearedAt) || issuedAt > clearedAt);
-  return { acknowledged: cookieCounts, record };
+  return { acknowledged: cookieCounts, record, storeUnreadable };
 }
 
 /**
@@ -92,9 +97,11 @@ export async function aiAcknowledgementRequired(req, res, next) {
     const isUser = Boolean(userId) && userId !== 'anonymous';
     if (isUser && isRememberedAcknowledged(userId, settings)) return next();
 
-    const { acknowledged } = await evaluateAcknowledgement(req, settings);
+    const { acknowledged, storeUnreadable } = await evaluateAcknowledgement(req, settings);
     if (acknowledged) {
-      if (isUser) rememberAcknowledged(userId, settings);
+      // A yes from the cookie alone while the store was unreadable is not
+      // remembered: the store may say the acknowledgement was removed.
+      if (isUser && !storeUnreadable) rememberAcknowledged(userId, settings);
       return next();
     }
 

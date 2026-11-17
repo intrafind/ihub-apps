@@ -500,6 +500,8 @@ describe('428 guard', () => {
       try {
         expect((await post(app, asUser('bob'))).status).toBe(428);
         expect((await post(app, asUser('bob'), cookieFor('bob'))).status).toBe(200);
+        // That cookie-only yes is not remembered: the store may say it was revoked.
+        expect(ackCache.isRememberedAcknowledged('bob', service.getSettings())).toBe(false);
       } finally {
         spy.mockRestore();
       }
