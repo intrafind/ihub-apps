@@ -1315,6 +1315,8 @@ function AppChat({
                 // rendering live, and it is the version that survives a
                 // reload.
                 loadServerMessages(Array.isArray(settled?.messages) ? settled.messages : []);
+                // The turn that just settled may have left a call waiting for a connection.
+                setPendingConnect(settled?.chat?.pendingConnect || null);
                 invalidateChatsCache();
               } catch (err) {
                 // The live projection stays on screen. It is very probably

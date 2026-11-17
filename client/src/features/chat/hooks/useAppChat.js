@@ -432,10 +432,15 @@ function useAppChat({
       const attempt = connectResumeRef.current;
       if (attempt && CONNECT_RESUME_CODES.has(error?.code)) {
         connectResumeRef.current = null;
-        if (attempt.placeholderId) removeMessage(attempt.placeholderId);
         setConnectResumeStatus(attempt.integration, { state: 'refused', code: error.code });
-        detachEventSourceRef.current?.();
-        setProcessing(false);
+        // Only while this attempt still owns the stream: a refusal that arrives
+        // after the user moved to another chat or started another turn must
+        // not stop that one.
+        if (attempt.placeholderId && attempt.placeholderId === lastMessageIdRef.current) {
+          removeMessage(attempt.placeholderId);
+          detachEventSourceRef.current?.();
+          setProcessing(false);
+        }
         return;
       }
       if (attempt) {

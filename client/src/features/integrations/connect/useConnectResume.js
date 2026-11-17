@@ -47,7 +47,11 @@ export function useConnectResume({ chatId, pendingConnect, ready, busy, resume }
 
   useEffect(() => {
     if (chatId && !returnChatRef.current) returnChatRef.current = chatId;
-    if (chatId && returnChatRef.current !== chatId) doneRef.current = true;
+    if (chatId && returnChatRef.current !== chatId && connected) {
+      // Another chat is on screen: this page's outcome does not belong to it.
+      doneRef.current = true;
+      setConnectResumeStatus(connected, null);
+    }
     if (doneRef.current || !connected || !ready || busy || !chatId) return;
     // Hydration has not reported the record yet, or there is none.
     if (!pendingConnect?.id || !pendingConnect.integrations?.includes(connected)) return;

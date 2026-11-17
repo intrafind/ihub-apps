@@ -1365,7 +1365,7 @@ class ChatService {
         });
         return false;
       }
-      const stored = await repository.updateChat(chatId, { pendingConnect: record });
+      const stored = await repository.setPendingConnect(chatId, runId, record);
       return Boolean(stored);
     } catch (error) {
       logger.warn('The pending call could not be kept with the chat', {

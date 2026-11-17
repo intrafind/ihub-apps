@@ -129,6 +129,19 @@ export function buildPendingConnect({
   const list = Array.isArray(calls) ? calls : [];
   if (!runId || list.length === 0 || list.length > MAX_CONNECT_CALLS) return null;
   if (!list.every(c => c?.id && c.toolId && c.integration && argsKeptWhole(c.args))) return null;
+  // Anything the turn did after the failed step is not part of the stored
+  // transcript: a later call that ran (a write) would be unknown to the
+  // continuation, which could then do it again. Not resumable.
+  const stepAt = messages.findLastIndex(
+    m =>
+      m?.role === 'assistant' &&
+      Array.isArray(m.tool_calls) &&
+      m.tool_calls.some(c => c?.id === list[list.length - 1].id)
+  );
+  if (stepAt < 0) return null;
+  let afterStep = stepAt + 1;
+  while (messages[afterStep]?.role === 'tool') afterStep++;
+  if (messages.slice(afterStep).some(m => m?.role === 'tool')) return null;
   const transcript = stepTranscript(messages, startMessage, list[0].id, list[list.length - 1].id);
   if (!transcript) return null;
   // A transcript call whose arguments were cut is not the call that failed.
@@ -369,6 +382,17 @@ export async function prepareConnectResume({
     // Exactly one request takes the record off the chat.
     const taken = await repository.takePendingConnect(chatId, stored.id);
     if (!taken) return { resume: null, refusal: { ...NOT_PENDING }, restore: null };
+    if (taken.expired) {
+      return {
+        resume: null,
+        refusal: {
+          status: 410,
+          code: 'CONNECT_RESUME_EXPIRED',
+          message: 'The request waited too long for the connection; ask again'
+        },
+        restore: null
+      };
+    }
     const calls = taken.calls.filter(c => c.integration === connectedIntegration);
     logger.info('Chat call resumed after a connect', {
       component: COMPONENT,

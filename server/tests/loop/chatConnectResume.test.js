@@ -697,3 +697,57 @@ test('connectResume together with an approval answer is refused; an expired reco
     null
   );
 });
+
+// ───────────────────────── CodeRabbit follow-ups ─────────────────────────
+
+test('a turn that went on to run another tool after the failed call is not resumable', async t => {
+  const chatId = newChatId('later');
+  captureFrames(t, chatId);
+  const repository = await chatStore(t);
+  const other = {
+    id: 'other_write',
+    name: 'other_write',
+    description: 'Writes',
+    parameters: { type: 'object', properties: {} }
+  };
+  const { service } = makeService(
+    [
+      toolTurn('jira_search', ARGS),
+      toolTurn('other_write', {}, { id: 'call_2' }),
+      textTurn('Done.')
+    ],
+    {
+      runTool: async toolId => (toolId === 'jira_search' ? { ...AUTH_REQUIRED } : { written: true })
+    }
+  );
+  await turn(service, {
+    chatId,
+    prepData: prep({ tools: [JIRA_TOOL, other] }),
+    persistence: persistenceFor(repository)
+  });
+  assert.ok(!(await repository.getChat(chatId))?.pendingConnect, 'the write may have run');
+});
+
+test('a record that expired between the checks and the take does not run', async t => {
+  const setup = await failedTurn(t);
+  const chat = await setup.repository.getChat(setup.chatId);
+  const prepared = await preparing(setup);
+  assert.equal(prepared.refusal, null);
+  await setup.repository.updateChat(setup.chatId, {
+    pendingConnect: { ...chat.pendingConnect, expiresAt: new Date(Date.now() - 1000).toISOString() }
+  });
+  const committed = await prepared.commit();
+  assert.equal(committed.refusal.code, 'CONNECT_RESUME_EXPIRED');
+  assert.equal(committed.resume, null);
+});
+
+test('a run that no longer owns the chat does not leave its record behind', async t => {
+  const setup = await failedTurn(t);
+  const { pendingConnect: record } = await setup.repository.getChat(setup.chatId);
+  await setup.repository.updateChat(setup.chatId, {
+    pendingConnect: null,
+    activeRunId: 'chat-newer-run'
+  });
+  assert.equal(await setup.repository.setPendingConnect(setup.chatId, record.runId, record), false);
+  assert.ok(!(await setup.repository.getChat(setup.chatId)).pendingConnect);
+});

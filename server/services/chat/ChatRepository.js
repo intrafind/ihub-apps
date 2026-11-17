@@ -1518,7 +1518,32 @@ export class ChatRepository {
       const pending = existing?.pendingConnect;
       if (!pending || pending.id !== recordId) return null;
       await this._writeChat(applyChatPatch(existing, { pendingConnect: null }), etag);
+      // Expiry is decided here too, under the lock: a record that expired
+      // between the request's checks and this take does not run.
+      if (!pending.expiresAt || Date.parse(pending.expiresAt) <= Date.now()) {
+        return { expired: true };
+      }
       return pending;
+    });
+  }
+
+  /**
+   * Keep a pending connect record on the chat, but only while the run that
+   * made it still owns the chat (a newer message has not taken it over), in
+   * one read-modify-write under the chat lock.
+   *
+   * @param {string} chatId - Chat id.
+   * @param {string} runId - The run that produced the record.
+   * @param {Object} record - The record.
+   * @returns {Promise<boolean>} Whether it was stored.
+   */
+  async setPendingConnect(chatId, runId, record) {
+    if (!this._usable(chatId, 'setPendingConnect')) return false;
+    return this._withChatLock(chatId, async () => {
+      const { chat: existing, etag } = await this._loadChat(chatId);
+      if (!existing || existing.activeRunId !== runId) return false;
+      await this._writeChat(applyChatPatch(existing, { pendingConnect: record }), etag);
+      return true;
     });
   }
 
