@@ -6,6 +6,7 @@ import Icon from '../../../../shared/components/Icon';
 import { CredentialRefSelect } from '../OpenApiToolEditor';
 import GroupMultiSelect from '../GroupMultiSelect';
 import { getBasePath } from '../../../../utils/runtimeBasePath';
+import { CHECKBOX_CLASS, INPUT_CLASS } from '../formStyles';
 
 // OIDC Provider Templates
 const OIDC_PROVIDER_TEMPLATES = {
@@ -169,9 +170,11 @@ function OidcProvidersSection({ config, onChange, t, availableGroups = [] }) {
             type="checkbox"
             checked={config.oidcAuth?.allowSelfSignup || false}
             onChange={e => updateNestedConfig('oidcAuth', 'allowSelfSignup', e.target.checked)}
-            className="mr-2"
+            className={`${CHECKBOX_CLASS} mr-2`}
           />
-          <span className="text-sm font-medium text-gray-700">Allow Self-Signup</span>
+          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            Allow Self-Signup
+          </span>
         </label>
         <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
           Allow new users to register automatically through OIDC authentication. If disabled, new
@@ -197,13 +200,13 @@ function OidcProvidersSection({ config, onChange, t, availableGroups = [] }) {
                     type="checkbox"
                     checked={provider.enabled !== false}
                     onChange={e => updateOidcProvider(index, 'enabled', e.target.checked)}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded-sm"
+                    className={CHECKBOX_CLASS}
                   />
                   <h4 className="text-md font-medium text-gray-900 dark:text-gray-100">
                     {provider.displayName || provider.name || `Provider ${index + 1}`}
                   </h4>
                   {provider.enabled === false && (
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-gray-100 text-gray-800">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200">
                       Disabled
                     </span>
                   )}
@@ -228,7 +231,7 @@ function OidcProvidersSection({ config, onChange, t, availableGroups = [] }) {
                     placeholder="google"
                     value={provider.name || ''}
                     onChange={e => updateOidcProvider(index, 'name', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    className={INPUT_CLASS}
                   />
                 </div>
                 <div>
@@ -240,7 +243,7 @@ function OidcProvidersSection({ config, onChange, t, availableGroups = [] }) {
                     placeholder="Google"
                     value={provider.displayName || ''}
                     onChange={e => updateOidcProvider(index, 'displayName', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    className={INPUT_CLASS}
                   />
                 </div>
                 <div>
@@ -252,7 +255,7 @@ function OidcProvidersSection({ config, onChange, t, availableGroups = [] }) {
                     placeholder="${GOOGLE_CLIENT_ID}"
                     value={provider.clientId || ''}
                     onChange={e => updateOidcProvider(index, 'clientId', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    className={INPUT_CLASS}
                   />
                 </div>
                 <div>
@@ -276,7 +279,7 @@ function OidcProvidersSection({ config, onChange, t, availableGroups = [] }) {
                     placeholder="https://accounts.google.com/o/oauth2/v2/auth"
                     value={provider.authorizationURL || ''}
                     onChange={e => updateOidcProvider(index, 'authorizationURL', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    className={INPUT_CLASS}
                   />
                 </div>
                 <div>
@@ -288,7 +291,7 @@ function OidcProvidersSection({ config, onChange, t, availableGroups = [] }) {
                     placeholder="https://www.googleapis.com/oauth2/v4/token"
                     value={provider.tokenURL || ''}
                     onChange={e => updateOidcProvider(index, 'tokenURL', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    className={INPUT_CLASS}
                   />
                 </div>
                 <div>
@@ -300,7 +303,7 @@ function OidcProvidersSection({ config, onChange, t, availableGroups = [] }) {
                     placeholder="https://www.googleapis.com/oauth2/v2/userinfo"
                     value={provider.userInfoURL || ''}
                     onChange={e => updateOidcProvider(index, 'userInfoURL', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    className={INPUT_CLASS}
                   />
                 </div>
                 <div className="md:col-span-2">
@@ -318,7 +321,7 @@ function OidcProvidersSection({ config, onChange, t, availableGroups = [] }) {
                     ).replace('{{providerName}}', provider.name || 'provider')}
                     value={provider.callbackURL || ''}
                     onChange={e => updateOidcProvider(index, 'callbackURL', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    className={INPUT_CLASS}
                   />
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     {t(
@@ -351,7 +354,7 @@ function OidcProvidersSection({ config, onChange, t, availableGroups = [] }) {
                     )}
                     value={provider.logoutURL || ''}
                     onChange={e => updateOidcProvider(index, 'logoutURL', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    className={INPUT_CLASS}
                   />
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     {t(
@@ -389,7 +392,7 @@ function OidcProvidersSection({ config, onChange, t, availableGroups = [] }) {
                     onChange={e =>
                       updateOidcProvider(index, 'postLogoutRedirectURL', e.target.value)
                     }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    className={INPUT_CLASS}
                   />
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     {t(
@@ -407,7 +410,7 @@ function OidcProvidersSection({ config, onChange, t, availableGroups = [] }) {
                     placeholder="groups"
                     value={provider.groupsAttribute || ''}
                     onChange={e => updateOidcProvider(index, 'groupsAttribute', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    className={INPUT_CLASS}
                   />
                 </div>
                 <div className="md:col-span-2">
@@ -425,7 +428,7 @@ function OidcProvidersSection({ config, onChange, t, availableGroups = [] }) {
                         e.target.value.split(',').map(s => s.trim())
                       )
                     }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    className={INPUT_CLASS}
                   />
                 </div>
                 <div className="md:col-span-2">
@@ -449,9 +452,11 @@ function OidcProvidersSection({ config, onChange, t, availableGroups = [] }) {
                       type="checkbox"
                       checked={provider.pkce !== false}
                       onChange={e => updateOidcProvider(index, 'pkce', e.target.checked)}
-                      className="mr-2"
+                      className={`${CHECKBOX_CLASS} mr-2`}
                     />
-                    <span className="text-sm font-medium text-gray-700">Enable PKCE</span>
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Enable PKCE
+                    </span>
                   </label>
                 </div>
                 <div>
@@ -460,9 +465,11 @@ function OidcProvidersSection({ config, onChange, t, availableGroups = [] }) {
                       type="checkbox"
                       checked={provider.autoRedirect || false}
                       onChange={e => updateOidcProvider(index, 'autoRedirect', e.target.checked)}
-                      className="mr-2"
+                      className={`${CHECKBOX_CLASS} mr-2`}
                     />
-                    <span className="text-sm font-medium text-gray-700">Auto-redirect</span>
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Auto-redirect
+                    </span>
                   </label>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     Automatically redirect users to this provider when it's the only auth method

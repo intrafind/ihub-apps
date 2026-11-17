@@ -102,8 +102,10 @@ export function TestChat({ appId, testProjectId = null }) {
     );
   }
 
+  // `data-surface="app"`: the end-user chat keeps its end-user look inside the admin (App.css
+  // scopes the admin's form-control styles out of this subtree).
   return (
-    <div className="flex flex-col flex-1 min-h-0">
+    <div data-surface="app" className="flex flex-col flex-1 min-h-0">
       <AppChat
         embedded
         appId={appId}

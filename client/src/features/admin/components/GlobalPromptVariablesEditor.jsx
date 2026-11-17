@@ -132,7 +132,7 @@ function GlobalPromptVariablesEditor({ value, onChange }) {
           value={context}
           onChange={handleContextChange}
           rows={6}
-          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white font-mono text-sm"
+          className="w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-md shadow-xs focus:outline-hidden focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white font-mono text-sm"
           placeholder="e.g., Current date: {{date}}. Company: {{company}}. User: {{user_name}}"
         />
       </div>
@@ -208,7 +208,7 @@ function GlobalPromptVariablesEditor({ value, onChange }) {
                   value={newVariableKey}
                   onChange={e => setNewVariableKey(e.target.value)}
                   placeholder="e.g., company, department, region"
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-hidden focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                  className="w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-md focus:outline-hidden focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                 />
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                   {t(
@@ -226,7 +226,7 @@ function GlobalPromptVariablesEditor({ value, onChange }) {
                   onChange={e => setNewVariableValue(e.target.value)}
                   rows={3}
                   placeholder="e.g., We are a leading provider of AI solutions..."
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-hidden focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                  className="w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-md focus:outline-hidden focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                 />
               </div>
               {error && <div className="text-sm text-red-600 dark:text-red-400">{error}</div>}
@@ -286,7 +286,7 @@ function GlobalPromptVariablesEditor({ value, onChange }) {
                       value={value}
                       onChange={e => handleUpdateVariable(key, e.target.value)}
                       rows={3}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-hidden focus:ring-2 focus:ring-blue-500 dark:bg-gray-600 dark:text-white text-sm"
+                      className="w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-md focus:outline-hidden focus:ring-2 focus:ring-blue-500 dark:bg-gray-600 dark:text-white text-sm"
                     />
                   </div>
                   <button

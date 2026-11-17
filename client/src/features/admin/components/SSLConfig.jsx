@@ -256,7 +256,7 @@ function SSLConfig({ onDirtyChange }) {
               onChange={e => setNewDomain(e.target.value)}
               onKeyPress={handleKeyPress}
               placeholder={t('admin.system.ssl.domainWhitelistPlaceholder')}
-              className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 text-sm"
+              className="flex-1 px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-md shadow-xs focus:ring-admin-accent focus:border-admin-accent dark:bg-gray-700 dark:text-gray-100 text-sm"
             />
             <button
               onClick={handleAddDomain}

@@ -377,7 +377,7 @@ function AdminOAuthClientEditPage() {
                     required
                     value={formData.name}
                     onChange={handleInputChange}
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    className="mt-1 block w-full border border-admin-control-border rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                   />
                 </div>
 
@@ -394,7 +394,7 @@ function AdminOAuthClientEditPage() {
                     rows={3}
                     value={formData.description}
                     onChange={handleInputChange}
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    className="mt-1 block w-full border border-admin-control-border rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                   />
                 </div>
 
@@ -413,7 +413,7 @@ function AdminOAuthClientEditPage() {
                     max="1440"
                     value={formData.tokenExpirationMinutes}
                     onChange={handleInputChange}
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    className="mt-1 block w-full border border-admin-control-border rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                   />
                   <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                     Default: 60 minutes, Maximum: 1440 minutes (24 hours)
@@ -429,7 +429,10 @@ function AdminOAuthClientEditPage() {
                     onChange={handleInputChange}
                     className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded-sm"
                   />
-                  <label htmlFor="active" className="ml-2 block text-sm text-gray-900">
+                  <label
+                    htmlFor="active"
+                    className="ml-2 block text-sm text-gray-900 dark:text-gray-100"
+                  >
                     {t('admin.auth.oauth.active', 'Active')}
                   </label>
                 </div>
@@ -529,7 +532,7 @@ function AdminOAuthClientEditPage() {
                     name="clientType"
                     value={formData.clientType}
                     onChange={handleInputChange}
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    className="mt-1 block w-full border border-admin-control-border rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                   >
                     <option value="confidential">
                       {t(
@@ -559,7 +562,7 @@ function AdminOAuthClientEditPage() {
                           onChange={() => handleGrantTypeToggle(grant)}
                           className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded-sm"
                         />
-                        <span className="ml-2 text-sm text-gray-700">
+                        <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
                           {grant === 'client_credentials' &&
                             t(
                               'admin.auth.oauth.grantClientCredentials',
@@ -615,7 +618,7 @@ function AdminOAuthClientEditPage() {
                               'admin.auth.oauth.redirectUriPlaceholder',
                               'https://yourapp.com/callback'
                             )}
-                            className="flex-1 border border-gray-300 rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                            className="flex-1 border border-admin-control-border rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                             onKeyDown={e => {
                               if (e.key === 'Enter') {
                                 e.preventDefault();
@@ -689,7 +692,7 @@ function AdminOAuthClientEditPage() {
                               'admin.auth.oauth.postLogoutUriPlaceholder',
                               'https://yourapp.com/logged-out'
                             )}
-                            className="flex-1 border border-gray-300 rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                            className="flex-1 border border-admin-control-border rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                             onKeyDown={e => {
                               if (e.key === 'Enter') {
                                 e.preventDefault();
@@ -739,7 +742,7 @@ function AdminOAuthClientEditPage() {
                         />
                         <label
                           htmlFor="consentRequired"
-                          className="ml-2 block text-sm text-gray-900"
+                          className="ml-2 block text-sm text-gray-900 dark:text-gray-100"
                         >
                           {t('admin.auth.oauth.consentRequired', 'Require user consent screen')}
                         </label>
@@ -753,7 +756,10 @@ function AdminOAuthClientEditPage() {
                           onChange={handleInputChange}
                           className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded-sm"
                         />
-                        <label htmlFor="trusted" className="ml-2 block text-sm text-gray-900">
+                        <label
+                          htmlFor="trusted"
+                          className="ml-2 block text-sm text-gray-900 dark:text-gray-100"
+                        >
                           {t(
                             'admin.auth.oauth.trustedClient',
                             'Trusted client (skip consent screen)'

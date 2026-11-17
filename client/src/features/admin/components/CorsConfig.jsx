@@ -192,7 +192,7 @@ function CorsConfig({ onDirtyChange }) {
               'admin.cors.originPlaceholder',
               'https://example.com or chrome-extension://abc123...'
             )}
-            className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 text-sm"
+            className="flex-1 px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-md shadow-xs focus:ring-admin-accent focus:border-admin-accent dark:bg-gray-700 dark:text-gray-100 text-sm"
           />
           <button
             onClick={handleAddOrigin}
@@ -297,7 +297,7 @@ function CorsConfig({ onDirtyChange }) {
           onChange={e =>
             setConfig(prev => ({ ...prev, maxAge: Number.parseInt(e.target.value, 10) || 0 }))
           }
-          className="w-40 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 text-sm"
+          className="w-40 px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-md shadow-xs focus:ring-admin-accent focus:border-admin-accent dark:bg-gray-700 dark:text-gray-100 text-sm"
         />
       </div>
 
@@ -325,7 +325,7 @@ function CorsConfig({ onDirtyChange }) {
                 .filter(Boolean)
             }))
           }
-          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 text-sm"
+          className="w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-md shadow-xs focus:ring-admin-accent focus:border-admin-accent dark:bg-gray-700 dark:text-gray-100 text-sm"
         />
       </div>
 
@@ -356,7 +356,7 @@ function CorsConfig({ onDirtyChange }) {
                 .filter(Boolean)
             }))
           }
-          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 text-sm font-mono"
+          className="w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-md shadow-xs focus:ring-admin-accent focus:border-admin-accent dark:bg-gray-700 dark:text-gray-100 text-sm font-mono"
         />
       </div>
 

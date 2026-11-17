@@ -10,6 +10,11 @@ import './App.css';
 import { i18nService } from './i18n/i18n';
 import { exposeCacheForDebugging } from './utils/cache';
 import { purgeLegacyChatCopies } from './features/chat/utils/chatMessagesStorage';
+import { applySavedTheme } from './utils/embedBootstrap';
+
+// Open every route in the saved light/dark theme before the first render (the inline script in
+// index.html has usually done this already; this also covers embed mode, which it skips).
+applySavedTheme();
 
 // Dev builds put the API cache on `window.appCache` for devtools inspection.
 if (import.meta.env.DEV) {

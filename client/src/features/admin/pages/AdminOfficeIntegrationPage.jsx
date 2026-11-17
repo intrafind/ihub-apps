@@ -667,7 +667,7 @@ function AdminOfficeIntegrationPage() {
   };
 
   const selectClass =
-    'block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-gray-100 px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed';
+    'block w-full rounded-md border border-admin-control-border dark:border-admin-control-border-dark bg-white dark:bg-gray-700 dark:text-gray-100 px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed';
   const labelClass = 'block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1';
   const helpClass = 'mt-2 text-xs text-gray-500 dark:text-gray-400';
 
@@ -808,7 +808,7 @@ function AdminOfficeIntegrationPage() {
                     type="text"
                     readOnly
                     value={manifestUrl}
-                    className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 px-3 py-2 text-sm font-mono text-gray-700 dark:text-gray-300 focus:outline-hidden"
+                    className="flex-1 rounded-lg border border-admin-control-border dark:border-admin-control-border-dark bg-gray-50 dark:bg-gray-700 px-3 py-2 text-sm font-mono text-gray-700 dark:text-gray-300 focus:outline-hidden"
                     onClick={e => e.target.select()}
                   />
                   <button
@@ -1102,7 +1102,7 @@ function AdminOfficeIntegrationPage() {
                     type="url"
                     value={officeJsCdnUrl}
                     onChange={e => setOfficeJsCdnUrl(e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-900 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:border-indigo-500 focus:ring-indigo-500"
+                    className="w-full rounded-lg border border-admin-control-border dark:border-admin-control-border-dark dark:bg-gray-900 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:border-indigo-500 focus:ring-indigo-500"
                     placeholder="https://officeapis.public.onecdn.static.microsoft/1/office.js"
                   />
                   <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -1127,7 +1127,7 @@ function AdminOfficeIntegrationPage() {
                     type="url"
                     value={officeJsCustomUrl}
                     onChange={e => setOfficeJsCustomUrl(e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-900 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:border-indigo-500 focus:ring-indigo-500"
+                    className="w-full rounded-lg border border-admin-control-border dark:border-admin-control-border-dark dark:bg-gray-900 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:border-indigo-500 focus:ring-indigo-500"
                     placeholder="https://cdn.example.com/office/office.js"
                   />
                   <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">

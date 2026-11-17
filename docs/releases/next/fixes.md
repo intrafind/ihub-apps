@@ -954,3 +954,24 @@ button that names the action. If the action fails, the error stays in the dialog
   the admin area or the workflow editor (deleting a node asks in a named dialog).
 - Dialogs with a form (Install integration, Add an existing key) ask before Escape, ✕ or Cancel
   discards what you typed, and Escape closes only the topmost dialog.
+
+## Admin Form Fields Are Visible in Light and Dark Mode
+
+Many admin fields (the app, model, prompt, user and group editors, Authentication, Short links, Pages,
+Localization, Voice input, Updates) had no visible edge: their border had no width, so an empty field
+looked like plain page background. In dark mode, labels on **Authentication** were dark gray on a dark
+card, and the **Save** button under **Security → Cookies** had no fill.
+
+- Text fields, selects and text areas on the admin pages, including the search box, filters and
+  page-size select above admin lists, now have a visible border and padding. Their borders are darker
+  than before (gray-500, gray-400 in dark mode) so they meet the 3:1 contrast WCAG asks for.
+- Primary buttons on the admin pages that share the admin's form styles are now **indigo**, the admin's
+  accent colour, instead of blue; focus rings and checkboxes use the same colour, in a lighter indigo
+  in dark mode so they stay visible on dark cards.
+- Labels and checkbox texts on **Authentication** are readable in dark mode, and clicking a checkbox's
+  text toggles it.
+- The admin opens in your light/dark choice straight away, also while it checks your sign-in, and the
+  sidebar has a **Theme** button (Auto, Light, Dark). A choice made there is no longer undone when the
+  operating system switches between light and dark.
+- Custom CSS (**UI Customization → Theme & styles**) that targets `input` still applies; the admin's
+  default field border is a layered style that any custom rule overrides.

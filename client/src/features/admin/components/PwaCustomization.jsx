@@ -100,7 +100,7 @@ function PwaCustomization({ config, onUpdate, t }) {
               value={pwa.shortName || ''}
               onChange={e => handleChange('shortName', e.target.value)}
               placeholder="iHub"
-              className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+              className="w-full border border-admin-control-border dark:border-admin-control-border-dark rounded-md px-3 py-2 text-sm focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
             />
             <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">
               {t('admin.ui.pwa.shortNameHint', 'Shown under the home screen icon')}
@@ -122,7 +122,7 @@ function PwaCustomization({ config, onUpdate, t }) {
             value={pwa.description || ''}
             onChange={e => handleChange('description', e.target.value)}
             placeholder="AI-powered applications platform"
-            className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+            className="w-full border border-admin-control-border dark:border-admin-control-border-dark rounded-md px-3 py-2 text-sm focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
           />
         </div>
       </fieldset>
@@ -149,7 +149,7 @@ function PwaCustomization({ config, onUpdate, t }) {
                 })}
                 value={pwa.themeColor || '#003557'}
                 onChange={e => handleChange('themeColor', e.target.value)}
-                className="h-9 w-12 rounded-sm border border-gray-300 dark:border-gray-600 cursor-pointer"
+                className="h-9 w-12 rounded-sm border border-admin-control-border dark:border-admin-control-border-dark cursor-pointer"
               />
               <input
                 id="pwa-theme-color"
@@ -158,7 +158,7 @@ function PwaCustomization({ config, onUpdate, t }) {
                 onChange={e => handleChange('themeColor', e.target.value)}
                 placeholder="#003557"
                 pattern="^#[0-9a-fA-F]{6}$"
-                className="flex-1 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm font-mono focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                className="flex-1 border border-admin-control-border dark:border-admin-control-border-dark rounded-md px-3 py-2 text-sm font-mono focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
               />
             </div>
             <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">
@@ -181,7 +181,7 @@ function PwaCustomization({ config, onUpdate, t }) {
                 })}
                 value={pwa.backgroundColor || '#ffffff'}
                 onChange={e => handleChange('backgroundColor', e.target.value)}
-                className="h-9 w-12 rounded-sm border border-gray-300 dark:border-gray-600 cursor-pointer"
+                className="h-9 w-12 rounded-sm border border-admin-control-border dark:border-admin-control-border-dark cursor-pointer"
               />
               <input
                 id="pwa-background-color"
@@ -190,7 +190,7 @@ function PwaCustomization({ config, onUpdate, t }) {
                 onChange={e => handleChange('backgroundColor', e.target.value)}
                 placeholder="#ffffff"
                 pattern="^#[0-9a-fA-F]{6}$"
-                className="flex-1 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm font-mono focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                className="flex-1 border border-admin-control-border dark:border-admin-control-border-dark rounded-md px-3 py-2 text-sm font-mono focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
               />
             </div>
             <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">
@@ -264,7 +264,7 @@ function PwaCustomization({ config, onUpdate, t }) {
                 value={pwa.icons?.[key] || ''}
                 onChange={e => handleIconChange(key, e.target.value)}
                 placeholder="/uploads/assets/icon-192.png"
-                className="flex-1 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm font-mono focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                className="flex-1 border border-admin-control-border dark:border-admin-control-border-dark rounded-md px-3 py-2 text-sm font-mono focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
               />
               {pwa.icons?.[key] && (
                 <img

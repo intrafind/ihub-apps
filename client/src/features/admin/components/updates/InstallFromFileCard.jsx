@@ -7,6 +7,7 @@ import Icon from '../../../../shared/components/Icon';
 import AdminTabs from '../AdminTabs';
 import { makeAdminApiCall } from '../../../../api/adminApi';
 import { formatBytes } from './StagedUpdatePanel';
+import { INPUT_CLASS } from '../formStyles';
 
 const RELEASES_URL = 'https://github.com/intrafind/ihub-apps/releases';
 const ARCHIVE_ACCEPT = '.gz,.tgz,.zip,.txt';
@@ -312,7 +313,7 @@ function InstallFromFileCard({ status, latestVersion, busy, setBusy, onStaged })
                       : '/opt/updates/' + expectedName
                   }
                   aria-describedby={`${baseId}-path-hint`}
-                  className="flex-1 rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 shadow-xs text-sm"
+                  className={`${INPUT_CLASS} flex-1`}
                 />
                 <button
                   type="submit"

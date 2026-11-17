@@ -16,9 +16,9 @@ import {
   toDictationValue,
   toRecognitionLang
 } from '../../../voice/utils/speechService';
+import { INPUT_CLASS } from '../formStyles';
 
-const selectClass =
-  'mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm disabled:opacity-60';
+const selectClass = `${INPUT_CLASS} mt-1 block`;
 const labelClass = 'block text-xs font-medium text-gray-700 dark:text-gray-300';
 
 const BUSY = new Set(['starting', 'listening', 'stopping']);

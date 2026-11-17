@@ -8,6 +8,7 @@ import { makeAdminApiCall } from '../../../api/adminApi';
 import AdminLoadGate from './AdminLoadGate';
 import { useAdminConfigLoad } from '../hooks/useAdminConfigLoad';
 import { useDirtyReport } from '../hooks/useDirtyReport';
+import { CHECKBOX_CLASS, PRIMARY_BUTTON_CLASS } from './formStyles';
 
 /**
  * @param {Object} props
@@ -91,7 +92,7 @@ function CookieSettingsConfig({ onDirtyChange }) {
         resourceLabel={t('admin.system.cookieSettings.title')}
         loadingFallback={
           <div className="flex items-center justify-center py-8">
-            <Icon name="loader" className="h-6 w-6 animate-spin text-primary-600" />
+            <Icon name="loader" className="h-6 w-6 animate-spin text-admin-accent dark:text-admin-accent-fg-dark" />
           </div>
         }
       />
@@ -153,7 +154,7 @@ function CookieSettingsConfig({ onDirtyChange }) {
               type="checkbox"
               checked={config.disableSecure}
               onChange={handleToggleDisableSecure}
-              className="h-4 w-4 rounded-sm border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-gray-600 dark:bg-gray-700"
+              className={CHECKBOX_CLASS}
             />
           </div>
           <div className="ml-3 text-sm">
@@ -182,14 +183,17 @@ function CookieSettingsConfig({ onDirtyChange }) {
             </div>
           )}
         </div>
+        {/* `primary-*` classes do not exist in this theme (the button rendered transparent,
+            PL-B5); the shared admin primary button is solid indigo in both themes. */}
         <button
+          type="button"
           onClick={handleSaveConfig}
           disabled={saving}
-          className="inline-flex items-center rounded-md bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-xs hover:bg-primary-500 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-primary-500 dark:hover:bg-primary-400"
+          className={PRIMARY_BUTTON_CLASS}
         >
           {saving ? (
             <>
-              <Icon name="loader" className="mr-2 h-4 w-4 animate-spin" />
+              <Icon name="loader" className="h-4 w-4 animate-spin" />
               {t('admin.system.cookieSettings.savingConfig')}
             </>
           ) : (

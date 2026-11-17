@@ -4,7 +4,7 @@
 /**
  * Applies what must be in place before the app starts: embed mode (`?embed=true`, or the
  * `data-ihub-embed` attribute of an embed page), the `mode` URL parameter and, in embed mode, the
- * `language` URL parameter.
+ * `language` URL parameter. {@link applySavedTheme} applies the saved theme for the web app.
  *
  * The i18n service reads the language and picks its storage at the moment it is imported, so this
  * has to have run by then. That is why `i18nService.js` imports this module: a dependency is
@@ -70,6 +70,21 @@ export function bootstrapFromUrl(search) {
   if (mode || embedded) {
     applyThemeToDocument(resolveIsDark(getStoredPreference()));
   }
+}
+
+/**
+ * Apply the saved light/dark preference to the document. The web app's entry point
+ * (`src/index.jsx`) calls this before React's first render, so every route opens in the saved
+ * theme, not only once a component that calls `useDarkMode` mounts (the admin's loading and
+ * access screens have none). In embed mode it reads the tab's own preference, never the
+ * direct-visit one in `localStorage`.
+ *
+ * It is deliberately not part of {@link bootstrapFromUrl}: the Outlook task pane and the browser
+ * extension import this module too (through the i18n service), and they keep their own theme
+ * (`features/office/utilities/officeTheme.js`), which this must not overwrite.
+ */
+export function applySavedTheme() {
+  applyThemeToDocument(resolveIsDark(getStoredPreference()));
 }
 
 if (typeof window !== 'undefined') {

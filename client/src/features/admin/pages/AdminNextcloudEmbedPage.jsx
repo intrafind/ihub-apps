@@ -362,7 +362,7 @@ function AdminNextcloudEmbedPage() {
                     type="text"
                     readOnly
                     value={embedUrl}
-                    className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 px-3 py-2 text-sm font-mono text-gray-700 dark:text-gray-300 focus:outline-hidden"
+                    className="flex-1 rounded-lg border border-admin-control-border dark:border-admin-control-border-dark bg-gray-50 dark:bg-gray-700 px-3 py-2 text-sm font-mono text-gray-700 dark:text-gray-300 focus:outline-hidden"
                     onClick={e => e.target.select()}
                   />
                   <button
@@ -399,7 +399,7 @@ function AdminNextcloudEmbedPage() {
                     }
                   }}
                   placeholder="https://cloud.example.com"
-                  className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  className="flex-1 rounded-lg border border-admin-control-border dark:border-admin-control-border-dark bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 />
                 <button
                   type="button"

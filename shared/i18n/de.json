@@ -8340,7 +8340,10 @@
     "switchToLight": "Zu hellem Modus wechseln",
     "switchToDark": "Zu dunklem Modus wechseln",
     "switchToAuto": "Zu automatischem Modus wechseln",
-    "followingSystem": "Folgt der Systemeinstellung"
+    "followingSystem": "Folgt der Systemeinstellung",
+    "themeAuto": "Darstellung: Automatisch (folgt dem System)",
+    "themeLight": "Darstellung: Hell",
+    "themeDark": "Darstellung: Dunkel"
   },
   "theme": {
     "title": "Design & Erscheinung",

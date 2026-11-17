@@ -258,7 +258,7 @@ function AdminFeedbackPage() {
             <select
               value={draft.trackingMode}
               onChange={e => setDraft(prev => ({ ...prev, trackingMode: e.target.value }))}
-              className="rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-gray-100 px-3 py-1.5"
+              className="rounded-md border border-admin-control-border dark:border-admin-control-border-dark bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-gray-100 px-3 py-1.5"
             >
               {TRACKING_MODES.map(mode => (
                 <option key={mode} value={mode}>

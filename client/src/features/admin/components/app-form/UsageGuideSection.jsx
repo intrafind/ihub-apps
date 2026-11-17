@@ -41,7 +41,7 @@ function UsageGuideActions({
         id="usage-guide-language"
         value={language}
         onChange={e => onLanguageChange(e.target.value)}
-        className="rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm px-2 py-1.5"
+        className="rounded-md border border-admin-control-border dark:border-admin-control-border-dark bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm px-2 py-1.5"
       >
         {languages.map(lang => (
           <option key={lang} value={lang}>

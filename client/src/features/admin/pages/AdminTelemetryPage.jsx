@@ -286,7 +286,7 @@ function AdminTelemetryPage() {
                       type="text"
                       value={config.exporters?.otlp?.endpoint || ''}
                       onChange={e => updateField('exporters.otlp.endpoint', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                      className="w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                       placeholder="http://localhost:4318"
                     />
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -319,7 +319,7 @@ function AdminTelemetryPage() {
                           Number.parseInt(e.target.value, 10)
                         )
                       }
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                      className="w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                     />
                   </div>
                   <div>
@@ -330,7 +330,7 @@ function AdminTelemetryPage() {
                       type="text"
                       value={config.exporters?.prometheus?.host || '0.0.0.0'}
                       onChange={e => updateField('exporters.prometheus.host', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                      className="w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                     />
                   </div>
                 </div>
@@ -451,7 +451,7 @@ function AdminTelemetryPage() {
                         onChange={e =>
                           updateField('events.maxEventSize', Number.parseInt(e.target.value, 10))
                         }
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                        className="w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                       />
                     </div>
                     <div>
@@ -464,7 +464,7 @@ function AdminTelemetryPage() {
                         onChange={e =>
                           updateField('metrics.exportInterval', Number.parseInt(e.target.value, 10))
                         }
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                        className="w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                       />
                     </div>
                   </div>
@@ -513,7 +513,7 @@ function AdminTelemetryPage() {
                         Number.parseInt(e.target.value, 10)
                       )
                     }
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                    className="w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                   />
                 </div>
                 <div>
@@ -530,7 +530,7 @@ function AdminTelemetryPage() {
                         Number.parseInt(e.target.value, 10)
                       )
                     }
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                    className="w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                   />
                 </div>
               </div>

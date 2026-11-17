@@ -15,12 +15,12 @@ import {
   VOICE_THINKING_LEVELS,
   clampNumber
 } from '../../utils/voiceMode';
+import { CHECKBOX_CLASS, INPUT_CLASS } from '../formStyles';
 
-const inputClass =
-  'mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm';
+const inputClass = `${INPUT_CLASS} mt-1 block`;
 const labelClass = 'block text-sm font-medium text-gray-700 dark:text-gray-300';
 const hintClass = 'mt-1 text-xs text-gray-500 dark:text-gray-400';
-const checkboxClass = 'rounded-sm border-gray-300 text-indigo-600 focus:ring-indigo-500';
+const checkboxClass = CHECKBOX_CLASS;
 
 const LANGUAGE_NAMES = { en: 'English', de: 'Deutsch' };
 const THINKING_LABELS = { minimal: 'Minimal', low: 'Low', medium: 'Medium', high: 'High' };

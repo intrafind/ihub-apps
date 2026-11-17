@@ -32,6 +32,7 @@ import { apiTypeLabel } from '../utils/modelImport';
 import { TOOL_SUPPORT, TOOL_SUPPORT_VALUES } from '../../../../../shared/modelCapabilities.js';
 import EuAiActStateNote from './euAiAct/EuAiActStateNote';
 import GatewaySyncDialog from './GatewaySyncDialog';
+import { CHECKBOX_CLASS, INPUT_CLASS } from './formStyles';
 
 /** English fallbacks for the tool calling dropdown (`admin.models.toolSupport.*`). */
 const TOOL_SUPPORT_LABELS = {
@@ -238,8 +239,8 @@ function SamplingField({ id, label, value, error, placeholder, onChange, bounds 
         value={value}
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
-        className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
-          error ? 'border-red-300 text-red-900' : ''
+        className={`${INPUT_CLASS} mt-1 block ${
+          error ? 'border-red-500 dark:border-red-400 text-red-900' : ''
         }`}
         {...bounds}
       />
@@ -646,9 +647,9 @@ function ModelFormEditor({
                     value={data.id || ''}
                     onChange={handleInputChange}
                     disabled={!isNewModel}
-                    className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 rounded-md disabled:bg-gray-100 dark:disabled:bg-gray-700 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 ${
+                    className={`${INPUT_CLASS} mt-1 block ${
                       validationErrors.id || errors.id
-                        ? 'border-red-300 text-red-900 placeholder-red-300'
+                        ? 'border-red-500 dark:border-red-400 text-red-900 placeholder-red-300'
                         : ''
                     }`}
                     required={isFieldRequired('id', jsonSchema)}
@@ -696,7 +697,7 @@ function ModelFormEditor({
                     name="modelType"
                     value={data.modelType || 'chat'}
                     onChange={handleInputChange}
-                    className="mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    className="mt-1 block w-full py-2 px-3 border border-admin-control-border dark:border-admin-control-border-dark bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-xs focus:outline-hidden focus:ring-admin-accent focus:border-admin-accent sm:text-sm"
                   >
                     <option value="chat">{t('admin.models.modelType.chat', 'Chat')}</option>
                     <option value="transcription">
@@ -724,8 +725,8 @@ function ModelFormEditor({
                     name="provider"
                     value={data.providerId || data.provider || ''}
                     onChange={handleProviderSelect}
-                    className={`mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm ${
-                      errors.provider ? 'border-red-300 text-red-900' : ''
+                    className={`mt-1 block w-full py-2 px-3 border border-admin-control-border dark:border-admin-control-border-dark bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-xs focus:outline-hidden focus:ring-admin-accent focus:border-admin-accent sm:text-sm ${
+                      errors.provider ? 'border-red-500 dark:border-red-400 text-red-900' : ''
                     }`}
                     required
                   >
@@ -806,8 +807,10 @@ function ModelFormEditor({
                     value={data.modelId || ''}
                     onChange={handleInputChange}
                     placeholder={t('admin.models.placeholders.apiModelId')}
-                    className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
-                      errors.modelId ? 'border-red-300 text-red-900 placeholder-red-300' : ''
+                    className={`${INPUT_CLASS} mt-1 block ${
+                      errors.modelId
+                        ? 'border-red-500 dark:border-red-400 text-red-900 placeholder-red-300'
+                        : ''
                     }`}
                   />
                   {errors.modelId && (
@@ -852,8 +855,10 @@ function ModelFormEditor({
                               : 'https://api.mistral.ai/v1/audio/speech'
                             : t('admin.models.placeholders.apiUrl')
                       }
-                      className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
-                        errors.url ? 'border-red-300 text-red-900 placeholder-red-300' : ''
+                      className={`${INPUT_CLASS} mt-1 block ${
+                        errors.url
+                          ? 'border-red-500 dark:border-red-400 text-red-900 placeholder-red-300'
+                          : ''
                       }`}
                       required
                     />
@@ -897,7 +902,7 @@ function ModelFormEditor({
                         handleTtsChange('voice', e.target.value.replaceAll(/[^\w-]/g, ''))
                       }
                       placeholder={data.provider === 'google' ? 'Kore' : 'en_paul_neutral'}
-                      className="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md"
+                      className={`${INPUT_CLASS} mt-1 block`}
                     />
                     {TTS_PRESET_VOICES[data.provider] && (
                       <datalist id="ttsVoiceOptions">
@@ -945,7 +950,7 @@ function ModelFormEditor({
                               ])
                             );
                           }}
-                          className="block w-40 py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-xs sm:text-sm"
+                          className="block w-40 py-2 px-3 border border-admin-control-border dark:border-admin-control-border-dark bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-xs sm:text-sm"
                         >
                           {TTS_LANGUAGES.filter(
                             language =>
@@ -972,7 +977,7 @@ function ModelFormEditor({
                             );
                           }}
                           placeholder={t('admin.models.placeholders.ttsVoiceId', 'Voice id')}
-                          className="block flex-1 shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md"
+                          className={`${INPUT_CLASS} block flex-1`}
                         />
                         <button
                           type="button"
@@ -1053,7 +1058,7 @@ function ModelFormEditor({
                               'Enter API key (optional - will use environment variable if not set)'
                             )
                       }
-                      className="focus:ring-indigo-500 focus:border-indigo-500 block w-full pr-10 sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md"
+                      className="focus:ring-admin-accent focus:border-admin-accent block w-full pr-10 sm:text-sm border border-admin-control-border dark:border-admin-control-border-dark bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md"
                     />
                   </div>
                   <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
@@ -1113,8 +1118,10 @@ function ModelFormEditor({
                         value={data.contextWindow || ''}
                         onChange={handleInputChange}
                         min="1"
-                        className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
-                          errors.contextWindow ? 'border-red-300 text-red-900' : ''
+                        className={`${INPUT_CLASS} mt-1 block ${
+                          errors.contextWindow
+                            ? 'border-red-500 dark:border-red-400 text-red-900'
+                            : ''
                         }`}
                         required={isFieldRequired('contextWindow', jsonSchema)}
                       />
@@ -1141,8 +1148,10 @@ function ModelFormEditor({
                         value={data.maxOutputTokens || ''}
                         onChange={handleInputChange}
                         min="1"
-                        className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
-                          errors.maxOutputTokens ? 'border-red-300 text-red-900' : ''
+                        className={`${INPUT_CLASS} mt-1 block ${
+                          errors.maxOutputTokens
+                            ? 'border-red-500 dark:border-red-400 text-red-900'
+                            : ''
                         }`}
                         placeholder={t('admin.models.placeholders.maxOutputTokens', {
                           defaultValue: 'Default: {{value}}',
@@ -1180,8 +1189,8 @@ function ModelFormEditor({
                     value={data.concurrency || ''}
                     onChange={handleInputChange}
                     min="1"
-                    className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
-                      errors.concurrency ? 'border-red-300 text-red-900' : ''
+                    className={`${INPUT_CLASS} mt-1 block ${
+                      errors.concurrency ? 'border-red-500 dark:border-red-400 text-red-900' : ''
                     }`}
                   />
                   {errors.concurrency && (
@@ -1205,8 +1214,8 @@ function ModelFormEditor({
                     value={data.requestDelayMs || ''}
                     onChange={handleInputChange}
                     min="0"
-                    className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
-                      errors.requestDelayMs ? 'border-red-300 text-red-900' : ''
+                    className={`${INPUT_CLASS} mt-1 block ${
+                      errors.requestDelayMs ? 'border-red-500 dark:border-red-400 text-red-900' : ''
                     }`}
                   />
                   {errors.requestDelayMs && (
@@ -1231,8 +1240,10 @@ function ModelFormEditor({
                     onChange={handleInputChange}
                     min="0"
                     max="300000"
-                    className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
-                      errors.connectTimeoutMs ? 'border-red-300 text-red-900' : ''
+                    className={`${INPUT_CLASS} mt-1 block ${
+                      errors.connectTimeoutMs
+                        ? 'border-red-500 dark:border-red-400 text-red-900'
+                        : ''
                     }`}
                   />
                   {errors.connectTimeoutMs && (
@@ -1257,8 +1268,10 @@ function ModelFormEditor({
                     onChange={handleInputChange}
                     min="0"
                     max="300000"
-                    className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
-                      errors.streamIdleTimeoutMs ? 'border-red-300 text-red-900' : ''
+                    className={`${INPUT_CLASS} mt-1 block ${
+                      errors.streamIdleTimeoutMs
+                        ? 'border-red-500 dark:border-red-400 text-red-900'
+                        : ''
                     }`}
                   />
                   {errors.streamIdleTimeoutMs && (
@@ -1288,7 +1301,7 @@ function ModelFormEditor({
                     value={data.supportsTools || 'none'}
                     onChange={handleInputChange}
                     aria-describedby="supportsTools-help"
-                    className="mt-1 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                    className={`${INPUT_CLASS} mt-1 block`}
                   >
                     {TOOL_SUPPORT_VALUES.map(value => (
                       <option key={value} value={value}>
@@ -1321,7 +1334,7 @@ function ModelFormEditor({
                             type="checkbox"
                             checked={data.supportsVision || false}
                             onChange={handleInputChange}
-                            className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded-sm"
+                            className={CHECKBOX_CLASS}
                           />
                         </div>
                         <div className="ml-3 text-sm">
@@ -1347,7 +1360,7 @@ function ModelFormEditor({
                             type="checkbox"
                             checked={data.supportsAudio || false}
                             onChange={handleInputChange}
-                            className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded-sm"
+                            className={CHECKBOX_CLASS}
                           />
                         </div>
                         <div className="ml-3 text-sm">
@@ -1373,7 +1386,7 @@ function ModelFormEditor({
                             type="checkbox"
                             checked={data.enabled !== false}
                             onChange={handleInputChange}
-                            className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded-sm"
+                            className={CHECKBOX_CLASS}
                           />
                         </div>
                         <div className="ml-3 text-sm">
@@ -1395,7 +1408,7 @@ function ModelFormEditor({
                               type="checkbox"
                               checked={data.default || false}
                               onChange={handleInputChange}
-                              className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded-sm"
+                              className={CHECKBOX_CLASS}
                             />
                           </div>
                           <div className="ml-3 text-sm">
@@ -1416,7 +1429,7 @@ function ModelFormEditor({
                             type="checkbox"
                             checked={data.supportsImageGeneration || false}
                             onChange={handleInputChange}
-                            className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded-sm"
+                            className={CHECKBOX_CLASS}
                           />
                         </div>
                         <div className="ml-3 text-sm">
@@ -1446,7 +1459,7 @@ function ModelFormEditor({
                             checked={data.autoDiscovery || false}
                             onChange={handleInputChange}
                             disabled={!(data.provider === 'openai' || data.provider === 'local')}
-                            className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                            className={CHECKBOX_CLASS}
                           />
                         </div>
                         <div className="ml-3 text-sm">
@@ -1537,7 +1550,7 @@ function ModelFormEditor({
                             id="contentMarking.text.by"
                             value={data.contentMarking?.text?.by || 'none'}
                             onChange={e => handleMarkingChange('by', e.target.value)}
-                            className="mt-1 block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                            className="mt-1 block w-full border border-admin-control-border dark:border-admin-control-border-dark dark:bg-gray-700 dark:text-gray-100 rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-admin-accent focus:border-admin-accent sm:text-sm"
                           >
                             <option value="none">
                               {t('admin.models.marking.optionNone', 'Not marked')}
@@ -1591,7 +1604,7 @@ function ModelFormEditor({
                                         : e.target.value
                                     )
                                   }
-                                  className="mt-1 block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                                  className="mt-1 block w-full border border-admin-control-border dark:border-admin-control-border-dark dark:bg-gray-700 dark:text-gray-100 rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-admin-accent focus:border-admin-accent sm:text-sm"
                                 />
                               </div>
                             ))}
@@ -1619,7 +1632,7 @@ function ModelFormEditor({
                                 value={data.contentMarking?.text?.scheme || ''}
                                 onChange={e => handleMarkingChange('scheme', e.target.value)}
                                 placeholder="synthid"
-                                className="mt-1 block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                                className="mt-1 block w-full border border-admin-control-border dark:border-admin-control-border-dark dark:bg-gray-700 dark:text-gray-100 rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-admin-accent focus:border-admin-accent sm:text-sm"
                               />
                             </div>
                             <div className="col-span-6 sm:col-span-2">
@@ -1638,7 +1651,7 @@ function ModelFormEditor({
                                 maxLength={500}
                                 value={data.contentMarking?.text?.statementRef || ''}
                                 onChange={e => handleMarkingChange('statementRef', e.target.value)}
-                                className="mt-1 block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                                className="mt-1 block w-full border border-admin-control-border dark:border-admin-control-border-dark dark:bg-gray-700 dark:text-gray-100 rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-admin-accent focus:border-admin-accent sm:text-sm"
                               />
                               <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                                 {t(
@@ -1678,7 +1691,7 @@ function ModelFormEditor({
                             id="contentMarking.image.by"
                             value={data.contentMarking?.image?.by || 'none'}
                             onChange={e => handleImageMarkingChange('by', e.target.value)}
-                            className="mt-1 block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                            className="mt-1 block w-full border border-admin-control-border dark:border-admin-control-border-dark dark:bg-gray-700 dark:text-gray-100 rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-admin-accent focus:border-admin-accent sm:text-sm"
                           >
                             <option value="none">
                               {t('admin.models.marking.optionNone', 'Not marked')}
@@ -1707,7 +1720,7 @@ function ModelFormEditor({
                                 value={data.contentMarking?.image?.scheme || ''}
                                 onChange={e => handleImageMarkingChange('scheme', e.target.value)}
                                 placeholder="synthid"
-                                className="mt-1 block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                                className="mt-1 block w-full border border-admin-control-border dark:border-admin-control-border-dark dark:bg-gray-700 dark:text-gray-100 rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-admin-accent focus:border-admin-accent sm:text-sm"
                               />
                             </div>
                             <div className="col-span-6 sm:col-span-2">
@@ -1728,7 +1741,7 @@ function ModelFormEditor({
                                 onChange={e =>
                                   handleImageMarkingChange('statementRef', e.target.value)
                                 }
-                                className="mt-1 block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                                className="mt-1 block w-full border border-admin-control-border dark:border-admin-control-border-dark dark:bg-gray-700 dark:text-gray-100 rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-admin-accent focus:border-admin-accent sm:text-sm"
                               />
                               <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                                 {t(
@@ -1757,7 +1770,7 @@ function ModelFormEditor({
                             type="checkbox"
                             checked={data.thinking?.enabled || false}
                             onChange={e => handleThinkingChange('enabled', e.target.checked)}
-                            className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded-sm"
+                            className={CHECKBOX_CLASS}
                           />
                         </div>
                         <div className="ml-3 text-sm">
@@ -1788,7 +1801,7 @@ function ModelFormEditor({
                               id="thinking.level"
                               value={data.thinking?.level || ''}
                               onChange={e => handleThinkingChange('level', e.target.value)}
-                              className="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md"
+                              className={`${INPUT_CLASS} mt-1 block`}
                             >
                               <option value="">
                                 {t('admin.models.fields.thinkingLevelDefault', 'Provider default')}
@@ -1820,7 +1833,7 @@ function ModelFormEditor({
                                 type="checkbox"
                                 checked={data.thinking?.thoughts !== false}
                                 onChange={e => handleThinkingChange('thoughts', e.target.checked)}
-                                className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded-sm"
+                                className={CHECKBOX_CLASS}
                               />
                             </div>
                             <div className="ml-3 text-sm">
@@ -1859,7 +1872,7 @@ function ModelFormEditor({
                             onChange={e =>
                               handleChange('promptCaching', { enabled: e.target.checked })
                             }
-                            className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded-sm"
+                            className={CHECKBOX_CLASS}
                           />
                         </div>
                         <div className="ml-3 text-sm">
@@ -1912,7 +1925,7 @@ function ModelFormEditor({
                                   enabled: e.target.checked
                                 })
                               }
-                              className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded-sm"
+                              className={CHECKBOX_CLASS}
                             />
                           </div>
                           <div className="ml-3 text-sm">
@@ -1950,7 +1963,7 @@ function ModelFormEditor({
                                       toolVersion: e.target.value
                                     })
                                   }
-                                  className="mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                                  className="mt-1 block w-full py-2 px-3 border border-admin-control-border dark:border-admin-control-border-dark bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-xs focus:outline-hidden focus:ring-admin-accent focus:border-admin-accent sm:text-sm"
                                 >
                                   <option value="web_search_20250305">
                                     web_search_20250305 —{' '}
@@ -1997,7 +2010,7 @@ function ModelFormEditor({
                                         dynamicFiltering: e.target.checked
                                       })
                                     }
-                                    className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded-sm disabled:opacity-50"
+                                    className={CHECKBOX_CLASS}
                                   />
                                 </div>
                                 <div className="ml-3 text-sm">
@@ -2048,7 +2061,7 @@ function ModelFormEditor({
                                 aspectRatio: e.target.value
                               })
                             }
-                            className="mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                            className="mt-1 block w-full py-2 px-3 border border-admin-control-border dark:border-admin-control-border-dark bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-xs focus:outline-hidden focus:ring-admin-accent focus:border-admin-accent sm:text-sm"
                           >
                             <option value="1:1">1:1 (Square)</option>
                             <option value="16:9">16:9 (Landscape)</option>
@@ -2079,7 +2092,7 @@ function ModelFormEditor({
                                 quality: e.target.value
                               })
                             }
-                            className="mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                            className="mt-1 block w-full py-2 px-3 border border-admin-control-border dark:border-admin-control-border-dark bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-xs focus:outline-hidden focus:ring-admin-accent focus:border-admin-accent sm:text-sm"
                           >
                             <option value="Low">
                               {t('admin.models.imageQuality.low', 'Low (1K)')}
@@ -2112,7 +2125,7 @@ function ModelFormEditor({
                             }
                             min="1"
                             max="14"
-                            className="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md"
+                            className={`${INPUT_CLASS} mt-1 block`}
                           />
                           <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
                             {t(
@@ -2168,7 +2181,7 @@ function ModelFormEditor({
                                   type="text"
                                   value={value}
                                   onChange={e => handleConfigChange(field.key, e.target.value)}
-                                  className="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md"
+                                  className={`${INPUT_CLASS} mt-1 block`}
                                 />
                               ) : (
                                 <input
@@ -2183,7 +2196,7 @@ function ModelFormEditor({
                                         : e.target.value
                                     )
                                   }
-                                  className="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md"
+                                  className={`${INPUT_CLASS} mt-1 block`}
                                 />
                               )}
                               {Array.isArray(field.enumHint) && field.enumHint.length > 0 && (

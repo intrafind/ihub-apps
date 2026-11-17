@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
+import { CHECKBOX_CLASS, INPUT_CLASS } from '../formStyles';
+
 /**
  * LocalAuthSection - Built-in username/password authentication settings.
  */
@@ -36,7 +38,7 @@ function LocalAuthSection({ config, onChange }) {
             type="text"
             value={config.localAuth?.usersFile || ''}
             onChange={e => updateLocalAuth('usersFile', e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+            className={INPUT_CLASS}
             placeholder="contents/config/users.json"
           />
         </div>
@@ -50,7 +52,7 @@ function LocalAuthSection({ config, onChange }) {
             onChange={e =>
               updateLocalAuth('sessionTimeoutMinutes', Number.parseInt(e.target.value))
             }
-            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+            className={INPUT_CLASS}
             placeholder="480"
           />
         </div>
@@ -62,7 +64,7 @@ function LocalAuthSection({ config, onChange }) {
             type="text"
             value={config.localAuth?.jwtSecret || ''}
             onChange={e => updateLocalAuth('jwtSecret', e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+            className={INPUT_CLASS}
             placeholder="${JWT_SECRET}"
           />
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -75,9 +77,9 @@ function LocalAuthSection({ config, onChange }) {
               type="checkbox"
               checked={config.localAuth?.showDemoAccounts !== false}
               onChange={e => updateLocalAuth('showDemoAccounts', e.target.checked)}
-              className="mr-2"
+              className={`${CHECKBOX_CLASS} mr-2`}
             />
-            <span className="text-sm font-medium text-gray-700">
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
               Show Demo Accounts in Login Form
             </span>
           </label>
@@ -91,9 +93,9 @@ function LocalAuthSection({ config, onChange }) {
               type="checkbox"
               checked={lockout.enabled !== false}
               onChange={e => updateLockout('enabled', e.target.checked)}
-              className="mr-2"
+              className={`${CHECKBOX_CLASS} mr-2`}
             />
-            <span className="text-sm font-medium text-gray-700">
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
               Lock accounts after repeated failed sign-ins
             </span>
           </label>
@@ -115,7 +117,7 @@ function LocalAuthSection({ config, onChange }) {
             value={lockout.maxAttempts ?? ''}
             onChange={e => updateLockoutNumber('maxAttempts', e.target.value)}
             disabled={lockout.enabled === false}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+            className={INPUT_CLASS}
             placeholder="5"
           />
         </div>
@@ -133,7 +135,7 @@ function LocalAuthSection({ config, onChange }) {
             value={lockout.durationMinutes ?? ''}
             onChange={e => updateLockoutNumber('durationMinutes', e.target.value)}
             disabled={lockout.enabled === false}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+            className={INPUT_CLASS}
             placeholder="15"
           />
         </div>

@@ -361,6 +361,7 @@ export default function AdminCommandPalette() {
               'admin.commandPalette.placeholder',
               'Search pages, actions, entities...'
             )}
+            data-bare
             className="flex-1 bg-transparent text-sm text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 outline-hidden"
           />
           <kbd className="hidden sm:inline-flex items-center px-1.5 py-0.5 text-[0.625rem] font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-sm border border-gray-200 dark:border-gray-600">

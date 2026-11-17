@@ -13,6 +13,7 @@ import {
   toDictationValue
 } from '../../../voice/utils/speechService';
 import { VOICE_LISTENING_STYLES, withVoiceModeSettings } from '../../utils/voiceMode';
+import { CHECKBOX_CLASS, INPUT_CLASS } from '../formStyles';
 
 /** The microphone switch and, when it is on, its mode and transcript options. */
 function MicrophoneFields({ app, onInputChange: handleInputChange, t }) {
@@ -31,9 +32,9 @@ function MicrophoneFields({ app, onInputChange: handleInputChange, t }) {
               }
             })
           }
-          className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
+          className={CHECKBOX_CLASS}
         />
-        <label className="ml-2 block text-sm font-medium text-gray-900">
+        <label className="ml-2 block text-sm font-medium text-gray-900 dark:text-gray-100">
           {t('admin.apps.edit.enableMicrophone', 'Enable Microphone')}
         </label>
       </div>
@@ -52,7 +53,7 @@ function MicrophoneFields({ app, onInputChange: handleInputChange, t }) {
                   microphone: { ...app.inputMode?.microphone, mode: e.target.value }
                 })
               }
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+              className={`${INPUT_CLASS} mt-1 block`}
             >
               <option value="manual">
                 {t('admin.apps.edit.manualMode', 'Manual (Click to Record)')}
@@ -76,7 +77,7 @@ function MicrophoneFields({ app, onInputChange: handleInputChange, t }) {
                   }
                 })
               }
-              className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
+              className={CHECKBOX_CLASS}
             />
             <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
               {t('admin.apps.edit.showTranscript', 'Show Transcript')}
@@ -212,7 +213,7 @@ function SpeechServiceField({
       <select
         value={pickerValue(speechService, selectedModelId)}
         onChange={e => handleServiceChange(e.target.value)}
-        className="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+        className={`${INPUT_CLASS} mt-1 block`}
       >
         <option value="default">
           {t('admin.apps.edit.platformDefaultService', 'Platform default ({{service}})', {
@@ -269,7 +270,7 @@ function TextareaRowsField({ app, onInputChange: handleInputChange, t }) {
             rows: parseNumberOrUndefined(e.target.value, Number.parseInt)
           })
         }
-        className="mt-1 block w-20 rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+        className="mt-1 block w-20 rounded-md border border-admin-control-border dark:border-admin-control-border-dark shadow-xs focus:border-admin-accent focus:ring-admin-accent sm:text-sm"
       />
       <p id={`${fieldId}-hint`} className="mt-1 text-xs text-gray-500 dark:text-gray-400">
         {t(
@@ -300,7 +301,7 @@ function ServiceHostField({ app, onInputChange: handleInputChange, t }) {
           })
         }
         placeholder="https://your-speech-service.com"
-        className="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+        className={`${INPUT_CLASS} mt-1 block`}
       />
     </div>
   );
@@ -312,8 +313,7 @@ const voiceSuggestionsOf = model => {
   return [...new Set(ids.filter(id => typeof id === 'string' && id))];
 };
 
-const selectClass =
-  'mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm disabled:cursor-not-allowed';
+const selectClass = `${INPUT_CLASS} mt-1 block`;
 
 /**
  * Whether this app offers the spoken conversation (voice mode), and what it
@@ -602,7 +602,7 @@ function InputModeSection({
                 onChange={e =>
                   handleInputChange('inputMode', { ...app.inputMode, type: e.target.value })
                 }
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                className={`${INPUT_CLASS} mt-1 block`}
               >
                 <option value="singleline">{t('admin.apps.edit.singleLine', 'Single Line')}</option>
                 <option value="multiline">{t('admin.apps.edit.multiLine', 'Multi Line')}</option>

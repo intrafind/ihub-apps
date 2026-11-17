@@ -227,7 +227,7 @@ function FilterMultiSelect({
                     searchPlaceholder ?? t('admin.filters.multiSelect.search', 'Filter…')
                   }
                   aria-label={searchPlaceholder ?? t('admin.filters.multiSelect.search', 'Filter…')}
-                  className="w-full rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 px-2 py-1 text-sm focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                  className="w-full rounded-md border border-admin-control-border dark:border-admin-control-border-dark bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 px-2 py-1 text-sm focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
             )}

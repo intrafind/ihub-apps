@@ -320,6 +320,21 @@ Normal text needs 4.5:1 (3:1 for large text and for icons or borders that carry 
 | white on `bg-{green,orange,emerald,teal,amber}-600` | | all of them (about 3.2–3.7:1); use `-700` |
 | `text-{green,amber,orange,yellow}-600` | | on white and tinted panels; use `-700` |
 
+### Admin form fields
+
+A field's boundary is a control boundary under WCAG 1.4.11 and needs 3:1 against the background. Light gray borders do not reach it (`border-gray-300` on white is 1.47:1), so admin fields use the class strings in `client/src/features/admin/components/formStyles.js`:
+
+| Class | What it gives |
+|---|---|
+| `INPUT_CLASS` (also `MONO_INPUT_CLASS`) | 1px border in `admin-control-border` (gray-500, 4.84:1 on white) and `admin-control-border-dark` (gray-400, 5.64:1 on the gray-800 card), padding, light and dark fill, an indigo focus ring, and a disabled look that keeps the border visible |
+| `LABEL_CLASS`, `HELP_CLASS` | label and hint text with dark-mode colours |
+| `CHECKBOX_CLASS`, `RADIO_CLASS` | native controls tinted with `accent-color` (border and text classes do nothing on them) and a focus outline, both indigo-600 in light mode and indigo-400 in dark mode (indigo-600 is 2.33:1 on the gray-800 card) |
+| `PRIMARY_BUTTON_CLASS` | the admin accent (indigo-600, white text 6.29:1) |
+
+Tailwind 4 sets every border width to 0, so a class string that only names a border colour (`border-gray-300` without `border`) draws no edge at all. While the admin is open (the pages under `AdminLayout` and the full-screen workflow editor), `<html data-surface="admin">` is set and a layered rule in `client/src/App.css` gives every text field, select and textarea a 1px border and padding as a fallback; any utility class on the field still wins. A subtree that shows end-user UI inside the admin (the test panel's chat) carries `data-surface="app"` and keeps its end-user look; a field inside a bordered wrapper (the command palette search) carries `data-bare`.
+
+`tests/unit/client/admin-class-hygiene.test.jsx` counts, per admin file, border colours without a border width, `*-primary-*` classes (there is no `primary` colour ramp), `text-gray-600`…`-900` without a `dark:text-*` variant, and text fields, selects and textareas whose class sets a border below 3:1 (`border-gray-100`…`-300`, `dark:border-gray-500`…`-700`; use `border-admin-control-border dark:border-admin-control-border-dark`); the counts may only go down. `tests/e2e/admin-controls-visible.spec.js` measures the fields on the main editor pages and on one list page (`/admin/apps`) in light and dark.
+
 Use `rem`-based text sizes (`text-xs`, `text-[0.6875rem]`), not `text-[11px]`, so text follows the browser's text-size setting. Do not rely on colour alone: status badges carry their status as text.
 
 ## Known Limitations
@@ -327,6 +342,7 @@ Use `rem`-based text sizes (`text-xs`, `text-[0.6875rem]`), not `text-[11px]`, s
 The following accessibility gaps are tracked and will be addressed in future iterations:
 
 - **Dynamic React components** (`ReactComponentRenderer`): Content rendered from user-authored JSX pages is not automatically validated for accessibility. Authors are responsible for following accessibility best practices in their components.
+- **Dialogs opened by the admin's test chat**: the app test panel shows the end-user chat inside the admin under `data-surface="app"`, which opts it out of the admin field styling. A dialog or drawer that chat opens (a confirmation, the artifact viewer) is rendered through a portal under `<body>`, outside that subtree, so a field in it takes the admin field style (and the admin's dark-mode field colours) instead of the end-user one. Fields stay readable and above 3:1; only the look differs from the end-user chat. This is cosmetic and accepted for now.
 - **Third-party embeds**: Embedded content from external services (e.g., iframes) may not meet WCAG 2.1 AA standards. Where possible, `title` attributes are added to iframes.
 - **PDF exports**: Generated PDF documents do not currently include accessibility tags (e.g., tagged PDF structure). This is planned for a future release.
 - **Complex data tables**: Some admin configuration tables may lack full `scope` and `headers` attributes. These will be remediated as the admin UI is refactored.

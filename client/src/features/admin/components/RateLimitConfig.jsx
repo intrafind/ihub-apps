@@ -147,7 +147,7 @@ function RateLimitConfig({ onDirtyChange }) {
   };
 
   const inputClass =
-    'w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 text-sm';
+    'w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 text-sm';
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">

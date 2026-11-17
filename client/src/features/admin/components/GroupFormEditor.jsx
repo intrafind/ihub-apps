@@ -14,6 +14,7 @@ import {
 } from '../../../utils/schemaValidation';
 import AdminFormErrorSummary from './AdminFormErrorSummary';
 import { FormValidationProvider } from '../../../shared/contexts/formValidationContext';
+import { CHECKBOX_CLASS, INPUT_CLASS } from './formStyles';
 
 /**
  * GroupFormEditor - Form-based editor for group configuration
@@ -171,8 +172,8 @@ function GroupFormEditor({
                     value={group.id || ''}
                     onChange={e => handleInputChange('id', e.target.value)}
                     disabled={isProtectedGroup(group.id)}
-                    className={`mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm disabled:bg-gray-100 dark:disabled:bg-gray-700 ${
-                      validationErrors.id ? 'border-red-300' : ''
+                    className={`${INPUT_CLASS} mt-1 block ${
+                      validationErrors.id ? 'border-red-500 dark:border-red-400' : ''
                     }`}
                     placeholder="Enter unique group ID"
                   />
@@ -200,8 +201,8 @@ function GroupFormEditor({
                     required={isFieldRequired('name', jsonSchema)}
                     value={group.name || ''}
                     onChange={e => handleInputChange('name', e.target.value)}
-                    className={`mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${
-                      validationErrors.name ? 'border-red-300' : ''
+                    className={`${INPUT_CLASS} mt-1 block ${
+                      validationErrors.name ? 'border-red-500 dark:border-red-400' : ''
                     }`}
                     placeholder="Enter group display name"
                   />
@@ -220,7 +221,7 @@ function GroupFormEditor({
                     value={group.description || ''}
                     onChange={e => handleInputChange('description', e.target.value)}
                     rows={3}
-                    className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    className={`${INPUT_CLASS} mt-1 block`}
                     placeholder="Enter group description"
                   />
                 </div>
@@ -231,7 +232,7 @@ function GroupFormEditor({
                       type="checkbox"
                       checked={group.permissions?.adminAccess || false}
                       onChange={e => handlePermissionChange('adminAccess', e.target.checked)}
-                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
+                      className={CHECKBOX_CLASS}
                     />
                     <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
                       {t('admin.groups.adminAccess', 'Admin Access')}
@@ -248,7 +249,7 @@ function GroupFormEditor({
                       type="checkbox"
                       checked={group.permissions?.contentAdmin || false}
                       onChange={e => handlePermissionChange('contentAdmin', e.target.checked)}
-                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
+                      className={CHECKBOX_CLASS}
                     />
                     <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
                       {t('admin.groups.contentAdmin', 'Content Admin (Apps, Prompts, Projects)')}
@@ -269,7 +270,7 @@ function GroupFormEditor({
                       type="checkbox"
                       checked={group.permissions?.scheduledTasks || false}
                       onChange={e => handlePermissionChange('scheduledTasks', e.target.checked)}
-                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
+                      className={CHECKBOX_CLASS}
                     />
                     <label
                       htmlFor="group-permission-scheduled-tasks"
@@ -293,7 +294,7 @@ function GroupFormEditor({
                       type="checkbox"
                       checked={group.permissions?.projects || false}
                       onChange={e => handlePermissionChange('projects', e.target.checked)}
-                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
+                      className={CHECKBOX_CLASS}
                     />
                     <label
                       htmlFor="group-permission-projects"
@@ -317,7 +318,7 @@ function GroupFormEditor({
                       type="checkbox"
                       checked={group.permissions?.projectSharing || false}
                       onChange={e => handlePermissionChange('projectSharing', e.target.checked)}
-                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
+                      className={CHECKBOX_CLASS}
                     />
                     <label
                       htmlFor="group-permission-project-sharing"
@@ -340,7 +341,7 @@ function GroupFormEditor({
                       type="checkbox"
                       checked={group.enabled !== false}
                       onChange={e => handleInputChange('enabled', e.target.checked)}
-                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
+                      className={CHECKBOX_CLASS}
                     />
                     <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
                       {t('admin.groups.enabled', 'Enabled')}

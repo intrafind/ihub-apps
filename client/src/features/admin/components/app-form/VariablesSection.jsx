@@ -4,6 +4,7 @@
 import { useTranslation } from 'react-i18next';
 import DynamicLanguageEditor from '../../../../shared/components/DynamicLanguageEditor';
 import Icon from '../../../../shared/components/Icon';
+import { CHECKBOX_CLASS, INPUT_CLASS } from '../formStyles';
 
 /**
  * VariablesSection - Input variable list editor for the App form.
@@ -125,7 +126,7 @@ function VariablesSection({ app, onChange }) {
                   type="checkbox"
                   checked={app.startForm?.enabled === true}
                   onChange={e => handleStartFormChange('enabled', e.target.checked)}
-                  className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
+                  className={CHECKBOX_CLASS}
                 />
                 <label
                   htmlFor="app-start-form-enabled"
@@ -168,7 +169,7 @@ function VariablesSection({ app, onChange }) {
                         variablesPanel: { ...app.variablesPanel, pinned: e.target.checked }
                       })
                     }
-                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
+                    className={CHECKBOX_CLASS}
                   />
                   <label
                     htmlFor="app-variables-panel-pinned"
@@ -195,7 +196,7 @@ function VariablesSection({ app, onChange }) {
                 className="border border-gray-200 dark:border-gray-600 rounded-lg p-4"
               >
                 <div className="flex justify-between items-start mb-4">
-                  <h4 className="text-sm font-medium text-gray-900">
+                  <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100">
                     {t('admin.apps.edit.variable', 'Variable')} {index + 1}
                   </h4>
                   <button
@@ -216,7 +217,7 @@ function VariablesSection({ app, onChange }) {
                       type="text"
                       value={variable.name || ''}
                       onChange={e => handleVariableChange(index, 'name', e.target.value)}
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                      className={`${INPUT_CLASS} mt-1 block`}
                     />
                   </div>
 
@@ -227,7 +228,7 @@ function VariablesSection({ app, onChange }) {
                     <select
                       value={variable.type || 'string'}
                       onChange={e => handleVariableChange(index, 'type', e.target.value)}
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                      className={`${INPUT_CLASS} mt-1 block`}
                     >
                       <option value="string">{t('admin.apps.edit.typeString', 'String')}</option>
                       <option value="text">{t('admin.apps.edit.typeText', 'Text')}</option>
@@ -243,7 +244,7 @@ function VariablesSection({ app, onChange }) {
                         type="checkbox"
                         checked={variable.required || false}
                         onChange={e => handleVariableChange(index, 'required', e.target.checked)}
-                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
+                        className={CHECKBOX_CLASS}
                       />
                       <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
                         {t('admin.apps.edit.required', 'Required')}
@@ -276,7 +277,7 @@ function VariablesSection({ app, onChange }) {
                   </div>
 
                   <div className="col-span-6">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                       {t('admin.apps.edit.predefinedValues', 'Predefined Values')}
                     </label>
                     <p className="text-xs text-gray-500 mb-2">
@@ -324,7 +325,7 @@ function VariablesSection({ app, onChange }) {
                                 )
                               }
                               placeholder={t('admin.apps.edit.value', 'Value')}
-                              className="block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                              className={`${INPUT_CLASS} block`}
                             />
                           </div>
                           <button
@@ -339,7 +340,7 @@ function VariablesSection({ app, onChange }) {
                       <button
                         type="button"
                         onClick={() => addPredefinedValue(index)}
-                        className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-xs text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                        className="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 shadow-xs text-sm leading-4 font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                       >
                         <Icon name="plus" className="h-4 w-4 mr-2" />
                         {t('admin.apps.edit.addOption', 'Add Option')}
@@ -353,7 +354,7 @@ function VariablesSection({ app, onChange }) {
             <button
               type="button"
               onClick={addVariable}
-              className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-xs text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-xs text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
             >
               <Icon name="plus" className="h-4 w-4 mr-2" />
               {t('admin.apps.edit.addVariable', 'Add Variable')}

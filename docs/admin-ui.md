@@ -37,6 +37,8 @@ Pages for features that are switched off (for example Marketplace, Workflows, Ag
 
 **Collapsing the sidebar:** Click the chevron at the bottom of the sidebar to collapse it to icon-only mode. Hover over any icon to see its label. The collapse state is remembered across sessions.
 
+**Theme:** The button at the bottom of the sidebar shows the current theme — **Theme: Auto (follows system)**, **Theme: Light** or **Theme: Dark** — and each click moves to the next one. It is the same choice as the theme switch in the end-user sidebar, so both always agree, and the admin opens in that theme straight away, including the "Checking authentication…" screen.
+
 **Mobile:** On small screens the sidebar is hidden by default. Tap the hamburger menu (☰) in the top bar to open the sidebar as a drawer.
 
 ---

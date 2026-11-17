@@ -356,7 +356,7 @@ function AdminSkillsPage() {
                   </div>
                   <input
                     type="text"
-                    className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md leading-5 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    className="block w-full pl-10 pr-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-md leading-5 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                     placeholder={t('admin.skills.searchPlaceholder', 'Search skills...')}
                     value={searchTerm}
                     onChange={e => setSearchTerm(e.target.value)}
@@ -367,7 +367,7 @@ function AdminSkillsPage() {
                 <select
                   value={filterEnabled}
                   onChange={e => setFilterEnabled(e.target.value)}
-                  className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  className="block w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-md shadow-xs bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                 >
                   <option value="all">{t('admin.skills.filterAll', 'All Skills')}</option>
                   <option value="enabled">{t('admin.skills.filterEnabled', 'Enabled Only')}</option>

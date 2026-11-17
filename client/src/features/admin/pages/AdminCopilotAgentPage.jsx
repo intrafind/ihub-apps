@@ -17,7 +17,7 @@ const TEAMS_DEVELOPER_PORTAL_URL = 'https://dev.teams.microsoft.com/tools';
 const CARD =
   'bg-white dark:bg-gray-800 rounded-xl shadow-xs border border-gray-200 dark:border-gray-700 p-6';
 const INPUT =
-  'w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-hidden focus:ring-2 focus:ring-indigo-500';
+  'w-full rounded-lg border border-admin-control-border dark:border-admin-control-border-dark bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-hidden focus:ring-2 focus:ring-indigo-500';
 const SECONDARY_BUTTON =
   'shrink-0 rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50';
 const PRIMARY_BUTTON =
@@ -47,7 +47,7 @@ function CopyField({ label, value, hint }) {
           value={value}
           aria-label={label}
           onClick={e => e.target.select()}
-          className="flex-1 min-w-0 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 px-3 py-2 text-sm font-mono text-gray-700 dark:text-gray-300 focus:outline-hidden"
+          className="flex-1 min-w-0 rounded-lg border border-admin-control-border dark:border-admin-control-border-dark bg-gray-50 dark:bg-gray-700 px-3 py-2 text-sm font-mono text-gray-700 dark:text-gray-300 focus:outline-hidden"
         />
         <button type="button" onClick={copy} className={SECONDARY_BUTTON}>
           {copied ? t('admin.copilotAgent.copied', 'Copied') : t('admin.copilotAgent.copy', 'Copy')}

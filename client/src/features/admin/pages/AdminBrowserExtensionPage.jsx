@@ -638,7 +638,7 @@ function AdminBrowserExtensionPage() {
                     }
                   }}
                   placeholder="abcdefghijklmnopabcdefghijklmnop"
-                  className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm font-mono text-gray-700 dark:text-gray-200 focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
+                  className="flex-1 rounded-lg border border-admin-control-border dark:border-admin-control-border-dark bg-white dark:bg-gray-900 px-3 py-2 text-sm font-mono text-gray-700 dark:text-gray-200 focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
                 />
                 <button
                   type="button"

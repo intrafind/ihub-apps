@@ -13,6 +13,7 @@ import {
 import AdminFormErrorSummary from './AdminFormErrorSummary';
 import { FormValidationProvider } from '../../../shared/contexts/formValidationContext';
 import GroupMultiSelect from './GroupMultiSelect';
+import { CHECKBOX_CLASS, INPUT_CLASS } from './formStyles';
 
 /**
  * UserFormEditor - Form-based editor for user configuration
@@ -186,8 +187,8 @@ function UserFormEditor({
                     value={user.username || ''}
                     onChange={e => handleInputChange('username', e.target.value)}
                     disabled={!isNewUser}
-                    className={`mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm disabled:bg-gray-100 dark:disabled:bg-gray-700 ${
-                      validationErrors.username ? 'border-red-300' : ''
+                    className={`${INPUT_CLASS} mt-1 block ${
+                      validationErrors.username ? 'border-red-500 dark:border-red-400' : ''
                     }`}
                     placeholder="Enter username"
                   />
@@ -218,8 +219,8 @@ function UserFormEditor({
                     required={isFieldRequired('email', jsonSchema)}
                     value={user.email || ''}
                     onChange={e => handleInputChange('email', e.target.value)}
-                    className={`mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${
-                      validationErrors.email ? 'border-red-300' : ''
+                    className={`${INPUT_CLASS} mt-1 block ${
+                      validationErrors.email ? 'border-red-500 dark:border-red-400' : ''
                     }`}
                     placeholder="Enter email address"
                   />
@@ -238,7 +239,7 @@ function UserFormEditor({
                     type="text"
                     value={user.fullName || ''}
                     onChange={e => handleInputChange('fullName', e.target.value)}
-                    className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    className={`${INPUT_CLASS} mt-1 block`}
                     placeholder="Enter full name"
                   />
                 </div>
@@ -254,7 +255,7 @@ function UserFormEditor({
                       disabled={isSelf && user.active !== false}
                       aria-describedby={isSelf ? 'user-active-self-hint' : undefined}
                       onChange={e => handleInputChange('active', e.target.checked)}
-                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm disabled:opacity-50"
+                      className={`${CHECKBOX_CLASS} disabled:opacity-50`}
                     />
                     <label
                       htmlFor="user-active"
@@ -289,7 +290,7 @@ function UserFormEditor({
                       <select
                         value={user.authMethods?.[0] || 'local'}
                         onChange={e => handleInputChange('authMethods', [e.target.value])}
-                        className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        className={`${INPUT_CLASS} mt-1 block`}
                       >
                         <option value="local">
                           {t('admin.users.authMethod.local', 'Local (Username/Password)')}
@@ -380,8 +381,8 @@ function UserFormEditor({
                       required={isNewUser && isLocalAuthUser && !hasExternalAuth}
                       value={user.password || ''}
                       onChange={e => handleInputChange('password', e.target.value)}
-                      className={`mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${
-                        validationErrors.password ? 'border-red-300' : ''
+                      className={`${INPUT_CLASS} mt-1 block ${
+                        validationErrors.password ? 'border-red-500 dark:border-red-400' : ''
                       }`}
                       placeholder={
                         hasExternalAuth
@@ -408,8 +409,8 @@ function UserFormEditor({
                       required={!!user.password}
                       value={confirmPassword}
                       onChange={e => setConfirmPassword(e.target.value)}
-                      className={`mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${
-                        validationErrors.confirmPassword ? 'border-red-300' : ''
+                      className={`${INPUT_CLASS} mt-1 block ${
+                        validationErrors.confirmPassword ? 'border-red-500 dark:border-red-400' : ''
                       }`}
                       placeholder="Confirm password"
                     />
