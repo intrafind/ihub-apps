@@ -127,4 +127,30 @@ describe('GroupMultiSelect', () => {
     expect(screen.queryByText(/Add "/)).not.toBeInTheDocument();
     expect(screen.getByText('No matching groups')).toBeInTheDocument();
   });
+
+  test('pasting "a,b" and pressing Enter adds one entry per name', () => {
+    const onChange = jest.fn();
+    render(<GroupMultiSelect value={['users']} onChange={onChange} availableGroups={GROUPS} />);
+
+    const input = screen.getByRole('combobox');
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: 'agent-operators, Admins' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenCalledWith(['users', 'agent-operators', 'admins']);
+  });
+
+  test('clicking the "Add" option for pasted "a,b" adds one entry per name', () => {
+    const onChange = jest.fn();
+    render(<GroupMultiSelect value={[]} onChange={onChange} availableGroups={GROUPS} />);
+
+    const input = screen.getByRole('combobox');
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: 'agent-operators,admins' } });
+    fireEvent.click(screen.getByRole('option', { name: /Add "agent-operators,admins"/ }));
+
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenCalledWith(['agent-operators', 'admins']);
+  });
 });

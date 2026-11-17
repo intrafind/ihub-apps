@@ -10,7 +10,8 @@ import { WorkflowEditor } from '../../workflows/editor/WorkflowEditor';
 import {
   workflowToFlow,
   flowToWorkflow,
-  createStarterWorkflow
+  createStarterWorkflow,
+  workflowSaveErrorMessage
 } from '../../workflows/editor/workflowEditorUtils';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
@@ -21,7 +22,7 @@ const VALID_ID_PATTERN = /^[a-zA-Z0-9._-]+$/;
 /**
  * Admin page for visually editing a workflow using the React Flow-based editor.
  * Supports creating new workflows (id="new") and editing existing ones.
- * Provides save and publish functionality via the workflow API.
+ * Saves through the workflow API.
  *
  * Route: /admin/workflows/:id/edit
  */
@@ -124,7 +125,9 @@ function WorkflowEditorPage() {
       } catch (err) {
         showToast(
           'error',
-          t('workflows.editor.saveFailed', 'Save failed: {{message}}', { message: err.message })
+          t('workflows.editor.saveFailed', 'Save failed: {{message}}', {
+            message: workflowSaveErrorMessage(err)
+          })
         );
         return null;
       } finally {
@@ -171,34 +174,6 @@ function WorkflowEditorPage() {
     await persistWorkflow(updated);
   }, [idValue, idDialog, persistWorkflow, showToast, t]);
 
-  /**
-   * Publishes the workflow by saving first, then calling the publish endpoint.
-   */
-  const handlePublish = useCallback(
-    async (rfNodes, rfEdges) => {
-      // The ID dialog is asynchronous: on a brand-new workflow `handleSave`
-      // opens it and returns without saving. Publishing anyway would POST to
-      // /workflows/new/publish and fail on top of the open dialog.
-      const savedId = await handleSave(rfNodes, rfEdges);
-      if (!savedId) return;
-      try {
-        await apiClient.post(`/workflows/${savedId}/publish`);
-        showToast(
-          'success',
-          t('workflows.editor.publishSuccess', 'Workflow published successfully')
-        );
-      } catch (err) {
-        showToast(
-          'error',
-          t('workflows.editor.publishFailed', 'Publish failed: {{message}}', {
-            message: err.message
-          })
-        );
-      }
-    },
-    [handleSave, workflow, id, t, showToast]
-  );
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -235,17 +210,9 @@ function WorkflowEditorPage() {
               : (typeof workflow?.name === 'object' ? workflow.name.en : workflow?.name) ||
                 t('workflows.editor.title', 'Workflow Editor')}
           </h1>
-          {workflow?.status && (
-            <span
-              className={`text-xs px-2 py-0.5 rounded ${
-                workflow.status === 'published'
-                  ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
-                  : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'
-              }`}
-            >
-              {workflow.status}
-            </span>
-          )}
+          {/* No Publish button and no draft/published pill: publishing wrote a
+              snapshot nothing reads, and draft and published workflows run
+              the same (AX-B11). A stored `status` is saved back unchanged. */}
         </div>
         <div className="flex items-center gap-4">
           {saving && (
@@ -275,7 +242,6 @@ function WorkflowEditorPage() {
           initialNodes={initialNodes}
           initialEdges={initialEdges}
           onSave={handleSave}
-          onPublish={handlePublish}
           onFlowChange={handleFlowChange}
         />
         {toast && (

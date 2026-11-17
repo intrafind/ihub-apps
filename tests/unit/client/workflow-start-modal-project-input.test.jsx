@@ -166,6 +166,23 @@ describe('the run dialog project input', () => {
   });
 });
 
+describe('the run dialog of a workflow without inputs (AX-B12)', () => {
+  it('sends the message as `input`, the name a chat message has too', async () => {
+    const workflow = {
+      id: 'summarise',
+      name: { en: 'Summarise' },
+      nodes: [{ id: 'start', type: 'start', config: {} }]
+    };
+    render(
+      <StartWorkflowModal workflow={workflow} isOpen onClose={() => {}} onStarted={() => {}} />
+    );
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Summarise this' } });
+    fireEvent.click(screen.getByRole('button', { name: /Start Workflow/ }));
+    await waitFor(() => expect(mockPost).toHaveBeenCalled());
+    expect(mockPost.mock.calls[0][1].initialData).toEqual({ input: 'Summarise this' });
+  });
+});
+
 describe('a project input on the execution page', () => {
   it("shows the project's name with its id", () => {
     render(<ProjectInputValue projectId="handbook" />);

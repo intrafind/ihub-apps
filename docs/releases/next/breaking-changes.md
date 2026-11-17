@@ -987,3 +987,13 @@ Only scripts that call the admin API directly are affected; the admin pages need
 **Before upgrading:** check scripts that clear a secret by leaving it out (send `null`), that send
 a body read from the admin API with a placeholder in a field they did not mean to set, or that
 change `pages` through `POST /api/admin/ui/config`.
+
+## Workflow Run Dialog Sends the Message as `input`
+
+The **Message** box of the run dialog (shown for a workflow without input variables) now sends its
+text as `input`, the name a chat message already has. It was sent as `message`, so a workflow
+started from the dialog and one started from a chat read the text under different names.
+
+**Before upgrading:** in a workflow without input variables, replace `{{message}}` and
+`$.data.message` by `{{input}}` and `$.data.input`. A prompt step without its own prompt is not
+affected: it uses the run's message either way.

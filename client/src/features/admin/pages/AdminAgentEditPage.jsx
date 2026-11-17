@@ -11,8 +11,16 @@ import IconPicker from '../../../shared/components/IconPicker';
 import CapabilityFields from '../../../shared/components/CapabilityFields';
 import SkillsSelector from '../../../shared/components/SkillsSelector';
 import ProjectPicker from '../components/ProjectPicker';
+import GroupMultiSelect from '../components/GroupMultiSelect';
+import MonacoJsonEditor from '../../../shared/components/MonacoJsonEditor';
+import useDarkMode from '../../../hooks/useDarkMode';
 import { getLocalizedContent } from '../../../utils/localizeContent';
-import { fetchAdminApps, fetchAdminModels, getAdminApiErrorMessage } from '../../../api/adminApi';
+import {
+  fetchAdminApps,
+  fetchAdminGroups,
+  fetchAdminModels,
+  getAdminApiErrorMessage
+} from '../../../api/adminApi';
 import {
   fetchAgentProfile,
   createAgentProfile,
@@ -124,6 +132,11 @@ export default function AdminAgentEditPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [mode, setMode] = useState('form');
+  // Whether the text in JSON mode parses; Save and the switch back to the form
+  // wait for valid JSON instead of using the last valid state silently.
+  const [jsonValid, setJsonValid] = useState(true);
+  const [availableGroups, setAvailableGroups] = useState([]);
+  const { isDark } = useDarkMode();
 
   const { blocker, markSaved } = useUnsavedChanges(initialData, profile);
 
@@ -138,6 +151,10 @@ export default function AdminAgentEditPage() {
         console.warn('Failed to load models/apps', err);
       }
     })();
+    // The group fields suggest defined groups; without them names can still be typed.
+    fetchAdminGroups()
+      .then(result => setAvailableGroups(Object.values(result?.groups || {})))
+      .catch(() => setAvailableGroups([]));
   }, []);
 
   useEffect(() => {
@@ -208,21 +225,6 @@ export default function AdminAgentEditPage() {
       serviceAccount: { ...prev.serviceAccount, ...partial }
     }));
   }
-  function handleCronSchedule(cron) {
-    setProfile(prev => {
-      const triggers = cron ? [{ type: 'schedule', config: { cron, timezone: 'UTC' } }] : [];
-      const def = prev.workflow?.definition || {};
-      return {
-        ...prev,
-        workflow: {
-          ...prev.workflow,
-          ref: prev.workflow?.ref || 'embedded',
-          definition: { ...def, triggers }
-        }
-      };
-    });
-  }
-
   // Strip empty entries from localized maps so we don't send `{en: ''}` which
   // some schemas reject as min-length violations.
   function cleanLocalized(obj) {
@@ -325,10 +327,6 @@ export default function AdminAgentEditPage() {
     );
   }
 
-  const cron =
-    (profile.workflow?.definition?.triggers || []).find(tr => tr.type === 'schedule')?.config
-      ?.cron || '';
-
   return (
     <div className="bg-gray-50 min-h-screen dark:bg-gray-900">
       <div className="max-w-4xl mx-auto py-8 px-4">
@@ -348,7 +346,8 @@ export default function AdminAgentEditPage() {
           <div className="flex gap-2">
             <button
               onClick={() => setMode(mode === 'form' ? 'json' : 'form')}
-              className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-sm hover:bg-gray-50 dark:hover:bg-gray-600"
+              disabled={mode === 'json' && !jsonValid}
+              className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-sm hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50"
             >
               {mode === 'form'
                 ? t('admin.common.viewJson', 'JSON')
@@ -356,7 +355,7 @@ export default function AdminAgentEditPage() {
             </button>
             <button
               onClick={handleSave}
-              disabled={saving}
+              disabled={saving || (mode === 'json' && !jsonValid)}
               className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-sm disabled:opacity-50"
             >
               {saving ? t('common.saving', 'Saving…') : t('common.save', 'Save')}
@@ -373,17 +372,25 @@ export default function AdminAgentEditPage() {
         {error && <AdminLoadError message={error} framed={false} className="mb-4" action={null} />}
 
         {mode === 'json' ? (
-          <textarea
-            className="w-full h-[600px] font-mono text-xs p-3 border rounded-sm"
-            value={JSON.stringify(profile, null, 2)}
-            onChange={e => {
-              try {
-                setProfile(JSON.parse(e.target.value));
-              } catch {
-                // ignore parse errors while typing
-              }
-            }}
-          />
+          <div>
+            {/* The editor keeps the typed text itself and passes on only valid
+                JSON, so a half-typed key or comma is not thrown away (AX-B2). */}
+            <MonacoJsonEditor
+              value={profile}
+              onChange={setProfile}
+              onValidationChange={validation => setJsonValid(validation?.isValid !== false)}
+              height="600px"
+              theme={isDark ? 'vs-dark' : 'vs'}
+            />
+            {!jsonValid && (
+              <p role="alert" className="mt-2 text-sm text-red-600 dark:text-red-400">
+                {t(
+                  'admin.agents.edit.jsonInvalid',
+                  'The JSON is not valid. Fix it before you save or switch to the form.'
+                )}
+              </p>
+            )}
+          </div>
         ) : (
           <div className="space-y-6">
             {/* Identity */}
@@ -621,6 +628,10 @@ export default function AdminAgentEditPage() {
                   <SkillsSelector
                     selectedSkills={profile.skills || []}
                     onSkillsChange={skills => handleField('skills', skills)}
+                    helperText={t(
+                      'admin.agents.edit.skillsHelper',
+                      'Search and select skills to add to this agent. Click on selected skills to remove them.'
+                    )}
                   />
                 </div>
               </div>
@@ -1090,22 +1101,9 @@ export default function AdminAgentEditPage() {
               </div>
             </Section>
 
-            {/* Schedule */}
-            <Section
-              title={t('admin.agents.edit.schedule', 'Schedule')}
-              hint={t(
-                'admin.agents.edit.scheduleHint',
-                'Optional cron expression. The agent runs on this schedule under its service-account identity. Leave empty for manual / webhook only.'
-              )}
-            >
-              <input
-                type="text"
-                placeholder="*/15 * * * *"
-                value={cron}
-                onChange={e => handleCronSchedule(e.target.value)}
-                className="block w-full rounded-lg border-admin-control-border shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm font-mono dark:bg-gray-700 dark:border-admin-control-border-dark dark:text-gray-100"
-              />
-            </Section>
+            {/* No Schedule card: agent schedules are not run yet (AX-B1). A
+                schedule already in the profile (workflow.definition.triggers)
+                is left as it is and saved back unchanged. */}
 
             {/* Inbox */}
             <Section
@@ -1287,22 +1285,15 @@ export default function AdminAgentEditPage() {
               title={t('admin.agents.edit.hitl', 'HITL approver groups')}
               hint={t(
                 'admin.agents.edit.hitlHint',
-                'Comma-separated group IDs. Users in any of these groups can approve human-checkpoint pauses for this profile.'
+                'Users in any of these groups can approve human-checkpoint pauses for this profile. Pick a group or type its ID and press Enter or a comma.'
               )}
             >
-              <input
-                type="text"
-                placeholder="agent-operators"
-                value={(profile.hitl?.approverGroups || []).join(',')}
-                onChange={e =>
-                  handleHitl({
-                    approverGroups: e.target.value
-                      .split(',')
-                      .map(s => s.trim())
-                      .filter(Boolean)
-                  })
-                }
-                className="block w-full rounded-lg border-admin-control-border shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-admin-control-border-dark dark:text-gray-100"
+              <GroupMultiSelect
+                id="agent-hitl-approver-groups"
+                value={profile.hitl?.approverGroups || []}
+                onChange={approverGroups => handleHitl({ approverGroups })}
+                availableGroups={availableGroups}
+                commitOnBlur
               />
             </Section>
 
@@ -1314,19 +1305,12 @@ export default function AdminAgentEditPage() {
                 'Groups the agent principal (agent:<id>) belongs to. These determine which apps/tools/models the agent can access via the standard group permission system.'
               )}
             >
-              <input
-                type="text"
-                placeholder="agents,authenticated"
-                value={(profile.serviceAccount?.groups || []).join(',')}
-                onChange={e =>
-                  handleServiceAccount({
-                    groups: e.target.value
-                      .split(',')
-                      .map(s => s.trim())
-                      .filter(Boolean)
-                  })
-                }
-                className="block w-full rounded-lg border-admin-control-border shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-admin-control-border-dark dark:text-gray-100"
+              <GroupMultiSelect
+                id="agent-service-account-groups"
+                value={profile.serviceAccount?.groups || []}
+                onChange={groups => handleServiceAccount({ groups })}
+                availableGroups={availableGroups}
+                commitOnBlur
               />
             </Section>
           </div>

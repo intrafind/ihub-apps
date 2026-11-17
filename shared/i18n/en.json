@@ -1008,7 +1008,10 @@
         }
       },
       "edit": {
-        "projects": "Projects"
+        "projects": "Projects",
+        "jsonInvalid": "The JSON is not valid. Fix it before you save or switch to the form.",
+        "skillsHelper": "Search and select skills to add to this agent. Click on selected skills to remove them.",
+        "hitlHint": "Users in any of these groups can approve human-checkpoint pauses for this profile. Pick a group or type its ID and press Enter or a comma."
       }
     },
     "providers": {
@@ -3273,6 +3276,7 @@
         "toolSearchHelp": "When the tools of this app are too many for one request, the biggest integrations are left out and listed in the prompt; the model finds a tool with search_tools and the tools it finds are added to the request. Keeps requests small and tool choice sharp. Set \"Always loaded\" on an integration to keep it out of the search.",
         "toolSearchBudget": "Token budget for tool definitions",
         "toolSearchBudgetHelp": "Tokens the tool definitions of one request may take before integrations are left to the search. Default 6000; never more than a tenth of the model's context window.",
+        "selectCategory": "Select category...",
         "resource": "app \"{{id}}\"",
         "backToApps": "Back to Apps"
       },
@@ -5537,6 +5541,10 @@
           "endWithoutOutput": "The end step {{nodes}} has no output. The workflow cannot be saved, and a run that reaches that step fails, until you set its Output in the visual editor."
         },
         "jsonInvalid": "Fix the JSON below to change these settings."
+      },
+      "table": {
+        "visibleTo": "Visible to",
+        "adminsOnly": "Admins only"
       }
     },
     "projects": {
@@ -8228,9 +8236,6 @@
       "progressNoteWhenHelp": "Optional condition. Leave empty to always show the note.",
       "promptId": "Enter workflow ID:",
       "promptIdHint": "Use only letters, numbers, dots, underscores, and hyphens.",
-      "publish": "Publish",
-      "publishFailed": "Publish failed: {{message}}",
-      "publishSuccess": "Workflow published successfully",
       "save": "Save",
       "saveFailed": "Save failed: {{message}}",
       "saveSuccess": "Workflow saved",
@@ -8321,6 +8326,20 @@
           "wait": "Wait until the document is ready",
           "outputHelp": "State variable for the stored document. Default: {{name}}. Keep \"wait\" on when a later step reads the document."
         }
+      },
+      "localizedField": {
+        "addLanguages": "Add languages",
+        "addLanguagesTitle": "Enter this text per language",
+        "addLanguage": "Add a language",
+        "removeLanguage": "Remove {{lang}}"
+      },
+      "human": {
+        "optionLabel": "Label",
+        "optionValueN": "Value of option {{n}}",
+        "optionLabelN": "Label of option {{n}}",
+        "optionStyleN": "Style of option {{n}}",
+        "removeOptionN": "Remove option {{n}}",
+        "noOptions": "Add at least one option. Without one, nobody can answer this step and the run waits until it is cancelled."
       },
       "deleteNodeTitle": "Delete node \"{{name}}\"?",
       "deleteNodeConsequence": "The node, the steps nested in it and their connections are removed. The workflow keeps its saved version until you save."

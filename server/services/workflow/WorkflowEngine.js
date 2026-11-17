@@ -17,6 +17,8 @@ import { isValidId } from '../../utils/pathSecurity.js';
 import { createPresenceMap, hasRemote, publish, subscribe } from '../../clusterBus.js';
 import logger from '../../utils/logger.js';
 import { actorSnapshot } from './executionActor.js';
+import interactionService from '../loop/InteractionService.js';
+import { getLocalizedString } from '../../utils/localize.js';
 
 /** Presence kind announcing which worker holds a running execution's abort controller. */
 export const EXECUTION_PRESENCE_KIND = 'execution';
@@ -130,6 +132,17 @@ export function getWorkflowEngine(options) {
 }
 
 /**
+ * A step's name for messages people read: its localized name, else its id.
+ *
+ * @param {Object} node - The workflow node.
+ * @param {string} [language] - The run's language.
+ * @returns {string}
+ */
+function stepDisplayName(node, language = 'en') {
+  return getLocalizedString(node?.name, language, 'en', '') || node?.id || 'unnamed';
+}
+
+/**
  * Resets the singleton instance (for testing purposes only).
  */
 export function resetWorkflowEngine() {
@@ -152,6 +165,13 @@ export class WorkflowEngine {
      * @type {StateManager}
      */
     this.stateManager = options.stateManager || getStateManager();
+
+    /**
+     * Interaction service (questions, approvals); its pending interactions of
+     * a run are cancelled with the run.
+     * @type {import('../loop/InteractionService.js').InteractionService}
+     */
+    this.interactions = options.interactions || interactionService;
 
     /**
      * DAG scheduler for dependency resolution
@@ -808,6 +828,13 @@ export class WorkflowEngine {
 
             // Check if the node returned a paused status (e.g., human checkpoint)
             if (result && result.status === 'paused') {
+              // The run was cancelled while the node was deciding to ask: what
+              // it raised came after cancel()'s sweep. Cancel that too, and
+              // keep the run cancelled instead of marking it paused (AX-B16).
+              if (await this._wasCancelledDuringNode(executionId, signal)) {
+                return;
+              }
+
               logger.info('Workflow paused by node', {
                 component: 'WorkflowEngine',
                 executionId,
@@ -1168,7 +1195,7 @@ export class WorkflowEngine {
    * @param {Object} options - Execution options
    * @private
    */
-  async _handleNodeError(executionId, node, error, _options) {
+  async _handleNodeError(executionId, node, error, options) {
     const { id: nodeId, type: _nodeType } = node;
 
     logger.error('Node execution failed', {
@@ -1226,7 +1253,8 @@ export class WorkflowEngine {
       this._emitEvent('workflow.failed', {
         executionId,
         error: {
-          message: `Node ${nodeId} failed: ${error.message}`,
+          // The step's name, as the editor shows it, not its internal id (AX-B32).
+          message: `Step "${stepDisplayName(node, options?.language)}" failed: ${error.message}`,
           nodeId,
           code: error.code
         }
@@ -1692,6 +1720,10 @@ export class WorkflowEngine {
       data: { reason }
     });
 
+    // A question or approval the run was waiting on can no longer be
+    // answered: take it out of the approvals queue (AX-B16).
+    await this._cancelPendingInteractions(executionId);
+
     // Emit cancelled event
     this._emitEvent('workflow.cancelled', {
       executionId,
@@ -1699,6 +1731,63 @@ export class WorkflowEngine {
     });
 
     return this.stateManager.get(executionId);
+  }
+
+  /**
+   * Whether the run was cancelled while a node ran that has now returned
+   * `paused`. If so, the interactions the node raised after `cancel()` listed
+   * the pending ones are cancelled now, so none is left in the approvals queue
+   * for a run that can no longer resume.
+   *
+   * @param {string} executionId - The run.
+   * @param {AbortSignal} signal - The run's abort signal.
+   * @returns {Promise<boolean>} True when the run is cancelled.
+   * @private
+   */
+  async _wasCancelledDuringNode(executionId, signal) {
+    let cancelled = signal?.aborted === true;
+    if (!cancelled) {
+      const current = await this.stateManager.get(executionId);
+      cancelled = current?.status === WorkflowStatus.CANCELLED;
+    }
+    if (!cancelled) return false;
+    logger.info('Node paused a run that was cancelled meanwhile; cancelling what it raised', {
+      component: 'WorkflowEngine',
+      executionId
+    });
+    await this._cancelPendingInteractions(executionId);
+    return true;
+  }
+
+  /**
+   * Cancels the pending interactions (Ask a Person checkpoints, tool
+   * approvals, questions) of a cancelled run, so they leave the approvals
+   * queue. A failure is logged and does not undo the cancellation.
+   *
+   * The whole pending list is read (not the run-scoped mirror): an
+   * interaction may have been raised on another worker.
+   *
+   * @param {string} executionId - The cancelled run.
+   * @returns {Promise<number>} How many interactions were cancelled.
+   * @private
+   */
+  async _cancelPendingInteractions(executionId) {
+    try {
+      const pending = (await this.interactions.listPending()).filter(
+        interaction => interaction.runId === executionId
+      );
+      for (const interaction of pending) {
+        await this.interactions.cancel(interaction.id, 'run_cancelled');
+      }
+      return pending.length;
+    } catch (error) {
+      logger.warn('Could not cancel the interactions of a cancelled run', {
+        component: 'WorkflowEngine',
+        executionId,
+        error: error.message
+      });
+      return 0;
+    }
   }
 
   /**

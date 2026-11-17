@@ -1477,7 +1477,10 @@
         }
       },
       "edit": {
-        "projects": "Projekte"
+        "projects": "Projekte",
+        "jsonInvalid": "Das JSON ist nicht gültig. Korrigieren Sie es, bevor Sie speichern oder zum Formular wechseln.",
+        "skillsHelper": "Suchen und wählen Sie Skills für diesen Agenten aus. Klicken Sie auf einen ausgewählten Skill, um ihn zu entfernen.",
+        "hitlHint": "Benutzer in einer dieser Gruppen können Freigaben für dieses Profil erteilen. Wählen Sie eine Gruppe aus oder geben Sie ihre ID ein und drücken Sie die Eingabetaste oder ein Komma."
       }
     },
     "providers": {
@@ -3768,6 +3771,7 @@
         "toolSearchHelp": "Sind die Tools dieser App für eine Anfrage zu viele, werden die größten Integrationen weggelassen und im Prompt aufgelistet; das Modell findet ein Tool mit search_tools, und die gefundenen Tools werden der Anfrage hinzugefügt. Hält Anfragen klein und die Tool-Wahl treffsicher. Setzen Sie bei einer Integration „Immer geladen“, um sie aus der Suche herauszuhalten.",
         "toolSearchBudget": "Token-Budget für Tool-Definitionen",
         "toolSearchBudgetHelp": "Tokens, die die Tool-Definitionen einer Anfrage belegen dürfen, bevor Integrationen der Suche überlassen werden. Standard 6000; nie mehr als ein Zehntel des Kontextfensters des Modells.",
+        "selectCategory": "Kategorie auswählen …",
         "resource": "App „{{id}}“",
         "backToApps": "Zurück zu den Apps"
       },
@@ -6032,6 +6036,10 @@
           "endWithoutOutput": "Der End-Schritt {{nodes}} hat keine Ausgabe. Der Workflow lässt sich nicht speichern, und ein Lauf, der diesen Schritt erreicht, schlägt fehl, bis Sie seine Ausgabe im visuellen Editor setzen."
         },
         "jsonInvalid": "Korrigieren Sie das JSON unten, um diese Einstellungen zu ändern."
+      },
+      "table": {
+        "visibleTo": "Sichtbar für",
+        "adminsOnly": "Nur Administratoren"
       }
     },
     "projects": {
@@ -8227,9 +8235,6 @@
       "progressNoteWhenHelp": "Optionale Bedingung. Leer lassen, um den Hinweis immer anzuzeigen.",
       "promptId": "Workflow-ID eingeben:",
       "promptIdHint": "Nur Buchstaben, Zahlen, Punkte, Unterstriche und Bindestriche.",
-      "publish": "Veröffentlichen",
-      "publishFailed": "Veröffentlichen fehlgeschlagen: {{message}}",
-      "publishSuccess": "Workflow erfolgreich veröffentlicht",
       "save": "Speichern",
       "saveFailed": "Speichern fehlgeschlagen: {{message}}",
       "saveSuccess": "Workflow gespeichert",
@@ -8320,6 +8325,20 @@
           "wait": "Warten, bis das Dokument bereit ist",
           "outputHelp": "Zustandsvariable für das gespeicherte Dokument. Standard: {{name}}. Lassen Sie „Warten“ an, wenn ein späterer Schritt das Dokument liest."
         }
+      },
+      "localizedField": {
+        "addLanguages": "Sprachen hinzufügen",
+        "addLanguagesTitle": "Diesen Text je Sprache eingeben",
+        "addLanguage": "Sprache hinzufügen",
+        "removeLanguage": "{{lang}} entfernen"
+      },
+      "human": {
+        "optionLabel": "Beschriftung",
+        "optionValueN": "Wert von Option {{n}}",
+        "optionLabelN": "Beschriftung von Option {{n}}",
+        "optionStyleN": "Stil von Option {{n}}",
+        "removeOptionN": "Option {{n}} entfernen",
+        "noOptions": "Fügen Sie mindestens eine Option hinzu. Ohne Option kann niemand diesen Schritt beantworten, und der Lauf wartet, bis er abgebrochen wird."
       },
       "deleteNodeTitle": "Knoten „{{name}}“ löschen?",
       "deleteNodeConsequence": "Der Knoten, die darin verschachtelten Schritte und ihre Verbindungen werden entfernt. Der Workflow behält seine gespeicherte Fassung, bis Sie speichern."
