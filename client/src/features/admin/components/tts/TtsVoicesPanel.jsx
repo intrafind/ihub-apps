@@ -274,7 +274,7 @@ function TtsVoicesPanel({ modelId, onUseVoice, t, uiLanguage }) {
           <h4
             ref={voicesHeadingRef}
             tabIndex={-1}
-            className="text-sm font-medium text-gray-900 dark:text-gray-100 focus:outline-hidden"
+            className="text-sm font-medium text-gray-900 dark:text-gray-100 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 rounded-sm"
           >
             {t('admin.models.ttsVoices.title', 'Available voices')}
           </h4>

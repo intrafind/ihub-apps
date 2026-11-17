@@ -17,7 +17,11 @@ import {
   KIND_DEFAULT_LABELS,
   KIND_DEFAULT_HELP
 } from '../utils/oauthClientKind';
-import { showSecretReveal, useSecretReveal } from '../state/secretReveal';
+import {
+  setSecretRequestPending,
+  showSecretReveal,
+  useSecretRequestBlocked
+} from '../state/secretReveal';
 import { useConfirmAction } from '../hooks/useConfirmAction';
 
 function AdminOAuthClientsPage() {
@@ -40,7 +44,9 @@ function AdminOAuthClientsPage() {
   const [confirmDialog, setConfirmDialog] = useState(null);
   // A rotated secret waiting to be acknowledged. It lives above the routes
   // (AdminSecretRevealHost), so leaving the page mid-request cannot lose it.
-  const revealedSecret = useSecretReveal();
+  // Blocked while a rotation runs or its secret is not saved yet, also after
+  // the page was left and opened again.
+  const secretRequestBlocked = useSecretRequestBlocked();
   // Rotation runs inside its confirmation, which stays open and busy until the
   // server answered: the new secret cannot get lost behind a closed dialog.
   const { requestConfirm: requestRotateConfirm, dialogProps: rotateDialogProps } =
@@ -354,7 +360,7 @@ function AdminOAuthClientsPage() {
    * @param {{ clientId: string, name?: string }} client
    */
   const handleRotateSecret = client => {
-    if (revealedSecret) return;
+    if (secretRequestBlocked) return;
     const name = client.name || client.clientId;
     requestRotateConfirm({
       title: t('admin.auth.oauth.rotateSecretNamedTitle', {
@@ -368,12 +374,19 @@ function AdminOAuthClientsPage() {
       confirmLabel: t('admin.auth.oauth.rotateSecretAction', 'Rotate secret'),
       danger: true,
       action: async () => {
-        const response = await makeAdminApiCall(
-          `/admin/oauth/clients/${client.clientId}/rotate-secret`,
-          {
-            method: 'POST'
-          }
-        );
+        setSecretRequestPending(true);
+        let response;
+        try {
+          response = await makeAdminApiCall(
+            `/admin/oauth/clients/${client.clientId}/rotate-secret`,
+            {
+              method: 'POST'
+            }
+          );
+        } catch (err) {
+          setSecretRequestPending(false);
+          throw err;
+        }
         showSecretReveal({
           title: t('admin.auth.oauth.secretReveal.title', {
             name,

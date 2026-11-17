@@ -16,20 +16,39 @@ import { useSyncExternalStore } from 'react';
 
 /** @type {SecretReveal|null} */
 let current = null;
+// A request that will produce a secret is running. Kept here, not in the
+// page, so leaving and returning to the page cannot start a second one whose
+// result would replace the first before it was saved.
+let pending = false;
+let snapshot = { reveal: null, pending: false };
 const listeners = new Set();
 
 function emit() {
+  snapshot = { reveal: current, pending };
   for (const listener of listeners) listener();
 }
 
 /** @param {SecretReveal} reveal */
 export function showSecretReveal(reveal) {
   current = reveal;
+  pending = false;
+  emit();
+}
+
+/**
+ * Mark a secret-producing request as started (true) or failed (false).
+ * `showSecretReveal` ends it on success.
+ *
+ * @param {boolean} value
+ */
+export function setSecretRequestPending(value) {
+  pending = Boolean(value);
   emit();
 }
 
 export function clearSecretReveal() {
   current = null;
+  pending = false;
   emit();
 }
 
@@ -39,10 +58,21 @@ function subscribe(listener) {
 }
 
 function getSnapshot() {
-  return current;
+  return snapshot;
 }
 
 /** @returns {SecretReveal|null} The secret waiting to be shown, if any. */
 export function useSecretReveal() {
-  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot).reveal;
+}
+
+/**
+ * Whether a new secret may be requested now: not while one is on its way or
+ * still waiting to be saved.
+ *
+ * @returns {boolean}
+ */
+export function useSecretRequestBlocked() {
+  const state = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  return Boolean(state.reveal) || state.pending;
 }

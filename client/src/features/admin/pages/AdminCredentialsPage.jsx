@@ -542,7 +542,7 @@ function AdminCredentialsPage() {
           <h1
             ref={headingRef}
             tabIndex={-1}
-            className="text-3xl font-bold text-gray-900 dark:text-gray-100 focus:outline-hidden"
+            className="text-3xl font-bold text-gray-900 dark:text-gray-100 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 rounded-sm"
           >
             {t('admin.credentials.title', 'Credentials')}
           </h1>

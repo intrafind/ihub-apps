@@ -162,7 +162,7 @@ function AdminMarketplaceRegistriesPage() {
               <h1
                 ref={headingRef}
                 tabIndex={-1}
-                className="text-2xl font-bold text-gray-900 dark:text-white focus:outline-hidden"
+                className="text-2xl font-bold text-gray-900 dark:text-white focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 rounded-sm"
               >
                 {t('admin.marketplace.registries.title', 'Marketplace Registries')}
               </h1>

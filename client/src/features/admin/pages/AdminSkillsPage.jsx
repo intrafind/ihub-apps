@@ -252,7 +252,7 @@ function AdminSkillsPage() {
             <h1
               ref={headingRef}
               tabIndex={-1}
-              className="text-2xl font-semibold text-gray-900 dark:text-gray-100 focus:outline-hidden"
+              className="text-2xl font-semibold text-gray-900 dark:text-gray-100 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 rounded-sm"
             >
               {activeTab === 'user'
                 ? t('admin.skills.userSkills.title', 'User Skills')

@@ -56,6 +56,9 @@ function LeavableAdmin() {
       <button type="button" onClick={() => setOnPage(false)}>
         leave page
       </button>
+      <button type="button" onClick={() => setOnPage(true)}>
+        return to page
+      </button>
       <Admin showPage={onPage} />
     </>
   );
@@ -164,6 +167,30 @@ describe('rotation runs inside its confirmation', () => {
     // Browser Back while the POST runs: the page unmounts, the layout stays.
     fireEvent.click(screen.getByRole('button', { name: 'leave page' }));
     expect(screen.queryByTitle('Rotate Secret')).not.toBeInTheDocument();
+
+    await act(async () => {
+      answer({ data: { clientSecret: SECRET } });
+    });
+    const reveal = screen.getByRole('dialog', { name: 'New secret for "Reporting bot"' });
+    expect(within(reveal).getByRole('textbox', { name: 'Client Secret' })).toHaveValue(SECRET);
+  });
+
+  it('blocks a second rotation after leaving and returning while the first runs', async () => {
+    let answer;
+    mockApi(() => new Promise(resolve => (answer = resolve)));
+    render(<LeavableAdmin />);
+    fireEvent.click(await screen.findByTitle('Rotate Secret'));
+    await act(async () => {
+      fireEvent.click(
+        within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Rotate secret' })
+      );
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'leave page' }));
+    fireEvent.click(screen.getByRole('button', { name: 'return to page' }));
+
+    // The first POST still runs: a second rotation does not even ask.
+    fireEvent.click(await screen.findByTitle('Rotate Secret'));
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
 
     await act(async () => {
       answer({ data: { clientSecret: SECRET } });

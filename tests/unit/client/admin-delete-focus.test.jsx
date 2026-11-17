@@ -138,3 +138,25 @@ describe('TTS voices: delete', () => {
     unmount();
   });
 });
+
+describe('focus target after a delete is visibly focused', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const files = [
+    'client/src/features/admin/components/tts/TtsVoicesPanel.jsx',
+    'client/src/features/admin/components/AssetManager.jsx',
+    'client/src/features/admin/pages/AdminCredentialsPage.jsx',
+    'client/src/features/admin/pages/AdminSkillsPage.jsx',
+    'client/src/features/admin/pages/AdminMarketplaceRegistriesPage.jsx'
+  ];
+  it.each(files)('%s gives its focus-target heading a focus-visible ring', file => {
+    const source = fs.readFileSync(path.join(__dirname, '../../..', file), 'utf8');
+    // The heading that receives focus after a successful delete (tabIndex -1)
+    // hides the default outline, so it must show a keyboard focus ring instead.
+    const heading = source.match(
+      /ref=\{(?:voices)?[hH]eadingRef\}[\s\S]{0,300}?className="([^"]*)"/
+    );
+    expect(heading).not.toBeNull();
+    expect(heading[1]).toContain('focus-visible:ring-2');
+  });
+});

@@ -179,7 +179,7 @@ function AssetManager({ t }) {
       <h2
         ref={headingRef}
         tabIndex={-1}
-        className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-6 focus:outline-hidden"
+        className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-6 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 rounded-sm"
       >
         {t('admin.ui.assets.title', 'Asset Management')}
       </h2>
