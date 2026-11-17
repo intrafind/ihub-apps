@@ -81,6 +81,19 @@ describe('ConfirmDialog', () => {
     unmount();
   });
 
+  it('takes focus back when the menu that opened it returns focus to its trigger', async () => {
+    const trigger = document.createElement('button');
+    document.body.appendChild(trigger);
+    const { unmount } = renderDialog();
+    // The menu closes after the dialog opened and focuses its own trigger.
+    trigger.focus();
+    expect(trigger).toHaveFocus();
+    await act(() => new Promise(resolve => requestAnimationFrame(() => resolve())));
+    expect(screen.getByRole('button', { name: 'Cancel' })).toHaveFocus();
+    unmount();
+    trigger.remove();
+  });
+
   it('lists consequences and the irreversible callout', () => {
     const { unmount } = renderDialog({
       consequences: ['Used by "HR assistant"', 'Used by "Sales bot"'],

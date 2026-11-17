@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import useFocusTrap from '../hooks/useFocusTrap';
@@ -132,6 +132,20 @@ function ConfirmDialogPanel({
     initialFocusRef: requiredToken ? tokenInputRef : denyButtonRef,
     returnFocusOnDeactivate: true
   });
+
+  // A menu that opened this dialog returns focus to its own trigger as it
+  // closes, which can land after the trap's initial focus: put focus back into
+  // the dialog on the next frame if it ended up outside.
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      const container = containerRef.current;
+      const target = (requiredToken ? tokenInputRef : denyButtonRef).current;
+      if (container && target && !container.contains(document.activeElement)) target.focus();
+    });
+    return () => cancelAnimationFrame(frame);
+    // Only on open: later focus moves are the user's.
+    // eslint-disable-next-line @eslint-react/exhaustive-deps
+  }, []);
 
   // Escape is routed by the overlay stack; ignored while the action runs.
   useOverlayStack(true, busy ? null : onDeny);

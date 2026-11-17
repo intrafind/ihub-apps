@@ -55,8 +55,14 @@ const MODELS = [
 ];
 
 async function signIn(request) {
-  const response = await request.post('/api/auth/local/login', { data: ADMIN });
-  expect(response.ok()).toBeTruthy();
+  // The web server is "up" once Vite answers; the API can take a few seconds
+  // longer on the first run, so the sign-in is retried.
+  await expect
+    .poll(async () => (await request.post('/api/auth/local/login', { data: ADMIN })).ok(), {
+      message: 'sign in as the default admin',
+      timeout: 30_000
+    })
+    .toBe(true);
 }
 
 test.describe('Admin confirmations', () => {
@@ -201,7 +207,7 @@ test.describe('Admin confirmations', () => {
     await expect(field).toBeFocused();
 
     await field.fill('not-this-server');
-    await confirm.click();
+    await expect(confirm).toBeDisabled();
     expect(imports).toEqual([]);
 
     // Cancel drops the file; nothing was sent.
