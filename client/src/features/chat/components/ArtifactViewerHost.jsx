@@ -144,6 +144,9 @@ function focusRegion(name, element) {
  * @param {boolean} [props.inline] - A `WorkspaceLayout` hosts the pane in the page layout.
  * @param {boolean} [props.forceSheet] - Never split (embedded surfaces, the admin test panel).
  * @param {(quote: Object) => void} [props.onQuote] - "Ask about" / "Edit with AI" of a selection.
+ * @param {{ sendMessage: (text: string) => void, isProcessing: boolean }|null} [props.promptHost] -
+ *   The chat an HTML artifact's `sendPrompt` asks, after the user confirmed. Surfaces without a
+ *   composer pass nothing.
  * @param {(dock: Object) => import('react').ReactNode} [props.renderFullScreenChat] - The chat
  *   of the full-screen pane (the composer dock).
  * @param {import('react').Ref} [props.controllerRef] - Receives `{ openArtifact, openFile,
@@ -160,6 +163,7 @@ export default function ArtifactViewerHost({
   inline = false,
   forceSheet = false,
   onQuote = null,
+  promptHost = null,
   renderFullScreenChat = null,
   controllerRef = null
 }) {
@@ -659,6 +663,19 @@ export default function ArtifactViewerHost({
             // the caret are in view.
             else if (full && renderFullScreenChat) setDockExpanded(true);
             announce(t('workspace.quoted', 'Quoted in the message box'));
+          }
+        : null,
+      // An HTML artifact's `sendPrompt`, once the user confirmed it: the answer comes in the chat,
+      // so a sheet steps aside and full screen opens its dock to show it.
+      promptHost: promptHost
+        ? {
+            isProcessing: Boolean(promptHost.isProcessing),
+            send: text => {
+              promptHost.sendMessage(text);
+              if (!split) setSheetHidden(true);
+              else if (full && renderFullScreenChat) setDockExpanded(true);
+              announce(t('workspace.promptSent', 'Sent to the chat'));
+            }
           }
         : null,
       bottomPadding: showDock ? dockHeight : 0,

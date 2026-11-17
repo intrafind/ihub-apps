@@ -440,6 +440,7 @@ export default function ArtifactViewer({
           mode="fill"
           viewMode={viewMode}
           onViewModeChange={setViewMode}
+          promptHost={chrome?.promptHost || null}
         />
       </SelectionScope>
     </div>

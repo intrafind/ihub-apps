@@ -224,6 +224,21 @@ and the model fixes and resends the file — for URLs the preview will not load
 (an unclosed `<script>` or `<style>`, or no `</body>`/`</html>`), besides
 relative files, dead links and unguarded storage.
 
+**Follow-up questions (`sendPrompt`).** Every preview defines
+`sendPrompt(text)`, so an artifact can turn a click into a question in the
+chat. In the chat's workspace pane it posts
+`{ type: 'ihub-artifact:send-prompt', text }` to the parent (trimmed, at most
+2000 characters); the pane takes messages only from that frame's window,
+shows the question above the artifact, and sends it as the user's next
+message only when the user clicks **Send** — the same path an MCP App view's
+`ui/message` takes. While one question waits, further ones are ignored, so
+the text cannot be swapped under the button; while an answer is streaming,
+**Send** is disabled. In shared links and on the standalone artifact page
+`sendPrompt` is a no-op and `sendPrompt.available` is `false`; a downloaded
+file has no `sendPrompt` at all, which is why the `web-artifacts` skill
+guards every call. The bridge is a message, not an opening of the sandbox:
+the frame keeps `sandbox="allow-scripts"` without `allow-same-origin`.
+
 Known limit: CSP does not govern navigation of the frame itself, so a script
 can still navigate the frame to another address. The sandbox stops top-level
 navigation, popups and any access to the parent.
