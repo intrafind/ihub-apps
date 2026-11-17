@@ -625,19 +625,24 @@ function AdminLoggingPage() {
                   {availableComponents.map(component => (
                     <label
                       key={component.id}
+                      aria-label={component.name}
                       className="flex items-start p-3 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
                     >
                       <input
                         type="checkbox"
                         checked={loggingConfig.components?.filter?.includes(component.id) || false}
                         onChange={() => handleComponentToggle(component.id)}
+                        aria-describedby={`logging-component-${component.id}-description`}
                         className="mt-1 rounded-sm border-gray-300 text-blue-600 focus:ring-blue-500"
                       />
                       <div className="ml-3 flex-1">
                         <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
                           {component.name}
                         </div>
-                        <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                        <div
+                          id={`logging-component-${component.id}-description`}
+                          className="text-xs text-gray-600 dark:text-gray-400 mt-1"
+                        >
                           {component.description}
                         </div>
                       </div>
