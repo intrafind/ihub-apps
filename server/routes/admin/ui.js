@@ -18,6 +18,7 @@ import { recordUpload } from '../../telemetry/metrics.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import { APP_ID_PATTERN, APP_ID_MAX_LENGTH } from '../../../shared/validationPatterns.js';
 import { sendCreated, segment } from '../../utils/created.js';
+import { assertIfMatch, revisionOf, setRevisionHeaders } from '../../utils/configRevision.js';
 
 /**
  * Views `ui.json → startPage.defaultPage` may name as the "/" route: the
@@ -37,6 +38,9 @@ const MAX_APP_SHORTCUTS = 12;
 
 /** Nobody curates more default apps than this; the counts cap the lists anyway. */
 const MAX_FEATURED_APPS = 50;
+
+/** The UI configuration, as a path relative to `contents/`. */
+const UI_FILE = 'config/ui.json';
 
 export default function registerAdminUIRoutes(app) {
   // Configure multer for file uploads
@@ -226,14 +230,27 @@ export default function registerAdminUIRoutes(app) {
   /**
    * Get UI configuration
    */
-  app.get(buildServerPath('/api/admin/ui/config'), authRequired, adminAuth, (req, res) => {
+  app.get(buildServerPath('/api/admin/ui/config'), authRequired, adminAuth, async (req, res) => {
     const uiConfig = configCache.getUI();
+    // The revision is of the stored file, which is what a save with
+    // `If-Match` is compared against.
+    const stored = await configStore.readJson(UI_FILE);
 
+    setRevisionHeaders(res, revisionOf(stored));
     res.json(uiConfig?.data || {});
   });
 
   /**
-   * Update UI configuration
+   * Update UI configuration.
+   *
+   * Replaces `ui.json` with `config`, except `pages`: the content pages are
+   * owned by the pages routes (`/api/admin/pages`), so the registry stored on
+   * disk is always kept and a `pages` member in the request is ignored. A UI
+   * form opened before a page was created can therefore no longer delete it.
+   *
+   * Optional `If-Match` (the `ETag` of GET /api/admin/ui/config): a stale one
+   * is refused with 412 `PRECONDITION_FAILED` and nothing is written. The 204
+   * carries the new `ETag`.
    */
   app.post(buildServerPath('/api/admin/ui/config'), authRequired, adminAuth, async (req, res) => {
     const { config } = req.body;
@@ -245,11 +262,17 @@ export default function registerAdminUIRoutes(app) {
     // Validate the configuration structure (basic validation)
     validateUIConfig(config);
 
-    // Write the updated configuration atomically
-    await configStore.writeJson('config/ui.json', config);
+    // Read, compare and write under the file's update lock.
+    const { data: stored } = await configStore.updateJson(UI_FILE, current => {
+      assertIfMatch(req, current, 'ui');
+      const next = { ...config };
+      if (current?.pages !== undefined) next.pages = current.pages;
+      else delete next.pages;
+      return next;
+    });
 
     // Refresh the cache
-    await configCache.refreshCacheEntry('config/ui.json');
+    await configCache.refreshCacheEntry(UI_FILE);
 
     logAudit({
       req,
@@ -258,6 +281,7 @@ export default function registerAdminUIRoutes(app) {
       summary: 'Updated UI configuration'
     });
 
+    setRevisionHeaders(res, revisionOf(stored));
     res.status(204).end();
   });
 

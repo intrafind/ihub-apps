@@ -22,8 +22,8 @@ Where each guard is called (always inside the `updateJson` / `updatePlatform` mu
 held under the lock):
 
 - `assertPlatformChangeKeepsAccess(req.user, stored, next)`: `POST /api/admin/configs/platform`,
-  platform rollback (`routes/admin/changes.js`). **The scoped PATCH planned in a follow-up PR must
-  call it the same way.** It does nothing unless an auth block (`AUTH_CONFIG_KEYS`) changed.
+  `PATCH /api/admin/configs/platform` (both through `applyPlatformChange`), platform rollback
+  (`routes/admin/changes.js`). It does nothing unless an auth block (`AUTH_CONFIG_KEYS`) changed.
 - `assertUserChangeKeepsAdmin(req.user, before, after, { userId, action })`: user PUT and DELETE.
 - `assertGroupChangeKeepsAdmin(before, after)`: group PUT and group rollback.
 - `assertGroupsResolvable(body)`: every groups.json writer. `assertGroupNotInherited`: group DELETE.

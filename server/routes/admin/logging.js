@@ -6,6 +6,8 @@ import logger from '../../utils/logger.js';
 import configCache from '../../configCache.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { updatePlatform } from '../../utils/platformConfigStore.js';
+import { logAudit } from '../../services/AuditLogService.js';
+import { saveSnapshot } from '../../services/ChangeHistoryService.js';
 
 export default function registerAdminLoggingRoutes(app) {
   /**
@@ -71,12 +73,30 @@ export default function registerAdminLoggingRoutes(app) {
   app.put(buildServerPath('/api/admin/logging/config'), adminAuth, async (req, res) => {
     const newLoggingConfig = req.body;
 
-    // Update logging config
+    // Update logging config. A shallow merge: a card that sends only its own
+    // fields (the privacy card sends `anonymizeIp`) leaves the rest as stored.
+    let before;
     const { data: platformConfig } = await updatePlatform(platformConfig => {
+      before = structuredClone(platformConfig);
       platformConfig.logging = {
         ...platformConfig.logging,
         ...newLoggingConfig
       };
+    });
+
+    await saveSnapshot({
+      resource: 'platform',
+      id: 'platform',
+      before,
+      after: platformConfig,
+      admin: req.user?.username ?? req.user?.name ?? req.user?.id ?? 'unknown'
+    });
+    await logAudit({
+      req,
+      action: 'update',
+      resource: 'platform',
+      resourceId: 'logging',
+      summary: `Updated logging configuration (${Object.keys(newLoggingConfig || {}).join(', ')})`
     });
 
     // Refresh config cache

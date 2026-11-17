@@ -2243,3 +2243,18 @@ popup and of the hint under the chat input, the hint text and link (previously o
 `ui.json`) and a **Show again to everyone** button. The popup now remembers the version a visitor
 confirmed, so raising the version shows it again, as the setting always promised; visitors who confirmed
 earlier are not asked again until the next change. See [UI Configuration](../../ui.md#disclaimer-configuration).
+
+## Admin Settings Warn When Someone Else Saved First
+
+When two administrators, two browser tabs or a script change the platform settings or **UI
+Customization** at the same time, the later save no longer silently overwrites the earlier one.
+It is refused with a dialog, **This changed since you opened it**; your edits stay on the page,
+and **Reload and discard my changes** loads the current settings. See
+[Admin UI → When someone else saved first](../../admin-ui.md#when-someone-else-saved-first).
+
+For scripts, `GET /api/admin/configs/platform` and `GET /api/admin/ui/config` return an `ETag`;
+sending it back as `If-Match` makes a save fail with `412 PRECONDITION_FAILED` when the file
+changed in between (without `If-Match` nothing changes). The new
+`PATCH /api/admin/configs/platform` changes only the fields it names (JSON Merge Patch) and runs
+the same checks as a full save. See
+[Platform Configuration → Changing platform.json through the admin API](../../platform.md#changing-platformjson-through-the-admin-api).

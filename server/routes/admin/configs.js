@@ -6,7 +6,6 @@ import { updatePlatform } from '../../utils/platformConfigStore.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { reconfigureOidcProviders } from '../../middleware/oidcAuth.js';
-import tokenStorageService from '../../services/TokenStorageService.js';
 import { issueAzureSpeechToken } from '../../services/azureSpeechToken.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import logger from '../../utils/logger.js';
@@ -18,6 +17,15 @@ import { sharedSecretHeaderProblem } from '../../utils/proxyAuthTrust.js';
 import { toolApprovalConfigProblem } from '../../utils/toolApproval.js';
 import { platformConfigSchema } from '../../validators/platformConfigSchema.js';
 import { assertPlatformChangeKeepsAccess } from '../../utils/adminGuards.js';
+import {
+  PLATFORM_SECRET_PATHS,
+  SECRET_MARKER,
+  assertNoMarkers,
+  isEnvVarPlaceholder,
+  redactForRead,
+  restoreRedacted
+} from '../../utils/redactedSecrets.js';
+import { assertIfMatch, revisionOf, setRevisionHeaders } from '../../utils/configRevision.js';
 import {
   describeSettingsChange,
   mergeSettingsForSave
@@ -31,58 +39,499 @@ import {
 const PLATFORM_FILE = 'config/platform.json';
 
 /**
- * Check if a value is an environment variable placeholder
- * @param {string} value - Value to check
- * @returns {boolean} - True if the value is an environment variable placeholder
+ * The top-level sections `PATCH /api/admin/configs/platform` may change:
+ * exactly the sections the POST writes. Every other key of platform.json is
+ * either edited through its own validated route (see
+ * {@link DEDICATED_SECTION_ROUTES}) or not editable from the admin API, and the
+ * POST cannot change it either (it spreads the stored file under the named
+ * keys), so a PATCH must not open it.
  */
-function isEnvVarPlaceholder(value) {
-  if (typeof value !== 'string') return false;
-  return /^\$\{[A-Z_][A-Z0-9_]*\}$/i.test(value);
+export const PATCHABLE_PLATFORM_SECTIONS = Object.freeze([
+  'defaultLanguage',
+  'setup',
+  'aiDisclosure',
+  'aiAcknowledgement',
+  'provenance',
+  'auth',
+  'anonymousAuth',
+  'proxyAuth',
+  'localAuth',
+  'oidcAuth',
+  'ldapAuth',
+  'ntlmAuth',
+  'authorization',
+  'oauth',
+  'mcpServer',
+  'telemetry',
+  'speech',
+  'globalPromptVariables',
+  'cookieSettings',
+  'toolApproval'
+]);
+
+/** Sections with their own route and validation, named in the PATCH refusal. */
+const DEDICATED_SECTION_ROUTES = Object.freeze({
+  ssl: '/api/admin/ssl/config',
+  ssrf: '/api/admin/ssrf/config',
+  cors: '/api/admin/cors/config',
+  rateLimit: '/api/admin/rate-limits',
+  proxy: '/api/admin/proxy/config',
+  logging: '/api/admin/logging/config'
+});
+
+/** Top-level sections whose `null` has a meaning in the POST (it removes the block). */
+const NULLABLE_SECTIONS = new Set(['toolApproval']);
+
+/** @param {unknown} value */
+function isPlainObject(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+/** The secret paths without array markers, as segment lists (`[]` dropped). */
+const SECRET_SEGMENTS = PLATFORM_SECRET_PATHS.map(({ path }) =>
+  path.split('.').map(segment => segment.replace(/\[\]$/, ''))
+);
+
+/** Whether `path` is exactly a secret leaf reachable through objects only. */
+function isSecretLeaf(path) {
+  return PLATFORM_SECRET_PATHS.some(
+    ({ path: secretPath }, index) =>
+      !secretPath.includes('[]') &&
+      SECRET_SEGMENTS[index].length === path.length &&
+      SECRET_SEGMENTS[index].every((segment, i) => segment === path[i])
+  );
+}
+
+/** Whether `path` encloses a secret (a `null` there would delete the secret with it). */
+function enclosesSecret(path) {
+  return SECRET_SEGMENTS.some(
+    segments => segments.length > path.length && path.every((segment, i) => segment === segments[i])
+  );
 }
 
 /**
- * Sanitize a secret value for API responses
- * - Preserve environment variable placeholders like ${VARIABLE_NAME}
- * - Replace actual secret values with ***REDACTED***
- * @param {string} value - Value to sanitize
- * @returns {string|undefined} - Sanitized value
+ * Check a PATCH body before it is applied: an object, only patchable sections,
+ * and no `null` where it would remove a whole section or the object a secret
+ * lives in (clearing a secret is `null` on the secret itself).
+ *
+ * @param {unknown} patch - The request body
+ * @throws {ServiceError} `BAD_REQUEST` for a body that is not an object,
+ *   `VALIDATION_FAILED` (400, `errors[].pointer`) for the rest
  */
-function sanitizeSecret(value) {
-  if (!value) return undefined;
-  // Preserve environment variable placeholders
-  if (isEnvVarPlaceholder(value)) {
-    return value;
+function assertPatchShape(patch) {
+  if (!isPlainObject(patch)) {
+    throw new ServiceError('BAD_REQUEST', 'The body must be a JSON Merge Patch object');
   }
-  // Redact actual secret values
-  return '***REDACTED***';
-}
-
-/**
- * Restore secret values from existing config when ***REDACTED*** is received
- * @param {string} newValue - New value from client
- * @param {string} existingValue - Existing value from config file
- * @returns {string} - Value to use (existing if newValue is redacted, otherwise newValue)
- */
-function restoreSecretIfRedacted(newValue, existingValue) {
-  // If the new value is the redacted placeholder, use the existing value
-  if (newValue === '***REDACTED***') {
-    return existingValue;
+  const issues = [];
+  for (const [key, value] of Object.entries(patch)) {
+    if (!PATCHABLE_PLATFORM_SECTIONS.includes(key)) {
+      const route = DEDICATED_SECTION_ROUTES[key];
+      issues.push({
+        path: [key],
+        code: 'not_patchable',
+        message: route
+          ? `"${key}" has its own validated route (${route}) and cannot be changed here`
+          : `"${key}" cannot be changed through this endpoint`
+      });
+      continue;
+    }
+    if (value === null && !NULLABLE_SECTIONS.has(key)) {
+      issues.push({
+        path: [key],
+        code: 'null_not_allowed',
+        message: `"${key}" cannot be removed; send the fields to change instead`
+      });
+    }
   }
-  // Otherwise use the new value (could be a new secret or env var placeholder)
-  return newValue;
+  const findEnclosingNulls = (value, path) => {
+    if (!isPlainObject(value)) return;
+    for (const [key, child] of Object.entries(value)) {
+      const childPath = [...path, key];
+      if (child === null && enclosesSecret(childPath)) {
+        issues.push({
+          path: childPath,
+          code: 'null_not_allowed',
+          message: `"${childPath.join('.')}" holds a secret and cannot be removed as a whole; set the secret itself to null to clear it`
+        });
+      } else {
+        findEnclosingNulls(child, childPath);
+      }
+    }
+  };
+  for (const [key, value] of Object.entries(patch)) {
+    if (PATCHABLE_PLATFORM_SECTIONS.includes(key)) findEnclosingNulls(value, [key]);
+  }
+  if (issues.length > 0) {
+    throw new ServiceError(
+      'VALIDATION_FAILED',
+      issues.map(issue => `${issue.path.join('.')}: ${issue.message}`).join('; '),
+      { details: issues }
+    );
+  }
 }
 
 /**
- * Encrypt a secret string for storage, unless it is an env var placeholder or
- * already encrypted. Mirrors the guard pattern used for model API keys.
- * @param {string} value
- * @returns {string}
+ * RFC 7396 JSON Merge Patch of `patch` onto `target`, except that `null` on a
+ * secret leaf stays `null`: {@link restoreRedacted} reads it as "clear the
+ * secret", where a removed key would read as "keep the stored one".
+ *
+ * @param {unknown} target - The stored value (not modified)
+ * @param {unknown} patch
+ * @param {string[]} path - Where `target` sits in platform.json
+ * @returns {unknown} The patched value
  */
-function encryptSecretIfNeeded(value) {
-  if (!value || typeof value !== 'string') return value;
-  if (isEnvVarPlaceholder(value)) return value;
-  if (tokenStorageService.isEncrypted(value)) return value;
-  return tokenStorageService.encryptString(value);
+function mergePatch(target, patch, path) {
+  if (!isPlainObject(patch)) return structuredClone(patch);
+  const result = isPlainObject(target) ? structuredClone(target) : {};
+  for (const [key, value] of Object.entries(patch)) {
+    const childPath = [...path, key];
+    if (value === null) {
+      if (isSecretLeaf(childPath)) result[key] = null;
+      else delete result[key];
+    } else {
+      result[key] = mergePatch(result[key], value, childPath);
+    }
+  }
+  return result;
+}
+
+/**
+ * Sections whose POST merge is already a partial deep merge with its own `null`
+ * rule (`provenance`: `null` on a watermark tunable means "default"). A PATCH
+ * hands their value to that merge as it is; patching it onto the stored block
+ * first would drop the `null` and the merge would then keep the stored value.
+ */
+const SELF_MERGING_SECTIONS = new Set(['provenance']);
+
+/**
+ * The sections a PATCH submits, each one patched onto its stored value, in the
+ * shape the POST receives (whole sections) so both run the same merge.
+ *
+ * @param {Object} stored - The stored platform.json
+ * @param {Object} patch - A body accepted by {@link assertPatchShape}
+ * @returns {Object}
+ */
+function sectionsFromPatch(stored, patch) {
+  const sections = {};
+  for (const [key, value] of Object.entries(patch)) {
+    if (value === null || SELF_MERGING_SECTIONS.has(key)) sections[key] = structuredClone(value);
+    else sections[key] = mergePatch(stored?.[key], value, [key]);
+  }
+  return sections;
+}
+
+/**
+ * The checks every submitted platform section passes before it is stored, for
+ * POST and PATCH alike.
+ *
+ * @param {Object} newConfig - The submitted sections
+ * @throws {ServiceError} `BAD_REQUEST`
+ */
+function validatePlatformSections(newConfig) {
+  // A bad default language is not cosmetic: every localized lookup that
+  // falls back to it, and every web search that has no request language of
+  // its own, would take the bad value.
+  if (newConfig.defaultLanguage !== undefined && !isValidLanguageCode(newConfig.defaultLanguage)) {
+    throw new ServiceError(
+      'BAD_REQUEST',
+      'defaultLanguage must be a valid language code, e.g. "en"'
+    );
+  }
+
+  // The AI disclosure block is read straight from the file at run time (a string where a
+  // boolean belongs would be read as "on"), so it is checked before it is stored.
+  if (newConfig.aiDisclosure !== undefined) {
+    const checked = platformConfigSchema.shape.aiDisclosure.safeParse(newConfig.aiDisclosure);
+    if (!checked.success) {
+      throw new ServiceError(
+        'BAD_REQUEST',
+        `aiDisclosure is invalid: ${checked.error.issues
+          .map(issue => `${issue.path.join('.')} ${issue.message}`)
+          .join('; ')}`
+      );
+    }
+  }
+
+  // The shared secret header is removed from every request, so it must not
+  // be one that sign-in or request handling reads.
+  const secretHeaderProblem = newConfig.proxyAuth && sharedSecretHeaderProblem(newConfig.proxyAuth);
+  if (secretHeaderProblem) {
+    throw new ServiceError('BAD_REQUEST', `proxyAuth.sharedSecretHeader ${secretHeaderProblem}`);
+  }
+
+  if (
+    newConfig.cookieSettings !== undefined &&
+    (newConfig.cookieSettings === null ||
+      typeof newConfig.cookieSettings !== 'object' ||
+      Array.isArray(newConfig.cookieSettings) ||
+      (newConfig.cookieSettings.disableSecure !== undefined &&
+        typeof newConfig.cookieSettings.disableSecure !== 'boolean'))
+  ) {
+    throw new ServiceError(
+      'BAD_REQUEST',
+      'cookieSettings must be an object with a boolean disableSecure'
+    );
+  }
+
+  if (newConfig.toolApproval !== undefined && newConfig.toolApproval !== null) {
+    const approvalProblem = toolApprovalConfigProblem(newConfig.toolApproval);
+    if (approvalProblem) throw new ServiceError('BAD_REQUEST', approvalProblem);
+  }
+}
+
+/**
+ * The stored platform.json with the submitted sections applied: the POST's
+ * section allowlist. Sections not named here keep their stored value, whatever
+ * the body says.
+ *
+ * @param {Object} existingConfig - The stored body
+ * @param {Object} newConfig - The submitted sections
+ * @returns {Object} The body to store (secrets not yet restored)
+ */
+function mergePlatformSections(existingConfig, newConfig) {
+  const mergedConfig = {
+    ...existingConfig,
+    // Listed explicitly for the same reason as `mcpServer` below: this merge
+    // emits only the named keys, so an unnamed one is silently reverted by
+    // the spread of existingConfig on save.
+    defaultLanguage:
+      newConfig.defaultLanguage !== undefined
+        ? newConfig.defaultLanguage
+        : existingConfig.defaultLanguage,
+    // First-run onboarding toggle (Admin → Advanced); same reason as above.
+    setup: newConfig.setup !== undefined ? newConfig.setup : existingConfig.setup,
+    // First-turn AI notice (Admin → Advanced); same reason as above.
+    aiDisclosure:
+      newConfig.aiDisclosure !== undefined ? newConfig.aiDisclosure : existingConfig.aiDisclosure,
+    // AI-use acknowledgement (#3326): the form owns enabled/enforce/text/
+    // policyUrl; `requiredVersion` and `resetAt` always come from the stored
+    // block, so a stale form cannot re-validate everyone.
+    aiAcknowledgement: mergeSettingsForSave(
+      newConfig.aiAcknowledgement,
+      existingConfig.aiAcknowledgement
+    ),
+    // Provenance records (#3327): retention, store switch, verify access, media and
+    // watermark tunables. Validated and deep-merged, so keys a form does not own survive.
+    provenance: mergeProvenanceForSave(newConfig.provenance, existingConfig.provenance),
+    auth: newConfig.auth || existingConfig.auth,
+    anonymousAuth: newConfig.anonymousAuth || existingConfig.anonymousAuth,
+    proxyAuth: newConfig.proxyAuth || existingConfig.proxyAuth,
+    localAuth: newConfig.localAuth || existingConfig.localAuth,
+    oidcAuth: newConfig.oidcAuth || existingConfig.oidcAuth,
+    ldapAuth: newConfig.ldapAuth || existingConfig.ldapAuth,
+    ntlmAuth: newConfig.ntlmAuth || existingConfig.ntlmAuth,
+    authorization: newConfig.authorization || existingConfig.authorization,
+    oauth: newConfig.oauth || existingConfig.oauth,
+    // MCP gateway (Admin → MCP gateway) is edited through this generic
+    // endpoint rather than a dedicated route, so it must be listed here —
+    // otherwise the spread of existingConfig silently wins and the saved
+    // toggles revert on the next load.
+    mcpServer: newConfig.mcpServer !== undefined ? newConfig.mcpServer : existingConfig.mcpServer,
+    telemetry: newConfig.telemetry !== undefined ? newConfig.telemetry : existingConfig.telemetry,
+    speech: newConfig.speech !== undefined ? newConfig.speech : existingConfig.speech,
+    // Admin → Prompts → Variables (global context and custom variables).
+    globalPromptVariables:
+      newConfig.globalPromptVariables !== undefined
+        ? newConfig.globalPromptVariables
+        : existingConfig.globalPromptVariables,
+    // Admin → System → Cookie settings (`disableSecure`); same reason as above.
+    cookieSettings:
+      newConfig.cookieSettings !== undefined
+        ? newConfig.cookieSettings
+        : existingConfig.cookieSettings,
+    // Admin → Security → Tool approval (#2945).
+    toolApproval:
+      newConfig.toolApproval !== undefined ? newConfig.toolApproval : existingConfig.toolApproval
+  };
+  if (newConfig.toolApproval === null) {
+    // `null` turns approval off: the block is removed, never stored as
+    // null (the platform schema has it as an optional object).
+    delete mergedConfig.toolApproval;
+  }
+  return mergedConfig;
+}
+
+/**
+ * The one writer of `POST` and `PATCH /api/admin/configs/platform`.
+ *
+ * Both requests run the same steps, so a PATCH can never become a way around
+ * a check the POST makes:
+ * 1. under the platform update lock: the optional `If-Match` (412), the
+ *    submitted sections (the POST body, or the PATCH merged onto the stored
+ *    sections), the section validators, the section merge, the restore of
+ *    redacted and omitted secrets, the refusal of any marker left over, and the
+ *    lockout invariant (409 `AUTH_LOCKOUT`);
+ * 2. after the write: cache refresh, runtime reconfiguration, snapshot and audit.
+ *
+ * Secrets are encrypted by `updatePlatform` on the way to disk.
+ *
+ * @param {import('express').Request} req - The admin request (`req.user`, `If-Match`)
+ * @param {Object} body - The POST body (whole sections) or the PATCH body (merge patch)
+ * @param {Object} options
+ * @param {'replace'|'merge'} options.mode - `replace` for POST, `merge` for PATCH
+ * @returns {Promise<{stored: Object, revision: string, reconfiguration: Object}>}
+ *   The body now stored (secrets encrypted), its revision and what was reconfigured
+ */
+async function applyPlatformChange(req, body, { mode }) {
+  // Set by the mutator, which may run more than once (a conflicting write by
+  // another worker re-runs it on a fresh read): it derives everything from the
+  // stored body it is handed and only assigns these.
+  let existingConfig;
+  let mergedConfig;
+  let newConfig;
+  let firstRun = false;
+  // Strict, because this is a read-modify-write: the merge emits only the
+  // named keys, so treating an unparseable platform.json as a first run would
+  // answer 200 while replacing `features`, `cors`, `storage`, `chats`,
+  // `runLog`, `rateLimit` and the rest with nothing.
+  const { data: stored } = await updatePlatform(
+    async current => {
+      assertIfMatch(req, current, 'platform');
+      firstRun = current === null || Object.keys(current).length === 0;
+      existingConfig = structuredClone(current);
+      newConfig =
+        mode === 'merge' ? sectionsFromPatch(existingConfig, body) : structuredClone(body);
+
+      validatePlatformSections(newConfig);
+      mergedConfig = mergePlatformSections(existingConfig, newConfig);
+
+      // Put back what the admin read redacted or left out (JWT secrets, the
+      // speech key, masked JWKS URLs): omitted keeps, null clears.
+      restoreRedacted(mergedConfig, existingConfig, PLATFORM_SECRET_PATHS);
+      // A marker that is still there stands for nothing stored; saving it would
+      // replace a secret with the word "REDACTED".
+      for (const key of Object.keys(newConfig)) {
+        assertNoMarkers(mergedConfig[key], [key]);
+      }
+
+      // No save may lock the caller, or every administrator, out (409
+      // AUTH_LOCKOUT, no override): evaluated on the stored body and the
+      // merged one, under the platform lock.
+      await assertPlatformChangeKeepsAccess(req.user, existingConfig, mergedConfig);
+      return mergedConfig;
+    },
+    { create: true }
+  );
+  if (firstRun) {
+    logger.info('Creating new platform config file', { component: 'AdminConfigs' });
+  }
+
+  await configCache.refreshCacheEntry(PLATFORM_FILE);
+
+  const acknowledgementChange = describeSettingsChange(
+    existingConfig.aiAcknowledgement,
+    mergedConfig.aiAcknowledgement
+  );
+  if (acknowledgementChange) {
+    logAudit({
+      req,
+      action: 'update',
+      resource: 'aiAcknowledgement',
+      resourceId: 'settings',
+      summary: `AI-use acknowledgement settings changed: ${acknowledgementChange.changed.join(', ')}`,
+      details: acknowledgementChange
+    });
+  }
+
+  const provenanceChange = describeProvenanceChange(
+    existingConfig.provenance,
+    mergedConfig.provenance
+  );
+  if (provenanceChange) {
+    await logAudit({
+      req,
+      action: 'update',
+      resource: 'provenanceSettings',
+      resourceId: 'settings',
+      summary: `Provenance settings changed: ${provenanceChange.changed.map(c => c.key).join(', ')}`,
+      details: provenanceChange
+    });
+  }
+
+  // Apply runtime-mutable telemetry settings without server restart
+  try {
+    const telemetryChanged =
+      JSON.stringify(existingConfig.telemetry) !== JSON.stringify(newConfig.telemetry);
+    if (telemetryChanged && newConfig.telemetry) {
+      const { reloadTelemetryConfig } = await import('../../telemetry.js');
+      const { default: activityTracker } = await import('../../telemetry/ActivityTracker.js');
+      reloadTelemetryConfig(newConfig.telemetry);
+      activityTracker.configure(newConfig.telemetry.activitySummary || {});
+      logger.info('Telemetry runtime configuration updated', { component: 'AdminConfigs' });
+    }
+  } catch (telemetryError) {
+    logger.warn('Failed to apply runtime telemetry config update', {
+      component: 'AdminConfigs',
+      error: telemetryError.message
+    });
+  }
+
+  // A changed OIDC provider (token URL, client) invalidates the iFinder
+  // tokens exchanged through it. The iFinder installation itself lives in
+  // integrations.json and resets its caches from there.
+  if (JSON.stringify(existingConfig.oidcAuth) !== JSON.stringify(newConfig.oidcAuth)) {
+    try {
+      const { clearExchangedTokenCache } =
+        await import('../../services/integrations/iFinderTokenProvider.js');
+      clearExchangedTokenCache();
+    } catch (error) {
+      logger.warn('Could not clear the iFinder token cache', {
+        component: 'AdminConfigs',
+        error
+      });
+    }
+  }
+
+  // Reconfigure authentication methods dynamically where possible
+  const reconfigResults = reconfigureAuthenticationMethods(existingConfig, newConfig);
+
+  if (reconfigResults.reconfigured.length > 0) {
+    logger.info('Reconfigured authentication methods', {
+      component: 'AdminConfigs',
+      reconfigured: reconfigResults.reconfigured.join(', ')
+    });
+  }
+  if (reconfigResults.requiresRestart.length > 0) {
+    logger.info('Authentication methods require restart', {
+      component: 'AdminConfigs',
+      requiresRestart: reconfigResults.requiresRestart.join(', ')
+    });
+  }
+  reconfigResults.notes.forEach(note =>
+    logger.info('Authentication reconfiguration note', { component: 'AdminConfigs', note })
+  );
+
+  logger.info('Platform authentication configuration updated', { component: 'AdminConfigs' });
+
+  // Both sides as stored (secrets encrypted where the file encrypts them); the
+  // snapshot read redacts them.
+  await saveSnapshot({
+    resource: 'platform',
+    id: 'platform',
+    before: existingConfig,
+    after: stored,
+    admin: req.user?.username ?? req.user?.name ?? req.user?.id ?? 'unknown'
+  });
+  await logAudit({
+    req,
+    action: 'update',
+    resource: 'platform',
+    resourceId: 'platform',
+    summary:
+      mode === 'merge'
+        ? `Updated platform configuration (${Object.keys(body).join(', ') || 'no sections'})`
+        : 'Updated platform configuration'
+  });
+
+  return {
+    stored,
+    revision: revisionOf(stored),
+    reconfiguration: {
+      reconfigured: reconfigResults.reconfigured,
+      requiresRestart: reconfigResults.requiresRestart,
+      notes: reconfigResults.notes
+    }
+  };
 }
 
 /**
@@ -191,7 +640,8 @@ export default function registerAdminConfigRoutes(app) {
     // Strict, for the reason the save below is: defaults rendered over a
     // platform.json that merely cannot be parsed read as "nothing is
     // configured", which is the one thing that is not true.
-    let platformConfig = await configStore.readJsonStrict(PLATFORM_FILE);
+    const stored = await configStore.readJsonStrict(PLATFORM_FILE);
+    let platformConfig = stored;
     if (!platformConfig) {
       logger.info('Platform config not found, returning default config', {
         component: 'AdminConfigs'
@@ -222,386 +672,106 @@ export default function registerAdminConfigRoutes(app) {
       };
     }
 
-    // Integration secrets (oidc/ldap/ntlm) no longer
-    // live in platform.json — they are stored in the central credential store
-    // and referenced by *Ref ids, so there is nothing to sanitize for them
-    // here. Only the JWT secrets and proxy JWT provider config remain inline.
-    const sanitizedConfig = { ...platformConfig };
-
-    // Sanitize JWT secret from auth config
-    if (sanitizedConfig.auth?.jwtSecret) {
-      sanitizedConfig.auth = {
-        ...sanitizedConfig.auth,
-        jwtSecret: sanitizeSecret(sanitizedConfig.auth.jwtSecret)
-      };
-    }
-
-    // Sanitize JWT secret from localAuth config
-    if (sanitizedConfig.localAuth?.jwtSecret) {
-      sanitizedConfig.localAuth = {
-        ...sanitizedConfig.localAuth,
-        jwtSecret: sanitizeSecret(sanitizedConfig.localAuth.jwtSecret)
-      };
-    }
-
-    // Sanitize the Azure Speech subscription key (server-side secret).
-    if (sanitizedConfig.speech?.azure?.subscriptionKey) {
-      sanitizedConfig.speech = {
-        ...sanitizedConfig.speech,
-        azure: {
-          ...sanitizedConfig.speech.azure,
-          subscriptionKey: sanitizeSecret(sanitizedConfig.speech.azure.subscriptionKey)
-        }
-      };
-    }
-
-    // Sanitize proxy auth JWT provider secrets
-    if (sanitizedConfig.proxyAuth?.jwtProviders) {
-      sanitizedConfig.proxyAuth = {
-        ...sanitizedConfig.proxyAuth,
-        jwtProviders: sanitizedConfig.proxyAuth.jwtProviders.map(provider => ({
-          name: provider.name,
-          header: provider.header,
-          issuer: provider.issuer,
-          audience: provider.audience
-          // Exclude jwkUrl and any other potentially sensitive configuration
-        }))
-      };
-    }
-
-    res.json(sanitizedConfig);
+    // JWT secrets and the speech key read as ***REDACTED*** (`${ENV}`
+    // placeholders as they are); JWKS URLs are shown with credentials masked,
+    // so a save of this body restores them instead of deleting them.
+    // Integration secrets (oidc/ldap/ntlm) live in the credential store.
+    setRevisionHeaders(res, revisionOf(stored));
+    res.json(redactForRead(platformConfig, PLATFORM_SECRET_PATHS));
   });
 
   /**
-   * Update platform configuration
+   * @swagger
+   * /admin/configs/platform:
+   *   post:
+   *     summary: Save platform configuration sections
+   *     description: |
+   *       Replaces each section the body names (from a fixed list: auth blocks,
+   *       defaultLanguage, setup, aiDisclosure, aiAcknowledgement, provenance,
+   *       oauth, mcpServer, telemetry, speech, globalPromptVariables,
+   *       cookieSettings, toolApproval); every other key keeps its stored value.
+   *       Redacted secrets (`***REDACTED***`, masked JWKS URLs) and omitted
+   *       secret fields keep the stored value; `null` on a secret clears it. A
+   *       value that is still a redaction marker is refused.
+   *     tags:
+   *       - Admin - Configuration
+   *     parameters:
+   *       - in: header
+   *         name: If-Match
+   *         required: false
+   *         schema: { type: string }
+   *         description: The ETag of the read the change is based on. Optional.
+   *     responses:
+   *       200:
+   *         description: Saved; `ETag` header carries the new revision
+   *       400:
+   *         description: Invalid section or a redaction marker as a value
+   *       409:
+   *         description: AUTH_LOCKOUT
+   *       412:
+   *         description: PRECONDITION_FAILED, the configuration changed since that read
    */
   app.post(buildServerPath('/api/admin/configs/platform'), adminAuth, async (req, res) => {
     const submittedConfig = req.body;
-    // The merge restores redacted secrets into it; a fresh copy per attempt keeps a
-    // re-run (after a conflicting write) from carrying the first attempt's restores.
-    let newConfig = submittedConfig;
-
-    if (!newConfig || typeof newConfig !== 'object') {
+    if (!submittedConfig || typeof submittedConfig !== 'object') {
       throw new ServiceError('BAD_REQUEST', 'Invalid configuration data');
     }
 
-    // A bad default language is not cosmetic: every localized lookup that
-    // falls back to it, and every web search that has no request language of
-    // its own, would take the bad value.
-    if (
-      newConfig.defaultLanguage !== undefined &&
-      !isValidLanguageCode(newConfig.defaultLanguage)
-    ) {
-      throw new ServiceError(
-        'BAD_REQUEST',
-        'defaultLanguage must be a valid language code, e.g. "en"'
-      );
-    }
-
-    // The AI disclosure block is read straight from the file at run time (a string where a
-    // boolean belongs would be read as "on"), so it is checked before it is stored.
-    if (newConfig.aiDisclosure !== undefined) {
-      const checked = platformConfigSchema.shape.aiDisclosure.safeParse(newConfig.aiDisclosure);
-      if (!checked.success) {
-        throw new ServiceError(
-          'BAD_REQUEST',
-          `aiDisclosure is invalid: ${checked.error.issues
-            .map(issue => `${issue.path.join('.')} ${issue.message}`)
-            .join('; ')}`
-        );
-      }
-    }
-
-    // The shared secret header is removed from every request, so it must not
-    // be one that sign-in or request handling reads.
-    const secretHeaderProblem =
-      newConfig.proxyAuth && sharedSecretHeaderProblem(newConfig.proxyAuth);
-    if (secretHeaderProblem) {
-      throw new ServiceError('BAD_REQUEST', `proxyAuth.sharedSecretHeader ${secretHeaderProblem}`);
-    }
-
-    // Load existing config to preserve other fields and track changes.
-    // Strict, because this is a read-modify-write: the merge below emits
-    // only the named keys, so treating an unparseable platform.json as a
-    // first run would answer 200 while replacing `features`, `cors`,
-    // `storage`, `chats`, `runLog`, `rateLimit` and the rest with nothing.
-    // One trailing comma left by an operator, one Save, and the file is
-    // gone.
-    // The merge below runs inside updatePlatform: on the stored file, under the
-    // update lock, and strictly (an unparseable platform.json is an error, not a
-    // first run — the merge emits only the named keys, so treating it as empty
-    // would replace `features`, `cors`, `storage`, `chats`, `runLog`, `rateLimit`
-    // and the rest with nothing). It may run again after a conflicting write, so
-    // it only reads its input and sets the variables below.
-    let existingConfig;
-    let mergedConfig;
-    let firstRun = false;
-    await updatePlatform(
-      async stored => {
-        firstRun = stored === null || Object.keys(stored).length === 0;
-        newConfig = structuredClone(submittedConfig);
-        existingConfig = structuredClone(stored);
-
-        // Merge the authentication-related config with existing config
-        mergedConfig = {
-          ...existingConfig,
-          // Listed explicitly for the same reason as `mcpServer` below: this merge
-          // emits only the named keys, so an unnamed one is silently reverted by
-          // the spread of existingConfig on save.
-          defaultLanguage:
-            newConfig.defaultLanguage !== undefined
-              ? newConfig.defaultLanguage
-              : existingConfig.defaultLanguage,
-          // First-run onboarding toggle (Admin → Advanced); same reason as above.
-          setup: newConfig.setup !== undefined ? newConfig.setup : existingConfig.setup,
-          // First-turn AI notice (Admin → Advanced); same reason as above.
-          aiDisclosure:
-            newConfig.aiDisclosure !== undefined
-              ? newConfig.aiDisclosure
-              : existingConfig.aiDisclosure,
-          // AI-use acknowledgement (#3326): the form owns enabled/enforce/text/
-          // policyUrl; `requiredVersion` and `resetAt` always come from the stored
-          // block, so a stale form cannot re-validate everyone.
-          aiAcknowledgement: mergeSettingsForSave(
-            newConfig.aiAcknowledgement,
-            existingConfig.aiAcknowledgement
-          ),
-          // Provenance records (#3327): retention, store switch, verify access, media and
-          // watermark tunables. Validated and deep-merged, so keys a form does not own survive.
-          provenance: mergeProvenanceForSave(newConfig.provenance, existingConfig.provenance),
-          auth: newConfig.auth || existingConfig.auth,
-          anonymousAuth: newConfig.anonymousAuth || existingConfig.anonymousAuth,
-          proxyAuth: newConfig.proxyAuth || existingConfig.proxyAuth,
-          localAuth: newConfig.localAuth || existingConfig.localAuth,
-          oidcAuth: newConfig.oidcAuth || existingConfig.oidcAuth,
-          ldapAuth: newConfig.ldapAuth || existingConfig.ldapAuth,
-          ntlmAuth: newConfig.ntlmAuth || existingConfig.ntlmAuth,
-          authorization: newConfig.authorization || existingConfig.authorization,
-          oauth: newConfig.oauth || existingConfig.oauth,
-          // MCP gateway (Admin → MCP gateway) is edited through this generic
-          // endpoint rather than a dedicated route, so it must be listed here —
-          // otherwise the spread of existingConfig silently wins and the saved
-          // toggles revert on the next load.
-          mcpServer:
-            newConfig.mcpServer !== undefined ? newConfig.mcpServer : existingConfig.mcpServer,
-          telemetry:
-            newConfig.telemetry !== undefined ? newConfig.telemetry : existingConfig.telemetry,
-          speech: newConfig.speech !== undefined ? newConfig.speech : existingConfig.speech,
-          // Admin → Prompts → Variables (global context and custom variables).
-          globalPromptVariables:
-            newConfig.globalPromptVariables !== undefined
-              ? newConfig.globalPromptVariables
-              : existingConfig.globalPromptVariables,
-          // Admin → System → Cookie settings (`disableSecure`); same reason as above.
-          cookieSettings:
-            newConfig.cookieSettings !== undefined
-              ? newConfig.cookieSettings
-              : existingConfig.cookieSettings,
-          // Admin → Security → Tool approval (#2945).
-          toolApproval:
-            newConfig.toolApproval !== undefined
-              ? newConfig.toolApproval
-              : existingConfig.toolApproval
-        };
-        if (
-          newConfig.cookieSettings !== undefined &&
-          (newConfig.cookieSettings === null ||
-            typeof newConfig.cookieSettings !== 'object' ||
-            Array.isArray(newConfig.cookieSettings) ||
-            (newConfig.cookieSettings.disableSecure !== undefined &&
-              typeof newConfig.cookieSettings.disableSecure !== 'boolean'))
-        ) {
-          throw new ServiceError(
-            'BAD_REQUEST',
-            'cookieSettings must be an object with a boolean disableSecure'
-          );
-        }
-        if (newConfig.toolApproval === null) {
-          // `null` turns approval off: the block is removed, never stored as
-          // null (the platform schema has it as an optional object).
-          delete mergedConfig.toolApproval;
-        } else if (newConfig.toolApproval !== undefined) {
-          const approvalProblem = toolApprovalConfigProblem(newConfig.toolApproval);
-          if (approvalProblem) throw new ServiceError('BAD_REQUEST', approvalProblem);
-        }
-
-        // Restore secrets that were redacted in the client
-        // This prevents environment variable placeholders from being overwritten with ***REDACTED***
-
-        // Restore JWT secrets
-        if (newConfig.auth?.jwtSecret) {
-          if (!mergedConfig.auth) mergedConfig.auth = {};
-          mergedConfig.auth.jwtSecret = restoreSecretIfRedacted(
-            newConfig.auth.jwtSecret,
-            existingConfig.auth?.jwtSecret
-          );
-        }
-
-        if (newConfig.localAuth?.jwtSecret) {
-          if (!mergedConfig.localAuth) mergedConfig.localAuth = {};
-          mergedConfig.localAuth.jwtSecret = restoreSecretIfRedacted(
-            newConfig.localAuth.jwtSecret,
-            existingConfig.localAuth?.jwtSecret
-          );
-        }
-
-        // Integration secrets (oidc/ldap/ntlm) live in
-        // the central credential store and are referenced by *Ref ids that are
-        // plain config values — they pass through the merge above unchanged and
-        // require no encrypt/restore handling here.
-
-        // Azure Speech subscription key: restore if the client sent the redacted
-        // placeholder, otherwise encrypt the newly provided secret at rest.
-        if (newConfig.speech?.azure && Object.hasOwn(newConfig.speech.azure, 'subscriptionKey')) {
-          if (!mergedConfig.speech) mergedConfig.speech = {};
-          if (!mergedConfig.speech.azure) mergedConfig.speech.azure = {};
-          const restored = restoreSecretIfRedacted(
-            newConfig.speech.azure.subscriptionKey,
-            existingConfig.speech?.azure?.subscriptionKey
-          );
-          mergedConfig.speech.azure.subscriptionKey = encryptSecretIfNeeded(restored);
-        }
-
-        // No save may lock the caller, or every administrator, out (409
-        // AUTH_LOCKOUT, no override): evaluated on the stored body and the
-        // merged one, under the platform lock. A later scoped PATCH calls the
-        // same guard.
-        await assertPlatformChangeKeepsAccess(req.user, existingConfig, mergedConfig);
-
-        // Save to file. Every secret has already been restored-if-redacted and
-        // encrypted above; what reaches the store is a plain object.
-        return mergedConfig;
-      },
-      { create: true }
-    );
-    if (firstRun) {
-      // File genuinely absent: first run.
-      logger.info('Creating new platform config file', { component: 'AdminConfigs' });
-    }
-
-    // Refresh cache
-    await configCache.refreshCacheEntry('config/platform.json');
-
-    const acknowledgementChange = describeSettingsChange(
-      existingConfig.aiAcknowledgement,
-      mergedConfig.aiAcknowledgement
-    );
-    if (acknowledgementChange) {
-      logAudit({
-        req,
-        action: 'update',
-        resource: 'aiAcknowledgement',
-        resourceId: 'settings',
-        summary: `AI-use acknowledgement settings changed: ${acknowledgementChange.changed.join(', ')}`,
-        details: acknowledgementChange
-      });
-    }
-
-    const provenanceChange = describeProvenanceChange(
-      existingConfig.provenance,
-      mergedConfig.provenance
-    );
-    if (provenanceChange) {
-      await logAudit({
-        req,
-        action: 'update',
-        resource: 'provenanceSettings',
-        resourceId: 'settings',
-        summary: `Provenance settings changed: ${provenanceChange.changed.map(c => c.key).join(', ')}`,
-        details: provenanceChange
-      });
-    }
-
-    // Apply runtime-mutable telemetry settings without server restart
-    try {
-      const telemetryChanged =
-        JSON.stringify(existingConfig.telemetry) !== JSON.stringify(newConfig.telemetry);
-      if (telemetryChanged && newConfig.telemetry) {
-        const { reloadTelemetryConfig } = await import('../../telemetry.js');
-        const { default: activityTracker } = await import('../../telemetry/ActivityTracker.js');
-        reloadTelemetryConfig(newConfig.telemetry);
-        activityTracker.configure(newConfig.telemetry.activitySummary || {});
-        logger.info('Telemetry runtime configuration updated', { component: 'AdminConfigs' });
-      }
-    } catch (telemetryError) {
-      logger.warn('Failed to apply runtime telemetry config update', {
-        component: 'AdminConfigs',
-        error: telemetryError.message
-      });
-    }
-
-    // A changed OIDC provider (token URL, client) invalidates the iFinder
-    // tokens exchanged through it. The iFinder installation itself lives in
-    // integrations.json and resets its caches from there.
-    if (JSON.stringify(existingConfig.oidcAuth) !== JSON.stringify(newConfig.oidcAuth)) {
-      try {
-        const { clearExchangedTokenCache } =
-          await import('../../services/integrations/iFinderTokenProvider.js');
-        clearExchangedTokenCache();
-      } catch (error) {
-        logger.warn('Could not clear the iFinder token cache', {
-          component: 'AdminConfigs',
-          error
-        });
-      }
-    }
-
-    // Reconfigure authentication methods dynamically where possible
-    const reconfigResults = reconfigureAuthenticationMethods(existingConfig, newConfig);
-
-    // Log results
-    if (reconfigResults.reconfigured.length > 0) {
-      logger.info('Reconfigured authentication methods', {
-        component: 'AdminConfigs',
-        reconfigured: reconfigResults.reconfigured.join(', ')
-      });
-    }
-    if (reconfigResults.requiresRestart.length > 0) {
-      logger.info('Authentication methods require restart', {
-        component: 'AdminConfigs',
-        requiresRestart: reconfigResults.requiresRestart.join(', ')
-      });
-    }
-    reconfigResults.notes.forEach(note =>
-      logger.info('Authentication reconfiguration note', { component: 'AdminConfigs', note })
-    );
-
-    logger.info('Platform authentication configuration updated', { component: 'AdminConfigs' });
-
-    // Sanitize the remaining inline secrets in the response — the admin UI
-    // should see ***REDACTED*** for JWT secrets, not raw values. Integration
-    // secrets no longer live in platform.json (they are in the credential
-    // store), so only the JWT secrets need sanitizing here.
-    const responseConfig = JSON.parse(JSON.stringify(mergedConfig));
-    if (responseConfig.auth?.jwtSecret) {
-      responseConfig.auth.jwtSecret = sanitizeSecret(responseConfig.auth.jwtSecret);
-    }
-    if (responseConfig.localAuth?.jwtSecret) {
-      responseConfig.localAuth.jwtSecret = sanitizeSecret(responseConfig.localAuth.jwtSecret);
-    }
-
-    await saveSnapshot({
-      resource: 'platform',
-      id: 'platform',
-      before: existingConfig,
-      after: mergedConfig,
-      admin: req.user?.username ?? req.user?.name ?? req.user?.id ?? 'unknown'
+    const { stored, revision, reconfiguration } = await applyPlatformChange(req, submittedConfig, {
+      mode: 'replace'
     });
-    await logAudit({
-      req,
-      action: 'update',
-      resource: 'platform',
-      resourceId: 'platform',
-      summary: 'Updated platform configuration'
-    });
+
+    setRevisionHeaders(res, revision);
     res.json({
-      config: responseConfig,
-      reconfiguration: {
-        reconfigured: reconfigResults.reconfigured,
-        requiresRestart: reconfigResults.requiresRestart,
-        notes: reconfigResults.notes
-      }
+      config: redactForRead(stored, PLATFORM_SECRET_PATHS),
+      reconfiguration
     });
+  });
+
+  /**
+   * @swagger
+   * /admin/configs/platform:
+   *   patch:
+   *     summary: Change platform configuration sections (JSON Merge Patch)
+   *     description: |
+   *       RFC 7396 JSON Merge Patch over the sections the POST may change. A
+   *       section with its own route (ssl, ssrf, cors, rateLimit, proxy,
+   *       logging) or any other key is refused with 400 and `errors[].pointer`.
+   *       `null` removes a member; on a secret it clears the secret; on a whole
+   *       section, or on an object that holds a secret, it is refused (except
+   *       `toolApproval: null`, which turns approval off as in the POST). Runs
+   *       the same validators, secret restore, lockout check, snapshot and
+   *       audit as the POST.
+   *     tags:
+   *       - Admin - Configuration
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema: { type: object }
+   *     parameters:
+   *       - in: header
+   *         name: If-Match
+   *         required: false
+   *         schema: { type: string }
+   *     responses:
+   *       200:
+   *         description: The configuration as the GET shows it; `ETag` header carries the new revision
+   *       400:
+   *         description: VALIDATION_FAILED (section not patchable, null not allowed, redaction marker) or BAD_REQUEST
+   *       409:
+   *         description: AUTH_LOCKOUT
+   *       412:
+   *         description: PRECONDITION_FAILED
+   */
+  app.patch(buildServerPath('/api/admin/configs/platform'), adminAuth, async (req, res) => {
+    const patch = req.body;
+    assertPatchShape(patch);
+
+    const { stored, revision } = await applyPlatformChange(req, patch, { mode: 'merge' });
+
+    setRevisionHeaders(res, revision);
+    res.json(redactForRead(stored, PLATFORM_SECRET_PATHS));
   });
 
   /**
@@ -619,7 +789,7 @@ export default function registerAdminConfigRoutes(app) {
     const region = String(body.region ?? saved.region ?? '').trim();
     const host = String(body.host ?? saved.host ?? '').trim();
     let subscriptionKey = body.subscriptionKey ?? saved.subscriptionKey ?? '';
-    if (subscriptionKey === '***REDACTED***' || isEnvVarPlaceholder(subscriptionKey)) {
+    if (subscriptionKey === SECRET_MARKER || isEnvVarPlaceholder(subscriptionKey)) {
       subscriptionKey = saved.subscriptionKey || ''; // already decrypted by configCache
     }
 

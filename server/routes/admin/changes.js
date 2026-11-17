@@ -16,6 +16,12 @@ import {
   assertGroupsResolvable,
   assertPlatformChangeKeepsAccess
 } from '../../utils/adminGuards.js';
+import {
+  PLATFORM_SECRET_PATHS,
+  assertNoMarkers,
+  redactForRead,
+  restoreRedacted
+} from '../../utils/redactedSecrets.js';
 
 const VALID_RESOURCES = new Set([
   'app',
@@ -64,6 +70,17 @@ export default function registerAdminChangesRoutes(app) {
       const snapshot = await getSnapshot(resource, id, filename);
       if (!snapshot) {
         throw new ServiceError('NOT_FOUND', 'Snapshot not found');
+      }
+
+      // A platform snapshot holds the file as stored, JWT secrets included.
+      // It shows them as the platform read does: redacted.
+      if (resource === 'platform') {
+        res.json({
+          ...snapshot,
+          before: redactForRead(snapshot.before, PLATFORM_SECRET_PATHS),
+          after: redactForRead(snapshot.after, PLATFORM_SECRET_PATHS)
+        });
+        return;
       }
 
       res.json(snapshot);
@@ -148,8 +165,18 @@ export default function registerAdminChangesRoutes(app) {
           // the platform update lock so it cannot interleave with another save.
           // It is refused, like any platform save, when it would lock the
           // caller or every administrator out (409 AUTH_LOCKOUT).
+          // Secrets are not rolled back: the current ones stay (a rollback must
+          // not bring back a rotated, possibly leaked secret, nor write the
+          // marker an older snapshot may hold), and a marker that is left is
+          // refused rather than stored.
           await updatePlatform(async stored => {
-            const next = structuredClone(beforeState);
+            const next = restoreRedacted(
+              structuredClone(beforeState),
+              stored,
+              PLATFORM_SECRET_PATHS,
+              { mode: 'rollback' }
+            );
+            assertNoMarkers(next);
             await assertPlatformChangeKeepsAccess(req.user, stored, next);
             return next;
           });

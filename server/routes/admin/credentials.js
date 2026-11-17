@@ -12,6 +12,7 @@ import logger from '../../utils/logger.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import { validateCredential, SECRET_FIELDS_BY_TYPE } from '../../validators/credentialSchema.js';
 import { sendCreated, segment } from '../../utils/created.js';
+import { SECRET_MARKER } from '../../utils/redactedSecrets.js';
 
 /**
  * Admin CRUD routes for the central credential store
@@ -26,7 +27,7 @@ import { sendCreated, segment } from '../../utils/created.js';
  * @module routes/admin/credentials
  */
 
-const REDACTED = '***REDACTED***';
+const REDACTED = SECRET_MARKER;
 const COMPONENT = 'AdminCredentials';
 
 /** The credential store, as a path relative to `contents/`. */

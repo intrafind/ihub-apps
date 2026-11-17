@@ -1045,6 +1045,16 @@
     "confirmReplaceWithNewContentTitle": "Inhalt aus dem Chat"
   },
   "admin": {
+    "configConflict": {
+      "title": "Das wurde geändert, seit Sie die Seite geöffnet haben",
+      "message": "Jemand hat die {{resource}} gespeichert, nachdem Sie diese Seite geöffnet haben (ein anderer Administrator, ein anderer Tab oder ein Skript). Ihre Änderungen wurden nicht gespeichert und sind noch auf der Seite. Laden Sie neu, um den aktuellen Stand zu sehen, und nehmen Sie Ihre Änderungen dann erneut vor.",
+      "reload": "Neu laden und meine Änderungen verwerfen",
+      "keep": "Meine Änderungen auf der Seite behalten",
+      "resource": {
+        "platform": "Plattformkonfiguration",
+        "ui": "UI-Anpassung"
+      }
+    },
     "chatHistory": {
       "chats": {
         "enabled": "Chats im Verlauf behalten",
@@ -10753,7 +10763,8 @@
     "LAST_ADMIN": "Diese Änderung würde keinen aktiven Administrator übrig lassen, der sich anmelden kann. Es wurde nichts geändert. Geben Sie zuerst einem anderen aktiven Benutzer Administratorrechte.",
     "SELF_LOCKOUT": "Sie können Ihr eigenes Konto nicht deaktivieren oder löschen. Bitten Sie einen anderen Administrator darum.",
     "GROUP_IN_USE": "Die Gruppe „{{groupId}}“ kann nicht gelöscht werden, weil andere Gruppen von ihr erben. Entfernen Sie sie zuerst aus deren geerbten Gruppen.",
-    "ADMIN_CHECK_FAILED": "Es konnte nicht geprüft werden, ob ein Administrator Zugriff behält, daher wurde nichts geändert. Bitte versuchen Sie es erneut."
+    "ADMIN_CHECK_FAILED": "Es konnte nicht geprüft werden, ob ein Administrator Zugriff behält, daher wurde nichts geändert. Bitte versuchen Sie es erneut.",
+    "PRECONDITION_FAILED": "Diese Konfiguration wurde geändert, nachdem Sie sie geöffnet haben (von einem anderen Administrator, in einem anderen Tab oder durch ein Skript). Es wurde nichts gespeichert, Ihre Änderungen sind noch auf der Seite. Laden Sie neu, um den aktuellen Stand zu sehen, und übernehmen Sie Ihre Änderungen dann erneut."
   },
   "workspace": {
     "backTo": "Zurück zu {{name}}",

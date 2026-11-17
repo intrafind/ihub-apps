@@ -17,6 +17,7 @@ import AdminCommandPalette from './AdminCommandPalette';
 import AdminShortcutsModal from './AdminShortcutsModal';
 import AdminStorageAlert from './AdminStorageAlert';
 import AdminDemoAccountsAlert from './AdminDemoAccountsAlert';
+import AdminConfigConflictNotice from './AdminConfigConflictNotice';
 import { SidebarProvider, useSidebar } from '../contexts/SidebarContext';
 import { getAdminNavSections } from './AdminSidebarNavData';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
@@ -112,6 +113,7 @@ function AdminLayoutInner() {
 
       <AdminCommandPalette />
       <AdminShortcutsModal isOpen={showCheatsheet} onClose={() => setShowCheatsheet(false)} />
+      <AdminConfigConflictNotice />
     </SidebarProvider>
   );
 }

@@ -852,3 +852,24 @@ with an explanation on the page, and nothing is saved.
 
 How to recover when nobody can sign in as an administrator: see
 [Authentication Quick Start → Recover Admin Access](../../AUTHENTICATION_QUICK_START.md#recover-admin-access).
+
+## Admin Saves No Longer Erase Settings They Did Not Show
+
+Several admin saves wrote back more than they showed, and lost what they could not see:
+
+- Every save of **Authentication**, of the onboarding switch on **Advanced** and of the
+  **Provenance** settings on **EU AI Act** deleted the JWKS URL of every proxy JWT provider, so
+  token sign-in through the proxy stopped working after an unrelated change. The URL is now shown
+  (with any password or token in it masked) and kept.
+- A save that left out a JWT secret or the Azure speech key deleted it. A secret is now kept unless
+  it is cleared explicitly, and a redaction placeholder can never be saved as a secret: such a save
+  is refused, naming the field.
+- Saving **UI Customization** deleted content pages created under **Pages** after the
+  customization page was opened. Pages are now always kept.
+- **Save Privacy Settings** on **Logging** also saved a pending, unsaved change of the log level.
+  It now saves only the IP anonymization; logging configuration changes are recorded in the audit
+  log and the change history.
+- The change history of the platform settings showed the JWT secrets in plain text. They are now
+  redacted, and rolling back keeps the current secrets instead of restoring older ones.
+
+No action is needed after the upgrade.

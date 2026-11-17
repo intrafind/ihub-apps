@@ -364,7 +364,9 @@ function AdminLoggingPage() {
       // blocks server-side.
       await makeAdminApiCall('/admin/logging/config', {
         method: 'PUT',
-        body: { ...loggingConfig, anonymizeIp: privacyConfig.loggingAnonymizeIp }
+        // Only the field this card owns: unsaved edits in the logging card
+        // above stay unsaved (the server merges this into the stored block).
+        body: { anonymizeIp: privacyConfig.loggingAnonymizeIp }
       });
       await makeAdminApiCall('/admin/audit-log/settings', {
         method: 'PUT',

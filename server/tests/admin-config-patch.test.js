@@ -1,0 +1,372 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
+/**
+ * `PATCH /api/admin/configs/platform` (decision 6): a JSON Merge Patch (RFC
+ * 7396) over the sections the POST may change, through the same writer as the
+ * POST — same validators, secret restore, marker refusal, lockout invariant,
+ * If-Match, snapshot and audit — so it can never become the way around them.
+ *
+ * Sections with their own validated routes (ssl, ssrf, cors, rateLimit, proxy,
+ * logging) and unknown keys are refused with 400 `VALIDATION_FAILED` and
+ * `errors[].pointer`.
+ *
+ * Real ConfigStore and adminAuth on a temporary contents directory.
+ */
+
+import { jest, describe, test, expect, beforeEach, afterEach } from '@jest/globals';
+import request from 'supertest';
+import express from 'express';
+import fs from 'fs/promises';
+import os from 'os';
+import path from 'path';
+
+const state = { rootDir: null };
+const auditEntries = [];
+const snapshots = [];
+
+jest.unstable_mockModule('../pathUtils.js', () => ({
+  getRootDir: () => state.rootDir
+}));
+
+jest.unstable_mockModule('../storage/bootstrap.js', () => ({
+  getStorage: () => null
+}));
+
+jest.unstable_mockModule('../configCache.js', () => ({
+  default: {
+    refreshCacheEntry: async () => {},
+    getPlatform: () => ({})
+  }
+}));
+
+jest.unstable_mockModule('../middleware/oidcAuth.js', () => ({
+  reconfigureOidcProviders: () => {}
+}));
+
+jest.unstable_mockModule('../services/TokenStorageService.js', () => ({
+  default: {
+    encryptionKey: 'test',
+    initializeEncryptionKey: async () => {},
+    isEncrypted: v => typeof v === 'string' && v.startsWith('ENC['),
+    encryptString: v => `ENC[${v}]`,
+    decryptString: v => v.slice(4, -1)
+  }
+}));
+
+jest.unstable_mockModule('../services/AuditLogService.js', () => ({
+  logAudit: async entry => {
+    auditEntries.push({ ...entry, req: undefined });
+  }
+}));
+
+jest.unstable_mockModule('../services/ChangeHistoryService.js', () => ({
+  saveSnapshot: async snapshot => {
+    snapshots.push(snapshot);
+  }
+}));
+
+const { default: registerAdminConfigRoutes } = await import('../routes/admin/configs.js');
+const { default: errorHandler } = await import('../middleware/errorHandler.js');
+
+const LOCAL_ADMIN = {
+  id: 'user_local',
+  username: 'admin',
+  groups: ['admins'],
+  authMode: 'local',
+  isAdmin: true
+};
+
+const PLATFORM = {
+  defaultLanguage: 'en',
+  auth: { mode: 'local', jwtSecret: 'auth-secret' },
+  anonymousAuth: { enabled: false },
+  localAuth: { enabled: true, jwtSecret: 'local-secret', sessionTimeoutMinutes: 480 },
+  oidcAuth: { enabled: false, providers: [] },
+  ldapAuth: { enabled: false, providers: [] },
+  ntlmAuth: { enabled: false },
+  proxyAuth: {
+    enabled: false,
+    jwtProviders: [
+      { name: 'a', header: 'X-A', jwkUrl: 'https://a.example.com/jwks' },
+      { name: 'b', header: 'X-B', jwkUrl: 'https://b.example.com/jwks' }
+    ]
+  },
+  speech: { azure: { region: 'westeurope', subscriptionKey: 'ENC[speech-key]' } },
+  telemetry: { enabled: false, exporter: { endpoint: 'http://otel:4318' } },
+  toolApproval: { defaults: { external: 'writes' } },
+  ssl: { ignoreInvalidCertificates: false, domainWhitelist: [] },
+  cors: { origin: ['https://a.example.com'] },
+  logging: { level: 'info' }
+};
+
+const GROUPS = {
+  groups: { admins: { id: 'admins', name: 'Admins', permissions: { adminAccess: true } } }
+};
+const USERS = {
+  users: {
+    user_local: {
+      id: 'user_local',
+      username: 'admin',
+      active: true,
+      authMethods: ['local'],
+      passwordHash: 'hash',
+      internalGroups: ['admins']
+    }
+  }
+};
+
+const file = name => path.join(state.rootDir, 'contents', 'config', name);
+const writeConfig = (name, data) => fs.writeFile(file(name), JSON.stringify(data, null, 2));
+const readText = () => fs.readFile(file('platform.json'), 'utf8');
+const readPlatform = async () => JSON.parse(await readText());
+
+function appFor(user) {
+  const app = express();
+  app.use(express.json());
+  app.use((req, res, next) => {
+    req.user = user;
+    next();
+  });
+  registerAdminConfigRoutes(app);
+  app.use(errorHandler);
+  return app;
+}
+
+const patch = (body, options = {}) => {
+  const { ifMatch } = options;
+  const user = Object.hasOwn(options, 'user') ? options.user : LOCAL_ADMIN;
+  const call = request(appFor(user)).patch('/api/admin/configs/platform');
+  if (ifMatch !== undefined) call.set('If-Match', ifMatch);
+  return call.send(body);
+};
+
+beforeEach(async () => {
+  auditEntries.length = 0;
+  snapshots.length = 0;
+  state.rootDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-patch-'));
+  await fs.mkdir(path.join(state.rootDir, 'contents', 'config'), { recursive: true });
+  await writeConfig('platform.json', PLATFORM);
+  await writeConfig('groups.json', GROUPS);
+  await writeConfig('users.json', USERS);
+});
+
+afterEach(async () => {
+  await fs.rm(state.rootDir, { recursive: true, force: true });
+});
+
+describe('PATCH /api/admin/configs/platform: merge semantics', () => {
+  test('a telemetry patch changes only telemetry; every other key stays as stored', async () => {
+    const response = await patch({ telemetry: { enabled: true } });
+
+    expect(response.status).toBe(200);
+    const { telemetry, ...rest } = await readPlatform();
+    const { telemetry: _before, ...restBefore } = PLATFORM;
+    expect(telemetry).toEqual({ enabled: true, exporter: { endpoint: 'http://otel:4318' } });
+    expect(rest).toEqual(restBefore);
+  });
+
+  test('answers with the configuration as the read shows it, and the new ETag', async () => {
+    const response = await patch({ setup: { disabled: true } });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.etag).toMatch(/^"[A-Za-z0-9_-]{43}"$/);
+    expect(response.body.setup).toEqual({ disabled: true });
+    expect(response.body.auth.jwtSecret).toBe('***REDACTED***');
+    expect(response.body.config).toBeUndefined();
+  });
+
+  test('null removes a non-secret member', async () => {
+    await patch({ localAuth: { sessionTimeoutMinutes: null } }).expect(200);
+
+    expect((await readPlatform()).localAuth).toEqual({ enabled: true, jwtSecret: 'local-secret' });
+  });
+
+  test('a patch that does not name the secret keeps it', async () => {
+    await patch({ localAuth: { enabled: true, sessionTimeoutMinutes: 60 } }).expect(200);
+
+    expect((await readPlatform()).localAuth.jwtSecret).toBe('local-secret');
+  });
+
+  test('the marker on a secret keeps the stored secret', async () => {
+    await patch({ auth: { jwtSecret: '***REDACTED***', mode: 'local' } }).expect(200);
+
+    expect((await readPlatform()).auth.jwtSecret).toBe('auth-secret');
+  });
+
+  test('null on the secret itself clears it; a new value replaces it (encrypted where stored encrypted)', async () => {
+    await patch({ auth: { jwtSecret: null } }).expect(200);
+    expect((await readPlatform()).auth).toEqual({ mode: 'local' });
+
+    await patch({ speech: { azure: { subscriptionKey: 'rotated' } } }).expect(200);
+    expect((await readPlatform()).speech.azure.subscriptionKey).toBe('ENC[rotated]');
+  });
+
+  test('null on an object that holds a secret is refused', async () => {
+    const before = await readText();
+
+    const response = await patch({ speech: { azure: null } });
+
+    expect(response.status).toBe(400);
+    expect(response.body.code).toBe('VALIDATION_FAILED');
+    expect(response.body.errors).toEqual([
+      expect.objectContaining({ pointer: '/speech/azure', code: 'null_not_allowed' })
+    ]);
+    expect(await readText()).toBe(before);
+  });
+
+  test('null on a whole section is refused, except toolApproval (turns approval off)', async () => {
+    const refused = await patch({ localAuth: null });
+    expect(refused.status).toBe(400);
+    expect(refused.body.errors[0].pointer).toBe('/localAuth');
+
+    await patch({ toolApproval: null }).expect(200);
+    expect((await readPlatform()).toolApproval).toBeUndefined();
+  });
+
+  test('jwtProviders are replaced as an array; jwkUrl is restored by provider name', async () => {
+    await patch({
+      proxyAuth: {
+        jwtProviders: [
+          { name: 'b', header: 'X-B2' },
+          { name: 'a', header: 'X-A' }
+        ]
+      }
+    }).expect(200);
+
+    expect((await readPlatform()).proxyAuth.jwtProviders).toEqual([
+      { name: 'b', header: 'X-B2', jwkUrl: 'https://b.example.com/jwks' },
+      { name: 'a', header: 'X-A', jwkUrl: 'https://a.example.com/jwks' }
+    ]);
+  });
+
+  test('provenance keeps its own merge: a partial block, null on a tunable means default', async () => {
+    await writeConfig('platform.json', {
+      ...PLATFORM,
+      provenance: {
+        retentionDays: 90,
+        verify: { access: 'authenticated' },
+        watermark: { alpha: 0.001, minScoredTokens: 300 }
+      }
+    });
+
+    await patch({
+      provenance: { retentionDays: 30, watermark: { alpha: null, minScoredTokens: 500 } }
+    }).expect(200);
+
+    expect((await readPlatform()).provenance).toEqual({
+      retentionDays: 30,
+      verify: { access: 'authenticated' },
+      watermark: { minScoredTokens: 500 }
+    });
+  });
+
+  test('a redaction marker without a stored value is refused', async () => {
+    const response = await patch({ telemetry: { exporter: { token: '[REDACTED]' } } });
+
+    expect(response.status).toBe(400);
+    expect(response.body.errors[0].pointer).toBe('/telemetry/exporter/token');
+  });
+});
+
+describe('PATCH /api/admin/configs/platform: allowlist', () => {
+  test.each(['ssl', 'ssrf', 'cors', 'rateLimit', 'proxy', 'logging'])(
+    '%s has its own route and is refused',
+    async section => {
+      const before = await readText();
+
+      const response = await patch({ [section]: { anything: true } });
+
+      expect(response.status).toBe(400);
+      expect(response.headers['content-type']).toMatch(/application\/problem\+json/);
+      expect(response.body.code).toBe('VALIDATION_FAILED');
+      expect(response.body.errors).toEqual([
+        expect.objectContaining({ pointer: `/${section}`, code: 'not_patchable' })
+      ]);
+      expect(response.body.errors[0].message).toMatch(/own validated route/);
+      expect(await readText()).toBe(before);
+    }
+  );
+
+  test('an unknown key is refused, and nothing of the rest of the patch is applied', async () => {
+    const before = await readText();
+
+    const response = await patch({ telemetry: { enabled: true }, features: { x: true } });
+
+    expect(response.status).toBe(400);
+    expect(response.body.errors).toEqual([expect.objectContaining({ pointer: '/features' })]);
+    expect(await readText()).toBe(before);
+  });
+
+  test('a body that is not an object is BAD_REQUEST', async () => {
+    const response = await request(appFor(LOCAL_ADMIN))
+      .patch('/api/admin/configs/platform')
+      .set('Content-Type', 'application/json')
+      .send('[1,2]');
+
+    expect(response.status).toBe(400);
+    expect(response.body.code).toBe('BAD_REQUEST');
+  });
+});
+
+describe('PATCH /api/admin/configs/platform: the POST checks apply', () => {
+  test('section validators run on the patched section', async () => {
+    const response = await patch({ cookieSettings: { disableSecure: 'yes' } });
+    expect(response.status).toBe(400);
+    expect(response.body.detail).toMatch(/cookieSettings/);
+
+    const language = await patch({ defaultLanguage: '../../etc' });
+    expect(language.status).toBe(400);
+  });
+
+  test('the lockout invariant: turning off the caller’s own sign-in method is 409 AUTH_LOCKOUT', async () => {
+    const before = await readText();
+
+    const response = await patch({ localAuth: { enabled: false } });
+
+    expect(response.status).toBe(409);
+    expect(response.body.code).toBe('AUTH_LOCKOUT');
+    expect(await readText()).toBe(before);
+  });
+
+  test('a stale If-Match is 412; a fresh one is applied', async () => {
+    const read = await request(appFor(LOCAL_ADMIN)).get('/api/admin/configs/platform');
+    await patch({ setup: { disabled: true } }).expect(200);
+    await patch({ setup: { disabled: false } }, { ifMatch: read.headers.etag }).expect(412);
+
+    const fresh = await request(appFor(LOCAL_ADMIN)).get('/api/admin/configs/platform');
+    await patch({ setup: { disabled: false } }, { ifMatch: fresh.headers.etag }).expect(200);
+  });
+
+  test('a snapshot (as stored, secrets encrypted) and an audit entry naming the sections', async () => {
+    await patch({ speech: { azure: { subscriptionKey: 'rotated' } } }).expect(200);
+
+    expect(snapshots).toHaveLength(1);
+    expect(snapshots[0].after.speech.azure.subscriptionKey).toBe('ENC[rotated]');
+    expect(auditEntries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          resource: 'platform',
+          summary: 'Updated platform configuration (speech)'
+        })
+      ])
+    );
+  });
+
+  test('a caller who is not signed in is refused and nothing is written', async () => {
+    const before = await readText();
+
+    const response = await patch({ setup: { disabled: true } }, { user: undefined });
+
+    expect(response.status).toBe(403);
+    expect(await readText()).toBe(before);
+  });
+
+  test('a signed-in non-admin is refused', async () => {
+    const response = await patch(
+      { setup: { disabled: true } },
+      { user: { id: 'u', username: 'u', groups: ['users'], authMode: 'local', isAdmin: false } }
+    );
+    expect(response.status).toBe(403);
+  });
+});

@@ -531,6 +531,24 @@ If you navigate away from an edit page with unsaved changes, a confirmation dial
 
 The warning also appears if you try to close or refresh the browser tab while a form is dirty.
 
+### When someone else saved first
+
+Pages that save the platform settings (Authentication, Telemetry, Voice Input, MCP gateway and the
+other settings pages) and **UI Customization** remember which version they loaded. If another
+administrator, another browser tab or a script saved the same settings after you opened the page,
+your save is refused and a dialog says **This changed since you opened it**. Nothing was saved, and
+your edits are still on the page:
+
+- **Keep my changes on the page** closes the dialog, so you can note what you changed (or check
+  **History**).
+- **Reload and discard my changes** loads the current settings; make your changes again and save.
+
+A few one-switch settings save only their own field and are not affected: the onboarding switch
+on **Advanced**, the **Provenance** settings on **EU AI Act**, and **Save Privacy Settings** on
+**Logging**, which saves only the IP anonymization and leaves other unsaved logging changes
+unsaved. Saving **UI Customization** never removes content pages created under **Pages** in the
+meantime.
+
 ---
 
 ## Backup & Restore

@@ -4,6 +4,7 @@
 import { apiClient } from './client.js';
 import { CRAWL_REQUEST_TIMEOUT_MS } from './endpoints/projects.js';
 import { buildApiUrl } from '../utils/runtimeBasePath';
+import { rememberRevision, reportConfigConflict, withIfMatch } from './adminConfigRevision.js';
 
 const isPlainObjectForBody = value =>
   value !== null &&
@@ -86,11 +87,17 @@ export const makeAdminApiCall = async (url, options = {}) => {
     axiosConfig.headers.Authorization = `Bearer ${adminToken}`;
   }
 
+  // Platform and UI config saves carry the revision they were based on, so a
+  // save over someone else's newer change is refused (412) instead of erasing it.
+  axiosConfig.headers = withIfMatch(axiosConfig.url, method, axiosConfig.headers);
+
   try {
     const response = await apiClient(axiosConfig);
+    rememberRevision(axiosConfig.url, response);
     return response;
   } catch (error) {
     const status = error.response?.status;
+    reportConfigConflict(axiosConfig.url, error);
 
     // Handle admin-specific auth failures
     if (status === 401 || status === 403) {

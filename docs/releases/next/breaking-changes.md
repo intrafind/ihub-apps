@@ -968,3 +968,21 @@ get their rights only from an identity-provider group mapping are not counted.
 the account they run as, or delete parent groups before their children must change order: enable
 the new method first and sign in with it, use another admin account, and delete children first
 (the `details.dependants` of the refusal name them).
+
+## Admin API: Platform and UI Configuration Saves Keep Secrets and Pages
+
+Only scripts that call the admin API directly are affected; the admin pages need nothing.
+
+- `POST /api/admin/configs/platform`: a JWT secret or the speech key left out of a section is now
+  kept, not deleted. To remove one, send `null` for it.
+- A value that is still a redaction placeholder (`***REDACTED***`, `[REDACTED]`, a URL with
+  `REDACTED` in place of a password or token) and has no stored value behind it is refused with
+  `400 VALIDATION_FAILED`; `errors[].pointer` names the field. Before, it was stored as the secret.
+- `GET /api/admin/configs/platform` now returns every field of `proxyAuth.jwtProviders`, including
+  `jwkUrl` (credentials in it masked).
+- `POST /api/admin/ui/config` ignores `pages` and keeps the stored ones; create, change and delete
+  pages through `/api/admin/pages`.
+
+**Before upgrading:** check scripts that clear a secret by leaving it out (send `null`), that send
+a body read from the admin API with a placeholder in a field they did not mean to set, or that
+change `pages` through `POST /api/admin/ui/config`.

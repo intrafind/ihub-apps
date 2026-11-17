@@ -51,8 +51,8 @@ const STORED = {
 
 function setup(provenance = STORED.provenance) {
   mockAdminCall.mockImplementation(async (url, options = {}) => {
-    if (options.method === 'POST') {
-      return { data: { config: { ...STORED, provenance: options.body.provenance } } };
+    if (options.method === 'PATCH') {
+      return { data: { ...STORED, provenance: options.body.provenance } };
     }
     return { data: { ...STORED, provenance } };
   });
@@ -60,7 +60,7 @@ function setup(provenance = STORED.provenance) {
   render(<ProvenanceSettingsCard onSaved={onSaved} />);
   return { onSaved };
 }
-const posts = () => mockAdminCall.mock.calls.filter(([, o]) => o?.method === 'POST');
+const posts = () => mockAdminCall.mock.calls.filter(([, o]) => o?.method === 'PATCH');
 const change = (label, value) =>
   fireEvent.change(screen.getByLabelText(label), { target: { value } });
 
@@ -141,7 +141,7 @@ describe('ProvenanceSettingsCard', () => {
     expect(screen.getByLabelText(/Keep records for/)).not.toHaveAttribute('aria-invalid');
   });
 
-  test('a harmless change saves at once: partial provenance block on top of the fresh platform file, then the status refreshes', async () => {
+  test('a harmless change saves at once: a scoped PATCH of the partial provenance block only, then the status refreshes', async () => {
     const { onSaved } = setup();
     await screen.findByLabelText(/Keep records for/);
     change(/Keep records for/, '400');
@@ -149,7 +149,7 @@ describe('ProvenanceSettingsCard', () => {
     await screen.findByText(/Settings saved/);
     const [[url, options]] = posts();
     expect(url).toBe('/admin/configs/platform');
-    expect(options.body.chats).toEqual(STORED.chats);
+    expect(Object.keys(options.body)).toEqual(['provenance']);
     expect(options.body.provenance).toEqual({
       retentionDays: 400,
       storeRecords: true,
@@ -210,7 +210,7 @@ describe('ProvenanceSettingsCard', () => {
 
   test('a server validation error is shown on its field and the form keeps the input', async () => {
     mockAdminCall.mockImplementation(async (url, options = {}) => {
-      if (options.method === 'POST') {
+      if (options.method === 'PATCH') {
         throw {
           response: {
             data: {
