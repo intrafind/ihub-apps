@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import Badge from '../../../shared/components/Badge';
 import { useConnectResult } from './useConnectResult';
+import { useConnectResumeStatus } from './connectResumeStatus';
 import { normalizeAuthPrompts } from './authPrompts';
 import {
   invalidateIntegrationInfo,
@@ -85,6 +86,8 @@ export function ConnectCard({ prompt, readOnly = false, context = 'chat', naviga
     if (result.error && result.errorIntegration === prompt.integration) return result.error;
     return null;
   });
+  // What the server did with the call that waited for this connection (#3752).
+  const resumeStatus = useConnectResumeStatus(prompt.integration);
   const [info, setInfo] = useState(null);
   const [dismissed, setDismissed] = useState(false);
   const [starting, setStarting] = useState(false);
@@ -135,6 +138,23 @@ export function ConnectCard({ prompt, readOnly = false, context = 'chat', naviga
     }
   };
 
+  // One line after the connect, in the same live region as "is connected": the
+  // continuation has no message of the user's to announce it.
+  let resumeNote = null;
+  if (resumeStatus?.state === 'resuming') {
+    resumeNote = t('integrations.connect.resuming', 'Continuing your request…');
+  } else if (resumeStatus?.code === 'CONNECT_RESUME_EXPIRED') {
+    resumeNote = t(
+      'integrations.connect.resumeExpired',
+      'Your request waited too long. Ask again to continue.'
+    );
+  } else if (resumeStatus?.code === 'CONNECT_RESUME_NOT_PENDING') {
+    resumeNote = t(
+      'integrations.connect.resumeNotPending',
+      'Your request was already continued or replaced by a newer message.'
+    );
+  }
+
   if (connectedNow) {
     return (
       <div
@@ -149,6 +169,7 @@ export function ConnectCard({ prompt, readOnly = false, context = 'chat', naviga
                 account: info.connection.account
               })
             : t('integrations.connect.connected', '{{name}} is connected.', { name })}
+          {resumeNote && <> {resumeNote}</>}
         </span>
       </div>
     );
@@ -265,6 +286,15 @@ export function ConnectCard({ prompt, readOnly = false, context = 'chat', naviga
                   }
                 )
               })}
+            </p>
+          )}
+          {resumeStatus?.code === 'CONNECT_RESUME_NOT_CONNECTED' && (
+            <p className="mt-2 text-red-700 dark:text-red-300" role="alert">
+              {t(
+                'integrations.connect.resumeNotConnected',
+                '{{name}} is not connected yet. Connect it and your request continues.',
+                { name }
+              )}
             </p>
           )}
           {startError && (

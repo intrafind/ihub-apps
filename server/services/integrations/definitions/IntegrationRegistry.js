@@ -58,6 +58,14 @@ const MAX_COMPANION_BYTES = 512 * 1024;
 const SERVED_COMPANION_PATTERN =
   /^(?!\.)(?!.*(^|\/)\.\.?(\/|$))[A-Za-z0-9][A-Za-z0-9._-]*(\/[A-Za-z0-9][A-Za-z0-9._-]*)*\.md$/i;
 
+/**
+ * The icon a definition ships next to `integration.json`: one SVG file, no
+ * folders. (Not PNG: a marketplace install fetches companion files as text,
+ * which would corrupt the bytes of a binary file.)
+ */
+const ICON_FILE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*\.svg$/i;
+const MAX_ICON_BYTES = 128 * 1024;
+
 const defaultShippedDir = fileURLToPath(
   new URL('../../../defaults/integration-definitions/', import.meta.url)
 );
@@ -158,6 +166,54 @@ export class IntegrationRegistry {
       const stat = await fs.stat(target);
       if (!stat.isFile() || stat.size > MAX_COMPANION_BYTES) return null;
       return await fs.readFile(target, 'utf8');
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * The name of the icon file a definition ships (`"icon": "icon.svg"`), or
+   * null: none declared, an http(s) URL, a name that is not a plain `.svg`
+   * file name, or no such file (checked once, when the definition was
+   * loaded).
+   *
+   * @param {string} id - definition id
+   * @returns {string|null}
+   */
+  iconFile(id) {
+    return this.entries.get(id)?.iconFile || null;
+  }
+
+  /**
+   * The icon file of a definition, read from its folder.
+   *
+   * @param {string} id - definition id
+   * @returns {Promise<{ data: Buffer, contentType: string }|null>} null when
+   *   the definition ships no (readable, small enough) icon
+   */
+  async readIcon(id) {
+    const entry = this.entries.get(id);
+    const name = entry?.iconFile;
+    if (!name) return null;
+    const target = await resolveAndValidatePath(name, entry.dir);
+    if (!target) return null;
+    try {
+      const stat = await fs.stat(target);
+      if (!stat.isFile() || stat.size > MAX_ICON_BYTES) return null;
+      return { data: await fs.readFile(target), contentType: 'image/svg+xml' };
+    } catch {
+      return null;
+    }
+  }
+
+  async _iconFileOf(entry) {
+    const name = entry.definition.icon;
+    if (typeof name !== 'string' || !ICON_FILE_PATTERN.test(name)) return null;
+    try {
+      const target = await resolveAndValidatePath(name, entry.dir);
+      if (!target) return null;
+      const stat = await fs.stat(target);
+      return stat.isFile() && stat.size <= MAX_ICON_BYTES ? name : null;
     } catch {
       return null;
     }
@@ -585,6 +641,7 @@ export class IntegrationRegistry {
       );
     }
     await this._checkReleaseNotes(entry, file);
+    entry.iconFile = await this._iconFileOf(entry);
     if (definition.protocol.type === 'script') {
       try {
         await fs.access(path.join(dir, definition.protocol.module));

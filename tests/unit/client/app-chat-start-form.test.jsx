@@ -191,10 +191,10 @@ jest.mock('../../../client/src/shared/hooks/useFeatureFlags', () => ({
   __esModule: true,
   default: () => mockFeatureFlags
 }));
-// The retry after connecting an integration has its own tests (connect-card.test.jsx).
-jest.mock('../../../client/src/features/integrations/connect/useConnectRetry', () => ({
+// The continuation after connecting an integration has its own tests (connect-resume.test.jsx).
+jest.mock('../../../client/src/features/integrations/connect/useConnectResume', () => ({
   __esModule: true,
-  useConnectRetry: () => {}
+  useConnectResume: () => {}
 }));
 const mockVoice = { handleVoiceInput: mockNoop, handleVoiceCommand: mockNoop };
 // Voice mode (issue #2868) has its own tests; the chat page only renders its

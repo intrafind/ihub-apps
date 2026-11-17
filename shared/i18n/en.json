@@ -7683,7 +7683,10 @@
       "failed": "Connecting {{name}} did not succeed. Try again.",
       "failedMessage": "Connecting {{name}} failed: {{message}}",
       "startFailed": "The sign-in to {{name}} could not be started.",
-      "retryMessage": "I connected {{name}}. Please try again.",
+      "resuming": "Continuing your request…",
+      "resumeExpired": "Your request waited too long. Ask again to continue.",
+      "resumeNotPending": "Your request was already continued or replaced by a newer message.",
+      "resumeNotConnected": "{{name}} is not connected yet. Connect it and your request continues.",
       "errors": {
         "access_denied": "{{name}} was not connected because access was not granted. If your organization requires administrator approval for the app, ask your administrator to grant it, then try again.",
         "oauth_failed": "The sign-in to {{name}} did not succeed.",
@@ -10352,7 +10355,10 @@
     "showInFiles": "Show in files",
     "openInNewTab": "Open in new tab",
     "closeViewer": "Close artifact",
-    "pageNotFound": "This file could not be found."
+    "pageNotFound": "This file could not be found.",
+    "promptRequest": "The artifact wants to ask in the chat:",
+    "promptSend": "Send",
+    "promptBusy": "An answer is still being written. Send once it is done."
   },
   "chatFiles": {
     "deleted": "{{name}} deleted.",
@@ -10697,6 +10703,10 @@
     "UNKNOWN_MESSAGE": "The message to continue from is not in this chat.",
     "STORAGE_PROVIDER_NOT_FOUND": "The storage provider does not exist.",
     "STORAGE_PROVIDER_REQUIRED": "A storage provider is required.",
+    "INVALID_CONNECT_RESUME": "The request to continue is not valid.",
+    "CONNECT_RESUME_NOT_PENDING": "Nothing is waiting to be continued in this chat (it was already continued, or a newer message replaced it).",
+    "CONNECT_RESUME_NOT_CONNECTED": "The integration is not connected yet.",
+    "CONNECT_RESUME_EXPIRED": "The request waited too long for the connection. Ask again.",
     "INVALID_RETURN_URL": "The return address is not allowed.",
     "NOT_CONNECTABLE": "This integration cannot be connected by a user.",
     "INTEGRATION_CONNECT_FAILED": "The sign-in to the integration could not be started.",
@@ -10829,7 +10839,8 @@
       "edit": "Edit with AI",
       "editHint": "The assistant writes a new file with the change. The original stays as it is.",
       "label": "Selection actions"
-    }
+    },
+    "promptSent": "Sent to the chat"
   },
   "clarification": {
     "skipped": "Skipped",

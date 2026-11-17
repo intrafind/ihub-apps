@@ -334,7 +334,7 @@ file (`locks/`), so two recovering workers never allocate the same number.
   backoff (five attempts) before it gives up and keeps its live view. The ledger
   is always on while the storage provider is up, so gap re-sync always has
   something to read back.
-- **The stream format does not depend on the flag.** SSE v2 (`docs/sse-v2.md`)
+- **The stream format does not depend on the flag.** SSE v2 (`docs/streaming-events.md`)
   is the only chat / workflow / run stream; the ledger flag decides what is
   persisted, not what is sent.
 - **A paused chat turn continues its run.** A chat turn that stops for a

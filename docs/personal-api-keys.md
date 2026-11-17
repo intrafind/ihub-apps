@@ -93,6 +93,8 @@ minted under a shared identity would outlive the session that created it.
 
 ## Creating a key
 
+![The Personal API Key card in Settings → Integrations, with the Generate API key button](assets/screenshots/settings-personal-api-key.png)
+
 1. Open **Settings → Integrations**.
 2. In the **Personal API Key** card, choose **Generate API key**.
 3. Optionally give the key a name and a lifetime, then confirm.

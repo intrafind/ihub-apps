@@ -320,7 +320,7 @@ export function authRequiredOf(rawResult, toolDef) {
  * live `tool/progress` frames: `args` / `args.ended` for the call being
  * written and `model.waiting` for the silence (`onChunk`, `streamEnd`,
  * `preStep`; the rules are in `toolArgProgress.js`, the frames in
- * `docs/sse-v2.md`). They are not stored. `streamProgress: false` (a turn
+ * `docs/streaming-events.md`). They are not stored. `streamProgress: false` (a turn
  * nobody watches live) leaves them out.
  */
 export function chatToolSeam({
@@ -329,6 +329,7 @@ export function chatToolSeam({
   logInteraction,
   mcpAppViews = null,
   authPrompts = null,
+  connectCalls = null,
   scheduledTaskProposals = null,
   generatedFiles = null,
   generatedImages = null,
@@ -512,7 +513,23 @@ export function chatToolSeam({
         return;
       }
       const authRequired = authRequiredOf(outcome.rawResult, info.toolDef);
-      if (authRequired) recordAuthPrompt(authRequired);
+      if (authRequired) {
+        recordAuthPrompt(authRequired);
+        // The call itself, for the resume after the connect (#3752): taken
+        // from the loop's own call object — never from the tool result, which
+        // a web page or document could shape — and for the tool's own
+        // installation only (`authRequiredOf` checked that).
+        if (Array.isArray(connectCalls)) {
+          connectCalls.push({
+            id: callIdOf(info),
+            name: String(info.call?.function?.name || info.name || toolId),
+            toolId: String(toolId),
+            integration: authRequired.integration,
+            reason: authRequired.reason,
+            args
+          });
+        }
+      }
       // Only the scheduling tools may draw a confirmation card; any other
       // tool's result carrying the same field is ignored.
       const scheduledTaskProposal = isSchedulingToolDef(info.toolDef)

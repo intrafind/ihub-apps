@@ -413,7 +413,7 @@ Opening the chip shows **About this answer**: the AI-generated statement, each s
 projects that were in scope but not used, and the provenance details.
 
 The server decides the chip: it names the basis when the turn ends (`run/ended.answerBasis`, see
-[SSE v2](sse-v2.md#a-chat-turn-on-the-wire)). The browser only displays it. An answer stopped after
+[Streaming Events](streaming-events.md#a-chat-turn-on-the-wire)). The browser only displays it. An answer stopped after
 it started keeps the basis it had; one without a basis — a failed turn, one stopped before it wrote
 anything or cut off by a server restart, a notice, an answer stored before the server kept it —
 shows no chip.
