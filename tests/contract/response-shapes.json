@@ -1079,8 +1079,7 @@
         "azure": {
           "enabled": "boolean",
           "host": "string",
-          "region": "string",
-          "subscriptionKey": "string"
+          "region": "string"
         },
         "defaultService": "string",
         "dictation": {
