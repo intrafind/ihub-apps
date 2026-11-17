@@ -342,6 +342,48 @@ describe('chatMaterializer: hasUnseenActivity', () => {
   });
 });
 
+describe('chatMaterializer: a resume after a connect', () => {
+  it('claims the chat for the run and stores no user message', async () => {
+    await withRepository(async ({ repository }) => {
+      await userTurn(repository);
+      await assistantTurn(repository);
+      const runId = 'chat-run-resume';
+
+      const outcome = await settleUserTurn({
+        repository,
+        chatId: CHAT_ID,
+        ownerId: OWNER,
+        identityMode: 'default',
+        appId: 'chat',
+        modelId: 'gpt-4o',
+        settings: { thinkingEnabled: true },
+        runId,
+        content: '',
+        silent: true
+      });
+
+      assert.deepEqual(outcome, { message: null, refusal: null });
+      const chat = await repository.getChat(CHAT_ID);
+      assert.equal(chat.activeRunId, runId);
+      assert.equal(chat.status, 'running');
+      assert.equal(chat.settings.thinkingEnabled, true);
+      const { messages } = await repository.getMessages(CHAT_ID);
+      assert.equal(messages.length, 2, 'only the earlier question and answer');
+
+      await materializeAssistantTurn({
+        repository,
+        chatId: CHAT_ID,
+        runId,
+        summary: { status: 'success', content: 'Connected; here is the answer.' },
+        clientConnected: true
+      });
+      const ended = await repository.getChat(CHAT_ID);
+      assert.equal(ended.activeRunId ?? null, null, 'the answer released the run');
+      assert.equal((await repository.getMessages(CHAT_ID)).messages.length, 3);
+    });
+  });
+});
+
 describe('chatMaterializer: turns that did not go well', () => {
   it('records the abort on the message so a cut-off answer does not read as complete', async () => {
     await withRepository(async ({ repository }) => {
