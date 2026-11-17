@@ -1502,6 +1502,70 @@ export class ChatRepository {
   }
 
   /**
+   * Take the chat's pending connect record (#3752) if it is the one named: a
+   * compare-and-set under the chat lock, so of two requests resuming the same
+   * call exactly one gets it. The record is cleared in the same write.
+   *
+   * @param {string} chatId - Chat id.
+   * @param {string} recordId - The `pendingConnect.id` being resumed.
+   * @returns {Promise<Object|null>} The record that was taken, or null when
+   *   another request took it (or it is not pending).
+   */
+  async takePendingConnect(chatId, recordId) {
+    if (!this._usable(chatId, 'takePendingConnect')) return null;
+    return this._withChatLock(chatId, async () => {
+      const { chat: existing, etag } = await this._loadChat(chatId);
+      const pending = existing?.pendingConnect;
+      if (pending?.id !== recordId) return null;
+      await this._writeChat(applyChatPatch(existing, { pendingConnect: null }), etag);
+      // Expiry is decided here too, under the lock: a record that expired
+      // between the request's checks and this take does not run.
+      if (!pending.expiresAt || Date.parse(pending.expiresAt) <= Date.now()) {
+        return { expired: true };
+      }
+      return pending;
+    });
+  }
+
+  /**
+   * Keep a pending connect record on the chat, but only while the run that
+   * made it still owns the chat (a newer message has not taken it over), in
+   * one read-modify-write under the chat lock.
+   *
+   * @param {string} chatId - Chat id.
+   * @param {string} runId - The run that produced the record.
+   * @param {Object} record - The record.
+   * @returns {Promise<boolean>} Whether it was stored.
+   */
+  async setPendingConnect(chatId, runId, record) {
+    if (!this._usable(chatId, 'setPendingConnect')) return false;
+    return this._withChatLock(chatId, async () => {
+      const { chat: existing, etag } = await this._loadChat(chatId);
+      if (existing?.activeRunId !== runId) return false;
+      await this._writeChat(applyChatPatch(existing, { pendingConnect: record }), etag);
+      return true;
+    });
+  }
+
+  /**
+   * Put a taken pending connect record back, when the turn that took it was
+   * refused before its loop started. Only while nothing else is pending.
+   *
+   * @param {string} chatId - Chat id.
+   * @param {Object} record - The record as taken.
+   * @returns {Promise<boolean>} Whether it was put back.
+   */
+  async restorePendingConnect(chatId, record) {
+    if (!this._usable(chatId, 'restorePendingConnect')) return false;
+    return this._withChatLock(chatId, async () => {
+      const { chat: existing, etag } = await this._loadChat(chatId);
+      if (!existing || existing.pendingConnect) return false;
+      await this._writeChat(applyChatPatch(existing, { pendingConnect: record }), etag);
+      return true;
+    });
+  }
+
+  /**
    * Patch a chat for a turn that names projects, under its lock: the
    * project fields are checked against the chat as it stands now, not as
    * the turn read it before its prompt was prepared.

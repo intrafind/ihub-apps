@@ -1,6 +1,6 @@
 /**
- * The one Connect card of every protocol (#2917) and the retry after a
- * connect:
+ * The one Connect card of every protocol (#2917) (the continuation of the stored call after a
+ * connect, #3752, is in connect-resume.test.jsx):
  *
  *   - `tool/completed.authRequired` projects onto `message.integrationAuthRequired`
  *     (one per integration), and stored answers bring it back;
@@ -11,9 +11,7 @@
  *   - Connect asks the server for the sign-in URL with the current page as
  *     return URL (reconnect with the new scopes) and leaves for it;
  *   - the sign-in result is read once from the URL;
- *   - after a connect the answer that needed it is retried exactly once, only
- *     when it is the last answer; an adapter or transport failure (no card)
- *     is never retried.
+ *   - after a connect the card says what became of the waiting call.
  */
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
@@ -32,18 +30,13 @@ import {
   resetConnectResultForTests
 } from '../../../client/src/features/integrations/connect/connectResult';
 import {
-  findRetryTarget,
-  markRetried,
-  pendingRetry,
-  resetConnectRetryForTests,
-  retryKey,
-  wasRetried
-} from '../../../client/src/features/integrations/connect/connectRetry';
-import { useConnectRetry } from '../../../client/src/features/integrations/connect/useConnectRetry';
-import {
   permissionsByEffect,
   resetIntegrationInfoForTests
 } from '../../../client/src/features/integrations/connect/integrationInfo';
+import {
+  resetConnectResumeStatusForTests,
+  setConnectResumeStatus
+} from '../../../client/src/features/integrations/connect/connectResumeStatus';
 import ConnectCards, {
   ConnectCard
 } from '../../../client/src/features/integrations/connect/ConnectCard';
@@ -173,8 +166,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  resetConnectResumeStatusForTests();
   resetConnectResultForTests();
-  resetConnectRetryForTests();
   resetIntegrationInfoForTests();
   window.sessionStorage.clear();
   window.history.replaceState(null, '', '/');
@@ -486,111 +479,53 @@ describe('ConnectCard', () => {
   });
 });
 
-describe('retry once after connecting', () => {
-  const user = { id: 'u1', role: 'user', content: 'What are my open tickets?' };
-  const answer = {
-    id: 'a1',
-    role: 'assistant',
-    content: 'Please connect Jira.',
-    integrationAuthRequired: [JIRA_PROMPT]
-  };
-
-  test('targets the last answer that needed the connection', () => {
-    expect(findRetryTarget([user, answer], 'jira')).toEqual({
-      messageId: 'a1',
-      prompt: JIRA_PROMPT
+describe('what the card says about the waiting call (#3752)', () => {
+  const connectedJira = () =>
+    mockIntegrations.set('jira', {
+      ...JIRA,
+      connection: { mode: 'personal', status: 'connected', account: 'daniel@example.com' }
     });
-    // System notices do not count as moving on.
-    expect(
-      findRetryTarget([user, answer, { role: 'system', content: 'x' }], 'jira')
-    ).not.toBeNull();
-  });
 
-  test('not when the user has moved on, another integration was connected or it is still loading', () => {
-    expect(findRetryTarget([user, answer, { id: 'u2', role: 'user' }], 'jira')).toBeNull();
-    expect(findRetryTarget([user, answer], 'okta')).toBeNull();
-    expect(findRetryTarget([user, { ...answer, loading: true }], 'jira')).toBeNull();
-  });
-
-  test('a failure inside the adapter or on the transport is never retried', () => {
-    const failed = { id: 'a2', role: 'assistant', content: 'Jira answered 500.', error: true };
-    expect(findRetryTarget([user, failed], 'jira')).toBeNull();
-    expect(pendingRetry({ connected: 'jira', chatId: 'c', messages: [user, failed] })).toBeNull();
-  });
-
-  test('is pending until marked, then never again, across reloads', () => {
-    const messages = [user, answer];
-    const target = pendingRetry({ connected: 'jira', chatId: 'c', messages });
-    expect(target).toMatchObject({ messageId: 'a1', key: retryKey('c', 'a1') });
-    // Deciding does not claim it.
-    expect(pendingRetry({ connected: 'jira', chatId: 'c', messages })).not.toBeNull();
-    markRetried(target.key);
-    expect(pendingRetry({ connected: 'jira', chatId: 'c', messages })).toBeNull();
-    expect(window.sessionStorage.getItem(retryKey('c', 'a1'))).toBe('1');
-    // A new page load (in-memory record gone) still finds it in the session.
-    resetConnectRetryForTests();
-    expect(pendingRetry({ connected: 'jira', chatId: 'c', messages })).toBeNull();
-  });
-
-  test('a browser that blocks session storage does not break the chat', () => {
-    const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'sessionStorage');
-    Object.defineProperty(globalThis, 'sessionStorage', {
-      configurable: true,
-      get() {
-        throw new DOMException('blocked', 'SecurityError');
-      }
-    });
-    try {
-      expect(wasRetried('k')).toBe(false);
-      expect(() => markRetried('k')).not.toThrow();
-      // The in-memory record still holds for this page.
-      expect(wasRetried('k')).toBe(true);
-    } finally {
-      Object.defineProperty(globalThis, 'sessionStorage', descriptor);
-    }
-  });
-
-  function Harness({ messages, ready, busy, send }) {
-    useConnectRetry({ chatId: 'chat-1', messages, ready, busy, send });
-    return null;
-  }
-
-  test('the chat sends one follow-up once the transcript is loaded and idle', async () => {
-    window.history.replaceState(null, '', '/apps/a/c/chat-1?integration_connected=jira');
-    const send = jest.fn(async () => true);
-    const { rerender } = render(<Harness messages={[]} ready={false} busy={false} send={send} />);
-    expect(send).not.toHaveBeenCalled();
-    rerender(<Harness messages={[user, answer]} ready busy send={send} />);
-    expect(send).not.toHaveBeenCalled();
-    rerender(<Harness messages={[user, answer]} ready busy={false} send={send} />);
-    expect(send).toHaveBeenCalledTimes(1);
-    expect(send).toHaveBeenCalledWith('I connected Atlassian Jira. Please try again.');
-    act(() => {
-      rerender(<Harness messages={[user, answer]} ready busy={false} send={send} />);
-    });
-    expect(send).toHaveBeenCalledTimes(1);
-    // Marked once the chat took it.
-    await waitFor(() => expect(window.sessionStorage.getItem(retryKey('chat-1', 'a1'))).toBe('1'));
-  });
-
-  test('a message the chat turned away is not counted as the retry', async () => {
-    window.history.replaceState(null, '', '/apps/a/c/chat-1?integration_connected=jira');
-    const send = jest.fn(async () => false);
-    render(<Harness messages={[user, answer]} ready busy={false} send={send} />);
-    expect(send).toHaveBeenCalledTimes(1);
-    await act(async () => {});
-    expect(window.sessionStorage.getItem(retryKey('chat-1', 'a1'))).toBeNull();
-    expect(wasRetried(retryKey('chat-1', 'a1'))).toBe(false);
-  });
-
-  test('nothing is sent without a successful connect', () => {
-    window.history.replaceState(
-      null,
-      '',
-      '/apps/a/c/chat-1?integration_error=access_denied&integration=jira'
+  test('"Continuing your request…" in the live region while the server runs the call', async () => {
+    connectedJira();
+    render(<ConnectCard prompt={JIRA_PROMPT} />);
+    const status = await screen.findByRole('status');
+    expect(status).not.toHaveTextContent('Continuing');
+    act(() => setConnectResumeStatus('jira', { state: 'resuming' }));
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Atlassian Jira is connected as daniel@example.com. Continuing your request…'
     );
-    const send = jest.fn();
-    render(<Harness messages={[user, answer]} ready busy={false} send={send} />);
-    expect(send).not.toHaveBeenCalled();
+    act(() => setConnectResumeStatus('jira', { state: 'done' }));
+    expect(screen.getByRole('status')).not.toHaveTextContent('Continuing');
+  });
+
+  test('says plainly when the request expired or was already continued', async () => {
+    connectedJira();
+    render(<ConnectCard prompt={JIRA_PROMPT} />);
+    await screen.findByRole('status');
+    act(() => setConnectResumeStatus('jira', { state: 'refused', code: 'CONNECT_RESUME_EXPIRED' }));
+    expect(screen.getByRole('status')).toHaveTextContent('waited too long');
+    act(() =>
+      setConnectResumeStatus('jira', { state: 'refused', code: 'CONNECT_RESUME_NOT_PENDING' })
+    );
+    expect(screen.getByRole('status')).toHaveTextContent('already continued');
+  });
+
+  test("another integration's outcome does not show on this card", async () => {
+    connectedJira();
+    render(<ConnectCard prompt={JIRA_PROMPT} />);
+    await screen.findByRole('status');
+    act(() => setConnectResumeStatus('okta', { state: 'resuming' }));
+    expect(screen.getByRole('status')).not.toHaveTextContent('Continuing');
+  });
+
+  test('a connection that is not usable yet keeps the card asking, with an alert', async () => {
+    render(<ConnectCard prompt={JIRA_PROMPT} />);
+    await screen.findByRole('button', { name: 'Connect' });
+    act(() =>
+      setConnectResumeStatus('jira', { state: 'refused', code: 'CONNECT_RESUME_NOT_CONNECTED' })
+    );
+    expect(screen.getByRole('alert')).toHaveTextContent('is not connected yet');
+    expect(screen.getByRole('button', { name: 'Connect' })).toBeInTheDocument();
   });
 });

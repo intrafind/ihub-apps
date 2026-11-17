@@ -22,7 +22,7 @@ client/src/features/integrations/connect/
   ConnectCard.jsx                                the one card (and ConnectCards for a message)
   authPrompts.js                                 normalize / project `integrationAuthRequired`
   connectResult.js                               read `integration_connected` / `integration_error` once per page
-  connectRetry.js, useConnectRetry.js            retry once after a connect
+  connectResumeStatus.js, useConnectResume.js    the outcome of the resume after a connect, and the hook that asks for it (#3752)
   integrationInfo.js                             cached GET /api/integrations/:id, startIntegrationConnect, permissionsByEffect
 ```
 
@@ -74,18 +74,18 @@ Rules:
 - The router is mounted at `/api/integrations` **before** the provider routers, so an installation id equal to a slug (`office365`) still reaches `/:id/connect`. `GET /:id` calls `next()` for ids that are not installations, so `/api/integrations/connections`, `/api-keys`, … keep working.
 - One result shape after the callback: `integration_connected=<id>` / `integration_error=<code>&integration=<id>` (`resultParams`), codes = `OAUTH_FLOW_ERROR_CODES` unmapped.
 
-## The card and the retry
+## The card and the resume
 
 - Server: every tool result `{ error: 'INTEGRATION_AUTH_REQUIRED', integration, reason, scopes? }` whose `integration` is the tool's own installation (`_integration.instanceId` or `_mcp.serverId`) becomes `tool/completed.authRequired = { integration, name, reason, action?, scopes? }` and is stored on the answer as `integrationAuthRequired` (was `mcpAuthRequired`). Adapter/transport failures never have this shape, so they never get a card.
 - Client: `runToMessage` projects it to `message.integrationAuthRequired`; `ChatMessage` renders `ConnectCards`. The card loads `GET /api/integrations/:id` (cached 30 s per id) for name, permissions, sign-in host and live status; says "connected as …" instead of asking when the user is connected by now.
 - Connect: `requestConnectUrl(id, { returnUrl: current page without result params, reconnect, scopes })`, then `window.location.assign(url)`.
-- Return: `Layout`'s `useOAuthCallbackCleanup` calls `consumeConnectResult()` (reads once per path, strips the params, `popstate` for the router). `AppChat` calls `useConnectRetry({ chatId, messages, ready: !hydrating, busy: processing, send })` after `handleSubmit`; `claimRetry` sends the follow-up "I connected X. Please try again." exactly once when the answer with the card for that integration is the last message (sessionStorage key `ihub.integrationRetry.<chat>.<message>`).
-- Why a follow-up message and not a server-side re-run of the stored call: the stored transcript holds text only, and the server-side resume of a stored call is what the tool-approval PR (#3136, `ChatService._storePendingApproval`) adds. Once both are merged, the retry could run the exact stored call through that path instead; the client trigger (`useConnectRetry`) stays.
+- Return: `Layout`'s `useOAuthCallbackCleanup` calls `consumeConnectResult()` (reads once per path, strips the params, `popstate` for the router). Since #3752 `AppChat` calls `useConnectResume({ chatId, pendingConnect, ready, busy, resume })`, which asks the **server** to continue the stored call once (see [Resume the stored call after a connect](2026-11-17%20Resume%20the%20stored%20call%20after%20a%20connect.md)). The first version of this PR sent the follow-up message "I connected X. Please try again." instead; it is removed.
+- Why the first version sent a follow-up message: the stored transcript holds text only, and the stored-call mechanism of the approval work is bound to an approval interaction. #3752 adds the record for a call that stopped on a missing connection (`pendingConnect`) and resumes it through the same loop `resume` and seams.
 
 ## Not in this PR
 
 - Settings → Integrations rebuilt on `GET /api/integrations` (#2922). Here it was switched minimally: one list call, the new connect/disconnect, the new result params; its layout is unchanged.
-- The retry is still a follow-up chat message (see above), not a server-side re-run of the stored call.
+- (Done in #3752: the stored call is resumed by the server, once.)
 
 ## Follow-ups of 2026-11-16 (gap review of #2917)
 
@@ -102,6 +102,6 @@ Running the opt-in e2e for the first time on current main found what the unit te
 - `node --test server/tests/integrations/userIntegrationsRoutes.test.js` — listing access filter, modes, connect/reconnect/disconnect, return URL, CSRF/JSON, adapter result shape.
 - `node server/tests/oauth-integration-factory.test.js`, `node server/tests/office365-callback-routes.test.js` — security parity through the real routes, 409 from the browse routes.
 - `npx node@24 --experimental-vm-modules node_modules/jest/bin/jest.js tests/mcp/oauthUserRoutes.test.js` (from `server/`; Node 22 cannot load it, `require(esm)`).
-- `npx jest --config tests/config/jest.config.js tests/unit/client/connect-card.test.jsx` — the card, the result reader, retry once and never for adapter failures.
+- `npx jest --config tests/config/jest.config.js tests/unit/client/connect-card.test.jsx tests/unit/client/connect-resume.test.jsx` — the card, the result reader, the card's status line, the resume hook.
 - E2E: `tests/e2e/integration-connect.spec.js` (opt-in `CONNECT_E2E=1`, Chromium, a throwaway instance; stub model + MCP server + authorization server on port 4178; set `PW_CHROMIUM_PATH` when Playwright's own browser is not installed). Three runs: not connected → Connect → consent → back → answer (with an axe scan of the card), expired → Reconnect, and the picker's `Connect →` in a new tab.
 - `node --test server/tests/integrations/integrationIcon.test.js` — the icon file, the listing and the route; `server/tests/integrations/installedWriteReapplies.test.js` and `server/tests/a2a/reloadHook.test.js` (jest) — the writer re-applies.

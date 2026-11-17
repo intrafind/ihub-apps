@@ -33,6 +33,8 @@ import { resolveActorId } from '../../services/loop/runIdentity.js';
 import { authorizeInteraction } from '../../services/loop/runAccess.js';
 import interactionService from '../../services/loop/InteractionService.js';
 import { prepareChatApproval } from '../../services/chat/chatToolApproval.js';
+import { prepareConnectResume } from '../../services/chat/chatConnectResume.js';
+import { getIntegrationConnectionService } from '../../services/integrations/auth/IntegrationConnectionService.js';
 import { SSE_V2_EVENTS, RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
 import { KNOWLEDGE_REFRESH_PHASE } from '../../../shared/run/knowledgeRefresh.js';
 import { createSseChannel } from '../../utils/sseChannel.js';
@@ -727,6 +729,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
     user,
     persistence = null,
     toolApproval = null,
+    connectResume = null,
     canApproveTools = false,
     runId = null,
     continueRun = null
@@ -748,6 +751,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
       user,
       persistence,
       toolApproval,
+      connectResume,
       canApproveTools
     });
   }
@@ -873,6 +877,9 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
       // turn never reached its loop (see `commitApproval`).
       let restoreApproval = null;
       let toolApproval = null;
+      // The same for the call a connect resumes (#3752).
+      let restoreConnect = null;
+      let connectResume = null;
       try {
         const {
           messages,
@@ -1086,6 +1093,31 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             code: approvals.refusal.code
           });
         }
+        // A connect resumes the call that stopped on a missing connection
+        // (#3752): `connectResume { id }` is checked here and the record is
+        // taken (exactly once) only after the turn is prepared, like an
+        // approval. Any other message supersedes the record.
+        const connectResumePrep = await prepareConnectResume({
+          chatId,
+          user: req.user,
+          appId,
+          chat: access.chat || null,
+          ownerId: owner.id,
+          lastMessage: messages[0],
+          repository,
+          req,
+          isConnected: async (userId, integration) => {
+            const resolved = await getIntegrationConnectionService()
+              .resolve({ type: 'user', id: userId }, integration)
+              .catch(() => null);
+            return resolved?.ok === true;
+          }
+        });
+        if (connectResumePrep.refusal) {
+          throw refusal(connectResumePrep.refusal.status, connectResumePrep.refusal.message, {
+            code: connectResumePrep.refusal.code
+          });
+        }
         toolApproval = { grants: approvals.grants, resume: null };
         /**
          * Answer the approval once the turn can run. Returns a refusal to send
@@ -1109,6 +1141,26 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
         let history = stored.messages;
         let forkStoredId = null;
         let replacedMessage = null;
+        if (connectResumePrep.record) {
+          // The answer that carries the card is the last message of the chat
+          // (a resume that failed again left a chain of them); the
+          // continuation is built from the question before them.
+          const record = connectResumePrep.record;
+          const answerRuns = new Set([...(record.continues || []), record.runId]);
+          const last = history[history.length - 1];
+          if (replaceFromMessageId || last?.role !== 'assistant' || last.runId !== record.runId) {
+            throw refusal(409, 'Nothing is waiting to be continued in this chat', {
+              code: 'CONNECT_RESUME_NOT_PENDING'
+            });
+          }
+          while (
+            history.length > 0 &&
+            history[history.length - 1].role === 'assistant' &&
+            answerRuns.has(history[history.length - 1].runId)
+          ) {
+            history = history.slice(0, -1);
+          }
+        }
         if (replaceFromMessageId) {
           // Either id the client can know this message by: the stored id it
           // was given on hydrate, or — for a turn made in the session that
@@ -1236,9 +1288,17 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
                     : entry
                 )
                 .filter(entry => entry.fileData || (entry.content || '').trim());
-        conversation = includeHistory
-          ? [...historyForPrompt(dedupedHistory), preparedPromptMessage]
-          : [preparedPromptMessage];
+        if (connectResumePrep.record) {
+          // No new message: the history ends with the question that failed.
+          conversation =
+            includeHistory && dedupedHistory.length > 0
+              ? historyForPrompt(dedupedHistory)
+              : [{ role: 'user', content: connectResumePrep.record.question || '' }];
+        } else if (includeHistory) {
+          conversation = [...historyForPrompt(dedupedHistory), preparedPromptMessage];
+        } else {
+          conversation = [preparedPromptMessage];
+        }
 
         persistence = {
           repository,
@@ -1248,6 +1308,8 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           // The stored history is never client-asserted; the message being
           // sent necessarily is — it only exists in this request.
           content: typeof newMessage.content === 'string' ? newMessage.content : '',
+          // A resume after a connect stores no user message.
+          silent: Boolean(connectResumePrep.record),
           clientMessageId: messageId,
           attachments: persistedAttachments,
           variables: turnVariables,
@@ -1419,6 +1481,22 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           });
           return res.json({ status: 'error', message: errMsg, code: prep.error.code });
         }
+        if (connectResumePrep.commit) {
+          const committed = await connectResumePrep.commit();
+          if (committed.refusal) {
+            emitFailedRun(chatId, {
+              runId: turnRunId,
+              messageId,
+              code: committed.refusal.code,
+              message: committed.refusal.message
+            });
+            throw refusal(committed.refusal.status, committed.refusal.message, {
+              code: committed.refusal.code
+            });
+          }
+          connectResume = committed.resume;
+          restoreConnect = committed.restore;
+        }
         const approvalRefusal = await commitApproval();
         if (approvalRefusal) {
           emitFailedRun(chatId, {
@@ -1456,6 +1534,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           user: req.user,
           persistence,
           toolApproval,
+          connectResume,
           // Only a client that draws the approval card can answer one.
           canApproveTools: toolApprovalCapable === true,
           runId: turnRunId,
@@ -1484,6 +1563,8 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
         // could run the call: put the approval back, with its answer, so the
         // same decision can be sent again.
         if (restoreApproval && !toolApproval?.started) await restoreApproval();
+        // Never after the loop started: the call may have run.
+        if (restoreConnect && !connectResume?.started) await restoreConnect();
       }
     }
   );

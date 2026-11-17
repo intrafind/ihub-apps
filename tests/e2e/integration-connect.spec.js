@@ -11,10 +11,18 @@ import crypto from 'node:crypto';
  *
  *   1. not connected → the chat shows the Connect card → Connect → consent
  *      (the stub authorization server approves at once) → back in the same
- *      chat → the request is retried once → the answer names the account;
+ *      chat → the server runs the stored call once and the answer names the
+ *      account, with no message of the user's own in between (#3752);
  *   2. expired → the card says Reconnect → Reconnect → back in the chat → answer;
- *   3. from the chat's integrations picker: `Connect →` → consent in a new tab →
+ *   3. cancelled consent → nothing runs, the card stays;
+ *   4. a call that needs approval asks again after the connect (it does not run);
+ *   5. a second request for the same stored call (a second tab, a double click)
+ *      is refused and runs nothing; another user's request neither;
+ *   6. from the chat's integrations picker: `Connect →` → consent in a new tab →
  *      back in the same chat → the row is on → the tool call succeeds.
+ *
+ * Under a path prefix (`CONNECT_E2E_BASE=/ihub`, `playwright.subpath.config.js`) every
+ * request and page goes through the prefix.
  *
  * Everything between the browser and the vendor is the real iHub: the Vite
  * client, the Express server, the connection service and its OAuth client,
@@ -39,6 +47,8 @@ import crypto from 'node:crypto';
  * Set `PW_CHROMIUM_PATH` when the environment's Chromium is not Playwright's.
  */
 
+/** The deployment's path prefix (`/ihub`), empty at the root. */
+const BASE = (process.env.CONNECT_E2E_BASE || '').replace(/\/$/, '');
 const STUB_PORT = Number(process.env.CONNECT_E2E_STUB_PORT || 4178);
 const STUB = `http://127.0.0.1:${STUB_PORT}`;
 const ACCOUNT = 'ada@example.com';
@@ -49,6 +59,8 @@ const ADMIN = {
 };
 const INSTALLATION_ID = 'e2e-directory';
 const APP_ID = 'e2e-connect';
+/** The same app with tool approval on: every call asks first. */
+const APPROVAL_APP_ID = 'e2e-connect-approval';
 const MODEL = {
   id: 'e2e-connect-chat',
   modelId: 'e2e-connect-chat-model',
@@ -74,7 +86,10 @@ const vendor = {
   refreshTokens: new Set(),
   rejectTokens: false,
   authorizeRequests: [],
-  toolCalls: 0
+  denyConsent: false,
+  toolCalls: 0,
+  /** What the model was sent: the user messages of every request, in order. */
+  modelRequests: []
 };
 
 function readBody(req) {
@@ -135,6 +150,9 @@ function streamCompletion(res, { toolCall, text }) {
  */
 function answerChat(body, res) {
   const messages = Array.isArray(body.messages) ? body.messages : [];
+  vendor.modelRequests.push(
+    messages.filter(m => m.role === 'user').map(m => String(m.content || ''))
+  );
   const last = messages[messages.length - 1];
   const tool = (body.tools || []).find(t => /whoami/.test(t.function?.name || ''));
   if (last?.role === 'tool') {
@@ -213,8 +231,16 @@ function startStub() {
       return json(res, 201, { ...metadata, client_id: 'e2e-client' });
     }
     if (url.pathname === '/authorize') {
-      // Consent: approved at once.
+      // Consent: approved at once (or denied, for the run that cancels it).
       vendor.authorizeRequests.push(Object.fromEntries(url.searchParams));
+      if (vendor.denyConsent) {
+        const denied = new URL(url.searchParams.get('redirect_uri'));
+        denied.searchParams.set('error', 'access_denied');
+        denied.searchParams.set('state', url.searchParams.get('state'));
+        res.writeHead(302, { Location: denied.toString() });
+        res.end();
+        return undefined;
+      }
       const code = crypto.randomUUID();
       vendor.codes.set(code, url.searchParams.get('code_challenge'));
       const back = new URL(url.searchParams.get('redirect_uri'));
@@ -279,8 +305,16 @@ function startStub() {
 test.use({
   launchOptions: process.env.PW_CHROMIUM_PATH
     ? { executablePath: process.env.PW_CHROMIUM_PATH }
-    : {}
+    : {},
+  // Screenshots a person will look at are taken at twice the pixel density.
+  ...(process.env.CONNECT_E2E_SHOTS ? { deviceScaleFactor: 2 } : {})
 });
+
+/** `CONNECT_E2E_SHOTS=<dir>` keeps a screenshot of the key states there; otherwise nothing. */
+async function shot(page, name) {
+  const dir = process.env.CONNECT_E2E_SHOTS;
+  if (dir) await page.screenshot({ path: `${dir}/${name}.png` });
+}
 test.describe.configure({ mode: 'serial' });
 
 let stubServer = null;
@@ -295,8 +329,8 @@ let originalSsrf = null;
  * connected, as it does on a real installation after the first user connected.
  */
 async function primeCatalog() {
-  const started = await api.post(`/api/integrations/${INSTALLATION_ID}/_connect`, {
-    data: { returnUrl: '/' }
+  const started = await api.post(`${BASE}/api/integrations/${INSTALLATION_ID}/_connect`, {
+    data: { returnUrl: `${BASE}/` }
   });
   expect(started.ok(), await started.text()).toBeTruthy();
   const { url } = await started.json();
@@ -306,7 +340,7 @@ async function primeCatalog() {
   await expect
     .poll(
       async () => {
-        const res = await api.get(`/api/integrations/${INSTALLATION_ID}`);
+        const res = await api.get(`${BASE}/api/integrations/${INSTALLATION_ID}`);
         const body = res.ok() ? await res.json() : null;
         return body?.actions?.length ?? 0;
       },
@@ -318,7 +352,9 @@ async function primeCatalog() {
 
 /** The admin (and the browser, same user) starts every run not connected. */
 async function disconnect() {
-  const res = await api.post(`/api/integrations/${INSTALLATION_ID}/_disconnect`, { data: {} });
+  const res = await api.post(`${BASE}/api/integrations/${INSTALLATION_ID}/_disconnect`, {
+    data: {}
+  });
   expect(res.ok(), await res.text()).toBeTruthy();
 }
 
@@ -336,25 +372,25 @@ test.beforeAll(async () => {
   const baseURL = test.info().project.use.baseURL || 'http://localhost:5173';
   api = await playwrightRequest.newContext({ baseURL });
   await expect
-    .poll(async () => (await api.get('/api/health').catch(() => null))?.status() ?? 0, {
+    .poll(async () => (await api.get(`${BASE}/api/health`).catch(() => null))?.status() ?? 0, {
       timeout: 90_000,
       message: 'the iHub server answers /api/health'
     })
     .toBe(200);
-  const login = await api.post('/api/auth/local/login', { data: ADMIN });
+  const login = await api.post(`${BASE}/api/auth/local/login`, { data: ADMIN });
   expect(login.ok(), 'admin login (default admin / password123)').toBeTruthy();
 
   // The stub runs on 127.0.0.1: the SSRF guard has to let iHub reach it.
-  originalSsrf = await (await api.get('/api/admin/ssrf/config')).json();
-  const ssrf = await api.put('/api/admin/ssrf/config', {
+  originalSsrf = await (await api.get(`${BASE}/api/admin/ssrf/config`)).json();
+  const ssrf = await api.put(`${BASE}/api/admin/ssrf/config`, {
     data: { allowedHosts: [...(originalSsrf.allowedHosts || []), '127.0.0.1'] }
   });
   expect(ssrf.ok(), await ssrf.text()).toBeTruthy();
 
-  const model = await api.put(`/api/admin/models/${MODEL.id}`, { data: MODEL });
+  const model = await api.put(`${BASE}/api/admin/models/${MODEL.id}`, { data: MODEL });
   expect(model.ok(), await model.text()).toBeTruthy();
 
-  const installed = await api.post('/api/admin/integrations/installed', {
+  const installed = await api.post(`${BASE}/api/admin/integrations/installed`, {
     data: {
       id: INSTALLATION_ID,
       definition: 'com.intrafind/mcp-server',
@@ -371,7 +407,7 @@ test.beforeAll(async () => {
   await expect
     .poll(
       async () => {
-        const res = await api.get(`/api/integrations/${INSTALLATION_ID}`);
+        const res = await api.get(`${BASE}/api/integrations/${INSTALLATION_ID}`);
         const body = res.ok() ? await res.json() : null;
         return Boolean(body?.connection?.connectable);
       },
@@ -381,7 +417,7 @@ test.beforeAll(async () => {
 
   await primeCatalog();
 
-  const app = await api.post('/api/admin/apps', {
+  const app = await api.post(`${BASE}/api/admin/apps`, {
     data: {
       id: APP_ID,
       name: { en: 'E2E connect' },
@@ -395,6 +431,23 @@ test.beforeAll(async () => {
     }
   });
   expect(app.ok(), await app.text()).toBeTruthy();
+
+  // The same app, with every tool call asking a person first.
+  const approvalApp = await api.post(`${BASE}/api/admin/apps`, {
+    data: {
+      id: APPROVAL_APP_ID,
+      name: { en: 'E2E connect approval' },
+      description: { en: 'Connect flow with tool approval' },
+      color: '#4F46E5',
+      icon: 'link',
+      system: { en: 'Use the directory tool to answer.' },
+      preferredModel: MODEL.id,
+      enabled: true,
+      integrations: { [INSTALLATION_ID]: {} },
+      toolApproval: { default: 'always' }
+    }
+  });
+  expect(approvalApp.ok(), await approvalApp.text()).toBeTruthy();
 });
 
 test.afterAll(async () => {
@@ -402,11 +455,12 @@ test.afterAll(async () => {
     await api
       .post(`/api/integrations/${INSTALLATION_ID}/_disconnect`, { data: {} })
       .catch(() => {});
-    await api.delete(`/api/admin/apps/${APP_ID}`).catch(() => {});
-    await api.delete(`/api/admin/integrations/installed/${INSTALLATION_ID}`).catch(() => {});
-    await api.delete(`/api/admin/models/${MODEL.id}`).catch(() => {});
+    await api.delete(`${BASE}/api/admin/apps/${APP_ID}`).catch(() => {});
+    await api.delete(`${BASE}/api/admin/apps/${APPROVAL_APP_ID}`).catch(() => {});
+    await api.delete(`${BASE}/api/admin/integrations/installed/${INSTALLATION_ID}`).catch(() => {});
+    await api.delete(`${BASE}/api/admin/models/${MODEL.id}`).catch(() => {});
     if (originalSsrf) {
-      await api.put('/api/admin/ssrf/config', { data: originalSsrf }).catch(() => {});
+      await api.put(`${BASE}/api/admin/ssrf/config`, { data: originalSsrf }).catch(() => {});
     }
     await api.dispose();
   }
@@ -432,11 +486,11 @@ function chatLog(page) {
  * context counter shows the model's window. Sent earlier, the request goes out
  * without a `modelId` and the server answers 400.
  */
-async function askQuestion(page) {
+async function askQuestion(page, appId = APP_ID) {
   const modelsLoaded = page.waitForResponse(
     r => new URL(r.url()).pathname.endsWith('/api/models') && r.ok()
   );
-  await page.goto(`/apps/${APP_ID}`);
+  await page.goto(`${BASE}/apps/${appId}`);
   await modelsLoaded;
   await page.waitForLoadState('networkidle');
   await page.getByRole('textbox').first().fill(QUESTION);
@@ -459,6 +513,7 @@ test('not connected → Connect → consent → back in the same chat → answer
   const card = page.getByRole('region', { name: /Connect E2E directory/ });
   await expect(card).toBeVisible({ timeout: 60_000 });
   await expect(card).toContainText('iHub needs to act as you in E2E directory');
+  await shot(page, '1-card-asking-light');
 
   // The card in its "not connected" state meets WCAG 2.2 AA (the tags of
   // accessibility.spec.js): no axe violation inside the card, and the buttons
@@ -482,6 +537,7 @@ test('not connected → Connect → consent → back in the same chat → answer
   expect(
     axeDark.violations.map(v => `${v.id}: ${v.nodes.map(n => n.target.join(' ')).join(', ')}`)
   ).toEqual([]);
+  await shot(page, '2-card-asking-dark');
   await page.emulateMedia({ colorScheme: 'light' });
   await card.getByRole('button', { name: /Connect/ }).focus();
   await expect(card.getByRole('button', { name: /Connect/ })).toBeFocused();
@@ -491,18 +547,28 @@ test('not connected → Connect → consent → back in the same chat → answer
   // The stub approves at once; the callback sends the browser back to the chat.
   await page.waitForURL(url => url.pathname === new URL(chatUrl).pathname, { timeout: 60_000 });
   expect(vendor.authorizeRequests.at(-1)?.code_challenge_method).toBe('S256');
-  expect(page.url()).not.toContain('integration_connected');
+  // The result parameters are removed from the URL once the page has mounted.
+  await expect.poll(() => page.url()).not.toContain('integration_connected');
 
-  // Retried once, automatically: the follow-up and the answer.
-  await expect(chatLog(page).getByText(/I connected E2E directory/)).toBeVisible({
-    timeout: 60_000
-  });
+  // The server continued the stored call: the answer appears with no message
+  // of the user's own in between, and the vendor was called once.
   await expect(chatLog(page).getByText(`You are signed in as ${ACCOUNT}.`)).toBeVisible({
     timeout: 60_000
   });
+  await expect(chatLog(page).getByText(/I connected E2E directory/)).toHaveCount(0);
+  await shot(page, '3-after-connect-answer');
   expect(vendor.toolCalls).toBe(1);
+  // The model saw the question once: call, explanation, continuation.
+  expect(vendor.modelRequests.length).toBeGreaterThanOrEqual(3);
+  expect(vendor.modelRequests.flat().filter(text => /connected/i.test(text))).toEqual([]);
 
-  // A reload does not retry again.
+  // The stored chat: one question, the explanation and the continuation.
+  const chatId = new URL(chatUrl).pathname.split('/').pop();
+  const stored = await (await api.get(`${BASE}/api/chats/${chatId}`)).json();
+  expect(stored.messages.map(m => m.role)).toEqual(['user', 'assistant', 'assistant']);
+  expect(stored.chat.pendingConnect ?? null).toBeNull();
+
+  // A reload does not run it again.
   await page.reload();
   await expect(chatLog(page).getByText(`You are signed in as ${ACCOUNT}.`)).toBeVisible();
   await page.waitForTimeout(2000);
@@ -529,6 +595,142 @@ test('expired → Reconnect → back in the chat → answer', async ({ page, con
     timeout: 60_000
   });
   expect(vendor.toolCalls).toBe(calls + 1);
+  await expect(chatLog(page).getByText(/I connected E2E directory/)).toHaveCount(0);
+});
+
+test('cancelled consent → nothing runs and the card stays', async ({ page, context }) => {
+  await signIn(context);
+  await disconnect();
+  vendor.denyConsent = true;
+  try {
+    await askQuestion(page);
+    const card = page.getByRole('region', { name: /Connect E2E directory/ });
+    await expect(card).toBeVisible({ timeout: 60_000 });
+    const calls = vendor.toolCalls;
+    const chatPath = new URL(page.url()).pathname;
+    await card.getByRole('button', { name: /Connect/ }).click();
+    await page.waitForURL(url => url.pathname === chatPath, { timeout: 60_000 });
+    // The sign-in says it did not succeed; the card is still there to try again.
+    await expect(
+      page.getByRole('alert').filter({ hasText: /not connected because access was not granted/i })
+    ).toBeVisible({ timeout: 30_000 });
+    await expect(
+      page.getByRole('region', { name: /Connect E2E directory/ }).getByRole('button', {
+        name: /Connect/
+      })
+    ).toBeVisible();
+    await page.waitForTimeout(1500);
+    expect(vendor.toolCalls).toBe(calls);
+  } finally {
+    vendor.denyConsent = false;
+  }
+});
+
+test('a call that needs approval asks again after the connect; it does not run', async ({
+  page,
+  context
+}) => {
+  await signIn(context);
+  await disconnect();
+  await askQuestion(page, APPROVAL_APP_ID);
+
+  // The first ask: the policy gate, before the call reaches the connection check.
+  await expect(page.getByRole('button', { name: 'Approve', exact: true })).toBeVisible({
+    timeout: 60_000
+  });
+  await page.getByRole('button', { name: 'Approve', exact: true }).click();
+  const card = page.getByRole('region', { name: /Connect E2E directory/ });
+  await expect(card).toBeVisible({ timeout: 60_000 });
+
+  const calls = vendor.toolCalls;
+  const chatPath = new URL(page.url()).pathname;
+  await card.getByRole('button', { name: /Connect/ }).click();
+  await page.waitForURL(url => url.pathname === chatPath, { timeout: 60_000 });
+
+  // The connect continued the stored call, which asks again: nothing ran.
+  await expect(page.getByRole('button', { name: 'Approve', exact: true })).toBeVisible({
+    timeout: 60_000
+  });
+  await shot(page, '4-approval-after-connect');
+  await page.waitForTimeout(1500);
+  expect(vendor.toolCalls).toBe(calls);
+
+  await page.getByRole('button', { name: 'Approve', exact: true }).click();
+  await expect(chatLog(page).getByText(`You are signed in as ${ACCOUNT}.`)).toBeVisible({
+    timeout: 60_000
+  });
+  expect(vendor.toolCalls).toBe(calls + 1);
+});
+
+test('a second request for the same stored call runs nothing', async ({ page, context }) => {
+  await signIn(context);
+  await disconnect();
+  await askQuestion(page);
+  await expect(page.getByRole('region', { name: /Connect E2E directory/ })).toBeVisible({
+    timeout: 60_000
+  });
+  const chatId = new URL(page.url()).pathname.split('/').pop();
+  const record = (await (await api.get(`${BASE}/api/chats/${chatId}`)).json()).chat.pendingConnect;
+  expect(record.integrations).toEqual([INSTALLATION_ID]);
+  // The record never carries the arguments or the transcript to the client.
+  expect(Object.keys(record).sort()).toEqual(['callIds', 'expiresAt', 'id', 'integrations']);
+
+  // Not connected yet: the server refuses and keeps the record.
+  const resume = () =>
+    api.post(`${BASE}/api/apps/${APP_ID}/chat/${chatId}`, {
+      data: {
+        messages: [
+          { role: 'user', content: '', messageId: 'msg-resume', connectResume: { id: record.id } }
+        ],
+        modelId: MODEL.id,
+        language: 'en'
+      }
+    });
+  const early = await resume();
+  expect(early.status()).toBe(409);
+  expect((await early.json()).code).toBe('CONNECT_RESUME_NOT_CONNECTED');
+
+  // Connect (as the browser would), then two requests at once: one runs it.
+  const started = await api.post(`${BASE}/api/integrations/${INSTALLATION_ID}/_connect`, {
+    data: { returnUrl: `${BASE}/` }
+  });
+  expect(started.ok(), await started.text()).toBeTruthy();
+  expect((await api.get((await started.json()).url)).ok()).toBeTruthy();
+  const calls = vendor.toolCalls;
+  const [a, b] = await Promise.all([resume(), resume()]);
+  const statuses = [a.status(), b.status()].sort();
+  expect(statuses).toEqual([200, 409]);
+  const refused = a.status() === 409 ? a : b;
+  expect((await refused.json()).code).toBe('CONNECT_RESUME_NOT_PENDING');
+  await expect
+    .poll(() => vendor.toolCalls, { timeout: 60_000, message: 'the stored call ran' })
+    .toBe(calls + 1);
+  await page.waitForTimeout(2000);
+  expect(vendor.toolCalls).toBe(calls + 1);
+  // The audit log has the connect and, once, the call that ran because of it
+  // (ids and tool names, never the arguments).
+  const audit = await (
+    await api.get(`${BASE}/api/admin/audit-log?resource=connection&limit=100`)
+  ).json();
+  const forChat = audit.items.filter(item => item.details?.chatId === chatId);
+  expect(forChat).toHaveLength(1);
+  expect(forChat[0]).toMatchObject({
+    action: 'execute',
+    resource: 'connection',
+    resourceId: expect.stringContaining(`${INSTALLATION_ID}:`),
+    details: { event: 'connection.resume', integration: INSTALLATION_ID }
+  });
+  expect(JSON.stringify(forChat[0])).not.toContain(QUESTION);
+  expect(
+    audit.items.some(
+      item => item.action === 'create' && item.resourceId.startsWith(`${INSTALLATION_ID}:`)
+    )
+  ).toBe(true);
+  // A third request, after the run: nothing is pending any more.
+  const late = await resume();
+  expect(late.status()).toBe(409);
+  expect((await late.json()).code).toBe('CONNECT_RESUME_NOT_PENDING');
+  expect(vendor.toolCalls).toBe(calls + 1);
 });
 
 // #2923: the same flow started from the chat's integrations picker.
@@ -538,12 +740,12 @@ test('picker → Connect → consent in a new tab → back in the same chat → 
 }) => {
   await signIn(context);
   // Start disconnected.
-  const disconnected = await api.post(`/api/integrations/${INSTALLATION_ID}/_disconnect`, {
+  const disconnected = await api.post(`${BASE}/api/integrations/${INSTALLATION_ID}/_disconnect`, {
     data: {}
   });
   expect(disconnected.ok(), await disconnected.text()).toBeTruthy();
 
-  await page.goto(`/apps/${APP_ID}`);
+  await page.goto(`${BASE}/apps/${APP_ID}`);
   await page.getByRole('button', { name: 'Actions menu' }).first().click();
   const row = page.getByRole('menu').getByRole('menuitem', { name: /E2E directory/ });
   await expect(row).toContainText('Connect →');

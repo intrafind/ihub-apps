@@ -703,6 +703,9 @@ index can answer "list my chats" without scanning:
   status,               // 'active' | 'running' | 'error'
   temporary?,           // true for a chat that is not kept — see Temporary chats
   runIds: [],           // most recent 200, for the delete cascade
+  pendingConnect?,      // the call(s) that stopped on a missing connection, kept for 15 minutes so
+                        // the connect can resume them once — see Integrations; never sent to clients
+                        // (they get only { id, integrations, callIds, expiresAt })
   origin,               // { createdVia: 'ui' | 'responses-api' | 'scheduled-task',
                         //   clientId?, authMode?, taskId?, runId?, taskName? }
   // Chats made through the inference API's Conversations API also carry:

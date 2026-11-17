@@ -102,7 +102,7 @@ Start here when you see a problem but do not yet know the cause. Each entry list
 
 **If you are a user**
 
-- Use the **Connect** card in the chat (it offers **Reconnect** when a connection expired or lacks a permission), or **Settings → Integrations**, and sign in at the service. Your access expired, was revoked, or lacks a permission. After a connect from the chat card, the chat sends one follow-up message to retry the request. See [Integrations](integrations.md#connections).
+- Use the **Connect** card in the chat (it offers **Reconnect** when a connection expired or lacks a permission), or **Settings → Integrations**, and sign in at the service. Your access expired, was revoked, or lacks a permission. After a connect from the chat card, iHub continues the request that was waiting, once, without a message from you; if it waited longer than 15 minutes, or you sent another message meanwhile, it is not run and you ask again. See [Integrations](integrations.md#connections).
 
 **If you are an admin**
 
