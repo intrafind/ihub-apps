@@ -89,6 +89,10 @@ function AdminUsageReports() {
     ['limits', t('admin.usage.tabs.limits', 'Limits & quotas'), 'chart-bar']
   ];
   const showRange = state.tab !== 'limits';
+  // Once opened, Limits & quotas stays mounted (hidden on the other tabs), so
+  // switching tabs keeps unsaved edits of its settings; leaving the page asks.
+  const [limitsOpened, setLimitsOpened] = useState(state.tab === 'limits');
+  if (state.tab === 'limits' && !limitsOpened) setLimitsOpened(true);
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900" data-testid="admin-usage-reports">
@@ -146,7 +150,11 @@ function AdminUsageReports() {
         {state.tab === 'breakdown' && <BreakdownTable state={state} />}
         {state.tab === 'reliability' && <ReliabilityPanel state={state} />}
         {state.tab === 'requests' && <RequestLog state={state} />}
-        {state.tab === 'limits' && <UsageQuotasPanel />}
+        {(state.tab === 'limits' || limitsOpened) && (
+          <div hidden={state.tab !== 'limits'}>
+            <UsageQuotasPanel />
+          </div>
+        )}
       </div>
     </div>
   );

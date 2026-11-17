@@ -23,6 +23,8 @@ import VoiceModeSettings from '../components/voice/VoiceModeSettings';
 import ReadAloudButton from '../../voice/components/ReadAloudButton';
 import useReadAloudPlayback from '../../voice/hooks/useReadAloudPlayback';
 import { stop as stopReadAloud } from '../../voice/utils/readAloud';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
 
 /** Playback id of the read-aloud test, apart from every chat message. */
 const READ_ALOUD_TEST_ID = 'admin-read-aloud-test';
@@ -85,6 +87,10 @@ function AdminVoiceInputPage() {
   const [message, setMessage] = useState('');
   const [config, setConfig] = useState(DEFAULT_SPEECH);
   const [savedConfig, setSavedConfig] = useState(DEFAULT_SPEECH);
+  // Whether the settings loaded; until then (or after a failed load) the page
+  // never counts as holding unsaved edits.
+  const [hasLoaded, setHasLoaded] = useState(false);
+  const { blocker } = useUnsavedChanges(hasLoaded ? savedConfig : null, config);
   const [azureTesting, setAzureTesting] = useState(false);
   const [azureTestResult, setAzureTestResult] = useState(null);
   const [transcriptionModels, setTranscriptionModels] = useState(null);
@@ -124,6 +130,7 @@ function AdminVoiceInputPage() {
     const speech = toFormSpeech((response.data || {}).speech);
     setConfig(speech);
     setSavedConfig(speech);
+    setHasLoaded(true);
   };
 
   // No form and no Save until the settings loaded: Save writes the Azure
@@ -140,6 +147,7 @@ function AdminVoiceInputPage() {
         onLoad: speech => {
           setConfig(speech);
           setSavedConfig(speech);
+          setHasLoaded(true);
         }
       }
     }
@@ -704,6 +712,7 @@ function AdminVoiceInputPage() {
           language={i18n.language}
         />
       </div>
+      <UnsavedChangesDialog blocker={blocker} />
     </div>
   );
 }

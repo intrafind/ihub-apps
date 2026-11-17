@@ -7,6 +7,7 @@ import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import AdminLoadGate from './AdminLoadGate';
 import { useAdminConfigLoad } from '../hooks/useAdminConfigLoad';
+import { useDirtyReport } from '../hooks/useDirtyReport';
 import AdminLoadError from './AdminLoadError';
 
 const EMPTY_CONFIG = {
@@ -36,12 +37,20 @@ function sameList(a = [], b = []) {
   return a.length === b.length && a.every((entry, index) => entry === b[index]);
 }
 
-function ProxyConfig() {
+/**
+ * @param {Object} props
+ * @param {(dirty: boolean) => void} [props.onDirtyChange] - Reports unsaved edits to the page.
+ */
+function ProxyConfig({ onDirtyChange }) {
   const { t } = useTranslation();
   const [config, setConfig] = useState(EMPTY_CONFIG);
   // The last state the server confirmed, so the editor can tell which fields
   // carry an edit that has not been saved yet.
   const [savedConfig, setSavedConfig] = useState(EMPTY_CONFIG);
+  // Whether the configuration loaded at least once; before that (or after a
+  // failed load) the editor never counts as holding unsaved changes.
+  const [hasLoaded, setHasLoaded] = useState(false);
+  useDirtyReport(hasLoaded ? savedConfig : null, config, onDirtyChange);
   const [provenance, setProvenance] = useState({});
   const [effective, setEffective] = useState(null);
   const [unresolvedPlaceholders, setUnresolvedPlaceholders] = useState({});
@@ -65,6 +74,7 @@ function ProxyConfig() {
     };
     setConfig(next);
     setSavedConfig(next);
+    setHasLoaded(true);
     setProvenance(data.provenance || {});
     setEffective(data.effective || null);
     setUnresolvedPlaceholders(data.unresolvedPlaceholders || {});

@@ -22,6 +22,8 @@ import Switch from '../../../shared/components/Switch';
 import FeedbackReview from '../components/feedback/FeedbackReview';
 import AdminLoadGate from '../components/AdminLoadGate';
 import { useAdminConfigLoad } from '../hooks/useAdminConfigLoad';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
 
 const TRACKING_MODES = ['anonymous', 'pseudonymous', 'identified'];
 
@@ -67,6 +69,10 @@ function AdminFeedbackPage() {
   });
   // Edited state
   const [draft, setDraft] = useState(saved);
+  // Whether the settings loaded; until then (or after a failed load) the page
+  // never counts as holding unsaved edits.
+  const [hasLoaded, setHasLoaded] = useState(false);
+  const { blocker } = useUnsavedChanges(hasLoaded ? saved : null, draft);
   const [apps, setApps] = useState([]);
   const [appSaving, setAppSaving] = useState(null);
   const [usage, setUsage] = useState(null);
@@ -99,6 +105,7 @@ function AdminFeedbackPage() {
           };
           setSaved(next);
           setDraft(next);
+          setHasLoaded(true);
           setApps(
             (Array.isArray(appList) ? appList : []).map(app => ({
               id: app.id,
@@ -418,6 +425,7 @@ function AdminFeedbackPage() {
           </>
         )}
       </div>
+      <UnsavedChangesDialog blocker={blocker} />
     </div>
   );
 }

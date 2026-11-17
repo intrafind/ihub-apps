@@ -915,3 +915,19 @@ with no Save until the settings have loaded.
 - **Authentication** asks before you leave the page with unsaved changes.
 - The admin **Overview** no longer turns into a "fresh installation" with the getting-started
   checklist when the list of apps fails to load; it shows the error with Retry.
+
+## Admin Pages Ask Before Unsaved Changes Are Lost
+
+Many admin pages dropped unsaved edits without a word when you clicked a sidebar entry, a link or
+the browser's Back button: the Observability and Platform settings pages, the integration pages,
+the visual workflow editor, translation overrides, the document template editor and the new
+provider form. They now ask **Leave without saving?** first, with **Stay** and **Discard changes**,
+like the other editors. The dialog reads the same on every page.
+
+- Browser Back and Forward ask too, and so does the Back button of the visual workflow editor.
+- Switching a tab or a filter on the same page no longer asks (it did on **UI Customization**).
+  Edits on an integration's **Settings** tab and on the **Limits & quotas** tab of **Usage
+  Reports** are kept while you look at another tab.
+- A page that is still loading or failed to load never asks.
+- **Security** marks each section with unsaved changes, next to its heading and in its section
+  list.

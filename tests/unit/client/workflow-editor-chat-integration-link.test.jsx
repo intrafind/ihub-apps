@@ -29,6 +29,13 @@ jest.mock('../../../client/src/api/client', () => ({
   apiClient: { get: jest.fn(), post: jest.fn(), put: jest.fn() }
 }));
 
+// The leave dialog's icon set imports the runtime base path module, which jest
+// cannot load; the icons are not what this test is about.
+jest.mock('../../../client/src/shared/components/Icon', () => ({
+  __esModule: true,
+  default: () => <span aria-hidden="true" />
+}));
+
 jest.mock('../../../client/src/features/workflows/editor/WorkflowEditor', () => ({
   WorkflowEditor: () => <div data-testid="canvas" />
 }));

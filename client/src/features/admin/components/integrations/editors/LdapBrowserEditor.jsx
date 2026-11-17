@@ -17,7 +17,7 @@ import {
   fetchInstalledIntegrations,
   fetchPeopleDirectoryEditorContext
 } from '../../../../../api/integrationsAdminApi';
-import useInstallationEditor from './useInstallationEditor';
+import useInstallationEditor, { useInstallationEditorDirty } from './useInstallationEditor';
 import {
   AccessSection,
   ActionsSection,
@@ -122,6 +122,7 @@ function LdapBrowserEditor({ instance, definition, onSaved, onCancel }) {
   const { t } = useTranslation();
   const editor = useInstallationEditor({ instance, definition, onSaved });
   const [form, setForm] = useState(() => browserValuesToForm(instance.values || {}));
+  useInstallationEditorDirty(editor, form);
   const [directories, setDirectories] = useState(null);
   const [limit, setLimit] = useState(BROWSE_MAX_RESULTS_LIMIT);
   const [problems, setProblems] = useState([]);

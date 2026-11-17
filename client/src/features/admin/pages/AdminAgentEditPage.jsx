@@ -6,7 +6,6 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
-import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 import IconPicker from '../../../shared/components/IconPicker';
 import CapabilityFields from '../../../shared/components/CapabilityFields';
@@ -20,6 +19,7 @@ import {
   updateAgentProfile
 } from '../../../api/agentsAdminApi';
 import AdminLoadError from '../components/AdminLoadError';
+import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
 
 const BLANK_PROFILE = {
   id: '',
@@ -1331,16 +1331,7 @@ export default function AdminAgentEditPage() {
         )}
       </div>
 
-      <ConfirmDialog
-        isOpen={blocker.state === 'blocked'}
-        title="Unsaved Changes"
-        message="You have unsaved changes. Leave anyway?"
-        confirmLabel="Leave"
-        denyLabel="Stay"
-        danger={false}
-        onConfirm={() => blocker.proceed?.()}
-        onDeny={() => blocker.reset?.()}
-      />
+      <UnsavedChangesDialog blocker={blocker} />
     </div>
   );
 }

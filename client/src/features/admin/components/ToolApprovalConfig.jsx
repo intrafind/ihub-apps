@@ -7,6 +7,7 @@ import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import AdminLoadGate from './AdminLoadGate';
 import { useAdminConfigLoad } from '../hooks/useAdminConfigLoad';
+import { useDirtyReport } from '../hooks/useDirtyReport';
 import { ApprovalModeSelect } from './ToolApprovalFields';
 
 /**
@@ -51,9 +52,16 @@ export function toolApprovalPatchFromForm(form) {
  * whether a person approves a model's tool call before it runs. Installations,
  * tools, actions and apps can only tighten these.
  */
-function ToolApprovalConfig() {
+/**
+ * @param {Object} props
+ * @param {(dirty: boolean) => void} [props.onDirtyChange] - Reports unsaved edits to the page.
+ */
+function ToolApprovalConfig({ onDirtyChange }) {
   const { t } = useTranslation();
   const [form, setForm] = useState({ default: '', internal: '', external: '' });
+  // The form as last loaded or saved; null until it loaded.
+  const [savedForm, setSavedForm] = useState(null);
+  useDirtyReport(savedForm, form, onDirtyChange);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
 
@@ -66,11 +74,13 @@ function ToolApprovalConfig() {
           (await makeAdminApiCall('/admin/configs/platform', { method: 'GET' })).data,
         onLoad: data => {
           const defaults = data?.toolApproval?.defaults || {};
-          setForm({
+          const loaded = {
             default: defaults.default || '',
             internal: defaults.internal || '',
             external: defaults.external || ''
-          });
+          };
+          setForm(loaded);
+          setSavedForm(loaded);
         }
       }
     }
@@ -90,6 +100,7 @@ function ToolApprovalConfig() {
         method: 'PATCH',
         body: toolApprovalPatchFromForm(form)
       });
+      setSavedForm(form);
       setMessage({
         type: 'success',
         text: t('admin.toolApproval.saved', 'Tool approval settings saved.')

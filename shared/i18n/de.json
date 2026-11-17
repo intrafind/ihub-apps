@@ -4967,12 +4967,6 @@
         "unsaved": "Es gibt ungespeicherte Änderungen",
         "discard": "Verwerfen"
       },
-      "unsaved": {
-        "title": "Ungespeicherte Änderungen",
-        "message": "Es gibt ungespeicherte Änderungen. Trotzdem verlassen?",
-        "leave": "Verlassen",
-        "stay": "Bleiben"
-      },
       "saved": "UI-Konfiguration gespeichert",
       "backedUp": "Konfiguration gesichert unter: {{path}}",
       "missingSection": "Der Konfiguration fehlt der Abschnitt „{{section}}“.",
@@ -6044,12 +6038,6 @@
         "deleteSelectedAction": "Elemente löschen",
         "deleteSelectedFailed": "{{count}} Elemente konnten nicht gelöscht werden: {{reason}}"
       },
-      "unsaved": {
-        "title": "Ungespeicherte Änderungen",
-        "message": "Sie haben ungespeicherte Änderungen. Trotzdem verlassen?",
-        "leave": "Verlassen",
-        "stay": "Bleiben"
-      },
       "dependencies": {
         "title": "Projekt wird verwendet",
         "message": "„{{name}}“ kann nicht gelöscht werden, solange diese Apps, Workflows oder Agenten es verknüpfen. Entfernen Sie das Projekt zuerst dort.",
@@ -6741,13 +6729,7 @@
       },
       "titleEdit": "Im Builder bearbeiten",
       "titleEditOf": "{{id}} im Builder bearbeiten",
-      "titleNew": "Manuell hinzufügen",
-      "unsaved": {
-        "leave": "Verlassen",
-        "message": "Die Integration ist nicht gespeichert. Trotzdem verlassen?",
-        "stay": "Bleiben",
-        "title": "Ungespeicherte Änderungen"
-      }
+      "titleNew": "Manuell hinzufügen"
     },
     "usageLimits": {
       "title": "Nutzungslimits",
@@ -6805,9 +6787,9 @@
       }
     },
     "unsavedChanges": {
-      "title": "Ungespeicherte Änderungen",
-      "message": "Sie haben ungespeicherte Änderungen. Trotzdem verlassen?",
-      "leave": "Verlassen",
+      "title": "Ohne Speichern verlassen?",
+      "message": "Ihre Änderungen gehen verloren.",
+      "discard": "Änderungen verwerfen",
       "stay": "Bleiben"
     },
     "docs": {
@@ -7326,6 +7308,11 @@
       "relatedNoticeText": "– der Hinweis im leeren Chat und der Wortlaut der Leitplanke",
       "relatedAck": "KI-Bestätigung",
       "relatedAckText": "– die Bestätigung vor der ersten Nachricht, beim Benutzer gespeichert"
+    },
+    "settingsPage": {
+      "sectionsNav": "Einstellungsabschnitte",
+      "sectionUnsaved": "(ungespeicherte Änderungen)",
+      "sectionUnsavedBadge": "Ungespeicherte Änderungen"
     },
     "load": {
       "title": "Laden fehlgeschlagen: {{resource}}",
@@ -7942,7 +7929,7 @@
       "back": "Zurück",
       "boundaryEdgesRemoved": "Verbindungen über die Schleifengrenze wurden entfernt — bitte innerhalb oder außerhalb der Schleife neu verbinden.",
       "chatIntegrationLink": "Chat-Anbindung",
-      "chatIntegrationLinkHint": "Verfügbarkeit im Chat, die Darstellung der Antwort und ihre Beschreibung werden auf der Workflow-Seite festgelegt. Nicht gespeicherte Änderungen auf der Arbeitsfläche gehen verloren.",
+      "chatIntegrationLinkHint": "Verfügbarkeit im Chat, die Darstellung der Antwort und ihre Beschreibung werden auf der Workflow-Seite festgelegt.",
       "chatVisible": "Fortschritt im Chat anzeigen",
       "config": "Konfiguration",
       "configJson": "Konfiguration (JSON)",

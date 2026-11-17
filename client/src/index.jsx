@@ -4,6 +4,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+import { installUnsavedChangesPopGate } from './features/admin/hooks/useUnsavedChanges';
 import './App.css';
 // Import the i18n instance before rendering the app
 import { i18nService } from './i18n/i18n';
@@ -22,6 +23,8 @@ purgeLegacyChatCopies();
 // The translations come from the API rather than the bundle, so hold the first
 // render until they arrive (bounded by a timeout) to avoid a flash of untranslated text.
 i18nService.whenReady().then(() => {
+  // Before the router mounts: see installUnsavedChangesPopGate.
+  installUnsavedChangesPopGate();
   ReactDOM.createRoot(document.getElementById('root')).render(
     <React.StrictMode>
       <App />

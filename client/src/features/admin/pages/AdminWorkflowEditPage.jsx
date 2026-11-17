@@ -9,7 +9,6 @@ import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEdi
 import Switch from '../../../shared/components/Switch';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
-import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import ContentAccessSection from '../components/ContentAccessSection';
 import WorkflowChatIntegrationSection from '../components/WorkflowChatIntegrationSection';
 import {
@@ -23,6 +22,7 @@ import {
 import { createStarterWorkflow } from '../../workflows/editor/workflowEditorUtils';
 import { appsUsingWorkflow, withCleanToolDescription } from '../../workflows/utils/chatIntegration';
 import AdminLoadError from '../components/AdminLoadError';
+import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
 /**
  * Admin page for editing or creating a single workflow definition.
  * Provides metadata editing, group-based permissions, and a full JSON editor.
@@ -568,16 +568,7 @@ function AdminWorkflowEditPage() {
         )}
       </div>
 
-      <ConfirmDialog
-        isOpen={blocker.state === 'blocked'}
-        title="Unsaved Changes"
-        message="You have unsaved changes. Leave anyway?"
-        confirmLabel="Leave"
-        denyLabel="Stay"
-        danger={false}
-        onConfirm={() => blocker.proceed?.()}
-        onDeny={() => blocker.reset?.()}
-      />
+      <UnsavedChangesDialog blocker={blocker} />
     </div>
   );
 }

@@ -475,6 +475,52 @@ describe('installation page: settings', () => {
   });
 });
 
+describe('installation page: unsaved changes', () => {
+  test('Settings edits survive a tab switch, leaving asks, and a save clears the guard', async () => {
+    renderAt('/admin/integrations/ifinder?tab=settings');
+    let editor = await screen.findByTestId('ifinder-editor');
+    fireEvent.change(within(editor).getByLabelText(/iFinder base URL/), {
+      target: { value: 'https://edited.example.com' }
+    });
+
+    // Another tab of the same page does not ask and does not drop the edit.
+    fireEvent.click(screen.getByRole('tab', { name: /Overview/ }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByTestId('installation-facts')).toBeVisible();
+    fireEvent.click(screen.getByRole('tab', { name: /Settings/ }));
+    editor = screen.getByTestId('ifinder-editor');
+    expect(editor).toBeVisible();
+    expect(within(editor).getByLabelText(/iFinder base URL/)).toHaveValue(
+      'https://edited.example.com'
+    );
+
+    // Leaving the page asks; Stay keeps the edit.
+    fireEvent.click(screen.getByRole('link', { name: 'Integrations' }));
+    expect(await screen.findByText('Leave without saving?')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Stay' }));
+    expect(screen.queryByTestId('list-page')).not.toBeInTheDocument();
+    expect(within(editor).getByLabelText(/iFinder base URL/)).toHaveValue(
+      'https://edited.example.com'
+    );
+
+    // Save remounts the editor with the stored values: nothing left to lose.
+    mockApi.fetchInstalledIntegration.mockImplementation(async () => ({
+      ...IFINDER_DETAIL,
+      values: { ...IFINDER_DETAIL.values, baseUrl: 'https://edited.example.com' }
+    }));
+    fireEvent.click(within(editor).getByRole('button', { name: 'Save' }));
+    expect(await screen.findByText('Integration "ifinder" saved.')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(
+        within(screen.getByTestId('ifinder-editor')).getByLabelText(/iFinder base URL/)
+      ).toHaveValue('https://edited.example.com')
+    );
+    fireEvent.click(screen.getByRole('link', { name: 'Integrations' }));
+    expect(await screen.findByTestId('list-page')).toBeInTheDocument();
+    expect(screen.queryByText('Leave without saving?')).not.toBeInTheDocument();
+  });
+});
+
 describe('installation page: new and changed actions (#2916)', () => {
   const REVIEW_DETAIL = {
     ...CKAN_DETAIL,

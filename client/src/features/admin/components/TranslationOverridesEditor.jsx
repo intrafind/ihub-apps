@@ -5,6 +5,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { makeAdminApiCall, getAdminApiErrorMessage } from '../../../api/adminApi';
 import i18nService from '../../../services/i18nService';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import UnsavedChangesDialog from './UnsavedChangesDialog';
 
 const PAGE_SIZE = 50;
 
@@ -94,6 +96,15 @@ function TranslationOverridesEditor({ languages, initialLanguage }) {
   };
 
   const hasMore = data.items.length < data.total;
+
+  // A draft that differs from the text it edits is an unsaved change. A draft
+  // for a key the current list no longer shows (another search) still counts.
+  const hasUnsavedDrafts = Object.entries(drafts).some(([key, draft]) => {
+    const entry = data.items.find(item => item.key === key);
+    if (!entry) return true;
+    return draft !== (entry.override ?? entry.base ?? '');
+  });
+  const { blocker } = useUnsavedChanges(false, hasUnsavedDrafts);
 
   return (
     <div className="mt-8 bg-white dark:bg-gray-800 shadow-sm sm:rounded-lg px-4 py-5 sm:p-6">
@@ -256,6 +267,7 @@ function TranslationOverridesEditor({ languages, initialLanguage }) {
           </button>
         </div>
       )}
+      <UnsavedChangesDialog blocker={blocker} />
     </div>
   );
 }

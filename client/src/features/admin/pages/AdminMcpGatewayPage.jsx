@@ -8,6 +8,8 @@ import Switch from '../../../shared/components/Switch';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import AdminLoadGate from '../components/AdminLoadGate';
 import { useAdminConfigLoad } from '../hooks/useAdminConfigLoad';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
 
 /** One settings row: label and description on the left, the switch on the right. */
 function Toggle({ checked, onChange, label, description }) {
@@ -41,6 +43,9 @@ function AdminMcpGatewayPage() {
   const [platform, setPlatform] = useState(null);
   const [message, setMessage] = useState(null);
   const [saving, setSaving] = useState(false);
+  // The platform config as last loaded or saved; null until it loaded.
+  const [savedPlatform, setSavedPlatform] = useState(null);
+  const { blocker } = useUnsavedChanges(savedPlatform, platform);
   // The revision of the configuration this form loaded (or last saved): its
   // save sends exactly this as If-Match, whatever other reads in the tab saw.
   const revisionRef = useRef(null);
@@ -54,7 +59,10 @@ function AdminMcpGatewayPage() {
         load: async () =>
           (await makeAdminApiCall('/admin/configs/platform', { revision: revisionRef })).data ||
           {},
-        onLoad: setPlatform
+        onLoad: data => {
+          setPlatform(data);
+          setSavedPlatform(data);
+        }
       }
     }
   });
@@ -147,6 +155,7 @@ function AdminMcpGatewayPage() {
         body: platform,
         revision: revisionRef
       });
+      setSavedPlatform(platform);
       setMessage({ type: 'success', text: t('admin.mcp.common.saved', 'Saved') });
     } catch (err) {
       setMessage({
@@ -602,6 +611,7 @@ function AdminMcpGatewayPage() {
           </div>
         </div>
       )}
+      <UnsavedChangesDialog blocker={blocker} />
     </div>
   );
 }

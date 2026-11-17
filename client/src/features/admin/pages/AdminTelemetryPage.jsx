@@ -8,6 +8,8 @@ import { makeAdminApiCall } from '../../../api/adminApi';
 import { createConfigRevision } from '../../../api/adminConfigRevision';
 import AdminLoadGate from '../components/AdminLoadGate';
 import { useAdminConfigLoad } from '../hooks/useAdminConfigLoad';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
 
 const DEFAULT_TELEMETRY = {
   enabled: false,
@@ -68,6 +70,9 @@ function AdminTelemetryPage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [config, setConfig] = useState(DEFAULT_TELEMETRY);
+  // The configuration as last loaded or saved; null until it loaded.
+  const [savedConfig, setSavedConfig] = useState(null);
+  const { blocker } = useUnsavedChanges(savedConfig, config);
 
   // No form and no Save until the platform config loaded: saving after a failed
   // load would write the defaults below over the real telemetry block (OB-B1).
@@ -76,7 +81,11 @@ function AdminTelemetryPage() {
       platform: {
         load: async () =>
           (await makeAdminApiCall('/admin/configs/platform', { method: 'GET' })).data || {},
-        onLoad: platform => setConfig(deepMerge(DEFAULT_TELEMETRY, platform.telemetry || {}))
+        onLoad: platform => {
+          const loaded = deepMerge(DEFAULT_TELEMETRY, platform.telemetry || {});
+          setConfig(loaded);
+          setSavedConfig(loaded);
+        }
       }
     }
   });
@@ -100,6 +109,7 @@ function AdminTelemetryPage() {
         body: platform,
         revision
       });
+      setSavedConfig(config);
       setMessage({
         type: 'success',
         text: t(
@@ -595,6 +605,7 @@ function AdminTelemetryPage() {
           </div>
         </div>
       </div>
+      <UnsavedChangesDialog blocker={blocker} />
     </div>
   );
 }

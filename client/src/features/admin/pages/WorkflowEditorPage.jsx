@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { apiClient } from '../../../api/client';
@@ -11,6 +11,8 @@ import {
   flowToWorkflow,
   createStarterWorkflow
 } from '../../workflows/editor/workflowEditorUtils';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
 
 /** Same character class enforced by validateIdForPath() on the server. */
 const VALID_ID_PATTERN = /^[a-zA-Z0-9._-]+$/;
@@ -36,6 +38,28 @@ function WorkflowEditorPage() {
   const [idValue, setIdValue] = useState('');
 
   const isNew = id === 'new';
+  // The canvas as the editor holds it right now ({ nodes, edges }), reported by
+  // WorkflowEditor; null until the editor mounted.
+  const [flow, setFlow] = useState(null);
+
+  // Unsaved-changes guard (AX-B6): compare the workflow the canvas would save
+  // with the one it was opened from. Comparing the saved shape, not React
+  // Flow's nodes, ignores selection and measuring. While loading, after a failed
+  // load, or before the editor reported its canvas, nothing is dirty.
+  const initialFlow = useMemo(() => (workflow ? workflowToFlow(workflow) : null), [workflow]);
+  const loadedShape = useMemo(
+    () => (initialFlow ? flowToWorkflow(initialFlow.nodes, initialFlow.edges, workflow) : null),
+    [initialFlow, workflow]
+  );
+  // After a save the baseline is exactly what was sent.
+  const [savedShapeAfterSave, setSavedShapeAfterSave] = useState(null);
+  const savedShape = savedShapeAfterSave ?? loadedShape;
+  const editedShape = useMemo(
+    () => (flow && workflow ? flowToWorkflow(flow.nodes, flow.edges, workflow) : savedShape),
+    [flow, workflow, savedShape]
+  );
+  const { blocker, markSaved } = useUnsavedChanges(savedShape, editedShape);
+  const handleFlowChange = useCallback((nodes, edges) => setFlow({ nodes, edges }), []);
 
   const showToast = useCallback((kind, message) => {
     setToast({ kind, message });
@@ -44,6 +68,8 @@ function WorkflowEditorPage() {
 
   useEffect(() => {
     const loadWorkflow = async () => {
+      setFlow(null);
+      setSavedShapeAfterSave(null);
       if (isNew) {
         // Start from the shared starter so the canvas opens with connected
         // Start and End steps and the workflow is valid the moment it saves.
@@ -82,11 +108,14 @@ function WorkflowEditorPage() {
       try {
         if (isNew) {
           await apiClient.post('/workflows', updated);
+          // Saved: moving to the new workflow's own URL loses nothing.
+          markSaved();
           navigate(`/admin/workflows/${updated.id}/edit`, { replace: true });
         } else {
           await apiClient.put(`/workflows/${id}`, updated);
         }
         setWorkflow(updated);
+        setSavedShapeAfterSave(updated);
         showToast('success', t('workflows.editor.saveSuccess', 'Workflow saved'));
         return updated.id || id;
       } catch (err) {
@@ -99,7 +128,7 @@ function WorkflowEditorPage() {
         setSaving(false);
       }
     },
-    [isNew, id, navigate, t, showToast]
+    [isNew, id, navigate, t, showToast, markSaved]
   );
 
   /**
@@ -185,7 +214,7 @@ function WorkflowEditorPage() {
     );
   }
 
-  const { nodes: initialNodes, edges: initialEdges } = workflowToFlow(workflow);
+  const { nodes: initialNodes, edges: initialEdges } = initialFlow;
 
   return (
     <div className="h-full min-h-0 flex flex-col">
@@ -228,7 +257,7 @@ function WorkflowEditorPage() {
               to={`/admin/workflows/${id}`}
               title={t(
                 'workflows.editor.chatIntegrationLinkHint',
-                'Availability in chat, the result shown there and its format are set on the workflow page. Unsaved changes on the canvas are lost.'
+                'Availability in chat, the result shown there and its format are set on the workflow page.'
               )}
               className="text-sm text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300"
             >
@@ -244,6 +273,7 @@ function WorkflowEditorPage() {
           initialEdges={initialEdges}
           onSave={handleSave}
           onPublish={handlePublish}
+          onFlowChange={handleFlowChange}
         />
         {toast && (
           <div
@@ -306,6 +336,7 @@ function WorkflowEditorPage() {
           </div>
         )}
       </div>
+      <UnsavedChangesDialog blocker={blocker} />
     </div>
   );
 }

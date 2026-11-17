@@ -4486,12 +4486,6 @@
         "unsaved": "You have unsaved changes",
         "discard": "Discard"
       },
-      "unsaved": {
-        "title": "Unsaved changes",
-        "message": "You have unsaved changes. Leave anyway?",
-        "leave": "Leave",
-        "stay": "Stay"
-      },
       "saved": "UI configuration saved successfully",
       "backedUp": "Configuration backed up to: {{path}}",
       "missingSection": "The configuration lacks the section \"{{section}}\".",
@@ -5563,12 +5557,6 @@
         "deleteSelectedAction": "Delete items",
         "deleteSelectedFailed": "{{count}} items could not be deleted: {{reason}}"
       },
-      "unsaved": {
-        "title": "Unsaved changes",
-        "message": "You have unsaved changes. Leave anyway?",
-        "leave": "Leave",
-        "stay": "Stay"
-      },
       "dependencies": {
         "title": "Project is in use",
         "message": "\"{{name}}\" cannot be deleted while these apps, workflows or agents link it. Remove the project from them first.",
@@ -6260,13 +6248,7 @@
       },
       "titleEdit": "Edit in builder",
       "titleEditOf": "Edit {{id}} in the builder",
-      "titleNew": "Add manually",
-      "unsaved": {
-        "leave": "Leave",
-        "message": "The integration is not saved. Leave anyway?",
-        "stay": "Stay",
-        "title": "Unsaved changes"
-      }
+      "titleNew": "Add manually"
     },
     "usageLimits": {
       "title": "Usage limits",
@@ -6324,9 +6306,9 @@
       }
     },
     "unsavedChanges": {
-      "title": "Unsaved changes",
-      "message": "You have unsaved changes. Leave anyway?",
-      "leave": "Leave",
+      "title": "Leave without saving?",
+      "message": "Your changes will be lost.",
+      "discard": "Discard changes",
       "stay": "Stay"
     },
     "docs": {
@@ -6845,6 +6827,11 @@
       "relatedNoticeText": "— the notice in the empty chat and the guardrail wording",
       "relatedAck": "AI acknowledgement",
       "relatedAckText": "— the confirmation before the first message, stored with the user"
+    },
+    "settingsPage": {
+      "sectionsNav": "Settings sections",
+      "sectionUnsaved": "(unsaved changes)",
+      "sectionUnsavedBadge": "Unsaved changes"
     },
     "load": {
       "title": "Couldn't load {{resource}}",
@@ -7943,7 +7930,7 @@
       "back": "Back",
       "boundaryEdgesRemoved": "Connections crossing the loop boundary were removed — reconnect inside or outside the loop.",
       "chatIntegrationLink": "Chat integration",
-      "chatIntegrationLinkHint": "Availability in chat, how the answer is shown and its description are set on the workflow page. Unsaved changes on the canvas are lost.",
+      "chatIntegrationLinkHint": "Availability in chat, how the answer is shown and its description are set on the workflow page.",
       "chatVisible": "Show progress in chat",
       "config": "Configuration",
       "configJson": "Config (JSON)",

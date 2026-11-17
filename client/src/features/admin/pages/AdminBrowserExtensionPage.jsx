@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
@@ -10,6 +10,9 @@ import { makeAdminApiCall } from '../../../api/adminApi';
 import AdminLoadGate from '../components/AdminLoadGate';
 import { useAdminConfigLoad } from '../hooks/useAdminConfigLoad';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
+import { useSavedBaseline } from '../hooks/useSavedBaseline';
 
 function AdminBrowserExtensionPage() {
   const { t } = useTranslation();
@@ -27,6 +30,14 @@ function AdminBrowserExtensionPage() {
   const [allowedGroups, setAllowedGroups] = useState(['browser-extension']);
   const [availableGroups, setAvailableGroups] = useState([]);
   const [confirmDialog, setConfirmDialog] = useState(null);
+  // Unsaved-changes guard: the baseline is captured after every successful load
+  // (also the reload after Save), so a just-loaded page is never dirty.
+  const editedValues = useMemo(
+    () => ({ displayName, description, starterPrompts, extensionIds, allowedGroups }),
+    [displayName, description, starterPrompts, extensionIds, allowedGroups]
+  );
+  const { baseline, captureBaseline } = useSavedBaseline(editedValues);
+  const { blocker } = useUnsavedChanges(baseline, editedValues);
 
   const emptyPrompt = () => ({
     _id: crypto.randomUUID(),
@@ -66,6 +77,8 @@ function AdminBrowserExtensionPage() {
         ? data.allowedGroups
         : ['browser-extension']
     );
+    // The loaded values are the unsaved-changes baseline (also after a reload).
+    captureBaseline();
   };
 
   // Reload after Enable/Disable or a save; the first load goes through the gate below.
@@ -824,6 +837,7 @@ function AdminBrowserExtensionPage() {
         onConfirm={() => confirmDialog?.onConfirm()}
         onDeny={() => setConfirmDialog(null)}
       />
+      <UnsavedChangesDialog blocker={blocker} />
     </div>
   );
 }

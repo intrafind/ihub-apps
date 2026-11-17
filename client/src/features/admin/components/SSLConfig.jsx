@@ -8,13 +8,21 @@ import Switch from '../../../shared/components/Switch';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import AdminLoadGate from './AdminLoadGate';
 import { useAdminConfigLoad } from '../hooks/useAdminConfigLoad';
+import { useDirtyReport } from '../hooks/useDirtyReport';
 
-function SSLConfig() {
+/**
+ * @param {Object} props
+ * @param {(dirty: boolean) => void} [props.onDirtyChange] - Reports unsaved edits to the page.
+ */
+function SSLConfig({ onDirtyChange }) {
   const { t } = useTranslation();
   const [config, setConfig] = useState({
     ignoreInvalidCertificates: false,
     domainWhitelist: []
   });
+  // The configuration as last loaded or saved; null until it loaded.
+  const [savedConfig, setSavedConfig] = useState(null);
+  useDirtyReport(savedConfig, config, onDirtyChange);
   const [newDomain, setNewDomain] = useState('');
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
@@ -32,10 +40,12 @@ function SSLConfig() {
           ).data,
         onLoad: data => {
           // Ensure domainWhitelist is always an array for backward compatibility
-          setConfig({
+          const loaded = {
             ignoreInvalidCertificates: data.ignoreInvalidCertificates || false,
             domainWhitelist: Array.isArray(data.domainWhitelist) ? data.domainWhitelist : []
-          });
+          };
+          setConfig(loaded);
+          setSavedConfig(loaded);
         }
       }
     }
@@ -87,6 +97,7 @@ function SSLConfig() {
         method: 'PUT',
         body: config
       });
+      setSavedConfig(config);
 
       setMessage({
         type: 'success',

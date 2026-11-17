@@ -7,10 +7,18 @@ import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import AdminLoadGate from './AdminLoadGate';
 import { useAdminConfigLoad } from '../hooks/useAdminConfigLoad';
+import { useDirtyReport } from '../hooks/useDirtyReport';
 
-function SsrfConfig() {
+/**
+ * @param {Object} props
+ * @param {(dirty: boolean) => void} [props.onDirtyChange] - Reports unsaved edits to the page.
+ */
+function SsrfConfig({ onDirtyChange }) {
   const { t } = useTranslation();
   const [allowedHosts, setAllowedHosts] = useState([]);
+  // The allowlist as last loaded or saved; null until it loaded.
+  const [savedHosts, setSavedHosts] = useState(null);
+  useDirtyReport(savedHosts, allowedHosts, onDirtyChange);
   const [newHost, setNewHost] = useState('');
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
@@ -22,7 +30,9 @@ function SsrfConfig() {
       config: {
         load: async () => (await makeAdminApiCall('/admin/ssrf/config', { method: 'GET' })).data,
         onLoad: data => {
-          setAllowedHosts(Array.isArray(data.allowedHosts) ? data.allowedHosts : []);
+          const loaded = Array.isArray(data.allowedHosts) ? data.allowedHosts : [];
+          setAllowedHosts(loaded);
+          setSavedHosts(loaded);
         }
       }
     }
@@ -55,6 +65,7 @@ function SsrfConfig() {
         method: 'PUT',
         body: { allowedHosts }
       });
+      setSavedHosts(allowedHosts);
       setMessage({
         type: 'success',
         text: t('admin.system.ssrf.configSaved', 'SSRF allowlist saved successfully')

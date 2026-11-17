@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useEffect, useMemo, useState } from 'react';
+import { use, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../../shared/components/Icon';
 import LoadingSpinner from '../../../../shared/components/LoadingSpinner';
@@ -33,6 +33,7 @@ import {
   updateInstalledIntegration
 } from '../../../../api/integrationsAdminApi';
 import { fetchAdminGroups, getAdminApiErrorMessage } from '../../../../api/adminApi';
+import { DirtyReportContext, useDirtyReport } from '../../hooks/useDirtyReport';
 
 const AUTH_MODE_KEYS = {
   none: ['none', 'No sign-in (public API)'],
@@ -174,6 +175,10 @@ function IntegrationInstallForm({
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
   const [form, setForm] = useState(null);
+  // The form as loaded; reported to the page (DirtyReportContext) so an
+  // installation's Settings tab can warn before its edits are lost.
+  const [loadedForm, setLoadedForm] = useState(null);
+  useDirtyReport(loadedForm, form, use(DirtyReportContext));
   const [secretStored, setSecretStored] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -214,7 +219,7 @@ function IntegrationInstallForm({
           instance?.labelLocalized && typeof instance.labelLocalized === 'object'
             ? instance.labelLocalized
             : {};
-        setForm({
+        const nextForm = {
           id: instance?.id || def.singleton?.instanceId || proposeInstanceId(def.id, takenIds),
           label: pickText(storedLabel, lang) || (!isEdit && prefill?.label) || '',
           description: pickText(instance?.description, lang) || '',
@@ -239,7 +244,9 @@ function IntegrationInstallForm({
           // A new installation starts with an approval default the admin can
           // change before saving (#2916): the server's preset for the definition.
           approvalDefault: isEdit ? undefined : def.approvalPreset || installApprovalPreset(def)
-        });
+        };
+        setForm(nextForm);
+        setLoadedForm(nextForm);
       } catch (err) {
         if (!cancelled) setLoadError(getAdminApiErrorMessage(err));
       } finally {

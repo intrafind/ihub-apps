@@ -17,7 +17,7 @@ import {
 } from '../../formStyles';
 import { buildApiUrl } from '../../../../../utils/runtimeBasePath';
 import { fetchIntegrationConnections } from '../../../../../api/integrationsAdminApi';
-import useInstallationEditor from './useInstallationEditor';
+import useInstallationEditor, { useInstallationEditorDirty } from './useInstallationEditor';
 import {
   AccessSection,
   ActionsSection,
@@ -225,6 +225,7 @@ function StorageProviderEditor({ instance, definition, onSaved, onCancel }) {
   const [values, setValues] = useState(() =>
     spec ? initialStorageValues(spec, instance.values) : {}
   );
+  useInstallationEditorDirty(editor, values);
   const [showAdvanced, setShowAdvanced] = useState(() =>
     Boolean(instance.values?.siteUrl || instance.values?.driveId)
   );

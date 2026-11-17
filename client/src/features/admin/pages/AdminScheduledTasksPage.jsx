@@ -14,6 +14,8 @@ import {
   TaskStatusBadge
 } from '../../tasks/components/TaskBadges';
 import { formatDateTime, formatDuration, reasonText } from '../../tasks/utils/taskFormat';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
 
 const input =
   'block w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100';
@@ -58,6 +60,9 @@ export default function AdminScheduledTasksPage() {
   const [error, setError] = useState(null);
   const [notice, setNotice] = useState(null);
   const [settings, setSettings] = useState(null);
+  // The settings as first loaded or last saved; null until they loaded.
+  const [savedSettings, setSavedSettings] = useState(null);
+  const { blocker } = useUnsavedChanges(savedSettings, settings);
   const [saving, setSaving] = useState(false);
   const [runsFor, setRunsFor] = useState(null);
   const [runs, setRuns] = useState([]);
@@ -70,6 +75,7 @@ export default function AdminScheduledTasksPage() {
       });
       setData(response.data);
       setSettings(prev => prev || response.data.settings);
+      setSavedSettings(prev => prev || response.data.settings);
       setError(null);
     } catch (err) {
       setError(getAdminApiErrorMessage(err));
@@ -92,6 +98,7 @@ export default function AdminScheduledTasksPage() {
         body
       });
       setSettings(response.data.settings);
+      setSavedSettings(response.data.settings);
       setNotice(
         response.data.changed.length > 0
           ? t('admin.scheduledTasks.saved', 'Settings saved')
@@ -566,6 +573,7 @@ export default function AdminScheduledTasksPage() {
           </div>
         </div>
       </Modal>
+      <UnsavedChangesDialog blocker={blocker} />
     </div>
   );
 }

@@ -25,6 +25,8 @@ import {
   sourceLabel,
   windowLabel
 } from '../../../shared/utils/usageFormat';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import UnsavedChangesDialog from './UnsavedChangesDialog';
 
 const WINDOWS = ['day', 'week', 'month'];
 const WEEKDAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
@@ -172,17 +174,22 @@ function SettingsCard() {
   const { t, i18n } = useTranslation();
   const [settings, setSettings] = useState(null);
   const [form, setForm] = useState(null);
+  // The form as last loaded or saved; null until it loaded.
+  const [savedForm, setSavedForm] = useState(null);
+  const { blocker } = useUnsavedChanges(savedForm, form);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
 
   const apply = data => {
     setSettings(data);
-    setForm({
+    const nextForm = {
       allModels: Object.fromEntries(
         WINDOWS.map(w => [w, data.allModels?.[w] >= 0 ? String(data.allModels[w]) : ''])
       ),
       resets: { ...data.resets, timezone: data.resets.timezone || '' }
-    });
+    };
+    setForm(nextForm);
+    setSavedForm(nextForm);
   };
 
   useEffect(() => {
@@ -230,6 +237,7 @@ function SettingsCard() {
 
   return (
     <div className={`${CARD} p-5`} data-testid="usage-limit-settings">
+      <UnsavedChangesDialog blocker={blocker} />
       <div className="grid gap-6 lg:grid-cols-2">
         <div>
           <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">

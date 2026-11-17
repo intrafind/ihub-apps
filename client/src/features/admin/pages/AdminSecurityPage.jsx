@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import SSLConfig from '../components/SSLConfig';
@@ -20,6 +20,14 @@ function AdminSecurityPage() {
   const [encryptedResult, setEncryptedResult] = useState('');
   const [encryptLoading, setEncryptLoading] = useState(false);
   const [encryptMessage, setEncryptMessage] = useState('');
+  // Which sections hold unsaved edits. Each section loads and saves on its own
+  // and reports here; AdminSettingsPage marks them in its nav and guards the page.
+  const [dirtySections, setDirtySections] = useState({});
+  const reportDirty = useCallback(
+    id => dirty =>
+      setDirtySections(prev => (Boolean(prev[id]) === dirty ? prev : { ...prev, [id]: dirty })),
+    []
+  );
 
   const handleEncryptValue = async () => {
     if (!encryptValue || encryptValue.trim() === '') {
@@ -274,37 +282,44 @@ function AdminSecurityPage() {
         {
           id: 'ssl',
           label: t('admin.security.sections.ssl', 'SSL / TLS'),
-          children: <SSLConfig />
+          dirty: dirtySections.ssl,
+          children: <SSLConfig onDirtyChange={reportDirty('ssl')} />
         },
         {
           id: 'cookies',
           label: t('admin.security.sections.cookies', 'Cookies'),
-          children: <CookieSettingsConfig />
+          dirty: dirtySections.cookies,
+          children: <CookieSettingsConfig onDirtyChange={reportDirty('cookies')} />
         },
         {
           id: 'cors',
           label: t('admin.security.sections.cors', 'CORS'),
-          children: <CorsConfig />
+          dirty: dirtySections.cors,
+          children: <CorsConfig onDirtyChange={reportDirty('cors')} />
         },
         {
           id: 'rateLimits',
           label: t('admin.security.sections.rateLimits', 'Rate Limits'),
-          children: <RateLimitConfig />
+          dirty: dirtySections.rateLimits,
+          children: <RateLimitConfig onDirtyChange={reportDirty('rateLimits')} />
         },
         {
           id: 'ssrf',
           label: t('admin.security.sections.ssrf', 'SSRF Allowlist'),
-          children: <SsrfConfig />
+          dirty: dirtySections.ssrf,
+          children: <SsrfConfig onDirtyChange={reportDirty('ssrf')} />
         },
         {
           id: 'toolApproval',
           label: t('admin.security.sections.toolApproval', 'Tool approval'),
-          children: <ToolApprovalConfig />
+          dirty: dirtySections.toolApproval,
+          children: <ToolApprovalConfig onDirtyChange={reportDirty('toolApproval')} />
         },
         {
           id: 'proxy',
           label: t('admin.security.sections.proxy', 'Outbound Proxy'),
-          children: <ProxyConfig />
+          dirty: dirtySections.proxy,
+          children: <ProxyConfig onDirtyChange={reportDirty('proxy')} />
         },
         {
           id: 'encryption',

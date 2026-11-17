@@ -16,13 +16,13 @@ import {
 } from '../components/formStyles';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import { makeAdminApiCall } from '../../../api/adminApi';
-import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 import Switch from '../../../shared/components/Switch';
 import { DisclaimerCard } from '../../../shared/components/DisclaimerPopup';
 import AIDisclaimerBanner from '../../chat/components/AIDisclaimerBanner';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import { nextDisclaimerVersion } from '../../../utils/disclaimerAcknowledgement';
+import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
 
 const EMPTY = Object.freeze({});
 
@@ -408,16 +408,7 @@ function AdminDisclaimerPage() {
         }}
       />
 
-      <ConfirmDialog
-        isOpen={blocker.state === 'blocked'}
-        title={t('admin.ui.unsaved.title', 'Unsaved changes')}
-        message={t('admin.ui.unsaved.message', 'You have unsaved changes. Leave anyway?')}
-        confirmLabel={t('admin.ui.unsaved.leave', 'Leave')}
-        denyLabel={t('admin.ui.unsaved.stay', 'Stay')}
-        danger={false}
-        onConfirm={() => blocker.proceed?.()}
-        onDeny={() => blocker.reset?.()}
-      />
+      <UnsavedChangesDialog blocker={blocker} />
     </div>
   );
 }

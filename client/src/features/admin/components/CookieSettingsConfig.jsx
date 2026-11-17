@@ -7,12 +7,20 @@ import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import AdminLoadGate from './AdminLoadGate';
 import { useAdminConfigLoad } from '../hooks/useAdminConfigLoad';
+import { useDirtyReport } from '../hooks/useDirtyReport';
 
-function CookieSettingsConfig() {
+/**
+ * @param {Object} props
+ * @param {(dirty: boolean) => void} [props.onDirtyChange] - Reports unsaved edits to the page.
+ */
+function CookieSettingsConfig({ onDirtyChange }) {
   const { t } = useTranslation();
   const [config, setConfig] = useState({
     disableSecure: false
   });
+  // The settings as last loaded or saved; null until they loaded.
+  const [savedConfig, setSavedConfig] = useState(null);
+  useDirtyReport(savedConfig, config, onDirtyChange);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -28,9 +36,11 @@ function CookieSettingsConfig() {
             })
           ).data,
         onLoad: data => {
-          setConfig({
+          const loaded = {
             disableSecure: data?.cookieSettings?.disableSecure || false
-          });
+          };
+          setConfig(loaded);
+          setSavedConfig(loaded);
         }
       }
     }
@@ -58,6 +68,7 @@ function CookieSettingsConfig() {
         method: 'PATCH',
         body: { cookieSettings: { disableSecure: config.disableSecure } }
       });
+      setSavedConfig(config);
 
       setMessage({
         type: 'success',
