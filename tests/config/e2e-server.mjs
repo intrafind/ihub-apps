@@ -19,7 +19,8 @@
  * `playwright.admin-safety.config.js`), through environment variables whose
  * defaults are the values above:
  *
- * - `E2E_CONTENTS_DIR` - the contents directory (default `contents-e2e`)
+ * - `E2E_CONTENTS_DIR` - the contents directory (default `contents-e2e`; only a directory
+ *   inside the repository named `contents-e2e*`, anything else is refused)
  * - `E2E_FRESH_CONTENTS=1` - delete that directory first, for a fresh install (only a
  *   directory inside the repository named `contents-e2e*`; anything else is refused)
  * - `E2E_SERVER_PORT` - the API server's port (default: the server's own, 3000)
@@ -31,10 +32,12 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { prepareE2eContents } from './e2e-contents.mjs';
-import { removeDisposableContents } from './e2e-fresh-contents.mjs';
+import { e2eContentsDir, removeDisposableContents } from './e2e-fresh-contents.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const CONTENTS_DIR = process.env.E2E_CONTENTS_DIR || 'contents-e2e';
+// Only a `contents-e2e*` directory inside the repository; anything else throws
+// before the directory is rewritten below, with or without E2E_FRESH_CONTENTS.
+const CONTENTS_DIR = e2eContentsDir(root, process.env);
 const LLM_PORT = Number(process.env.E2E_LLM_PORT) || 8979;
 const SERVER_PORT = Number(process.env.E2E_SERVER_PORT) || null;
 const CLIENT_PORT = Number(process.env.E2E_CLIENT_PORT) || null;

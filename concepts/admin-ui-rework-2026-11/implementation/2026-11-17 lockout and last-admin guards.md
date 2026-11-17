@@ -81,10 +81,15 @@ Details that are easy to get wrong:
 
 Same-file races are serialized by `configStore.updateJson`. Cross-file skew (a platform save and
 a user edit, each checked against the other's old file, together leaving no admin) is closed in
-one process by `withAdminInvariantLock`: lock order is always invariant lock, then file lock, and
-nothing takes the invariant lock while holding a file lock. **Known limitation:** it is per
-process. Several workers/pods acting within milliseconds can still skew. A cross-process version
-would need a lock the document store backends share; not worth it for a two-admins-at-once race.
+by `withAdminInvariantLock`: lock order is always invariant lock, then file lock, and nothing
+takes the invariant lock while holding a file lock. It is an in-process queue plus a lease file,
+`contents/config/.admin-invariants.lock` (`withFileLock`, the same lease the per-file config locks
+use), so the cluster workers of one installation (`WORKERS`, four by default) are serialized too.
+The lease is taken once per call chain (reentrant via `AsyncLocalStorage`) and waits up to 30 s,
+then fails with `LockTimeoutError` instead of writing unguarded. **Known limitation:** separate
+installations (pods) that do not share `contents/` are not coordinated; that would need a lock
+the document store backends share (the storage provider's `locks` facet once a distributed
+provider exists).
 
 ## Verified facts
 

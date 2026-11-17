@@ -164,6 +164,48 @@ describe('AdminUICustomization', () => {
     });
   });
 
+  it('keeps edits made while the page list is read back after a save', async () => {
+    await renderPage();
+    let releasePages;
+    makeAdminApiCall.mockImplementation(url => {
+      if (url === '/admin/pages') {
+        return new Promise(resolve => {
+          releasePages = () =>
+            resolve({
+              data: { items: [{ id: 'news', title: { en: 'News' }, contentType: 'markdown' }] }
+            });
+        });
+      }
+      return Promise.resolve({ data: {} });
+    });
+
+    fireEvent.click(screen.getByLabelText('Custom text per language'));
+    fireEvent.change(screen.getByDisplayValue('Acme AI'), { target: { value: 'My Hub' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+    });
+    await flush();
+
+    // The save went out; the page-list read is still pending. Keep editing.
+    fireEvent.change(screen.getByDisplayValue('My Hub'), { target: { value: 'Our Hub' } });
+    await act(async () => releasePages());
+    await flush();
+
+    expect(screen.getByDisplayValue('Our Hub')).toBeInTheDocument();
+    // The edit was not sent, so it is still reported as unsaved.
+    expect(screen.getByRole('region', { name: 'Save changes' })).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+    });
+    await flush();
+    const saves = makeAdminApiCall.mock.calls.filter(([, options]) => options?.method === 'POST');
+    expect(saves[1][1].body.config.title).toEqual({ en: 'Our Hub' });
+    expect(saves[1][1].body.config.pages).toEqual({
+      news: { title: { en: 'News' }, contentType: 'markdown' }
+    });
+  });
+
   it('marks the tab that holds unsaved changes', async () => {
     await renderPage();
     fireEvent.click(screen.getByLabelText('Custom text per language'));

@@ -12,6 +12,7 @@ import os from 'os';
 import path from 'path';
 import {
   disposableContentsPath,
+  e2eContentsDir,
   removeDisposableContents
 } from '../../tests/config/e2e-fresh-contents.mjs';
 
@@ -51,5 +52,42 @@ describe('removeDisposableContents', () => {
 
     expect(fs.existsSync(path.join(root, 'contents-e2e'))).toBe(false);
     expect(fs.existsSync(path.join(root, 'contents', '.encryption-key'))).toBe(true);
+  });
+});
+
+describe('a symlinked parent', () => {
+  test('pointing out of the repository is refused before anything is deleted', () => {
+    const root = tempRoot();
+    const outside = tempRoot();
+    fs.mkdirSync(path.join(outside, 'contents-e2e'), { recursive: true });
+    fs.writeFileSync(path.join(outside, 'contents-e2e', 'keep'), 'k');
+    fs.symlinkSync(outside, path.join(root, 'linked'), 'dir');
+
+    expect(() => removeDisposableContents(root, 'linked/contents-e2e')).toThrow(
+      /refusing to delete/
+    );
+    expect(fs.existsSync(path.join(outside, 'contents-e2e', 'keep'))).toBe(true);
+  });
+
+  test('a directory that does not exist yet is still fine', () => {
+    const root = tempRoot();
+    expect(disposableContentsPath(root, 'contents-e2e-new')).toBe(
+      path.join(root, 'contents-e2e-new')
+    );
+  });
+});
+
+describe('e2eContentsDir (checked whether or not E2E_FRESH_CONTENTS is set)', () => {
+  test('defaults to contents-e2e and accepts contents-e2e-safety', () => {
+    expect(e2eContentsDir('/repo', {})).toBe('contents-e2e');
+    expect(e2eContentsDir('/repo', { E2E_CONTENTS_DIR: 'contents-e2e-safety' })).toBe(
+      'contents-e2e-safety'
+    );
+  });
+
+  test('E2E_CONTENTS_DIR=contents without E2E_FRESH_CONTENTS is refused', () => {
+    expect(() => e2eContentsDir('/repo', { E2E_CONTENTS_DIR: 'contents' })).toThrow(
+      /refusing to delete or rewrite "contents"/
+    );
   });
 });

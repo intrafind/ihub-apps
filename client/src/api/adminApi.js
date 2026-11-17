@@ -93,7 +93,7 @@ export const makeAdminApiCall = async (url, options = {}) => {
 
   try {
     const response = await apiClient(axiosConfig);
-    rememberRevision(axiosConfig.url, response);
+    rememberRevision(axiosConfig.url, response, method);
     return response;
   } catch (error) {
     const status = error.response?.status;

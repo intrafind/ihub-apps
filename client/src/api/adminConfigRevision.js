@@ -19,7 +19,11 @@
  *
  * Scoped writes (`PATCH`, which change only the fields they name) are not
  * guarded by default: a one-field toggle should not fail because another
- * section changed. A caller can still send its own `If-Match`.
+ * section changed. A caller can still send its own `If-Match`. Their responses
+ * do not advance the remembered revision either: a full-config form loaded
+ * earlier in this tab has not seen the changes between its load and the
+ * PATCH (another admin's included), so its next POST must still be checked
+ * against the revision it loaded.
  *
  * @module api/adminConfigRevision
  */
@@ -81,15 +85,21 @@ export function withIfMatch(url, method, headers) {
   return etag ? { ...headers, 'If-Match': etag } : headers;
 }
 
+/** The methods whose response revision a full-config form may build on. */
+const REVISION_METHODS = new Set(['GET', 'POST']);
+
 /**
- * Remember the revision a response carries (reads and successful writes).
+ * Remember the revision a response carries: full reads (`GET`) and full
+ * writes (`POST`). A scoped `PATCH` response is ignored, because the page
+ * that saves the whole file next did not load what that revision contains.
  *
  * @param {string} url
  * @param {{headers?: Object}} response - An axios response
+ * @param {string} [method='GET'] - HTTP method of the request
  */
-export function rememberRevision(url, response) {
+export function rememberRevision(url, response, method = 'GET') {
   const resource = guardedResourceOf(url);
-  if (!resource) return;
+  if (!resource || !REVISION_METHODS.has(String(method).toUpperCase())) return;
   const headers = response?.headers || {};
   const etag = typeof headers.get === 'function' ? headers.get('etag') : headers.etag;
   if (typeof etag === 'string' && etag) revisions.set(resource, etag);

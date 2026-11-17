@@ -74,6 +74,7 @@ const { default: registerAdminConfigRoutes } = await import('../routes/admin/con
 const { default: registerAdminUIRoutes } = await import('../routes/admin/ui.js');
 const { default: registerAdminPagesRoutes } = await import('../routes/admin/pages.js');
 const { default: errorHandler } = await import('../middleware/errorHandler.js');
+const { assertIfMatch } = await import('../utils/configRevision.js');
 
 const LOCAL_ADMIN = {
   id: 'user_local',
@@ -225,6 +226,25 @@ describe('platform config: ETag and optional If-Match', () => {
   test('If-Match: * is applied when the file exists', async () => {
     await savePlatform(appFor(), { defaultLanguage: 'de' }, '*').expect(200);
     expect(JSON.parse(await readText('platform.json')).defaultLanguage).toBe('de');
+  });
+
+  test('If-Match: * accepts an existing empty file; only a missing one is 412', () => {
+    const req = { get: name => (name === 'If-Match' ? '*' : undefined) };
+    expect(() => assertIfMatch(req, {}, 'platform')).not.toThrow();
+    for (const missing of [null, undefined]) {
+      expect(() => assertIfMatch(req, missing, 'platform')).toThrow(
+        expect.objectContaining({ code: 'PRECONDITION_FAILED' })
+      );
+    }
+  });
+
+  test('If-Match: * saves over an existing empty ui.json', async () => {
+    await writeConfig('ui.json', {});
+    await request(appFor())
+      .post('/api/admin/ui/config')
+      .set('If-Match', '*')
+      .send({ config: UI })
+      .expect(204);
   });
 
   test('a tag a proxy weakened (W/) still matches its revision', async () => {

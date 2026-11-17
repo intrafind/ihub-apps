@@ -132,6 +132,26 @@ describe('makeAdminApiCall: If-Match for platform and UI config saves', () => {
     expect(sentHeaders(2)['If-Match']).toBeUndefined();
   });
 
+  test("a PATCH response does not advance the revision a full form's POST is checked against", async () => {
+    // A full form (Authentication) loaded rev-1. Another admin then saved, and
+    // a scoped PATCH from another card finished afterwards with rev-3. The
+    // form never saw the other admin's change, so its POST must still send
+    // rev-1 and be refused, not carry rev-3 and overwrite that change.
+    mockRequest
+      .mockResolvedValueOnce(ok({}, '"rev-1"'))
+      .mockResolvedValueOnce(ok({}, '"rev-3"'))
+      .mockResolvedValueOnce(ok({}, '"rev-4"'));
+
+    await makeAdminApiCall('/admin/configs/platform');
+    await makeAdminApiCall('/admin/configs/platform', {
+      method: 'PATCH',
+      body: { cookieSettings: { disableSecure: true } }
+    });
+    await makeAdminApiCall('/admin/configs/platform', { method: 'POST', body: {} });
+
+    expect(sentHeaders(2)['If-Match']).toBe('"rev-1"');
+  });
+
   test('no read yet: no If-Match (the save behaves as before)', async () => {
     mockRequest.mockResolvedValueOnce(ok({}));
     await makeAdminApiCall('/admin/configs/platform', { method: 'POST', body: {} });

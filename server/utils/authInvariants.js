@@ -266,20 +266,28 @@ export function listUsableAdmins(usersData, resolvedGroups, platform) {
   const ldap = platform.ldapAuth;
   if (isMethodEnabled(ldap) && Array.isArray(ldap.providers)) {
     for (const provider of ldap.providers) {
-      const defaults = Array.isArray(provider?.defaultGroups) ? provider.defaultGroups : [];
-      if (defaults.some(groupId => grantsAdmin(resolvedGroups, groupId))) {
+      if (defaultGroupsGrantAdmin(resolvedGroups, provider?.defaultGroups)) {
         routes.push(`ldap:${provider.name}`);
       }
     }
   }
 
   const ntlm = platform.ntlmAuth;
-  if (isMethodEnabled(ntlm) && Array.isArray(ntlm.defaultGroups)) {
-    if (ntlm.defaultGroups.some(groupId => grantsAdmin(resolvedGroups, groupId))) {
-      routes.push('ntlm');
-    }
+  if (isMethodEnabled(ntlm) && defaultGroupsGrantAdmin(resolvedGroups, ntlm.defaultGroups)) {
+    routes.push('ntlm');
   }
   return routes;
+}
+
+/**
+ * Whether default groups (of an LDAP provider or NTLM) grant admin access.
+ *
+ * @param {Object} resolvedGroups - Groups with inheritance resolved
+ * @param {unknown} defaults - The configured `defaultGroups`
+ * @returns {boolean}
+ */
+function defaultGroupsGrantAdmin(resolvedGroups, defaults) {
+  return Array.isArray(defaults) && defaults.some(groupId => grantsAdmin(resolvedGroups, groupId));
 }
 
 /**

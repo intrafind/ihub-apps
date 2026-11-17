@@ -181,10 +181,8 @@ export function parseIfMatch(header) {
 export function assertIfMatch(req, stored, resource, revisionFn = revisionOf) {
   const expected = parseIfMatch(req.get('If-Match'));
   if (expected === null) return;
-  const exists =
-    stored !== null &&
-    stored !== undefined &&
-    !(typeof stored === 'object' && !Array.isArray(stored) && Object.keys(stored).length === 0);
+  // The store reads a missing file as `null`; an existing `{}` is a file.
+  const exists = stored !== null && stored !== undefined;
   if (expected === '*' ? exists : expected.includes(revisionFn(stored))) return;
   throw new ServiceError(
     'PRECONDITION_FAILED',

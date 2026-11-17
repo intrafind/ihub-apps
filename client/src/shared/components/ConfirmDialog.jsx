@@ -49,6 +49,11 @@ function ConfirmDialog({
     returnFocusOnDeactivate: true
   });
 
+  // Hiding Confirm removes the button that may hold focus; keep focus inside.
+  useEffect(() => {
+    if (isOpen && hideConfirm) denyButtonRef.current?.focus();
+  }, [isOpen, hideConfirm]);
+
   useEffect(() => {
     if (!isOpen) return undefined;
     const onKeyDown = event => {

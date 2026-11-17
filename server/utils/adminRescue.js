@@ -6,7 +6,7 @@ import { loadUsers, saveUsers } from './userManager.js';
 import configCache from '../configCache.js';
 import logger from './logger.js';
 import { localUsersFile } from './contentsPath.js';
-import { applySignInEnvFlags, isUsableAdmin, isUserAuthMethodEnabled } from './authInvariants.js';
+import { applySignInEnvFlags, isUsableAdmin, listUsableAdmins } from './authInvariants.js';
 
 /**
  * Check if there is at least one admin user across all enabled authentication methods
@@ -21,95 +21,22 @@ export function hasAnyAdmin(usersFilePath = localUsersFile()) {
     const platform = applySignInEnvFlags(configCache.getPlatform() || {});
     const groupsConfig = loadGroupsConfiguration();
 
-    // Check persisted users (local, OIDC, proxy, NTLM auth users)
+    // The rule the lockout guards (adminGuards.js) count with, so the guard
+    // and the rescue never disagree on whether an administrator is left:
+    // active persisted users with an enabled sign-in method in an admin group,
+    // plus enabled LDAP providers / NTLM whose default groups grant admin.
+    // External group mappings are not counted: that would block the rescue
+    // even when no directory user holds the mapped group.
     const usersConfig = loadUsers(usersFilePath);
-    const users = usersConfig.users || {};
-
-    // For each user, check if they:
-    // 1. Are active
-    // 2. Have an enabled authentication method (can actually login)
-    // 3. Have admin access through their groups
-    for (const userId in users) {
-      const user = users[userId];
-
-      // Skip inactive users
-      if (user.active === false) {
-        continue;
+    const routes = listUsableAdmins(usersConfig, groupsConfig, platform);
+    logger.debug(
+      routes.length > 0 ? 'Found admin' : 'No admin found in any authentication method',
+      {
+        component: 'AdminRescue',
+        routes
       }
-
-      // Skip users whose authentication method is disabled (they can't login)
-      if (!isUserAuthMethodEnabled(user, platform)) {
-        logger.debug('Skipping user - auth method disabled', {
-          component: 'AdminRescue',
-          username: user.username,
-          userId
-        });
-        continue;
-      }
-
-      // Check if user has admin access through their internal groups
-      const userGroups = user.internalGroups || [];
-      const userHasAdminAccess = userGroups.some(groupName => {
-        const group = groupsConfig.groups?.[groupName];
-        return group?.permissions?.adminAccess === true;
-      });
-
-      if (userHasAdminAccess) {
-        logger.debug('Found admin user in persisted users', {
-          component: 'AdminRescue',
-          username: user.username,
-          userId
-        });
-        return true;
-      }
-    }
-
-    // Check if LDAP is enabled and has default admin groups
-    // LDAP users are not persisted, so we only check if LDAP default groups include admin
-    // Note: We do NOT check hasAdminGroupMappings here because that would block the rescue
-    // mechanism even when no actual LDAP user has the mapped external groups
-    if (platform.ldapAuth?.enabled && platform.ldapAuth?.providers?.length > 0) {
-      for (const ldapProvider of platform.ldapAuth.providers) {
-        // Check if LDAP provider has default groups that include admin
-        if (ldapProvider.defaultGroups?.length > 0) {
-          const hasAdminGroup = ldapProvider.defaultGroups.some(groupName => {
-            const group = groupsConfig.groups?.[groupName];
-            return group?.permissions?.adminAccess === true;
-          });
-
-          if (hasAdminGroup) {
-            logger.debug('Found admin in LDAP provider default groups', {
-              component: 'AdminRescue',
-              providerName: ldapProvider.name
-            });
-            return true;
-          }
-        }
-      }
-    }
-
-    // Check if NTLM is enabled and has default admin groups
-    // Note: We do NOT check hasAdminGroupMappings here because that would block the rescue
-    // mechanism even when no actual NTLM user has the mapped external groups
-    if (platform.ntlmAuth?.enabled) {
-      // Check if NTLM has default groups that include admin
-      if (platform.ntlmAuth.defaultGroups?.length > 0) {
-        const hasAdminGroup = platform.ntlmAuth.defaultGroups.some(groupName => {
-          const group = groupsConfig.groups?.[groupName];
-          return group?.permissions?.adminAccess === true;
-        });
-
-        if (hasAdminGroup) {
-          logger.debug('Found admin in NTLM default groups', { component: 'AdminRescue' });
-          return true;
-        }
-      }
-    }
-
-    logger.debug('No admin found in any authentication method', {
-      component: 'AdminRescue'
-    });
-    return false;
+    );
+    return routes.length > 0;
   } catch (error) {
     logger.error('Error checking for admin', { component: 'AdminRescue', error });
     // In case of error, assume there's an admin to avoid unintended changes

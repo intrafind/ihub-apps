@@ -224,8 +224,10 @@ function AdminUserEditPage() {
   const [jsonSchema, setJsonSchema] = useState(null);
   const [availableGroups, setAvailableGroups] = useState([]);
   const { user: currentUser } = useAuth();
-  // The user as loaded: `active` is sent only when the admin changed it.
-  const loadedUserRef = useRef(null);
+  // Set when an update that sent `active` failed: the server may or may not
+  // have stored it, so the next save sends the admin's status choice even
+  // when it matches the loaded user.
+  const activeUncertainRef = useRef(false);
 
   // Generate a unique ID for new users
   const generateUserId = () => `user_${crypto.randomUUID().replaceAll('-', '_')}`;
@@ -236,6 +238,7 @@ function AdminUserEditPage() {
     loading,
     error,
     isNew: isNewUser,
+    initialData: acceptedUser,
     save,
     blocker
   } = useAdminResourceEditor({
@@ -251,7 +254,6 @@ function AdminUserEditPage() {
           throw new Error('User not found');
         }
 
-        loadedUserRef.current = userData;
         return { ...userData, password: '' };
       } catch (err) {
         throw new Error(getAdminApiErrorMessage(err));
@@ -279,22 +281,38 @@ function AdminUserEditPage() {
       const isLocalAuth =
         !data.authMethods || data.authMethods.length === 0 || data.authMethods.includes('local');
 
-      const apiData = buildUserSavePayload(data, { isNew, initial: loadedUserRef.current });
+      // The baseline is the hook's accepted load (or last successful save),
+      // never a response it discarded: `active` is sent only when it changed.
+      const apiData = buildUserSavePayload(data, {
+        isNew,
+        initial: acceptedUser,
+        forceActive: activeUncertainRef.current
+      });
 
       // For new local auth users, ensure password is provided
       if (isNew && isLocalAuth && !data.password) {
         throw new Error('Password is required for local authentication users');
       }
 
-      await makeAdminApiCall(url, {
-        method,
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: apiData
-      });
+      try {
+        await makeAdminApiCall(url, {
+          method,
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: apiData
+        });
+      } catch (err) {
+        if ('active' in apiData) activeUncertainRef.current = true;
+        throw err;
+      }
+      activeUncertainRef.current = false;
     }
   });
+
+  useEffect(() => {
+    activeUncertainRef.current = false;
+  }, [userId]);
 
   useEffect(() => {
     void loadSchema();

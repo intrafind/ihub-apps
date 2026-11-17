@@ -475,10 +475,12 @@ the only administrator's identity provider is gone):
   "you keep access" cannot be evaluated against it, and refusing would block disaster recovery.
   Check the archive's sign-in methods and administrators before importing it.
 - **Configuration migrations** that run on startup are part of iHub itself, not admin actions.
-- **Two administrators at the same moment, on several servers:** within one server process,
-  authentication saves and user and group edits wait for each other, so two of them cannot each
-  pass against the other's old state. With several workers or pods, two such changes made within
-  milliseconds of each other on different servers can still together leave no administrator.
+- **Two administrators at the same moment, on several servers:** within one installation,
+  authentication saves and user and group edits wait for each other, also across its worker
+  processes, so two of them cannot each pass against the other's old state. Separate servers
+  (pods) that do not share one `contents/` directory are not coordinated: two such changes made
+  within milliseconds of each other on different servers can still together leave no
+  administrator.
 
 **How the admin rescue behaves:** whenever nobody can sign in as an administrator (by the rule
 above), the next person who signs in through local, OIDC, proxy, NTLM or Teams sign-in is made an
