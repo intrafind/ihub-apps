@@ -2,7 +2,7 @@
 
 **Date:** 2026-11-17 · **Epic:** #3739 (sub-epics #3740–#3747) · **Input:** [`../admin-ui-review-2026-11/`](../admin-ui-review-2026-11/README.md) · **Status:** plan agreed; Now phase in implementation as eleven draft PRs.
 
-This folder turns the November review into a delivery plan. A panel of seven experts (product manager, UX designer, UI designer, technical writer, quality engineer, on-prem iHub admin, security expert) worked independently from the review reports and the current code. Their full reports, each with a pre-mortem, open questions and the choices they made on their own, are in [`panel/`](panel/). This README merges them.
+This folder turns the November review into a delivery plan. A panel of seven experts (product manager, UX designer, UI designer, technical writer, quality engineer, on-prem iHub admin, security expert) worked independently from the review reports and the current code. Their full reports, each with a pre-mortem, open questions and the choices they made on their own, are in [`panel/`](panel/). This README merges them. The merge order of the Now PRs and how their conflicts resolve are in [`merge-order-and-conflicts.md`](merge-order-and-conflicts.md).
 
 | File | Expert |
 |---|---|
