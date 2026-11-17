@@ -20,19 +20,28 @@
  *   {@link DEFAULT_WORKERS}, as before.
  * - **Heap per worker.** A `--max-old-space-size` in `NODE_OPTIONS` or on the
  *   command line wins. Otherwise, with a memory limit and more than one
- *   worker, each worker gets its share of the limit minus what a Node process
- *   uses outside the old-space heap ({@link WORKER_NON_HEAP_MB}), never less
- *   than {@link MIN_WORKER_HEAP_MB}. A single process keeps Node's own
- *   default, which already follows the container limit.
+ *   worker, each worker's share of the limit is split: what a Node process
+ *   uses outside its V8 heap ({@link WORKER_NON_HEAP_MB}), the young
+ *   generation (about {@link YOUNG_GENERATION_FACTOR} times the semi-space),
+ *   and the rest as the old-space limit — so old space, young generation and
+ *   non-heap together never exceed the share. When an explicit `WORKERS`
+ *   leaves less than {@link MIN_WORKER_HEAP_MB} for the heap, the workers do
+ *   not fit: the heap gets what is left (at least
+ *   {@link LOWEST_WORKER_HEAP_MB}) and the decision is logged as a warning.
+ *   A single process keeps Node's own default, which already follows the
+ *   container limit.
  * - **Young generation per worker.** A `--max-semi-space-size` given by the
  *   admin wins. Otherwise a worker with a heap limit from the memory limit gets
  *   a larger young generation when its share allows it ({@link semiSpaceMbFor}):
  *   chat turns allocate many short-lived objects, and Node's default young
  *   generation promotes them into the old space, whose collections paused the
- *   event loop for up to a second. A load test at 1,500 users (6 workers,
- *   ~1.3 GB per worker) measured the event-loop peak about 30% lower with 64 MB.
- *   The young generation takes about three times the semi-space, out of
- *   {@link WORKER_NON_HEAP_MB}; 128 MB did not fit and a worker was killed.
+ *   event loop for up to a second. A load test at 1,500 users measured the
+ *   event-loop peak about 30% lower with 64 MB.
+ *
+ * Measured on Kubernetes (no swap, 1,500–2,000 users): a worker uses about
+ * 1 GB RSS idle and 1.5–1.95 GB under load, about 600 MB of it outside the V8
+ * heap (code, buffers, worker-thread isolates); its RSS grows with the heap
+ * limit it is given. Six workers in 8 GiB were OOM-killed.
  *
  * @module utils/workerSizing
  */
@@ -46,19 +55,28 @@ export const DEFAULT_WORKERS = 4;
 export const PRIMARY_RESERVE_MB = 160;
 
 /**
- * Memory one worker is planned with: ~450–550 MB RSS idle after boot, plus
- * headroom for the requests it serves (file extraction, large chats).
+ * Memory one worker is planned with when the count is derived: measured
+ * 1.5–1.95 GB RSS under load (about 1 GB idle).
  */
-export const WORKER_BUDGET_MB = 768;
+export const WORKER_BUDGET_MB = 1536;
 
 /**
- * What a worker process uses besides its old-space heap: code, the young
- * generation, buffers and native allocations.
+ * What a worker process uses outside its V8 heap: code, buffers, native
+ * allocations and the isolates of its worker threads (measured ~600 MB).
  */
-export const WORKER_NON_HEAP_MB = 300;
+export const WORKER_NON_HEAP_MB = 600;
 
-/** Lowest heap limit handed to a worker. */
+/** The young generation takes about this many times the semi-space size. */
+export const YOUNG_GENERATION_FACTOR = 3;
+
+/** Node's default semi-space size on 64-bit systems, in MB. */
+export const NODE_DEFAULT_SEMI_SPACE_MB = 16;
+
+/** Smallest heap a worker is planned with; below it the workers do not fit. */
 export const MIN_WORKER_HEAP_MB = 512;
+
+/** Heap given to a worker that does not fit (an explicit `WORKERS` too high). */
+export const LOWEST_WORKER_HEAP_MB = 256;
 
 /** cgroup v2, then v1. */
 const CGROUP_LIMIT_FILES = Object.freeze([
@@ -76,15 +94,15 @@ const HEAP_FLAG = /--max[-_]old[-_]space[-_]size(?:=|\s|$)/;
 const SEMI_SPACE_FLAG = /--max[-_]semi[-_]space[-_]size(?:=|\s|$)/;
 
 /**
- * Semi-space size for a worker's share of the memory limit: 64 MB from about
- * 1.2 GB per worker, 32 MB from 800 MB, otherwise Node's default.
+ * Semi-space size for a worker's share of the memory limit: 64 MB from
+ * 2,000 MB per worker, 32 MB from 1,400 MB, otherwise Node's default.
  *
  * @param {number} shareMb - Memory per worker (limit minus the primary's reserve, divided by workers)
  * @returns {number|null} MB, or null for Node's default
  */
 export function semiSpaceMbFor(shareMb) {
-  if (shareMb >= 1200) return 64;
-  if (shareMb >= 800) return 32;
+  if (shareMb >= 2000) return 64;
+  if (shareMb >= 1400) return 32;
   return null;
 }
 
@@ -143,7 +161,8 @@ export function hasSemiSpaceFlag(nodeOptions = '', execArgv = []) {
  * @param {boolean} [input.semiSpaceFlagSet] - Whether `--max-semi-space-size` was given
  * @returns {{workers: number, workersSource: 'env'|'memory limit'|'default',
  *   heapMb: number|null, heapSource: 'NODE_OPTIONS'|'memory limit'|'node default',
- *   semiSpaceMb: number|null, limitMb: number|null, cpus: number}}
+ *   semiSpaceMb: number|null, shareMb: number|null, fits: boolean,
+ *   limitMb: number|null, cpus: number}}
  */
 export function decideWorkerSizing({
   explicitWorkers,
@@ -175,16 +194,32 @@ export function decideWorkerSizing({
   let heapMb = null;
   let heapSource = 'node default';
   let semiSpaceMb = null;
+  let shareMb = null;
+  let fits = true;
   if (heapFlagSet) {
     heapSource = 'NODE_OPTIONS';
   } else if (limitMb !== null && workers > 1) {
-    const share = Math.floor((limitMb - PRIMARY_RESERVE_MB) / workers);
-    heapMb = Math.max(MIN_WORKER_HEAP_MB, share - WORKER_NON_HEAP_MB);
+    shareMb = Math.floor((limitMb - PRIMARY_RESERVE_MB) / workers);
+    if (!semiSpaceFlagSet) semiSpaceMb = semiSpaceMbFor(shareMb);
+    // An admin semi-space flag is not parsed; Node's default is assumed for it.
+    const youngMb = YOUNG_GENERATION_FACTOR * (semiSpaceMb ?? NODE_DEFAULT_SEMI_SPACE_MB);
+    const leftForHeap = shareMb - WORKER_NON_HEAP_MB - youngMb;
+    fits = leftForHeap >= MIN_WORKER_HEAP_MB;
+    heapMb = fits ? leftForHeap : Math.max(LOWEST_WORKER_HEAP_MB, leftForHeap);
     heapSource = 'memory limit';
-    if (!semiSpaceFlagSet) semiSpaceMb = semiSpaceMbFor(share);
   }
 
-  return { workers, workersSource, heapMb, heapSource, semiSpaceMb, limitMb, cpus: cpuCount };
+  return {
+    workers,
+    workersSource,
+    heapMb,
+    heapSource,
+    semiSpaceMb,
+    shareMb,
+    fits,
+    limitMb,
+    cpus: cpuCount
+  };
 }
 
 /**
@@ -217,22 +252,31 @@ export function workerSizingForProcess({
 
 /**
  * The decision as one log line, written once by the process that starts the
- * cluster (or by the single process).
+ * cluster (or by the single process); log it as a warning when `sizing.fits`
+ * is false.
  *
  * @param {ReturnType<typeof decideWorkerSizing>} sizing - The decision
  * @returns {Object} Log fields, `message` included
  */
 export function describeWorkerSizing(sizing) {
+  const fits = sizing.fits !== false;
+  const needMb =
+    WORKER_NON_HEAP_MB + YOUNG_GENERATION_FACTOR * NODE_DEFAULT_SEMI_SPACE_MB + MIN_WORKER_HEAP_MB;
   return {
     component: 'Server',
     message: `Worker sizing: ${sizing.workers} worker(s) (${sizing.workersSource}), heap per worker ${
       sizing.heapMb ? `${sizing.heapMb} MB` : 'Node default'
-    } (${sizing.heapSource})${sizing.semiSpaceMb ? `, young generation ${sizing.semiSpaceMb} MB semi-space` : ''}`,
+    } (${sizing.heapSource})${sizing.semiSpaceMb ? `, young generation ${sizing.semiSpaceMb} MB semi-space` : ''}${
+      fits
+        ? ''
+        : ` — ${sizing.workers} workers do not fit into the memory limit: ${sizing.shareMb} MB each, a worker needs at least ${needMb} MB; lower WORKERS or raise the limit`
+    }`,
     workers: sizing.workers,
     workersSource: sizing.workersSource,
     heapPerWorkerMb: sizing.heapMb,
     heapSource: sizing.heapSource,
     semiSpaceMb: sizing.semiSpaceMb ?? null,
+    shareMb: sizing.shareMb ?? null,
     memoryLimitMb: sizing.limitMb,
     cpus: sizing.cpus
   };

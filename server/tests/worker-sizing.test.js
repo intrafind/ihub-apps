@@ -11,6 +11,9 @@ import {
   decideWorkerSizing,
   describeWorkerSizing,
   hasHeapLimitFlag,
+  MIN_WORKER_HEAP_MB,
+  NODE_DEFAULT_SEMI_SPACE_MB,
+  WORKER_NON_HEAP_MB,
   readContainerMemoryLimit,
   workerExecArgv,
   workerSizingForProcess
@@ -18,20 +21,52 @@ import {
 
 const MiB = 1024 * 1024;
 
-test('a 2000 MiB pod with four CPUs runs two workers with a heap limit each', () => {
+test('a 4 GiB pod with four CPUs runs two workers with a heap limit each', () => {
+  const sizing = decideWorkerSizing({
+    explicitWorkers: undefined,
+    memoryLimitBytes: 4096 * MiB,
+    cpus: 4,
+    heapFlagSet: false
+  });
+  assert.equal(sizing.workers, 2);
+  assert.equal(sizing.workersSource, 'memory limit');
+  // (4096 − 160) / 2 = 1968 → 1968 − 600 non-heap − 3 × 32 young = 1272
+  assert.equal(sizing.heapMb, 1272);
+  assert.equal(sizing.semiSpaceMb, 32);
+  assert.equal(sizing.heapSource, 'memory limit');
+  assert.equal(sizing.limitMb, 4096);
+  assert.equal(sizing.fits, true);
+});
+
+test('a 2000 MiB pod runs a single process', () => {
   const sizing = decideWorkerSizing({
     explicitWorkers: undefined,
     memoryLimitBytes: 2000 * MiB,
     cpus: 4,
     heapFlagSet: false
   });
-  assert.equal(sizing.workers, 2);
-  assert.equal(sizing.workersSource, 'memory limit');
-  assert.equal(sizing.heapMb, 620);
-  assert.equal(sizing.heapSource, 'memory limit');
-  assert.equal(sizing.limitMb, 2000);
-  // Primary reserve + two workers (heap + non-heap) stay within the limit.
-  assert.ok(160 + 2 * (sizing.heapMb + 300) <= 2000);
+  assert.equal(sizing.workers, 1);
+  assert.equal(sizing.heapMb, null);
+});
+
+test('old space + young generation + non-heap never exceed a derived share', () => {
+  for (let limitMb = 1024; limitMb <= 64 * 1024; limitMb += 128) {
+    for (const cpus of [1, 2, 4, 8, 16]) {
+      const sizing = decideWorkerSizing({
+        explicitWorkers: undefined,
+        memoryLimitBytes: limitMb * MiB,
+        cpus,
+        heapFlagSet: false
+      });
+      if (sizing.heapMb === null) continue;
+      const youngMb = 3 * (sizing.semiSpaceMb ?? NODE_DEFAULT_SEMI_SPACE_MB);
+      const label = `${limitMb} MiB, ${cpus} CPUs`;
+      assert.ok(sizing.fits, label);
+      assert.ok(sizing.heapMb >= MIN_WORKER_HEAP_MB, label);
+      assert.ok(sizing.heapMb + youngMb + WORKER_NON_HEAP_MB <= sizing.shareMb, label);
+      assert.ok(160 + sizing.workers * sizing.shareMb <= limitMb, label);
+    }
+  }
 });
 
 test('the derived count is capped by the CPUs and by the default', () => {
@@ -61,17 +96,32 @@ test('an explicit WORKERS wins; the heap still follows the limit', () => {
   });
   assert.equal(sizing.workers, 3);
   assert.equal(sizing.workersSource, 'env');
-  assert.equal(sizing.heapMb, Math.floor((4096 - 160) / 3) - 300);
+  // (4096 − 160) / 3 = 1312 → 1312 − 600 − 3 × 16 (Node's default semi-space) = 664
+  assert.equal(sizing.heapMb, 664);
+  assert.equal(sizing.semiSpaceMb, null);
 });
 
-test('the heap limit never drops below the minimum', () => {
+test('an explicit WORKERS that does not fit gets what is left and a warning', () => {
   const sizing = decideWorkerSizing({
     explicitWorkers: 4,
     memoryLimitBytes: 1024 * MiB,
     cpus: 4,
     heapFlagSet: false
   });
-  assert.equal(sizing.heapMb, 512);
+  assert.equal(sizing.fits, false);
+  assert.equal(sizing.heapMb, 256, 'never the 512 MB minimum the share cannot hold');
+  assert.match(
+    describeWorkerSizing(sizing).message,
+    /4 workers do not fit into the memory limit: 216 MB each, a worker needs at least 1160 MB/
+  );
+  // 8 GiB with WORKERS=6 (the OOM-killed lab) still fits, with a smaller heap.
+  const lab = decideWorkerSizing({
+    explicitWorkers: 6,
+    memoryLimitBytes: 8192 * MiB,
+    cpus: 8,
+    heapFlagSet: false
+  });
+  assert.deepEqual([lab.fits, lab.heapMb, lab.semiSpaceMb], [true, 690, null]);
 });
 
 test('an explicit --max-old-space-size wins over the derived heap', () => {
@@ -149,11 +199,12 @@ test('the young generation follows the memory share of a worker', () => {
       heapFlagSet: false,
       ...flags
     });
-  // The measured lab: 8 GB, 6 workers → ~1.3 GB each → 64 MB (128 MB was killed there).
-  assert.equal(sized(8192, 6).semiSpaceMb, 64);
-  assert.equal(sized(8192, 6).heapMb, 1038);
-  assert.equal(sized(4096, 4).semiSpaceMb, 32);
-  assert.equal(sized(2048, 4).semiSpaceMb, null, 'a small share keeps the Node default');
+  // 12 GiB, 6 workers → 2021 MB each → 64 MB, its young generation out of the share.
+  assert.equal(sized(12288, 6).semiSpaceMb, 64);
+  assert.equal(sized(12288, 6).heapMb, 2021 - 600 - 192);
+  assert.equal(sized(4096, 2).semiSpaceMb, 32);
+  assert.equal(sized(8192, 6).semiSpaceMb, null, '1338 MB each keeps the Node default');
+  assert.equal(sized(4096, 4).semiSpaceMb, null, 'a small share keeps the Node default');
   assert.equal(sized(8192, 1).semiSpaceMb, null, 'a single process keeps the Node default');
   assert.equal(sized(8192, 6, { semiSpaceFlagSet: true }).semiSpaceMb, null, 'an admin flag wins');
   assert.equal(
@@ -168,10 +219,10 @@ test('a semi-space flag in NODE_OPTIONS is respected', () => {
     explicitWorkers: 6,
     env: { NODE_OPTIONS: '--max-semi-space-size=16' },
     execArgv: [],
-    memoryLimit: () => 8192 * MiB,
+    memoryLimit: () => 12288 * MiB,
     availableParallelism: () => 8
   });
-  assert.equal(sizing.heapMb, 1038);
+  assert.equal(sizing.heapMb, 2021 - 600 - 48);
   assert.equal(sizing.semiSpaceMb, null);
 });
 
@@ -179,17 +230,18 @@ test('the decision is logged with its inputs', () => {
   const line = describeWorkerSizing(
     decideWorkerSizing({
       explicitWorkers: undefined,
-      memoryLimitBytes: 2000 * MiB,
+      memoryLimitBytes: 4096 * MiB,
       cpus: 4,
       heapFlagSet: false
     })
   );
   assert.equal(
     line.message,
-    'Worker sizing: 2 worker(s) (memory limit), heap per worker 620 MB (memory limit), young generation 32 MB semi-space'
+    'Worker sizing: 2 worker(s) (memory limit), heap per worker 1272 MB (memory limit), young generation 32 MB semi-space'
   );
   assert.equal(line.semiSpaceMb, 32);
-  assert.equal(line.memoryLimitMb, 2000);
+  assert.equal(line.shareMb, 1968);
+  assert.equal(line.memoryLimitMb, 4096);
   assert.equal(line.cpus, 4);
 });
 
@@ -198,7 +250,7 @@ test('workerSizingForProcess reads the environment it is given', () => {
     explicitWorkers: undefined,
     env: { NODE_OPTIONS: '--max-old-space-size=700' },
     execArgv: [],
-    memoryLimit: () => 3000 * MiB,
+    memoryLimit: () => 5000 * MiB,
     availableParallelism: () => 8
   });
   assert.equal(sizing.workers, 3);

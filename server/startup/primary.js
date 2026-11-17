@@ -28,7 +28,9 @@ import { describeWorkerSizing, workerExecArgv } from '../utils/workerSizing.js';
  * @param {{workerCount: number, stickyRouting: boolean}} options
  */
 export async function startPrimary({ workerCount, stickyRouting }) {
-  logger.info(describeWorkerSizing(config.WORKER_SIZING));
+  logger[config.WORKER_SIZING.fits === false ? 'warn' : 'info'](
+    describeWorkerSizing(config.WORKER_SIZING)
+  );
   logger.info({
     component: 'Server',
     message: `Primary process ${process.pid} starting ${workerCount} workers`,
