@@ -5562,7 +5562,7 @@
         "describeVariable": "Beschreiben",
         "variableDescribed": "beschrieben",
         "variablesDescPlaceholders": "Platzhalter wie {{name}} im Prompt-Text werden beim Verwenden des Prompts abgefragt. Beschreiben Sie sie hier, um Bezeichnung, Typ, Standardwert oder Optionen festzulegen. {{content}} markiert, wo der eigene Text des Nutzers hingehört; globale Variablen wie {{user_name}} werden automatisch ausgefüllt.",
-        "appId": "Öffnet in App",
+        "appId": "Wird geöffnet in App",
         "noApp": "Standard-Chat-App",
         "appIdDesc": "Die Prompt-Bibliothek öffnet diesen Prompt in dieser App und zeigt ihn dort zuerst an. Wer den Prompt sieht, legt dieses Feld nicht fest."
       },
@@ -5603,7 +5603,7 @@
         "userCount": "{{count}} Nutzer"
       },
       "details": {
-        "linkedApp": "Öffnet in App"
+        "linkedApp": "Wird geöffnet in App"
       }
     },
     "skills": {

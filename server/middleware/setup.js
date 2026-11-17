@@ -23,6 +23,7 @@ import activityTracker from '../telemetry/ActivityTracker.js';
 import { auditLogger } from './auditLogger.js';
 import { randomUUID } from 'node:crypto';
 import { ServiceError } from '../utils/ServiceError.js';
+import { isAdminDocsPagePath } from '../routes/staticRoutes.js';
 
 /**
  * Middleware to verify the Content-Length header before parsing the body.
@@ -82,8 +83,13 @@ function isStaticAssetRequest(req, platformConfig = {}) {
   // so the catch-all route in staticRoutes.js can serve index.html
   // This allows direct navigation to routes like /apps/meeting-analyser
   // EXCEPTION: When NTLM is enabled, SPA routes MUST go through auth middleware
+  // The in-app documentation routes (`/admin/docs/<page>.md`) end in `.md` but are SPA routes
+  // too (see staticRoutes.js): without this, a stale or rejected session cookie on a cold load
+  // of a doc link would be answered by the auth chain with a JSON 401/403 instead of the SPA.
+  // The path is already base-path-relative here (basePathRewriteMiddleware runs first).
   const isSPARoute =
-    !isNtlmEnabled && !path.match(/\.[a-z0-9]+$/i) && !path.startsWith('/uploads/');
+    !isNtlmEnabled &&
+    ((!path.match(/\.[a-z0-9]+$/i) && !path.startsWith('/uploads/')) || isAdminDocsPagePath(path));
 
   return isCommonStaticAsset || isViteAsset || isSPARoute;
 }

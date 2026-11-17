@@ -91,9 +91,9 @@ direct URL.
 
 ## What you get out of the box
 
-- **About 25 apps** — Chat, Web Chat, Email Composer, Meeting Briefing, Diagram Generator, Image
-  Generator, File Analyzer, NDA Risk Analyzer and more; some ship disabled and are switched on in
-  **Admin → Apps**.
+- **27 apps, 18 of them enabled** — Chat, Web Chat, Email Composer, Meeting Briefing, Diagram
+  Generator, Image Generator, File Analyzer, NDA Risk Analyzer and more; the others are switched on
+  in **Admin → Apps**.
 - **Providers** for OpenAI, Anthropic, Google, Mistral, OpenRouter, AWS Bedrock and local servers,
   with their API addresses filled in. No cloud model is preconfigured: **Admin → Models → Import
   from provider** lists the models of a provider and adds the ones you pick. The disabled local

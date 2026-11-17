@@ -841,6 +841,9 @@ server, and the checklist shows while a required step is still open.
 - **Configure an LLM provider** is ticked once an enabled model has an API key the server can use,
   or needs none.
 - **Create your first app** is listed only when there are no apps at all.
+- **Connect identity provider** counts only OIDC and LDAP providers people can sign in with. The
+  sign-in summary under **Platform status** counts the same way, so a switched-off provider no longer
+  shows as "OIDC (1)".
 - **Hide** removes the checklist in this browser.
 
 ## Admin Hints Point to the Right Place
@@ -856,5 +859,6 @@ Several hints in the admin area sent admins to the wrong place or described a fi
 - **Pages:** the example for **Allowed Groups** named the groups `admin` and `user`, which do not
   exist; copying it hid the page from everyone. It now reads `admins, users or *`, with a hint that
   the IDs must match **Admin → Groups** exactly.
-- **Integrations:** connection tests that reject a TLS certificate point to **Admin → Security →
-  SSL / TLS** instead of "Admin > Platform > SSL".
+- **Integrations:** connection tests that reject a TLS certificate point to **Admin → Platform →
+  Security → SSL / TLS** instead of "Admin > Platform > SSL".
+- **Keyboard shortcuts:** the `?` cheatsheet no longer lists `n` ("New item"), which did nothing.

@@ -300,7 +300,7 @@ export async function runTransportSteps(report, { rawUrl, urlLabel, timeout }) {
 
   await report.run('tcp', 'TCP / TLS connection', async () => {
     // The probe always verifies certificates. Where the admin has whitelisted the
-    // domain under Admin → Security → SSL / TLS, a rejection here is not a broken
+    // domain under Admin → Platform → Security → SSL / TLS, a rejection here is not a broken
     // integration — real requests still go through — so the whitelist changes how
     // the result is *interpreted*, never how strictly it was measured.
     const probe = await probeTcpTls({
@@ -336,7 +336,7 @@ export async function runTransportSteps(report, { rawUrl, urlLabel, timeout }) {
           message: `Reached ${urlInfo.hostname}:${urlInfo.port}; its TLS certificate is not trusted by the iHub trust store (${probe.error}), but this domain is whitelisted so requests still succeed`,
           details,
           hints: [
-            'The integration works because the domain is listed under Admin → Security → SSL / TLS. That bypass applies to iHub only — browsers and other clients still reject this certificate.',
+            'The integration works because the domain is listed under Admin → Platform → Security → SSL / TLS. That bypass applies to iHub only — browsers and other clients still reject this certificate.',
             'Add the issuing CA to the trust store of the iHub server to fix it properly and drop the whitelist entry.',
             opensslHint
           ]
@@ -348,7 +348,7 @@ export async function runTransportSteps(report, { rawUrl, urlLabel, timeout }) {
         details,
         hints: [
           'Add the CA that issued the certificate to the trust store of the iHub server, so both iHub and the browser trust it.',
-          'As a temporary workaround the domain can be listed under Admin → Security → SSL / TLS. That only relaxes iHub, not other clients.',
+          'As a temporary workaround the domain can be listed under Admin → Platform → Security → SSL / TLS. That only relaxes iHub, not other clients.',
           opensslHint
         ]
       };

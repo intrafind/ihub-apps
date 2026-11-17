@@ -112,7 +112,7 @@ The dashboard (`/admin`) gives a real-time snapshot of your platform.
 - **Admin account ready** — the `admin` account no longer signs in with its shipped password (or local sign-in is off). While it still does, the step says so and links to **Users**.
 - **Configure an LLM provider** — at least one enabled model has an API key the server can use, or needs none (a local server).
 - **Create your first app** — listed only when there are no apps at all.
-- **Connect identity provider (optional)** — an OIDC or LDAP provider, or proxy sign-in, is set up. Optional steps do not keep the checklist on screen.
+- **Connect identity provider (optional)** — an enabled OIDC or LDAP provider people can sign in with, or proxy sign-in, is set up. Optional steps do not keep the checklist on screen.
 
 The checklist is shown while a required step is open, however many apps there are. **Hide** removes it in this browser.
 

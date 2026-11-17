@@ -4,7 +4,7 @@
 /**
  * Admin Overview "Getting started" checklist (SH-B3). Its ticks used to be constants ("Admin
  * account ready" ticked while the same page warned that `admin` still had the shipped password),
- * and it only appeared with zero apps, which a real install (about 25 shipped apps) never has.
+ * and it only appeared with zero apps, which a real install (27 shipped apps) never has.
  * Now each tick comes from a server signal and the checklist shows while a required step is open.
  */
 import '@testing-library/jest-dom';
@@ -171,6 +171,39 @@ describe('Getting started checklist on the Overview', () => {
     await screen.findByText('Getting started');
     expect(within(step('admin')).queryByRole('link')).toBeNull();
     expect(within(step('provider')).getByRole('link')).toBeInTheDocument();
+  });
+
+  test('waits for the overview stats before deciding, so it never flashes on an OIDC-only install', async () => {
+    // `admin` still has the shipped password in users.json, but local sign-in is off: the step
+    // is done. The demo-account answer arrives first; the stats come later.
+    answer({ keyStatuses: [{ id: 'local', enabled: true, state: 'keyless' }] });
+    const { rerender } = renderOverview(null);
+
+    await waitFor(() => expect(mockMakeAdminApiCall).toHaveBeenCalledTimes(2));
+    await act(async () => {});
+    expect(screen.queryByText('Getting started')).not.toBeInTheDocument();
+
+    mockOverview = {
+      ...mockOverview,
+      platformInfo: overviewStats({ auth: { local: false, oidcProviders: 1 } })
+    };
+    rerender(
+      <MemoryRouter>
+        <AdminOverview />
+      </MemoryRouter>
+    );
+    await act(async () => {});
+    expect(screen.queryByText('Getting started')).not.toBeInTheDocument();
+  });
+
+  test('shows no checklist, and no shipped-password hint, when the stats cannot be read', async () => {
+    answer();
+    renderOverview(null);
+
+    await waitFor(() => expect(mockMakeAdminApiCall).toHaveBeenCalledTimes(2));
+    await act(async () => {});
+    expect(screen.queryByText('Getting started')).not.toBeInTheDocument();
+    expect(screen.queryByText(/still signs in with the shipped password/)).not.toBeInTheDocument();
   });
 
   test('can be hidden, and stays hidden', async () => {

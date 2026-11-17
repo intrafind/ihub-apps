@@ -32,8 +32,9 @@ const USABLE_KEY_STATES = new Set(['ok', 'keyless']);
  * - **Configure an LLM provider**: at least one enabled chat model has a usable credential (a key
  *   the server can use, or none needed) (`GET /admin/models/_key-status`).
  * - **Create your first app**: listed only while the server reports no apps at all; a real install
- *   ships about 25, so the step does not tick for apps nobody created.
- * - **Connect identity provider** (optional): an OIDC or LDAP provider, or proxy sign-in, is set up.
+ *   ships 27 (18 enabled), so the step does not tick for apps nobody created.
+ * - **Connect identity provider** (optional): an OIDC or LDAP provider people can sign in with
+ *   (the stats count only enabled ones), or proxy sign-in, is set up.
  *
  * @param {Object} input
  * @param {{accounts?: string[]}|null} [input.demoAccounts] - Demo account status, or null if unknown.

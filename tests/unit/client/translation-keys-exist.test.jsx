@@ -8,13 +8,14 @@
  * overridden by an admin and has no German text.
  *
  * This covers the whole client, the admin area included. The admin area still uses many keys
- * that exist only as inline defaults. Those are counted per file in
+ * that exist only as inline defaults. Those are listed by name, per file, in
  * `translation-keys-baseline.json`, and that file can only shrink:
  *
- * - A file with more missing keys than its baseline count fails: add the new keys to
- *   `shared/i18n/en.json` and `shared/i18n/de.json`. Every key added from now on must be in both.
- * - A file with fewer missing keys than its baseline count also fails: lower its count in the
- *   baseline (or delete the entry at 0), so nobody can add a missing key there later unnoticed.
+ * - A missing key that is not listed for its file fails: add it to `shared/i18n/en.json` and
+ *   `shared/i18n/de.json`. Every key added from now on must be in both. Swapping a listed key for
+ *   a new missing one fails too, because the list holds names, not a count.
+ * - A listed key that is no longer missing also fails: remove it from the baseline (and the file
+ *   entry once its list is empty), so nobody can add it back later unnoticed.
  *
  * Not covered: the login gate (client/src/auth-gate has its own bundled table) and keys built at
  * run time (`t(\`a.${b}\`)`).
@@ -24,6 +25,7 @@
  */
 import fs from 'fs';
 import path from 'path';
+import { tokenize } from 'espree';
 import en from '../../../shared/i18n/en.json';
 import de from '../../../shared/i18n/de.json';
 import baseline from './translation-keys-baseline.json';
@@ -43,20 +45,70 @@ function sourceFiles(dir, out = []) {
   return out;
 }
 
-// `t('a.b')`, `t("a.b", …)` and `i18n.t('a.b')`; keys without a dot are not translation keys
-// of the client (the login gate has its own table).
-const CALL = /(?<![\w.$])(?:i18n\.)?t\(\s*(['"`])([A-Za-z][\w-]*(?:\.[\w-]+)+)\1/g;
+// Keys without a dot are not translation keys of the client (the login gate has its own table).
+const KEY = /^[A-Za-z][\w-]*(?:\.[\w-]+)+$/;
+
+const TOKENIZE_OPTIONS = {
+  ecmaVersion: 'latest',
+  sourceType: 'module',
+  ecmaFeatures: { jsx: true },
+  loc: true
+};
+
+/**
+ * The text of a string literal or a template literal without substitutions, or null.
+ * @param {{type: string, value: string}|undefined} token
+ * @returns {string|null}
+ */
+function literalText(token) {
+  if (!token) return null;
+  if (token.type === 'String') return token.value.slice(1, -1);
+  if (token.type === 'Template' && /^`[^`]*`$/.test(token.value)) return token.value.slice(1, -1);
+  return null;
+}
+
+/**
+ * The literal keys of `t('a.b')`, `t("a.b", …)`, `` t(`a.b`) `` and `i18n.t('a.b')` calls in
+ * source text, with their line. The text is tokenized (espree, the parser ESLint uses), so
+ * comments are skipped and a `/*` inside a string (`'audio/*'`) does not hide the code after it.
+ * `x.t('a.b')` on any other object is not counted.
+ * @param {string} source
+ * @returns {Array<{key: string, line: number}>}
+ */
+function keysInSource(source) {
+  const tokens = tokenize(source, TOKENIZE_OPTIONS);
+  const keys = [];
+  for (let i = 0; i < tokens.length - 2; i++) {
+    const token = tokens[i];
+    if (token.type !== 'Identifier' || token.value !== 't') continue;
+    const previous = tokens[i - 1];
+    if (previous?.type === 'Punctuator' && (previous.value === '.' || previous.value === '?.')) {
+      if (previous.value !== '.' || tokens[i - 2]?.value !== 'i18n') continue;
+    }
+    if (tokens[i + 1].type !== 'Punctuator' || tokens[i + 1].value !== '(') continue;
+    const key = literalText(tokens[i + 2]);
+    if (key !== null && KEY.test(key)) keys.push({ key, line: token.loc.start.line });
+  }
+  return keys;
+}
 
 function literalKeys(file) {
-  // Comments (JSDoc examples) are not calls.
-  const text = fs
-    .readFileSync(file, 'utf8')
-    .replace(/\/\*[\s\S]*?\*\//g, match => match.replace(/[^\n]/g, ' '))
-    .replace(/(^|\s)\/\/.*$/gm, '$1');
-  return [...text.matchAll(CALL)].map(match => ({
-    key: match[2],
-    line: text.slice(0, match.index).split('\n').length
-  }));
+  return keysInSource(fs.readFileSync(file, 'utf8'));
+}
+
+/**
+ * Missing keys the baseline does not list for their file, as `file:line: key`.
+ * @param {Object<string, Map<string, number>>} missingByFile
+ * @param {Object<string, string[]>} listedByFile
+ * @returns {string[]}
+ */
+function unlistedMissingKeys(missingByFile, listedByFile) {
+  return Object.entries(missingByFile).flatMap(([file, missing]) => {
+    const listed = new Set(listedByFile[file] ?? []);
+    return [...missing]
+      .filter(([key]) => !listed.has(key))
+      .map(([key, line]) => `${file}:${line}: ${key}`);
+  });
 }
 
 function lookup(locale, key) {
@@ -102,6 +154,36 @@ function missingKeysByFile() {
   return result;
 }
 
+describe('finding translation keys in source', () => {
+  it('skips comments but not code after a "/*" inside a string', () => {
+    const source = [
+      "const accept = 'audio/*';",
+      "const label = t('admin.after.audio', 'After');",
+      "// t('admin.line.comment')",
+      "/* t('admin.block.comment') */",
+      'const url = `${base}/*`;',
+      "const other = i18n.t('admin.after.template');",
+      "const notOurs = form.t('admin.other.object');"
+    ].join('\n');
+    expect(keysInSource(source)).toEqual([
+      { key: 'admin.after.audio', line: 2 },
+      { key: 'admin.after.template', line: 6 }
+    ]);
+  });
+
+  it('reads JSX text with apostrophes without losing its place', () => {
+    const source = "const a = <p>Don't {t('admin.jsx.key')}</p>;";
+    expect(keysInSource(source).map(({ key }) => key)).toEqual(['admin.jsx.key']);
+  });
+
+  it('catches a listed missing key swapped for a new one in the same file', () => {
+    const missing = { 'a.jsx': new Map([['admin.new.key', 7]]) };
+    expect(unlistedMissingKeys(missing, { 'a.jsx': ['admin.old.key'] })).toEqual([
+      'a.jsx:7: admin.new.key'
+    ]);
+  });
+});
+
 describe('translation keys used by the frontend', () => {
   const missingByFile = missingKeysByFile();
 
@@ -110,27 +192,27 @@ describe('translation keys used by the frontend', () => {
     expect(used).toBeGreaterThan(5000);
   });
 
-  it('exist in English and German, apart from the counts in the baseline', () => {
-    const over = Object.entries(missingByFile)
-      .filter(([file, missing]) => missing.size > (baseline[file] ?? 0))
-      .map(
-        ([file, missing]) =>
-          `${file}: ${missing.size} missing, baseline ${baseline[file] ?? 0}: ` +
-          [...missing].map(([key, line]) => `${key} (:${line})`).join(', ')
-      );
-    expect(over).toEqual([]);
+  it('exist in English and German, apart from the keys listed in the baseline', () => {
+    expect(unlistedMissingKeys(missingByFile, baseline)).toEqual([]);
   });
 
-  it('have a baseline no higher than what is still missing (lower it when you add keys)', () => {
-    const stale = Object.entries(baseline)
-      .filter(([file, count]) => (missingByFile[file]?.size ?? 0) < count)
-      .map(([file, count]) => {
-        const now = missingByFile[file]?.size ?? 0;
-        return now === 0
-          ? `${file}: remove it from the baseline (was ${count})`
-          : `${file}: lower the baseline from ${count} to ${now}`;
-      });
+  it('have a baseline that lists only keys still missing (remove a key once you add it)', () => {
+    const stale = Object.entries(baseline).flatMap(([file, keys]) => {
+      const missing = missingByFile[file];
+      const fixed = keys.filter(key => !missing?.has(key));
+      if (fixed.length === 0) return [];
+      return fixed.length === keys.length
+        ? [`${file}: remove the file from the baseline`]
+        : fixed.map(key => `${file}: remove ${key} from the baseline`);
+    });
     expect(stale).toEqual([]);
+  });
+
+  it('have a baseline kept sorted, one entry per key', () => {
+    const unsorted = Object.entries(baseline)
+      .filter(([, keys]) => keys.join('\n') !== [...new Set(keys)].sort().join('\n'))
+      .map(([file]) => file);
+    expect(unsorted).toEqual([]);
   });
 });
 
