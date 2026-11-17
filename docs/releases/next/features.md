@@ -2249,6 +2249,26 @@ popup and of the hint under the chat input, the hint text and link (previously o
 confirmed, so raising the version shows it again, as the setting always promised; visitors who confirmed
 earlier are not asked again until the next change. See [UI Configuration](../../ui.md#disclaimer-configuration).
 
+## Admin Settings Warn When Someone Else Saved First
+
+When two administrators, two browser tabs or a script change the platform settings or **UI
+Customization** at the same time, the later save no longer silently overwrites the earlier one.
+This applies to **Authentication**, **MCP gateway**, **UI Customization**, **Localization** and the
+global prompt variables on **Prompts**, each checked against the version it loaded: the save is refused
+with a dialog, **This changed since you opened it**; your edits stay on the page. **Reload and
+discard my changes** loads the current settings, and **Keep my changes and overwrite on next save**
+lets you save over the newer version deliberately. **Close** (or Escape) only closes the dialog:
+nothing is overwritten and the next save is refused again. See
+[Admin UI → When someone else saved first](../../admin-ui.md#when-someone-else-saved-first).
+
+For scripts, `GET /api/admin/configs/platform` and `GET /api/admin/ui/config` return an `ETag`;
+sending it back as `If-Match` makes a save fail with `412 PRECONDITION_FAILED` when the file
+changed in between (without `If-Match` nothing changes). The UI `ETag` leaves out `pages`, which
+that save never writes. The new
+`PATCH /api/admin/configs/platform` changes only the fields it names (JSON Merge Patch) and runs
+the same checks as a full save. See
+[Platform Configuration → Changing platform.json through the admin API](../../platform.md#changing-platformjson-through-the-admin-api).
+
 ## Chat: Interactive Artifacts Can Ask Follow-up Questions
 
 An HTML artifact can now turn a click into a question in the chat: a bar of a chart, a node of a

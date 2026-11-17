@@ -7,6 +7,7 @@
  * All outbound HTTP calls should use httpFetch() to ensure proxy/SSL configuration is applied.
  */
 import { withOutboundRecording } from './outboundRecorder.js';
+import { redactUrlSecrets } from './urlSecrets.js';
 import http from 'node:http';
 import https from 'node:https';
 import nodeFetch from 'node-fetch';
@@ -758,25 +759,9 @@ export function enhanceFetchOptions(
   return enhancedOptions;
 }
 
-/**
- * Redact secret-looking parts of a URL so it can be safely included in logs and
- * error messages. Credentials ride along in a URL two ways: query parameters
- * (Google's `?key=`, plus `token` / `api_key` / `client_secret` / ...) and
- * basic-auth userinfo (`http://user:pass@host`). Both are masked; non-strings
- * are returned unchanged.
- *
- * @param {string} url - The URL to sanitize
- * @returns {string} URL with any embedded secrets replaced by `REDACTED`
- */
-export function redactUrlSecrets(url) {
-  if (typeof url !== 'string') return url;
-  return url
-    .replace(/(\/\/)[^/@\s]+@/, '$1REDACTED@')
-    .replace(
-      /([?&](?:api[-_]?key|access[-_]?token|client[-_]?secret|key|token|password|secret)=)[^&#\s]*/gi,
-      '$1REDACTED'
-    );
-}
+// Lives in its own module so modules that only mask URLs (the admin secret
+// redaction) need not load the HTTP stack; re-exported for existing callers.
+export { redactUrlSecrets };
 
 /**
  * Fetch wrapper that automatically applies proxy and SSL configuration.

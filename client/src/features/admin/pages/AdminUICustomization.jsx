@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import BrandingCustomization from '../components/BrandingCustomization';
@@ -45,6 +45,21 @@ const TAB_SLICES = {
 };
 
 /**
+ * The page registry (`ui.json` → `pages`) as the start page picker reads it,
+ * from the list `GET /api/admin/pages` answers.
+ *
+ * @param {Array<{id: string, title?: Object, authRequired?: boolean, allowedGroups?: string[], contentType?: string}>} items
+ * @returns {Object<string, Object>} Pages by id
+ */
+export function pagesRegistryFromList(items) {
+  return Object.fromEntries(
+    (Array.isArray(items) ? items : [])
+      .filter(item => item && typeof item.id === 'string')
+      .map(({ id, ...page }) => [id, page])
+  );
+}
+
+/**
  * The configuration as it is stored: a site title or PWA name left empty follows
  * the product name instead of saving as nothing, so a save never blanks them.
  */
@@ -79,6 +94,13 @@ function AdminUICustomization() {
   const [error, setError] = useState(null);
   const [successMessage, setSuccessMessage] = useState('');
   const { isDirty, blocker, markSaved } = useUnsavedChanges(savedConfig, config);
+  // The newest form state, so a save can tell whether the admin kept editing
+  // while its requests ran.
+  const latestConfigRef = useRef(config);
+  // The revision of the configuration this form loaded (or last saved): its
+  // save sends exactly this as If-Match, whatever other reads in the tab saw.
+  const revisionRef = useRef(null);
+  latestConfigRef.current = config;
 
   // The tab is part of the address, so a reload or a shared link keeps it.
   // Unknown values (the removed `content`, `pwa` tabs) land on the first tab.
@@ -95,7 +117,7 @@ function AdminUICustomization() {
     let cancelled = false;
     const loadConfig = async () => {
       try {
-        const response = await makeAdminApiCall('/admin/ui/config');
+        const response = await makeAdminApiCall('/admin/ui/config', { revision: revisionRef });
         if (cancelled) return;
         setSavedConfig(response.data);
         setConfig(response.data);
@@ -133,11 +155,25 @@ function AdminUICustomization() {
       await makeAdminApiCall('/admin/ui/config', {
         method: 'POST',
         body: { config: toSave },
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
+        revision: revisionRef
       });
-      markSaved();
-      setSavedConfig(toSave);
-      setConfig(toSave);
+      // The save keeps the stored page registry, whatever the form sent, so
+      // pages created elsewhere since this page loaded are read back for the
+      // start page picker. If that read fails, the form keeps its list.
+      let saved = toSave;
+      try {
+        const pagesResponse = await makeAdminApiCall('/admin/pages');
+        saved = { ...toSave, pages: pagesRegistryFromList(pagesResponse.data?.items) };
+      } catch (pagesError) {
+        console.warn('Could not refresh the page list after saving:', pagesError);
+      }
+      // What was sent is the new baseline. Edits made while the requests ran
+      // stay on the form (and stay unsaved); only the page list is refreshed.
+      const editedMeanwhile = latestConfigRef.current !== config;
+      if (!editedMeanwhile) markSaved();
+      setSavedConfig(saved);
+      setConfig(current => (current === config ? saved : { ...current, pages: saved.pages }));
       setSuccessMessage(t('admin.ui.saved', 'UI configuration saved successfully'));
       // Apply the change in this browser right away.
       await refreshUIConfig();

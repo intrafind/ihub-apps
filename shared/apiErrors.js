@@ -27,6 +27,8 @@ export const GENERIC_ERROR_CODES = Object.freeze({
   METHOD_NOT_ALLOWED: 405,
   REQUEST_TIMEOUT: 408,
   CONFLICT: 409,
+  /** An `If-Match` that does not name the stored revision (optimistic lock on admin config writes). */
+  PRECONDITION_FAILED: 412,
   PAYLOAD_TOO_LARGE: 413,
   UNSUPPORTED_MEDIA_TYPE: 415,
   RATE_LIMITED: 429,

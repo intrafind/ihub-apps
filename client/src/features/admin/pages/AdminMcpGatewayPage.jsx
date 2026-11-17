@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect, useId } from 'react';
+import { useState, useEffect, useId, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import Switch from '../../../shared/components/Switch';
@@ -40,11 +40,16 @@ function AdminMcpGatewayPage() {
   const [platform, setPlatform] = useState(null);
   const [message, setMessage] = useState(null);
   const [saving, setSaving] = useState(false);
+  // The revision of the configuration this form loaded (or last saved): its
+  // save sends exactly this as If-Match, whatever other reads in the tab saw.
+  const revisionRef = useRef(null);
 
   const load = async () => {
     setLoading(true);
     try {
-      const { data } = await makeAdminApiCall('/admin/configs/platform');
+      const { data } = await makeAdminApiCall('/admin/configs/platform', {
+        revision: revisionRef
+      });
       setPlatform(data || {});
     } catch (err) {
       setMessage({
@@ -146,7 +151,8 @@ function AdminMcpGatewayPage() {
       await makeAdminApiCall('/admin/configs/platform', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: platform
+        body: platform,
+        revision: revisionRef
       });
       setMessage({ type: 'success', text: t('admin.mcp.common.saved', 'Saved') });
     } catch (err) {

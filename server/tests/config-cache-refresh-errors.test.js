@@ -21,6 +21,7 @@ process.env.APP_ROOT_DIR = ROOT;
 process.env.CONTENTS_DIR = 'contents';
 
 const { default: configCache } = await import('../configCache.js');
+const { default: configStore } = await import('../services/config/ConfigStore.js');
 
 const GROUPS_KEY = 'config/groups.json';
 const groupsPath = path.join(ROOT, 'contents', 'config', 'groups.json');
@@ -66,5 +67,57 @@ describe('a groups.json that does not resolve', () => {
       configCache.get(GROUPS_KEY)?.data?.groups?.editors?.permissions?.adminAccess,
       false
     );
+  });
+});
+
+describe('refreshes that keep the old copy without throwing', () => {
+  it('records a file that cannot be read (the null read), and clears it once fixed', async () => {
+    const platformKey = 'config/platform.json';
+    const platformPath = path.join(ROOT, 'contents', 'config', 'platform.json');
+    await fs.writeFile(platformPath, JSON.stringify({ auth: { mode: 'local' } }), 'utf8');
+    await configCache.refreshCacheEntry(platformKey);
+    assert.equal(configCache.getRefreshErrors().length, 0);
+
+    await fs.writeFile(platformPath, '{ not json', 'utf8');
+    await configCache.refreshCacheEntry(platformKey);
+
+    assert.equal(configCache.get(platformKey)?.data?.auth?.mode, 'local', 'the old copy stays');
+    const errors = configCache.getRefreshErrors();
+    assert.equal(errors.length, 1);
+    assert.equal(errors[0].key, platformKey);
+    assert.match(errors[0].message, /platform\.json could not be read/);
+
+    await fs.writeFile(platformPath, JSON.stringify({ auth: { mode: 'oidc' } }), 'utf8');
+    await configCache.refreshCacheEntry(platformKey);
+    assert.deepEqual(configCache.getRefreshErrors(), []);
+  });
+
+  it('records a best-effort loader that failed (emptyOnError)', async () => {
+    const agentsKey = 'config/agents.json';
+    const agentsDir = path.join(ROOT, 'contents', 'agents');
+    await fs.mkdir(agentsDir, { recursive: true });
+    await configCache.refreshCacheEntry(agentsKey);
+    assert.ok(configCache.cache.has(agentsKey));
+    assert.equal(configCache.getRefreshErrors().length, 0);
+
+    // The storage layer fails to list the directory (the cache is real; only
+    // the store below it is made to fail).
+    const listDocuments = configStore.listDocuments;
+    configStore.listDocuments = async () => {
+      throw new Error('storage unavailable');
+    };
+    try {
+      await configCache.refreshCacheEntry(agentsKey);
+    } finally {
+      configStore.listDocuments = listDocuments;
+    }
+
+    const errors = configCache.getRefreshErrors();
+    assert.equal(errors.length, 1);
+    assert.equal(errors[0].key, agentsKey);
+    assert.match(errors[0].message, /storage unavailable/);
+
+    await configCache.refreshCacheEntry(agentsKey);
+    assert.deepEqual(configCache.getRefreshErrors(), []);
   });
 });

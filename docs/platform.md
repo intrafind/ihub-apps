@@ -543,6 +543,68 @@ files by the production build (`npm run build:api-docs`, part of `build:server`,
 binary) into `server/generated/openapi/`, and read on the first `/api/docs` request. Without those files —
 a development checkout — the first request builds them, once per process. Nothing is built at startup.
 
+### Changing platform.json through the admin API
+
+Scripts and the admin pages change `platform.json` through `/api/admin/configs/platform`. Each
+section that has its own admin page with its own checks (`ssl`, `ssrf`, `cors`, `rateLimit`,
+`proxy`, `logging`) is changed through that page's route instead
+(`/api/admin/ssl/config`, `/api/admin/ssrf/config`, `/api/admin/cors/config`,
+`/api/admin/rate-limits`, `/api/admin/proxy/config`, `/api/admin/logging/config`).
+
+- **`GET`** returns the file with secrets redacted: `auth.jwtSecret`, `localAuth.jwtSecret` and
+  `speech.azure.subscriptionKey` read as `***REDACTED***` (a `${ENV_VAR}` placeholder is shown as
+  it is), and each `proxyAuth.jwtProviders[].jwkUrl` with user name, password and credential query
+  parameters (`token`, `key`, `code`, `sig`, `subscription-key`, `X-Amz-Signature`, `apiKey`, …)
+  replaced by `REDACTED`. The response carries an `ETag` (the revision of the stored file, keyed
+  with the server's encryption key so it reveals nothing about the secrets) and
+  `Cache-Control: no-store`.
+- **`POST`** replaces each section the body names, from a fixed list (`auth`, `anonymousAuth`,
+  `localAuth`, `oidcAuth`, `ldapAuth`, `ntlmAuth`, `proxyAuth`, `authorization`, `oauth`,
+  `defaultLanguage`, `setup`, `aiDisclosure`, `aiAcknowledgement`, `provenance`, `mcpServer`,
+  `telemetry`, `speech`, `globalPromptVariables`, `cookieSettings`, `toolApproval`); every other
+  key keeps its stored value. The body of a `GET` can be sent back unchanged: it leaves the file as
+  it was.
+- **`PATCH`** is a JSON Merge Patch (RFC 7396) over the same sections and changes only the fields
+  it names, for example `{ "setup": { "disabled": true } }`. Any other key, including the
+  sections listed at the top, is refused with `400` and an `errors[].pointer` naming it. `null`
+  removes a field; it cannot remove a whole section (except `toolApproval: null`, which turns
+  tool approval off) or an object that holds a secret. `provenance` is merged by its own rules, as
+  in the `POST`. It answers with the configuration as the `GET` shows it.
+
+Secrets in a `POST` or `PATCH` body:
+
+| You send | Result |
+| --- | --- |
+| the field left out | the stored value is kept |
+| `***REDACTED***`, or the masked `jwkUrl` from the `GET` | the stored value is kept |
+| `null` | the secret is removed |
+| a new value or `${ENV_VAR}` | stored (the speech key encrypted) |
+
+A redaction marker that has no stored value behind it (for example in a provider that was renamed)
+is refused with `400` `VALIDATION_FAILED` and the field's pointer, so the word "REDACTED" is never
+saved as a secret. Only the sections the request can change, and only values that differ from the
+stored ones, are checked: a marker-like value already stored elsewhere does not block a save. JWKS URLs are matched to the stored provider by `name`, not by position.
+
+**Concurrent changes.** Send the `ETag` of your `GET` as `If-Match` on the `POST` or `PATCH`. When
+the file changed since (another admin, another script, a hand edit), the answer is `412`
+`PRECONDITION_FAILED` and nothing is written; read again and reapply your change. A successful
+write answers with the new `ETag`. `If-Match: *` only requires the file to exist. A weak tag
+(`W/"…"`, as a compressing proxy may turn the `ETag` into) is compared by its value. Without
+`If-Match` a write behaves as before. The same applies to `GET` and `POST /api/admin/ui/config`;
+that `POST` never changes `pages`, which belong to `/api/admin/pages`, so its `ETag` leaves `pages`
+out: creating or editing a page does not make a UI save fail.
+
+```bash
+ETAG=$(curl -sI -b cookies.txt https://ihub.example.com/api/admin/configs/platform | awk -F': ' 'tolower($1)=="etag"{print $2}' | tr -d '\r')
+curl -X PATCH -b cookies.txt -H 'Content-Type: application/json' -H "If-Match: $ETAG" \
+  -d '{"telemetry":{"enabled":true}}' https://ihub.example.com/api/admin/configs/platform
+```
+
+The change history of `platform.json` (**History**, and
+`GET /api/admin/changes/platform/platform/{snapshot}`) shows secrets redacted as well. Rolling back
+to an older snapshot restores every setting except secrets: the current JWT secrets and speech key
+stay, so a rollback cannot bring back a secret that was rotated.
+
 ### **refreshSalt**
 Cache invalidation mechanism (automatically managed).
 

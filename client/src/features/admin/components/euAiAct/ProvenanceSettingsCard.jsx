@@ -189,15 +189,13 @@ export default function ProvenanceSettingsCard({ onSaved }) {
     setSaving(true);
     setMessage(null);
     try {
-      // Read-modify-write: platform.json holds settings this card does not show.
-      const response = await makeAdminApiCall('/admin/configs/platform', { method: 'GET' });
-      const platform = response.data || {};
-      platform.provenance = buildBody(form);
+      // A scoped change of the provenance block only: the server merges it into
+      // the stored one, and nothing else in platform.json is sent or touched.
       const result = await makeAdminApiCall('/admin/configs/platform', {
-        method: 'POST',
-        body: platform
+        method: 'PATCH',
+        body: { provenance: buildBody(form) }
       });
-      const next = toForm(result.data?.config?.provenance || {});
+      const next = toForm(result.data?.provenance || {});
       setForm(next);
       setSaved(next);
       setErrors({});

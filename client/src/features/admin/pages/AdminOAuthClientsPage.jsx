@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import { createConfigRevision } from '../../../api/adminConfigRevision';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import OAuthTabsHeader from '../components/OAuthTabsHeader';
@@ -57,7 +58,9 @@ function AdminOAuthClientsPage() {
     const newStatus = !clientsEnabled;
 
     try {
-      const response = await makeAdminApiCall('/admin/configs/platform');
+      // This save's own read: its POST sends the read's ETag as If-Match.
+      const revision = createConfigRevision();
+      const response = await makeAdminApiCall('/admin/configs/platform', { revision });
       const platformConfig = response.data;
 
       const updatedConfig = {
@@ -74,7 +77,8 @@ function AdminOAuthClientsPage() {
       await makeAdminApiCall('/admin/configs/platform', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: updatedConfig
+        body: updatedConfig,
+        revision
       });
 
       setClientsEnabled(newStatus);

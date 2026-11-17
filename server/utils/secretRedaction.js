@@ -18,7 +18,7 @@
  *
  * @module utils/secretRedaction
  */
-import { redactUrlSecrets } from './httpConfig.js';
+import { redactUrlSecrets } from './urlSecrets.js';
 
 /** What a redacted value is replaced with. */
 export const REDACTED = '[redacted]';

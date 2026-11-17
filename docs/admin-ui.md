@@ -531,6 +531,36 @@ If you navigate away from an edit page with unsaved changes, a confirmation dial
 
 The warning also appears if you try to close or refresh the browser tab while a form is dirty.
 
+### When someone else saved first
+
+**Authentication**, **MCP gateway**, **UI Customization**, **Localization** and the global prompt
+variables on **Prompts** remember which version of the settings they loaded. Each page checks its
+save against its own loaded version only; another page or card that reads the same settings later
+does not change it. If another administrator, another browser tab or a script saved the same
+settings after you opened the page, your save is refused and a dialog says **This changed since
+you opened it**. Nothing was saved, and your edits are still on the page:
+
+- **Close** (also Escape or a click outside the dialog) only closes it. Your edits stay, nothing
+  is overwritten, and your next save is refused again with the same dialog. Use it to copy your
+  edits somewhere before you reload, or to check **History** first.
+- **Reload and discard my changes** loads the current settings; make your changes again and save.
+- **Keep my changes and overwrite on next save** closes the dialog and keeps your edits. Your next
+  save goes through and replaces the newer version, including what the other person changed in
+  the settings this page saves. Check **History** first if you are not sure what that was. Only
+  this button overwrites; the dialog never chooses it for you.
+
+Other settings pages (Telemetry, Voice Input, Feedback, Logging, the AI notice and
+acknowledgement cards, OAuth) read the current settings right before they save, so they are not
+protected this way: a change someone else made to the same settings while your page was open is
+replaced by your save. Settings stored elsewhere are kept.
+
+A few settings save only their own field and are never refused: the onboarding switch on
+**Advanced**, the **Cookies** and **Tool approval** cards on **Security**, the **Provenance**
+settings on **EU AI Act**, and **Save Privacy Settings** on **Logging**, which saves only the IP
+anonymization and leaves other unsaved logging changes unsaved. Saving **UI Customization** never
+removes content pages created under **Pages** in the meantime, and creating a page while UI
+Customization is open does not make its save fail.
+
 ---
 
 ## Backup & Restore

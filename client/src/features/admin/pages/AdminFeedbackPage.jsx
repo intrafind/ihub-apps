@@ -13,6 +13,7 @@ import {
   setAppFeedbackEnabled,
   getAdminApiErrorMessage
 } from '../../../api/adminApi';
+import { createConfigRevision } from '../../../api/adminConfigRevision';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
@@ -139,13 +140,22 @@ function AdminFeedbackPage() {
       if (draft.storageEnabled !== saved.storageEnabled) {
         // Read-modify-write, like every other page that owns one platform.json
         // key: the file carries settings this page does not show.
-        const response = await makeAdminApiCall('/admin/configs/platform', { method: 'GET' });
+        // This save's own read: its POST sends the read's ETag as If-Match.
+        const revision = createConfigRevision();
+        const response = await makeAdminApiCall('/admin/configs/platform', {
+          method: 'GET',
+          revision
+        });
         const platform = response.data || {};
         platform.features = {
           ...platform.features,
           feedbackTracking: draft.storageEnabled
         };
-        await makeAdminApiCall('/admin/configs/platform', { method: 'POST', body: platform });
+        await makeAdminApiCall('/admin/configs/platform', {
+          method: 'POST',
+          body: platform,
+          revision
+        });
       }
 
       if (draft.trackingMode !== saved.trackingMode) {

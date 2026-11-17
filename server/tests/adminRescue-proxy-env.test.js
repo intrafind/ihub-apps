@@ -81,3 +81,34 @@ describe('admin rescue and PROXY_AUTH_ENABLED', () => {
     expect(isLastAdmin('u2', '/unused')).toBe(true);
   });
 });
+
+describe('admin rescue and the lockout guards count admins with one rule', () => {
+  test('a malformed record counts as no admin, as countUsableAdmins counts it', () => {
+    // A record that is not an object used to throw inside hasAnyAdmin, whose
+    // catch answered "an admin exists" while the guards counted none.
+    platform = { localAuth: { enabled: true } };
+    users = {
+      broken: null,
+      u1: { id: 'u1', username: 'x', active: true, internalGroups: 'admins', passwordHash: 'h' }
+    };
+    expect(hasAnyAdmin('/unused')).toBe(false);
+
+    users = {
+      ...users,
+      u2: { id: 'u2', active: true, internalGroups: ['admins'], passwordHash: 'h' }
+    };
+    expect(hasAnyAdmin('/unused')).toBe(true);
+  });
+
+  test('an enabled LDAP provider or NTLM whose default groups grant admin counts', () => {
+    users = {};
+    platform = {
+      ldapAuth: { enabled: true, providers: [{ name: 'ad', defaultGroups: ['admins'] }] }
+    };
+    expect(hasAnyAdmin('/unused')).toBe(true);
+    platform = { ntlmAuth: { enabled: true, defaultGroups: ['admins'] } };
+    expect(hasAnyAdmin('/unused')).toBe(true);
+    platform = { ntlmAuth: { enabled: false, defaultGroups: ['admins'] } };
+    expect(hasAnyAdmin('/unused')).toBe(false);
+  });
+});

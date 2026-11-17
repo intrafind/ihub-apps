@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { MemoryRouter, Routes, Route } from 'react-router-dom';
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { MemoryRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import '@testing-library/jest-dom';
 
 /**
@@ -172,6 +172,83 @@ describe('AdminUserEditPage and active', () => {
     );
     expect(screen.queryByText('Users list')).not.toBeInTheDocument();
     expect(screen.getByPlaceholderText('Enter email address')).toHaveValue('kept@example.com');
+  });
+});
+
+describe('AdminUserEditPage: the baseline for active', () => {
+  function GoTo({ path }) {
+    const navigate = useNavigate();
+    return (
+      <button type="button" onClick={() => navigate(path)}>
+        go
+      </button>
+    );
+  }
+
+  test('a load the editor discarded is not the baseline (out-of-order responses)', async () => {
+    const userA = { ...DISABLED_USER, id: 'user_a', username: 'anna', active: false };
+    const userB = { ...DISABLED_USER, id: 'user_b', username: 'bert', active: true };
+    const users = { [userA.id]: userA, [userB.id]: userB };
+    let releaseFirst;
+    let reads = 0;
+    mockMakeAdminApiCall.mockImplementation((url, options = {}) => {
+      if (options.method) return Promise.resolve({ data: {} });
+      if (url === '/admin/auth/users') {
+        reads += 1;
+        if (reads === 1) {
+          return new Promise(resolve => {
+            releaseFirst = () => resolve({ data: { users } });
+          });
+        }
+        return Promise.resolve({ data: { users } });
+      }
+      return Promise.resolve({ data: { groups: {} } });
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/admin/users/user_a']}>
+        <GoTo path="/admin/users/user_b" />
+        <Routes>
+          <Route path="/admin/users/:userId" element={<AdminUserEditPage />} />
+          <Route path="/admin/users" element={<div>Users list</div>} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    // Switch to bert before anna's load answers; anna's answer comes last.
+    fireEvent.click(screen.getByRole('button', { name: 'go' }));
+    expect(await screen.findByLabelText('Enabled')).toBeChecked();
+    await act(async () => releaseFirst());
+
+    fireEvent.click(screen.getByLabelText('Enabled'));
+    fireEvent.click(screen.getByRole('button', { name: 'Save User' }));
+
+    await waitFor(() => expect(writes()).toHaveLength(1));
+    expect(writes()[0][0]).toBe('/admin/auth/users/user_b');
+    expect(writes()[0][1].body.active).toBe(false);
+  });
+
+  test('after a failed save that sent active, the next save sends the status choice', async () => {
+    let attempt = 0;
+    mockApi(DISABLED_USER, () => {
+      attempt += 1;
+      return attempt === 1
+        ? Promise.reject(new Error('Network Error'))
+        : Promise.resolve({ data: {} });
+    });
+    renderEditor('user_d');
+
+    // Enable; the response is lost, so the server may have stored active: true.
+    fireEvent.click(await screen.findByLabelText('Enabled'));
+    fireEvent.click(screen.getByRole('button', { name: 'Save User' }));
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+
+    // Back to disabled, which equals the loaded user: it must still be sent.
+    fireEvent.click(screen.getByLabelText('Enabled'));
+    fireEvent.click(screen.getByRole('button', { name: 'Save User' }));
+
+    await waitFor(() => expect(writes()).toHaveLength(2));
+    expect(writes()[1][1].body.active).toBe(false);
   });
 });
 

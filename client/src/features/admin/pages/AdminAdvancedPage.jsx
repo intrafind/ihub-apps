@@ -35,11 +35,11 @@ function AdminAdvancedPage() {
     setOnboardingSaving(true);
     setOnboardingMessage(null);
     try {
-      // Read-modify-write: platform.json carries settings this page does not show.
-      const response = await makeAdminApiCall('/admin/configs/platform', { method: 'GET' });
-      const platform = response.data || {};
-      platform.setup = { ...platform.setup, disabled };
-      await makeAdminApiCall('/admin/configs/platform', { method: 'POST', body: platform });
+      // A scoped change of this one field: nothing the page does not show is sent.
+      await makeAdminApiCall('/admin/configs/platform', {
+        method: 'PATCH',
+        body: { setup: { disabled } }
+      });
       setOnboardingDisabled(disabled);
       setOnboardingMessage({
         type: 'success',

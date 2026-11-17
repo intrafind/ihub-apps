@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import { createConfigRevision } from '../../../api/adminConfigRevision';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import Switch from '../../../shared/components/Switch';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
@@ -118,7 +119,9 @@ function AdminOAuthServerPage() {
     const newStatus = !oauthEnabled;
 
     try {
-      const response = await makeAdminApiCall('/admin/configs/platform');
+      // This save's own read: its POST sends the read's ETag as If-Match.
+      const revision = createConfigRevision();
+      const response = await makeAdminApiCall('/admin/configs/platform', { revision });
       const platformConfig = response.data;
 
       const updatedConfig = {
@@ -137,7 +140,8 @@ function AdminOAuthServerPage() {
       await makeAdminApiCall('/admin/configs/platform', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: updatedConfig
+        body: updatedConfig,
+        revision
       });
 
       setOAuthEnabled(newStatus);
@@ -165,7 +169,9 @@ function AdminOAuthServerPage() {
     setMessage('');
 
     try {
-      const response = await makeAdminApiCall('/admin/configs/platform');
+      // This save's own read: its POST sends the read's ETag as If-Match.
+      const revision = createConfigRevision();
+      const response = await makeAdminApiCall('/admin/configs/platform', { revision });
       const currentPlatformConfig = response.data;
 
       const updatedConfig = {
@@ -191,7 +197,8 @@ function AdminOAuthServerPage() {
       await makeAdminApiCall('/admin/configs/platform', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: updatedConfig
+        body: updatedConfig,
+        revision
       });
 
       setMessage({

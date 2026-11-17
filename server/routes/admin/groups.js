@@ -136,6 +136,77 @@ function normalizeGroupPermissions(incoming = {}, existing = {}, adminAccess = u
 }
 
 /**
+ * Apply the plain fields of a group update (name, description, mappings,
+ * inherits, usage limits) to `groups[groupId]` in place. A field left
+ * `undefined` keeps its stored value.
+ *
+ * @param {Object} groups - `groups` of groups.json, read under the lock (modified)
+ * @param {string} groupId - An existing group
+ * @param {Object} update
+ * @param {string} [update.name]
+ * @param {string} [update.description]
+ * @param {unknown} [update.mappings] - Anything but an array clears the mappings
+ * @param {unknown} [update.inherits]
+ * @param {{value?: Object}|null} update.limits - Parsed `usageLimits`; `null` when
+ *   not sent, `{ value: undefined }` to remove them
+ * @throws {ServiceError} `BAD_REQUEST` when the new `inherits` is invalid or forms a cycle
+ */
+function applyGroupFieldUpdates(
+  groups,
+  groupId,
+  { name, description, mappings, inherits, limits }
+) {
+  const group = groups[groupId];
+  if (name !== undefined) group.name = name;
+  if (description !== undefined) group.description = description;
+  if (mappings !== undefined) group.mappings = Array.isArray(mappings) ? mappings : [];
+  if (inherits !== undefined) {
+    group.inherits = normalizeInherits(inherits);
+    const inheritanceError = validateGroupInheritance(groups, groupId);
+    if (inheritanceError) throw new ServiceError('BAD_REQUEST', inheritanceError);
+  }
+  if (limits) {
+    if (limits.value) group.usageLimits = limits.value;
+    else delete group.usageLimits;
+  }
+}
+
+/**
+ * Apply `permissions` from a group update to `groups[groupId]` in place.
+ *
+ * Refuses to strip adminAccess from the last group that grants it, which would
+ * lock every admin out of the platform.
+ *
+ * @param {Object} groups - `groups` of groups.json, read under the lock (modified)
+ * @param {string} groupId - An existing group
+ * @param {Object} permissions - `permissions` from the request body
+ * @throws {ServiceError} `BAD_REQUEST` when the group is the only one with admin access
+ */
+function applyGroupPermissionUpdate(groups, groupId, permissions) {
+  const group = groups[groupId];
+  const newAdminAccess =
+    permissions.adminAccess !== undefined
+      ? Boolean(permissions.adminAccess)
+      : group.permissions.adminAccess || false;
+
+  if (group.permissions?.adminAccess === true && newAdminAccess !== true) {
+    const remainingAdminGroups = countAdminAccessGroups(groups, groupId);
+    if (remainingAdminGroups === 0) {
+      throw new ServiceError(
+        'BAD_REQUEST',
+        `Cannot remove administrative access from group '${groupId}': it is the only group with administrative access`
+      );
+    }
+  }
+
+  group.permissions = normalizeGroupPermissions(
+    permissions,
+    group.permissions || {},
+    newAdminAccess
+  );
+}
+
+/**
  * @swagger
  * components:
  *   schemas:
@@ -753,44 +824,15 @@ export default function registerAdminGroupRoutes(app) {
         group = groupsData.groups[groupId];
         oldGroup = JSON.parse(JSON.stringify(group));
 
-        // Update fields
-        if (name !== undefined) group.name = name;
-        if (description !== undefined) group.description = description;
-        if (mappings !== undefined) group.mappings = Array.isArray(mappings) ? mappings : [];
-        if (inherits !== undefined) {
-          group.inherits = normalizeInherits(inherits);
-          const inheritanceError = validateGroupInheritance(groupsData.groups, groupId);
-          if (inheritanceError) throw new ServiceError('BAD_REQUEST', inheritanceError);
-        }
-        if (limits) {
-          if (limits.value) group.usageLimits = limits.value;
-          else delete group.usageLimits;
-        }
-
-        // Update permissions
+        applyGroupFieldUpdates(groupsData.groups, groupId, {
+          name,
+          description,
+          mappings,
+          inherits,
+          limits
+        });
         if (permissions !== undefined && typeof permissions === 'object') {
-          const newAdminAccess =
-            permissions.adminAccess !== undefined
-              ? Boolean(permissions.adminAccess)
-              : group.permissions.adminAccess || false;
-
-          // Prevent stripping adminAccess from the last group that grants it,
-          // which would lock every admin out of the platform.
-          if (group.permissions?.adminAccess === true && newAdminAccess !== true) {
-            const remainingAdminGroups = countAdminAccessGroups(groupsData.groups, groupId);
-            if (remainingAdminGroups === 0) {
-              throw new ServiceError(
-                'BAD_REQUEST',
-                `Cannot remove administrative access from group '${groupId}': it is the only group with administrative access`
-              );
-            }
-          }
-
-          group.permissions = normalizeGroupPermissions(
-            permissions,
-            group.permissions || {},
-            newAdminAccess
-          );
+          applyGroupPermissionUpdate(groupsData.groups, groupId, permissions);
         }
 
         // The whole file must resolve, and an administrator who can sign in must

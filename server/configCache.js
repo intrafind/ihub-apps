@@ -418,6 +418,18 @@ class ConfigCache {
   }
 
   /**
+   * Record that a refresh of a cached entry failed and the old copy is still
+   * served. Entries never cached are not recorded: there is no stale copy.
+   *
+   * @param {string} key - Cache key
+   * @param {string} message - What went wrong
+   */
+  _recordRefreshError(key, message) {
+    if (!this.cache.has(key)) return;
+    this.refreshErrors.set(key, { message, at: new Date().toISOString() });
+  }
+
+  /**
    * Set a cache entry with automatic refresh timer
    */
   setCacheEntry(key, data) {
@@ -572,13 +584,17 @@ class ConfigCache {
           key,
           error: err.message
         });
+        this._recordRefreshError(key, err?.message || String(err));
         this._armRefreshTimer(key);
         return;
       }
 
       if (data === null) {
-        // Unreadable right now — a half-written save, a transient EACCES. The
-        // cached copy stays, and so must the chain that will try again.
+        // Unreadable right now — a half-written save, a transient EACCES, or a
+        // hand edit that is not valid JSON. The cached copy stays, and so must
+        // the chain that will try again; the failure is recorded until a
+        // later reload succeeds.
+        this._recordRefreshError(key, `${key} could not be read; the last good copy stays in use.`);
         this._armRefreshTimer(key);
         return;
       }
@@ -615,10 +631,7 @@ class ConfigCache {
       // A groups.json that no longer resolves lands here: the old groups stay
       // in force, so the failure is recorded where an admin can see it.
       if (this.cache.has(key)) {
-        this.refreshErrors.set(key, {
-          message: error?.message || String(error),
-          at: new Date().toISOString()
-        });
+        this._recordRefreshError(key, error?.message || String(error));
         this._armRefreshTimer(key);
       }
     } finally {

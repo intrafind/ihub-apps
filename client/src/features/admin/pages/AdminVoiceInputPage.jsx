@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import { createConfigRevision } from '../../../api/adminConfigRevision';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 import { getLocalizedContent } from '../../../utils/localizeContent';
@@ -149,7 +150,12 @@ function AdminVoiceInputPage() {
     try {
       setSaving(true);
       setMessage('');
-      const response = await makeAdminApiCall('/admin/configs/platform', { method: 'GET' });
+      // This save's own read: its POST sends the read's ETag as If-Match.
+      const revision = createConfigRevision();
+      const response = await makeAdminApiCall('/admin/configs/platform', {
+        method: 'GET',
+        revision
+      });
       const platform = response.data || {};
       platform.speech = {
         ...platform.speech,
@@ -159,7 +165,11 @@ function AdminVoiceInputPage() {
         azure: config.azure,
         voiceMode: toSavedVoiceMode(config.voiceMode, platform.speech?.voiceMode)
       };
-      await makeAdminApiCall('/admin/configs/platform', { method: 'POST', body: platform });
+      await makeAdminApiCall('/admin/configs/platform', {
+        method: 'POST',
+        body: platform,
+        revision
+      });
       // Re-read so the keys show their redacted state again. Not loadConfig():
       // it blanks the page while loading and clears the message, so the
       // success notice never showed and the test panel lost its state.

@@ -131,7 +131,7 @@ describe('cross-file write skew', () => {
       await writeConfig('users.json', USERS);
 
       // B turns local off (fine while B is an admin); A demotes B (fine while local is on).
-      await Promise.all([
+      const responses = await Promise.all([
         request(appFor(B))
           .post('/api/admin/configs/platform')
           .send({ ...PLATFORM, localAuth: { enabled: false } }),
@@ -139,6 +139,12 @@ describe('cross-file write skew', () => {
           .put('/api/admin/auth/users/b')
           .send({ internalGroups: ['users'] })
       ]);
+
+      // Either order is fine, but one write must go through and the other be
+      // refused by the guard (not both fail for some other reason).
+      expect(responses.map(response => response.status).sort()).toEqual([200, 409]);
+      const refusal = responses.find(response => response.status === 409);
+      expect(['AUTH_LOCKOUT', 'LAST_ADMIN']).toContain(refusal.body.code);
 
       const platform = effectivePlatformConfig(await readConfig('platform.json'), {});
       const users = await readConfig('users.json');
@@ -167,6 +173,38 @@ describe('withAdminInvariantLock', () => {
 
     expect(results).toEqual(['first', 'second']);
     expect(events).toEqual(['start first', 'end first', 'start second', 'end second']);
+  });
+
+  test("waits for another worker's lease on the shared lock file", async () => {
+    // Another worker holds the installation-wide lease. The in-process queue
+    // is empty, so only the lease file can make this write wait.
+    const { withFileLock } = await import('../utils/fileLock.js');
+    const lockFile = path.join(state.rootDir, 'contents', 'config', '.admin-invariants.lock');
+    const events = [];
+    let releaseOther;
+    let otherHolds;
+    const held = new Promise(resolve => {
+      otherHolds = resolve;
+    });
+    const other = withFileLock(lockFile, async () => {
+      events.push('other holds');
+      otherHolds();
+      await new Promise(resolve => {
+        releaseOther = resolve;
+      });
+      events.push('other releases');
+    });
+    await held;
+
+    const mine = withAdminInvariantLock(async () => {
+      events.push('mine runs');
+    });
+    await new Promise(resolve => setTimeout(resolve, 100));
+    expect(events).toEqual(['other holds']);
+
+    releaseOther();
+    await Promise.all([other, mine]);
+    expect(events).toEqual(['other holds', 'other releases', 'mine runs']);
   });
 
   test('is reentrant within one call chain and survives a failed holder', async () => {

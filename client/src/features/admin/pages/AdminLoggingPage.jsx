@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import { createConfigRevision } from '../../../api/adminConfigRevision';
 
 // The platform.json value ('off' | 'mask' | 'drop') for the <select>; an
 // unset value reads as 'off'.
@@ -318,8 +319,11 @@ function AdminLoggingPage() {
       setMessage('');
 
       // Load current platform config
+      // This save's own read: its POST sends the read's ETag as If-Match.
+      const revision = createConfigRevision();
       const platformResponse = await makeAdminApiCall('/admin/configs/platform', {
-        method: 'GET'
+        method: 'GET',
+        revision
       });
       const platformConfig = platformResponse.data;
 
@@ -331,7 +335,8 @@ function AdminLoggingPage() {
       // Save back
       await makeAdminApiCall('/admin/configs/platform', {
         method: 'POST',
-        body: platformConfig
+        body: platformConfig,
+        revision
       });
 
       setMessage({
@@ -364,7 +369,9 @@ function AdminLoggingPage() {
       // blocks server-side.
       await makeAdminApiCall('/admin/logging/config', {
         method: 'PUT',
-        body: { ...loggingConfig, anonymizeIp: privacyConfig.loggingAnonymizeIp }
+        // Only the field this card owns: unsaved edits in the logging card
+        // above stay unsaved (the server merges this into the stored block).
+        body: { anonymizeIp: privacyConfig.loggingAnonymizeIp }
       });
       await makeAdminApiCall('/admin/audit-log/settings', {
         method: 'PUT',
