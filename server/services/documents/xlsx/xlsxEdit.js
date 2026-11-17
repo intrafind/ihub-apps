@@ -50,7 +50,7 @@ function invalid(message) {
 /** Column letters to a 0-based index: A → 0, AA → 26. */
 export function columnIndexOf(letters) {
   let index = 0;
-  for (const char of letters.toUpperCase()) index = index * 26 + (char.charCodeAt(0) - 64);
+  for (const char of letters.toUpperCase()) index = index * 26 + (char.codePointAt(0) - 64);
   return index - 1;
 }
 
@@ -75,7 +75,9 @@ function sheetIndexOf(sheets, ref, where) {
     .toLowerCase();
   const index = sheets.findIndex(sheet => String(sheet?.name || '').toLowerCase() === name);
   if (index < 0) {
-    const names = sheets.map((sheet, i) => `"${sheet?.name || `Sheet ${i + 1}`}"`).join(', ');
+    const names = sheets
+      .map((sheet, i) => JSON.stringify(sheet?.name || 'Sheet ' + (i + 1)))
+      .join(', ');
     throw invalid(`${where}: no sheet "${ref}". The workbook has: ${names}.`);
   }
   return index;
@@ -165,6 +167,75 @@ function rowNumberOf(value, sheet, where, { allowEnd = false } = {}) {
   return value;
 }
 
+/** The rows of a sheet, as a list. */
+function rowsOfSheet(sheet) {
+  return Array.isArray(sheet.rows) ? sheet.rows : [];
+}
+
+/**
+ * Run `apply(sheet, index)` on the sheet a change names and store what it
+ * returns in its place.
+ */
+function onSheet(book, change, where, apply) {
+  const at = sheetIndexOf(book, change.sheet, `${where}.sheet`);
+  book[at] = apply(book[at], at);
+}
+
+/** What each sheet operation does to the workbook (changed in place). */
+const SHEET_OPS = {
+  setCells(book, change, where) {
+    onSheet(book, change, where, sheet => setCells(sheet, change.cell, change.values, where));
+  },
+  appendRows(book, change, where) {
+    onSheet(book, change, where, sheet => ({
+      ...sheet,
+      rows: [...rowsOfSheet(sheet), ...rowsOf(change.rows, `${where}.rows`)]
+    }));
+  },
+  insertRows(book, change, where) {
+    onSheet(book, change, where, sheet => {
+      const before = rowNumberOf(change.before, sheet, `${where}.before`, { allowEnd: true });
+      const rows = [...rowsOfSheet(sheet)];
+      rows.splice(before - 2, 0, ...rowsOf(change.rows, `${where}.rows`));
+      return { ...sheet, rows };
+    });
+  },
+  deleteRows(book, change, where) {
+    onSheet(book, change, where, sheet => {
+      const rows = [...rowsOfSheet(sheet)];
+      const from = rowNumberOf(change.row, sheet, `${where}.row`);
+      const count = change.count ?? 1;
+      if (!Number.isInteger(count) || count < 1 || from - 2 + count > rows.length) {
+        throw invalid(`${where}.count must be at least 1 and stay within the sheet's rows.`);
+      }
+      rows.splice(from - 2, count);
+      return { ...sheet, rows };
+    });
+  },
+  replaceSheet(book, change, where) {
+    onSheet(book, change, where, () => sheetOf(change.with, `${where}.with`));
+  },
+  renameSheet(book, change, where) {
+    const to = typeof change.to === 'string' ? change.to.trim() : '';
+    if (!to) throw invalid(`${where}.to must be the new sheet name.`);
+    onSheet(book, change, where, sheet => ({ ...sheet, name: to }));
+  },
+  deleteSheet(book, change, where) {
+    const at = sheetIndexOf(book, change.sheet, `${where}.sheet`);
+    if (book.length === 1) throw invalid('A workbook keeps at least one sheet.');
+    book.splice(at, 1);
+  },
+  addSheet(book, change, where) {
+    if (book.length >= MAX_SHEETS) throw invalid(`A workbook has at most ${MAX_SHEETS} sheets.`);
+    const sheet = sheetOf(change.sheet, `${where}.sheet`);
+    const after =
+      change.after === undefined
+        ? book.length
+        : sheetIndexOf(book, change.after, `${where}.after`) + 1;
+    book.splice(after, 0, sheet);
+  }
+};
+
 /**
  * Apply sheet operations to a workbook's sheets, all or none.
  *
@@ -182,49 +253,10 @@ export function applySheetChanges(sheets, value) {
   const book = structuredClone(sheets);
   changes.forEach((change, index) => {
     const where = `changes[${index}]`;
-    const op = change?.op;
-    if (!OPS.includes(op)) throw invalid(`${where}.op must be one of: ${OPS.join(', ')}.`);
-    if (op === 'addSheet') {
-      if (book.length >= MAX_SHEETS) throw invalid(`A workbook has at most ${MAX_SHEETS} sheets.`);
-      const sheet = sheetOf(change.sheet, `${where}.sheet`);
-      const after =
-        change.after === undefined
-          ? book.length
-          : sheetIndexOf(book, change.after, `${where}.after`) + 1;
-      book.splice(after, 0, sheet);
-      return;
-    }
-    const at = sheetIndexOf(book, change.sheet, `${where}.sheet`);
-    const sheet = book[at];
-    const rows = Array.isArray(sheet.rows) ? sheet.rows : [];
-    if (op === 'setCells') {
-      book[at] = setCells(sheet, change.cell, change.values, where);
-    } else if (op === 'appendRows') {
-      book[at] = { ...sheet, rows: [...rows, ...rowsOf(change.rows, `${where}.rows`)] };
-    } else if (op === 'insertRows') {
-      const before = rowNumberOf(change.before, sheet, `${where}.before`, { allowEnd: true });
-      const next = [...rows];
-      next.splice(before - 2, 0, ...rowsOf(change.rows, `${where}.rows`));
-      book[at] = { ...sheet, rows: next };
-    } else if (op === 'deleteRows') {
-      const from = rowNumberOf(change.row, sheet, `${where}.row`);
-      const count = change.count === undefined ? 1 : change.count;
-      if (!Number.isInteger(count) || count < 1 || from - 2 + count > rows.length) {
-        throw invalid(`${where}.count must be at least 1 and stay within the sheet's rows.`);
-      }
-      const next = [...rows];
-      next.splice(from - 2, count);
-      book[at] = { ...sheet, rows: next };
-    } else if (op === 'replaceSheet') {
-      book[at] = sheetOf(change.with, `${where}.with`);
-    } else if (op === 'deleteSheet') {
-      if (book.length === 1) throw invalid('A workbook keeps at least one sheet.');
-      book.splice(at, 1);
-    } else {
-      const to = typeof change.to === 'string' ? change.to.trim() : '';
-      if (!to) throw invalid(`${where}.to must be the new sheet name.`);
-      book[at] = { ...sheet, name: to };
-    }
+    // Checked against the list first: an object lookup alone would also find `constructor`.
+    const apply = OPS.includes(change?.op) ? SHEET_OPS[change.op] : null;
+    if (!apply) throw invalid(`${where}.op must be one of: ${OPS.join(', ')}.`);
+    apply(book, change, where);
   });
   return book;
 }

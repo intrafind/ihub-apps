@@ -153,6 +153,12 @@ describe('edit helpers', () => {
       /at least one slide/
     );
     assert.throws(() => applySlideChanges(deck, [{ op: 'swap' }]), /op must be one of/);
+    // An inherited name is not an operation.
+    assert.throws(() => applySlideChanges(deck, [{ op: 'constructor' }]), /op must be one of/);
+    assert.throws(
+      () => applySheetChanges([{ name: 'A' }], [{ op: 'toString', sheet: 'A' }]),
+      /op must be one of/
+    );
   });
 
   it('address cells as in Excel and keep row objects', () => {

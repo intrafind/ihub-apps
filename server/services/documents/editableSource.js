@@ -136,7 +136,7 @@ export async function readSource(buffer) {
   try {
     const zip = await JSZip.loadAsync(buffer);
     const xml = await zip.file(SOURCE_PART)?.async('string');
-    if (!xml || !xml.includes(SOURCE_NAMESPACE)) return null;
+    if (!xml?.includes(SOURCE_NAMESPACE)) return null;
     const payload = /<source\b[^>]*>([A-Za-z0-9+/=\s]*)<\/source>/.exec(xml)?.[1];
     if (!payload) return null;
     const parsed = JSON.parse(Buffer.from(payload, 'base64').toString('utf8'));
@@ -197,7 +197,7 @@ export async function editableSourceOf(params, { tool, extension, what }) {
     );
   }
   const source = await readSource(data);
-  if (!source || source.tool !== tool) {
+  if (source?.tool !== tool) {
     throw new GeneratedFileError(
       `"${name}" carries no editable source (it was made before edits were possible, built on an uploaded file, uploaded itself, or saved elsewhere). Create it again with ${tool}; later changes can then be edits.`,
       'not-editable'
@@ -366,8 +366,9 @@ export function applySettings(args, set, allowed) {
   }
   const unknown = Object.keys(changes).filter(key => !allowed.includes(key));
   if (unknown.length) {
+    const named = unknown.map(key => JSON.stringify(key)).join(', ');
     throw new GeneratedFileError(
-      `"set" cannot change ${unknown.map(k => `"${k}"`).join(', ')}. It can change: ${allowed.join(', ')}.`,
+      `"set" cannot change ${named}. It can change: ${allowed.join(', ')}.`,
       'invalid'
     );
   }

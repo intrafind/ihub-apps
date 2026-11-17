@@ -138,6 +138,25 @@ async function textOf(candidate, data) {
   return text;
 }
 
+/** What a read says about a document returned as its source; nothing for any other file. */
+function sourceNoteOf(view) {
+  if (!view) return {};
+  const language = view.format === 'markdown' ? 'Markdown' : 'JSON';
+  return {
+    source: view.format,
+    note: `This is the ${language} the file was made from. Change the file with ${view.editTool}, copying oldText from here.`
+  };
+}
+
+/** The answer for a file that holds no text (a picture, an archive). */
+function unreadableResult(described, kind) {
+  return {
+    ...described,
+    text: '',
+    note: `This file is ${kind === 'image' ? 'an image' : 'an archive'} and cannot be read as text.`
+  };
+}
+
 /**
  * `chat_artifacts_read`
  *
@@ -161,13 +180,7 @@ export async function read(params) {
       kind: candidate.kind,
       ...(candidate.mimeType ? { mimeType: candidate.mimeType } : {})
     };
-    if (UNREADABLE_KINDS.has(candidate.kind)) {
-      return {
-        ...described,
-        text: '',
-        note: `This file is ${candidate.kind === 'image' ? 'an image' : 'an archive'} and cannot be read as text.`
-      };
-    }
+    if (UNREADABLE_KINDS.has(candidate.kind)) return unreadableResult(described, candidate.kind);
     const data = await candidate.load();
     if (!data) {
       return chatContextError(`The file "${candidate.name}" is no longer stored.`, 'ARTIFACT_GONE');
@@ -177,12 +190,7 @@ export async function read(params) {
     const page = pageOfText(view ? view.text : await textOf(candidate, data), params.offset);
     return {
       ...described,
-      ...(view
-        ? {
-            source: view.format,
-            note: `This is the ${view.format === 'markdown' ? 'Markdown' : 'JSON'} the file was made from. Change the file with ${view.editTool}, copying oldText from here.`
-          }
-        : {}),
+      ...sourceNoteOf(view),
       ...page,
       ...(page.nextOffset !== undefined
         ? {

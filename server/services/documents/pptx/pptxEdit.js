@@ -44,6 +44,41 @@ function positionOf(value, slides, where, { allowZero = false } = {}) {
   return value;
 }
 
+/** What each slide operation does to the deck (changed in place). */
+const SLIDE_OPS = {
+  replace(deck, change, where) {
+    const at = positionOf(change.slide, deck, `${where}.slide`);
+    deck[at - 1] = slideOf(change.with, `${where}.with`);
+  },
+  update(deck, change, where) {
+    const at = positionOf(change.slide, deck, `${where}.slide`);
+    const next = { ...deck[at - 1] };
+    for (const [key, field] of Object.entries(slideOf(change.set, `${where}.set`))) {
+      if (field === null) delete next[key];
+      else next[key] = field;
+    }
+    deck[at - 1] = next;
+  },
+  insert(deck, change, where) {
+    const after = positionOf(change.after ?? deck.length, deck, `${where}.after`, {
+      allowZero: true
+    });
+    if (deck.length >= MAX_SLIDES) throw invalid(`A deck has at most ${MAX_SLIDES} slides.`);
+    deck.splice(after, 0, slideOf(change.slide, `${where}.slide`));
+  },
+  delete(deck, change, where) {
+    const at = positionOf(change.slide, deck, `${where}.slide`);
+    if (deck.length === 1) throw invalid('A deck keeps at least one slide.');
+    deck.splice(at - 1, 1);
+  },
+  move(deck, change, where) {
+    const from = positionOf(change.slide, deck, `${where}.slide`);
+    const to = positionOf(change.to, deck, `${where}.to`);
+    const [moved] = deck.splice(from - 1, 1);
+    deck.splice(to - 1, 0, moved);
+  }
+};
+
 /**
  * Apply slide operations to a deck's slides, all or none.
  *
@@ -61,36 +96,10 @@ export function applySlideChanges(slides, value) {
   const deck = structuredClone(slides);
   changes.forEach((change, index) => {
     const where = `changes[${index}]`;
-    const op = change?.op;
-    if (!OPS.includes(op)) throw invalid(`${where}.op must be one of: ${OPS.join(', ')}.`);
-    if (op === 'replace') {
-      const at = positionOf(change.slide, deck, `${where}.slide`);
-      deck[at - 1] = slideOf(change.with, `${where}.with`);
-    } else if (op === 'update') {
-      const at = positionOf(change.slide, deck, `${where}.slide`);
-      const fields = slideOf(change.set, `${where}.set`);
-      const next = { ...deck[at - 1] };
-      for (const [key, field] of Object.entries(fields)) {
-        if (field === null) delete next[key];
-        else next[key] = field;
-      }
-      deck[at - 1] = next;
-    } else if (op === 'insert') {
-      const after = positionOf(change.after ?? deck.length, deck, `${where}.after`, {
-        allowZero: true
-      });
-      if (deck.length >= MAX_SLIDES) throw invalid(`A deck has at most ${MAX_SLIDES} slides.`);
-      deck.splice(after, 0, slideOf(change.slide, `${where}.slide`));
-    } else if (op === 'delete') {
-      const at = positionOf(change.slide, deck, `${where}.slide`);
-      if (deck.length === 1) throw invalid('A deck keeps at least one slide.');
-      deck.splice(at - 1, 1);
-    } else {
-      const from = positionOf(change.slide, deck, `${where}.slide`);
-      const to = positionOf(change.to, deck, `${where}.to`);
-      const [moved] = deck.splice(from - 1, 1);
-      deck.splice(to - 1, 0, moved);
-    }
+    // Checked against the list first: an object lookup alone would also find `constructor`.
+    const apply = OPS.includes(change?.op) ? SLIDE_OPS[change.op] : null;
+    if (!apply) throw invalid(`${where}.op must be one of: ${OPS.join(', ')}.`);
+    apply(deck, change, where);
   });
   return deck;
 }
