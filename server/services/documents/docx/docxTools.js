@@ -3,7 +3,16 @@
 
 import logger from '../../../utils/logger.js';
 import { assertSpecSize, optionalString, toolFailure } from '../documentToolHelpers.js';
-import { holdGeneratedFile } from '../generatedFiles.js';
+import {
+  applySettings,
+  applyTextEdits,
+  editableSourceOf,
+  editResultOf,
+  embedSource,
+  textEditsOf,
+  toolArgsOf
+} from '../editableSource.js';
+import { GeneratedFileError, holdGeneratedFile } from '../generatedFiles.js';
 import { DocumentGenerationError, renderInWorker } from '../renderService.js';
 import { applyTemplateToDocxSpec, templateBundleFor } from '../templates/applyTemplate.js';
 import {
@@ -11,12 +20,15 @@ import {
   loadUploadedFileOriginal,
   userTemplateUploadsAllowed
 } from '../templateFiles.js';
+import { CREATE_DOCX_TOOL } from './docxToolDefinitions.js';
 import { WORD_TEMPLATE_MODES } from './wordTemplate.js';
 
 /**
  * The tool the `docx` system skill brings (see `server/systemSkills/docx`):
  * `create_docx` renders a Word document from Markdown, in the app's document
- * template, and hands it to the chat as a generated file.
+ * template, and hands it to the chat as a generated file. The file carries its
+ * arguments (see `editableSource.js`), so `edit_docx` can change the Markdown
+ * and render it again.
  */
 
 export const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
@@ -139,7 +151,17 @@ export async function runCreateDocx(params) {
     const file = holdGeneratedFile({
       user: params.user,
       chatId: params.chatId,
-      data: buffer,
+      // The source is kept only when it is the whole document: an uploaded
+      // file whose own text stays (placeholders filled, content appended) is
+      // more than the Markdown, so an edit could not rebuild it. The date is
+      // kept as rendered, so an edit next week keeps this one.
+      data:
+        !templateFile || templateFile.mode === 'styles_only'
+          ? await embedSource(buffer, 'docx', {
+              tool: CREATE_DOCX_TOOL.id,
+              args: { ...toolArgsOf(params, CREATE_DOCX_TOOL), date: spec.date }
+            })
+          : buffer,
       mimeType: DOCX_MIME,
       name: params.filename || params.title
     });
@@ -156,5 +178,57 @@ export async function runCreateDocx(params) {
     };
   } catch (error) {
     return toolFailure(error, 'The Word document could not be created.');
+  }
+}
+
+/** What `set` may change on a Word document: every argument but its content and name. */
+const DOCX_SETTINGS = Object.keys(CREATE_DOCX_TOOL.parameters.properties).filter(
+  key => key !== 'markdown' && key !== 'filename'
+);
+
+/**
+ * `edit_docx`: change a Word document this chat made, by exact replacements
+ * in its Markdown and new settings, and render it again under the same name.
+ *
+ * @param {Object} params - `filename`, `edits`, `set`, plus the trusted context.
+ * @returns {Promise<Object>}
+ */
+export async function runEditDocx(params) {
+  try {
+    const edits = textEditsOf(params.edits, {
+      required: false,
+      rewriteHint: 'create the document again with create_docx'
+    });
+    if (!edits.length && params.set === undefined) {
+      throw new GeneratedFileError(
+        'Give "edits" (text replacements), "set" (settings), or both.',
+        'invalid'
+      );
+    }
+    const { name, args } = await editableSourceOf(params, {
+      tool: CREATE_DOCX_TOOL.id,
+      extension: /\.docx$/i,
+      what: 'Word document'
+    });
+    const next = applySettings(args, params.set, DOCX_SETTINGS);
+    if (edits.length) {
+      next.markdown = applyTextEdits(String(next.markdown || ''), edits, {
+        readHint:
+          'read it with chat_artifacts_read, which returns the Markdown the document was made from'
+      });
+    }
+    if (JSON.stringify(next) === JSON.stringify(args)) {
+      throw new GeneratedFileError('The edits change nothing.', 'invalid');
+    }
+    const result = await runCreateDocx({
+      ...next,
+      filename: name,
+      user: params.user,
+      chatId: params.chatId,
+      appConfig: params.appConfig
+    });
+    return editResultOf(result, edits.length + (params.set ? 1 : 0));
+  } catch (error) {
+    return toolFailure(error, 'The Word document could not be changed.');
   }
 }

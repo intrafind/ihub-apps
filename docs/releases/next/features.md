@@ -2297,3 +2297,27 @@ throttle, and storage operations. The counters run since the process started; co
 snapshots to see a window. The load-test harness reports them as "Waits and cluster bus".
 
 - The field is `processes[].diagnostics`; the rest of the answer is unchanged.
+
+## Chat: Word, PowerPoint and Excel Files Are Changed in Place
+
+A change to a document the chat made no longer makes the model write the whole document again.
+"Correct the figure in section 2", "add a slide after the agenda" or "set Q3 to 95,000" now
+changes only that part, and the file is ready in seconds instead of minutes on a self-hosted
+model.
+
+- **New tools** in the `docx`, `pptx` and `xlsx` skills: `edit_docx` (text in the document,
+  settings such as a table of contents), `edit_pptx` (update, insert, delete or move slides, change
+  slide text), `edit_xlsx` (set cells, add or remove rows, add, rename or delete sheets).
+- **Same name, same template.** The new version replaces the file in the chat; the earlier one
+  stays in the Files list.
+- **How it works:** a generated document carries the content it was made from inside the file, as
+  a custom XML part Office keeps. Documents created before this update, and uploaded documents,
+  are created once more on the first change.
+
+## Skills: Complete Examples for Web Artifacts and Dashboards
+
+The `web-artifacts` skill now comes with four complete, tested example artifacts — a KPI overview
+with a clickable chart, a calculator, a data explorer and a clickable diagram — and the
+`dashboard` reference with a second full example. The model reads the closest one before it
+writes, so artifacts are more consistent, work on phones and with the keyboard, and come out
+right the first time more often.

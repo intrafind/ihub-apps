@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
+import { filenameParameter, textEditsParameter } from '../editToolParameters.js';
+
 /**
  * Definition of the tool the `web-artifacts` system skill brings (see
  * `server/systemSkills/web-artifacts`). Plain data: the handler lives in
@@ -80,30 +82,10 @@ export const EDIT_WEB_ARTIFACT_TOOL = {
   parameters: {
     type: 'object',
     properties: {
-      filename: {
-        type: 'string',
-        description:
-          'The artifact to change: its file name as created (e.g. "roi-calculator.html") or its id.'
-      },
-      edits: {
-        type: 'array',
-        description:
-          'The replacements, applied in order. Keep each oldText short but unique: a few lines around the change, copied exactly (whitespace and quotes included).',
-        items: {
-          type: 'object',
-          properties: {
-            oldText: {
-              type: 'string',
-              description: 'Text to replace, exactly as it is in the current file.'
-            },
-            newText: {
-              type: 'string',
-              description: 'The replacement; an empty string deletes oldText.'
-            }
-          },
-          required: ['oldText', 'newText']
-        }
-      }
+      filename: filenameParameter('roi-calculator.html', 'artifact'),
+      edits: textEditsParameter(
+        'The replacements, applied in order. Keep each oldText short but unique: a few lines around the change, copied exactly (whitespace and quotes included).'
+      )
     },
     required: ['filename', 'edits']
   }

@@ -10,10 +10,10 @@
 import { afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  applyArtifactEdits,
   runCreateWebArtifact,
   runEditWebArtifact
 } from '../services/documents/webArtifacts/webArtifactTools.js';
+import { applyTextEdits as applyArtifactEdits } from '../services/documents/editableSource.js';
 import {
   clearHeldGeneratedFiles,
   heldGeneratedFile,
@@ -207,8 +207,12 @@ describe('runEditWebArtifact', () => {
       (await call([{ oldText: 'Compute', newText: 'Compute' }])).error,
       /change nothing/
     );
-    const missingName = await runEditWebArtifact({ edits: [], user, chatId });
-    assert.match(missingName.error, /Name the artifact/);
+    const missingName = await runEditWebArtifact({
+      edits: [{ oldText: 'a', newText: 'b' }],
+      user,
+      chatId
+    });
+    assert.match(missingName.error, /Name the file to change/);
 
     holdGeneratedFile({
       user,

@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
+import { filenameParameter, settingsParameter, textEditsParameter } from '../editToolParameters.js';
+
 /**
  * Definition of the tool the `xlsx` system skill brings (see
  * `server/systemSkills/xlsx`). Plain data: the handler lives in
@@ -60,5 +62,33 @@ export const CREATE_XLSX_TOOL = {
       }
     },
     required: ['filename', 'title', 'sheets']
+  }
+};
+
+export const EDIT_XLSX_TOOL = {
+  id: 'edit_xlsx',
+  name: { en: 'Edit Excel workbook', de: 'Excel-Arbeitsmappe bearbeiten' },
+  description: {
+    en: 'Change an Excel workbook this chat created with create_xlsx instead of building it again: sheet operations ("changes": set cells, append, insert or delete rows, replace, add, delete or rename a sheet), exact text replacements in its texts and formulas ("edits"), new settings ("set"), or a combination. Cells are addressed as in Excel: row 1 is the header row, data starts in row 2. Formulas are not adjusted when rows move: fix references yourself. All changes apply or none. The workbook is built again under the same name. If you do not have its sheets, read it with chat_artifacts_read first. Use create_xlsx only for a new workbook or a rewrite.',
+    de: 'Ändert eine Excel-Arbeitsmappe, die dieser Chat mit create_xlsx erstellt hat, statt sie neu zu bauen: Blattoperationen ("changes": Zellen setzen, Zeilen anhängen, einfügen oder löschen, ein Blatt ersetzen, hinzufügen, löschen oder umbenennen), exakte Textersetzungen in Texten und Formeln ("edits"), neue Einstellungen ("set") oder eine Kombination. Zellen werden wie in Excel adressiert: Zeile 1 ist die Kopfzeile, Daten beginnen in Zeile 2. Formeln werden beim Verschieben von Zeilen nicht angepasst: Bezüge selbst korrigieren. Alle Änderungen werden übernommen oder keine. Die Arbeitsmappe wird unter demselben Namen neu erzeugt. Fehlen die Blätter, zuerst mit chat_artifacts_read lesen. create_xlsx nur für eine neue Arbeitsmappe oder eine Neufassung.'
+  },
+  parameters: {
+    type: 'object',
+    properties: {
+      filename: filenameParameter('budget-2027.xlsx', 'workbook'),
+      changes: {
+        type: 'array',
+        description:
+          'Sheet operations, applied in order; "sheet" is a sheet name or its 1-based number: {"op":"setCells","sheet":"Summary","cell":"B3","values":[[125000,"=B3*1.1"]]} (row 1 sets column headers), {"op":"appendRows","sheet":"Summary","rows":[["APAC",90000]]}, {"op":"insertRows","sheet":"Summary","before":4,"rows":[…]}, {"op":"deleteRows","sheet":"Summary","row":5,"count":2}, {"op":"replaceSheet","sheet":"Data","with":{…sheet…}}, {"op":"addSheet","sheet":{…sheet…},"after":"Summary"}, {"op":"deleteSheet","sheet":"Old"}, {"op":"renameSheet","sheet":"Sheet1","to":"Summary"}. Rows and sheets are written as in create_xlsx.',
+        items: { type: 'object' }
+      },
+      edits: textEditsParameter(
+        'Replacements in the texts and formulas of the cells, applied after "changes". Each oldText must occur exactly once in all of them.'
+      ),
+      set: settingsParameter(
+        'Settings to change, as in create_xlsx (e.g. {"title": "Budget 2027"}); null removes one. The sheets change through "changes" and "edits".'
+      )
+    },
+    required: ['filename']
   }
 };

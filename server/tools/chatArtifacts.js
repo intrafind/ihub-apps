@@ -8,7 +8,10 @@
  * (`chatArtifactCandidates`). See `services/chat/chatContextTools.js`.
  *
  * Artifacts are write-once: the model changes a file by creating a new one
- * (a web artifact through `edit_web_artifact`, which writes the new version).
+ * (a web artifact through `edit_web_artifact`, a Word, PowerPoint or Excel
+ * file through `edit_docx` / `edit_pptx` / `edit_xlsx`, which write the new
+ * version). For such a document the read returns the source it was made from
+ * (its Markdown, slides or sheets), the text those edits are copied from.
  *
  * @module tools/chatArtifacts
  */
@@ -22,6 +25,7 @@ import {
 import { chatArtifactCandidates, selectChatFiles } from '../services/documents/files/fileTools.js';
 import { extractText } from '../services/projects/extractText.js';
 import { TEXT_FILE_MEDIA_TYPES } from '../../shared/generatedFiles.js';
+import { readSource, sourceViewOf } from '../services/documents/editableSource.js';
 
 /** Kinds that hold no text to read. */
 const UNREADABLE_KINDS = new Set(['image', 'archive']);
@@ -134,6 +138,25 @@ async function textOf(candidate, data) {
   return text;
 }
 
+/** What a read says about a document returned as its source; nothing for any other file. */
+function sourceNoteOf(view) {
+  if (!view) return {};
+  const language = view.format === 'markdown' ? 'Markdown' : 'JSON';
+  return {
+    source: view.format,
+    note: `This is the ${language} the file was made from. Change the file with ${view.editTool}, copying oldText from here.`
+  };
+}
+
+/** The answer for a file that holds no text (a picture, an archive). */
+function unreadableResult(described, kind) {
+  return {
+    ...described,
+    text: '',
+    note: `This file is ${kind === 'image' ? 'an image' : 'an archive'} and cannot be read as text.`
+  };
+}
+
 /**
  * `chat_artifacts_read`
  *
@@ -157,20 +180,17 @@ export async function read(params) {
       kind: candidate.kind,
       ...(candidate.mimeType ? { mimeType: candidate.mimeType } : {})
     };
-    if (UNREADABLE_KINDS.has(candidate.kind)) {
-      return {
-        ...described,
-        text: '',
-        note: `This file is ${candidate.kind === 'image' ? 'an image' : 'an archive'} and cannot be read as text.`
-      };
-    }
+    if (UNREADABLE_KINDS.has(candidate.kind)) return unreadableResult(described, candidate.kind);
     const data = await candidate.load();
     if (!data) {
       return chatContextError(`The file "${candidate.name}" is no longer stored.`, 'ARTIFACT_GONE');
     }
-    const page = pageOfText(await textOf(candidate, data), params.offset);
+    // A document the chat made carries its source: that is what an edit changes.
+    const view = isPlainText(candidate) ? null : sourceViewOf(await readSource(data));
+    const page = pageOfText(view ? view.text : await textOf(candidate, data), params.offset);
     return {
       ...described,
+      ...sourceNoteOf(view),
       ...page,
       ...(page.nextOffset !== undefined
         ? {
