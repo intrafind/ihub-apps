@@ -12,6 +12,10 @@ spec:
     spec:
       # The stubs need no Kubernetes API access.
       automountServiceAccountToken: false
+      # Example (k3s01): pin to the node the iHub under test runs on, so no network hop
+      # between them varies; requests keep their CPU apart. Optional.
+      # nodeSelector:
+      #   kubernetes.io/hostname: k3s01-agent-01
       containers:
         - name: stubs
           image: ihub-loadtest
@@ -25,8 +29,9 @@ spec:
             - { name: STUB_TOKENS_PER_SEC, value: '40' }
             - { name: STUB_SITE_PAGES, value: '300' }
           resources:
-            requests: { cpu: 500m, memory: 256Mi }
-            limits: { cpu: '2', memory: 1Gi }
+            # ~200 streams in flight at 1,500 users; below this the stub adds latency itself.
+            requests: { cpu: '2', memory: 512Mi }
+            limits: { cpu: '4', memory: 2Gi }
           readinessProbe:
             httpGet: { path: /v1/models, port: llm }
 ---
