@@ -341,7 +341,54 @@
   "GET /api/admin/apps/templates": {
     "status": 200,
     "shape": {
-      "items": []
+      "items": [
+        {
+          "allowEmptyContent": "boolean",
+          "allowInheritance": "boolean",
+          "autoStart": "boolean",
+          "category?": "string",
+          "color": "string",
+          "customResponseRenderer?": "string",
+          "description": "object",
+          "disallowModelSelection": "boolean",
+          "enabled": "boolean",
+          "ephemeral": "boolean",
+          "features?": "object",
+          "greeting?": "object",
+          "iassistant?": "object",
+          "icon": "string",
+          "id": "string",
+          "iframeConfig?": "object",
+          "imageGeneration?": "object",
+          "inheritanceLevel?": "number",
+          "inputMode?": "object",
+          "integrations?": "object",
+          "messagePlaceholder?": "object",
+          "name": "object",
+          "order?": "number",
+          "outputSchema?": "object",
+          "overriddenFields?": "array",
+          "parentId?": "string",
+          "preferredModel?": "string",
+          "preferredOutputFormat?": "string",
+          "preferredStyle?": "string",
+          "projects?": "array",
+          "prompt?": "object",
+          "redirectConfig?": "object",
+          "rendererConfig?": "object",
+          "requiredFeatures?": "array",
+          "sendChatHistory": "boolean",
+          "settings?": "object",
+          "skillSettings?": "object",
+          "skills?": "array",
+          "starterPrompts?": "[]|array",
+          "system?": "object",
+          "type": "string",
+          "upload?": "object",
+          "variables?": "[]|array",
+          "websearch?": "object"
+        }
+      ]
     }
   },
   "GET /api/admin/audit-log": {

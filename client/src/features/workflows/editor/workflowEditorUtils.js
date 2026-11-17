@@ -5,10 +5,6 @@ import dagre from '@dagrejs/dagre';
 import { PROJECT_NODE_DEFAULT_OUTPUT, PROJECT_NODE_TYPES } from '../utils/projectNodeConfig';
 
 /**
- * Color mapping for each workflow node type.
- * Used consistently across the visual editor for node headers, minimap, and palette indicators.
- */
-/**
  * React Flow node type of every step except loop containers. A type of its own
  * rather than React Flow's `default`: the library styles `default` nodes
  * (`.react-flow__node-default`: border, 150 px width, white fill), which drew a
@@ -16,6 +12,10 @@ import { PROJECT_NODE_DEFAULT_OUTPUT, PROJECT_NODE_TYPES } from '../utils/projec
  */
 export const WORKFLOW_STEP_NODE_TYPE = 'workflowStep';
 
+/**
+ * Color mapping for each workflow node type.
+ * Used consistently across the visual editor for node headers, minimap, and palette indicators.
+ */
 export const NODE_TYPE_COLORS = {
   start: '#10B981',
   end: '#6B7280',
@@ -220,7 +220,12 @@ export function defaultConfigForType(type) {
     case 'http':
       return { method: 'GET', url: '' };
     case 'human':
-      return { message: { en: '' }, options: [] };
+      // One option, as the engine offers when a step lists none: the step can
+      // be answered and saved as it comes (an empty list is refused, AX-B4).
+      return {
+        message: { en: '' },
+        options: [{ value: 'continue', label: { en: 'Continue', de: 'Weiter' }, style: 'primary' }]
+      };
     case 'project-items':
       return { project: '', outputVariable: PROJECT_NODE_DEFAULT_OUTPUT['project-items'] };
     case 'project-read':
@@ -746,11 +751,30 @@ export const ENGINE_PROVIDED_NAMES = [
  * message (`tools/workflowRunner.js`) and the run dialog's message both arrive
  * as `input`. Every workflow has it, so the Variables tab lists it and the
  * reference checker accepts `{{input}}` (AX-B12).
+ *
+ * The run dialog sends `input` only for a workflow whose start step declares
+ * no input variables; it shows the variables' fields instead. For such a
+ * workflow only a chat run sets `input`, which `chatOnlyLabel` says.
  */
 export const RUN_INPUT_VARIABLE = {
   name: 'input',
-  label: 'Message the run was started with (built-in)'
+  label: 'Message the run was started with (built-in)',
+  chatOnlyLabel: 'Chat message the run was started with (chat runs only; empty otherwise)'
 };
+
+/**
+ * The Variables-tab label of `input` for a workflow: chat runs only when the
+ * start step declares input variables (the run dialog then sends none).
+ *
+ * @param {object|undefined} startNode - The start step's React Flow node
+ * @returns {string} Label for the `input` suggestion
+ */
+export function runInputLabel(startNode) {
+  const declared = startNode?.data?.nodeConfig?.inputVariables;
+  return Array.isArray(declared) && declared.length > 0
+    ? RUN_INPUT_VARIABLE.chatOnlyLabel
+    : RUN_INPUT_VARIABLE.label;
+}
 
 /**
  * Collects the workflow state variables visible to a given node: input
@@ -799,7 +823,7 @@ export function collectUpstreamVariables(rfNodes, rfEdges, nodeId) {
   const startNode = rfNodes.find(n => n.data?.nodeType === 'start');
   if (startNode) visit(startNode.id);
   if (startNode && startNode.id !== nodeId) {
-    addVariable(RUN_INPUT_VARIABLE.name, RUN_INPUT_VARIABLE.label);
+    addVariable(RUN_INPUT_VARIABLE.name, runInputLabel(startNode));
   }
 
   const self = byId.get(nodeId);

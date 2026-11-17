@@ -206,6 +206,25 @@ test('JSON mode keeps text that is not valid yet and saves the finished edit', a
   expect(payload.inboxId).toBe('triage');
 });
 
+test('JSON mode holds back Save and Form while the text does not parse (no Monaco markers)', async () => {
+  await renderEditor();
+  fireEvent.click(screen.getByRole('button', { name: 'JSON' }));
+  const editor = screen.getByLabelText('JSON');
+  const text = editor.value;
+
+  // The stand-in editor never publishes markers, so only the text itself can
+  // tell the page that it is invalid.
+  fireEvent.change(editor, { target: { value: text.replace(/\n}\s*$/, ',\n  "x"\n}') } });
+  expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Form' })).toBeDisabled();
+  expect(screen.getByRole('alert')).toHaveTextContent('The JSON is not valid');
+
+  fireEvent.change(screen.getByLabelText('JSON'), { target: { value: text } });
+  expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+  expect(screen.getByRole('button', { name: 'Form' })).toBeEnabled();
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+});
+
 test('a comma separates names in the approver and service-account group fields', async () => {
   await renderEditor();
   const approverField = document.getElementById('agent-hitl-approver-groups');

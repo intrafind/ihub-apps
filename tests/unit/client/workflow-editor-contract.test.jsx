@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import fs from 'node:fs';
+import { useState } from 'react';
 import path from 'node:path';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import HumanForm from '../../../client/src/features/workflows/editor/panels/forms/HumanForm';
@@ -20,6 +21,7 @@ import {
   workflowToFlow
 } from '../../../client/src/features/workflows/editor/workflowEditorUtils';
 import { groupsGrantingWorkflow } from '../../../client/src/features/admin/utils/workflowVisibility';
+import { findUnanswerableHumanSteps } from '../../../server/services/workflow/workflowSaveChecks.js';
 
 /**
  * Contract of the workflow editors (AX-B4, AX-B5, AX-B10, AX-B11, AX-B12,
@@ -149,6 +151,17 @@ describe('the built-in run input (AX-B12)', () => {
     });
   });
 
+  it('is marked "chat runs only" when the start step declares input variables', () => {
+    const withInputs = structuredClone(workflow);
+    withInputs.nodes[0].config = { inputVariables: [{ name: 'summary', type: 'string' }] };
+    const { nodes, edges } = workflowToFlow(withInputs);
+    expect(collectUpstreamVariables(nodes, edges, 'sum')).toContainEqual({
+      value: 'input',
+      label: RUN_INPUT_VARIABLE.chatOnlyLabel
+    });
+    expect(RUN_INPUT_VARIABLE.chatOnlyLabel).toMatch(/chat runs only/);
+  });
+
   it('is not reported as unknown; an undefined name still is', () => {
     const { nodes, edges } = workflowToFlow(workflow);
     expect(findUnknownReferences(nodes, edges).map(r => r.name)).toEqual(['summary']);
@@ -181,6 +194,55 @@ describe('Ask a Person options (AX-B4, AX-B5)', () => {
     const { options: _options, ...withoutOptions } = humanConfig();
     render(<HumanForm config={withoutOptions} onChange={jest.fn()} />);
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('a step from the palette starts with one "Continue" option the save check accepts', () => {
+    const node = createNewNode('human', { x: 0, y: 0 });
+    expect(node.data.nodeConfig.options).toEqual([
+      { value: 'continue', label: { en: 'Continue', de: 'Weiter' }, style: 'primary' }
+    ]);
+    const workflow = {
+      nodes: [{ id: node.id, type: 'human', name: { en: '' }, config: node.data.nodeConfig }]
+    };
+    expect(findUnanswerableHumanSteps(workflow)).toEqual([]);
+
+    render(<HumanForm config={node.data.nodeConfig} onChange={jest.fn()} />);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('names each option field by its position and keeps button labels on one line', () => {
+    render(<HumanForm config={humanConfig()} onChange={jest.fn()} />);
+    const second = screen.getByRole('textbox', { name: 'Label of option 2' });
+    expect(second.tagName).toBe('INPUT');
+    expect(screen.getByRole('textbox', { name: 'Label of option 1' })).not.toBe(second);
+    expect(screen.getByRole('textbox', { name: 'Value of option 2' })).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Style of option 2' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Remove option 2' })).toBeInTheDocument();
+    // The visible label of the message is tied to its field.
+    expect(screen.getByLabelText('Message').tagName).toBe('TEXTAREA');
+  });
+
+  it('a removed option does not hand its language tab to the next one', () => {
+    const config = {
+      ...humanConfig(),
+      options: [
+        { value: 'a', label: { en: 'First', de: 'Erste' } },
+        { value: 'b', label: { en: 'Second', de: 'Zweite' } }
+      ]
+    };
+    function Harness() {
+      const [current, setCurrent] = useState(config);
+      return <HumanForm config={current} onChange={setCurrent} />;
+    }
+    render(<Harness />);
+    // Edit option 1 in German, then remove it.
+    const firstLabel = screen.getByRole('textbox', { name: 'Label of option 1' });
+    fireEvent.click(within(firstLabel.parentElement).getByRole('button', { name: 'de' }));
+    expect(screen.getByRole('textbox', { name: 'Label of option 1' })).toHaveValue('Erste');
+    fireEvent.click(screen.getByRole('button', { name: 'Remove option 1' }));
+
+    // The former option 2 opens on its own (first) language.
+    expect(screen.getByRole('textbox', { name: 'Label of option 1' })).toHaveValue('Second');
   });
 
   it("a refused save shows the server's message for the step", () => {

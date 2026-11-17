@@ -828,6 +828,13 @@ export class WorkflowEngine {
 
             // Check if the node returned a paused status (e.g., human checkpoint)
             if (result && result.status === 'paused') {
+              // The run was cancelled while the node was deciding to ask: what
+              // it raised came after cancel()'s sweep. Cancel that too, and
+              // keep the run cancelled instead of marking it paused (AX-B16).
+              if (await this._wasCancelledDuringNode(executionId, signal)) {
+                return;
+              }
+
               logger.info('Workflow paused by node', {
                 component: 'WorkflowEngine',
                 executionId,
@@ -1724,6 +1731,32 @@ export class WorkflowEngine {
     });
 
     return this.stateManager.get(executionId);
+  }
+
+  /**
+   * Whether the run was cancelled while a node ran that has now returned
+   * `paused`. If so, the interactions the node raised after `cancel()` listed
+   * the pending ones are cancelled now, so none is left in the approvals queue
+   * for a run that can no longer resume.
+   *
+   * @param {string} executionId - The run.
+   * @param {AbortSignal} signal - The run's abort signal.
+   * @returns {Promise<boolean>} True when the run is cancelled.
+   * @private
+   */
+  async _wasCancelledDuringNode(executionId, signal) {
+    let cancelled = signal?.aborted === true;
+    if (!cancelled) {
+      const current = await this.stateManager.get(executionId);
+      cancelled = current?.status === WorkflowStatus.CANCELLED;
+    }
+    if (!cancelled) return false;
+    logger.info('Node paused a run that was cancelled meanwhile; cancelling what it raised', {
+      component: 'WorkflowEngine',
+      executionId
+    });
+    await this._cancelPendingInteractions(executionId);
+    return true;
   }
 
   /**

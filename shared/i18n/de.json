@@ -7957,7 +7957,6 @@
       "progressNoteWhenHelp": "Optionale Bedingung. Leer lassen, um den Hinweis immer anzuzeigen.",
       "promptId": "Workflow-ID eingeben:",
       "promptIdHint": "Nur Buchstaben, Zahlen, Punkte, Unterstriche und Bindestriche.",
-      "publish": "Veröffentlichen",
       "save": "Speichern",
       "saveFailed": "Speichern fehlgeschlagen: {{message}}",
       "saveSuccess": "Workflow gespeichert",
@@ -8049,8 +8048,18 @@
           "outputHelp": "Zustandsvariable für das gespeicherte Dokument. Standard: {{name}}. Lassen Sie „Warten“ an, wenn ein späterer Schritt das Dokument liest."
         }
       },
+      "localizedField": {
+        "addLanguages": "Sprachen hinzufügen",
+        "addLanguagesTitle": "Diesen Text je Sprache eingeben",
+        "addLanguage": "Sprache hinzufügen",
+        "removeLanguage": "{{lang}} entfernen"
+      },
       "human": {
         "optionLabel": "Beschriftung",
+        "optionValueN": "Wert von Option {{n}}",
+        "optionLabelN": "Beschriftung von Option {{n}}",
+        "optionStyleN": "Stil von Option {{n}}",
+        "removeOptionN": "Option {{n}} entfernen",
         "noOptions": "Fügen Sie mindestens eine Option hinzu. Ohne Option kann niemand diesen Schritt beantworten, und der Lauf wartet, bis er abgebrochen wird."
       }
     },

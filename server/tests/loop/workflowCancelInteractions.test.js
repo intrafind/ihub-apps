@@ -131,3 +131,54 @@ test('a failed step is named by its name in the run language, not by its id (AX-
   assert.equal(events[0].error.message, 'Step "Zusammenfassen" failed: Agent execution failed');
   assert.equal(events[0].error.nodeId, 'prompt-1794518310650', 'the id stays for machines');
 });
+
+test('an interaction a node raises after the cancel sweep is cancelled too, and the run stays cancelled', async () => {
+  const storage = await startTestStorage({ prefix: 'wf-cancel-late-raise-' });
+  try {
+    const runLog = new RunLog({ forceEnabled: true, getPlatformConfig: () => ({}) });
+    const interactions = new InteractionService({ runLog, bus: silentBus() });
+    const executionId = 'wf-exec-late';
+    const states = new Map([
+      [
+        executionId,
+        { executionId, status: 'running', currentNodes: ['ask'], completedNodes: [], data: {} }
+      ]
+    ]);
+    const engine = new WorkflowEngine({
+      bus: silentBus(),
+      stateManager: fakeStateManager(states),
+      interactions,
+      scheduler: { getExecutableNodes: (_workflow, current) => current }
+    });
+    const controller = new AbortController();
+    engine.abortControllers.set(executionId, controller);
+
+    let late;
+    // The node is past its abort checks when the run is cancelled, then asks.
+    engine.executeNode = async () => {
+      await engine.cancel(executionId, 'user_cancelled');
+      late = await interactions.raise({
+        runId: executionId,
+        kind: 'approval',
+        origin: 'node',
+        prompt: { message: 'Approve?' },
+        source: { executionId, checkpointId: 'ckpt-late' }
+      });
+      return { status: 'paused', pauseReason: 'human_checkpoint', checkpoint: { id: 'ckpt-late' } };
+    };
+
+    await engine._runExecutionLoop(
+      { id: 'wf', nodes: [{ id: 'ask', type: 'human', config: {} }], edges: [] },
+      executionId,
+      {},
+      controller.signal
+    );
+
+    assert.equal(states.get(executionId).status, 'cancelled', 'not overwritten with paused');
+    assert.equal((await interactions.get(late.id)).status, 'cancelled');
+    assert.deepEqual(await interactions.listPending(), []);
+    await interactions.stop();
+  } finally {
+    await storage.stop();
+  }
+});

@@ -851,9 +851,11 @@ base language (`en`, `de`).
 
 - An **Ask a Person** step with no option could be saved, and the run then waited with a Submit
   button that never turned on. The step's panel now flags it, and saving is refused with the step's
-  name.
+  name. A new step from the palette starts with one **Continue** option, so it can be saved as it
+  comes.
 - The option labels of the shipped approval workflow showed `[object Object]`, and typing in them
-  replaced the German label. Labels are edited per language now.
+  replaced the German label. Labels are edited per language now, in a one-line field that screen
+  readers announce with the option's number.
 - Cancelling a run removes its open approvals from **Admin → Agents → Pending Approvals**. Before,
   they stayed there with **Open run** and could never be answered.
 
@@ -865,5 +867,7 @@ base language (`en`, `de`).
 - The Workflows list column **Visible to** shows the groups whose permissions grant the workflow, or
   **Admins only**. The old **Groups** column showed a field that does not decide access.
 - Every step can read `{{input}}`, the message the run was started with from a chat or the run
-  dialog; the Variables tab lists it and the canvas no longer warns about it.
+  dialog; the Variables tab lists it and the canvas no longer warns about it. In a workflow with
+  input variables the run dialog sends no message, so the Variables tab marks `{{input}}` as
+  "chat runs only".
 - A failed run names the step by its name ("Step "Summarise" failed: …") instead of an internal ID.

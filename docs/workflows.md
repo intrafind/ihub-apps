@@ -160,7 +160,7 @@ Guessing a variable name is the easiest way to break a workflow quietly: a missp
 
 **The Variables tab.** Selecting a step and opening its **Variables** tab lists every name that step can read, grouped by where it comes from — workflow inputs, the output of each earlier step, the enclosing loops' items and counters, and the run metadata the engine provides. Click a name to copy it as `{{name}}`.
 
-**The run's message: `{{input}}`.** Every step after the start can read `{{input}}`, the message the run was started with: the chat message of a run started from a chat, or the **Message** box of the run dialog for a workflow without input variables. The Variables tab lists it as built-in.
+**The run's message: `{{input}}`.** Every step after the start can read `{{input}}`, the message the run was started with: the chat message of a run started from a chat, or the **Message** box of the run dialog for a workflow without input variables. The Variables tab lists it as built-in. When the start step declares input variables, the run dialog shows their fields instead of the **Message** box and sends no message, so `{{input}}` is set only for a run started from a chat; the Variables tab then marks it "chat runs only". Scheduled and webhook runs never set it. In such a workflow, read the input variables instead.
 
 **The unknown-name warning.** The canvas shows a warning listing any `{{name}}` or `$.data.name` reference that no step in the workflow defines; clicking one selects the step it appears in. It understands the names steps write beyond `outputVariable` — a corpus search's `corpusVar`/`coverageVar`, a loop's `itemVariable`/`countInto`, a transform's operation targets, a human step's `humanResponse_<id>`, a start step's `inputVariables`/`inputMapping`/`defaults` — and the scopes some steps render against, such as a report template's `records`/`coverage`/`synthesis` and a prompt's `{{sources}}` placeholder. References inside a Handlebars block (`{{#each …}}`) are left alone, since names there resolve against the block rather than workflow state.
 
@@ -541,7 +541,7 @@ Schedule triggers run on the same scheduler as [Scheduled Tasks](scheduled-tasks
 
 An **Ask a Person** (`human`) step pauses the run until someone picks one of its options. In the step's panel, each option has a value (what later steps and branch conditions see) and a label per language; switch the language tab above the label to edit it in another language without touching the others.
 
-A step needs at least one option: without one nobody could answer it, so the panel flags it and saving is refused with the step's name. A step with no options list at all offers a single **Continue**.
+A step needs at least one option: without one nobody could answer it, so the panel flags it and saving is refused with the step's name. A new step from the palette starts with one **Continue** option. A step with no options list at all (in the JSON) offers a single **Continue** too.
 
 When the run is cancelled, its open questions and approvals are cancelled with it and leave **Admin → Agents → Pending Approvals**.
 

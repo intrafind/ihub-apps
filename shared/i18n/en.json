@@ -7958,7 +7958,6 @@
       "progressNoteWhenHelp": "Optional condition. Leave empty to always show the note.",
       "promptId": "Enter workflow ID:",
       "promptIdHint": "Use only letters, numbers, dots, underscores, and hyphens.",
-      "publish": "Publish",
       "save": "Save",
       "saveFailed": "Save failed: {{message}}",
       "saveSuccess": "Workflow saved",
@@ -8050,8 +8049,18 @@
           "outputHelp": "State variable for the stored document. Default: {{name}}. Keep \"wait\" on when a later step reads the document."
         }
       },
+      "localizedField": {
+        "addLanguages": "Add languages",
+        "addLanguagesTitle": "Enter this text per language",
+        "addLanguage": "Add a language",
+        "removeLanguage": "Remove {{lang}}"
+      },
       "human": {
         "optionLabel": "Label",
+        "optionValueN": "Value of option {{n}}",
+        "optionLabelN": "Label of option {{n}}",
+        "optionStyleN": "Style of option {{n}}",
+        "removeOptionN": "Remove option {{n}}",
         "noOptions": "Add at least one option. Without one, nobody can answer this step and the run waits until it is cancelled."
       }
     },

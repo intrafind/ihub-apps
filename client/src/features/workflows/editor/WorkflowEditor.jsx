@@ -145,9 +145,8 @@ function NodePalette({ onAddNode }) {
  * @param {object[]} props.initialNodes - Initial React Flow nodes
  * @param {object[]} props.initialEdges - Initial React Flow edges
  * @param {function} props.onSave - Save callback receiving (nodes, edges)
- * @param {function} [props.onPublish] - Optional publish callback receiving (nodes, edges)
  */
-function WorkflowEditorInner({ initialNodes, initialEdges, onSave, onPublish }) {
+function WorkflowEditorInner({ initialNodes, initialEdges, onSave }) {
   const { t } = useTranslation();
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
@@ -534,14 +533,6 @@ function WorkflowEditorInner({ initialNodes, initialEdges, onSave, onPublish }) 
             >
               {t('workflows.editor.autoLayout', 'Auto Layout')}
             </button>
-            {onPublish && (
-              <button
-                onClick={() => onPublish(nodes, edges)}
-                className="bg-green-700 text-white text-xs px-3 py-1.5 rounded-sm hover:bg-green-800 transition-colors"
-              >
-                {t('workflows.editor.publish', 'Publish')}
-              </button>
-            )}
             <button
               onClick={() => onSave(nodes, edges)}
               className="bg-blue-600 text-white text-xs px-3 py-1.5 rounded-sm hover:bg-blue-700 transition-colors"
@@ -593,22 +584,20 @@ function WorkflowEditorInner({ initialNodes, initialEdges, onSave, onPublish }) 
  * Provides a drag-and-drop canvas with a searchable node palette, loop
  * containers (drop nodes inside to build the body), labeled decision
  * branches, an edge condition editor, auto-layout, node configuration
- * panel, and save/publish actions.
+ * panel, and the save action.
  *
  * @param {object} props
  * @param {object[]} props.initialNodes - Initial React Flow nodes
  * @param {object[]} props.initialEdges - Initial React Flow edges
  * @param {function} props.onSave - Save callback receiving (nodes, edges)
- * @param {function} [props.onPublish] - Optional publish callback receiving (nodes, edges)
  */
-export function WorkflowEditor({ initialNodes, initialEdges, onSave, onPublish }) {
+export function WorkflowEditor({ initialNodes, initialEdges, onSave }) {
   return (
     <ReactFlowProvider>
       <WorkflowEditorInner
         initialNodes={initialNodes}
         initialEdges={initialEdges}
         onSave={onSave}
-        onPublish={onPublish}
       />
     </ReactFlowProvider>
   );
