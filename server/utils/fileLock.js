@@ -320,6 +320,8 @@ async function claimRemoval(lockPath, identity) {
  * @param {number} opts.pollMs
  * @param {string} opts.name - Lock name for messages
  * @param {string} [opts.component]
+ * @returns {Promise<number>} `performance.now()` taken right before the write
+ *   that published the lease began (see {@link releaseLease})
  * @throws {LockTimeoutError} When the budget ran out
  */
 export async function acquireLease(lockPath, owner, opts) {
@@ -329,9 +331,10 @@ export async function acquireLease(lockPath, owner, opts) {
   const startedAt = performance.now();
   diag.waiters += 1;
   try {
-    await acquireLeaseUntimed(lockPath, owner, opts);
+    const writtenAt = await acquireLeaseUntimed(lockPath, owner, opts);
     diag.acquisitions += 1;
     diag.wait.record(performance.now() - startedAt);
+    return writtenAt;
   } catch (error) {
     if (error instanceof LockTimeoutError) diag.timeouts += 1;
     throw error;
@@ -356,11 +359,17 @@ async function acquireLeaseUntimed(
   // Stamped per attempt, not once up front: a lease that recorded when its
   // waiter *started* waiting looked abandoned the moment it appeared whenever
   // the wait had outlasted the TTL.
-  const publish = () => publishLease(lockPath, leasePayload(owner, ttlMs));
+  let writtenAt;
+  const publish = async () => {
+    const at = performance.now();
+    if (!(await publishLease(lockPath, leasePayload(owner, ttlMs)))) return false;
+    writtenAt = at;
+    return true;
+  };
   const timedOut = () =>
     new LockTimeoutError(`Timed out after ${waitMs}ms waiting for lock "${short(name)}"`);
   // At least one attempt even with a zero budget.
-  if (await publish()) return;
+  if (await publish()) return writtenAt;
   // A waiter only reads the lease (open, fstat, read, close) and publishes
   // once it is gone; publishing on every round cost a create attempt on top.
   // The pause doubles from `pollMs` up to MAX_POLL_FACTOR times it, jittered so
@@ -369,7 +378,7 @@ async function acquireLeaseUntimed(
   for (;;) {
     const existing = await readLease(lockPath);
     if (!existing) {
-      if (await publish()) return;
+      if (await publish()) return writtenAt;
       continue; // someone else published first — read theirs
     }
     if (isExpiredLease(existing, ttlMs)) {
@@ -386,7 +395,7 @@ async function acquireLeaseUntimed(
       if (outcome === 'removed' || outcome === 'gone') {
         // Try at once: with a short budget the caller that cleared the dead
         // lease must not be the one that gives up on it.
-        if (await publish()) return;
+        if (await publish()) return writtenAt;
         continue;
       }
       // 'changed' (another lease is there now, or this one was refreshed) or
@@ -408,9 +417,20 @@ async function acquireLeaseUntimed(
  * never briefly empty; a reader that catches a torn refresh finds an
  * unparseable lease written just now, which counts as held.
  *
+ * @param {{writtenAt: number}} [clock] - Set to `performance.now()` taken
+ *   before a refresh that was written (see {@link releaseLease})
  * @returns {Promise<boolean>} False once the lease is no longer ours
  */
-export async function touchLease(lockPath, owner, ttlMs, name, token, component = COMPONENT) {
+export async function touchLease(
+  lockPath,
+  owner,
+  ttlMs,
+  name,
+  token,
+  component = COMPONENT,
+  clock
+) {
+  const startedAt = performance.now();
   let handle;
   try {
     handle = await fs.open(lockPath, 'r+');
@@ -445,6 +465,7 @@ export async function touchLease(lockPath, owner, ttlMs, name, token, component 
     const payload = leasePayload(owner, ttlMs, token);
     await handle.write(payload, 0, 'utf8');
     await handle.truncate(Buffer.byteLength(payload, 'utf8'));
+    if (clock) clock.writtenAt = startedAt;
     return true;
   } catch (error) {
     logger.warn('Could not refresh a lease', {
@@ -463,6 +484,8 @@ export async function touchLease(lockPath, owner, ttlMs, name, token, component 
  * only how long a *crashed* holder blocks the path. The timer is unref'd.
  *
  * @param {() => void} [onLost] - Called once the lease is found to be no longer ours
+ * @param {{writtenAt: number}} [clock] - Kept up to date by every refresh
+ *   written (see {@link touchLease})
  * @returns {() => void} Stops the renewal; safe to call more than once
  */
 export function startLeaseRenewal(
@@ -473,7 +496,8 @@ export function startLeaseRenewal(
   name,
   token,
   component = COMPONENT,
-  onLost
+  onLost,
+  clock
 ) {
   let stopped = false;
   let inFlight = false;
@@ -484,7 +508,7 @@ export function startLeaseRenewal(
   const timer = setInterval(() => {
     if (stopped || inFlight) return;
     inFlight = true;
-    void touchLease(lockPath, owner, ttlMs, name, token, component)
+    void touchLease(lockPath, owner, ttlMs, name, token, component, clock)
       .then(kept => {
         if (!kept) {
           stop();
@@ -507,9 +531,27 @@ export function startLeaseRenewal(
  * token), so the lease is read once, under the claim, not before it as well.
  * Never throws: the section already ran, and the TTL makes a leftover lease
  * recoverable.
+ *
+ * Fast path: with a `clock` whose last publish or refresh *started* less than
+ * a third of the lease's TTL ago, the lease is removed with one `unlink` — no
+ * claim, no read-back. Nobody can judge a lease that young expired
+ * ({@link isExpiredLease} needs it older than its TTL), and only an expired
+ * lease is ever claimed or replaced by someone else, so the file at the path
+ * is still ours. The other two thirds of the TTL are the margin for a coarse
+ * mtime and for the time between this check and the unlink running.
+ * ponytail: the margin assumes the unlink runs within ~2/3 TTL of the check
+ * (10 s at 15 s); a thread pool stalled longer than that could remove a lease
+ * taken over meanwhile. Shorten the window if such stalls are ever seen.
+ *
+ * @param {{writtenAt: number, ttlMs: number}} [clock] - When this holder last
+ *   wrote the lease (`performance.now()` before the write) and its TTL
  */
-export async function releaseLease(lockPath, owner, name, component = COMPONENT) {
+export async function releaseLease(lockPath, owner, name, component = COMPONENT, clock) {
   try {
+    if (clock && performance.now() - clock.writtenAt < clock.ttlMs / 3) {
+      await removeIfExists(lockPath);
+      return;
+    }
     const outcome = await removeLease(lockPath, { data: { owner } }, () => true);
     if (outcome === 'changed') {
       logger.warn('Lease was taken over before release', { component, name: short(name) });
@@ -580,7 +622,13 @@ async function passTurn(lockPath, line, name, component) {
     line.lease = null;
     line.yieldFirst = Boolean(canHandOff);
     lease.stopRenewal?.();
-    await releaseLease(lockPath, lease.owner, name, component);
+    await releaseLease(
+      lockPath,
+      lease.owner,
+      name,
+      component,
+      lease.lost ? undefined : lease.clock
+    );
   }
   const next = line.waiters.shift();
   if (next) next();
@@ -654,14 +702,19 @@ export async function withFileLock(
         await sleep(Math.min(pause, Math.max(0, deadline - Date.now())));
       }
       const owner = crypto.randomUUID();
-      await acquireLease(lockPath, owner, {
+      const writtenAt = await acquireLease(lockPath, owner, {
         ttlMs: staleMs,
         waitMs: Math.max(0, deadline - Date.now()),
         pollMs,
         name,
         component
       });
-      const lease = { owner, stopRenewal: null, lost: false };
+      const lease = {
+        owner,
+        stopRenewal: null,
+        lost: false,
+        clock: { writtenAt, ttlMs: staleMs }
+      };
       const renew = renewMs ?? Math.max(1, Math.floor(staleMs / 3));
       if (renew > 0) {
         lease.stopRenewal = startLeaseRenewal(
@@ -672,7 +725,8 @@ export async function withFileLock(
           name,
           undefined,
           component,
-          () => (lease.lost = true)
+          () => (lease.lost = true),
+          lease.clock
         );
       }
       line.lease = lease;

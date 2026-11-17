@@ -230,7 +230,8 @@ export class FilesystemLockManager extends LockManager {
     // matches the token on disk may unlink the lease, so a holder whose lease
     // expired and was taken over cannot delete the new holder's lease.
     const owner = crypto.randomUUID();
-    await this._acquire(lockPath, owner, ttl, wait, name);
+    // When the lease was last written, for the fast release (`releaseLease`).
+    const clock = { writtenAt: await this._acquire(lockPath, owner, ttl, wait, name), ttlMs: ttl };
     const acquiredAt = performance.now();
     this._held.set(lockPath, { owner, name });
     let token = null;
@@ -239,7 +240,7 @@ export class FilesystemLockManager extends LockManager {
         token = await this._issueToken(name);
         // The lease names its token, so `isTokenCurrent` can tell this lease
         // from one a later holder created after taking the name over.
-        if (!(await this._touch(lockPath, owner, ttl, name, token))) {
+        if (!(await this._touch(lockPath, owner, ttl, name, token, clock))) {
           // Lost before the section started (a TTL shorter than issuing the
           // token takes): running `fn` now would run it without the lock.
           throw new LockTimeoutError(
@@ -260,13 +261,15 @@ export class FilesystemLockManager extends LockManager {
         : () => this._isLeaseOwned(lockPath, owner, ttl)
     });
     const stopRenewal =
-      renew > 0 ? this._startRenewal(lockPath, owner, ttl, renew, name, token ?? undefined) : null;
+      renew > 0
+        ? this._startRenewal(lockPath, owner, ttl, renew, name, token ?? undefined, clock)
+        : null;
     try {
       return await fn(lease);
     } finally {
       stopRenewal?.();
       this._held.delete(lockPath);
-      await this._release(lockPath, owner, name);
+      await this._release(lockPath, owner, name, clock);
       recordLockHold(lockPrefix(name, COMPONENT), acquiredAt);
     }
   }
@@ -278,8 +281,18 @@ export class FilesystemLockManager extends LockManager {
    * @returns {() => void} Stops the renewal; safe to call more than once
    * @private
    */
-  _startRenewal(lockPath, owner, ttlMs, renewMs, name, token) {
-    return startLeaseRenewal(lockPath, owner, ttlMs, renewMs, name, token, COMPONENT);
+  _startRenewal(lockPath, owner, ttlMs, renewMs, name, token, clock) {
+    return startLeaseRenewal(
+      lockPath,
+      owner,
+      ttlMs,
+      renewMs,
+      name,
+      token,
+      COMPONENT,
+      undefined,
+      clock
+    );
   }
 
   /**
@@ -301,8 +314,8 @@ export class FilesystemLockManager extends LockManager {
    * @returns {Promise<boolean>} False once the lease is no longer ours
    * @private
    */
-  _touch(lockPath, owner, ttlMs, name, token) {
-    return touchLease(lockPath, owner, ttlMs, name, token, COMPONENT);
+  _touch(lockPath, owner, ttlMs, name, token, clock) {
+    return touchLease(lockPath, owner, ttlMs, name, token, COMPONENT, clock);
   }
 
   /**
@@ -588,12 +601,13 @@ export class FilesystemLockManager extends LockManager {
   }
 
   /**
-   * Remove the lease, but only while it is still ours (`releaseLease`).
+   * Remove the lease, but only while it is still ours (`releaseLease`); with
+   * `clock`, by one unlink while the lease is young enough.
    *
    * @private
    */
-  _release(lockPath, owner, name) {
-    return releaseLease(lockPath, owner, name, COMPONENT);
+  _release(lockPath, owner, name, clock) {
+    return releaseLease(lockPath, owner, name, COMPONENT, clock);
   }
 }
 
