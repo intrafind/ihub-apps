@@ -973,7 +973,10 @@
         }
       },
       "edit": {
-        "projects": "Projects"
+        "projects": "Projects",
+        "jsonInvalid": "The JSON is not valid. Fix it before you save or switch to the form.",
+        "skillsHelper": "Search and select skills to add to this agent. Click on selected skills to remove them.",
+        "hitlHint": "Users in any of these groups can approve human-checkpoint pauses for this profile. Pick a group or type its ID and press Enter or a comma."
       }
     },
     "providers": {
@@ -3155,7 +3158,8 @@
         "toolSearchOff": "Off: send every tool",
         "toolSearchHelp": "When the tools of this app are too many for one request, the biggest integrations are left out and listed in the prompt; the model finds a tool with search_tools and the tools it finds are added to the request. Keeps requests small and tool choice sharp. Set \"Always loaded\" on an integration to keep it out of the search.",
         "toolSearchBudget": "Token budget for tool definitions",
-        "toolSearchBudgetHelp": "Tokens the tool definitions of one request may take before integrations are left to the search. Default 6000; never more than a tenth of the model's context window."
+        "toolSearchBudgetHelp": "Tokens the tool definitions of one request may take before integrations are left to the search. Default 6000; never more than a tenth of the model's context window.",
+        "selectCategory": "Select category..."
       },
       "reorder": "Reorder",
       "reorderHelp": "Drag a row or use the arrows to set the order apps appear in for users — in the apps browser, on the start page and in the sidebar. Every app is listed, so search and filters do not apply here. Nothing is saved until you choose \"Save order\".",
@@ -5372,6 +5376,10 @@
           "endWithoutOutput": "The end step {{nodes}} has no output. The workflow cannot be saved, and a run that reaches that step fails, until you set its Output in the visual editor."
         },
         "jsonInvalid": "Fix the JSON below to change these settings."
+      },
+      "table": {
+        "visibleTo": "Visible to",
+        "adminsOnly": "Admins only"
       }
     },
     "projects": {
@@ -7951,8 +7959,6 @@
       "promptId": "Enter workflow ID:",
       "promptIdHint": "Use only letters, numbers, dots, underscores, and hyphens.",
       "publish": "Publish",
-      "publishFailed": "Publish failed: {{message}}",
-      "publishSuccess": "Workflow published successfully",
       "save": "Save",
       "saveFailed": "Save failed: {{message}}",
       "saveSuccess": "Workflow saved",
@@ -8043,6 +8049,10 @@
           "wait": "Wait until the document is ready",
           "outputHelp": "State variable for the stored document. Default: {{name}}. Keep \"wait\" on when a later step reads the document."
         }
+      },
+      "human": {
+        "optionLabel": "Label",
+        "noOptions": "Add at least one option. Without one, nobody can answer this step and the run waits until it is cancelled."
       }
     },
     "checkpointAwaiting": "Awaiting your input",

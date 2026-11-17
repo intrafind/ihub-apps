@@ -1428,7 +1428,10 @@
         }
       },
       "edit": {
-        "projects": "Projekte"
+        "projects": "Projekte",
+        "jsonInvalid": "Das JSON ist nicht gültig. Korrigieren Sie es, bevor Sie speichern oder zum Formular wechseln.",
+        "skillsHelper": "Suchen und wählen Sie Skills für diesen Agenten aus. Klicken Sie auf einen ausgewählten Skill, um ihn zu entfernen.",
+        "hitlHint": "Benutzer in einer dieser Gruppen können Freigaben für dieses Profil erteilen. Wählen Sie eine Gruppe aus oder geben Sie ihre ID ein und drücken Sie die Eingabetaste oder ein Komma."
       }
     },
     "providers": {
@@ -3636,7 +3639,8 @@
         "toolSearchOff": "Aus: alle Tools senden",
         "toolSearchHelp": "Sind die Tools dieser App für eine Anfrage zu viele, werden die größten Integrationen weggelassen und im Prompt aufgelistet; das Modell findet ein Tool mit search_tools, und die gefundenen Tools werden der Anfrage hinzugefügt. Hält Anfragen klein und die Tool-Wahl treffsicher. Setzen Sie bei einer Integration „Immer geladen“, um sie aus der Suche herauszuhalten.",
         "toolSearchBudget": "Token-Budget für Tool-Definitionen",
-        "toolSearchBudgetHelp": "Tokens, die die Tool-Definitionen einer Anfrage belegen dürfen, bevor Integrationen der Suche überlassen werden. Standard 6000; nie mehr als ein Zehntel des Kontextfensters des Modells."
+        "toolSearchBudgetHelp": "Tokens, die die Tool-Definitionen einer Anfrage belegen dürfen, bevor Integrationen der Suche überlassen werden. Standard 6000; nie mehr als ein Zehntel des Kontextfensters des Modells.",
+        "selectCategory": "Kategorie auswählen …"
       },
       "reorder": "Reihenfolge",
       "reorderHelp": "Ziehen Sie eine Zeile oder nutzen Sie die Pfeile, um die Reihenfolge festzulegen, in der Apps für Benutzer erscheinen – in der App-Übersicht, auf der Startseite und in der Seitenleiste. Es werden immer alle Apps aufgelistet, Suche und Filter gelten hier nicht. Gespeichert wird erst mit „Reihenfolge speichern“.",
@@ -5853,6 +5857,10 @@
           "endWithoutOutput": "Der End-Schritt {{nodes}} hat keine Ausgabe. Der Workflow lässt sich nicht speichern, und ein Lauf, der diesen Schritt erreicht, schlägt fehl, bis Sie seine Ausgabe im visuellen Editor setzen."
         },
         "jsonInvalid": "Korrigieren Sie das JSON unten, um diese Einstellungen zu ändern."
+      },
+      "table": {
+        "visibleTo": "Sichtbar für",
+        "adminsOnly": "Nur Administratoren"
       }
     },
     "projects": {
@@ -7950,8 +7958,6 @@
       "promptId": "Workflow-ID eingeben:",
       "promptIdHint": "Nur Buchstaben, Zahlen, Punkte, Unterstriche und Bindestriche.",
       "publish": "Veröffentlichen",
-      "publishFailed": "Veröffentlichen fehlgeschlagen: {{message}}",
-      "publishSuccess": "Workflow erfolgreich veröffentlicht",
       "save": "Speichern",
       "saveFailed": "Speichern fehlgeschlagen: {{message}}",
       "saveSuccess": "Workflow gespeichert",
@@ -8042,6 +8048,10 @@
           "wait": "Warten, bis das Dokument bereit ist",
           "outputHelp": "Zustandsvariable für das gespeicherte Dokument. Standard: {{name}}. Lassen Sie „Warten“ an, wenn ein späterer Schritt das Dokument liest."
         }
+      },
+      "human": {
+        "optionLabel": "Beschriftung",
+        "noOptions": "Fügen Sie mindestens eine Option hinzu. Ohne Option kann niemand diesen Schritt beantworten, und der Lauf wartet, bis er abgebrochen wird."
       }
     },
     "checkpointAwaiting": "Wartet auf Ihre Eingabe",

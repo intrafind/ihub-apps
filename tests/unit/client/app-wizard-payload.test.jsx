@@ -5,7 +5,9 @@
  */
 import {
   WIZARD_ONLY_KEYS,
-  buildAppPayloadFromWizard
+  appCategoryOptions,
+  buildAppPayloadFromWizard,
+  wizardLanguage
 } from '../../../client/src/features/admin/utils/appWizardPayload';
 
 const wizardState = (extra = {}) => ({
@@ -78,5 +80,65 @@ describe('buildAppPayloadFromWizard', () => {
     buildAppPayloadFromWizard(state);
 
     expect(state).toEqual(snapshot);
+  });
+});
+
+describe('wizardLanguage', () => {
+  test.each([
+    ['de-DE', 'de'],
+    ['en-US', 'en'],
+    ['EN', 'en'],
+    ['fr', 'fr'],
+    [undefined, 'en'],
+    ['', 'en']
+  ])('%p → %p', (language, expected) => {
+    expect(wizardLanguage(language)).toBe(expected);
+  });
+});
+
+describe('required localized fields', () => {
+  test('drop the empty languages the draft started with', () => {
+    const payload = buildAppPayloadFromWizard(
+      wizardState({
+        name: { en: '', de: 'Helfer' },
+        description: { en: ' ', de: 'Hilft' },
+        system: { en: '', de: 'Du hilfst.' }
+      })
+    );
+
+    expect(payload.name).toEqual({ de: 'Helfer' });
+    expect(payload.description).toEqual({ de: 'Hilft' });
+    expect(payload.system).toEqual({ de: 'Du hilfst.' });
+  });
+
+  test('stay as they are when no language has text, so the server names the field', () => {
+    const payload = buildAppPayloadFromWizard(wizardState({ name: { en: '' } }));
+
+    expect(payload.name).toEqual({ en: '' });
+  });
+});
+
+describe('appCategoryOptions', () => {
+  const uiConfig = {
+    appsList: {
+      categories: {
+        list: [
+          { id: 'all', name: { en: 'All' } },
+          { id: 'writing', name: { en: 'Writing' } }
+        ]
+      }
+    }
+  };
+
+  test('lists the ui.json categories without "all"', () => {
+    expect(appCategoryOptions(uiConfig).map(c => c.id)).toEqual(['writing']);
+  });
+
+  test('keeps a category the app has that the list does not know', () => {
+    expect(appCategoryOptions(uiConfig, 'legal').map(c => c.id)).toEqual(['writing', 'legal']);
+  });
+
+  test('is empty without a UI configuration', () => {
+    expect(appCategoryOptions(null)).toEqual([]);
   });
 });

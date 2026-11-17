@@ -8,6 +8,14 @@ import { PROJECT_NODE_DEFAULT_OUTPUT, PROJECT_NODE_TYPES } from '../utils/projec
  * Color mapping for each workflow node type.
  * Used consistently across the visual editor for node headers, minimap, and palette indicators.
  */
+/**
+ * React Flow node type of every step except loop containers. A type of its own
+ * rather than React Flow's `default`: the library styles `default` nodes
+ * (`.react-flow__node-default`: border, 150 px width, white fill), which drew a
+ * second box behind each step card (AX-B20).
+ */
+export const WORKFLOW_STEP_NODE_TYPE = 'workflowStep';
+
 export const NODE_TYPE_COLORS = {
   start: '#10B981',
   end: '#6B7280',
@@ -297,7 +305,7 @@ export function workflowToFlow(workflow) {
     const size = isLoop ? node.size || LOOP_CONTAINER_DEFAULT_SIZE : null;
     return {
       id: node.id,
-      type: isLoop ? 'loopContainer' : 'default',
+      type: isLoop ? 'loopContainer' : WORKFLOW_STEP_NODE_TYPE,
       position: node.position || { x: 0, y: 0 },
       ...(node.parentId ? { parentId: node.parentId } : {}),
       ...(size ? { width: size.width, height: size.height, style: { ...size } } : {}),
@@ -551,7 +559,7 @@ export function createNewNode(type, position, parentId) {
   const isLoop = type === 'loop';
   return {
     id: `${type}-${Date.now()}`,
-    type: isLoop ? 'loopContainer' : 'default',
+    type: isLoop ? 'loopContainer' : WORKFLOW_STEP_NODE_TYPE,
     position,
     ...(parentId ? { parentId } : {}),
     ...(isLoop
@@ -734,6 +742,17 @@ export const ENGINE_PROVIDED_NAMES = [
 ];
 
 /**
+ * The message a run starts with, under the name the engine gives it: a chat
+ * message (`tools/workflowRunner.js`) and the run dialog's message both arrive
+ * as `input`. Every workflow has it, so the Variables tab lists it and the
+ * reference checker accepts `{{input}}` (AX-B12).
+ */
+export const RUN_INPUT_VARIABLE = {
+  name: 'input',
+  label: 'Message the run was started with (built-in)'
+};
+
+/**
  * Collects the workflow state variables visible to a given node: input
  * variables from the start node, `outputVariable`s of upstream nodes
  * (following edges backwards), and — for nodes inside a loop container —
@@ -779,6 +798,9 @@ export function collectUpstreamVariables(rfNodes, rfEdges, nodeId) {
 
   const startNode = rfNodes.find(n => n.data?.nodeType === 'start');
   if (startNode) visit(startNode.id);
+  if (startNode && startNode.id !== nodeId) {
+    addVariable(RUN_INPUT_VARIABLE.name, RUN_INPUT_VARIABLE.label);
+  }
 
   const self = byId.get(nodeId);
   if (self?.parentId) {
@@ -869,7 +891,11 @@ function forEachString(value, fn) {
  * @returns {Array<{nodeId: string, nodeName: string, name: string}>} Unknown references
  */
 export function findUnknownReferences(rfNodes, rfEdges) {
-  const defined = new Set([...LOOP_SCOPE_NAMES, ...ENGINE_PROVIDED_NAMES.map(v => v.name)]);
+  const defined = new Set([
+    ...LOOP_SCOPE_NAMES,
+    ...ENGINE_PROVIDED_NAMES.map(v => v.name),
+    RUN_INPUT_VARIABLE.name
+  ]);
   rfNodes.forEach(node => variablesProducedBy(node).forEach(v => defined.add(v.name)));
 
   // Loop-scoped names resolve only for steps inside that loop, so build a
@@ -1007,4 +1033,25 @@ export function createStarterWorkflow(overrides = {}) {
     edges: [{ id: 'e-start-end', source: 'start', target: 'end' }],
     ...overrides
   };
+}
+
+/**
+ * What a failed workflow save says: the server's per-field messages
+ * (problem+json `errors[]`, e.g. which "Ask a Person" step needs an option),
+ * else its `detail`, else the request error's message.
+ *
+ * @param {Error & {response?: {data?: object}}} err - The failed request.
+ * @returns {string}
+ *
+ * @example
+ * workflowSaveErrorMessage({ response: { data: { detail: 'Invalid', errors: [{ message: 'Step "A" …' }] } } });
+ * // → 'Step "A" …'
+ */
+export function workflowSaveErrorMessage(err) {
+  const problem = err?.response?.data;
+  const fieldMessages = Array.isArray(problem?.errors)
+    ? problem.errors.map(issue => issue?.message).filter(Boolean)
+    : [];
+  if (fieldMessages.length > 0) return fieldMessages.join(' ');
+  return problem?.detail || err?.message || '';
 }

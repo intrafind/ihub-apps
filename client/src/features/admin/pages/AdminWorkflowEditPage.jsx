@@ -20,7 +20,10 @@ import {
   getAdminApiErrorMessage,
   updateAdminWorkflow
 } from '../../../api/adminApi';
-import { createStarterWorkflow } from '../../workflows/editor/workflowEditorUtils';
+import {
+  createStarterWorkflow,
+  workflowSaveErrorMessage
+} from '../../workflows/editor/workflowEditorUtils';
 import { appsUsingWorkflow, withCleanToolDescription } from '../../workflows/utils/chatIntegration';
 import AdminLoadError from '../components/AdminLoadError';
 /**
@@ -253,7 +256,7 @@ function AdminWorkflowEditPage() {
       navigate('/admin/workflows');
     } catch (err) {
       console.error('Error saving workflow:', err);
-      setError(err.message || 'Failed to save workflow');
+      setError(workflowSaveErrorMessage(err) || 'Failed to save workflow');
     } finally {
       setSaving(false);
     }

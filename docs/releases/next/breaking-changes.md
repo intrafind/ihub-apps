@@ -940,3 +940,13 @@ went: site title, logo, favicon, tagline and PWA settings → **Branding**; the 
 
 Nothing changes in `ui.json` or the REST API for existing settings. `PUT /api/admin/ui/disclaimer` is
 new and saves the disclaimer on its own; `POST /api/admin/ui/config` still takes the whole configuration.
+
+## Workflow Run Dialog Sends the Message as `input`
+
+The **Message** box of the run dialog (shown for a workflow without input variables) now sends its
+text as `input`, the name a chat message already has. It was sent as `message`, so a workflow
+started from the dialog and one started from a chat read the text under different names.
+
+**Before upgrading:** in a workflow without input variables, replace `{{message}}` and
+`$.data.message` by `{{input}}` and `$.data.input`. A prompt step without its own prompt is not
+affected: it uses the run's message either way.

@@ -10,6 +10,7 @@ import Icon from '../../../shared/components/Icon';
 import {
   createAdminWorkflow,
   deleteAdminWorkflow,
+  fetchAdminGroups,
   fetchAdminWorkflows,
   getAdminApiErrorMessage,
   makeAdminApiCall,
@@ -18,6 +19,7 @@ import {
 import { DataTable, SearchInput, FilterSelect } from '../components/data-table';
 import UploadConfigButton from '../components/UploadConfigButton';
 import AdminLoadError from '../components/AdminLoadError';
+import { groupsGrantingWorkflow } from '../utils/workflowVisibility';
 
 function WorkflowNameCell({ workflow, currentLanguage }) {
   return (
@@ -30,14 +32,26 @@ function WorkflowNameCell({ workflow, currentLanguage }) {
   );
 }
 
-function GroupsCell({ workflow }) {
-  const groups = workflow.allowedGroups || workflow.groups || [];
-  if (groups.length === 0) {
+/**
+ * The groups that can run the workflow, computed from the groups' workflow
+ * permissions (the rule the server enforces). Without such a group only
+ * admins can run it. `null` groups: they could not be loaded.
+ */
+function VisibleToCell({ workflow, groups, t }) {
+  if (!groups) {
     return <span className="text-gray-500 text-xs">—</span>;
+  }
+  const granting = groupsGrantingWorkflow(workflow.id, groups);
+  if (granting.length === 0) {
+    return (
+      <span className="text-xs text-gray-600 dark:text-gray-300">
+        {t('admin.workflows.table.adminsOnly', 'Admins only')}
+      </span>
+    );
   }
   return (
     <div className="flex flex-wrap gap-1">
-      {groups.slice(0, 3).map(g => (
+      {granting.slice(0, 3).map(g => (
         <span
           key={g}
           className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200"
@@ -45,8 +59,8 @@ function GroupsCell({ workflow }) {
           {g}
         </span>
       ))}
-      {groups.length > 3 && (
-        <span className="text-xs text-gray-500 dark:text-gray-400">+{groups.length - 3}</span>
+      {granting.length > 3 && (
+        <span className="text-xs text-gray-500 dark:text-gray-400">+{granting.length - 3}</span>
       )}
     </div>
   );
@@ -62,9 +76,15 @@ function AdminWorkflowsPage() {
   const [searchTerm, setSearchTerm] = useFilterState('q', '');
   const [filterEnabled, setFilterEnabled] = useFilterState('enabled', 'all');
   const [uploading, setUploading] = useState(false);
+  // Groups by id, for the "Visible to" column; null until loaded or when they
+  // cannot be read (the column then shows a dash rather than a wrong answer).
+  const [groups, setGroups] = useState(null);
 
   useEffect(() => {
     void loadWorkflows();
+    fetchAdminGroups()
+      .then(result => setGroups(result?.groups || {}))
+      .catch(() => setGroups(null));
   }, []);
 
   const loadWorkflows = async () => {
@@ -230,9 +250,9 @@ function AdminWorkflowsPage() {
     },
     {
       key: 'groups',
-      header: t('admin.workflows.table.groups', 'Groups'),
+      header: t('admin.workflows.table.visibleTo', 'Visible to'),
       hideBelow: 'lg',
-      render: w => <GroupsCell workflow={w} />
+      render: w => <VisibleToCell workflow={w} groups={groups} t={t} />
     },
     {
       key: 'status',

@@ -34,6 +34,7 @@ import { RUN_PRESENCE_KIND } from '../../services/loop/RunLog.js';
 import { actionTracker } from '../../actionTracker.js';
 import { createSseChannel, startInactiveClientSweep } from '../../utils/sseChannel.js';
 import { workflowConfigSchema } from '../../validators/workflowConfigSchema.js';
+import { findUnanswerableHumanSteps } from '../../services/workflow/workflowSaveChecks.js';
 import configStore from '../../services/config/ConfigStore.js';
 import { assertValidId, isValidId } from '../../utils/pathSecurity.js';
 import { ServiceError } from '../../utils/ServiceError.js';
@@ -257,6 +258,11 @@ function validateWorkflow(workflow) {
   try {
     const result = workflowConfigSchema.safeParse(workflow);
     if (result.success) {
+      // Settings the schema accepts but no run can get past (AX-B4).
+      const unworkable = findUnanswerableHumanSteps(result.data);
+      if (unworkable.length > 0) {
+        return { success: false, errors: unworkable };
+      }
       return { success: true, data: result.data };
     }
     return {

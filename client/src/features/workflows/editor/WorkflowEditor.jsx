@@ -34,11 +34,15 @@ import {
   parentsFirst,
   absolutePosition,
   collectUpstreamVariables,
-  findUnknownReferences
+  findUnknownReferences,
+  WORKFLOW_STEP_NODE_TYPE
 } from './workflowEditorUtils';
 
 /** Map of custom node types used by React Flow */
-const nodeTypes = { default: WorkflowNode, loopContainer: LoopContainerNode };
+const nodeTypes = {
+  [WORKFLOW_STEP_NODE_TYPE]: WorkflowNode,
+  loopContainer: LoopContainerNode
+};
 
 /** Map of custom edge types used by React Flow */
 const edgeTypes = { conditional: ConditionalEdge, default: ConditionalEdge };

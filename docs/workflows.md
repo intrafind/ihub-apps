@@ -11,6 +11,10 @@ Workflows are multi-step, graph-based automations: nodes (prompt, tool, decision
 
 Default example workflows ship in `server/defaults/workflows/` and are copied into `contents/workflows/` at server startup when missing. Definitions are validated against the schema in `server/validators/workflowConfigSchema.js`.
 
+**Who can run a workflow.** The **Visible to** column of **Admin → Workflows** lists the groups whose workflow permissions grant the workflow (all workflows, or this one by its ID) in **Admin → Groups**. **Admins only** means no group grants it: only administrators can run it. A group that inherits from a listed group can run it too.
+
+**Saving is all there is.** A saved workflow is the one that runs; there is no separate publish step.
+
 ## Loop containers (iterate over results)
 
 A `loop` node repeats a body of nodes. Since the introduction of visual loop containers, the loop body can be built directly on the canvas: the loop node is rendered as a resizable container, and any node dragged inside it becomes part of the loop body.
@@ -155,6 +159,8 @@ Nesting works on the canvas like any other containment: drag a loop container in
 Guessing a variable name is the easiest way to break a workflow quietly: a misspelled `{{topci}}` renders as an empty string and the run continues as if nothing happened. Two things in the editor remove the guesswork.
 
 **The Variables tab.** Selecting a step and opening its **Variables** tab lists every name that step can read, grouped by where it comes from — workflow inputs, the output of each earlier step, the enclosing loops' items and counters, and the run metadata the engine provides. Click a name to copy it as `{{name}}`.
+
+**The run's message: `{{input}}`.** Every step after the start can read `{{input}}`, the message the run was started with: the chat message of a run started from a chat, or the **Message** box of the run dialog for a workflow without input variables. The Variables tab lists it as built-in.
 
 **The unknown-name warning.** The canvas shows a warning listing any `{{name}}` or `$.data.name` reference that no step in the workflow defines; clicking one selects the step it appears in. It understands the names steps write beyond `outputVariable` — a corpus search's `corpusVar`/`coverageVar`, a loop's `itemVariable`/`countInto`, a transform's operation targets, a human step's `humanResponse_<id>`, a start step's `inputVariables`/`inputMapping`/`defaults` — and the scopes some steps render against, such as a report template's `records`/`coverage`/`synthesis` and a prompt's `{{sources}}` placeholder. References inside a Handlebars block (`{{#each …}}`) are left alone, since names there resolve against the block rather than workflow state.
 
@@ -530,6 +536,14 @@ A workflow runs on a schedule with a `schedule` trigger:
 ```
 
 Schedule triggers run on the same scheduler as [Scheduled Tasks](scheduled-tasks.md): one worker in the cluster fires each slot once, the next run follows the trigger's `timezone` across DST, and adding, editing or removing a trigger applies **without a restart**. The workflow runs as the non-privileged `system` principal. A slot missed while the server was down is skipped, not caught up. Webhook triggers are unaffected.
+
+## Ask a Person steps
+
+An **Ask a Person** (`human`) step pauses the run until someone picks one of its options. In the step's panel, each option has a value (what later steps and branch conditions see) and a label per language; switch the language tab above the label to edit it in another language without touching the others.
+
+A step needs at least one option: without one nobody could answer it, so the panel flags it and saving is refused with the step's name. A step with no options list at all offers a single **Continue**.
+
+When the run is cancelled, its open questions and approvals are cancelled with it and leave **Admin → Agents → Pending Approvals**.
 
 ## Who a run acts as after an answer
 

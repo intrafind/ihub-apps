@@ -824,3 +824,46 @@ dark mode was selected; only pages reached from the chat were dark.
 The warnings at the top of the admin area (demo accounts with their shipped passwords, low disk
 space) showed one word per line on a narrow screen and filled the whole screen. The text now uses
 the full width and the links move below it.
+
+## Create App Works on Regional Browser Languages
+
+On a browser set to a regional language such as `en-US` or `de-DE`, the Create App wizard lost the
+name, description and system prompt you typed, showed an empty name on the Review step, and Create
+failed with "name.en: Localized string cannot be empty". The wizard now stores the texts under the
+base language (`en`, `de`).
+
+- **Choose App Template** lists every enabled app to copy from. It was always empty.
+- The wizard's **Category** list is the one the app editor and the apps page use; it no longer
+  offers "Productivity" and "Creativity", which the apps page could not filter by.
+
+## Agent Editor: JSON Mode Keeps Your Edits, Group Fields Take Commas
+
+- In **JSON** mode, typing a new key or a comma no longer disappears: the editor keeps the text while
+  it is not valid JSON yet, marks the error, and waits with Save until the JSON is valid.
+- **HITL approver groups** and **Service account groups** are picked from the defined groups or
+  typed. A comma separates two groups; before, `agent-operators,admins` became
+  `agent-operatorsadmins`, and approvals reached nobody.
+- The **Schedule** field is hidden: agent schedules are not run yet. A schedule already in an agent's
+  JSON is kept when you save in the editor.
+- The skill picker says "add to this agent" instead of "this app".
+
+## Workflows: Ask a Person Steps Can Always Be Answered
+
+- An **Ask a Person** step with no option could be saved, and the run then waited with a Submit
+  button that never turned on. The step's panel now flags it, and saving is refused with the step's
+  name.
+- The option labels of the shipped approval workflow showed `[object Object]`, and typing in them
+  replaced the German label. Labels are edited per language now.
+- Cancelling a run removes its open approvals from **Admin → Agents → Pending Approvals**. Before,
+  they stayed there with **Open run** and could never be answered.
+
+## Workflow Editor: Clearer Canvas, List and Errors
+
+- The canvas no longer draws a second white box behind every step.
+- **Publish** and the draft/published label are gone from the canvas: publishing changed nothing,
+  draft and published workflows ran the same. Save is what counts.
+- The Workflows list column **Visible to** shows the groups whose permissions grant the workflow, or
+  **Admins only**. The old **Groups** column showed a field that does not decide access.
+- Every step can read `{{input}}`, the message the run was started with from a chat or the run
+  dialog; the Variables tab lists it and the canvas no longer warns about it.
+- A failed run names the step by its name ("Step "Summarise" failed: …") instead of an internal ID.

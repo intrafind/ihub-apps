@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
+import { useTranslation } from 'react-i18next';
 import FormField from './FormField';
 import LocalizedField from './LocalizedField';
 
@@ -10,8 +11,24 @@ const STYLE_OPTIONS = [
   { value: 'danger', label: 'Danger' }
 ];
 
+/**
+ * Settings of an "Ask a Person" (`human`) step: the message, the options the
+ * person answers with, the timeout and the output variable.
+ *
+ * An option's label may be a plain string or a localized object
+ * (`{ en, de }`); it is edited per language so the other languages are kept
+ * (AX-B5). An empty options list is flagged: such a step cannot be answered,
+ * and the server refuses to save it (AX-B4). Without an options list at all
+ * the run offers a single "Continue".
+ *
+ * @param {object} props
+ * @param {object} props.config - The step's `config`.
+ * @param {(config: object) => void} props.onChange - Receives the new config.
+ */
 function HumanForm({ config, onChange }) {
+  const { t } = useTranslation();
   const options = Array.isArray(config.options) ? config.options : [];
+  const hasEmptyOptionList = Array.isArray(config.options) && config.options.length === 0;
 
   const updateOption = (index, field, value) => {
     const updated = options.map((opt, i) => (i === index ? { ...opt, [field]: value } : opt));
@@ -59,12 +76,12 @@ function HumanForm({ config, onChange }) {
                 placeholder="Value"
                 className={`${inputClass} font-mono`}
               />
-              <input
-                type="text"
-                value={opt.label || ''}
-                onChange={e => updateOption(index, 'label', e.target.value)}
-                placeholder="Label"
-                className={inputClass}
+              <LocalizedField
+                label={t('workflows.editor.human.optionLabel', 'Label')}
+                rows={1}
+                value={opt.label ?? ''}
+                onChange={v => updateOption(index, 'label', v)}
+                placeholder={t('workflows.editor.human.optionLabel', 'Label')}
               />
               <div className="flex items-center gap-1.5">
                 <select
@@ -90,6 +107,14 @@ function HumanForm({ config, onChange }) {
             </div>
           ))}
         </div>
+        {hasEmptyOptionList && (
+          <p role="alert" className="mt-1.5 text-xs text-red-600 dark:text-red-400">
+            {t(
+              'workflows.editor.human.noOptions',
+              'Add at least one option. Without one, nobody can answer this step and the run waits until it is cancelled.'
+            )}
+          </p>
+        )}
         <button
           type="button"
           onClick={addOption}
