@@ -835,9 +835,10 @@ with an explanation on the page, and nothing is saved.
 
 - **Authentication:** a save that turns off your own sign-in method (or your OIDC/LDAP provider),
   or leaves no administrator who can sign in, is refused. To switch methods: enable the new one,
-  sign in with it as an administrator, then turn off the old one. Methods forced on through
-  `IHUB_PLATFORM__*` environment variables count as on. A rollback from the change history is
-  checked the same way.
+  sign in with it once, give that user record an administrator group on **Users** (a group
+  mapping from the identity provider alone does not count), sign in with it as that
+  administrator, then turn off the old one. Methods forced on through `IHUB_PLATFORM__*`
+  environment variables count as on. A rollback from the change history is checked the same way.
 - **Users:** you cannot deactivate or delete your own account; your own Enabled switch is locked.
   Removing administrator rights from, or deactivating, the last active administrator who can
   sign in is refused. Administrators inherited through a group count; deactivated ones and those
@@ -846,9 +847,14 @@ with an explanation on the page, and nothing is saved.
   and unticking **Enabled** deactivates it again.
 - **Groups:** a group other groups inherit from can no longer be deleted; the dialog names them.
   Deleting it used to leave the groups unresolvable, and from then on permission changes silently
-  stopped applying until a restart. Group edits that would leave no administrator are refused,
-  and a groups file that no longer resolves is listed on the admin Overview statistics
-  (`configRefreshErrors`).
+  stopped applying until a restart. Group edits and deletes that would leave no administrator are
+  refused, and a groups file that no longer resolves is listed on the admin Overview statistics
+  (`configRefreshErrors`). Such a file can be repaired from **Groups** by removing the
+  inheritance that closes the loop or creating the missing group; other group edits say that the
+  stored file is the problem.
+- A sign-in method switched on by a placeholder or environment variable that resolves to text
+  such as `"true"` counts as on for these checks and for the admin rescue, as it does for
+  sign-in itself.
 
 How to recover when nobody can sign in as an administrator: see
 [Authentication Quick Start → Recover Admin Access](../../AUTHENTICATION_QUICK_START.md#recover-admin-access).

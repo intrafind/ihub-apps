@@ -330,6 +330,7 @@ export default function registerAdminContentAccessRoutes(app) {
           throw new ServiceError('NOT_FOUND', 'Groups file not found');
         }
 
+        const groupsBefore = structuredClone(groupsData);
         const { manageableIds } = buildView(req, groupsData, target.type, target.contentId);
 
         changes = applyContentAccessChanges({
@@ -343,7 +344,7 @@ export default function registerAdminContentAccessRoutes(app) {
 
         if (changes.length === 0) return undefined;
         // Like every groups.json writer: never store a body that does not resolve.
-        assertGroupsResolvable(groupsData);
+        assertGroupsResolvable(groupsData, groupsBefore);
         groupsData.metadata = {
           ...groupsData.metadata,
           lastModified: new Date().toISOString()

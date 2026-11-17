@@ -10760,7 +10760,7 @@
     "COPILOT_PUBLIC_HTTPS_REQUIRED": "The Copilot agent needs a public HTTPS address.",
     "INTEGRATION_AUTH_REQUIRED": "Connect your account to use this integration.",
     "AI_ACKNOWLEDGEMENT_REQUIRED": "Please confirm the AI-use notice before sending messages.",
-    "AUTH_LOCKOUT": "This change would turn off the sign-in method you are using, or leave no administrator who can sign in. Nothing was changed. To switch methods: enable the new method and save, sign in with it as an administrator, then turn off the old one.",
+    "AUTH_LOCKOUT": "This change would turn off the sign-in method you are using, or leave no administrator who can sign in. Nothing was changed. To switch methods: enable the new method and save, sign in with it once, give that user an administrator group on the Users page (a group mapping from the identity provider alone does not count), sign in with it as that administrator, then turn off the old one.",
     "LAST_ADMIN": "This change would leave no active administrator who can sign in. Nothing was changed. Give another active user administrator rights first.",
     "SELF_LOCKOUT": "You cannot deactivate or delete your own account. Ask another administrator to do it.",
     "GROUP_IN_USE": "The group \"{{groupId}}\" cannot be deleted because other groups inherit from it. Remove it from their inherited groups first.",

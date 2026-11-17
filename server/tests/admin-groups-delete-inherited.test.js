@@ -21,11 +21,12 @@ import { jest, describe, test, expect, beforeEach, afterEach } from '@jest/globa
 import request from 'supertest';
 import express from 'express';
 import fs from 'fs/promises';
+import fsSync from 'fs';
 import os from 'os';
 import path from 'path';
 
 // A root before the first test: modules read it while they load.
-const state = { rootDir: os.tmpdir(), snapshot: null, refreshes: 0 };
+const state = { rootDir: os.tmpdir(), snapshot: null, refreshes: 0, lastGoodGroups: null };
 
 jest.unstable_mockModule('../pathUtils.js', () => ({
   getRootDir: () => state.rootDir
@@ -39,6 +40,8 @@ jest.unstable_mockModule('../configCache.js', () => ({
   default: {
     getPlatform: () => ({}),
     get: () => null,
+    // The groups the runtime enforces (the last body that resolved).
+    getGroups: () => (state.lastGoodGroups ? { data: state.lastGoodGroups } : null),
     refreshCacheEntry: async () => {
       state.refreshes++;
     },
@@ -76,6 +79,7 @@ const file = name => path.join(state.rootDir, 'contents', 'config', name);
 const writeConfig = (name, data) => fs.writeFile(file(name), JSON.stringify(data, null, 2));
 const readText = name => fs.readFile(file(name), 'utf8');
 const readGroups = async () => JSON.parse(await readText('groups.json'));
+const readGroupsSync = () => JSON.parse(fsSync.readFileSync(file('groups.json'), 'utf8'));
 
 function appFor(user) {
   const app = express();
@@ -92,11 +96,13 @@ function appFor(user) {
 
 const del = (id, user = ADMIN) => request(appFor(user)).delete(`/api/admin/groups/${id}`);
 const put = (id, body) => request(appFor(ADMIN)).put(`/api/admin/groups/${id}`).send(body);
+const post = body => request(appFor(ADMIN)).post('/api/admin/groups').send(body);
 
 beforeEach(async () => {
   state.rootDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-group-guard-'));
   state.refreshes = 0;
   state.snapshot = null;
+  state.lastGoodGroups = null;
   await fs.mkdir(path.join(state.rootDir, 'contents', 'config'), { recursive: true });
   await writeConfig('groups.json', GROUPS);
   await writeConfig('platform.json', { localAuth: { enabled: true } });
@@ -227,5 +233,96 @@ describe('group rollback', () => {
 
     expect(res.status).toBe(400);
     expect(await readText('groups.json')).toBe(before);
+  });
+});
+
+describe('DELETE keeps an administrator who can sign in', () => {
+  test('deleting the custom admin group every admin is in is LAST_ADMIN, nothing written', async () => {
+    // `admins` keeps the flag (so the old "only adminAccess group" rule passes),
+    // but nobody is in it: every admin user gets their rights through it-admins.
+    await writeConfig('groups.json', {
+      groups: {
+        admins: { id: 'admins', name: 'Admins', permissions: { adminAccess: true } },
+        'it-admins': { id: 'it-admins', name: 'IT', permissions: { adminAccess: true } }
+      },
+      metadata: {}
+    });
+    const users = JSON.parse(await readText('users.json'));
+    users.users.a.internalGroups = ['it-admins'];
+    await writeConfig('users.json', users);
+    const before = await readText('groups.json');
+
+    const res = await del('it-admins');
+
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe('LAST_ADMIN');
+    expect(res.body.details).toEqual({ groupId: 'it-admins' });
+    expect(await readText('groups.json')).toBe(before);
+  });
+
+  test('the same delete is allowed while an admin remains through another group', async () => {
+    await writeConfig('groups.json', {
+      groups: {
+        admins: { id: 'admins', name: 'Admins', permissions: { adminAccess: true } },
+        'it-admins': { id: 'it-admins', name: 'IT', permissions: { adminAccess: true } }
+      },
+      metadata: {}
+    });
+    const users = JSON.parse(await readText('users.json'));
+    users.users.a.internalGroups = ['it-admins', 'admins'];
+    await writeConfig('users.json', users);
+
+    const res = await del('it-admins');
+
+    expect(res.status).toBe(204);
+  });
+});
+
+describe('a stored groups.json that does not resolve', () => {
+  /** A hand edit: x and y inherit from each other. */
+  const withCycle = () => {
+    const broken = structuredClone(GROUPS);
+    broken.groups.x = { id: 'x', name: 'X', inherits: ['y'], permissions: {} };
+    broken.groups.y = { id: 'y', name: 'Y', inherits: ['x'], permissions: {} };
+    return broken;
+  };
+
+  beforeEach(async () => {
+    await writeConfig('groups.json', withCycle());
+    state.lastGoodGroups = resolveGroupInheritance(structuredClone(GROUPS));
+  });
+
+  test('the PUT that breaks the cycle is saved', async () => {
+    const res = await put('x', { inherits: [] });
+
+    expect(res.status).toBe(200);
+    expect(() => resolveGroupInheritance(readGroupsSync())).not.toThrow();
+  });
+
+  test('a PUT that leaves the cycle in place names the stored problem', async () => {
+    const res = await put('ops', { inherits: [] });
+
+    // Still broken afterwards (the cycle is untouched): the stored problem is named.
+    expect(res.status).toBe(400);
+    expect(res.body.detail).toMatch(/stored group configuration already does not resolve/);
+  });
+
+  test('an unrelated create is 400 naming the stored problem, not the new group', async () => {
+    const before = await readText('groups.json');
+
+    const res = await post({ id: 'fresh', name: 'Fresh', permissions: {} });
+
+    expect(res.status).toBe(400);
+    expect(res.body.detail).toMatch(/stored group configuration already does not resolve/);
+    expect(await readText('groups.json')).toBe(before);
+  });
+
+  test('with no groups in force either, the repairing PUT is 503 (unevaluable)', async () => {
+    state.lastGoodGroups = null;
+
+    const res = await put('x', { inherits: [] });
+
+    expect(res.status).toBe(503);
+    expect(res.body.code).toBe('ADMIN_CHECK_FAILED');
   });
 });
