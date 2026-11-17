@@ -1859,7 +1859,9 @@ language) and in the audit log, so you can answer "who confirmed which version, 
 - **Admin.** **Admin → EU AI Act → AI acknowledgement** holds the switches, the text per language and the policy
   link. **Admin → Users** gets an **AI acknowledgement** column and filter, a per-user **Remove AI
   acknowledgement** action and an **AI acknowledgements** menu: **Export CSV**, **Request again**, **Remove all**.
-  (`aiAcknowledgement` in `platform.json`; migration V242 adds the defaults.)
+  (`aiAcknowledgement` in `platform.json`; migration V242 adds the defaults.) Removing a user's
+  acknowledgement also invalidates the confirmation their browsers still hold, so they are asked
+  again at their next message.
 
 See [EU AI Act](../../ai-act.md#ai-use-acknowledgement).
 
@@ -2285,3 +2287,13 @@ installations.
 
 - A user's `updatedAt` in `users.json` now moves only when their record changed, no longer on
   every sign-in.
+
+## System Resources Show Where Requests Wait
+
+`GET /api/admin/system/resources` now reports, per process, where requests wait rather than
+compute: the cluster bus between workers (requests, replies, timeouts, latency), file and storage
+locks (acquisitions, timeouts, current waiters, wait and hold times), the model and tool request
+throttle, and storage operations. The counters run since the process started; compare two
+snapshots to see a window. The load-test harness reports them as "Waits and cluster bus".
+
+- The field is `processes[].diagnostics`; the rest of the answer is unchanged.

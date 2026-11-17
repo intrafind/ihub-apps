@@ -705,6 +705,13 @@ whose lock expired no longer removes the lock of the worker that took over.
 
 - A lock that cannot be obtained within its wait no longer lets the change run anyway: the request
   fails with `503` (`LOCK_TIMEOUT`) and can be retried. Nothing is written.
+- Many changes to one config file at once (users confirming the AI-use notice or signing in during
+  a login wave, several admins saving) could fail with `409` and
+  > Etag mismatch for document config/users
+  without a log line. These changes now wait their turn instead of retrying, and only a change that
+  waited longer than its lock allows fails, with `503` (`LOCK_TIMEOUT`).
+- A worker with a steady stream of changes to one file no longer keeps it from the other workers,
+  whose requests then failed with `503` (`LOCK_TIMEOUT`).
 - The iFinder sign-in refresh gives up after 10 seconds if the identity provider does not answer,
   instead of holding the refresh lock. A waiting request used to refresh with the already used
   refresh token, which the provider rejected and which deleted the user's stored tokens.
