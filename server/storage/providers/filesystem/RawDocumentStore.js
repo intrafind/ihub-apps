@@ -389,6 +389,10 @@ export class RawDocumentStore extends DocumentStore {
    * on conflicts and can run out of attempts. Here the lock is held for one
    * round, and writers queue instead of colliding.
    *
+   * `mutate` runs under the document's lock, so it must not take another lock
+   * (no write of another document or config file): two processes doing that in
+   * opposite orders would wait on each other until both time out.
+   *
    * @param {string} ns - Raw namespace
    * @param {string} key - Document key
    * @param {(current: any|null) => any|Promise<any>} mutate - Gets the parsed

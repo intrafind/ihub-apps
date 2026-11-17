@@ -702,12 +702,18 @@ export class ConfigStore {
    * that read the same body and each add a record both write, and the second
    * write erases the first record. Here the write only lands on the body the
    * change was computed from. On the document path that is the provider's
-   * etag compare-and-set (a provider only serves configuration when it
-   * declares conditional writes), retried with a fresh read on a conflict; on
-   * the filesystem path it is a lock file every worker honours.
+   * `update` under the document's lock when it has one, else its etag
+   * compare-and-set (a provider only serves configuration when it declares
+   * conditional writes), retried with a fresh read on a conflict; on the
+   * filesystem path it is a lock file every worker honours.
    *
    * `mutate` may run more than once, so it must derive everything from the
    * body it is handed and keep no effect of an earlier run.
+   *
+   * `mutate` runs while the file's lock is held, so it must not take another
+   * file lock (no `updateJson`, `writeJson` or `withFileLock` of another file):
+   * two workers doing that in opposite orders would wait on each other until
+   * both time out. Read what it needs before the call, write the rest after.
    *
    * @param {string} relPath - Path relative to `contents/`
    * @param {(current: any|null) => any|Promise<any>} mutate - Gets a private
