@@ -25,3 +25,7 @@ optional = true
 
 [preprocessor.mermaid]
 command = "mdbook-mermaid"
+
+# Renamed pages: the old URL forwards to the new one.
+[output.html.redirect]
+"/sse-v2.html" = "streaming-events.html"

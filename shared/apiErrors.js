@@ -337,7 +337,12 @@ export const CHAT_SESSION_ERROR_CODES = Object.freeze({
   AI_ACKNOWLEDGEMENT_REQUIRED: 428,
   INVALID_APP: 400,
   PREFERENCES_UNAVAILABLE: 503,
-  FEATURE_DISABLED: 403
+  FEATURE_DISABLED: 403,
+  // Resuming the call that stopped on a missing connection after a connect (#3752).
+  INVALID_CONNECT_RESUME: 400,
+  CONNECT_RESUME_NOT_PENDING: 409,
+  CONNECT_RESUME_NOT_CONNECTED: 409,
+  CONNECT_RESUME_EXPIRED: 410
 });
 
 /** Codes of the cloud storage connection routes (`server/routes/integrations`). */

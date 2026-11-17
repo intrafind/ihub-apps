@@ -251,6 +251,10 @@ be resumed after an answer (`EXECUTION_PRINCIPAL_UNKNOWN`): start it again.
   connected systems by name and the projects it read), so the answer after the approval names the
   whole turn as its basis (`run/ended.answerBasis`, see
   [Answer Sources](answer-sources.md#what-users-see)).
+- A call that stopped on a missing connection is resumed after the connect through the same
+  seams (`chatConnectResume.js`, see [Integrations](integrations.md#the-connect-flow-for-users)): it is **not**
+  carried over as approved. A call that needs approval asks again once the connection exists, and
+  an approval given before the connect does not apply to the resumed call.
 - Chat API: answer an approval by posting the next message with
   `approvalResponse: { interactionId, decision: 'approve' | 'reject', grant?: 'chat' }`, and send
   `toolApprovalCapable: true` with every request from a client that draws the card. A chat

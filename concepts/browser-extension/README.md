@@ -10,10 +10,15 @@ an email.
 - [`2026-04-28 Browser Extension Plan.md`](./2026-04-28%20Browser%20Extension%20Plan.md) —
   initial concept, scope, architecture, reuse strategy, and phased rollout
   plan. Start here.
+- [`2026-11-17 Local Browser Bridge.md`](./2026-11-17%20Local%20Browser%20Bridge.md) —
+  idea: let the cloud agent act in the user's own browser, with the
+  extension as a host for client-executed tools. The design doc for the
+  plan's Phase 3.
 
 ## Status
 
-Planning. No code has been written yet. The plan reuses the Outlook add-in's
+The read-only Phase 1 extension exists in `browser-extension/`; the local
+browser bridge is an idea without code. The plan reuses the Outlook add-in's
 OAuth 2.0 + PKCE flow, group-based permissions, and chat-message construction
 patterns; new work is mostly the extension shell (Manifest V3) and the page
 content extractor.

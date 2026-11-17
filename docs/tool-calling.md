@@ -106,7 +106,7 @@ chat, workflow nodes, app-as-tool and MCP all run tool calls through it (tool
 matching, argument repair, circuit breakers, round budgets), and the tool itself
 is executed by `runTool()` (`server/services/tools/runTool.js`). In chat, one tool runs at a time and each
 call is surfaced to the client as `tool/started` / `tool/completed` SSE v2 frames
-(see [SSE v2 Streaming](sse-v2.md)).
+(see [Streaming Events](streaming-events.md)).
 
 ### Tool Registration and Discovery
 

@@ -97,6 +97,7 @@
 - [Running with SSL/HTTPS](ssl-https-setup.md)
   - [Self-Signed SSL Certificates](ssl-certificates.md)
 - [Reverse Proxy Deployment](production-reverse-proxy-guide.md)
+- [Network Requirements](network-requirements.md)
 - [Proxy Configuration](proxy-configuration.md)
 - [Windows Service](windows-service.md)
 - [Scaling with Multiple Workers](scaling.md)
@@ -109,6 +110,7 @@
 
 # Security and compliance
 
+- [Compliance Overview](compliance-overview.md)
 - [Security](security.md)
 - [Encryption Key Management](encryption-key-management.md)
 - [Value Encryption Tool](value-encryption-tool.md)
@@ -132,6 +134,7 @@
 # Troubleshooting and FAQ
 
 - [Troubleshooting](troubleshooting.md)
+- [Getting Support](support.md)
 - [FAQ (English)](ihub-faq-en.md)
 - [FAQ (Deutsch)](ihub-faq-de.md)
 - [Error Responses](error-responses.md)
@@ -145,7 +148,7 @@
   - [NTLM Technical Reference](ntlm-technical-reference.md)
 - [LLM Client](llm-client.md)
 - [Agent Loop](agent-loop.md)
-- [SSE v2 Streaming](sse-v2.md)
+- [Streaming Events](streaming-events.md)
 - [Run Ledger](run-ledger.md)
 - [Storage Providers](storage.md)
 - [Chat Persistence](chat-persistence.md)
