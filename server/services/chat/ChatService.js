@@ -62,6 +62,7 @@ import {
 import { createChatChannel } from './chatChannel.js';
 import { discardRunActivity, recordRunActivity } from './runActivity.js';
 import { createPageReadGate, resolveMaxPageReads } from './pageReadLimit.js';
+import { createTurnSkillLog } from './turnSkillLog.js';
 import { headlessToolOutputSeam } from './toolOutputFiles.js';
 import {
   admitTurnProjects,
@@ -935,6 +936,9 @@ class ChatService {
     ];
 
     const pageReads = createPageReadGate(resolveMaxPageReads(app));
+    // The skills the model loads in this turn: a tool whose skill carries rules
+    // (`create_dashboard`) checks that it did (`activate_skill` writes to it).
+    const turnSkills = createTurnSkillLog();
 
     // A continuation of a turn that paused on an approval: the stored part of
     // that turn replaces the decision message. An approved call is run by the
@@ -1055,6 +1059,7 @@ class ChatService {
               user,
               appConfig: app,
               integrationScopes,
+              turnSkills,
               // The user's timezone, for the scheduling tools' defaults. Only
               // when known: a value the model put in `args` could only pick a
               // default timezone, which the schedule itself can name anyway.
@@ -1970,6 +1975,7 @@ class ChatService {
       });
 
       const pageReads = createPageReadGate(resolveMaxPageReads(app));
+      const turnSkills = createTurnSkillLog();
       const result = await this.agentLoop.run({
         runId,
         kind: 'subagent',
@@ -2032,7 +2038,7 @@ class ChatService {
           pageReads.admit(toolId) ||
           this.runTool(
             toolId,
-            { language, ...args, chatId, user, appConfig: app, integrationScopes: {} },
+            { language, ...args, chatId, user, appConfig: app, integrationScopes: {}, turnSkills },
             { signal }
           )
       });

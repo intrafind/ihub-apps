@@ -1820,11 +1820,24 @@ for it once the results are in.
 - **Every chart has a Table view** with the same numbers, a tooltip on hover and focus, light and
   dark colours and a phone layout. The header uses the app's brand colour and font.
 - **Quick and consistent.** The model writes a small JSON spec instead of a whole HTML page, and
-  the server lays it out. `create_web_artifact` gained the parameters `preset` (`dashboard`) and
-  `data` for it; a faulty spec comes back as a message that names the field at fault.
-- **Numbers are not recalculated.** The skill has the model copy every figure from the data; the
-  page works out shares, order, the sum of a folded tail and table sorting itself.
-- **Enable it** by adding `dashboard` to an app's `skills`. It brings the tool itself, so
+  the server lays it out. The skill has tools of its own, `create_dashboard` and `edit_dashboard`,
+  so the run activity reads **Create dashboard** / **Edit dashboard** (**Dashboard erstellen** /
+  **Dashboard bearbeiten**) instead of "web artifact", and "make a dashboard, do not use web
+  artifacts" works. A faulty spec comes back as a message that names the field at fault, and a
+  change is an edit of the spec, not a page written again.
+- **Numbers are not recalculated, and the server holds the rules.** The skill has the model copy
+  every figure from the data; the page works out shares, order, the sum of a folded tail and table
+  sorting itself. A dashboard needs the date of the data (`asOf`) and at least one source; a date
+  more than three months back (or in the future) comes back as a warning the model must answer. A
+  `create_dashboard` call in a turn where the model did not load the skill is refused with
+  guidance, so figures are not made up when an earlier turn used the skill. A source can carry a
+  reference and an address, shown under **Sources and formulas**.
+- **Negative values.** Bar charts show growth, change and margin figures left of a zero line in
+  their own colour; parts of a whole (`share`) stay positive.
+- **Only where it exists.** The `web-artifacts` skill and the web artifact tool mention the
+  dashboard skill only in apps that have it; there, `web-artifacts` sends dashboards of figures
+  to `dashboard`.
+- **Enable it** by adding `dashboard` to an app's `skills`. It brings its tools itself, so
   `web-artifacts` does not have to be enabled as well.
 
 See [Document and File Generation → The `dashboard` skill](../../pdf-generation.md#the-dashboard-skill)

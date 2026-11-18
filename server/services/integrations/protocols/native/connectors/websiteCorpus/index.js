@@ -157,7 +157,7 @@ const PARAMETERS = {
       dashboard: {
         type: 'boolean',
         description:
-          'Also return the result as a "dashboard" spec for the dashboard skill (create_web_artifact with preset "dashboard"). Ask for it only when the dashboard skill is available.'
+          'Also return the result as a "dashboard" spec for the dashboard skill (its create_dashboard tool). Ask for it only when the dashboard skill is available.'
       },
       language: {
         type: 'string',

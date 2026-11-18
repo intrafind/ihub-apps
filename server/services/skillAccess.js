@@ -225,7 +225,9 @@ export async function loadUsableSkill(skillName, { skillIds, user, app }) {
     };
   }
   if (!(await isSkillUsable(skillName, { skillIds, user, app }))) return null;
-  const content = await getSkillContent(skillName);
+  // The instructions of a system skill point to other skills only where the app has them.
+  const available = (await getUsableSkills({ skillIds, user })).map(skill => skill.name);
+  const content = await getSkillContent(skillName, undefined, { available });
   if (!content) return null;
   return {
     name: skillName,

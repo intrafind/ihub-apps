@@ -72,6 +72,12 @@ checked again on every turn: a skill whose grant, assignment or share was remove
 active. At most `skillSettings.maxActiveSkills` (default 3) skills are active at once — the ones
 named in the current message first, then the most recently activated ones.
 
+A system skill that points the model to another skill does so only in an app that has that skill:
+its `SKILL.md` marks such text with `<!-- if-skill name -->…<!-- else -->…<!-- /if-skill -->`
+blocks, which are resolved against the app's skills when the instructions are loaded
+(`web-artifacts` sends dashboards of figures to `dashboard` only where `dashboard` is enabled).
+Only system skills use these blocks.
+
 Limits in `platform.json` (see [Skills configuration](platform.md#skills-configuration)):
 
 | Setting | Default | What happens over the limit |

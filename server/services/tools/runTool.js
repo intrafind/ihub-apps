@@ -121,6 +121,9 @@ export async function runTool(toolId, params = {}, options = {}) {
       return `Skill '${skillName}' can only be started by the user, by writing /${skill.displayName} in a message.`;
     }
     logger.info('Activating skill', { component: 'ToolLoader', skillName });
+    // The turn's record of loaded skills, for the tools whose skill carries
+    // rules (`create_dashboard`): the instructions are in front of the model now.
+    params.turnSkills?.note?.(skill.name);
     // Emit skill activation SSE event for UI indicators. `skillId` is what
     // the next turns of the chat keep the skill active by; `activatedBy`
     // tells them the model chose it.

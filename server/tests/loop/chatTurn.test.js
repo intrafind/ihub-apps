@@ -744,7 +744,10 @@ test('tools path: step/completed{tool_calls} → tool/started → tool/completed
 
   assert.equal(runTool.calls.length, 1);
   assert.equal(runTool.calls[0][0], 'webSearch');
-  assert.deepEqual(runTool.calls[0][1], {
+  // The turn's record of the skills the model loaded, for the tools whose skill carries rules.
+  const { turnSkills, ...toolParams } = runTool.calls[0][1];
+  assert.equal(turnSkills.has('dashboard'), false);
+  assert.deepEqual(toolParams, {
     language: 'en',
     query: 'berlin',
     chatId,

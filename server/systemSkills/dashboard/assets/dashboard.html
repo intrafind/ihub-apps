@@ -17,6 +17,7 @@
         --baseline: #c3c2b7;
         --border: rgba(11, 11, 11, 0.1);
         --other: #b5b4ad;
+        --neg: #b5462a;
         --good: #006300;
         --warning: #8a5a00;
         --critical: #b02a2a;
@@ -42,6 +43,7 @@
           --baseline: #383835;
           --border: rgba(255, 255, 255, 0.1);
           --other: #5d5c58;
+          --neg: #e0795a;
           --good: #0ca30c;
           --warning: #fab219;
           --critical: #ec6b6b;
@@ -66,6 +68,7 @@
         --baseline: #383835;
         --border: rgba(255, 255, 255, 0.1);
         --other: #5d5c58;
+        --neg: #e0795a;
         --good: #0ca30c;
         --warning: #fab219;
         --critical: #ec6b6b;
@@ -282,17 +285,31 @@
         position: relative;
         height: 32px;
       }
+      /* --x: where the bar starts and --r: how wide it is, as shares of the track. */
       .bar-fill {
         position: absolute;
-        left: 0;
+        left: calc((100% - var(--vw)) * var(--x, 0));
         top: 6px;
         height: 20px;
         width: calc((100% - var(--vw)) * var(--r));
         border-radius: 0 4px 4px 0;
         background: var(--s1);
       }
+      /* A negative bar runs left of the zero line, in its own colour. */
+      .bar-row.is-negative .bar-fill {
+        border-radius: 4px 0 0 4px;
+        background: var(--neg);
+      }
       .bar-row.is-other .bar-fill {
         background: var(--other);
+      }
+      .bar-zero {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: calc((100% - var(--vw)) * var(--r));
+        width: 1px;
+        background: var(--baseline);
       }
       .bar-mark {
         position: absolute;
@@ -484,6 +501,20 @@
         max-width: 70ch;
         color: var(--ink-2);
         font-size: 0.875rem;
+      }
+      .source .source-ref {
+        margin-top: 6px;
+      }
+      .source .source-url {
+        margin-top: 2px;
+        color: var(--muted);
+        font:
+          0.8125rem/1.5 ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          Consolas,
+          monospace;
+        overflow-wrap: anywhere;
       }
       .formula {
         margin: 6px 0 0;
@@ -930,19 +961,24 @@
             .sort(function (x, y) {
               return x.value - y.value;
             });
-          var domain = Math.max.apply(
-            null,
-            items
-              .map(function (i) {
-                return i.value;
+          // The scale runs from the smallest value (or 0) to the largest (or 0): a bar
+          // starts at the zero line and runs right for a positive value, left for a negative.
+          var values = items
+            .map(function (i) {
+              return i.value;
+            })
+            .concat(
+              marks.map(function (m) {
+                return m.value;
               })
-              .concat(
-                marks.map(function (m) {
-                  return m.value;
-                }),
-                [1]
-              )
-          );
+            );
+          var lo = Math.min.apply(null, values.concat([0]));
+          var hi = Math.max.apply(null, values.concat([0]));
+          var span = hi - lo || 1;
+          var zero = -lo / span;
+          var at = function (v) {
+            return (v - lo) / span;
+          };
           var valueText = function (i) {
             return fmt(i.value, b.format) + (b.share ? ' · ' + pct(i.value, total) : '');
           };
@@ -954,7 +990,7 @@
             var plot = el('div', 'axis-plot');
             marks.forEach(function (m) {
               var label = el('span', 'mark-label', m.label);
-              label.style.setProperty('--r', m.value / domain);
+              label.style.setProperty('--r', at(m.value));
               plot.appendChild(label);
             });
             axis.appendChild(plot);
@@ -962,22 +998,33 @@
           }
           var list = el('ul', 'bars');
           items.forEach(function (i) {
-            var row = el('li', 'bar-row' + (i.other ? ' is-other' : ''));
+            var row = el(
+              'li',
+              'bar-row' + (i.other ? ' is-other' : '') + (i.value < 0 ? ' is-negative' : '')
+            );
             row.tabIndex = 0;
             row.setAttribute('aria-label', i.label + ': ' + valueText(i));
             row.appendChild(el('span', 'bar-label', i.label));
             var track = el('div', 'bar-track');
-            var ratio = i.value > 0 ? Math.max(0.004, i.value / domain) : 0;
+            // The bar's width as a share of the track; a value other than 0 is always visible.
+            var width = i.value === 0 ? 0 : Math.max(0.004, Math.abs(i.value) / span);
             var fill = el('span', 'bar-fill');
-            fill.style.setProperty('--r', ratio);
+            fill.style.setProperty('--x', i.value < 0 ? zero - width : zero);
+            fill.style.setProperty('--r', width);
             track.appendChild(fill);
+            if (lo < 0) {
+              var base = el('span', 'bar-zero');
+              base.style.setProperty('--r', zero);
+              track.appendChild(base);
+            }
             marks.forEach(function (m) {
               var line = el('span', 'bar-mark');
-              line.style.setProperty('--r', m.value / domain);
+              line.style.setProperty('--r', at(m.value));
               track.appendChild(line);
             });
+            // The value stands after a positive bar, and right of the zero line for a negative one.
             var value = el('span', 'bar-value', valueText(i));
-            value.style.setProperty('--r', ratio);
+            value.style.setProperty('--r', i.value < 0 ? zero : zero + width);
             track.appendChild(value);
             row.appendChild(track);
             tipOn(row, function (t) {
@@ -1352,6 +1399,9 @@
             entry.appendChild(el('h3', null, s.name));
             if (s.description) entry.appendChild(el('p', null, s.description));
             if (s.formula) entry.appendChild(el('pre', 'formula', s.formula));
+            // Plain text: the page has no network and opens no links, so an address is for copying.
+            if (s.ref) entry.appendChild(el('p', 'source-ref', s.ref));
+            if (s.url) entry.appendChild(el('p', 'source-url', s.url));
             sourcesEl.appendChild(entry);
           });
           app.appendChild(sourcesEl);

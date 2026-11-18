@@ -28,6 +28,8 @@ import {
 import { systemSkillToolsFor } from '../services/systemSkillTools.js';
 import { getToolsForApp } from '../services/tools/appTools.js';
 import { runTool } from '../services/tools/runTool.js';
+import { createTurnSkillLog } from '../services/chat/turnSkillLog.js';
+import { describeSkillCatalog } from '../services/skillAccess.js';
 import { chatToolSeam } from '../services/chat/chatSeams.js';
 import { RunStreamEmitter } from '../services/loop/RunStream.js';
 import { createStreamState, getRun, reduceRunEvents } from '../../shared/run/runReducer.js';
@@ -132,14 +134,16 @@ describe('tools of system skills', () => {
   it('are offered only through a system skill', () => {
     const tools = systemSkillToolsFor(skills);
     assert.deepEqual(tools.map(t => [t.id, t.skillName]).sort(), [
+      // A dashboard has tools of its own: it is not a web artifact.
+      ['create_dashboard', 'dashboard'],
       ['create_docx', 'docx'],
       ['create_file', 'files'],
       ['create_pdf', 'pdf'],
       ['create_pptx', 'pptx'],
-      // `dashboard` and `web-artifacts` bring the same tool; it is offered once, through the first.
-      ['create_web_artifact', 'dashboard'],
+      ['create_web_artifact', 'web-artifacts'],
       ['create_xlsx', 'xlsx'],
       ['create_zip', 'files'],
+      ['edit_dashboard', 'dashboard'],
       ['edit_docx', 'docx'],
       ['edit_pptx', 'pptx'],
       ['edit_web_artifact', 'web-artifacts'],
@@ -155,6 +159,7 @@ describe('tools of system skills', () => {
       systemSkillToolsFor(skills).map(t => [t.id, t.outputKind ?? null])
     );
     assert.deepEqual(kinds, {
+      create_dashboard: 'dashboard',
       create_docx: 'document',
       create_file: 'file',
       create_pdf: 'pdf',
@@ -163,6 +168,7 @@ describe('tools of system skills', () => {
       create_xlsx: 'workbook',
       create_zip: 'archive',
       // An edit changes a file; the row reads "Edit web artifact", not "Creating …".
+      edit_dashboard: null,
       edit_docx: null,
       edit_pptx: null,
       edit_web_artifact: null,
@@ -237,6 +243,102 @@ describe('skill activation checks access', () => {
       appConfig: { id: 'other', skills: ['pdf'], skillSettings: { enabled: true } }
     });
     assert.match(resource, /access denied/);
+  });
+});
+
+describe('the dashboard skill is mentioned only where the app has it', () => {
+  const appWith = (...names) => ({
+    id: 'analyst',
+    skills: names,
+    skillSettings: { enabled: true }
+  });
+  const user = userWith('*');
+  const mentionsDashboardSkill = text =>
+    /create_dashboard|edit_dashboard|`dashboard` skill|"dashboard" skill|skill "dashboard"/i.test(
+      text
+    );
+
+  it('keeps the pointer out of the web-artifacts instructions of an app without it', async () => {
+    const body = await runTool('activate_skill', {
+      skill_name: 'web-artifacts',
+      user,
+      appConfig: appWith('web-artifacts', 'pdf')
+    });
+    assert.match(body, /create_web_artifact/);
+    assert.ok(!mentionsDashboardSkill(body), 'no dashboard skill here');
+    assert.ok(!/if-skill/.test(body), 'no directive is left in the text');
+  });
+
+  it('sends dashboards of figures to the skill when the app has both', async () => {
+    const body = await runTool('activate_skill', {
+      skill_name: 'web-artifacts',
+      user,
+      appConfig: appWith('web-artifacts', 'dashboard')
+    });
+    assert.match(body, /\*\*A dashboard of figures\*\*/);
+    assert.match(body, /`create_dashboard`/);
+    assert.ok(!/if-skill/.test(body));
+    assert.ok(!/\n{3,}/.test(body.slice(0, 1500)), 'no gap where the block was');
+  });
+
+  it('keeps the pointer out of the skill lists of an app without the skill', async () => {
+    const { entries } = await describeSkillCatalog({
+      app: appWith('web-artifacts', 'pdf', 'files'),
+      user
+    });
+    assert.deepEqual(entries.map(entry => entry.name).sort(), ['files', 'pdf', 'web-artifacts']);
+    for (const entry of entries) {
+      assert.ok(!mentionsDashboardSkill(entry.description), entry.name);
+    }
+  });
+
+  it('does not make the two skill descriptions compete for dashboards', async () => {
+    const { entries } = await describeSkillCatalog({
+      app: appWith('web-artifacts', 'dashboard'),
+      user
+    });
+    const byName = Object.fromEntries(entries.map(entry => [entry.name, entry.description]));
+    assert.match(byName.dashboard, /whenever the user asks for a dashboard/);
+    // web-artifacts keeps the dashboards that have controls, and no longer "live dashboards".
+    assert.ok(!/live dashboards/i.test(byName['web-artifacts']));
+    assert.match(byName['web-artifacts'], /dashboards with their own controls/);
+  });
+
+  it('offers the tool of the skill, and a web artifact tool that never mentions a dashboard', async () => {
+    const without = await getToolsForApp(appWith('web-artifacts'), 'en', { user });
+    assert.ok(!without.some(tool => tool.id === 'create_dashboard'));
+    const create = without.find(tool => tool.id === 'create_web_artifact');
+    assert.ok(create, 'the web artifact tool is there');
+    assert.ok(!/dashboard/i.test(create.description), create.description);
+    assert.equal(create.parameters.properties.preset, undefined);
+    assert.equal(create.parameters.properties.data, undefined);
+
+    const withSkill = await getToolsForApp(appWith('web-artifacts', 'dashboard'), 'en', { user });
+    assert.deepEqual(
+      withSkill.map(tool => tool.id).filter(id => /dashboard|web_artifact/.test(id)),
+      ['create_dashboard', 'edit_dashboard', 'create_web_artifact', 'edit_web_artifact']
+    );
+    const web = withSkill.find(tool => tool.id === 'create_web_artifact');
+    assert.ok(!/dashboard/i.test(web.description));
+  });
+
+  it('records what activate_skill loaded in the turn, for the tools that need the rules', async () => {
+    const turnSkills = createTurnSkillLog();
+    await runTool('activate_skill', {
+      skill_name: 'dashboard',
+      user,
+      turnSkills,
+      appConfig: appWith('dashboard')
+    });
+    assert.equal(turnSkills.has('dashboard'), true);
+    // A skill the app does not have loads nothing and is not recorded.
+    await runTool('activate_skill', {
+      skill_name: 'pdf',
+      user,
+      turnSkills,
+      appConfig: appWith('dashboard')
+    });
+    assert.equal(turnSkills.has('pdf'), false);
   });
 });
 

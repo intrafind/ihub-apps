@@ -3,7 +3,7 @@
 
 /**
  * The sizing result as a dashboard spec: built from the same analysis as the
- * Markdown report, accepted by the `dashboard` preset of `create_web_artifact`
+ * Markdown report, accepted by `create_dashboard`
  * and in the language asked for.
  *
  * Run: node --test server/tests/website-corpus-dashboard.test.js
@@ -15,6 +15,7 @@ import { analyseCorpus, windowFit } from '../services/websiteCorpus/stats.js';
 import { buildDashboard } from '../services/websiteCorpus/dashboard.js';
 import {
   checkDashboardSpec,
+  dashboardWarnings,
   renderDashboard
 } from '../services/documents/webArtifacts/dashboardPreset.js';
 import { inspectWebArtifact } from '../services/documents/webArtifacts/webArtifactTools.js';
@@ -52,11 +53,27 @@ async function input(extraPages = []) {
 }
 
 describe('buildDashboard', () => {
-  it('builds a spec the dashboard preset accepts and renders without warnings', async () => {
+  it('builds a spec create_dashboard accepts and renders without warnings', async () => {
     const spec = buildDashboard(await input());
     assert.doesNotThrow(() => checkDashboardSpec(spec));
+    assert.deepEqual(
+      dashboardWarnings(checkDashboardSpec(spec), { now: new Date('2026-11-18') }),
+      []
+    );
     const html = renderDashboard(spec);
     assert.deepEqual(inspectWebArtifact(html, 'html'), []);
+  });
+
+  it('names the crawled site as the source of the page figures, when it is an http(s) address', async () => {
+    const withSite = buildDashboard(await input());
+    assert.equal(withSite.sources.find(src => src.id === 'sections').url, 'https://a.test');
+    assert.equal(withSite.sources.find(src => src.id === 'windows').url, undefined);
+    assert.doesNotThrow(() => checkDashboardSpec(withSite));
+
+    const data = await input();
+    const odd = buildDashboard({ ...data, meta: { ...data.meta, siteUrl: 'a test' } });
+    assert.equal(odd.sources.find(src => src.id === 'sections').url, undefined);
+    assert.doesNotThrow(() => checkDashboardSpec(odd), 'a bad address never breaks the dashboard');
   });
 
   it('carries the figures of the analysis and computes none of its own', async () => {

@@ -98,7 +98,7 @@ not send them. Logic and every timing: `server/services/chat/toolArgProgress.js`
   server runs and the chat shows: never an unknown or hallucinated name,
   `activate_skill` and the other loop tools, `ask_user`, a passthrough (workflow)
   tool or a caller-executed tool. A creator (a built-in tool that declares what
-  it makes, `outputKind`: the document, file, archive and web-artifact tools) is
+  it makes, `outputKind`: the document, file, archive, web-artifact and dashboard tools) is
   announced as soon as its name and call id are known; any other tool, a system
   skill tool that makes nothing such as `preview_pdf` included, only once its
   arguments are still streaming 1.5 s after its name was seen, so a fast search
@@ -110,7 +110,7 @@ not send them. Logic and every timing: `server/services/chat/toolArgProgress.js`
 - **First frame** (the announcement): `name` (the name the model called),
   `title` / `integration` / `activityKind` / `activityOrigin` as on `tool/started` (from
   `utils/toolDisplay.js`), `outputKind` for the built-in creators (`webArtifact`,
-  `document`, `presentation`, `workbook`, `pdf`, `file`, `archive`; decided on the
+  `dashboard`, `document`, `presentation`, `workbook`, `pdf`, `file`, `archive`; decided on the
   server, `undefined` for every other tool), `argBytes`, `elapsedMs`, and
   `occurrence` (only when 2 or more: how many calls of this tool the turn has
   announced). **Most later frames carry `argBytes` and `elapsedMs` only**: merge
