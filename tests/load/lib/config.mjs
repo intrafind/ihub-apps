@@ -55,7 +55,7 @@ export const DEFAULTS = {
       deleteAfter: true,
       crawl: {
         // The stub site (stub/server.mjs) as iHub reaches it in docker-compose.yml.
-        url: 'http://loadtest-stubs:8980/docs/',
+        url: 'http://loadtest-stubs:8980/docs/', // NOSONAR: the local stub site, no TLS
         maxPages: 30,
         maxDepth: 2,
         addPages: 10,

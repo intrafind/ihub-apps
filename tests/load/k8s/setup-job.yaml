@@ -3,7 +3,6 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: loadtest-setup
-  namespace: ihub-loadtest
 spec:
   backoffLimit: 0
   ttlSecondsAfterFinished: 86400
@@ -19,8 +18,6 @@ spec:
           envFrom:
             - configMapRef: { name: loadtest-config }
             - secretRef: { name: loadtest-secrets }
-            # Per-call overrides written by k8s/setup.sh (LT_USER_COUNT, LT_LLM_URL, …).
-            - configMapRef: { name: loadtest-run-overrides, optional: true }
           resources:
             requests: { cpu: 250m, memory: 256Mi }
             limits: { cpu: '1', memory: 1Gi }

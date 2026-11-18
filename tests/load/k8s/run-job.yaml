@@ -7,7 +7,6 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: loadtest-run
-  namespace: ihub-loadtest
 spec:
   completionMode: Indexed
   completions: 8

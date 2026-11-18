@@ -68,7 +68,8 @@ fi
 # --- 2. the run ----------------------------------------------------------------
 overrides="$(mktemp)"
 trap 'rm -f "$overrides"' EXIT
-env | grep '^LT_' >"$overrides"
+# Credentials stay in loadtest-secrets, never in a ConfigMap.
+env | grep '^LT_' | grep -vE '^LT_(ADMIN_USER|ADMIN_PASSWORD|USER_PASSWORD|LLM_API_KEY|PROM_TOKEN)=' >"$overrides"
 "${K[@]}" create configmap loadtest-run-overrides --from-env-file="$overrides" \
   --dry-run=client -o yaml | "${K[@]}" apply -f - >/dev/null
 edits=(-e "s/^(  (completions|parallelism)): [0-9]+/\1: $SHARDS/")

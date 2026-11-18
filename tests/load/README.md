@@ -99,14 +99,13 @@ Use an existing instance, or the sizing lab. The lab gives you a fixed CPU budge
 IHUB_CPUS=2 IHUB_WORKERS=2 docker compose -f tests/load/docker-compose.yml up -d
 ```
 
-The compose file already lifts the per-IP rate limits. The AI-use acknowledgement stays enforced, as shipped: `run.mjs` confirms it for each user before the clock starts and logs how many chat turns still got a 428 (that must be 0). `IHUB_AI_ACK_ENFORCE=false` turns it off for a comparison run. The compose file allows the stub host for crawling whitelists no TLS host by default: for a GPU behind a private CA set `IHUB_SSL_DOMAIN_WHITELIST='["host", …]'`.
+The compose file already lifts the per-IP rate limits. The AI-use acknowledgement stays enforced, as shipped: `run.mjs` confirms it for each user before the clock starts and logs how many chat turns still got a 428 (that must be 0). `IHUB_AI_ACK_ENFORCE=false` turns it off for a comparison run. The compose file allows the stub host for crawling. It whitelists no TLS host: for a GPU behind a private CA set `IHUB_SSL_DOMAIN_WHITELIST='["gpu-a.example.com"]'` with your GPU's host.
 
 ### 2. Prepare it
 
 ```bash
 LT_BASE_URL=http://localhost:3000 \
 LT_STUB_MODEL_URL=http://loadtest-stubs:8979 \
-LT_LLM_URL=https://gpu-a.example.com \
 node tests/load/setup.mjs --profile capacity-stub
 ```
 
@@ -306,43 +305,43 @@ The test target is **one iHub replica scaled by `WORKERS`**. Set the pod's CPU l
 
 ## Settings (environment)
 
-| Variable                                                                   | Default                            | Meaning                                                                                                 |
-| -------------------------------------------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `LT_BASE_URL`                                                              | `http://localhost:3000`            | iHub base URL, including a subpath such as `/ihub`                                                      |
-| `LT_PROFILE`                                                               | `smoke`                            | Name in `profiles/` or a path to a JSON file                                                            |
-| `LT_MODEL_ID`                                                              | profile                            | `loadtest-stub`, `loadtest-gpu` (all GPUs), `loadtest-gpu-2`, any other                                 |
-| `LT_APP_ID`                                                                | `chat`                             | App the chats use                                                                                       |
-| `LT_STAGES`                                                                | profile                            | Override, e.g. `10:60:300,20:60:300` (VUs:ramp s:hold s, …)                                             |
-| `LT_VU_SCALE`                                                              | 1                                  | Multiplies every stage's VUs                                                                            |
-| `LT_MIX`                                                                   | profile                            | e.g. `chat=50,projectChat=50` (others become 0)                                                         |
-| `LT_USER_COUNT` / `--users`                                                | max VUs                            | Users to create and use (`lt-0001`…)                                                                    |
-| `LT_USER_PASSWORD`, `LT_ADMIN_USER`, `LT_ADMIN_PASSWORD`                   | see `lib/config.mjs`               | Credentials                                                                                             |
-| `LT_LLM_URL`                                                               | none                               | GPU base URL for `loadtest-gpu`; `none` skips it                                                        |
-| `LT_LLM_URLS`                                                              | –                                  | Several GPUs, comma-separated: `loadtest-gpu`, `loadtest-gpu-2`, …                                      |
-| `LT_LLM_MODEL_NAME`, `LT_LLM_API_KEY`                                      | discovered / none                  | Served model name, key                                                                                  |
-| `LT_LLM_SUPPORTS_TOOLS`                                                    | `auto`                             | vLLM with `--enable-auto-tool-choice` supports tools; `none` makes every turn a single LLM call         |
-| `LT_LLM_CONCURRENCY`                                                       | 100                                | iHub's queue limit for the model (1–100)                                                                |
-| `LT_STUB_MODEL_URL`                                                        | –                                  | Stub as iHub reaches it; registers `loadtest-stub`                                                      |
-| `LT_EXPECTED_LLM_TTFT_MS`                                                  | profile                            | Stub TTFT; the report subtracts it as "iHub overhead"                                                   |
-| `LT_CRAWL_URL`                                                             | `http://loadtest-stubs:8980/docs/` | Site for `projectBuild` crawls                                                                          |
-| `LT_CRAWL_MAX_CONCURRENT`                                                  | 2                                  | Concurrent crawls per shard (protects a real website)                                                   |
-| `LT_FIXTURES_DIR`                                                          | corpus if generated                | Folder of your own PDF/DOCX/PPTX/XLSX… to upload instead                                                |
-| `LT_SHARD_COUNT`, `LT_SHARD_INDEX`                                         | 1, 0                               | Sharding (`JOB_COMPLETION_INDEX` in Kubernetes)                                                         |
-| `LT_RUN_ID`                                                                | profile + time                     | Same value on every shard of one run                                                                    |
-| `LT_TARGET_CONCURRENT_USERS`                                               | –                                  | Adds a workers / vCPU / RAM recommendation to the report                                                |
-| `LT_SERVER_WORKERS`                                                        | sampled                            | Worker count when the sampler cannot see it                                                             |
-| `LT_STUB_STATS_URL`                                                        | –                                  | `…:8979/__stats` for stub in-flight and prompt sizes                                                    |
-| `LT_RESULTS_DIR`, `LT_RESULT_TO_STDOUT`                                    | `tests/load/results`, off          | Output                                                                                                  |
-| `LT_STOP_ON_FAILURE`                                                       | profile                            | End the ramp after the first level that breaks an SLO                                                   |
-| `LT_THINKING`                                                              | model default                      | `on` / `off`: sends `thinkingEnabled` (e.g. Qwen3)                                                      |
-| `LT_LLM_CONTEXT_WINDOW`                                                    | discovered (173184)                | Context window registered for the test models                                                           |
-| `LT_OWN_PROJECTS_MAX`, `LT_SHARED_PROJECTS`, `LT_DOCS_PER_PROJECT`         | 200, profile, 6                    | Projects setup prepares for `projectChat`                                                               |
-| `LT_PREFER_SHARED`, `LT_HOT_SHARE`                                         | 0.5, 0 (`company`: 0.8, 0.6)       | Share of project chats in shared projects; share of those in `shared-1`                                 |
-| `LT_USERS_PER_IP`                                                          | target or capacity                 | Users assumed behind one IP for the rate-limit recommendation                                           |
-| `LT_VLLM_METRICS_URL`                                                      | auto                               | vLLM `/metrics`; `none` disables it                                                                     |
-| `LT_PROM_URL`, `LT_PROM_TOKEN`                                             | –                                  | Prometheus or Grafana datasource proxy, bearer token                                                    |
-| `LT_PROM_IHUB_NAMESPACE`, `LT_PROM_IHUB_POD_REGEX`, `LT_PROM_GPU_SELECTOR` | `ihub`, `ihub.*`, empty            | Label selectors for the PromQL queries                                                                  |
-| `LT_POST_STREAM`                                                           | off                                | `1`: each chat turn streams on its own POST (`Accept: text/event-stream`), no GET; needs server support |
+| Variable                                                                   | Default                            | Meaning                                                                                                                        |
+| -------------------------------------------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `LT_BASE_URL`                                                              | `http://localhost:3000`            | iHub base URL, including a subpath such as `/ihub`                                                                             |
+| `LT_PROFILE`                                                               | `smoke`                            | Name in `profiles/` or a path to a JSON file                                                                                   |
+| `LT_MODEL_ID`                                                              | profile                            | `loadtest-stub`, `loadtest-gpu` (all GPUs), `loadtest-gpu-2`, any other                                                        |
+| `LT_APP_ID`                                                                | `chat`                             | App the chats use                                                                                                              |
+| `LT_STAGES`                                                                | profile                            | Override, e.g. `10:60:300,20:60:300` (VUs:ramp s:hold s, …)                                                                    |
+| `LT_VU_SCALE`                                                              | 1                                  | Multiplies every stage's VUs                                                                                                   |
+| `LT_MIX`                                                                   | profile                            | e.g. `chat=50,projectChat=50` (others become 0)                                                                                |
+| `LT_USER_COUNT` / `--users`                                                | max VUs                            | Users to create and use (`lt-0001`…)                                                                                           |
+| `LT_USER_PASSWORD`, `LT_ADMIN_USER`, `LT_ADMIN_PASSWORD`                   | see `lib/config.mjs`               | Credentials                                                                                                                    |
+| `LT_LLM_URL`                                                               | none                               | GPU base URL for `loadtest-gpu`; `none` skips it                                                                               |
+| `LT_LLM_URLS`                                                              | –                                  | Several GPUs, comma-separated: `loadtest-gpu`, `loadtest-gpu-2`, …                                                             |
+| `LT_LLM_MODEL_NAME`, `LT_LLM_API_KEY`                                      | discovered / none                  | Served model name, key                                                                                                         |
+| `LT_LLM_SUPPORTS_TOOLS`                                                    | `auto`                             | vLLM with `--enable-auto-tool-choice` supports tools; `none` makes every turn a single LLM call                                |
+| `LT_LLM_CONCURRENCY`                                                       | 100                                | iHub's queue limit for the model (1–100)                                                                                       |
+| `LT_STUB_MODEL_URL`                                                        | –                                  | Stub as iHub reaches it; registers `loadtest-stub`                                                                             |
+| `LT_EXPECTED_LLM_TTFT_MS`                                                  | profile                            | Stub TTFT; the report subtracts it as "iHub overhead"                                                                          |
+| `LT_CRAWL_URL`                                                             | `http://loadtest-stubs:8980/docs/` | Site for `projectBuild` crawls; the default is the stub site's name on the compose network, set a URL iHub can reach otherwise |
+| `LT_CRAWL_MAX_CONCURRENT`                                                  | 2                                  | Concurrent crawls per shard (protects a real website)                                                                          |
+| `LT_FIXTURES_DIR`                                                          | corpus if generated                | Folder of your own PDF/DOCX/PPTX/XLSX… to upload instead                                                                       |
+| `LT_SHARD_COUNT`, `LT_SHARD_INDEX`                                         | 1, 0                               | Sharding (`JOB_COMPLETION_INDEX` in Kubernetes)                                                                                |
+| `LT_RUN_ID`                                                                | profile + time                     | Same value on every shard of one run                                                                                           |
+| `LT_TARGET_CONCURRENT_USERS`                                               | –                                  | Adds a workers / vCPU / RAM recommendation to the report                                                                       |
+| `LT_SERVER_WORKERS`                                                        | sampled                            | Worker count when the sampler cannot see it                                                                                    |
+| `LT_STUB_STATS_URL`                                                        | –                                  | `…:8979/__stats` for stub in-flight and prompt sizes                                                                           |
+| `LT_RESULTS_DIR`, `LT_RESULT_TO_STDOUT`                                    | `tests/load/results`, off          | Output                                                                                                                         |
+| `LT_STOP_ON_FAILURE`                                                       | profile                            | End the ramp after the first level that breaks an SLO                                                                          |
+| `LT_THINKING`                                                              | model default                      | `on` / `off`: sends `thinkingEnabled` (e.g. Qwen3)                                                                             |
+| `LT_LLM_CONTEXT_WINDOW`                                                    | discovered (173184)                | Context window registered for the test models                                                                                  |
+| `LT_OWN_PROJECTS_MAX`, `LT_SHARED_PROJECTS`, `LT_DOCS_PER_PROJECT`         | 200, profile, 6                    | Projects setup prepares for `projectChat`                                                                                      |
+| `LT_PREFER_SHARED`, `LT_HOT_SHARE`                                         | 0.5, 0 (`company`: 0.8, 0.6)       | Share of project chats in shared projects; share of those in `shared-1`                                                        |
+| `LT_USERS_PER_IP`                                                          | target or capacity                 | Users assumed behind one IP for the rate-limit recommendation                                                                  |
+| `LT_VLLM_METRICS_URL`                                                      | auto                               | vLLM `/metrics`; `none` disables it                                                                                            |
+| `LT_PROM_URL`, `LT_PROM_TOKEN`                                             | –                                  | Prometheus or Grafana datasource proxy, bearer token                                                                           |
+| `LT_PROM_IHUB_NAMESPACE`, `LT_PROM_IHUB_POD_REGEX`, `LT_PROM_GPU_SELECTOR` | `ihub`, `ihub.*`, empty            | Label selectors for the PromQL queries                                                                                         |
+| `LT_POST_STREAM`                                                           | off                                | `1`: each chat turn streams on its own POST (`Accept: text/event-stream`), no GET; needs server support                        |
 
 Stub tuning (`stub/server.mjs`): `STUB_TTFT_MS` (700), `STUB_TOKENS` (250), `STUB_TOKENS_PER_SEC` (40), `STUB_JITTER` (0.25), `STUB_SITE_PAGES` (300), `STUB_SITE_LATENCY_MS` (80).
 

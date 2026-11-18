@@ -20,6 +20,10 @@
 #   SEED_SNAPSHOT   restore this snapshot from /seed before setup; SEED_OWNER (default 100:101)
 #   SAVE_SNAPSHOT   after setup: stop iHub, write contents/ to /seed/<name>, start iHub again
 #   SETUP_TIMEOUT   seconds to wait for the setup job (default 3600)
+#
+# One setup or run per namespace at a time: setup.sh and run.sh share the Job and ConfigMap
+# names and stop iHub for snapshots. A failed restore leaves iHub stopped; restore a
+# known-good snapshot (SEED_SNAPSHOT=…) before scaling it up again.
 set -euo pipefail
 NS="${NS:-ihub-loadtest}"
 DEPLOY="${IHUB_DEPLOYMENT:-ihub}"
@@ -35,38 +39,45 @@ restart_ihub() {
 stop_ihub() {
   "${K[@]}" scale "deploy/$DEPLOY" --replicas=0 >/dev/null
   "${K[@]}" wait --for=delete pod -l "app=$DEPLOY" --timeout=180s >/dev/null 2>&1 || true
+  # Never touch contents/ while iHub still writes it.
+  if [ -n "$("${K[@]}" get pod -l "app=$DEPLOY" -o name)" ]; then
+    echo "iHub pods still running; not touching contents/" >&2
+    exit 1
+  fi
 }
 
 if [ -n "${SEED_SNAPSHOT:-}" ]; then
   echo "restoring $SEED_SNAPSHOT into contents/" >&2
   stop_ihub
-  "${K[@]}" exec seed -- sh -c "cd /contents && find . -mindepth 1 -maxdepth 1 -exec rm -rf {} + \
-    && tar xzf '/seed/$SEED_SNAPSHOT' -C /contents && chown -R ${SEED_OWNER:-100:101} /contents"
+  "${K[@]}" exec seed -- sh -c 'gzip -t "/seed/$1" && cd /contents && find . -mindepth 1 -maxdepth 1 -exec rm -rf {} + \
+    && tar xzf "/seed/$1" -C /contents && chown -R "$2" /contents' sh "$SEED_SNAPSHOT" "${SEED_OWNER:-100:101}"
   restart_ihub
 fi
 
+# Per-call settings for this Job only; credentials stay in loadtest-secrets.
 overrides="$(mktemp)"
-trap 'rm -f "$overrides"' EXIT
-env | grep '^LT_' >"$overrides" || true
-"${K[@]}" create configmap loadtest-run-overrides --from-env-file="$overrides" \
+trap 'rm -f "$overrides"; "${K[@]}" delete configmap loadtest-setup-overrides --ignore-not-found >/dev/null 2>&1 || true' EXIT
+env | grep '^LT_' | grep -vE '^LT_(ADMIN_USER|ADMIN_PASSWORD|USER_PASSWORD|LLM_API_KEY|PROM_TOKEN)=' >"$overrides" || true
+"${K[@]}" create configmap loadtest-setup-overrides --from-env-file="$overrides" \
   --dry-run=client -o yaml | "${K[@]}" apply -f - >/dev/null
 "${K[@]}" delete job loadtest-setup --ignore-not-found --wait=true >/dev/null
-if [ -n "${RUNNER_IMAGE:-}" ]; then
-  sed -E "s|^( +image: ).*|\1$RUNNER_IMAGE|" "$HERE/setup-job.yaml"
-else
-  cat "$HERE/setup-job.yaml"
-fi | "${K[@]}" apply -f - >/dev/null
+image_edit=()
+[ -n "${RUNNER_IMAGE:-}" ] && image_edit=(-e "s|^( +image: ).*|\1$RUNNER_IMAGE|")
+# The overrides ConfigMap is added to this Job only, after the shared config and secrets.
+sed -E ${image_edit[@]+"${image_edit[@]}"} \
+  -e 's|^( +)- secretRef: \{ name: loadtest-secrets \}$|&\n\1- configMapRef: { name: loadtest-setup-overrides }|' \
+  "$HERE/setup-job.yaml" | "${K[@]}" apply -f - >/dev/null
 echo "setup started; follow with ${KUBECTL:-kubectl} -n $NS logs -f job/loadtest-setup" >&2
 if ! "${K[@]}" wait --for=condition=complete job/loadtest-setup --timeout="${SETUP_TIMEOUT:-3600}s" >/dev/null; then
   "${K[@]}" logs job/loadtest-setup --tail=30 >&2 || true
   echo "setup did not complete" >&2
   exit 1
 fi
-"${K[@]}" logs job/loadtest-setup --tail=5 >&2
+"${K[@]}" logs job/loadtest-setup --tail=5 >&2 || true
 
 if [ -n "${SAVE_SNAPSHOT:-}" ]; then
   stop_ihub # consistent files: nothing writes while tar reads
-  "${K[@]}" exec seed -- tar czf "/seed/$SAVE_SNAPSHOT" -C /contents .
+  "${K[@]}" exec seed -- sh -c 'tar czf "/seed/$1.tmp" -C /contents . && mv "/seed/$1.tmp" "/seed/$1"' sh "$SAVE_SNAPSHOT"
   echo "saved /seed/$SAVE_SNAPSHOT" >&2
   restart_ihub
 fi
