@@ -196,13 +196,13 @@ At startup the server reads the container's memory limit from the cgroup
 `max` means no limit) and the CPU count (`os.availableParallelism()`):
 
 - **Workers**, when neither `WORKERS` nor `NUM_WORKERS` is set:
-  `(limit − 160 MB for the primary) / 1536 MB per worker`, at least 1, at most
+  `(limit − 160 MB for the primary) / 1700 MB per worker`, at least 1, at most
   the CPU count and never more than 4. Without a limit: 4, as before. One
   worker means the plain single process, without a primary.
 - **Heap per worker**, unless `--max-old-space-size` is given in
   `NODE_OPTIONS` or on the command line: each worker's share,
-  `(limit − 160 MB) / workers`, minus 600 MB for what a Node process uses
-  outside its V8 heap (code, buffers, the isolates of its worker threads),
+  `(limit − 160 MB) / workers`, minus 850 MB for what a worker uses outside
+  its main V8 heap (the isolates of its worker threads, buffers, code),
   minus the young generation (about three times the semi-space; 48 MB with
   Node's default), passed to each worker as `--max-old-space-size`. Old
   space, young generation and the rest together stay within the share, so V8
@@ -219,35 +219,41 @@ At startup the server reads the container's memory limit from the cgroup
 Worker threads inside a worker (file extraction, project search, document
 rendering) keep their own heap limits: V8's heap flags are process-wide and
 would otherwise override them, so the server resets the flags after its own
-heap is set up. The threads' memory counts toward the 600 MB outside the heap.
+heap is set up. The threads' memory counts toward the 850 MB outside the heap.
 
-When an explicit `WORKERS` leaves a worker less than 512 MB of heap after
-these deductions, the workers do not fit: each gets what is left (at least
-256 MB) and the decision is logged as a warning naming the share and what a
-worker needs. Lower `WORKERS` or raise the memory limit.
+When an explicit `WORKERS` leaves a worker less than 1,700 MB, the workers do
+not fit: each still gets its share minus the deductions as heap (at least
+256 MB), and the decision is logged as a warning naming how many workers fit
+into the limit and how much memory the requested count needs, for example:
+
+```
+14 workers do not fit into the memory limit: 1305 MB each, a worker needs 1700 MB. At most 10 worker(s) fit into 18432 MB; 14 workers need 23960 MB. Lower WORKERS or raise the limit
+```
 
 An explicit setting always wins. The decision is logged once at startup:
 
 ```
-Worker sizing: 2 worker(s) (memory limit), heap per worker 1272 MB (memory limit), young generation 32 MB semi-space { shareMb: 1968, memoryLimitMb: 4096, cpus: 4 }
+Worker sizing: 2 worker(s) (memory limit), heap per worker 1022 MB (memory limit), young generation 32 MB semi-space { shareMb: 1968, memoryLimitMb: 4096, cpus: 4 }
 ```
 
-| Container memory limit | CPUs | Workers | Heap per worker | Semi-space   |
-| ---------------------- | ---- | ------- | --------------- | ------------ |
-| none                   | any  | 4       | Node default    | Node default |
-| 1 GiB – 3 GiB          | any  | 1       | Node default    | Node default |
-| 4 GiB                  | 2+   | 2       | 1272 MB         | 32 MB        |
-| 8 GiB                  | 4+   | 4       | 1216 MB         | 64 MB        |
-| 8 GiB (`WORKERS=6`)    | 8    | 6       | 690 MB          | Node default |
-| 12 GiB (`WORKERS=6`)   | 8    | 6       | 1229 MB         | 64 MB        |
-| 16 GiB                 | 4+   | 4       | 3264 MB         | 64 MB        |
+| Container memory limit | CPUs | Workers | Heap per worker | Semi-space   | Fits |
+| ---------------------- | ---- | ------- | --------------- | ------------ | ---- |
+| none                   | any  | 4       | Node default    | Node default | yes  |
+| 1 GiB – 3 GiB          | any  | 1       | Node default    | Node default | yes  |
+| 4 GiB                  | 2+   | 2       | 1022 MB         | 32 MB        | yes  |
+| 8 GiB                  | 4+   | 4       | 966 MB          | 64 MB        | yes  |
+| 8 GiB (`WORKERS=6`)    | 8    | 6       | 440 MB          | Node default | no (at most 4) |
+| 12 GiB (`WORKERS=6`)   | 8    | 6       | 979 MB          | 64 MB        | yes  |
+| 16 GiB                 | 4+   | 4       | 3014 MB         | 64 MB        | yes  |
+| 18 GiB (`WORKERS=14`)  | 15   | 14      | 407 MB          | Node default | no (at most 10) |
+| 24 GiB (`WORKERS=14`)  | 15   | 14      | 798 MB          | 32 MB        | yes  |
 
-Measured on Kubernetes without swap (1,500–2,000 users): a worker uses about
-1 GB RSS idle and 1.5–1.95 GB under load, about 600 MB of it outside the V8
-heap, and its RSS grows with the heap limit it is given. Six workers in 8 GiB
-were OOM-killed when the heap was planned with less; with this sizing they get
-a 690 MB heap each, which fits but leaves them collecting often. Prefer fewer
-workers (or more memory) over squeezing six into 8 GiB.
+Measured on Kubernetes without swap (14 workers, 2,000–2,500 users): a worker
+uses 1.5–1.7 GB RSS under load, and that barely depends on its heap limit —
+most of it is outside the main heap. 14 workers ran without an OOM kill in
+24 GiB; in 18 GiB they were OOM-killed and about 4% of chat turns failed, in
+14 GiB two thirds did. Plan about 1.7 GB per worker; prefer fewer workers (or
+more memory) over squeezing more into the limit.
 
 ### Picking a value
 
