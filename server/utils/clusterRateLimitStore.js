@@ -30,17 +30,28 @@ const RESET_CHANNEL = 'rate-limit:reset';
 /** How long a worker waits for the primary before counting on its own. */
 const BUS_TIMEOUT_MS = 500;
 
-/** Primary-side counters: `<storeId>\0<key>` → { hits, resetAt }. */
+/** Primary-side counters: `<storeId>\0<key>` → { hits, resetAt }, oldest window first. */
 const counters = new Map();
+
+/**
+ * Upper bound on counters, so sign-ins sprayed over random usernames (keys of
+ * up to ~300 characters) cannot grow the primary's memory between sweeps.
+ * Over it, the oldest window is dropped.
+ */
+export const MAX_COUNTERS = 50000;
 
 const counterKey = (storeId, key) => `${storeId}\u0000${key}`;
 
-function incrementInPrimary({ storeId, key, windowMs }, now = Date.now()) {
+/** Exported for tests. */
+export function incrementInPrimary({ storeId, key, windowMs }, now = Date.now()) {
   const id = counterKey(storeId, key);
   let entry = counters.get(id);
   if (!entry || entry.resetAt <= now) {
     entry = { hits: 0, resetAt: now + windowMs };
+    // Re-insert, so the Map stays ordered oldest window first.
+    counters.delete(id);
     counters.set(id, entry);
+    if (counters.size > MAX_COUNTERS) counters.delete(counters.keys().next().value);
   }
   entry.hits += 1;
   return { totalHits: entry.hits, resetAt: entry.resetAt };
@@ -138,4 +149,9 @@ export class ClusterRateLimitStore {
 /** Test seam: forget every primary-side count. */
 export function resetClusterRateLimitCounters() {
   counters.clear();
+}
+
+/** Test seam: how many counters the primary holds. */
+export function clusterRateLimitCounterCount() {
+  return counters.size;
 }
