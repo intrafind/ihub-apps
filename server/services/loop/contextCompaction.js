@@ -126,7 +126,7 @@ function elidedArguments(text) {
  * keeps its short arguments (a filename, a title) and each long value becomes
  * a note of its length. The error it got stays, so the model still knows what
  * went wrong; the newest attempt is never touched, so it can be fixed from
- * what it sent.
+ * what it sent. A message that carries provider signatures is left as it is.
  *
  * Pure: returns new message objects for what changed, the same array when
  * nothing did.
@@ -146,9 +146,12 @@ export function elideRetriedCallArguments(messages) {
   });
   // Calls with long arguments the model has called again since; only their
   // results are read, so a long transcript is not parsed on every step.
+  // A message with provider signatures (Gemini's thought signatures) is
+  // replayed as it was signed.
   const candidates = new Set();
   messages.forEach((message, index) => {
     if (message?.role !== 'assistant' || !Array.isArray(message.tool_calls)) return;
+    if (message.thoughtSignatures?.length) return;
     for (const call of message.tool_calls) {
       const text = call?.function?.arguments;
       if (

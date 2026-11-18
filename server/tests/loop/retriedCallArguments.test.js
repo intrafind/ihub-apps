@@ -79,6 +79,16 @@ describe('elideRetriedCallArguments', () => {
     assert.equal(elideRetriedCallArguments(short).messages, short);
   });
 
+  it('leaves a message with thought signatures as it was signed', () => {
+    const messages = [
+      { ...assistant(call('a', 'create_xlsx', { sheets: BIG })), thoughtSignatures: ['sig'] },
+      result('a', FAILED),
+      assistant(call('b', 'create_xlsx', { sheets: BIG })),
+      result('b', FAILED)
+    ];
+    assert.equal(elideRetriedCallArguments(messages).messages, messages);
+  });
+
   it('is stable: a second pass changes nothing', () => {
     const messages = [
       assistant(call('a', 'create_xlsx', { sheets: BIG })),

@@ -9,7 +9,8 @@
  * Models writing long JSON by hand most often drop a closing bracket: at the
  * very end, or just before the bracket of the container around it
  * (`…0.6]}]` where `…0.6]]}]` was meant). Both are closed here, in nesting
- * order, where the text first shows them missing. Nothing else is changed:
+ * order, where the text first shows them missing, when that is the only
+ * plausible place for them (see {@link closeMissingBrackets}). Nothing else is changed:
  * other damage is refused with its position, since a generic "must be JSON"
  * made the model send the same 5,000 characters again and again
  * (intrafind/ihub-apps#3831). The result is still checked like any argument.
@@ -39,10 +40,19 @@ export class JsonArgumentError extends Error {
 
 /**
  * Close brackets the text leaves open: at its end, and before a closing
- * bracket that belongs to an outer container. Inside the text, each container
- * closed that way must sit in one of the other kind (an array in an object, an
- * object in an array): an array directly in an array could as well have ended
- * after any of its elements, so such text is refused, not guessed at.
+ * bracket that belongs to an outer container. A bracket is only added where no
+ * other place for it is plausible; otherwise the text is refused, not guessed
+ * at:
+ *
+ * - A container closed this way must not sit directly in one of its own kind:
+ *   an array in an array could as well have ended after any of its elements.
+ * - Its last item must not be able to have swallowed the items after it. Had
+ *   that item's own bracket been dropped, everything after it would read as
+ *   part of it, and the bracket found at its end would be the outer one. An
+ *   object whose last value is an object is refused (any member fits in
+ *   either), and so is an array whose last element is an array when that
+ *   element holds an array or the outer one holds non-arrays (rows are arrays
+ *   of values: a row inside a row is the sign of a dropped bracket).
  *
  * @param {string} text
  * @returns {{ text: string, closed: number }|null} null when nothing can be closed this way
@@ -55,32 +65,95 @@ export function closeMissingBrackets(text) {
   let closed = 0;
   for (let i = 0; i < text.length; i++) {
     const ch = text[i];
-    const opener = OPENER[ch];
+    if (' \t\n\r'.includes(ch)) continue;
+    const top = stack.at(-1);
+    if (top?.expecting && !OPENER[ch]) startItem(top, ch);
     if (ch === '"') {
       const end = stringEnd(text, i);
       if (end === -1) return null;
       i = end - 1;
+    } else if (ch === ',' || ch === ':') {
+      if (top) top.expecting = ch === ':' || top.open === '[';
     } else if (CLOSER[ch]) {
-      stack.push(ch);
-    } else if (opener && stack.at(-1) === opener) {
-      stack.pop();
-    } else if (opener) {
-      const closers = closersUntil(stack, opener);
+      stack.push(openEntry(ch));
+    } else if (OPENER[ch]) {
+      const closers = closeUntil(stack, OPENER[ch]);
       if (closers === null) return null;
-      parts.push(text.slice(last, i), closers);
-      last = i;
-      closed += closers.length;
-      // The containers just closed, and the one this bracket closes.
-      stack.length -= closers.length + 1;
+      if (closers) {
+        parts.push(text.slice(last, i), closers);
+        last = i;
+        closed += closers.length;
+      }
     }
   }
   parts.push(text.slice(last));
   if (stack.length === 0) return closed ? { text: parts.join(''), closed } : null;
-  const closers = stack
-    .reverse()
-    .map(open => CLOSER[open])
-    .join('');
+  const closers = closeUntil(stack, null);
+  if (closers === null) return null;
   return { text: parts.join('').trimEnd() + closers, closed: closed + closers.length };
+}
+
+/** A container the scan is inside. */
+function openEntry(open) {
+  return {
+    open,
+    // An item (array element, object value) starts at the next character.
+    expecting: open === '[',
+    // Arrays: holds an array element, holds any other element.
+    hasArray: false,
+    hasOther: false,
+    // The last item is a container of this one's kind, and it holds an array.
+    lastIsSame: false,
+    lastHoldsArray: false
+  };
+}
+
+/** An item of `entry` starts with `ch`. */
+function startItem(entry, ch) {
+  entry.expecting = false;
+  entry.lastIsSame = false;
+  if (entry.open !== '[') return;
+  if (ch === '[') entry.hasArray = true;
+  else entry.hasOther = true;
+}
+
+/** `entry` is closed; `parent` is the container it sits in. */
+function closeEntry(entry, parent) {
+  if (parent?.open !== entry.open) return;
+  parent.lastIsSame = true;
+  parent.lastHoldsArray = entry.hasArray;
+}
+
+/** Whether the last item of `entry` could have swallowed the items after it. */
+function lastItemCouldHaveSwallowed(entry) {
+  if (!entry.lastIsSame) return false;
+  return entry.open === '{' || entry.lastHoldsArray || entry.hasOther;
+}
+
+/**
+ * Close the containers above the innermost `opener` (all of them when it is
+ * null) and, for an opener, that one too; return the brackets that had to be
+ * added, innermost first: '' when the top is the opener itself, null when a
+ * bracket cannot be added there (no such opener, or a place that is not the
+ * only plausible one).
+ *
+ * @param {Object[]} stack - Open containers, outermost first.
+ * @param {string|null} opener
+ * @returns {string|null}
+ */
+function closeUntil(stack, opener) {
+  const at = opener === null ? -1 : stack.findLastIndex(entry => entry.open === opener);
+  if (opener !== null && at === -1) return null;
+  let closers = '';
+  for (let k = stack.length - 1; k > at; k--) {
+    const entry = stack[k];
+    if (stack[k - 1]?.open === entry.open || lastItemCouldHaveSwallowed(entry)) return null;
+    closers += CLOSER[entry.open];
+    stack.pop();
+    closeEntry(entry, stack.at(-1));
+  }
+  if (opener !== null) closeEntry(stack.pop(), stack.at(-1));
+  return closers;
 }
 
 /**
@@ -97,28 +170,6 @@ function stringEnd(text, start) {
     else if (text[i] === '"') return i + 1;
   }
   return -1;
-}
-
-/**
- * The closing brackets for the containers above the innermost `opener` on the
- * stack, innermost first; null when there is no such opener, or when one of
- * those containers sits directly in one of its own kind.
- *
- * @param {string[]} stack - Open brackets, outermost first.
- * @param {string} opener
- * @returns {string|null}
- */
-function closersUntil(stack, opener) {
-  const at = stack.lastIndexOf(opener);
-  if (at === -1) return null;
-  for (let k = stack.length - 1; k > at; k--) {
-    if (stack[k] === stack[k - 1]) return null;
-  }
-  return stack
-    .slice(at + 1)
-    .reverse()
-    .map(open => CLOSER[open])
-    .join('');
 }
 
 /** `sheets[0].rows[3]` for a root name and a list of keys and indexes. */
@@ -307,7 +358,7 @@ export function describeJsonError(text, root = '') {
   } else if (container && expected.includes(`"${containerCloser}"`) && (atEnd || OPENER[ch])) {
     // A bracket of the other kind, or the end: the container's own bracket
     // is what is missing.
-    message += `. The ${container.kind} ${pathText(root, container.path)} (opened at character ${formatNumber(container.start + 1)}) is not closed`;
+    message += `. The ${container.kind} ${pathText(root, container.path)} (opened at character ${formatNumber(container.start + 1)}) is not closed there, or an item inside it is missing its own closing bracket`;
   }
   return {
     message,

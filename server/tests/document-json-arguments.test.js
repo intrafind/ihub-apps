@@ -50,7 +50,7 @@ describe('closeMissingBrackets', () => {
 
   it('closes a container before the bracket of the one around it', () => {
     assert.equal(closeMissingBrackets(ROWS_OPEN).text, VALID);
-    assert.equal(closeMissingBrackets('[{"a":{"b":1}]').text, '[{"a":{"b":1}}]');
+    assert.equal(closeMissingBrackets('[{"a":[1,2}').text, '[{"a":[1,2]}]');
   });
 
   it('leaves alone what closing brackets cannot fix', () => {
@@ -61,6 +61,26 @@ describe('closeMissingBrackets', () => {
     assert.equal(closeMissingBrackets('{"r":[[1],[2],[3]}').text, '{"r":[[1],[2],[3]]}');
     assert.equal(closeMissingBrackets('[[[1],[2],[3]]}'), null);
     assert.equal(closeMissingBrackets('[[1,2],[3,4]}'), null);
+    assert.equal(closeMissingBrackets('[[1,2],[3,4'), null, 'an open array in an array');
+  });
+
+  it('leaves alone a last item that could have swallowed the items after it', () => {
+    // Row B lost its "]": rows C and D read as part of it, and the "]" meant
+    // for rows closes row B. Closing rows before "}" would make the file
+    // from two rows.
+    assert.equal(closeMissingBrackets('{"rows":[["A",1],["B",2,["C",3],["D",4]]}'), null);
+    assert.equal(closeMissingBrackets('[["A",1],["B",2,["C",3],["D",4]]'), null);
+    // An array that also holds values: 4 and 5 may belong to either array.
+    assert.equal(closeMissingBrackets('[1,[2,3,4,5]'), null);
+    // An object in an object: "b" may belong to either.
+    assert.equal(closeMissingBrackets('{"a":{"x":1,"b":2}'), null);
+    assert.equal(closeMissingBrackets('[{"a":{"b":1}]'), null);
+    // Rows of values and a list of objects are closed.
+    assert.equal(closeMissingBrackets('[[1,2],[3,4]').text, '[[1,2],[3,4]]');
+    assert.equal(
+      closeMissingBrackets('{"items":[{"a":1},{"b":2}]').text,
+      '{"items":[{"a":1},{"b":2}]}'
+    );
   });
 
   it('ignores brackets inside strings', () => {
@@ -102,7 +122,10 @@ describe('parseJsonArgument', () => {
   it('names the container whose bracket is missing when it cannot be closed', () => {
     const { message } = describeJsonError('{"rows":[[1],[2],[3]', 'sheets');
     assert.match(message, /expected "," or "]" at the end \(character 21\)/);
-    assert.match(message, /The array sheets\.rows \(opened at character 9\) is not closed/);
+    assert.match(
+      message,
+      /The array sheets\.rows \(opened at character 9\) is not closed there, or an item inside it is missing its own closing bracket$/
+    );
     assert.throws(
       () => parseJsonArgument('[[[1],[2],[3]]}', 'x'),
       /"}" matches no bracket open here/
@@ -130,6 +153,14 @@ describe('document tools', () => {
     assert.equal(res.success, true, res.error);
     assert.equal(res.file.name, 'shares.xlsx');
     assert.equal(res.file.sheets, 1);
+  });
+
+  it('create_xlsx: a row missing its bracket is refused, not merged with the rows after it', () => {
+    const rowOpen = VALID.replace('["Model B",0.45]', '["Model B",0.45');
+    assert.throws(
+      () => xlsxSpecFromToolArgs({ sheets: rowOpen }),
+      /"sheets" must be a JSON array of worksheets \(or its JSON\), and this JSON is not valid: expected "," or "]" at character \d+/
+    );
   });
 
   it('create_xlsx: other broken JSON says where and what, and nothing is made', async () => {
