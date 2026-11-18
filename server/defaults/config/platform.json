@@ -531,7 +531,10 @@
     "maxPerBatch": 8,
     "maxZipFiles": 200,
     "maxZipBytes": 104857600,
-    "scriptHosts": ["cdnjs.cloudflare.com", "cdn.jsdelivr.net", "unpkg.com"]
+    "scriptHosts": ["cdnjs.cloudflare.com", "cdn.jsdelivr.net", "unpkg.com"],
+    "libraryKit": {
+      "enabled": true
+    }
   },
   "workflowState": {
     "retentionDays": 30,

@@ -3,6 +3,12 @@
 
 import vm from 'node:vm';
 import { isAllowedScriptUrl } from '../../../../shared/artifactPreview.js';
+import {
+  ARTIFACT_LIBRARIES,
+  ARTIFACT_LIBRARY_ATTRIBUTE,
+  artifactLibraryMarkers,
+  describeArtifactLibraries
+} from '../../../../shared/artifactLibraries.js';
 import { artifactPolicy } from '../../artifacts/artifactPolicy.js';
 import { optionalString, toolFailure } from '../documentToolHelpers.js';
 import { applyTextEdits, chatFileToEdit, textEditsOf } from '../editableSource.js';
@@ -194,6 +200,158 @@ function scriptSyntaxErrors(text) {
 }
 
 /**
+ * The kit library a CDN URL loads, judged by the package name in its path
+ * (`/npm/chart.js@4.4.1/…`, `/npm/chart.js`, `/ajax/libs/Chart.js/…`,
+ * `/d3@7`, `/alpinejs@3`), or by a library's own CDN (`d3js.org/d3.v7.min.js`).
+ *
+ * @param {string} url
+ * @returns {object|null}
+ */
+function kitLibraryOfUrl(url) {
+  const lower = String(url).toLowerCase();
+  if (OWN_CDN.d3.test(lower)) return ARTIFACT_LIBRARIES.find(library => library.id === 'd3');
+  return (
+    ARTIFACT_LIBRARIES.find(library => {
+      const name = library.npm.package.toLowerCase();
+      const at = lower.indexOf(`/${name}`);
+      if (at === -1 || !/^(?:[@/?#]|$)/.test(lower.slice(at + name.length + 1))) return false;
+      // A package path of a CDN (`/npm/x`, `/ajax/libs/x`, or right under the
+      // host as on unpkg), not any file that happens to be called `chart.js`.
+      const before = lower.slice(0, at);
+      return /(?:\/npm|\/libs)$/.test(before) || /^(?:https?:)?\/\/[^/]+$/.test(before);
+    }) || null
+  );
+}
+
+/** Libraries' own CDNs, whose URLs do not carry the npm package path. */
+const OWN_CDN = Object.freeze({ d3: /\/\/d3js\.org\/d3(?:\.v(\d+))?(?:\.min)?\.js/ });
+
+/** The marker that loads a kit library offline, as the model writes it. */
+function markerOf(library) {
+  return `<script ${ARTIFACT_LIBRARY_ATTRIBUTE}="${library.id}"></script>`;
+}
+
+/** The major version a CDN URL pins for a package (`chart.js@2.9.4`, `chart.js@2` → 2), or null. */
+function majorVersionInUrl(url, packageName) {
+  const lower = String(url).toLowerCase();
+  const name = packageName.toLowerCase();
+  const own = name === 'd3' ? OWN_CDN.d3.exec(lower) : null;
+  if (own) return own[1] ? Number(own[1]) : null;
+  for (const separator of ['@', '/']) {
+    const at = lower.indexOf(`/${name}${separator}`);
+    if (at === -1) continue;
+    // `2.9.4`, `2/dist/…`, a bare `@2` at the end, or `2?…` / `2#…`.
+    const digits = /^v?(\d+)(?=[./?#]|$)/.exec(lower.slice(at + name.length + 2));
+    if (digits) return Number(digits[1]);
+  }
+  return null;
+}
+
+/**
+ * How to move one kit library from a CDN to the kit: the marker, and, when
+ * the page pins another major version than the kit ships or no version that
+ * can be read, a warning to check the code first. The kit never swaps a
+ * version silently.
+ *
+ * @param {object} library - A kit library.
+ * @param {string[]} urls - The CDN URLs of the page.
+ * @returns {string}
+ */
+function kitReplacementOf(library, urls) {
+  const kitMajor = Number(library.version.split('.')[0]);
+  const majors = urls
+    .filter(url => kitLibraryOfUrl(url) === library)
+    .map(url => majorVersionInUrl(url, library.npm.package));
+  // Alpine.js must come last in <body>, so it is not a swap in place.
+  const action =
+    library.placement === 'body'
+      ? `remove the <script src> and put ${markerOf(library)} at the end of <body>, after any script with an "alpine:init" listener`
+      : `replace the <script src> with ${markerOf(library)}`;
+  const other = majors.find(major => major !== null && major !== kitMajor);
+  if (other !== undefined) {
+    return `${action}, but only after checking that the code works with ${library.name} ${library.version}: the page uses version ${other}, whose API differs`;
+  }
+  if (majors.includes(null)) {
+    return `${action}, but only after checking that the code works with ${library.name} ${library.version}: the URL does not say which version the page uses`;
+  }
+  return action;
+}
+
+/**
+ * What is wrong with the library-kit markers of a document (#3822): a name
+ * that is not in the kit, a version the kit does not ship, a marker with code
+ * or a `src` of its own (both are dropped when the library is inlined), an
+ * Alpine.js marker before `<body>` (Alpine needs the body to start), and any
+ * marker while the admin has the kit switched off.
+ *
+ * @param {string} text
+ * @param {{enabled: boolean}} libraryKit
+ * @param {(text: string) => void} problem
+ */
+function libraryMarkerFindings(text, libraryKit, problem) {
+  const markers = artifactLibraryMarkers(text);
+  if (!markers.length) return;
+  if (!libraryKit.enabled) {
+    problem(
+      `The library kit is switched off on this installation, so ${quoteList(
+        [...new Set(markers.map(marker => marker.ref))],
+        3
+      )} (<script ${ARTIFACT_LIBRARY_ATTRIBUTE}>) loads nothing. Draw the chart as inline SVG and write the code inline, or, where this installation allows a CDN host, load the library from it.`
+    );
+    return;
+  }
+  const kit = `The kit has: ${describeArtifactLibraries()}.`;
+  const unknown = markers.filter(marker => marker.resolved.error === 'unknown').map(m => m.ref);
+  if (unknown.length) {
+    problem(
+      `<script ${ARTIFACT_LIBRARY_ATTRIBUTE}> names no library of the kit: ${quoteList([...new Set(unknown)], 3)}, so nothing loads. Names are exact. ${kit} For anything else, write the code inline.`
+    );
+  }
+  const versions = markers.filter(marker => marker.resolved.error === 'version');
+  if (versions.length) {
+    const shown = versions.map(m => `${m.resolved.id}@${m.resolved.version}`);
+    problem(
+      `The kit ships one version of each library, not ${quoteList([...new Set(shown)], 3)}. Leave the version out (<script ${ARTIFACT_LIBRARY_ATTRIBUTE}="chart.js"></script>). ${kit}`
+    );
+  }
+  const withCode = markers.filter(
+    marker =>
+      marker.resolved.library && (marker.body.trim() || /\bsrc\s*=/i.test(marker.attributes))
+  );
+  if (withCode.length) {
+    problem(
+      `A <script ${ARTIFACT_LIBRARY_ATTRIBUTE}> marker is replaced by the library as a whole, so its own code or src is dropped (${quoteList(
+        [...new Set(withCode.map(m => m.ref))],
+        3
+      )}). Keep the marker empty, without src, and put your code in a separate <script> after it.`
+    );
+  }
+  const bodyAt = text.search(/<body\b/i);
+  const alpineEarly = markers.some(
+    marker => marker.resolved.library?.placement === 'body' && bodyAt >= 0 && marker.start < bodyAt
+  );
+  const alpineMarker = markers.find(marker => marker.resolved.library?.placement === 'body');
+  if (alpineEarly) {
+    problem(
+      `Alpine.js starts as soon as it is loaded and needs <body> to exist, so its marker in <head> does nothing. Move ${markerOf(
+        alpineMarker.resolved.library
+      )} to the end of <body>, after any script that registers Alpine.data() in an "alpine:init" listener.`
+    );
+  } else if (alpineMarker) {
+    // Alpine fires "alpine:init" once, while it starts: a listener added by a
+    // later script misses it, and the Alpine.data() components never exist.
+    const listenerAt = text.indexOf('alpine:init', alpineMarker.end);
+    if (listenerAt !== -1) {
+      problem(
+        `The "alpine:init" listener comes after the Alpine.js marker, but Alpine starts (and fires "alpine:init") as soon as its marker runs, so the listener and its Alpine.data() components are never used. Move ${markerOf(
+          alpineMarker.resolved.library
+        )} after that script, to the end of <body>.`
+      );
+    }
+  }
+}
+
+/**
  * Inspect HTML or SVG content for sandbox and self-containment pitfalls.
  *
  * A finding is `blocking` when the preview is broken without a fix: the file
@@ -204,11 +362,16 @@ function scriptSyntaxErrors(text) {
  *
  * @param {string} content
  * @param {'html'|'svg'} format
- * @param {{scriptHosts?: string[]}} [options] - CDN hosts the preview loads
- *   scripts and stylesheets from (`platform.artifacts.scriptHosts`).
+ * @param {{scriptHosts?: string[], libraryKit?: {enabled: boolean}}} [options] - CDN hosts
+ *   the preview loads scripts and stylesheets from (`platform.artifacts.scriptHosts`), and
+ *   whether the library kit is on (`platform.artifacts.libraryKit`; on when not given).
  * @returns {Array<{ text: string, blocking: boolean }>}
  */
-export function inspectWebArtifactFindings(content, format, { scriptHosts = [] } = {}) {
+export function inspectWebArtifactFindings(
+  content,
+  format,
+  { scriptHosts = [], libraryKit = { enabled: true } } = {}
+) {
   const findings = [];
   const problem = text => findings.push({ text, blocking: true });
   const note = text => findings.push({ text, blocking: false });
@@ -229,7 +392,7 @@ export function inspectWebArtifactFindings(content, format, { scriptHosts = [] }
     }
     return findings;
   }
-  htmlFindings(text, { truncated, scriptHosts, problem, note });
+  htmlFindings(text, { truncated, scriptHosts, libraryKit, problem, note });
   return findings;
 }
 
@@ -241,10 +404,11 @@ export function inspectWebArtifactFindings(content, format, { scriptHosts = [] }
  * @param {Object} options
  * @param {boolean} options.truncated - The file was cut off (its scripts are not parsed then).
  * @param {string[]} options.scriptHosts
+ * @param {{enabled: boolean}} options.libraryKit
  * @param {(text: string) => void} options.problem - Records a finding that breaks the preview.
  * @param {(text: string) => void} options.note - Records a finding that does not.
  */
-function htmlFindings(text, { truncated, scriptHosts, problem, note }) {
+function htmlFindings(text, { truncated, scriptHosts, libraryKit, problem, note }) {
   const relScript = RELATIVE_SCRIPT_RE.exec(text);
   if (relScript) {
     problem(
@@ -258,14 +422,36 @@ function htmlFindings(text, { truncated, scriptHosts, problem, note }) {
     );
   }
   const { code: blockedCode, media: blockedMedia } = blockedRemoteUrls(text, scriptHosts);
+  // Kit libraries loaded from a CDN: they work offline from the kit.
+  const cdnScripts = capturesOf(EXTERNAL_SCRIPT_RE, text);
+  const kitFromCdn = libraryKit.enabled
+    ? [...new Set(cdnScripts.map(kitLibraryOfUrl).filter(Boolean))]
+    : [];
+  const replacements = libraries =>
+    libraries.map(library => kitReplacementOf(library, cdnScripts)).join('; ');
   if (blockedCode.length) {
     const allowed = scriptHosts.length
       ? `Scripts and stylesheets load only over https from ${scriptHosts.join(', ')}`
       : 'This installation allows no external scripts or stylesheets at all';
+    const blockedKit = kitFromCdn.filter(library =>
+      blockedCode.some(url => kitLibraryOfUrl(url) === library)
+    );
+    const fix = blockedKit.length
+      ? `Load ${blockedKit.map(library => library.name).join(', ')} from iHub's library kit instead: ${replacements(blockedKit)}.`
+      : 'Switch to an allowed host or inline the code.';
     problem(
-      `The sandboxed preview will not load ${quoteList(blockedCode, 3)}, so the code that needs it does not run. ${allowed}. Switch to an allowed host or inline the code.`
+      `The sandboxed preview will not load ${quoteList(blockedCode, 3)}, so the code that needs it does not run. ${allowed}. ${fix}`
     );
   }
+  const kitAllowed = kitFromCdn.filter(
+    library => !blockedCode.some(url => kitLibraryOfUrl(url) === library)
+  );
+  if (kitAllowed.length) {
+    note(
+      `${kitAllowed.map(library => library.name).join(', ')} come${kitAllowed.length === 1 ? 's' : ''} from a public CDN here, so the artifact needs internet access to work. iHub ships ${kitAllowed.length === 1 ? 'it' : 'them'} in its offline library kit: unless the user asked for the CDN, ${replacements(kitAllowed)}.`
+    );
+  }
+  libraryMarkerFindings(text, libraryKit, problem);
   if (blockedMedia.length) {
     note(
       `The preview never loads images, fonts or CSS url()/@import from the network, so ${quoteList(blockedMedia, 3)} will not show. Embed images as data: URIs or inline SVG, or leave them out.`
@@ -393,9 +579,8 @@ function reportOf({ verb, format, name, findings }) {
  * @returns {Promise<Object>} The tool result.
  */
 export async function packageWebArtifact(params, { content, format, name, verb, report }) {
-  const findings = inspectWebArtifactFindings(content, format, {
-    scriptHosts: artifactPolicy().scriptHosts
-  });
+  const { scriptHosts, libraryKit } = artifactPolicy();
+  const findings = inspectWebArtifactFindings(content, format, { scriptHosts, libraryKit });
 
   const bundle = await templateBundleFor({
     format: 'xlsx',

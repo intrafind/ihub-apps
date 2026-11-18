@@ -352,6 +352,13 @@ export function getAdminNavSections({ t, showAdminPage, featureFlags, badges = {
           visible: showAdminPage('system')
         },
         {
+          key: 'artifacts',
+          label: t('admin.nav.artifacts', 'Artifacts'),
+          href: '/admin/artifacts',
+          icon: DocumentTextIcon,
+          visible: showAdminPage('system')
+        },
+        {
           key: 'security',
           label: t('admin.nav.security', 'Security'),
           href: '/admin/security',

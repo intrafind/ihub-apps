@@ -16,6 +16,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { fetchChatArtifact } from '../../../api';
 import Icon from '../../../shared/components/Icon';
+import { usePlatformConfig } from '../../../shared/contexts/platformConfigContextValue';
 import SkipLink from '../../../shared/components/SkipLink';
 import useMediaQuery from '../../../shared/hooks/useMediaQuery';
 import { GHOST_BUTTON } from '../../../shared/utils/buttonTokens';
@@ -50,6 +51,7 @@ import {
   saveName,
   storedCounterpart
 } from '../utils/artifactFiles';
+import { downloadableArtifactBlob, libraryKitOf } from '../utils/artifactLibraryKit';
 import ArtifactsPanel from './ArtifactsPanel';
 import ArtifactViewer from './ArtifactViewer';
 import UploadedFileDetail from './UploadedFilesTab';
@@ -417,6 +419,8 @@ export default function ArtifactViewerHost({
     [live, collected, generatedItems, uploadedItems, citedSources]
   );
 
+  const libraryKit = libraryKitOf(usePlatformConfig().platformConfig);
+
   const getBlob = useCallback(
     artifact => {
       if (artifact.data) return Promise.resolve(blobOfBase64(artifact.data, artifact.mimeType));
@@ -764,7 +768,13 @@ export default function ArtifactViewerHost({
             run: () =>
               mailAttach.attach({
                 file: { name: saveName(artifactDisplayName(descriptor)), bytes: descriptor.bytes },
-                fetchBlob: () => getBlob(descriptor)
+                // An HTML file is attached with its library-kit libraries inlined.
+                fetchBlob: async () =>
+                  downloadableArtifactBlob(
+                    await getBlob(descriptor),
+                    artifactDisplayName(descriptor),
+                    libraryKit
+                  )
               })
           }
         : null;

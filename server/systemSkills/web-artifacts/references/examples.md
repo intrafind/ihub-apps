@@ -1,15 +1,15 @@
 # Complete `web-artifacts` examples
 
-Four finished artifacts, one per kind of job. Read the one closest to the task, **keep its structure and replace its content**: the figures, names and texts below are invented example data, never facts to reuse. Each passes the checks of `create_web_artifact` without a problem or a note, works in light and dark mode, on a phone and with the keyboard, and asks follow-up questions only where the chat can answer them.
+Four finished artifacts, one per kind of job. Read the one closest to the task, **keep its structure and replace its content**: the figures, names and texts below are invented example data, never facts to reuse. Each passes the checks of `create_web_artifact` without a problem or a note, works in light and dark mode, on a phone and with the keyboard, works offline (libraries come from iHub's library kit, never from a CDN), and asks follow-up questions only where the chat can answer them.
 
-| #   | Job                                 | Shows how to                                                         |
-| --- | ----------------------------------- | -------------------------------------------------------------------- |
-| 1   | KPI overview with a clickable chart | Theme tokens, KPI strip, inline SVG bars, `sendPrompt` per bar       |
-| 2   | Calculator                          | Sliders with live results, number formatting, a reset                |
-| 3   | Data explorer                       | Search, filter and sortable columns over embedded rows               |
-| 4   | Clickable diagram                   | SVG nodes with a detail panel, keyboard focus, "ask about this step" |
+| #   | Job                                 | Library (kit marker)  | Shows how to                                                         |
+| --- | ----------------------------------- | --------------------- | -------------------------------------------------------------------- |
+| 1   | KPI overview with a clickable chart | Chart.js (`chart.js`) | Theme colours in a chart, KPI strip, `sendPrompt` per bar             |
+| 2   | Calculator                          | Alpine.js (`alpinejs`) | Sliders bound with `x-model`, computed results, a reset              |
+| 3   | Data explorer                       | none                  | Search, filter and sortable columns over embedded rows               |
+| 4   | Clickable diagram                   | D3 (`d3`)             | SVG nodes from data, a detail panel, keyboard focus, "ask about this step" |
 
-Two habits carry over to every artifact: an SVG with text gets a `viewBox` about as wide as the space it fills on a phone (around 360), or a sideways-scrolling box with a `min-width`, so its text never shrinks below about 11 px; and every click target is also reachable with Tab and Enter.
+Three habits carry over to every artifact: a library is loaded with its kit marker (`<script data-ihub-lib="chart.js"></script>`), never a CDN URL unless the user asks for one; an SVG with text gets a `viewBox` about as wide as the space it fills on a phone (around 360), or a sideways-scrolling box with a `min-width`, so its text never shrinks below about 11 px; and every click target is also reachable with Tab and Enter.
 
 After the first version, change an artifact with `edit_web_artifact` (see the end of this file), not by sending the whole file again.
 
@@ -22,6 +22,7 @@ After the first version, change an artifact with `edit_web_artifact` (see the en
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Regional sales Q3</title>
+<script data-ihub-lib="chart.js"></script>
 <style>
   :root { --bg:#f8fafc; --surface:#fff; --border:#e2e8f0; --text:var(--brand-text,#0f172a); --muted:#64748b; --primary:var(--brand-primary,#1e3a8a); }
   @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#0b0f19; --surface:#111827; --border:#1e293b; --text:#f1f5f9; --muted:#94a3b8; --primary:#93c5fd; } }
@@ -34,10 +35,10 @@ After the first version, change an artifact with `edit_web_artifact` (see the en
   .kpi b { display:block; font-size:1.5rem; font-variant-numeric:tabular-nums; }
   .kpi span { color:var(--muted); font-size:.8rem; }
   .card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px; }
-  .bar rect { fill:var(--primary); } .bar:hover rect, .bar:focus rect { opacity:.8; }
-  .bar { cursor:pointer; outline:none; } .bar:focus-visible rect { stroke:var(--text); stroke-width:2; }
-  #chart { display:block; width:100%; max-width:560px; }
-  svg text { fill:var(--text); font-size:12px; } .hint { color:var(--muted); font-size:.8rem; margin-top:8px; }
+  .chart { position:relative; height:240px; max-width:640px; }
+  .hint { color:var(--muted); font-size:.8rem; margin-top:8px; }
+  .asks { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+  .asks button { padding:4px 10px; border:1px solid var(--border); border-radius:6px; background:var(--surface); color:var(--text); cursor:pointer; }
 </style>
 </head>
 <body>
@@ -45,8 +46,9 @@ After the first version, change an artifact with `edit_web_artifact` (see the en
   <p class="sub">Example data · in € thousand</p>
   <section class="kpis" id="kpis"></section>
   <section class="card">
-    <svg id="chart" viewBox="0 0 360 220" role="img" aria-label="Sales by region"></svg>
+    <div class="chart"><canvas id="chart" role="img" aria-label="Sales by region, Q3 2026, in € thousand"></canvas></div>
     <p class="hint" id="hint"></p>
+    <div class="asks" id="asks"></div>
   </section>
 <script>
   const regions = [
@@ -64,31 +66,46 @@ After the first version, change an artifact with `edit_web_artifact` (see the en
     ['Fastest growth', best.name + ' +' + best.growth + '\u00a0%']
   ].map(([label, value]) => `<div class="kpi"><b>${value}</b><span>${label}</span></div>`).join('');
 
+  // Chart.js draws on a canvas, which cannot read CSS variables: hand it the theme's colours.
+  const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   const canAsk = Boolean(window.sendPrompt && sendPrompt.available);
-  const max = Math.max(...regions.map(r => r.sales));
-  const svg = document.getElementById('chart');
-  svg.innerHTML = regions.map((r, i) => {
-    const w = Math.round((r.sales / max) * 170);
-    const y = 20 + i * 48;
-    return `<g class="bar" tabindex="0" role="button" data-i="${i}" aria-label="${r.name}: ${fmt.format(r.sales)}">
-      <text x="0" y="${y + 20}">${r.name}</text>
-      <rect x="56" y="${y}" width="${w}" height="30" rx="4"></rect>
-      <text x="${62 + w}" y="${y + 20}">${fmt.format(r.sales)} (${r.growth > 0 ? '+' : ''}${r.growth} %)</text>
-      <title>${r.name}: ${fmt.format(r.sales)}</title></g>`;
-  }).join('');
-  document.getElementById('hint').textContent = canAsk
-    ? 'Click a bar (or press Enter on it) to ask about that region.'
-    : 'Figures per region; growth against Q2.';
-
+  const signed = g => (g > 0 ? '+' : '') + g;
   function ask(i) {
     const r = regions[i];
     if (canAsk) sendPrompt(`Why did sales in region ${r.name} change by ${r.growth} % in Q3 2026 (${fmt.format(r.sales)} thousand €)?`);
   }
-  svg.addEventListener('click', e => { const g = e.target.closest('.bar'); if (g) ask(Number(g.dataset.i)); });
-  svg.addEventListener('keydown', e => {
-    const g = e.target.closest('.bar');
-    if (g && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); ask(Number(g.dataset.i)); }
+
+  new Chart(document.getElementById('chart'), {
+    type: 'bar',
+    data: {
+      labels: regions.map(r => r.name),
+      datasets: [{ label: 'Sales (€ thousand)', data: regions.map(r => r.sales), backgroundColor: css('--primary'), borderRadius: 4 }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: c => `${fmt.format(c.raw)} (${signed(regions[c.dataIndex].growth)} %)` } }
+      },
+      scales: {
+        x: { beginAtZero: true, ticks: { color: css('--muted') }, grid: { color: css('--border') } },
+        y: { ticks: { color: css('--text') }, grid: { display: false } }
+      },
+      onClick: (event, elements) => { if (elements.length) ask(elements[0].index); },
+      onHover: (event, elements) => { event.native.target.style.cursor = canAsk && elements.length ? 'pointer' : 'default'; }
+    }
   });
+
+  document.getElementById('hint').textContent = canAsk
+    ? 'Click a bar, or one of the buttons, to ask about that region.'
+    : 'Figures per region; growth against Q2.';
+  if (canAsk) {
+    const asks = document.getElementById('asks');
+    asks.innerHTML = regions.map((r, i) => `<button type="button" data-i="${i}">Ask about ${r.name}</button>`).join('');
+    asks.addEventListener('click', e => { const b = e.target.closest('button'); if (b) ask(Number(b.dataset.i)); });
+  }
 </script>
 </body>
 </html>
@@ -121,41 +138,40 @@ After the first version, change an artifact with `edit_web_artifact` (see the en
 </head>
 <body>
   <h1 style="font-size:1.25rem;margin-bottom:12px">Loan calculator</h1>
-  <div class="grid">
-    <form class="card" id="form">
-      <label for="amount">Amount <output id="amountOut"></output></label>
-      <input id="amount" type="range" min="10000" max="500000" step="5000" value="200000">
-      <label for="rate">Interest rate <output id="rateOut"></output></label>
-      <input id="rate" type="range" min="0.5" max="9" step="0.1" value="3.8">
-      <label for="years">Term <output id="yearsOut"></output></label>
-      <input id="years" type="range" min="1" max="35" step="1" value="20">
+  <div class="grid" x-data="loan">
+    <form class="card" @submit.prevent @reset.prevent="reset()">
+      <label for="amount">Amount <output x-text="eur(amount)"></output></label>
+      <input id="amount" type="range" min="10000" max="500000" step="5000" x-model.number="amount">
+      <label for="rate">Interest rate <output x-text="rate + ' %'"></output></label>
+      <input id="rate" type="range" min="0.5" max="9" step="0.1" x-model.number="rate">
+      <label for="years">Term <output x-text="years + ' years'"></output></label>
+      <input id="years" type="range" min="1" max="35" step="1" x-model.number="years">
       <button type="reset">Reset</button>
     </form>
     <section class="card result" aria-live="polite">
-      <span>Monthly payment</span><b id="monthly"></b>
-      <div class="row"><span>Total paid</span><span id="totalPaid"></span></div>
-      <div class="row"><span>Total interest</span><span id="interest"></span></div>
+      <span>Monthly payment</span><b x-text="eur(monthly)"></b>
+      <div class="row"><span>Total paid</span><span x-text="eur(monthly * months)"></span></div>
+      <div class="row"><span>Total interest</span><span x-text="eur(monthly * months - amount)"></span></div>
     </section>
   </div>
 <script>
+  const DEFAULTS = { amount: 200000, rate: 3.8, years: 20 };
   const money = new Intl.NumberFormat(document.documentElement.lang, { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
-  const $ = id => document.getElementById(id);
-  function update() {
-    const amount = Number($('amount').value);
-    const rate = Number($('rate').value) / 100 / 12;
-    const months = Number($('years').value) * 12;
-    const monthly = rate === 0 ? amount / months : (amount * rate) / (1 - Math.pow(1 + rate, -months));
-    $('amountOut').textContent = money.format(amount);
-    $('rateOut').textContent = $('rate').value + ' %';
-    $('yearsOut').textContent = $('years').value + ' years';
-    $('monthly').textContent = money.format(monthly);
-    $('totalPaid').textContent = money.format(monthly * months);
-    $('interest').textContent = money.format(monthly * months - amount);
-  }
-  $('form').addEventListener('input', update);
-  $('form').addEventListener('reset', () => setTimeout(update, 0));
-  update();
+  // Registered before Alpine starts: the kit marker below comes last in <body>.
+  document.addEventListener('alpine:init', () => {
+    Alpine.data('loan', () => ({
+      ...DEFAULTS,
+      get months() { return this.years * 12; },
+      get monthly() {
+        const r = this.rate / 100 / 12;
+        return r === 0 ? this.amount / this.months : (this.amount * r) / (1 - Math.pow(1 + r, -this.months));
+      },
+      eur(value) { return money.format(value); },
+      reset() { Object.assign(this, DEFAULTS); }
+    }));
+  });
 </script>
+<script data-ihub-lib="alpinejs"></script>
 </body>
 </html>
 ```
@@ -249,6 +265,7 @@ After the first version, change an artifact with `edit_web_artifact` (see the en
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Order process</title>
+<script data-ihub-lib="d3"></script>
 <style>
   :root { --bg:#f8fafc; --surface:#fff; --border:#cbd5e1; --text:var(--brand-text,#0f172a); --muted:#64748b; --primary:var(--brand-primary,#1e3a8a); --node:#eef2ff; }
   @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#0b0f19; --surface:#111827; --border:#334155; --text:#f1f5f9; --muted:#94a3b8; --primary:#93c5fd; --node:#1e293b; } }
@@ -279,32 +296,35 @@ After the first version, change an artifact with `edit_web_artifact` (see the en
     { id: 'pick', label: 'Picking', detail: 'The warehouse collects the items; missing stock pauses the order.' },
     { id: 'ship', label: 'Shipping', detail: 'The carrier gets the parcel and the tracking number goes to the customer.' }
   ];
-  const svg = document.getElementById('diagram');
-  const panel = document.getElementById('panel');
   const canAsk = Boolean(window.sendPrompt && sendPrompt.available);
-  svg.insertAdjacentHTML('beforeend', steps.map((s, i) => {
-    const x = 16 + i * 166;
-    const arrow = i < steps.length - 1 ? `<path class="arrow" d="M${x + 136},70 L${x + 162},70"></path>` : '';
-    return `<g class="node" tabindex="0" role="button" aria-pressed="false" data-i="${i}">
-      <rect x="${x}" y="40" width="136" height="60" rx="8"></rect>
-      <text x="${x + 68}" y="75" text-anchor="middle">${s.label}</text></g>${arrow}`;
-  }).join(''));
+  const svg = d3.select('#diagram');
+  const panel = d3.select('#panel');
+  // The centre of each box, evenly spaced across the diagram.
+  const x = d3.scalePoint().domain(steps.map(s => s.id)).range([84, 582]);
 
-  function select(i) {
-    const step = steps[i];
-    svg.querySelectorAll('.node').forEach(n => n.setAttribute('aria-pressed', String(n.dataset.i === String(i))));
-    panel.innerHTML = `<strong>${step.label}</strong><p>${step.detail}</p>` +
-      (canAsk ? '<button type="button" id="ask">Ask how to speed this step up</button>' : '');
+  svg.selectAll('path.arrow').data(d3.pairs(steps)).join('path')
+    .attr('class', 'arrow')
+    .attr('d', ([a, b]) => `M${x(a.id) + 68},70 L${x(b.id) - 72},70`);
+
+  const nodes = svg.selectAll('g.node').data(steps).join('g')
+    .attr('class', 'node').attr('tabindex', 0).attr('role', 'button').attr('aria-pressed', 'false')
+    .on('click', (event, step) => select(step))
+    .on('keydown', (event, step) => {
+      if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); select(step); }
+    });
+  nodes.append('rect').attr('x', d => x(d.id) - 68).attr('y', 40).attr('width', 136).attr('height', 60).attr('rx', 8);
+  nodes.append('text').attr('x', d => x(d.id)).attr('y', 75).attr('text-anchor', 'middle').text(d => d.label);
+
+  function select(step) {
+    nodes.attr('aria-pressed', d => String(d === step));
+    panel.html('');
+    panel.append('strong').text(step.label);
+    panel.append('p').text(step.detail);
     if (canAsk) {
-      document.getElementById('ask').addEventListener('click', () =>
-        sendPrompt(`How could we speed up the step "${step.label}" in our order process? It works like this: ${step.detail}`));
+      panel.append('button').attr('type', 'button').text('Ask how to speed this step up')
+        .on('click', () => sendPrompt(`How could we speed up the step "${step.label}" in our order process? It works like this: ${step.detail}`));
     }
   }
-  svg.addEventListener('click', e => { const n = e.target.closest('.node'); if (n) select(Number(n.dataset.i)); });
-  svg.addEventListener('keydown', e => {
-    const n = e.target.closest('.node');
-    if (n && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); select(Number(n.dataset.i)); }
-  });
 </script>
 </body>
 </html>
@@ -319,8 +339,8 @@ The user asks for "the bars in green and a fifth region" on example 1. Do not wr
   "filename": "regional-sales.html",
   "edits": [
     {
-      "oldText": ".bar rect { fill:var(--primary); }",
-      "newText": ".bar rect { fill:#047857; }"
+      "oldText": "backgroundColor: css('--primary')",
+      "newText": "backgroundColor: '#047857'"
     },
     {
       "oldText": "    { name: 'West', sales: 1105, growth: 3.2 }\n  ];",
@@ -330,4 +350,4 @@ The user asks for "the bars in green and a fifth region" on example 1. Do not wr
 }
 ```
 
-Each `oldText` is copied exactly and occurs once; everything else in the file stays as it was. A fifth bar needs more height, so a third edit would change `viewBox="0 0 360 220"` to `viewBox="0 0 360 270"`.
+Each `oldText` is copied exactly and occurs once; everything else in the file stays as it was, the library marker included. Chart.js lays the fifth bar out by itself; with more than about six bars, a third edit would raise the chart's `height:240px`.

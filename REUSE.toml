@@ -56,3 +56,24 @@ path = "server/tests/fixtures/provenance/C.jpg"
 precedence = "override"
 SPDX-FileCopyrightText = "2020 Adobe. All rights reserved. (https://github.com/contentauth/c2pa-rs)"
 SPDX-License-Identifier = "MIT OR Apache-2.0"
+
+# Library kit for HTML artifacts (#3822): browser builds copied unchanged from npm at the
+# versions in shared/artifactLibraries.js, which records their size and SHA-256
+# (scripts/check-artifact-libraries.js compares them with the published packages).
+[[annotations]]
+path = "server/artifactLibraries/chart.umd.min.js"
+precedence = "override"
+SPDX-FileCopyrightText = "2014-2024 Chart.js Contributors (https://www.chartjs.org)"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "server/artifactLibraries/d3.min.js"
+precedence = "override"
+SPDX-FileCopyrightText = "2010-2023 Mike Bostock (https://d3js.org)"
+SPDX-License-Identifier = "ISC"
+
+[[annotations]]
+path = "server/artifactLibraries/alpinejs.cdn.min.js"
+precedence = "override"
+SPDX-FileCopyrightText = "2019-2021 Caleb Porzio and contributors (https://alpinejs.dev)"
+SPDX-License-Identifier = "MIT"

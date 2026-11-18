@@ -385,8 +385,10 @@ describe('cards that share their page with other platform.json writers save with
     expect(body.auth.debug.enabled).toBe(false);
     expect(posts()).toEqual([]);
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    // The message renders after the PATCH resolves, which can take more than
+    // the one flush above on a loaded runner.
     expect(
-      screen.getByText('Authentication debug configuration saved successfully')
+      await screen.findByText('Authentication debug configuration saved successfully')
     ).toBeInTheDocument();
   });
 

@@ -90,6 +90,7 @@
     "test:e2e:crawl": "playwright test --config tests/config/playwright.config.js tests/e2e/route-crawl.spec.js",
     "test:e2e:subpath": "playwright test --config tests/config/playwright.subpath.config.js",
     "test:e2e:admin-safety": "playwright test --config tests/config/playwright.admin-safety.config.js",
+    "check:artifact-libraries": "node scripts/check-artifact-libraries.js",
     "check:response-shapes": "node scripts/check-response-shapes.js",
     "test:api": "jest --config tests/config/jest.config.js tests/integration/api",
     "test:models": "jest --config tests/config/jest.config.js tests/integration/models",
