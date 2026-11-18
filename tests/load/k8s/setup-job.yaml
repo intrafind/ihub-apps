@@ -3,7 +3,6 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: loadtest-setup
-  namespace: ihub-loadtest
 spec:
   backoffLimit: 0
   ttlSecondsAfterFinished: 86400

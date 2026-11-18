@@ -75,7 +75,7 @@ const llm = http.createServer((req, res) => {
     return;
   }
   if (req.method === 'GET' && req.url.startsWith('/metrics')) {
-    // vLLM-style metrics, so stub runs exercise the same observer as gpu-01. No KV-cache
+    // vLLM-style metrics, so stub runs exercise the same observer as a real vLLM. No KV-cache
     // gauge: the stub has none, and an invented one made the report call the "GPU" saturated.
     res.writeHead(200, { 'content-type': 'text/plain; version=0.0.4' });
     res.end(
