@@ -765,7 +765,10 @@ export async function prepareTurnFiles({
     }
 
     // Fallback when storage is unavailable or refused the inline file: keep inline for Turn 1.
-    resolvedPromptFiles.push(file);
+    // Without the token count the request may have brought: only a count made
+    // when the text was stored is trusted (see `setKnownTokenParts`).
+    const { tokens: _clientCount, ...inlineFile } = file;
+    resolvedPromptFiles.push(inlineFile);
     descriptors.push({
       type: String(mimeType),
       name: String(name),

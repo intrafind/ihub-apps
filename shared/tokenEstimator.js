@@ -235,14 +235,20 @@ const knownParts = new WeakMap();
  * Note on `owner` (a prompt message) which pieces of its text were counted
  * when they were stored: an attachment's extracted text, a project document.
  * The note is not part of the message, so it never reaches a provider; a copy
- * of the message does not carry it (see {@link copyKnownTokenParts}).
+ * of the message does not carry it (see {@link copyKnownTokenParts}). Only
+ * counts the server made belong here; a piece whose count is not a finite
+ * number >= 0 is left out (its text is then counted).
  * @param {object} owner
  * @param {Array<{text: string, tokens: number}>} parts
  */
 export function setKnownTokenParts(owner, parts) {
   if (!owner || typeof owner !== 'object' || !Array.isArray(parts)) return;
   const valid = parts.filter(
-    part => typeof part?.text === 'string' && part.text && Number.isFinite(part.tokens)
+    part =>
+      typeof part?.text === 'string' &&
+      part.text &&
+      Number.isFinite(part.tokens) &&
+      part.tokens >= 0
   );
   if (valid.length) knownParts.set(owner, valid);
 }

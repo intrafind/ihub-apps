@@ -268,6 +268,18 @@ describe('stored counts in the prompt', () => {
     assert.ok(ms < 8, `100 pieces took ${ms.toFixed(2)} ms`);
   });
 
+  it('notes only counts that are finite numbers >= 0', () => {
+    const doc = prose(5_000, 12);
+    for (const tokens of [-1, 0.5 - 1, Number.NaN, Infinity, '12', null]) {
+      const message = { role: 'user', content: `${doc} q` };
+      setKnownTokenParts(message, [{ text: doc, tokens }]);
+      assert.equal(estimateMessageTokens(message), estimateTokens(`${doc} q`), String(tokens));
+    }
+    const zero = { role: 'user', content: `${doc} q` };
+    setKnownTokenParts(zero, [{ text: doc, tokens: 0 }]);
+    assert.equal(estimateMessageTokens(zero), estimateTokens(` q`));
+  });
+
   it('remembers a 300 KB text by its hash', () => {
     const text = prose(300_000, 4);
     const first = tokenized(() => estimateTokens(text));
@@ -345,6 +357,22 @@ describe('chat attachments are counted once, when stored', () => {
       estimateMessageTokens(message);
       assert.ok(tokenizerStats.chars - before < 100, `turn ${turn}: the text was not tokenized`);
     }
+  });
+
+  it('drops a count the request brought when the file stays inline', async () => {
+    const { message } = await prepareTurnFiles({
+      chatId: scope.id,
+      ownerId: 'u1',
+      message: {
+        role: 'user',
+        content: 'Summarize',
+        fileData: [{ fileName: 'a.txt', fileType: 'text/plain', content: 'text', tokens: -5_000 }]
+      },
+      store: { isAvailable: () => false }
+    });
+    const [file] = [message.fileData].flat();
+    assert.equal(file.content, 'text');
+    assert.equal('tokens' in file, false);
   });
 
   it('counts a file stored before counts were kept once, then reuses the stored count', async () => {
