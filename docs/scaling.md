@@ -231,8 +231,12 @@ Worker sizing: 2 worker(s) (memory limit), heap per worker 620 MB (memory limit)
   2-core container running `WORKERS=8` will thrash the scheduler.
 - **Memory budget:** each worker holds its own copy of the config cache,
   loaded adapters, and in-flight state: about 450–550 MB RSS once started,
-  more while it extracts large files. The derived sizing plans 768 MB per
-  worker and 160 MB for the primary.
+  more while it extracts large files. Each worker also runs one extraction
+  thread and two project search threads (`projects.search.threads`), each
+  with its own heap of up to `projects.extraction.memoryMb` (see
+  [Projects](projects.md#platform-settings)); the search threads hold the
+  worker's share of the project index cache. The derived sizing plans 768 MB
+  per worker and 160 MB for the primary.
 
 ## Startup behaviour
 

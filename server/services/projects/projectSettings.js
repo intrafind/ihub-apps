@@ -49,6 +49,7 @@ import {
   DEFAULT_EXTRACTION_MEMORY_MB,
   DEFAULT_EXTRACTION_TIMEOUT_MS,
   DEFAULT_INDEX_CACHE_ENTRIES,
+  DEFAULT_SEARCH_THREADS,
   MAX_EXTRACTION_MEMORY_MB,
   MAX_EXTRACTION_TIMEOUT_MS,
   MIN_EXTRACTION_MEMORY_MB,
@@ -57,6 +58,7 @@ import {
   MAX_FILES_CEILING,
   MAX_INDEX_CACHE_ENTRIES,
   MAX_MEMBERS,
+  MAX_SEARCH_THREADS,
   MIN_CACHE_HEAP_SHARE,
   PROJECT_TIERS,
   TIER_POLICIES
@@ -212,7 +214,15 @@ export function projectSettings(platformConfig) {
       maxHeapShare: readHeapShare(block.indexCache?.maxHeapShare)
     },
     textCache: { maxHeapShare: readHeapShare(block.textCache?.maxHeapShare) },
-    extraction: extractionSettings(block.extraction)
+    extraction: extractionSettings(block.extraction),
+    // Threads that build and search project indexes off the event loop
+    // (`knowledge/searchPool.js`); 0 searches on the event loop.
+    search: {
+      threads:
+        Number.isInteger(block.search?.threads) && block.search.threads >= 0
+          ? Math.min(block.search.threads, MAX_SEARCH_THREADS)
+          : DEFAULT_SEARCH_THREADS
+    }
   };
 }
 

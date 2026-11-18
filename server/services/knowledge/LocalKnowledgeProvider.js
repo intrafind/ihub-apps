@@ -8,10 +8,11 @@
  * sections, 6 000-character parts, BM25 with title and path weights, over
  * every ready item of a project as one corpus.
  *
- * The corpus index lives in a per-process LRU keyed by the project and a
- * fingerprint of its items (their text hashes, or for link items the
- * fetched text), so a change to any item rebuilds it and nothing is ever
- * indexed from anything but stored or freshly fetched text. A rebuild costs
+ * The corpus index lives in an LRU keyed by the project and a fingerprint of
+ * its items (their text hashes, or for link items the fetched text), so a
+ * change to any item rebuilds it and nothing is ever indexed from anything but
+ * stored or freshly fetched text. The LRU, the build and the ranking run on the
+ * project's search thread (`searchPool.js`), off the event loop. A rebuild costs
  * about a second per 10 MB of text, whatever the item count: 200 items of
  * 40 000 characters (8 MB) take under a second, 200 items of 1 MB about
  * twenty. There is no persistent index, so the first search after a change
@@ -22,8 +23,6 @@
 import { createHash } from 'node:crypto';
 import {
   RESULT_BUDGET_CHARS,
-  buildCorpusIndex,
-  collectHits,
   getContentStats,
   selectContent
 } from '../../sources/documentRetrieval.js';
@@ -42,6 +41,7 @@ import {
   countIndexCacheMiss,
   setIndexCacheSizeProbe
 } from './indexCacheStats.js';
+import { evictSearchIndexes, searchCacheSize, searchProjectIndex } from './searchPool.js';
 
 /**
  * Corpus indexes kept per process, and the characters they may stand for
@@ -61,55 +61,11 @@ export function indexCacheLimits(platformConfig = configCache.getPlatform?.()) {
   };
 }
 
-const indexCache = new Map();
-
-function cachedChars() {
-  let weight = 0;
-  for (const entry of indexCache.values()) weight += entry?.characters || 0;
-  return weight;
-}
-
-setIndexCacheSizeProbe(() => ({
-  entries: indexCache.size,
-  chars: cachedChars(),
-  ...indexCacheLimits()
-}));
-
-function cacheGet(key) {
-  const entry = indexCache.get(key);
-  if (!entry) return null;
-  indexCache.delete(key);
-  indexCache.set(key, entry);
-  return entry;
-}
-
-function cacheSet(key, value) {
-  indexCache.set(key, value);
-  const { maxEntries, maxChars } = indexCacheLimits();
-  let evicted = 0;
-  while (indexCache.size > maxEntries) {
-    indexCache.delete(indexCache.keys().next().value);
-    evicted += 1;
-  }
-  // A 10 MB text takes about 55 MB of heap as an index: hold the cache to a
-  // weight too, dropping the oldest, never the entry just added.
-  let weight = cachedChars();
-  for (const oldest of [...indexCache.keys()]) {
-    if (weight <= maxChars || indexCache.size <= 1) break;
-    weight -= indexCache.get(oldest)?.characters || 0;
-    indexCache.delete(oldest);
-    evicted += 1;
-  }
-  // Only drops made to fit the limits count; `evictProjectIndex` is an
-  // invalidation after a change, not cache pressure.
-  countIndexCacheEvictions(evicted);
-}
+setIndexCacheSizeProbe(() => ({ ...searchCacheSize(), ...indexCacheLimits() }));
 
 /** Test and cascade hook: forget every cached index of a project (or all). */
 export function evictProjectIndex(projectId) {
-  for (const key of [...indexCache.keys()]) {
-    if (!projectId || key.startsWith(`${projectId}:`)) indexCache.delete(key);
-  }
+  evictSearchIndexes(projectId);
 }
 
 /**
@@ -239,12 +195,11 @@ export class LocalKnowledgeProvider extends KnowledgeProvider {
   }
 
   /**
-   * The index of a project whose usable items are all stored texts with a
-   * recorded hash, taken from the cache without decrypting a single text. Null
-   * when a link item has to be fetched, a hash is missing or the index is not
-   * cached (then the texts are loaded and the index built, as before).
+   * The usable items of a project when they are all stored texts with a
+   * recorded hash: their index key is known without decrypting a single text.
+   * Null when a link item has to be fetched or a hash is missing.
    */
-  _warmIndex(project, ctx, itemIds) {
+  _storedEntries(project, itemIds) {
     const wanted = itemIds ? new Set(itemIds) : null;
     const usable = [];
     const unavailable = [];
@@ -262,26 +217,50 @@ export class LocalKnowledgeProvider extends KnowledgeProvider {
       if (item.storage !== 'text' || !item.text?.sha256) return null;
       usable.push({ item, text: null, truncated: item.text.truncated === true, failed: [] });
     }
-    const index = cacheGet(this._indexKey(project, ctx, usable));
-    if (index) countIndexCacheHit();
-    return index ? { index, texts: usable, unavailable } : null;
+    return { texts: usable, unavailable };
   }
 
-  _index(project, ctx, texts) {
-    const key = this._indexKey(project, ctx, texts);
-    const cached = cacheGet(key);
-    if (cached) {
-      countIndexCacheHit();
-      return cached;
+  /**
+   * Rank the project's corpus on its search thread (`searchPool.js`). The thread
+   * is asked by key first; the texts are loaded (and sent) only when it does not
+   * hold the index, so searching a large, unchanged project neither decrypts it
+   * again nor copies it.
+   *
+   * @returns {Promise<{texts: Array, unavailable: Array, found: Object}>}
+   */
+  async _rank(project, ctx, itemIds, request) {
+    const limits = indexCacheLimits();
+    const stored = this._storedEntries(project, itemIds);
+    let warmKey = null;
+    if (stored) {
+      warmKey = this._indexKey(project, ctx, stored.texts);
+      const found = await searchProjectIndex(project.id, { ...request, key: warmKey, limits });
+      if (!found.miss) {
+        countIndexCacheHit();
+        return { ...stored, found };
+      }
     }
-    countIndexCacheMiss();
-    const started = performance.now();
-    const index = buildCorpusIndex(
-      texts.map(({ item, text }) => ({ id: item.id, name: item.name, text }))
-    );
-    countIndexBuild((performance.now() - started) / 1000);
-    cacheSet(key, index);
-    return index;
+    const { texts, unavailable } = await this.texts(project, ctx, { itemIds });
+    const key = this._indexKey(project, ctx, texts);
+    let found = { miss: true };
+    if (key !== warmKey) found = await searchProjectIndex(project.id, { ...request, key, limits });
+    if (found.miss) {
+      found = await searchProjectIndex(project.id, {
+        ...request,
+        key,
+        limits,
+        docs: texts.map(({ item, text }) => ({ id: item.id, name: item.name, text }))
+      });
+    }
+    if (found.buildSeconds === null) countIndexCacheHit();
+    else {
+      countIndexCacheMiss();
+      countIndexBuild(found.buildSeconds);
+      // Only drops made to fit the limits count; `evictProjectIndex` is an
+      // invalidation after a change, not cache pressure.
+      countIndexCacheEvictions(found.evicted);
+    }
+    return { texts, unavailable, found };
   }
 
   _assertWritable(project) {
@@ -311,33 +290,28 @@ export class LocalKnowledgeProvider extends KnowledgeProvider {
    *   budgetChars?: number}} [options] - `itemIds` limits which items are loaded and
    *   indexed (a different index per subset); `docIds` only filters the ranked hits of
    *   the project's one cached index, so a caller that wants "everything but the
-   *   pinned documents" does not pay for a second index
+   *   pinned documents" does not pay for a second index; `sections` adds each hit's
+   *   excerpt `section` and `sectionTokens` (the scope planner's excerpts)
    */
   async search(
     project,
     ctx,
-    { query, limit = 8, itemIds, docIds, budgetChars = RESULT_BUDGET_CHARS } = {}
+    { query, limit = 8, itemIds, docIds, budgetChars = RESULT_BUDGET_CHARS, sections = false } = {}
   ) {
     projectActivityTracker.recordProjectUse(project);
     const q = typeof query === 'string' ? query.trim() : '';
     if (!q) throw new KnowledgeError('INVALID_REF', 'A query is needed', { projectId: project.id });
-    // A warm index needs no text: searching a large, unchanged project does
-    // not decrypt it again.
-    const warm = this._warmIndex(project, ctx, itemIds);
-    const { texts, unavailable } =
-      warm || (await this.texts(project, { ...ctx, query: q }, { itemIds }));
-    const index = warm ? warm.index : this._index(project, ctx, texts);
+    const { texts, unavailable, found } = await this._rank(project, { ...ctx, query: q }, itemIds, {
+      query: q,
+      limit,
+      budgetChars,
+      docIds: docIds ? [...docIds] : undefined,
+      sections
+    });
     const byId = new Map(texts.map(({ item }) => [item.id, item]));
-    const hits = collectHits(index, q, { limit, budgetChars, docIds }).map(hit => ({
-      docId: hit.docId,
+    const hits = found.hits.map(hit => ({
+      ...hit,
       projectId: project.id,
-      sectionId: hit.sectionId,
-      title: hit.title,
-      path: hit.path,
-      part: `${hit.part}/${hit.partCount}`,
-      text: hit.text,
-      score: Math.round(hit.score * 100) / 100,
-      chars: hit.chars,
       name: byId.get(hit.docId)?.name || ''
     }));
     const partial = texts.filter(entry => entry.truncated).map(entry => entry.item.id);
@@ -353,8 +327,8 @@ export class LocalKnowledgeProvider extends KnowledgeProvider {
         ...(partial.length ? { truncatedDocuments: partial } : {}),
         // Searched without the documents their source could not fetch.
         ...(missing.length ? { incompleteDocuments: missing } : {}),
-        totalSections: index.sections.length,
-        totalTokens: index.tokens,
+        totalSections: found.totalSections,
+        totalTokens: found.totalTokens,
         returnedTokens: Math.round(hits.reduce((sum, hit) => sum + hit.chars, 0) / 4)
       }
     };

@@ -421,7 +421,7 @@ export default function registerDataRoutes(app) {
     let requestId = `${Date.now()}-${crypto.randomUUID().replaceAll('-', '').substring(0, 9)}`;
 
     try {
-      logger.info('Translation request', {
+      logger.debug('Translation request', {
         component: 'DataRoutes',
         requestId,
         language: originalLang
@@ -538,7 +538,7 @@ export default function registerDataRoutes(app) {
         );
       }
 
-      logger.info('Successfully returning translations', {
+      logger.debug('Successfully returning translations', {
         component: 'DataRoutes',
         requestId,
         lang

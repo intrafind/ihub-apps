@@ -37,6 +37,22 @@ const TASKS = {
     }
   },
 
+  async crawlPage({ bytes, contentType, pageUrl }) {
+    const { readCrawledPage } = await import('./crawledPage.js');
+    const started = performance.now();
+    try {
+      const result = readCrawledPage(bytes, contentType, pageUrl);
+      return { ok: true, result, format: 'html', durationMs: performance.now() - started };
+    } catch (error) {
+      return {
+        ok: false,
+        error: describeError(error),
+        format: 'html',
+        durationMs: performance.now() - started
+      };
+    }
+  },
+
   async renderPdfPages({ bytes, maxPages }) {
     const { renderScannedPdfPagesInProcess } = await import('../documents/pdf/scannedPages.js');
     const started = performance.now();

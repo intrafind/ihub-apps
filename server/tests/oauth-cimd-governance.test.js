@@ -343,10 +343,10 @@ describe('bulk revocation', () => {
     expect(result.connectionsRevoked).toBe(2);
     expect(result.refreshTokensRevoked).toBe(2);
     expect(listConsents({ clientId: CODE_URL })).toHaveLength(0);
-    expect(listRefreshTokenUserIds(CODE_URL)).toHaveLength(0);
+    expect(await listRefreshTokenUserIds(CODE_URL)).toHaveLength(0);
     // The other client on the same host keeps its connection.
     expect(listConsents({ clientId: WEB_URL })).toHaveLength(1);
-    expect(listRefreshTokenUserIds(WEB_URL)).toEqual(['alice']);
+    expect(await listRefreshTokenUserIds(WEB_URL)).toEqual(['alice']);
   });
 
   test('also revokes a user whose consent lapsed but whose refresh token is live', async () => {

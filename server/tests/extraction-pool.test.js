@@ -22,11 +22,13 @@ import {
   ExtractionPoolError,
   configureExtractionPool,
   extractionPoolStats,
+  parseCrawledPage,
   renderScannedPdfPages,
   runInThread,
   shutdownExtractionPool
 } from '../services/projects/extractionPool.js';
 import { renderScannedPdfPagesInProcess } from '../services/documents/pdf/scannedPages.js';
+import { readCrawledPage } from '../services/projects/crawledPage.js';
 import { createPdf } from '../services/documents/pdf/PdfService.js';
 import { renderPptx } from '../services/documents/pptx/renderPptx.js';
 import { projectSettings } from '../services/projects/projectSettings.js';
@@ -300,6 +302,56 @@ describe('extraction in worker threads', () => {
     assert.equal(code('shutdown'), 'INTERRUPTED');
     assert.equal(code('memory'), 'EXTRACTION_FAILED');
     assert.equal(code('crashed'), 'EXTRACTION_FAILED');
+  });
+
+  it('parses a crawled page in a thread exactly as inline, and inline with threads: 0', async () => {
+    const html =
+      '<html><head><title>Größe &amp; Maße</title></head><body>' +
+      '<a href="/a?utm_source=x">A</a><a href="b#top">B</a><a href="/c" rel="nofollow">C</a>' +
+      '<script>var x = "<a href=/no>";</script></body></html>';
+    const bytes = Buffer.from(html, 'latin1');
+    const contentType = 'text/html; charset=iso-8859-1';
+    const url = 'https://x.com/docs/';
+    const expected = readCrawledPage(Buffer.from(bytes), contentType, url);
+    assert.equal(expected.title, 'Größe & Maße');
+    assert.deepEqual(expected.links, ['https://x.com/a', 'https://x.com/docs/b']);
+
+    assert.deepEqual(await parseCrawledPage(Buffer.from(bytes), contentType, url), expected);
+    assert.ok(extractionPoolStats().threads >= 1, 'the page was parsed in a thread');
+
+    await shutdownExtractionPool();
+    configureExtractionPool({ ...SETTINGS, threads: 0 });
+    assert.deepEqual(await parseCrawledPage(Buffer.from(bytes), contentType, url), expected);
+    assert.equal(extractionPoolStats().threads, 0);
+  });
+
+  it('parses a crawled page inline instead of waiting behind a file extraction', async () => {
+    configureExtractionPool({ ...SETTINGS, threads: 1 });
+    const html = '<html><head><title>T</title></head><body><a href="/a">A</a></body></html>';
+    const file = extractText({ bytes: bigXlsx(), name: 'slow.xlsx' });
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(extractionPoolStats().busy, 1);
+    const parsed = await parseCrawledPage(Buffer.from(html), 'text/html', 'https://x.com/');
+    assert.equal(parsed.title, 'T');
+    assert.equal(extractionPoolStats().busy, 1, 'the extraction is still running');
+    assert.equal(extractionPoolStats().queued, 0, 'the page did not queue');
+    await file;
+  });
+
+  it('drops a queued job whose caller stopped waiting', async () => {
+    configureExtractionPool({ ...SETTINGS, threads: 1 });
+    const html = Buffer.from('<html><head><title>T</title></head></html>');
+    const controller = new AbortController();
+    const first = parseCrawledPage(Buffer.from(html), 'text/html', 'https://x.com/');
+    const second = parseCrawledPage(Buffer.from(html), 'text/html', 'https://x.com/', {
+      signal: controller.signal
+    });
+    assert.equal(extractionPoolStats().queued, 1, 'the second page waits for the first');
+    controller.abort();
+    await assert.rejects(second, error => error.code === 'aborted');
+    assert.equal(extractionPoolStats().queued, 0, 'the abandoned page left the queue');
+    assert.equal((await first).title, 'T');
+    await shutdownExtractionPool();
   });
 
   it('reads on the event loop with threads: 0', async () => {

@@ -684,7 +684,7 @@ class ChatService {
           : NO_STREAM);
     if (stream !== NO_STREAM && !recordOnly) bindStreamRun(chatId, runId, stream);
 
-    logger.info('Chat turn started', {
+    logger.debug('Chat turn started', {
       component: COMPONENT,
       chatId,
       runId,

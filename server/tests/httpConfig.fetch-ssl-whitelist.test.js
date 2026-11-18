@@ -7,9 +7,10 @@
  * `ssl.domainWhitelist` while `ssl.ignoreInvalidCertificates` is on.
  */
 
-import { afterEach, describe, expect, test } from '@jest/globals';
+import { afterEach, describe, expect, jest, test } from '@jest/globals';
 import configCache from '../configCache.js';
 import { shouldIgnoreSSLForURL } from '../utils/httpConfig.js';
+import logger from '../utils/logger.js';
 
 function setSsl(ssl) {
   configCache.setCacheEntry('config/platform.json', { ssl });
@@ -38,4 +39,36 @@ describe('shouldIgnoreSSLForURL and ssl.domainWhitelist', () => {
     setSsl({ ignoreInvalidCertificates: false, domainWhitelist: ['internal.example'] });
     expect(skipsVerification('https://internal.example/page')).toBe(false);
   });
+});
+
+test('warns about a non-whitelisted host once per process, not on every request', () => {
+  setSsl({ ignoreInvalidCertificates: true, domainWhitelist: ['internal.example'] });
+  const warn = jest.spyOn(logger, 'warn').mockImplementation(() => {});
+  try {
+    for (let i = 0; i < 3; i++) skipsVerification('https://once.example/v1/chat');
+    skipsVerification('https://other.example/v1/chat');
+    const hosts = warn.mock.calls
+      .filter(([message]) => String(message).includes('not in ssl.domainWhitelist'))
+      .map(([, meta]) => meta.hostname);
+    expect(hosts).toEqual(['once.example', 'other.example']);
+  } finally {
+    warn.mockRestore();
+  }
+});
+
+test('warns again about a host after the whitelist changed', () => {
+  const warn = jest.spyOn(logger, 'warn').mockImplementation(() => {});
+  try {
+    setSsl({ ignoreInvalidCertificates: true, domainWhitelist: ['internal.example'] });
+    skipsVerification('https://again.example/v1/chat');
+    skipsVerification('https://again.example/v1/chat');
+    setSsl({ ignoreInvalidCertificates: true, domainWhitelist: ['other-internal.example'] });
+    skipsVerification('https://again.example/v1/chat');
+    const warnings = warn.mock.calls.filter(([message]) =>
+      String(message).includes('not in ssl.domainWhitelist')
+    );
+    expect(warnings).toHaveLength(2);
+  } finally {
+    warn.mockRestore();
+  }
 });

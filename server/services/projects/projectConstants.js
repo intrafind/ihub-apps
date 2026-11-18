@@ -145,6 +145,10 @@ export const MAX_INDEX_CACHE_ENTRIES = 10000;
 export const MIN_CACHE_HEAP_SHARE = 0.01;
 export const MAX_CACHE_HEAP_SHARE = 0.5;
 
+/** `projects.search.threads`: threads per server process that build and search project indexes. */
+export const DEFAULT_SEARCH_THREADS = 2;
+export const MAX_SEARCH_THREADS = 8;
+
 /** `projects.extraction`: the threads that read uploaded files off the event loop (#3649). */
 export const DEFAULT_EXTRACTION_TIMEOUT_MS = 60_000;
 export const MIN_EXTRACTION_TIMEOUT_MS = 1_000;

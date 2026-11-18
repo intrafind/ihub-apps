@@ -106,7 +106,7 @@ class VLLMAdapterClass extends BaseAdapter {
       if (toolChoice) {
         body.tool_choice = toolChoice;
       }
-      logger.info('Converted tools with schema sanitization', {
+      logger.debug('Converted tools with schema sanitization', {
         component: 'VLLMAdapter',
         toolCount: tools.length
       });

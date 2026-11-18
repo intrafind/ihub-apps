@@ -4,6 +4,7 @@
 import { Worker } from 'node:worker_threads';
 import configCache from '../../configCache.js';
 import { renderScannedPdfPagesInProcess } from '../documents/pdf/scannedPages.js';
+import { readCrawledPage } from './crawledPage.js';
 import { projectSettings } from './projectSettings.js';
 
 /**
@@ -32,7 +33,7 @@ const WORKER_URL = new URL('./extractionWorker.js', import.meta.url);
 
 /** Why a job did not get an answer from its thread. */
 export class ExtractionPoolError extends Error {
-  /** @param {'timeout'|'crashed'|'memory'|'shutdown'} code */
+  /** @param {'timeout'|'crashed'|'memory'|'shutdown'|'aborted'} code */
   constructor(code, message, details = {}) {
     super(message);
     this.name = 'ExtractionPoolError';
@@ -113,26 +114,31 @@ function ownedBytes(bytes, transfer) {
 /**
  * Run one job on a thread.
  *
- * @param {'extract'|'renderPdfPages'} task
+ * @param {'extract'|'renderPdfPages'|'crawlPage'} task
  * @param {Object} payload - Plain data for the task, without the file.
  * @param {Object} file
  * @param {Buffer|Uint8Array} file.bytes
  * @param {boolean} [file.transfer=false] - The caller gives the buffer up: it is
  *   moved to the thread, not copied, and is empty afterwards.
  * @param {number} [file.timeoutMs] - Override of the configured time budget.
+ * @param {AbortSignal} [file.signal] - The caller stops waiting: a job still
+ *   queued is dropped, a running one finishes on its thread unanswered.
  * @returns {Promise<{envelope: Object, queueMs: number}>} The thread's answer
  *   (`{ ok, result | error, format, durationMs }`) and the time the job waited.
  * @throws {ExtractionPoolError} The thread timed out, died, ran out of memory
- *   or the pool is shutting down.
+ *   or the pool is shutting down; `aborted` when `signal` fired first.
  */
-export function runInThread(task, payload, { bytes, transfer = false, timeoutMs } = {}) {
+export function runInThread(task, payload, { bytes, transfer = false, timeoutMs, signal } = {}) {
   if (closed) {
     return Promise.reject(
       new ExtractionPoolError('shutdown', 'The server is shutting down; try again in a moment.')
     );
   }
+  if (signal?.aborted) {
+    return Promise.reject(new ExtractionPoolError('aborted', 'The caller stopped waiting.'));
+  }
   return new Promise((resolve, reject) => {
-    queue.push({
+    const job = {
       task,
       payload,
       bytes,
@@ -141,9 +147,38 @@ export function runInThread(task, payload, { bytes, transfer = false, timeoutMs 
       enqueuedAt: performance.now(),
       resolve,
       reject
-    });
+    };
+    if (signal) {
+      const onAbort = () => {
+        const index = queue.indexOf(job);
+        if (index >= 0) queue.splice(index, 1);
+        reject(new ExtractionPoolError('aborted', 'The caller stopped waiting.'));
+      };
+      signal.addEventListener('abort', onAbort, { once: true });
+      job.resolve = value => {
+        signal.removeEventListener('abort', onAbort);
+        resolve(value);
+      };
+      job.reject = error => {
+        signal.removeEventListener('abort', onAbort);
+        reject(error);
+      };
+    }
+    queue.push(job);
     dispatch();
   });
+}
+
+/**
+ * Whether a crawled page would wait behind an upload or ingest extraction
+ * (up to `timeoutMs` each) instead of starting on a thread right away or
+ * behind other crawled pages, which take milliseconds.
+ */
+function crawlPageWouldWaitForFiles() {
+  const busy = [...slots].filter(slot => slot.job);
+  const free = busy.length < slots.size || slots.size < Math.max(1, extractionSettings().threads);
+  if (free && queue.length === 0) return false;
+  return [...queue, ...busy.map(slot => slot.job)].some(job => job.task !== 'crawlPage');
 }
 
 function spawn() {
@@ -269,5 +304,34 @@ export async function renderScannedPdfPages(bytes, maxPages) {
   if (!extractionThreadsEnabled()) return renderScannedPdfPagesInProcess(bytes, maxPages);
   const { envelope } = await runInThread('renderPdfPages', { maxPages }, { bytes });
   if (!envelope.ok) throw new Error(envelope.error?.message || 'The PDF could not be rendered');
+  return envelope.result;
+}
+
+/**
+ * Decode and parse a page the site crawler fetched, in a thread when the pool
+ * is on: JSDOM on a large page held the event loop for hundreds of ms.
+ *
+ * A crawl answers within its deadline, so a page that would wait behind a
+ * file extraction is parsed on the event loop instead (as before the threads),
+ * and a page parsed in a thread is bounded by `timeoutMs` and `signal`.
+ *
+ * @param {Buffer} bytes - The body; moved to the thread, empty afterwards.
+ * @param {string} contentType
+ * @param {string} pageUrl
+ * @param {{signal?: AbortSignal, timeoutMs?: number}} [options] - The crawl's
+ *   stop signal and the time left until its deadline.
+ * @returns {Promise<{html: string, title: string, links: string[]}>}
+ * @throws {ExtractionPoolError} `timeout` or `aborted` when the crawl ran out of time
+ */
+export async function parseCrawledPage(bytes, contentType, pageUrl, { signal, timeoutMs } = {}) {
+  if (!extractionThreadsEnabled() || crawlPageWouldWaitForFiles()) {
+    return readCrawledPage(bytes, contentType, pageUrl);
+  }
+  const { envelope } = await runInThread(
+    'crawlPage',
+    { contentType, pageUrl },
+    { bytes, transfer: true, signal, timeoutMs }
+  );
+  if (!envelope.ok) throw new Error(envelope.error?.message || 'The page could not be read');
   return envelope.result;
 }

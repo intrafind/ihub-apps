@@ -13,6 +13,7 @@ import {
   MAX_CACHE_HEAP_SHARE,
   MAX_FILES_CEILING,
   MAX_INDEX_CACHE_ENTRIES,
+  MAX_SEARCH_THREADS,
   MIN_CACHE_HEAP_SHARE
 } from '../services/projects/projectConstants.js';
 import {
@@ -917,6 +918,12 @@ export const platformConfigSchema = z
               .max(MAX_EXTRACTION_MEMORY_MB)
               .optional()
           })
+          .passthrough()
+          .optional(),
+        // Threads per server process that build and search project indexes
+        // off the event loop. Absent: 2; 0 searches on the event loop.
+        search: z
+          .object({ threads: z.number().int().min(0).max(MAX_SEARCH_THREADS).optional() })
           .passthrough()
           .optional(),
         kinds: z.record(z.string(), z.boolean()).prefault({}),
