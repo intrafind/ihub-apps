@@ -54,9 +54,8 @@ The system supports seven different types of rate limiters, each configurable th
   one address do not share a budget through it. When an address reaches the limit, its further
   `/api/admin` requests get `429` until the window ends.
 - Earlier releases shipped 100 requests per minute per address. Migration `V254` turns that
-  value into 300 per user where it was never changed (see below); migration `V255` raises a
-  `rateLimit.adminApi` still at the old 100 requests per 60000 ms to the shipped value in the one
-  case `V254` leaves it (an admin had set `keyBy` already). A limit or window an admin set stays.
+  value into 300 per user where it was never changed (see below). A limit or window an admin set
+  stays.
 
 ### 3. Auth API Rate Limiter
 - **Limit**: 30 requests per 15 minutes per IP address **and username** in the shipped

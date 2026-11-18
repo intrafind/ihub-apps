@@ -35,7 +35,7 @@ The user answered these on 2026-11-17 (asked with the panel's recommendation fir
 | — | Lockout refusal: absolute, audited override, or client-only? | **Absolute refusal**, no override flag. Existing 403 (last-admin user delete) and 400 (last admin group) codes stay. | PR 2. Local→SSO cut-over: enable SSO, sign in with it as admin, then disable local. Break-glass = edit `platform.json` on disk + restart (documented). |
 | 6 | Config writes | **Optional `If-Match` (412) and a scoped `PATCH /api/admin/configs/platform` now.** | PR 3. `If-Match` stays optional; making it required needs another decision. |
 | 7 | Remove chat questions / rater names from logs (OB-B4, OB-B28) | **Deferred.** | Not in Now. Only the DPO doc is corrected to state what is logged today (OB-B5). |
-| 9 | Admin rate limit | **Migration 100→500 for untouched defaults + per-user keying.** | PR 10, migration `V255` (renumbered from `V254` when main's #3751 took `V254`). Main's #3751 ships `adminApi` at 300 per user (`anonymousLimit` 500); main's value won, so V255 now raises an untouched 100 to that shipped value. |
+| 9 | Admin rate limit | **Migration 100→500 for untouched defaults + per-user keying.** Superseded: main's #3751 ships 300 per user (500 per address unauthenticated) with its own migration `V254`; the user kept 300 and PR 10's own migration was dropped. | PR 10: per-client keying for OAuth clients, refused requests counted per address. |
 | 4 | Machine OAuth clients: `[]` = none? | **UI fix + clean server break**: `[]` means no access for client-credentials clients. | PR 9, `breaking-changes.md`. |
 | 10 | Secrets in backups | **(a) callout only**; export format unchanged. | PR 5. |
 | 12 | Prompt "Linked App" | **Relabel "Opens in app"**, fix docs. | PR 11. |
@@ -63,7 +63,7 @@ One PR per theme; each merges on its own. Waves: 1 = safety (1–3), 2 = guards 
 | 7 AI and workflow contracts | `claude/admin-now-contract-ai-workflows` | AI-B1, AI-B4, AI-B6, AX-B2, AX-B3, AX-B4, AX-B5, AX-B10 (display), AX-B11, AX-B12, AX-B20, AX-B32, AX-B1/AX-B21 (hide + doc), AX-B16 | Round-trip test per editor touched. |
 | 8 Short links, i18n, integrations, logs | `claude/admin-now-contract-cu-in` | CU-B1, CU-B2, CU-B7, CU-B8, CU-B9, CU-B10, IN-B2, IN-B4, IN-B5, OB-B3 | Subpath e2e for short links. |
 | 9 Security hygiene | `claude/admin-now-security-quick-fixes` | ID-B6 (decision 4), PL-B12 (shown, D14a), OB-B13 | Plus `no-store` on secret responses, masked env-override log. |
-| 10 Admin rate limit | `claude/admin-now-rate-limit` | PL-B18 (decision 9) | `V255` (was `V254`); per-user key. |
+| 10 Admin rate limit | `claude/admin-now-rate-limit` | PL-B18 (decision 9) | No migration (main's `V254` covers it); per-client key. |
 | 11 Honest Overview, docs, ratchet | `claude/admin-now-docs-honesty` | SH-B1, SH-B3, OB-B5, AI-B7, AI-B15, SH-B14 (= OB-B12), IN-B23, CU-B12; translation ratchet for AX-B7, SH-B13, AI-B14, CU-B22 | No translation of the 1,270 missing keys in Now; the ratchet stops growth. |
 
 **Cut from Now:** OB-B4 and OB-B28 (decision 7 deferred); AX-B7 full German (M, needs a translator); the agent scheduler fix (AX-B1 "fix next"); the generic used-by service (only group inheritance and the credential dialog in Now).
@@ -85,7 +85,7 @@ One PR per theme; each merges on its own. Waves: 1 = safety (1–3), 2 = guards 
 
 ## 5. Test plan
 
-- **Server (jest, supertest):** invariant matrix (local, OIDC, LDAP, proxy, NTLM, inherited admin group, inactive admin, disabled method, env override, evaluator error → refuse); file unchanged on every refusal; concurrent demotion of the last two admins → one wins; inherited group delete; GET→write-back round trip leaves `platform.json` identical (fails today on `jwkUrl`); If-Match fresh/stale/absent/`*`; PATCH allowlist and secret rules; migration `V254` both cases; rate-limit keying; `[]` = none for machine clients.
+- **Server (jest, supertest):** invariant matrix (local, OIDC, LDAP, proxy, NTLM, inherited admin group, inactive admin, disabled method, env override, evaluator error → refuse); file unchanged on every refusal; concurrent demotion of the last two admins → one wins; inherited group delete; GET→write-back round trip leaves `platform.json` identical (fails today on `jwkUrl`); If-Match fresh/stale/absent/`*`; PATCH allowlist and secret rules; migration `V254` (main's, from #3751) both cases; rate-limit keying; `[]` = none for machine clients.
 - **Client (jest + RTL):** load hook states and stale responses; auth page after a failed load has no Save, no fields, no "All valid"; real-router unsaved-guard hook (push, replace, `go(-1)`, POP, same-path, markSaved-then-navigate); `ConfirmDialog` naming, focus, typed token, unique ids; backup import sends nothing before confirm; round-trip per editor touched.
 - **Ratchets (shrink-only baselines):** load-gate coverage, unsaved-guard coverage, native dialogs (0), admin class hygiene, missing translation keys.
 - **E2E (Playwright):** load gating (`page.route().fulfill(429)`, no write after clicking everything), unsaved guards, confirmations (intercepted writes, no native dialogs), visible controls in light/dark/auto-dark with computed contrast; destructive guards in an isolated config (`playwright.admin-safety.config.js`, own contents dir and ports, `workers: 1`, `retries: 0`); subpath (`/ihub`) for docs deep links and short links.
@@ -116,7 +116,7 @@ One PR per theme; each merges on its own. Waves: 1 = safety (1–3), 2 = guards 
 | i18n gaps in the new safety dialogs | en+de in the same PR; translation ratchet; *Sie*, „…", "Benutzer". |
 | Docs drift (`admin-ui.md` promises more than the code) | Each PR edits the sentence it makes true; ratchet tests name the remaining gaps. |
 | Destructive e2e locks out the shared CI instance | Isolated safety config, own contents and ports, `reuseExistingServer: false`. |
-| Parallel PRs conflict (i18n, `fixes.md`, `Modal`) | Merge order above; rebase after each merge; migration number `V254` reserved for PR 10 (taken by main's #3751 in the end; PR 10 is `V255`). |
+| Parallel PRs conflict (i18n, `fixes.md`, `Modal`) | Merge order above; rebase after each merge; migration number `V254` reserved for PR 10 (taken by main's #3751 in the end; PR 10 ships no migration). |
 | Scope creep turns S rows into M | Fixed ID list per PR; new findings go to #3739, not into the PR. |
 
 ## 8. New defects found by the panel and the implementers
