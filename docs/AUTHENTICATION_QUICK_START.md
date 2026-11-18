@@ -48,10 +48,12 @@ The authentication system processes requests in this order:
 3. jwtAuthMiddleware      → Validate JWT tokens from cookies/headers
 4. localAuthMiddleware    → Placeholder for local auth
 5. ldapAuthMiddleware     → Placeholder for LDAP auth
-6. ntlmAuthMiddleware     → Windows/NTLM authentication
+6. ntlmAuthMiddleware     → Windows/NTLM handshake, only on /api/auth/ntlm/login
 ```
 
 **Key Point**: The chain stops when the first middleware sets `req.user`. If no middleware sets a user, the request continues as anonymous.
+
+The NTLM handshake runs only on the sign-in endpoint `/api/auth/ntlm/login`. After a Windows sign-in, every other request is signed in by the `authToken` session cookie, the same way as after a local, LDAP or OIDC sign-in.
 
 ---
 
@@ -68,7 +70,7 @@ The authentication system processes requests in this order:
     "domain": "EXAMPLE",
     "domainController": "ldaps://dc.example.com:636",
     "ldapGroupLookupProvider": "corporate-ldap",
-    "generateJwtToken": true
+    "sessionTimeoutMinutes": 480
   }
 }
 ```
@@ -204,9 +206,14 @@ Content-Type: application/json
 Universal authentication login (supports both local and LDAP authentication).
 
 ```http
+GET /api/auth/ntlm/login?returnUrl=/
 POST /api/auth/ntlm/login
 ```
-NTLM authentication login (requires Windows authentication).
+Windows sign-in (NTLM). This is the only endpoint that runs the NTLM handshake. The browser uses
+GET: on success it sets the `authToken` session cookie and redirects to `returnUrl?ntlm=success`;
+on failure it redirects to `/?auth=error&message=…`, and the login screen shows the message. API
+clients use POST, which answers with JSON, or with a problem+json error (403 rejected, 429 cooldown
+after a rejection, 503 domain controller did not answer).
 
 ```http
 GET /api/auth/user
@@ -269,12 +276,15 @@ const apiClient = axios.create({
 
 ### Default Behavior
 
-NTLM is **skipped** through the Vite proxy in development mode to avoid multi-step authentication issues.
+NTLM works through the Vite dev server without any flag. The Vite proxy keeps the NTLM handshake on
+one upstream connection per browser connection, so `npm run dev` on `https://localhost:5173` can sign
+in with Windows. The handshake runs only on `/api/auth/ntlm/login`; all other requests use the
+session cookie.
 
 ### Test NTLM Locally
 
 ```bash
-SKIP_NTLM_VITE_PROXY=false npm run dev
+npm run dev
 ```
 
 ### NTLM Debug Logging
@@ -376,7 +386,9 @@ Press F12, go to Application → Cookies, look for `authToken` cookie.
 **Solution**:
 1. Verify `ntlmAuth.enabled: true` in platform.json
 2. Check if browser is on Windows domain (`whoami /all`)
-3. In development, set `SKIP_NTLM_VITE_PROXY=false` to test
+3. Check the message on the login screen (`?auth=error&message=…`): the domain controller rejected
+   the credentials, did not answer within 5 seconds, or the account is in the 60-second cooldown
+   after a rejection
 
 ### "Access Denied" After Login
 
@@ -465,7 +477,6 @@ ALLOWED_ORIGINS="https://domain1.com,https://domain2.com"
 ### Development
 
 ```bash
-SKIP_NTLM_VITE_PROXY=false    # Test NTLM in dev
 NODE_ENV=development
 ```
 
@@ -473,18 +484,19 @@ NODE_ENV=development
 
 ## Testing Authentication Locally
 
-### Test without NTLM (Development Default)
+### Test without NTLM
 
 ```bash
 npm run dev
 # Navigate to http://localhost:5173
-# NTLM is skipped through Vite proxy
+# Leave ntlmAuth.enabled false
 ```
 
 ### Test with NTLM (Requires Windows Domain)
 
 ```bash
-SKIP_NTLM_VITE_PROXY=false npm run dev
+npm run dev
+# Sign in at https://localhost:5173 with "Windows sign-in"
 # Requires:
 # - Windows domain-joined computer
 # - Configured domain controller in platform.json

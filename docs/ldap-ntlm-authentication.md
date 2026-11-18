@@ -279,7 +279,7 @@ bare account name under a setting that promises a qualified one.
 - Windows Integrated Authentication
 - Automatic user and group information extraction
 - Domain-aware authentication
-- JWT token generation for API access
+- Session cookie after sign-in, so only the sign-in itself is a logon at the domain controller
 
 ### Configuration
 
@@ -294,8 +294,7 @@ Add NTLM configuration to your `contents/config/platform.json`:
     "debug": false,
     "ldapGroupLookupProvider": "corporate-ldap",
     "defaultGroups": ["ntlm-users"],
-    "sessionTimeoutMinutes": 480,
-    "generateJwtToken": true
+    "sessionTimeoutMinutes": 480
   }
 }
 ```
@@ -309,11 +308,19 @@ Add NTLM configuration to your `contents/config/platform.json`:
 | `domainController`          | URL of the domain controller that checks the sign-in (e.g., `ldaps://dc.example.com:636`). **Without it, every NTLM sign-in is accepted without checking the password.** | Yes      | -       |
 | `debug`                 | Enable debug logging                                           | No       | `false` |
 | `defaultGroups`         | Default groups for authenticated users                         | No       | `[]`    |
-| `sessionTimeoutMinutes` | JWT token timeout                                              | No       | `480`   |
-| `generateJwtToken`      | Generate JWT for API access                                    | No       | `true`  |
+| `sessionTimeoutMinutes` | Lifetime of the session cookie issued at sign-in               | No       | `480`   |
 | `ldapGroupLookupProvider` | Name of an LDAP provider to use for group lookup (see below) | No       | -       |
 
 NTLM sign-in returns only the user name and domain. Groups come from `ldapGroupLookupProvider`; without it, NTLM users get only `defaultGroups`. The display name is the login name and the email is empty.
+
+### Sign-In Flow
+
+The NTLM handshake runs only on `/api/auth/ntlm/login`. The browser opens `GET /api/auth/ntlm/login?returnUrl=…`, answers the NTLM challenge, and on success receives iHub's `authToken` session cookie and is redirected to `returnUrl?ntlm=success`. Every other request, API calls and pages alike, is signed in by that cookie, the same way as after a local, LDAP or OIDC sign-in. Each NTLM handshake is a logon at the domain controller, so a wrong password counts as one failed logon, not one per request.
+
+- **Automatic sign-in**: when NTLM is the only enabled sign-in method (anonymous access off), or when the browser signed in with Windows before (`ntlmRequested` cookie, cleared on logout), `GET /api/auth/status` returns `autoRedirect` to the NTLM login and the client follows it without a click. This also renews the session when the cookie expires.
+- **Several methods enabled**: the user clicks "Windows sign-in" on the login screen.
+- **Failure**: when the domain controller rejects the logon, does not answer within 5 seconds, or the account is in the cooldown below, the browser is redirected to `/?auth=error&message=…` and the login screen shows the message.
+- **Cooldown**: after a rejection, the account's next NTLM answers are held back for 60 seconds (429) so they do not count as further failed logons. This also works when the browser sends no domain (a machine outside the domain); express-ntlm then uses `domain`.
 
 ### How the Sign-In Is Checked
 
@@ -371,8 +378,7 @@ The LDAP group lookup only happens during login (session start), not on every re
     "domain": "EXAMPLE",
     "domainController": "ldaps://dc.example.com:636",
     "ldapGroupLookupProvider": "corporate-ad",
-    "defaultGroups": ["ntlm-users"],
-    "generateJwtToken": true
+    "defaultGroups": ["ntlm-users"]
   }
 }
 ```
@@ -555,8 +561,16 @@ Content-Type: application/json
 #### Login (requires Windows authentication)
 
 ```http
+GET /api/auth/ntlm/login?returnUrl=/
+```
+
+Browser sign-in. Sets the session cookie and redirects to `returnUrl?ntlm=success`; on failure redirects to `/?auth=error&message=…`.
+
+```http
 POST /api/auth/ntlm/login
 ```
+
+Sign-in for API clients. Sets the session cookie and answers `{ user, expiresIn }`; on failure answers problem+json with 403 (rejected), 429 (cooldown after a rejection) or 503 (domain controller did not answer).
 
 ### Authentication Status
 
@@ -595,6 +609,7 @@ async function login(username, password, provider = null) {
 }
 
 // NTLM login (automatic with Windows authentication)
+// Sets the authToken session cookie; send later requests with credentials: 'include'
 async function loginNtlm() {
   const response = await fetch('/api/auth/ntlm/login', {
     method: 'POST',
@@ -602,11 +617,10 @@ async function loginNtlm() {
   });
 
   const result = await response.json();
-  if (result.success) {
-    localStorage.setItem('auth_token', result.token);
+  if (response.ok) {
     return result.user;
   }
-  throw new Error(result.error);
+  throw new Error(result.detail);
 }
 
 // Use token for API calls
@@ -659,22 +673,26 @@ async function makeAuthenticatedRequest(url) {
    - NTLM works best on Windows servers
    - Check domain configuration
 
-2. **403 Forbidden after the browser sent its credentials**
+2. **403 Forbidden after the browser sent its credentials** (the browser lands on the login screen with an error message)
    - The domain controller refused the relayed sign-in (wrong credentials, or its LDAP hardening — see [How the Sign-In Is Checked](#how-the-sign-in-is-checked))
    - Use `ldaps://` for `domainController`
    - Channel binding (`LdapEnforceChannelBinding` `1` or `2`) or NTLM restricted at the domain controller: see [Kerberos](#kerberos) for alternatives
 
-3. **500 Internal Server Error during sign-in**
+3. **429 or 503 during sign-in**
+   - 429: the domain controller rejected this account within the last 60 seconds; iHub holds back further attempts so they do not count as failed logons. Wait and sign in again
+   - 503: the domain controller did not answer within 5 seconds; check that it is reachable from the server
+
+4. **500 Internal Server Error during sign-in**
    - Usually the second NTLM message arrived on a different connection than the first, or the domain controller could not be reached
    - NTLM authenticates the TCP connection, and iHub remembers the signed-in user per connection. Connect clients directly, or use a proxy that keeps one dedicated backend connection per client connection. Never put NTLM behind a shared or pooled upstream connection: it can hand one user's sign-in to another
    - Otherwise sign in at the proxy and use [proxy authentication](external-authentication.md)
 
-4. **Connection Refused**
+5. **Connection Refused**
    - Ensure no proxy between client and server
    - Verify domain controller is accessible
    - Check Windows authentication settings
 
-5. **Groups Not Retrieved**
+6. **Groups Not Retrieved**
    - Set `ldapGroupLookupProvider` to an LDAP provider; NTLM sign-in itself returns no groups
    - Check that provider's admin bind credentials and group search settings
    - Review user account settings
