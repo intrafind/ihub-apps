@@ -144,9 +144,10 @@ const MAX_OWNER_CHATS = 1000;
 /**
  * Lock lease for one chat write. Short: the critical section is two document
  * writes, and a lease held longer than that means a dead worker whose lock we
- * want taken over quickly.
+ * want taken over quickly. Unfenced: no section reads the fencing token, and
+ * every write is etag-conditional already.
  */
-const LOCK_OPTIONS = { ttlMs: 15000, waitMs: 5000 };
+const LOCK_OPTIONS = { ttlMs: 15000, waitMs: 5000, fence: false };
 
 /** Fields a patch may never change — identity and the owner index depend on them. */
 const PROTECTED_CHAT_FIELDS = new Set([
@@ -1361,6 +1362,12 @@ export class ChatRepository {
     temporary = false
   } = {}) {
     if (!this._usable(chatId, 'ensureChat') || !ownerId) return null;
+    // Nearly every turn finds its chat: answer that from a plain read, without
+    // the lock. The chat may change or go right after either way — the lock
+    // only ever covered the read — and a turn whose chat was deleted meanwhile
+    // gets null from `appendMessage`. Only a create needs the lock.
+    const found = await this._readChat(chatId);
+    if (found) return found;
     return this._withChatLock(chatId, async () => {
       const { chat: existing, etag } = await this._loadChat(chatId);
       if (existing) return existing;
@@ -2023,12 +2030,22 @@ export class ChatRepository {
    *   checked under the chat lock: a question is stored only in the container
    *   its turn was prepared for, never in one a racing turn claimed since.
    *   Omitted, the container is not checked.
-   * @returns {Promise<{message: Object|null, messages: Object[], skipped?: true,
-   *   conflict?: true}|null>}
+   * @param {Object|null} [options.chatPatch=null] - Further chat fields to set
+   *   in the same chat write as the append ({@link ChatRepository#updateChat}
+   *   in one lock instead of two). Applied only when the message is written.
+   * @param {{runId: string, patch: Object}|null} [options.release=null] - Apply
+   *   `patch` in the same chat write as the append, but only while `runId` is
+   *   the chat's active run ({@link ChatRepository#releaseRun} in the same
+   *   lock). Nothing is released when the message is not written; the caller
+   *   releases separately then.
+   * @returns {Promise<{message: Object|null, messages: Object[], chat?: Object,
+   *   released?: boolean, skipped?: true, conflict?: true}|null>}
    *   Null when the chat does not exist or cannot be stored; `skipped` when
    *   `unlessAnswered` found the run answered (`message` is that answer), or
    *   `supersedeMessageId` is gone (`message` is the run's answer, if any);
    *   `conflict` when the chat is not in `expectedProjectId` (nothing written).
+   *   When the message was written, `chat` is the stored chat and `released`
+   *   whether `release.patch` was applied.
    * @throws {StorageError} Code `UNKNOWN_MESSAGE` when `replaceFromMessageId`
    *   is not in the stored history.
    */
@@ -2040,13 +2057,15 @@ export class ChatRepository {
       insertAfterRunId = null,
       unlessAnswered = false,
       supersedeMessageId = null,
-      expectedProjectId
+      expectedProjectId,
+      chatPatch = null,
+      release = null
     } = {}
   ) {
     if (!this._usable(chatId, 'appendMessage')) return null;
     return this._withChatLock(chatId, async () => {
-      const { chat, etag: chatEtag } = await this._loadChat(chatId);
-      if (!chat) {
+      const { chat: storedChat, etag: chatEtag } = await this._loadChat(chatId);
+      if (!storedChat) {
         this.logger.warn('Cannot append to a chat that was never created', {
           component: COMPONENT,
           chatId
@@ -2054,9 +2073,15 @@ export class ChatRepository {
         return null;
       }
 
+      // Checked against the chat as stored, before `chatPatch`.
+      const released = Boolean(release) && storedChat.activeRunId === release.runId;
+      // What the turn's own patch sets is in place before the append's fields
+      // are derived, as it was when the patch was a write of its own.
+      const chat = chatPatch ? applyChatPatch(storedChat, chatPatch) : storedChat;
+
       const { stored, etag: messagesEtag } = await this._loadMessages(chatId);
       let messages = stored.messages;
-      if (chatProjectConflict(chat, { expectedContainer: expectedProjectId })) {
+      if (chatProjectConflict(storedChat, { expectedContainer: expectedProjectId })) {
         return { message: null, messages, conflict: true };
       }
       if (unlessAnswered && message?.runId) {
@@ -2138,7 +2163,10 @@ export class ChatRepository {
         const derived = deriveChatTitle(entry.content);
         if (derived) patch.title = derived;
       }
-      await this._writeChat(applyChatPatch(chat, patch), chatEtag);
+      const savedChat = await this._writeChat(
+        applyChatPatch(chat, released ? { ...patch, ...release.patch } : patch),
+        chatEtag
+      );
 
       // After the transcript is written, never before: an artifact that is
       // gone while the descriptor is still stored renders as a broken picture
@@ -2150,29 +2178,42 @@ export class ChatRepository {
       // scope rather than copied — so an edit that drops a message from the
       // live chat must not take a picture away from a link the owner already
       // sent. Those payloads go when the chat goes, with the share.
-      const orphaned = artifactIdsOfMessages(discarded);
-      if (orphaned.length > 0) {
-        const retained = await this.shareStore().artifactIdsRetainedByShares(chatId);
-        const deletable = orphaned.filter(id => !retained.has(id));
-        if (deletable.length > 0) {
-          await this.artifactStore().deleteMany(this.artifactScope(chatId), deletable);
+      //
+      // Best effort: the write above is committed (with the run's release, if
+      // any). A failure here reported as a failed append made the caller
+      // retry or abandon a turn that was stored; a payload left behind is
+      // swept when the chat is deleted.
+      try {
+        const orphaned = artifactIdsOfMessages(discarded);
+        if (orphaned.length > 0) {
+          const retained = await this.shareStore().artifactIdsRetainedByShares(chatId);
+          const deletable = orphaned.filter(id => !retained.has(id));
+          if (deletable.length > 0) {
+            await this.artifactStore().deleteMany(this.artifactScope(chatId), deletable);
+          }
         }
-      }
 
-      const orphanedFiles = fileIdsOfMessages(discarded);
-      if (orphanedFiles.length > 0) {
-        const stillUsedFiles = new Set(fileIdsOfMessages(messages));
-        const retainedFiles = await this.shareStore().fileIdsRetainedByShares(chatId);
-        const deletableFiles = orphanedFiles.filter(
-          id => !stillUsedFiles.has(id) && !retainedFiles.has(id)
-        );
-        if (deletableFiles.length > 0) {
-          await this.fileStore().deleteMany(this.fileScope(chatId), deletableFiles);
+        const orphanedFiles = fileIdsOfMessages(discarded);
+        if (orphanedFiles.length > 0) {
+          const stillUsedFiles = new Set(fileIdsOfMessages(messages));
+          const retainedFiles = await this.shareStore().fileIdsRetainedByShares(chatId);
+          const deletableFiles = orphanedFiles.filter(
+            id => !stillUsedFiles.has(id) && !retainedFiles.has(id)
+          );
+          if (deletableFiles.length > 0) {
+            await this.fileStore().deleteMany(this.fileScope(chatId), deletableFiles);
+          }
         }
+      } catch (error) {
+        this.logger.warn('Could not remove the payloads of removed messages', {
+          component: COMPONENT,
+          chatId,
+          error
+        });
       }
 
       this._deleteEvidenceOf(chatId, discarded);
-      return { message: entry, messages };
+      return { message: entry, messages, chat: savedChat, released };
     });
   }
 

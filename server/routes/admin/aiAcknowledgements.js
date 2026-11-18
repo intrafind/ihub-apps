@@ -9,9 +9,9 @@
  * - `DELETE /api/admin/eu-ai-act/acknowledgements`: remove everyone's entries
  * - `GET    /api/admin/eu-ai-act/acknowledgements/_export?status=`: CSV
  *
- * The list itself is `GET /api/admin/auth/users`, which already carries
- * `aiAcknowledgements`. Every action is audited. While the EU AI Act master switch is
- * off, the actions that delete or reset acknowledgements answer 403 FEATURE_DISABLED
+ * The list itself is `GET /api/admin/auth/users`, which attaches each user's
+ * `aiAcknowledgements` from their acknowledgement document. Every action is
+ * audited. While the EU AI Act master switch is off, the actions that delete or reset acknowledgements answer 403 FEATURE_DISABLED
  * (the acknowledgements stay as evidence); the read-only export stays available.
  */
 import configCache from '../../configCache.js';
@@ -20,7 +20,8 @@ import { buildServerPath } from '../../utils/basePath.js';
 import { ServiceError } from '../../utils/ServiceError.js';
 import { assertValidId } from '../../utils/pathSecurity.js';
 import { buildCsv } from '../../utils/csv.js';
-import { clearAiAcknowledgements } from '../../utils/userManager.js';
+import { loadUsersFresh } from '../../utils/userManager.js';
+import logger from '../../utils/logger.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import { requireEuAiActEnabled } from '../../services/euAiAct/conformity.js';
 import {
@@ -28,6 +29,7 @@ import {
   buildCsvRows,
   usersFilePath
 } from '../../services/aiAcknowledgement/aiAcknowledgementService.js';
+import { getAiAcknowledgementRepository } from '../../services/aiAcknowledgement/AiAcknowledgementRepository.js';
 import { updatePlatform } from '../../utils/platformConfigStore.js';
 
 const PLATFORM_FILE = 'config/platform.json';
@@ -109,8 +111,9 @@ export default function registerAdminAiAcknowledgementRoutes(app) {
       const { userId } = req.params;
       assertValidId(userId, 'user');
       const platform = configCache.getPlatform() || {};
-      const removed = await clearAiAcknowledgements(userId, usersFilePath(platform));
-      if (!removed.found) throw new ServiceError('NOT_FOUND', 'User not found');
+      const users = (await loadUsersFresh(usersFilePath(platform))).users || {};
+      if (!Object.hasOwn(users, userId)) throw new ServiceError('NOT_FOUND', 'User not found');
+      const removed = await getAiAcknowledgementRepository().clear(userId);
       logAudit({
         req,
         action: 'delete',
@@ -129,8 +132,8 @@ export default function registerAdminAiAcknowledgementRoutes(app) {
    *   delete:
    *     summary: Remove every AI-use acknowledgement
    *     description: >-
-   *       Clears all user records and sets `resetAt`, so guest cookies issued
-   *       before it stop counting too.
+   *       Sets `resetAt`: every acknowledgement and cookie from before it stops
+   *       counting at once. The stored entries are then deleted in the background.
    *     tags: [Admin, AI Acknowledgement]
    *     responses:
    *       204:
@@ -141,11 +144,14 @@ export default function registerAdminAiAcknowledgementRoutes(app) {
     adminAuth,
     requireEuAiActEnabled('acknowledgement'),
     async (req, res) => {
-      const platform = configCache.getPlatform() || {};
-      const removed = await clearAiAcknowledgements(null, usersFilePath(platform));
-      await updateAcknowledgementState(block => {
+      // One platform write revokes everything: `resetAt` rules out every entry and
+      // every cookie from before it, on every worker. No per-user write in the request.
+      const resetAt = await updateAcknowledgementState(block => {
         block.resetAt = new Date().toISOString();
+        return block.resetAt;
       });
+      const repository = getAiAcknowledgementRepository();
+      const removed = await repository.collectBefore(resetAt);
       logAudit({
         req,
         action: 'delete',
@@ -155,6 +161,14 @@ export default function registerAdminAiAcknowledgementRoutes(app) {
         details: { users: removed.users, entries: removed.entries }
       });
       res.status(204).end();
+      // ponytail: one document write per user, after the response; a crash midway leaves
+      // entries that `resetAt` already hides and the user's next confirmation drops.
+      repository.prune(removed.stale).catch(error =>
+        logger.error('Could not delete every AI acknowledgement after "Remove all"', {
+          component: 'AiAcknowledgement',
+          error
+        })
+      );
     }
   );
 
@@ -188,7 +202,7 @@ export default function registerAdminAiAcknowledgementRoutes(app) {
       if (status !== undefined && status !== 'acknowledged' && status !== 'pending') {
         throw new ServiceError('BAD_REQUEST', 'status must be "acknowledged" or "pending"');
       }
-      const rows = buildCsvRows(status);
+      const rows = await buildCsvRows(status);
       logAudit({
         req,
         action: 'export',

@@ -429,7 +429,7 @@ describe('AdminProjectEditPage – items', () => {
       .mockResolvedValue(makeProject([READY]));
     renderAt('/admin/projects/handbook');
 
-    expect(await screen.findByText('Waiting')).toBeInTheDocument();
+    expect(await screen.findByText('Extracting')).toBeInTheDocument();
     expect(await screen.findByText('Ready', {}, { timeout: 4000 })).toBeInTheDocument();
     expect(mockApi.fetchAdminProject).toHaveBeenCalledTimes(2);
   });

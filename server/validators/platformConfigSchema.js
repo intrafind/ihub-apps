@@ -13,6 +13,7 @@ import {
   MAX_CACHE_HEAP_SHARE,
   MAX_FILES_CEILING,
   MAX_INDEX_CACHE_ENTRIES,
+  MAX_SEARCH_THREADS,
   MIN_CACHE_HEAP_SHARE
 } from '../services/projects/projectConstants.js';
 import {
@@ -111,6 +112,15 @@ const ldapAttributeMappingSchema = z.object({
  * `server/utils/ldapProviderConfig.js`). Every derived field below can still be
  * set explicitly, and an explicit value always wins.
  */
+/** Lock a sign-in name after repeated failures (`localAuth.lockout`, `ldapAuth.lockout`). */
+const lockoutSchema = z
+  .object({
+    enabled: z.boolean().prefault(true),
+    maxAttempts: z.number().int().min(1).prefault(5),
+    durationMinutes: z.number().int().min(1).prefault(15)
+  })
+  .prefault({});
+
 const ldapProviderSchema = z.object({
   name: z.string(),
   displayName: z.string().optional().describe('Name shown on the login page. Defaults to `name`.'),
@@ -408,13 +418,7 @@ export const platformConfigSchema = z
         showDemoAccounts: z.boolean().prefault(true),
         // Repeated failed sign-ins lock the account for a while; see
         // utils/loginLockout.js.
-        lockout: z
-          .object({
-            enabled: z.boolean().prefault(true),
-            maxAttempts: z.number().int().min(1).prefault(5),
-            durationMinutes: z.number().int().min(1).prefault(15)
-          })
-          .prefault({})
+        lockout: lockoutSchema
       })
       .prefault({}),
     oidcAuth: z
@@ -428,7 +432,9 @@ export const platformConfigSchema = z
       .object({
         enabled: z.boolean().prefault(false),
         allowSelfSignup: z.boolean().prefault(true),
-        providers: z.array(ldapProviderSchema).prefault([])
+        providers: z.array(ldapProviderSchema).prefault([]),
+        // Failed binds per username, from any address; see utils/loginLockout.js.
+        lockout: lockoutSchema
       })
       .prefault({}),
     ntlmAuth: z
@@ -917,6 +923,12 @@ export const platformConfigSchema = z
               .max(MAX_EXTRACTION_MEMORY_MB)
               .optional()
           })
+          .passthrough()
+          .optional(),
+        // Threads per server process that build and search project indexes
+        // off the event loop. Absent: 2; 0 searches on the event loop.
+        search: z
+          .object({ threads: z.number().int().min(0).max(MAX_SEARCH_THREADS).optional() })
           .passthrough()
           .optional(),
         kinds: z.record(z.string(), z.boolean()).prefault({}),

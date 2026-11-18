@@ -15,8 +15,10 @@
  * @param {Function} onEvent - Callback: (eventName: string, data: object|{raw: string}) => void.
  *   Frames without an `event:` field are dispatched with the spec default name `message`.
  * @param {AbortSignal} [signal] - Optional AbortSignal to cancel parsing
+ * @param {Function} [onChunk] - Called after every chunk read (comments included), e.g. to
+ *   tell a live connection from a silent one
  */
-export async function parseSseStream(body, onEvent, signal) {
+export async function parseSseStream(body, onEvent, signal, onChunk) {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
@@ -88,6 +90,7 @@ export async function parseSseStream(body, onEvent, signal) {
       let done, value;
       try {
         ({ done, value } = await reader.read());
+        if (!done) onChunk?.();
       } catch (err) {
         if (err.name === 'AbortError') break;
 

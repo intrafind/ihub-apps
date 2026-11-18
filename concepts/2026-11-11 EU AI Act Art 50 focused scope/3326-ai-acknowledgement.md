@@ -221,3 +221,32 @@ E2E (`tests/e2e/ai-acknowledgement.spec.js`, Playwright; admin `admin`/`password
 8. E2E, e2e-contents switch, docs, release note, lint/format, SPDX (1 d)
 
 Total roughly 7 person-days (size L), plus design review. Dependencies: needs #3325 merged first only for the shared docs page and the migration number; #3329 reuses `summary()`, the export and the two actions, so keep them in the service, not in route handlers. Decisions needed from PO before coding: A8 (default on for upgrades), A4 (guest lifetime), A2 (workflows/agents in scope), and the default policy wording.
+
+## Addendum 2026-11-17: acknowledgements move to per-user documents
+
+Supersedes 2.1 (data model), the `userManager` helpers in 2.2, and the users.json re-read in 2.3.
+
+- **Why.** Load test, 6 workers, 1,250-1,750 users: during the sign-in wave `POST /me` answered 503
+  ("Timed out after 5000ms waiting for lock users.lock") 134 times over six runs. Each confirmation
+  rewrote the whole users.json under one lock and made every worker reload it. Stale whole-file saves
+  (`saveUsers` from a cached snapshot) could also drop entries written elsewhere.
+- **Where now.** `server/services/aiAcknowledgement/AiAcknowledgementRepository.js`, runtime namespace
+  `ai-acknowledgements`, key `ack_<sha256(userId)[0:24]>`, body
+  `{ version: 1, userId, aiAcknowledgements: [...], aiAcknowledgementsClearedAt? }` (same field names as
+  the old record, so `isAcknowledged`/`statusOfUser` take a document as they took a record).
+- **Writes.** `POST /me` = one compare-and-set `put` of the user's document (no lock, no users.json, no
+  reload). Per-user removal = the same, with `aiAcknowledgementsClearedAt = now`.
+- **Reads.** The 428 guard and `GET /me` read the user's document (one small `get`); a valid
+  `ihubAiAck` cookie issued after `aiAcknowledgementsClearedAt` also counts, and is the only proof while
+  the store cannot be read. Guests: cookie only, unchanged.
+- **Remove all.** Only sets `aiAcknowledgement.resetAt` in platform.json (one write). `currentEntries()`
+  hides older entries everywhere at once; the route then deletes them in the background
+  (`collectBefore` + `prune`), and a user's next confirmation drops them too.
+- **Admin.** `GET /api/admin/auth/users`, `summary()` and the CSV take users from users.json and their state
+  from one listing of the namespace (`listAll`), never one read per user.
+- **Import.** Migration V255 copies `aiAcknowledgements`/`aiAcknowledgementsClearedAt` of every record into
+  the documents (merge: existing entry per version wins, later cleared stamp wins), then strips them from
+  users.json. Migrations run once per cluster under the migration lock, before workers fork; a run that
+  stops halfway repeats in full and adds nothing twice.
+- **Known limits.** A pod still on the old release during a rolling upgrade writes confirmations into
+  users.json after V255 ran; those are not imported (the user is asked again).

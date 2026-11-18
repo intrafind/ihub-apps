@@ -2372,8 +2372,8 @@
           "ip": "Client address"
         },
         "anonymousLimit": "Requests per address (not signed in)",
-        "perIpLimit": "Requests per address (all usernames)",
-        "perAddress": "The web app, admin and inference limits count per signed-in user, and requests without a sign-in per client address. Sign-in counts per client address and username, with a higher ceiling per address. Each server worker counts on its own, so with several workers a user can send up to that many times the limit. Behind a reverse proxy, set the number of proxy hops (trustProxy in platform.json); otherwise all anonymous requests and sign-ins share the proxy's address.",
+        "perIpLimit": "Failed sign-ins per address (all usernames)",
+        "perAddress": "The web app, admin and inference limits count per signed-in user, and requests without a sign-in per client address. Sign-in counts per client address and username, with a ceiling on failed sign-ins per address. Each server worker counts on its own, so with several workers a user can send up to that many times the limit. Behind a reverse proxy, set the number of proxy hops (trustProxy in platform.json); otherwise all anonymous requests and sign-ins share the proxy's address.",
         "save": "Save rate limits",
         "saving": "Saving...",
         "saved": "Rate limits saved. Restart the server to apply them.",
@@ -7291,6 +7291,7 @@
     "missingRequiredFields": "Missing required fields:",
     "modelTakesNoImage": "The selected model cannot process images. Select a model with vision, or remove the image attachment.",
     "streamingError": "An error occurred during streaming",
+    "connectionLost": "The connection was lost before the answer was complete.",
     "runInterrupted": "This answer was interrupted: the server stopped while it was being produced.",
     "failedToGenerateResponse": "Failed to generate response. Please try again or select a different model.",
     "sessionExpired": "Your session has expired. Please log in again to continue.",

@@ -538,7 +538,9 @@ function redactSensitiveData(data) {
   return redacted;
 }
 
-// Export logger methods for easy use
+// Export logger methods for easy use. Levels below the active one return before
+// processLogArgs: winston would drop them anyway, but only after the request
+// context merge and redaction had already been paid for.
 export default {
   error: (...args) => {
     const logData = processLogArgs(args);
@@ -553,18 +555,22 @@ export default {
     logger.info(logData);
   },
   http: (...args) => {
+    if (!logger.isLevelEnabled('http')) return;
     const logData = processLogArgs(args);
     logger.http(logData);
   },
   verbose: (...args) => {
+    if (!logger.isLevelEnabled('verbose')) return;
     const logData = processLogArgs(args);
     logger.verbose(logData);
   },
   debug: (...args) => {
+    if (!logger.isLevelEnabled('debug')) return;
     const logData = processLogArgs(args);
     logger.debug(logData);
   },
   silly: (...args) => {
+    if (!logger.isLevelEnabled('silly')) return;
     const logData = processLogArgs(args);
     logger.silly(logData);
   },
@@ -575,6 +581,7 @@ export default {
     logger.info(logData);
   },
   trace: (...args) => {
+    if (!logger.isLevelEnabled('debug')) return;
     const logData = processLogArgs(args);
     logger.debug(logData);
   },

@@ -611,7 +611,11 @@ async function recoverWorkflowsAndStartScheduler() {
 export async function startWorker({ stickyRouting }) {
   // The single process logs the sizing decision itself; in a cluster the
   // primary does, once.
-  if (!cluster.isWorker) logger.info(describeWorkerSizing(config.WORKER_SIZING));
+  if (!cluster.isWorker) {
+    logger[config.WORKER_SIZING.fits === false ? 'warn' : 'info'](
+      describeWorkerSizing(config.WORKER_SIZING)
+    );
+  }
   // Join the cross-worker bus before anything can register per-chat state, so
   // no SSE stream is ever invisible to the rest of the cluster. No-op when this
   // process is not a cluster worker.

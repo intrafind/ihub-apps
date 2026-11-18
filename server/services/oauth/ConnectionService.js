@@ -243,7 +243,7 @@ export async function revokeConnectionsForClient(clientId) {
   if (!clientId) return { connectionsRevoked: 0, refreshTokensRevoked: 0 };
 
   const userIds = new Set(listConsents({ clientId }).map(entry => entry.userId));
-  for (const userId of listRefreshTokenUserIds(clientId)) userIds.add(userId);
+  for (const userId of await listRefreshTokenUserIds(clientId)) userIds.add(userId);
 
   let connectionsRevoked = 0;
   let refreshTokensRevoked = 0;

@@ -21,6 +21,7 @@ import { fetchWebPage } from '../pageReader/pageReader.js';
 import { classifyBlockedResponse } from '../pageReader/botProtection.js';
 import { ProjectError } from './projectErrors.js';
 import { ACCEPTED_TYPES, HTML_MIME, acceptedTypeOf } from './extractText.js';
+import { decodeHtml } from './crawledPage.js';
 
 /** The throttle queue of project downloads: never the chat's `read_url` slots. */
 export const DOWNLOAD_THROTTLE_ID = 'project_download';
@@ -139,42 +140,6 @@ function dispositionParams(header) {
     if (key && value && !params.has(key)) params.set(key, value);
   }
   return params;
-}
-
-/** The charset a response declares in its content type, or in the page's first bytes. */
-function charsetOf(contentType, bytes) {
-  const declared = /charset=["']?([\w.:-]+)/i.exec(String(contentType || '').replace(/\s/g, ''));
-  if (declared) return declared[1];
-  const head = bytes.subarray(0, 1024).toString('latin1');
-  return /<meta[^>]{0,200}?charset=["']?([\w.:-]+)/i.exec(head)?.[1] || '';
-}
-
-/**
- * The text of an HTML page in the charset it declares; without one, UTF-8, or
- * Windows-1252 for bytes that are not UTF-8 (older pages). A character the
- * byte limit cut in half is dropped, not turned into the whole page's
- * fallback.
- *
- * @param {Buffer} bytes
- * @param {string} [contentType]
- * @returns {string}
- */
-export function decodeHtml(bytes, contentType) {
-  const label = charsetOf(contentType, bytes)
-    .toLowerCase()
-    .replace(/^utf8$/, 'utf-8');
-  if (label) {
-    try {
-      return new TextDecoder(label).decode(bytes, { stream: true });
-    } catch {
-      // A label TextDecoder does not know: guess below.
-    }
-  }
-  try {
-    return new TextDecoder('utf-8', { fatal: true }).decode(bytes, { stream: true });
-  } catch {
-    return new TextDecoder('windows-1252').decode(bytes);
-  }
 }
 
 /** Whether a content type names a web page. */

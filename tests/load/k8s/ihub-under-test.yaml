@@ -1,0 +1,135 @@
+# Optional: an iHub UNDER TEST in the load-test namespace: one pod with a fixed CPU/RAM
+# budget, its own contents volume, a Service for runners in the cluster and an Ingress for
+# a runner outside it. Skip this file to test an existing deployment instead (then merge
+# ihub-env.example.yaml into its env). Sizing runs vary CPU, memory and WORKERS below, or
+# per run with k8s/run.sh (IHUB_CPU, IHUB_MEMORY, IHUB_WORKERS).
+#
+#   kubectl apply -k tests/load/k8s                         # namespace, stubs, config
+#   kubectl -n ihub-loadtest apply -f tests/load/k8s/ihub-under-test.yaml
+#   kubectl -n ihub-loadtest rollout status deploy/ihub
+#
+# Fresh contents/ between runs: delete the Deployment and the PVC, apply again, run setup;
+# or restore a prepared snapshot (seed.yaml, k8s/run.sh SEED_SNAPSHOT=…).
+# Storage: `local-path` = node-local disk (typical single server). For the network-storage
+# comparison, use a replicated class (e.g. `longhorn`: slower fsync).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ihub-contents
+  namespace: ihub-loadtest
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: local-path
+  resources:
+    # Example policy (k3s01): at most 10Gi per claim. One 1,500-user run writes ~2.8 GB.
+    requests: { storage: 10Gi }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ihub
+  namespace: ihub-loadtest
+spec:
+  replicas: 1
+  strategy: { type: Recreate } # one writer on a ReadWriteOnce volume
+  selector:
+    matchLabels: { app: ihub }
+  template:
+    metadata:
+      labels: { app: ihub }
+    spec:
+      # Example (k3s01): pin to an otherwise idle node so neighbours do not distort the
+      # numbers. Optional; a local-path volume pins the pod after the first start anyway.
+      # nodeSelector:
+      #   kubernetes.io/hostname: k3s01-agent-01
+      automountServiceAccountToken: false
+      containers:
+        - name: ihub
+          # The build under test. Use a fixed tag so reruns compare the same code; the
+          # cluster may need an amd64 build (docker buildx build --platform linux/amd64 …).
+          image: ghcr.io/intrafind/ihub-apps:latest
+          ports:
+            - { name: http, containerPort: 3000 }
+            - { name: metrics, containerPort: 9464 }
+          env:
+            # Keep in step with the CPU limit: cores - 1 (the primary relays SSE between workers).
+            - { name: WORKERS, value: '6' }
+            - { name: NODE_ENV, value: production }
+            # Empty by default. CPU profiles: --cpu-prof --cpu-prof-dir=/app/contents/prof --cpu-prof-interval=2000
+            - { name: NODE_OPTIONS, value: '' }
+            # All runners come from a few pod IPs: lift the per-IP limits.
+            - { name: IHUB_PLATFORM__RATE_LIMIT__AUTH_API__LIMIT, value: '100000' }
+            - { name: IHUB_PLATFORM__RATE_LIMIT__PUBLIC_API__LIMIT, value: '1000000' }
+            - { name: IHUB_PLATFORM__RATE_LIMIT__DEFAULT__LIMIT, value: '1000000' }
+            - { name: IHUB_PLATFORM__RATE_LIMIT__ADMIN_API__LIMIT, value: '100000' }
+            - { name: IHUB_PLATFORM__RATE_LIMIT__INFERENCE_API__LIMIT, value: '1000000' }
+            # The AI-use notice stays enforced, as shipped; run.mjs confirms it for its users.
+            # Crawl the stub site (a private address).
+            - name: IHUB_PLATFORM__SSRF__ALLOWED_HOSTS
+              value: '["loadtest-stubs", "loadtest-stubs.ihub-loadtest.svc"]'
+            - { name: IHUB_PLATFORM__PROJECTS__LIMITS__MAX_PROJECTS_PER_USER, value: '50' }
+            - { name: IHUB_PLATFORM__TELEMETRY__ENABLED, value: 'true' }
+            - { name: IHUB_PLATFORM__TELEMETRY__PROVIDER, value: 'prometheus' }
+          # requests = limits: a guaranteed budget, no bursting into idle node CPU.
+          # One Kubernetes CPU is one hyperthread, not a physical core. There is no swap:
+          # the memory limit is a hard ceiling (OOM kill), unlike Docker Desktop.
+          resources:
+            requests: { cpu: '7', memory: 8Gi }
+            limits: { cpu: '7', memory: 8Gi }
+          volumeMounts:
+            - { name: contents, mountPath: /app/contents }
+          readinessProbe:
+            httpGet: { path: /api/health, port: http }
+            periodSeconds: 5
+      volumes:
+        - name: contents
+          persistentVolumeClaim: { claimName: ihub-contents }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ihub
+  namespace: ihub-loadtest
+spec:
+  selector: { app: ihub }
+  ports:
+    - { name: http, port: 3000, targetPort: http }
+    - { name: metrics, port: 9464, targetPort: metrics }
+---
+# Only for a runner OUTSIDE the cluster (a laptop over VPN collapses beyond a few hundred
+# connections; prefer the in-cluster Job). Hostnames, ingress class and the cert-manager /
+# external-dns annotations are examples (k3s01): replace them with your cluster's.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ihub-loadtest
+  namespace: ihub-loadtest
+  annotations:
+    # Examples, cluster-specific:
+    # cert-manager.io/cluster-issuer: letsencrypt-route53
+    # external-dns.alpha.kubernetes.io/hostname: ihub-loadtest.example.com,ihub-loadtest-stubs.example.com
+    # SSE needs unbuffered, long-lived responses (ingress-nginx):
+    nginx.ingress.kubernetes.io/proxy-buffering: 'off'
+    nginx.ingress.kubernetes.io/proxy-request-buffering: 'off'
+    nginx.ingress.kubernetes.io/proxy-read-timeout: '3600'
+    nginx.ingress.kubernetes.io/proxy-send-timeout: '3600'
+    nginx.ingress.kubernetes.io/proxy-body-size: 1G
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: [ihub-loadtest.example.com, ihub-loadtest-stubs.example.com]
+      secretName: ihub-loadtest-tls
+  rules:
+    - host: ihub-loadtest.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend: { service: { name: ihub, port: { name: http } } }
+    # The stub statistics (LT_STUB_STATS_URL) for an outside runner.
+    - host: ihub-loadtest-stubs.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend: { service: { name: loadtest-stubs, port: { name: llm } } }

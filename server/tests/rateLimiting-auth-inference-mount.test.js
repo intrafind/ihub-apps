@@ -45,11 +45,11 @@ describe('Auth and inference rate limiters (#1684)', () => {
     const app = await createTestApp({ authApi: { limit: 3, windowMs: 60_000 } });
 
     for (let i = 0; i < 3; i++) {
-      const response = await request(app).post('/api/auth/local/login').send({});
+      const response = await request(app).post('/api/auth/local/login').send({ username: 'alice' });
       expect(response.status).toBe(200);
     }
 
-    const blocked = await request(app).post('/api/auth/local/login').send({});
+    const blocked = await request(app).post('/api/auth/local/login').send({ username: 'alice' });
     expect(blocked.status).toBe(429);
   });
 

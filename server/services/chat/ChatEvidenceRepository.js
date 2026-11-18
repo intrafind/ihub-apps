@@ -53,11 +53,12 @@ export const EVIDENCE_VERSION = 2;
 /**
  * Lease of the evidence lock. Generous: the holder writes a record's blobs,
  * off the answer path, and a waiter is a background write or a delete.
+ * Unfenced: no section reads the fencing token.
  */
-const LOCK_OPTIONS = { ttlMs: 60_000, waitMs: 30_000 };
+const LOCK_OPTIONS = { ttlMs: 60_000, waitMs: 30_000, fence: false };
 
 /** The same lease for a delete, which must not keep a request waiting long. */
-const DELETE_LOCK_OPTIONS = { ttlMs: 60_000, waitMs: 5_000 };
+const DELETE_LOCK_OPTIONS = { ttlMs: 60_000, waitMs: 5_000, fence: false };
 
 /** A content hash as the endpoints accept it. */
 export const SHA256_PATTERN = /^[a-f0-9]{64}$/;

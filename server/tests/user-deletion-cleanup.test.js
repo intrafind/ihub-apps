@@ -344,6 +344,7 @@ describe('the cleanup', () => {
       'chats',
       'runEvidence',
       'userPrompts',
+      'aiAcknowledgements',
       'integrationPreferences',
       'userProjects',
       'userSkills',
@@ -370,6 +371,7 @@ describe('the cleanup', () => {
       'chats',
       'runEvidence',
       'userPrompts',
+      'aiAcknowledgements',
       'userSkills',
       'integrationRequests',
       'shortLinks'

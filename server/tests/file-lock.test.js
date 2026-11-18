@@ -16,7 +16,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { after, before, describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { touchLease, withFileLock } from '../utils/fileLock.js';
+import { acquireLease, releaseLease, touchLease, withFileLock } from '../utils/fileLock.js';
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const STEAL_WORKER = path.join(
@@ -26,6 +26,10 @@ const STEAL_WORKER = path.join(
 const WORKER = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
   'helpers/file-lock-worker.js'
+);
+const HOT_WORKER = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  'helpers/file-lock-hot-worker.js'
 );
 
 let dir;
@@ -90,10 +94,23 @@ describe('withFileLock', () => {
         await sleep(3);
         inside--;
       };
+      // Through the lease directly: `withFileLock` callers in one process
+      // would line up in memory and never race on the file.
       await Promise.all(
-        Array.from({ length: 8 }, () =>
-          withFileLock(lockPath, section, { staleMs: 1000, pollMs: 0 })
-        )
+        Array.from({ length: 8 }, async (_, n) => {
+          const owner = `waiter-${n}`;
+          await acquireLease(lockPath, owner, {
+            ttlMs: 1000,
+            waitMs: 5000,
+            pollMs: 0,
+            name: owner
+          });
+          try {
+            await section();
+          } finally {
+            await releaseLease(lockPath, owner, owner);
+          }
+        })
       );
       assert.equal(maxInside, 1, `trial ${trial}: ${maxInside} holders inside at once`);
     }
@@ -167,14 +184,19 @@ describe('withFileLock', () => {
       { staleMs: 100, renewMs: 0 }
     );
     await sleep(20);
-    const thief = withFileLock(
-      lockPath,
-      async () => {
-        thiefHasLock();
-        await thiefGate;
-      },
-      { staleMs: 100, timeoutMs: 2000, pollMs: 10 }
-    );
+    // The thief takes the lease the way another process would: callers of
+    // `withFileLock` in this process would queue behind the holder in memory.
+    const thief = (async () => {
+      await acquireLease(lockPath, 'thief', {
+        ttlMs: 100,
+        waitMs: 2000,
+        pollMs: 10,
+        name: 'thief'
+      });
+      thiefHasLock();
+      await thiefGate;
+      await releaseLease(lockPath, 'thief', 'thief');
+    })();
     await thiefReady; // the thief took the expired lock over
     await first; // the original holder finishes and releases
     assert.ok(
@@ -199,13 +221,12 @@ describe('withFileLock', () => {
       { staleMs: 150 }
     );
     await sleep(30);
+    // Contend on the file as another process would (see the test above).
     await assert.rejects(
-      withFileLock(
-        lockPath,
-        async () => {
+      acquireLease(lockPath, 'waiter', { ttlMs: 150, waitMs: 450, pollMs: 10, name: 'w' }).then(
+        () => {
           entered = true;
-        },
-        { staleMs: 150, timeoutMs: 450, pollMs: 10 }
+        }
       ),
       err => err.code === 'LOCK_TIMEOUT'
     );
@@ -271,5 +292,198 @@ describe('withFileLock', () => {
     // A readable lease of another owner is still reported as lost.
     await fs.writeFile(lockPath, JSON.stringify({ owner: 'someone-else' }));
     assert.equal(await touchLease(lockPath, 'me', 1000, 'test', undefined), false);
+  });
+});
+
+describe('withFileLock: callers in one process', () => {
+  /** Count exclusive creates of `lockPath` that succeeded while `run` runs. */
+  async function countLeaseCreates(lockPath, run) {
+    const realOpen = fs.open;
+    let creates = 0;
+    mock.method(fs, 'open', async (file, flags, ...rest) => {
+      const handle = await realOpen(file, flags, ...rest);
+      if (file === lockPath && flags === 'wx') creates++;
+      return handle;
+    });
+    try {
+      await run();
+    } finally {
+      mock.restoreAll();
+    }
+    return creates;
+  }
+
+  it('concurrent callers on one path line up in memory and create the lease file once', async () => {
+    const lockPath = lockPathFor();
+    let inside = 0;
+    let maxInside = 0;
+    const order = [];
+    const creates = await countLeaseCreates(lockPath, () =>
+      Promise.all(
+        [1, 2, 3].map(n =>
+          withFileLock(lockPath, async () => {
+            inside++;
+            maxInside = Math.max(maxInside, inside);
+            await sleep(5);
+            order.push(n);
+            inside--;
+          })
+        )
+      )
+    );
+    assert.equal(creates, 1, 'the lease was handed on, not released and re-created');
+    assert.equal(maxInside, 1);
+    assert.deepEqual(order, [1, 2, 3], 'callers run in arrival order');
+    assert.ok(!fsSync.existsSync(lockPath), 'the last caller releases the lease');
+  });
+
+  it('a caller that gives up in the local line does not break it', async () => {
+    const lockPath = lockPathFor();
+    let releaseHolder;
+    const holder = withFileLock(lockPath, () => new Promise(r => (releaseHolder = r)));
+    await sleep(10);
+    const quitter = withFileLock(lockPath, async () => 'never', { timeoutMs: 20 });
+    const patient = withFileLock(lockPath, async () => 'ran');
+    await assert.rejects(quitter, err => err.code === 'LOCK_TIMEOUT');
+    releaseHolder();
+    await holder;
+    assert.equal(await patient, 'ran');
+    assert.ok(!fsSync.existsSync(lockPath));
+  });
+
+  it('without renewal the lease is not handed on, so it cannot age out under a successor', async () => {
+    const lockPath = lockPathFor();
+    const creates = await countLeaseCreates(lockPath, () =>
+      Promise.all([0, 1].map(() => withFileLock(lockPath, () => sleep(5), { renewMs: 0 })))
+    );
+    assert.equal(creates, 2);
+  });
+});
+
+describe('withFileLock: one busy lock over several processes', () => {
+  it('a process whose own callers keep the lock busy does not starve the others', async () => {
+    const lockPath = lockPathFor();
+    const results = await Promise.all(
+      [0, 1, 2].map(
+        () =>
+          new Promise((resolve, reject) => {
+            const child = fork(HOT_WORKER, [lockPath, '6', '3000']);
+            let stats = null;
+            child.on('message', m => (stats = m));
+            child.on('exit', code =>
+              code === 0 ? resolve(stats) : reject(new Error(`worker exited ${code}`))
+            );
+          })
+      )
+    );
+    const detail = JSON.stringify(results);
+    assert.deepEqual(
+      results.map(r => r.timeouts),
+      [0, 0, 0],
+      `a process timed out: ${detail}`
+    );
+    const total = results.reduce((sum, r) => sum + r.done, 0);
+    for (const r of results) {
+      assert.ok(r.done >= total / 8, `a process was starved: ${detail}`);
+    }
+  });
+});
+
+describe('withFileLock: release', () => {
+  /** Record unlinks and claim-file opens while `fn` runs. */
+  async function recording(fn) {
+    const seen = { unlinks: [], claims: 0 };
+    const realOpen = fs.open;
+    const realUnlink = fs.unlink;
+    mock.method(fs, 'open', (file, ...rest) => {
+      if (String(file).includes('.claim-')) seen.claims += 1;
+      return realOpen(file, ...rest);
+    });
+    mock.method(fs, 'unlink', file => {
+      seen.unlinks.push(String(file));
+      return realUnlink(file);
+    });
+    try {
+      await fn();
+    } finally {
+      mock.restoreAll();
+    }
+    return seen;
+  }
+
+  it('releases a lease written moments ago with one unlink and no claim', async () => {
+    const lockPath = lockPathFor();
+    const seen = await recording(() => withFileLock(lockPath, () => {}, { staleMs: 15_000 }));
+    assert.deepEqual(seen.unlinks, [lockPath]);
+    assert.equal(seen.claims, 0);
+    assert.equal(fsSync.existsSync(lockPath), false);
+  });
+
+  it('goes through the claim when the lease was last written over a third of its TTL ago', async () => {
+    const lockPath = lockPathFor();
+    const seen = await recording(() =>
+      withFileLock(lockPath, () => sleep(60), { staleMs: 150, renewMs: 0 })
+    );
+    assert.equal(seen.claims, 1);
+    assert.equal(fsSync.existsSync(lockPath), false);
+  });
+
+  it('a refresh makes the lease young again', async () => {
+    const lockPath = lockPathFor();
+    // Renewed every 20 ms: a 120 ms hold ends within 50 ms (a third) of a refresh.
+    const seen = await recording(() =>
+      withFileLock(lockPath, () => sleep(120), { staleMs: 150, renewMs: 20 })
+    );
+    assert.equal(seen.claims, 0);
+    assert.equal(fsSync.existsSync(lockPath), false);
+  });
+
+  it('never removes a lease that was taken over: an expired holder takes the claim path', async () => {
+    const lockPath = lockPathFor();
+    let thiefHasLock;
+    const thiefReady = new Promise(resolve => (thiefHasLock = resolve));
+    let seen;
+    const first = recording(() =>
+      withFileLock(lockPath, () => sleep(250), { staleMs: 100, renewMs: 0 })
+    ).then(result => (seen = result));
+    await sleep(20);
+    await acquireLease(lockPath, 'thief', { ttlMs: 100, waitMs: 2000, pollMs: 10, name: 'thief' });
+    thiefHasLock();
+    await thiefReady;
+    await first;
+    // One claim for the thief's takeover, one for the holder's release.
+    assert.equal(seen.claims, 2, 'the release went through the claim');
+    assert.ok(fsSync.existsSync(lockPath), "the thief's lease is still there");
+    assert.equal(JSON.parse(await fs.readFile(lockPath, 'utf8')).owner, 'thief');
+    await releaseLease(lockPath, 'thief', 'thief');
+  });
+});
+
+describe('withFileLock: a waiter that gives up during a hand-off', () => {
+  it('releases the lease when the last local waiter times out while the holder looks at the want marker', async () => {
+    const lockPath = lockPathFor();
+    // Slow the look at the want marker so the waiter's timeout lands inside it.
+    const unlink = fs.unlink;
+    const slowed = mock.method(fs, 'unlink', async (file, ...rest) => {
+      if (String(file).endsWith('.want')) await sleep(300);
+      return unlink.call(fs, file, ...rest);
+    });
+    try {
+      // Held past the hand-off bound (75 ms), so the holder checks the marker.
+      const holder = withFileLock(lockPath, () => sleep(150), { timeoutMs: 5000, staleMs: 1500 });
+      await sleep(10);
+      await assert.rejects(
+        withFileLock(lockPath, () => 'ran', { timeoutMs: 250, staleMs: 1500 }),
+        /Timed out/
+      );
+      await holder;
+    } finally {
+      slowed.mock.restore();
+    }
+    assert.equal(fsSync.existsSync(lockPath), false, 'no lease left behind');
+    assert.equal(
+      await withFileLock(lockPath, () => 'next', { timeoutMs: 500, staleMs: 1500 }),
+      'next'
+    );
   });
 });

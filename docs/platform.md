@@ -401,7 +401,7 @@ the installation.
 
 - **defaultLanguage** (string) – Fallback language code when requested language is unavailable. Default: `"en"`
 - **requestBodyLimitMB** (number) – Maximum size of JSON request bodies in megabytes. Default: `50`
-- **requestConcurrency** (number) – How many calls to one model (or tool) run at once, across all workers, unless the model sets its own `concurrency`. If omitted or below `1`, concurrency is unlimited. Default: `25` (5 before migration `V254`). For a small backend (LM Studio or Ollama on one machine) or a cloud API key with a low rate limit, set `concurrency` on that model. A call that waits 2 seconds or more for a slot is logged (`Request throttle: calls waited for a free slot`, at most once a minute per model) — the sign to raise the model's `concurrency`
+- **requestConcurrency** (number) – How many calls to one model run at once, across all workers, unless the model sets its own `concurrency`. It also applies to every other throttled id without its own setting: tools, page reads (`read_url`), project website crawls (`project_crawl`), the HTTP workflow node and marketplace downloads, so up to 25 page reads or crawl fetches run at once. If omitted or below `1`, concurrency is unlimited. Default: `25` (5 before migration `V254`). For a small backend (LM Studio or Ollama on one machine) or a cloud API key with a low rate limit, set `concurrency` on that model. A call that waits 2 seconds or more for a slot is logged (`Request throttle: calls waited for a free slot`, at most once a minute per model) — the sign to raise the model's `concurrency`
 - **requestDelayMs** (number) – Default delay in milliseconds between outbound requests. Default: `0`
 
 ### llm
@@ -842,6 +842,11 @@ LDAP directory authentication configuration. Allows users to log in using their 
 - **enabled** (boolean) – Enable LDAP authentication. Default: `false`
 - **allowSelfSignup** (boolean) – Automatically create user accounts on first login. Default: `true`
 - **providers** (array) – One or more LDAP provider configurations
+- **lockout** (object) – Same fields and defaults as `localAuth.lockout`. Failed LDAP sign-ins count
+  per username (trimmed, lower-cased) from any address; after `maxAttempts` failures within
+  `durationMinutes`, `POST /api/auth/ldap/login` answers `429` without binding to the directory.
+  Keep `maxAttempts` below the directory's own lockout threshold, so an attacker cannot lock the
+  account in Active Directory through iHub. Default: enabled, 5 attempts, 15 minutes
 
 #### LDAP Provider Configuration
 
@@ -1049,7 +1054,7 @@ iHub Apps enforces rate limits per route category to protect against abuse and e
     "authApi": {
       "windowMs": 900000,
       "limit": 30,
-      "perIpLimit": 5000,
+      "perIpLimit": 300,
       "skipFailedRequests": false
     },
     "oauthApi": {
@@ -1080,7 +1085,7 @@ iHub Apps enforces rate limits per route category to protect against abuse and e
 | `default`       | Base the other categories inherit from                          | 60 s           | 300 per user, 500 per IP without sign-in          |
 | `adminApi`      | `/api/admin/**` admin endpoints                                 | 60 s           | 300 per user or API client, 500 per IP without sign-in |
 | `publicApi`     | The web app's API                                               | 60 s           | 300 per user, 500 per IP without sign-in          |
-| `authApi`       | `/api/auth/**` endpoints that check credentials                 | 900 s (15 min) | 30 per IP and username, 5,000 per IP              |
+| `authApi`       | `/api/auth/**` endpoints that check credentials                 | 900 s (15 min) | 30 per IP and username, 300 failed per IP         |
 | `oauthApi`      | `/api/oauth/**` OAuth server endpoints                          | 60 s           | 300 per IP                                        |
 | `oauthTokenApi` | `POST /api/oauth/token` and `/introspect`, failed requests only | 900 s (15 min) | 30 per IP                                         |
 | `inferenceApi`  | `/api/inference/**` and read aloud                              | 60 s           | 300 per user, 500 per IP without sign-in          |
@@ -1095,7 +1100,7 @@ Each category accepts the following fields. Partial overrides inherit unset valu
 | `limit`                  | Number  | 100     | Maximum requests allowed per window per key (user, IP, or IP and username). Minimum: `1` |
 | `keyBy`                  | String  | `"user"` | `adminApi`, `publicApi`, `inferenceApi`: `"user"` counts a signed-in request per user and an anonymous one per IP; `"ip"` counts every request per IP |
 | `anonymousLimit`         | Number  | `limit` | With `keyBy: "user"`: the limit of a request without a sign-in, per IP           |
-| `perIpLimit`             | Number  | 5000    | `authApi` only: the ceiling per IP over all usernames                           |
+| `perIpLimit`             | Number  | 300     | `authApi` only: failed sign-ins per IP over all usernames; successful sign-ins never count |
 | `message`                | String  | -       | Custom error message returned when the limit is exceeded                        |
 | `standardHeaders`        | Boolean | `true`  | Include `RateLimit-*` headers in responses                                      |
 | `legacyHeaders`          | Boolean | `false` | Include legacy `X-RateLimit-*` headers                                          |

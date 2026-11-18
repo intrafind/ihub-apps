@@ -97,14 +97,21 @@ Other ways chat content can become durable are:
 1. **Feedback submissions** — when a user clicks a rating, the first 300
    characters of the rated message (plus any free-text comment) are appended
    to `contents/data/feedback.jsonl` (`server/feedbackStorage.js`).
-2. **Application log.** At the default level `info`, every chat request,
-   including scheduled-task runs, writes a `CHAT_REQUEST` line with the user's
-   name and the full question (`query`). Every rating writes a `FEEDBACK` line
-   with the user's name and the chat id. The answer text is not logged. Lines
-   go to stdout and, with `logging.file.enabled`, to `logs/app.log`. Whatever
-   collects stdout (container runtime, log shipper, SIEM) keeps them.
-   `logging.level: "warn"` stops these lines (`server/utils.js`,
-   `logInteraction()`).
+2. **Application log** — at the default level `info`, every chat request,
+   including scheduled-task runs, writes a `CHAT_REQUEST` line
+   (`server/utils.js`, `logInteraction()`) with the user's name and the first
+   1000 characters of the question (`query`); the `CHAT_RESPONSE` line carries
+   ids only, no response text. Every rating writes a `FEEDBACK` line with the
+   user's name and the chat id. The text of attached documents is not logged:
+   each `<content>` block is replaced by its length (`[N characters omitted]`).
+   A few other info lines also carry text derived from user input: the iFinder
+   search query (`server/services/integrations/iFinderService.js`, "Searching
+   for query in profile") and the first 100 characters of a clarification
+   question the model asks (`server/services/chat/chatSeams.js`,
+   "Clarification requested"). Lines go to stdout and, with
+   `logging.file.enabled`, to `logs/app.log`. Whatever collects stdout
+   (container runtime, log shipper, SIEM) keeps them. `logging.level: "warn"`
+   drops these info lines.
 3. **External iAssistant / iFinder integration** — when configured, full
    conversations are sent to and stored by the external iFinder server. That
    is a deliberate third-party integration; the data belongs to that backend.
@@ -269,7 +276,7 @@ honours it immediately.
 | `usageTracking.eventRetentionDays` | `90` | Delete usage events older than N days |
 | `usageTracking.dailyRetentionDays` | `365` | Delete daily rollups older than N days *(now wired in 5.4.0)* |
 | `usageTracking.monthlyRetentionDays` | `-1` | Delete monthly rollups older than N days |
-| `logging.level` | `info` | `warn` suppresses the `logInteraction()` full-prompt info logs |
+| `logging.level` | `info` | `warn` suppresses the `logInteraction()` query info lines and other info lines with user-derived text |
 | `logging.file.enabled` | `false` | Keep logs ephemeral on stdout |
 | `auth.sessionTimeoutMinutes` | `480` | JWT lifetime (= cookie lifetime) |
 | `anonymousAuth.enabled` | `true` | Anonymous users avoid the user-fingerprint code path |
@@ -346,9 +353,9 @@ recorded` by design — but the IP and email columns can both be anonymized.
 
 | Right | How to fulfil |
 | --- | --- |
-| **Access** (Art. 15) | Admin → Usage → Feedback (CSV export); audit log via Admin → Platform → Audit Log; user record at `contents/config/users.json`, which carries the user's `aiAcknowledgements` (version, text hash, time, language); the caller can read their own via `GET /api/eu-ai-act/acknowledgements/me`; admins export them with `GET /api/admin/eu-ai-act/acknowledgements/_export` |
+| **Access** (Art. 15) | Admin → Usage → Feedback (CSV export); audit log via Admin → Platform → Audit Log; user record at `contents/config/users.json`; the user's AI acknowledgements (version, text hash, time, language) in the storage provider's `ai-acknowledgements` namespace, one document per user; the caller can read their own via `GET /api/eu-ai-act/acknowledgements/me`; admins export them with `GET /api/admin/eu-ai-act/acknowledgements/_export` |
 | **Rectification** (Art. 16) | Edit the user via Admin → Users; OIDC/LDAP/NTLM users are read-only mirrors of the IdP |
-| **Erasure** (Art. 17) | Delete the user via Admin → Users, which also removes their `aiAcknowledgements`, API keys, connections, stored integration credentials, scheduled tasks, chats, prompts, skills and short links; rewrite `feedback.jsonl` with `cleanupFeedback()` or shorten `feedbackRetentionDays`; audit entries are kept for the configured `retentionDays` and cannot be deleted before expiry (regulatory requirement) |
+| **Erasure** (Art. 17) | Delete the user via Admin → Users, which also removes their AI acknowledgements document, API keys, connections, stored integration credentials, scheduled tasks, chats, prompts, skills and short links; rewrite `feedback.jsonl` with `cleanupFeedback()` or shorten `feedbackRetentionDays`; audit entries are kept for the configured `retentionDays` and cannot be deleted before expiry (regulatory requirement) |
 | **Portability** (Art. 20) | Export usage records as CSV or JSON (`GET /api/admin/usage/export?range=…`); user data lives in plain JSON files for direct extraction |
 | **Restrict / object** (Art. 18, 21) | Disable the user (`active: false` in `users.json`); set `usageTrackingMode: "anonymous"` |
 

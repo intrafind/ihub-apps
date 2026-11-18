@@ -23,6 +23,27 @@ async function resolveMode(filePath, mode) {
   }
 }
 
+/**
+ * Run `write`; when it fails because `dir` does not exist, create `dir` and run
+ * it once more. Saves a `mkdir` on every write to a directory that is almost
+ * always there already. `write` must be safe to repeat after an ENOENT.
+ *
+ * @template T
+ * @param {string} dir - Directory `write` puts its file in
+ * @param {() => Promise<T>} write
+ * @returns {Promise<T>}
+ */
+export async function writeInDirectory(dir, write) {
+  try {
+    return await write();
+  } catch (error) {
+    if (error?.code !== 'ENOENT') throw error;
+    // lgtm[js/path-injection] -- caller-validated path; see atomicWriteFile.
+    await fs.mkdir(dir, { recursive: true });
+    return write();
+  }
+}
+
 /** Flush the directory entry created by a rename; best effort where unsupported. */
 async function syncDirectory(dir) {
   let handle;
@@ -55,18 +76,25 @@ async function syncDirectory(dir) {
  *
  * @param {string} filePath - The target file path (must be caller-validated)
  * @param {string|Buffer} data - The data to write
- * @param {string|{encoding?: string, mode?: number}} [options] - Encoding, or
- *   `{ encoding, mode }`. `mode` sets the file's permission bits (e.g. `0o600`
- *   for secrets); without it the existing target's mode is kept.
+ * @param {string|{encoding?: string, mode?: number, keepMode?: boolean}} [options] -
+ *   Encoding, or `{ encoding, mode, keepMode }`. `mode` sets the file's
+ *   permission bits (e.g. `0o600` for secrets); without it the existing
+ *   target's mode is kept, unless `keepMode: false`: then the file gets the
+ *   default mode a new file gets, and the `stat` and `fchmod` are skipped (for
+ *   files that are always written with the default mode, like store documents).
  * @returns {Promise<void>}
  */
 export async function atomicWriteFile(filePath, data, options = 'utf8') {
-  const { encoding = 'utf8', mode } =
-    typeof options === 'string' ? { encoding: options } : options || {};
+  const {
+    encoding = 'utf8',
+    mode,
+    keepMode = true
+  } = typeof options === 'string' ? { encoding: options } : options || {};
   const dir = dirname(filePath);
   const tempSuffix = randomBytes(8).toString('hex');
   const tempPath = join(dir, `.tmp_${tempSuffix}`);
-  const targetMode = await resolveMode(filePath, mode);
+  const targetMode =
+    keepMode || Number.isInteger(mode) ? await resolveMode(filePath, mode) : undefined;
 
   try {
     // Write to temporary file first
@@ -102,12 +130,16 @@ export async function atomicWriteFile(filePath, data, options = 'utf8') {
  *
  * @param {string} filePath - The target file path
  * @param {any} data - The data to serialize as JSON
- * @param {{mode?: number}} [options] - `mode` sets the permission bits (see atomicWriteFile)
+ * @param {{mode?: number, keepMode?: boolean}} [options] - Permission bits (see atomicWriteFile)
  * @returns {Promise<void>}
  */
 export async function atomicWriteJSON(filePath, data, options = {}) {
   const jsonData = JSON.stringify(data, null, 2);
-  await atomicWriteFile(filePath, jsonData, { encoding: 'utf8', mode: options?.mode });
+  await atomicWriteFile(filePath, jsonData, {
+    encoding: 'utf8',
+    mode: options?.mode,
+    keepMode: options?.keepMode
+  });
 }
 
 /**
@@ -115,9 +147,18 @@ export async function atomicWriteJSON(filePath, data, options = {}) {
  *
  * Used by admin "create" handlers (agent profiles, etc.) where two
  * concurrent POSTs could otherwise race past an `fs.access` existence
- * check and the second write would silently overwrite the first.
- * Throws an Error whose `.code === 'EEXIST'` when the file already
- * exists; callers should map that to HTTP 409 Conflict.
+ * check and the second write would silently overwrite the first, and by the
+ * document store for a create-only `put`. Throws an Error whose
+ * `.code === 'EEXIST'` when the file already exists; callers should map that
+ * to HTTP 409 Conflict.
+ *
+ * The content is written to a temp file and fsynced first, then hard-linked
+ * onto the target: `link` fails with EEXIST when the target exists, so it is
+ * the same create-or-fail as `O_EXCL`, but the name appears with its whole
+ * content. Writing through an `O_EXCL` handle on the target itself left a
+ * moment in which the file existed empty or half-written, and a reader that
+ * caught it (a second worker's `get` of a chat being created) failed on
+ * "Unexpected end of JSON input".
  *
  * NOTE: `filePath` is trusted — caller-validated path (same contract as
  * `atomicWriteFile`).
@@ -126,11 +167,46 @@ export async function atomicWriteJSON(filePath, data, options = {}) {
  * @param {any} data - The data to serialize as JSON
  * @returns {Promise<void>}
  */
+/** `link` errors of a filesystem that has no hard links. */
+const NO_HARD_LINKS = new Set(['EPERM', 'ENOTSUP', 'ENOSYS', 'EOPNOTSUPP']);
+
+/** Hard links of `file`, 0 when it cannot be stat'ed. */
+async function linkCount(file) {
+  // lgtm[js/path-injection] -- the temp file of a caller-validated path.
+  return (await fs.stat(file).catch(() => null))?.nlink ?? 0;
+}
+
 export async function atomicCreateJSON(filePath, data) {
   const jsonData = JSON.stringify(data, null, 2);
-  // `wx` opens the file for writing only if it does not already exist —
-  // Node's fs maps it to O_CREAT|O_EXCL so the create-or-fail check is
-  // atomic at the filesystem level.
+  const dir = dirname(filePath);
+  const tempPath = join(dir, `.tmp_${randomBytes(8).toString('hex')}`);
   // lgtm[js/path-injection] -- caller-validated path; see function doc.
-  await fs.writeFile(filePath, jsonData, { encoding: 'utf8', flag: 'wx' });
+  const handle = await fs.open(tempPath, 'wx');
+  try {
+    try {
+      await handle.writeFile(jsonData, 'utf8');
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+    try {
+      // lgtm[js/path-injection] -- caller-validated path; see function doc.
+      await fs.link(tempPath, filePath);
+    } catch (error) {
+      // NFS: the link was made, its reply lost, and the retried request
+      // answered EEXIST. The temp file's second name is the target: ours.
+      const linkedAfterAll = error.code === 'EEXIST' && (await linkCount(tempPath)) === 2;
+      if (!linkedAfterAll) {
+        if (!NO_HARD_LINKS.has(error.code)) throw error;
+        // A filesystem without hard links (some network and FUSE mounts): an
+        // exclusive create of the target, briefly visible half-written.
+        // lgtm[js/path-injection] -- caller-validated path; see function doc.
+        await fs.writeFile(filePath, jsonData, { encoding: 'utf8', flag: 'wx' });
+      }
+    }
+  } finally {
+    // lgtm[js/path-injection] -- caller-validated path; see function doc.
+    await fs.unlink(tempPath).catch(() => {});
+  }
+  await syncDirectory(dir);
 }

@@ -152,12 +152,7 @@ function createRateLimiter(
   defaults = {},
   type = 'API',
   skip = undefined,
-  {
-    shared = false,
-    keyGenerator = undefined,
-    limit = undefined,
-    requestWasSuccessful = undefined
-  } = {}
+  { shared = false, keyGenerator = undefined, limit = undefined, requestWasSuccessful } = {}
 ) {
   const finalConfig = { ...defaults, ...config };
 
@@ -258,27 +253,61 @@ function submittedUsername(req) {
 }
 
 /**
- * The credential limiter: `limit` per IP address and submitted username, so
- * one office behind one address is not limited to a few logins per window
- * together, plus a much higher `perIpLimit` per address against spraying
- * many usernames. Guessing one account's password is stopped earlier by the
- * per-account lockout (`utils/loginLockout.js`). Both count cluster-wide.
+ * Whether a sign-in request did not fail. An NTLM handshake answers its first
+ * two requests with a 401 challenge (`WWW-Authenticate: NTLM`) before the
+ * browser sends credentials; those steps are not failed sign-ins. A rejected
+ * NTLM credential answers 403.
+ *
+ * @param {import('express').Request} req
+ * @param {import('express').Response} res
+ * @returns {boolean}
+ */
+function signInDidNotFail(req, res) {
+  if (res.statusCode < 400) return true;
+  return res.statusCode === 401 && /^NTLM\b/i.test(String(res.getHeader('WWW-Authenticate') || ''));
+}
+
+/**
+ * The credential limiter, two counters:
+ *
+ * - `limit` per IP address and submitted username, so one office behind one
+ *   address is not limited to a few logins per window together. Requests
+ *   without a username (NTLM, Teams token exchange) skip it; they would all
+ *   share one counter per address.
+ * - `perIpLimit` per address over all usernames, counting only FAILED
+ *   attempts: it stops one address from spraying passwords over many
+ *   usernames, while a sign-in wave behind a NAT address (successful
+ *   sign-ins) never reaches it.
+ *
+ * Guessing one account's password is stopped earlier by the per-account
+ * lockout (`utils/loginLockout.js`). Both count cluster-wide.
  *
  * @param {Object} config - The resolved `rateLimit.authApi` settings
  * @returns {Function} Express middleware
  */
 function createAuthLimiter(config) {
-  const perAccount = createRateLimiter(config, {}, 'authentication', isReadOnlyAuthRequest, {
-    shared: true,
-    keyGenerator: req => `${ipKeyGenerator(req.ip || '')}|${submittedUsername(req)}`
-  });
+  const perAccount = createRateLimiter(
+    config,
+    {},
+    'authentication',
+    req => isReadOnlyAuthRequest(req) || !submittedUsername(req),
+    {
+      shared: true,
+      keyGenerator: req => `${ipKeyGenerator(req.ip || '')}|${submittedUsername(req)}`
+    }
+  );
   if (!(config.perIpLimit >= 1)) return perAccount;
   const perIp = createRateLimiter(
-    { ...config, limit: config.perIpLimit },
+    {
+      ...config,
+      limit: config.perIpLimit,
+      skipSuccessfulRequests: true,
+      skipFailedRequests: false
+    },
     {},
     'authentication per IP',
     isReadOnlyAuthRequest,
-    { shared: true }
+    { shared: true, requestWasSuccessful: signInDidNotFail }
   );
   return (req, res, next) =>
     perIp(req, res, error => (error ? next(error) : perAccount(req, res, next)));
@@ -309,9 +338,9 @@ const LIMITER_FALLBACKS = Object.freeze({
   // Public API configuration - same as default
   publicApi: {},
   // Auth API configuration - more restrictive for authentication. `limit`
-  // counts per IP and username, `perIpLimit` per IP (mirrors
+  // counts per IP and username, `perIpLimit` failed attempts per IP (mirrors
   // server/defaults/config/platform.json for a config without it).
-  authApi: { limit: 50, perIpLimit: 5000, windowMs: 15 * 60 * 1000, skipFailedRequests: false },
+  authApi: { limit: 50, perIpLimit: 300, windowMs: 15 * 60 * 1000, skipFailedRequests: false },
   // OAuth API - every request under /api/oauth, browsers and servers alike.
   // Sized for real traffic: the consent screen is opened from browsers that
   // often share one NAT address, and a server-side client such as Microsoft

@@ -36,7 +36,12 @@ export const streamConnectedData = z.object({
   runId: z.string().optional(),
   /** Last sequence number the server has for this run (0 when new). */
   lastSeq: z.number().int().nonnegative().prefault(0),
-  protocol: z.literal(2).prefault(2)
+  protocol: z.literal(2).prefault(2),
+  /**
+   * On a chat turn's own POST stream: whether the turn outlives the connection
+   * (a kept chat) or ends with it (a temporary one). Decided by the server.
+   */
+  durable: z.boolean().optional()
 });
 
 export const streamErrorData = z.object({

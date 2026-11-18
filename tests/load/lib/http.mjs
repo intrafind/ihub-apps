@@ -170,3 +170,26 @@ export async function login({ baseUrl, username, password, metrics = null }) {
   client.token = token;
   return { client, user: res.body?.user };
 }
+
+/**
+ * Confirm the AI-use notice for a logged-in client when the server enforces it
+ * and the user has not confirmed it yet (the 428 guard would block every chat).
+ *
+ * @param {Client} client
+ * @returns {Promise<boolean>} true when this call confirmed it
+ */
+export async function ensureAiAcknowledged(client) {
+  const me = await client.get('/api/eu-ai-act/acknowledgements/me');
+  if (me.status !== 200 || !me.body?.enabled || !me.body?.enforce || me.body?.acknowledged) {
+    return false;
+  }
+  await client.request('POST', '/api/eu-ai-act/acknowledgements/me', {
+    json: {
+      version: me.body.requiredVersion,
+      textHash: me.body.textHash,
+      language: me.body.language
+    },
+    expect: [200, 201]
+  });
+  return true;
+}

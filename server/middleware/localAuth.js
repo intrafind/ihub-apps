@@ -26,6 +26,37 @@ const DUMMY_USER_ID = 'nonexistent-user';
 const DUMMY_PASSWORD_HASH = '$2a$12$n6wyln4ERyOHBD6UAx2fAOkt0F7nX0x6X2ZiYAbBVvK7i7diOaJjG';
 
 /**
+ * Password checks allowed to run at once in this process. A bcrypt check at
+ * cost 12 takes about 300 ms of CPU on the main thread; a flood of sign-ins
+ * would otherwise interleave hundreds of them and starve every other request.
+ * Further checks wait their turn. ponytail: the queue is unbounded; the
+ * sign-in rate limiters bound how many requests can wait.
+ */
+const MAX_CONCURRENT_PASSWORD_CHECKS = 2;
+let passwordChecksRunning = 0;
+const passwordCheckQueue = [];
+
+/**
+ * Run `check` once a password-check slot is free.
+ *
+ * @template T
+ * @param {() => Promise<T>} check
+ * @returns {Promise<T>}
+ */
+async function withPasswordCheckSlot(check) {
+  if (passwordChecksRunning < MAX_CONCURRENT_PASSWORD_CHECKS) passwordChecksRunning += 1;
+  // The releasing check hands its slot straight to us, so the count stays.
+  else await new Promise(resolve => passwordCheckQueue.push(resolve));
+  try {
+    return await check();
+  } finally {
+    const next = passwordCheckQueue.shift();
+    if (next) next();
+    else passwordChecksRunning -= 1;
+  }
+}
+
+/**
  * Verify password against hash using user ID
  * @param {string} password - Plain text password
  * @param {string} userId - User ID used during hashing
@@ -36,7 +67,7 @@ export async function verifyPasswordWithUserId(password, userId, hash) {
   // Combine password with user ID same way as during hashing
   const passwordWithUserId = `${userId}:${password}`;
 
-  return await bcrypt.compare(passwordWithUserId, hash);
+  return withPasswordCheckSlot(() => bcrypt.compare(passwordWithUserId, hash));
 }
 
 /**

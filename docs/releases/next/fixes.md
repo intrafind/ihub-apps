@@ -1,5 +1,16 @@
 # Fixes — Unreleased
 
+## Refreshing an OAuth Sign-in No Longer Holds Up the Server
+
+Each refresh of an OAuth or MCP client's sign-in hashed the new refresh token with bcrypt on the server's event loop,
+holding up every other request of the process for about 100–150 ms. Refresh tokens are long random values, so they are
+now stored as a SHA-256 hash, and the token store is read without blocking. Refresh tokens issued before the upgrade
+keep working and are converted on their next use. No action is needed after the upgrade.
+
+- **Rolling back:** an older version does not accept refresh tokens issued or rotated after the upgrade. After a
+  rollback, or while older and newer servers share one `contents/` folder, OAuth and MCP clients whose token was
+  refreshed in the meantime are signed out and must sign in again.
+
 ## A New MCP Integration Works at Once
 
 The worker that handled an admin install or change of an integration did not reload its MCP and A2A connections, so a
@@ -705,6 +716,13 @@ whose lock expired no longer removes the lock of the worker that took over.
 
 - A lock that cannot be obtained within its wait no longer lets the change run anyway: the request
   fails with `503` (`LOCK_TIMEOUT`) and can be retried. Nothing is written.
+- Many changes to one config file at once (users confirming the AI-use notice or signing in during
+  a login wave, several admins saving) could fail with `409` and
+  > Etag mismatch for document config/users
+  without a log line. These changes now wait their turn instead of retrying, and only a change that
+  waited longer than its lock allows fails, with `503` (`LOCK_TIMEOUT`).
+- A worker with a steady stream of changes to one file no longer keeps it from the other workers,
+  whose requests then failed with `503` (`LOCK_TIMEOUT`).
 - The iFinder sign-in refresh gives up after 10 seconds if the identity provider does not answer,
   instead of holding the refresh lock. A waiting request used to refresh with the already used
   refresh token, which the provider rejected and which deleted the user's stored tokens.
@@ -1139,3 +1157,30 @@ providers, apps, groups and the like).
 
 - Check `users.json` for names or emails whose placeholders were replaced before the upgrade; the upgrade
   does not restore those records.
+
+## Chat Logs No Longer Contain the Text of Attached Files
+
+The `Chat request received` line (`CHAT_REQUEST`) logged the whole user message at info level, including
+the extracted text of every attached file. One message with a spreadsheet put several hundred KB of
+document content into the server log. The line now names attached documents with their size instead of
+their text (`[N characters omitted]`) and keeps at most the first 1,000 characters of the message, like the
+response.
+
+## Chat Requests With `Accept-Language: *` Answer Again
+
+A chat request whose `Accept-Language` header is not a language tag (`*`, which Node's `fetch` sends by
+default) still failed with `INTERNAL_ERROR`: the weekday in the prompt variables was formatted with the raw
+header. It now uses the platform's default language, like the date.
+
+## Windows Sign-In No Longer Locks the Account After One Wrong Password
+
+With Windows sign-in (NTLM), a browser that sent a stale or wrong password locked the user's Active
+Directory account within seconds — and kept it locked for as long as the iHub tab stayed open. Until a
+sign-in succeeds, every request runs its own sign-in, so one page load counted as a dozen failed logons,
+and the connection check then retried `/api/health` every few seconds, adding another one each time.
+
+- The health check (`/api/health`) no longer asks for Windows sign-in, and a refused sign-in no longer
+  makes the app think the server is offline.
+- After the domain controller rejects an account, iHub answers that account's next sign-in attempts
+  itself for 60 seconds (`429` with `Retry-After`) instead of passing them on, so they do not count as
+  failed logons.

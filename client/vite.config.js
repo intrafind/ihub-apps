@@ -2,9 +2,56 @@ import { defineConfig } from 'vite';
 import { resolve } from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
+import http from 'node:http';
 import react from '@vitejs/plugin-react';
 import authGatePlugin from './vite-plugins/vite-plugin-auth-gate.js';
 import vadAssetsPlugin from './vite-plugins/vite-plugin-vad-assets.js';
+
+// Windows sign-in (NTLM) authenticates a TCP connection, not a request: the
+// server's challenge and the browser's answer must travel over the same
+// connection. Vite's proxy defaults to a fresh upstream connection per request
+// (agent: false, "Connection: close"), so through :5173 the answer always
+// arrives on a new connection and the server rejects it with a 500.
+//
+// This agent keeps upstream connections alive and pools them per browser
+// connection: requests from one browser connection reuse one upstream
+// connection, and the upstream connection is closed with it. HTTP/2 requests
+// are not tagged and share an ordinary keep-alive pool; browsers fall back to
+// HTTP/1.1 for NTLM on their own.
+const CLIENT_CONN_HEADER = 'x-ihub-dev-client-conn';
+const clientConnIds = new WeakMap();
+let nextClientConnId = 0;
+let affineAgent;
+
+function createConnectionAffineAgent() {
+  class ConnectionAffineAgent extends http.Agent {
+    getName(options) {
+      const conn = options.headers?.[CLIENT_CONN_HEADER];
+      return conn ? `${super.getName(options)}|conn-${conn}` : super.getName(options);
+    }
+  }
+  affineAgent = new ConnectionAffineAgent({ keepAlive: true });
+  return affineAgent;
+}
+
+function tagClientConnection(req) {
+  if (req.httpVersionMajor !== 1) return;
+  const socket = req.socket;
+  let id = clientConnIds.get(socket);
+  if (id === undefined) {
+    id = String(++nextClientConnId);
+    clientConnIds.set(socket, id);
+    socket.once('close', () => {
+      const suffix = `|conn-${id}`;
+      for (const pool of [affineAgent.freeSockets, affineAgent.sockets]) {
+        for (const name of Object.keys(pool)) {
+          if (name.endsWith(suffix)) pool[name].forEach(s => s.destroy());
+        }
+      }
+    });
+  }
+  req.headers[CLIENT_CONN_HEADER] = id;
+}
 
 // Plugin that copies @microsoft/office-js/dist to dist/office/office-js after build.
 // This backs the `bundled` Office.js mode (see server/utils/officeJsSource.js) for
@@ -129,6 +176,7 @@ export default defineConfig({
     proxy: (() => {
       const basePath = process.env.VITE_BASE_PATH || '';
       const proxyConfig = {};
+      const upstreamAgent = createConnectionAffineAgent();
 
       // Define the paths that need proxying
       const pathsToProxy = [
@@ -157,11 +205,22 @@ export default defineConfig({
             // speech-to-text endpoint at /api/voice/realtime). Scoped to /api
             // so Vite's own HMR socket is untouched.
             ws: path === '/api/',
+            // Keep-alive agent that gives each browser connection its own
+            // upstream connection (see createConnectionAffineAgent). bypass runs
+            // before the request is proxied and tags it with its browser
+            // connection; returning undefined lets the proxy continue.
+            agent: upstreamAgent,
+            bypass: req => {
+              tagClientConnection(req);
+              return undefined;
+            },
             configure: proxy => {
               // xfwd adds X-Forwarded-For/Port/Proto but NOT X-Forwarded-Host.
               // changeOrigin replaces Host with the target, so Express can't see
               // the original browser-facing host without this header.
               proxy.on('proxyReq', (proxyReq, req) => {
+                // The tag only selects the upstream socket; Express never sees it.
+                proxyReq.removeHeader(CLIENT_CONN_HEADER);
                 if (req.headers.host) {
                   proxyReq.setHeader('X-Forwarded-Host', req.headers.host);
                 }

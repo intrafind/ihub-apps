@@ -34,7 +34,8 @@ import {
   checkpointToInteraction,
   translateInternalEvent,
   projectLedgerEvent,
-  stampSeq
+  stampSeq,
+  DELTA_COALESCE_MS
 } from '../../services/loop/RunStream.js';
 import { sseV2EventSchema, parseSseV2EventData } from '../../services/loop/contracts/sseV2.js';
 import { interactionSchema } from '../../services/loop/contracts/interaction.js';
@@ -337,6 +338,79 @@ test('emit: the global delivery (setEnvelopeDelivery) is used when the emitter h
   const orphan = emitter.emit(META, { title: 'nobody listening' });
   assertValidEnvelope(orphan);
   assert.equal(global.calls.length, 1, 'no delivery installed → frame is built but goes nowhere');
+});
+
+test('emit: text deltas within a window are merged into one frame; any other frame flushes them first', t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const s = freshStream(t, 'coalesce');
+  const global = spyDelivery(t);
+  const emitter = new RunStreamEmitter({ streamId: s, runId: 'chat-run-1' });
+  const delivered = () => global.calls.map(([, e]) => [e.type, e.data.kind, e.data.content]);
+  const text = content => emitter.emit(STEP_DELTA, { step: 0, kind: 'text', content });
+
+  text('a');
+  assert.deepEqual(delivered(), [[STEP_DELTA, 'text', 'a']], 'the first delta goes out at once');
+  text('b');
+  text('c');
+  assert.equal(global.calls.length, 1, 'deltas inside the window wait');
+  emitter.emit(TOOL_PROGRESS, { step: 0, phase: 'search.started' });
+  assert.deepEqual(delivered().slice(1), [
+    [STEP_DELTA, 'text', 'bc'],
+    [TOOL_PROGRESS, undefined, undefined]
+  ]);
+  global.calls.forEach(([, e]) => assertValidEnvelope(e));
+
+  text('d');
+  text('e');
+  emitter.emit(STEP_DELTA, { step: 0, kind: 'thinking', content: 'hm' });
+  assert.deepEqual(
+    delivered().slice(3),
+    [
+      [STEP_DELTA, 'text', 'd'],
+      [STEP_DELTA, 'text', 'e'],
+      [STEP_DELTA, 'thinking', 'hm']
+    ],
+    'a different kind flushes the pending text and goes out itself'
+  );
+  t.mock.timers.tick(DELTA_COALESCE_MS);
+  assert.equal(global.calls.length, 6, 'nothing pending: the window just closes');
+  emitter.emit(STEP_DELTA, { step: 0, kind: 'thinking', content: '!' });
+  text('f');
+  t.mock.timers.tick(DELTA_COALESCE_MS);
+  assert.deepEqual(delivered().slice(6), [
+    [STEP_DELTA, 'thinking', '!'],
+    [STEP_DELTA, 'text', 'f']
+  ]);
+  emitter.emit(RUN_ENDED, { status: 'completed' });
+  assert.equal(global.calls.at(-1)[1].type, RUN_ENDED);
+});
+
+test('emit: a 250-token answer at 40 tokens/s sends about half as many delta frames', t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const s = freshStream(t, 'coalesce-answer');
+  const global = spyDelivery(t);
+  const emitter = new RunStreamEmitter({ streamId: s, runId: 'chat-run-1' });
+  for (let i = 0; i < 250; i++) {
+    emitter.emit(STEP_DELTA, { step: 0, kind: 'text', content: `w${i} ` });
+    t.mock.timers.tick(25);
+  }
+  emitter.emit(RUN_ENDED, { status: 'completed' });
+  const deltas = global.calls.filter(([, e]) => e.type === STEP_DELTA).map(([, e]) => e);
+  assert.ok(deltas.length <= 130, `${deltas.length} delta frames`);
+  assert.equal(
+    deltas.map(e => e.data.content).join(''),
+    Array.from({ length: 250 }, (_, i) => `w${i} `).join(''),
+    'the text arrives whole and in order'
+  );
+});
+
+test('emit: a delivery override is not coalesced (in-process sinks get every delta)', t => {
+  const s = freshStream(t, 'coalesce-override');
+  const local = spy();
+  const emitter = new RunStreamEmitter({ streamId: s, deliver: local });
+  emitter.emit(STEP_DELTA, { step: 0, kind: 'text', content: 'a' });
+  emitter.emit(STEP_DELTA, { step: 0, kind: 'text', content: 'b' });
+  assert.equal(local.calls.length, 2);
 });
 
 test('RunStreamEmitter requires a streamId', () => {

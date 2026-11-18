@@ -138,7 +138,7 @@ class PromptService {
       promptKnowledgeSources.set(chatId, new Set());
     }
     promptKnowledgeSources.get(chatId).add('project');
-    logger.info('Tracked project knowledge in the prompt of a chat', {
+    logger.debug('Tracked project knowledge in the prompt of a chat', {
       component: 'PromptService',
       chatId
     });
@@ -256,7 +256,7 @@ class PromptService {
       this.trackPromptSources(chatId);
     }
     this.trackKnowledgeScope(scopeKey, scopeSummary(plan));
-    logger.info('Projects applied to the prompt', {
+    logger.debug('Projects applied to the prompt', {
       component: 'PromptService',
       chatId,
       projects: plan.projects.map(project => `${project.id}:${project.mode}`).join(','),
@@ -311,7 +311,7 @@ class PromptService {
       /** ISO-8601 calendar date in the resolved timezone — never ambiguous. */
       date_iso: isoDateInTimeZone(now, timezone),
       time: timeFormatter.format(now),
-      day_of_week: now.toLocaleDateString(language || defaultLang, {
+      day_of_week: now.toLocaleDateString(locale, {
         ...tzOptions,
         weekday: 'long'
       }),
@@ -427,11 +427,11 @@ class PromptService {
   ) {
     const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
     const lang = language || defaultLang;
-    logger.info('Using language for message templates', { component: 'PromptService', lang });
+    logger.debug('Using language for message templates', { component: 'PromptService', lang });
 
     // Resolve global prompt variables once for use throughout the function
     const globalPromptVariables = this.resolveGlobalPromptVariables(user, modelName, lang, style);
-    logger.info('Resolved global prompt variables', {
+    logger.debug('Resolved global prompt variables', {
       component: 'PromptService',
       count: Object.keys(globalPromptVariables).length
     });
@@ -627,7 +627,7 @@ class PromptService {
           if (styles && styles[style] && style !== 'keep') {
             systemPrompt += `\n\n${styles[style]}`;
           } else {
-            logger.info('No specific style found, nothing added to system prompt', {
+            logger.debug('No specific style found, nothing added to system prompt', {
               component: 'PromptService',
               style
             });

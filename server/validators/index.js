@@ -61,6 +61,12 @@ export const chatConnectSchema = {
   params: z.object({
     appId: z.string().min(1),
     chatId: z.string().min(1)
+  }),
+  // Re-attach to a running turn: the run, and the last ledger seq the client
+  // replayed of it (`services/chat/chatResume.js`).
+  query: z.object({
+    resumeRun: z.string().max(200).optional(),
+    afterLedgerSeq: z.coerce.number().int().nonnegative().optional()
   })
 };
 

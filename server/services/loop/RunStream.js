@@ -41,6 +41,13 @@ export const MAX_TRACKED_STREAMS = 10000;
 const seqByStream = new Map();
 /** streamId → current run binding `{ runId, emitter }` (chat turns register themselves). */
 const currentByStream = new Map();
+/**
+ * runId → last run frame counter (`rseq`). Stamped by the producer, so a frame
+ * carries the same number whichever worker delivers it: a re-attaching client
+ * and the resume snapshot (`services/chat/chatResume.js`) agree on what "up to
+ * here" means. Not the stream `seq`, which the delivering worker assigns.
+ */
+const rseqByRun = new Map();
 let deliver = null;
 
 /** Re-insert `key` so Map iteration order doubles as LRU order; evict the oldest past the cap. */
@@ -67,7 +74,7 @@ const emitObservers = new Set();
  * to record what a chat turn did (`services/chat/runActivity.js`). An observer
  * must be cheap and must not throw into the producer.
  *
- * @param {(envelope: Object) => void} fn
+ * @param {(envelope: Object, streamId: string) => void} fn
  * @returns {() => void} unsubscribe
  */
 export function observeEmittedEnvelopes(fn) {
@@ -76,10 +83,10 @@ export function observeEmittedEnvelopes(fn) {
   return () => emitObservers.delete(fn);
 }
 
-function notifyEmitObservers(envelope) {
+function notifyEmitObservers(envelope, streamId) {
   for (const fn of emitObservers) {
     try {
-      fn(envelope);
+      fn(envelope, streamId);
     } catch (err) {
       logger.warn('SSE v2 emit observer failed', {
         component: COMPONENT,
@@ -105,14 +112,35 @@ export function currentSeq(streamId) {
   return seqByStream.get(streamId) || 0;
 }
 
+/** The last run frame counter stamped for `runId` on this worker (0 when none). */
+export function currentRseq(runId) {
+  return rseqByRun.get(runId) || 0;
+}
+
+function nextRseq(runId) {
+  const next = (rseqByRun.get(runId) || 0) + 1;
+  touch(rseqByRun, runId, next);
+  return next;
+}
+
 /**
  * Forget a stream: its `seq` counter and run binding. Called when the stream
  * is gone for good — the chat's SSE client entry was removed, a workflow /
  * agent execution reached a terminal state — so the registry stays bounded.
+ *
+ * Text still waiting in the stream's coalescing window (up to
+ * DELTA_COALESCE_MS of deltas) is dropped, not delivered: the chat callers
+ * reset only after their client is gone, and an execution's terminal frame,
+ * like any non-delta frame, has already flushed the window before the reset.
  */
 export function resetStream(streamId) {
   seqByStream.delete(streamId);
   currentByStream.delete(streamId);
+  const slot = coalescing.get(streamId);
+  if (slot) {
+    clearTimeout(slot.timer);
+    coalescing.delete(streamId);
+  }
 }
 
 /**
@@ -140,6 +168,103 @@ export function buildEnvelope({ streamId, runId, type, data, seq }) {
  */
 export function stampSeq(streamId, envelope) {
   return { ...envelope, seq: nextSeq(streamId) };
+}
+
+// ── text delta coalescing ───────────────────────────────────────────────────
+
+/**
+ * How long consecutive text / thinking deltas of one stream are merged into one
+ * frame. A model streams one token per chunk (40/s and more), and in cluster
+ * mode almost every frame crosses workers through the primary
+ * (`server/clusterBus.js`), so a frame per token is the bus's main traffic.
+ * The first delta after a quiet window goes out at once (no added latency to
+ * the first token); deltas arriving within the window are appended to one
+ * pending frame, sent when the window ends. Any other frame on the stream
+ * flushes the pending one first, so order is unchanged.
+ */
+export const DELTA_COALESCE_MS = 50;
+
+/** streamId → `{ pending: envelope|null, timer }` while a window is open. */
+const coalescing = new Map();
+
+/** A delta whose `content` can be appended to: text or thinking, no metadata. */
+function isMergeableDelta(envelope) {
+  const d = envelope.data;
+  return (
+    envelope.type === SSE_V2_EVENTS.STEP_DELTA &&
+    (d.kind === 'text' || d.kind === 'thinking') &&
+    typeof d.content === 'string' &&
+    d.meta === undefined
+  );
+}
+
+function sameDelta(a, b) {
+  return a.runId === b.runId && a.data.step === b.data.step && a.data.kind === b.data.kind;
+}
+
+function sendNow(streamId, envelope) {
+  if (!deliver) return;
+  try {
+    deliver(streamId, envelope);
+  } catch (err) {
+    logger.warn('SSE v2 delivery failed', {
+      component: COMPONENT,
+      streamId,
+      type: envelope.type,
+      error: err.message
+    });
+  }
+}
+
+function openWindow(streamId) {
+  const slot = { pending: null, timer: null };
+  const tick = () => {
+    if (coalescing.get(streamId) !== slot) return;
+    if (!slot.pending) {
+      coalescing.delete(streamId);
+      return;
+    }
+    const pending = slot.pending;
+    slot.pending = null;
+    slot.timer = setTimeout(tick, DELTA_COALESCE_MS);
+    sendNow(streamId, pending);
+  };
+  slot.timer = setTimeout(tick, DELTA_COALESCE_MS);
+  coalescing.set(streamId, slot);
+}
+
+/**
+ * Close the stream's window, delivering what it holds. Exported for the
+ * resume snapshot, which must not straddle a half-filled window, and for a
+ * POST stream about to end.
+ */
+export function flushStream(streamId) {
+  const slot = coalescing.get(streamId);
+  if (!slot) return;
+  clearTimeout(slot.timer);
+  coalescing.delete(streamId);
+  if (slot.pending) sendNow(streamId, slot.pending);
+}
+
+/** Deliver through the installed delivery function, merging deltas per window. */
+function deliverCoalesced(streamId, envelope) {
+  const delta = isMergeableDelta(envelope);
+  const slot = coalescing.get(streamId);
+  if (slot && delta) {
+    if (!slot.pending) {
+      slot.pending = { ...envelope, data: { ...envelope.data } };
+      return;
+    }
+    if (sameDelta(slot.pending, envelope)) {
+      slot.pending.data.content += envelope.data.content;
+      // The merged frame holds every chunk up to this one.
+      if (envelope.rseq) slot.pending.rseq = envelope.rseq;
+      return;
+    }
+  }
+  flushStream(streamId);
+  sendNow(streamId, envelope);
+  if (delta) openWindow(streamId);
 }
 
 /**
@@ -191,19 +316,25 @@ export class RunStreamEmitter {
       });
       return null;
     }
-    if (emitObservers.size > 0) notifyEmitObservers(envelope);
-    const fn = this._deliver || deliver;
-    if (fn) {
-      try {
-        fn(this.streamId, envelope);
-      } catch (err) {
-        logger.warn('SSE v2 delivery failed', {
-          component: COMPONENT,
-          streamId: this.streamId,
-          type,
-          error: err.message
-        });
-      }
+    // Only frames on the installed delivery (the chat stream) are numbered per
+    // run: an override is an in-process sink nobody re-attaches to.
+    if (!this._deliver) envelope.rseq = nextRseq(envelope.runId);
+    if (emitObservers.size > 0) notifyEmitObservers(envelope, this.streamId);
+    // A delivery override is an in-process sink (an API response, a recorder)
+    // with nothing to relay, so only the installed delivery coalesces.
+    if (!this._deliver) {
+      deliverCoalesced(this.streamId, envelope);
+      return envelope;
+    }
+    try {
+      this._deliver(this.streamId, envelope);
+    } catch (err) {
+      logger.warn('SSE v2 delivery failed', {
+        component: COMPONENT,
+        streamId: this.streamId,
+        type,
+        error: err.message
+      });
     }
     return envelope;
   }

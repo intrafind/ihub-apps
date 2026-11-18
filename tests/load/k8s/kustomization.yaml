@@ -1,5 +1,5 @@
-# kubectl apply -k tests/load/k8s           (stubs + config)
-# then the jobs one by one, see tests/load/README.md → "In the cluster"
+# kubectl apply -k tests/load/k8s           (namespace, stubs + config)
+# then the iHub under test (optional) and the jobs, see tests/load/README.md → "In the cluster"
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: ihub-loadtest
@@ -8,8 +8,10 @@ resources:
   - stubs.yaml
 images:
   - name: ihub-loadtest
-    newName: ghcr.io/intrafind/ihub-loadtest # push tests/load/Dockerfile here
-    newTag: latest
+    # tests/load/Dockerfile, pushed as a tag of the ihub-apps package (build it for
+    # the cluster's architecture: docker buildx build --platform linux/amd64 …).
+    newName: ghcr.io/intrafind/ihub-apps
+    newTag: loadtest-runner
 configMapGenerator:
   - name: loadtest-config
     envs:

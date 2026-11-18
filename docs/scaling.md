@@ -184,7 +184,7 @@ branches in [`server/startup/primary.js`](../server/startup/primary.js) and
 | `WORKERS`         | derived | Number of worker processes. `1` = no cluster. Unset: from the container memory limit, or `4` without one. |
 | `NUM_WORKERS`     | derived | Alias of `WORKERS` (accepted for backwards-compat).                    |
 | `STICKY_SESSIONS` | `false` | Pin each client to one worker by hashing its TCP peer address.         |
-| `NODE_OPTIONS=--max-old-space-size=<MB>` | derived | V8 heap limit of every process. Unset: each worker gets its share of the container memory limit. |
+| `NODE_OPTIONS=--max-old-space-size=<MB>` | derived | V8 old-space limit of every process (`--max-heap-size` sets the whole heap). Unset: each worker gets its share of the container memory limit. |
 
 `WORKERS` is read **once at process start** by `server/config.js`. Changing
 it at runtime has no effect — see [Why it is not in the Admin UI](#why-it-is-not-in-the-admin-ui).
@@ -196,29 +196,66 @@ At startup the server reads the container's memory limit from the cgroup
 `max` means no limit) and the CPU count (`os.availableParallelism()`):
 
 - **Workers**, when neither `WORKERS` nor `NUM_WORKERS` is set:
-  `(limit − 160 MB for the primary) / 768 MB per worker`, at least 1, at most
+  `(limit − 160 MB for the primary) / 1700 MB per worker`, at least 1, at most
   the CPU count and never more than 4. Without a limit: 4, as before. One
   worker means the plain single process, without a primary.
-- **Heap per worker**, unless `--max-old-space-size` is given in
-  `NODE_OPTIONS` or on the command line: `(limit − 160 MB) / workers − 300 MB`
-  (what a Node process uses outside its heap), at least 512 MB, passed to each
-  worker as `--max-old-space-size`. V8 then collects garbage before the
-  container reaches its limit instead of being killed by it. A single process
-  keeps Node's own default, which already follows the container limit.
+- **Heap per worker**, unless `--max-old-space-size` or `--max-heap-size` is
+  given in `NODE_OPTIONS` or on the command line: each worker's share,
+  `(limit − 160 MB) / workers`, minus 850 MB for what a worker uses outside
+  its main V8 heap (the isolates of its worker threads, buffers, code),
+  minus the young generation, passed to each worker as
+  `--max-old-space-size`. Old space, young generation and the rest together
+  stay within the share, so V8 collects garbage before the container reaches
+  its limit instead of being killed by it. A single process keeps Node's own
+  default, which already follows the container limit.
+- **Young generation**: Node's own. Node sizes it from the container's
+  memory limit, not from `--max-old-space-size`: 3 × 16 MB semi-space up to
+  1 GiB, 3 × 32 MB up to 2 GiB and 3 × 64 MB = 192 MB above (measured with
+  Node 24 in containers), and that is what the heap formula deducts. The
+  server passes no `--max-semi-space-size` of its own; one you give in
+  `NODE_OPTIONS` reaches the workers and is deducted instead (3 × its value).
+
+Worker threads inside a worker (file extraction, project search, document
+rendering) keep their own heap limits: V8's heap flags are process-wide and
+would otherwise override them, so the server resets the flags after its own
+heap is set up. Each thread also gets a 32 MB young generation (otherwise it
+would take Node's container default, 192 MB above 2 GiB). The threads' memory
+counts toward the 850 MB outside the heap.
+
+When an explicit `WORKERS` leaves a worker less than 1,700 MB — or a heap flag
+of yours leaves less than the flag's heap (old space plus young generation)
+plus 850 MB — the workers do not fit: each still gets its share minus the deductions as heap (at least
+256 MB), and the decision is logged as a warning naming how many workers fit
+into the limit and how much memory the requested count needs, for example:
+
+```
+14 workers do not fit into the memory limit: 1305 MB each, a worker needs 1700 MB. At most 10 worker(s) fit into 18432 MB; 14 workers need 23960 MB. Lower WORKERS or raise the limit
+```
 
 An explicit setting always wins. The decision is logged once at startup:
 
 ```
-Worker sizing: 2 worker(s) (memory limit), heap per worker 620 MB (memory limit) { memoryLimitMb: 2000, cpus: 4 }
+Worker sizing: 2 worker(s) (memory limit), heap per worker 926 MB (memory limit) { shareMb: 1968, youngGenerationMb: 192, memoryLimitMb: 4096, cpus: 4 }
 ```
 
-| Container memory limit | CPUs | Workers | Heap per worker |
-| ---------------------- | ---- | ------- | --------------- |
-| none                   | any  | 4       | Node default    |
-| 1 GiB                  | 4    | 1       | Node default    |
-| 2000 MiB               | 4    | 2       | 620 MB          |
-| 4 GiB                  | 4    | 4       | 684 MB          |
-| 4 GiB                  | 2    | 2       | 1668 MB         |
+| Container memory limit | CPUs | Workers | Heap per worker | Young generation (Node's) | Fits |
+| ---------------------- | ---- | ------- | --------------- | ------------------------- | ---- |
+| none                   | any  | 4       | Node default    | Node default              | yes  |
+| 1 GiB – 3 GiB          | any  | 1       | Node default    | Node default              | yes  |
+| 4 GiB                  | 2+   | 2       | 926 MB          | 192 MB                    | yes  |
+| 8 GiB                  | 4+   | 4       | 966 MB          | 192 MB                    | yes  |
+| 8 GiB (`WORKERS=6`)    | 8    | 6       | 296 MB          | 192 MB                    | no (at most 4) |
+| 12 GiB (`WORKERS=6`)   | 8    | 6       | 979 MB          | 192 MB                    | yes  |
+| 16 GiB                 | 4+   | 4       | 3014 MB         | 192 MB                    | yes  |
+| 18 GiB (`WORKERS=14`)  | 15   | 14      | 263 MB          | 192 MB                    | no (at most 10) |
+| 24 GiB (`WORKERS=14`)  | 15   | 14      | 702 MB          | 192 MB                    | yes  |
+
+Measured on Kubernetes without swap (14 workers, 2,000–2,500 users): a worker
+uses 1.5–1.7 GB RSS under load, and that barely depends on its heap limit —
+most of it is outside the main heap. 14 workers ran without an OOM kill in
+24 GiB; in 18 GiB they were OOM-killed and about 4% of chat turns failed, in
+14 GiB two thirds did. Plan about 1.7 GB per worker; prefer fewer workers (or
+more memory) over squeezing more into the limit.
 
 ### Picking a value
 
@@ -230,9 +267,13 @@ Worker sizing: 2 worker(s) (memory limit), heap per worker 620 MB (memory limit)
   CPU limit assigned to the container, not to the host's physical cores. A
   2-core container running `WORKERS=8` will thrash the scheduler.
 - **Memory budget:** each worker holds its own copy of the config cache,
-  loaded adapters, and in-flight state: about 450–550 MB RSS once started,
-  more while it extracts large files. The derived sizing plans 768 MB per
-  worker and 160 MB for the primary.
+  loaded adapters, worker threads and in-flight state: about 1 GB RSS once
+  started, 1.5–1.95 GB under load. The threads are one extraction thread and
+  two project search threads (`projects.search.threads`), each with its own
+  heap of up to `projects.extraction.memoryMb` (see
+  [Projects](projects.md#platform-settings)); the search threads hold the
+  worker's share of the project index cache. The derived sizing plans 1536 MB
+  per worker and 160 MB for the primary.
 
 ## Startup behaviour
 

@@ -32,6 +32,8 @@ import { NotSupportedError } from './errors.js';
  * @property {string} [key] - Key that changed, when applicable.
  * @property {string|null} [ownerId] - Owning principal of the changed
  *   document, so a subscriber can filter without a read.
+ * @property {string} [etag] - Etag of the stored document, on a put by a
+ *   provider that publishes it, so a subscriber can recognise a version it holds.
  * @property {string} at - ISO-8601 timestamp of the change.
  */
 

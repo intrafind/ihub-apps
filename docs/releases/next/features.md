@@ -74,16 +74,34 @@ pace while documents are ingested. The result is the same text as before.
 - New metric `ihub.extraction.queue.duration` (wait for a free thread); `ihub.extraction.duration` now
   measures the extraction in the thread. See [Projects](../../projects.md#platform-settings).
 
+## Project Search Runs in Worker Threads, Off the Event Loop
+
+Searching a project — `knowledge_search`, and the excerpts a `relevant` or `auto` project puts into the
+prompt — no longer blocks the server process. Building a project's search index, ranking it and counting
+the excerpt tokens used to hold up every other request of the process for up to several hundred
+milliseconds under load; they now run in worker threads. The results are the same as before.
+
+- Each server process has two search threads (`platform.json` → `projects.search.threads`, 0 to 8; `0`
+  searches on the event loop as before). Each cluster worker has its own threads.
+- A project's index lives on its thread, so a search sends only the question and gets the hits back; the
+  index cache limits (`projects.indexCache`) are shared across the threads.
+  See [Projects](../../projects.md#platform-settings).
+
 ## Workers and Their Memory Follow the Container's Memory Limit
 
 In a container with a memory limit, iHub no longer starts four workers that each size their memory as if they
 had the whole container to themselves. When `WORKERS` (or `NUM_WORKERS`) is not set, the server starts as
-many workers as fit into the memory limit (768 MB each after 160 MB for the primary), at most one per CPU and
-never more than four, and gives each worker a heap limit of its share, so memory is reclaimed before the
-container is killed. A 2 GB container now runs 2 workers instead of 4; a 1 GB container runs a single process.
-Without a memory limit nothing changes (4 workers).
+many workers as fit into the memory limit (1.7 GB each after 160 MB for the primary, the memory a worker was
+measured to use under load), at most one per CPU and
+never more than four, and gives each worker a heap limit of its share minus what a worker uses outside the heap,
+so memory is reclaimed before the container is killed. A 4 GB container now runs 2 workers instead of 4; up to
+3 GB a single process runs. Without a memory limit nothing changes (4 workers). An
+explicit `WORKERS` that does not fit into the limit (less than 1.7 GB per worker) is logged as a warning that
+names how many workers fit and how much memory the requested count needs — for example, 14 workers need about
+23.4 GB, and an 18 GB container holds at most 10.
 
-An explicit `WORKERS` and an explicit `--max-old-space-size` in `NODE_OPTIONS` still win. The decision is
+An explicit `WORKERS`, or `--max-old-space-size` / `--max-heap-size` in `NODE_OPTIONS`, still wins; a heap flag
+that leaves too little memory per worker is logged as the same warning. The decision is
 logged at startup ("Worker sizing: …"), and the container start banner no longer claims a worker count the
 server does not use. See [Scaling with Multiple Workers](../../scaling.md#sizing-from-the-container).
 
@@ -1860,7 +1878,9 @@ language) and in the audit log, so you can answer "who confirmed which version, 
 - **Admin.** **Admin → EU AI Act → AI acknowledgement** holds the switches, the text per language and the policy
   link. **Admin → Users** gets an **AI acknowledgement** column and filter, a per-user **Remove AI
   acknowledgement** action and an **AI acknowledgements** menu: **Export CSV**, **Request again**, **Remove all**.
-  (`aiAcknowledgement` in `platform.json`; migration V242 adds the defaults.)
+  (`aiAcknowledgement` in `platform.json`; migration V242 adds the defaults.) Removing a user's
+  acknowledgement also invalidates the confirmation their browsers still hold, so they are asked
+  again at their next message.
 
 See [EU AI Act](../../ai-act.md#ai-use-acknowledgement).
 
@@ -2322,6 +2342,27 @@ again. It sends only the lines that change, so a fix or a small request ("make t
   missing `viewBox` is now a note the model mentions or fixes in passing, never a reason to
   rewrite the file.
 
+## Proxy and NTLM Sign-In No Longer Rewrite `users.json` on Every Request
+
+With proxy authentication, or NTLM without a session token, every request signed the user in
+again and rewrote `users.json`, which every worker then reloaded. A sign-in that changes nothing
+now writes nothing: the file is written when a user's name, email or login name changes, and once
+a day for the "last active" date. This takes most of the disk and CPU load off busy proxy and NTLM
+installations.
+
+- A user's `updatedAt` in `users.json` now moves only when their record changed, no longer on
+  every sign-in.
+
+## System Resources Show Where Requests Wait
+
+`GET /api/admin/system/resources` now reports, per process, where requests wait rather than
+compute: the cluster bus between workers (requests, replies, timeouts, latency), file and storage
+locks (acquisitions, timeouts, current waiters, wait and hold times), the model and tool request
+throttle, and storage operations. The counters run since the process started; compare two
+snapshots to see a window. The load-test harness reports them as "Waits and cluster bus".
+
+- The field is `processes[].diagnostics`; the rest of the answer is unchanged.
+
 ## Chat: Word, PowerPoint and Excel Files Are Changed in Place
 
 A change to a document the chat made no longer makes the model write the whole document again.
@@ -2345,3 +2386,20 @@ with a clickable chart, a calculator, a data explorer and a clickable diagram �
 `dashboard` reference with a second full example. The model reads the closest one before it
 writes, so artifacts are more consistent, work on phones and with the keyboard, and come out
 right the first time more often.
+
+## Chat: Answers on One Connection, and Reopened Turns Show Their Text So Far
+
+A chat answer can now stream on the request that sends the message, instead of the browser first
+opening a second stream connection. This halves the connections per message (Compare mode uses one
+per panel) and keeps answer text off the traffic between server workers. It is off by default: turn
+on **Chat answers on one connection** under **Admin → Features**; switching it takes effect on the
+next message.
+
+- Reopening a chat whose answer is still being written (a reload, a second tab, a dropped
+  connection) now shows the text and the reasoning written so far at once, instead of only from the
+  next words on.
+- With the feature on, a connection that drops mid-answer reconnects to the running answer on its
+  own. A stored chat's answer keeps running; a temporary chat's answer stops, as before.
+- API callers can use the same: send `Accept: text/event-stream` with the chat message. Requests
+  without it get the same answer as before. Without sticky sessions across several pods, Stop and
+  reopening a running answer work only on the pod running it.

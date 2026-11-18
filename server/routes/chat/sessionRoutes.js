@@ -25,9 +25,13 @@ import {
   hasChatClient,
   isChatDurable,
   locateChatClient,
-  markChatDurable
+  markChatDurable,
+  openChatPostStream,
+  postStreams,
+  writeStreamStart
 } from '../../sse.js';
-import { RunStreamEmitter, currentSeq, getStreamRun } from '../../services/loop/RunStream.js';
+import { resumeChatRun } from '../../services/chat/chatResume.js';
+import { RunStreamEmitter, buildEnvelope, getStreamRun } from '../../services/loop/RunStream.js';
 import runLog, { newRunId, isValidRunId } from '../../services/loop/RunLog.js';
 import { resolveActorId } from '../../services/loop/runIdentity.js';
 import { authorizeInteraction } from '../../services/loop/runAccess.js';
@@ -67,7 +71,7 @@ import { describeCause, userAbortCause } from '../../services/chat/abortCause.js
 import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
 import { resolveChatScopes } from '../../services/integrations/scopes/index.js';
 import { ServiceError } from '../../utils/ServiceError.js';
-import { codeOfStatus } from '../../utils/errorResponse.js';
+import { codeOfStatus, toErrorResponse } from '../../utils/errorResponse.js';
 import { drainPendingFinish } from '../../services/workflow/chatBridge.js';
 import { cancelChatWorkflow, replayChatWorkflowProgress } from '../../tools/workflowRunner.js';
 import {
@@ -86,6 +90,48 @@ import {
  */
 function refusal(status, message, { code, details } = {}) {
   return new ServiceError(code ?? codeOfStatus(status), message, { status, details });
+}
+
+/**
+ * The frames that answer a refusal or failure after a POST stream committed,
+ * when no status line can carry it any more: `stream/error`, then the turn's
+ * `run/ended { status: 'error' }`. The error is described exactly as its
+ * problem+json body would be (`toErrorResponse`): the same code, and a 5xx
+ * message only when it is safe to show.
+ *
+ * @param {string} chatId
+ * @param {string} runId - The turn's run
+ * @param {Error} error
+ * @returns {Object[]} SSE v2 envelopes
+ */
+function lateRefusalFrames(chatId, runId, error) {
+  const { body } = toErrorResponse(error);
+  const frame = (type, data) => buildEnvelope({ streamId: chatId, runId, type, data });
+  const described = { code: body.code, message: body.detail };
+  return [
+    frame(SSE_V2_EVENTS.STREAM_ERROR, {
+      ...described,
+      retryable: false,
+      details: { ...body.details, status: body.status }
+    }),
+    frame(SSE_V2_EVENTS.RUN_ENDED, { status: 'error', finishReason: 'error', error: described })
+  ];
+}
+
+/**
+ * Whether a chat POST asks for its turn as a stream: `text/event-stream` named
+ * in `Accept` and preferred over JSON (q-values respected). A wildcard alone
+ * (any type, `text/*`) keeps the JSON answer.
+ *
+ * @param {import('express').Request} req
+ * @returns {boolean}
+ */
+function wantsEventStream(req) {
+  const accept = req.get?.('accept') || '';
+  return (
+    /\btext\/event-stream\b/i.test(accept) &&
+    req.accepts(['application/json', 'text/event-stream']) === 'text/event-stream'
+  );
 }
 
 /**
@@ -486,8 +532,9 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
    *     summary: Connect to chat SSE stream
    *     description: |
    *       Establishes a Server-Sent Events (SSE) connection for receiving real-time chat
-   *       messages and status updates. The client must connect here first, then POST a
-   *       message to the same URL. Events are streamed back over this connection.
+   *       messages and status updates. The client connects here first, then POSTs a
+   *       message to the same URL, and the turn's events stream back over this connection
+   *       (or the POST streams them itself when sent with `Accept: text/event-stream`).
    *       The connection remains open until the client disconnects or the stream is stopped.
    *     tags:
    *       - Chat
@@ -507,6 +554,24 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
    *         schema:
    *           type: string
    *         description: Unique chat session ID (e.g. UUID) created by the client
+   *       - in: query
+   *         name: resumeRun
+   *         required: false
+   *         schema:
+   *           type: string
+   *         description: >-
+   *           Re-attach to this running turn. After `stream/connected` the stream
+   *           first carries the turn's text and thinking so far (as `step/delta`
+   *           frames) and its ledger events after `afterLedgerSeq`, then goes live.
+   *       - in: query
+   *         name: afterLedgerSeq
+   *         required: false
+   *         schema:
+   *           type: integer
+   *           minimum: 0
+   *         description: >-
+   *           The last ledger `seq` of `resumeRun` the client replayed
+   *           (`GET /api/runs/{runId}/events?view=sse`).
    *     responses:
    *       200:
    *         description: SSE stream established successfully
@@ -525,6 +590,8 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
    *
    *               event: run/ended
    *               data: {"v":2,"seq":9,"runId":"chat-…","ts":"…","type":"run/ended","data":{"status":"completed","finishReason":"stop"}}
+   *       400:
+   *         description: Invalid `resumeRun` or `afterLedgerSeq` (VALIDATION_FAILED, problem+json)
    *       401:
    *         description: Authentication required
    *       500:
@@ -564,16 +631,31 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             // the exception: its answer is stored for the user to come back to,
             // so the helper leaves that one running.
             abortChatRequestOnDisconnect(chatId);
-            logger.info('Client disconnected', { component: 'sessionRoutes', chatId });
+            logger.debug('Client disconnected', { component: 'sessionRoutes', chatId });
           }
         });
         // appId is carried on the entry for parity with the previous shape;
         // nothing currently reads it back off the map, but keep it available.
         channel.entry.appId = appId;
-        new RunStreamEmitter({ streamId: chatId }).emit(SSE_V2_EVENTS.STREAM_CONNECTED, {
-          runId: chatId,
-          lastSeq: currentSeq(chatId)
-        });
+        // A client re-attaching to a running turn (`resumeRun`, after replaying
+        // its ledger up to `afterLedgerSeq`) gets the turn's partial text and
+        // thinking first; live frames wait until then (`writeStreamStart`).
+        const { resumeRun, afterLedgerSeq } = req.query;
+        let resume = null;
+        if (resumeRun && isValidRunId(resumeRun)) {
+          channel.entry.held = [];
+          try {
+            resume = await resumeChatRun({ chatId, runId: resumeRun, afterLedgerSeq });
+          } catch (resumeError) {
+            logger.warn('Chat stream resume failed', {
+              component: 'sessionRoutes',
+              chatId,
+              runId: resumeRun,
+              error: resumeError.message
+            });
+          }
+        }
+        writeStreamStart(chatId, channel.entry, resume ? { ...resume, runId: resumeRun } : {});
 
         // --- Workflow disconnect resilience ---
         // 1. If a workflow finished while the chat was disconnected, deliver
@@ -766,6 +848,18 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
    *       connection (GET on the same URL), so open that first. This endpoint answers
    *       `{ status: "streaming" }` once the turn has ended. Without an SSE connection
    *       the turn still runs and a kept chat stores its answer, but nothing streams.
+   *
+   *       **Streaming on the POST.** Send `Accept: text/event-stream` and the turn's
+   *       frames come back on this response instead, with no GET needed. Every refusal
+   *       before the turn starts (authentication, validation, unknown chat, 409, 428,
+   *       503, …) is still answered with its status and `application/problem+json`.
+   *       Once the turn starts, the answer is `200 text/event-stream`: `stream/connected`
+   *       first, then the same SSE v2 frames as the GET, ending after the turn's
+   *       `run/ended` or `run/paused`. A refusal after that point is a `stream/error`
+   *       frame with its `code`. Closing the response stops a temporary chat's turn; a
+   *       kept chat's turn keeps running and can be followed again on the GET with
+   *       `resumeRun`. An `@workflow` mention is still answered with JSON and streams
+   *       on the GET.
    *     tags:
    *       - Chat
    *     security:
@@ -784,6 +878,15 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
    *         schema:
    *           type: string
    *         description: Unique chat session ID matching the active SSE connection
+   *       - in: header
+   *         name: Accept
+   *         required: false
+   *         schema:
+   *           type: string
+   *           example: text/event-stream
+   *         description: >-
+   *           `text/event-stream` streams the turn on this response; anything else (or
+   *           nothing) keeps the JSON answer.
    *     requestBody:
    *       required: true
    *       content:
@@ -798,8 +901,22 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
    *             outputFormat: "markdown"
    *     responses:
    *       200:
-   *         description: The turn ran; its answer was streamed over the chat's SSE connection
+   *         description: >-
+   *           The turn ran. JSON: its answer was streamed over the chat's SSE connection.
+   *           `text/event-stream` (when asked for): the turn's frames.
    *         content:
+   *           text/event-stream:
+   *             schema:
+   *               type: string
+   *               description: >-
+   *                 SSE v2 frames (see docs/streaming-events.md), starting with `stream/connected`.
+   *             example: |
+   *               event: stream/connected
+   *               data: {"v":2,"seq":1,"runId":"550e8400-…","ts":"…","type":"stream/connected","data":{"runId":"550e8400-…","lastSeq":0,"protocol":2}}
+   *
+   *               event: step/delta
+   *               id: chat-…:3
+   *               data: {"v":2,"seq":3,"runId":"chat-…","rseq":3,"ts":"…","type":"step/delta","data":{"step":0,"kind":"text","content":"Paris"}}
    *           application/json:
    *             schema:
    *               oneOf:
@@ -880,6 +997,16 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
       // The same for the call a connect resumes (#3752).
       let restoreConnect = null;
       let connectResume = null;
+
+      // A client that accepts `text/event-stream` gets the turn's frames on this
+      // response instead of over its GET stream; without the header the answer
+      // is the JSON it always was. Opened at the commit point below: every
+      // refusal before it is problem+json either way.
+      const wantsStream = wantsEventStream(req);
+      // This request's own stream (`openChatPostStream`) and the turn's run, for
+      // a refusal that can only be told as frames.
+      let postStream = null;
+      let postStreamRunId = null;
       try {
         const {
           messages,
@@ -978,7 +1105,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           const lastMessage = messages.at(-1);
           if (lastMessage && lastMessage.messageId) {
             messageId = lastMessage.messageId;
-            logger.info('Using client-provided messageId', {
+            logger.debug('Using client-provided messageId', {
               component: 'sessionRoutes',
               messageId
             });
@@ -1008,7 +1135,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             ...extra
           };
         }
-        logger.info('Processing chat', { component: 'sessionRoutes', language: clientLanguage });
+        logger.debug('Processing chat', { component: 'sessionRoutes', language: clientLanguage });
         if (!messages || !Array.isArray(messages)) {
           const errorMessage = await getLocalizedError('messagesRequired', {}, clientLanguage);
           throw new ServiceError('BAD_REQUEST', errorMessage);
@@ -1421,7 +1548,10 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
         // known here before the turn's first frame is routed (#3674). With no
         // stream anywhere the turn still runs and is stored; its frames have
         // nowhere to go.
-        await locateChatClient(chatId);
+        //
+        // A turn streamed on its own POST needs none of that: its frames are
+        // written here, to the response this worker holds.
+        if (!wantsStream) await locateChatClient(chatId);
 
         // From here the turn owns the chat. A kept chat's turn has to survive
         // the browser closing — its answer is written to the store either way —
@@ -1456,6 +1586,23 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
         const pausedTurn = answeredClarification || approvals.pausedTurn || null;
         const continuesRun = pausedTurn && isValidRunId(pausedTurn.runId);
         const turnRunId = continuesRun ? pausedTurn.runId : newRunId('chat');
+        // The commit point of a POST stream: the SSE headers go out now, so the
+        // wait for outdated documents below already streams. From here on a
+        // refusal is a `stream/error` frame (see the catch below).
+        if (wantsStream) {
+          postStream = openChatPostStream({
+            req,
+            res,
+            chatId,
+            runId: turnRunId,
+            durable: !persistence.temporary
+          });
+          postStreamRunId = turnRunId;
+          // Whether the reader is still there when a durable turn ends (the
+          // stored answer is marked unread otherwise): this stream, or a GET
+          // the client re-attached with after losing it.
+          persistence.clientConnected = () => postStream.isOpen() || hasChatClient(chatId);
+        }
         const refreshStatus = new RunStreamEmitter({ streamId: chatId, runId: turnRunId });
         const prep = await chatService.prepareChatRequest({
           ...chatRequestOptions,
@@ -1479,6 +1626,8 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             // pause must not end the run the first one may be continuing.
             runId: continuesRun ? null : turnRunId
           });
+          // A POST stream carried those frames itself; the finally ends it.
+          if (postStream) return;
           return res.json({ status: 'error', message: errMsg, code: prep.error.code });
         }
         if (connectResumePrep.commit) {
@@ -1490,6 +1639,8 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
               code: committed.refusal.code,
               message: committed.refusal.message
             });
+            // The failed run's frames (with the code) were the answer on a POST stream.
+            if (postStream) return;
             throw refusal(committed.refusal.status, committed.refusal.message, {
               code: committed.refusal.code
             });
@@ -1507,10 +1658,16 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             code: approvalRefusal.code,
             message: approvalRefusal.message
           });
+          // The failed run's frames (with the code) were the answer on a POST stream.
+          if (postStream) return;
           throw refusal(approvalRefusal.status, approvalRefusal.message, {
             code: approvalRefusal.code
           });
         }
+        // A temporary chat's client that went away while the turn was prepared
+        // has nobody left to answer: the disconnect could not abort a turn that
+        // had not started yet.
+        if (postStream && !postStream.isOpen() && persistence.temporary) return;
         model = prep.data.model;
         // What open MCP App views reported since the last turn; model-only.
         appendMcpAppContext(prep.data.llmMessages, mcpAppContext);
@@ -1543,28 +1700,48 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
         // Refused at persistence: the chat's container changed under the
         // turn (`settleUserTurn`), and nothing of it was stored.
         if (outcome?.refusal) {
+          // The failed run's frames, when ChatService emitted them, were the
+          // answer on a POST stream (a refusal before the run started has none).
+          if (postStream?.hasEnded(turnRunId)) return;
           throw refusal(409, outcome.refusal.message, {
             code: outcome.refusal.code
           });
         }
 
+        // A POST stream ends in the finally, after the turn's last frame.
+        if (postStream) return;
         return res.json({ status: 'streaming', chatId });
       } catch (error) {
-        // A refusal and a failing model call are answered as they are; only an unexpected
-        // failure is logged here.
-        if (error instanceof ServiceError || isLLMError(error)) throw error;
-        logger.error('Error in app chat', { component: 'sessionRoutes', error });
+        const expected = error instanceof ServiceError || isLLMError(error);
+        // Only an unexpected failure is logged here.
+        if (!expected) logger.error('Error in app chat', { component: 'sessionRoutes', error });
+        // Past the commit point the status line is gone: the refusal is a frame.
+        if (postStream) {
+          // A run that already ended on this stream has said its last word.
+          if (!postStream.hasEnded(postStreamRunId)) {
+            for (const frame of lateRefusalFrames(chatId, postStreamRunId, error)) {
+              postStream.write(frame);
+            }
+          }
+          return;
+        }
+        // A refusal and a failing model call are answered as they are.
         throw error;
       } finally {
         // The turn is over however it ended, so a disconnect from here on has
         // nothing to protect and should abort again.
-        if (durableTurn) clearChatDurable(chatId);
-        // Answered, but the turn was refused (or failed) before its loop
-        // could run the call: put the approval back, with its answer, so the
-        // same decision can be sent again.
-        if (restoreApproval && !toolApproval?.started) await restoreApproval();
-        // Never after the loop started: the call may have run.
-        if (restoreConnect && !connectResume?.started) await restoreConnect();
+        try {
+          if (durableTurn) clearChatDurable(chatId);
+          // Answered, but the turn was refused (or failed) before its loop
+          // could run the call: put the approval back, with its answer, so the
+          // same decision can be sent again.
+          if (restoreApproval && !toolApproval?.started) await restoreApproval();
+          // Never after the loop started: the call may have run.
+          if (restoreConnect && !connectResume?.started) await restoreConnect();
+        } finally {
+          // Ended however the restores went: the client is waiting for it.
+          postStream?.end();
+        }
       }
     }
   );
@@ -1804,7 +1981,8 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
         // `active` and `processing` are the parts callers branch on.
         return res.status(200).json({
           active: true,
-          lastActivity: clients.get(chatId)?.lastActivity ?? null,
+          lastActivity:
+            clients.get(chatId)?.lastActivity ?? postStreams.get(chatId)?.lastActivity ?? null,
           processing: hasActiveChatRequest(chatId)
         });
       }

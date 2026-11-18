@@ -1367,6 +1367,189 @@ describe('ingest pipeline', () => {
     }
   });
 
+  it('writes a new pick twice: added pending, then installed; its own reconciler leaves it', async () => {
+    const project = await newProject();
+    const repository = getProjectRepository();
+    const realMutate = repository.mutate;
+    let writes = 0;
+    repository.mutate = function (projectId, ...rest) {
+      if (projectId === project.id) writes += 1;
+      return realMutate.call(this, projectId, ...rest);
+    };
+    let open = null;
+    try {
+      fakeFetch.entered = false;
+      fakeFetch.gate = new Promise(resolve => {
+        open = resolve;
+      });
+      const { item } = await service.addItem(
+        project.id,
+        { kind: 'fake-cloud', ref: { fileId: 'two-writes' } },
+        { user: ADA }
+      );
+      await waitFor(() => fakeFetch.entered);
+      // Running, and still pending with its attempt: nothing marked its start.
+      const running = await itemOf(project.id, item.id);
+      assert.equal(running.status, 'pending');
+      assert.equal(typeof running.ingestAttempt, 'string');
+      assert.equal(writes, 1);
+
+      // This worker's reconciler, long past `staleAfterMinutes`: the job is
+      // its own and running, so the item is left alone.
+      const scoped = Object.create(repository);
+      scoped.listAdmin = async () => [];
+      scoped.scanUser = async () => ({
+        projects: [await repository.get(project.id)],
+        truncated: false,
+        skipped: 0
+      });
+      scoped.hasBlobs = () => false;
+      const sameWorker = Object.create(service.ingest);
+      sameWorker._repository = scoped;
+      const result = await sameWorker.reconcile({ now: Date.now() + 3 * 60 * 60 * 1000 });
+      assert.equal(result.interrupted, 0);
+      assert.equal((await itemOf(project.id, item.id)).status, 'pending');
+
+      open();
+      const done = await settled(project.id, item.id);
+      assert.equal(done.status, 'ready', JSON.stringify(done.error));
+      assert.equal(done.ingestAttempt, undefined);
+      assert.equal(writes, 2, 'the add and the install, nothing at the start of the job');
+    } finally {
+      repository.mutate = realMutate;
+      open?.();
+      fakeFetch.gate = null;
+    }
+  });
+
+  it('a new item whose job waited long in the queue is marked when the job starts', async () => {
+    const project = await newProject();
+    const repository = getProjectRepository();
+    const realMutate = repository.mutate;
+    const realEnqueue = service.ingest._enqueue;
+    let writes = 0;
+    repository.mutate = function (projectId, ...rest) {
+      if (projectId === project.id) writes += 1;
+      return realMutate.call(this, projectId, ...rest);
+    };
+    // As if it had waited past half of `staleAfterMinutes` behind other jobs.
+    service.ingest._enqueue = function (job) {
+      job.startedAt -= 3 * 60 * 60 * 1000;
+      return realEnqueue.call(this, job);
+    };
+    let open = null;
+    try {
+      fakeFetch.entered = false;
+      fakeFetch.gate = new Promise(resolve => {
+        open = resolve;
+      });
+      const { item } = await service.addItem(
+        project.id,
+        { kind: 'fake-cloud', ref: { fileId: 'queued-long' } },
+        { user: ADA }
+      );
+      await waitFor(() => fakeFetch.entered);
+      // Restamped at the start: another worker's reconciler counts from here.
+      const running = await itemOf(project.id, item.id);
+      assert.equal(running.status, 'extracting');
+      assert.equal(writes, 2, 'the add and the start');
+
+      open();
+      const done = await settled(project.id, item.id);
+      assert.equal(done.status, 'ready', JSON.stringify(done.error));
+    } finally {
+      repository.mutate = realMutate;
+      service.ingest._enqueue = realEnqueue;
+      open?.();
+      fakeFetch.gate = null;
+    }
+  });
+
+  it('an item that waited long for the conversion slot is stamped when it gets it', async () => {
+    const project = await newProject();
+    const repository = getProjectRepository();
+    const realMutate = repository.mutate;
+    const realAcquire = service.ingest._acquireConvert;
+    const writes = [];
+    let slotAt = Infinity;
+    repository.mutate = async function (projectId, ...rest) {
+      const stored = await realMutate.call(this, projectId, ...rest);
+      if (projectId === project.id) writes.push({ at: Date.now(), items: stored?.items });
+      return stored;
+    };
+    service.ingest._acquireConvert = async function (job) {
+      const release = await realAcquire.call(this, job);
+      slotAt = Date.now();
+      return release;
+    };
+    let open = null;
+    try {
+      fakeFetch.entered = false;
+      fakeFetch.gate = new Promise(resolve => {
+        open = resolve;
+      });
+      const { item } = await service.addItem(
+        project.id,
+        { kind: 'fake-cloud', ref: { fileId: 'slot-long' } },
+        { user: ADA }
+      );
+      await waitFor(() => fakeFetch.entered);
+      // As if it had waited past half of `staleAfterMinutes` since it was added.
+      await realMutate.call(
+        repository,
+        project.id,
+        stored => {
+          const entry = stored.items.find(candidate => candidate.id === item.id);
+          entry.updatedAt = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
+          return stored;
+        },
+        { touchActivity: false, touchUpdated: false }
+      );
+      open();
+      const done = await settled(project.id, item.id);
+      assert.equal(done.status, 'ready', JSON.stringify(done.error));
+      // The first write after the slot is the stamp, before the result is installed.
+      const first = writes.find(write => write.at >= slotAt);
+      const stamped = first.items.find(entry => entry.id === item.id);
+      assert.notEqual(stamped.status, 'ready');
+      assert.ok(Date.now() - Date.parse(stamped.updatedAt) < 60_000, stamped.updatedAt);
+    } finally {
+      repository.mutate = realMutate;
+      service.ingest._acquireConvert = realAcquire;
+      open?.();
+      fakeFetch.gate = null;
+    }
+  });
+
+  it('a new item removed while its job waited stores nothing', async () => {
+    const project = await newProject();
+    const repository = getProjectRepository();
+    let open = null;
+    try {
+      fakeFetch.entered = false;
+      fakeFetch.gate = new Promise(resolve => {
+        open = resolve;
+      });
+      const { item } = await service.addItem(
+        project.id,
+        { kind: 'fake-cloud', ref: { fileId: 'removed' } },
+        { user: ADA }
+      );
+      await waitFor(() => fakeFetch.entered);
+      await service.removeItem(project.id, item.id, { user: ADA });
+      open();
+      await waitFor(() => !service.ingest.isActive(item.id));
+      assert.equal(await itemOf(project.id, item.id), null);
+      const page = await repository.blobs.list(PROJECT_FILES_NAMESPACE, {
+        prefix: `${project.id}__${item.id}__`
+      });
+      assert.deepEqual(page.items, []);
+    } finally {
+      open?.();
+      fakeFetch.gate = null;
+    }
+  });
+
   it('discards a slow first pick another worker released, after a refresh replaced it', async () => {
     const project = await newProject();
     const repository = getProjectRepository();

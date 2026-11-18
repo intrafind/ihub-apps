@@ -254,7 +254,7 @@
     "authApi": {
       "windowMs": 900000,
       "limit": 30,
-      "perIpLimit": 5000,
+      "perIpLimit": 300,
       "skipFailedRequests": false
     },
     "oauthApi": {

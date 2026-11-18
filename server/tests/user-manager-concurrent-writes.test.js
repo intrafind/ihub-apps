@@ -16,7 +16,12 @@ import path from 'node:path';
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createOrUpdateExternalUser, updateUserActivity } from '../utils/userManager.js';
+import {
+  createOrUpdateExternalUser,
+  loadUsersFresh,
+  updateUserActivity,
+  updateUsersFile
+} from '../utils/userManager.js';
 
 let baseDir;
 
@@ -62,6 +67,20 @@ describe('concurrent writes to users.json', () => {
     );
   });
 
+  it('a change reads the file itself, not a cached copy whose token still matches', async () => {
+    const file = seed({ a: { username: 'a', name: 'xx' } });
+    await loadUsersFresh(file);
+    // Another host rewrote it in place, same size, same mtime: the token matches.
+    const { atimeMs, mtimeMs } = fs.statSync(file);
+    fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace('"xx"', '"yy"'));
+    fs.utimesSync(file, atimeMs / 1000, mtimeMs / 1000);
+    await updateUsersFile(file, usersConfig => {
+      usersConfig.users.b = { username: 'b' };
+    });
+    assert.equal(stored(file).a.name, 'yy');
+    assert.ok(stored(file).b);
+  });
+
   it('keeps a user that an admin-made record sits next to', async () => {
     const file = seed({
       user_admin: { id: 'user_admin', username: 'root', authMethods: ['local'] }
@@ -83,5 +102,100 @@ describe('concurrent writes to users.json', () => {
 
     const today = new Date().toISOString().split('T')[0];
     for (const user of Object.values(stored(file))) assert.equal(user.lastActiveDate, today);
+  });
+});
+
+describe('external logins that change nothing write nothing', () => {
+  // As proxyAuth builds it: it re-authenticates (and lands here) on every request.
+  const proxyLogin = (overrides = {}) => ({
+    id: 'jane',
+    name: 'Jane Doe',
+    email: 'jane@corp.example',
+    groups: [],
+    externalGroups: ['staff'],
+    authenticated: true,
+    authMethod: 'proxy',
+    provider: 'proxy',
+    ...overrides
+  });
+  // A write replaces the file (atomic rename), so its inode or mtime moves.
+  const fileVersion = file => {
+    const stat = fs.statSync(file);
+    return `${stat.ino}:${stat.mtimeMs}`;
+  };
+
+  it('proxy auth: a second request of the same user on the same day writes nothing', async () => {
+    const file = seed();
+    const first = await createOrUpdateExternalUser(proxyLogin(), file);
+    const written = fileVersion(file);
+    const record = stored(file)[first.id];
+
+    const second = await createOrUpdateExternalUser(proxyLogin(), file);
+    assert.equal(second.id, first.id);
+    assert.equal(fileVersion(file), written);
+    assert.deepEqual(stored(file)[first.id], record);
+  });
+
+  it('changed external groups are not persisted, so they write nothing either', async () => {
+    const file = seed();
+    await createOrUpdateExternalUser(proxyLogin(), file);
+    const written = fileVersion(file);
+    await createOrUpdateExternalUser(proxyLogin({ externalGroups: ['staff', 'managers'] }), file);
+    assert.equal(fileVersion(file), written);
+  });
+
+  it('a changed name writes, and moves updatedAt', async () => {
+    const file = seed();
+    const first = await createOrUpdateExternalUser(proxyLogin(), file);
+    const before = stored(file)[first.id];
+    await new Promise(resolve => setTimeout(resolve, 5));
+
+    await createOrUpdateExternalUser(proxyLogin({ name: 'Jane Smith' }), file);
+    const after = stored(file)[first.id];
+    assert.equal(after.name, 'Jane Smith');
+    assert.notEqual(after.updatedAt, before.updatedAt);
+  });
+
+  it('the first request of a new day writes lastActiveDate, but not updatedAt', async () => {
+    const file = seed({
+      user_jane: {
+        id: 'user_jane',
+        username: 'jane@corp.example',
+        email: 'jane@corp.example',
+        name: 'Jane Doe',
+        internalGroups: [],
+        active: true,
+        authMethods: ['proxy'],
+        proxyData: { subject: 'jane', provider: 'proxy', lastProvider: 'proxy' },
+        lastActiveDate: '2000-01-01',
+        updatedAt: '2000-01-01T00:00:00.000Z'
+      }
+    });
+    const written = fileVersion(file);
+
+    await createOrUpdateExternalUser(proxyLogin(), file);
+    const after = stored(file).user_jane;
+    assert.notEqual(fileVersion(file), written);
+    assert.equal(after.lastActiveDate, new Date().toISOString().split('T')[0]);
+    assert.equal(after.updatedAt, '2000-01-01T00:00:00.000Z');
+  });
+
+  it('a record missing internalGroups is healed with one write', async () => {
+    const file = seed({
+      user_jane: {
+        id: 'user_jane',
+        username: 'jane@corp.example',
+        email: 'jane@corp.example',
+        name: 'Jane Doe',
+        active: true,
+        authMethods: ['proxy'],
+        proxyData: { subject: 'jane', provider: 'proxy', lastProvider: 'proxy' },
+        lastActiveDate: new Date().toISOString().split('T')[0]
+      }
+    });
+    const written = fileVersion(file);
+    await createOrUpdateExternalUser(proxyLogin(), file);
+    assert.notEqual(fileVersion(file), written);
+    assert.deepEqual(stored(file).user_jane.internalGroups, []);
   });
 });

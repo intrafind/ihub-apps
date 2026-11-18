@@ -124,9 +124,9 @@ const MAX_EXAMINED_RUNS = 100_000;
 /**
  * Lease for one read-modify-write. Short: the critical section is a read and a
  * write, and a lease held longer than that means a dead worker whose lock we
- * want taken over quickly.
+ * want taken over quickly. Unfenced: no section reads the fencing token.
  */
-const LOCK_OPTIONS = { ttlMs: 15000, waitMs: 5000 };
+const LOCK_OPTIONS = { ttlMs: 15000, waitMs: 5000, fence: false };
 
 /** Fields a patch may never change — identity and prototype safety. */
 const PROTECTED_FIELDS = new Set(['runId', '__proto__', 'constructor', 'prototype']);

@@ -44,6 +44,7 @@ jest.unstable_mockModule('../telemetry/metrics.js', () => ({ recordAuthEvent: ()
 
 const { default: registerAuthRoutes } = await import('../routes/auth.js');
 const { default: errorHandler } = await import('../middleware/errorHandler.js');
+const { resetLoginLockouts } = await import('../utils/loginLockout.js');
 
 function buildApp({ ntlm } = {}) {
   const app = express();
@@ -67,6 +68,7 @@ function expectProblem(res, status, code) {
 }
 
 beforeEach(() => {
+  resetLoginLockouts();
   loginUser.mockReset();
   loginLdapUser.mockReset();
   processNtlmLogin.mockReset();
@@ -134,6 +136,30 @@ describe('POST /api/auth/ldap/login', () => {
     const res = await login({ username: 'ada', password: 'pw' });
     expectProblem(res, 401, 'AUTH_REQUIRED');
     expect(res.body.detail).toBe('Invalid credentials');
+  });
+
+  test('locks a username after 5 failed binds, from any address, without binding again', async () => {
+    loginLdapUser.mockRejectedValue(new Error('ldap said no'));
+    for (let i = 0; i < 5; i++) {
+      expectProblem(await login({ username: 'Bob', password: `guess-${i}` }), 401, 'AUTH_REQUIRED');
+    }
+    const binds = loginLdapUser.mock.calls.length;
+    const locked = await login({ username: ' bob', password: 'right' });
+    expectProblem(locked, 429, 'RATE_LIMITED');
+    expect(loginLdapUser.mock.calls.length).toBe(binds);
+    // Another name is unaffected.
+    loginLdapUser.mockResolvedValue({ user: { id: 'ada' }, token: 't', expiresIn: 60 });
+    expect((await login({ username: 'ada', password: 'pw' })).status).toBe(200);
+  });
+
+  test('a successful bind clears the failures', async () => {
+    loginLdapUser.mockRejectedValue(new Error('ldap said no'));
+    for (let i = 0; i < 4; i++) await login({ username: 'carol', password: 'x' });
+    loginLdapUser.mockResolvedValueOnce({ user: { id: 'carol' }, token: 't', expiresIn: 60 });
+    expect((await login({ username: 'carol', password: 'pw' })).status).toBe(200);
+    for (let i = 0; i < 4; i++) {
+      expectProblem(await login({ username: 'carol', password: 'x' }), 401, 'AUTH_REQUIRED');
+    }
   });
 
   test('answers 400 when LDAP sign-in is turned off', async () => {

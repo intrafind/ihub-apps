@@ -8,7 +8,10 @@
  * every process of the instance that answered (primary + each worker) with
  * cpuPercent (100 = one core), RSS, heap and mean event-loop delay. Behind a
  * load balancer with several replicas it shows only the replica that served
- * the call — use Prometheus / `kubectl top` for the others.
+ * the call — use Prometheus / `kubectl top` for the others. Each process also
+ * reports cumulative wait counters (`diagnostics`: cluster bus, locks, request
+ * throttle, storage ops); shard 0 keeps them per stage for the "Waits and
+ * cluster bus" section (lib/waits.mjs).
  *
  * Runner: its own CPU and event-loop delay. If the runner is saturated, the
  * latencies it measures are its own, not the server's; the report flags that.
@@ -42,8 +45,10 @@ export function startSamplers({ cfg, metrics, adminClient }) {
         let workers = 0;
         let cpuSum = 0;
         let rssSum = 0;
+        const diag = {};
         for (const p of snap.processes || []) {
           const id = p.role === 'worker' ? `w${p.workerIndex}` : p.role;
+          if (p.diagnostics) diag[id] = { pid: p.pid, d: p.diagnostics };
           metrics.gauge(`server.cpu.${id}`, p.cpuPercent);
           metrics.gauge(`server.rss.${id}`, p.memory?.rss / 1048576);
           metrics.gauge(`server.heap.${id}`, p.memory?.heapUsed / 1048576);
@@ -60,6 +65,7 @@ export function startSamplers({ cfg, metrics, adminClient }) {
             rssSum += p.memory?.rss || 0;
           }
         }
+        if (firstShard && Object.keys(diag).length) metrics.diag(diag);
         metrics.gauge('server.workerCount', workers);
         metrics.gauge('server.cpu.workersTotal', cpuSum);
         metrics.gauge('server.rss.total', rssSum / 1048576);
@@ -98,8 +104,10 @@ export function startSamplers({ cfg, metrics, adminClient }) {
     timers.push(setInterval(tick, intervalMs));
   }
 
-  if (firstShard && cfg.sampling.vllmMetricsUrl) {
-    const tick = createVllmObserver({ url: cfg.sampling.vllmMetricsUrl, metrics, log });
+  // One vLLM per GPU model; with several, gauges are llm.<modelId>.* instead of llm.*.
+  for (const target of firstShard ? cfg.sampling.vllmTargets || [] : []) {
+    const prefix = target.id ? `llm.${target.id}` : 'llm';
+    const tick = createVllmObserver({ url: target.url, prefix, metrics, log });
     tick().catch(() => metrics.count('sampler.failed'));
     timers.push(setInterval(tick, intervalMs));
   }

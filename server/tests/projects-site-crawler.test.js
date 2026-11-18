@@ -24,6 +24,10 @@ import {
   robotsAllows
 } from '../services/projects/siteCrawler.js';
 import { dropRawTextElements } from '../services/pageReader/pageContent.js';
+import {
+  configureExtractionPool,
+  shutdownExtractionPool
+} from '../services/projects/extractionPool.js';
 
 const page = (title, hrefs) =>
   `<html><head><title>${title}</title></head><body>${hrefs
@@ -431,6 +435,33 @@ describe('crawlSite', () => {
     );
     assert.deepEqual(urlsOf(result), ['https://x.com/']);
     assert.equal(result.truncated, true);
+  });
+
+  it('fails with a timeout when the start page cannot be parsed before the deadline', async () => {
+    configureExtractionPool({ threads: 1, timeoutMs: 60_000, memoryMb: 512 });
+    try {
+      let clock = 0;
+      const fetchPage = async () => {
+        // The fetch used up the crawl's time: the parse has 1 ms left, less
+        // than a thread needs to start.
+        clock = 10_000;
+        return {
+          finalUrl: 'https://x.com/',
+          contentType: 'text/html',
+          bytes: Buffer.from(page('Home', ['a']))
+        };
+      };
+      await assert.rejects(
+        crawlSite(
+          { url: 'https://x.com/' },
+          { fetchPage, fetchRobots: async () => null, now: () => clock, deadlineMs: 5000 }
+        ),
+        error => error.code === 'CRAWL_TIMEOUT'
+      );
+    } finally {
+      await shutdownExtractionPool();
+      configureExtractionPool(null);
+    }
   });
 
   it('fails when the start page cannot be read', async () => {

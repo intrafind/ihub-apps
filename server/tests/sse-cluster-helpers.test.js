@@ -203,9 +203,13 @@ check(
     const emitter = new RunStreamEmitter({ streamId: 'chat-3', runId: 'chat-run-9' });
     const first = emitter.emit('run/started', { kind: 'chat', refs: { chatId: 'chat-3' } });
     const second = emitter.emit('step/delta', { step: 1, kind: 'text', content: 'via emitter' });
-    assert.strictEqual(target.writes.length, before + 4);
-    const a = parseFrame(target.writes, before);
-    const b = parseFrame(target.writes, before + 2);
+    // An emitted frame carries its run frame counter, written as the SSE id.
+    assert.strictEqual(target.writes.length, before + 6);
+    assert.strictEqual(target.writes[before + 1], `id: chat-run-9:${first.rseq}\n`);
+    assert.strictEqual(target.writes[before + 4], `id: chat-run-9:${second.rseq}\n`);
+    assert.strictEqual(second.rseq, first.rseq + 1, 'rseq climbs per run');
+    const a = parseFrame([target.writes[before], target.writes[before + 2]]);
+    const b = parseFrame([target.writes[before + 3], target.writes[before + 5]]);
     assert.strictEqual(a.event, 'run/started');
     assert.deepStrictEqual(a.payload, { ...first, seq: 1 });
     assert.strictEqual(b.event, 'step/delta');

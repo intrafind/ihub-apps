@@ -1315,3 +1315,35 @@ test('sources: every tool call, adapter chunk and provider search is collected, 
   assert.equal(ledgered.length, 4, 'every reported frame is on the ledger');
   assert.equal(ledgered[0].data.callId, 'c1');
 });
+
+test('a failed model call is one ledger error, not one from the call and one from the loop', async () => {
+  for (const abort of [true, false]) {
+    const { runLog, events } = await captureRunLog();
+    const { runId } = await runLog.startRun({ kind: 'agent', user: { id: 'u1' } });
+    const controller = new AbortController();
+    const { loop } = makeLoop(
+      [
+        (request, ctx) =>
+          abort
+            ? new Promise((_, reject) => {
+                ctx.signal.addEventListener('abort', () =>
+                  reject(Object.assign(new Error('aborted'), { name: 'AbortError' }))
+                );
+                controller.abort();
+              })
+            : Promise.reject(Object.assign(new Error('bad request'), { status: 400 }))
+      ],
+      { runLog }
+    );
+    const result = await loop.run({
+      runId,
+      model,
+      messages: baseMessages,
+      signal: controller.signal
+    });
+    assert.equal(result.status, abort ? 'aborted' : 'error');
+    const errors = events.filter(e => e.runId === runId && e.type === RUN_LOG_EVENTS.ERROR);
+    assert.equal(errors.length, 1, JSON.stringify(errors.map(e => e.data)));
+    await runLog.stop();
+  }
+});

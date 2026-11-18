@@ -19,6 +19,11 @@ import { deleteLoginTokens } from '../../services/integrations/iFinderTokenProvi
 import { clearFailedLogins, lockoutKey } from '../../utils/loginLockout.js';
 import { getDemoAccountStatus } from '../../utils/demoAccounts.js';
 import { parseUsageLimitsInput } from '../../validators/common.js';
+import {
+  currentEntries,
+  getSettings as getAcknowledgementSettings
+} from '../../services/aiAcknowledgement/aiAcknowledgementService.js';
+import { getAiAcknowledgementRepository } from '../../services/aiAcknowledgement/AiAcknowledgementRepository.js';
 
 /** The local user database, as a path relative to `contents/`. */
 const USERS_FILE = 'config/users.json';
@@ -263,9 +268,41 @@ export default function registerAdminAuthRoutes(app) {
       usersData = { users: {}, metadata: {} };
     }
 
+    // AI-use acknowledgements live in their own documents (one listing for all users).
+    // Not listed while the feature is off; a store that cannot be read leaves the
+    // fields out rather than failing the user page.
+    const acknowledgementSettings = getAcknowledgementSettings();
+    let acknowledgements = new Map();
+    if (acknowledgementSettings.enabled) {
+      try {
+        acknowledgements = await getAiAcknowledgementRepository().listAll();
+      } catch (error) {
+        logger.warn('Could not list AI acknowledgements; users are shown without them', {
+          component: 'AdminAuth',
+          error
+        });
+      }
+    }
     const sanitizedUsers = Object.fromEntries(
       Object.entries(usersData.users || {}).map(([id, user]) => {
-        const { passwordHash, ...userWithoutPasswordHash } = user;
+        // users.json no longer holds acknowledgements; a leftover copy there is not shown.
+        const {
+          passwordHash,
+          aiAcknowledgements: _legacyEntries,
+          aiAcknowledgementsClearedAt: _legacyClearedAt,
+          ...userWithoutPasswordHash
+        } = user;
+        const record = acknowledgements.get(id)?.data;
+        if (record) {
+          userWithoutPasswordHash.aiAcknowledgements = currentEntries(
+            record,
+            acknowledgementSettings
+          );
+          if (record.aiAcknowledgementsClearedAt) {
+            userWithoutPasswordHash.aiAcknowledgementsClearedAt =
+              record.aiAcknowledgementsClearedAt;
+          }
+        }
         return [id, userWithoutPasswordHash];
       })
     );

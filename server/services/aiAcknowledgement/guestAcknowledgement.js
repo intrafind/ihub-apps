@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * The acknowledgement of a principal that has no users.json record: an
- * anonymous guest (or, rarely, a signed-in user whose record is gone).
+ * The signed acknowledgement cookie. For an anonymous guest it is the
+ * acknowledgement; for a signed-in user it backs up their acknowledgement
+ * document (see `AiAcknowledgementRepository`) while the store cannot be read.
  *
  * It is remembered in a signed, HttpOnly cookie `ihubAiAck`:
  * `v<version>.<issuedAtMs>.<hmac>`. The HMAC covers the subject, the version and
@@ -59,30 +60,31 @@ export function signAcknowledgement(subject, version, issuedAt = Date.now()) {
 
 /**
  * Whether a cookie value proves an acknowledgement for `subject` that still
- * counts.
+ * counts, and since when.
  *
  * @param {unknown} value - Raw cookie value
  * @param {string|null} subject - See {@link cookieSubject}
  * @param {{requiredVersion: number, resetAt: string|null}} settings
- * @returns {boolean}
+ * @returns {number|null} The issue time in ms when the cookie counts, else null.
+ *   A caller with its own revocation time (a per-user removal) compares it.
  */
 export function verifyAcknowledgement(value, subject, settings) {
-  if (typeof value !== 'string' || !subject) return false;
+  if (typeof value !== 'string' || !subject) return null;
   const match = /^v(\d{1,9})\.(\d{10,16})\.([A-Za-z0-9_-]{43})$/.exec(value);
-  if (!match) return false;
+  if (!match) return null;
   const version = Number(match[1]);
   const issuedAt = Number(match[2]);
   const expected = sign(subject, version, issuedAt);
-  if (!expected) return false;
+  if (!expected) return null;
   const a = Buffer.from(expected);
   const b = Buffer.from(match[3]);
-  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return false;
-  if (version < settings.requiredVersion) return false;
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+  if (version < settings.requiredVersion) return null;
   if (settings.resetAt) {
     const reset = Date.parse(settings.resetAt);
-    if (Number.isFinite(reset) && issuedAt < reset) return false;
+    if (Number.isFinite(reset) && issuedAt < reset) return null;
   }
-  return Date.now() - issuedAt <= GUEST_COOKIE_MAX_AGE_MS;
+  return Date.now() - issuedAt <= GUEST_COOKIE_MAX_AGE_MS ? issuedAt : null;
 }
 
 /**
@@ -93,7 +95,9 @@ export function verifyAcknowledgement(value, subject, settings) {
  * @returns {boolean}
  */
 export function hasValidAcknowledgementCookie(req, settings) {
-  return verifyAcknowledgement(req.cookies?.[ACK_COOKIE], cookieSubject(req.user), settings);
+  return (
+    verifyAcknowledgement(req.cookies?.[ACK_COOKIE], cookieSubject(req.user), settings) !== null
+  );
 }
 
 /**

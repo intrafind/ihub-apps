@@ -194,6 +194,41 @@ describe('an artifact lives exactly as long as the message that names it', () =>
     });
   });
 
+  it('reports an edit as stored when removing the old payloads fails', async () => {
+    await withRepository(async ({ repository, artifacts, lines }) => {
+      await repository.ensureChat({ chatId: CHAT_ID, ownerId: OWNER, appId: 'chat' });
+      const question = await repository.appendMessage(CHAT_ID, {
+        role: 'user',
+        content: 'draw me a cat',
+        runId: 'run-1'
+      });
+      const superseded = await putChatArtifact(artifacts, CHAT_ID);
+      await repository.appendMessage(CHAT_ID, {
+        role: 'assistant',
+        content: 'a cat',
+        runId: 'run-1',
+        artifacts: [superseded]
+      });
+      artifacts.deleteMany = async () => {
+        throw new Error('disk gone');
+      };
+
+      const result = await repository.appendMessage(
+        CHAT_ID,
+        { role: 'user', content: 'draw me a dog', runId: 'run-2' },
+        { replaceFromMessageId: question.message.id }
+      );
+
+      assert.equal(result.message.content, 'draw me a dog');
+      const { messages } = await repository.getMessages(CHAT_ID);
+      assert.deepEqual(
+        messages.map(m => m.content),
+        ['draw me a dog']
+      );
+      assert.ok(lines.some(line => line.level === 'warn' && /payloads/.test(line.message)));
+    });
+  });
+
   it('drops the payloads of messages the per-chat cap pushed out', async () => {
     await withRepository(
       async ({ repository, artifacts }) => {

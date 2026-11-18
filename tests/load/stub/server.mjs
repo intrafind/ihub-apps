@@ -75,13 +75,13 @@ const llm = http.createServer((req, res) => {
     return;
   }
   if (req.method === 'GET' && req.url.startsWith('/metrics')) {
-    // vLLM-style metrics, so stub runs exercise the same observer as gpu-01.
+    // vLLM-style metrics, so stub runs exercise the same observer as gpu-01. No KV-cache
+    // gauge: the stub has none, and an invented one made the report call the "GPU" saturated.
     res.writeHead(200, { 'content-type': 'text/plain; version=0.0.4' });
     res.end(
       [
         `vllm:num_requests_running{model_name="loadtest-stub-model"} ${stats.inflight}`,
         `vllm:num_requests_waiting{model_name="loadtest-stub-model"} 0`,
-        `vllm:kv_cache_usage_perc{model_name="loadtest-stub-model"} ${Math.min(1, stats.inflight / 256)}`,
         `vllm:prompt_tokens_total{model_name="loadtest-stub-model"} ${stats.promptTokens}`,
         `vllm:generation_tokens_total{model_name="loadtest-stub-model"} ${stats.genTokens}`,
         `vllm:num_preemptions_total{model_name="loadtest-stub-model"} 0`,

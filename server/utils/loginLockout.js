@@ -204,7 +204,7 @@ function evictIfFull(now) {
  */
 async function askPrimary(channel, payload) {
   if (cluster.isPrimary || !isClusterBusActive()) return null;
-  const reply = await request(channel, payload, { timeoutMs: BUS_TIMEOUT_MS });
+  const reply = await request(channel, payload, { timeoutMs: BUS_TIMEOUT_MS, primaryOnly: true });
   if (reply === null) {
     logger.warn('Login lockout: no answer from the primary process; using this worker only', {
       component: 'LoginLockout',

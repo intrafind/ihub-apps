@@ -18,9 +18,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
 import { performance } from 'node:perf_hooks';
-import { loadConfig, userName, publicConfig } from './lib/config.mjs';
+import { loadConfig, userName, publicConfig, modelForVu } from './lib/config.mjs';
 import { Metrics } from './lib/metrics.mjs';
-import { Client, login } from './lib/http.mjs';
+import { Client, login, ensureAiAcknowledged } from './lib/http.mjs';
 import { loadFixtures } from './lib/fixtures.mjs';
 import { listProjects } from './lib/projects.mjs';
 import { runSchedule, buildTimeline } from './lib/scheduler.mjs';
@@ -58,7 +58,7 @@ for (const name of Object.keys(cfg.mix)) {
 }
 
 log(
-  `profile ${cfg.name} · shard ${shardIndex + 1}/${shardCount} · target ${cfg.baseUrl} · app ${cfg.appId} · model ${cfg.modelId || '(app default)'}`
+  `profile ${cfg.name} · shard ${shardIndex + 1}/${shardCount} · target ${cfg.baseUrl} · app ${cfg.appId} · model ${cfg.vuModelIds ? `${cfg.vuModelIds.join(' | ')} (round robin per VU)` : cfg.modelId || '(app default)'}`
 );
 const timelinePreview = buildTimeline(cfg.stages);
 const totalSec = Math.round(timelinePreview.at(-1).hold.end / 1000);
@@ -92,12 +92,42 @@ if (cfg.users.count < cfg.maxVus) {
   );
 }
 
+// Fail fast when setup created fewer users than this shard logs in, instead of 401s mid-run.
+if (userIndexes.length) {
+  const lastUser = userName(cfg, Math.max(...userIndexes));
+  const check = await login({
+    baseUrl: cfg.baseUrl,
+    username: lastUser,
+    password: cfg.users.password
+  }).catch(err => err);
+  if (check?.status === 401) {
+    console.error(
+      `User ${lastUser} cannot log in (401): this run uses ${cfg.users.count} users (${userName(cfg, 0)} … ${userName(cfg, cfg.users.count - 1)}). ` +
+        `Create them with LT_USER_COUNT=${cfg.users.count} node tests/load/setup.mjs --profile ${cfg.name}, ` +
+        'or set LT_USER_COUNT lower so VUs share the users that exist (or check LT_USER_PASSWORD).'
+    );
+    process.exit(2);
+  }
+}
+
+let aiAcknowledged = 0;
 async function loginUser(idx) {
   const username = userName(cfg, idx);
   const { client } = await withRetry(
     () => login({ baseUrl: cfg.baseUrl, username, password: cfg.users.password }),
     { label: `login ${username}` }
   );
+  // A restored state may have no acknowledgements: confirm before the clock starts,
+  // or the enforced 428 guard blocks every chat of this user.
+  // A real user whose confirmation failed (503 lock timeout, 409) clicks again:
+  // retry; each retry prints "[retry] ai-ack …" to the shard log.
+  if (
+    await withRetry(() => ensureAiAcknowledged(client), {
+      label: `ai-ack ${username}`,
+      retryStatuses: [409, 429, 503]
+    })
+  )
+    aiAcknowledged += 1;
   client.metrics = metrics;
   client.rate = { tracker: rateTracker, user: username };
   let projects = { own: [], shared: [] };
@@ -120,7 +150,7 @@ const withProjects = [...sessions.values()].filter(
   s => s.projects.own.length + s.projects.shared.length > 0
 ).length;
 log(
-  `logged in ${sessions.size} users in ${((performance.now() - t0Login) / 1000).toFixed(1)} s · ${withProjects} see LT-chat projects`
+  `logged in ${sessions.size} users in ${((performance.now() - t0Login) / 1000).toFixed(1)} s · ${withProjects} see LT-chat projects · ${aiAcknowledged} confirmed the AI-use notice`
 );
 if (cfg.mix.projectChat > 0 && withProjects === 0) {
   console.error(
@@ -159,7 +189,8 @@ const crawlGate = new Semaphore(cfg.scenarios.projectBuild?.crawl?.maxConcurrent
 async function runVu(vuIndex, isActive) {
   const session = sessions.get(vuIndex % cfg.users.count);
   const ctx = {
-    config: cfg,
+    // Sticky per VU: a user keeps the model it picked for every turn.
+    config: { ...cfg, modelId: modelForVu(cfg, vuIndex) },
     client: session.client,
     metrics,
     fixtures,
@@ -249,6 +280,9 @@ const result = await runSchedule({
   }
 });
 samplers.stop();
+// Every user confirmed the notice before the clock started, so this has to be 0.
+const ack428 = Object.values(metrics.counts['chat.ack428'] || {}).reduce((a, b) => a + b, 0);
+log(`chat turns refused with 428 (AI acknowledgement): ${ack428}`);
 rateTracker.flush();
 rateTracker.stop();
 if (result.abandonedVus)
@@ -279,9 +313,12 @@ if (cfg.results.toStdout) {
   // For Kubernetes: `kubectl logs` is the collection channel (see k8s/collect.sh).
   const b64 = zlib.gzipSync(JSON.stringify(shardResult)).toString('base64');
   const size = 60_000;
+  // Synchronous: on a pipe (kubectl logs) console.log is asynchronous, and the process exits
+  // before the last 64 KB line is flushed, which truncated larger shard results.
   for (let i = 0; i * size < b64.length; i++) {
-    console.log(
-      `##LT-RESULT## ${cfg.runId} ${shardIndex} ${i} ${Math.ceil(b64.length / size)} ${b64.slice(i * size, (i + 1) * size)}`
+    fs.writeSync(
+      1,
+      `##LT-RESULT## ${cfg.runId} ${shardIndex} ${i} ${Math.ceil(b64.length / size)} ${b64.slice(i * size, (i + 1) * size)}\n`
     );
   }
 }

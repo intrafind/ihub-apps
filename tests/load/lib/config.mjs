@@ -72,6 +72,9 @@ export const DEFAULTS = {
     docsPerProject: 6,
     // Real LLM: registered as model `loadtest-gpu` when `url` is set. The model
     // name is discovered from the server's /v1/models unless `modelName` is given.
+    // Several GPUs: `gpus` (URLs or { url, modelName, … }) or LT_LLM_URLS. Each one
+    // becomes its own model, loadtest-gpu, loadtest-gpu-2, …; `gpu` holds the defaults.
+    gpus: null,
     gpu: {
       id: 'loadtest-gpu',
       url: 'https://gpu-01.local.intrafind.io',
@@ -100,7 +103,7 @@ export const DEFAULTS = {
     intervalSec: 5,
     server: true,
     stubStatsUrl: null,
-    // vLLM's own /metrics. "auto" = <setup.gpu.url>/metrics when the run uses loadtest-gpu.
+    // vLLM's own /metrics. "auto" = <url>/metrics of every GPU model the run uses.
     vllmMetricsUrl: 'auto',
     // Prometheus, or Grafana's datasource proxy:
     //   https://grafana.example/api/datasources/proxy/uid/<prometheus-uid>  + service account token
@@ -234,6 +237,7 @@ export function loadConfig(argv = process.argv.slice(2), env = process.env) {
   set(['sizing', 'targetConcurrentUsers'], num(args.target || env.LT_TARGET_CONCURRENT_USERS));
   set(['setup', 'stub', 'url'], args['stub-url'] || env.LT_STUB_MODEL_URL);
   set(['setup', 'gpu', 'url'], args['llm-url'] || env.LT_LLM_URL);
+  const gpuUrls = args['llm-urls'] || env.LT_LLM_URLS;
   set(['setup', 'gpu', 'modelName'], env.LT_LLM_MODEL_NAME);
   set(['setup', 'gpu', 'apiKey'], env.LT_LLM_API_KEY);
   set(['setup', 'gpu', 'supportsTools'], env.LT_LLM_SUPPORTS_TOOLS);
@@ -263,22 +267,62 @@ export function loadConfig(argv = process.argv.slice(2), env = process.env) {
     cfg.stages = cfg.stages.map(s => ({ ...s, vus: Math.max(1, Math.round(s.vus * scale)) }));
 
   cfg.baseUrl = cfg.baseUrl.replace(/\/+$/, '');
-  if (cfg.sampling.vllmMetricsUrl === 'auto') {
-    const gpu = cfg.setup.gpu?.url;
+
+  // GPU endpoints: LT_LLM_URLS, else LT_LLM_URL (one GPU), else setup.gpus, else setup.gpu.url.
+  const gpuList = gpuUrls
+    ? gpuUrls.split(',')
+    : args['llm-url'] || env.LT_LLM_URL !== undefined || !cfg.setup.gpus
+      ? [cfg.setup.gpu.url]
+      : cfg.setup.gpus;
+  const baseId = cfg.setup.gpu.id;
+  cfg.setup.gpus = gpuList
+    .map(e => (typeof e === 'string' ? { url: e.trim() } : e))
+    .filter(e => e?.url && e.url !== 'none')
+    .map((e, i) => ({
+      ...cfg.setup.gpu,
+      // A served name set for the first GPU does not fit the others: they discover theirs.
+      ...(i > 0 ? { modelName: null } : {}),
+      ...e,
+      id: i === 0 ? baseId : `${baseId}-${i + 1}`
+    }));
+  cfg.setup.gpu.url = cfg.setup.gpus[0]?.url ?? null;
+  // Spread over the GPU models: LT_MODEL_ID=loadtest-gpu-*, or loadtest-gpu while
+  // several GPUs are configured. Each VU keeps one model (see modelForVu).
+  const gpuIds = cfg.setup.gpus.map(g => g.id);
+  if (cfg.modelId === `${baseId}-*` && !gpuIds.length)
+    throw new Error(`${cfg.modelId}: no GPU configured (LT_LLM_URLS)`);
+  cfg.vuModelIds =
+    cfg.modelId === `${baseId}-*` || (gpuIds.length > 1 && cfg.modelId === baseId) ? gpuIds : null;
+
+  // vLLM metrics targets: [{ id, url }]; id labels the gauges when there are several.
+  const metricsUrl = cfg.sampling.vllmMetricsUrl;
+  cfg.sampling.vllmTargets = [];
+  if (metricsUrl === 'auto') {
+    const used = cfg.vuModelIds ? cfg.setup.gpus : cfg.setup.gpus.filter(g => g.id === cfg.modelId);
     const stubStats = cfg.sampling.stubStatsUrl;
-    if (gpu && cfg.modelId === cfg.setup.gpu.id) {
-      cfg.sampling.vllmMetricsUrl = `${gpu.replace(/\/+$/, '').replace(/\/v1(\/chat\/completions)?$/, '')}/metrics`;
+    if (used.length) {
+      cfg.sampling.vllmTargets = used.map(g => ({
+        id: used.length > 1 ? g.id : null,
+        url: `${g.url.replace(/\/+$/, '').replace(/\/v1(\/chat\/completions)?$/, '')}/metrics`
+      }));
     } else if (stubStats && cfg.modelId === cfg.setup.stub?.id) {
       // The stub publishes the same vLLM metric names.
-      cfg.sampling.vllmMetricsUrl = stubStats.replace(/\/__stats$/, '/metrics');
-    } else cfg.sampling.vllmMetricsUrl = null;
-  } else if (cfg.sampling.vllmMetricsUrl === 'none') cfg.sampling.vllmMetricsUrl = null;
+      cfg.sampling.vllmTargets = [{ id: null, url: stubStats.replace(/\/__stats$/, '/metrics') }];
+    }
+  } else if (metricsUrl && metricsUrl !== 'none') {
+    cfg.sampling.vllmTargets = [{ id: null, url: metricsUrl }];
+  }
   cfg.maxVus = Math.max(...cfg.stages.map(s => s.vus));
   if (!cfg.users.count) cfg.users.count = cfg.maxVus;
   if (!cfg.runId)
     cfg.runId = `${cfg.name}-${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}`;
   cfg.args = args;
   return cfg;
+}
+
+/** The model a VU uses for all its turns: round robin over the GPU models when spreading. */
+export function modelForVu(cfg, vuIndex) {
+  return cfg.vuModelIds ? cfg.vuModelIds[vuIndex % cfg.vuModelIds.length] : cfg.modelId;
 }
 
 export function userName(cfg, index) {
@@ -290,7 +334,11 @@ export function publicConfig(cfg) {
   const { admin, users, args: _args, setup, ...rest } = cfg;
   return {
     ...rest,
-    setup: { ...setup, gpu: { ...setup.gpu, apiKey: setup.gpu?.apiKey ? '***' : null } },
+    setup: {
+      ...setup,
+      gpu: { ...setup.gpu, apiKey: setup.gpu?.apiKey ? '***' : null },
+      gpus: (setup.gpus || []).map(g => ({ ...g, apiKey: g.apiKey ? '***' : null }))
+    },
     sampling: {
       ...rest.sampling,
       prometheus: {

@@ -13,8 +13,12 @@ import logger from './logger.js';
 
 /**
  * Decrypt a single value if it has the ENC[...] format.
+ *
+ * @param {*} value - The stored value
+ * @param {Object} [context] - Names the secret in the error log when it cannot
+ *   be decrypted (for example `{ credentialId, field }`); never the value itself
  */
-export function decryptIfEncrypted(value) {
+export function decryptIfEncrypted(value, context = {}) {
   if (!value || typeof value !== 'string') return value;
   if (tokenStorageService.isEncrypted(value)) {
     try {
@@ -22,6 +26,7 @@ export function decryptIfEncrypted(value) {
     } catch (error) {
       logger.error('Failed to decrypt config secret', {
         component: 'ConfigCache',
+        ...context,
         keySource: tokenStorageService.keySource,
         keyFingerprint: tokenStorageService.getKeyFingerprint(),
         error
@@ -38,12 +43,16 @@ export function decryptIfEncrypted(value) {
  */
 export function decryptCredentials(config) {
   if (!config || typeof config !== 'object' || !config.credentials) return config;
-  for (const profile of Object.values(config.credentials)) {
+  for (const [credentialId, profile] of Object.entries(config.credentials)) {
     if (!profile || typeof profile !== 'object') continue;
     const secretFields = SECRET_FIELDS_BY_TYPE[profile.type] || [];
     for (const field of secretFields) {
       if (profile[field]) {
-        profile[field] = decryptIfEncrypted(profile[field]);
+        profile[field] = decryptIfEncrypted(profile[field], {
+          configPath: 'config/credentials.json',
+          credentialId,
+          field
+        });
       }
     }
   }
@@ -63,7 +72,8 @@ export function decryptCredentials(config) {
 export function decryptPlatformSecrets(platformData) {
   if (platformData.speech?.azure?.subscriptionKey) {
     platformData.speech.azure.subscriptionKey = decryptIfEncrypted(
-      platformData.speech.azure.subscriptionKey
+      platformData.speech.azure.subscriptionKey,
+      { configPath: 'config/platform.json', setting: 'speech.azure.subscriptionKey' }
     );
   }
   return platformData;

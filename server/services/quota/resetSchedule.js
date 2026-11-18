@@ -40,23 +40,37 @@ export const DEFAULT_RESETS = Object.freeze({
 
 const TIME_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
+/** Validity per time-zone name, filled by isValidTimeZone. */
+const timeZoneValidity = new Map();
+
 /** Whether `tz` is an IANA time zone this runtime knows. */
 export function isValidTimeZone(tz) {
   if (typeof tz !== 'string' || !tz) return false;
-  try {
-    new Intl.DateTimeFormat('en-US', { timeZone: tz });
-    return true;
-  } catch {
-    return false;
+  let valid = timeZoneValidity.get(tz);
+  if (valid === undefined) {
+    try {
+      new Intl.DateTimeFormat('en-US', { timeZone: tz });
+      valid = true;
+    } catch {
+      valid = false;
+    }
+    // ponytail: unbounded only in theory — keys come from admin-set quota configs.
+    if (timeZoneValidity.size < 1000) timeZoneValidity.set(tz, valid);
   }
+  return valid;
 }
 
+// The process's time zone does not change while it runs; resolving it builds
+// an Intl.DateTimeFormat, which showed up per request under load.
+let cachedServerTimeZone;
 function serverTimeZone() {
+  if (cachedServerTimeZone) return cachedServerTimeZone;
   try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    cachedServerTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
   } catch {
-    return 'UTC';
+    cachedServerTimeZone = 'UTC';
   }
+  return cachedServerTimeZone;
 }
 
 function parseTime(value, fallback = '00:00') {
