@@ -492,24 +492,19 @@ export default function registerAuthRoutes(app) {
         throw refusal(400, 'Invalid return URL');
       }
 
-      // Only allow relative URLs (starting with /) and same-origin URLs
+      // Redirect to a path only, never to another origin.
       try {
         // Normalize backslashes to prevent bypass via \evil.com interpreted as /evil.com
         returnUrl = returnUrl.replaceAll('\\', '/');
 
-        // If returnUrl is an absolute URL, validate it's same origin
-        if (returnUrl.startsWith('http://') || returnUrl.startsWith('https://')) {
+        // The auth gate sends the page's full URL. Its host is the one the
+        // browser sees, which behind a proxy (the Vite dev server, a reverse
+        // proxy that rewrites Host) is not this request's Host, so it cannot be
+        // compared. Keep its path, query and hash instead: a path-only redirect
+        // stays on the origin the browser is on, whatever URL was passed in.
+        if (/^https?:\/\//i.test(returnUrl)) {
           const returnUrlObj = new URL(returnUrl);
-          const currentHost = req.get('host');
-
-          // Only allow same-origin redirects
-          if (returnUrlObj.host !== currentHost) {
-            logger.warn('[Security] Blocked open redirect attempt', {
-              component: 'Auth',
-              returnUrl
-            });
-            returnUrl = '/';
-          }
+          returnUrl = `${returnUrlObj.pathname}${returnUrlObj.search}${returnUrlObj.hash}`;
         } else if (!returnUrl.startsWith('/')) {
           // Ensure relative URLs start with /
           returnUrl = '/' + returnUrl;
@@ -526,7 +521,7 @@ export default function registerAuthRoutes(app) {
 
       // Redirect to the validated return URL with success indicator, in the query
       // and not inside a #fragment (the auth gate reads it from location.search).
-      // returnUrl has been validated above: same-origin check, no //, no backslash -- lgtm[js/server-side-unvalidated-url-redirection]
+      // returnUrl has been reduced to a path above: no origin, no //, no backslash -- lgtm[js/server-side-unvalidated-url-redirection]
       res.redirect(appendQueryParams(returnUrl, { ntlm: 'success' })); // lgtm[js/server-side-unvalidated-url-redirection]
     } catch (error) {
       // A browser navigation, not an API call: answer with the app and the
