@@ -34,6 +34,28 @@ const ARCHIVE_CONTENTS_DIR = 'contents';
  */
 const IMPORT_UPLOAD_DIR_PREFIX = 'ihub-import-';
 
+/** File name of the uploaded archive inside its private upload directory. */
+const IMPORT_ARCHIVE_NAME = 'upload.zip';
+
+/** Folder inside the private upload directory the archive is extracted into. */
+const IMPORT_EXTRACT_DIR = 'extract';
+
+/**
+ * Whether `dir` is an upload directory this module created: a direct child of
+ * the system temp directory carrying the import prefix. Every path of an import
+ * is built from such a directory and fixed names, never from the request.
+ *
+ * @param {unknown} dir
+ * @returns {boolean}
+ */
+function isUploadDir(dir) {
+  return (
+    typeof dir === 'string' &&
+    path.dirname(dir) === os.tmpdir() &&
+    path.basename(dir).startsWith(IMPORT_UPLOAD_DIR_PREFIX)
+  );
+}
+
 /**
  * Folder inside the contents directory holding what an import replaced, one
  * `<timestamp>/` folder per import, and the import's staging area while it runs.
@@ -75,12 +97,7 @@ const STALE_IMPORT_LOCK_MS = 30 * 60 * 1000;
  * @returns {Promise<void>}
  */
 async function removeUploadDir(dir) {
-  if (
-    path.dirname(dir) !== os.tmpdir() ||
-    !path.basename(dir).startsWith(IMPORT_UPLOAD_DIR_PREFIX)
-  ) {
-    return;
-  }
+  if (!isUploadDir(dir)) return;
   await fs.rm(dir, { recursive: true, force: true });
 }
 
@@ -752,15 +769,15 @@ export async function releaseImportLock(lockPath) {
  */
 export async function importConfig(req, res) {
   const contentsPath = getContentsPath();
-  let tempZipPath = null;
-  let tempExtractPath = null;
   let importLock = null;
 
   try {
     logger.info('Starting configuration import', { component: 'AdminBackup' });
 
     // Check if file was uploaded
-    if (!req.file) {
+    // The archive is stored under a fixed name in the private directory the
+    // upload storage created; nothing of the upload's own path is used.
+    if (!req.file || !isUploadDir(req.importUploadDir)) {
       throw new ServiceError('BAD_REQUEST', 'No ZIP file uploaded');
     }
 
@@ -768,8 +785,9 @@ export async function importConfig(req, res) {
     // the cache reload all work on the contents directory.
     importLock = await acquireImportLock(contentsPath);
 
-    tempZipPath = req.file.path;
-    tempExtractPath = path.join(path.dirname(tempZipPath), `extract_${Date.now()}`);
+    const uploadDir = req.importUploadDir;
+    const tempZipPath = path.join(uploadDir, IMPORT_ARCHIVE_NAME);
+    const tempExtractPath = path.join(uploadDir, IMPORT_EXTRACT_DIR);
 
     logger.info('Extracting ZIP file', { component: 'AdminBackup', tempExtractPath });
 
@@ -883,14 +901,9 @@ export async function importConfig(req, res) {
   } finally {
     await releaseImportLock(importLock);
 
-    // Clean up temporary files
+    // Clean up temporary files: the archive and what was extracted from it
+    // both live in the upload directory.
     try {
-      if (tempZipPath) {
-        await fs.unlink(tempZipPath);
-      }
-      if (tempExtractPath) {
-        await fs.rm(tempExtractPath, { recursive: true, force: true });
-      }
       if (req.importUploadDir) {
         await removeUploadDir(req.importUploadDir);
       }
@@ -915,7 +928,9 @@ export default async function registerBackupRoutes(app) {
         req.importUploadDir = dir;
         cb(null, dir);
       }, cb);
-    }
+    },
+    // One archive per directory, under a fixed name the import reads it from.
+    filename: (_req, _file, cb) => cb(null, IMPORT_ARCHIVE_NAME)
   });
   const upload = multer({
     storage,
