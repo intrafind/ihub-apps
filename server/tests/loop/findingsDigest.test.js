@@ -350,6 +350,12 @@ test('a digest says how many not-found lines it kept, so a cut one is not lost s
   }));
   const small = renderDigest({ number: 1, calls, notFound, maxChars: MIN_DIGEST_CHARS });
   assert.ok(small.notFoundShown > 0 && small.notFoundShown < 200);
+  assert.match(
+    small.text,
+    new RegExp(`… ${200 - small.notFoundShown} more not found; read the results`),
+    'the model is told'
+  );
+  assert.ok(small.text.length <= MIN_DIGEST_CHARS, `${small.text.length} characters`);
   const all = renderDigest({ number: 1, calls, notFound: notFound.slice(0, 3) });
   assert.equal(all.notFoundShown, 3);
 });

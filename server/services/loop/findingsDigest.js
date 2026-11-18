@@ -946,7 +946,13 @@ export function renderDigest({
       tail.push(line);
       notFoundShown += 1;
     }
-    if (notFoundShown > 0) text += `\n${tail.join('\n')}`;
+    // What did not fit is said, within the margin the budget keeps for it.
+    if (notFoundShown < notFound.length) {
+      tail.push(
+        `- … ${notFound.length - notFoundShown} more not found; read the results with recall_tool_result.`
+      );
+    }
+    text += `\n${tail.join('\n')}`;
   }
   return { text: `${text}\n${closing}`, factsShown: shown, notFoundShown };
 }
