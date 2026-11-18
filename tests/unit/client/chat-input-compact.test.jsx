@@ -151,6 +151,7 @@ describe('ChatInput size', () => {
     expect(textarea).toHaveAttribute('rows', '1');
     expect(lines(textarea)).toEqual({ min: '5', max: '12' });
     expect(textarea).not.toHaveClass('chat-input-textarea--compact');
+    expect(textarea).not.toHaveClass('chat-input-textarea--one-line');
   });
 
   test('a started chat has a one-line composer that keeps its placeholder on one line', () => {
@@ -158,6 +159,7 @@ describe('ChatInput size', () => {
     const textarea = screen.getByRole('textbox', { name: 'Type your message' });
     expect(lines(textarea)).toEqual({ min: '1', max: '12' });
     expect(textarea).toHaveClass('chat-input-textarea--compact');
+    expect(textarea).toHaveClass('chat-input-textarea--one-line');
   });
 
   test('the Outlook cap holds for an app with more rows', () => {
@@ -184,6 +186,13 @@ describe('ChatInput size', () => {
     renderInput({ app: singlelineApp });
     const textarea = screen.getByRole('textbox', { name: 'Type your message' });
     expect(lines(textarea)).toEqual({ min: '1', max: '5' });
+  });
+
+  test('a single-line app outside a started chat (the start page) matches the toolbar height', () => {
+    renderInput({ app: singlelineApp });
+    const textarea = screen.getByRole('textbox', { name: 'Type your message' });
+    expect(textarea).not.toHaveClass('chat-input-textarea--compact');
+    expect(textarea).toHaveClass('chat-input-textarea--one-line');
   });
 });
 
