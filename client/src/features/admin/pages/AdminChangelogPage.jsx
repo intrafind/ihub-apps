@@ -355,10 +355,10 @@ function TableOfContents({ id, release, sectionLabel, t }) {
               <a
                 href={`#${sectionDomId}`}
                 onClick={event => scrollToElement(event, sectionDomId)}
-                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-medium transition-colors ${
+                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium transition-colors ${
                   breaking
-                    ? 'border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-300 dark:hover:bg-amber-900/40'
-                    : 'border-gray-200 bg-gray-50 text-gray-800 hover:border-indigo-300 hover:text-indigo-700 dark:border-gray-700 dark:bg-gray-800/60 dark:text-gray-200 dark:hover:border-indigo-700 dark:hover:text-indigo-300'
+                    ? 'border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-300 dark:hover:bg-amber-900/40'
+                    : 'border border-gray-200 bg-gray-50 text-gray-800 hover:border-indigo-300 hover:text-indigo-700 dark:border-gray-700 dark:bg-gray-800/60 dark:text-gray-200 dark:hover:border-indigo-700 dark:hover:text-indigo-300'
                 }`}
               >
                 {sectionLabel(section)}{' '}
