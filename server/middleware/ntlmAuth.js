@@ -474,6 +474,58 @@ export function isNtlmExemptPath(path) {
   return path === buildServerPath('/api/health');
 }
 
+/** How long one NTLM step may wait for the domain controller. */
+const NTLM_HANDSHAKE_TIMEOUT_MS = 5000;
+
+const NTLM_RESPONSE_WRITES = new Set([
+  'setHeader',
+  'writeHead',
+  'write',
+  'end',
+  'send',
+  'sendStatus',
+  'status',
+  'json'
+]);
+const NTLM_RESPONSE_FINISHERS = new Set(['end', 'send', 'sendStatus', 'json']);
+
+/**
+ * The response object handed to express-ntlm. It forwards to `res`, reports
+ * when express-ntlm finishes the response, and ignores every write once
+ * `isTimedOut()` is true.
+ *
+ * @param {Object} res - Express response
+ * @param {{isTimedOut: () => boolean, onSend: () => void}} hooks
+ * @returns {Object}
+ */
+export function createNtlmResponse(res, { isTimedOut, onSend }) {
+  const facade = new Proxy(res, {
+    get(target, prop) {
+      if (NTLM_RESPONSE_WRITES.has(prop)) {
+        if (isTimedOut()) return () => facade;
+        const method = target[prop];
+        if (NTLM_RESPONSE_FINISHERS.has(prop)) {
+          return (...args) => {
+            onSend();
+            return method.apply(target, args);
+          };
+        }
+        return (...args) => {
+          const result = method.apply(target, args);
+          return result === target ? facade : result;
+        };
+      }
+      const value = Reflect.get(target, prop, target);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+    set(target, prop, value) {
+      if (!isTimedOut()) target[prop] = value;
+      return true;
+    }
+  });
+  return facade;
+}
+
 /**
  * NTLM authentication middleware - self-contained like other auth middlewares
  * Handles both express-ntlm initialization and user processing
@@ -501,12 +553,16 @@ export function ntlmAuthMiddleware(req, res, next) {
   // here instead of relaying them, so they do not count as failed logons.
   const identity = parseNtlmType3Identity(req.headers.authorization);
   if (identity) {
-    const remainingMs = ntlmCooldownRemaining(identity.domain, identity.user);
+    // A browser on a machine outside the domain often sends no domain at all.
+    // express-ntlm then reports the configured domain, and that is the name the
+    // rejection was recorded under, so look it up the same way.
+    const domain = identity.domain || ntlmAuth.domain;
+    const remainingMs = ntlmCooldownRemaining(domain, identity.user);
     if (remainingMs > 0) {
       const retryAfterSeconds = Math.ceil(remainingMs / 1000);
       logger.warn('NTLM Auth: sign-in held back after a recent rejection', {
         component: 'NtlmAuth',
-        domain: identity.domain,
+        domain,
         user: identity.user,
         retryAfterSeconds
       });
@@ -590,63 +646,56 @@ export function ntlmAuthMiddleware(req, res, next) {
   // Get or create the express-ntlm middleware instance
   const ntlmMiddleware = getNtlmMiddleware(ntlmAuth);
 
-  // Track if response was sent by express-ntlm
+  // express-ntlm answers through `ntlmRes`, never through `res` directly, so
+  // its writes can be seen (responseSent) and, once this request has timed
+  // out, dropped: a challenge that arrives late would otherwise set headers on
+  // a response that is already finished and throw inside a socket callback.
   let responseSent = false;
-  const originalEnd = res.end;
-  const originalSend = res.send;
-
-  // Intercept response to detect if express-ntlm sent it
-  res.end = function (...args) {
-    responseSent = true;
-    if (isDev) {
-      logger.debug('NTLM Debug: response sent by express-ntlm', {
-        component: 'NtlmAuth',
-        status: res.statusCode
-      });
-      if (res.statusCode === 401) {
-        logger.debug('NTLM Debug: NTLM challenge sent', {
+  let timedOut = false;
+  const ntlmRes = createNtlmResponse(res, {
+    isTimedOut: () => timedOut,
+    onSend: () => {
+      responseSent = true;
+      if (isDev) {
+        logger.debug('NTLM Debug: response sent by express-ntlm', {
           component: 'NtlmAuth',
-          headers: res.getHeaders()
+          status: res.statusCode
         });
+        if (res.statusCode === 401) {
+          logger.debug('NTLM Debug: NTLM challenge sent', {
+            component: 'NtlmAuth',
+            headers: res.getHeaders()
+          });
+        }
       }
     }
-    return originalEnd.apply(this, args);
-  };
+  });
 
-  res.send = function (...args) {
-    responseSent = true;
-    if (isDev) {
-      logger.debug('NTLM Debug: response sent by express-ntlm via send', {
-        component: 'NtlmAuth',
-        status: res.statusCode
-      });
-      if (res.statusCode === 500 && args.length > 0) {
-        logger.error('NTLM Debug: 500 error body', { component: 'NtlmAuth', body: args[0] });
-      }
-    }
-    return originalSend.apply(this, args);
-  };
-
-  // Set a timeout to prevent hanging
+  // The domain controller did not answer. Fail this request with 503 instead
+  // of letting it through unauthenticated: an unauthenticated request ends in
+  // 401, which the client reads as an expired session and signs the user out.
   const timeout = setTimeout(() => {
-    if (!responseSent) {
-      logger.error('NTLM Auth: express-ntlm middleware timed out after 5 seconds', {
-        component: 'NtlmAuth'
-      });
-      res.end = originalEnd;
-      res.send = originalSend;
-      if (!res.headersSent) {
-        return next();
-      }
-    }
-  }, 5000);
+    if (responseSent) return;
+    timedOut = true;
+    logger.error('NTLM Auth: domain controller did not answer within 5 seconds', {
+      component: 'NtlmAuth',
+      url: req.originalUrl
+    });
+    if (res.headersSent) return;
+    res.setHeader('Retry-After', '5');
+    next(
+      new ServiceError(
+        'SERVICE_UNAVAILABLE',
+        'The domain controller did not answer the Windows sign-in in time. Try again shortly.'
+      )
+    );
+  }, NTLM_HANDSHAKE_TIMEOUT_MS);
 
   // Apply express-ntlm middleware first to populate req.ntlm
   try {
-    ntlmMiddleware(req, res, async err => {
+    ntlmMiddleware(req, ntlmRes, async err => {
       clearTimeout(timeout);
-      res.end = originalEnd;
-      res.send = originalSend;
+      if (timedOut) return; // already answered with 503
 
       if (responseSent) {
         if (isDev) {
@@ -770,8 +819,6 @@ export function ntlmAuthMiddleware(req, res, next) {
     });
   } catch (error) {
     clearTimeout(timeout);
-    res.end = originalEnd;
-    res.send = originalSend;
     logger.error('NTLM Auth: unexpected error in NTLM middleware', {
       component: 'NtlmAuth',
       error

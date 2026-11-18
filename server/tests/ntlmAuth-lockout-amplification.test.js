@@ -14,8 +14,13 @@
  */
 import { describe, it, beforeEach, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
+import net from 'node:net';
 import configCache from '../configCache.js';
-import { ntlmAuthMiddleware, isNtlmExemptPath } from '../middleware/ntlmAuth.js';
+import {
+  ntlmAuthMiddleware,
+  isNtlmExemptPath,
+  createNtlmResponse
+} from '../middleware/ntlmAuth.js';
 import {
   parseNtlmType3Identity,
   recordNtlmRejection,
@@ -175,11 +180,146 @@ describe('ntlmAuthMiddleware lockout protection', () => {
     assert.equal(res.ended, false);
   });
 
+  it('holds back an answer that names no domain, as a browser outside the domain sends it', () => {
+    // express-ntlm reports the configured domain when the message has none,
+    // and the rejection is recorded under that name.
+    recordNtlmRejection('MUC', 'jane.doe');
+    const { nextArg } = run({
+      path: '/api/apps',
+      url: '/api/apps',
+      headers: { authorization: type3Header({ domain: '', user: 'jane.doe' }) }
+    });
+    assert.equal(nextArg?.code, 'RATE_LIMITED');
+  });
+
   it('still challenges a request without credentials', () => {
     recordNtlmRejection('MUC', 'jane.doe');
     const { res, nextArg } = run({ path: '/api/apps', url: '/api/apps', originalUrl: '/api/apps' });
     assert.equal(nextArg, 'not called');
     assert.equal(res.statusCode, 401);
     assert.equal(res.headers['www-authenticate'], 'NTLM');
+  });
+});
+
+describe('createNtlmResponse', () => {
+  function fakeRes() {
+    const res = {
+      statusCode: 200,
+      headers: {},
+      ended: 0,
+      setHeader(name, value) {
+        res.headers[name] = value;
+        return res;
+      },
+      end() {
+        res.ended++;
+        return res;
+      }
+    };
+    return res;
+  }
+
+  it('forwards writes and reports when the response is finished', () => {
+    const res = fakeRes();
+    let sent = 0;
+    const facade = createNtlmResponse(res, { isTimedOut: () => false, onSend: () => sent++ });
+    facade.statusCode = 401;
+    facade.setHeader('WWW-Authenticate', 'NTLM abc');
+    facade.end();
+    assert.equal(res.statusCode, 401);
+    assert.equal(res.headers['WWW-Authenticate'], 'NTLM abc');
+    assert.equal(res.ended, 1);
+    assert.equal(sent, 1);
+  });
+
+  it('drops a late challenge once the request has timed out', () => {
+    // The request was already answered with 503; a challenge from the domain
+    // controller arriving afterwards must not touch the finished response.
+    const res = fakeRes();
+    let sent = 0;
+    const facade = createNtlmResponse(res, { isTimedOut: () => true, onSend: () => sent++ });
+    facade.statusCode = 401;
+    facade.setHeader('WWW-Authenticate', 'NTLM abc');
+    facade.end();
+    assert.equal(res.statusCode, 200);
+    assert.deepEqual(res.headers, {});
+    assert.equal(res.ended, 0);
+    assert.equal(sent, 0);
+  });
+});
+
+describe('ntlmAuthMiddleware when the domain controller does not answer', () => {
+  let server;
+  const sockets = [];
+
+  beforeEach(async () => {
+    // Accepts the connection and never answers, like an overloaded DC.
+    server = net.createServer(socket => sockets.push(socket));
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    const { port } = server.address();
+    mock.method(configCache, 'getPlatform', () => ({
+      ntlmAuth: { enabled: true, domain: 'MUC', domainController: `ldap://127.0.0.1:${port}` }
+    }));
+    mock.timers.enable({ apis: ['setTimeout'] });
+  });
+
+  afterEach(async () => {
+    mock.timers.reset();
+    mock.restoreAll();
+    sockets.forEach(s => s.destroy());
+    await new Promise(resolve => server.close(resolve));
+  });
+
+  it('answers 503 instead of letting the request through unauthenticated', async () => {
+    const res = {
+      statusCode: 200,
+      headers: {},
+      ended: false,
+      setHeader(name, value) {
+        res.headers[name.toLowerCase()] = value;
+      },
+      getHeaders: () => res.headers,
+      end() {
+        res.ended = true;
+      },
+      sendStatus(code) {
+        res.statusCode = code;
+        res.ended = true;
+      }
+    };
+    let nextArg = 'not called';
+    const type1 = 'NTLM TlRMTVNTUAABAAAAB4IIogAAAAAAAAAAAAAAAAAAAAAGAbEdAAAADw==';
+    ntlmAuthMiddleware(
+      {
+        path: '/api/apps',
+        url: '/api/apps',
+        originalUrl: '/api/apps',
+        protocol: 'http',
+        get: () => 'localhost',
+        headers: { authorization: type1 },
+        query: {},
+        cookies: {},
+        connection: {}
+      },
+      res,
+      err => {
+        nextArg = err;
+      }
+    );
+
+    // Let express-ntlm open its connection to the domain controller.
+    await new Promise(resolve => setImmediate(resolve));
+    mock.timers.tick(5000);
+
+    assert.equal(nextArg?.code, 'SERVICE_UNAVAILABLE');
+    assert.equal(nextArg.status, 503);
+    assert.equal(res.headers['retry-after'], '5');
+
+    // The domain controller gives up afterwards; express-ntlm's late answer
+    // must not reach the response that was already answered.
+    sockets.forEach(s => s.destroy());
+    for (let i = 0; i < 5; i++) await new Promise(resolve => setImmediate(resolve));
+    assert.equal(res.ended, false);
+    assert.equal(res.statusCode, 200);
   });
 });

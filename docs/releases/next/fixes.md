@@ -888,4 +888,13 @@ and the connection check then retried `/api/health` every few seconds, adding an
   makes the app think the server is offline.
 - After the domain controller rejects an account, iHub answers that account's next sign-in attempts
   itself for 60 seconds (`429` with `Retry-After`) instead of passing them on, so they do not count as
-  failed logons.
+  failed logons. This also holds when the browser sends the user name without a domain, as a computer
+  outside the domain (for example a Mac) does.
+
+## Windows Sign-In No Longer Signs the User Out When the Domain Controller Is Slow
+
+With Windows sign-in (NTLM), a request whose sign-in step got no answer from the domain controller
+within 5 seconds went on as if no one was signed in. On a page that needs a sign-in it then failed
+with `401`, which the app takes for an expired session: it signed the user out. Such a request now
+fails with `503 SERVICE_UNAVAILABLE` and `Retry-After`, and the user stays signed in. The domain
+controller's late answer is dropped instead of being written to a response that was already sent.
