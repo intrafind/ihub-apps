@@ -2481,3 +2481,12 @@ on installations without internet access and with every CDN host removed.
 - **New page Admin → Artifacts.** One place for every artifact setting: keeping generated files, the size
   limits, the ZIP limits, the CDN hosts and the library kit (on by default). Changes apply right away.
 
+
+## Sources Panel: Many Searches No Longer Push the Sources Out of View
+
+When an answer ran many web searches, the sources panel listed every search query in its header,
+and with a few dozen of them there was no room left for the sources. The panel now shows the first
+three searches, one line each, with **Show all N searches** to unfold the rest.
+
+- Unfolded, the full queries scroll in a list of their own, so the sources below stay visible.
+- Hovering a shortened search shows it in full.

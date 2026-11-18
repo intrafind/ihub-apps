@@ -9329,6 +9329,8 @@
     "resultsCount_other": "{{count}} Ergebnisse",
     "originFilter": "Nach Herkunft filtern",
     "queries": "Suchen",
+    "showAllQueries_one": "Alle {{count}} Suchen anzeigen",
+    "showAllQueries_other": "Alle {{count}} Suchen anzeigen",
     "cited": "In dieser Antwort zitiert",
     "read": "Für diese Antwort gelesen",
     "foundIn": "Gefunden in {{scope}}",

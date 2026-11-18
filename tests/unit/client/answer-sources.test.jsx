@@ -635,6 +635,35 @@ describe('an answer that cites none of its sources', () => {
     expect(screen.getByRole('button', { name: 'sources.resultsCount:4' })).toBeInTheDocument();
   });
 
+  test('many searches fold to the first three, so the sources stay in view', () => {
+    const queries = ['q1', 'q2', 'q3', 'q4', 'q5'];
+    const dialog = openPanel({ ...searched, queries });
+    const list = within(dialog).getByRole('list', { name: 'Searches' });
+    const listed = () =>
+      within(list)
+        .getAllByRole('listitem')
+        .map(item => item.textContent);
+    expect(listed()).toEqual(['q1', 'q2', 'q3']);
+    // The sources are still there below the folded searches.
+    expect(sectionTitles(dialog)).toEqual(['Read for this answer (2)', 'Also considered (2)']);
+
+    const toggle = within(dialog).getByRole('button', { name: 'sources.showAllQueries:5' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(toggle);
+    expect(listed()).toEqual(queries);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Show fewer' }));
+    expect(listed()).toEqual(['q1', 'q2', 'q3']);
+  });
+
+  test('a few searches are all listed, with nothing to unfold', () => {
+    const dialog = openPanel({ ...searched, queries: ['q1', 'q2', 'q3'] });
+    const list = within(dialog).getByRole('list', { name: 'Searches' });
+    expect(within(list).getAllByRole('listitem')).toHaveLength(3);
+    expect(within(dialog).queryByRole('button', { name: /showAllQueries/ })).toBeNull();
+  });
+
   test('nothing cited and nothing read: one list of what was found, no empty section', () => {
     const dialog = openPanel({ queries: ['langdock'], items: [langdock, yc] });
     expect(sectionTitles(dialog)).toEqual(['Considered (2)']);

@@ -60,6 +60,13 @@ const PASSAGE_TRUNCATE_LENGTH = 200;
 const ANSWER_LIST_LIMIT = 5;
 
 /**
+ * Searches listed in the panel's header before the rest fold away. A long
+ * research run makes dozens; listed in full they would push the sources (what
+ * the panel is for) out of view.
+ */
+const QUERY_LIST_LIMIT = 3;
+
+/**
  * Everything an answer found — web pages, documents, records, whichever
  * integration found them (`shared/sources`) — behind one entry at the
  * answer's end, next to the badge that says what the answer is based on:
@@ -275,6 +282,60 @@ function AnswerSourceList({ messageKey, sources, title }) {
           {showAll
             ? t('sources.showFewer', 'Show fewer')
             : t('sources.showMoreCited', { count: folded })}
+          <Icon
+            name="chevron-down"
+            size="xs"
+            className={`transition-transform ${showAll ? 'rotate-180' : ''}`}
+          />
+        </button>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The searches the answer ran, in the panel's header. Folded, it shows the
+ * first few, one line each; unfolded, all of them in full, in a list that
+ * scrolls on its own so the sources below stay in view.
+ */
+function SearchQueryList({ queries }) {
+  const { t } = useTranslation();
+  const listId = useId();
+  const [showAll, setShowAll] = useState(false);
+  if (!queries.length) return null;
+  const folded = queries.length - QUERY_LIST_LIMIT;
+  const expanded = showAll || folded <= 0;
+  const shown = expanded ? queries : queries.slice(0, QUERY_LIST_LIMIT);
+
+  return (
+    <div className="mt-1">
+      <ul
+        id={listId}
+        className={`flex flex-wrap gap-1 ${expanded ? 'max-h-[30vh] overflow-y-auto' : ''}`}
+        aria-label={t('sources.queries', 'Searches')}
+      >
+        {shown.map(query => (
+          <li
+            key={query}
+            title={expanded ? undefined : query}
+            className="inline-flex min-w-0 max-w-full items-center gap-1 rounded-md bg-gray-100 px-2 py-0.5 text-xs text-gray-600 dark:bg-gray-800 dark:text-gray-300"
+          >
+            <Icon name="search" size="xs" className="shrink-0" />
+            <span className={expanded ? '[overflow-wrap:anywhere]' : 'truncate'}>{query}</span>
+          </li>
+        ))}
+      </ul>
+      {folded > 0 && (
+        <button
+          type="button"
+          onClick={() => setShowAll(all => !all)}
+          aria-expanded={showAll}
+          aria-controls={listId}
+          className="mt-1 inline-flex items-center gap-1 rounded-sm text-xs text-gray-500 hover:text-gray-700 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-gray-400 dark:hover:text-gray-300"
+        >
+          {showAll
+            ? t('sources.showFewer', 'Show fewer')
+            : t('sources.showAllQueries', { count: queries.length })}
           <Icon
             name="chevron-down"
             size="xs"
@@ -657,22 +718,7 @@ function SourcesPanel({
             <h2 id={titleId} className="text-base font-semibold text-gray-900 dark:text-gray-100">
               {t('sources.title', 'Sources')}
             </h2>
-            {queries.length > 0 && (
-              <ul
-                className="mt-1 flex flex-wrap gap-1"
-                aria-label={t('sources.queries', 'Searches')}
-              >
-                {queries.map(query => (
-                  <li
-                    key={query}
-                    className="inline-flex items-center gap-1 rounded-md bg-gray-100 px-2 py-0.5 text-xs text-gray-600 dark:bg-gray-800 dark:text-gray-300"
-                  >
-                    <Icon name="search" size="xs" className="shrink-0" />
-                    <span className="break-all">{query}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
+            <SearchQueryList queries={queries} />
             {answerScopes.length > 0 && (
               <ul className="mt-1 space-y-0.5 text-xs text-gray-600 dark:text-gray-300">
                 {answerScopes.map(scope => (

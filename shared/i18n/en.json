@@ -9330,6 +9330,8 @@
     "resultsCount_other": "{{count}} results",
     "originFilter": "Filter by origin",
     "queries": "Searches",
+    "showAllQueries_one": "Show all {{count}} searches",
+    "showAllQueries_other": "Show all {{count}} searches",
     "cited": "Cited in this answer",
     "read": "Read for this answer",
     "foundIn": "Found in {{scope}}",
