@@ -3313,8 +3313,6 @@
         "description": "string",
         "examples": ["object"],
         "properties": {
-          "aiAcknowledgements": "object",
-          "aiAcknowledgementsClearedAt": "object",
           "createdAt": "object",
           "email": "object",
           "enabled": "object",
