@@ -51,6 +51,68 @@ export function microcompactMessages(messages, opts = {}) {
   return { messages: out, freedChars, collapsed };
 }
 
+/** Whether a tool result says its call failed (`{ success: false }`, `{ error }`, "Error: …"). */
+function isFailedResult(content) {
+  const text = String(content ?? '').trim();
+  if (/^error\b/i.test(text)) return true;
+  if (!text.startsWith('{')) return false;
+  try {
+    const value = JSON.parse(text);
+    return value?.success === false || (value?.error != null && value?.success !== true);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The arguments of failed tool calls, shortened: a last way to free context
+ * when the results are condensed already and a model resent a long call that
+ * was refused (a workbook whose JSON did not parse, three times). The newest
+ * failed call keeps its arguments, so the model can see what it sent last;
+ * its error stays in its result.
+ *
+ * @param {Array<Object>} messages
+ * @param {{maxArgsChars?: number}} [opts]
+ * @returns {{messages: Array<Object>, freedChars: number, shortened: number}}
+ */
+export function shrinkFailedToolCalls(messages, opts = {}) {
+  const maxArgsChars = opts.maxArgsChars ?? 1000;
+  if (!Array.isArray(messages)) return { messages, freedChars: 0, shortened: 0 };
+  const failed = new Set(
+    messages
+      .filter(m => m?.role === 'tool' && m.tool_call_id && isFailedResult(m.content))
+      .map(m => m.tool_call_id)
+  );
+  // The newest failed call with long arguments keeps them.
+  let newest = null;
+  for (const message of messages) {
+    for (const call of message?.role === 'assistant' ? message.tool_calls || [] : []) {
+      if (failed.has(call?.id) && String(call.function?.arguments ?? '').length > maxArgsChars) {
+        newest = call.id;
+      }
+    }
+  }
+  let freedChars = 0;
+  let shortened = 0;
+  const out = messages.map(message => {
+    if (message?.role !== 'assistant' || !Array.isArray(message.tool_calls)) return message;
+    let changed = false;
+    const calls = message.tool_calls.map(call => {
+      const args = String(call?.function?.arguments ?? '');
+      if (!failed.has(call?.id) || call.id === newest || args.length <= maxArgsChars) return call;
+      const replacement = JSON.stringify({
+        omitted: `the arguments of this failed call (${args.length} characters) were removed to free context; its error is in its result`
+      });
+      freedChars += args.length - replacement.length;
+      shortened += 1;
+      changed = true;
+      return { ...call, function: { ...call.function, arguments: replacement } };
+    });
+    return changed ? { ...message, tool_calls: calls } : message;
+  });
+  return { messages: out, freedChars, shortened };
+}
+
 /**
  * Per message, remembered on the message, counted like the context figure
  * (`contextTracker.messageText`): the transcript is counted after every step

@@ -58,6 +58,15 @@ export const CONTEXT_WRAP_UP_NUDGE =
   'back with recall_tool_result; when one is not there, state that it is not available. Never ' +
   'fill a gap from memory, not even approximately.';
 
+/**
+ * The context is full and nothing more can be condensed (#3819): the tools
+ * are gone for this answer, which is written from what the notes hold.
+ */
+export const CONTEXT_FULL_NUDGE =
+  '[system] The context is full. Tools are no longer available. Write your COMPLETE final ' +
+  'answer now from the notes and results above. Take every figure, date and name from them; ' +
+  'when one is not there, state that it is not available. Never fill a gap from memory.';
+
 /** Build the nudge message object the loop appends to the transcript. */
 export function nudgeMessage(content) {
   return { role: 'user', content, _nudge: true };

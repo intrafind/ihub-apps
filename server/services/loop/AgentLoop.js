@@ -61,6 +61,7 @@ import {
   compactIfOversized,
   microcompactMessages,
   isContextOverflowError,
+  shrinkFailedToolCalls,
   estimateTokens
 } from './contextCompaction.js';
 import { estimateTranscriptTokens } from './contextTracker.js';
@@ -89,6 +90,7 @@ import {
   tokenBudgetNudge,
   ROUND_CAP_NUDGE,
   CONTEXT_WRAP_UP_NUDGE,
+  CONTEXT_FULL_NUDGE,
   nudgeMessage
 } from './nudges.js';
 
@@ -737,6 +739,41 @@ export class AgentLoop {
               await runHooks(seams, 'onCompaction', ctx, {
                 ...mc,
                 ...elided
+              });
+              iteration--;
+              continue;
+            }
+            // Nothing left to condense or shorten: long arguments of calls
+            // that were refused (a model resending a broken workbook), then,
+            // as a last resort, an answer without tools — the tool list
+            // leaves the prompt, and the turn ends with an answer, not an
+            // error.
+            const shrunk = shrinkFailedToolCalls(ctx.messages);
+            if (shrunk.freedChars > 0) {
+              reactiveAttempts++;
+              ctx.messages = shrunk.messages;
+              promptAnchor = null;
+              this.logger.warn('Reactive context recovery: shortened failed tool calls, retrying', {
+                component: COMPONENT,
+                runId,
+                attempt: reactiveAttempts,
+                freedChars: shrunk.freedChars,
+                shortened: shrunk.shortened
+              });
+              iteration--;
+              continue;
+            }
+            // Only when the call offered tools: without them the retry would
+            // send the same prompt again.
+            if (!forceFinish && ctx.offeredTools.length > 0) {
+              reactiveAttempts++;
+              forceFinish = true;
+              ctx.messages.push(nudgeMessage(CONTEXT_FULL_NUDGE));
+              promptAnchor = null;
+              this.logger.warn('Reactive context recovery: answering without tools', {
+                component: COMPONENT,
+                runId,
+                attempt: reactiveAttempts
               });
               iteration--;
               continue;

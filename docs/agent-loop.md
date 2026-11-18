@@ -286,7 +286,13 @@ a summary call (the results stay readable by ref). Only when that frees
 nothing — and in an `elide` turn — are old bodies collapsed (`reactiveKeepRecent`).
 The loop then retries, up to `maxReactiveAttempts` times, without charging a
 round. It is recorded as `trigger: 'overflow'`, `lossy: true`,
-`fallbackReason: 'context_overflow'`.
+`fallbackReason: 'context_overflow'`. When neither frees anything, the long
+arguments of earlier failed tool calls are shortened (the newest failed call
+keeps its own, and every error stays in its result). As a last resort, when
+the call offered tools, the loop answers without them: the tool list leaves
+the prompt, the model is told to write its complete answer from the notes
+(`CONTEXT_FULL_NUDGE`), and the turn ends with an answer instead of an
+error.
 
 **What is recorded and shown.** Every compaction writes a `context/compaction`
 ledger event with `compactionId`, `strategy`, `lossy`, `tokensBefore`,

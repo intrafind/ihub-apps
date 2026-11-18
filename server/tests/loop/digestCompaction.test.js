@@ -9,6 +9,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { AgentLoop, resolvePolicies } from '../../services/loop/AgentLoop.js';
+import { shrinkFailedToolCalls } from '../../services/loop/contextCompaction.js';
 import { projectLedgerEvent } from '../../services/loop/RunStream.js';
 import { RUN_LOG_EVENTS, SSE_V2_EVENTS } from '../../../shared/runEvents.js';
 import { RECALL_TOOL_ID } from '../../services/loop/findingsDigest.js';
@@ -911,6 +912,79 @@ test('the notes of a run are bounded: once their share is used up, digests keep 
   assert.equal(infos[1].wrapUp, true);
   const tools = (stepRequests.at(-1).body.tools || []).map(t => t.function?.name || t.id || t.name);
   assert.ok(!tools.includes('webSearch'), 'no more searching');
+});
+
+test('shrinkFailedToolCalls shortens long arguments of failed calls, keeping the newest and every successful one', () => {
+  const long = JSON.stringify({ sheets: 'x'.repeat(5000) });
+  const call = id => ({ id, type: 'function', function: { name: 'create_xlsx', arguments: long } });
+  const messages = [
+    { role: 'user', content: 'q' },
+    { role: 'assistant', content: '', tool_calls: [call('a')] },
+    { role: 'tool', tool_call_id: 'a', content: '{"success":false,"error":"bad sheets"}' },
+    { role: 'assistant', content: '', tool_calls: [call('b')] },
+    { role: 'tool', tool_call_id: 'b', content: '{"success":true,"file":{}}' },
+    { role: 'assistant', content: '', tool_calls: [call('c')] },
+    { role: 'tool', tool_call_id: 'c', content: 'Error: bad sheets' }
+  ];
+  const { messages: out, shortened, freedChars } = shrinkFailedToolCalls(messages);
+  assert.equal(shortened, 1);
+  assert.ok(freedChars > 4000);
+  assert.match(out[1].tool_calls[0].function.arguments, /were removed to free context/);
+  assert.equal(out[3].tool_calls[0].function.arguments, long, 'a successful call is kept');
+  assert.equal(out[5].tool_calls[0].function.arguments, long, 'the newest failed call is kept');
+  assert.equal(messages[1].tool_calls[0].function.arguments, long, 'the input is not changed');
+});
+
+test('an overflow that nothing can condense shortens failed calls, then answers without tools', async () => {
+  const xlsxTool = {
+    id: 'create_xlsx',
+    name: 'create_xlsx',
+    description: 'make a spreadsheet',
+    parameters: { type: 'object', properties: { sheets: { type: 'string' } } }
+  };
+  const overflow = () =>
+    textResponse(
+      '{"error":{"code":"context_length_exceeded","message":"maximum context length is 8192 tokens"}}',
+      { status: 400 }
+    );
+  const run = async turns => {
+    const { loop, stepRequests } = makeLoop(turns, []);
+    const result = await loop.run({
+      model,
+      messages: baseMessages,
+      tools: [searchTool, xlsxTool],
+      policies: { context: { strategy: 'digest', compactThresholdTokens: 100_000 } },
+      executeTool: async () => '{"success":false,"error":"\\"sheets\\" must be a JSON array"}'
+    });
+    return { result, stepRequests };
+  };
+  const sheets = 'y'.repeat(5000);
+  // Two refused workbooks: the older one's arguments go, the retry fits.
+  const shortened = await run([
+    toolTurn('c1', 'create_xlsx', { sheets }),
+    toolTurn('c2', 'create_xlsx', { sheets }),
+    overflow,
+    textTurn('recovered')
+  ]);
+  assert.equal(shortened.result.status, 'completed', JSON.stringify(shortened.result.error));
+  assert.equal(shortened.result.content, 'recovered');
+  const retry = shortened.stepRequests.at(-1).body.messages;
+  const callArgs = id =>
+    retry.flatMap(m => m.tool_calls || []).find(c => c.id === id).function.arguments;
+  assert.match(callArgs('c1'), /were removed to free context/);
+  assert.ok(callArgs('c2').length > 4000, 'the newest failed call keeps its arguments');
+
+  // Nothing to condense or shorten: the answer comes without tools.
+  const answered = await run([
+    toolTurn('c1', 'create_xlsx', { sheets: 'short' }),
+    overflow,
+    textTurn('the answer')
+  ]);
+  assert.equal(answered.result.status, 'completed', JSON.stringify(answered.result.error));
+  assert.equal(answered.result.content, 'the answer');
+  const last = answered.stepRequests.at(-1).body;
+  assert.ok(!(last.tools || []).length, 'no tools');
+  assert.ok(last.messages.some(m => String(m.content).includes('The context is full')));
 });
 
 test('near the window the second kept batch is condensed too; well below it, it stays', async () => {
