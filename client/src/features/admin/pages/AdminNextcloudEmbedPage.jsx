@@ -1,15 +1,20 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import AdminLoadGate from '../components/AdminLoadGate';
+import { useAdminConfigLoad } from '../hooks/useAdminConfigLoad';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
+import { useSavedBaseline } from '../hooks/useSavedBaseline';
 
 function AdminNextcloudEmbedPage() {
   const { t } = useTranslation();
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [toggling, setToggling] = useState(false);
   const [message, setMessage] = useState(null);
@@ -20,6 +25,14 @@ function AdminNextcloudEmbedPage() {
   const [starterPrompts, setStarterPrompts] = useState([]);
   const [allowedHostOrigins, setAllowedHostOrigins] = useState([]);
   const [newOrigin, setNewOrigin] = useState('');
+  // Unsaved-changes guard: the baseline is captured after every successful load
+  // (also the reload after Save), so a just-loaded page is never dirty.
+  const editedValues = useMemo(
+    () => ({ displayName, description, starterPrompts, allowedHostOrigins }),
+    [displayName, description, starterPrompts, allowedHostOrigins]
+  );
+  const { baseline, captureBaseline } = useSavedBaseline(editedValues);
+  const { blocker } = useUnsavedChanges(baseline, editedValues);
 
   const emptyPrompt = () => ({
     _id: crypto.randomUUID(),
@@ -36,26 +49,35 @@ function AdminNextcloudEmbedPage() {
     return out;
   };
 
+  const fetchStatus = async () =>
+    (await makeAdminApiCall('/admin/nextcloud-embed/status', { method: 'GET' })).data;
+
+  /** Put a loaded status into the form state. */
+  const applyStatus = data => {
+    setStatus(data);
+    setDisplayName(sanitizeLocalized(data.displayName));
+    setDescription(sanitizeLocalized(data.description));
+    setStarterPrompts(
+      Array.isArray(data.starterPrompts)
+        ? data.starterPrompts.map(p => ({
+            _id: crypto.randomUUID(),
+            title: sanitizeLocalized(p?.title),
+            message: sanitizeLocalized(p?.message)
+          }))
+        : []
+    );
+    setAllowedHostOrigins(
+      Array.isArray(data.allowedHostOrigins) ? data.allowedHostOrigins.slice() : []
+    );
+    // The loaded values are the unsaved-changes baseline (also after a reload).
+    captureBaseline();
+  };
+
+  // Reload after Enable/Disable or a save; the first load goes through the gate below.
   const loadStatus = async () => {
     try {
       setLoading(true);
-      const res = await makeAdminApiCall('/admin/nextcloud-embed/status', { method: 'GET' });
-      const data = res.data;
-      setStatus(data);
-      setDisplayName(sanitizeLocalized(data.displayName));
-      setDescription(sanitizeLocalized(data.description));
-      setStarterPrompts(
-        Array.isArray(data.starterPrompts)
-          ? data.starterPrompts.map(p => ({
-              _id: crypto.randomUUID(),
-              title: sanitizeLocalized(p?.title),
-              message: sanitizeLocalized(p?.message)
-            }))
-          : []
-      );
-      setAllowedHostOrigins(
-        Array.isArray(data.allowedHostOrigins) ? data.allowedHostOrigins.slice() : []
-      );
+      applyStatus(await fetchStatus());
     } catch (err) {
       console.error('[nextcloud-embed] loadStatus failed', err);
       setMessage({
@@ -67,12 +89,15 @@ function AdminNextcloudEmbedPage() {
     }
   };
 
-  useEffect(() => {
-    void loadStatus();
-    // eslint-disable-next-line @eslint-react/exhaustive-deps
-  }, []);
+  // No form, Enable or Save until the status loaded: saving after a failed
+  // load would store empty prompts and defaults over the real ones (IN-B6).
+  const load = useAdminConfigLoad({
+    sources: { status: { load: fetchStatus, onLoad: applyStatus } }
+  });
+  const ready = load.status === 'ready';
 
   const handleToggle = async () => {
+    if (!ready) return;
     if (!status) return;
     // Capture the pre-toggle state *before* the await; reading `status.enabled`
     // after `loadStatus()` resolves would refer to the post-toggle state and
@@ -160,6 +185,7 @@ function AdminNextcloudEmbedPage() {
   };
 
   const handleSaveConfig = async () => {
+    if (!ready) return;
     try {
       setSaving(true);
       setMessage(null);
@@ -252,7 +278,12 @@ function AdminNextcloudEmbedPage() {
           </div>
         )}
 
-        {loading ? (
+        {!ready ? (
+          <AdminLoadGate
+            load={load}
+            resourceLabel={t('admin.nextcloudEmbed.resource', 'Nextcloud embed settings')}
+          />
+        ) : loading ? (
           <div className="flex items-center justify-center py-16">
             <div className="w-8 h-8 border-4 border-gray-200 border-t-indigo-600 rounded-full animate-spin" />
           </div>
@@ -331,7 +362,7 @@ function AdminNextcloudEmbedPage() {
                     type="text"
                     readOnly
                     value={embedUrl}
-                    className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 px-3 py-2 text-sm font-mono text-gray-700 dark:text-gray-300 focus:outline-hidden"
+                    className="flex-1 rounded-lg border border-admin-control-border dark:border-admin-control-border-dark bg-gray-50 dark:bg-gray-700 px-3 py-2 text-sm font-mono text-gray-700 dark:text-gray-300 focus:outline-hidden"
                     onClick={e => e.target.select()}
                   />
                   <button
@@ -368,7 +399,7 @@ function AdminNextcloudEmbedPage() {
                     }
                   }}
                   placeholder="https://cloud.example.com"
-                  className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  className="flex-1 rounded-lg border border-admin-control-border dark:border-admin-control-border-dark bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 />
                 <button
                   type="button"
@@ -567,6 +598,7 @@ function AdminNextcloudEmbedPage() {
           </>
         )}
       </div>
+      <UnsavedChangesDialog blocker={blocker} />
     </div>
   );
 }

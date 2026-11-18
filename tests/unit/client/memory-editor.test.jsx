@@ -245,8 +245,8 @@ describe('MemoryEditor', () => {
       );
       const { props, rerender } = setup({ id: 'a', clear });
       await flush();
-      jest.spyOn(window, 'confirm').mockReturnValueOnce(true);
       fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Clear notes' }));
       await flush();
 
       const loadB = jest.fn().mockResolvedValue(DOC_B);
@@ -323,8 +323,8 @@ describe('MemoryEditor', () => {
     expect(textarea()).toHaveAttribute('readonly');
     expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
 
-    jest.spyOn(window, 'confirm').mockReturnValueOnce(true);
     fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Clear notes' }));
     await flush();
     expect(clear).toHaveBeenCalledTimes(1);
   });
@@ -338,16 +338,34 @@ describe('MemoryEditor', () => {
     setup({ clear, load });
     await flush();
 
-    jest.spyOn(window, 'confirm').mockReturnValueOnce(false);
     fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
+    expect(screen.getByRole('alertdialog', { name: 'Clear all notes?' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     await flush();
     expect(clear).not.toHaveBeenCalled();
 
-    jest.spyOn(window, 'confirm').mockReturnValueOnce(true);
     fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Clear notes' }));
     await flush();
     expect(clear).toHaveBeenCalledTimes(1);
     expect(textarea()).toHaveValue('');
+  });
+
+  it('drops an open clear question when the editor moves to other notes', async () => {
+    const clear = jest.fn().mockResolvedValue({ version: 2 });
+    const load = jest
+      .fn()
+      .mockResolvedValueOnce(DOC)
+      .mockResolvedValueOnce({ body: 'other task', version: 1 });
+    const { props, rerender } = setup({ clear, load });
+    await flush();
+    fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
+    expect(screen.getByRole('alertdialog', { name: 'Clear all notes?' })).toBeInTheDocument();
+
+    rerender(<MemoryEditor {...props} id="task-2" />);
+    await flush();
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(clear).not.toHaveBeenCalled();
   });
 
   it('shows a load failure through formatError', async () => {

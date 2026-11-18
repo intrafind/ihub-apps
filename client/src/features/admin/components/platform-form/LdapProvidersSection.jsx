@@ -8,6 +8,7 @@ import { CredentialRefSelect } from '../OpenApiToolEditor';
 import GroupMultiSelect from '../GroupMultiSelect';
 import LdapLoginTest from './LdapLoginTest';
 import { LDAP_PRESETS, DEFAULT_LDAP_PRESET, deriveLdapDefaults } from '../../utils/ldapPresets';
+import { CHECKBOX_CLASS } from '../formStyles';
 
 /**
  * LdapProvidersSection - LDAP authentication settings card: provider list
@@ -45,7 +46,7 @@ function peopleSearchUrl(provider) {
 }
 
 const INPUT_CLASS =
-  'w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm';
+  'w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark dark:bg-gray-700 dark:text-gray-100 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm';
 
 /** A labelled text input with help text, optionally spanning both columns. */
 function Field({ id, label, value, onChange, placeholder, help, type = 'text', wide = false }) {
@@ -368,7 +369,7 @@ function LdapProvidersSection({
                     onChange={e =>
                       updateLdapProvider(index, 'starttls', e.target.checked || undefined)
                     }
-                    className="h-4 w-4 text-blue-600 border-gray-300 rounded-sm focus:ring-blue-500"
+                    className={CHECKBOX_CLASS}
                   />
                   <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
                     {t('admin.auth.ldap.starttls', 'Use StartTLS (encrypt ldap:// connections)')}
@@ -394,7 +395,7 @@ function LdapProvidersSection({
                         e.target.checked ? { rejectUnauthorized: false } : undefined
                       )
                     }
-                    className="h-4 w-4 text-blue-600 border-gray-300 rounded-sm focus:ring-blue-500"
+                    className={CHECKBOX_CLASS}
                   />
                   <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
                     {t(

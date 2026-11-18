@@ -23,8 +23,11 @@ import {
   LinkIcon
 } from '@heroicons/react/24/outline';
 import AdminDemoAccountsAlert from '../components/AdminDemoAccountsAlert';
+import AdminLoadError from '../components/AdminLoadError';
 import { useOverviewData } from '../hooks/useOverviewData';
 import { useUpdateCheck } from '../hooks/useUpdateCheck';
+import { useRetryCountdown } from '../hooks/useRetryCountdown';
+import { useSetupChecklist } from '../hooks/useSetupChecklist';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
@@ -76,60 +79,53 @@ function StatCard({
   );
 }
 
-function SetupChecklist() {
+/**
+ * "Getting started" card. The steps and their ticks come from `useSetupChecklist`, which reads
+ * them from the server; this component only labels and renders them.
+ *
+ * @param {Object} props
+ * @param {import('../utils/setupChecklist').SetupStep[]} props.steps
+ * @param {() => void} props.onDismiss - Hides the checklist in this browser.
+ */
+function SetupChecklist({ steps, onDismiss }) {
   const { t } = useTranslation();
 
-  const steps = [
-    {
-      id: 'install',
-      label: t('admin.overview.setup.installed', 'Platform installed'),
-      done: true,
-      href: null
-    },
-    {
-      id: 'admin',
-      label: t('admin.overview.setup.adminAccount', 'Admin account ready'),
-      done: true,
-      href: null
-    },
-    {
-      id: 'provider',
-      label: t('admin.overview.setup.addProvider', 'Configure an LLM provider'),
-      done: false,
-      href: '/admin/providers'
-    },
-    {
-      id: 'app',
-      label: t('admin.overview.setup.createApp', 'Create your first app'),
-      done: false,
-      href: '/admin/apps'
-    },
-    {
-      id: 'identity',
-      label: t('admin.overview.setup.configureAuth', 'Connect identity provider (optional)'),
-      done: false,
-      href: '/admin/auth'
-    },
-    {
-      id: 'features',
-      label: t('admin.overview.setup.reviewFeatures', 'Review feature flags'),
-      done: false,
-      href: '/admin/features'
-    }
-  ];
+  const labels = {
+    install: t('admin.overview.setup.installed', 'Platform installed'),
+    admin: t('admin.overview.setup.adminAccount', 'Admin account ready'),
+    provider: t('admin.overview.setup.addProvider', 'Configure an LLM provider'),
+    app: t('admin.overview.setup.createApp', 'Create your first app'),
+    identity: t('admin.overview.setup.configureAuth', 'Connect identity provider (optional)')
+  };
+  const hints = {
+    shippedPassword: t(
+      'admin.overview.setup.shippedPasswordHint',
+      'The admin account still signs in with the shipped password. Change it.'
+    )
+  };
 
   const completedCount = steps.filter(s => s.done).length;
   const progress = Math.round((completedCount / steps.length) * 100);
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-5">
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between gap-2 mb-3">
         <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
           {t('admin.overview.gettingStarted', 'Getting started')}
         </h2>
-        <span className="text-xs text-gray-500 dark:text-gray-400">
-          {completedCount}/{steps.length}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-500 dark:text-gray-400">
+            {completedCount}/{steps.length}
+          </span>
+          <button
+            type="button"
+            onClick={onDismiss}
+            className="text-xs font-medium text-gray-600 dark:text-gray-300 underline hover:no-underline"
+            aria-label={t('admin.overview.setup.dismissLabel', 'Hide the setup checklist')}
+          >
+            {t('admin.overview.setup.dismiss', 'Hide')}
+          </button>
+        </div>
       </div>
       <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 mb-4">
         <div
@@ -139,9 +135,9 @@ function SetupChecklist() {
       </div>
       <ul className="space-y-2.5">
         {steps.map(step => (
-          <li key={step.id} className="flex items-center gap-3">
+          <li key={step.id} className="flex items-start gap-3" data-step={step.id}>
             <div
-              className={`w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center ${
+              className={`mt-0.5 w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center ${
                 step.done
                   ? 'bg-indigo-600 border-indigo-600'
                   : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600'
@@ -154,26 +150,34 @@ function SetupChecklist() {
                   viewBox="0 0 24 24"
                   stroke="currentColor"
                   strokeWidth={3}
+                  aria-hidden="true"
                 >
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                 </svg>
               )}
             </div>
-            {step.href && !step.done ? (
-              <Link
-                to={step.href}
-                className="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 flex items-center gap-1"
-              >
-                {step.label}
-                <ArrowTopRightOnSquareIcon className="w-3 h-3" aria-hidden="true" />
-              </Link>
-            ) : (
-              <span
-                className={`text-sm ${step.done ? 'text-gray-500 dark:text-gray-400 line-through' : 'text-gray-700 dark:text-gray-300'}`}
-              >
-                {step.label}
-              </span>
-            )}
+            <div className="min-w-0">
+              {step.href && !step.done ? (
+                <Link
+                  to={step.href}
+                  className="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 flex items-center gap-1"
+                >
+                  {labels[step.id]}
+                  <ArrowTopRightOnSquareIcon className="w-3 h-3" aria-hidden="true" />
+                </Link>
+              ) : (
+                <span
+                  className={`text-sm ${step.done ? 'text-gray-500 dark:text-gray-400 line-through' : 'text-gray-700 dark:text-gray-300'}`}
+                >
+                  {labels[step.id]}
+                </span>
+              )}
+              {!step.done && step.hint && (
+                <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                  {hints[step.hint]}
+                </p>
+              )}
+            </div>
           </li>
         ))}
       </ul>
@@ -613,15 +617,38 @@ export default function AdminOverview() {
     user?.permissions?.contentAdmin && !user?.permissions?.adminAccess && !user?.isAdmin
   );
 
-  const { stats, platformInfo, recentActivity, isLoading, isFreshInstance } = useOverviewData({
-    contentAdminOnly: isContentAdminOnly
-  });
+  const { stats, platformInfo, recentActivity, isLoading, isFreshInstance, loadError, retry } =
+    useOverviewData({
+      contentAdminOnly: isContentAdminOnly
+    });
+
+  // After a 429, Retry counts the Retry-After wait down instead of re-hitting the limit.
+  const retryAfterSeconds = useRetryCountdown(loadError);
+
+  // A failed apps request is an error with Retry, never the fresh-install view (SH-B2).
+  const loadErrorBanner = loadError ? (
+    <AdminLoadError
+      framed={false}
+      className="mb-6"
+      resourceLabel={t('admin.overview.resource', 'the overview')}
+      status={loadError.status}
+      message={loadError.detail}
+      onRetry={retry}
+      retryAfterSeconds={retryAfterSeconds}
+    />
+  ) : null;
 
   // Runs alongside the dashboard data rather than as part of it: this one
   // reaches api.github.com, and the page must render before it answers — or not
   // at all, in deployments without outbound internet access (issue #2150).
   // Content admins aren't permitted on the endpoint and have no version card.
   const { updateInfo } = useUpdateCheck({ enabled: !isContentAdminOnly });
+
+  // Shown while a required setup step is open, whatever the app count (SH-B3).
+  const setupChecklist = useSetupChecklist({
+    enabled: !isContentAdminOnly,
+    overviewStats: platformInfo
+  });
 
   const currentLanguage = i18n.language;
   const { titleLight, titleBold, title } = uiConfig?.header ?? {};
@@ -723,6 +750,8 @@ export default function AdminOverview() {
           </p>
         </div>
 
+        {loadErrorBanner}
+
         {/* Content stat cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
           {statCards.map(({ key, ...card }) => (
@@ -758,6 +787,8 @@ export default function AdminOverview() {
           {t('admin.overview.subtitle', 'Platform overview and quick actions')}
         </p>
       </div>
+
+      {loadErrorBanner}
 
       {/* Stat cards */}
       {!isFreshInstance && (
@@ -796,9 +827,10 @@ export default function AdminOverview() {
                 configured={platformConfig?.setup?.configured ?? true}
               />
             )}
-          {isFreshInstance ? (
-            <SetupChecklist />
-          ) : (
+          {setupChecklist.visible && (
+            <SetupChecklist steps={setupChecklist.steps} onDismiss={setupChecklist.dismiss} />
+          )}
+          {!isFreshInstance && (
             <PlatformInfoSection info={platformInfo} systemPagesVisible={systemPagesVisible} />
           )}
         </div>

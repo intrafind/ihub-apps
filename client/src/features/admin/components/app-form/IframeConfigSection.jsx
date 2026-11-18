@@ -1,5 +1,6 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
+import { CHECKBOX_CLASS } from '../formStyles';
 
 const SANDBOX_PERMISSIONS = [
   {
@@ -70,7 +71,7 @@ function IframeConfigSection({ app, onChange, t }) {
                   })
                 }
                 placeholder="https://example.com"
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                className="mt-1 block w-full rounded-md border border-admin-control-border dark:border-admin-control-border-dark shadow-xs focus:border-admin-accent focus:ring-admin-accent sm:text-sm"
               />
             </div>
             <div className="flex items-center">
@@ -83,7 +84,7 @@ function IframeConfigSection({ app, onChange, t }) {
                     allowFullscreen: e.target.checked
                   })
                 }
-                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
+                className={CHECKBOX_CLASS}
               />
               <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
                 {t('admin.apps.edit.allowFullscreen', 'Allow Fullscreen')}
@@ -92,7 +93,7 @@ function IframeConfigSection({ app, onChange, t }) {
 
             {/* Sandbox Configuration */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 {t('admin.apps.edit.sandboxPermissions', 'Sandbox Permissions')}
               </label>
               <p className="text-xs text-gray-500 mb-3">
@@ -121,9 +122,9 @@ function IframeConfigSection({ app, onChange, t }) {
                             sandbox: newSandbox
                           });
                         }}
-                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
+                        className={CHECKBOX_CLASS}
                       />
-                      <label className="ml-2 block text-sm text-gray-700">
+                      <label className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
                         {t(permission.labelKey, permission.labelDefault)}
                       </label>
                     </div>

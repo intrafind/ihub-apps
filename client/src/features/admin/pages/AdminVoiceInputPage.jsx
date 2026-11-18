@@ -1,10 +1,13 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import { createConfigRevision } from '../../../api/adminConfigRevision';
+import AdminLoadGate from '../components/AdminLoadGate';
+import { useAdminConfigLoad } from '../hooks/useAdminConfigLoad';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 import { getLocalizedContent } from '../../../utils/localizeContent';
@@ -20,6 +23,9 @@ import VoiceModeSettings from '../components/voice/VoiceModeSettings';
 import ReadAloudButton from '../../voice/components/ReadAloudButton';
 import useReadAloudPlayback from '../../voice/hooks/useReadAloudPlayback';
 import { stop as stopReadAloud } from '../../voice/utils/readAloud';
+import { CHECKBOX_CLASS, INPUT_CLASS } from '../components/formStyles';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
 
 /** Playback id of the read-aloud test, apart from every chat message. */
 const READ_ALOUD_TEST_ID = 'admin-read-aloud-test';
@@ -78,11 +84,19 @@ const toPublicSpeech = (speech, dictationModels) => ({
 function AdminVoiceInputPage() {
   const { t, i18n } = useTranslation();
   const { refreshConfig } = usePlatformConfig();
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [config, setConfig] = useState(DEFAULT_SPEECH);
   const [savedConfig, setSavedConfig] = useState(DEFAULT_SPEECH);
+  // Whether the settings loaded; until then (or after a failed load) the page
+  // never counts as holding unsaved edits.
+  const [hasLoaded, setHasLoaded] = useState(false);
+  // The revision of platform.json this form was loaded from (then: last saved).
+  // Its save sends exactly this as If-Match; a 412 leaves it as it is, so the
+  // next save is refused again until the page reloads or the admin chooses
+  // "Keep my changes and overwrite" (which re-reads into this holder).
+  const revisionRef = useRef(null);
+  const { blocker } = useUnsavedChanges(hasLoaded ? savedConfig : null, config);
   const [azureTesting, setAzureTesting] = useState(false);
   const [azureTestResult, setAzureTestResult] = useState(null);
   const [transcriptionModels, setTranscriptionModels] = useState(null);
@@ -92,11 +106,6 @@ function AdminVoiceInputPage() {
   const [ttsSample, setTtsSample] = useState('');
   const readAloudTest = useReadAloudPlayback(READ_ALOUD_TEST_ID);
   const voiceModeFlagEnabled = useFeatureFlags().isEnabled('voiceMode', false);
-
-  useEffect(() => {
-    void loadConfig();
-    // eslint-disable-next-line @eslint-react/exhaustive-deps
-  }, []);
 
   // The admin model list, not the public /api/models: that one is filtered by
   // the admin's own model permissions, and admin access does not imply them.
@@ -121,34 +130,52 @@ function AdminVoiceInputPage() {
     };
   }, []);
 
-  // Read platform.speech into the form and the saved snapshot.
+  // Read platform.speech into the form and the saved snapshot. This read
+  // fills the form, so it also sets the form's revision.
   const fetchSpeech = async () => {
-    const response = await makeAdminApiCall('/admin/configs/platform', { method: 'GET' });
+    const response = await makeAdminApiCall('/admin/configs/platform', {
+      method: 'GET',
+      revision: revisionRef
+    });
     const speech = toFormSpeech((response.data || {}).speech);
     setConfig(speech);
     setSavedConfig(speech);
+    setHasLoaded(true);
   };
 
-  const loadConfig = async () => {
-    try {
-      setLoading(true);
-      await fetchSpeech();
-      setMessage('');
-    } catch (error) {
-      setMessage({
-        type: 'error',
-        text:
-          error.message || t('admin.voiceInput.loadError', 'Failed to load voice input settings')
-      });
-    } finally {
-      setLoading(false);
+  // No form and no Save until the settings loaded: Save writes the Azure
+  // block and the defaults of this form into platform.json, which after a
+  // failed load would replace the stored speech settings.
+  const load = useAdminConfigLoad({
+    sources: {
+      platform: {
+        load: async () => {
+          const revision = createConfigRevision();
+          const response = await makeAdminApiCall('/admin/configs/platform', {
+            method: 'GET',
+            revision
+          });
+          return { speech: toFormSpeech((response.data || {}).speech), revision: revision.current };
+        },
+        // Only a current (not stale) load sets the form's revision.
+        onLoad: ({ speech, revision }) => {
+          revisionRef.current = revision;
+          setConfig(speech);
+          setSavedConfig(speech);
+          setHasLoaded(true);
+        }
+      }
     }
-  };
+  });
+  const ready = load.status === 'ready';
 
   const handleSave = async () => {
+    if (!ready) return;
     try {
       setSaving(true);
       setMessage('');
+      // Read-modify-write for the sections this page does not show. This read
+      // does not change the revision the save sends (the one the form loaded).
       const response = await makeAdminApiCall('/admin/configs/platform', { method: 'GET' });
       const platform = response.data || {};
       platform.speech = {
@@ -159,8 +186,12 @@ function AdminVoiceInputPage() {
         azure: config.azure,
         voiceMode: toSavedVoiceMode(config.voiceMode, platform.speech?.voiceMode)
       };
-      await makeAdminApiCall('/admin/configs/platform', { method: 'POST', body: platform });
-      // Re-read so the keys show their redacted state again. Not loadConfig():
+      await makeAdminApiCall('/admin/configs/platform', {
+        method: 'POST',
+        body: platform,
+        revision: revisionRef
+      });
+      // Re-read so the keys show their redacted state again. Not the first load:
       // it blanks the page while loading and clears the message, so the
       // success notice never showed and the test panel lost its state.
       await fetchSpeech();
@@ -244,20 +275,27 @@ function AdminVoiceInputPage() {
   const setVoiceMode = patch =>
     setConfig(prev => ({ ...prev, voiceMode: { ...prev.voiceMode, ...patch } }));
 
-  if (loading) {
+  if (!ready) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
         <div className="max-w-4xl mx-auto">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
-            <p className="text-gray-600 dark:text-gray-400">{t('common.loading', 'Loading...')}</p>
-          </div>
+          <AdminLoadGate
+            load={load}
+            resourceLabel={t('admin.voiceInput.resource', 'voice settings')}
+            loadingFallback={
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
+                <p className="text-gray-600 dark:text-gray-400">
+                  {t('common.loading', 'Loading...')}
+                </p>
+              </div>
+            }
+          />
         </div>
       </div>
     );
   }
 
-  const inputClass =
-    'mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm';
+  const inputClass = `${INPUT_CLASS} mt-1 block`;
   const labelClass = 'block text-sm font-medium text-gray-700 dark:text-gray-300';
   const dirty = JSON.stringify(config) !== JSON.stringify(savedConfig);
   const dictationModelId = config.defaultService === 'model' ? config.dictation.modelId : '';
@@ -456,7 +494,7 @@ function AdminVoiceInputPage() {
               onChange={e =>
                 setConfig(prev => ({ ...prev, tts: { ...prev.tts, enabled: e.target.checked } }))
               }
-              className="rounded-sm border-gray-300 text-indigo-600 focus:ring-indigo-500"
+              className={CHECKBOX_CLASS}
             />
             {t('admin.voiceInput.tts.enabled', 'Show a read-aloud button on chat messages')}
           </label>
@@ -530,7 +568,7 @@ function AdminVoiceInputPage() {
                 value={ttsSample}
                 onChange={e => setTtsSample(e.target.value)}
                 placeholder={ttsSampleText}
-                className="block w-full flex-1 rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                className={`${INPUT_CLASS} block flex-1`}
               />
               {ttsModelId && !ttsModelMissing && (
                 <span className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
@@ -587,7 +625,7 @@ function AdminVoiceInputPage() {
               type="checkbox"
               checked={!!config.azure.enabled}
               onChange={e => setAzure('enabled', e.target.checked)}
-              className="rounded-sm border-gray-300 text-indigo-600 focus:ring-indigo-500"
+              className={CHECKBOX_CLASS}
             />
             {t('admin.voiceInput.azure.enabled', 'Enable Azure Speech')}
           </label>
@@ -685,6 +723,7 @@ function AdminVoiceInputPage() {
           language={i18n.language}
         />
       </div>
+      <UnsavedChangesDialog blocker={blocker} />
     </div>
   );
 }

@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { CredentialRefSelect } from '../../OpenApiToolEditor';
 import { CALLOUT_CLASS, HELP_CLASS, LABEL_CLASS, MONO_INPUT_CLASS } from '../../formStyles';
 import { fetchPeopleDirectoryEditorContext } from '../../../../../api/integrationsAdminApi';
-import useInstallationEditor from './useInstallationEditor';
+import useInstallationEditor, { useInstallationEditorDirty } from './useInstallationEditor';
 import {
   AccessSection,
   ActionsSection,
@@ -81,6 +81,7 @@ function EntraDirectoryEditor({ instance, definition, onSaved, onCancel }) {
   const { t } = useTranslation();
   const editor = useInstallationEditor({ instance, definition, onSaved });
   const [values, setValues] = useState(() => entraValuesToForm(instance.values || {}));
+  useInstallationEditorDirty(editor, values);
   const [environment, setEnvironment] = useState(null);
   const errors = editor.fieldErrors;
 

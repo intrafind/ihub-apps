@@ -161,7 +161,7 @@ describe('AdminAppEditPage save actions', () => {
     // Leaving right after the save is not blocked by the unsaved-changes guard.
     fireEvent.click(screen.getByRole('button', { name: 'Back to Apps' }));
     expect(await screen.findByText('Apps list')).toBeInTheDocument();
-    expect(screen.queryByText('You have unsaved changes. Leave anyway?')).not.toBeInTheDocument();
+    expect(screen.queryByText('Your changes will be lost.')).not.toBeInTheDocument();
   });
 
   test('Save & Exit persists and returns to the apps list', async () => {
@@ -281,10 +281,10 @@ describe('AdminAppEditPage open and test', () => {
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Chat 3' } });
     fireEvent.click(screen.getByRole('button', { name: 'Close test panel' }));
     expect(screen.queryByTestId('app-chat')).not.toBeInTheDocument();
-    expect(screen.queryByText('You have unsaved changes. Leave anyway?')).not.toBeInTheDocument();
+    expect(screen.queryByText('Your changes will be lost.')).not.toBeInTheDocument();
 
     // Leaving the page still does.
     fireEvent.click(screen.getByRole('button', { name: 'Back to Apps' }));
-    expect(await screen.findByText('You have unsaved changes. Leave anyway?')).toBeInTheDocument();
+    expect(await screen.findByText('Your changes will be lost.')).toBeInTheDocument();
   });
 });

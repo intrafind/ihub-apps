@@ -91,6 +91,29 @@ describe('LlmTimeoutsCard', () => {
     expect(screen.getByRole('alert')).toBeVisible();
   });
 
+  it('shows a failed load once, with a visible Retry, and no Edit (R7)', async () => {
+    makeAdminApiCall.mockRejectedValueOnce(new Error('boom'));
+    render(<LlmTimeoutsCard />);
+    await flush();
+
+    // One alert, also counting hidden ones (the collapsed body).
+    expect(screen.getAllByRole('alert', { hidden: true })).toHaveLength(1);
+    const retry = screen.getByRole('button', { name: 'Retry' });
+    expect(retry).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
+
+    makeAdminApiCall.mockResolvedValueOnce(payload());
+    await act(async () => {
+      fireEvent.click(retry);
+    });
+    await flush();
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByTestId('llm-timeouts-summary')).toBeInTheDocument();
+    openCard();
+    expect(screen.getByLabelText('Connect timeout (ms)')).toBeVisible();
+  });
+
   it('keeps Save disabled until something changes', async () => {
     makeAdminApiCall.mockResolvedValue(payload());
     render(<LlmTimeoutsCard />);

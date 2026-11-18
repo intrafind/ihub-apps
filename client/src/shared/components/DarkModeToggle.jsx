@@ -9,12 +9,26 @@
  * - Sun icon for light mode
  * - Moon icon for dark mode
  * - Computer icon for auto mode
+ *
+ * Variants:
+ * - `header` (default): icon only, on the coloured top bar.
+ * - `sidebar`: icon only, on a white/dark surface next to the language selector.
+ *
+ * The admin area has no toggle of its own: it follows the theme chosen in the app.
+ *
+ * Every instance reads the shared theme store (`useDarkMode`), so toggles on different parts
+ * of the page always agree.
  */
 
 import { useTranslation } from 'react-i18next';
 import Icon from './Icon';
 import useDarkMode from '../../hooks/useDarkMode';
 
+/**
+ * @param {Object} props
+ * @param {string} [props.className] - Extra classes for the button.
+ * @param {'header'|'sidebar'} [props.variant] - Where the toggle sits (see above).
+ */
 function DarkModeToggle({ className = '', variant = 'header' }) {
   const { t } = useTranslation();
   const { preference, toggleMode } = useDarkMode();

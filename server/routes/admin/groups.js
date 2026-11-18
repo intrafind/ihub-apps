@@ -13,6 +13,12 @@ import { saveSnapshot } from '../../services/ChangeHistoryService.js';
 import { parseUsageLimitsInput } from '../../validators/common.js';
 import { resolveGroupInheritance } from '../../utils/authorization.js';
 import { PROTECTED_GROUP_IDS } from '../../utils/protectedGroups.js';
+import {
+  assertGroupChangeKeepsAdmin,
+  assertGroupNotInherited,
+  assertGroupsResolvable
+} from '../../utils/adminGuards.js';
+import { withAdminInvariantLock } from '../../utils/adminInvariantLock.js';
 
 /** The group configuration, as a path relative to `contents/`. */
 const GROUPS_FILE = 'config/groups.json';
@@ -127,6 +133,77 @@ function normalizeGroupPermissions(incoming = {}, existing = {}, adminAccess = u
     projects: Boolean(incoming.projects ?? existing.projects),
     projectSharing: Boolean(incoming.projectSharing ?? existing.projectSharing)
   };
+}
+
+/**
+ * Apply the plain fields of a group update (name, description, mappings,
+ * inherits, usage limits) to `groups[groupId]` in place. A field left
+ * `undefined` keeps its stored value.
+ *
+ * @param {Object} groups - `groups` of groups.json, read under the lock (modified)
+ * @param {string} groupId - An existing group
+ * @param {Object} update
+ * @param {string} [update.name]
+ * @param {string} [update.description]
+ * @param {unknown} [update.mappings] - Anything but an array clears the mappings
+ * @param {unknown} [update.inherits]
+ * @param {{value?: Object}|null} update.limits - Parsed `usageLimits`; `null` when
+ *   not sent, `{ value: undefined }` to remove them
+ * @throws {ServiceError} `BAD_REQUEST` when the new `inherits` is invalid or forms a cycle
+ */
+function applyGroupFieldUpdates(
+  groups,
+  groupId,
+  { name, description, mappings, inherits, limits }
+) {
+  const group = groups[groupId];
+  if (name !== undefined) group.name = name;
+  if (description !== undefined) group.description = description;
+  if (mappings !== undefined) group.mappings = Array.isArray(mappings) ? mappings : [];
+  if (inherits !== undefined) {
+    group.inherits = normalizeInherits(inherits);
+    const inheritanceError = validateGroupInheritance(groups, groupId);
+    if (inheritanceError) throw new ServiceError('BAD_REQUEST', inheritanceError);
+  }
+  if (limits) {
+    if (limits.value) group.usageLimits = limits.value;
+    else delete group.usageLimits;
+  }
+}
+
+/**
+ * Apply `permissions` from a group update to `groups[groupId]` in place.
+ *
+ * Refuses to strip adminAccess from the last group that grants it, which would
+ * lock every admin out of the platform.
+ *
+ * @param {Object} groups - `groups` of groups.json, read under the lock (modified)
+ * @param {string} groupId - An existing group
+ * @param {Object} permissions - `permissions` from the request body
+ * @throws {ServiceError} `BAD_REQUEST` when the group is the only one with admin access
+ */
+function applyGroupPermissionUpdate(groups, groupId, permissions) {
+  const group = groups[groupId];
+  const newAdminAccess =
+    permissions.adminAccess !== undefined
+      ? Boolean(permissions.adminAccess)
+      : group.permissions.adminAccess || false;
+
+  if (group.permissions?.adminAccess === true && newAdminAccess !== true) {
+    const remainingAdminGroups = countAdminAccessGroups(groups, groupId);
+    if (remainingAdminGroups === 0) {
+      throw new ServiceError(
+        'BAD_REQUEST',
+        `Cannot remove administrative access from group '${groupId}': it is the only group with administrative access`
+      );
+    }
+  }
+
+  group.permissions = normalizeGroupPermissions(
+    permissions,
+    group.permissions || {},
+    newAdminAccess
+  );
 }
 
 /**
@@ -594,6 +671,7 @@ export default function registerAdminGroupRoutes(app) {
     // No group file yet is the first-run case: start the structure here.
     let newGroup;
     await configStore.updateJson(GROUPS_FILE, current => {
+      const groupsBefore = current ? structuredClone(current) : null;
       const groupsData = current || {
         groups: {},
         metadata: {
@@ -623,6 +701,8 @@ export default function registerAdminGroupRoutes(app) {
       groupsData.groups[id] = newGroup;
       const inheritanceError = validateGroupInheritance(groupsData.groups, id);
       if (inheritanceError) throw new ServiceError('BAD_REQUEST', inheritanceError);
+      // The whole file must resolve, or the cache keeps the old groups.
+      assertGroupsResolvable(groupsData, groupsBefore);
       groupsData.metadata.lastModified = new Date().toISOString();
       return groupsData;
     });
@@ -728,63 +808,42 @@ export default function registerAdminGroupRoutes(app) {
     // cannot overwrite a concurrent create, delete or content-access change.
     let group;
     let oldGroup;
-    await configStore.updateJson(GROUPS_FILE, groupsData => {
-      if (!groupsData) {
-        throw new ServiceError('NOT_FOUND', 'Groups file not found');
-      }
-
-      // Check if group exists (own-property check so names inherited from
-      // Object.prototype, e.g. "hasOwnProperty", can't be mistaken for a group)
-      if (!Object.hasOwn(groupsData.groups, groupId)) {
-        throw new ServiceError('NOT_FOUND', 'Group not found');
-      }
-
-      group = groupsData.groups[groupId];
-      oldGroup = JSON.parse(JSON.stringify(group));
-
-      // Update fields
-      if (name !== undefined) group.name = name;
-      if (description !== undefined) group.description = description;
-      if (mappings !== undefined) group.mappings = Array.isArray(mappings) ? mappings : [];
-      if (inherits !== undefined) {
-        group.inherits = normalizeInherits(inherits);
-        const inheritanceError = validateGroupInheritance(groupsData.groups, groupId);
-        if (inheritanceError) throw new ServiceError('BAD_REQUEST', inheritanceError);
-      }
-      if (limits) {
-        if (limits.value) group.usageLimits = limits.value;
-        else delete group.usageLimits;
-      }
-
-      // Update permissions
-      if (permissions !== undefined && typeof permissions === 'object') {
-        const newAdminAccess =
-          permissions.adminAccess !== undefined
-            ? Boolean(permissions.adminAccess)
-            : group.permissions.adminAccess || false;
-
-        // Prevent stripping adminAccess from the last group that grants it,
-        // which would lock every admin out of the platform.
-        if (group.permissions?.adminAccess === true && newAdminAccess !== true) {
-          const remainingAdminGroups = countAdminAccessGroups(groupsData.groups, groupId);
-          if (remainingAdminGroups === 0) {
-            throw new ServiceError(
-              'BAD_REQUEST',
-              `Cannot remove administrative access from group '${groupId}': it is the only group with administrative access`
-            );
-          }
+    await withAdminInvariantLock(() =>
+      configStore.updateJson(GROUPS_FILE, async groupsData => {
+        if (!groupsData) {
+          throw new ServiceError('NOT_FOUND', 'Groups file not found');
         }
 
-        group.permissions = normalizeGroupPermissions(
-          permissions,
-          group.permissions || {},
-          newAdminAccess
-        );
-      }
+        // Check if group exists (own-property check so names inherited from
+        // Object.prototype, e.g. "hasOwnProperty", can't be mistaken for a group)
+        if (!Object.hasOwn(groupsData.groups, groupId)) {
+          throw new ServiceError('NOT_FOUND', 'Group not found');
+        }
 
-      groupsData.metadata.lastModified = new Date().toISOString();
-      return groupsData;
-    });
+        const groupsBefore = structuredClone(groupsData);
+        group = groupsData.groups[groupId];
+        oldGroup = JSON.parse(JSON.stringify(group));
+
+        applyGroupFieldUpdates(groupsData.groups, groupId, {
+          name,
+          description,
+          mappings,
+          inherits,
+          limits
+        });
+        if (permissions !== undefined && typeof permissions === 'object') {
+          applyGroupPermissionUpdate(groupsData.groups, groupId, permissions);
+        }
+
+        // The whole file must resolve, and an administrator who can sign in must
+        // remain (removing admin access or an `inherits` link to it): 409 LAST_ADMIN.
+        assertGroupsResolvable(groupsData, groupsBefore);
+        await assertGroupChangeKeepsAdmin(groupsBefore, groupsData, { groupId });
+
+        groupsData.metadata.lastModified = new Date().toISOString();
+        return groupsData;
+      })
+    );
 
     // Refresh cache
     await configCache.refreshCacheEntry('config/groups.json');
@@ -861,6 +920,10 @@ export default function registerAdminGroupRoutes(app) {
    *                   type: string
    *             example:
    *               error: "Cannot delete protected system group: admins"
+   *       409:
+   *         description: |
+   *           `GROUP_IN_USE`: other groups inherit from this group; `details.dependants`
+   *           lists them (remove the group from their `inherits` first)
    *       404:
    *         description: Group not found
    *         content:
@@ -889,35 +952,49 @@ export default function registerAdminGroupRoutes(app) {
     // Check, snapshot and remove on the body read under the lock, so the
     // last-admin-group guard sees the groups as they are now.
     let deletedGroup;
-    await configStore.updateJson(GROUPS_FILE, groupsData => {
-      if (!groupsData) {
-        throw new ServiceError('NOT_FOUND', 'Groups file not found');
-      }
-
-      // Check if group exists (own-property check so names inherited from
-      // Object.prototype, e.g. "hasOwnProperty", can't be mistaken for a group)
-      if (!Object.hasOwn(groupsData.groups, groupId)) {
-        throw new ServiceError('NOT_FOUND', 'Group not found');
-      }
-
-      deletedGroup = groupsData.groups[groupId];
-
-      // Prevent deleting the last group that grants adminAccess, which would
-      // lock every admin out of the platform.
-      if (deletedGroup.permissions?.adminAccess === true) {
-        const remainingAdminGroups = countAdminAccessGroups(groupsData.groups, groupId);
-        if (remainingAdminGroups === 0) {
-          throw new ServiceError(
-            'BAD_REQUEST',
-            `Cannot delete group '${groupId}': it is the only group with administrative access`
-          );
+    await withAdminInvariantLock(() =>
+      configStore.updateJson(GROUPS_FILE, async groupsData => {
+        if (!groupsData) {
+          throw new ServiceError('NOT_FOUND', 'Groups file not found');
         }
-      }
 
-      delete groupsData.groups[groupId];
-      groupsData.metadata.lastModified = new Date().toISOString();
-      return groupsData;
-    });
+        // Check if group exists (own-property check so names inherited from
+        // Object.prototype, e.g. "hasOwnProperty", can't be mistaken for a group)
+        if (!Object.hasOwn(groupsData.groups, groupId)) {
+          throw new ServiceError('NOT_FOUND', 'Group not found');
+        }
+
+        deletedGroup = groupsData.groups[groupId];
+
+        // A group others inherit from cannot go: their inheritance would no
+        // longer resolve, and the cache would keep serving the old groups, so
+        // revocations would silently stop applying. 409 GROUP_IN_USE, naming them.
+        assertGroupNotInherited(groupsData, groupId);
+
+        // Prevent deleting the last group that grants adminAccess, which would
+        // lock every admin out of the platform.
+        if (deletedGroup.permissions?.adminAccess === true) {
+          const remainingAdminGroups = countAdminAccessGroups(groupsData.groups, groupId);
+          if (remainingAdminGroups === 0) {
+            throw new ServiceError(
+              'BAD_REQUEST',
+              `Cannot delete group '${groupId}': it is the only group with administrative access`
+            );
+          }
+        }
+
+        const groupsBefore = structuredClone(groupsData);
+        delete groupsData.groups[groupId];
+        assertGroupsResolvable(groupsData, groupsBefore);
+        // The rule above counts groups that carry the flag; this one counts the
+        // administrators who can still sign in. Deleting a custom admin group
+        // that every admin user gets their rights through leaves `admins` with
+        // the flag but nobody in it: 409 LAST_ADMIN.
+        await assertGroupChangeKeepsAdmin(groupsBefore, groupsData, { groupId });
+        groupsData.metadata.lastModified = new Date().toISOString();
+        return groupsData;
+      })
+    );
     const groupName = deletedGroup.name;
 
     // Save snapshot of the deleted group

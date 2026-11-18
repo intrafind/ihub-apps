@@ -15,7 +15,7 @@ const BUTTON_PRIMARY =
 const BUTTON_SECONDARY =
   'inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60 focus-visible:ring-2 focus-visible:ring-indigo-500';
 const INPUT =
-  'block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-xs sm:text-sm focus:ring-indigo-500 focus:border-indigo-500';
+  'block w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-xs sm:text-sm focus:ring-indigo-500 focus:border-indigo-500';
 const SECRET_BLOCK =
   'font-mono text-xs break-all whitespace-pre-wrap bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-600 rounded-md p-3 select-all';
 
@@ -278,99 +278,104 @@ export function AddKeyDialog({ isOpen, onClose, onSubmit }) {
       closeOnBackdropClick={false}
       initialFocusRef={inputRef}
       labelledBy="watermark-add-key-title"
+      // A typed key or label is not dropped on Escape or Cancel without asking.
+      isDirty={value.trim() !== '' || label.trim() !== ''}
+      dirtyTitle={t('admin.euAiAct.keys.addTitle', 'Add an existing key')}
     >
-      <form onSubmit={submit} noValidate>
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-          <h2
-            id="watermark-add-key-title"
-            className="text-lg font-semibold text-gray-900 dark:text-gray-100"
-          >
-            {t('admin.euAiAct.keys.addTitle', 'Add an existing key')}
-          </h2>
-        </div>
-        <div className="px-6 py-4 space-y-4">
-          {error && (
-            <p
-              role="alert"
-              id="watermark-add-key-error"
-              className="text-sm text-red-700 dark:text-red-300"
+      {({ requestClose }) => (
+        <form onSubmit={submit} noValidate>
+          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+            <h2
+              id="watermark-add-key-title"
+              className="text-lg font-semibold text-gray-900 dark:text-gray-100"
             >
-              {error}
-            </p>
-          )}
-          <div>
-            <label
-              htmlFor="watermark-add-key-value"
-              className="block text-sm font-medium text-gray-700 dark:text-gray-300"
-            >
-              {t('admin.euAiAct.keys.addValue', 'Key (whole number)')}
-            </label>
-            <div className="mt-1 flex gap-2">
-              <input
-                ref={inputRef}
-                id="watermark-add-key-value"
-                type={reveal ? 'text' : 'password'}
-                inputMode="numeric"
-                autoComplete="off"
-                spellCheck={false}
-                value={value}
-                onChange={e => setValue(e.target.value)}
-                aria-invalid={error ? 'true' : undefined}
-                aria-describedby={
-                  error
-                    ? 'watermark-add-key-help watermark-add-key-error'
-                    : 'watermark-add-key-help'
-                }
-                className={`${INPUT} font-mono`}
-              />
-              <button
-                type="button"
-                onClick={() => setReveal(v => !v)}
-                aria-pressed={reveal}
-                className={BUTTON_SECONDARY}
+              {t('admin.euAiAct.keys.addTitle', 'Add an existing key')}
+            </h2>
+          </div>
+          <div className="px-6 py-4 space-y-4">
+            {error && (
+              <p
+                role="alert"
+                id="watermark-add-key-error"
+                className="text-sm text-red-700 dark:text-red-300"
               >
-                <Icon name={reveal ? 'eye-slash' : 'eye'} size="sm" />
-                {reveal
-                  ? t('admin.euAiAct.keys.hideInput', 'Hide')
-                  : t('admin.euAiAct.keys.showInput', 'Show')}
-              </button>
+                {error}
+              </p>
+            )}
+            <div>
+              <label
+                htmlFor="watermark-add-key-value"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+              >
+                {t('admin.euAiAct.keys.addValue', 'Key (whole number)')}
+              </label>
+              <div className="mt-1 flex gap-2">
+                <input
+                  ref={inputRef}
+                  id="watermark-add-key-value"
+                  type={reveal ? 'text' : 'password'}
+                  inputMode="numeric"
+                  autoComplete="off"
+                  spellCheck={false}
+                  value={value}
+                  onChange={e => setValue(e.target.value)}
+                  aria-invalid={error ? 'true' : undefined}
+                  aria-describedby={
+                    error
+                      ? 'watermark-add-key-help watermark-add-key-error'
+                      : 'watermark-add-key-help'
+                  }
+                  className={`${INPUT} font-mono`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setReveal(v => !v)}
+                  aria-pressed={reveal}
+                  className={BUTTON_SECONDARY}
+                >
+                  <Icon name={reveal ? 'eye-slash' : 'eye'} size="sm" />
+                  {reveal
+                    ? t('admin.euAiAct.keys.hideInput', 'Hide')
+                    : t('admin.euAiAct.keys.showInput', 'Show')}
+                </button>
+              </div>
+              <p
+                id="watermark-add-key-help"
+                className="mt-1 text-xs text-gray-600 dark:text-gray-400"
+              >
+                {t(
+                  'admin.euAiAct.keys.addHelp',
+                  'Must equal the key in the --watermark-config of your vLLM server. The new key becomes active; the current one is retired.'
+                )}
+              </p>
             </div>
-            <p
-              id="watermark-add-key-help"
-              className="mt-1 text-xs text-gray-600 dark:text-gray-400"
-            >
-              {t(
-                'admin.euAiAct.keys.addHelp',
-                'Must equal the key in the --watermark-config of your vLLM server. The new key becomes active; the current one is retired.'
-              )}
-            </p>
+            <div>
+              <label
+                htmlFor="watermark-add-key-label"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+              >
+                {t('admin.euAiAct.keys.addLabel', 'Label (optional)')}
+              </label>
+              <input
+                id="watermark-add-key-label"
+                type="text"
+                maxLength={100}
+                value={label}
+                onChange={e => setLabel(e.target.value)}
+                className={`mt-1 ${INPUT}`}
+              />
+            </div>
           </div>
-          <div>
-            <label
-              htmlFor="watermark-add-key-label"
-              className="block text-sm font-medium text-gray-700 dark:text-gray-300"
-            >
-              {t('admin.euAiAct.keys.addLabel', 'Label (optional)')}
-            </label>
-            <input
-              id="watermark-add-key-label"
-              type="text"
-              maxLength={100}
-              value={label}
-              onChange={e => setLabel(e.target.value)}
-              className={`mt-1 ${INPUT}`}
-            />
+          <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
+            <button type="button" onClick={requestClose} className={BUTTON_SECONDARY}>
+              {t('common.cancel', 'Cancel')}
+            </button>
+            <button type="submit" disabled={busy} className={BUTTON_PRIMARY}>
+              {t('admin.euAiAct.keys.addConfirm', 'Add key')}
+            </button>
           </div>
-        </div>
-        <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
-          <button type="button" onClick={close} className={BUTTON_SECONDARY}>
-            {t('common.cancel', 'Cancel')}
-          </button>
-          <button type="submit" disabled={busy} className={BUTTON_PRIMARY}>
-            {t('admin.euAiAct.keys.addConfirm', 'Add key')}
-          </button>
-        </div>
-      </form>
+        </form>
+      )}
     </Modal>
   );
 }

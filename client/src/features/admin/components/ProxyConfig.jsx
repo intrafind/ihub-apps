@@ -1,10 +1,13 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import AdminLoadGate from './AdminLoadGate';
+import { useAdminConfigLoad } from '../hooks/useAdminConfigLoad';
+import { useDirtyReport } from '../hooks/useDirtyReport';
 import AdminLoadError from './AdminLoadError';
 
 const EMPTY_CONFIG = {
@@ -34,18 +37,25 @@ function sameList(a = [], b = []) {
   return a.length === b.length && a.every((entry, index) => entry === b[index]);
 }
 
-function ProxyConfig() {
+/**
+ * @param {Object} props
+ * @param {(dirty: boolean) => void} [props.onDirtyChange] - Reports unsaved edits to the page.
+ */
+function ProxyConfig({ onDirtyChange }) {
   const { t } = useTranslation();
   const [config, setConfig] = useState(EMPTY_CONFIG);
   // The last state the server confirmed, so the editor can tell which fields
   // carry an edit that has not been saved yet.
   const [savedConfig, setSavedConfig] = useState(EMPTY_CONFIG);
+  // Whether the configuration loaded at least once; before that (or after a
+  // failed load) the editor never counts as holding unsaved changes.
+  const [hasLoaded, setHasLoaded] = useState(false);
+  useDirtyReport(hasLoaded ? savedConfig : null, config, onDirtyChange);
   const [provenance, setProvenance] = useState({});
   const [effective, setEffective] = useState(null);
   const [unresolvedPlaceholders, setUnresolvedPlaceholders] = useState({});
   const [newNoProxy, setNewNoProxy] = useState('');
   const [newPattern, setNewPattern] = useState('');
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -64,30 +74,25 @@ function ProxyConfig() {
     };
     setConfig(next);
     setSavedConfig(next);
+    setHasLoaded(true);
     setProvenance(data.provenance || {});
     setEffective(data.effective || null);
     setUnresolvedPlaceholders(data.unresolvedPlaceholders || {});
   }, []);
 
-  useEffect(() => {
-    const fetchConfig = async () => {
-      try {
-        const response = await makeAdminApiCall('/admin/proxy/config', { method: 'GET' });
-        applyResponse(response.data);
-        setMessage('');
-      } catch (error) {
-        setMessage({
-          type: 'error',
-          text:
-            error.message ||
-            t('admin.system.proxy.configLoadError', 'Failed to load proxy configuration')
-        });
-      } finally {
-        setLoading(false);
+  // The card shows no form and no Save until its settings loaded: saving
+  // the defaults after a failed load would overwrite the stored ones (PL-B3).
+  const load = useAdminConfigLoad({
+    sources: {
+      config: {
+        load: async () => (await makeAdminApiCall('/admin/proxy/config', { method: 'GET' })).data,
+        onLoad: data => {
+          applyResponse(data);
+        }
       }
-    };
-    void fetchConfig();
-  }, [applyResponse, t]);
+    }
+  });
+  const ready = load.status === 'ready';
 
   const invalidPatterns = useMemo(
     () => config.urlPatterns.filter(pattern => !isValidRegex(pattern)),
@@ -215,6 +220,7 @@ function ProxyConfig() {
   };
 
   const handleSave = async () => {
+    if (!ready) return;
     if (invalidPatterns.length > 0) {
       setMessage({
         type: 'error',
@@ -320,19 +326,25 @@ function ProxyConfig() {
     return known[result.classification] || result.classification;
   };
 
-  if (loading) {
+  if (!ready) {
     return (
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
         <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">
           {t('admin.system.proxy.title', 'Outbound Proxy')}
         </h2>
-        <p className="text-gray-600 dark:text-gray-400">{t('common.loading', 'Loading...')}</p>
+        <AdminLoadGate
+          load={load}
+          resourceLabel={t('admin.system.proxy.title', 'Outbound Proxy')}
+          loadingFallback={
+            <p className="text-gray-600 dark:text-gray-400">{t('common.loading', 'Loading...')}</p>
+          }
+        />
       </div>
     );
   }
 
   const inputClass =
-    'w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 text-sm';
+    'w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 text-sm';
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">

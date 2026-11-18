@@ -5,9 +5,12 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import { localizedTextPatch, textOrNull } from '../utils/platformPatch';
 import { useAiAcknowledgementAdmin } from '../hooks/useAiAcknowledgementAdmin';
 import EuAiActCard from './euAiAct/EuAiActCard';
 import EuAiActStateNote from './euAiAct/EuAiActStateNote';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import UnsavedChangesDialog from './UnsavedChangesDialog';
 
 const BUTTON =
   'px-4 py-2 rounded-lg font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800 disabled:opacity-50 disabled:cursor-not-allowed';
@@ -26,6 +29,9 @@ const BUTTON =
 function AiAcknowledgementSettingsCard({ onSaved, requiredVersion }) {
   const { t } = useTranslation();
   const [form, setForm] = useState(null);
+  // The form as last loaded or saved; null until it loaded.
+  const [savedForm, setSavedForm] = useState(null);
+  const { blocker } = useUnsavedChanges(savedForm, form);
   const [loadFailed, setLoadFailed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
@@ -37,12 +43,14 @@ function AiAcknowledgementSettingsCard({ onSaved, requiredVersion }) {
       .then(response => {
         const block = response.data?.aiAcknowledgement || {};
         if (!cancelled) {
-          setForm({
+          const loaded = {
             enabled: block.enabled !== false,
             enforce: block.enforce !== false,
             text: block.text || {},
             policyUrl: block.policyUrl || ''
-          });
+          };
+          setForm(loaded);
+          setSavedForm(loaded);
         }
       })
       .catch(() => {
@@ -58,22 +66,22 @@ function AiAcknowledgementSettingsCard({ onSaved, requiredVersion }) {
     setSaving(true);
     setMessage(null);
     try {
-      // Read-modify-write: platform.json carries settings this card does not show.
-      const response = await makeAdminApiCall('/admin/configs/platform', { method: 'GET' });
-      const platform = response.data || {};
-      // The read is redacted (proxy JWT provider `jwkUrl` values are left out), and the route
-      // keeps the stored proxyAuth when none is sent: posting the redacted one would erase them.
-      delete platform.proxyAuth;
-      const text = Object.fromEntries(
-        Object.entries(form.text).filter(([, value]) => typeof value === 'string' && value.trim())
-      );
-      platform.aiAcknowledgement = {
-        enabled: form.enabled,
-        enforce: form.enforce,
-        text,
-        policyUrl: form.policyUrl.trim()
-      };
-      await makeAdminApiCall('/admin/configs/platform', { method: 'POST', body: platform });
+      // A scoped PATCH of this card's block only (never a full-config POST):
+      // the other cards on the EU AI Act page save platform.json too, and a
+      // guarded POST would report their saves as a conflict. A field the form
+      // cleared is sent as null, which removes it.
+      await makeAdminApiCall('/admin/configs/platform', {
+        method: 'PATCH',
+        body: {
+          aiAcknowledgement: {
+            enabled: form.enabled,
+            enforce: form.enforce,
+            text: localizedTextPatch(savedForm?.text, form.text),
+            policyUrl: textOrNull(form.policyUrl)
+          }
+        }
+      });
+      setSavedForm(form);
       setMessage({
         type: 'success',
         text: t('admin.aiAcknowledgement.saved', 'AI acknowledgement saved')
@@ -101,6 +109,7 @@ function AiAcknowledgementSettingsCard({ onSaved, requiredVersion }) {
         'Users confirm a short AI-use notice before their first message. The confirmation is stored with the user and in the audit log. Existing confirmations stay valid when you edit the text; use "Request again" to ask everyone again.'
       )}
     >
+      <UnsavedChangesDialog blocker={blocker} />
       <EuAiActStateNote className="mb-4" />
       {loadFailed && (
         <p role="alert" className="text-sm text-red-700 dark:text-red-300">
@@ -177,7 +186,7 @@ function AiAcknowledgementSettingsCard({ onSaved, requiredVersion }) {
               type="text"
               value={form.policyUrl}
               onChange={e => setForm({ ...form, policyUrl: e.target.value })}
-              className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100"
+              className="w-full rounded-md border border-admin-control-border dark:border-admin-control-border-dark bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100"
             />
           </div>
           <p className="mb-4 text-sm text-gray-700 dark:text-gray-300">

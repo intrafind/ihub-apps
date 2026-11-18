@@ -310,9 +310,10 @@ export default function registerAdminAppsRoutes(app) {
    *   get:
    *     summary: Get template applications for inheritance
    *     description: |
-   *       Retrieves applications that can be used as templates for inheritance.
-   *       Only returns apps where allowInheritance is not false and the app is enabled.
-   *       These templates can serve as parent applications for creating derived apps.
+   *       The applications a new app can be copied from in the Create App dialog:
+   *       every enabled app. `allowInheritance` does not narrow the list: the
+   *       schema defaults it to `false` and no admin screen sets it, so a filter on
+   *       it left the dialog empty.
    *     tags:
    *       - Admin
    *       - Applications
@@ -353,7 +354,10 @@ export default function registerAdminAppsRoutes(app) {
    */
   app.get(buildServerPath('/api/admin/apps/templates'), contentAdminAuth, async (req, res) => {
     const { data: apps, etag: appsEtag } = configCache.getApps(true);
-    const templates = apps.filter(app => app.allowInheritance !== false && app.enabled);
+    // Every enabled app can be copied. `allowInheritance` is `false` unless an
+    // app sets it (schema default) and nothing in the admin sets it, so
+    // filtering on it returned an empty list (AI-B4).
+    const templates = apps.filter(app => app.enabled);
     res.setHeader('ETag', responseEtag(appsEtag));
     res.json({ items: templates });
   });

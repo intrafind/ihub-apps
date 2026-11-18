@@ -90,6 +90,20 @@ function sendOAuthError(res, status, error, description) {
   });
 }
 
+/**
+ * The grant types a stored (non-personal) client may use.
+ *
+ * Clients written before `grantTypes` existed have no such field; they were
+ * all client-credentials clients, and `createOAuthClient` still applies the
+ * same default (`['client_credentials']`) to a client created without one.
+ *
+ * @param {Object} client - The stored OAuth client.
+ * @returns {string[]} The client's grant types.
+ */
+function clientGrantTypes(client) {
+  return Array.isArray(client.grantTypes) ? client.grantTypes : ['client_credentials'];
+}
+
 /** What a grant's user check answers when the users cannot be read. */
 const USER_CHECK_UNAVAILABLE = 'Unable to validate the user. Please try again later.';
 
@@ -721,6 +735,17 @@ export default function registerOAuthRoutes(app) {
             'This API key is not authorized for the client_credentials grant'
           );
         }
+      } else if (!clientGrantTypes(client).includes('client_credentials')) {
+        // A machine token is granted exactly the client's lists, bound to no
+        // user. A client registered for the authorization-code flow only (a
+        // third-party app acting for its users) must not be able to mint one
+        // just because it holds a secret.
+        return sendOAuthError(
+          res,
+          400,
+          'unauthorized_client',
+          'This client is not authorized for the client_credentials grant'
+        );
       }
 
       // Generate token

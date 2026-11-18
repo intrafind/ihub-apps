@@ -35,11 +35,12 @@ import {
   shouldIgnoreSSLForURL
 } from '../../utils/httpConfig.js';
 import { updatePlatform } from '../../utils/platformConfigStore.js';
+import { SECRET_MARKER } from '../../utils/redactedSecrets.js';
 
 const PLATFORM_FILE = 'config/platform.json';
 
 /** Placeholder the UI shows (and sends back) instead of a proxy password. */
-const SECRET_MASK = '***REDACTED***';
+const SECRET_MASK = SECRET_MARKER;
 
 /** Connectivity test bounds, in milliseconds. */
 const DEFAULT_TEST_TIMEOUT_MS = 10000;

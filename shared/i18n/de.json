@@ -175,7 +175,30 @@
     "expandObject": "Objekt aufklappen ({{count}} Felder)",
     "details": "Details",
     "tryAgain": "Erneut versuchen",
-    "done": "Fertig"
+    "done": "Fertig",
+    "dismiss": "Ausblenden",
+    "confirmDialog": {
+      "irreversible": "Das kann nicht rückgängig gemacht werden.",
+      "typeToConfirm": "Geben Sie zur Bestätigung ein:",
+      "copyToken": "Kopieren",
+      "busy": "Wird ausgeführt …"
+    },
+    "discardDialog": {
+      "title": "Änderungen verwerfen?",
+      "body": "Ihre Eingaben gehen verloren.",
+      "bodyNamed": "Ihre Eingaben in „{{title}}“ gehen verloren.",
+      "keepEditing": "Weiter bearbeiten",
+      "discard": "Verwerfen"
+    },
+    "secretReveal": {
+      "onlyOnce": "Das Geheimnis wird nur dieses eine Mal angezeigt. Speichern Sie es jetzt.",
+      "fieldLabel": "Geheimnis",
+      "copied": "Kopiert",
+      "copyFailed": "Kopieren nicht möglich. Markieren Sie den Text und kopieren Sie ihn.",
+      "notCopiedWarning": "Sie haben das Geheimnis noch nicht kopiert. Trotzdem schließen?",
+      "closeAnyway": "Trotzdem schließen"
+    },
+    "note": "Hinweis"
   },
   "chatActions": {
     "menu": "Aktionsmenü",
@@ -359,21 +382,21 @@
     },
     "appsList": {
       "title": "KI-Anwendungen",
-      "subtitle": "Wähle eine Anwendung, um eine Unterhaltung zu beginnen",
+      "subtitle": "Wählen Sie eine Anwendung, um eine Unterhaltung zu beginnen",
       "pendingDocument": {
-        "title": "Wähle eine App, in der „{{name}}“ geöffnet werden soll",
+        "title": "Wählen Sie eine App, in der „{{name}}“ geöffnet werden soll",
         "description": "Das Dokument wird an den Chat angehängt, sobald die App geöffnet ist.",
         "untitled": "das Dokument",
         "onlyDocumentApps": "Nur Apps anzeigen, die dieses Dokument verwenden können",
         "dismiss": "Schließen",
-        "unavailable": "Das System, aus dem dieses Dokument stammt, steht dir nicht zur Verfügung.",
-        "noAccess": "Du hast keinen Zugriff auf dieses Dokument.",
+        "unavailable": "Das System, aus dem dieses Dokument stammt, steht Ihnen nicht zur Verfügung.",
+        "noAccess": "Sie haben keinen Zugriff auf dieses Dokument.",
         "notFound": "Dieses Dokument wurde nicht gefunden. Es wurde möglicherweise verschoben oder gelöscht.",
         "noApp": "Keine App kann Dokumente aus diesem System verwenden. Bitte eine Administratorin oder einen Administrator, die Integration zu einer App hinzuzufügen.",
-        "continueWithout": "Du kannst trotzdem eine App wählen und ohne das Dokument starten."
+        "continueWithout": "Sie können trotzdem eine App wählen und ohne das Dokument starten."
       },
       "nextcloudSelection": {
-        "description": "Wähle unten eine App, um den Chat zu starten — deine ausgewählten Dateien werden automatisch angehängt.",
+        "description": "Wählen Sie unten eine App, um den Chat zu starten — Ihre ausgewählten Dateien werden automatisch angehängt.",
         "title_one": "{{count}} Datei in Nextcloud ausgewählt",
         "title_other": "{{count}} Dateien in Nextcloud ausgewählt"
       },
@@ -447,11 +470,11 @@
       "invalidUrl": "Für diese App ist keine gültige Webadresse hinterlegt. Nur http- und https-Links können geöffnet werden."
     },
     "appChat": {
-      "messagePlaceholder": "Gib deine Nachricht hier ein...",
+      "messagePlaceholder": "Geben Sie Ihre Nachricht hier ein...",
       "thinking": "Denkt nach...",
       "loadingChat": "Chat wird geladen...",
       "clear": "Chat löschen",
-      "confirmClear": "Möchtest du den Chat wirklich löschen?",
+      "confirmClear": "Möchten Sie den Chat wirklich löschen?",
       "editApp": "App bearbeiten",
       "export": {
         "dialogTitle": "Unterhaltung exportieren",
@@ -511,7 +534,7 @@
       "starterPromptsTitle": "Start-Prompts",
       "starterPromptsSubtitle": "Wählen Sie einen Prompt unten aus, um schnell zu beginnen",
       "noMessagesTitle": "Noch keine Nachrichten",
-      "noMessagesSubtitle": "Beginne eine Unterhaltung, indem du eine Nachricht sendest!",
+      "noMessagesSubtitle": "Beginnen Sie eine Unterhaltung, indem Sie eine Nachricht senden!",
       "modelSelector": {
         "hint": {
           "alertTitle": "Wichtiger Hinweis",
@@ -668,7 +691,7 @@
     "showThoughts": "Denkprozess anzeigen"
   },
   "chatMessage": {
-    "user": "Du",
+    "user": "Sie",
     "assistant": "Assistent",
     "system": "System",
     "copy": "Kopieren",
@@ -888,6 +911,20 @@
       "title": "Nicht autorisiert",
       "message": "Sie haben keine Berechtigung für diese Seite.",
       "goBack": "Zurück"
+    },
+    "fields": {
+      "REQUIRED": "Pflichtfeld.",
+      "NOT_A_NUMBER": "Geben Sie eine Zahl ein.",
+      "NOT_A_BOOLEAN": "Wählen Sie Ja oder Nein.",
+      "INVALID_CHOICE": "Wählen Sie einen der angebotenen Werte.",
+      "INVALID_URL": "Geben Sie eine http(s)-URL ein.",
+      "NOT_A_LIST": "Geben Sie eine Liste von Werten ein.",
+      "NOT_A_STRING": "Geben Sie Text ein.",
+      "PATTERN_MISMATCH": "Der Wert hat nicht das erwartete Format.",
+      "UNKNOWN_FIELD": "Diese Einstellung kennt die Integration nicht.",
+      "SENSITIVE_VALUE": "Geheime Werte gehören in den Zugangsdatenspeicher.",
+      "TOO_SMALL": "Geben Sie mindestens {{min}} ein.",
+      "TOO_LARGE": "Geben Sie höchstens {{max}} ein."
     }
   },
   "serverErrors": {
@@ -1046,6 +1083,17 @@
     "confirmReplaceWithNewContentTitle": "Inhalt aus dem Chat"
   },
   "admin": {
+    "configConflict": {
+      "title": "Das wurde geändert, seit Sie die Seite geöffnet haben",
+      "message": "Jemand hat die {{resource}} gespeichert, nachdem Sie diese Seite geöffnet haben (ein anderer Administrator, ein anderer Tab oder ein Skript). Ihre Änderungen wurden nicht gespeichert und sind noch auf der Seite. Laden Sie neu, um den aktuellen Stand zu sehen, und nehmen Sie Ihre Änderungen erneut vor, oder behalten Sie Ihre Änderungen: Ihr nächstes Speichern ersetzt dann den neueren Stand, einschließlich der Änderungen der anderen Person. Wenn Sie diesen Dialog schließen, wird Ihr nächstes Speichern erneut abgelehnt.",
+      "close": "Schließen",
+      "reload": "Neu laden und meine Änderungen verwerfen",
+      "keep": "Meine Änderungen behalten und beim nächsten Speichern überschreiben",
+      "resource": {
+        "platform": "Plattformkonfiguration",
+        "ui": "UI-Anpassung"
+      }
+    },
     "chatHistory": {
       "chats": {
         "enabled": "Chats im Verlauf behalten",
@@ -1406,7 +1454,8 @@
         "tryIt": "Ausprobieren",
         "tryFlagOff": "Aktivieren Sie zuerst die Vorschau-Funktion „Sprachmodus“",
         "tryItHint": "Startet in diesem Browser eine Sprachsitzung mit dem unter „Spracheingabe“ oben gewählten Dienst, dem Sprachausgabemodell und den Einstellungen dieses Formulars, ohne sie zu speichern. Bei einem Transkriptionsmodell muss „Sprachmodus aktivieren“ einmal gespeichert sein; es braucht das Mikrofon und ein aktiviertes Sprachausgabemodell."
-      }
+      },
+      "resource": "Spracheinstellungen"
     },
     "agents": {
       "memory": {
@@ -1429,7 +1478,10 @@
         }
       },
       "edit": {
-        "projects": "Projekte"
+        "projects": "Projekte",
+        "jsonInvalid": "Das JSON ist nicht gültig. Korrigieren Sie es, bevor Sie speichern oder zum Formular wechseln.",
+        "skillsHelper": "Suchen und wählen Sie Skills für diesen Agenten aus. Klicken Sie auf einen ausgewählten Skill, um ihn zu entfernen.",
+        "hitlHint": "Benutzer in einer dieser Gruppen können Freigaben für dieses Profil erteilen. Wählen Sie eine Gruppe aus oder geben Sie ihre ID ein und drücken Sie die Eingabetaste oder ein Komma."
       }
     },
     "providers": {
@@ -1707,7 +1759,8 @@
         "basicInfo": "Grundlegende Informationen",
         "basicInfoDesc": "Grundlegende Informationen über das Modell",
         "configuration": "Konfiguration",
-        "configurationDesc": "Erweiterte Konfigurationsoptionen für das Modell"
+        "configurationDesc": "Erweiterte Konfigurationsoptionen für das Modell",
+        "resource": "Modell „{{id}}“"
       },
       "fields": {
         "id": "Modell-ID",
@@ -1848,7 +1901,6 @@
         "presets": "Vorlage-Stimmen ({{count}})",
         "useDefault": "Als Stimme verwenden",
         "useFor": "Für {{language}} verwenden",
-        "deleteConfirm": "Die Stimme „{{name}}“ im Anbieterkonto löschen? Modelle, die sie verwenden, können dann nicht mehr mit ihr sprechen.",
         "deleteError": "Die Stimme konnte nicht gelöscht werden",
         "createTitle": "Eigene Stimme anlegen",
         "createHint": "Nehmen Sie 10–30 Sekunden einer Person auf, die natürlich spricht, ohne Musik oder Hintergrundgeräusche, oder laden Sie eine solche Aufnahme hoch. Die Stimme wird sofort im Anbieterkonto angelegt; sie liest jede Sprache, mit dem Akzent der Aufnahme.",
@@ -1870,7 +1922,9 @@
         "create": "Stimme anlegen",
         "creating": "Wird angelegt…",
         "createError": "Die Stimme konnte nicht angelegt werden",
-        "created": "Stimme „{{name}}“ angelegt ({{id}}). Verwenden Sie sie unten und speichern Sie dann das Modell."
+        "created": "Stimme „{{name}}“ angelegt ({{id}}). Verwenden Sie sie unten und speichern Sie dann das Modell.",
+        "deleteTitle": "Stimme „{{name}}“ löschen?",
+        "deleteConsequence": "Die Stimme wird im Anbieterkonto gelöscht. Modelle, die sie verwenden, können dann nicht mehr mit ihr sprechen."
       },
       "import": {
         "button": "Von URL importieren",
@@ -1984,7 +2038,9 @@
         "done": "(erledigt)",
         "todo": "(offen)"
       },
-      "moreActions": "Weitere Modell-Aktionen"
+      "moreActions": "Weitere Modell-Aktionen",
+      "disableAllDefault": "Die Einstellung für das Standardmodell wird entfernt. Werden Modelle wieder aktiviert, wird das erste Chat-Modell der Liste zum Standard.",
+      "disableAllDefaultNamed": "Die Einstellung für das Standardmodell wird entfernt (derzeit „{{name}}“). Werden Modelle wieder aktiviert, wird das erste Chat-Modell der Liste zum Standard, nicht unbedingt „{{name}}“."
     },
     "chat": {
       "title": "Chat",
@@ -1998,7 +2054,7 @@
       "exportConversation": "Konversation exportieren",
       "thinking": "Denkt nach...",
       "responseComplete": "Antwort vollständig",
-      "placeholder": "Gib deine Nachricht hier ein...",
+      "placeholder": "Geben Sie Ihre Nachricht hier ein...",
       "conversationHistory": "Konversationsverlauf",
       "modelSelector": {
         "label": "Modell",
@@ -2081,7 +2137,22 @@
         "noModelsSelected": "Keine Modelle ausgewählt — keine Client-Einschränkung (Benutzer behält volle Gruppenberechtigungen; Machine-to-Machine-Tokens erhalten keine Modelle)",
         "noPromptsSelected": "Keine Prompts ausgewählt — keine Client-Einschränkung (Benutzer behält volle Gruppenberechtigungen; Machine-to-Machine-Tokens erhalten keine Prompts)",
         "permissionsHintTitle": "Wie Ressourcenbeschränkungen funktionieren",
-        "permissionsHint": "Standardmäßig ist \"Alle (*)\" ausgewählt, was bedeutet, dass dieser OAuth-Client auf alle Ressourcen zugreifen kann, für die der Benutzer berechtigt ist. Die Auswahl bestimmter Apps, Modelle oder Prompts schränkt den Zugriff ein. Wenn ein Benutzer beispielsweise 5 Apps hat, Sie hier aber nur 3 auswählen, kann dieser OAuth-Client nur auf diese 3 Apps zugreifen - er fungiert als Filter zusätzlich zu den vorhandenen Benutzerberechtigungen.",
+        "permissionsHintMachine": "Client Credentials (Machine-to-Machine): Hinter dem Token steht kein Benutzer, daher SIND diese Listen die Berechtigung. Der Client kann genau die hier aufgeführten Apps, Modelle und Prompts verwenden – und keine einer Art, deren Liste leer ist. „Alle (*)“ gewährt alle, auch später hinzugefügte.",
+        "permissionsHintDelegated": "Authorization Code (Benutzeranmeldung): Das Token handelt als angemeldeter Benutzer. Diese Listen schränken ein, was die Gruppen dieses Benutzers erlauben; eine leere Liste schränkt nichts zusätzlich ein. „Alle (*)“ setzt keine Grenze: Benutzer erreichen alles, was ihre Gruppen erlauben, auch später hinzugefügte Elemente.",
+        "permissionsHintPersonal": "Persönlicher API-Schlüssel: Das Token handelt als der Benutzer, dem der Schlüssel gehört. Diese Listen schränken ein, was die Gruppen dieses Benutzers erlauben; eine leere Liste schränkt nichts zusätzlich ein. „Alle (*)“ setzt keine Grenze: Der Schlüssel erreicht alles, was die Gruppen des Eigentümers erlauben, auch später hinzugefügte Elemente.",
+        "permissionsHintNoGrant": "Wählen Sie unten einen Grant-Typ. Bei Client Credentials sind diese Listen die Berechtigung; bei Authorization Code schränken sie die Berechtigungen des angemeldeten Benutzers ein.",
+        "noAppsSelectedMachine": "Nichts ausgewählt: Dieser Client kann keine Apps verwenden.",
+        "noModelsSelectedMachine": "Nichts ausgewählt: Dieser Client kann keine Modelle verwenden.",
+        "noPromptsSelectedMachine": "Nichts ausgewählt: Dieser Client kann keine Prompts verwenden.",
+        "noAppsSelectedDelegated": "Nichts ausgewählt: keine Client-Einschränkung (Benutzer behalten die Apps, die ihre Gruppen erlauben).",
+        "noModelsSelectedDelegated": "Nichts ausgewählt: keine Client-Einschränkung (Benutzer behalten die Modelle, die ihre Gruppen erlauben).",
+        "noPromptsSelectedDelegated": "Nichts ausgewählt: keine Client-Einschränkung (Benutzer behalten die Prompts, die ihre Gruppen erlauben).",
+        "allGrantWarning": "„Alle (*)“ gibt diesem Client-Credentials-Client jedes Element dieser Art, auch später hinzugefügte. Führen Sie besser nur auf, was er benötigt.",
+        "allGrantWarningDelegated": "„Alle (*)“ setzt keine Grenze auf Client-Ebene: Benutzer dieses Clients erreichen jedes Element dieser Art, das ihre Gruppen erlauben, auch später hinzugefügte. Führen Sie besser nur auf, was er benötigt.",
+        "machineClientNeedsGrant": "Ein Client-Credentials-Client benötigt mindestens eine App, ein Modell oder einen Prompt. Wählen Sie, was er verwenden darf, oder „Alle (*)“.",
+        "machineClientHasNoGrant": "Dieser Client-Credentials-Client hat keine Apps, Modelle oder Prompts, seine Tokens können also nichts. Wählen Sie, was er verwenden darf, oder „Alle (*)“.",
+        "machineClientHasNoModels": "Dieser Client hat Apps, aber keine Modelle. Jeder App-Aufruf benötigt ein Modell, das der Client verwenden darf, daher schlagen diese Aufrufe fehl. Wählen Sie die Modelle, die er verwenden darf, oder „Alle (*)“.",
+        "grantTypesChangedWarning": "Sie haben die Grant-Typen geändert. Damit ändert sich, was die erlaubten Apps, Modelle und Prompts bedeuten: Für Client-Credentials-Tokens bedeutet eine leere Liste „nichts“, und die Listen sind die gesamte Berechtigung; für Authorization-Code-Tokens bedeutet eine leere Liste „keine zusätzliche Einschränkung“. Prüfen Sie die Listen oben vor dem Speichern.",
         "tokenExpiration": "Token-Ablauf (Minuten)",
         "active": "Aktiv",
         "suspended": "Gesperrt",
@@ -2173,7 +2244,8 @@
           "disabledDesc": "Aktivieren Sie den Autorisierungsserver, um externen Anwendungen und Ressourcen-Servern die Authentifizierung über OAuth 2.0 zu ermöglichen.",
           "enabledSuccess": "Autorisierungsserver erfolgreich aktiviert",
           "disabledSuccess": "Autorisierungsserver erfolgreich deaktiviert",
-          "toggleError": "Fehler beim Aktualisieren des Autorisierungsservers"
+          "toggleError": "Fehler beim Aktualisieren des Autorisierungsservers",
+          "resource": "Einstellungen des Autorisierungsservers"
         },
         "personalKeys": {
           "enable": "Persönliche API-Schlüssel",
@@ -2286,6 +2358,13 @@
           "tokenExpirationHelp": "Zugleich das Zeitfenster, bis eine Sperre greift: ein bereits ausgestelltes Access-Token bleibt bis zu seinem Ablauf gültig.",
           "unblock": "Entsperren",
           "unblocked": "{{name}} entsperrt"
+        },
+        "redirectUriInvalid": "Nicht hinzugefügt: Weiterleitungs-URIs müssen HTTPS verwenden (oder http://localhost für die Entwicklung).",
+        "rotateSecretNamedTitle": "Geheimnis von „{{name}}“ erneuern?",
+        "rotateSecretAction": "Geheimnis erneuern",
+        "secretReveal": {
+          "title": "Neues Geheimnis für „{{name}}“",
+          "createdTitle": "Client „{{name}}“ angelegt"
         }
       },
       "ldap": {
@@ -2361,7 +2440,13 @@
         "sharedSecretHeaderLabel": "Header für das gemeinsame Geheimnis",
         "sharedSecretLabel": "Gemeinsames Geheimnis",
         "sharedSecretHelp": "Ein Geheimnis, das der Proxy im Header für das gemeinsame Geheimnis sendet. Ist es gesetzt, werden die Header nur bei Anfragen verwendet, die es enthalten. Zusammen mit vertrauenswürdigen Proxys müssen beide zutreffen: Für einen Proxy an anderer Stelle tragen Sie oben seine Adresse ein oder leeren die Liste, um sich allein auf das Geheimnis zu verlassen."
-      }
+      },
+      "resource": "Authentifizierungseinstellungen",
+      "subtitle": "Konfigurieren Sie mehrere Anmeldemethoden und den Benutzerzugriff. Aktivieren Sie mehrere Methoden gleichzeitig für maximale Flexibilität.",
+      "save": "Konfiguration speichern",
+      "saving": "Wird gespeichert...",
+      "saved": "Authentifizierungskonfiguration gespeichert.",
+      "saveFailed": "Konfiguration konnte nicht gespeichert werden: {{error}}"
     },
     "officeIntegration": {
       "title": "Office-Integration",
@@ -2483,15 +2568,17 @@
       "addinId": "Add-in-ID",
       "addinIdShared": "Jede iHub-Installation liefert diese ID aus. Erzeugen Sie eine neue, um diesen Server neben einem anderen (zum Beispiel Entwicklung und Produktion) im selben Outlook zu installieren.",
       "regenerateAddinId": "Neue ID erzeugen",
-      "regenerateAddinIdConfirm": "Outlook behandelt ein Manifest mit neuer ID als anderes Add-in. Alle Nutzer müssen das neue Manifest installieren, und das alte zeigt weiter auf diesen Server, bis es entfernt wird. Fortfahren?",
       "regenerateAddinIdDone": "Neue Add-in-ID erzeugt. Laden Sie das Manifest herunter und stellen Sie es erneut bereit.",
-      "regenerateAddinIdError": "Neue Add-in-ID konnte nicht erzeugt werden"
+      "regenerateAddinIdError": "Neue Add-in-ID konnte nicht erzeugt werden",
+      "regenerateAddinIdTitle": "Neue Add-in-ID erzeugen?",
+      "regenerateAddinIdConsequence": "Outlook behandelt ein Manifest mit neuer ID als anderes Add-in. Alle Nutzer müssen das neue Manifest installieren, und das alte zeigt weiter auf diesen Server, bis es entfernt wird.",
+      "resource": "Einstellungen der Office-Integration"
     },
     "nextcloudEmbed": {
       "title": "Nextcloud-Embed",
       "description": "Konfiguriere die eingebettete iHub-Oberfläche, die innerhalb von Nextcloud geöffnet wird, sobald jemand ein Dokument auswählt und einen Chat startet.",
       "statusTitle": "Integrationsstatus",
-      "statusEnabled": "Das Nextcloud-Embed ist aktiviert. Füge unten einen Nextcloud-Ursprung hinzu, damit dieser iHub einbetten darf.",
+      "statusEnabled": "Das Nextcloud-Embed ist aktiviert. Fügen Sie unten einen Nextcloud-Ursprung hinzu, damit dieser iHub einbetten darf.",
       "statusDisabled": "Aktivieren, um automatisch einen OAuth-Client anzulegen und die eingebettete Oberfläche scharfzuschalten.",
       "enable": "Aktivieren",
       "disable": "Deaktivieren",
@@ -2499,19 +2586,19 @@
       "disabled": "Nextcloud-Embed deaktiviert",
       "viewClient": "OAuth-Client ansehen",
       "embedUrlTitle": "Embed-URL",
-      "embedUrlDesc": "Das mitgelieferte Nextcloud-App-Skelett (nextcloud-app/) zeigt bereits auf diese URL; das Feld dient zur Referenz und zum Kopieren, wenn du eine eigene Nextcloud-Integration konfigurierst.",
+      "embedUrlDesc": "Das mitgelieferte Nextcloud-App-Skelett (nextcloud-app/) zeigt bereits auf diese URL; das Feld dient zur Referenz und zum Kopieren, wenn Sie eine eigene Nextcloud-Integration konfigurieren.",
       "copy": "Kopieren",
       "originsTitle": "Erlaubte Nextcloud-Ursprünge",
       "originsDesc": "Nur diese Nextcloud-Ursprünge dürfen iHub einbetten oder Auswahl-Nachrichten via postMessage senden. Wird sowohl für CSP frame-ancestors als auch für die postMessage-Origin-Prüfung verwendet.",
       "addOrigin": "Hinzufügen",
-      "originInvalid": "Gib einen gültigen http(s)-Ursprung an, z. B. https://cloud.beispiel.de",
-      "noOrigins": "Noch keine Ursprünge hinzugefügt. Das Einbetten von iHub aus einer Nextcloud-Instanz wird blockiert, bis du deren Ursprung hier ergänzt.",
+      "originInvalid": "Geben Sie einen gültigen http(s)-Ursprung an, z. B. https://cloud.beispiel.de",
+      "noOrigins": "Noch keine Ursprünge hinzugefügt. Das Einbetten von iHub aus einer Nextcloud-Instanz wird blockiert, bis Sie deren Ursprung hier ergänzen.",
       "displayTitle": "Anzeigeeinstellungen",
       "displayName": "Anzeigename",
       "descriptionField": "Beschreibung",
       "starterPromptsTitle": "Standard-Startfragen",
       "starterPromptsDesc": "Werden im Embed angezeigt, wenn die ausgewählte App keine eigenen Startfragen hat. Beim Klick wird der Prompt sofort gegen die aktuelle Auswahl gesendet.",
-      "noPrompts": "Keine Standard-Startfragen konfiguriert. Füge eine hinzu, um Vorschläge im Embed anzuzeigen.",
+      "noPrompts": "Keine Standard-Startfragen konfiguriert. Fügen Sie eine hinzu, um Vorschläge im Embed anzuzeigen.",
       "addPrompt": "Frage hinzufügen",
       "promptIndex": "Frage Nr. {{n}}",
       "promptTitle": "Titel",
@@ -2525,10 +2612,11 @@
       "loadError": "Nextcloud-Embed-Status konnte nicht geladen werden",
       "toggleError": "Nextcloud-Embed konnte nicht aktualisiert werden",
       "setupTitle": "Bereitstellungsanleitung",
-      "step1": "Richte unter Admin → Integrationen → Nextcloud einen Nextcloud-Cloud-Speicher-Anbieter ein (dieser stellt OAuth + WebDAV bereit).",
-      "step2": "Füge deinen Nextcloud-Ursprung (z. B. https://cloud.beispiel.de) oben hinzu, damit die Embed-Seite iframe und postMessage akzeptiert.",
-      "step3": "Baue und installiere das mitgelieferte Nextcloud-App-Skelett (siehe nextcloud-app/README.md im iHub-Repo).",
-      "step4": "Nutzer klicken in Nextcloud Files mit der rechten Maustaste auf eine Datei → „Mit iHub chatten“ — das Embed öffnet sich mit den vorausgewählten Dokumenten."
+      "step1": "Richten Sie unter Admin → Integrationen → Nextcloud einen Nextcloud-Cloud-Speicher-Anbieter ein (dieser stellt OAuth + WebDAV bereit).",
+      "step2": "Fügen Sie Ihren Nextcloud-Ursprung (z. B. https://cloud.beispiel.de) oben hinzu, damit die Embed-Seite iframe und postMessage akzeptiert.",
+      "step3": "Bauen und installieren Sie das mitgelieferte Nextcloud-App-Skelett (siehe nextcloud-app/README.md im iHub-Repo).",
+      "step4": "Nutzer klicken in Nextcloud Files mit der rechten Maustaste auf eine Datei → „Mit iHub chatten“ — das Embed öffnet sich mit den vorausgewählten Dokumenten.",
+      "resource": "Einstellungen der Nextcloud-Einbettung"
     },
     "cloudStorage": {
       "office365": "Microsoft Office 365",
@@ -2539,7 +2627,7 @@
       "forceTitle": "Client-Aktualisierung erzwingen",
       "forceDesc": "Eine erzwungene Aktualisierung für alle Clients auslösen. Dies löscht alle Browser-Caches, localStorage und zwingt Clients, alle Assets (JS, CSS, Schriften, Konfigurationen) ohne Browser-Cache neu zu laden. Die Disclaimer-Akzeptanz bleibt erhalten.",
       "warningTitle": "Warnung",
-      "warningDesc": "Diese Aktion zwingt alle verbundenen Clients, ihre Browser bei der nächsten Seiteninteraktion neu zu laden. Verwenden Sie dies bei der Bereitstellung kritischer Updates oder wenn Clients zwischengespeicherte Daten löschen müssen.",
+      "warningDesc": "Jeder Browser, der iHub verwendet, löscht seine zwischengespeicherten Dateien und lädt neu, wenn iHub darin das nächste Mal geladen wird. Verwenden Sie dies bei der Bereitstellung kritischer Updates oder wenn Clients zwischengespeicherte Daten löschen müssen.",
       "trigger": "Aktualisierung erzwingen",
       "triggering": "Aktualisierung wird erzwungen...",
       "triggerSuccess": "Erzwungene Aktualisierung erfolgreich ausgelöst! Neuer Salt: {{salt}}. Alle Clients werden beim nächsten Seitenladen aktualisiert.",
@@ -2624,7 +2712,8 @@
         "configSaveError": "Fehler beim Speichern der SSL-Konfiguration",
         "securityWarning": "Sicherheitswarnung",
         "securityWarningDesc": "Das Deaktivieren der SSL-Zertifikatvalidierung macht Ihre Anwendung anfällig für Man-in-the-Middle-Angriffe. Verwenden Sie diese Funktion nur in sicheren, vertrauenswürdigen Netzwerkumgebungen.",
-        "globalWarning": "Derzeit sind keine Domains auf der Whitelist. Die SSL-Zertifikatvalidierung ist für ALLE externen Verbindungen aktiviert. Fügen Sie oben bestimmte Domains hinzu, um die SSL-Validierung nur für diese Domains zu umgehen."
+        "globalWarning": "Derzeit sind keine Domains auf der Whitelist. Die SSL-Zertifikatvalidierung ist für ALLE externen Verbindungen aktiviert. Fügen Sie oben bestimmte Domains hinzu, um die SSL-Validierung nur für diese Domains zu umgehen.",
+        "ssrfTrustNotice": "Diese Hosts gelten auch für den SSRF-Schutz von Webquellen, Website-Crawls, dem Seitenleser und dem Wasserzeichen-Detektor als vertrauenswürdig: Diese dürfen sie erreichen, auch wenn sie auf private Netzwerkadressen auflösen. Das gilt unabhängig davon, ob „Ungültige SSL-Zertifikate ignorieren“ aktiviert ist. Tools und MCP-Server verwenden diese Liste nicht."
       },
       "ssrf": {
         "title": "SSRF-Allowlist",
@@ -2633,7 +2722,10 @@
         "removeHost": "Entfernen",
         "hostPlaceholder": "*.intrafind.io, api.internal.company.com",
         "patternHelp": "Unterstützte Muster: exakter Hostname (api.example.com), Wildcard (*.example.com), Subdomain (.example.com).",
-        "noHosts": "Keine Hosts erlaubt. Ausgehende Aufrufe zu privaten/internen IPs werden blockiert.",
+        "noHosts": "Der SSRF-Allowlist wurden keine Hosts ausdrücklich hinzugefügt.",
+        "tlsTrustedTitle": "Ebenfalls vertrauenswürdig: SSL-Domain-Whitelist",
+        "tlsTrustedDesc": "Hosts auf der SSL-Domain-Whitelist gelten auch für Webquellen, Website-Crawls, den Seitenleser und den Wasserzeichen-Detektor als vertrauenswürdig (nicht für Tools und MCP-Server), unabhängig davon, ob „Ungültige SSL-Zertifikate ignorieren“ aktiviert ist. Sie werden in der SSL-Karte bearbeitet.",
+        "tlsTrustedNone": "Die SSL-Domain-Whitelist ist leer.",
         "saveConfig": "Allowlist speichern",
         "savingConfig": "Wird gespeichert…",
         "configSaved": "SSRF-Allowlist erfolgreich gespeichert",
@@ -2737,7 +2829,13 @@
         "securityWarning": "Sicherheitswarnung",
         "securityWarningDesc": "Das Deaktivieren des Secure-Cookie-Flags ermöglicht die Übertragung von Cookies über unverschlüsselte HTTP-Verbindungen. Dies macht Ihre Authentifizierungs-Tokens anfällig für Abfangen. Verwenden Sie dies nur in sicheren, internen Netzwerkumgebungen ohne SSL.",
         "defaultBehavior": "Standardmäßig werden Cookies in Produktionsumgebungen als sicher markiert, was bedeutet, dass sie nur über HTTPS-Verbindungen gesendet werden. Dies ist die empfohlene Sicherheitseinstellung."
-      }
+      },
+      "forceRefreshConfirmTitle": "Aktualisierung für alle Benutzer erzwingen?",
+      "forceRefreshConfirmMessage": "Jeder Browser, der iHub verwendet, löscht seine zwischengespeicherten Dateien und lokal gespeicherten Daten und lädt neu, wenn iHub darin das nächste Mal geladen wird. Gerade geöffnete Seiten werden nicht unterbrochen.",
+      "forceRefreshConfirmKept": "Die Zustimmung zum Hinweis bleibt erhalten; andere nur im Browser gespeicherte Einstellungen werden gelöscht.",
+      "forceRefreshConfirmSignIn": "Benutzer, deren Anmeldung im Browser gespeichert ist, müssen sich eventuell erneut anmelden.",
+      "forceRefreshConfirmAction": "Aktualisierung erzwingen",
+      "forceRefreshDone": "Aktualisierung ausgelöst. Jeder Browser löscht seine zwischengespeicherten Dateien und lädt neu, wenn iHub darin das nächste Mal geladen wird."
     },
     "security": {
       "description": "SSL, CORS, Cookie-Einstellungen, Ratenbegrenzung, ausgehender Proxy und Verschlüsselung",
@@ -2785,7 +2883,7 @@
           },
           "adminApi": {
             "name": "Admin-API",
-            "description": "Alles unter /api/admin."
+            "description": "Alles unter /api/admin. Gezählt pro angemeldetem Benutzer oder API-Client; nur Anfragen ohne Anmeldung zählen pro Adresse."
           },
           "authApi": {
             "name": "Anmeldung",
@@ -2847,7 +2945,9 @@
         "backToList": "Zurück zu Benutzern",
         "cancel": "Abbrechen",
         "save": "Benutzer speichern",
-        "saving": "Speichern..."
+        "saving": "Speichern...",
+        "selfDeactivateHint": "Sie können Ihr eigenes Konto nicht deaktivieren.",
+        "saveFailedTitle": "Der Benutzer konnte nicht gespeichert werden"
       },
       "groups": "Gruppen",
       "groupsPlaceholder": "Gruppen suchen oder Namen eingeben…",
@@ -2904,7 +3004,7 @@
       "jsonDescription": "Strukturiertes JSON-Logging für Parsing und Analyse",
       "textDescription": "Menschenlesbares Textformat mit Farben",
       "enableComponentFilter": "Komponenten-Filterung aktivieren",
-      "componentFilterHelp": "Wenn aktiviert, werden nur Logs von ausgewählten Komponenten angezeigt",
+      "componentFilterHelp": "Wenn aktiviert, werden nur Logs der ausgewählten Komponenten geschrieben. Fehler werden immer geschrieben, egal welche Komponente sie meldet.",
       "selectAll": "Alle auswählen",
       "deselectAll": "Alle abwählen",
       "enableFileLogging": "Datei-Logging aktivieren",
@@ -2937,7 +3037,51 @@
       "note2": "Log-Level-Änderungen werden in platform.json gespeichert",
       "note3": "Niedrigere Level (error, warn) zeigen weniger Nachrichten, höhere Level (debug, silly) mehr",
       "note4": "Verwenden Sie \"info\" Level für Produktion, \"debug\" für Entwicklung",
-      "note5": "Authentifizierungs-Debug-Logging ist separat und erfordert Neustart"
+      "note5": "Authentifizierungs-Debug-Logging ist separat und erfordert Neustart",
+      "components": {
+        "WorkflowEngine": {
+          "name": "Workflow-Engine",
+          "description": "Workflow-Ausführungen: Planung der Knoten, Zustand, Wiederholungen und Fehler"
+        },
+        "NtlmAuth": {
+          "name": "NTLM-Authentifizierung",
+          "description": "Windows-Anmeldung (NTLM/Kerberos) und Gruppenabfrage"
+        },
+        "OidcAuth": {
+          "name": "OIDC-Authentifizierung",
+          "description": "OpenID-Connect-Anmeldung: Weiterleitungen, Token-Austausch, Gruppenzuordnung"
+        },
+        "LdapAuth": {
+          "name": "LDAP-Authentifizierung",
+          "description": "Anmeldung über LDAP und Active Directory sowie Gruppenabfrage"
+        },
+        "ProxyAuth": {
+          "name": "Proxy-Authentifizierung",
+          "description": "Anmeldung über Header oder Token, die ein Reverse Proxy setzt"
+        },
+        "Authorization": {
+          "name": "Autorisierung",
+          "description": "Gruppenvererbung und Berechtigungsprüfungen für Apps, Modelle und Tools"
+        },
+        "IFinderService": {
+          "name": "iFinder",
+          "description": "Dokumentsuche und -abruf in iFinder"
+        },
+        "JiraService": {
+          "name": "Jira",
+          "description": "Jira-Integration: Anmeldung und Anfragen zu Vorgängen"
+        },
+        "WebSearch": {
+          "name": "Websuche",
+          "description": "Suchanfragen an Brave, Staan, Qwant und andere Suchmaschinen"
+        },
+        "McpClientManager": {
+          "name": "MCP-Clients",
+          "description": "Verbindungen zu MCP-Servern: verbinden, Tools auflisten, neu verbinden"
+        }
+      },
+      "resource": "Protokollierungseinstellungen",
+      "currentLevel": "Aktuelle Stufe"
     },
     "nav": {
       "chatHistory": "Chatverlauf",
@@ -3041,7 +3185,11 @@
         "cimdApprovalRequired": "Freigabe erforderlich (empfohlen)",
         "cimdApprovalAuto": "Automatisch verbinden",
         "a2aDefaultSkill": "A2A-Standard-Skill",
-        "a2aDefaultSkillDesc": "Die App oder der Workflow, den eine Nachricht ausführt, wenn der A2A-Client keinen Skill nennt, als app__<appId> oder workflow__<workflowId>. Clients können jederzeit einen Skill über metadata.skillId oder den Skill-Endpunkt /a2a/skills/<skillId> wählen. Leer lassen, um eine Auswahl zu verlangen (ein Aufrufer mit genau einem Skill braucht keine)."
+        "a2aDefaultSkillDesc": "Die App oder der Workflow, den eine Nachricht ausführt, wenn der A2A-Client keinen Skill nennt, als app__<appId> oder workflow__<workflowId>. Clients können jederzeit einen Skill über metadata.skillId oder den Skill-Endpunkt /a2a/skills/<skillId> wählen. Leer lassen, um eine Auswahl zu verlangen (ein Aufrufer mit genau einem Skill braucht keine).",
+        "resource": "Einstellungen des MCP-Gateways",
+        "discoveryLabel": "Discovery:",
+        "endpointLabel": "Endpunkt:",
+        "transportStateless": "Zustandsloser Modus"
       }
     },
     "telemetry": {
@@ -3084,7 +3232,8 @@
       "save": "Telemetrie-Einstellungen speichern",
       "referenceTitle": "Referenz",
       "refEnvHint": "Standard-OTEL_*-Umgebungsvariablen (OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_SERVICE_NAME, ...) werden beim Start berücksichtigt.",
-      "refMetricsHint": "Eigene iHub-Metriken: ihub.app.usage, ihub.prompt.usage, ihub.errors, ihub.conversations, ihub.active.users, ihub.active.chats."
+      "refMetricsHint": "Eigene iHub-Metriken: ihub.app.usage, ihub.prompt.usage, ihub.errors, ihub.conversations, ihub.active.users, ihub.active.chats.",
+      "resource": "Telemetrie-Einstellungen"
     },
     "systemResources": {
       "title": "Systemressourcen",
@@ -3248,7 +3397,7 @@
       },
       "viewSkill": "Skill ansehen",
       "viewIntegration": "Integration einrichten",
-      "integrationInUse": "Diese Integrationsdefinition ist noch als Instanz installiert. Entferne die Instanz zuerst unter Integrationen → Installiert.",
+      "integrationInUse": "Diese Integrationsdefinition ist noch als Instanz installiert. Entfernen Sie die Instanz zuerst unter Integrationen → Installiert.",
       "registries": {
         "title": "Marktplatz-Registries",
         "subtitle": "Inhalts-Registries verwalten, um Apps, Modelle, Prompts, Skills, Workflows und Integrationen zu entdecken und zu installieren.",
@@ -3299,7 +3448,11 @@
           "removePin": "Festlegung entfernen",
           "addPin": "Festlegung hinzufügen",
           "pinInvalid": "Jede Festlegung braucht einen Eintrag als <Typ>:<Name> (zum Beispiel integration:org.ckan__open-data-portal) und einen Versionsbereich."
-        }
+        },
+        "deleteConsequence": "Ihr Katalog verschwindet aus dem Marktplatz, und die zwischengespeicherten Katalogdaten werden entfernt. Bereits daraus installierte Elemente bleiben installiert.",
+        "deleteShipped": "Diese Registry wird mit iHub ausgeliefert. Es gibt kein „Standard wiederherstellen“: Um sie zurückzubekommen, müssen Sie sie von Hand erneut hinzufügen.",
+        "refreshFailed": "Aktualisierung fehlgeschlagen",
+        "updateFailed": "Änderung fehlgeschlagen"
       },
       "detail": {
         "description": "Beschreibung",
@@ -3403,7 +3556,7 @@
           "actions": "Aktionen",
           "noActions": "Diese Installation bietet gerade keine Aktion an.",
           "notInstalled": "Nicht installiert",
-          "notInstalledHelp": "Diese Installation gibt es nicht mehr; die App ist deshalb für Nutzer ausgeblendet. Entferne die Einbindung, um die App wieder anzubieten.",
+          "notInstalledHelp": "Diese Installation gibt es nicht mehr; die App ist deshalb für Nutzer ausgeblendet. Entfernen Sie die Einbindung, um die App wieder anzubieten.",
           "notInstalledOptionalHelp": "Diese Installation gibt es nicht mehr. Die App bleibt ohne sie verfügbar; entferne die Einbindung zum Aufräumen.",
           "required": "Erforderlich",
           "requiredHelp": "Blendet die App aus, solange diese Integration deaktiviert ist oder fehlt. Aus: Die App bleibt ohne ihre Aktionen verfügbar.",
@@ -3644,7 +3797,10 @@
         "toolSearchOff": "Aus: alle Tools senden",
         "toolSearchHelp": "Sind die Tools dieser App für eine Anfrage zu viele, werden die größten Integrationen weggelassen und im Prompt aufgelistet; das Modell findet ein Tool mit search_tools, und die gefundenen Tools werden der Anfrage hinzugefügt. Hält Anfragen klein und die Tool-Wahl treffsicher. Setzen Sie bei einer Integration „Immer geladen“, um sie aus der Suche herauszuhalten.",
         "toolSearchBudget": "Token-Budget für Tool-Definitionen",
-        "toolSearchBudgetHelp": "Tokens, die die Tool-Definitionen einer Anfrage belegen dürfen, bevor Integrationen der Suche überlassen werden. Standard 6000; nie mehr als ein Zehntel des Kontextfensters des Modells."
+        "toolSearchBudgetHelp": "Tokens, die die Tool-Definitionen einer Anfrage belegen dürfen, bevor Integrationen der Suche überlassen werden. Standard 6000; nie mehr als ein Zehntel des Kontextfensters des Modells.",
+        "selectCategory": "Kategorie auswählen …",
+        "resource": "App „{{id}}“",
+        "backToApps": "Zurück zu den Apps"
       },
       "reorder": "Reihenfolge",
       "reorderHelp": "Ziehen Sie eine Zeile oder nutzen Sie die Pfeile, um die Reihenfolge festzulegen, in der Apps für Benutzer erscheinen – in der App-Übersicht, auf der Startseite und in der Seitenleiste. Es werden immer alle Apps aufgelistet, Suche und Filter gelten hier nicht. Gespeichert wird erst mit „Reihenfolge speichern“.",
@@ -3743,7 +3899,7 @@
       },
       "empty": {
         "title": "Noch nichts installiert",
-        "description": "Wähle eine Integration aus dem Katalog, trage ihre Einstellungen ein und teste sie vor dem Speichern.",
+        "description": "Wählen Sie eine Integration aus dem Katalog, tragen Sie ihre Einstellungen ein und testen Sie sie vor dem Speichern.",
         "cta": "Katalog öffnen"
       },
       "status": {
@@ -3855,10 +4011,14 @@
         "connectedAt": "seit {{date}}",
         "expired": "abgelaufen",
         "disconnect": "Trennen",
-        "disconnectConfirm": "„{{user}}“ von {{label}} trennen? Die Person muss sich erneut anmelden, um es zu nutzen.",
         "resetRegistration": "OAuth-Client-Registrierung zurücksetzen",
-        "resetConfirm": "OAuth-Client-Registrierung von {{label}} zurücksetzen? Die nächste Anmeldung registriert iHub neu; verbundene Benutzer müssen sich eventuell erneut verbinden.",
-        "resetDone": "OAuth-Client-Registrierung zurückgesetzt"
+        "resetDone": "OAuth-Client-Registrierung zurückgesetzt",
+        "disconnectTitle": "„{{user}}“ von {{label}} trennen?",
+        "disconnectAction": "Trennen",
+        "resetTitle": "OAuth-Client-Registrierung von {{label}} zurücksetzen?",
+        "resetAction": "Registrierung zurücksetzen",
+        "disconnectConsequence": "Die Person muss sich erneut anmelden, um {{label}} zu nutzen.",
+        "resetConsequence": "Die nächste Anmeldung registriert iHub neu; verbundene Benutzer müssen sich eventuell erneut verbinden."
       },
       "runsCode": "Führt Code auf diesem Server aus",
       "incompatibleReason": "Diese Installation bietet keine Aktionen: ihre Definition {{reason}}.",
@@ -4689,9 +4849,9 @@
           "connectionPersonal": "Meine eigene Verbindung ({{user}})",
           "connectionMe": "Als ich ({{user}})",
           "errorRequired": "Pflichtfeld",
-          "errorNumber": "Gib eine Zahl ein",
-          "errorInteger": "Gib eine ganze Zahl ein",
-          "errorJson": "Gib gültiges JSON ein",
+          "errorNumber": "Geben Sie eine Zahl ein",
+          "errorInteger": "Geben Sie eine ganze Zahl ein",
+          "errorJson": "Geben Sie gültiges JSON ein",
           "choose": "Auswählen…",
           "notSet": "(nicht gesetzt)",
           "requiredSr": "(Pflichtfeld)",
@@ -4732,13 +4892,13 @@
         "from": "aus {{source}}",
         "dataFlowLabel": "Datenfluss",
         "approval": "Freigabe",
-        "methodHint": "Die OpenAPI-Methode {{method}} legt „{{effect}}“ nahe. Bestätige das unten mit einer Überschreibung.",
+        "methodHint": "Die OpenAPI-Methode {{method}} legt „{{effect}}“ nahe. Bestätigen Sie das unten mit einer Überschreibung.",
         "overrideSideEffect": "Nebenwirkung überschreiben",
         "asDeclared": "Wie angegeben ({{value}})",
         "overrideDataFlow": "Datenfluss überschreiben",
         "asDeclaredPlain": "Wie angegeben",
         "actionApproval": "Freigabe für diese Aktion",
-        "effectHelp": "Eine Überschreibung ist deine Entscheidung und gilt als vertrauenswürdig: Sie kann eine Freigabe strenger machen oder, bei einem bestätigten Lesen, lockerer. Es gilt die strengste Einstellung aus Plattform-Standard, Integration, dieser Aktion und App.",
+        "effectHelp": "Eine Überschreibung ist Ihre Entscheidung und gilt als vertrauenswürdig: Sie kann eine Freigabe strenger machen oder, bei einem bestätigten Lesen, lockerer. Es gilt die strengste Einstellung aus Plattform-Standard, Integration, dieser Aktion und App.",
         "howToUse": "So wird sie genutzt",
         "guidance": "Hinweise für das Modell",
         "noGuidance": "Keine Hinweise.",
@@ -4768,10 +4928,10 @@
           "internal": "Bleibt in iHub",
           "external": "Verlässt iHub"
         },
-        "intro": "Das ist eine einzelne Aktion der Integration: etwas, das das KI-Modell von diesem System ausführen lassen kann. Hier legst du fest, was das Modell darüber erfährt und wie iHub sie behandelt (lesend oder schreibend, wohin die Daten gehen, ob eine Person freigeben muss). Außerdem kannst du sie einmal ausführen, um zu prüfen, ob sie funktioniert.",
+        "intro": "Das ist eine einzelne Aktion der Integration: etwas, das das KI-Modell von diesem System ausführen lassen kann. Hier legen Sie fest, was das Modell darüber erfährt und wie iHub sie behandelt (lesend oder schreibend, wohin die Daten gehen, ob eine Person freigeben muss). Außerdem können Sie sie einmal ausführen, um zu prüfen, ob sie funktioniert.",
         "badgesLabel": "Aktuelle Einstellungen:",
         "whatLead": "Was das KI-Modell über diese Aktion erfährt. Anhand von Beschreibung und Parametern entscheidet es, wann es sie aufruft und was es übergibt.",
-        "effectLead": "Wie iHub einen Aufruf dieser Aktion behandelt. Diese Werte entscheiden, ob vorher eine Person freigeben muss. Die Angabe des Herstellers gilt nicht von selbst als vertrauenswürdig, deine Überschreibungen schon.",
+        "effectLead": "Wie iHub einen Aufruf dieser Aktion behandelt. Diese Werte entscheiden, ob vorher eine Person freigeben muss. Die Angabe des Herstellers gilt nicht von selbst als vertrauenswürdig, Ihre Überschreibungen schon.",
         "overridesTitle": "Diese Einstellungen ändern",
         "sideEffectHelp": "Was ein Aufruf im angebundenen System verändert: nichts (lesend), etwas (schreibend) oder er löscht Daten.",
         "dataFlowHelp": "Ob das Ergebnis in iHub bleibt oder an einen externen Dienst weitergegeben wird.",
@@ -4802,7 +4962,7 @@
         }
       },
       "instructions": {
-        "sourceAdmin": "Dein Text",
+        "sourceAdmin": "Ihr Text",
         "sourceDefinition": "Aus der Integrationsdefinition",
         "sourceServer": "Vom Server gesendet",
         "title": "Hinweise für das Modell",
@@ -4941,17 +5101,13 @@
         "unsaved": "Es gibt ungespeicherte Änderungen",
         "discard": "Verwerfen"
       },
-      "unsaved": {
-        "title": "Ungespeicherte Änderungen",
-        "message": "Es gibt ungespeicherte Änderungen. Trotzdem verlassen?",
-        "leave": "Verlassen",
-        "stay": "Bleiben"
-      },
       "saved": "UI-Konfiguration gespeichert",
       "backedUp": "Konfiguration gesichert unter: {{path}}",
       "missingSection": "Der Konfiguration fehlt der Abschnitt „{{section}}“.",
       "assets": {
-        "savedNotice": "Uploads und Löschungen wirken sofort und gehören nicht zu den ungespeicherten Änderungen. Den Pfad einer hochgeladenen Datei tragen Sie in den anderen Tabs ein."
+        "savedNotice": "Uploads und Löschungen wirken sofort und gehören nicht zu den ungespeicherten Änderungen. Den Pfad einer hochgeladenen Datei tragen Sie in den anderen Tabs ein.",
+        "deleteConsequence": "Seiten, Stile und Einstellungen, die auf diese Datei verweisen, zeigen dann einen defekten Link.",
+        "deleted": "Datei gelöscht"
       },
       "footer": {
         "title": "Fußzeile",
@@ -4990,8 +5146,15 @@
       },
       "linkTarget": "Link öffnen in",
       "styles": {
-        "colorPicker": "{{name}} (Farbwähler)"
-      }
+        "colorPicker": "{{name}} (Farbwähler)",
+        "variableName": "Name (ohne --)",
+        "variableValue": "Wert",
+        "addVariableRequired": "Geben Sie einen Namen und einen Wert für die Variable ein.",
+        "addVariableConfirm": "Variable hinzufügen"
+      },
+      "resource": "UI-Einstellungen",
+      "title": "UI-Anpassung",
+      "description": "Passen Sie das Erscheinungsbild und Branding von $t(product.name) an"
     },
     "groupSelect": {
       "placeholder": "Gruppen suchen oder Namen eingeben…",
@@ -5055,7 +5218,9 @@
         "other": "Weitere Einträge",
         "otherHelp": "Einträge, die die Liste oben nicht zeigt: Definitions-IDs oder Installationen, die es nicht mehr gibt.",
         "remove": "{{key}} entfernen"
-      }
+      },
+      "deleteBlockedTitle": "Gruppe kann nicht gelöscht werden",
+      "deleteFailed": "Die Gruppe konnte nicht gelöscht werden."
     },
     "contentAccess": {
       "title": "Gruppenzugriff",
@@ -5111,7 +5276,7 @@
       "retentionDays": "{{days}} Tage aufbewahren",
       "retentionForever": "Dauerhaft aufbewahren",
       "retentionDisabled": "Aufräumen deaktiviert",
-      "retentionHint": "Konfiguriert in platform.json → audit. Bearbeitung unter Plattform → Erweitert.",
+      "retentionHint": "Wird in platform.json festgelegt (audit.retentionDays, audit.cleanupEnabled). Noch keine Admin-Seite bearbeitet diese Werte.",
       "runCleanup": "Jetzt aufräumen",
       "cleanupRunning": "Läuft…",
       "cleanupRemoved": "{{count}} Dateien entfernt",
@@ -5195,7 +5360,10 @@
         "noGroups": "Keine",
         "moreDetails": "Weitere Details",
         "rawEntry": "Roher Eintrag (JSON)"
-      }
+      },
+      "cleanupConfirmTitle": "Audit-Einträge löschen, die älter als {{date}} sind?",
+      "cleanupConfirmMessage": "Die Audit-Log-Dateien, die älter als die Aufbewahrungsfrist ({{days}} Tage) sind, werden jetzt vom Server gelöscht statt bei der nächsten geplanten Bereinigung.",
+      "cleanupConfirmAction": "Alte Einträge löschen"
     },
     "filters": {
       "multiSelect": {
@@ -5216,7 +5384,6 @@
     },
     "changelog": {
       "title": "Neuigkeiten",
-      "subtitle": "Versionshinweise zu jeder $t(product.name)-Version, neueste zuerst.",
       "loading": "Änderungsprotokoll wird geladen …",
       "loadingRelease": "Versionshinweise werden geladen …",
       "loadError": "Änderungsprotokoll konnte nicht geladen werden",
@@ -5240,7 +5407,9 @@
       "breakingChangesHint": "Vor oder nach dem Upgrade ist eine Aktion erforderlich.",
       "features": "Neu & verbessert",
       "fixes": "Fehlerbehebungen",
-      "backToContents": "Zurück zur Übersicht"
+      "newerRelease": "Neuere Version",
+      "olderRelease": "Ältere Version",
+      "pagination": "Neuere und ältere Version"
     },
     "feedback": {
       "title": "Feedback",
@@ -5283,7 +5452,8 @@
       "review": {
         "unavailable": "Feedback-Statistiken sind nicht verfügbar.",
         "range": "Bewertungen der letzten 90 Tage."
-      }
+      },
+      "resource": "Feedback-Einstellungen"
     },
     "usage": {
       "reviewFeedback": "Feedback ansehen",
@@ -5476,7 +5646,11 @@
           "anonymousDesc": "Benutzer und Unterhaltungen werden als nicht umkehrbare Fingerabdrücke erfasst.",
           "pseudonymousDesc": "Jede Unterhaltung wird als eigener Benutzer erfasst; Benutzer-IDs werden nicht gespeichert.",
           "identifiedDesc": "Einträge nennen die echte Benutzer-ID.",
-          "label": "Erfassungsmodus"
+          "label": "Erfassungsmodus",
+          "confirmTitle": "Erfassungsmodus auf „{{mode}}“ ändern?",
+          "confirmScope": "Gilt ab jetzt für alle neu geschriebenen Nutzungsdatensätze, für alle Benutzer.",
+          "confirmAction": "Erfassungsmodus ändern",
+          "changed": "Erfassungsmodus auf „{{mode}}“ geändert."
         },
         "subtitle": "Anfragen und Tokens jedes Modellaufrufs – Chats, Agenten, Workflows, geplante Aufgaben und die API.",
         "surface": {
@@ -5558,7 +5732,9 @@
         "reset": "Auf Standard zurücksetzen",
         "none": "Noch keine Schlüssel geändert. Suchen Sie oben nach einer Beschriftung.",
         "noMatches": "Keine passenden Übersetzungen.",
-        "more": "Mehr anzeigen"
+        "more": "Mehr anzeigen",
+        "languageUnsaved": "{{language}} ({{unsaved}} nicht gespeichert)",
+        "unsavedElsewhere": "Nicht gespeicherte Änderungen in {{languages}}. Wechseln Sie zu dieser Sprache und speichern Sie sie, bevor Sie die Seite verlassen."
       }
     },
     "prompts": {
@@ -5569,7 +5745,10 @@
         "detectedVariables": "Im Text erkannt",
         "describeVariable": "Beschreiben",
         "variableDescribed": "beschrieben",
-        "variablesDescPlaceholders": "Platzhalter wie {{name}} im Prompt-Text werden beim Verwenden des Prompts abgefragt. Beschreiben Sie sie hier, um Bezeichnung, Typ, Standardwert oder Optionen festzulegen. {{content}} markiert, wo der eigene Text des Nutzers hingehört; globale Variablen wie {{user_name}} werden automatisch ausgefüllt."
+        "variablesDescPlaceholders": "Platzhalter wie {{name}} im Prompt-Text werden beim Verwenden des Prompts abgefragt. Beschreiben Sie sie hier, um Bezeichnung, Typ, Standardwert oder Optionen festzulegen. {{content}} markiert, wo der eigene Text des Nutzers hingehört; globale Variablen wie {{user_name}} werden automatisch ausgefüllt.",
+        "appId": "Wird geöffnet in App",
+        "noApp": "Standard-Chat-App",
+        "appIdDesc": "Die Prompt-Bibliothek öffnet diesen Prompt in dieser App und zeigt ihn dort zuerst an. Wer den Prompt sieht, legt dieses Feld nicht fest."
       },
       "userPrompts": {
         "allowEveryone": "Alle angemeldeten Nutzer",
@@ -5606,6 +5785,9 @@
         "truncated": "Es werden nur die ersten Prompts angezeigt",
         "updated": "Zuletzt geändert",
         "userCount": "{{count}} Nutzer"
+      },
+      "details": {
+        "linkedApp": "Wird geöffnet in App"
       }
     },
     "skills": {
@@ -5665,7 +5847,8 @@
       "systemTooltip": "Wird mit iHub ausgeliefert. Kann nicht geändert oder gelöscht werden.",
       "systemNotice": "Dies ist ein System-Skill, der mit iHub ausgeliefert wird. Er wird mit iHub aktualisiert und kann hier weder geändert noch gelöscht werden. Aktivieren Sie ihn für eine App in den Skill-Einstellungen der App.",
       "providedTools": "Werkzeuge dieses Skills:",
-      "view": "Ansehen"
+      "view": "Ansehen",
+      "deletedNamed": "Skill „{{name}}“ gelöscht."
     },
     "scheduledTasks": {
       "all": "Alle",
@@ -5720,9 +5903,12 @@
       "memory": {
         "summary": "{{chars}} Zeichen · v{{version}} · {{updatedAt}}",
         "clear": "Gedächtnis leeren",
-        "confirmClear": "Das Gedächtnis von „{{name}}“ von {{owner}} leeren? Der Eigentümer verliert diese Notizen."
+        "clearTitle": "Gedächtnis von „{{name}}“ löschen?",
+        "clearAction": "Notizen löschen",
+        "clearConsequence": "Der Eigentümer, {{owner}}, verliert die Notizen, die diese Aufgabe bisher geschrieben hat."
       },
-      "memoryEnabledHint": "Aus: Läufe lesen und aktualisieren die Notizen einer Aufgabe nicht (die Notizen bleiben erhalten), und „Nur bei Änderungen“ benachrichtigt nach jedem Lauf."
+      "memoryEnabledHint": "Aus: Läufe lesen und aktualisieren die Notizen einer Aufgabe nicht (die Notizen bleiben erhalten), und „Nur bei Änderungen“ benachrichtigt nach jedem Lauf.",
+      "deleteConsequence": "Die Aufgabe wird nicht mehr ausgeführt, und ihr Besitzer kann sie und ihre Läufe nicht mehr sehen."
     },
     "overview": {
       "storage": {
@@ -5748,6 +5934,22 @@
       },
       "users": {
         "active": "{{count}} aktiv (30 T.)"
+      },
+      "gettingStarted": "Erste Schritte",
+      "setup": {
+        "installed": "Plattform installiert",
+        "adminAccount": "Administratorkonto bereit",
+        "addProvider": "LLM-Anbieter konfigurieren",
+        "createApp": "Erste App erstellen",
+        "configureAuth": "Identitätsanbieter verbinden (optional)",
+        "shippedPasswordHint": "Das Konto „admin“ meldet sich noch mit dem ausgelieferten Passwort an. Ändern Sie es.",
+        "dismiss": "Ausblenden",
+        "dismissLabel": "Einrichtungs-Checkliste ausblenden"
+      },
+      "resource": "Übersicht",
+      "apps": {
+        "unavailable": "nicht geladen",
+        "enabledCount": "{{count}} aktiviert"
       }
     },
     "copilotAgent": {
@@ -5814,7 +6016,8 @@
       "downloading": "Wird erstellt…",
       "download": "Agentenpaket herunterladen",
       "prereqHttps": "Die öffentliche Adresse von iHub verwendet HTTPS",
-      "prereqHttpsOff": "Die öffentliche Adresse von iHub ist kein HTTPS, und Copilot ruft nur HTTPS-Adressen auf – setzen Sie die Public URL des MCP-Gateways (oder leiten Sie X-Forwarded-Proto im Proxy weiter)"
+      "prereqHttpsOff": "Die öffentliche Adresse von iHub ist kein HTTPS, und Copilot ruft nur HTTPS-Adressen auf – setzen Sie die Public URL des MCP-Gateways (oder leiten Sie X-Forwarded-Proto im Proxy weiter)",
+      "resource": "Einstellungen des Copilot-Agenten"
     },
     "apiKeyStatus": {
       "ok": "Schlüssel gefunden",
@@ -5861,6 +6064,10 @@
           "endWithoutOutput": "Der End-Schritt {{nodes}} hat keine Ausgabe. Der Workflow lässt sich nicht speichern, und ein Lauf, der diesen Schritt erreicht, schlägt fehl, bis Sie seine Ausgabe im visuellen Editor setzen."
         },
         "jsonInvalid": "Korrigieren Sie das JSON unten, um diese Einstellungen zu ändern."
+      },
+      "table": {
+        "visibleTo": "Sichtbar für",
+        "adminsOnly": "Nur Administratoren"
       }
     },
     "projects": {
@@ -6005,12 +6212,6 @@
         "deleteSelectedConfirm": "{{count}} Elemente aus dem Projekt löschen? Das lässt sich nicht rückgängig machen.",
         "deleteSelectedAction": "Elemente löschen",
         "deleteSelectedFailed": "{{count}} Elemente konnten nicht gelöscht werden: {{reason}}"
-      },
-      "unsaved": {
-        "title": "Ungespeicherte Änderungen",
-        "message": "Sie haben ungespeicherte Änderungen. Trotzdem verlassen?",
-        "leave": "Verlassen",
-        "stay": "Bleiben"
       },
       "dependencies": {
         "title": "Projekt wird verwendet",
@@ -6473,7 +6674,10 @@
       "noApp": "Keine App ausgewählt",
       "urlHint": "Ein Pfad auf diesem Server (/apps/chat) funktioniert immer. Ein Link zu einer anderen Website funktioniert nur, wenn ihr Host auf der SSRF-Allowlist steht.",
       "ssrfNotice": "Kurzlinks zu anderen Websites funktionieren nur für Hosts auf der SSRF-Allowlist; Links zu anderen Hosts antworten mit „Nicht gefunden“.",
-      "ssrfLink": "Admin → Sicherheit → SSRF-Allowlist"
+      "ssrfLink": "Admin → Sicherheit → SSRF-Allowlist",
+      "urlEmptyHint": "Lassen Sie das Feld leer, um die oben gewählte App oder den Pfad zu öffnen.",
+      "paramsLeftOut": "Diese Parameter werden nicht an den Link angehängt, solange „Include Params“ ausgeschaltet ist.",
+      "targetPreview": "Öffnet:"
     },
     "toolApproval": {
       "mode": {
@@ -6511,7 +6715,8 @@
       "newOrChangedDefault": "Immer fragen (Standard)",
       "newOrChangedHelp": "Eine Aktion, die seit der letzten Prüfung hinzugekommen ist oder deren Wirkung oder Eingabe sich geändert hat, fragt mindestens so, bis Sie sie als geprüft markieren. Gilt, sobald an dieser Integration eine Freigabe eingestellt ist.",
       "presetAlwaysHelp": "Vorausgewählt: immer fragen. Diese Integration sendet Daten nach außen und gibt nicht verlässlich an, welche ihrer Aktionen nur lesen. Sie können das jetzt oder später auf der Seite der Integration ändern.",
-      "presetWritesHelp": "Vorausgewählt: fragen, außer eine Aktion liest nur. Sie können das jetzt oder später auf der Seite der Integration ändern."
+      "presetWritesHelp": "Vorausgewählt: fragen, außer eine Aktion liest nur. Sie können das jetzt oder später auf der Seite der Integration ändern.",
+      "resource": "Einstellungen zur Werkzeugfreigabe"
     },
     "integrationBuilder": {
       "a2a": {
@@ -6702,13 +6907,7 @@
       },
       "titleEdit": "Im Builder bearbeiten",
       "titleEditOf": "{{id}} im Builder bearbeiten",
-      "titleNew": "Manuell hinzufügen",
-      "unsaved": {
-        "leave": "Verlassen",
-        "message": "Die Integration ist nicht gespeichert. Trotzdem verlassen?",
-        "stay": "Bleiben",
-        "title": "Ungespeicherte Änderungen"
-      }
+      "titleNew": "Manuell hinzufügen"
     },
     "usageLimits": {
       "title": "Nutzungslimits",
@@ -6766,9 +6965,9 @@
       }
     },
     "unsavedChanges": {
-      "title": "Ungespeicherte Änderungen",
-      "message": "Sie haben ungespeicherte Änderungen. Trotzdem verlassen?",
-      "leave": "Verlassen",
+      "title": "Ohne Speichern verlassen?",
+      "message": "Ihre Änderungen gehen verloren.",
+      "discard": "Änderungen verwerfen",
       "stay": "Bleiben"
     },
     "docs": {
@@ -6799,7 +6998,8 @@
       "resultCount_one": "{{count}} Treffer",
       "resultCount_other": "{{count}} Treffer",
       "collapseAll": "Alle zuklappen",
-      "expandAll": "Alle aufklappen"
+      "expandAll": "Alle aufklappen",
+      "tableLabel": "Tabelle"
     },
     "aiDisclosure": {
       "title": "KI-Hinweis",
@@ -7287,6 +7487,111 @@
       "relatedNoticeText": "– der Hinweis im leeren Chat und der Wortlaut der Leitplanke",
       "relatedAck": "KI-Bestätigung",
       "relatedAckText": "– die Bestätigung vor der ersten Nachricht, beim Benutzer gespeichert"
+    },
+    "common": {
+      "enableAll": "Alle aktivieren",
+      "disableAll": "Alle deaktivieren"
+    },
+    "confirm": {
+      "deleteTitle": "{{type}} „{{name}}“ löschen?",
+      "deleteMessage": "Der Eintrag wird für alle Benutzer entfernt.",
+      "delete": "Löschen",
+      "failed": "Die Aktion ist fehlgeschlagen.",
+      "andMore_one": "und {{count}} weiterer",
+      "andMore_other": "und {{count}} weitere",
+      "types": {
+        "app": "App",
+        "model": "Modell",
+        "prompt": "Prompt",
+        "provider": "Anbieter",
+        "skill": "Skill",
+        "workflow": "Workflow",
+        "registry": "Registry",
+        "asset": "Datei",
+        "credential": "Zugangsdaten"
+      },
+      "plural": {
+        "apps": "Apps",
+        "models": "Modelle",
+        "prompts": "Prompts"
+      },
+      "bulk": {
+        "enableTitle": "Alle {{items}} aktivieren?",
+        "disableTitle": "Alle {{items}} deaktivieren?",
+        "enableMessage_one": "{{count}} von {{total}} {{items}} ist derzeit deaktiviert und wird aktiviert. Benutzer mit Zugriff sehen sie sofort:",
+        "enableMessage_other": "{{count}} von {{total}} {{items}} sind derzeit deaktiviert und werden aktiviert. Benutzer mit Zugriff sehen sie sofort:",
+        "disableMessage_one": "{{count}} von {{total}} {{items}} ist derzeit aktiviert und wird deaktiviert. Benutzer verlieren sofort den Zugriff:",
+        "disableMessage_other": "{{count}} von {{total}} {{items}} sind derzeit aktiviert und werden deaktiviert. Benutzer verlieren sofort den Zugriff:",
+        "nothingToEnable": "Alle {{total}} {{items}} sind bereits aktiviert.",
+        "nothingToDisable": "Alle {{total}} {{items}} sind bereits deaktiviert."
+      }
+    },
+    "backup": {
+      "sensitivity": {
+        "title": "Bewahren Sie den Export wie einen Schlüssel auf",
+        "body": "Der Export ist nicht verschlüsselt. Er enthält den Schlüssel für gespeicherte Geheimnisse, die JWT-Signaturschlüssel und die Passwort-Hashes der Benutzer. Wer die Datei hat, kann jedes gespeicherte Geheimnis entschlüsseln und gültige Anmelde-Token erzeugen. Bewahren Sie sie so auf, dass nur Administratoren sie lesen können, und löschen Sie Kopien, die Sie nicht mehr brauchen."
+      },
+      "importConfirm": {
+        "title": "Gesamten Inhalt durch „{{name}}“ ersetzen?",
+        "message": "Der Import ersetzt alles in contents/ auf diesem Server: Konfiguration, Benutzer und Gruppen, Schlüssel, Chats und hochgeladene Daten.",
+        "file": "Datei: {{name}} ({{size}})",
+        "preImportCopy": "Der aktuelle Inhalt bleibt als Kopie vor dem Import in contents/.backups erhalten (die letzten 3 werden aufbewahrt).",
+        "signIn": "Benutzer, Passwörter und Schlüssel stammen aus der Datei: Möglicherweise müssen Sie sich neu anmelden.",
+        "typeHost": "Geben Sie zur Bestätigung die Adresse dieses Servers ein:",
+        "action": "Importieren und ersetzen"
+      }
+    },
+    "credentials": {
+      "usageUnknown": "Es konnte nicht geprüft werden, welche Integrationen „{{id}}“ verwenden.",
+      "usageIncomplete": "Es konnte nicht vollständig geprüft werden, welche Integrationen „{{id}}“ verwenden: {{count}} installierte Integrationen konnten nicht gelesen werden. Prüfen Sie diese vor dem Löschen.",
+      "usedBy_one": "Wird von {{count}} installierten Integration verwendet, die dann nicht mehr funktioniert:",
+      "usedBy_other": "Wird von {{count}} installierten Integrationen verwendet, die dann nicht mehr funktionieren:",
+      "notUsedByIntegrations": "Keine installierte Integration verwendet sie.",
+      "notChecked": "Tools, MCP-Server und Anmeldeeinstellungen, die darauf verweisen, werden hier nicht geprüft; sie schlagen fehl, bis sie andere Zugangsdaten erhalten.",
+      "deleteNamed": "Zugangsdaten „{{id}}“ löschen",
+      "deleted": "Zugangsdaten gelöscht",
+      "deleteError": "Löschen fehlgeschlagen: {{error}}"
+    },
+    "editor": {
+      "resetTitle": "Alle Änderungen zurücksetzen?",
+      "resetAction": "Änderungen zurücksetzen",
+      "switchToJsonTitle": "Zum JSON-Editor wechseln?",
+      "switchToFormTitle": "Zum Formular-Editor wechseln?",
+      "switchAction": "Editor wechseln",
+      "resetConsequence": "Ihre nicht gespeicherten Änderungen werden verworfen.",
+      "switchConsequence": "Sie haben nicht gespeicherte Änderungen. Beim Wechsel des Editors können einige davon verloren gehen."
+    },
+    "pages": {
+      "fields": {
+        "allowedGroups": "Erlaubte Gruppen",
+        "allowedGroupsPlaceholder": "admins, users oder *",
+        "allowedGroupsHelp": "Gruppen-IDs, durch Kommas getrennt, genau wie unter Admin → Gruppen. Leer lassen oder * eingeben, um allen den Zugriff zu erlauben. Nur Mitglieder einer aufgeführten Gruppe sehen die Seite; eine ID, die es nicht gibt, passt auf niemanden.",
+        "idRequired": "Die ID ist erforderlich."
+      }
+    },
+    "settingsPage": {
+      "sectionsNav": "Einstellungsabschnitte",
+      "sectionUnsaved": "(ungespeicherte Änderungen)",
+      "sectionUnsavedBadge": "Ungespeicherte Änderungen"
+    },
+    "load": {
+      "title": "Laden fehlgeschlagen: {{resource}}",
+      "nothingChanged": "Es wurde nichts geändert.",
+      "rateLimited": "Gerade zu viele Anfragen.",
+      "retry": "Erneut versuchen",
+      "retrying": "Wird erneut versucht…",
+      "retryIn": "Erneut versuchen in {{seconds}} s",
+      "forbiddenTitle": "Kein Zugriff: {{resource}}",
+      "forbidden": "Ihr Konto hat keinen Zugriff auf diese Seite.",
+      "notFoundTitle": "Nicht gefunden: {{resource}}",
+      "notFound": "Es wurde möglicherweise gelöscht oder umbenannt.",
+      "resourceFallback": "Eintrag"
+    },
+    "browserExtension": {
+      "resource": "Einstellungen der Browser-Erweiterung"
+    },
+    "cors": {
+      "title": "CORS-Konfiguration"
     }
   },
   "cloudStorage": {
@@ -7356,11 +7661,11 @@
     }
   },
   "feedback": {
-    "ratingHeading": "Bewerte diese Antwort",
-    "commentPlaceholder": "Erzähle uns mehr über deine Bewertung (optional)",
+    "ratingHeading": "Bewerten Sie diese Antwort",
+    "commentPlaceholder": "Erzählen Sie uns mehr über Ihre Bewertung (optional)",
     "rated": "Bewertet",
     "sendFeedback": "Feedback senden",
-    "thankYou": "Danke für dein Feedback!",
+    "thankYou": "Danke für Ihr Feedback!",
     "sending": "Wird gesendet..."
   },
   "auth": {
@@ -7884,11 +8189,10 @@
       "back": "Zurück",
       "boundaryEdgesRemoved": "Verbindungen über die Schleifengrenze wurden entfernt — bitte innerhalb oder außerhalb der Schleife neu verbinden.",
       "chatIntegrationLink": "Chat-Anbindung",
-      "chatIntegrationLinkHint": "Verfügbarkeit im Chat, die Darstellung der Antwort und ihre Beschreibung werden auf der Workflow-Seite festgelegt. Nicht gespeicherte Änderungen auf der Arbeitsfläche gehen verloren.",
+      "chatIntegrationLinkHint": "Verfügbarkeit im Chat, die Darstellung der Antwort und ihre Beschreibung werden auf der Workflow-Seite festgelegt.",
       "chatVisible": "Fortschritt im Chat anzeigen",
       "config": "Konfiguration",
       "configJson": "Konfiguration (JSON)",
-      "confirmDeleteNode": "Diesen Knoten löschen?",
       "copied": "kopiert",
       "deleteEdge": "Verbindung löschen",
       "deleteNode": "Knoten löschen",
@@ -7960,9 +8264,6 @@
       "progressNoteWhenHelp": "Optionale Bedingung. Leer lassen, um den Hinweis immer anzuzeigen.",
       "promptId": "Workflow-ID eingeben:",
       "promptIdHint": "Nur Buchstaben, Zahlen, Punkte, Unterstriche und Bindestriche.",
-      "publish": "Veröffentlichen",
-      "publishFailed": "Veröffentlichen fehlgeschlagen: {{message}}",
-      "publishSuccess": "Workflow erfolgreich veröffentlicht",
       "save": "Speichern",
       "saveFailed": "Speichern fehlgeschlagen: {{message}}",
       "saveSuccess": "Workflow gespeichert",
@@ -8053,7 +8354,23 @@
           "wait": "Warten, bis das Dokument bereit ist",
           "outputHelp": "Zustandsvariable für das gespeicherte Dokument. Standard: {{name}}. Lassen Sie „Warten“ an, wenn ein späterer Schritt das Dokument liest."
         }
-      }
+      },
+      "localizedField": {
+        "addLanguages": "Sprachen hinzufügen",
+        "addLanguagesTitle": "Diesen Text je Sprache eingeben",
+        "addLanguage": "Sprache hinzufügen",
+        "removeLanguage": "{{lang}} entfernen"
+      },
+      "human": {
+        "optionLabel": "Beschriftung",
+        "optionValueN": "Wert von Option {{n}}",
+        "optionLabelN": "Beschriftung von Option {{n}}",
+        "optionStyleN": "Stil von Option {{n}}",
+        "removeOptionN": "Option {{n}} entfernen",
+        "noOptions": "Fügen Sie mindestens eine Option hinzu. Ohne Option kann niemand diesen Schritt beantworten, und der Lauf wartet, bis er abgebrochen wird."
+      },
+      "deleteNodeTitle": "Knoten „{{name}}“ löschen?",
+      "deleteNodeConsequence": "Der Knoten, die darin verschachtelten Schritte und ihre Verbindungen werden entfernt. Der Workflow behält seine gespeicherte Fassung, bis Sie speichern."
     },
     "checkpointAwaiting": "Wartet auf Ihre Eingabe",
     "join": "Beitreten",
@@ -9621,11 +9938,13 @@
     "save": "Speichern",
     "saving": "Speichern…",
     "clear": "Leeren",
-    "clearConfirm": "Alle Notizen leeren? Das entfernt alles, was bisher geschrieben wurde.",
     "reload": "Neu laden (meine Änderungen verwerfen)",
     "keepEditing": "Weiter bearbeiten",
     "versionConflict": "Konflikt: Das Gedächtnis wurde an anderer Stelle geändert. Neu laden, um den aktuellen Stand zu sehen.",
-    "staleNotice": "Die Notizen haben sich geändert, seit Sie mit dem Bearbeiten begonnen haben (ein Lauf hat sie evtl. aktualisiert)."
+    "staleNotice": "Die Notizen haben sich geändert, seit Sie mit dem Bearbeiten begonnen haben (ein Lauf hat sie evtl. aktualisiert).",
+    "clearTitle": "Alle Notizen löschen?",
+    "clearAction": "Notizen löschen",
+    "clearConsequence": "Alles bisher Geschriebene wird entfernt."
   },
   "usageGuide": {
     "question": "Wie nutze ich diese App?",
@@ -10762,7 +11081,13 @@
     "COPILOT_REFERENCE_ID_MISSING": "Für den Copilot-Agenten ist noch keine Referenz-ID eingetragen.",
     "COPILOT_PUBLIC_HTTPS_REQUIRED": "Der Copilot-Agent benötigt eine öffentliche HTTPS-Adresse.",
     "INTEGRATION_AUTH_REQUIRED": "Verbinden Sie Ihr Konto, um diese Integration zu nutzen.",
-    "AI_ACKNOWLEDGEMENT_REQUIRED": "Bitte bestätigen Sie den KI-Hinweis, bevor Sie Nachrichten senden."
+    "AI_ACKNOWLEDGEMENT_REQUIRED": "Bitte bestätigen Sie den KI-Hinweis, bevor Sie Nachrichten senden.",
+    "AUTH_LOCKOUT": "Diese Änderung würde die Anmeldemethode abschalten, mit der Sie angemeldet sind, oder keinen Administrator übrig lassen, der sich anmelden kann. Es wurde nichts geändert. So wechseln Sie die Methode: Aktivieren Sie die neue Methode und speichern Sie, melden Sie sich einmal damit an, geben Sie diesem Benutzer auf der Seite „Benutzer“ eine Administratorgruppe (eine Gruppenzuordnung des Identitätsanbieters allein zählt nicht), melden Sie sich damit als dieser Administrator an und schalten Sie erst dann die alte Methode ab.",
+    "LAST_ADMIN": "Diese Änderung würde keinen aktiven Administrator übrig lassen, der sich anmelden kann. Es wurde nichts geändert. Geben Sie zuerst einem anderen aktiven Benutzer Administratorrechte.",
+    "SELF_LOCKOUT": "Sie können Ihr eigenes Konto nicht deaktivieren oder löschen. Bitten Sie einen anderen Administrator darum.",
+    "GROUP_IN_USE": "Die Gruppe „{{groupId}}“ kann nicht gelöscht werden, weil andere Gruppen von ihr erben. Entfernen Sie sie zuerst aus deren geerbten Gruppen.",
+    "ADMIN_CHECK_FAILED": "Es konnte nicht geprüft werden, ob ein Administrator Zugriff behält, daher wurde nichts geändert. Bitte versuchen Sie es erneut.",
+    "PRECONDITION_FAILED": "Diese Konfiguration wurde geändert, nachdem Sie sie geöffnet haben (von einem anderen Administrator, in einem anderen Tab oder durch ein Skript). Es wurde nichts gespeichert, Ihre Änderungen sind noch auf der Seite. Laden Sie neu, um den aktuellen Stand zu sehen, und übernehmen Sie Ihre Änderungen dann erneut."
   },
   "workspace": {
     "backTo": "Zurück zu {{name}}",

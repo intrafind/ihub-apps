@@ -1,16 +1,20 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { apiClient } from '../../../api/client';
+import useSurface from '../../../shared/hooks/useSurface';
 import { WorkflowEditor } from '../../workflows/editor/WorkflowEditor';
 import {
   workflowToFlow,
   flowToWorkflow,
-  createStarterWorkflow
+  createStarterWorkflow,
+  workflowSaveErrorMessage
 } from '../../workflows/editor/workflowEditorUtils';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
 
 /** Same character class enforced by validateIdForPath() on the server. */
 const VALID_ID_PATTERN = /^[a-zA-Z0-9._-]+$/;
@@ -18,11 +22,13 @@ const VALID_ID_PATTERN = /^[a-zA-Z0-9._-]+$/;
 /**
  * Admin page for visually editing a workflow using the React Flow-based editor.
  * Supports creating new workflows (id="new") and editing existing ones.
- * Provides save and publish functionality via the workflow API.
+ * Saves through the workflow API.
  *
  * Route: /admin/workflows/:id/edit
  */
 function WorkflowEditorPage() {
+  // The editor is full screen, outside AdminLayout, so it marks the admin surface itself.
+  useSurface('admin');
   const { id } = useParams();
   const navigate = useNavigate();
   const { t } = useTranslation();
@@ -36,6 +42,28 @@ function WorkflowEditorPage() {
   const [idValue, setIdValue] = useState('');
 
   const isNew = id === 'new';
+  // The canvas as the editor holds it right now ({ nodes, edges }), reported by
+  // WorkflowEditor; null until the editor mounted.
+  const [flow, setFlow] = useState(null);
+
+  // Unsaved-changes guard (AX-B6): compare the workflow the canvas would save
+  // with the one it was opened from. Comparing the saved shape, not React
+  // Flow's nodes, ignores selection and measuring. While loading, after a failed
+  // load, or before the editor reported its canvas, nothing is dirty.
+  const initialFlow = useMemo(() => (workflow ? workflowToFlow(workflow) : null), [workflow]);
+  const loadedShape = useMemo(
+    () => (initialFlow ? flowToWorkflow(initialFlow.nodes, initialFlow.edges, workflow) : null),
+    [initialFlow, workflow]
+  );
+  // After a save the baseline is exactly what was sent.
+  const [savedShapeAfterSave, setSavedShapeAfterSave] = useState(null);
+  const savedShape = savedShapeAfterSave ?? loadedShape;
+  const editedShape = useMemo(
+    () => (flow && workflow ? flowToWorkflow(flow.nodes, flow.edges, workflow) : savedShape),
+    [flow, workflow, savedShape]
+  );
+  const { blocker, markSaved } = useUnsavedChanges(savedShape, editedShape);
+  const handleFlowChange = useCallback((nodes, edges) => setFlow({ nodes, edges }), []);
 
   const showToast = useCallback((kind, message) => {
     setToast({ kind, message });
@@ -44,6 +72,8 @@ function WorkflowEditorPage() {
 
   useEffect(() => {
     const loadWorkflow = async () => {
+      setFlow(null);
+      setSavedShapeAfterSave(null);
       if (isNew) {
         // Start from the shared starter so the canvas opens with connected
         // Start and End steps and the workflow is valid the moment it saves.
@@ -82,24 +112,29 @@ function WorkflowEditorPage() {
       try {
         if (isNew) {
           await apiClient.post('/workflows', updated);
+          // Saved: moving to the new workflow's own URL loses nothing.
+          markSaved();
           navigate(`/admin/workflows/${updated.id}/edit`, { replace: true });
         } else {
           await apiClient.put(`/workflows/${id}`, updated);
         }
         setWorkflow(updated);
+        setSavedShapeAfterSave(updated);
         showToast('success', t('workflows.editor.saveSuccess', 'Workflow saved'));
         return updated.id || id;
       } catch (err) {
         showToast(
           'error',
-          t('workflows.editor.saveFailed', 'Save failed: {{message}}', { message: err.message })
+          t('workflows.editor.saveFailed', 'Save failed: {{message}}', {
+            message: workflowSaveErrorMessage(err)
+          })
         );
         return null;
       } finally {
         setSaving(false);
       }
     },
-    [isNew, id, navigate, t, showToast]
+    [isNew, id, navigate, t, showToast, markSaved]
   );
 
   /**
@@ -139,34 +174,6 @@ function WorkflowEditorPage() {
     await persistWorkflow(updated);
   }, [idValue, idDialog, persistWorkflow, showToast, t]);
 
-  /**
-   * Publishes the workflow by saving first, then calling the publish endpoint.
-   */
-  const handlePublish = useCallback(
-    async (rfNodes, rfEdges) => {
-      // The ID dialog is asynchronous: on a brand-new workflow `handleSave`
-      // opens it and returns without saving. Publishing anyway would POST to
-      // /workflows/new/publish and fail on top of the open dialog.
-      const savedId = await handleSave(rfNodes, rfEdges);
-      if (!savedId) return;
-      try {
-        await apiClient.post(`/workflows/${savedId}/publish`);
-        showToast(
-          'success',
-          t('workflows.editor.publishSuccess', 'Workflow published successfully')
-        );
-      } catch (err) {
-        showToast(
-          'error',
-          t('workflows.editor.publishFailed', 'Publish failed: {{message}}', {
-            message: err.message
-          })
-        );
-      }
-    },
-    [handleSave, workflow, id, t, showToast]
-  );
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -185,7 +192,7 @@ function WorkflowEditorPage() {
     );
   }
 
-  const { nodes: initialNodes, edges: initialEdges } = workflowToFlow(workflow);
+  const { nodes: initialNodes, edges: initialEdges } = initialFlow;
 
   return (
     <div className="h-full min-h-0 flex flex-col">
@@ -203,17 +210,9 @@ function WorkflowEditorPage() {
               : (typeof workflow?.name === 'object' ? workflow.name.en : workflow?.name) ||
                 t('workflows.editor.title', 'Workflow Editor')}
           </h1>
-          {workflow?.status && (
-            <span
-              className={`text-xs px-2 py-0.5 rounded ${
-                workflow.status === 'published'
-                  ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
-                  : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'
-              }`}
-            >
-              {workflow.status}
-            </span>
-          )}
+          {/* No Publish button and no draft/published pill: publishing wrote a
+              snapshot nothing reads, and draft and published workflows run
+              the same (AX-B11). A stored `status` is saved back unchanged. */}
         </div>
         <div className="flex items-center gap-4">
           {saving && (
@@ -228,7 +227,7 @@ function WorkflowEditorPage() {
               to={`/admin/workflows/${id}`}
               title={t(
                 'workflows.editor.chatIntegrationLinkHint',
-                'Availability in chat, the result shown there and its format are set on the workflow page. Unsaved changes on the canvas are lost.'
+                'Availability in chat, the result shown there and its format are set on the workflow page.'
               )}
               className="text-sm text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300"
             >
@@ -243,7 +242,7 @@ function WorkflowEditorPage() {
           initialNodes={initialNodes}
           initialEdges={initialEdges}
           onSave={handleSave}
-          onPublish={handlePublish}
+          onFlowChange={handleFlowChange}
         />
         {toast && (
           <div
@@ -280,7 +279,7 @@ function WorkflowEditorPage() {
                 }}
                 autoFocus
                 placeholder="my-workflow"
-                className="w-full text-sm border border-gray-300 dark:border-gray-600 rounded-sm px-2 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                className="w-full text-sm border border-admin-control-border dark:border-admin-control-border-dark rounded-sm px-2 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
               />
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 {t(
@@ -306,6 +305,7 @@ function WorkflowEditorPage() {
           </div>
         )}
       </div>
+      <UnsavedChangesDialog blocker={blocker} />
     </div>
   );
 }

@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { APPROVAL_MODES, DATA_FLOWS, SIDE_EFFECTS } from '../../../../../shared/toolApproval.js';
 
 const SELECT_CLASS =
-  'w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm';
+  'w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm';
 
 /**
  * The label of an approval mode, translated.

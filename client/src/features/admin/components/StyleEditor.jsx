@@ -12,6 +12,9 @@ const isValidHexColor = color => {
 function StyleEditor({ config, onUpdate, t }) {
   const [activeSection, setActiveSection] = useState('theme');
   const [colorErrors, setColorErrors] = useState({});
+  // Inline "add CSS variable" form (replaces two window.prompt() calls, CU-B24).
+  const [newVariable, setNewVariable] = useState(null);
+  const [newVariableError, setNewVariableError] = useState(null);
 
   // Handle theme color changes at the root theme level
   const handleThemeColorChange = (colorKey, color, isDarkMode = false) => {
@@ -56,14 +59,29 @@ function StyleEditor({ config, onUpdate, t }) {
     onUpdate(updatedConfig);
   };
 
-  const addCssVariable = () => {
-    const name = prompt(
-      t('admin.ui.styles.addVariableName', 'Enter CSS variable name (without --):')
-    );
-    if (!name) return;
+  const startAddingCssVariable = () => {
+    setNewVariable({ name: '', value: '' });
+    setNewVariableError(null);
+  };
 
-    const value = prompt(t('admin.ui.styles.addVariableValue', 'Enter CSS variable value:'));
-    if (!value) return;
+  const cancelAddingCssVariable = () => {
+    setNewVariable(null);
+    setNewVariableError(null);
+  };
+
+  /**
+   * Adds the variable from the inline form. The name is entered without the
+   * leading `--` (a typed `--` is stripped); both fields are required.
+   */
+  const addCssVariable = () => {
+    const name = (newVariable?.name || '').trim().replace(/^--/, '');
+    const value = (newVariable?.value || '').trim();
+    if (!name || !value) {
+      setNewVariableError(
+        t('admin.ui.styles.addVariableRequired', 'Enter a name and a value for the variable.')
+      );
+      return;
+    }
 
     const updatedConfig = {
       ...config,
@@ -76,6 +94,8 @@ function StyleEditor({ config, onUpdate, t }) {
       }
     };
     onUpdate(updatedConfig);
+    setNewVariable(null);
+    setNewVariableError(null);
   };
 
   const updateCssVariable = (name, value) => {
@@ -266,7 +286,7 @@ function StyleEditor({ config, onUpdate, t }) {
                         })}
                         value={currentColor}
                         onChange={e => handleThemeColorChange(key, e.target.value)}
-                        className="w-10 h-10 rounded-md border-2 border-gray-300 dark:border-gray-600 shadow-xs cursor-pointer"
+                        className="w-10 h-10 rounded-md border-2 border-admin-control-border dark:border-admin-control-border-dark shadow-xs cursor-pointer"
                       />
                       <input
                         id={`theme-color-${key}`}
@@ -276,7 +296,7 @@ function StyleEditor({ config, onUpdate, t }) {
                         className={`flex-1 px-3 py-2 border rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 ${
                           colorErrors[key]
                             ? 'border-red-500'
-                            : 'border-gray-300 dark:border-gray-600'
+                            : 'border-admin-control-border dark:border-admin-control-border-dark'
                         }`}
                         placeholder={defaultColor}
                       />
@@ -340,7 +360,7 @@ function StyleEditor({ config, onUpdate, t }) {
                         })}
                         value={currentColor || defaultColor}
                         onChange={e => handleThemeColorChange(key, e.target.value, true)}
-                        className="w-10 h-10 rounded-md border-2 border-gray-300 dark:border-gray-600 shadow-xs cursor-pointer"
+                        className="w-10 h-10 rounded-md border-2 border-admin-control-border dark:border-admin-control-border-dark shadow-xs cursor-pointer"
                       />
                       <input
                         id={`theme-color-dark-${key}`}
@@ -350,7 +370,7 @@ function StyleEditor({ config, onUpdate, t }) {
                         className={`flex-1 px-3 py-2 border rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 ${
                           colorErrors[errorKey]
                             ? 'border-red-500'
-                            : 'border-gray-300 dark:border-gray-600'
+                            : 'border-admin-control-border dark:border-admin-control-border-dark'
                         }`}
                         placeholder={defaultColor}
                       />
@@ -487,7 +507,7 @@ function StyleEditor({ config, onUpdate, t }) {
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }`}
               rows={15}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+              className="w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
             />
 
             <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
@@ -536,12 +556,92 @@ function StyleEditor({ config, onUpdate, t }) {
               </p>
             </div>
             <button
-              onClick={addCssVariable}
-              className="px-3 py-2 bg-indigo-600 text-white text-sm rounded-md hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+              type="button"
+              onClick={startAddingCssVariable}
+              disabled={Boolean(newVariable)}
+              className="px-3 py-2 bg-indigo-600 text-white text-sm rounded-md hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
             >
               {t('admin.ui.styles.addVariable', 'Add Variable')}
             </button>
           </div>
+
+          {newVariable && (
+            <div
+              className="p-3 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800"
+              data-testid="add-css-variable-form"
+            >
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label
+                    htmlFor="new-css-variable-name"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                  >
+                    {t('admin.ui.styles.variableName', 'Name (without --)')}
+                  </label>
+                  <input
+                    id="new-css-variable-name"
+                    type="text"
+                    // The form opens on an explicit click; focus belongs in it.
+                    // eslint-disable-next-line jsx-a11y/no-autofocus
+                    autoFocus
+                    value={newVariable.name}
+                    onChange={e => setNewVariable(prev => ({ ...prev, name: e.target.value }))}
+                    aria-invalid={newVariableError ? 'true' : undefined}
+                    aria-describedby={newVariableError ? 'new-css-variable-error' : undefined}
+                    className="w-full px-3 py-1 border border-admin-control-border dark:border-admin-control-border-dark rounded-sm text-sm font-mono bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="new-css-variable-value"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                  >
+                    {t('admin.ui.styles.variableValue', 'Value')}
+                  </label>
+                  <input
+                    id="new-css-variable-value"
+                    type="text"
+                    value={newVariable.value}
+                    onChange={e => setNewVariable(prev => ({ ...prev, value: e.target.value }))}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        addCssVariable();
+                      }
+                    }}
+                    aria-invalid={newVariableError ? 'true' : undefined}
+                    aria-describedby={newVariableError ? 'new-css-variable-error' : undefined}
+                    className="w-full px-3 py-1 border border-admin-control-border dark:border-admin-control-border-dark rounded-sm text-sm font-mono bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                  />
+                </div>
+              </div>
+              {newVariableError && (
+                <p
+                  id="new-css-variable-error"
+                  role="alert"
+                  className="mt-2 text-sm text-red-700 dark:text-red-300"
+                >
+                  {newVariableError}
+                </p>
+              )}
+              <div className="mt-3 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={cancelAddingCssVariable}
+                  className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
+                >
+                  {t('common.cancel', 'Cancel')}
+                </button>
+                <button
+                  type="button"
+                  onClick={addCssVariable}
+                  className="px-3 py-1.5 bg-indigo-600 text-white text-sm rounded-md hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                >
+                  {t('admin.ui.styles.addVariableConfirm', 'Add variable')}
+                </button>
+              </div>
+            </div>
+          )}
 
           <div className="space-y-3">
             {config.theme?.cssVariables ? (
@@ -557,7 +657,7 @@ function StyleEditor({ config, onUpdate, t }) {
                     type="text"
                     value={value}
                     onChange={e => updateCssVariable(name, e.target.value)}
-                    className="flex-1 px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-sm text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                    className="flex-1 px-3 py-1 border border-admin-control-border dark:border-admin-control-border-dark rounded-sm text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                   />
                   <button
                     onClick={() => removeCssVariable(name)}

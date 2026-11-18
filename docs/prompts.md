@@ -44,7 +44,7 @@ The schema is enforced by `server/validators/promptConfigSchema.js` using Zod. A
 | `enabled` | boolean | No | Whether the prompt is visible to users. Defaults to `true`. |
 | `order` | integer | No | Display order (ascending). Prompts without an order appear after ordered ones. |
 | `category` | string | No | Category ID for filtering. Must match a category defined in `ui.json` > `promptsList.categories`. |
-| `appId` | string | No | If set, this prompt is only offered when the user is in the specified app. |
+| `appId` | string | No | The app the prompt opens in when a user picks it in the prompt library, if the user may open that app (otherwise the default chat app). In that app's prompt search it is listed first. It does **not** limit who sees the prompt. In the admin editor this is **Opens in app**. |
 | `variables` | array | No | Input variable definitions. See Variables below. |
 | `actions` | array | No | Action buttons shown alongside the prompt. See Actions below. |
 | `outputSchema` | object | No | JSON Schema object describing the expected structured output. |
@@ -144,9 +144,9 @@ Use `outputSchema` to request structured JSON output from the LLM. The schema fo
 }
 ```
 
-### App-Scoped Prompt — FAQ Bot
+### App-Linked Prompt — FAQ Bot
 
-This prompt is only available when the user is inside the `faq-bot` app:
+This prompt opens in the `faq-bot` app and is listed first in that app's prompt search:
 
 ```json
 {

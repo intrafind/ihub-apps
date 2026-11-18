@@ -90,7 +90,7 @@ function WebSearchSection({ app, onChange, engines = null }) {
                   value={provider}
                   onChange={e => handleWebSearchChange({ provider: e.target.value })}
                   aria-describedby="websearch-engine-desc"
-                  className="mt-1 block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                  className="mt-1 block w-full rounded-lg border border-admin-control-border shadow-xs focus:border-admin-accent focus:ring-admin-accent sm:text-sm dark:bg-gray-700 dark:border-admin-control-border-dark dark:text-gray-100"
                 >
                   <option value={AUTO_ENGINE}>
                     {t('admin.apps.edit.websearchProviderAuto', 'Auto')}
@@ -221,7 +221,7 @@ function WebSearchSection({ app, onChange, engines = null }) {
                     onChange={e =>
                       handleWebSearchChange({ maxSearches: Number.parseInt(e.target.value) || 5 })
                     }
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    className="mt-1 block w-full rounded-md border border-admin-control-border dark:border-admin-control-border-dark shadow-xs focus:border-admin-accent focus:ring-admin-accent sm:text-sm"
                   />
                 </div>
               )}
@@ -247,7 +247,7 @@ function WebSearchSection({ app, onChange, engines = null }) {
                       maxPageReads: Math.min(50, Math.max(1, Number.parseInt(e.target.value) || 5))
                     })
                   }
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  className="mt-1 block w-full rounded-md border border-admin-control-border dark:border-admin-control-border-dark shadow-xs focus:border-admin-accent focus:ring-admin-accent sm:text-sm"
                 />
               </div>
 
@@ -264,7 +264,7 @@ function WebSearchSection({ app, onChange, engines = null }) {
                   onChange={e =>
                     handleWebSearchChange({ maxResults: Number.parseInt(e.target.value) || 5 })
                   }
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  className="mt-1 block w-full rounded-md border border-admin-control-border dark:border-admin-control-border-dark shadow-xs focus:border-admin-accent focus:ring-admin-accent sm:text-sm"
                 />
               </div>
 
@@ -319,7 +319,7 @@ function WebSearchSection({ app, onChange, engines = null }) {
                         contentMaxLength: Number.parseInt(e.target.value) || 3000
                       })
                     }
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    className="mt-1 block w-full rounded-md border border-admin-control-border dark:border-admin-control-border-dark shadow-xs focus:border-admin-accent focus:ring-admin-accent sm:text-sm"
                   />
                 </div>
               )}
@@ -429,7 +429,7 @@ function WebSearchSection({ app, onChange, engines = null }) {
                     onChange={e =>
                       handleWebSearchChange({ researchGuidance: e.target.value || true })
                     }
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    className="mt-1 block w-full rounded-md border border-admin-control-border dark:border-admin-control-border-dark shadow-xs focus:border-admin-accent focus:ring-admin-accent sm:text-sm"
                   />
                 </div>
               )}

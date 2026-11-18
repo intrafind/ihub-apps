@@ -22,6 +22,10 @@ import ModelsSetupStrip from '../components/ModelsSetupStrip';
 import MoreActionsMenu from '../components/MoreActionsMenu';
 import { describeModelProvider } from '../utils/modelsArea';
 import { apiTypeLabel } from '../utils/modelImport';
+import ConfirmDialog from '../../../shared/components/ConfirmDialog';
+import { useConfirmAction } from '../hooks/useConfirmAction';
+import { buildBulkToggleConfirm } from '../utils/bulkToggleConfirm';
+import { deleteConfirmText } from '../utils/confirmText';
 
 function ModelNameCell({ model, currentLanguage }) {
   return (
@@ -126,6 +130,7 @@ function ProviderCell({ model, providers, language, t }) {
 function AdminModelsPage() {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
+  const { requestConfirm, dialogProps: confirmDialogProps } = useConfirmAction();
   const navigate = useNavigate();
   const location = useLocation();
   const featureFlags = useFeatureFlags();
@@ -194,22 +199,51 @@ function AdminModelsPage() {
     }
   };
 
-  const enableAllModels = async () => {
-    try {
-      await toggleModels('*', true);
-      setModels(prev => prev.map(m => ({ ...m, enabled: true })));
-    } catch (err) {
-      setError(getAdminApiErrorMessage(err));
-    }
-  };
+  const modelName = model => getLocalizedContent(model.name, currentLanguage) || model.id;
 
-  const disableAllModels = async () => {
-    try {
-      await toggleModels('*', false);
-      setModels(prev => prev.map(m => ({ ...m, enabled: false, default: false })));
-    } catch (err) {
-      setError(getAdminApiErrorMessage(err));
-    }
+  /**
+   * Enable All / Disable All toggle every model (`*`) for every user, so they
+   * open a confirmation naming the count and the models first (AI-B2).
+   *
+   * Disable All also clears the default flag on every model (the server sets
+   * `default: false` on each disabled model). When models are enabled again,
+   * the server makes the first enabled chat model the default, which is not
+   * necessarily the previous one. The dialog says so.
+   *
+   * @param {boolean} enable - Target state.
+   */
+  const confirmToggleAll = enable => {
+    const currentDefault = models.find(m => m.default === true);
+    const extraConsequences = enable
+      ? []
+      : [
+          currentDefault
+            ? t('admin.models.disableAllDefaultNamed', {
+                name: modelName(currentDefault),
+                defaultValue:
+                  'The default model setting is cleared ("{{name}}" is the default now). When models are enabled again, the first chat model in the list becomes the default, not necessarily "{{name}}".'
+              })
+            : t(
+                'admin.models.disableAllDefault',
+                'The default model setting is cleared. When models are enabled again, the first chat model in the list becomes the default.'
+              )
+        ];
+    requestConfirm({
+      ...buildBulkToggleConfirm({
+        items: models,
+        enable,
+        itemsLabel: t('admin.confirm.plural.models', 'models'),
+        getName: modelName,
+        t,
+        extraConsequences
+      }),
+      action: async () => {
+        await toggleModels('*', enable);
+        // Reload instead of patching the list: enabling makes the server pick
+        // a new default model, which only the server's list shows.
+        await loadModels();
+      }
+    });
   };
 
   const testModel = async modelId => {
@@ -249,14 +283,14 @@ function AdminModelsPage() {
     navigate('/admin/models/new', { state: { templateModel: model } });
   };
 
-  const handleDeleteModel = async modelId => {
-    if (!confirm(t('admin.models.deleteConfirm', 'Delete this model?'))) return;
-    try {
-      await makeAdminApiCall(`/admin/models/${modelId}`, { method: 'DELETE' });
-      setModels(prev => prev.filter(m => m.id !== modelId));
-    } catch (err) {
-      setError(getAdminApiErrorMessage(err));
-    }
+  const handleDeleteModel = model => {
+    requestConfirm({
+      ...deleteConfirmText({ typeKey: 'model', typeFallback: 'model', name: modelName(model), t }),
+      action: async () => {
+        await makeAdminApiCall(`/admin/models/${model.id}`, { method: 'DELETE' });
+        setModels(prev => prev.filter(m => m.id !== model.id));
+      }
+    });
   };
 
   const downloadModelConfig = async modelId => {
@@ -432,7 +466,7 @@ function AdminModelsPage() {
       label: t('admin.models.delete', 'Delete'),
       icon: 'trash',
       destructive: true,
-      onClick: m => handleDeleteModel(m.id)
+      onClick: m => handleDeleteModel(m)
     }
   ];
 
@@ -551,13 +585,13 @@ function AdminModelsPage() {
                   {
                     id: 'enableAll',
                     label: t('admin.common.enableAll', 'Enable All'),
-                    onSelect: enableAllModels
+                    onSelect: () => confirmToggleAll(true)
                   },
                   {
                     id: 'disableAll',
                     label: t('admin.common.disableAll', 'Disable All'),
                     destructive: true,
-                    onSelect: disableAllModels
+                    onSelect: () => confirmToggleAll(false)
                   }
                 ]}
               />
@@ -667,6 +701,7 @@ function AdminModelsPage() {
           />
         )}
       </div>
+      <ConfirmDialog {...confirmDialogProps} />
     </div>
   );
 }

@@ -4,6 +4,7 @@
 import { useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../../shared/components/Icon';
+import { CHECKBOX_CLASS } from '../formStyles';
 
 /** Human-readable size, e.g. "148.2 MB". */
 export function formatBytes(bytes) {
@@ -205,7 +206,7 @@ function StagedUpdatePanel({ summary, busy, onApply, onDiscard }) {
             <label className="flex items-start gap-2 text-sm text-gray-800 dark:text-gray-200">
               <input
                 type="checkbox"
-                className="mt-0.5 h-4 w-4 rounded border-gray-300"
+                className={`${CHECKBOX_CLASS} mt-0.5`}
                 checked={confirmDowngrade}
                 onChange={event => setConfirmDowngrade(event.target.checked)}
               />
@@ -237,7 +238,7 @@ function StagedUpdatePanel({ summary, busy, onApply, onDiscard }) {
                 spellCheck={false}
                 value={typedVersion}
                 onChange={event => setTypedVersion(event.target.value)}
-                className="mt-1 block w-48 rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 shadow-xs text-sm"
+                className="mt-1 block w-48 rounded-md border border-admin-control-border dark:border-admin-control-border-dark dark:bg-gray-700 dark:text-gray-100 shadow-xs text-sm"
               />
             </div>
           )}

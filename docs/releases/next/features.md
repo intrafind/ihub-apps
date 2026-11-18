@@ -791,8 +791,9 @@ See [Marketplace → Air-gapped installations](../../marketplace.md#air-gapped-i
 ## Localization: Edit Translation Overrides in the Admin UI
 
 **Admin → Customization → Localization** now lets you overwrite labels and translations without
-editing files. The editor opens on the keys you changed; search by key or text to find any other
-label, edit it per language and save, or reset a key to the built-in text. Changes are stored in
+editing files. Search by key or text to find any label, edit it per language and save, or reset a
+key to the built-in text; tick **Changed only** to list just the keys you changed. An unsaved edit
+stays with its language when you switch languages. Changes are stored in
 `contents/locales/{lang}.json` and apply immediately.
 
 ## Configure Group Inheritance in the Group Editor
@@ -2269,6 +2270,52 @@ popup and of the hint under the chat input, the hint text and link (previously o
 confirmed, so raising the version shows it again, as the setting always promised; visitors who confirmed
 earlier are not asked again until the next change. See [UI Configuration](../../ui.md#disclaimer-configuration).
 
+## Admin Settings Warn When Someone Else Saved First
+
+When two administrators, two browser tabs or a script change the platform settings or **UI
+Customization** at the same time, the later save no longer silently overwrites the earlier one.
+This applies to **Authentication**, **MCP gateway**, **UI Customization**, **Localization** and the
+global prompt variables on **Prompts**, each checked against the version it loaded: the save is refused
+with a dialog, **This changed since you opened it**; your edits stay on the page. **Reload and
+discard my changes** loads the current settings, and **Keep my changes and overwrite on next save**
+lets you save over the newer version deliberately. **Close** (or Escape) only closes the dialog:
+nothing is overwritten and the next save is refused again. See
+[Admin UI → When someone else saved first](../../admin-ui.md#when-someone-else-saved-first).
+
+For scripts, `GET /api/admin/configs/platform` and `GET /api/admin/ui/config` return an `ETag`;
+sending it back as `If-Match` makes a save fail with `412 PRECONDITION_FAILED` when the file
+changed in between (without `If-Match` nothing changes). The UI `ETag` leaves out `pages`, which
+that save never writes. The new
+`PATCH /api/admin/configs/platform` changes only the fields it names (JSON Merge Patch) and runs
+the same checks as a full save. See
+[Platform Configuration → Changing platform.json through the admin API](../../platform.md#changing-platformjson-through-the-admin-api).
+
+## Admin API Rate Limit: API Clients Count Separately, Refused Tokens per Address
+
+Admin pages send many requests while they load. The admin API limit counts per signed-in user (see
+"Rate Limits Count per User, and Every Model Runs 25 Calls at Once" under breaking changes for the
+shipped values and the upgrade); two details apply to the admin API only:
+
+- An OAuth client or static API key counts per client, apart from any user of the same id.
+- Requests whose sign-in is refused (an invalid or expired token) never reach the per-user count;
+  they are counted per address with the limit for requests without a sign-in, so a flood of bad
+  tokens is still stopped without spending the budget of admins behind the same address.
+
+## Security: SSL Whitelist Hosts Are Shown as Trusted by the SSRF Guard
+
+Hosts on the SSL domain whitelist are also trusted by the SSRF guard, so web sources, website
+crawls, the page reader and the watermark detector may reach them even when they resolve to private
+network addresses (tools and MCP servers do not use this list).
+This was not visible anywhere. Nothing about the trust changes; it is now shown:
+
+- **Admin → Security → SSL / TLS** shows the domain whitelist even while **Ignore Invalid SSL
+  Certificates** is off, with a notice that these hosts are SSRF-trusted.
+- **Admin → Security → SSRF allowlist** lists the same hosts read-only, updated when the SSL card
+  is saved.
+- At startup the server logs a warning naming the hosts that are SSRF-trusted only through the SSL
+  whitelist. Add them to the SSRF allowlist (the same entry or a broader pattern) to make that trust
+  explicit, or remove them from the whitelist.
+  
 ## Chat: Interactive Artifacts Can Ask Follow-up Questions
 
 An HTML artifact can now turn a click into a question in the chat: a bar of a chart, a node of a
@@ -2372,3 +2419,13 @@ back on, older files left out for space, another model), the whole conversation 
   counted the first time they are used again. Project documents use the count stored with them.
 - A first message in a very long conversation (another model, or no stored figure yet) is counted
   from samples, within a few percent.
+
+## What's New Looks Like the Documentation
+
+**Admin → What's New** now has the layout of **Admin → Documentation**: a header with the breadcrumb and
+the documentation search, the releases on the left in the style of the documentation contents (a
+**Releases** drawer on small screens), the release notes in the documentation's reading column and
+typography — callouts, framed tables and highlighted code included — and **In this release** as a
+column on the right on wide screens, marking the entry you are reading. **Newer release** and **Older
+release** at the bottom move through the releases, and every release has its own address
+(`/admin/changelog?version=5.6.4`), so Back, a bookmark or a reload return to it.

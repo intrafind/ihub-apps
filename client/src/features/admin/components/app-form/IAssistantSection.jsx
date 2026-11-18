@@ -21,7 +21,7 @@ const BINDING_KEY = 'iassistant';
 const ASK_ACTION = 'ask';
 
 const INPUT_CLASS =
-  'mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed';
+  'mt-1 block w-full rounded-md border-admin-control-border shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-admin-control-border-dark dark:text-white disabled:opacity-60 disabled:cursor-not-allowed';
 
 /**
  * IAssistantSection - iAssistant integration configuration card for the App form.
@@ -259,7 +259,7 @@ function IAssistantSection({
                   checked={allSearchProfiles}
                   disabled={usesAssistant}
                   onChange={e => handleIAssistantChange({ allSearchProfiles: e.target.checked })}
-                  className="mt-0.5 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 disabled:opacity-60"
+                  className={`${CHECKBOX_CLASS} mt-0.5`}
                 />
                 <div>
                   <label
@@ -295,7 +295,7 @@ function IAssistantSection({
                   value={app.iassistant?.extraContext ?? ''}
                   onChange={e => handleIAssistantChange({ extraContext: e.target.value })}
                   rows={3}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  className="mt-1 block w-full rounded-md border border-admin-control-border shadow-xs focus:border-admin-accent focus:ring-admin-accent sm:text-sm dark:bg-gray-700 dark:border-admin-control-border-dark dark:text-white"
                 />
               </div>
 
@@ -314,7 +314,7 @@ function IAssistantSection({
                   value={app.iassistant?.systemPromptPreamble ?? ''}
                   onChange={e => handleIAssistantChange({ systemPromptPreamble: e.target.value })}
                   rows={3}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  className="mt-1 block w-full rounded-md border border-admin-control-border shadow-xs focus:border-admin-accent focus:ring-admin-accent sm:text-sm dark:bg-gray-700 dark:border-admin-control-border-dark dark:text-white"
                 />
               </div>
 

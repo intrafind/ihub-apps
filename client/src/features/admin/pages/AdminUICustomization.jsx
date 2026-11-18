@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import BrandingCustomization from '../components/BrandingCustomization';
@@ -16,13 +16,15 @@ import EuAiActCard from '../components/euAiAct/EuAiActCard';
 import AdminTabs from '../components/AdminTabs';
 import AdminSaveBar from '../components/AdminSaveBar';
 import AdminLoadError from '../components/AdminLoadError';
+import AdminLoadGate from '../components/AdminLoadGate';
+import { useAdminConfigLoad } from '../hooks/useAdminConfigLoad';
 import { CALLOUT_CLASS, SECONDARY_BUTTON_CLASS } from '../components/formStyles';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
-import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import { PRODUCT_NAME_REF } from '../../../../../shared/translationRefs.js';
+import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
 
 /** What the server requires of every saved configuration (server/routes/admin/ui.js). */
 const REQUIRED_SECTIONS = ['title', 'header', 'footer'];
@@ -43,6 +45,21 @@ const TAB_SLICES = {
   errorPages: config => [config.errorPages],
   assets: () => []
 };
+
+/**
+ * The page registry (`ui.json` → `pages`) as the start page picker reads it,
+ * from the list `GET /api/admin/pages` answers.
+ *
+ * @param {Array<{id: string, title?: Object, authRequired?: boolean, allowedGroups?: string[], contentType?: string}>} items
+ * @returns {Object<string, Object>} Pages by id
+ */
+export function pagesRegistryFromList(items) {
+  return Object.fromEntries(
+    (Array.isArray(items) ? items : [])
+      .filter(item => item && typeof item.id === 'string')
+      .map(({ id, ...page }) => [id, page])
+  );
+}
 
 /**
  * The configuration as it is stored: a site title or PWA name left empty follows
@@ -74,11 +91,17 @@ function AdminUICustomization() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [savedConfig, setSavedConfig] = useState(null);
   const [config, setConfig] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [successMessage, setSuccessMessage] = useState('');
   const { isDirty, blocker, markSaved } = useUnsavedChanges(savedConfig, config);
+  // The newest form state, so a save can tell whether the admin kept editing
+  // while its requests ran.
+  const latestConfigRef = useRef(config);
+  // The revision of the configuration this form loaded (or last saved): its
+  // save sends exactly this as If-Match, whatever other reads in the tab saw.
+  const revisionRef = useRef(null);
+  latestConfigRef.current = config;
 
   // The tab is part of the address, so a reload or a shared link keeps it.
   // Unknown values (the removed `content`, `pwa` tabs) land on the first tab.
@@ -91,28 +114,24 @@ function AdminUICustomization() {
 
   // Load the configuration once. A save replaces the form with what was saved;
   // reloading after `refreshUIConfig()` would overwrite edits made meanwhile.
-  useEffect(() => {
-    let cancelled = false;
-    const loadConfig = async () => {
-      try {
-        const response = await makeAdminApiCall('/admin/ui/config');
-        if (cancelled) return;
-        setSavedConfig(response.data);
-        setConfig(response.data);
-      } catch (err) {
-        console.error('Failed to load UI config:', err);
-        if (!cancelled) setError(err.message || 'Failed to load configuration');
-      } finally {
-        if (!cancelled) setLoading(false);
+  // Until it loaded there is no form and no Save (CU-B5); a failed load shows
+  // the error with Retry (UX-N4).
+  const load = useAdminConfigLoad({
+    sources: {
+      ui: {
+        load: async () =>
+          (await makeAdminApiCall('/admin/ui/config', { revision: revisionRef })).data,
+        onLoad: data => {
+          setSavedConfig(data);
+          setConfig(data);
+        }
       }
-    };
-    void loadConfig();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    }
+  });
+  const ready = load.status === 'ready';
 
   const handleSave = async () => {
+    if (!ready || !config) return;
     const toSave = normalizeUIConfig(config);
     const missing = REQUIRED_SECTIONS.find(section => !Object.hasOwn(toSave, section));
     if (missing) {
@@ -133,11 +152,25 @@ function AdminUICustomization() {
       await makeAdminApiCall('/admin/ui/config', {
         method: 'POST',
         body: { config: toSave },
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
+        revision: revisionRef
       });
-      markSaved();
-      setSavedConfig(toSave);
-      setConfig(toSave);
+      // The save keeps the stored page registry, whatever the form sent, so
+      // pages created elsewhere since this page loaded are read back for the
+      // start page picker. If that read fails, the form keeps its list.
+      let saved = toSave;
+      try {
+        const pagesResponse = await makeAdminApiCall('/admin/pages');
+        saved = { ...toSave, pages: pagesRegistryFromList(pagesResponse.data?.items) };
+      } catch (pagesError) {
+        console.warn('Could not refresh the page list after saving:', pagesError);
+      }
+      // What was sent is the new baseline. Edits made while the requests ran
+      // stay on the form (and stay unsaved); only the page list is refreshed.
+      const editedMeanwhile = latestConfigRef.current !== config;
+      if (!editedMeanwhile) markSaved();
+      setSavedConfig(saved);
+      setConfig(current => (current === config ? saved : { ...current, pages: saved.pages }));
       setSuccessMessage(t('admin.ui.saved', 'UI configuration saved successfully'));
       // Apply the change in this browser right away.
       await refreshUIConfig();
@@ -202,7 +235,7 @@ function AdminUICustomization() {
     icon: <Icon name={TAB_ICONS[tab.id]} size="sm" aria-hidden="true" />
   }));
 
-  if (loading) {
+  if (load.status === 'loading') {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
@@ -215,13 +248,21 @@ function AdminUICustomization() {
     );
   }
 
-  if (!config) {
+  if (!ready || !config) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-red-600 dark:text-red-400" role="alert">
-            {error || t('admin.ui.error', 'Failed to load configuration')}
-          </p>
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+        <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+              {t('admin.ui.title', 'UI Customization')}
+            </h1>
+            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+              {t('admin.ui.description', 'Customize the appearance and branding of your iHub Apps')}
+            </p>
+          </div>
+        </div>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <AdminLoadGate load={load} resourceLabel={t('admin.ui.resource', 'UI settings')} />
         </div>
       </div>
     );
@@ -372,16 +413,7 @@ function AdminUICustomization() {
 
       <AdminSaveBar dirty={isDirty} saving={saving} onSave={handleSave} onDiscard={handleDiscard} />
 
-      <ConfirmDialog
-        isOpen={blocker.state === 'blocked'}
-        title={t('admin.ui.unsaved.title', 'Unsaved changes')}
-        message={t('admin.ui.unsaved.message', 'You have unsaved changes. Leave anyway?')}
-        confirmLabel={t('admin.ui.unsaved.leave', 'Leave')}
-        denyLabel={t('admin.ui.unsaved.stay', 'Stay')}
-        danger={false}
-        onConfirm={() => blocker.proceed?.()}
-        onDeny={() => blocker.reset?.()}
-      />
+      <UnsavedChangesDialog blocker={blocker} />
     </div>
   );
 }

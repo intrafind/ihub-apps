@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getAdminApiErrorMessage } from '../../../api/adminApi';
 import { useUnsavedChanges } from './useUnsavedChanges';
+import { describeAdminLoadError } from './useAdminConfigLoad';
 
 /** Route-param sentinel every Admin*EditPage uses for "creating a new resource". */
 const NEW_RESOURCE_ID = 'new';
@@ -45,6 +46,8 @@ const NEW_RESOURCE_ID = 'new';
  *   loading: boolean,
  *   error: string|null,
  *   setError: (message: string|null) => void,
+ *   loadError: {status: number|null, code: string|null, detail: string, retryAfterSeconds: number|null}|null,
+ *   retryLoad: () => Promise<void>,
  *   isNew: boolean,
  *   save: () => Promise<any>,
  *   blocker: { state: 'blocked'|'unblocked', proceed: Function, reset: Function },
@@ -90,6 +93,12 @@ export function useAdminResourceEditor({ resourceId, loadResource, makeDefault, 
   const [initialData, setInitialData] = useState(mountDefaultsRef.current);
   const [loading, setLoading] = useState(!isNew);
   const [error, setError] = useState(null);
+  // Why the existing resource could not be loaded ({ status, code, detail }), or
+  // null. Unlike `error`, a save failure never sets it: while it is set there is
+  // nothing to edit, and AdminEditPageShell shows the error instead of the form.
+  const [loadError, setLoadError] = useState(null);
+  // Bumped by every load, so a slow earlier response cannot overwrite a newer one.
+  const loadGenerationRef = useRef(0);
 
   // Keep the latest callbacks in refs so the loading effect below can depend
   // only on `resourceId` (matching what each page already did with its own
@@ -122,6 +131,7 @@ export function useAdminResourceEditor({ resourceId, loadResource, makeDefault, 
     }
 
     let cancelled = false;
+    const generation = ++loadGenerationRef.current;
 
     async function run() {
       if (resourceId === NEW_RESOURCE_ID) {
@@ -130,6 +140,7 @@ export function useAdminResourceEditor({ resourceId, loadResource, makeDefault, 
         setData(defaults);
         setInitialData(defaults);
         setError(null);
+        setLoadError(null);
         setLoading(false);
         return;
       }
@@ -137,12 +148,16 @@ export function useAdminResourceEditor({ resourceId, loadResource, makeDefault, 
       try {
         setLoading(true);
         const loaded = await loadResourceRef.current(resourceId);
-        if (cancelled) return;
+        if (cancelled || generation !== loadGenerationRef.current) return;
         setData(loaded);
         setInitialData(loaded);
         setError(null);
+        setLoadError(null);
       } catch (err) {
-        if (!cancelled) setError(getAdminApiErrorMessage(err));
+        if (!cancelled && generation === loadGenerationRef.current) {
+          setError(getAdminApiErrorMessage(err));
+          setLoadError(describeAdminLoadError(err));
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -163,6 +178,8 @@ export function useAdminResourceEditor({ resourceId, loadResource, makeDefault, 
   latestDataRef.current = data;
 
   const save = useCallback(async () => {
+    // Never save over a resource that did not load: the form holds no real data.
+    if (loadError) throw new Error(loadError.detail);
     const snapshot = data;
     const result = await saveResourceRef.current(snapshot, resourceId);
     // What was just saved is the new baseline for the unsaved-changes check.
@@ -170,7 +187,7 @@ export function useAdminResourceEditor({ resourceId, loadResource, makeDefault, 
     // Edits made while the request ran are still unsaved: keep them guarded.
     if (latestDataRef.current === snapshot) markSaved();
     return result;
-  }, [data, resourceId, markSaved]);
+  }, [data, resourceId, markSaved, loadError]);
 
   // Re-read the saved resource and make it the new baseline, dropping unsaved edits. For
   // pages whose server side changed the stored resource behind the form's back (a model sync).
@@ -181,10 +198,31 @@ export function useAdminResourceEditor({ resourceId, loadResource, makeDefault, 
     setInitialData(loaded);
   }, [resourceId]);
 
+  // Retry a failed load in place (no page reload). The error stays shown while
+  // the request runs; a newer load wins over this one.
+  const retryLoad = useCallback(async () => {
+    if (resourceId === NEW_RESOURCE_ID) return;
+    const generation = ++loadGenerationRef.current;
+    try {
+      const loaded = await loadResourceRef.current(resourceId);
+      if (generation !== loadGenerationRef.current) return;
+      setData(loaded);
+      setInitialData(loaded);
+      setError(null);
+      setLoadError(null);
+    } catch (err) {
+      if (generation !== loadGenerationRef.current) return;
+      setError(getAdminApiErrorMessage(err));
+      setLoadError(describeAdminLoadError(err));
+    }
+  }, [resourceId]);
+
   return {
     data,
     setData,
     reload,
+    retryLoad,
+    loadError,
     initialData,
     isDirty,
     loading,

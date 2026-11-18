@@ -285,6 +285,6 @@ For technical implementation details, see:
 ## Related Features
 
 - [Prefill Parameter](./user-guide.md#prefill-parameter) - Pre-populate the input field
-- [Short Links](./user-guide.md#short-links) - Create shareable links
+- [Short Links](./admin-ui.md#short-links) - Create shareable links
 - [Variables](./apps.md#variables) - Pass data to apps via URL parameters
 - [iFinder Integration](./iFinder-Integration.md) - Enterprise document management and the "Open in App" flow

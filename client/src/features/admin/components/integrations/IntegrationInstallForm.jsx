@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useEffect, useMemo, useState } from 'react';
+import { use, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../../shared/components/Icon';
 import LoadingSpinner from '../../../../shared/components/LoadingSpinner';
@@ -33,6 +33,9 @@ import {
   updateInstalledIntegration
 } from '../../../../api/integrationsAdminApi';
 import { fetchAdminGroups, getAdminApiErrorMessage } from '../../../../api/adminApi';
+import { DirtyReportContext, useDirtyReport } from '../../hooks/useDirtyReport';
+import { apiErrorMessage } from '../../../../utils/apiErrorMessage';
+import { mapProblemErrorsToFields } from '../../../../utils/mapProblemErrorsToFields';
 
 const AUTH_MODE_KEYS = {
   none: ['none', 'No sign-in (public API)'],
@@ -54,19 +57,6 @@ export function proposeInstanceId(definitionId, taken = []) {
   let n = 2;
   while (taken.includes(`${base}-${n}`)) n += 1;
   return `${base}-${n}`;
-}
-
-/** One validation detail as text: `key: message`, `path.to.field: message` or the message. */
-function detailLine(detail) {
-  if (detail?.key) return `${detail.key}: ${detail.message}`;
-  if (detail?.path) return `${detail.path.join('.')}: ${detail.message}`;
-  return detail?.message;
-}
-
-function detailText(err) {
-  const issues = err?.response?.data?.details?.issues;
-  if (!Array.isArray(issues)) return '';
-  return issues.map(detailLine).filter(Boolean).join('; ');
 }
 
 /** `GET /api/admin/groups` → `groups` (id → group), or null when it failed. */
@@ -147,6 +137,8 @@ const NO_TAKEN_IDS = [];
  * @param {(definition: Object) => void} [props.onLoaded] - the definition was loaded
  * @param {() => void} props.onCancel
  * @param {(instance: Object) => void} props.onSaved - with the saved installation
+ * @param {(dirty: boolean) => void} [props.onDirtyChange] - whether the form differs
+ *   from what it loaded (the install dialog asks before discarding it)
  */
 function IntegrationInstallForm({
   definitionId,
@@ -157,11 +149,16 @@ function IntegrationInstallForm({
   variant = 'dialog',
   onLoaded,
   onCancel,
-  onSaved
+  onSaved,
+  onDirtyChange
 }) {
   const { t, i18n } = useTranslation();
   const lang = i18n.language || 'en';
   const isEdit = Boolean(instanceId);
+  // The form as loaded (JSON), to tell whether the admin changed anything.
+  const loadedFormRef = useRef(null);
+  const onDirtyChangeRef = useRef(onDirtyChange);
+  onDirtyChangeRef.current = onDirtyChange;
   const inDialog = variant === 'dialog';
   const formId = inDialog ? 'integration-install-form' : 'integration-settings-form';
 
@@ -174,6 +171,10 @@ function IntegrationInstallForm({
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
   const [form, setForm] = useState(null);
+  // The form as loaded; reported to the page (DirtyReportContext) so an
+  // installation's Settings tab can warn before its edits are lost.
+  const [loadedForm, setLoadedForm] = useState(null);
+  useDirtyReport(loadedForm, form, use(DirtyReportContext));
   const [secretStored, setSecretStored] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -189,6 +190,7 @@ function IntegrationInstallForm({
     void (async () => {
       setLoading(true);
       setLoadError(null);
+      loadedFormRef.current = null;
       try {
         const [def, groupsResult, existing] = await Promise.all([
           preloaded?.definition || fetchIntegrationDefinition(definitionId),
@@ -214,7 +216,7 @@ function IntegrationInstallForm({
           instance?.labelLocalized && typeof instance.labelLocalized === 'object'
             ? instance.labelLocalized
             : {};
-        setForm({
+        const nextForm = {
           id: instance?.id || def.singleton?.instanceId || proposeInstanceId(def.id, takenIds),
           label: pickText(storedLabel, lang) || (!isEdit && prefill?.label) || '',
           description: pickText(instance?.description, lang) || '',
@@ -239,7 +241,9 @@ function IntegrationInstallForm({
           // A new installation starts with an approval default the admin can
           // change before saving (#2916): the server's preset for the definition.
           approvalDefault: isEdit ? undefined : def.approvalPreset || installApprovalPreset(def)
-        });
+        };
+        setForm(nextForm);
+        setLoadedForm(nextForm);
       } catch (err) {
         if (!cancelled) setLoadError(getAdminApiErrorMessage(err));
       } finally {
@@ -252,6 +256,18 @@ function IntegrationInstallForm({
     // `onLoaded` is a notification; a new function identity must not reload the form.
     // eslint-disable-next-line @eslint-react/exhaustive-deps
   }, [definitionId, instanceId, isEdit, lang, takenIds, prefill, preloaded]);
+
+  // Report whether the form differs from what was loaded (IN-B12). The first
+  // form after a load is the baseline; the secret field counts too.
+  useEffect(() => {
+    if (!form) return;
+    // `checkedActions` is a Set, which JSON.stringify would write as {}.
+    const snapshot = JSON.stringify(form, (_key, value) =>
+      value instanceof Set ? [...value].sort((a, b) => String(a).localeCompare(String(b))) : value
+    );
+    if (loadedFormRef.current === null) loadedFormRef.current = snapshot;
+    onDirtyChangeRef.current?.(snapshot !== loadedFormRef.current);
+  }, [form]);
 
   const secretField = useMemo(
     () => secretFieldForMode(definition, form?.authMode),
@@ -306,16 +322,35 @@ function IntegrationInstallForm({
     return payload;
   };
 
+  /**
+   * Show a failed test or save: each `errors[]` entry of the problem answer
+   * at its field (`/values/<key>` or `/secrets/<key>`, IN-B4), and the rest —
+   * a field the form does not show, or another part of the request — in the
+   * message above the form.
+   */
   const applyError = err => {
-    const data = err?.response?.data;
-    if (Array.isArray(data?.details?.issues) && data.code === 'INVALID_VALUES') {
-      const errors = {};
-      for (const d of data.details.issues) if (d?.key) errors[d.key] = d.message;
-      setFieldErrors(errors);
-    }
-    const detail = detailText(err);
-    const message = getAdminApiErrorMessage(err);
-    setError(detail ? `${message} (${detail})` : message);
+    // A number out of range names the field's limit from the definition.
+    const limitsOf = key => {
+      const field = (definition?.install || []).find(f => f.key === key);
+      return { min: field?.min, max: field?.max };
+    };
+    const byField = {
+      ...mapProblemErrorsToFields(err, { prefix: '/secrets', t }),
+      ...mapProblemErrorsToFields(err, { prefix: '/values', t, limitsOf })
+    };
+    const shown = new Set([...visibleFields.map(f => f.key), secretField?.key].filter(Boolean));
+    setFieldErrors(Object.fromEntries(Object.entries(byField).filter(([key]) => shown.has(key))));
+    if (advancedFields.some(f => byField[f.key])) setShowAdvanced(true);
+
+    const elsewhere = Object.entries(mapProblemErrorsToFields(err, { t }))
+      .filter(([path]) => {
+        const [part, key, ...rest] = path.split('.');
+        return !((part === 'values' || part === 'secrets') && rest.length === 0 && shown.has(key));
+      })
+      .map(([path, message]) => `${path}: ${message}`);
+    // The code's localized message (INVALID_VALUES: "Some of the entered values are not valid.").
+    const message = apiErrorMessage(err, t) || getAdminApiErrorMessage(err);
+    setError(elsewhere.length ? `${message} (${elsewhere.join('; ')})` : message);
   };
 
   const runTest = async () => {

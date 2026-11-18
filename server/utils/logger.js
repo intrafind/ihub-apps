@@ -151,7 +151,23 @@ function isAuthDebugEnabled() {
 }
 
 /**
- * Custom filter format to filter logs by component
+ * The level of a log entry before any formatting: `colorize` rewrites
+ * `info.level` with color codes, the `Symbol.for('level')` copy stays plain.
+ *
+ * @param {Object} info - winston log entry
+ * @returns {string}
+ */
+function plainLevelOf(info) {
+  return info[Symbol.for('level')] || info.level;
+}
+
+/**
+ * Custom filter format to filter logs by component.
+ *
+ * The component filter narrows what is logged to the selected components,
+ * but it never hides an error: an `error` entry of any component (or of none)
+ * is always logged, so a filter set up to trace one component cannot swallow
+ * the failure an administrator is looking for (OB-B3).
  */
 const componentFilterFormat = winston.format(info => {
   const componentFilter = getComponentFilter();
@@ -163,6 +179,11 @@ const componentFilterFormat = winston.format(info => {
 
   // If filter list is empty, allow all logs
   if (!componentFilter.filter || componentFilter.filter.length === 0) {
+    return info;
+  }
+
+  // Errors are never filtered out, whatever component logged them.
+  if (plainLevelOf(info) === 'error') {
     return info;
   }
 

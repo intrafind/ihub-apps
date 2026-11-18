@@ -22,6 +22,7 @@ import {
   humanizeVariableName,
   isAutoVariable
 } from '../../../../../shared/promptVariables.js';
+import { CHECKBOX_CLASS, INPUT_CLASS } from './formStyles';
 
 /**
  * Form-based editor for prompt configuration
@@ -210,9 +211,9 @@ function PromptFormEditor({
                     onChange={e => handleChange('id', e.target.value)}
                     disabled={!isNewPrompt}
                     required={isFieldRequired('id', jsonSchema)}
-                    className={`mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm disabled:bg-gray-100 dark:disabled:bg-gray-700 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 ${
+                    className={`${INPUT_CLASS} mt-1 block ${
                       validationErrors.id || errors.id
-                        ? 'border-red-300 text-red-900 placeholder-red-300'
+                        ? 'border-red-500 dark:border-red-400 text-red-900 placeholder-red-300'
                         : ''
                     }`}
                     placeholder="unique-prompt-id"
@@ -244,8 +245,8 @@ function PromptFormEditor({
                     id="icon"
                     value={data.icon || ''}
                     onChange={e => handleChange('icon', e.target.value)}
-                    className={`mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 ${
-                      errors.icon ? 'border-red-300 text-red-900' : ''
+                    className={`${INPUT_CLASS} mt-1 block ${
+                      errors.icon ? 'border-red-500 dark:border-red-400 text-red-900' : ''
                     }`}
                     placeholder="clipboard"
                     autoComplete="off"
@@ -272,8 +273,8 @@ function PromptFormEditor({
                     name="order"
                     value={data.order || ''}
                     onChange={handleInputChange}
-                    className={`mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 ${
-                      errors.order ? 'border-red-300 text-red-900' : ''
+                    className={`${INPUT_CLASS} mt-1 block ${
+                      errors.order ? 'border-red-500 dark:border-red-400 text-red-900' : ''
                     }`}
                     placeholder="0"
                     autoComplete="off"
@@ -298,8 +299,8 @@ function PromptFormEditor({
                     id="category"
                     value={data.category || ''}
                     onChange={e => handleChange('category', e.target.value)}
-                    className={`mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 ${
-                      errors.category ? 'border-red-300 text-red-900' : ''
+                    className={`${INPUT_CLASS} mt-1 block ${
+                      errors.category ? 'border-red-500 dark:border-red-400 text-red-900' : ''
                     }`}
                   >
                     <option value="">
@@ -327,14 +328,14 @@ function PromptFormEditor({
                     htmlFor="appId"
                     className="block text-sm font-medium text-gray-700 dark:text-gray-300"
                   >
-                    {t('admin.prompts.edit.appId', 'Linked App')}
+                    {t('admin.prompts.edit.appId', 'Opens in app')}
                   </label>
                   <div className="mt-1">
                     <SearchableAppsSelector
                       apps={apps}
                       value={data.appId || ''}
                       onChange={value => handleChange('appId', value)}
-                      placeholder={t('admin.prompts.edit.noApp', 'No linked app')}
+                      placeholder={t('admin.prompts.edit.noApp', 'Default chat app')}
                       currentLanguage={currentLanguage}
                     />
                   </div>
@@ -342,7 +343,10 @@ function PromptFormEditor({
                     <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.appId}</p>
                   )}
                   <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                    {t('admin.prompts.edit.appIdDesc', 'Link this prompt to a specific app')}
+                    {t(
+                      'admin.prompts.edit.appIdDesc',
+                      'The prompt library opens this prompt in this app and lists it first there. It does not limit who sees the prompt.'
+                    )}
                   </p>
                 </div>
 
@@ -355,7 +359,7 @@ function PromptFormEditor({
                       type="checkbox"
                       checked={data.enabled !== false}
                       onChange={handleInputChange}
-                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
+                      className={CHECKBOX_CLASS}
                     />
                     <label
                       htmlFor="enabled"
@@ -505,7 +509,7 @@ function PromptFormEditor({
                           type="text"
                           value={variable.name || ''}
                           onChange={e => handleVariableChange(index, 'name', e.target.value)}
-                          className="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                          className={`${INPUT_CLASS} mt-1 block`}
                           placeholder="variable_name"
                           autoComplete="off"
                         />
@@ -517,7 +521,7 @@ function PromptFormEditor({
                         <select
                           value={variable.type || 'string'}
                           onChange={e => handleVariableChange(index, 'type', e.target.value)}
-                          className="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                          className={`${INPUT_CLASS} mt-1 block`}
                         >
                           {variableTypes.map(type => (
                             <option key={type.value} value={type.value}>
@@ -549,7 +553,7 @@ function PromptFormEditor({
                           onChange={e =>
                             handleVariableChange(index, 'defaultValue', e.target.value)
                           }
-                          className="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                          className={`${INPUT_CLASS} mt-1 block`}
                           placeholder="Default value"
                           autoComplete="off"
                         />
@@ -561,7 +565,7 @@ function PromptFormEditor({
                           type="checkbox"
                           checked={variable.required || false}
                           onChange={e => handleVariableChange(index, 'required', e.target.checked)}
-                          className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
+                          className={CHECKBOX_CLASS}
                         />
                         <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
                           {t('admin.prompts.edit.variableRequired', 'Required')}

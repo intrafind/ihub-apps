@@ -80,7 +80,7 @@ export default function RangeControl({ state }) {
               value={draft.from}
               max={draft.to}
               onChange={e => setDraft(d => ({ ...d, from: e.target.value }))}
-              className="rounded border border-gray-300 bg-white px-1.5 py-0.5 text-xs dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+              className="rounded border border-admin-control-border bg-white px-1.5 py-0.5 text-xs dark:border-admin-control-border-dark dark:bg-gray-800 dark:text-gray-200"
             />
           </label>
           <label className="flex items-center gap-1">
@@ -90,7 +90,7 @@ export default function RangeControl({ state }) {
               value={draft.to}
               min={draft.from}
               onChange={e => setDraft(d => ({ ...d, to: e.target.value }))}
-              className="rounded border border-gray-300 bg-white px-1.5 py-0.5 text-xs dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+              className="rounded border border-admin-control-border bg-white px-1.5 py-0.5 text-xs dark:border-admin-control-border-dark dark:bg-gray-800 dark:text-gray-200"
             />
           </label>
           <button

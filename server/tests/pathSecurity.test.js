@@ -1,9 +1,12 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { describe, it } from 'node:test';
+import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert';
-import { isValidId, isValidExtensionId } from '../utils/pathSecurity.js';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { isValidId, isValidExtensionId, resolveAndValidatePath } from '../utils/pathSecurity.js';
 
 describe('pathSecurity', () => {
   describe('isValidId', () => {
@@ -67,6 +70,56 @@ describe('pathSecurity', () => {
       assert.strictEqual(isValidExtensionId('valid-id8'), true);
       assert.strictEqual(isValidExtensionId('a'.repeat(128)), true);
       assert.strictEqual(isValidExtensionId('a'.repeat(129)), false);
+    });
+  });
+
+  describe('resolveAndValidatePath', () => {
+    let base;
+    let outside;
+    before(async () => {
+      base = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'path-security-')));
+      outside = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'path-security-out-')));
+      await fs.mkdir(path.join(base, 'sub'));
+    });
+    after(async () => {
+      await fs.rm(base, { recursive: true, force: true });
+      await fs.rm(outside, { recursive: true, force: true });
+    });
+
+    it('resolves paths inside the base, existing or not', async () => {
+      assert.strictEqual(await resolveAndValidatePath('a.json', base), path.join(base, 'a.json'));
+      assert.strictEqual(
+        await resolveAndValidatePath('sub/new/b.json', base),
+        path.join(base, 'sub', 'new', 'b.json')
+      );
+      assert.strictEqual(
+        await resolveAndValidatePath('sub/../c.json', base),
+        path.join(base, 'c.json')
+      );
+      // A name that only starts with two dots stays inside.
+      assert.strictEqual(await resolveAndValidatePath('..notes', base), path.join(base, '..notes'));
+    });
+
+    it('accepts the base itself', async () => {
+      assert.strictEqual(await resolveAndValidatePath('.', base), base);
+    });
+
+    it('refuses paths that leave the base', async () => {
+      assert.strictEqual(await resolveAndValidatePath('../x.json', base), null);
+      assert.strictEqual(await resolveAndValidatePath('sub/../../x.json', base), null);
+      assert.strictEqual(await resolveAndValidatePath(path.join(outside, 'x.json'), base), null);
+      // A sibling whose name starts with the base's name is outside too.
+      assert.strictEqual(await resolveAndValidatePath(`${base}-evil/x.json`, base), null);
+    });
+
+    it('refuses a symlink inside the base that points outside it', async () => {
+      await fs.symlink(outside, path.join(base, 'link'));
+      assert.strictEqual(await resolveAndValidatePath('link/x.json', base), null);
+    });
+
+    it('refuses empty and non-string input', async () => {
+      assert.strictEqual(await resolveAndValidatePath('', base), null);
+      assert.strictEqual(await resolveAndValidatePath(undefined, base), null);
     });
   });
 });

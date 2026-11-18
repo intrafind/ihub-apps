@@ -197,7 +197,8 @@ export default defineConfig({
 
         patterns.forEach(pattern => {
           proxyConfig[pattern] = {
-            target: 'http://localhost:3000',
+            // VITE_API_TARGET: an e2e suite on its own server port (tests/config/e2e-server.mjs).
+            target: process.env.VITE_API_TARGET || 'http://localhost:3000',
             changeOrigin: true,
             xfwd: true,
             // Proxy WebSocket upgrades for the API (e.g. the realtime

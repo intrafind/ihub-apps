@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
@@ -11,6 +11,20 @@ import {
   updateCredential,
   deleteCredential
 } from '../../../api/adminApi';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
+import ConfirmDialog from '../../../shared/components/ConfirmDialog';
+import {
+  fetchInstalledIntegrations,
+  fetchIntegrationDefinition
+} from '../../../api/integrationsAdminApi';
+import { useConfirmAction } from '../hooks/useConfirmAction';
+import { deleteConfirmText, namedList } from '../utils/confirmText';
+import {
+  credentialFieldsByDefinition,
+  installationsUsingCredential,
+  installationsWithUnknownFields
+} from '../utils/credentialUsage';
 
 /**
  * Admin page for managing the central credential store.
@@ -32,7 +46,7 @@ import {
  */
 
 const INPUT_CLASS =
-  'w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-xs px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500';
+  'w-full rounded-md border border-admin-control-border dark:border-admin-control-border-dark bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-xs px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500';
 const MONO_INPUT_CLASS = `${INPUT_CLASS} font-mono`;
 const REDACTED = '***REDACTED***';
 
@@ -360,11 +374,27 @@ function AdminCredentialsPage() {
   const [editing, setEditing] = useState(null); // null | 'new' | profileId
   const [form, setForm] = useState(BLANK_FORM);
   const [saving, setSaving] = useState(false);
+  // The form as it was when the editor opened; null while no editor is open.
+  // Leaving the page with an edited, unsaved credential asks first.
+  const [formBaseline, setFormBaseline] = useState(null);
+  const { blocker } = useUnsavedChanges(formBaseline, form);
+  const { requestConfirm, dialogProps: confirmDialogProps } = useConfirmAction();
+  const headingRef = useRef(null);
+  // The credential whose usage is being read before its delete dialog opens.
+  // Further Delete clicks are ignored meanwhile, so a slow answer for one row
+  // can't open a dialog after the admin clicked another row (the dialog
+  // would name a credential the admin no longer means).
+  const [checkingId, setCheckingId] = useState(null);
+  const checkingRef = useRef(null);
 
   const isEdit = editing !== null && editing !== 'new';
 
+  /**
+   * Reads the credential list. Only the first load shows the full-page
+   * spinner (`loading` starts true); a reload after a save or delete keeps the
+   * page, and with it an open confirmation, mounted.
+   */
   const load = async () => {
-    setLoading(true);
     try {
       const list = await listCredentials();
       setCredentials(list);
@@ -389,15 +419,21 @@ function AdminCredentialsPage() {
 
   const startCreate = () => {
     setForm(BLANK_FORM);
+    setFormBaseline(BLANK_FORM);
     setEditing('new');
   };
 
   const startEdit = profile => {
-    setForm(profileToForm(profile));
+    const initial = profileToForm(profile);
+    setForm(initial);
+    setFormBaseline(initial);
     setEditing(profile.id);
   };
 
-  const closeDialog = () => setEditing(null);
+  const closeDialog = () => {
+    setEditing(null);
+    setFormBaseline(null);
+  };
 
   const save = async () => {
     setSaving(true);
@@ -423,27 +459,82 @@ function AdminCredentialsPage() {
     }
   };
 
+  /**
+   * Named, dependency-aware delete (IN-B3, client part): before the dialog
+   * opens, the installed integrations are read to list the ones that use this
+   * credential. The server does not check references, so this list is the
+   * admin's warning; if it can't be read, the dialog says so and still allows
+   * the delete.
+   *
+   * @param {string} id - Credential profile id.
+   */
   const remove = async id => {
-    if (
-      !window.confirm(
-        t('admin.credentials.deleteConfirm', 'Delete credential "{{id}}"? This cannot be undone.', {
-          id
-        })
-      )
-    )
-      return;
+    if (checkingRef.current !== null) return;
+    checkingRef.current = id;
+    setCheckingId(id);
+    let usedBy = null;
+    // Installations whose definition did not load: their credential fields are
+    // only guessed by name, so the list may miss one of them.
+    let unchecked = [];
     try {
-      await deleteCredential(id);
-      setMessage({ type: 'success', text: t('admin.credentials.deleted', 'Credential deleted') });
-      await load();
-    } catch (err) {
-      setMessage({
-        type: 'error',
-        text: t('admin.credentials.deleteError', 'Delete failed: {{error}}', {
-          error: err.response?.data?.detail || err.message
-        })
-      });
+      const installed = await fetchInstalledIntegrations();
+      // The definitions say which fields are credential fields.
+      const fields = await credentialFieldsByDefinition(
+        installed?.items,
+        fetchIntegrationDefinition
+      );
+      usedBy = installationsUsingCredential(installed?.items, id, fields);
+      unchecked = installationsWithUnknownFields(installed?.items, fields);
+    } catch {
+      usedBy = null;
+    } finally {
+      checkingRef.current = null;
+      setCheckingId(null);
     }
+
+    const usageMessage =
+      usedBy === null
+        ? t('admin.credentials.usageUnknown', {
+            id,
+            defaultValue: 'Couldn\'t check which integrations use "{{id}}".'
+          })
+        : unchecked.length > 0
+          ? t('admin.credentials.usageIncomplete', {
+              id,
+              count: unchecked.length,
+              defaultValue:
+                'Couldn\'t fully check which integrations use "{{id}}": {{count}} installed integrations could not be read. Check them before deleting.'
+            })
+          : usedBy.length > 0
+            ? t('admin.credentials.usedBy', {
+                count: usedBy.length,
+                defaultValue: 'Used by {{count}} installed integrations, which stop working:'
+              })
+            : t('admin.credentials.notUsedByIntegrations', 'No installed integration uses it.');
+
+    requestConfirm({
+      ...deleteConfirmText({ typeKey: 'credential', typeFallback: 'credential', name: id, t }),
+      message: usageMessage,
+      consequences: [
+        ...namedList([...new Set([...(usedBy || []), ...unchecked].map(item => item.label))], t),
+        t(
+          'admin.credentials.notChecked',
+          'Tools, MCP servers and sign-in settings that reference it are not checked here; they fail until they get another credential.'
+        )
+      ],
+      irreversible: true,
+      errorMessage: err =>
+        t('admin.credentials.deleteError', 'Delete failed: {{error}}', {
+          error: err.response?.data?.detail || err.message
+        }),
+      action: async () => {
+        await deleteCredential(id);
+        setMessage({ type: 'success', text: t('admin.credentials.deleted', 'Credential deleted') });
+        await load();
+      },
+      // The row's Delete button is gone: keep keyboard focus on the page.
+      focusAfterSuccess: headingRef
+    });
   };
 
   if (loading) {
@@ -460,7 +551,11 @@ function AdminCredentialsPage() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="flex justify-between items-start mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+          <h1
+            ref={headingRef}
+            tabIndex={-1}
+            className="text-3xl font-bold text-gray-900 dark:text-gray-100 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 rounded-sm"
+          >
             {t('admin.credentials.title', 'Credentials')}
           </h1>
           <p className="text-gray-600 dark:text-gray-400 mt-1">
@@ -531,7 +626,13 @@ function AdminCredentialsPage() {
                     </button>
                     <button
                       onClick={() => remove(c.id)}
-                      className="inline-flex items-center px-3 py-2 border border-red-300 dark:border-red-700 shadow-xs text-sm leading-4 font-medium rounded-md text-red-700 dark:text-red-400 bg-white dark:bg-gray-700 hover:bg-red-50 dark:hover:bg-red-900/50"
+                      // Not `disabled`: that would drop keyboard focus to <body>.
+                      aria-disabled={checkingId !== null || undefined}
+                      aria-busy={checkingId === c.id || undefined}
+                      aria-label={t('admin.credentials.deleteNamed', 'Delete credential "{{id}}"', {
+                        id: c.id
+                      })}
+                      className="inline-flex items-center px-3 py-2 border border-red-300 dark:border-red-700 shadow-xs text-sm leading-4 font-medium rounded-md text-red-700 dark:text-red-400 bg-white dark:bg-gray-700 hover:bg-red-50 dark:hover:bg-red-900/50 aria-disabled:opacity-50 aria-disabled:cursor-wait"
                     >
                       <Icon name="trash" size="sm" />
                     </button>
@@ -646,6 +747,8 @@ function AdminCredentialsPage() {
           </div>
         </div>
       )}
+      <UnsavedChangesDialog blocker={blocker} />
+      <ConfirmDialog {...confirmDialogProps} />
     </div>
   );
 }

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../../utils/localizeContent';
@@ -21,6 +21,10 @@ import { useFilterState } from '../hooks/useFilterState';
 import { DataTable, SearchInput, FilterSelect } from '../components/data-table';
 import UploadConfigButton from '../components/UploadConfigButton';
 import AdminLoadError from '../components/AdminLoadError';
+import ConfirmDialog from '../../../shared/components/ConfirmDialog';
+import { useConfirmAction } from '../hooks/useConfirmAction';
+import { buildBulkToggleConfirm } from '../utils/bulkToggleConfirm';
+import { deleteConfirmText } from '../utils/confirmText';
 
 function PromptNameCell({ prompt, currentLanguage }) {
   return (
@@ -46,6 +50,8 @@ function PromptNameCell({ prompt, currentLanguage }) {
 function AdminPromptsPage() {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
+  const { requestConfirm, dialogProps: confirmDialogProps } = useConfirmAction();
+  const headingRef = useRef(null);
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const featureFlags = useFeatureFlags();
@@ -116,36 +122,45 @@ function AdminPromptsPage() {
     }
   };
 
-  const enableAllPrompts = async () => {
-    try {
-      await togglePrompts('*', true);
-      await loadPrompts();
-    } catch (err) {
-      setError(getAdminApiErrorMessage(err));
-    }
+  const promptName = prompt => getLocalizedContent(prompt.name, currentLanguage) || prompt.id;
+
+  /**
+   * Enable All / Disable All toggle every prompt (`*`) for every user, so they
+   * open a confirmation naming the count and the prompts first (AI-B2).
+   *
+   * @param {boolean} enable - Target state.
+   */
+  const confirmToggleAll = enable => {
+    requestConfirm({
+      ...buildBulkToggleConfirm({
+        items: prompts,
+        enable,
+        itemsLabel: t('admin.confirm.plural.prompts', 'prompts'),
+        getName: promptName,
+        t
+      }),
+      action: async () => {
+        await togglePrompts('*', enable);
+        await loadPrompts();
+      }
+    });
   };
 
-  const disableAllPrompts = async () => {
-    try {
-      await togglePrompts('*', false);
-      await loadPrompts();
-    } catch (err) {
-      setError(getAdminApiErrorMessage(err));
-    }
-  };
-
-  const handleDeletePrompt = async promptId => {
-    if (
-      !confirm(t('admin.prompts.deleteConfirm', 'Are you sure you want to delete this prompt?'))
-    ) {
-      return;
-    }
-    try {
-      await makeAdminApiCall(`/admin/prompts/${promptId}`, { method: 'DELETE' });
-      await loadPrompts();
-    } catch (err) {
-      alert(err.message || 'Failed to delete prompt');
-    }
+  const handleDeletePrompt = prompt => {
+    requestConfirm({
+      ...deleteConfirmText({
+        typeKey: 'prompt',
+        typeFallback: 'prompt',
+        name: promptName(prompt),
+        t
+      }),
+      action: async () => {
+        await makeAdminApiCall(`/admin/prompts/${prompt.id}`, { method: 'DELETE' });
+        await loadPrompts();
+        // The row's Delete button is gone: keep keyboard focus on the page.
+        headingRef.current?.focus();
+      }
+    });
   };
 
   const handleClonePrompt = prompt => {
@@ -311,7 +326,7 @@ function AdminPromptsPage() {
   const actions = [
     {
       id: 'edit',
-      label: t('admin.prompts.edit', 'Edit'),
+      label: t('common.edit', 'Edit'),
       icon: 'pencil',
       priority: 'primary',
       onClick: p => navigate(`/admin/prompts/${p.id}`)
@@ -340,7 +355,7 @@ function AdminPromptsPage() {
       label: t('admin.prompts.delete', 'Delete'),
       icon: 'trash',
       destructive: true,
-      onClick: p => handleDeletePrompt(p.id)
+      onClick: p => handleDeletePrompt(p)
     }
   ];
 
@@ -358,7 +373,11 @@ function AdminPromptsPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="sm:flex sm:items-center">
           <div className="sm:flex-auto">
-            <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
+            <h1
+              ref={headingRef}
+              tabIndex={-1}
+              className="text-2xl font-semibold text-gray-900 dark:text-gray-100 focus:outline-hidden"
+            >
               {activeTab === 'variables'
                 ? t('admin.promptVariables.title', 'Global Prompt Variables')
                 : activeTab === 'user'
@@ -402,14 +421,14 @@ function AdminPromptsPage() {
                 <button
                   type="button"
                   className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600"
-                  onClick={enableAllPrompts}
+                  onClick={() => confirmToggleAll(true)}
                 >
                   {t('admin.common.enableAll', 'Enable All')}
                 </button>
                 <button
                   type="button"
                   className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600"
-                  onClick={disableAllPrompts}
+                  onClick={() => confirmToggleAll(false)}
                 >
                   {t('admin.common.disableAll', 'Disable All')}
                 </button>
@@ -554,6 +573,7 @@ function AdminPromptsPage() {
           <VariablesTabContent />
         )}
       </div>
+      <ConfirmDialog {...confirmDialogProps} />
     </div>
   );
 }
@@ -562,6 +582,9 @@ function VariablesTabContent() {
   const { t } = useTranslation();
   const [platformConfig, setPlatformConfig] = useState(null);
   const [globalPromptVariables, setGlobalPromptVariables] = useState(null);
+  // The revision of the configuration this form loaded (or last saved): its
+  // save sends exactly this as If-Match, whatever other reads in the tab saw.
+  const revisionRef = useRef(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -575,7 +598,9 @@ function VariablesTabContent() {
     try {
       setLoading(true);
       setError(null);
-      const response = await makeAdminApiCall('/admin/configs/platform');
+      const response = await makeAdminApiCall('/admin/configs/platform', {
+        revision: revisionRef
+      });
       setPlatformConfig(response.data);
       setGlobalPromptVariables(
         response.data.globalPromptVariables || { context: '', variables: {} }
@@ -602,14 +627,15 @@ function VariablesTabContent() {
       // left out (the proxy JWT providers' `jwkUrl`, for one).
       await makeAdminApiCall('/admin/configs/platform', {
         method: 'POST',
-        body: { globalPromptVariables }
+        body: { globalPromptVariables },
+        revision: revisionRef
       });
       setPlatformConfig(previous => ({ ...previous, globalPromptVariables }));
       setHasChanges(false);
     } catch (err) {
       console.error('Error saving platform config:', err);
+      // Shown in the page's error callout; no native alert on top of it.
       setError(getAdminApiErrorMessage(err));
-      alert(err.message || 'Failed to save global prompt variables');
     } finally {
       setSaving(false);
     }

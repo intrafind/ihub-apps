@@ -1,50 +1,57 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import Switch from '../../../shared/components/Switch';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import AdminLoadGate from './AdminLoadGate';
+import { useAdminConfigLoad } from '../hooks/useAdminConfigLoad';
+import { useDirtyReport } from '../hooks/useDirtyReport';
+import { announceSslConfigSaved } from '../utils/sslConfigEvents';
 
-function SSLConfig() {
+/**
+ * @param {Object} props
+ * @param {(dirty: boolean) => void} [props.onDirtyChange] - Reports unsaved edits to the page.
+ */
+function SSLConfig({ onDirtyChange }) {
   const { t } = useTranslation();
   const [config, setConfig] = useState({
     ignoreInvalidCertificates: false,
     domainWhitelist: []
   });
+  // The configuration as last loaded or saved; null until it loaded.
+  const [savedConfig, setSavedConfig] = useState(null);
+  useDirtyReport(savedConfig, config, onDirtyChange);
   const [newDomain, setNewDomain] = useState('');
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
 
-  // Fetch current SSL configuration on mount
-  useEffect(() => {
-    const fetchSSLConfig = async () => {
-      try {
-        const response = await makeAdminApiCall('/admin/ssl/config', {
-          method: 'GET'
-        });
-        // Ensure domainWhitelist is always an array for backward compatibility
-        setConfig({
-          ignoreInvalidCertificates: response.data.ignoreInvalidCertificates || false,
-          domainWhitelist: Array.isArray(response.data.domainWhitelist)
-            ? response.data.domainWhitelist
-            : []
-        });
-        setMessage('');
-      } catch (error) {
-        setMessage({
-          type: 'error',
-          text: error.message || t('admin.system.ssl.configSaveError')
-        });
-      } finally {
-        setLoading(false);
+  // The card shows no form and no Save until its settings loaded: saving
+  // the defaults after a failed load would overwrite the stored ones (PL-B3).
+  const load = useAdminConfigLoad({
+    sources: {
+      config: {
+        load: async () =>
+          (
+            await makeAdminApiCall('/admin/ssl/config', {
+              method: 'GET'
+            })
+          ).data,
+        onLoad: data => {
+          // Ensure domainWhitelist is always an array for backward compatibility
+          const loaded = {
+            ignoreInvalidCertificates: data.ignoreInvalidCertificates || false,
+            domainWhitelist: Array.isArray(data.domainWhitelist) ? data.domainWhitelist : []
+          };
+          setConfig(loaded);
+          setSavedConfig(loaded);
+        }
       }
-    };
-
-    void fetchSSLConfig();
-  }, [t]);
+    }
+  });
+  const ready = load.status === 'ready';
 
   /**
    * Turns "ignore invalid certificates" on or off.
@@ -81,6 +88,7 @@ function SSLConfig() {
   };
 
   const handleSaveConfig = async () => {
+    if (!ready) return;
     setSaving(true);
     setMessage('');
 
@@ -90,6 +98,9 @@ function SSLConfig() {
         method: 'PUT',
         body: config
       });
+      setSavedConfig(config);
+      // The SSRF card lists the saved whitelist; let it reload.
+      announceSslConfigSaved();
 
       setMessage({
         type: 'success',
@@ -111,13 +122,19 @@ function SSLConfig() {
     }
   };
 
-  if (loading) {
+  if (!ready) {
     return (
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
         <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">
           {t('admin.system.ssl.title')}
         </h2>
-        <p className="text-gray-600 dark:text-gray-400">{t('common.loading', 'Loading...')}</p>
+        <AdminLoadGate
+          load={load}
+          resourceLabel={t('admin.system.ssl.title')}
+          loadingFallback={
+            <p className="text-gray-600 dark:text-gray-400">{t('common.loading', 'Loading...')}</p>
+          }
+        />
       </div>
     );
   }
@@ -209,18 +226,40 @@ function SSLConfig() {
         </div>
       </div>
 
-      {/* Domain Whitelist */}
-      {config.ignoreInvalidCertificates && (
-        <div className="mb-6">
-          <h3 className="text-md font-semibold text-gray-900 dark:text-gray-100 mb-2">
-            {t('admin.system.ssl.domainWhitelist')}
-          </h3>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-            {t('admin.system.ssl.domainWhitelistDesc')}
-          </p>
+      {/* Domain Whitelist. Shown whether or not invalid certificates are
+          ignored: the SSRF guard trusts these hosts either way. */}
+      <div className="mb-6">
+        <h3 className="text-md font-semibold text-gray-900 dark:text-gray-100 mb-2">
+          {t('admin.system.ssl.domainWhitelist')}
+        </h3>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+          {t('admin.system.ssl.domainWhitelistDesc')}
+        </p>
 
-          {/* Info message if whitelist is empty - this is now the secure default */}
-          {config.domainWhitelist && config.domainWhitelist.length === 0 && (
+        {/* These hosts also bypass the SSRF guard's private-address rule. */}
+        <div
+          role="note"
+          data-testid="ssl-ssrf-trust-notice"
+          className="mb-4 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg"
+        >
+          <div className="flex">
+            <Icon
+              name="ExclamationTriangleIcon"
+              className="w-5 h-5 text-amber-700 dark:text-amber-400 mt-0.5 mr-3 shrink-0"
+            />
+            <p className="text-sm text-amber-800 dark:text-amber-300">
+              {t(
+                'admin.system.ssl.ssrfTrustNotice',
+                'These hosts are also trusted by the SSRF guard of web sources, website crawls, the page reader and the watermark detector: these may reach them even when they resolve to private network addresses. This applies whether or not "Ignore Invalid SSL Certificates" is on. Tools and MCP servers do not use this list.'
+              )}
+            </p>
+          </div>
+        </div>
+
+        {/* Info message if whitelist is empty - this is now the secure default */}
+        {config.ignoreInvalidCertificates &&
+          config.domainWhitelist &&
+          config.domainWhitelist.length === 0 && (
             <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
               <div className="flex">
                 <Icon
@@ -234,64 +273,63 @@ function SSLConfig() {
             </div>
           )}
 
-          {/* Add Domain Input */}
-          <div className="flex gap-2 mb-4">
-            <input
-              type="text"
-              value={newDomain}
-              onChange={e => setNewDomain(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder={t('admin.system.ssl.domainWhitelistPlaceholder')}
-              className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 text-sm"
-            />
-            <button
-              onClick={handleAddDomain}
-              disabled={!newDomain.trim()}
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-xs text-white bg-blue-600 hover:bg-blue-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
-            >
-              <Icon name="PlusIcon" className="w-4 h-4 mr-1" />
-              {t('admin.system.ssl.addDomain')}
-            </button>
-          </div>
-
-          {/* Domain Pattern Help */}
-          <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-            {t('admin.system.ssl.domainPatternHelp')}
-          </p>
-
-          {/* Domain List */}
-          {config.domainWhitelist && config.domainWhitelist.length > 0 ? (
-            <div className="space-y-2">
-              {config.domainWhitelist.map((domain, index) => (
-                <div
-                  key={index}
-                  className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-md"
-                >
-                  <div className="flex items-center">
-                    <Icon
-                      name="GlobeAltIcon"
-                      className="w-4 h-4 text-gray-500 dark:text-gray-400 mr-2"
-                    />
-                    <span className="text-sm text-gray-900 dark:text-gray-100">{domain}</span>
-                  </div>
-                  <button
-                    onClick={() => handleRemoveDomain(domain)}
-                    className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 text-sm font-medium"
-                  >
-                    {t('admin.system.ssl.removeDomain')}
-                  </button>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-md text-center">
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                {t('admin.system.ssl.noDomains')}
-              </p>
-            </div>
-          )}
+        {/* Add Domain Input */}
+        <div className="flex gap-2 mb-4">
+          <input
+            type="text"
+            value={newDomain}
+            onChange={e => setNewDomain(e.target.value)}
+            onKeyPress={handleKeyPress}
+            placeholder={t('admin.system.ssl.domainWhitelistPlaceholder')}
+            className="flex-1 px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-md shadow-xs focus:ring-admin-accent focus:border-admin-accent dark:bg-gray-700 dark:text-gray-100 text-sm"
+          />
+          <button
+            onClick={handleAddDomain}
+            disabled={!newDomain.trim()}
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-xs text-white bg-blue-600 hover:bg-blue-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
+          >
+            <Icon name="PlusIcon" className="w-4 h-4 mr-1" />
+            {t('admin.system.ssl.addDomain')}
+          </button>
         </div>
-      )}
+
+        {/* Domain Pattern Help */}
+        <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+          {t('admin.system.ssl.domainPatternHelp')}
+        </p>
+
+        {/* Domain List */}
+        {config.domainWhitelist && config.domainWhitelist.length > 0 ? (
+          <div className="space-y-2">
+            {config.domainWhitelist.map((domain, index) => (
+              <div
+                key={index}
+                className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-md"
+              >
+                <div className="flex items-center">
+                  <Icon
+                    name="GlobeAltIcon"
+                    className="w-4 h-4 text-gray-500 dark:text-gray-400 mr-2"
+                  />
+                  <span className="text-sm text-gray-900 dark:text-gray-100">{domain}</span>
+                </div>
+                <button
+                  onClick={() => handleRemoveDomain(domain)}
+                  className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 text-sm font-medium"
+                >
+                  {t('admin.system.ssl.removeDomain')}
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-md text-center">
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              {t('admin.system.ssl.noDomains')}
+            </p>
+          </div>
+        )}
+      </div>
 
       {/* Save Button */}
       <div className="flex justify-end">

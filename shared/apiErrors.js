@@ -27,6 +27,8 @@ export const GENERIC_ERROR_CODES = Object.freeze({
   METHOD_NOT_ALLOWED: 405,
   REQUEST_TIMEOUT: 408,
   CONFLICT: 409,
+  /** An `If-Match` that does not name the stored revision (optimistic lock on admin config writes). */
+  PRECONDITION_FAILED: 412,
   PAYLOAD_TOO_LARGE: 413,
   UNSUPPORTED_MEDIA_TYPE: 415,
   RATE_LIMITED: 429,
@@ -437,6 +439,23 @@ export const WATERMARK_ERROR_CODES = Object.freeze({
   WATERMARK_AUDIT_UNAVAILABLE: 503
 });
 
+/**
+ * Refusals that keep an installation administrable (`server/utils/adminGuards.js`):
+ * a change that would lock the signed-in admin out, or leave no admin who can sign in.
+ */
+export const ADMIN_GUARD_ERROR_CODES = Object.freeze({
+  /** A platform save would remove the caller's own sign-in method, or every admin's. */
+  AUTH_LOCKOUT: 409,
+  /** A user or group change would leave no active admin who can sign in. */
+  LAST_ADMIN: 409,
+  /** An admin tried to deactivate or delete their own account. */
+  SELF_LOCKOUT: 409,
+  /** A group cannot be deleted while other groups inherit from it. */
+  GROUP_IN_USE: 409,
+  /** The check that an admin keeps access could not run; nothing was changed. */
+  ADMIN_CHECK_FAILED: 503
+});
+
 /** Every code, with its default HTTP status. */
 export const API_ERROR_CODES = Object.freeze({
   ...GENERIC_ERROR_CODES,
@@ -461,7 +480,8 @@ export const API_ERROR_CODES = Object.freeze({
   ...PROJECT_ERROR_CODES,
   ...VOICE_ERROR_CODES,
   ...MISC_ERROR_CODES,
-  ...WATERMARK_ERROR_CODES
+  ...WATERMARK_ERROR_CODES,
+  ...ADMIN_GUARD_ERROR_CODES
 });
 
 /**

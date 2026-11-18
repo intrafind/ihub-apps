@@ -31,7 +31,7 @@ function writeDraft(value) {
 }
 
 const FIELD =
-  'w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus-visible:ring-2 focus-visible:ring-indigo-500 focus:outline-hidden';
+  'w-full rounded-lg border border-admin-control-border dark:border-admin-control-border-dark bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus-visible:ring-2 focus-visible:ring-indigo-500 focus:outline-hidden';
 
 /**
  * The dialog of the EU AI Act master switch. `mode="off"` demands the reason

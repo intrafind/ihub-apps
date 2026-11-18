@@ -45,6 +45,10 @@ const MonacoJsonEditor = ({
   const [isValidJson, setIsValidJson] = useState(true);
   const isInternalChange = useRef(false);
   const lastExternalValue = useRef(null);
+  // Whether the current text parses. Monaco's markers arrive late (the JSON
+  // worker publishes them after a debounce) and never arrive when the worker
+  // fails to load, so a parse failure alone already makes the text invalid.
+  const textParsesRef = useRef(true);
 
   // Convert object to formatted JSON string - only when value changes externally
   useEffect(() => {
@@ -107,11 +111,14 @@ const MonacoJsonEditor = ({
 
         setValidationErrors(errors);
         const hasErrors = errors.some(error => error.severity === monaco.MarkerSeverity.Error);
-        setIsValidJson(!hasErrors);
+        // Markers lag behind typing: an empty marker list for text that does
+        // not parse is stale, not a sign the text became valid.
+        const isValid = !hasErrors && textParsesRef.current;
+        setIsValidJson(isValid);
 
         if (onValidationChange) {
           onValidationChange({
-            isValid: !hasErrors,
+            isValid,
             errors: errors
           });
         }
@@ -136,10 +143,19 @@ const MonacoJsonEditor = ({
   const handleEditorChange = newValue => {
     setJsonString(newValue || '');
 
-    // Attempt to parse and validate JSON
+    // Attempt to parse and validate JSON. The result is reported at once, so
+    // a caller can hold back Save while the text does not parse, without
+    // waiting for Monaco's markers.
     try {
       const parsed = JSON.parse(newValue || '{}');
+      const parsedBefore = textParsesRef.current;
+      textParsesRef.current = true;
       setIsValidJson(true);
+      // Clear a parse failure reported earlier; schema errors still come
+      // from the markers.
+      if (!parsedBefore && onValidationChange) {
+        onValidationChange({ isValid: true, errors: [] });
+      }
 
       if (onChange) {
         // Mark this as an internal change to prevent useEffect from resetting
@@ -147,8 +163,15 @@ const MonacoJsonEditor = ({
         lastExternalValue.current = JSON.stringify(parsed);
         onChange(parsed);
       }
-    } catch {
+    } catch (error) {
+      textParsesRef.current = false;
       setIsValidJson(false);
+      if (onValidationChange) {
+        onValidationChange({
+          isValid: false,
+          errors: [{ message: error.message, severity: 8 }]
+        });
+      }
       // Don't call onChange for invalid JSON
     }
   };
@@ -184,11 +207,12 @@ const MonacoJsonEditor = ({
           const hasErrors = errors.some(
             error => error.severity === monacoRef.current.MarkerSeverity.Error
           );
-          setIsValidJson(!hasErrors);
+          const isValid = !hasErrors && textParsesRef.current;
+          setIsValidJson(isValid);
 
           if (onValidationChange) {
             onValidationChange({
-              isValid: !hasErrors,
+              isValid,
               errors: errors
             });
           }

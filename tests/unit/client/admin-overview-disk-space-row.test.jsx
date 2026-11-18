@@ -29,6 +29,10 @@ jest.mock('../../../client/src/features/admin/hooks/useUpdateCheck', () => ({
   __esModule: true,
   useUpdateCheck: () => ({ updateInfo: null })
 }));
+jest.mock('../../../client/src/features/admin/hooks/useSetupChecklist', () => ({
+  __esModule: true,
+  useSetupChecklist: () => ({ steps: null, visible: false, dismiss: () => {} })
+}));
 jest.mock('../../../client/src/shared/contexts/UIConfigContext', () => ({
   __esModule: true,
   useUIConfig: () => ({ uiConfig: {} })
@@ -38,6 +42,11 @@ jest.mock('../../../client/src/shared/contexts/AuthContext', () => ({
   useAuth: () => ({ user: { isAdmin: true, permissions: { adminAccess: true } } })
 }));
 jest.mock('../../../client/src/features/admin/components/AdminDemoAccountsAlert', () => ({
+  __esModule: true,
+  default: () => null
+}));
+// The load-error banner's icon pulls in runtimeBasePath (import.meta).
+jest.mock('../../../client/src/shared/components/Icon', () => ({
   __esModule: true,
   default: () => null
 }));

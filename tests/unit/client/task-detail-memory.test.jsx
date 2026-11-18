@@ -267,7 +267,6 @@ describe('TaskDetailPage: memory', () => {
   });
 
   it('clears the notes through the API after confirmation', async () => {
-    const confirm = jest.spyOn(window, 'confirm').mockReturnValue(true);
     fetchScheduledTaskMemory
       .mockResolvedValueOnce(MEMORY)
       .mockResolvedValue({ ...MEMORY, body: '', version: 4, chars: 0 });
@@ -276,22 +275,28 @@ describe('TaskDetailPage: memory', () => {
     await act(async () => {
       fireEvent.click(within(memoryCard()).getByRole('button', { name: 'Clear' }));
     });
+    // A confirmation dialog, not window.confirm: nothing is cleared before it.
+    expect(deleteScheduledTaskMemory).not.toHaveBeenCalled();
+    await act(async () => {
+      fireEvent.click(
+        within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Clear notes' })
+      );
+    });
     await flush();
 
-    expect(confirm).toHaveBeenCalled();
     expect(deleteScheduledTaskMemory).toHaveBeenCalledWith('st-1');
     expect(notes()).toHaveValue('');
-    confirm.mockRestore();
   });
 
   it('does not clear when the owner declines', async () => {
-    const confirm = jest.spyOn(window, 'confirm').mockReturnValue(false);
     await renderPage();
     await act(async () => {
       fireEvent.click(within(memoryCard()).getByRole('button', { name: 'Clear' }));
     });
+    fireEvent.click(
+      within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Cancel' })
+    );
     expect(deleteScheduledTaskMemory).not.toHaveBeenCalled();
-    confirm.mockRestore();
   });
 
   it('says the notes are kept but unused while memory is off', async () => {

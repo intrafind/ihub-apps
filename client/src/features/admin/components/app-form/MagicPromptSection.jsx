@@ -3,6 +3,7 @@
 
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../../../utils/localizeContent';
+import { CHECKBOX_CLASS } from '../formStyles';
 
 /**
  * MagicPromptSection - Magic Prompt (AI-powered prompt enhancement) configuration
@@ -42,7 +43,7 @@ function MagicPromptSection({ app, onChange, availableModels = [] }) {
                 type="checkbox"
                 checked={app.features?.magicPrompt?.enabled || false}
                 onChange={e => handleMagicPromptChange({ enabled: e.target.checked })}
-                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
+                className={CHECKBOX_CLASS}
               />
               <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
                 {t('admin.apps.edit.enableMagicPrompt', 'Enable Magic Prompt')}
@@ -58,7 +59,7 @@ function MagicPromptSection({ app, onChange, availableModels = [] }) {
                   <select
                     value={app.features?.magicPrompt?.model || ''}
                     onChange={e => handleMagicPromptChange({ model: e.target.value || undefined })}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    className="mt-1 block w-full rounded-md border border-admin-control-border dark:border-admin-control-border-dark shadow-xs focus:border-admin-accent focus:ring-admin-accent sm:text-sm"
                   >
                     <option value="">{t('admin.apps.edit.selectModel', 'Select model...')}</option>
                     {availableModels.map(model => (
@@ -80,7 +81,7 @@ function MagicPromptSection({ app, onChange, availableModels = [] }) {
                     }
                     onChange={e => handleMagicPromptChange({ prompt: e.target.value })}
                     rows={3}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    className="mt-1 block w-full rounded-md border border-admin-control-border dark:border-admin-control-border-dark shadow-xs focus:border-admin-accent focus:ring-admin-accent sm:text-sm"
                     placeholder="Enter instructions for the magic prompt feature..."
                   />
                   <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">

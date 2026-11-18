@@ -51,6 +51,7 @@ import {
 } from '../utils/projectAdmin';
 import { localizedText } from '../../projects/utils/projectItems';
 import { removeItemsInTurn, withoutItems } from '../../projects/utils/removeItems';
+import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
 
 // The chat pulls in the whole chat page: load it when an admin opens it.
 const ProjectTestPanel = lazy(() => import('../components/ProjectTestPanel'));
@@ -667,15 +668,7 @@ function AdminProjectEditPageContent({ id }) {
         onConfirm={handleBulkDelete}
         onDeny={() => setBulkDelete([])}
       />
-      <ConfirmDialog
-        isOpen={blocker.state === 'blocked'}
-        title={t('admin.projects.unsaved.title', 'Unsaved changes')}
-        message={t('admin.projects.unsaved.message', 'You have unsaved changes. Leave anyway?')}
-        confirmLabel={t('admin.projects.unsaved.leave', 'Leave')}
-        denyLabel={t('admin.projects.unsaved.stay', 'Stay')}
-        onConfirm={() => blocker.proceed?.()}
-        onDeny={() => blocker.reset?.()}
-      />
+      <UnsavedChangesDialog blocker={blocker} />
 
       {split && (
         <Suspense

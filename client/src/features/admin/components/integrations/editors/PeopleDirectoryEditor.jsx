@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import AdminFormErrorSummary from '../../AdminFormErrorSummary';
 import { CALLOUT_CLASS, HELP_CLASS, INPUT_CLASS, LABEL_CLASS } from '../../formStyles';
 import { fetchPeopleDirectoryEditorContext } from '../../../../../api/integrationsAdminApi';
-import useInstallationEditor from './useInstallationEditor';
+import useInstallationEditor, { useInstallationEditorDirty } from './useInstallationEditor';
 import { ActionsSection, EditorFooter } from './InstallationEditorParts';
 import SourceSection from './peopleDirectory/SourceSection';
 import DirectoryAccessSection from './peopleDirectory/DirectoryAccessSection';
@@ -70,6 +70,7 @@ function PeopleDirectoryEditor({ instance, definition, onSaved, onCancel }) {
       description: instance.description
     })
   );
+  useInstallationEditorDirty(editor, form);
   const [context, setContext] = useState(null);
   const [problems, setProblems] = useState([]);
   const [query, setQuery] = useState('');

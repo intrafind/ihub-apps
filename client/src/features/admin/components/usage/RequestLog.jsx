@@ -17,7 +17,7 @@ const TH =
   'px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400';
 const TD = 'px-3 py-2 text-sm tabular-nums text-gray-700 dark:text-gray-300 whitespace-nowrap';
 const INPUT =
-  'mt-1 block w-full rounded-md border border-gray-300 bg-white px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200';
+  'mt-1 block w-full rounded-md border border-admin-control-border bg-white px-2 py-1 text-sm dark:border-admin-control-border-dark dark:bg-gray-800 dark:text-gray-200';
 
 const OUTCOME_STYLE = {
   ok: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',

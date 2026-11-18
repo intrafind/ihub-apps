@@ -1,0 +1,11 @@
+{
+  "type": "urn:ihub:problem:INVALID_VALUES",
+  "title": "Some of the entered values are not valid.",
+  "status": 400,
+  "detail": "Invalid install values",
+  "code": "INVALID_VALUES",
+  "errors": [
+    { "pointer": "/values/baseUrl", "code": "REQUIRED", "message": "required" },
+    { "pointer": "/values/maxRows", "code": "TOO_LARGE", "message": "must be at most 50" }
+  ]
+}

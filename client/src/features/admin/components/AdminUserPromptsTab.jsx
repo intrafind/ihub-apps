@@ -16,7 +16,7 @@ import { highlightVariables } from '../../../utils/highlightVariables';
 import { DataTable, SearchInput } from './data-table';
 
 const inputClass =
-  'block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500';
+  'block w-full rounded-md border border-admin-control-border dark:border-admin-control-border-dark bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500';
 
 /** A global prompt id derived from a name — the server applies the same rule. */
 const slugify = name =>
@@ -555,7 +555,7 @@ function AdminUserPromptsTab() {
   const actions = [
     {
       id: 'edit',
-      label: t('admin.prompts.edit', 'Edit'),
+      label: t('common.edit', 'Edit'),
       icon: 'pencil',
       priority: 'primary',
       onClick: prompt => setEditing(prompt)

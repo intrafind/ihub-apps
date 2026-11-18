@@ -190,15 +190,24 @@ export async function resolveAndValidatePath(filePath, baseDir) {
 
   try {
     const resolvedBase = path.resolve(baseDir);
+    const resolvedBaseWithSep = resolvedBase.endsWith(path.sep)
+      ? resolvedBase
+      : resolvedBase + path.sep;
 
-    // Lexical boundary check before any filesystem work. The relative-path
-    // guard (no '..' escape, not absolute) is the sanitizer shape that both
-    // humans and static analysis (CodeQL js/path-injection) can verify.
-    const relative = path.relative(resolvedBase, path.resolve(resolvedBase, filePath));
-    if (relative.startsWith('..') || path.isAbsolute(relative)) {
+    // Lexical boundary check before any filesystem work: the resolved path is
+    // the base itself or starts with the base and a separator. Written as
+    // `path.resolve` followed by a `startsWith` check on its result, the shape
+    // static analysis (CodeQL js/path-injection) recognises as the guard, so
+    // nothing below works on an unchecked path.
+    const candidate = path.resolve(resolvedBase, filePath);
+    let resolvedFull;
+    if (candidate === resolvedBase) {
+      resolvedFull = resolvedBase;
+    } else if (candidate.startsWith(resolvedBaseWithSep)) {
+      resolvedFull = candidate;
+    } else {
       return null;
     }
-    const resolvedFull = path.join(resolvedBase, relative);
 
     const canonicalBase = await fs.realpath(resolvedBase);
 

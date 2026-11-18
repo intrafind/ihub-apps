@@ -16,8 +16,10 @@ import { fetchSkills } from '../../api/endpoints/skills';
  * @param {Object} props
  * @param {string[]} props.selectedSkills - Array of selected skill name strings
  * @param {Function} props.onSkillsChange - Callback receiving updated array of skill name strings
+ * @param {string} [props.helperText] - Text under the field; defaults to the app wording
+ *   ("…add to this app…"), so a caller that is not an app passes its own.
  */
-function SkillsSelector({ selectedSkills = [], onSkillsChange }) {
+function SkillsSelector({ selectedSkills = [], onSkillsChange, helperText }) {
   const { t } = useTranslation();
   const [searchTerm, setSearchTerm] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -150,7 +152,7 @@ function SkillsSelector({ selectedSkills = [], onSkillsChange }) {
             onChange={handleSearchChange}
             onKeyDown={handleSearchKeyDown}
             onFocus={() => setIsDropdownOpen(true)}
-            className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            className="block w-full pl-10 pr-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-300 focus:ring-2 focus:ring-admin-accent focus:border-admin-accent"
             autoComplete="off"
           />
         </div>
@@ -197,10 +199,11 @@ function SkillsSelector({ selectedSkills = [], onSkillsChange }) {
 
       {/* Helper text */}
       <p className="text-sm text-gray-500 dark:text-gray-400">
-        {t(
-          'admin.apps.edit.skillsHelper',
-          'Search and select skills to add to this app. Click on selected skills to remove them.'
-        )}
+        {helperText ||
+          t(
+            'admin.apps.edit.skillsHelper',
+            'Search and select skills to add to this app. Click on selected skills to remove them.'
+          )}
       </p>
     </div>
   );

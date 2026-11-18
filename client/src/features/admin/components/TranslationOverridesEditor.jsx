@@ -5,27 +5,35 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { makeAdminApiCall, getAdminApiErrorMessage } from '../../../api/adminApi';
 import i18nService from '../../../services/i18nService';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import UnsavedChangesDialog from './UnsavedChangesDialog';
+import { CHECKBOX_CLASS, INPUT_CLASS } from './formStyles';
 
 const PAGE_SIZE = 50;
 
 /**
  * Search and edit translation overrides (`contents/locales/{lang}.json`).
  *
- * Opens on the keys that were changed; searching (or switching "changed only"
- * off) explores the whole built-in catalogue so any key can be overridden.
+ * Searches the whole built-in catalogue, so any key can be found and
+ * overridden; "Changed only" narrows the list to the keys already changed.
  * Each row saves on its own — an override is a single key, never a batch.
+ * Unsaved edits are kept per language: switching the language never carries
+ * a draft into another language's file.
  */
 function TranslationOverridesEditor({ languages, initialLanguage }) {
   const { t, i18n } = useTranslation();
   const [language, setLanguage] = useState(initialLanguage || languages[0] || 'en');
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
-  const [changedOnly, setChangedOnly] = useState(true);
+  // Off by default: a search must find labels that were never changed (CU-B7).
+  const [changedOnly, setChangedOnly] = useState(false);
   const [data, setData] = useState({ items: [], total: 0, changedCount: 0 });
   const [limit, setLimit] = useState(PAGE_SIZE);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [drafts, setDrafts] = useState({});
+  // Unsaved edits by language, then key: { en: { 'common.save': '…' } } (CU-B8).
+  const [draftsByLanguage, setDraftsByLanguage] = useState({});
+  const drafts = draftsByLanguage[language] || {};
   const [busyKey, setBusyKey] = useState(null);
   const requestIdRef = useRef(0);
 
@@ -71,6 +79,23 @@ function TranslationOverridesEditor({ languages, initialLanguage }) {
     }
   };
 
+  /** Set or drop (`value` undefined) the draft of `key` in the current language. */
+  const setDraft = (key, value) =>
+    setDraftsByLanguage(prev => {
+      const forLanguage = { ...prev[language] };
+      if (value === undefined) delete forLanguage[key];
+      else forLanguage[key] = value;
+      return { ...prev, [language]: forLanguage };
+    });
+  const discardDraft = key => setDraft(key, undefined);
+
+  // Languages other than the shown one that still hold unsaved edits (R6):
+  // their drafts are not on screen, so the selector and a note name them.
+  const unsavedCountOf = code => Object.keys(draftsByLanguage[code] || {}).length;
+  const otherLanguagesWithDrafts = languages.filter(
+    code => code !== language && unsavedCountOf(code) > 0
+  );
+
   const save = async (entry, value) => {
     setBusyKey(entry.key);
     try {
@@ -78,11 +103,7 @@ function TranslationOverridesEditor({ languages, initialLanguage }) {
         method: 'PUT',
         body: { path: entry.path, value }
       });
-      setDrafts(prev => {
-        const next = { ...prev };
-        delete next[entry.key];
-        return next;
-      });
+      discardDraft(entry.key);
       setError('');
       await load();
       await refreshClientTranslations();
@@ -94,6 +115,20 @@ function TranslationOverridesEditor({ languages, initialLanguage }) {
   };
 
   const hasMore = data.items.length < data.total;
+
+  // A draft that differs from the text it edits is an unsaved change. A draft
+  // for a key the current list no longer shows (another search) still counts.
+  const hasUnsavedDrafts = Object.entries(drafts).some(([key, draft]) => {
+    const entry = data.items.find(item => item.key === key);
+    if (!entry) return true;
+    return draft !== (entry.override ?? entry.base ?? '');
+  });
+  // Drafts in another language are pending edits too (the selector says so); a
+  // draft is dropped on save or discard, so every remaining one is a real edit.
+  const { blocker } = useUnsavedChanges(
+    false,
+    hasUnsavedDrafts || otherLanguagesWithDrafts.length > 0
+  );
 
   return (
     <div className="mt-8 bg-white dark:bg-gray-800 shadow-sm sm:rounded-lg px-4 py-5 sm:p-6">
@@ -115,11 +150,17 @@ function TranslationOverridesEditor({ languages, initialLanguage }) {
             setLanguage(e.target.value);
             setLimit(PAGE_SIZE);
           }}
-          className="rounded-lg border-gray-300 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+          className={`${INPUT_CLASS} sm:w-auto`}
         >
           {languages.map(code => (
             <option key={code} value={code}>
-              {code}
+              {unsavedCountOf(code) > 0
+                ? t('admin.localization.overrides.languageUnsaved', {
+                    defaultValue: '{{language}} ({{unsaved}} unsaved)',
+                    language: code,
+                    unsaved: unsavedCountOf(code)
+                  })
+                : code}
             </option>
           ))}
         </select>
@@ -135,7 +176,7 @@ function TranslationOverridesEditor({ languages, initialLanguage }) {
             'Search by key or text, e.g. "answerSource" or "email"'
           )}
           aria-label={t('admin.localization.overrides.searchLabel', 'Search translations')}
-          className="block w-full flex-1 rounded-lg border-gray-300 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+          className={`${INPUT_CLASS} block flex-1`}
         />
         <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap">
           <input
@@ -145,11 +186,22 @@ function TranslationOverridesEditor({ languages, initialLanguage }) {
               setChangedOnly(e.target.checked);
               setLimit(PAGE_SIZE);
             }}
-            className="rounded border-gray-300 text-indigo-600"
+            className={CHECKBOX_CLASS}
           />
           {t('admin.localization.overrides.changedOnly', 'Changed only')} ({data.changedCount})
         </label>
       </div>
+
+      <p role="status" className="mt-2 text-sm text-amber-700 dark:text-amber-300 empty:hidden">
+        {otherLanguagesWithDrafts.length > 0 &&
+          t('admin.localization.overrides.unsavedElsewhere', {
+            defaultValue:
+              'Unsaved edits in {{languages}}. Switch to that language and save them before you leave this page.',
+            languages: otherLanguagesWithDrafts
+              .map(code => `${code} (${unsavedCountOf(code)})`)
+              .join(', ')
+          })}
+      </p>
 
       {error && (
         <div
@@ -190,9 +242,12 @@ function TranslationOverridesEditor({ languages, initialLanguage }) {
                 rows={Math.min(4, Math.max(1, Math.ceil(value.length / 80)))}
                 value={value}
                 disabled={busy || entry.unknown}
-                onChange={e => setDrafts(prev => ({ ...prev, [entry.key]: e.target.value }))}
+                onChange={e =>
+                  // Typing the stored text back is no edit: it leaves no draft behind.
+                  setDraft(entry.key, e.target.value === current ? undefined : e.target.value)
+                }
                 aria-label={entry.key}
-                className="mt-1 block w-full rounded-lg border-gray-300 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                className={`${INPUT_CLASS} mt-1 block`}
               />
               <div className="mt-2 flex gap-2">
                 <button
@@ -206,13 +261,7 @@ function TranslationOverridesEditor({ languages, initialLanguage }) {
                 {dirty && (
                   <button
                     type="button"
-                    onClick={() =>
-                      setDrafts(prev => {
-                        const next = { ...prev };
-                        delete next[entry.key];
-                        return next;
-                      })
-                    }
+                    onClick={() => discardDraft(entry.key)}
                     className="rounded-lg border border-gray-300 px-3 py-1 text-xs text-gray-700 dark:border-gray-600 dark:text-gray-200"
                   >
                     {t('admin.localization.overrides.cancel', 'Cancel')}
@@ -256,6 +305,7 @@ function TranslationOverridesEditor({ languages, initialLanguage }) {
           </button>
         </div>
       )}
+      <UnsavedChangesDialog blocker={blocker} />
     </div>
   );
 }

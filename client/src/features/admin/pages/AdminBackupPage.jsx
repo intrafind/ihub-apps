@@ -1,11 +1,14 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
+import ConfirmDialog from '../../../shared/components/ConfirmDialog';
+import UploadConfigButton from '../components/UploadConfigButton';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import { apiErrorMessage } from '../../../utils/apiErrorMessage';
+import { formatBytes } from '../utils/systemResourcesFormat';
 
 /**
  * The text of a failed import: what the server says happened to the live configuration, plus
@@ -22,12 +25,33 @@ function importErrorText(error, t) {
   return [data.detail, hint, reason && `(${reason})`].filter(Boolean).join(' ');
 }
 
+/**
+ * The token an admin types to confirm an import: the host this admin UI is
+ * served from. It names the instance whose contents will be replaced, so a
+ * restore meant for staging can't be confirmed on production by reflex.
+ *
+ * @returns {string}
+ */
+export function importConfirmationToken() {
+  return window.location.host;
+}
+
+/**
+ * Admin → Backup & Restore. Export downloads the whole `contents/` folder as a
+ * ZIP; Import replaces it from such a ZIP.
+ *
+ * Choosing a file never uploads it (PL-B1): it opens a type-to-confirm dialog
+ * naming the file, its size and what happens to the current contents; only
+ * the confirm button sends `POST /admin/backup/_import`.
+ */
 function AdminBackupPage() {
   const { t } = useTranslation();
-  const fileInputRef = useRef(null);
   const [exportLoading, setExportLoading] = useState(false);
   const [importLoading, setImportLoading] = useState(false);
   const [importMessage, setImportMessage] = useState('');
+  // The ZIP the admin picked, waiting for the typed confirmation.
+  const [pendingFile, setPendingFile] = useState(null);
+  const [importError, setImportError] = useState(null);
 
   const handleExportConfig = async () => {
     setExportLoading(true);
@@ -65,11 +89,19 @@ function AdminBackupPage() {
     }
   };
 
-  const handleImportConfig = async event => {
-    const file = event.target.files[0];
+  /**
+   * The picker's change handler: checks the file type and opens the
+   * confirmation. Nothing is uploaded here.
+   *
+   * @param {Event} event - Change event of the file input.
+   */
+  const handleFileChosen = event => {
+    const file = event.target.files?.[0];
+    // Reset the input so choosing the same file again opens the dialog again.
+    event.target.value = '';
     if (!file) return;
 
-    if (!file.name.endsWith('.zip')) {
+    if (!file.name.toLowerCase().endsWith('.zip')) {
       setImportMessage({
         type: 'error',
         text: t('admin.system.importInvalidFile', 'Please select a ZIP file')
@@ -77,8 +109,23 @@ function AdminBackupPage() {
       return;
     }
 
-    setImportLoading(true);
     setImportMessage('');
+    setImportError(null);
+    setPendingFile(file);
+  };
+
+  const cancelImport = () => {
+    setPendingFile(null);
+    setImportError(null);
+  };
+
+  /** Uploads the confirmed ZIP. Errors stay in the dialog so the admin can retry or cancel. */
+  const handleImportConfirmed = async () => {
+    const file = pendingFile;
+    if (!file) return;
+
+    setImportLoading(true);
+    setImportError(null);
 
     try {
       const formData = new FormData();
@@ -89,7 +136,8 @@ function AdminBackupPage() {
         body: formData
       });
 
-      const data = response.data;
+      const data = response.data || {};
+      setPendingFile(null);
       setImportMessage({
         type: 'success',
         text: t(
@@ -98,17 +146,12 @@ function AdminBackupPage() {
           { fileCount: data.importedFiles, backup: data.backupPath }
         )
       });
-
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
     } catch (error) {
-      setImportMessage({
-        type: 'error',
-        text: t('admin.system.importError', 'Failed to import configuration: {{error}}', {
+      setImportError(
+        t('admin.system.importError', 'Failed to import configuration: {{error}}', {
           error: importErrorText(error, t)
         })
-      });
+      );
     } finally {
       setImportLoading(false);
     }
@@ -143,6 +186,30 @@ function AdminBackupPage() {
                   'Export your complete configuration as a ZIP file for disaster recovery, or import a configuration backup to restore your system. This includes all apps, models, groups, custom pages, and frontend customizations (CSS, HTML, etc.).'
                 )}
               </p>
+
+              <div
+                className="bg-amber-50 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700 rounded-md p-4 mb-4"
+                data-testid="backup-sensitivity-callout"
+              >
+                <div className="flex">
+                  <Icon
+                    name="exclamation-triangle"
+                    size="md"
+                    className="text-amber-700 dark:text-amber-300 mt-0.5 mr-3 shrink-0"
+                  />
+                  <div>
+                    <h4 className="text-sm font-medium text-amber-900 dark:text-amber-200">
+                      {t('admin.backup.sensitivity.title', 'Store the export like a key')}
+                    </h4>
+                    <p className="text-sm text-amber-900 dark:text-amber-200 mt-1">
+                      {t(
+                        'admin.backup.sensitivity.body',
+                        "The export is not encrypted. It contains the encryption key for stored secrets, the JWT signing keys and the users' password hashes. Anyone who has the file can decrypt every stored secret and create valid sign-in tokens. Keep it where only administrators can read it, and delete copies you no longer need."
+                      )}
+                    </p>
+                  </div>
+                </div>
+              </div>
 
               <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-md p-4 mb-4">
                 <div className="flex">
@@ -239,55 +306,13 @@ function AdminBackupPage() {
                   )}
                 </button>
 
-                <div className="relative">
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    onChange={handleImportConfig}
-                    accept=".zip"
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                    disabled={importLoading}
-                  />
-                  <button
-                    disabled={importLoading}
-                    className={`inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md shadow-xs text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 ${
-                      importLoading
-                        ? 'cursor-not-allowed opacity-50'
-                        : 'hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-green-500'
-                    }`}
-                  >
-                    {importLoading ? (
-                      <>
-                        <svg
-                          className="animate-spin -ml-1 mr-3 h-4 w-4 text-gray-700"
-                          xmlns="http://www.w3.org/2000/svg"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                        >
-                          <circle
-                            className="opacity-25"
-                            cx="12"
-                            cy="12"
-                            r="10"
-                            stroke="currentColor"
-                            strokeWidth="4"
-                          />
-                          <path
-                            className="opacity-75"
-                            fill="currentColor"
-                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                          />
-                        </svg>
-                        {t('admin.system.importing', 'Importing Configuration...')}
-                      </>
-                    ) : (
-                      <>
-                        <Icon name="upload" size="md" className="mr-2" />
-                        {t('admin.system.importConfig', 'Import Configuration')}
-                      </>
-                    )}
-                  </button>
-                </div>
+                <UploadConfigButton
+                  accept=".zip,application/zip"
+                  onChange={handleFileChosen}
+                  uploading={importLoading}
+                  label={t('admin.system.importConfig', 'Import Configuration')}
+                  uploadingLabel={t('admin.system.importing', 'Importing Configuration...')}
+                />
               </div>
 
               <div className="mt-4 text-sm text-gray-500 dark:text-gray-400">
@@ -302,6 +327,48 @@ function AdminBackupPage() {
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        isOpen={Boolean(pendingFile)}
+        title={t('admin.backup.importConfirm.title', {
+          name: pendingFile?.name || '',
+          defaultValue: 'Replace all contents with "{{name}}"?'
+        })}
+        message={t(
+          'admin.backup.importConfirm.message',
+          'Importing replaces everything in contents/ on this server: configuration, users and groups, keys, chats and uploaded data.'
+        )}
+        consequences={
+          pendingFile
+            ? [
+                t('admin.backup.importConfirm.file', {
+                  name: pendingFile.name,
+                  size: formatBytes(pendingFile.size),
+                  defaultValue: 'File: {{name}} ({{size}})'
+                }),
+                t(
+                  'admin.backup.importConfirm.preImportCopy',
+                  'Current contents are kept as a pre-import copy in contents/.backups (the last 3 are kept).'
+                ),
+                t(
+                  'admin.backup.importConfirm.signIn',
+                  'Users, passwords and keys come from the file: you may have to sign in again.'
+                )
+              ]
+            : []
+        }
+        typedConfirmation={{
+          token: importConfirmationToken(),
+          label: t('admin.backup.importConfirm.typeHost', "To confirm, type this server's address")
+        }}
+        confirmLabel={t('admin.backup.importConfirm.action', 'Import and replace')}
+        busyLabel={t('admin.system.importing', 'Importing Configuration...')}
+        danger
+        busy={importLoading}
+        error={importError}
+        onConfirm={handleImportConfirmed}
+        onDeny={cancelImport}
+      />
     </div>
   );
 }

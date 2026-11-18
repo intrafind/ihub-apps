@@ -67,8 +67,27 @@ Restart the server after editing the file by hand.
 ### Step 1: Create an OAuth Client
 
 In the admin UI, open **Admin → OAuth → Clients** and click **Create OAuth Client**. Set the name,
-the token expiration and the allowed apps, models and prompts. The client ID and secret are shown
-once, after saving.
+the token expiration and the allowed apps, models and prompts. After saving, a dialog shows the
+client ID and the secret, with **Copy**. The secret is shown only this once; **Done** warns if you
+have not copied it yet.
+
+For a client-credentials client the allowed apps, models and prompts **are the grant**: the token
+has no user behind it, so the client can use exactly what is listed and nothing of a kind whose list
+is empty. A new client therefore starts with nothing selected and cannot be saved active without at
+least one app, model or prompt (a client of the OpenAI-compatible API needs only models); the editor
+also warns when it has apps but no models, because every app call needs a model. An existing client
+whose lists were all empty already, or an inactive one, can still be saved (for example to rename
+it). **All (\*)** grants every app, model or prompt, including ones added
+later, and shows a warning; prefer listing only what the client needs. For an authorization-code
+client the same lists narrow what the signed-in user's groups allow: an empty list adds no
+restriction, and **All (\*)** sets no limit at all, which the editor warns about too. A user's
+personal API key is edited the same way: it acts as its owner, so its lists narrow the owner's
+permissions. The editor warns when you change the grant types of an existing client, because that
+changes what the lists mean.
+
+The token endpoint issues a client-credentials token only to a client whose grant types include
+**Client Credentials**. A client registered for the authorization code flow only gets
+`400 unauthorized_client`, even with a valid secret.
 
 Or use the admin API:
 
@@ -82,6 +101,7 @@ curl -X POST https://your-ihub-instance.com/api/admin/oauth/clients \
     "scopes": ["chat", "models"],
     "allowedApps": ["chat", "summarizer"],
     "allowedModels": ["gpt-4", "claude-3"],
+    "allowedPrompts": [],
     "tokenExpirationMinutes": 60
   }'
 ```
@@ -90,7 +110,7 @@ curl -X POST https://your-ihub-instance.com/api/admin/oauth/clients \
 | --- | --- |
 | `name` | Required |
 | `scopes` | Scopes the client may request; default none |
-| `allowedApps`, `allowedModels`, `allowedPrompts` | IDs the client may use; an empty or missing list means all (`["*"]`) |
+| `allowedApps`, `allowedModels`, `allowedPrompts` | IDs the client may use, stored as sent. Client credentials: an empty or missing list means **none**, `["*"]` means all. Authorization code: an empty list means no restriction on the user's group permissions |
 | `allowedGroups` | Authorization Code flow only: groups a signing-in user must belong to; empty means any |
 | `tokenExpirationMinutes` | Default `oauth.defaultTokenExpirationMinutes` (60); at most `oauth.maxTokenExpirationMinutes` (1440) |
 
@@ -105,14 +125,16 @@ The answer is `201 Created`, with a `Location` header and the new client:
   "scopes": ["chat", "models"],
   "allowedApps": ["chat", "summarizer"],
   "allowedModels": ["gpt-4", "claude-3"],
-  "allowedPrompts": ["*"],
+  "allowedPrompts": [],
   "allowedGroups": [],
   "tokenExpirationMinutes": 60
 }
 ```
 
 > [!WARNING]
-> Save the `clientSecret` immediately. It is never shown again.
+> Save the `clientSecret` immediately. It is never shown again. The answer (and the one of
+> `POST /api/admin/oauth/clients/{clientId}/rotate-secret`) is sent with `Cache-Control: no-store`,
+> like the static API key from `POST /api/admin/oauth/clients/{clientId}/generate-token`.
 
 ### Step 2: Configure Your Application
 

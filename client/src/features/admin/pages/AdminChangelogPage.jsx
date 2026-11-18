@@ -1,14 +1,19 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { ChevronRightIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { ArrowLeftIcon, ArrowRightIcon, Bars3BottomLeftIcon } from '@heroicons/react/24/outline';
+import { ChevronRightIcon } from '@heroicons/react/20/solid';
+import './AdminDocsPage.css';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import { renderInlineMarkdown, renderMarkdown } from '../../../config/marked.config';
 import { useCodeBlockInteractions } from '../../../hooks/useCodeBlockInteractions';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
+import DocsDrawer from '../components/docs/DocsDrawer';
+import DocsOutline from '../components/docs/DocsOutline';
+import DocsSearch from '../components/docs/DocsSearch';
 import {
   buildReleaseTree,
   defaultExpandedGroups,
@@ -20,6 +25,7 @@ import {
   releaseSourcePath,
   rewriteDocsHtml
 } from '../utils/docsLinks';
+import { highlightDocsCode } from '../utils/docsHighlight';
 
 /**
  * Admin → What's New.
@@ -27,10 +33,13 @@ import {
  * `GET /admin/changelog` lists every release that has release notes (newest first, unreleased
  * changes ahead of them, with entry counts, and the `installed` / `isNew` flags the server
  * derives from the version this installation was upgraded from); `GET /admin/changelog/:version`
- * returns one release's entries per section, bodies as Markdown. One release is shown at a time:
- * a switcher on the left, and on the right the release with a table of contents followed by its
- * breaking changes, new & improved entries and fixes — in that order, because breaking changes
- * are what an admin has to act on.
+ * returns one release's entries per section, bodies as Markdown. One release is shown at a time,
+ * and the page looks and behaves like Admin → Documentation: a sticky header with the breadcrumb
+ * and the documentation search, the releases on the left (a drawer on small screens), the release
+ * in the documentation's reading column — breaking changes, new & improved entries and fixes, in
+ * that order, because breaking changes are what an admin has to act on — with newer/older at the
+ * bottom, and "In this release" on wide screens. The URL names the release (`?version=5.6.4`), so
+ * a link, a bookmark, a reload or Back lands on the same release.
  *
  * The switcher is a tree — `5.x` → `5.5.x` → the releases — because an installation that has been
  * running for a while has more releases than a flat list can show. Only the groups that hold the
@@ -105,39 +114,31 @@ const demoteHeadings = html =>
     (match, slash, level) => `<${slash}h${Number(level) + 1}`
   );
 
+const SCROLLER_ID = 'admin-main-content';
+
 const BADGE_TONES = {
   indigo: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200',
-  green: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',
-  amber: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'
+  green: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300'
 };
 
 function Badge({ tone, children }) {
   return (
     <span
-      className={`inline-flex shrink-0 items-center px-2 py-0.5 rounded-full text-xs font-medium ${BADGE_TONES[tone]}`}
+      className={`inline-flex shrink-0 items-center rounded-full px-1.5 py-px text-[11px] font-medium leading-4 ${BADGE_TONES[tone]}`}
     >
       {children}
     </span>
   );
 }
 
-function PageFrame({ title, subtitle, children }) {
-  return (
-    <div className="p-6 max-w-6xl mx-auto">
-      <header className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{title}</h1>
-        {subtitle && <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{subtitle}</p>}
-      </header>
-      {children}
-    </div>
-  );
-}
+/** The link that selects a release: the query string is the selection. */
+const releaseLink = version => ({ search: `?version=${encodeURIComponent(version)}` });
 
 function ErrorBox({ message, onRetry, retryLabel }) {
   return (
     <div
       role="alert"
-      className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 text-red-700 dark:text-red-400 flex flex-wrap items-center justify-between gap-3"
+      className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400"
     >
       <span>{message}</span>
       {onRetry && (
@@ -153,17 +154,17 @@ function ErrorBox({ message, onRetry, retryLabel }) {
   );
 }
 
-function ReleaseButton({ release, selected, onSelect, shortLabel, t }) {
+/** A release in the switcher, drawn like a page in the documentation contents. */
+function ReleaseLink({ release, selected, shortLabel, t }) {
   const active = release.version === selected;
   return (
-    <button
-      type="button"
-      onClick={() => onSelect(release.version)}
+    <Link
+      to={releaseLink(release.version)}
       aria-current={active ? 'page' : undefined}
-      className={`w-full flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md px-3 py-1.5 text-sm text-left transition-colors ${
+      className={`-ml-px flex flex-wrap items-center gap-x-2 gap-y-1 border-l-2 py-1 pl-3 pr-2 text-[13px] leading-5 transition-colors ${
         active
-          ? 'bg-indigo-50 text-indigo-700 font-semibold dark:bg-indigo-900/40 dark:text-indigo-200'
-          : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800'
+          ? 'border-indigo-600 font-medium text-indigo-700 dark:border-indigo-400 dark:text-indigo-300'
+          : 'border-transparent text-gray-600 hover:border-gray-300 hover:text-gray-900 dark:text-gray-400 dark:hover:border-gray-600 dark:hover:text-gray-100'
       }`}
     >
       <span className="shrink-0">{shortLabel(release)}</span>
@@ -171,39 +172,24 @@ function ReleaseButton({ release, selected, onSelect, shortLabel, t }) {
         <Badge tone="green">{t('admin.changelog.installed', 'Installed')}</Badge>
       )}
       {release.isNew && <Badge tone="indigo">{t('admin.changelog.new', 'New')}</Badge>}
-    </button>
+    </Link>
   );
 }
 
-/**
- * One level of the switcher tree. The chevron rotates instead of swapping icons so the control
- * keeps its place while a group opens.
- */
-function GroupToggle({ open, label, count, newCount, controls, onToggle, className = '', t }) {
+function GroupCount({ count, newCount, t }) {
   return (
-    <button
-      type="button"
-      onClick={onToggle}
-      aria-expanded={open}
-      aria-controls={controls}
-      className={`w-full flex flex-wrap items-center gap-x-1.5 gap-y-1 rounded-md px-2 py-1.5 text-sm text-left text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800 ${className}`}
-    >
-      <ChevronRightIcon
-        className={`h-4 w-4 shrink-0 text-gray-500 transition-transform ${open ? 'rotate-90' : ''}`}
-        aria-hidden="true"
-      />
-      <span className="truncate">{label}</span>
-      <span className="text-xs text-gray-500 dark:text-gray-400">{count}</span>
+    <>
+      <span className="font-normal tabular-nums text-gray-500 dark:text-gray-400">{count}</span>
       {newCount > 0 && (
         <Badge tone="indigo">
           {t('admin.changelog.newCount', '{{count}} new', { count: newCount })}
         </Badge>
       )}
-    </button>
+    </>
   );
 }
 
-function MinorGroup({ minor, selected, onSelect, expanded, onToggleGroup, shortLabel, t }) {
+function MinorGroup({ minor, selected, expanded, onToggleGroup, shortLabel, t }) {
   const [showAll, setShowAll] = useState(false);
   const open = expanded.has(minor.key);
   const listId = domId('release-group', minor.key);
@@ -211,26 +197,28 @@ function MinorGroup({ minor, selected, onSelect, expanded, onToggleGroup, shortL
 
   return (
     <li>
-      <GroupToggle
-        open={open}
-        label={t('admin.changelog.series', '{{series}}.x', { series: minor.key })}
-        count={minor.count}
-        newCount={minor.newCount}
-        controls={listId}
-        onToggle={() => onToggleGroup(minor.key)}
-        t={t}
-      />
+      <button
+        type="button"
+        onClick={() => onToggleGroup(minor.key)}
+        aria-expanded={open}
+        aria-controls={listId}
+        className="flex w-full flex-wrap items-center gap-x-2 gap-y-1 py-1 pl-3 pr-2 text-left text-[13px] font-medium leading-5 text-gray-900 hover:text-indigo-700 dark:text-gray-100 dark:hover:text-indigo-300"
+      >
+        <span>{t('admin.changelog.series', '{{series}}.x', { series: minor.key })}</span>
+        <GroupCount count={minor.count} newCount={minor.newCount} t={t} />
+        <ChevronRightIcon
+          aria-hidden="true"
+          className={`ml-auto h-4 w-4 shrink-0 text-gray-400 transition-transform ${open ? 'rotate-90' : ''}`}
+        />
+      </button>
       {open && (
-        <ul id={listId} className="mt-0.5 space-y-0.5 pl-3">
+        <ul
+          id={listId}
+          className="mt-px ml-3 space-y-px border-l border-gray-200 dark:border-gray-800"
+        >
           {releases.map(release => (
             <li key={release.version}>
-              <ReleaseButton
-                release={release}
-                selected={selected}
-                onSelect={onSelect}
-                shortLabel={shortLabel}
-                t={t}
-              />
+              <ReleaseLink release={release} selected={selected} shortLabel={shortLabel} t={t} />
             </li>
           ))}
           {hidden > 0 && (
@@ -238,7 +226,7 @@ function MinorGroup({ minor, selected, onSelect, expanded, onToggleGroup, shortL
               <button
                 type="button"
                 onClick={() => setShowAll(true)}
-                className="w-full rounded-md px-3 py-1.5 text-left text-xs font-medium text-indigo-600 hover:bg-gray-100 hover:underline dark:text-indigo-400 dark:hover:bg-gray-800"
+                className="block py-1 pl-3 pr-2 text-left text-[13px] leading-5 text-indigo-600 hover:underline dark:text-indigo-400"
               >
                 {t('admin.changelog.showOlder', 'Show {{count}} older', { count: hidden })}
               </button>
@@ -250,50 +238,51 @@ function MinorGroup({ minor, selected, onSelect, expanded, onToggleGroup, shortL
   );
 }
 
-function ReleaseSwitcher({ tree, selected, onSelect, expanded, onToggleGroup, shortLabel, t }) {
+/**
+ * The releases, drawn like the documentation contents: a major series is a section with a small
+ * uppercase toggle, a minor series a group on the guide line, a release a page.
+ */
+function ReleaseSwitcher({ tree, selected, expanded, onToggleGroup, shortLabel, t }) {
   return (
-    <nav
-      aria-label={t('admin.changelog.versions', 'Releases')}
-      className="lg:sticky lg:top-6 lg:self-start lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto"
-    >
-      <ul className="space-y-0.5">
-        {tree.unreleased.map(release => (
-          <li key={release.version}>
-            <ReleaseButton
-              release={release}
-              selected={selected}
-              onSelect={onSelect}
-              shortLabel={shortLabel}
-              t={t}
-            />
-          </li>
-        ))}
+    <nav aria-label={t('admin.changelog.versions', 'Releases')}>
+      {tree.unreleased.length > 0 && (
+        <ul className="mb-4 space-y-px">
+          {tree.unreleased.map(release => (
+            <li key={release.version}>
+              <ReleaseLink release={release} selected={selected} shortLabel={shortLabel} t={t} />
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="space-y-4">
         {tree.majors.map(major => {
           const open = expanded.has(major.key);
           const listId = domId('release-group', major.key);
           return (
-            <li key={major.key}>
-              <GroupToggle
-                open={open}
-                label={t('admin.changelog.series', '{{series}}.x', { series: major.major })}
-                count={major.count}
-                newCount={major.newCount}
-                controls={listId}
-                onToggle={() => onToggleGroup(major.key)}
-                className="font-medium"
-                t={t}
-              />
+            <div key={major.key}>
+              <button
+                type="button"
+                onClick={() => onToggleGroup(major.key)}
+                aria-expanded={open}
+                aria-controls={listId}
+                className="flex w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-sm py-1.5 pr-1 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
+              >
+                <span className="normal-case">
+                  {t('admin.changelog.series', '{{series}}.x', { series: major.major })}
+                </span>
+                <GroupCount count={major.count} newCount={major.newCount} t={t} />
+                <ChevronRightIcon
+                  aria-hidden="true"
+                  className={`ml-auto h-4 w-4 shrink-0 text-gray-400 transition-transform ${open ? 'rotate-90' : ''}`}
+                />
+              </button>
               {open && (
-                <ul
-                  id={listId}
-                  className="mt-0.5 space-y-0.5 pl-2 ml-3 border-l border-gray-200 dark:border-gray-700"
-                >
+                <ul id={listId} className="mt-1 space-y-px">
                   {major.minors.map(minor => (
                     <MinorGroup
                       key={minor.key}
                       minor={minor}
                       selected={selected}
-                      onSelect={onSelect}
                       expanded={expanded}
                       onToggleGroup={onToggleGroup}
                       shortLabel={shortLabel}
@@ -302,10 +291,10 @@ function ReleaseSwitcher({ tree, selected, onSelect, expanded, onToggleGroup, sh
                   ))}
                 </ul>
               )}
-            </li>
+            </div>
           );
         })}
-      </ul>
+      </div>
     </nav>
   );
 }
@@ -313,47 +302,46 @@ function ReleaseSwitcher({ tree, selected, onSelect, expanded, onToggleGroup, sh
 /**
  * What the last upgrade brought in. Only shown when this installation remembers a previous
  * version and at least one release since then has notes — on a fresh installation, or when the
- * jump crossed no documented release, there is nothing to point at.
+ * jump crossed no documented release, there is nothing to point at. Drawn as the documentation's
+ * "Important" callout.
  */
 function UpgradeNotice({ previousVersion, currentVersion, newCount, t }) {
   if (!previousVersion || !currentVersion || newCount === 0) return null;
   return (
-    <section
-      aria-labelledby="changelog-upgrade-notice"
-      className="mb-6 rounded-lg border border-indigo-200 bg-indigo-50 p-4 dark:border-indigo-800 dark:bg-indigo-900/20"
-    >
-      <p
-        id="changelog-upgrade-notice"
-        className="text-sm font-semibold text-indigo-900 dark:text-indigo-200"
-      >
-        {t('admin.changelog.upgradedFrom', 'Upgraded from {{previousVersion}} to {{version}}', {
-          previousVersion,
-          version: currentVersion
-        })}
-      </p>
-      <p className="mt-1 text-sm text-indigo-800 dark:text-indigo-300">
-        {t(
-          'admin.changelog.upgradedReleases',
-          '{{count}} releases are new to this installation — every one of them is marked New.',
-          { count: newCount }
-        )}
-      </p>
+    <section aria-labelledby="changelog-upgrade-notice" className="docs-prose mb-8">
+      <div className="docs-callout docs-callout-important">
+        <p id="changelog-upgrade-notice" className="docs-callout-title">
+          {t('admin.changelog.upgradedFrom', 'Upgraded from {{previousVersion}} to {{version}}', {
+            previousVersion,
+            version: currentVersion
+          })}
+        </p>
+        <p>
+          {t(
+            'admin.changelog.upgradedReleases',
+            '{{count}} releases are new to this installation — every one of them is marked New.',
+            { count: newCount }
+          )}
+        </p>
+      </div>
     </section>
   );
 }
 
-function TableOfContents({ id, release, sectionLabel, t }) {
+/**
+ * "In this release" inside the reading column, for screens without the outline column: one card
+ * per section with its entries, like the cards on the documentation start page.
+ */
+function TableOfContents({ release, sectionLabel, t }) {
   const groups = SECTIONS.filter(section => release.sections[section.key].length > 0);
   return (
     <nav
-      id={id}
-      tabIndex={-1}
       aria-label={t('admin.changelog.contents', 'In this release')}
-      className="scroll-mt-6 rounded-lg border border-gray-200 bg-gray-50 p-5 dark:border-gray-700 dark:bg-gray-800/60 focus:outline-hidden"
+      className="mb-10 rounded-lg border border-gray-200 p-4 xl:hidden dark:border-gray-800"
     >
-      <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-3">
+      <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
         {t('admin.changelog.contents', 'In this release')}
-      </h3>
+      </p>
       <div className="space-y-4">
         {groups.map(section => {
           const entries = release.sections[section.key];
@@ -363,29 +351,27 @@ function TableOfContents({ id, release, sectionLabel, t }) {
               <a
                 href={`#${sectionDomId}`}
                 onClick={event => scrollToElement(event, sectionDomId)}
-                className="text-sm font-semibold text-gray-900 hover:underline dark:text-gray-100"
+                className="text-sm font-semibold text-gray-900 hover:text-indigo-700 dark:text-gray-100 dark:hover:text-indigo-300"
               >
                 {sectionLabel(section)}{' '}
                 <span className="font-normal text-gray-500 dark:text-gray-400">
-                  ({entries.length})
+                  {entries.length}
                 </span>
               </a>
-              <ol
-                className={`mt-1 space-y-1 text-sm ${entries.length > 6 ? 'sm:columns-2 sm:gap-x-8' : ''}`}
-              >
+              <ul className="mt-1 space-y-1">
                 {entries.map(entry => (
-                  <li key={entry.id} className="break-inside-avoid">
+                  <li key={entry.id}>
                     <a
                       href={`#${entry.domId}`}
                       onClick={event => scrollToElement(event, entry.domId)}
-                      className="text-indigo-600 hover:underline dark:text-indigo-400"
+                      className="text-sm text-gray-600 hover:text-indigo-700 dark:text-gray-400 dark:hover:text-indigo-300"
                       // Titles are Markdown (inline code is common); rendered and sanitized
                       // with the shared marked config.
                       dangerouslySetInnerHTML={{ __html: entry.titleHtml }}
                     />
                   </li>
                 ))}
-              </ol>
+              </ul>
             </div>
           );
         })}
@@ -396,80 +382,73 @@ function TableOfContents({ id, release, sectionLabel, t }) {
 
 function ReleaseEntry({ entry }) {
   return (
-    <article id={entry.domId} tabIndex={-1} className="scroll-mt-6 py-5 focus:outline-hidden">
+    <article aria-labelledby={entry.domId}>
       <h3
-        className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2"
+        id={entry.domId}
+        tabIndex={-1}
+        className="focus:outline-hidden"
         dangerouslySetInnerHTML={{ __html: entry.titleHtml }}
       />
       {entry.bodyHtml && (
-        <div
-          className="prose prose-sm sm:prose-base dark:prose-invert max-w-none prose-headings:text-gray-900 dark:prose-headings:text-white prose-a:text-indigo-600 dark:prose-a:text-indigo-400"
-          // Sanitized by renderMarkdown (DOMPurify) before it gets here.
-          dangerouslySetInnerHTML={{ __html: entry.bodyHtml }}
-        />
+        // Sanitized by renderMarkdown (DOMPurify) before it gets here.
+        <div dangerouslySetInnerHTML={{ __html: entry.bodyHtml }} />
       )}
     </article>
   );
 }
 
-function ReleaseSection({ section, entries, release, tocId, sectionLabel, t }) {
+function ReleaseSection({ section, entries, release, first, sectionLabel, t }) {
   const breaking = section.key === 'breakingChanges';
   const sectionDomId = domId('release', release.version, section.key);
-  const headingId = `${sectionDomId}-heading`;
 
   return (
-    <section
-      id={sectionDomId}
-      aria-labelledby={headingId}
-      className={`scroll-mt-6 ${
-        breaking
-          ? 'rounded-lg border border-amber-300 bg-amber-50/70 p-5 dark:border-amber-700 dark:bg-amber-900/10'
-          : ''
+    <section aria-labelledby={sectionDomId}>
+      <h2
+        id={sectionDomId}
+        tabIndex={-1}
+        className={`focus:outline-hidden ${first ? 'mt-0!' : ''}`}
+      >
+        {sectionLabel(section)}{' '}
+        <span className="font-normal text-gray-500 dark:text-gray-400">{entries.length}</span>
+      </h2>
+      {breaking && (
+        <div className="docs-callout docs-callout-warning">
+          <p className="docs-callout-title">
+            {t(
+              'admin.changelog.breakingChangesHint',
+              'Action is needed before or after upgrading.'
+            )}
+          </p>
+        </div>
+      )}
+      {entries.map(entry => (
+        <ReleaseEntry key={entry.id} entry={entry} />
+      ))}
+    </section>
+  );
+}
+
+/** Newer or older release at the bottom, drawn like the documentation's previous/next. */
+function PagerLink({ release, direction, label, t }) {
+  const older = direction === 'older';
+  return (
+    <Link
+      to={releaseLink(release.version)}
+      className={`group flex flex-1 flex-col rounded-lg border border-gray-200 px-4 py-3 transition-colors hover:border-indigo-300 hover:bg-indigo-50/40 dark:border-gray-800 dark:hover:border-indigo-700 dark:hover:bg-indigo-950/30 ${
+        older ? 'items-end text-right' : 'items-start'
       }`}
     >
-      <div className="flex items-start gap-2">
-        {breaking && (
-          <ExclamationTriangleIcon
-            className="h-5 w-5 text-amber-500 dark:text-amber-400 shrink-0 mt-0.5"
-            aria-hidden="true"
-          />
-        )}
-        <div>
-          <h2
-            id={headingId}
-            className={`text-sm font-semibold uppercase tracking-wide ${
-              breaking ? 'text-amber-800 dark:text-amber-300' : 'text-gray-500 dark:text-gray-400'
-            }`}
-          >
-            {sectionLabel(section)} <span className="font-normal">({entries.length})</span>
-          </h2>
-          {breaking && (
-            <p className="text-sm text-amber-700 dark:text-amber-300">
-              {t(
-                'admin.changelog.breakingChangesHint',
-                'Action is needed before or after upgrading.'
-              )}
-            </p>
-          )}
-        </div>
-      </div>
-
-      <div className="divide-y divide-gray-100 dark:divide-gray-800">
-        {entries.map(entry => (
-          <ReleaseEntry key={entry.id} entry={entry} />
-        ))}
-      </div>
-
-      <div className="mt-2 text-right">
-        <a
-          href={`#${tocId}`}
-          onClick={event => scrollToElement(event, tocId)}
-          className="text-xs text-gray-500 hover:text-indigo-600 hover:underline dark:text-gray-400 dark:hover:text-indigo-400"
-        >
-          ↑ {t('admin.changelog.backToContents', 'Back to contents')}
-        </a>
-      </div>
-    </section>
+      <span className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
+        {!older && <ArrowLeftIcon className="h-3.5 w-3.5" aria-hidden="true" />}
+        {older
+          ? t('admin.changelog.olderRelease', 'Older release')
+          : t('admin.changelog.newerRelease', 'Newer release')}
+        {older && <ArrowRightIcon className="h-3.5 w-3.5" aria-hidden="true" />}
+      </span>
+      <span className="mt-0.5 text-sm font-medium text-gray-900 group-hover:text-indigo-700 dark:text-gray-100 dark:group-hover:text-indigo-300">
+        {label}
+      </span>
+    </Link>
   );
 }
 
@@ -528,8 +507,7 @@ function AdminChangelogPage() {
     if (index.versions.some(item => item.version === requestedVersion)) {
       setSelected(requestedVersion);
     }
-    // location.key: a link to the release named in the current query string still re-selects it
-    // after the admin picked another release in the switcher.
+    // location.key: following a link to the release already in the query string re-selects it.
   }, [requestedVersion, index, location.key]);
 
   // The selected release's entries, fetched on first selection and kept.
@@ -604,7 +582,11 @@ function AdminChangelogPage() {
               transformHtml: html =>
                 rewriteDocsHtml(
                   demoteHeadings(html),
-                  releaseSourcePath(release.version, section.file)
+                  releaseSourcePath(release.version, section.file),
+                  {
+                    docsComponents: true,
+                    tableLabel: t('admin.docs.tableLabel', 'Table')
+                  }
                 )
             })
           : ''
@@ -634,126 +616,243 @@ function AdminChangelogPage() {
   const sectionLabel = section => t(section.i18nKey, section.label);
 
   const title = t('admin.changelog.title', "What's New");
-  const subtitle = t(
-    'admin.changelog.subtitle',
-    'Release notes for every iHub Apps release, newest first.'
-  );
+  const articleRef = useRef(null);
+  const titleRef = useRef(null);
+  const firstSelectionRef = useRef(true);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
+  // Another release replaces the whole page, as another documentation page does: start at the
+  // top, close the drawer and, after the first one, move focus to the release's title.
+  useLayoutEffect(() => {
+    if (!selected) return;
+    setDrawerOpen(false);
+    if (!location.hash) {
+      const scroller = document.getElementById(SCROLLER_ID);
+      if (scroller) scroller.scrollTop = 0;
+    }
+    if (firstSelectionRef.current) firstSelectionRef.current = false;
+    else titleRef.current?.focus({ preventScroll: true });
+    // location.hash is read, not watched: the fragment effect handles a jump within a release.
+    // eslint-disable-next-line @eslint-react/exhaustive-deps
+  }, [selected]);
+
+  useEffect(() => {
+    if (prepared && articleRef.current) highlightDocsCode(articleRef.current).catch(() => {});
+  }, [prepared]);
+
+  const documentTitle = selectedMeta ? `${fullLabel(selectedMeta)} · ${title}` : title;
+  useEffect(() => {
+    document.title = documentTitle;
+  }, [documentTitle]);
+
+  const releaseError = selected ? releaseErrors[selected] : '';
+  const position = index ? index.versions.findIndex(item => item.version === selected) : -1;
+  const newer = position > 0 ? index.versions[position - 1] : null;
+  const older = position >= 0 ? (index.versions[position + 1] ?? null) : null;
+  const description = !selectedMeta
+    ? ''
+    : selectedMeta.unreleased
+      ? t(
+          'admin.changelog.unreleasedHint',
+          'Changes in this build that are not part of a tagged release yet.'
+        )
+      : SECTIONS.filter(section => selectedMeta.counts?.[section.key] > 0)
+          .map(section => `${selectedMeta.counts[section.key]} ${sectionLabel(section)}`)
+          .join(' · ');
+
+  let content;
   if (indexError) {
-    return (
-      <PageFrame title={title}>
-        <ErrorBox message={indexError} />
-      </PageFrame>
-    );
-  }
-
-  if (!index) {
-    return (
-      <PageFrame title={title}>
-        <LoadingSpinner message={t('admin.changelog.loading', 'Loading changelog...')} />
-      </PageFrame>
-    );
-  }
-
-  if (index.versions.length === 0) {
-    return (
-      <PageFrame title={title} subtitle={subtitle}>
-        <p className="text-gray-500 dark:text-gray-400">
+    content = <ErrorBox message={indexError} />;
+  } else if (!index) {
+    content = <LoadingSpinner message={t('admin.changelog.loading', 'Loading changelog...')} />;
+  } else if (index.versions.length === 0) {
+    content = (
+      <>
+        <h1 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl dark:text-white">
+          {title}
+        </h1>
+        <p className="mt-3 text-lg leading-relaxed text-gray-600 dark:text-gray-400">
           {t('admin.changelog.empty', 'No changelog entries yet.')}
         </p>
-      </PageFrame>
+      </>
     );
-  }
+  } else {
+    content = (
+      <>
+        <header className="mb-8">
+          <p className="mb-2 text-sm font-medium text-indigo-600 dark:text-indigo-400">{title}</p>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <h1
+              ref={titleRef}
+              tabIndex={-1}
+              className="text-3xl font-bold tracking-tight text-gray-900 focus:outline-hidden sm:text-4xl dark:text-white"
+            >
+              {selectedMeta ? fullLabel(selectedMeta) : title}
+            </h1>
+            {selectedMeta?.installed && (
+              <Badge tone="green">{t('admin.changelog.installed', 'Installed')}</Badge>
+            )}
+            {selectedMeta?.isNew && <Badge tone="indigo">{t('admin.changelog.new', 'New')}</Badge>}
+          </div>
+          {description && (
+            <p className="mt-3 text-lg leading-relaxed text-gray-600 dark:text-gray-400">
+              {description}
+            </p>
+          )}
+        </header>
 
-  const tocId = selected ? domId('release', selected, 'contents') : 'release-contents';
-  const releaseError = selected ? releaseErrors[selected] : '';
-  // Loading is the absence of both a result and an error for the selected release.
-  const loadingRelease = !!selected && !prepared && !releaseError;
-
-  return (
-    <PageFrame title={title} subtitle={subtitle}>
-      <UpgradeNotice
-        previousVersion={index.previousVersion}
-        currentVersion={index.currentVersion}
-        newCount={newCount}
-        t={t}
-      />
-      <div className="lg:grid lg:grid-cols-[15rem_minmax(0,1fr)] lg:gap-10">
-        <ReleaseSwitcher
-          tree={tree}
-          selected={selected}
-          onSelect={setSelected}
-          expanded={expanded}
-          onToggleGroup={toggleGroup}
-          shortLabel={shortLabel}
+        <UpgradeNotice
+          previousVersion={index.previousVersion}
+          currentVersion={index.currentVersion}
+          newCount={newCount}
           t={t}
         />
 
-        <div className="mt-4 min-w-0 lg:mt-0">
-          {selectedMeta && (
-            <div className="mb-5">
-              <div className="flex flex-wrap items-center gap-3">
-                <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
-                  {fullLabel(selectedMeta)}
-                </h2>
-                {selectedMeta.installed && (
-                  <Badge tone="green">{t('admin.changelog.installed', 'Installed')}</Badge>
-                )}
-                {selectedMeta.isNew && (
-                  <Badge tone="indigo">{t('admin.changelog.new', 'New')}</Badge>
-                )}
-              </div>
-              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                {selectedMeta.unreleased
-                  ? t(
-                      'admin.changelog.unreleasedHint',
-                      'Changes in this build that are not part of a tagged release yet.'
-                    )
-                  : SECTIONS.filter(section => selectedMeta.counts?.[section.key] > 0)
-                      .map(
-                        section => `${selectedMeta.counts[section.key]} ${sectionLabel(section)}`
-                      )
-                      .join(' · ')}
-              </p>
-            </div>
-          )}
-
-          {releaseError ? (
-            <ErrorBox
-              message={releaseError}
-              retryLabel={t('admin.changelog.retry', 'Try again')}
-              onRetry={() => {
-                setReleaseErrors(prev => ({ ...prev, [selected]: '' }));
-                setRetryToken(token => token + 1);
-              }}
-            />
-          ) : loadingRelease || !prepared ? (
-            <LoadingSpinner
-              message={t('admin.changelog.loadingRelease', 'Loading release notes...')}
-            />
-          ) : (
-            // Documentation links inside entry bodies navigate within the admin UI.
-            // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
-            <div className="space-y-8" onClick={event => handleDocsLinkClick(event, navigate)}>
-              <TableOfContents id={tocId} release={prepared} sectionLabel={sectionLabel} t={t} />
+        {releaseError ? (
+          <ErrorBox
+            message={releaseError}
+            retryLabel={t('admin.changelog.retry', 'Try again')}
+            onRetry={() => {
+              setReleaseErrors(prev => ({ ...prev, [selected]: '' }));
+              setRetryToken(token => token + 1);
+            }}
+          />
+        ) : !prepared ? (
+          <LoadingSpinner
+            message={t('admin.changelog.loadingRelease', 'Loading release notes...')}
+          />
+        ) : (
+          <>
+            <TableOfContents release={prepared} sectionLabel={sectionLabel} t={t} />
+            {/* Documentation links inside entry bodies navigate within the admin UI. */}
+            {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions */}
+            <article
+              ref={articleRef}
+              className="docs-prose prose prose-gray max-w-none dark:prose-invert prose-headings:font-semibold prose-headings:tracking-tight prose-headings:text-gray-900 dark:prose-headings:text-white prose-h2:text-2xl prose-h3:text-lg prose-p:leading-7"
+              onClick={event => handleDocsLinkClick(event, navigate)}
+            >
               {SECTIONS.filter(section => prepared.sections[section.key].length > 0).map(
-                section => (
+                (section, sectionIndex) => (
                   <ReleaseSection
                     key={section.key}
                     section={section}
                     entries={prepared.sections[section.key]}
                     release={prepared}
-                    tocId={tocId}
+                    first={sectionIndex === 0}
                     sectionLabel={sectionLabel}
                     t={t}
                   />
                 )
               )}
-            </div>
-          )}
+            </article>
+          </>
+        )}
+
+        {(newer || older) && (
+          <nav
+            aria-label={t('admin.changelog.pagination', 'Newer and older release')}
+            className="mt-16 flex flex-col gap-3 border-t border-gray-200 pt-6 sm:flex-row dark:border-gray-800"
+          >
+            {newer ? (
+              <PagerLink release={newer} direction="newer" label={fullLabel(newer)} t={t} />
+            ) : (
+              <span className="flex-1" />
+            )}
+            {older ? (
+              <PagerLink release={older} direction="older" label={fullLabel(older)} t={t} />
+            ) : (
+              <span className="flex-1" />
+            )}
+          </nav>
+        )}
+      </>
+    );
+  }
+
+  const switcher = (
+    <ReleaseSwitcher
+      tree={tree}
+      selected={selected}
+      expanded={expanded}
+      onToggleGroup={toggleGroup}
+      shortLabel={shortLabel}
+      t={t}
+    />
+  );
+
+  return (
+    <div className="min-h-full bg-white dark:bg-gray-900">
+      {/* Header: sticks to the top of the admin scroller, as on the documentation pages. */}
+      <div className="sticky top-0 z-20 border-b border-gray-200 bg-white/90 backdrop-blur-sm dark:border-gray-800 dark:bg-gray-900/90">
+        <div className="flex h-14 items-center gap-3 px-4 sm:px-6">
+          <button
+            type="button"
+            onClick={() => setDrawerOpen(true)}
+            className="-ml-1.5 inline-flex items-center gap-1.5 rounded-md p-1.5 text-sm text-gray-600 hover:bg-gray-100 lg:hidden dark:text-gray-300 dark:hover:bg-gray-800"
+            aria-haspopup="dialog"
+            aria-expanded={drawerOpen}
+          >
+            <Bars3BottomLeftIcon className="h-5 w-5" aria-hidden="true" />
+            <span className="sr-only sm:not-sr-only">
+              {t('admin.changelog.versions', 'Releases')}
+            </span>
+          </button>
+          <nav
+            aria-label={t('admin.docs.breadcrumb', 'Breadcrumb')}
+            className="hidden min-w-0 flex-1 sm:block"
+          >
+            <ol className="flex min-w-0 items-center gap-1 text-sm text-gray-500 dark:text-gray-400">
+              <li className="shrink-0 font-medium text-gray-900 dark:text-gray-100">{title}</li>
+              {selectedMeta && (
+                <li className="flex min-w-0 items-center gap-1">
+                  <ChevronRightIcon className="h-4 w-4 shrink-0 text-gray-400" aria-hidden="true" />
+                  <span className="truncate">{fullLabel(selectedMeta)}</span>
+                </li>
+              )}
+            </ol>
+          </nav>
+          <div className="ml-auto w-full max-w-xs sm:w-72">
+            <DocsSearch />
+          </div>
         </div>
       </div>
-    </PageFrame>
+
+      <div className="lg:grid lg:grid-cols-[17rem_minmax(0,1fr)] xl:grid-cols-[17rem_minmax(0,1fr)_14rem]">
+        {/* Releases: full height of the scroller below the header, its own scroll. */}
+        <aside className="hidden border-r border-gray-200 lg:block dark:border-gray-800">
+          <div className="sticky top-14 h-[calc(100dvh-3.5rem)] overflow-y-auto overscroll-contain px-4 py-6">
+            {index ? switcher : null}
+          </div>
+        </aside>
+
+        <div className="min-w-0 px-4 py-8 sm:px-8 lg:px-12">
+          <div className="mx-auto max-w-[46rem]">{content}</div>
+        </div>
+
+        <aside className="hidden xl:block">
+          <div className="sticky top-14 max-h-[calc(100dvh-3.5rem)] overflow-y-auto px-4 py-8">
+            {prepared && (
+              <DocsOutline
+                articleRef={articleRef}
+                scrollerId={SCROLLER_ID}
+                html={prepared}
+                label={t('admin.changelog.contents', 'In this release')}
+                onSelect={scrollToElement}
+              />
+            )}
+          </div>
+        </aside>
+      </div>
+
+      <DocsDrawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        label={t('admin.changelog.versions', 'Releases')}
+        title={t('admin.changelog.versions', 'Releases')}
+      >
+        {index ? switcher : null}
+      </DocsDrawer>
+    </div>
   );
 }
 

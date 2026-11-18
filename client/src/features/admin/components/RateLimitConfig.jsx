@@ -1,10 +1,13 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import AdminLoadGate from './AdminLoadGate';
+import { useAdminConfigLoad } from '../hooks/useAdminConfigLoad';
+import { useDirtyReport } from '../hooks/useDirtyReport';
 
 /** The limiters, in the order the server lists them (`RATE_LIMITER_KEYS`). */
 export const RATE_LIMITERS = [
@@ -94,45 +97,42 @@ export function toRequest(form) {
  * Admin → Security → Rate limits. Edits `rateLimit` in platform.json through
  * `/api/admin/rate-limits`; the limits apply after a restart, so the section
  * also shows what the server is running with until then.
+ *
+ * @param {Object} props
+ * @param {(dirty: boolean) => void} [props.onDirtyChange] - Reports unsaved edits to the page.
  */
-function RateLimitConfig() {
+function RateLimitConfig({ onDirtyChange }) {
   const { t } = useTranslation();
   const [form, setForm] = useState({});
   const [saved, setSaved] = useState({});
+  // The form as last loaded or saved; null until it loaded.
+  const [savedForm, setSavedForm] = useState(null);
+  useDirtyReport(savedForm, form, onDirtyChange);
   const [running, setRunning] = useState({});
   const [restartRequired, setRestartRequired] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
 
   const apply = data => {
-    setForm(toForm(data?.limiters));
+    const loadedForm = toForm(data?.limiters);
+    setForm(loadedForm);
+    setSavedForm(loadedForm);
     setSaved(data?.limiters || {});
     setRunning(data?.running || {});
     setRestartRequired(Boolean(data?.restartRequired));
   };
 
-  useEffect(() => {
-    let cancelled = false;
-    makeAdminApiCall('/admin/rate-limits', { method: 'GET' })
-      .then(response => {
-        if (!cancelled) apply(response.data);
-      })
-      .catch(error => {
-        if (!cancelled) {
-          setMessage({
-            type: 'error',
-            text: error.message || t('admin.security.rateLimits.loadError')
-          });
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [t]);
+  // No form and no Save until the limits loaded: saving the empty form after a
+  // failed load would send no limiters at all.
+  const load = useAdminConfigLoad({
+    sources: {
+      limits: {
+        load: async () => (await makeAdminApiCall('/admin/rate-limits', { method: 'GET' })).data,
+        onLoad: apply
+      }
+    }
+  });
+  const ready = load.status === 'ready';
 
   const update = (key, field, value) => {
     setForm(prev => ({ ...prev, [key]: { ...prev[key], [field]: value } }));
@@ -141,6 +141,7 @@ function RateLimitConfig() {
   const countsLabel = counts => t(`admin.security.rateLimits.counts.${counts}`);
 
   const handleSave = async () => {
+    if (!ready) return;
     const { limiters, invalid } = toRequest(form);
     if (invalid) {
       setMessage({
@@ -171,7 +172,7 @@ function RateLimitConfig() {
   };
 
   const inputClass =
-    'w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 text-sm';
+    'w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 text-sm';
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
@@ -187,8 +188,14 @@ function RateLimitConfig() {
         </div>
       </div>
 
-      {loading ? (
-        <p className="text-gray-600 dark:text-gray-400">{t('common.loading', 'Loading...')}</p>
+      {!ready ? (
+        <AdminLoadGate
+          load={load}
+          resourceLabel={t('admin.security.rateLimits.title')}
+          loadingFallback={
+            <p className="text-gray-600 dark:text-gray-400">{t('common.loading', 'Loading...')}</p>
+          }
+        />
       ) : (
         <>
           {restartRequired && (

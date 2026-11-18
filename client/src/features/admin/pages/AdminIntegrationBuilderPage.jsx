@@ -37,6 +37,7 @@ import {
   fetchBuilderDraft,
   saveCustomIntegration
 } from '../../../api/integrationsAdminApi';
+import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
 
 /** The label of a builder step. */
 function stepLabel(t, step) {
@@ -362,19 +363,7 @@ function AdminIntegrationBuilderPage() {
         }}
         onDeny={() => setPendingSource(null)}
       />
-      <ConfirmDialog
-        isOpen={blocker.state === 'blocked'}
-        title={t('admin.integrationBuilder.unsaved.title', 'Unsaved changes')}
-        message={t(
-          'admin.integrationBuilder.unsaved.message',
-          'The integration is not saved. Leave anyway?'
-        )}
-        confirmLabel={t('admin.integrationBuilder.unsaved.leave', 'Leave')}
-        denyLabel={t('admin.integrationBuilder.unsaved.stay', 'Stay')}
-        danger={false}
-        onConfirm={() => blocker.proceed?.()}
-        onDeny={() => blocker.reset?.()}
-      />
+      <UnsavedChangesDialog blocker={blocker} />
     </div>
   );
 }

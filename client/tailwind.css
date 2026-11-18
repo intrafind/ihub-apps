@@ -41,6 +41,9 @@
   --color-admin-border-dark: #374151;
   --color-admin-muted: #6b7280;
   --color-admin-muted-dark: #9ca3af;
+  /* Focus rings, links and icons on the dark admin surfaces (indigo-400):
+     4.92:1 on gray-800, 5.95:1 on gray-900. */
+  --color-admin-accent-fg-dark: #818cf8;
 
   /* Keep the Tailwind v3 (sRGB) indigo ramp — v4 ships a more saturated
      oklch palette, which would shift every accent colour in the UI. */
@@ -61,6 +64,18 @@
   --font-mono:
     'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
     'Courier New', monospace;
+}
+
+/*
+ * Admin form-field boundaries (WCAG 1.4.11 needs 3:1 against the background).
+ * gray-500 on white is 4.84:1; gray-400 on the gray-800 card is 5.64:1 and on
+ * the gray-700 field fill 3.96:1. `inline` makes the generated utilities
+ * (`border-admin-control-border`) resolve to the gray value itself rather than
+ * to a chained variable. Decorative card borders keep `admin-border`.
+ */
+@theme inline {
+  --color-admin-control-border: var(--color-gray-500);
+  --color-admin-control-border-dark: var(--color-gray-400);
 }
 
 /*

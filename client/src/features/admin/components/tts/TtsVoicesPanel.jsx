@@ -6,6 +6,9 @@ import { makeAdminApiCall } from '../../../../api/adminApi';
 import { AudioBufferRecorder } from '../../../../utils/audioRecorder';
 import { audioBufferToWav } from '../../../../utils/wav';
 import { getMicrophoneErrorMessage } from '../../../voice/utils/speechService';
+import ConfirmDialog from '../../../../shared/components/ConfirmDialog';
+import { useConfirmAction } from '../../hooks/useConfirmAction';
+import { CHECKBOX_CLASS, INPUT_CLASS } from '../formStyles';
 
 /** Languages Voxtral TTS speaks (server/tts/language.js). */
 export const TTS_LANGUAGES = ['en', 'de', 'fr', 'es', 'it', 'nl', 'pt', 'hi', 'ar'];
@@ -71,7 +74,10 @@ function TtsVoicesPanel({ modelId, onUseVoice, t, uiLanguage }) {
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState('');
   const [created, setCreated] = useState(null);
+  const { requestConfirm, dialogProps: confirmDialogProps } = useConfirmAction();
   const recorderRef = useRef(null);
+  // Focus target after a delete: the voice's row (and its button) is gone.
+  const voicesHeadingRef = useRef(null);
 
   // Leaving the page releases the microphone and the preview.
   useEffect(() => () => recorderRef.current?.cancel(), []);
@@ -92,28 +98,34 @@ function TtsVoicesPanel({ modelId, onUseVoice, t, uiLanguage }) {
     }
   };
 
-  const deleteVoice = async voice => {
-    if (
-      !confirm(
-        t(
-          'admin.models.ttsVoices.deleteConfirm',
-          'Delete the voice "{{name}}" from the provider account? Models that use it can no longer speak with it.',
-          { name: voice.name }
-        )
-      )
-    ) {
-      return;
-    }
-    try {
-      await makeAdminApiCall(`/admin/models/${modelId}/tts/voices/${voice.id}`, {
-        method: 'DELETE'
-      });
-      setVoices(prev => (prev || []).filter(v => v.id !== voice.id));
-    } catch (error) {
-      setListError(
-        errorText(error, t('admin.models.ttsVoices.deleteError', 'Could not delete the voice'))
-      );
-    }
+  /**
+   * Named confirmation, then deletes the voice from the provider account.
+   * A failure stays in the dialog.
+   *
+   * @param {{ id: string, name: string }} voice
+   */
+  const deleteVoice = voice => {
+    requestConfirm({
+      title: t('admin.models.ttsVoices.deleteTitle', 'Delete voice "{{name}}"?', {
+        name: voice.name
+      }),
+      message: t(
+        'admin.models.ttsVoices.deleteConsequence',
+        'The voice is deleted from the provider account. Models that use it can no longer speak with it.'
+      ),
+      irreversible: true,
+      confirmLabel: t('admin.confirm.delete', 'Delete'),
+      danger: true,
+      errorMessage: error =>
+        errorText(error, t('admin.models.ttsVoices.deleteError', 'Could not delete the voice')),
+      action: async () => {
+        await makeAdminApiCall(`/admin/models/${modelId}/tts/voices/${voice.id}`, {
+          method: 'DELETE'
+        });
+        setVoices(prev => (prev || []).filter(v => v.id !== voice.id));
+      },
+      focusAfterSuccess: voicesHeadingRef
+    });
   };
 
   // `preview` is an object URL for a recording made here, or '' for an
@@ -253,14 +265,17 @@ function TtsVoicesPanel({ modelId, onUseVoice, t, uiLanguage }) {
   const presets = (voices || []).filter(v => v.type !== 'custom');
   const sectionClass =
     'rounded-md border border-gray-200 dark:border-gray-700 p-4 space-y-3 bg-gray-50 dark:bg-gray-900/30';
-  const inputClass =
-    'block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm';
+  const inputClass = `${INPUT_CLASS} block`;
 
   return (
     <div className="space-y-4">
       <div className={sectionClass}>
         <div className="flex items-center justify-between gap-3">
-          <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100">
+          <h4
+            ref={voicesHeadingRef}
+            tabIndex={-1}
+            className="text-sm font-medium text-gray-900 dark:text-gray-100 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 rounded-sm"
+          >
             {t('admin.models.ttsVoices.title', 'Available voices')}
           </h4>
           <button
@@ -386,7 +401,7 @@ function TtsVoicesPanel({ modelId, onUseVoice, t, uiLanguage }) {
                   type="checkbox"
                   checked={languages.includes(code)}
                   onChange={() => toggleLanguage(code)}
-                  className="rounded-sm border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                  className={CHECKBOX_CLASS}
                 />
                 {languageName(code, uiLanguage)}
               </label>
@@ -446,7 +461,7 @@ function TtsVoicesPanel({ modelId, onUseVoice, t, uiLanguage }) {
             type="checkbox"
             checked={consent}
             onChange={e => setConsent(e.target.checked)}
-            className="mt-0.5 rounded-sm border-gray-300 text-indigo-600 focus:ring-indigo-500"
+            className={`${CHECKBOX_CLASS} mt-0.5`}
           />
           {t(
             'admin.models.ttsVoices.consent',
@@ -483,6 +498,7 @@ function TtsVoicesPanel({ modelId, onUseVoice, t, uiLanguage }) {
           </div>
         )}
       </div>
+      <ConfirmDialog {...confirmDialogProps} />
     </div>
   );
 }

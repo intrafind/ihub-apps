@@ -78,7 +78,7 @@ export default function AdminAgentInboxesPage() {
                 setNewId(e.target.value);
                 if (localError) setLocalError(null);
               }}
-              className="flex-1 border-gray-300 dark:border-gray-600 rounded-sm shadow-xs text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+              className="flex-1 border-admin-control-border dark:border-admin-control-border-dark rounded-sm shadow-xs text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
             />
             <button
               onClick={handleCreate}

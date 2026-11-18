@@ -1,10 +1,13 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import { createConfigRevision } from '../../../api/adminConfigRevision';
+import AdminLoadGate from '../components/AdminLoadGate';
+import { useAdminConfigLoad } from '../hooks/useAdminConfigLoad';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import Switch from '../../../shared/components/Switch';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
@@ -14,7 +17,6 @@ import OAuthTabsHeader from '../components/OAuthTabsHeader';
 function AdminOAuthServerPage() {
   const { t } = useTranslation();
   const { refreshConfig } = usePlatformConfig();
-  const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
   const [oauthEnabled, setOAuthEnabled] = useState(false);
   const [oauthConfig, setOauthConfig] = useState({
@@ -39,47 +41,52 @@ function AdminOAuthServerPage() {
   const [clientsEnabled, setClientsEnabled] = useState(false);
   const [jwtAlgorithm, setJwtAlgorithm] = useState('RS256');
   const [savingConfig, setSavingConfig] = useState(false);
+  // The revision of platform.json this page was loaded from (then: last saved).
+  // Its saves send exactly this as If-Match; a 412 leaves it as it is, so the
+  // next save is refused again until the page reloads or the admin chooses
+  // "Keep my changes and overwrite" (which re-reads into this holder).
+  const revisionRef = useRef(null);
 
-  useEffect(() => {
-    void loadConfig();
-    // eslint-disable-next-line @eslint-react/exhaustive-deps
-  }, []);
-
-  const loadConfig = async () => {
-    try {
-      const response = await makeAdminApiCall('/admin/configs/platform');
-      const data = response.data;
-      setOAuthEnabled(data?.oauth?.enabled?.authz || false);
-      if (data?.oauth) {
-        setOauthConfig(prev => ({
-          ...prev,
-          issuer: data.oauth.issuer || '',
-          defaultTokenExpirationMinutes: data.oauth.defaultTokenExpirationMinutes ?? 60,
-          maxTokenExpirationMinutes: data.oauth.maxTokenExpirationMinutes ?? 1440,
-          authorizationCodeEnabled: data.oauth.authorizationCodeEnabled ?? false,
-          authorizationCodeExpirationSeconds: data.oauth.authorizationCodeExpirationSeconds ?? 600,
-          refreshTokenEnabled: data.oauth.refreshTokenEnabled ?? false,
-          refreshTokenExpirationDays: data.oauth.refreshTokenExpirationDays ?? 30,
-          consentRequired: data.oauth.consentRequired ?? true,
-          consentMemoryDays: data.oauth.consentMemoryDays ?? 90,
-          personalKeys: {
-            ...prev.personalKeys,
-            ...data.oauth.personalKeys
+  // No settings and no Save until the platform config loaded: saving after a
+  // failed load would write the defaults above over the stored OAuth settings.
+  const load = useAdminConfigLoad({
+    sources: {
+      platform: {
+        load: async () => {
+          const revision = createConfigRevision();
+          const response = await makeAdminApiCall('/admin/configs/platform', { revision });
+          return { data: response.data, revision: revision.current };
+        },
+        // Only a current (not stale) load sets the page's revision.
+        onLoad: ({ data, revision }) => {
+          revisionRef.current = revision;
+          setOAuthEnabled(data?.oauth?.enabled?.authz || false);
+          if (data?.oauth) {
+            setOauthConfig(prev => ({
+              ...prev,
+              issuer: data.oauth.issuer || '',
+              defaultTokenExpirationMinutes: data.oauth.defaultTokenExpirationMinutes ?? 60,
+              maxTokenExpirationMinutes: data.oauth.maxTokenExpirationMinutes ?? 1440,
+              authorizationCodeEnabled: data.oauth.authorizationCodeEnabled ?? false,
+              authorizationCodeExpirationSeconds:
+                data.oauth.authorizationCodeExpirationSeconds ?? 600,
+              refreshTokenEnabled: data.oauth.refreshTokenEnabled ?? false,
+              refreshTokenExpirationDays: data.oauth.refreshTokenExpirationDays ?? 30,
+              consentRequired: data.oauth.consentRequired ?? true,
+              consentMemoryDays: data.oauth.consentMemoryDays ?? 90,
+              personalKeys: {
+                ...prev.personalKeys,
+                ...data.oauth.personalKeys
+              }
+            }));
           }
-        }));
+          setClientsEnabled(data?.oauth?.enabled?.clients || false);
+          setJwtAlgorithm(data?.jwt?.algorithm || 'RS256');
+        }
       }
-      setClientsEnabled(data?.oauth?.enabled?.clients || false);
-      setJwtAlgorithm(data?.jwt?.algorithm || 'RS256');
-    } catch (error) {
-      console.error('Failed to load OAuth config:', error);
-      setMessage({
-        type: 'error',
-        text: t('admin.auth.oauth.loadError', 'Failed to load configuration')
-      });
-    } finally {
-      setLoading(false);
     }
-  };
+  });
+  const ready = load.status === 'ready';
 
   const updatePersonalKeys = useCallback((field, value) => {
     setOauthConfig(prev => ({
@@ -115,9 +122,12 @@ function AdminOAuthServerPage() {
   );
 
   const handleToggleOAuth = async () => {
+    if (!ready) return;
     const newStatus = !oauthEnabled;
 
     try {
+      // Read-modify-write for the sections this page does not show. This read
+      // does not change the revision the save sends (the one the page loaded).
       const response = await makeAdminApiCall('/admin/configs/platform');
       const platformConfig = response.data;
 
@@ -137,7 +147,8 @@ function AdminOAuthServerPage() {
       await makeAdminApiCall('/admin/configs/platform', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: updatedConfig
+        body: updatedConfig,
+        revision: revisionRef
       });
 
       setOAuthEnabled(newStatus);
@@ -161,10 +172,13 @@ function AdminOAuthServerPage() {
   };
 
   const handleSaveOAuthConfig = async () => {
+    if (!ready) return;
     setSavingConfig(true);
     setMessage('');
 
     try {
+      // Read-modify-write for the sections this page does not show. This read
+      // does not change the revision the save sends (the one the page loaded).
       const response = await makeAdminApiCall('/admin/configs/platform');
       const currentPlatformConfig = response.data;
 
@@ -191,7 +205,8 @@ function AdminOAuthServerPage() {
       await makeAdminApiCall('/admin/configs/platform', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: updatedConfig
+        body: updatedConfig,
+        revision: revisionRef
       });
 
       setMessage({
@@ -209,13 +224,14 @@ function AdminOAuthServerPage() {
     }
   };
 
-  if (loading) {
+  if (!ready) {
     return (
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <OAuthTabsHeader />
-        <div className="flex items-center justify-center py-16">
-          <LoadingSpinner size="lg" />
-        </div>
+        <AdminLoadGate
+          load={load}
+          resourceLabel={t('admin.auth.oauth.server.resource', 'authorization server settings')}
+        />
       </div>
     );
   }
@@ -444,7 +460,7 @@ function AdminOAuthServerPage() {
                       'admin.auth.oauth.issuerHint',
                       'Leave blank for auto-detection from server origin'
                     )}
-                    className="mt-1 w-full rounded-md border-gray-300 dark:border-gray-600 shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                    className="mt-1 w-full rounded-md border-admin-control-border dark:border-admin-control-border-dark shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                   />
                   <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                     {t(
@@ -468,7 +484,7 @@ function AdminOAuthServerPage() {
                       onChange={e =>
                         updateOAuthConfig('defaultTokenExpirationMinutes', Number(e.target.value))
                       }
-                      className="mt-1 w-full rounded-md border-gray-300 dark:border-gray-600 shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                      className="mt-1 w-full rounded-md border-admin-control-border dark:border-admin-control-border-dark shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                     />
                   </div>
                   <div>
@@ -482,7 +498,7 @@ function AdminOAuthServerPage() {
                       onChange={e =>
                         updateOAuthConfig('maxTokenExpirationMinutes', Number(e.target.value))
                       }
-                      className="mt-1 w-full rounded-md border-gray-300 dark:border-gray-600 shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                      className="mt-1 w-full rounded-md border-admin-control-border dark:border-admin-control-border-dark shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                     />
                   </div>
                 </div>
@@ -545,7 +561,7 @@ function AdminOAuthServerPage() {
                             Number(e.target.value)
                           )
                         }
-                        className="mt-1 w-full sm:w-48 rounded-md border-gray-300 dark:border-gray-600 shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                        className="mt-1 w-full sm:w-48 rounded-md border-admin-control-border dark:border-admin-control-border-dark shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                       />
                     </div>
 
@@ -597,7 +613,7 @@ function AdminOAuthServerPage() {
                           onChange={e =>
                             updateOAuthConfig('consentMemoryDays', Number(e.target.value))
                           }
-                          className="mt-1 w-full sm:w-48 rounded-md border-gray-300 dark:border-gray-600 shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                          className="mt-1 w-full sm:w-48 rounded-md border-admin-control-border dark:border-admin-control-border-dark shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                         />
                         <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                           {t(
@@ -658,7 +674,7 @@ function AdminOAuthServerPage() {
                       onChange={e =>
                         updateOAuthConfig('refreshTokenExpirationDays', Number(e.target.value))
                       }
-                      className="mt-1 w-full sm:w-48 rounded-md border-gray-300 dark:border-gray-600 shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                      className="mt-1 w-full sm:w-48 rounded-md border-admin-control-border dark:border-admin-control-border-dark shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                     />
                   </div>
                 )}
@@ -719,7 +735,7 @@ function AdminOAuthServerPage() {
                             onChange={e =>
                               updatePersonalKeys('maxKeysPerUser', Number(e.target.value))
                             }
-                            className="mt-1 w-full rounded-md border-gray-300 dark:border-gray-600 shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                            className="mt-1 w-full rounded-md border-admin-control-border dark:border-admin-control-border-dark shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                           />
                         </div>
                         <div>
@@ -737,7 +753,7 @@ function AdminOAuthServerPage() {
                             onChange={e =>
                               updatePersonalKeys('defaultExpirationDays', Number(e.target.value))
                             }
-                            className="mt-1 w-full rounded-md border-gray-300 dark:border-gray-600 shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                            className="mt-1 w-full rounded-md border-admin-control-border dark:border-admin-control-border-dark shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                           />
                         </div>
                         <div>
@@ -752,7 +768,7 @@ function AdminOAuthServerPage() {
                             onChange={e =>
                               updatePersonalKeys('maxExpirationDays', Number(e.target.value))
                             }
-                            className="mt-1 w-full rounded-md border-gray-300 dark:border-gray-600 shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                            className="mt-1 w-full rounded-md border-admin-control-border dark:border-admin-control-border-dark shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                           />
                         </div>
                       </div>
@@ -777,7 +793,7 @@ function AdminOAuthServerPage() {
                             'admin.auth.oauth.personalKeys.allowedGroupsPlaceholder',
                             'Leave empty to allow every signed-in user'
                           )}
-                          className="mt-1 w-full rounded-md border-gray-300 dark:border-gray-600 shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                          className="mt-1 w-full rounded-md border-admin-control-border dark:border-admin-control-border-dark shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                         />
                         <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                           {t(

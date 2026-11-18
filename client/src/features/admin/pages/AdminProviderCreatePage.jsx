@@ -11,6 +11,20 @@ import { slugify } from '../utils/modelImport';
 import AdminLoadError from '../components/AdminLoadError';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import useAdminPageAccess from '../hooks/useAdminPageAccess';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
+
+/** The empty form a new provider starts from; also the unsaved-changes baseline. */
+const INITIAL_FORM = {
+  id: '',
+  name: '',
+  description: '',
+  enabled: true,
+  category: 'llm',
+  apiType: 'openai',
+  baseUrl: '',
+  apiKey: ''
+};
 
 function AdminProviderCreatePage() {
   const { t } = useTranslation();
@@ -21,16 +35,10 @@ function AdminProviderCreatePage() {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
 
-  const [formData, setFormData] = useState({
-    id: '',
-    name: '',
-    description: '',
-    enabled: true,
-    category: 'llm',
-    apiType: 'openai',
-    baseUrl: '',
-    apiKey: ''
-  });
+  const [formData, setFormData] = useState(INITIAL_FORM);
+  // Once the provider is created nothing is left to lose: the form is locked
+  // and the guard stays clean until the delayed redirect to the list.
+  const { blocker, markSaved } = useUnsavedChanges(success ? null : INITIAL_FORM, formData);
   // The ID follows the name until the admin types one of their own.
   const [idEdited, setIdEdited] = useState(false);
 
@@ -75,6 +83,7 @@ function AdminProviderCreatePage() {
         body: dataToSend
       });
 
+      markSaved();
       setSuccess(true);
 
       // Redirect after a short delay
@@ -145,39 +154,41 @@ function AdminProviderCreatePage() {
             )}
           </p>
 
-          <ProviderFormFields data={formData} onChange={handleChange} isNew isLlm />
+          <fieldset disabled={success}>
+            <ProviderFormFields data={formData} onChange={handleChange} isNew isLlm />
 
-          {/* API Key */}
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              {t('admin.providers.create.apiKey', 'API Key')}
-              <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">
-                {t('admin.providers.create.apiKeyOptional', '(Optional)')}
-              </span>
-            </label>
-            <input
-              type="password"
-              value={formData.apiKey}
-              onChange={e => handleChange('apiKey', e.target.value)}
-              placeholder={t('admin.providers.create.apiKeyEnter', 'Enter API key')}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-            />
-          </div>
-
-          {/* Enabled Toggle */}
-          <div className="mb-6">
-            <label className="flex items-center cursor-pointer">
+            {/* API Key */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                {t('admin.providers.create.apiKey', 'API Key')}
+                <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">
+                  {t('admin.providers.create.apiKeyOptional', '(Optional)')}
+                </span>
+              </label>
               <input
-                type="checkbox"
-                checked={formData.enabled}
-                onChange={e => handleChange('enabled', e.target.checked)}
-                className="w-4 h-4 text-blue-600 bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded-sm focus:ring-blue-500"
+                type="password"
+                value={formData.apiKey}
+                onChange={e => handleChange('apiKey', e.target.value)}
+                placeholder={t('admin.providers.create.apiKeyEnter', 'Enter API key')}
+                className="w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               />
-              <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
-                {t('admin.providers.create.enabled', 'Provider Enabled')}
-              </span>
-            </label>
-          </div>
+            </div>
+
+            {/* Enabled Toggle */}
+            <div className="mb-6">
+              <label className="flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formData.enabled}
+                  onChange={e => handleChange('enabled', e.target.checked)}
+                  className="w-4 h-4 text-blue-600 bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded-sm focus:ring-blue-500"
+                />
+                <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                  {t('admin.providers.create.enabled', 'Provider Enabled')}
+                </span>
+              </label>
+            </div>
+          </fieldset>
 
           {/* Action Buttons */}
           <div className="flex justify-end space-x-4">
@@ -190,7 +201,7 @@ function AdminProviderCreatePage() {
             </button>
             <button
               type="submit"
-              disabled={saving}
+              disabled={saving || success}
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {saving
@@ -200,6 +211,7 @@ function AdminProviderCreatePage() {
           </div>
         </form>
       </div>
+      <UnsavedChangesDialog blocker={blocker} />
     </div>
   );
 }

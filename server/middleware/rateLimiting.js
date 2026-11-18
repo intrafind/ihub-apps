@@ -72,12 +72,79 @@ export function isReadOnlyAuthRequest(req) {
 }
 
 /**
+ * Rate-limit key of the admin API limiter: one bucket per caller instead of
+ * one per address.
+ *
+ * Admins behind one corporate NAT address or reverse proxy share `req.ip`, so
+ * counting per address let one busy admin page (which fires many requests on
+ * load) spend the budget of every other admin. The limiter therefore runs after
+ * the authentication chain and counts per identity:
+ *
+ *   - a signed-in user (local, LDAP, OIDC, proxy, NTLM, Teams, a personal API
+ *     key, or an OAuth token issued on a user's behalf) → `user:<user id>`;
+ *   - an OAuth client (client_credentials) or a static API key, whose
+ *     `req.user.id` is the client id → `client:<client id>`;
+ *   - no signed-in user (no `req.user`, or the anonymous principal) → the
+ *     client address, `ip:<address>`. IPv6 addresses are reduced to their /56
+ *     subnet by `ipKeyGenerator`, as the library's default key does, so one
+ *     host cannot side-step the limit by rotating through its own addresses.
+ *
+ * The prefixes keep the three kinds apart, so a user id that looks like an
+ * address never shares a bucket with that address.
+ *
+ * Used through {@link userKeyOptions}: with `rateLimit.adminApi.keyBy: "ip"`
+ * the library's per-address key applies instead.
+ *
+ * @param {import('express').Request} req - Request after authentication.
+ * @returns {string} The bucket key.
+ * @example
+ * adminApiRateLimitKey({ user: { id: 'alice' }, ip: '10.0.0.1' }); // 'user:alice'
+ * adminApiRateLimitKey({ user: null, ip: '10.0.0.1' }); // 'ip:10.0.0.1'
+ */
+export function adminApiRateLimitKey(req) {
+  const user = req.user;
+  if (user?.id && user.id !== 'anonymous') {
+    return user.isOAuthClient ? `client:${user.id}` : `user:${user.id}`;
+  }
+  return `ip:${ipKeyGenerator(req.ip || '')}`;
+}
+
+/**
+ * Whether a finished `/api/admin` request leaves the pre-authentication limiter's count again:
+ * every request answered below 400, and every request of a signed-in user or API client, whatever
+ * its status. What stays counted is a failed request without a signed-in caller, chiefly one the
+ * authentication chain refused (a bad, expired or revoked token), which never reaches the per-user
+ * admin limiter.
+ *
+ * @param {import('express').Request} req - The request, after it was answered.
+ * @param {import('express').Response} res - Its response.
+ * @returns {boolean} True when the request does not count.
+ * @example
+ * adminApiAuthenticatedOrSucceeded({ user: null }, { statusCode: 401 }); // false (counts)
+ * adminApiAuthenticatedOrSucceeded({ user: { id: 'alice' } }, { statusCode: 404 }); // true
+ */
+export function adminApiAuthenticatedOrSucceeded(req, res) {
+  if (res.statusCode < 400) return true;
+  const user = req.user;
+  return Boolean(user?.id && user.id !== 'anonymous');
+}
+
+/**
  * Create a rate limiter with given configuration
  * @param {Object} config - Rate limiter configuration
  * @param {Object} defaults - Default configuration to merge with
  * @param {string} type - Type of rate limiter for error messages
  * @param {(req: import('express').Request) => boolean} [skip] - Predicate that
  *   exempts a request from this limiter entirely
+ * @param {Object} [options]
+ * @param {boolean} [options.shared=false] - Count across all cluster workers.
+ * @param {(req: import('express').Request) => string} [options.keyGenerator] -
+ *   Bucket key; the library's per-address key when omitted.
+ * @param {number|((req: import('express').Request) => number)} [options.limit] - Limit
+ *   that overrides `config.limit`, e.g. a different one for anonymous requests.
+ * @param {(req: import('express').Request, res: import('express').Response) => boolean}
+ *   [options.requestWasSuccessful] - Which finished requests count as successful for
+ *   `skipSuccessfulRequests` / `skipFailedRequests`; status below 400 when omitted.
  * @returns {Function} Express rate limiter middleware
  */
 function createRateLimiter(
@@ -91,11 +158,11 @@ function createRateLimiter(
 
   return rateLimit({
     ...(skip ? { skip } : {}),
+    ...(requestWasSuccessful ? { requestWasSuccessful } : {}),
     // Counted across all cluster workers, so the limit means what it says.
     ...(shared ? { store: new ClusterRateLimitStore(type) } : {}),
     // Without one, express-rate-limit keys by IP (an IPv6 /56 counts as one).
     ...(keyGenerator ? { keyGenerator } : {}),
-    ...(requestWasSuccessful ? { requestWasSuccessful } : {}),
     windowMs: finalConfig.windowMs || 1 * 60 * 1000, // 1 minute default
     limit: limit || finalConfig.limit || 500, // 500 requests default
     message:
@@ -156,16 +223,21 @@ function countedUserId(req) {
  * request), so with `WORKERS=N` a key can make up to N × the limit.
  *
  * @param {{keyBy?: string, limit: number, anonymousLimit?: number}} config
+ * @param {(req: import('express').Request) => string} [keyFor] - Bucket key of a
+ *   request; `user:<id>` for a signed-in user, `ip:<address>` otherwise when omitted.
+ *   The admin API passes {@link adminApiRateLimitKey}, which also keeps API clients apart.
  * @returns {{keyGenerator?: Function, limit?: Function}} Options for createRateLimiter
  */
-export function userKeyOptions(config) {
+export function userKeyOptions(config, keyFor = undefined) {
   if (config.keyBy === 'ip') return {};
   const anonymousLimit = config.anonymousLimit || config.limit;
   return {
-    keyGenerator: req => {
-      const userId = countedUserId(req);
-      return userId ? `user:${userId}` : `ip:${ipKeyGenerator(req.ip || '')}`;
-    },
+    keyGenerator:
+      keyFor ||
+      (req => {
+        const userId = countedUserId(req);
+        return userId ? `user:${userId}` : `ip:${ipKeyGenerator(req.ip || '')}`;
+      }),
     limit: req => (countedUserId(req) ? config.limit : anonymousLimit)
   };
 }
@@ -340,7 +412,23 @@ export function createRateLimiters(platformConfig = {}) {
       {},
       'admin API',
       undefined,
-      userKeyOptions(configs.adminApi)
+      userKeyOptions(configs.adminApi, adminApiRateLimitKey)
+    ),
+    // Mounted on /api/admin before the authentication chain, per address, with the admin API's
+    // per-address budget (`anonymousLimit`). It counts only failed requests without a signed-in
+    // caller, so it bounds a flood of refused tokens (which the auth chain answers before
+    // adminApiLimiter runs) without making admins behind one address share a budget again.
+    adminApiUnauthenticatedLimiter: createRateLimiter(
+      {
+        ...configs.adminApi,
+        limit: configs.adminApi.anonymousLimit || configs.adminApi.limit,
+        skipSuccessfulRequests: true,
+        skipFailedRequests: false
+      },
+      {},
+      'admin API',
+      undefined,
+      { requestWasSuccessful: adminApiAuthenticatedOrSucceeded }
     ),
     publicApiLimiter: createRateLimiter(
       configs.publicApi,

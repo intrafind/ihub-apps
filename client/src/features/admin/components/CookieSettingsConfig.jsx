@@ -1,43 +1,52 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import AdminLoadGate from './AdminLoadGate';
+import { useAdminConfigLoad } from '../hooks/useAdminConfigLoad';
+import { useDirtyReport } from '../hooks/useDirtyReport';
+import { CHECKBOX_CLASS, PRIMARY_BUTTON_CLASS } from './formStyles';
 
-function CookieSettingsConfig() {
+/**
+ * @param {Object} props
+ * @param {(dirty: boolean) => void} [props.onDirtyChange] - Reports unsaved edits to the page.
+ */
+function CookieSettingsConfig({ onDirtyChange }) {
   const { t } = useTranslation();
   const [config, setConfig] = useState({
     disableSecure: false
   });
-  const [loading, setLoading] = useState(true);
+  // The settings as last loaded or saved; null until they loaded.
+  const [savedConfig, setSavedConfig] = useState(null);
+  useDirtyReport(savedConfig, config, onDirtyChange);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
 
-  // Fetch current cookie settings configuration on mount
-  useEffect(() => {
-    const fetchCookieSettings = async () => {
-      try {
-        const response = await makeAdminApiCall('/admin/configs/platform', {
-          method: 'GET'
-        });
-        setConfig({
-          disableSecure: response.data?.cookieSettings?.disableSecure || false
-        });
-        setMessage('');
-      } catch (error) {
-        setMessage({
-          type: 'error',
-          text: error.message || t('admin.system.cookieSettings.configSaveError')
-        });
-      } finally {
-        setLoading(false);
+  // The card shows no form and no Save until its settings loaded: saving
+  // the defaults after a failed load would overwrite the stored ones (PL-B3).
+  const load = useAdminConfigLoad({
+    sources: {
+      config: {
+        load: async () =>
+          (
+            await makeAdminApiCall('/admin/configs/platform', {
+              method: 'GET'
+            })
+          ).data,
+        onLoad: data => {
+          const loaded = {
+            disableSecure: data?.cookieSettings?.disableSecure || false
+          };
+          setConfig(loaded);
+          setSavedConfig(loaded);
+        }
       }
-    };
-
-    void fetchCookieSettings();
-  }, [t]);
+    }
+  });
+  const ready = load.status === 'ready';
 
   const handleToggleDisableSecure = e => {
     setConfig(prev => ({
@@ -47,18 +56,20 @@ function CookieSettingsConfig() {
   };
 
   const handleSaveConfig = async () => {
+    if (!ready) return;
     setSaving(true);
     setMessage('');
 
     try {
-      // Only the cookie block: the save route keeps every section the body
-      // leaves out, while the GET answer it would otherwise echo back has
-      // fields removed (a proxy JWT provider's `jwkUrl`), which a full-body
-      // save would erase.
+      // A scoped change of this one field. Not a POST: the Security page's
+      // other cards save platform.json through their own routes, so the
+      // revision this card loaded is stale after any of them saved, and a
+      // guarded POST would report a conflict with the admin's own change.
       await makeAdminApiCall('/admin/configs/platform', {
-        method: 'POST',
+        method: 'PATCH',
         body: { cookieSettings: { disableSecure: config.disableSecure } }
       });
+      setSavedConfig(config);
 
       setMessage({
         type: 'success',
@@ -74,11 +85,20 @@ function CookieSettingsConfig() {
     }
   };
 
-  if (loading) {
+  if (!ready) {
     return (
-      <div className="flex items-center justify-center py-8">
-        <Icon name="loader" className="h-6 w-6 animate-spin text-primary-600" />
-      </div>
+      <AdminLoadGate
+        load={load}
+        resourceLabel={t('admin.system.cookieSettings.title')}
+        loadingFallback={
+          <div className="flex items-center justify-center py-8">
+            <Icon
+              name="loader"
+              className="h-6 w-6 animate-spin text-admin-accent dark:text-admin-accent-fg-dark"
+            />
+          </div>
+        }
+      />
     );
   }
 
@@ -137,7 +157,7 @@ function CookieSettingsConfig() {
               type="checkbox"
               checked={config.disableSecure}
               onChange={handleToggleDisableSecure}
-              className="h-4 w-4 rounded-sm border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-gray-600 dark:bg-gray-700"
+              className={CHECKBOX_CLASS}
             />
           </div>
           <div className="ml-3 text-sm">
@@ -166,14 +186,17 @@ function CookieSettingsConfig() {
             </div>
           )}
         </div>
+        {/* `primary-*` classes do not exist in this theme (the button rendered transparent,
+            PL-B5); the shared admin primary button is solid indigo in both themes. */}
         <button
+          type="button"
           onClick={handleSaveConfig}
           disabled={saving}
-          className="inline-flex items-center rounded-md bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-xs hover:bg-primary-500 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-primary-500 dark:hover:bg-primary-400"
+          className={PRIMARY_BUTTON_CLASS}
         >
           {saving ? (
             <>
-              <Icon name="loader" className="mr-2 h-4 w-4 animate-spin" />
+              <Icon name="loader" className="h-4 w-4 animate-spin" />
               {t('admin.system.cookieSettings.savingConfig')}
             </>
           ) : (

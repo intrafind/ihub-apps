@@ -118,7 +118,8 @@ import {
   CursorArrowRaysIcon,
   SpeakerWaveIcon,
   PauseIcon,
-  StopIcon
+  StopIcon,
+  InboxIcon as OutlineInboxIcon
 } from '@heroicons/react/24/outline';
 
 import {
@@ -218,7 +219,8 @@ import {
   CursorArrowRaysIcon as SolidCursorArrowRaysIcon,
   SpeakerWaveIcon as SolidSpeakerWaveIcon,
   PauseIcon as SolidPauseIcon,
-  StopIcon as SolidStopIcon
+  StopIcon as SolidStopIcon,
+  InboxIcon as SolidInboxIcon
 } from '@heroicons/react/24/solid';
 
 // Custom icons not available in Heroicons. They mirror the Heroicons component
@@ -468,6 +470,14 @@ const iconMap = {
   },
   server: { outline: ServerIcon, solid: SolidServerIcon },
   cpu: { outline: CpuChipIcon, solid: SolidCpuChipIcon },
+  // Names used by admin pages and agent defaults that had no entry and fell
+  // back to a 404 on /icons/{name}.svg
+  ClockIcon: { outline: ClockIcon, solid: SolidClockIcon },
+  BoltIcon: { outline: BoltIcon, solid: SolidBoltIcon },
+  robot: { outline: CpuChipIcon, solid: SolidCpuChipIcon },
+  inbox: { outline: OutlineInboxIcon, solid: SolidInboxIcon },
+  lightbulb: { outline: OutlineLightBulbIcon, solid: SolidLightBulbIcon },
+  'star-solid': { outline: SolidStarIcon, solid: SolidStarIcon },
   'alert-triangle': {
     outline: OutlineExclamationTriangleIcon,
     solid: SolidExclamationTriangleIcon

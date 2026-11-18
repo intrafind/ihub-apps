@@ -85,6 +85,7 @@ GET  /api/scheduled-tasks/_notifications          (a virtual collection, same pr
 | `403` | Authenticated, not allowed. For a resource the caller may not even know exists, use `404` |
 | `404` | No such resource                                                                          |
 | `409` | State conflict, including a failed optimistic-lock check (`ETAG_MISMATCH`)                |
+| `412` | An HTTP `If-Match` that does not match (`PRECONDITION_FAILED`, admin config files)        |
 | `413` / `415` | Body too large / unsupported media type                                           |
 | `429` | Rate limit, with `Retry-After`                                                            |
 | `502` / `503` / `504` | Upstream failed / unavailable (`Retry-After` if known) / timed out              |
@@ -172,7 +173,10 @@ GET /api/conversations?limit=50&cursor=eyJ…&status=active
 
 - **Names** are standard headers where one exists. Custom headers are `kebab-case` and documented.
 - **Optimistic locking:** resources that are edited concurrently return an `ETag`; an update sends `If-Match`. A
-  mismatch is `409` `ETAG_MISMATCH` (see [deviations](#deviations-from-zalando)).
+  mismatch is `409` `ETAG_MISMATCH` (see [deviations](#deviations-from-zalando)). The admin configuration files
+  (`/api/admin/configs/platform`, `/api/admin/ui/config`) answer an HTTP `If-Match` that does not name the stored
+  revision with `412` `PRECONDITION_FAILED`, as HTTP specifies; their `ETag` is `server/utils/configRevision.js`,
+  computed from the stored file and compared under the file's update lock. `If-Match` is optional there.
 - **`Idempotency-Key`** on a `POST` that must not run twice on a retry (it creates something that costs money or
   sends something to a person). The server remembers the key for 24 hours; the same key with a different body is `400`.
 - **`Retry-After`** on `429` and on `503` when the time is known.
@@ -252,7 +256,7 @@ The check finds the mechanical violations; the [checklist](#checklist) still cov
 | ---------------------------------------- | ------------------------------------------------- | ---------------------------------------------------------------------------------------- |
 | `snake_case` properties and parameters   | `camelCase`                                       | Everything in the server and the client is already camelCase; the JS ecosystem expects it |
 | Verb-free URLs                           | `_action` segments for operations with no resource | A state transition (`_cancel`, `_rotate`) is not a CRUD operation; the prefix marks it    |
-| Failed `If-Match` is `412`               | `409` `ETAG_MISMATCH`                             | Already shipped in the storage layer and the client                                       |
+| Failed `If-Match` is `412`               | `409` `ETAG_MISMATCH` (`412` on admin config files) | Already shipped in the storage layer and the client; the admin config writes are new  |
 | `type` as a relative URI                 | `urn:ihub:problem:<code>`                         | Relative URIs break under a base path (subpath deployment)                                |
 | API First with a separate OpenAPI file   | OpenAPI comment in the route file                 | The document is generated from the routes; one place to keep up to date                   |
 

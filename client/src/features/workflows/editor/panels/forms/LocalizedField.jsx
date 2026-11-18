@@ -1,12 +1,41 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 const COMMON_LANGS = ['en', 'de', 'fr', 'es', 'it', 'ja', 'zh'];
 
-function LocalizedField({ label, value, onChange, placeholder, rows = 4 }) {
-  const isObject = value !== null && typeof value === 'object' && !Array.isArray(value);
+/**
+ * A text that is either a plain string or one text per language
+ * (`{ en, de }`), edited one language at a time.
+ *
+ * The visible label names the field; `ariaLabel` overrides the accessible name
+ * where several fields share one visible label (the options of an Ask a Person
+ * step). With `singleLine` the field is a one-line input, so Enter cannot put
+ * a line break into a short text such as a button label.
+ *
+ * @param {object} props
+ * @param {string} props.label - Visible label.
+ * @param {string|object} props.value - Plain text or `{ [lang]: text }`.
+ * @param {(value: string|object) => void} props.onChange - Receives the new value.
+ * @param {string} [props.placeholder] - Placeholder of the text field.
+ * @param {number} [props.rows=4] - Rows of the text area.
+ * @param {string} [props.ariaLabel] - Accessible name instead of the label.
+ * @param {boolean} [props.singleLine=false] - Render a one-line input.
+ */
+function LocalizedField({
+  label,
+  value,
+  onChange,
+  placeholder,
+  rows = 4,
+  ariaLabel,
+  singleLine = false
+}) {
+  const { t } = useTranslation();
+  const fieldId = useId();
+  const isObject = Boolean(value) && typeof value === 'object' && !Array.isArray(value);
   const langs = isObject ? Object.keys(value) : [];
   const [activeLang, setActiveLang] = useState(langs[0] || 'en');
 
@@ -14,27 +43,50 @@ function LocalizedField({ label, value, onChange, placeholder, rows = 4 }) {
     'w-full text-sm border border-gray-300 dark:border-gray-600 rounded-sm px-2 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-mono';
   const labelClass = 'block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1';
 
+  /** The text field itself: a one-line input or a text area. */
+  const renderField = (text, onText) =>
+    singleLine ? (
+      <input
+        id={fieldId}
+        type="text"
+        value={text}
+        onChange={e => onText(e.target.value)}
+        placeholder={placeholder}
+        aria-label={ariaLabel}
+        className={inputClass}
+      />
+    ) : (
+      <textarea
+        id={fieldId}
+        value={text}
+        onChange={e => onText(e.target.value)}
+        rows={rows}
+        placeholder={placeholder}
+        aria-label={ariaLabel}
+        className={inputClass}
+      />
+    );
+
   if (!isObject) {
     return (
       <div>
         <div className="flex items-center justify-between mb-1">
-          <label className="text-xs font-medium text-gray-600 dark:text-gray-400">{label}</label>
+          <label htmlFor={fieldId} className="text-xs font-medium text-gray-600 dark:text-gray-400">
+            {label}
+          </label>
           <button
             type="button"
             onClick={() => onChange({ en: value || '' })}
             className="text-xs text-blue-500 hover:text-blue-600"
-            title="Convert to multilingual"
+            title={t(
+              'workflows.editor.localizedField.addLanguagesTitle',
+              'Enter this text per language'
+            )}
           >
-            + i18n
+            + {t('workflows.editor.localizedField.addLanguages', 'Add languages')}
           </button>
         </div>
-        <textarea
-          value={value ?? ''}
-          onChange={e => onChange(e.target.value)}
-          rows={rows}
-          placeholder={placeholder}
-          className={inputClass}
-        />
+        {renderField(value ?? '', text => onChange(text))}
       </div>
     );
   }
@@ -61,13 +113,16 @@ function LocalizedField({ label, value, onChange, placeholder, rows = 4 }) {
 
   return (
     <div>
-      <label className={labelClass}>{label}</label>
+      <label htmlFor={fieldId} className={labelClass}>
+        {label}
+      </label>
       <div className="flex items-center gap-1 mb-1 flex-wrap">
         {langs.map(lang => (
           <button
             key={lang}
             type="button"
             onClick={() => setActiveLang(lang)}
+            aria-pressed={currentLang === lang}
             className={`px-2 py-0.5 text-xs rounded transition-colors ${
               currentLang === lang
                 ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 font-medium'
@@ -83,6 +138,7 @@ function LocalizedField({ label, value, onChange, placeholder, rows = 4 }) {
             onChange={e => {
               if (e.target.value) addLang(e.target.value);
             }}
+            aria-label={t('workflows.editor.localizedField.addLanguage', 'Add a language')}
             className="text-xs border border-dashed border-gray-300 dark:border-gray-600 rounded-sm px-1 py-0.5 bg-transparent text-gray-500"
           >
             <option value="">+</option>
@@ -98,19 +154,18 @@ function LocalizedField({ label, value, onChange, placeholder, rows = 4 }) {
             type="button"
             onClick={() => removeLang(currentLang)}
             className="text-xs text-red-400 hover:text-red-600 ml-1"
-            title={`Remove ${currentLang}`}
+            title={t('workflows.editor.localizedField.removeLanguage', 'Remove {{lang}}', {
+              lang: currentLang
+            })}
+            aria-label={t('workflows.editor.localizedField.removeLanguage', 'Remove {{lang}}', {
+              lang: currentLang
+            })}
           >
             &#x2715;
           </button>
         )}
       </div>
-      <textarea
-        value={value[currentLang] ?? ''}
-        onChange={e => handleLangChange(e.target.value)}
-        rows={rows}
-        placeholder={placeholder}
-        className={inputClass}
-      />
+      {renderField(value[currentLang] ?? '', handleLangChange)}
     </div>
   );
 }

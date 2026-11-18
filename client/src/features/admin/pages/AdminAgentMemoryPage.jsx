@@ -203,7 +203,7 @@ export default function AdminAgentMemoryPage() {
                       {t('admin.agents.memory.builder.toolLabel', 'Tool')}
                     </label>
                     <select
-                      className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                      className="w-full px-2 py-1 border border-admin-control-border dark:border-admin-control-border-dark rounded-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                       value={builderToolId}
                       onChange={e => setBuilderToolId(e.target.value)}
                     >
@@ -223,7 +223,7 @@ export default function AdminAgentMemoryPage() {
                     </label>
                     <input
                       type="text"
-                      className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                      className="w-full px-2 py-1 border border-admin-control-border dark:border-admin-control-border-dark rounded-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                       value={builderSection}
                       onChange={e => setBuilderSection(e.target.value)}
                       placeholder="iFinder corpus map"
@@ -234,7 +234,7 @@ export default function AdminAgentMemoryPage() {
                       {t('admin.agents.memory.builder.modeLabel', 'Mode')}
                     </label>
                     <select
-                      className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                      className="w-full px-2 py-1 border border-admin-control-border dark:border-admin-control-border-dark rounded-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                       value={builderMode}
                       onChange={e => setBuilderMode(e.target.value)}
                     >
@@ -252,7 +252,7 @@ export default function AdminAgentMemoryPage() {
                     {t('admin.agents.memory.builder.paramsLabel', 'Tool params (JSON)')}
                   </label>
                   <textarea
-                    className="w-full h-32 font-mono text-xs p-2 border border-gray-300 dark:border-gray-600 rounded-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                    className="w-full h-32 font-mono text-xs p-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                     value={builderParams}
                     onChange={e => setBuilderParams(e.target.value)}
                   />
@@ -291,7 +291,7 @@ export default function AdminAgentMemoryPage() {
                       </button>
                       {showShapePrompt && (
                         <textarea
-                          className="mt-2 w-full h-48 font-mono text-xs p-2 border border-gray-300 dark:border-gray-600 rounded-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                          className="mt-2 w-full h-48 font-mono text-xs p-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                           value={shapePrompt}
                           onChange={e => setShapePrompt(e.target.value)}
                           placeholder={t(

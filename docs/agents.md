@@ -8,10 +8,16 @@ adminPage: /admin/agents
 # Agent Factory
 
 The Agent Factory turns iHub Apps into a control plane for an organization's AI
-workforce. Agents are autonomous Profile-defined entities that wake on their
-own (cron, webhook, manual trigger), do multi-step work using iHub's apps,
+workforce. Agents are autonomous Profile-defined entities that run when
+started (the **Run** button or the API), do multi-step work using iHub's apps,
 tools, sources, and models, ask a human only when they need approval, and
 leave durable artifacts behind.
+
+> [!WARNING]
+> Agent schedules are not run yet. A cron schedule on an agent never starts a
+> run, so the agent editor does not show a Schedule field. A schedule that is
+> already in an agent's JSON is left as it is when you save the agent in the
+> editor.
 
 > **"What an iHub App is to a chat session, an iHub Agent is to a job that runs by itself."**
 
@@ -32,17 +38,14 @@ leave durable artifacts behind.
 
 ## Quick start
 
-1. Enable the factory (turned on by default after V042 migration):
-   ```jsonc
-   // contents/config/platform.json
-   {
-     "features": { "agentFactory": true, "appAsTool": false }
-   }
-   ```
+1. Turn on **Agent Factory** in **Admin → Platform → Features** (on by
+   default after the V042 migration).
 2. Create an inbox: visit `/admin/agents/inboxes` → "Create inbox" with id `engineering-todos`.
 3. Create a profile: visit `/admin/agents` → "New profile". Fill in identity,
-   set `inboxId`, enable `dynamicTasks`, optionally configure a cron schedule.
-4. Trigger manually from the list page (`Run` button) or wait for the schedule.
+   set the inbox and turn on dynamic tasks. Pick the **HITL approver groups**
+   and **Service account groups** from the list, or type a group ID and press
+   Enter or a comma.
+4. Start a run from the list page (**Run**).
 5. Watch the run live at `/admin/agents/runs/:runId`.
 
 ## Auto-registered tools
