@@ -319,6 +319,8 @@ describe('ntlmAuthMiddleware when the domain controller does not answer', () => 
     assert.equal(req.ntlmFailure?.code, 'SERVICE_UNAVAILABLE');
     assert.equal(req.ntlmFailure.status, 503);
     assert.equal(res.headers['retry-after'], '5');
+    // A late answer is cached under the old key; the next handshake gets a new one.
+    assert.equal(req.connection.id, undefined);
 
     // The domain controller gives up afterwards; express-ntlm's late answer
     // must not reach the response that was already answered.

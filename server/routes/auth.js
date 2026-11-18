@@ -236,7 +236,7 @@ export default function registerAuthRoutes(app) {
 
       // Set HTTP-only cookie for authentication
       setAuthCookie(req, res, result.token, result.expiresIn);
-      markNtlmRequested(res, req);
+      clearNtlmRequested(res, req); // not a Windows sign-in: no automatic return to it
       // Drop any OIDC logout hint from an earlier login on this browser.
       clearOidcLogoutHint(res, req);
 
@@ -435,7 +435,7 @@ export default function registerAuthRoutes(app) {
 
       // Set HTTP-only cookie for authentication
       setAuthCookie(req, res, result.token, result.expiresIn);
-      markNtlmRequested(res, req);
+      clearNtlmRequested(res, req); // not a Windows sign-in: no automatic return to it
       // Drop any OIDC logout hint from an earlier login on this browser.
       clearOidcLogoutHint(res, req);
 

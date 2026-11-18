@@ -593,6 +593,11 @@ export function ntlmAuthMiddleware(req, res, next) {
   const timeout = setTimeout(() => {
     if (responseSent) return;
     timedOut = true;
+    // express-ntlm keys its per-connection handshake cache by connection.id and
+    // still stores this handshake if the domain controller answers late. Give
+    // the connection a fresh key, so that late entry cannot replace the one of
+    // a newer handshake on the same connection.
+    if (req.connection) delete req.connection.id;
     logger.error('NTLM Auth: domain controller did not answer within 5 seconds', {
       component: 'NtlmAuth',
       url: req.originalUrl

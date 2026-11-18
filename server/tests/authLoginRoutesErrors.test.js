@@ -38,7 +38,7 @@ jest.unstable_mockModule('../middleware/ldapAuth.js', () => ({
 jest.unstable_mockModule('../middleware/ntlmAuth.js', () => ({
   processNtlmLogin: (...args) => processNtlmLogin(...args),
   markNtlmRequested: res => res.cookie('ntlmRequested', '1'),
-  clearNtlmRequested: () => {},
+  clearNtlmRequested: res => res.clearCookie('ntlmRequested'),
   NTLM_REQUESTED_COOKIE: 'ntlmRequested'
 }));
 jest.unstable_mockModule('../services/AuditLogService.js', () => ({ logAudit: () => {} }));
@@ -115,6 +115,22 @@ describe('POST /api/auth/local/login', () => {
     });
     const res = await login(buildApp(), { username: 'ada', password: 'pw' });
     expectProblem(res, 401, 'AUTH_REQUIRED');
+  });
+});
+
+describe('local sign-in and the Windows preference', () => {
+  test('a local sign-in forgets an earlier Windows sign-in', async () => {
+    // Otherwise /api/auth/status would send this browser to Windows sign-in
+    // when the local session expires.
+    loginUser.mockResolvedValue({ user: { id: 'ada' }, token: 't', expiresIn: 3600 });
+    const res = await request(buildApp())
+      .post('/api/auth/local/login')
+      .set('Cookie', 'ntlmRequested=1')
+      .send({ username: 'ada', password: 'pw' });
+    expect(res.status).toBe(200);
+    const cookies = res.headers['set-cookie'].join(';');
+    expect(cookies).toMatch(/ntlmRequested=;/);
+    expect(cookies).not.toMatch(/ntlmRequested=1/);
   });
 });
 
