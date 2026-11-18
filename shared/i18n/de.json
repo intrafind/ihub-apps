@@ -9035,6 +9035,7 @@
       "why": "Schafft Platz im Kontext des Modells, damit die Antwort weitergehen kann, ohne diese Aufrufe zu wiederholen.",
       "lossyRecall": "In den Notizen können einzelne Details fehlen. Das Modell kann die vollständigen Ergebnisse erneut lesen.",
       "lossyElided": "Einzelne Details dieser Ergebnisse stehen dem Modell nicht mehr zur Verfügung.",
+      "wrapUp": "Der Kontext ist fast voll: keine weitere Suche. Die Antwort entsteht aus diesen Notizen.",
       "showNotes": "Notizen anzeigen",
       "hideNotes": "Notizen ausblenden",
       "notesTruncated": "Die Notizen sind hier gekürzt.",

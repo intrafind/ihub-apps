@@ -87,6 +87,7 @@ import {
   ALL_TOOLS_DEAD_NUDGE,
   tokenBudgetNudge,
   ROUND_CAP_NUDGE,
+  CONTEXT_WRAP_UP_NUDGE,
   nudgeMessage
 } from './nudges.js';
 
@@ -581,7 +582,17 @@ export class AgentLoop {
         try {
           await runHooks(seams, 'preStep', ctx);
 
-          const availableTools = tools.filter(t => !ctx.disabledTools.has(t.id));
+          // Wrapping up (the context is nearly full): told once, and the
+          // tools that gather more — searches, page reads — are withdrawn;
+          // the tools that make the answer's files stay.
+          const wrapUp = ctx.compaction?.wrapUp === true;
+          if (wrapUp && !ctx.compaction.wrapUpTold) {
+            ctx.compaction.wrapUpTold = true;
+            ctx.messages.push(nudgeMessage(CONTEXT_WRAP_UP_NUDGE));
+          }
+          const availableTools = tools.filter(
+            t => !ctx.disabledTools.has(t.id) && !(wrapUp && gathers(t))
+          );
           const offeredTools =
             availableTools.length > 0 && !forceFinish ? availableTools : undefined;
           ctx.offeredTools = offeredTools || [];
@@ -608,7 +619,7 @@ export class AgentLoop {
               ...options,
               ...(choicePlan.force ? { toolChoice: 'required' } : {}),
               tools: offeredTools,
-              nativeWebSearch: forceFinish ? null : nativeWebSearch,
+              nativeWebSearch: forceFinish || ctx.compaction?.wrapUp ? null : nativeWebSearch,
               responseSchema,
               responseFormat: options.responseFormat
             },
@@ -989,13 +1000,14 @@ export class AgentLoop {
           // Older tool batches become a findings digest (#3819). The next
           // model call sets the anchor anew before it is read again; the
           // live context figure is rebased by the `onCompaction` seam.
-          await this._digestCompaction(ctx, {
+          const freed = await this._digestCompaction(ctx, {
             seams,
             iteration,
             knownTokens,
             runBudget,
             options
           });
+          if (freed === 0) this._wrapUpIfFull(ctx, options, knownTokens);
         } else {
           const compaction = compactIfOversized(ctx.messages, {
             thresholdTokens: policies.context.compactThresholdTokens,
@@ -1476,13 +1488,9 @@ export class AgentLoop {
 
     const state = ctx.compaction;
     // Near the model's window the next call may be refused as too long: then
-    // neither the cooldown nor the second kept batch stands in the way. The
-    // window holds the output the call asks for too (vLLM counts `maxTokens`).
-    const window = Number(ctx.model?.contextWindow) || 0;
-    const reserve = Number(options?.maxTokens ?? ctx.model?.maxOutputTokens) || 0;
-    const inputLimit = window ? Math.max(window - reserve, window * 0.5) : 0;
-    const urgent =
-      overflow || tokensBefore > (inputLimit ? inputLimit * URGENT_WINDOW_SHARE : threshold * 1.6);
+    // neither the cooldown nor the second kept batch stands in the way.
+    const answerLine = this._answerLine(ctx, options);
+    const urgent = overflow || tokensBefore > answerLine;
     // The last compaction could not bring the prompt under the threshold (what
     // cannot be condensed — the system prompt, uploads, digests — is that
     // large): the next one waits until the prompt has grown by a tenth of the
@@ -1506,11 +1514,27 @@ export class AgentLoop {
     });
     // Urgent and the kept batches are what fills the window (large results,
     // a small window): keep only the newest, which the model has not read.
-    if (urgent && selection.projectedTokens > targetTokens && policy.digestKeepRecentBatches > 1) {
+    if (
+      urgent &&
+      !overflow &&
+      selection.projectedTokens > targetTokens &&
+      policy.digestKeepRecentBatches > 1
+    ) {
       selection = selectBatches(ctx.messages, {
         tokensBefore,
         targetTokens,
         keepRecentBatches: 1,
+        toolOf
+      });
+    }
+    // Still above the line with only the newest batch kept: that batch is
+    // condensed too. The answer needs the room more than the raw pages do,
+    // and its facts are in the notes.
+    if (urgent && selection.projectedTokens > answerLine) {
+      selection = selectBatches(ctx.messages, {
+        tokensBefore,
+        targetTokens: overflow ? 0 : targetTokens,
+        keepRecentBatches: 0,
         toolOf
       });
     }
@@ -1685,8 +1709,13 @@ export class AgentLoop {
         ? await this._spill(ctx, `${compactionId}-digest`, digestText, 'text/plain')
         : null;
 
+    // Still near the window after condensing: no room for more results and
+    // the answer. The run wraps up — gathering stops, the answer is written.
+    const wrapUp = urgent && tokensBefore - freedTokens > answerLine;
+    if (wrapUp) state.wrapUp = true;
     const record = {
       ...info,
+      ...(wrapUp ? { wrapUp: true } : {}),
       collapsed: calls.length,
       freedChars,
       lossy: Boolean(fallbackReason),
@@ -1725,6 +1754,37 @@ export class AgentLoop {
       messages: ctx.messages
     });
     return freedTokens;
+  }
+
+  /**
+   * The prompt size above which the next call leaves too little room for
+   * more tool results and the answer: {@link URGENT_WINDOW_SHARE} of what the
+   * model takes as input — its window less the output the call asks for
+   * (vLLM counts `maxTokens` against the window). Without a known window, a
+   * multiple of the compaction threshold.
+   * @private
+   */
+  _answerLine(ctx, options) {
+    const window = Number(ctx.model?.contextWindow) || 0;
+    const reserve = Number(options?.maxTokens ?? ctx.model?.maxOutputTokens) || 0;
+    const inputLimit = window ? Math.max(window - reserve, window * 0.5) : 0;
+    return inputLimit
+      ? inputLimit * URGENT_WINDOW_SHARE
+      : ctx.policies.context.compactThresholdTokens * 1.6;
+  }
+
+  /**
+   * After a compaction that freed nothing: a prompt still above the answer
+   * line leaves no room for more results, so the run wraps up.
+   * @private
+   */
+  _wrapUpIfFull(ctx, options, knownTokens) {
+    if (!ctx.compaction || ctx.compaction.wrapUp) return;
+    const tokens =
+      Number.isFinite(knownTokens) && knownTokens > 0
+        ? knownTokens
+        : estimateTranscriptTokens(ctx.messages) + toolDefinitionTokens(ctx.offeredTools);
+    if (tokens > this._answerLine(ctx, options)) ctx.compaction.wrapUp = true;
   }
 
   /**
@@ -1911,6 +1971,17 @@ const MAX_ARCHIVE_RUNS = 8;
  * the data is gone, so it is `lossy`. Before/after are estimates unless the
  * provider's count of the transcript is known.
  */
+/**
+ * Whether a tool gathers more material (a search or a page read) rather than
+ * producing. Reading a condensed result back is not gathering: it is how a
+ * wrap-up gets an exact figure the notes do not hold.
+ */
+function gathers(toolDef) {
+  if (toolDef?.isCompactionRecall) return false;
+  const kind = startedDisplayOf(toolDef).activityKind;
+  return kind === 'search' || kind === 'fetch';
+}
+
 function elisionInfo(messagesBefore, result, { step, trigger, knownTokens, fallbackReason }) {
   const estimatedBefore = estimateTranscriptTokens(messagesBefore);
   const estimatedAfter = estimateTranscriptTokens(result.messages);

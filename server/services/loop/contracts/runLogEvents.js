@@ -508,6 +508,8 @@ export const contextCompactionData = z.object({
   lossy: z.boolean().optional(),
   /** Why a digest compaction lost data: `summary_failed`, `summary_partial`, `summary_empty`, … */
   fallbackReason: z.string().optional(),
+  /** Still near the window after condensing: gathering stopped, the answer is written from the notes. */
+  wrapUp: z.boolean().optional(),
   tokensBefore: z.number().int().nonnegative().optional(),
   tokensAfter: z.number().int().nonnegative().optional(),
   itemsSummarised: z.number().int().nonnegative().optional(),

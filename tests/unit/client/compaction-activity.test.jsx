@@ -213,6 +213,22 @@ describe('the compaction row', () => {
     expect(screen.queryByRole('button', { name: /showNotes/ })).not.toBeInTheDocument();
   });
 
+  test('a wrap-up says the turn stops searching and answers from the notes', () => {
+    const activity = buildToolActivity(
+      runFrom([
+        started,
+        ...search(2, 'a'),
+        compacted(4, 'completed', { wrapUp: true, tokensAfter: 45000, digest: DIGEST }),
+        env(6, 'run/ended', { status: 'completed', finishReason: 'stop' })
+      ])
+    );
+    expect(activity.items[1].wrapUp).toBe(true);
+    render(<ToolActivity activity={activity} loading={false} />);
+    fireEvent.click(screen.getAllByRole('button')[0]);
+    const line = screen.getByText('toolActivity.compaction.wrapUp');
+    expect(line.className).toMatch(/amber/);
+  });
+
   test('a turn whose notes were written and once had to shorten says both, not only the loss', () => {
     const second = env(8, 'context/compacted', {
       compactionId: 'cmp-2',

@@ -2103,6 +2103,9 @@
               "fallbackReason": {
                 "type": "string"
               },
+              "wrapUp": {
+                "type": "boolean"
+              },
               "tokensBefore": {
                 "type": "integer",
                 "minimum": 0,
@@ -5952,6 +5955,9 @@
               "fallbackReason": {
                 "type": "string",
                 "maxLength": 200
+              },
+              "wrapUp": {
+                "type": "boolean"
               },
               "tokensBefore": {
                 "type": "integer",

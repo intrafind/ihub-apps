@@ -2494,6 +2494,10 @@ The model therefore does not run the same searches again, and its answer keeps t
   running the search again. Within a turn this always works; after the turn paused (for an
   approval or a question) it needs the run log, which keeps the results while the turn is
   paused.
+- **Room for the answer:** when the context is nearly full even after condensing, the turn stops
+  searching and writes its answer, and any file the user asked for, from the notes.
+- **Figures from sources, not memory:** the model is told to take figures only from its searches,
+  page reads and notes, and to say a figure is not available instead of filling it in.
 - **Visible in the chat:** the answer's activity shows "Condensed 9 earlier search results into
   notes", which opens to the notes, and explains why the context figure dropped. When the notes
   could not be written, or the model's context window was full, the row says that details may be

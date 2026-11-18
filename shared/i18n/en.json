@@ -9036,6 +9036,7 @@
       "why": "Frees room in the model's context, so the turn can go on without running these calls again.",
       "lossyRecall": "Some details may be missing from the notes. The model can read the full results again.",
       "lossyElided": "Some details of these results are no longer available to the model.",
+      "wrapUp": "The context is nearly full: no more searching. The answer is written from these notes.",
       "showNotes": "Show notes",
       "hideNotes": "Hide notes",
       "notesTruncated": "The notes are shortened here.",

@@ -101,7 +101,7 @@ test('the cut takes whole batches, oldest first, and never the newest ones', () 
   );
 });
 
-test('the cut stops once the projected prompt is at the target, and keeps at least the newest batch', () => {
+test('the cut stops once the projected prompt is at the target; only a wrap-up takes the newest batch', () => {
   const messages = transcript();
   const first = selectBatches(messages, {
     tokensBefore: 10_000,
@@ -109,8 +109,16 @@ test('the cut stops once the projected prompt is at the target, and keeps at lea
     keepRecentBatches: 0
   });
   assert.equal(first.batches.length, 1, 'one batch is enough');
+  const kept = selectBatches(messages, {
+    tokensBefore: 1e9,
+    targetTokens: 0,
+    keepRecentBatches: 1
+  });
+  assert.equal(kept.batches.length, 3, 'the newest batch is kept');
   const all = selectBatches(messages, { tokensBefore: 1e9, targetTokens: 0, keepRecentBatches: 0 });
-  assert.equal(all.batches.length, 3, 'the newest batch is never condensed');
+  assert.equal(all.batches.length, 4, 'a wrap-up condenses the newest batch too');
+  const fallback = selectBatches(messages, { tokensBefore: 1e9, targetTokens: 0 });
+  assert.equal(fallback.batches.length, 2, 'two kept by default');
 });
 
 test('a condensed batch is not taken again', () => {
@@ -391,7 +399,10 @@ test('the digest goes into the last condensed result; the calls stay, every othe
   assert.match(next[6].content, /- r1 · webSearch · \{"query":"c1"\} · ok/);
   assert.match(next[6].content, /nvidia — https:\/\/x\.test\/nvidia/);
   assert.match(next[6].content, /- \[r1\] NVIDIA 5\.1T \(https:\/\/x\.test\/nvidia\)/);
-  assert.match(next[6].content, /Looked for, not found:\n- \[r2\] Apple P\/E/);
+  assert.match(
+    next[6].content,
+    /Looked for, not found \(report these as not available, not from memory\):\n- \[r2\] Apple P\/E/
+  );
   assert.match(next[6].content, /Do not run these calls again/);
   assert.equal(next[6].tool_call_id, 'c3', 'the tool message keeps its call id');
   assert.deepEqual(condensedStateOf(next), { nextRef: 4, digests: 1, summarized: 1, failures: 0 });

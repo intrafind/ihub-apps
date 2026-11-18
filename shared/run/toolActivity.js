@@ -268,6 +268,7 @@ function compactionRows(run, finished) {
         strategy: entry.strategy || null,
         lossy: entry.lossy === true,
         fallbackReason: entry.fallbackReason || null,
+        wrapUp: entry.wrapUp === true,
         itemsSummarised: Number.isInteger(entry.itemsSummarised) ? entry.itemsSummarised : 0,
         kinds: entry.kinds || null,
         tokensBefore: Number.isInteger(entry.tokensBefore) ? entry.tokensBefore : null,

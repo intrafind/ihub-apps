@@ -65,6 +65,7 @@ test('the chat says a digest is being written, then what it did, and the context
   );
   for (const frame of frames) parseSseV2EventData(frame.type, frame.data);
   const completed = frames[1].data;
+  assert.equal(completed.wrapUp, undefined, 'no wrap-up unless the loop says so');
   assert.equal(completed.digestTruncated, true, 'the frame bounds the notes');
   assert.ok(completed.digest.length <= 8001);
   assert.equal(completed.tokensAfter, 37_905);
@@ -124,7 +125,8 @@ test('the stored answer keeps the row and its notes; a share keeps that it happe
         tokensBefore: 102_934,
         tokensAfter: 37_905,
         digest: '<condensed_results>NVIDIA 5.1T</condensed_results>',
-        facts: 12
+        facts: 12,
+        wrapUp: true
       }),
       env(5, 'run/ended', { status: 'completed', finishReason: 'stop' })
     ]),
@@ -156,6 +158,7 @@ test('the stored answer keeps the row and its notes; a share keeps that it happe
       digest: '<condensed_results>NVIDIA 5.1T</condensed_results>'
     }
   );
+  assert.equal(row.wrapUp, true, 'the stored row keeps the wrap-up');
   const shared = shareableActivity(stored).toolActivity.items.find(i => i.kind === 'compaction');
   assert.equal(shared.digest, undefined, 'the notes hold what the calls found');
   assert.equal(shared.itemsSummarised, 9);

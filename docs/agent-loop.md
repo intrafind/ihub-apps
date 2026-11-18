@@ -219,7 +219,24 @@ projected at `compactTargetShare` of the threshold
   output the call asks for (vLLM counts `maxTokens` against the window) — a
   compaction is urgent: the cooldown does not hold it back, and when the two
   kept batches are what fills the window, only the newest (the one the model
-  has not read) is kept.
+  has not read) is kept. When even that leaves the prompt above the line, the
+  newest batch is condensed too: the answer needs the room more than the raw
+  pages, and their facts are in the notes.
+- Still above that line after condensing, the run **wraps up**
+  (`context/compaction.wrapUp`): tools that gather more (activity `search` or
+  `fetch`, and native web search) are withdrawn for the rest of the run, the
+  tools that produce the answer's files and `recall_tool_result` stay, and the
+  model is told once (`CONTEXT_WRAP_UP_NUDGE`) to write its complete answer
+  from the notes, with figures only from the notes or a result read back. A
+  run whose prompt is above the line with nothing left to condense wraps up
+  the same way.
+- The summary model is told what to keep under all circumstances, in this
+  order, and writes its lines in that order (when the notes are cut, the end
+  goes first): everything the task asks for (each requested figure and
+  attribute, per entity), every other figure about a named entity, and a
+  `NOTFOUND` line for what the task needs and a result lacks. It never fills
+  a gap; the digest and the wrap-up tell the answering model to say a missing
+  figure is not available instead of supplying it from memory.
 - A second compaction appends a new digest after the first; a digest is never
   summarised again, so the prompt prefix up to it stays cacheable.
 - From the first compaction on, the model is offered `recall_tool_result`

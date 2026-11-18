@@ -600,6 +600,11 @@ function CompactionRow({ item, details }) {
             : t('toolActivity.compaction.lossyElided')}
         </p>
       )}
+      {item.wrapUp && (
+        <p className={`mt-1 ms-5.5 break-words ${ATTENTION}`}>
+          {t('toolActivity.compaction.wrapUp')}
+        </p>
+      )}
       {details && (tokens || item.trigger) && (
         <dl className="mt-0.5 mb-1 ms-5.5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
           {item.trigger && (

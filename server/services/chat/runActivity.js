@@ -416,6 +416,7 @@ function boundCompactionFields(item) {
     strategy: item.strategy === 'digest' || item.strategy === 'elide' ? item.strategy : undefined,
     lossy: item.lossy === true ? true : undefined,
     fallbackReason: text(item.fallbackReason, 100),
+    wrapUp: item.wrapUp === true ? true : undefined,
     itemsSummarised: integer(item.itemsSummarised),
     kinds: kinds
       ? {

@@ -253,6 +253,16 @@ export const WEB_SEARCH_READER_CITATION_GUIDANCE =
   '[1](https://example.com/page). Cite only pages the page reader returned.';
 
 /**
+ * Figures from sources, never from memory (#3819): a model that misses a
+ * figure tends to fill it in from its training data ("~$383B"), which reads
+ * as researched. Applies to every search setup.
+ */
+export const WEB_SEARCH_FIGURES_GUIDANCE =
+  'Take figures, prices, dates and names only from what your searches and page reads ' +
+  'returned. When one you need is missing, search for it; if it still cannot be found, say ' +
+  'that it is not available. Never fill it in from memory, not even approximately.';
+
+/**
  * No list of sources at the end of the answer — the chat lists the cited
  * sources under it ("Cited in this answer"), so a list the model writes shows
  * them twice. Named explicitly, in the words models use for it, because
@@ -290,6 +300,7 @@ export function buildWebSearchSourceGuidance({ native, pageReader }) {
   if (!native) parts.unshift(WEB_SEARCH_CITATION_GUIDANCE);
   else if (pageReader) parts.unshift(WEB_SEARCH_READER_CITATION_GUIDANCE);
   if (pageReader) parts.push(WEB_SEARCH_PASTED_URL_GUIDANCE);
+  parts.push(WEB_SEARCH_FIGURES_GUIDANCE);
   parts.push(WEB_SEARCH_NO_SOURCE_LIST_GUIDANCE);
   return parts.join('\n');
 }

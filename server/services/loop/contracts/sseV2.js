@@ -96,6 +96,8 @@ export const contextCompactedData = z.object({
   /** Data was dropped rather than condensed. */
   lossy: z.boolean().prefault(false),
   fallbackReason: z.string().max(200).optional(),
+  /** Still near the window after condensing: the turn stops searching and answers from the notes. */
+  wrapUp: z.boolean().optional(),
   tokensBefore: z.number().int().nonnegative().optional(),
   tokensAfter: z.number().int().nonnegative().optional(),
   /** Tool results condensed or shortened. */
@@ -135,6 +137,7 @@ export function compactedFrameOf(info, status = 'completed') {
     ...(typeof d.fallbackReason === 'string' && d.fallbackReason
       ? { fallbackReason: d.fallbackReason.slice(0, 200) }
       : {}),
+    ...(d.wrapUp === true ? { wrapUp: true } : {}),
     ...(int(d.tokensBefore) !== undefined ? { tokensBefore: int(d.tokensBefore) } : {}),
     ...(int(d.tokensAfter) !== undefined ? { tokensAfter: int(d.tokensAfter) } : {}),
     itemsSummarised: int(d.itemsSummarised) ?? int(d.collapsed) ?? 0,

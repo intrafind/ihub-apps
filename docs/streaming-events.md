@@ -61,7 +61,7 @@ reducer, `client/src/shared/run/runReducer.js`.
 | `tool/completed`       | `{ step, callId, toolId, name, resultPreview, error?, durationMs?, knowledgeSource? }`                                        | A tool call finished; `resultPreview` is bounded                              |
 | `sources/added`        | `{ step?, callId?, toolId?, items, queries?, supports? }`                                                                     | What a tool call, a model adapter or provider search found (see below)        |
 | `context/usage`        | `{ contextWindow, inputTokens, maxOutputTokens, source: provider \| estimate, step? }`                                         | How full the model's context window is, as the server counts it (see below)   |
-| `context/compacted`    | `{ compactionId, step, status: running \| completed, trigger, strategy?, lossy, fallbackReason?, tokensBefore?, tokensAfter?, itemsSummarised, kinds?, digest?, digestTruncated?, facts?, durationMs? }` | Earlier tool results were condensed or shortened to free context (see below)  |
+| `context/compacted`    | `{ compactionId, step, status: running \| completed, trigger, strategy?, lossy, fallbackReason?, wrapUp?, tokensBefore?, tokensAfter?, itemsSummarised, kinds?, digest?, digestTruncated?, facts?, durationMs? }` | Earlier tool results were condensed or shortened to free context (see below)  |
 | `interaction/raised`   | `{ interaction }`                                                                                                             | A human touchpoint (question, approval, review) — see `contracts/interaction.js` |
 | `interaction/answered` | `{ interactionId, kind, answer }`                                                                                             | The touchpoint was answered                                                   |
 | `progress/node`        | `{ executionId?, nodeId, nodeName?, nodeType?, status, iteration?, progress?, output?, error? }`                              | Workflow node progress (also chat-launched workflows)                         |
@@ -221,7 +221,9 @@ summary call, so a chat turn sends `status: running` before it and
 tools; `digest` is the digest as the model reads it, bounded to 8,000
 characters (`digestTruncated`). The ledger's `context/compaction` projects to
 the `completed` frame, so a re-sync (`view=sse`), a resumed stream and a
-rebuilt activity show it too; journal entries written before compactions had
+rebuilt activity show it too. `wrapUp: true` says the prompt stayed near the
+window after condensing: the turn stopped searching and answers from the notes.
+Journal entries written before compactions had
 an id project to nothing. The chat shows it as a `compaction` row of the
 answer's activity, placed by time among the tool calls. A `context/usage`
 frame with the rebased figure follows the `completed` frame.

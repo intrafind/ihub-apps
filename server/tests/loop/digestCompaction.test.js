@@ -61,7 +61,9 @@ function toolTurn(id, name, args, prompt = 100) {
 }
 
 const isSummaryRequest = request =>
-  String(request.body?.messages?.[0]?.content || '').startsWith('You extract facts');
+  String(request.body?.messages?.[0]?.content || '').startsWith(
+    'You write the notes that replace tool results'
+  );
 
 /**
  * A loop whose steps answer with `turns` in order and whose summary calls
@@ -247,7 +249,7 @@ test('a failed summary still condenses the batch, to its calls and sources, mark
     seams: [{ onCompaction: (_ctx, info) => infos.push(info) }],
     executeTool: async (_call, { args }) => searchResult(args.query)
   });
-  assert.equal(result.status, 'completed', 'the turn goes on');
+  assert.equal(result.status, 'completed', JSON.stringify(result.error));
   assert.equal(infos.length, 1);
   assert.equal(infos[0].lossy, true);
   assert.equal(infos[0].fallbackReason, 'summary_failed');
@@ -653,6 +655,61 @@ test('notes that would count more tokens than the results they replace are never
   assert.equal(summaryRequests.length, 0);
   assert.ok(!compactions.includes('digest'), `compactions: ${compactions.join(', ')}`);
   assert.equal(result.messages.find(m => m.tool_call_id === 'c1').content, sparse);
+});
+
+test('near the window the newest batch is condensed too; still full, the run wraps up with its producing tools', async () => {
+  const xlsxTool = {
+    id: 'create_xlsx',
+    name: 'create_xlsx',
+    description: 'make a spreadsheet',
+    parameters: { type: 'object', properties: { rows: { type: 'array' } } }
+  };
+  // Window 9,000 less 2,000 output: 7,000 of input, the answer line at 5,600.
+  const small = { ...model, contextWindow: 9000, maxOutputTokens: 2000 };
+  const run = async lastPrompt => {
+    const { loop, stepRequests } = makeLoop(
+      [
+        toolTurn('c1', 'webSearch', { query: 'nvidia' }, 1000),
+        toolTurn('c2', 'webSearch', { query: 'apple' }, lastPrompt),
+        textTurn('done')
+      ],
+      ['FACT | r1 | NVIDIA market cap 5.1 trillion USD | https://x.test/nvidia']
+    );
+    const infos = [];
+    const result = await loop.run({
+      model: small,
+      messages: baseMessages,
+      tools: [searchTool, xlsxTool],
+      policies,
+      seams: [{ onCompaction: (_ctx, info) => infos.push(info) }],
+      executeTool: async (_call, { args }) => searchResult(args.query)
+    });
+    const last = stepRequests.at(-1).body;
+    return {
+      result,
+      infos,
+      tools: (last.tools || []).map(t => t.function?.name || t.id || t.name),
+      nudges: last.messages.filter(m => String(m.content).includes('The context is nearly full'))
+    };
+  };
+
+  const condensed = await run(6000);
+  assert.equal(condensed.result.status, 'completed', JSON.stringify(condensed.result.error));
+  assert.match(
+    condensed.result.messages.find(m => m.tool_call_id === 'c2').content,
+    /^\[condensed result r2/,
+    'the newest batch is condensed too'
+  );
+  assert.equal(condensed.infos[0].wrapUp, undefined, 'room left: no wrap-up');
+  assert.ok(condensed.tools.includes('webSearch'), 'searching goes on');
+
+  const full = await run(9500);
+  assert.equal(full.result.status, 'completed', JSON.stringify(full.result.error));
+  assert.equal(full.infos[0].wrapUp, true);
+  assert.ok(!full.tools.includes('webSearch'), 'no more searching');
+  assert.ok(full.tools.includes('create_xlsx'), 'the file can still be made');
+  assert.ok(full.tools.includes(RECALL_TOOL_ID), 'a result can still be read back');
+  assert.equal(full.nudges.length, 1, 'told once');
 });
 
 test('near the window the second kept batch is condensed too; well below it, it stays', async () => {
