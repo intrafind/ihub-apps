@@ -192,7 +192,10 @@ relevant pages before it answers.
 Models tend to do only what they are asked, though, so when web search is on for a turn the server
 adds a short research instruction to the end of the system prompt:
 
-- break the question into its sub-questions;
+- plan before the first search what the answer must contain, and break the question into its
+  sub-questions;
+- for a list or a table, find the items first (one search for an authoritative list or ranking),
+  then the details per item, from a page that holds many of them at once;
 - run several searches with different wording (and in another language where that helps);
 - search again with more precise terms when results are thin or disagree;
 - open the most relevant pages and read them in full when the search excerpts are not enough

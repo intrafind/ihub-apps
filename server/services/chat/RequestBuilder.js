@@ -154,7 +154,11 @@ export function applyIntegrationScopes(llmMessages, tools, integrationScopes) {
 export const DEFAULT_WEB_SEARCH_RESEARCH_GUIDANCE =
   'Web search research: web search is available for this conversation, and you can search ' +
   'several times before answering. When a question needs current or external information:\n' +
-  '- Break the question into its sub-questions.\n' +
+  '- Before the first search, plan: what the answer must contain and which searches it ' +
+  'needs. Break the question into its sub-questions.\n' +
+  '- For a list or a table, find the items first (one search for an authoritative list or ' +
+  'ranking), then the details per item, preferring a page that holds many of them at once ' +
+  'over one search per detail.\n' +
   '- Run several searches with different wording (and in another language where that ' +
   'helps), not just one.\n' +
   '- When results are thin or disagree, search again with more precise terms before ' +

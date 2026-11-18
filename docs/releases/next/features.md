@@ -2498,6 +2498,10 @@ The model therefore does not run the same searches again, and its answer keeps t
   searching and writes its answer, and any file the user asked for, from the notes.
 - **Figures from sources, not memory:** the model is told to take figures only from its searches,
   page reads and notes, and to say a figure is not available instead of filling it in.
+- **Plan first:** with web search on, the model is told to plan what the answer needs before the
+  first search, and for a list or a table to find the items first and then their details. A
+  workbook built from research holds only figures from sources (`n/a` otherwise), states units
+  and scale in its headers, and lists a ranking's top 10 unless the user names a number.
 - **Visible in the chat:** the answer's activity shows "Condensed 9 earlier search results into
   notes", which opens to the notes, and explains why the context figure dropped. When the notes
   could not be written, or the model's context window was full, the row says that details may be
