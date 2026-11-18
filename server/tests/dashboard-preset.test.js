@@ -11,6 +11,8 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
+import fs from 'node:fs';
+import { SPEC_FIELDS } from '../services/documents/webArtifacts/dashboardSpec.js';
 import {
   checkDashboardSpec,
   dashboardSourceOf,
@@ -223,6 +225,144 @@ describe('dashboard spec check says what is wrong', () => {
   });
 });
 
+describe('dashboard spec: every problem at once', () => {
+  /** The text after the fixed lead, for a spec that fails. */
+  const problemsOf = value => {
+    try {
+      renderDashboard(value);
+    } catch (error) {
+      return error.message.replace(/^Invalid dashboard "data": /, '');
+    }
+    assert.fail('the spec should have been refused');
+  };
+
+  it('keeps the one-line message for a single fault', () => {
+    const bad = spec();
+    bad.blocks[0].items[1].value = '97,529';
+    assert.equal(problemsOf(bad), 'blocks[0].items[1].value must be a number (got "97,529").');
+  });
+
+  it('lists every fault in one message, so the model fixes them in one call', () => {
+    const bad = spec();
+    delete bad.asOf;
+    delete bad.sources;
+    bad.blocks[0].items[1].value = '97,529';
+    bad.blocks[1].type = 'pie';
+    bad.kpis = [{ label: 'a' }];
+    const message = problemsOf(bad);
+    assert.match(message, /^5 problems\. /);
+    for (const problem of [
+      'asOf is required.',
+      'sources is required.',
+      'blocks[0].items[1].value must be a number (got "97,529").',
+      'blocks[1].type must be one of bars, line, table, text.',
+      'kpis[0].value must be a number or a text.'
+    ]) {
+      assert.ok(message.includes(problem), `names: ${problem}`);
+    }
+    assert.match(message, /Fix all of them in the next call\.$/);
+  });
+
+  it('lists a fault once and at most eight, and says how many more there are', () => {
+    const bad = spec();
+    bad.blocks[0].items = Array.from({ length: 12 }, (_, i) => ({ label: `s${i}`, value: 'x' }));
+    const message = problemsOf(bad);
+    assert.match(message, /^12 problems \(4 more after these\)\. \(1\) /);
+    assert.ok(!message.includes('(9)'), 'eight are shown');
+  });
+
+  it('checks the rules that look across fields once the fields themselves are sound', () => {
+    const bad = spec();
+    bad.sources.push({ id: 'sections', name: 'again' });
+    bad.blocks[0].share = true;
+    bad.blocks[0].items[1].value = -2;
+    bad.blocks[1].series[0].values = [1, 2];
+    bad.blocks[2].columns.push({ key: 'name', label: 'again' });
+    bad.blocks[2].sort = { key: 'nope' };
+    bad.blocks[2].rows[0].w128 = { status: 'good' };
+    const message = problemsOf(bad);
+    for (const problem of [
+      'sources has an id twice.',
+      'blocks[0].items[1].value is negative (-2), which "share" cannot show',
+      'blocks[1].series[0].values has 2 entries but blocks[1].x has 3',
+      'blocks[2].columns has a key twice.',
+      'blocks[2].sort.key must be one of the column keys.',
+      'blocks[2].rows[0].w128 must be text, a number, null or {text, status}.'
+    ]) {
+      assert.ok(message.includes(problem), `names: ${problem}`);
+    }
+    // A type fault elsewhere comes first: the cross-field rules wait for it.
+    const both = spec();
+    both.sources.push({ id: 'sections', name: 'again' });
+    delete both.asOf;
+    assert.equal(problemsOf(both), 'asOf is required.');
+  });
+
+  it('says what a block is when it is not an object', () => {
+    const bad = spec();
+    bad.blocks[0] = 'bars';
+    assert.equal(
+      problemsOf(bad),
+      'blocks[0] must be an object whose "type" is one of bars, line, table, text.'
+    );
+  });
+});
+
+describe('dashboard spec: null is "not set", as it always was for most fields', () => {
+  it('accepts null for top, sort, visibleRows and the sort of a table', () => {
+    const lenient = spec();
+    lenient.blocks[0].top = null;
+    lenient.blocks[0].sort = null;
+    lenient.blocks[2].visibleRows = null;
+    lenient.blocks[2].sort = null;
+    const checked = checkDashboardSpec(lenient);
+    assert.equal(checked.blocks[0].top, undefined);
+    assert.equal(checked.blocks[0].sort, undefined);
+    assert.equal(checked.blocks[2].visibleRows, undefined);
+    assert.equal(checked.blocks[2].sort, undefined);
+  });
+
+  it('still refuses a value that is set and wrong', () => {
+    for (const [index, field, value, pattern] of [
+      [0, 'top', 0, /top must be a whole number from 1 to 50/],
+      [0, 'sort', 'asc', /sort must be "desc" \(default\) or "none"/],
+      [2, 'visibleRows', 1.5, /visibleRows must be a whole number from 0/]
+    ]) {
+      const bad = spec();
+      bad.blocks[index][field] = value;
+      invalid(bad, pattern);
+    }
+  });
+});
+
+describe('dashboard spec: the schema and its reference agree', () => {
+  const reference = fs.readFileSync(
+    new URL('../systemSkills/dashboard/references/spec.md', import.meta.url),
+    'utf8'
+  );
+
+  it('documents every field of the page and of each block type', () => {
+    const missing = [];
+    for (const [part, fields] of Object.entries(SPEC_FIELDS)) {
+      for (const field of fields) {
+        if (!reference.includes(`\`${field}\``)) missing.push(`${part}.${field}`);
+      }
+    }
+    assert.deepEqual(missing, [], 'fields the schema takes but spec.md does not mention');
+  });
+
+  it('lists the fields of the schema in the order the reference and the page use', () => {
+    assert.deepEqual(SPEC_FIELDS.page.slice(0, 3), ['lang', 'title', 'summary']);
+    assert.deepEqual(SPEC_FIELDS.bars.slice(0, 5), [
+      'type',
+      'title',
+      'description',
+      'source',
+      'items'
+    ]);
+  });
+});
+
 describe('dashboard spec: negative bars', () => {
   const withItems = items => {
     const s = spec();
@@ -272,10 +412,26 @@ describe('dashboard spec: the date and the sources are required', () => {
     const none = spec();
     delete none.asOf;
     invalid(none, /asOf is required/);
-    for (const bad of ['yesterday', '9 November 2026', '2026-13-01', '2026-11-32', 'Q3 2026']) {
+    for (const bad of [
+      'yesterday',
+      '9 November 2026',
+      '2026-13-01',
+      '2026-11-32',
+      'Q3 2026',
+      '2026-11T10:15',
+      '2026-11-09T10:15 11:00',
+      '2026-11-09Tnoon',
+      '2026-11-09T25'
+    ]) {
       invalid({ ...spec(), asOf: bad }, /asOf must be the date of the data as YYYY-MM-DD/);
     }
-    for (const good of ['2026-11-09', '2026-11', '2026-11-09T10:15:00Z', '2026-11-09 10:15']) {
+    for (const good of [
+      '2026-11-09',
+      '2026-11',
+      '2026-11-09T10:15:00Z',
+      '2026-11-09 10:15',
+      '2026-11-09T10:15:00.250+02:00'
+    ]) {
       assert.equal(checkDashboardSpec({ ...spec(), asOf: good }).asOf, good);
     }
   });

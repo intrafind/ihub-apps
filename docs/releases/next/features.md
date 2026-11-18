@@ -1824,7 +1824,7 @@ for it once the results are in.
   the server lays it out. The skill has tools of its own, `create_dashboard` and `edit_dashboard`,
   so the run activity reads **Create dashboard** / **Edit dashboard** (**Dashboard erstellen** /
   **Dashboard bearbeiten**) instead of "web artifact", and "make a dashboard, do not use web
-  artifacts" works. A faulty spec comes back as a message that names the field at fault, and a
+  artifacts" works. A faulty spec comes back as one message that names every field at fault, and a
   change is an edit of the spec, not a page written again.
 - **Numbers are not recalculated, and the server holds the rules.** The skill has the model copy
   every figure from the data; the page works out shares, order, the sum of a folded tail and table
