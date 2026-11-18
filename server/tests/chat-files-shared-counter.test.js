@@ -18,6 +18,7 @@ import path from 'node:path';
 
 import { FilesystemStorageProvider } from '../storage/index.js';
 import { ChatFileRepository } from '../services/chatFiles/ChatFileRepository.js';
+import { LockTimeoutError } from '../storage/errors.js';
 
 const COUNTER_KEY = '_meta__server-bytes';
 const NS = 'chat-files';
@@ -104,6 +105,51 @@ describe('shared server-wide quota counter', () => {
     const docs = await a._listAllDocs();
     const real = docs.reduce((sum, doc) => sum + doc.data.bytes, 0);
     assert.equal((await counter()).serverBytes, real);
+  });
+
+  it('50 parallel uploads over two instances: the counter equals the stored bytes', async () => {
+    await put(a, 0, 'seed', 1_000_000);
+    await Promise.all(
+      Array.from({ length: 50 }, (_, i) => put(i % 2 ? a : b, i + 1, 'x'.repeat(i + 1), 1_000_000))
+    );
+    const real = (await a._listAllDocs()).reduce((sum, doc) => sum + doc.data.bytes, 0);
+    assert.equal((await counter()).serverBytes, real);
+  });
+
+  it('a counter write that times out is kept and written with the next one', async () => {
+    await put(a, 0, 'seed', 1_000_000);
+    const documents = provider.documents;
+    let failures = 1;
+    const flaky = Object.create(documents);
+    flaky.put = (ns, key, ...rest) => {
+      if (key === COUNTER_KEY && failures-- > 0) {
+        return Promise.reject(new LockTimeoutError('Timed out waiting for lock'));
+      }
+      return documents.put(ns, key, ...rest);
+    };
+    const repo = new ChatFileRepository({ documents: flaky, blobs: provider.blobs });
+    await put(repo, 1, 'x'.repeat(100), 1_000_000);
+    assert.equal((await counter()).serverBytes, 4);
+    await put(repo, 2, 'y'.repeat(10), 1_000_000);
+    assert.equal((await counter()).serverBytes, 114);
+  });
+
+  it('concurrent stale-counter checks of one instance share one recount', async () => {
+    await put(a, 1, 'a'.repeat(100), 100000);
+    await provider.documents.put(NS, COUNTER_KEY, {
+      serverBytes: 5,
+      recountedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString()
+    });
+    let listings = 0;
+    const list = a._listAllDocs.bind(a);
+    a._listAllDocs = () => {
+      listings += 1;
+      return list();
+    };
+    const totals = await Promise.all(Array.from({ length: 10 }, () => a._serverUsedBytes()));
+    assert.deepEqual(new Set(totals), new Set([100]));
+    assert.equal(listings, 1);
+    assert.equal((await counter()).serverBytes, 100);
   });
 
   it('an exact recount heals a counter that drifted, and the counter is no file', async () => {

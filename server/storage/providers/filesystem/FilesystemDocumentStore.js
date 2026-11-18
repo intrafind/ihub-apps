@@ -32,7 +32,7 @@
  */
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import { atomicCreateJSON, atomicWriteJSON } from '../../../utils/atomicWrite.js';
+import { atomicCreateJSON, atomicWriteJSON, writeInDirectory } from '../../../utils/atomicWrite.js';
 import { withFileLock, removeIfExists, tryCreateExclusive } from '../../../utils/fileLock.js';
 import { isValidId } from '../../../utils/pathSecurity.js';
 import logger from '../../../utils/logger.js';
@@ -490,7 +490,9 @@ export class FilesystemDocumentStore extends DocumentStore {
           data: body
         };
 
-        await fs.mkdir(this._nsDir(ns), { recursive: true });
+        // The namespace directory is created by the first write that finds it
+        // missing (`writeInDirectory`), not by a `mkdir` on every put.
+        const nsDir = this._nsDir(ns);
 
         if (expectedEtag === null) {
           // O_EXCL decides the create, not the read above, for two reasons
@@ -518,9 +520,9 @@ export class FilesystemDocumentStore extends DocumentStore {
           const markerCreated = markerPath ? await tryCreateExclusive(markerPath, '') : false;
           // The prefix marker is left in place when the create loses: the key
           // then holds the winner's document, which belongs in the partition.
-          await this._prefixIndex.writeMarker(this._nsDir(ns), ns, key);
+          await this._prefixIndex.writeMarker(nsDir, ns, key);
           try {
-            await atomicCreateJSON(this._docPath(ns, key), envelope);
+            await writeInDirectory(nsDir, () => atomicCreateJSON(this._docPath(ns, key), envelope));
           } catch (error) {
             if (markerCreated) await removeIfExists(markerPath);
             if (error?.code === 'EEXIST') {
@@ -553,8 +555,13 @@ export class FilesystemDocumentStore extends DocumentStore {
         // dangling index entry.
         if (ownerId) await this._writeOwnerMarker(ns, ownerId, key);
         // Same order for the key-prefix index, same reason.
-        await this._prefixIndex.writeMarker(this._nsDir(ns), ns, key);
-        await atomicWriteJSON(this._docPath(ns, key), envelope);
+        await this._prefixIndex.writeMarker(nsDir, ns, key);
+        // Store documents always carry the default mode, so there is none to
+        // carry over (`keepMode: false` skips the stat and the chmod). Both
+        // fsyncs stay.
+        await writeInDirectory(nsDir, () =>
+          atomicWriteJSON(this._docPath(ns, key), envelope, { keepMode: false })
+        );
         // Retire the previous owner's marker only once the new envelope is on
         // disk, so the document is never missing from both indexes at once.
         if (previousOwnerId && previousOwnerId !== ownerId) {
@@ -850,10 +857,9 @@ export class FilesystemDocumentStore extends DocumentStore {
   /** Write (or heal) the index marker for a document. @private */
   async _writeOwnerMarker(ns, ownerId, key) {
     const marker = this._ownerMarkerPath(ns, ownerId, key);
-    await fs.mkdir(path.dirname(marker), { recursive: true });
     // Rewritten on every put so an entry lost to a crash reappears on the next
     // write. The file is empty: its name is the whole payload.
-    await fs.writeFile(marker, '', 'utf8');
+    await writeInDirectory(path.dirname(marker), () => fs.writeFile(marker, '', 'utf8'));
   }
 
   /**
@@ -940,8 +946,10 @@ export class FilesystemDocumentStore extends DocumentStore {
    * chat and writes a fresh one owned by whoever asked, while the transcript —
    * a separate document that still parses — comes along, so a torn chat
    * document silently transfers one user's conversation to another, at warn
-   * level. `atomicWriteFile` does not fsync the temp file or the parent
-   * directory, so a host crash after the rename can leave exactly that.
+   * level. `atomicWriteFile` fsyncs the temp file and the parent directory,
+   * so a host crash should leave the old envelope or the new one; a torn file
+   * comes from a disk or filesystem that does not honour that, a hand edit, or
+   * a copy taken mid-write.
    *
    * `lenient` is for the callers that are enumerating rather than fetching. A
    * listing must not fail its whole page because one document in it is torn,

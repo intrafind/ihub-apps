@@ -581,6 +581,9 @@ describe('web files in a project', () => {
     assert.equal(first.provenance.source.etag, '"v1"');
     const blob = first.text.blobKey;
     const ingest = getIngestService();
+    // The item reads ready a moment before its job leaves the worker's active
+    // set, and an active item is never scheduled.
+    await waitFor(() => !ingest.isActive(item.id));
     const later = Date.parse(first.checkedAt) + (DEFAULT_REFRESH_TTL_SECONDS + 1) * 1000;
 
     // Not due yet: nothing happens.
@@ -609,6 +612,7 @@ describe('web files in a project', () => {
     assert.equal(seen.at(-1).headers['if-none-match'], '"v1"', 'asked conditionally');
 
     serve('/policy.txt', 'Policy version two.', { 'content-type': 'text/plain' }, { etag: '"v2"' });
+    await waitFor(() => !ingest.isActive(item.id));
     const again = Date.parse(unchanged.checkedAt) + (DEFAULT_REFRESH_TTL_SECONDS + 1) * 1000;
     assert.equal(
       await ingest.refreshExpired([await getProjectRepository().get(project.id)], { now: again }),

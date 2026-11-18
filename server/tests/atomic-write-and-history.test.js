@@ -13,7 +13,8 @@ fsSync.mkdirSync(path.join(ROOT, 'contents'), { recursive: true });
 process.env.APP_ROOT_DIR = ROOT;
 process.env.CONTENTS_DIR = 'contents';
 
-const { atomicWriteFile, atomicWriteJSON } = await import('../utils/atomicWrite.js');
+const { atomicCreateJSON, atomicWriteFile, atomicWriteJSON, writeInDirectory } =
+  await import('../utils/atomicWrite.js');
 const { saveSnapshot, listSnapshots } = await import('../services/ChangeHistoryService.js');
 
 const modeOf = async p => (await fs.stat(p)).mode & 0o777;
@@ -34,6 +35,74 @@ describe('atomicWrite permissions', { skip: process.platform === 'win32' }, () =
     assert.equal(await modeOf(file), 0o600);
     await atomicWriteFile(file, 'x', { encoding: 'utf8' });
     assert.equal(await modeOf(file), 0o600);
+  });
+
+  it('gives the default mode with keepMode: false, and still honours an explicit mode', async () => {
+    const file = path.join(ROOT, 'store-doc.json');
+    await fs.writeFile(file, '{}');
+    await fs.chmod(file, 0o600);
+    const fresh = path.join(ROOT, 'fresh.json');
+    await fs.writeFile(fresh, '{}');
+    const defaultMode = await modeOf(fresh);
+    await atomicWriteJSON(file, { a: 1 }, { keepMode: false });
+    assert.equal(await modeOf(file), defaultMode);
+    await atomicWriteJSON(file, { a: 2 }, { keepMode: false, mode: 0o600 });
+    assert.equal(await modeOf(file), 0o600);
+  });
+
+  it('writeInDirectory creates a missing directory and retries once', async () => {
+    const dir = path.join(ROOT, 'later', 'nested');
+    const file = path.join(dir, 'a.json');
+    await writeInDirectory(dir, () => atomicWriteJSON(file, { a: 1 }));
+    assert.deepEqual(JSON.parse(await fs.readFile(file, 'utf8')), { a: 1 });
+    await assert.rejects(
+      writeInDirectory(dir, async () => {
+        throw Object.assign(new Error('denied'), { code: 'EACCES' });
+      }),
+      /denied/
+    );
+  });
+
+  it('atomicCreateJSON publishes the file whole, never opening the target to write it', async () => {
+    const dir = path.join(ROOT, 'create');
+    await fs.mkdir(dir);
+    const file = path.join(dir, 'doc.json');
+    const real = { open: fs.open, writeFile: fs.writeFile };
+    const opened = [];
+    for (const name of Object.keys(real)) {
+      fs[name] = (target, ...rest) => {
+        opened.push(String(target));
+        return real[name](target, ...rest);
+      };
+    }
+    try {
+      await atomicCreateJSON(file, { a: 1 });
+    } finally {
+      Object.assign(fs, real);
+    }
+    assert.equal(opened.includes(file), false, 'a reader cannot catch it half-written');
+    assert.deepEqual(JSON.parse(await fs.readFile(file, 'utf8')), { a: 1 });
+    await assert.rejects(atomicCreateJSON(file, { a: 2 }), error => error.code === 'EEXIST');
+    assert.deepEqual(JSON.parse(await fs.readFile(file, 'utf8')), { a: 1 });
+    assert.deepEqual(await fs.readdir(dir), ['doc.json'], 'no temp file left behind');
+  });
+
+  it('atomicCreateJSON falls back to an exclusive create where hard links are not supported', async () => {
+    const dir = path.join(ROOT, 'nolink');
+    await fs.mkdir(dir);
+    const file = path.join(dir, 'doc.json');
+    const realLink = fs.link;
+    fs.link = async () => {
+      throw Object.assign(new Error('not permitted'), { code: 'EPERM' });
+    };
+    try {
+      await atomicCreateJSON(file, { a: 1 });
+      await assert.rejects(atomicCreateJSON(file, { a: 2 }), error => error.code === 'EEXIST');
+    } finally {
+      fs.link = realLink;
+    }
+    assert.deepEqual(JSON.parse(await fs.readFile(file, 'utf8')), { a: 1 });
+    assert.deepEqual(await fs.readdir(dir), ['doc.json'], 'no temp file left behind');
   });
 
   it('leaves no temp file behind', async () => {

@@ -78,8 +78,12 @@ const PAGE_SIZE = 200;
 /** Hard bound on documents walked for one listing. */
 const MAX_SCANNED = 5000;
 
-/** Lock lease for one project write — the shape the chat repositories use. */
-const LOCK_OPTIONS = { ttlMs: 15000, waitMs: 5000 };
+/**
+ * Lock lease for one project write — the shape the chat repositories use. No
+ * fencing token: no section reads it, and a write already guards itself with
+ * the document's etag.
+ */
+const LOCK_OPTIONS = { ttlMs: 15000, waitMs: 5000, fence: false };
 
 /**
  * Code of the error a write throws when its `authorize` check fails on the

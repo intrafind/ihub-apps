@@ -550,30 +550,48 @@ export class ProjectIngestService {
     // A first fetch whose item another worker took while it waited: it does
     // nothing (`patchItem` answers the item unchanged, so this is tracked).
     let declined = false;
+    // A new item (an upload, a picked document, a crawled page) is pending with
+    // its attempt from the moment it was added and stays so until its outcome
+    // is installed: that is already "being processed" (`isBeingProcessed`), so
+    // it is not marked again when its job starts — one write under the
+    // project's lock fewer per item. A first fetch takes its item here, and a
+    // refresh or an edit marks its run, so those still write at the start.
+    // Except one that waited long in this worker's queue: another worker's
+    // reconciler counts a pending item's age from its `updatedAt` (the add) and
+    // cannot see this job, so a long wait plus the run would be taken for a
+    // crash and the result discarded. Marked, the run gets its own budget.
+    // ponytail: a job queued just under half the budget has only the other
+    // half to run in; a per-worker heartbeat the reconciler checks if that bites.
+    const staleMs = this.settings().ingest.staleAfterMinutes * 60 * 1000;
+    const queuedLong = Date.now() - job.startedAt > staleMs / 2;
+    const marksStart =
+      Boolean(input.reserve) || refresh || Boolean(input.previousBlobKey) || queuedLong;
     try {
-      const extracting = await patch(item => {
-        // A first fetch queued for an item waiting for one (`fetchWaiting`) takes
-        // the item now, when it starts: a job waiting in a worker's queue holds
-        // no reservation another worker's reconciler could take for a crashed
-        // one. If another worker took the item meanwhile, this job does nothing.
-        if (input.reserve) {
-          if (!isWaitingForFetch(item)) {
-            declined = true;
-            return false;
-          }
-          item.ingestAttempt = input.attempt;
-          item.updatedAt = new Date().toISOString();
-        }
-        if (!owns(item)) return false;
-        // A refresh keeps the old snapshot readable while the new one is
-        // fetched (spec 3 §4): the status stays, `refreshingAt` marks the run.
-        // `refreshItem` reserved it before queueing; that reservation is kept,
-        // not restamped, so the reconciler counts from the request (as it
-        // counts a queued upload from its `updatedAt`).
-        if (refresh) item.refreshingAt = item.refreshingAt || new Date().toISOString();
-        else item.status = 'extracting';
-        item.error = null;
-      });
+      const extracting = !marksStart
+        ? true
+        : await patch(item => {
+            // A first fetch queued for an item waiting for one (`fetchWaiting`) takes
+            // the item now, when it starts: a job waiting in a worker's queue holds
+            // no reservation another worker's reconciler could take for a crashed
+            // one. If another worker took the item meanwhile, this job does nothing.
+            if (input.reserve) {
+              if (!isWaitingForFetch(item)) {
+                declined = true;
+                return false;
+              }
+              item.ingestAttempt = input.attempt;
+              item.updatedAt = new Date().toISOString();
+            }
+            if (!owns(item)) return false;
+            // A refresh keeps the old snapshot readable while the new one is
+            // fetched (spec 3 §4): the status stays, `refreshingAt` marks the run.
+            // `refreshItem` reserved it before queueing; that reservation is kept,
+            // not restamped, so the reconciler counts from the request (as it
+            // counts a queued upload from its `updatedAt`).
+            if (refresh) item.refreshingAt = item.refreshingAt || new Date().toISOString();
+            else item.status = 'extracting';
+            item.error = null;
+          });
       // The item was removed while queued, or another worker took it.
       if (!extracting || declined) return null;
       assertOwned();
@@ -652,6 +670,10 @@ export class ProjectIngestService {
       const size = bytes ? bytes.length : Buffer.byteLength(text, 'utf8');
       const project = await this.repository.get(projectId);
       if (!project) return null;
+      // A new item was not checked at the start (`marksStart`): removed while
+      // queued, or its attempt released meanwhile, it is left alone here.
+      const current = (project.items || []).find(entry => entry.id === itemId);
+      if (!current || !owns(current)) return null;
       this.service._checkItemQuota(withoutItem(project, itemId), { bytes: size });
 
       // 3–4 hold the conversion slot (`CONVERSIONS_PER_PROCESS`): the fetch above

@@ -99,6 +99,22 @@ describe('sweepIdleFences', () => {
     assert.equal(await exists(leftover), false);
   });
 
+  it('removes a want marker a waiter left behind, and keeps a fresh one', async () => {
+    const locks = await manager();
+    const stale = fenceFile(locks, 'want-stale').replace(/\.fence$/, '.lock.want');
+    const fresh = fenceFile(locks, 'want-fresh').replace(/\.fence$/, '.lock.want');
+    await fs.mkdir(locks.lockDir, { recursive: true });
+    await fs.writeFile(stale, '');
+    await fs.writeFile(fresh, '');
+    await age(stale, DAY_MS + 1000);
+
+    const outcome = await locks.sweepIdleFences();
+
+    assert.equal(outcome.scratch, 1);
+    assert.equal(await exists(stale), false);
+    assert.equal(await exists(fresh), true);
+  });
+
   it('issues a larger token after the counter was swept', async () => {
     const locks = await manager();
     const first = await locks.withLock('grow', lease => lease.token);

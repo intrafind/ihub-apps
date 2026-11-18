@@ -9,8 +9,8 @@ import { itemErrorMessage } from '../utils/projectErrors';
 const BADGE = 'inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full';
 
 /**
- * Status of one project item (spec 3 §9): `pending` grey "waiting",
- * `extracting` with a spinner, `ready` green with its token count, `failed`
+ * Status of one project item (spec 3 §9): `pending` and `extracting` with a
+ * spinner, `ready` green with its token count, `failed`
  * red with the error message, `stale` amber with "newer version at the
  * source". A document linked from another project shows the original's
  * status, or that the viewer may not read it or it is gone.
@@ -58,13 +58,9 @@ function ProjectItemStatus({ item }) {
     return <ProjectItemStatus item={{ ...item, link: null, status: item.link.status }} />;
   }
   switch (item.status) {
+    // A new item stays `pending` until its text is installed: queued or being
+    // read, the server does not tell them apart, so both show as at work.
     case 'pending':
-      return (
-        <span className={`${BADGE} bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300`}>
-          <span className="h-1.5 w-1.5 rounded-full bg-gray-400" aria-hidden="true" />
-          {t('projects.items.status.pending', 'Waiting')}
-        </span>
-      );
     case 'extracting':
       return (
         <span

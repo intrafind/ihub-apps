@@ -51,11 +51,11 @@ import {
   releaseLease,
   removeIfExists,
   startLeaseRenewal,
-  touchLease
+  touchLease,
+  withLeaseLine
 } from '../../../utils/fileLock.js';
 import logger from '../../../utils/logger.js';
 import { LockManager } from '../../LockManager.js';
-import { lockPrefix, recordLockHold } from '../../../telemetry/waitDiagnostics.js';
 import { InvalidKeyError, LockTimeoutError, StorageError } from '../../errors.js';
 import { containedPath } from './paths.js';
 
@@ -184,6 +184,23 @@ export class FilesystemLockManager extends LockManager {
    * acquisition's fencing token, `isCurrent()` whether it still holds the
    * lease (see {@link FilesystemLockManager#isTokenCurrent}).
    *
+   * `fence: false` skips the token: no counter is read or written and the
+   * lease is not rewritten to name one, which saves about a dozen file
+   * operations per acquisition. Exclusion, renewal and release are the same.
+   * For sections that never read `token` (a chat or run-summary
+   * read-modify-write, which already guards itself with an etag). Such a
+   * section gets `token: null`, and `isCurrent()` then only asks whether the
+   * lease file is still this acquisition's and has not aged out. Tokens stay
+   * increasing across the fenced acquisitions of a name; an unfenced one in
+   * between takes none, and a fenced holder it took over still reads false.
+   *
+   * Callers of one process wait in memory, in line, instead of each polling
+   * the lease file, and an unfenced lease is handed straight to the next local
+   * caller with the same `ttlMs` and `renewMs`, for a bounded run while another
+   * process waits (`withLeaseLine` in `utils/fileLock.js`). A lease renewed
+   * more rarely than every half TTL stays out of the line: it may age out, and
+   * any caller must then be able to take it over.
+   *
    * @param {string} name - Lock name; any non-empty string
    * @param {(lease: import('../../LockManager.js').LockLease) => Promise<T>|T} fn - The critical section
    * @param {Object} [opts]
@@ -192,12 +209,17 @@ export class FilesystemLockManager extends LockManager {
    * @param {number} [opts.renewMs] - Refresh interval while `fn` runs; defaults
    *   to a third of `ttlMs`. 0 disables renewal, so the lease ages out under a
    *   running holder
+   * @param {boolean} [opts.fence=true] - Issue a fencing token (see above)
    * @returns {Promise<T>} Whatever `fn` returned
    * @throws {InvalidKeyError} When `name` is not a non-empty string
    * @throws {LockTimeoutError} When the lease could not be acquired within `waitMs`
    * @template T
    */
-  async withLock(name, fn, { ttlMs = DEFAULT_TTL_MS, waitMs = DEFAULT_WAIT_MS, renewMs } = {}) {
+  async withLock(
+    name,
+    fn,
+    { ttlMs = DEFAULT_TTL_MS, waitMs = DEFAULT_WAIT_MS, renewMs, fence = true } = {}
+  ) {
     if (typeof name !== 'string' || name.length === 0) {
       throw new InvalidKeyError(`Invalid lock name: ${String(name).slice(0, 64)}`);
     }
@@ -211,45 +233,99 @@ export class FilesystemLockManager extends LockManager {
     const renew = nonNegativeNumber(renewMs, Math.max(1, Math.floor(ttl / 3)), 'renewMs');
 
     const lockPath = containedPath(this._baseDir, LOCKS_DIR, leaseFileName(name));
-    // The owner token is what makes a takeover safe: only the holder that still
-    // matches the token on disk may unlink the lease, so a holder whose lease
-    // expired and was taken over cannot delete the new holder's lease.
-    const owner = crypto.randomUUID();
-    await this._acquire(lockPath, owner, ttl, wait, name);
-    const acquiredAt = performance.now();
-    this._held.set(lockPath, { owner, name });
-    let token;
-    try {
-      token = await this._issueToken(name);
-      // The lease names its token, so `isTokenCurrent` can tell this lease
-      // from one a later holder created after taking the name over.
-      if (!(await this._touch(lockPath, owner, ttl, name, token))) {
-        // Lost before the section started (a TTL shorter than issuing the
-        // token takes): running `fn` now would run it without the lock.
-        throw new LockTimeoutError(
-          `Storage lock "${String(name).slice(0, 64)}" was taken over before its section started`
-        );
+    // Callers of this process line up in memory (`withLeaseLine`): only the
+    // head of the line polls the lease file, and an unfenced lease is handed
+    // straight to the next local caller with the same TTL and renewal.
+    return withLeaseLine(
+      lockPath,
+      async held => {
+        let token = null;
+        if (fence) {
+          // A fenced lease is not handed on: renewal would rewrite the next
+          // section's token with this one's.
+          held.noHandOff = true;
+          try {
+            token = await this._issueToken(name);
+            // The lease names its token, so `isTokenCurrent` can tell this lease
+            // from one a later holder created after taking the name over.
+            if (!(await this._touch(lockPath, held.owner, ttl, name, token, held.clock))) {
+              // Lost before the section started (a TTL shorter than issuing the
+              // token takes): running `fn` now would run it without the lock.
+              throw new LockTimeoutError(
+                `Storage lock "${String(name).slice(0, 64)}" was taken over before its section started`
+              );
+            }
+          } catch (error) {
+            held.lost = true;
+            throw error;
+          }
+          if (renew > 0) {
+            held.stopRenewal = this._startRenewal(
+              lockPath,
+              held.owner,
+              ttl,
+              renew,
+              name,
+              token,
+              held.clock,
+              () => (held.lost = true)
+            );
+          }
+        }
+        const lease = Object.freeze({
+          name,
+          token,
+          isCurrent: fence
+            ? () => this.isTokenCurrent(name, token)
+            : () => this._isLeaseOwned(lockPath, held.owner, ttl)
+        });
+        return fn(lease);
+      },
+      {
+        name,
+        component: COMPONENT,
+        timeoutMs: wait,
+        pollMs: this._pollMs,
+        // A lease that may age out under its holder is taken over from the file.
+        lined: renew > 0 && renew <= ttl / 2,
+        // A fenced section needs a lease of its own (see above).
+        reusable: held => !fence && held.ttlMs === ttl && held.renewMs === renew,
+        acquire: async (waitMs, politeUntil) => {
+          // The owner token is what makes a takeover safe: only the holder that
+          // still matches the token on disk may unlink the lease, so a holder
+          // whose lease expired and was taken over cannot delete the new
+          // holder's lease.
+          const owner = crypto.randomUUID();
+          const writtenAt = await this._acquire(lockPath, owner, ttl, waitMs, name, politeUntil);
+          // `clock`: when the lease was last written, for the fast release (`releaseLease`).
+          const held = {
+            owner,
+            name,
+            ttlMs: ttl,
+            renewMs: renew,
+            clock: { writtenAt, ttlMs: ttl },
+            lost: false,
+            stopRenewal: null,
+            onRelease: () => this._held.delete(lockPath)
+          };
+          this._held.set(lockPath, held);
+          // A fenced section starts the renewal itself, with its token.
+          if (renew > 0 && !fence) {
+            held.stopRenewal = this._startRenewal(
+              lockPath,
+              owner,
+              ttl,
+              renew,
+              name,
+              undefined,
+              held.clock,
+              () => (held.lost = true)
+            );
+          }
+          return held;
+        }
       }
-    } catch (error) {
-      this._held.delete(lockPath);
-      await this._release(lockPath, owner, name);
-      throw error;
-    }
-    const lease = Object.freeze({
-      name,
-      token,
-      isCurrent: () => this.isTokenCurrent(name, token)
-    });
-    const stopRenewal =
-      renew > 0 ? this._startRenewal(lockPath, owner, ttl, renew, name, token) : null;
-    try {
-      return await fn(lease);
-    } finally {
-      stopRenewal?.();
-      this._held.delete(lockPath);
-      await this._release(lockPath, owner, name);
-      recordLockHold(lockPrefix(name, COMPONENT), acquiredAt);
-    }
+    );
   }
 
   /**
@@ -259,8 +335,30 @@ export class FilesystemLockManager extends LockManager {
    * @returns {() => void} Stops the renewal; safe to call more than once
    * @private
    */
-  _startRenewal(lockPath, owner, ttlMs, renewMs, name, token) {
-    return startLeaseRenewal(lockPath, owner, ttlMs, renewMs, name, token, COMPONENT);
+  _startRenewal(lockPath, owner, ttlMs, renewMs, name, token, clock, onLost) {
+    return startLeaseRenewal(
+      lockPath,
+      owner,
+      ttlMs,
+      renewMs,
+      name,
+      token,
+      COMPONENT,
+      onLost,
+      clock
+    );
+  }
+
+  /**
+   * Whether the lease at `lockPath` is still `owner`'s and has not aged out:
+   * `isCurrent()` of an unfenced acquisition.
+   *
+   * @returns {Promise<boolean>}
+   * @private
+   */
+  async _isLeaseOwned(lockPath, owner, ttlMs) {
+    const lease = await readLease(lockPath);
+    return lease?.data?.owner === owner && !isExpiredLease(lease, ttlMs);
   }
 
   /**
@@ -270,8 +368,8 @@ export class FilesystemLockManager extends LockManager {
    * @returns {Promise<boolean>} False once the lease is no longer ours
    * @private
    */
-  _touch(lockPath, owner, ttlMs, name, token) {
-    return touchLease(lockPath, owner, ttlMs, name, token, COMPONENT);
+  _touch(lockPath, owner, ttlMs, name, token, clock) {
+    return touchLease(lockPath, owner, ttlMs, name, token, COMPONENT, clock);
   }
 
   /**
@@ -353,12 +451,15 @@ export class FilesystemLockManager extends LockManager {
     }
     const token = Math.max(previous + 1, Date.now());
     const scratch = `${fencePath}.${process.pid}-${crypto.randomUUID()}`;
-    await fs.mkdir(this.lockDir, { recursive: true });
+    // No mkdir: the caller's lease file was just published in this directory.
     try {
       await fs.writeFile(scratch, JSON.stringify({ token }), 'utf8');
       await fs.rename(scratch, fencePath);
-    } finally {
+    } catch (error) {
+      // After a successful rename the scratch name is gone; only a failed
+      // write or rename leaves one behind.
       await removeIfExists(scratch).catch(() => {});
+      throw error;
     }
     return token;
   }
@@ -396,8 +497,8 @@ export class FilesystemLockManager extends LockManager {
    *   slow requests for many minutes after it ended. Paced, it drains such a
    *   backlog in the background over hours, and a day's idle counters in minutes.
    * @returns {Promise<{removed: number, scratch: number, busy: number}>}
-   *   Counters removed, scratch files removed, counters skipped because their
-   *   name was locked
+   *   Counters removed, scratch files and stale want markers removed, counters
+   *   skipped because their name was locked
    */
   async sweepIdleFences({
     idleMs = DEFAULT_FENCE_IDLE_MS,
@@ -431,12 +532,16 @@ export class FilesystemLockManager extends LockManager {
     for (const entry of names) {
       if (shouldStop()) break;
       const match = LOCK_FILE_NAME.exec(entry);
-      if (!match || match[2] !== 'fence') continue;
+      const wantMarker = match?.[2] === 'lock' && match[3] === '.want';
+      if (!match || (match[2] !== 'fence' && !wantMarker)) continue;
       const file = containedPath(this._baseDir, LOCKS_DIR, entry);
       if (!(await isIdle(file))) continue;
       await pace();
       if (shouldStop()) break;
-      if (match[3]) {
+      if (wantMarker || match[3]) {
+        // `<digest>.lock.want`: a waiter's request (see `signalWant` in
+        // fileLock.js) left by a process that died waiting; a live one lasts
+        // one lock wait.
         // `<digest>.fence.<pid>-<uuid>`: a counter write that never reached
         // its rename. A live one is milliseconds old.
         if (await removeIfExists(file)) outcome.scratch += 1;
@@ -524,8 +629,13 @@ export class FilesystemLockManager extends LockManager {
   async releaseAll() {
     const held = [...this._held.entries()];
     this._held.clear();
-    for (const [lockPath, { owner, name }] of held) {
-      await this._release(lockPath, owner, name);
+    for (const [lockPath, lease] of held) {
+      // Not to be handed on to a caller still waiting in this process, nor
+      // released a second time when its section ends.
+      lease.released = true;
+      lease.noHandOff = true;
+      lease.stopRenewal?.();
+      await this._release(lockPath, lease.owner, lease.name);
     }
     if (held.length > 0) {
       logger.info('Released storage leases still held at shutdown', {
@@ -543,23 +653,25 @@ export class FilesystemLockManager extends LockManager {
    * @throws {LockTimeoutError} When the budget ran out
    * @private
    */
-  _acquire(lockPath, owner, ttlMs, waitMs, name) {
+  _acquire(lockPath, owner, ttlMs, waitMs, name, politeUntil = 0) {
     return acquireLease(lockPath, owner, {
       ttlMs,
       waitMs,
       pollMs: this._pollMs,
       name,
-      component: COMPONENT
+      component: COMPONENT,
+      politeUntil
     });
   }
 
   /**
-   * Remove the lease, but only while it is still ours (`releaseLease`).
+   * Remove the lease, but only while it is still ours (`releaseLease`); with
+   * `clock`, by one unlink while the lease is young enough.
    *
    * @private
    */
-  _release(lockPath, owner, name) {
-    return releaseLease(lockPath, owner, name, COMPONENT);
+  _release(lockPath, owner, name, clock) {
+    return releaseLease(lockPath, owner, name, COMPONENT, clock);
   }
 }
 

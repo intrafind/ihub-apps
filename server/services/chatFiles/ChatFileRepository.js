@@ -371,6 +371,12 @@ export class ChatFileRepository {
     this.policy = policy;
     /** A chat's evidence counts against its byte quota (#3687); same provider as the files. */
     this._evidence = new ChatEvidenceRepository({ documents, blobs, logger: this.logger });
+    // The server byte counter (`_adjustServerBytes`, `_serverUsedBytes`): deltas
+    // not yet written, the number of the last one, the flush and the recount running.
+    this._pendingServerBytes = 0;
+    this._pendingTicket = 0;
+    this._counterFlush = null;
+    this._recount = null;
   }
 
   /** Whether both document and blob facets are available. @returns {boolean} */
@@ -758,11 +764,16 @@ export class ChatFileRepository {
   /**
    * Bytes stored by all chat files of the server, from the shared counter document.
    * Every instance that writes adjusts the same counter (a compare-and-set on the
-   * document's etag), so several instances enforce `maxServerBytes` consistently
-   * without reading the whole namespace on every upload. The counter is rebuilt
-   * from the documents when it does not exist, when it is older than
-   * {@link SERVER_COUNTER_RECOUNT_MS} (self-healing after a crash between a
-   * write and its counter update) and when `exact` asks for it.
+   * document's etag, see {@link ChatFileRepository#_adjustServerBytes}), so several
+   * instances enforce `maxServerBytes` consistently without reading the whole
+   * namespace on every upload. The counter is rebuilt from the documents when it
+   * does not exist, when it is older than {@link SERVER_COUNTER_RECOUNT_MS}
+   * (self-healing after a crash between a write and its counter update) and when
+   * `exact` asks for it.
+   *
+   * A recount lists the whole namespace, so concurrent callers of one instance
+   * share one: every upload of a busy worker listing it in parallel was a
+   * stampede of full reads, each overwriting the deltas written meanwhile.
    *
    * @param {{exact?: boolean}} [options]
    * @returns {Promise<number>}
@@ -781,9 +792,30 @@ export class ChatFileRepository {
         return counter.data.serverBytes;
       }
     }
+    this._recount ??= this._recountServerBytes().finally(() => {
+      this._recount = null;
+    });
+    return this._recount;
+  }
+
+  /**
+   * Sum the bytes of every document and store the total, with a compare-and-set
+   * on the counter as it was read *before* the listing: a delta another
+   * instance wrote while the listing ran makes the write lose, so a recount
+   * never overwrites an adjustment it may not have seen. The counter then keeps
+   * its age and the next check recounts.
+   * ponytail: under a steady stream of deltas from other instances a recount
+   * can keep losing (each check of a stale counter recounts again, one per
+   * instance at a time); store the total as base plus deltas-since if seen.
+   *
+   * @returns {Promise<number>}
+   * @private
+   */
+  async _recountServerBytes() {
+    const before = await this._readServerCounter();
     const docs = await this._listAllDocs();
     const value = docs.reduce((sum, doc) => sum + (Number(doc.data?.bytes) || 0), 0);
-    await this._writeServerCounter(value);
+    await this._writeServerCounter(value, before ? before.etag : null);
     return value;
   }
 
@@ -799,14 +831,23 @@ export class ChatFileRepository {
     }
   }
 
-  /** Store an exact recount, keeping the last adjustment's etag chain intact. */
-  async _writeServerCounter(value) {
+  /**
+   * Store an exact recount if the counter is still the one read before it.
+   *
+   * @param {number} value
+   * @param {string|null} etag - Etag read before the listing; null: it did not exist
+   * @private
+   */
+  async _writeServerCounter(value, etag) {
     try {
-      await this.documents.put(CHAT_FILES_NAMESPACE, SERVER_COUNTER_KEY, {
-        serverBytes: value,
-        recountedAt: new Date().toISOString()
-      });
+      await this.documents.put(
+        CHAT_FILES_NAMESPACE,
+        SERVER_COUNTER_KEY,
+        { serverBytes: value, recountedAt: new Date().toISOString() },
+        { etag }
+      );
     } catch (error) {
+      if (error?.code === 'ETAG_MISMATCH') return;
       this.logger.warn('Chat file counter could not be written', {
         component: COMPONENT,
         error: error.message
@@ -815,9 +856,14 @@ export class ChatFileRepository {
   }
 
   /**
-   * Add `delta` bytes to the shared counter (negative when files went away) with
-   * a compare-and-set, retrying when another instance wrote in between. A missing
-   * counter is left alone: the next quota check recounts and creates it.
+   * Add `delta` bytes to the shared counter (negative when files went away).
+   *
+   * The deltas of one instance are summed in memory and written by one flush at
+   * a time: one compare-and-set per flush instead of one per upload, which on a
+   * busy worker were enough to time out the counter's document lock. The call
+   * resolves once a flush that includes its delta has been tried, so a caller
+   * that awaits it sees its own upload counted. A flush that fails keeps the
+   * delta for the next one; nothing is dropped.
    *
    * @param {number} delta
    * @returns {Promise<void>}
@@ -825,9 +871,37 @@ export class ChatFileRepository {
    */
   async _adjustServerBytes(delta) {
     if (!delta) return;
+    this._pendingServerBytes += delta;
+    this._pendingTicket += 1;
+    const ticket = this._pendingTicket;
+    for (;;) {
+      this._counterFlush ??= this._flushServerBytes().finally(() => {
+        this._counterFlush = null;
+      });
+      // A flush already running took its snapshot before this delta: wait for
+      // it, then start (or join) the next one.
+      if ((await this._counterFlush) >= ticket) return;
+    }
+  }
+
+  /**
+   * Write the pending delta with a compare-and-set, retrying when another
+   * instance wrote in between. A missing counter is left alone (the next quota
+   * check recounts and creates it, and the recount sees the files). When the
+   * write fails — a lock timeout, a lost race beyond the retries — the delta goes
+   * back to the pending sum for the next flush.
+   *
+   * @returns {Promise<number>} The last ticket whose delta this flush took
+   * @private
+   */
+  async _flushServerBytes() {
+    const ticket = this._pendingTicket;
+    const delta = this._pendingServerBytes;
+    this._pendingServerBytes = 0;
+    if (!delta) return ticket;
     for (let attempt = 0; attempt < SERVER_COUNTER_CAS_ATTEMPTS; attempt += 1) {
       const counter = await this._readServerCounter();
-      if (!counter || !Number.isFinite(counter.data?.serverBytes)) return;
+      if (!counter || !Number.isFinite(counter.data?.serverBytes)) return ticket;
       try {
         await this.documents.put(
           CHAT_FILES_NAMESPACE,
@@ -838,14 +912,14 @@ export class ChatFileRepository {
           },
           { etag: counter.etag }
         );
-        return;
+        return ticket;
       } catch (error) {
         if (error?.code !== 'ETAG_MISMATCH') {
-          this.logger.warn('Chat file counter could not be updated', {
+          this.logger.warn('Chat file counter could not be updated; kept for the next update', {
             component: COMPONENT,
             error: error.message
           });
-          return;
+          break;
         }
         await new Promise(resolve =>
           setTimeout(
@@ -855,19 +929,8 @@ export class ChatFileRepository {
         );
       }
     }
-    // Contention beyond the retries: drop the counter's age so the next check recounts.
-    this.logger.warn('Chat file counter update kept losing; it will be recounted', {
-      component: COMPONENT
-    });
-    await this._expireServerCounter();
-  }
-
-  async _expireServerCounter() {
-    try {
-      await this.documents.delete(CHAT_FILES_NAMESPACE, SERVER_COUNTER_KEY);
-    } catch {
-      // Best effort; the periodic recount heals it anyway.
-    }
+    this._pendingServerBytes += delta;
+    return ticket;
   }
 
   /**

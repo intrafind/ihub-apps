@@ -29,6 +29,7 @@ import path from 'node:path';
 import { isValidId } from '../../../utils/pathSecurity.js';
 import { KEY_PREFIX_SEGMENTS } from '../../namespaces.js';
 import { removeIfExists } from '../../../utils/fileLock.js';
+import { writeInDirectory } from '../../../utils/atomicWrite.js';
 import { containedPath, prefixPartition } from './paths.js';
 
 /** Directory of a namespace holding the partitions. */
@@ -73,8 +74,7 @@ export class PrefixIndex {
     const partition = this.partition(ns, key);
     if (!partition) return;
     const marker = containedPath(nsDir, PREFIXES_DIR, partition, key);
-    await fs.mkdir(path.dirname(marker), { recursive: true });
-    await fs.writeFile(marker, '');
+    await writeInDirectory(path.dirname(marker), () => fs.writeFile(marker, ''));
   }
 
   /**

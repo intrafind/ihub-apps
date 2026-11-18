@@ -111,9 +111,10 @@ const SPILL_DIR = 'spill';
 
 /**
  * Lease for a per-run lock. The critical section is a flush plus one append,
- * and the wait budget matches what recovery has always had.
+ * and the wait budget matches what recovery has always had. Unfenced: the
+ * section never reads the fencing token.
  */
-const RUN_LOCK_OPTIONS = { ttlMs: 15_000, waitMs: 5_000 };
+const RUN_LOCK_OPTIONS = { ttlMs: 15_000, waitMs: 5_000, fence: false };
 
 /**
  * Longest spill name kept, and the character class allowed in it. Identical to

@@ -951,3 +951,56 @@ describe('filesystem document store: concurrent writes in one process', () => {
     assert.equal(leaseCreates.length, 1, 'the second put inherited the lease in memory');
   });
 });
+
+describe('filesystem document store: file operations of a put', () => {
+  it('creates directories only when a write finds them missing, and keeps the fsyncs', async () => {
+    const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-put-ops-'));
+    const provider = new FilesystemStorageProvider({ baseDir, flushIntervalMs: 1000 });
+    await provider.initialize();
+    const calls = [];
+    const syncs = { count: 0 };
+    try {
+      // A fresh namespace and owner: the directories come into being on demand.
+      const created = await provider.documents.put('chats', 'k', { n: 0 }, { ownerId: 'u1' });
+      const updated = await provider.documents.put(
+        'chats',
+        'k',
+        { n: 1 },
+        { ownerId: 'u2', etag: created.etag }
+      );
+      assert.deepEqual((await provider.documents.get('chats', 'k')).data, { n: 1 });
+      assert.deepEqual(
+        (await provider.documents.list('chats', { ownerId: 'u2' })).items.map(d => d.key),
+        ['k']
+      );
+
+      const handle = await fs.open(path.join(baseDir, 'probe'), 'w');
+      const FileHandle = Object.getPrototypeOf(handle);
+      await handle.close();
+      for (const name of ['mkdir', 'stat']) {
+        const real = fs[name];
+        mock.method(fs, name, (...args) => {
+          calls.push(name);
+          return real(...args);
+        });
+      }
+      const realChmod = FileHandle.chmod;
+      mock.method(FileHandle, 'chmod', function (...args) {
+        calls.push('fchmod');
+        return realChmod.apply(this, args);
+      });
+      const realSync = FileHandle.sync;
+      mock.method(FileHandle, 'sync', function (...args) {
+        syncs.count += 1;
+        return realSync.apply(this, args);
+      });
+      await provider.documents.put('chats', 'k', { n: 2 }, { ownerId: 'u2', etag: updated.etag });
+    } finally {
+      mock.restoreAll();
+      await provider.shutdown?.();
+      await fs.rm(baseDir, { recursive: true, force: true });
+    }
+    assert.deepEqual(calls, [], 'no mkdir, stat or fchmod on an ordinary update');
+    assert.equal(syncs.count, 2, 'the file and its directory are still flushed');
+  });
+});
