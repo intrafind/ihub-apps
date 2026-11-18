@@ -715,6 +715,14 @@ async function passTurn(lockPath, line, name, component, pollMs) {
   // with nobody to hand to, the lease must go, or its renewal keeps the name
   // locked for every process until this one exits.
   if (handOff && line.waiters.length === 0) handOff = false;
+  // Not handed on (fenced, lost, not reusable) while local callers wait: the
+  // next would re-publish at once and another process's waiter would never see
+  // the path free. Give way, as after a long run, when somebody asked.
+  if (!handOff && lease && line.waiters.length > 0) {
+    if (await removeIfExists(wantPath(lockPath)).catch(() => false)) {
+      line.politeUntil = Date.now() + pollMs * (MAX_POLL_FACTOR + 1);
+    }
+  }
   if (handOff) {
     line.handoffs += 1;
   } else if (lease) {
@@ -779,6 +787,10 @@ export async function withLeaseLine(
   try {
     if (line.lease && !reusable(line.lease)) {
       await releaseLineLease(lockPath, line, name, component);
+      // Same as in `passTurn`: a process that asked gets its chance first.
+      if (await removeIfExists(wantPath(lockPath)).catch(() => false)) {
+        line.politeUntil = Date.now() + pollMs * (MAX_POLL_FACTOR + 1);
+      }
     }
     if (!line.lease) {
       const politeUntil = line.politeUntil;

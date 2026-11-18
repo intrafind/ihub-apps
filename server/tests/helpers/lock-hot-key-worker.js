@@ -4,9 +4,10 @@
 /**
  * Child process for lock-fairness.test.js: one cluster worker hammering one
  * hot lock name with many concurrent callers.
- * argv: <mode file|manager> <path> <insidePath> <callers> <durationMs> <waitMs> [sectionMs=2]
+ * argv: <mode file|manager|fenced> <path> <insidePath> <callers> <durationMs> <waitMs> [sectionMs=2]
  *   file:    <path> is the lock file for `withFileLock`
  *   manager: <path> is the base directory of a `FilesystemLockManager`
+ *   fenced:  as manager, with fencing tokens (a lease is never handed on)
  *
  * Each section creates `insidePath` exclusively and removes it on exit, so a
  * second holder inside is seen directly (EEXIST). Reports the sections run,
@@ -18,7 +19,7 @@ import { FilesystemLockManager } from '../../storage/providers/filesystem/Filesy
 
 const [mode, target, insidePath, callers, durationMs, waitMs, sectionMs = '2'] =
   process.argv.slice(2);
-const manager = mode === 'manager' ? new FilesystemLockManager({ baseDir: target }) : null;
+const manager = mode !== 'file' ? new FilesystemLockManager({ baseDir: target }) : null;
 const stats = { done: 0, timeouts: 0, overlaps: 0, maxWaitMs: 0 };
 
 const section = async () => {
@@ -33,7 +34,7 @@ const section = async () => {
 
 const run = fn =>
   manager
-    ? manager.withLock('hot', fn, { waitMs: Number(waitMs), fence: false })
+    ? manager.withLock('hot', fn, { waitMs: Number(waitMs), fence: mode === 'fenced' })
     : withFileLock(target, fn, { timeoutMs: Number(waitMs) });
 
 const end = Date.now() + Number(durationMs);

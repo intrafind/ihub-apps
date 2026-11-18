@@ -5,7 +5,8 @@
  * One hot lock name hammered by two processes with many callers each: the
  * process holding the lease hands it on to its own callers only for a bounded
  * run while the other process waits, so neither side times out, and two
- * holders are never inside at once.
+ * holders are never inside at once. A fenced lease is never handed on, but the
+ * next local caller still gives way when the other process asked.
  *
  * Run: node --test server/tests/lock-fairness.test.js
  */
@@ -56,8 +57,14 @@ async function hammer(mode) {
   }
 }
 
-for (const mode of ['file', 'manager']) {
-  describe(`one hot lock over two processes (${mode === 'file' ? 'withFileLock' : 'FilesystemLockManager'})`, () => {
+const LABELS = {
+  file: 'withFileLock',
+  manager: 'FilesystemLockManager',
+  fenced: 'FilesystemLockManager, fenced'
+};
+
+for (const mode of Object.keys(LABELS)) {
+  describe(`one hot lock over two processes (${LABELS[mode]})`, () => {
     it('neither process times out, and the sections never overlap', async () => {
       const results = await hammer(mode);
       assert.deepEqual(
