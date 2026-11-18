@@ -17,7 +17,7 @@
 #                        (ConfigMap loadtest-run-overrides), e.g. LT_PROFILE, LT_STAGES,
 #                        LT_TARGET_CONCURRENT_USERS, LT_STOP_ON_FAILURE, LT_POST_STREAM
 #   SHARDS               runner pods (default 4); sets LT_SHARD_COUNT
-#   NS, KUBECTL          namespace (ihub-loadtest), kubectl command ("kubectl --context k3s01")
+#   NS, KUBECTL          namespace (ihub-loadtest), kubectl command ("kubectl --context lab")
 #   RUNNER_IMAGE         runner image (default: the one in run-job.yaml)
 #   IHUB_DEPLOYMENT      iHub under test (default ihub, see ihub-under-test.yaml)
 #   IHUB_CPU, IHUB_MEMORY  set requests = limits of iHub (restarts it)

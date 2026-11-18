@@ -26,6 +26,9 @@ spec:
           whenUnsatisfiable: ScheduleAnyway
           labelSelector:
             matchLabels: { app: loadtest-run }
+      # A dedicated node pool (example): keep runners off the node iHub runs on.
+      # nodeSelector: { nodepool: loadtest }
+      # tolerations: [{ key: dedicated, operator: Equal, value: loadtest, effect: NoSchedule }]
       # The runner talks to iHub over HTTP only; it needs no Kubernetes API access.
       automountServiceAccountToken: false
       containers:

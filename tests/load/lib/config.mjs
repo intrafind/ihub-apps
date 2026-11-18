@@ -54,7 +54,8 @@ export const DEFAULTS = {
       chatTurns: 2,
       deleteAfter: true,
       crawl: {
-        url: 'https://intrafind.com/de',
+        // The stub site (stub/server.mjs) as iHub reaches it in docker-compose.yml.
+        url: 'http://loadtest-stubs:8980/docs/',
         maxPages: 30,
         maxDepth: 2,
         addPages: 10,
@@ -77,11 +78,11 @@ export const DEFAULTS = {
     gpus: null,
     gpu: {
       id: 'loadtest-gpu',
-      url: 'https://gpu-01.local.intrafind.io',
+      url: null, // LT_LLM_URL
       modelName: null,
       apiKey: null,
       provider: 'local',
-      // gpu-01 serves Qwen/Qwen3.6-35B-A3B-FP8 with max_model_len 173184; setup
+      // Qwen/Qwen3.6-35B-A3B-FP8 served with max_model_len 173184; setup
       // takes the discovered value when the server reports one.
       contextWindow: 173184,
       // Room for Qwen3's thinking tokens before the answer.
