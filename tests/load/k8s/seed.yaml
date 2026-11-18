@@ -1,0 +1,43 @@
+# Optional: a pod that keeps snapshots of a prepared contents/ (users, projects, documents),
+# so every run starts from the same state without re-running setup (k8s/run.sh SEED_SNAPSHOT=…).
+#
+#   kubectl -n ihub-loadtest apply -f tests/load/k8s/seed.yaml
+#   # after setup ran once, with iHub scaled to 0 (consistent files):
+#   kubectl -n ihub-loadtest scale deploy/ihub --replicas=0
+#   kubectl -n ihub-loadtest exec seed -- tar czf /seed/prepared.tgz -C /contents .
+#
+# It mounts the iHub contents volume too; a ReadWriteOnce volume can be shared by pods on
+# the same node, and a local-path volume pins the pod there.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ihub-seed
+  namespace: ihub-loadtest
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: local-path
+  resources:
+    requests: { storage: 5Gi }
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: seed
+  namespace: ihub-loadtest
+spec:
+  automountServiceAccountToken: false
+  containers:
+    - name: seed
+      image: alpine:3.22
+      command: ['sleep', 'infinity']
+      volumeMounts:
+        - { name: contents, mountPath: /contents }
+        - { name: seed, mountPath: /seed }
+      resources:
+        requests: { cpu: 100m, memory: 64Mi }
+        limits: { cpu: '1', memory: 512Mi }
+  volumes:
+    - name: contents
+      persistentVolumeClaim: { claimName: ihub-contents }
+    - name: seed
+      persistentVolumeClaim: { claimName: ihub-seed }

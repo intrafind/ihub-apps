@@ -37,10 +37,11 @@ const sumOf = (samples, ...names) => {
 };
 
 /**
- * vLLM gauges per sample: llm.running, llm.waiting, llm.kvCachePct, and per-second
+ * vLLM gauges per sample: <prefix>.running, .waiting, .kvCachePct, and per-second
  * rates of prompt/generation tokens and preemptions (from the counters).
+ * prefix is `llm`, or `llm.<modelId>` when several GPUs are scraped.
  */
-export function createVllmObserver({ url, metrics, log }) {
+export function createVllmObserver({ url, prefix = 'llm', metrics, log }) {
   let last = null;
   let failures = 0;
   return async function tick() {
@@ -55,9 +56,9 @@ export function createVllmObserver({ url, metrics, log }) {
       const waiting = sumOf(samples, 'vllm:num_requests_waiting');
       // V0 name, V1 name; the value is a fraction.
       const kv = sumOf(samples, 'vllm:kv_cache_usage_perc', 'vllm:gpu_cache_usage_perc');
-      if (running !== null) metrics.gauge('llm.running', running);
-      if (waiting !== null) metrics.gauge('llm.waiting', waiting);
-      if (kv !== null) metrics.gauge('llm.kvCachePct', kv * 100);
+      if (running !== null) metrics.gauge(`${prefix}.running`, running);
+      if (waiting !== null) metrics.gauge(`${prefix}.waiting`, waiting);
+      if (kv !== null) metrics.gauge(`${prefix}.kvCachePct`, kv * 100);
       const counters = {
         prompt: sumOf(samples, 'vllm:prompt_tokens_total'),
         gen: sumOf(samples, 'vllm:generation_tokens_total'),
@@ -70,9 +71,9 @@ export function createVllmObserver({ url, metrics, log }) {
           const p = rate(counters.prompt, last.prompt);
           const g = rate(counters.gen, last.gen);
           const x = rate(counters.preempt, last.preempt);
-          if (p !== null) metrics.gauge('llm.promptTokPerSec', p);
-          if (g !== null) metrics.gauge('llm.genTokPerSec', g);
-          if (x !== null) metrics.gauge('llm.preemptionsPerSec', x);
+          if (p !== null) metrics.gauge(`${prefix}.promptTokPerSec`, p);
+          if (g !== null) metrics.gauge(`${prefix}.genTokPerSec`, g);
+          if (x !== null) metrics.gauge(`${prefix}.preemptionsPerSec`, x);
         }
       }
       last = { t: now, ...counters };
