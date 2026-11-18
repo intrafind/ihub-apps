@@ -404,6 +404,22 @@ function runPendingNavigation(navigator, pending) {
  * // ...
  * <UnsavedChangesDialog blocker={blocker} />
  */
+/**
+ * A callback that marks every unsaved-changes guard under this router as saved,
+ * for an action that has already asked the admin to drop their edits and now
+ * leaves the page itself (a full reload): without it the browser's own
+ * "Leave site?" prompt would ask a second time.
+ *
+ * @returns {() => void}
+ */
+export function useDiscardUnsavedChanges() {
+  const navigator = useContext(NavigationContext)?.navigator;
+  return useCallback(() => {
+    const registry = navigator && registries.get(navigator);
+    if (registry) registry.guards.forEach(guard => guard.markSaved?.());
+  }, [navigator]);
+}
+
 export function useUnsavedChanges(initialData, currentData) {
   // markSaved() records the value that was saved. The page counts as clean while
   // the edited value still equals it, and turns dirty on the very next edit: the

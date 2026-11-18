@@ -123,7 +123,12 @@ function TranslationOverridesEditor({ languages, initialLanguage }) {
     if (!entry) return true;
     return draft !== (entry.override ?? entry.base ?? '');
   });
-  const { blocker } = useUnsavedChanges(false, hasUnsavedDrafts);
+  // Drafts in another language are pending edits too (the selector says so); a
+  // draft is dropped on save or discard, so every remaining one is a real edit.
+  const { blocker } = useUnsavedChanges(
+    false,
+    hasUnsavedDrafts || otherLanguagesWithDrafts.length > 0
+  );
 
   return (
     <div className="mt-8 bg-white dark:bg-gray-800 shadow-sm sm:rounded-lg px-4 py-5 sm:p-6">

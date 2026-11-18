@@ -8,6 +8,7 @@ import useFocusTrap from '../../../shared/hooks/useFocusTrap';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import { CONFIG_CONFLICT_EVENT, revisionReadUrlOf } from '../../../api/adminConfigRevision';
+import { useDiscardUnsavedChanges } from '../hooks/useUnsavedChanges';
 
 const BUTTON_BASE =
   'px-4 py-2 rounded-lg font-medium transition-colors focus:outline-hidden focus:ring-2 focus:ring-offset-2';
@@ -50,6 +51,7 @@ const DANGER_BUTTON = `${BUTTON_BASE} bg-red-600 hover:bg-red-700 text-white foc
  */
 export default function AdminConfigConflictNotice({ onReload }) {
   const { t } = useTranslation();
+  const discardUnsavedChanges = useDiscardUnsavedChanges();
   const [resource, setResource] = useState(null);
   // The refused form's revision holder, from the conflict event.
   const revisionRef = useRef(null);
@@ -102,9 +104,13 @@ export default function AdminConfigConflictNotice({ onReload }) {
 
   const reload = useCallback(() => {
     setResource(null);
+    // The admin chose to discard: clear the unsaved-changes guards first, or
+    // the browser's "Leave site?" prompt asks again and cancelling it leaves
+    // the page without this dialog and still refused.
+    discardUnsavedChanges();
     if (onReload) onReload();
     else window.location.reload();
-  }, [onReload]);
+  }, [onReload, discardUnsavedChanges]);
 
   if (!isOpen) return null;
 
