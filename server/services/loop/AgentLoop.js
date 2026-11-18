@@ -1000,13 +1000,32 @@ export class AgentLoop {
           // Older tool batches become a findings digest (#3819). The next
           // model call sets the anchor anew before it is read again; the
           // live context figure is rebased by the `onCompaction` seam.
-          const freed = await this._digestCompaction(ctx, {
+          let freed = await this._digestCompaction(ctx, {
             seams,
             iteration,
             knownTokens,
             runBudget,
             options
           });
+          // Still near the window with the newest batch kept: it is condensed
+          // too, before the run wraps up.
+          if (ctx.compaction.condenseNewest) {
+            ctx.compaction.condenseNewest = false;
+            const known =
+              Number.isFinite(knownTokens) && knownTokens > 0
+                ? Math.max(0, knownTokens - freed)
+                : undefined;
+            const more = await this._digestCompaction(ctx, {
+              seams,
+              iteration,
+              knownTokens: known,
+              runBudget,
+              options,
+              keepNone: true
+            });
+            if (more === 0) this._wrapUpIfFull(ctx, options, known);
+            freed += more;
+          }
           if (freed === 0) this._wrapUpIfFull(ctx, options, knownTokens);
         } else {
           const compaction = compactIfOversized(ctx.messages, {
@@ -1476,7 +1495,7 @@ export class AgentLoop {
    */
   async _digestCompaction(
     ctx,
-    { seams, iteration, knownTokens, runBudget, options, overflow = false }
+    { seams, iteration, knownTokens, runBudget, options, overflow = false, keepNone = false }
   ) {
     const policy = ctx.policies.context;
     const threshold = policy.compactThresholdTokens;
@@ -1504,22 +1523,20 @@ export class AgentLoop {
     }
     const toolOf = name => matchTool(name, ctx.tools);
     const targetTokens = Math.floor(threshold * policy.compactTargetShare);
+    // How many of the newest batches the selection kept as they are.
+    let kept = keepNone ? 0 : overflow ? 1 : policy.digestKeepRecentBatches;
     let selection = selectBatches(ctx.messages, {
       tokensBefore,
       // After an overflow the estimate is below what the provider counted:
       // everything but the newest batch goes.
       targetTokens: overflow ? 0 : targetTokens,
-      keepRecentBatches: overflow ? 1 : policy.digestKeepRecentBatches,
+      keepRecentBatches: kept,
       toolOf
     });
     // Urgent and the kept batches are what fills the window (large results,
     // a small window): keep only the newest, which the model has not read.
-    if (
-      urgent &&
-      !overflow &&
-      selection.projectedTokens > targetTokens &&
-      policy.digestKeepRecentBatches > 1
-    ) {
+    if (urgent && !overflow && selection.projectedTokens > targetTokens && kept > 1) {
+      kept = 1;
       selection = selectBatches(ctx.messages, {
         tokensBefore,
         targetTokens,
@@ -1530,7 +1547,8 @@ export class AgentLoop {
     // Still above the line with only the newest batch kept: that batch is
     // condensed too. The answer needs the room more than the raw pages do,
     // and its facts are in the notes.
-    if (urgent && selection.projectedTokens > answerLine) {
+    if (urgent && kept > 0 && selection.projectedTokens > answerLine) {
+      kept = 0;
       selection = selectBatches(ctx.messages, {
         tokensBefore,
         targetTokens: overflow ? 0 : targetTokens,
@@ -1721,8 +1739,13 @@ export class AgentLoop {
 
     // Still near the window after condensing: no room for more results and
     // the answer. The run wraps up — gathering stops, the answer is written.
-    const wrapUp = urgent && tokensBefore - freedTokens > answerLine;
+    // Only once nothing is left to condense: when the projection let the
+    // newest batch stay and the digest turned out larger, that batch goes
+    // next (`condenseNewest`), before gathering stops.
+    const stillFull = urgent && tokensBefore - freedTokens > answerLine;
+    const wrapUp = stillFull && kept === 0;
     if (wrapUp) state.wrapUp = true;
+    if (stillFull && kept > 0) state.condenseNewest = true;
     const record = {
       ...info,
       ...(wrapUp ? { wrapUp: true } : {}),

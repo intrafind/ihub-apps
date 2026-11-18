@@ -225,6 +225,9 @@ projected at `compactTargetShare` of the threshold
   has not read) is kept. When even that leaves the prompt above the line, the
   newest batch is condensed too: the answer needs the room more than the raw
   pages, and their facts are in the notes.
+- When the projection kept the newest batch and the digest came out larger
+  than projected, leaving the prompt above the line, a second pass condenses
+  the newest batch too: a run wraps up only once nothing is left to condense.
 - Still above that line after condensing, the run **wraps up**
   (`context/compaction.wrapUp`): tools that gather more (activity `search` or
   `fetch`, and native web search) are withdrawn for the rest of the run, the

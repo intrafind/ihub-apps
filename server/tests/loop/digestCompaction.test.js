@@ -813,6 +813,44 @@ test('near the window the newest batch is condensed too; still full, the run wra
   assert.equal(full.nudges.length, 1, 'told once');
 });
 
+test('when the digest comes out larger than projected, the newest batch is condensed before any wrap-up', async () => {
+  // Window 9,000 less 2,000 output: the answer line at 5,600. The projection
+  // lets the newest batch stay; a long digest leaves the prompt above the line.
+  const small = { ...model, contextWindow: 9000, maxOutputTokens: 2000 };
+  const many = Array.from(
+    { length: 60 },
+    (_, i) =>
+      `FACT | r1 | NVIDIA statement ${String.fromCharCode(97 + (i % 26))}${String.fromCharCode(97 + Math.floor(i / 26))} about the market cap | https://x.test/nvidia`
+  ).join('\n');
+  const { loop, summaryRequests, stepRequests } = makeLoop(
+    [
+      toolTurn('c1', 'webSearch', { query: 'nvidia' }, 1000),
+      toolTurn('c2', 'webSearch', { query: 'apple' }, 5200),
+      textTurn('done')
+    ],
+    [many, 'FACT | r2 | Apple market cap | https://x.test/apple']
+  );
+  const infos = [];
+  const result = await loop.run({
+    model: small,
+    messages: baseMessages,
+    tools: [searchTool],
+    policies: { context: { strategy: 'digest', compactThresholdTokens: 3000 } },
+    seams: [{ onCompaction: (_ctx, info) => infos.push(info) }],
+    executeTool: async (_call, { args }) => searchResult(args.query)
+  });
+  assert.equal(result.status, 'completed', JSON.stringify(result.error));
+  assert.equal(infos.length, 2, 'a second pass for the newest batch');
+  assert.equal(infos[0].wrapUp, undefined, 'no wrap-up while the newest batch was kept');
+  assert.equal(summaryRequests.length, 2);
+  assert.match(
+    result.messages.find(m => m.tool_call_id === 'c2').content,
+    /^\[condensed result r2/
+  );
+  const tools = (stepRequests.at(-1).body.tools || []).map(t => t.function?.name || t.id || t.name);
+  assert.ok(tools.includes('webSearch'), 'room again: searching goes on');
+});
+
 test('near the window the second kept batch is condensed too; well below it, it stays', async () => {
   const run = async contextWindow => {
     const { loop } = makeLoop(
