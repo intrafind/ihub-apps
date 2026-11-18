@@ -34,6 +34,7 @@
  */
 
 import { redactUrlSecrets } from './urlSecrets.js';
+import { isSecretQueryParamName } from './secretNames.js';
 import { isSecretName } from './secretRedaction.js';
 import { ServiceError } from './ServiceError.js';
 
@@ -221,10 +222,13 @@ export function maskUrlCredentials(value) {
   let index = 0;
   while (index < url.length) {
     const param = queryParamAt(url, index);
+    const name = param.name === undefined ? undefined : decodeParamName(param.name);
+    // Both rules on the decoded name: `redactUrlSecrets` only knows the
+    // spellings as written, so `%63ode=` (`code`) or `%73ig=` (`sig`) reach here.
     const masks =
-      param.name !== undefined &&
+      name !== undefined &&
       param.value !== 'REDACTED' &&
-      isSecretName(decodeParamName(param.name));
+      (isSecretName(name) || isSecretQueryParamName(name));
     masked += masks ? `${url[index]}${param.name}=REDACTED` : url.slice(index, param.end);
     index = param.end;
   }

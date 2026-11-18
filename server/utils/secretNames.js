@@ -101,6 +101,20 @@ const LONGEST_SECRET_PARAM = Math.max(...[...SECRET_QUERY_PARAMS].map(name => na
 const SECRET_PARAM_NAME_CHARS = /^[a-z_-]+$/i;
 
 /**
+ * Whether a query parameter name (already decoded) is one of
+ * {@link SECRET_QUERY_PARAMS}, case-insensitively and in ASCII letters only.
+ * For callers that read the name themselves, such as one written
+ * percent-encoded (`%63ode` for `code`).
+ *
+ * @param {string} name
+ * @returns {boolean}
+ */
+export function isSecretQueryParamName(name) {
+  if (typeof name !== 'string' || name.length > LONGEST_SECRET_PARAM) return false;
+  return SECRET_PARAM_NAME_CHARS.test(name) && SECRET_QUERY_PARAMS.has(name.toLowerCase());
+}
+
+/**
  * The end of a secret query parameter's name that starts after `?`/`&` at
  * `start` (the index of its `=`), or -1 when the name there is not one of
  * {@link SECRET_QUERY_PARAMS}. Looks at most {@link LONGEST_SECRET_PARAM} + 1
@@ -117,8 +131,7 @@ function secretParamNameEnd(url, start) {
   const name = ahead.slice(0, nameLength);
   // ASCII letters only: a regular expression with the `i` flag never matched
   // a non-ASCII character (the Kelvin sign) against an ASCII one either.
-  if (!SECRET_PARAM_NAME_CHARS.test(name)) return -1;
-  return SECRET_QUERY_PARAMS.has(name.toLowerCase()) ? start + 1 + nameLength : -1;
+  return isSecretQueryParamName(name) ? start + 1 + nameLength : -1;
 }
 
 /**
@@ -163,5 +176,8 @@ function redactSecretQueryParams(url) {
  */
 export function redactUrlSecrets(url) {
   if (typeof url !== 'string') return url;
-  return redactSecretQueryParams(url.replace(/(\/\/)[^/@\s]+@/g, '$1REDACTED@'));
+  // User info is part of the authority, so it never contains `/`, `?` or `#`:
+  // in `https://h?token=a@b` the `@` belongs to the query, and matching across
+  // the `?` would mask the host and the token's start but leave `b` readable.
+  return redactSecretQueryParams(url.replace(/(\/\/)[^/?#@\s]+@/g, '$1REDACTED@'));
 }

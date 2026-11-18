@@ -183,6 +183,21 @@ describe('URL credentials (R2)', () => {
     expect(isRedactedValue(masked)).toBe(true);
   });
 
+  test.each([
+    ['https://fn.azurewebsites.net/api/jwks?%63ode=SUPERSECRETKEY', '%63ode'],
+    ['https://acct.blob.core.windows.net/k/jwks.json?sv=2024&%73ig=abc123', '%73ig'],
+    ['https://apim.example.com/jwks?subscription%2Dkey=abc123', 'subscription%2Dkey']
+  ])('%s: a percent-encoded credential name (%s) is masked too', (url, param) => {
+    const masked = maskUrlCredentials(url);
+    expect(masked).toContain(`${param}=REDACTED`);
+    expect(masked).not.toMatch(/SUPERSECRETKEY|abc123/);
+  });
+
+  test('an @ inside the query is not user info: the whole token value is masked', () => {
+    const masked = maskUrlCredentials('https://idp.example.com/jwks?token=prefix@suffix');
+    expect(masked).toBe('https://idp.example.com/jwks?token=REDACTED');
+  });
+
   test('keeps the address and non-secret parameters as stored', () => {
     expect(maskUrlCredentials('https://idp.example.com/jwks?tenant=acme&sv=2024')).toBe(
       'https://idp.example.com/jwks?tenant=acme&sv=2024'

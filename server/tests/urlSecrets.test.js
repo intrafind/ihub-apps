@@ -50,6 +50,10 @@ describe('redactUrlSecrets', () => {
     ['https://h/x?keys=a&mykey=b&api__key=c', 'https://h/x?keys=a&mykey=b&api__key=c'],
     ['https://h/x?\u212Aey=a', 'https://h/x?\u212Aey=a'],
     ['https://user:pass@h/x?token=t', 'https://REDACTED@h/x?token=REDACTED'],
+    // An @ in the query or fragment is not user info: the match stops at ? and #.
+    ['https://h?token=prefix@suffix', 'https://h?token=REDACTED'],
+    ['https://h#token=a@b', 'https://h#token=a@b'],
+    ['https://h/x?next=//a@b', 'https://h/x?next=//REDACTED@b'],
     ['https://h/x', 'https://h/x']
   ])('%j becomes %j', (url, expected) => {
     expect(redactUrlSecrets(url)).toBe(expected);
