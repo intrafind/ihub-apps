@@ -513,6 +513,23 @@ export function toLLMError(err, ctx = {}) {
 
 // ── The client ──────────────────────────────────────────────────────────────
 
+/** Failed calls this client wrote to a run's ledger: error → run id. */
+const ledgeredErrors = new WeakMap();
+
+/**
+ * Whether this error is a model call's failure the client already wrote to
+ * the given run's ledger, so a caller that catches it does not write it twice.
+ *
+ * @param {unknown} err
+ * @param {string|null} runId
+ * @returns {boolean}
+ */
+export function isErrorLedgered(err, runId) {
+  return (
+    Boolean(runId) && err !== null && typeof err === 'object' && ledgeredErrors.get(err) === runId
+  );
+}
+
 export class LLMClient {
   /**
    * @param {Object} [opts]
@@ -1707,6 +1724,7 @@ export class LLMClient {
   }
 
   _recordError({ runId, step, err, span, startedAt }) {
+    if (runId && err && typeof err === 'object') ledgeredErrors.set(err, runId);
     this._ledger(runId, RUN_LOG_EVENTS.ERROR, {
       step,
       code: err.code,
