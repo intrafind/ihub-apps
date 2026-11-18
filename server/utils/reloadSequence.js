@@ -37,6 +37,20 @@ export class ReloadSequence {
   }
 
   /**
+   * Whether a later-started reload of `key` has stored already, so what the
+   * reload with `ticket` found (data or a failure) is out of date. Unlike
+   * {@link ReloadSequence#claim} it records nothing: a failed reload asks it
+   * before it reports its failure.
+   *
+   * @param {string} key
+   * @param {number} ticket - From {@link ReloadSequence#begin}
+   * @returns {boolean}
+   */
+  isObsolete(key, ticket) {
+    return ticket < (this.#applied.get(key) ?? 0);
+  }
+
+  /**
    * Ask whether the reload with `ticket` may store what it read. Call once it
    * has read, before storing. A reload that may store is recorded as the newest
    * applied, so every older one that is still running will be refused.

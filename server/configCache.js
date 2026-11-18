@@ -556,6 +556,13 @@ class ConfigCache {
   async _reloadEntry(key) {
     const reloadStart = Date.now();
     let reloadError = null;
+    // Numbered before the read (below); null for the entries that are not
+    // reloaded through a loader.
+    let ticket = null;
+    // A failure of a reload that a later-started, successful one has
+    // overtaken is not recorded: that one cleared the entry's error, and the
+    // cached data is the newer one.
+    const isCurrent = () => ticket === null || !this.reloads.isObsolete(key, ticket);
     try {
       if (key.startsWith('locales/')) {
         const lang = key.split('/')[1].replace('.json', '');
@@ -573,7 +580,7 @@ class ConfigCache {
       const loader = loaderFor(key);
       // Reloads of one entry overlap, and each reads the disk at its own moment: numbered
       // before the read, so one that finishes late cannot store over a newer reload.
-      const ticket = this.reloads.begin(key);
+      ticket = this.reloads.begin(key);
       let data;
       try {
         data = await loader.load({ verbose: false });
@@ -584,6 +591,7 @@ class ConfigCache {
           key,
           error: err.message
         });
+        if (!isCurrent()) return;
         this._recordRefreshError(key, err?.message || String(err));
         this._armRefreshTimer(key);
         return;
@@ -594,6 +602,7 @@ class ConfigCache {
         // hand edit that is not valid JSON. The cached copy stays, and so must
         // the chain that will try again; the failure is recorded until a
         // later reload succeeds.
+        if (!isCurrent()) return;
         this._recordRefreshError(key, `${key} could not be read; the last good copy stays in use.`);
         this._armRefreshTimer(key);
         return;
@@ -630,7 +639,7 @@ class ConfigCache {
       // Keep the old data in cache on refresh failure, and keep retrying it.
       // A groups.json that no longer resolves lands here: the old groups stay
       // in force, so the failure is recorded where an admin can see it.
-      if (this.cache.has(key)) {
+      if (this.cache.has(key) && isCurrent()) {
         this._recordRefreshError(key, error?.message || String(error));
         this._armRefreshTimer(key);
       }
@@ -1349,6 +1358,9 @@ class ConfigCache {
 
     this.refreshTimers.clear();
     this.cache.clear();
+    // The diagnostics name entries that are gone now; the Overview must not
+    // report a failed refresh for an entry the cache no longer holds.
+    this.refreshErrors.clear();
 
     // Queued invalidations name entries that no longer exist. The subscription
     // itself stays: the provider is still up, and `initialize()` re-attaching

@@ -121,3 +121,52 @@ describe('refreshes that keep the old copy without throwing', () => {
     assert.deepEqual(configCache.getRefreshErrors(), []);
   });
 });
+
+describe('review round 4: obsolete reloads and clear()', () => {
+  const platformKey = 'config/platform.json';
+  const platformPath = path.join(ROOT, 'contents', 'config', 'platform.json');
+
+  it('a reload that fails after a later-started one stored records nothing', async () => {
+    await fs.writeFile(platformPath, JSON.stringify({ auth: { mode: 'local' } }), 'utf8');
+    await configCache.refreshCacheEntry(platformKey);
+    assert.deepEqual(configCache.getRefreshErrors(), []);
+
+    // The first reload's read is held and then fails (the null read); a second
+    // reload starts after it, reads the file and stores it.
+    const readJson = configStore.readJson;
+    let release;
+    const held = new Promise(resolve => {
+      release = resolve;
+    });
+    let platformReads = 0;
+    configStore.readJson = async (relPath, ...rest) => {
+      if (relPath === platformKey && ++platformReads === 1) {
+        await held;
+        return null;
+      }
+      return readJson.call(configStore, relPath, ...rest);
+    };
+    try {
+      const older = configCache._reloadEntry(platformKey);
+      await fs.writeFile(platformPath, JSON.stringify({ auth: { mode: 'oidc' } }), 'utf8');
+      await configCache._reloadEntry(platformKey);
+      release();
+      await older;
+    } finally {
+      configStore.readJson = readJson;
+    }
+
+    assert.equal(configCache.get(platformKey)?.data?.auth?.mode, 'oidc');
+    assert.deepEqual(configCache.getRefreshErrors(), []);
+  });
+
+  it('clear() also clears the recorded refresh errors', async () => {
+    await fs.writeFile(platformPath, '{ not json', 'utf8');
+    await configCache.refreshCacheEntry(platformKey);
+    assert.equal(configCache.getRefreshErrors().length, 1);
+
+    configCache.clear();
+
+    assert.deepEqual(configCache.getRefreshErrors(), []);
+  });
+});
