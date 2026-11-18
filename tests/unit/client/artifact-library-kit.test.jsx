@@ -121,6 +121,15 @@ test('a library that cannot be fetched is left out, the page still runs', async 
   expect(html).toContain('new Chart');
 });
 
+test('an empty source is not kept: the next preview fetches it again', async () => {
+  mockFetchSource.mockImplementationOnce(() => Promise.resolve(''));
+  const first = await withArtifactLibraries(PAGE, { enabled: true });
+  expect(first).not.toContain('chart.js source');
+  const second = await withArtifactLibraries(PAGE, { enabled: true });
+  expect(second).toContain('chart.js source');
+  expect(mockFetchSource).toHaveBeenCalledTimes(2);
+});
+
 test('fetches each library once per page', async () => {
   await withArtifactLibraries(PAGE, { enabled: true });
   await withArtifactLibraries(PAGE, { enabled: true });

@@ -237,7 +237,16 @@ function AdminArtifactsPage() {
       // its way stay in the form (and keep it dirty).
       const nowSaved = formOf(response.data);
       setSaved(nowSaved);
-      setForm(current => (deepEqual(current, submitted) ? nowSaved : current));
+      // Field by field: a field edited since it was submitted keeps its edit,
+      // every other one takes the saved value (normalized by the server).
+      setForm(current =>
+        Object.fromEntries(
+          Object.keys(nowSaved).map(key => [
+            key,
+            deepEqual(current[key], submitted[key]) ? nowSaved[key] : current[key]
+          ])
+        )
+      );
       setLibraries(Array.isArray(response.data.libraries) ? response.data.libraries : []);
       setMessage({
         type: 'success',

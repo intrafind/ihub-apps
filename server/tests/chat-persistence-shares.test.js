@@ -1477,45 +1477,46 @@ describe('the embed page', () => {
     const previousArtifacts = platform.artifacts;
     platform.artifacts = { ...previousArtifacts, scriptHosts: [] };
     configCache.setCacheEntry('config/platform.json', platform);
-    const res = await drive(embedHandlers, { params: { shareId: created.body.id } });
-    assert.equal(res.statusCode, 200);
-    // Escaped into srcdoc: the inlined library, never the marker, and no new script origin.
-    assert.match(res.body, /data-ihub-lib-inlined=&quot;chart\.js@4\.5\.1&quot;/);
-    assert.equal(res.body.includes('data-ihub-lib=&quot;chart.js&quot;'), false);
-    assert.match(res.body, /Chart\.js v4\.5\.1/);
-    assert.equal(/script-src[^;]*'self'/.test(res.headers['content-security-policy']), false);
-    // The frame's own policy (in the srcdoc) names no script host while none is allowed.
-    const srcdoc = /srcdoc="([^"]*)"/
-      .exec(res.body)[1]
-      .replaceAll('&quot;', '"')
-      .replaceAll('&#39;', "'")
-      .replaceAll('&lt;', '<')
-      .replaceAll('&gt;', '>')
-      .replaceAll('&amp;', '&');
-    const frameScriptSrc = /script-src [^;]*;/.exec(srcdoc)[0];
-    assert.equal(frameScriptSrc, "script-src 'unsafe-inline' 'unsafe-eval';");
-
-    // A download carries the library; the inline bytes are the stored ones, marker and all.
-    const bytes = { shareId: created.body.id, artifactId: page.id };
-    const inline = await drive(artifactHandlers, { params: bytes });
-    assert.equal(inline.statusCode, 200);
-    assert.match(Buffer.from(inline.body).toString(), /data-ihub-lib="chart\.js"/);
-    const saved = await drive(artifactHandlers, { params: bytes, query: { download: '1' } });
-    assert.equal(saved.statusCode, 200);
-    const savedText = Buffer.from(saved.body).toString();
-    assert.match(savedText, /data-ihub-lib-inlined="chart\.js@4\.5\.1"/);
-    assert.equal(savedText.includes('data-ihub-lib="'), false);
-    assert.equal(saved.headers['content-length'], String(saved.body.length));
-    assert.equal(saved.headers['cache-control'], 'private, no-store');
-    assert.match(inline.headers['cache-control'], /immutable/);
-
-    platform.artifacts = { ...platform.artifacts, libraryKit: { enabled: false } };
-    configCache.setCacheEntry('config/platform.json', platform);
     try {
+      const res = await drive(embedHandlers, { params: { shareId: created.body.id } });
+      assert.equal(res.statusCode, 200);
+      // Escaped into srcdoc: the inlined library, never the marker, and no new script origin.
+      assert.match(res.body, /data-ihub-lib-inlined=&quot;chart\.js@4\.5\.1&quot;/);
+      assert.equal(res.body.includes('data-ihub-lib=&quot;chart.js&quot;'), false);
+      assert.match(res.body, /Chart\.js v4\.5\.1/);
+      assert.equal(/script-src[^;]*'self'/.test(res.headers['content-security-policy']), false);
+      // The frame's own policy (in the srcdoc) names no script host while none is allowed.
+      const srcdoc = /srcdoc="([^"]*)"/
+        .exec(res.body)[1]
+        .replaceAll('&quot;', '"')
+        .replaceAll('&#39;', "'")
+        .replaceAll('&lt;', '<')
+        .replaceAll('&gt;', '>')
+        .replaceAll('&amp;', '&');
+      const frameScriptSrc = /script-src [^;]*;/.exec(srcdoc)[0];
+      assert.equal(frameScriptSrc, "script-src 'unsafe-inline' 'unsafe-eval';");
+
+      // A download carries the library; the inline bytes are the stored ones, marker and all.
+      const bytes = { shareId: created.body.id, artifactId: page.id };
+      const inline = await drive(artifactHandlers, { params: bytes });
+      assert.equal(inline.statusCode, 200);
+      assert.match(Buffer.from(inline.body).toString(), /data-ihub-lib="chart\.js"/);
+      const saved = await drive(artifactHandlers, { params: bytes, query: { download: '1' } });
+      assert.equal(saved.statusCode, 200);
+      const savedText = Buffer.from(saved.body).toString();
+      assert.match(savedText, /data-ihub-lib-inlined="chart\.js@4\.5\.1"/);
+      assert.equal(savedText.includes('data-ihub-lib="'), false);
+      assert.equal(saved.headers['content-length'], String(saved.body.length));
+      assert.equal(saved.headers['cache-control'], 'private, no-store');
+      assert.match(inline.headers['cache-control'], /immutable/);
+
+      platform.artifacts = { ...platform.artifacts, libraryKit: { enabled: false } };
+      configCache.setCacheEntry('config/platform.json', platform);
       const off = await drive(embedHandlers, { params: { shareId: created.body.id } });
       assert.equal(off.body.includes('data-ihub-lib-inlined'), false);
       assert.match(off.body, /data-ihub-lib=&quot;chart\.js&quot;/);
     } finally {
+      // Restored even when an assertion above fails, so no later test runs offline.
       platform.artifacts = previousArtifacts;
       configCache.setCacheEntry('config/platform.json', platform);
     }

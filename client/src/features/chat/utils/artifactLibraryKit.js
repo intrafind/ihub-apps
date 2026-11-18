@@ -21,7 +21,13 @@ const sources = new Map();
 function librarySource(id) {
   if (!sources.has(id)) {
     // Loaded on first use: a preview without a marker never pulls in the API client.
-    const pending = import('../../../api').then(api => api.fetchArtifactLibrarySource(id));
+    const pending = import('../../../api')
+      .then(api => api.fetchArtifactLibrarySource(id))
+      .then(text => {
+        // An empty answer is a failure too, so it is not kept for the page.
+        if (!text) throw new Error(`Empty source for ${id}`);
+        return text;
+      });
     pending.catch(() => sources.delete(id));
     sources.set(id, pending);
   }

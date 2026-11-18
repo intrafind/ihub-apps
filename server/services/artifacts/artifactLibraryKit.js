@@ -18,6 +18,7 @@
 
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { getRootDir } from '../../pathUtils.js';
 import logger from '../../utils/logger.js';
@@ -35,44 +36,37 @@ export function artifactLibraryDir() {
 }
 
 // id -> verified source. A file that is missing or does not match is not
-// cached for good: it is tried again after RETRY_MS, so restoring the file
-// takes effect without a restart.
+// cached for good: it is read again after RETRY_MS, in the background, so
+// restoring the file takes effect without a restart and no request waits on
+// the disk for it.
 const cache = new Map();
 const failedAt = new Map();
+const retrying = new Set();
 const RETRY_MS = 60 * 1000;
 
-/**
- * The verified source of a kit library, or null.
- *
- * @param {string} id - A kit id (`chart.js`, `d3`, `alpinejs`).
- * @returns {string|null}
- */
-export function artifactLibrarySource(id) {
-  const library = artifactLibraryById(id);
-  if (!library) return null;
-  if (cache.has(library.id)) return cache.get(library.id);
-  if (Date.now() - (failedAt.get(library.id) ?? -Infinity) < RETRY_MS) return null;
-  let source = null;
-  try {
-    const data = readFileSync(path.join(artifactLibraryDir(), library.file));
-    const sha256 = createHash('sha256').update(data).digest('hex');
-    if (data.length === library.bytes && sha256 === library.sha256) {
-      source = data.toString('utf8');
-    } else {
-      logger.error('Artifact library file does not match the kit manifest', {
-        component: 'ArtifactLibraryKit',
-        library: library.id,
-        bytes: data.length,
-        sha256
-      });
-    }
-  } catch (error) {
-    logger.error('Artifact library file could not be read', {
-      component: 'ArtifactLibraryKit',
-      library: library.id,
-      error: error.message
-    });
-  }
+/** The file's source when it matches the manifest's size and SHA-256, else null (logged). */
+function verified(library, data) {
+  const sha256 = createHash('sha256').update(data).digest('hex');
+  if (data.length === library.bytes && sha256 === library.sha256) return data.toString('utf8');
+  logger.error('Artifact library file does not match the kit manifest', {
+    component: 'ArtifactLibraryKit',
+    library: library.id,
+    bytes: data.length,
+    sha256
+  });
+  return null;
+}
+
+function unreadable(library, error) {
+  logger.error('Artifact library file could not be read', {
+    component: 'ArtifactLibraryKit',
+    library: library.id,
+    error: error.message
+  });
+  return null;
+}
+
+function remember(library, source) {
   if (source === null) failedAt.set(library.id, Date.now());
   else {
     cache.set(library.id, source);
@@ -81,9 +75,48 @@ export function artifactLibrarySource(id) {
   return source;
 }
 
+/** A retry of a failed file, off the request path. */
+function retryInBackground(library) {
+  if (retrying.has(library.id)) return;
+  retrying.add(library.id);
+  readFile(path.join(artifactLibraryDir(), library.file))
+    .then(data => verified(library, data))
+    .catch(error => unreadable(library, error))
+    .then(source => remember(library, source))
+    .finally(() => retrying.delete(library.id));
+}
+
+/**
+ * The verified source of a kit library, or null.
+ *
+ * The first read of a file is synchronous: it happens at startup
+ * ({@link warmArtifactLibraries}). A file that failed is retried at most
+ * every RETRY_MS, asynchronously; until that read succeeds the answer stays
+ * null.
+ *
+ * @param {string} id - A kit id (`chart.js`, `d3`, `alpinejs`).
+ * @returns {string|null}
+ */
+export function artifactLibrarySource(id) {
+  const library = artifactLibraryById(id);
+  if (!library) return null;
+  if (cache.has(library.id)) return cache.get(library.id);
+  if (failedAt.has(library.id)) {
+    if (Date.now() - failedAt.get(library.id) >= RETRY_MS) retryInBackground(library);
+    return null;
+  }
+  let source;
+  try {
+    source = verified(library, readFileSync(path.join(artifactLibraryDir(), library.file)));
+  } catch (error) {
+    source = unreadable(library, error);
+  }
+  return remember(library, source);
+}
+
 /**
  * Read and verify every kit file once, at startup, so that no request pays
- * for the first (synchronous) read of about half a megabyte.
+ * for the first read of about half a megabyte.
  */
 export function warmArtifactLibraries() {
   for (const library of ARTIFACT_LIBRARIES) artifactLibrarySource(library.id);

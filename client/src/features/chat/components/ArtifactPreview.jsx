@@ -266,9 +266,12 @@ export default function ArtifactPreview({
           ...(type === 'html' && !waits ? { runText: content.text } : {})
         });
         if (waits) {
-          withArtifactLibraries(content.text, { enabled: libraryKitEnabled }).then(runText => {
-            if (active) setState(prev => ({ ...prev, runText }));
-          });
+          withArtifactLibraries(content.text, { enabled: libraryKitEnabled })
+            // Whatever goes wrong while inlining, the page still runs, as stored.
+            .catch(() => content.text)
+            .then(runText => {
+              if (active) setState(prev => ({ ...prev, runText }));
+            });
         }
       })
       .catch(() => {
