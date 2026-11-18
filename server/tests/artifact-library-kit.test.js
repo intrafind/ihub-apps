@@ -22,7 +22,9 @@ import registerArtifactLibraryRoutes from '../routes/artifactLibraries.js';
 import {
   ARTIFACT_LIBRARIES,
   MAX_INLINED_LIBRARY_BYTES,
+  artifactLibraryById,
   artifactLibraryMarkers,
+  artifactLibraryNotice,
   inlineArtifactLibraries,
   inlineScriptSource,
   requestedArtifactLibraries,
@@ -134,8 +136,22 @@ describe('library markers', () => {
     assert.deepEqual(missing, ['d3']);
     assert.equal(
       out,
-      '<head><script data-ihub-lib-inlined="chart.js@4.5.1">var Chart = 1; "<\\/script>"\n</script></head><body></body>'
+      '<head><script data-ihub-lib-inlined="chart.js@4.5.1">' +
+        artifactLibraryNotice(artifactLibraryById('chart.js')) +
+        '\nvar Chart = 1; "<\\/script>"\n</script></head><body></body>'
     );
+  });
+
+  it('put the copyright and permission notice in front of every inlined library', () => {
+    for (const library of ARTIFACT_LIBRARIES) {
+      const notice = artifactLibraryNotice(library);
+      assert.match(notice, /^\/\*! /);
+      assert.ok(notice.includes(library.copyright), library.id);
+      assert.match(notice, /Permission/);
+      assert.equal(notice.indexOf('*/'), notice.length - 2);
+    }
+    const out = inlineKitLibraries('<script data-ihub-lib="d3"></script>', { enabled: true });
+    assert.match(out, /Copyright 2010-2023 Mike Bostock\nISC License\. Permission to use/);
   });
 
   it('stop inlining at the size cap', () => {
@@ -238,6 +254,14 @@ describe('create_web_artifact and the kit', () => {
       '<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>';
     const [allowed] = texts(doc(cdn), { scriptHosts: ['cdn.jsdelivr.net'] });
     assert.match(allowed, /^N Chart\.js comes from a public CDN.*data-ihub-lib="chart\.js"/);
+    assert.equal(allowed.includes('API differs'), false, 'same major version: a plain swap');
+    const v2 =
+      '<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.9.4/Chart.min.js"></script>';
+    const [older] = texts(doc(v2), { scriptHosts: ['cdnjs.cloudflare.com'] });
+    assert.match(
+      older,
+      /only after checking that the code works with Chart\.js 4\.5\.1: the page uses version 2/
+    );
     const [blocked] = texts(doc(cdn), { scriptHosts: [] });
     assert.match(blocked, /^P The sandboxed preview will not load .*library kit instead/);
     // An off kit is not offered.

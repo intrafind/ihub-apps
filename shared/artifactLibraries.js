@@ -45,7 +45,7 @@ export const MAX_INLINED_LIBRARY_BYTES = 2 * 1024 * 1024;
  *
  * @type {ReadonlyArray<Readonly<{
  *   id: string, name: string, version: string, global: string, use: string,
- *   placement: 'anywhere'|'body', license: string, homepage: string,
+ *   placement: 'anywhere'|'body', license: string, copyright: string, homepage: string,
  *   npm: { package: string, path: string }, file: string, bytes: number, sha256: string
  * }>>}
  */
@@ -59,6 +59,7 @@ export const ARTIFACT_LIBRARIES = Object.freeze(
       use: 'charts: line, bar, area, pie and doughnut, radar, polar area, scatter and bubble, with tooltips, legends and click events',
       placement: 'anywhere',
       license: 'MIT',
+      copyright: 'Copyright (c) 2014-2024 Chart.js Contributors',
       homepage: 'https://www.chartjs.org',
       npm: { package: 'chart.js', path: 'dist/chart.umd.min.js' },
       file: 'chart.umd.min.js',
@@ -73,6 +74,7 @@ export const ARTIFACT_LIBRARIES = Object.freeze(
       use: 'custom data visualizations in SVG: scales, axes, shapes, hierarchies (treemap, sunburst, tree), force layouts, Sankey-like flows built by hand, transitions',
       placement: 'anywhere',
       license: 'ISC',
+      copyright: 'Copyright 2010-2023 Mike Bostock',
       homepage: 'https://d3js.org',
       npm: { package: 'd3', path: 'dist/d3.min.js' },
       file: 'd3.min.js',
@@ -87,6 +89,7 @@ export const ARTIFACT_LIBRARIES = Object.freeze(
       use: 'declarative interactivity in the markup (x-data, x-model, x-show, x-for, @click) for forms, tabs, filters and small apps',
       placement: 'body',
       license: 'MIT',
+      copyright: 'Copyright © 2019-2021 Caleb Porzio and contributors',
       homepage: 'https://alpinejs.dev',
       npm: { package: 'alpinejs', path: 'dist/cdn.min.js' },
       file: 'alpinejs.cdn.min.js',
@@ -95,6 +98,32 @@ export const ARTIFACT_LIBRARIES = Object.freeze(
     }
   ].map(library => Object.freeze({ ...library, npm: Object.freeze(library.npm) }))
 );
+
+/**
+ * The permission notices of the kit's licenses. MIT and ISC both ask for the
+ * copyright and permission notice in every copy, and an inlined library is a
+ * copy: {@link inlineArtifactLibraries} puts the notice in front of it.
+ */
+const LICENSE_NOTICES = Object.freeze({
+  MIT: 'Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions: The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.',
+  ISC: 'Permission to use, copy, modify, and/or distribute this software for any purpose with or without fee is hereby granted, provided that the above copyright notice and this permission notice appear in all copies. THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.'
+});
+
+/**
+ * The comment an inlined library starts with: name, version, homepage,
+ * copyright and the license's permission notice.
+ *
+ * @param {{name: string, version: string, homepage: string, copyright: string, license: string}} library
+ * @returns {string}
+ */
+export function artifactLibraryNotice(library) {
+  const text = [
+    `${library.name} ${library.version} (${library.homepage})`,
+    library.copyright,
+    `${library.license} License. ${LICENSE_NOTICES[library.license] || ''}`.trim()
+  ].join('\n');
+  return `/*! ${text.replaceAll('*/', '* /')} */`;
+}
 
 const BY_ID = new Map(ARTIFACT_LIBRARIES.map(library => [library.id, library]));
 
@@ -142,19 +171,36 @@ export function artifactLibraryMarkers(html) {
   const text = typeof html === 'string' ? html : '';
   const lower = text.toLowerCase();
   const markers = [];
+  // The next `</script` end tag at or after a position. End tags are only
+  // ever looked for further ahead, so the whole scan reads the text once.
+  let closeAt = -2;
+  const closeFrom = position => {
+    while (closeAt !== -1 && closeAt < position) {
+      closeAt = lower.indexOf('</script', Math.max(position, closeAt + 1));
+      // `</scripts>` is not the end tag of a script.
+      if (closeAt !== -1 && !/[\s/>]/.test(lower.charAt(closeAt + 8) || '>')) {
+        position = closeAt + 1;
+      }
+    }
+    return closeAt;
+  };
   let from = 0;
   for (;;) {
     const start = lower.indexOf('<script', from);
     if (start === -1) break;
     const tagEnd = lower.indexOf('>', start);
     if (tagEnd === -1) break;
-    const next = lower.charAt(start + 7);
+    from = tagEnd + 1;
+    // `<scripts>` or `<script-x>` is another element.
+    if (!/[\s/>]/.test(lower.charAt(start + 7))) continue;
+    const close = closeFrom(tagEnd);
+    // No end tag anywhere after this point: no later script is closed either.
+    if (close === -1) break;
+    const closeEnd = lower.indexOf('>', close);
+    if (closeEnd === -1) break;
+    // A script's body is text, not markup: the next tag starts after its end tag.
+    from = closeEnd + 1;
     const tag = text.slice(start + 7, tagEnd);
-    const close = lower.indexOf('</script', tagEnd);
-    const closeEnd = close === -1 ? -1 : lower.indexOf('>', close);
-    from = closeEnd === -1 ? tagEnd + 1 : closeEnd + 1;
-    // `<scripts>` or `<script-x>` is another element; an unclosed script is no marker.
-    if (!/[\s/>]/.test(next) || closeEnd === -1) continue;
     const match = MARKER_ATTRIBUTE_RE.exec(tag);
     if (!match) continue;
     const ref = match[1] ?? match[2] ?? match[3] ?? '';
@@ -254,7 +300,7 @@ export function inlineArtifactLibraries(
     inlined.push(library.id);
     out +=
       `<script ${ARTIFACT_LIBRARY_INLINED_ATTRIBUTE}="${library.id}@${library.version}">` +
-      `${inlineScriptSource(source)}\n</script>`;
+      `${artifactLibraryNotice(library)}\n${inlineScriptSource(source)}\n</script>`;
   }
   out += text.slice(cursor);
   return { html: out, inlined, missing };

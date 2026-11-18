@@ -7172,7 +7172,10 @@
         "missing": "File missing or changed",
         "supplyChain": "The files ship with iHub, copied unchanged from npm at exactly these versions and checked against their recorded SHA-256 before they are used."
       },
-      "description": "Generated files: storage, size limits, and what HTML artifacts may load"
+      "description": "Generated files: storage, size limits, and what HTML artifacts may load",
+      "conflict": "Someone else changed the artifact settings after you opened this page, so nothing was saved. Your edits are still here: load the current settings, then make your change again.",
+      "reload": "Load the current settings",
+      "reloadError": "The current settings could not be loaded."
     }
   },
   "cloudStorage": {

@@ -7668,7 +7668,10 @@
         "missing": "Datei fehlt oder wurde verändert",
         "supplyChain": "Die Dateien werden mit iHub ausgeliefert, unverändert aus npm in genau diesen Versionen übernommen und vor der Verwendung gegen ihre hinterlegte SHA-256-Prüfsumme geprüft."
       },
-      "description": "Erzeugte Dateien: Speicherung, Größengrenzen und was HTML-Artefakte laden dürfen"
+      "description": "Erzeugte Dateien: Speicherung, Größengrenzen und was HTML-Artefakte laden dürfen",
+      "conflict": "Jemand anderes hat die Artefakt-Einstellungen geändert, nachdem Sie diese Seite geöffnet haben, daher wurde nichts gespeichert. Ihre Änderungen sind noch da: Laden Sie die aktuellen Einstellungen und nehmen Sie Ihre Änderung erneut vor.",
+      "reload": "Aktuelle Einstellungen laden",
+      "reloadError": "Die aktuellen Einstellungen konnten nicht geladen werden."
     }
   },
   "cloudStorage": {

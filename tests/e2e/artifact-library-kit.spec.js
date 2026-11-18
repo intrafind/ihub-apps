@@ -44,9 +44,13 @@ const sourceOf = id =>
 /** Abort every request that does not go to the app itself, and record it. */
 async function blockTheInternet(page) {
   const blocked = [];
+  // The app itself: loopback, and the host the run is pointed at (TEST_BASE_URL).
+  const baseURL = test.info().project.use.baseURL || process.env.TEST_BASE_URL;
+  const appHosts = ['localhost', '127.0.0.1', '[::1]'];
+  if (baseURL) appHosts.push(new URL(baseURL).hostname);
   await page.context().route('**/*', route => {
     const { protocol, hostname } = new URL(route.request().url());
-    if (!/^https?:$/.test(protocol) || ['localhost', '127.0.0.1', '[::1]'].includes(hostname)) {
+    if (!/^https?:$/.test(protocol) || appHosts.includes(hostname)) {
       return route.fallback();
     }
     blocked.push(route.request().url());
@@ -164,7 +168,7 @@ test.describe('Library kit: the web-artifacts skill examples run offline', () =>
     path.join(root, 'server', 'systemSkills', 'web-artifacts', 'references', 'examples.md'),
     'utf8'
   );
-  const examples = [...markdown.matchAll(/```html\n([\s\S]*?)\n```/g)].map(match => match[1]);
+  const examples = [...markdown.matchAll(/```html\r?\n([\s\S]*?)\r?\n```/g)].map(match => match[1]);
 
   const checks = [
     // 1: Chart.js — the chart exists on the canvas.
@@ -196,6 +200,10 @@ test.describe('Library kit: the web-artifacts skill examples run offline', () =>
       await expect(frame.locator('#panel strong')).toHaveText('Credit check');
     }
   ];
+
+  test('the four examples are found, one per check', () => {
+    expect(examples).toHaveLength(checks.length);
+  });
 
   examples.forEach((example, index) => {
     test(`example ${index + 1} runs without errors and without the network`, async ({ page }) => {

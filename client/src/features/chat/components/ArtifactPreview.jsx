@@ -18,6 +18,7 @@ import {
   withPreviewCsp
 } from '../utils/artifactFiles';
 import { libraryKitOf, withArtifactLibraries } from '../utils/artifactLibraryKit';
+import { hasArtifactLibraryMarker } from '../../../../../shared/artifactLibraries.js';
 import ArtifactPromptRequest from './ArtifactPromptRequest';
 
 // A preview that fills the full-screen pane scrolls behind the composer dock; the workspace sets
@@ -250,18 +251,25 @@ export default function ArtifactPreview({
     setState({ status: 'loading' });
     getBlob(artifact.id)
       .then(blob => loadPreview(type, blob))
-      .then(async content =>
-        type === 'html'
-          ? {
-              ...content,
-              runText: await withArtifactLibraries(content.text, { enabled: libraryKitEnabled })
-            }
-          : content
-      )
       .then(content => {
         url = content.url || null;
-        if (active) setState({ status: 'ready', ...content });
-        else if (url) URL.revokeObjectURL(url);
+        if (!active) {
+          if (url) URL.revokeObjectURL(url);
+          return;
+        }
+        // The stored text is ready for the Code view at once; the frame waits
+        // for the library kit (runText) when the page asks for a library.
+        const waits = type === 'html' && hasArtifactLibraryMarker(content.text);
+        setState({
+          status: 'ready',
+          ...content,
+          ...(type === 'html' && !waits ? { runText: content.text } : {})
+        });
+        if (waits) {
+          withArtifactLibraries(content.text, { enabled: libraryKitEnabled }).then(runText => {
+            if (active) setState(prev => ({ ...prev, runText }));
+          });
+        }
       })
       .catch(() => {
         if (active) setState({ status: 'error' });
@@ -402,18 +410,27 @@ export default function ArtifactPreview({
               onCancel={() => setPromptRequest(null)}
             />
           )}
-          <iframe
-            ref={iframeRef}
-            sandbox="allow-scripts"
-            referrerPolicy="no-referrer"
-            srcDoc={withPreviewCsp(state.runText ?? state.text, {
-              scriptHosts,
-              theme,
-              promptBridge
-            })}
-            title={name}
-            className={`w-full ${tall} ${frame} bg-white`}
-          />
+          {state.runText === undefined ? (
+            <p
+              className={`text-sm text-gray-500 dark:text-gray-400 ${fill ? 'p-4' : ''}`}
+              role="status"
+            >
+              {t('chatArtifacts.previewLoading', 'Loading preview…')}
+            </p>
+          ) : (
+            <iframe
+              ref={iframeRef}
+              sandbox="allow-scripts"
+              referrerPolicy="no-referrer"
+              srcDoc={withPreviewCsp(state.runText, {
+                scriptHosts,
+                theme,
+                promptBridge
+              })}
+              title={name}
+              className={`w-full ${tall} ${frame} bg-white`}
+            />
+          )}
         </Root>
       );
     }

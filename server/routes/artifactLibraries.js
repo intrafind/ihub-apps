@@ -24,9 +24,11 @@
 import { buildServerPath } from '../utils/basePath.js';
 import { ServiceError } from '../utils/ServiceError.js';
 import { artifactPolicy } from '../services/artifacts/artifactPolicy.js';
+import { authOptional } from '../middleware/authRequired.js';
 import {
   artifactLibraryList,
-  artifactLibrarySource
+  artifactLibrarySource,
+  warmArtifactLibraries
 } from '../services/artifacts/artifactLibraryKit.js';
 import { artifactLibraryById } from '../../shared/artifactLibraries.js';
 
@@ -37,6 +39,7 @@ import { artifactLibraryById } from '../../shared/artifactLibraries.js';
  * @returns {void}
  */
 export default function registerArtifactLibraryRoutes(app) {
+  warmArtifactLibraries();
   /**
    * @swagger
    * /api/artifact-libraries:
@@ -77,7 +80,7 @@ export default function registerArtifactLibraryRoutes(app) {
    *                       sha256: { type: string }
    *                       available: { type: boolean }
    */
-  app.get(buildServerPath('/api/artifact-libraries'), (req, res) => {
+  app.get(buildServerPath('/api/artifact-libraries'), authOptional, (req, res) => {
     res.setHeader('Cache-Control', 'no-cache');
     res.json({ enabled: artifactPolicy().libraryKit.enabled, items: artifactLibraryList() });
   });
@@ -108,20 +111,26 @@ export default function registerArtifactLibraryRoutes(app) {
    *       404:
    *         description: Not in the kit, or the kit is off (`NOT_FOUND`)
    */
-  app.get(buildServerPath('/api/artifact-libraries/:libraryId/source'), (req, res) => {
-    const library = artifactLibraryById(req.params.libraryId);
-    if (!library || !artifactPolicy().libraryKit.enabled) {
-      throw new ServiceError('NOT_FOUND', 'Library not found');
+  app.get(
+    buildServerPath('/api/artifact-libraries/:libraryId/source'),
+    authOptional,
+    (req, res) => {
+      const library = artifactLibraryById(req.params.libraryId);
+      if (!library || !artifactPolicy().libraryKit.enabled) {
+        throw new ServiceError('NOT_FOUND', 'Library not found');
+      }
+      const source = artifactLibrarySource(library.id);
+      if (source === null) throw new ServiceError('NOT_FOUND', 'Library not found');
+      const etag = `"${library.sha256}"`;
+      res.setHeader('ETag', etag);
+      // Revalidated on every use (a 304 while the ETag matches): an admin who
+      // switches the kit off, and an update that changes a library, take effect
+      // at once.
+      res.setHeader('Cache-Control', 'public, no-cache');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      if (req.headers['if-none-match'] === etag) return res.status(304).end();
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      return res.send(source);
     }
-    const source = artifactLibrarySource(library.id);
-    if (source === null) throw new ServiceError('NOT_FOUND', 'Library not found');
-    const etag = `"${library.sha256}"`;
-    res.setHeader('ETag', etag);
-    // The file changes only with an iHub update; revalidate after a day.
-    res.setHeader('Cache-Control', 'public, max-age=86400');
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    if (req.headers['if-none-match'] === etag) return res.status(304).end();
-    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-    return res.send(source);
-  });
+  );
 }

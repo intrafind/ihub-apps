@@ -94,6 +94,32 @@ describe('Admin artifact settings', () => {
     ]);
   });
 
+  it('refuses a save over a newer change (If-Match), and accepts one from the current read', async () => {
+    const read = await request(app).get('/api/admin/artifacts/config').expect(200);
+    const etag = read.headers.etag;
+    expect(etag).toMatch(/^"[0-9a-f]{32}"$/);
+
+    // Someone else removes a host in between.
+    await request(app).put('/api/admin/artifacts/config').send({ scriptHosts: [] }).expect(200);
+    const before = structuredClone(state.platform);
+    const stale = await request(app)
+      .put('/api/admin/artifacts/config')
+      .set('If-Match', etag)
+      .send({ scriptHosts: ['cdn.jsdelivr.net', 'unpkg.com'] })
+      .expect(412);
+    expect(stale.body.code).toBe('PRECONDITION_FAILED');
+    expect(state.platform).toEqual(before);
+
+    const fresh = await request(app).get('/api/admin/artifacts/config').expect(200);
+    const saved = await request(app)
+      .put('/api/admin/artifacts/config')
+      .set('If-Match', fresh.headers.etag)
+      .send({ maxPerBatch: 3 })
+      .expect(200);
+    expect(saved.headers.etag).not.toBe(fresh.headers.etag);
+    expect(state.platform.artifacts.scriptHosts).toEqual([]);
+  });
+
   it.each([
     [{ scriptHosts: ['*.example.com'] }, 400, /Not a plain host name: "\*\.example\.com"/],
     [{ scriptHosts: ['http://cdn.example.com'] }, 400, /Not a plain host name/],

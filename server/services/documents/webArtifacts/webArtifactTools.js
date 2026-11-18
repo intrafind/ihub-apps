@@ -221,6 +221,38 @@ function markerOf(library) {
   return `<script ${ARTIFACT_LIBRARY_ATTRIBUTE}="${library.id}"></script>`;
 }
 
+/** The major version a CDN URL pins for a package (`chart.js@2.9.4` → 2), or null. */
+function majorVersionInUrl(url, packageName) {
+  const lower = String(url).toLowerCase();
+  const name = packageName.toLowerCase();
+  for (const separator of ['@', '/']) {
+    const at = lower.indexOf(`/${name}${separator}`);
+    if (at === -1) continue;
+    const digits = /^v?(\d+)\./.exec(lower.slice(at + name.length + 2));
+    if (digits) return Number(digits[1]);
+  }
+  return null;
+}
+
+/**
+ * How to move one kit library from a CDN to the kit: the marker, and, when
+ * the page pins another major version than the kit ships, a warning that the
+ * API may differ. The kit never swaps a version silently.
+ *
+ * @param {object} library - A kit library.
+ * @param {string[]} urls - The CDN URLs of the page.
+ * @returns {string}
+ */
+function kitReplacementOf(library, urls) {
+  const kitMajor = Number(library.version.split('.')[0]);
+  const majors = urls
+    .filter(url => kitLibraryOfUrl(url) === library)
+    .map(url => majorVersionInUrl(url, library.npm.package))
+    .filter(major => major !== null && major !== kitMajor);
+  if (!majors.length) return markerOf(library);
+  return `${markerOf(library)} only after checking that the code works with ${library.name} ${library.version}: the page uses version ${majors[0]}, whose API differs`;
+}
+
 /**
  * What is wrong with the library-kit markers of a document (#3822): a name
  * that is not in the kit, a version the kit does not ship, a marker with code
@@ -355,9 +387,12 @@ function htmlFindings(text, { truncated, scriptHosts, libraryKit, problem, note 
   }
   const { code: blockedCode, media: blockedMedia } = blockedRemoteUrls(text, scriptHosts);
   // Kit libraries loaded from a CDN: they work offline from the kit.
+  const cdnScripts = capturesOf(EXTERNAL_SCRIPT_RE, text);
   const kitFromCdn = libraryKit.enabled
-    ? [...new Set([...capturesOf(EXTERNAL_SCRIPT_RE, text)].map(kitLibraryOfUrl).filter(Boolean))]
+    ? [...new Set(cdnScripts.map(kitLibraryOfUrl).filter(Boolean))]
     : [];
+  const replacements = libraries =>
+    libraries.map(library => kitReplacementOf(library, cdnScripts)).join('; ');
   if (blockedCode.length) {
     const allowed = scriptHosts.length
       ? `Scripts and stylesheets load only over https from ${scriptHosts.join(', ')}`
@@ -366,7 +401,7 @@ function htmlFindings(text, { truncated, scriptHosts, libraryKit, problem, note 
       blockedCode.some(url => kitLibraryOfUrl(url) === library)
     );
     const fix = blockedKit.length
-      ? `Load ${blockedKit.map(library => library.name).join(', ')} from iHub's library kit instead: replace the <script src> with ${blockedKit.map(markerOf).join(' ')}.`
+      ? `Load ${blockedKit.map(library => library.name).join(', ')} from iHub's library kit instead: replace the <script src> with ${replacements(blockedKit)}.`
       : 'Switch to an allowed host or inline the code.';
     problem(
       `The sandboxed preview will not load ${quoteList(blockedCode, 3)}, so the code that needs it does not run. ${allowed}. ${fix}`
@@ -377,7 +412,7 @@ function htmlFindings(text, { truncated, scriptHosts, libraryKit, problem, note 
   );
   if (kitAllowed.length) {
     note(
-      `${kitAllowed.map(library => library.name).join(', ')} come${kitAllowed.length === 1 ? 's' : ''} from a public CDN here, so the artifact needs internet access to work. iHub ships ${kitAllowed.length === 1 ? 'it' : 'them'} in its offline library kit: replace the <script src> with ${kitAllowed.map(markerOf).join(' ')} unless the user asked for the CDN.`
+      `${kitAllowed.map(library => library.name).join(', ')} come${kitAllowed.length === 1 ? 's' : ''} from a public CDN here, so the artifact needs internet access to work. iHub ships ${kitAllowed.length === 1 ? 'it' : 'them'} in its offline library kit: unless the user asked for the CDN, replace the <script src> with ${replacements(kitAllowed)}.`
     );
   }
   libraryMarkerFindings(text, libraryKit, problem);

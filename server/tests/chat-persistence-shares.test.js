@@ -959,6 +959,28 @@ describe('artifacts as one ZIP', () => {
     assert.equal(res.files['notes.md'], marker);
   });
 
+  it('counts the inlined libraries against the archive size limit', async () => {
+    const chatId = await seedChat(ADA, { turns: 0 });
+    await seedFile(
+      chatId,
+      'small.html',
+      '<script data-ihub-lib="chart.js"></script>',
+      'text/plain'
+    );
+    const previous = platform.artifacts;
+    platform.artifacts = { ...previous, maxZipBytes: 128 * 1024 };
+    configCache.setCacheEntry('config/platform.json', platform);
+    try {
+      const res = await driveZip(chatZipHandlers, { params: { chatId }, user: ADA });
+      assert.equal(res.statusCode, 413);
+      assert.equal(res.body.code, 'PAYLOAD_TOO_LARGE');
+      assert.equal(res.body.details?.reason, 'too-large');
+    } finally {
+      platform.artifacts = previous;
+      configCache.setCacheEntry('config/platform.json', platform);
+    }
+  });
+
   it('names the archive after a title cut inside an emoji without failing', async () => {
     chatCounter += 1;
     const chatId = `chat-${chatCounter}`;
@@ -1451,6 +1473,10 @@ describe('the embed page', () => {
     );
     const created = await shareArtifact(ADA, chatId, page.id, { mode: 'public', embeddable: true });
     assert.equal(created.statusCode, 201, JSON.stringify(created.body));
+    // Offline: no CDN host at all.
+    const previousArtifacts = platform.artifacts;
+    platform.artifacts = { ...previousArtifacts, scriptHosts: [] };
+    configCache.setCacheEntry('config/platform.json', platform);
     const res = await drive(embedHandlers, { params: { shareId: created.body.id } });
     assert.equal(res.statusCode, 200);
     // Escaped into srcdoc: the inlined library, never the marker, and no new script origin.
@@ -1458,6 +1484,16 @@ describe('the embed page', () => {
     assert.equal(res.body.includes('data-ihub-lib=&quot;chart.js&quot;'), false);
     assert.match(res.body, /Chart\.js v4\.5\.1/);
     assert.equal(/script-src[^;]*'self'/.test(res.headers['content-security-policy']), false);
+    // The frame's own policy (in the srcdoc) names no script host while none is allowed.
+    const srcdoc = /srcdoc="([^"]*)"/
+      .exec(res.body)[1]
+      .replaceAll('&quot;', '"')
+      .replaceAll('&#39;', "'")
+      .replaceAll('&lt;', '<')
+      .replaceAll('&gt;', '>')
+      .replaceAll('&amp;', '&');
+    const frameScriptSrc = /script-src [^;]*;/.exec(srcdoc)[0];
+    assert.equal(frameScriptSrc, "script-src 'unsafe-inline' 'unsafe-eval';");
 
     // A download carries the library; the inline bytes are the stored ones, marker and all.
     const bytes = { shareId: created.body.id, artifactId: page.id };
@@ -1478,7 +1514,7 @@ describe('the embed page', () => {
       assert.equal(off.body.includes('data-ihub-lib-inlined'), false);
       assert.match(off.body, /data-ihub-lib=&quot;chart\.js&quot;/);
     } finally {
-      platform.artifacts = { ...platform.artifacts, libraryKit: { enabled: true } };
+      platform.artifacts = previousArtifacts;
       configCache.setCacheEntry('config/platform.json', platform);
     }
   });

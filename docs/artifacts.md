@@ -187,7 +187,9 @@ limits, the CDN hosts (with "Remove all (offline)" and "Use the public
 defaults") and the library kit, whose table shows each library's version,
 license, size and whether its file passed the checksum check. A `PUT` changes
 only the fields it names; a host that is not a plain host name is refused
-rather than silently dropped.
+rather than silently dropped. The `GET` answers an `ETag`; the page sends it as
+`If-Match`, and a save over someone else's newer change is refused with `412
+PRECONDITION_FAILED`, the admin's edits kept.
 
 Migration V106 seeds the block into existing installations at its defaults, so
 an upgrade changes nothing on its own. Migration V190 adds the two ZIP limits
@@ -249,6 +251,13 @@ depends on the public origin or base path.
 - **Once, and capped.** Each library is inlined once however often it is asked
   for, and at most 2 MB of library source go into one document (the whole kit
   is about 540 KB).
+- **With its notice.** Every inlined library starts with a comment carrying its
+  name, version, copyright and the permission notice of its license (MIT, ISC),
+  so a downloaded file meets the license on its own.
+- **Never half done.** The preview runs with what it got (a library that could
+  not be fetched is left out). A download, an export or an attachment from the
+  chat is refused instead, and can be tried again. A ZIP counts the inlined
+  libraries against `maxZipBytes`.
 - **Checks.** `create_web_artifact` and `edit_web_artifact` report a marker
   that names nothing in the kit, a version the kit does not ship, a marker with
   code or a `src` of its own, an Alpine.js marker in `<head>`, and any marker

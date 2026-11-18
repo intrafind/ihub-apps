@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
@@ -160,6 +160,9 @@ function AdminArtifactsPage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
   const [invalid, setInvalid] = useState([]);
+  // The ETag of the settings the form was loaded from (or last saved as): sent
+  // as If-Match, so a save over someone else's newer change is refused.
+  const revisionRef = useRef(null);
 
   const apply = config => {
     const loaded = formOf(config);
@@ -168,13 +171,18 @@ function AdminArtifactsPage() {
     setLibraries(Array.isArray(config.libraries) ? config.libraries : []);
   };
 
+  const fetchConfig = async () => {
+    const response = await makeAdminApiCall('/admin/artifacts/config', { method: 'GET' });
+    revisionRef.current = response.headers?.etag || null;
+    return response.data;
+  };
+
   // No form and no Save until the settings loaded: saving the empty form after
   // a failed load would overwrite the stored settings.
   const load = useAdminConfigLoad({
     sources: {
       artifacts: {
-        load: async () =>
-          (await makeAdminApiCall('/admin/artifacts/config', { method: 'GET' })).data,
+        load: fetchConfig,
         onLoad: apply
       }
     }
@@ -216,26 +224,62 @@ function AdminArtifactsPage() {
     }
     setSaving(true);
     setMessage(null);
+    const submitted = form;
     try {
       const response = await makeAdminApiCall('/admin/artifacts/config', {
         method: 'PUT',
-        body
+        body,
+        headers: revisionRef.current ? { 'If-Match': revisionRef.current } : {}
       });
-      apply(response.data);
+      revisionRef.current = response.headers?.etag || null;
+      // The answer is the new saved state. Edits made while the save was on
+      // its way stay in the form (and keep it dirty).
+      const nowSaved = formOf(response.data);
+      setSaved(nowSaved);
+      setForm(current => (deepEqual(current, submitted) ? nowSaved : current));
+      setLibraries(Array.isArray(response.data.libraries) ? response.data.libraries : []);
       setMessage({
         type: 'success',
         text: t('admin.artifacts.saved', 'Artifact settings saved. They apply right away.')
       });
       refreshConfig();
     } catch (error) {
-      setMessage({
-        type: 'error',
-        text:
-          error.message ||
-          t('admin.artifacts.saveError', 'The artifact settings could not be saved.')
-      });
+      const status = error?.response?.status ?? error?.status;
+      setMessage(
+        status === 412
+          ? {
+              type: 'error',
+              conflict: true,
+              text: t(
+                'admin.artifacts.conflict',
+                'Someone else changed the artifact settings after you opened this page, so nothing was saved. Your edits are still here: load the current settings, then make your change again.'
+              )
+            }
+          : {
+              type: 'error',
+              text:
+                error.message ||
+                t('admin.artifacts.saveError', 'The artifact settings could not be saved.')
+            }
+      );
     } finally {
       setSaving(false);
+    }
+  };
+
+  const reloadCurrent = async () => {
+    try {
+      apply(await fetchConfig());
+      setInvalid([]);
+      setMessage(null);
+    } catch (error) {
+      setMessage({
+        type: 'error',
+        conflict: true,
+        text:
+          error.message ||
+          t('admin.artifacts.reloadError', 'The current settings could not be loaded.')
+      });
     }
   };
 
@@ -558,6 +602,15 @@ function AdminArtifactsPage() {
             }`}
           >
             {message.text}
+            {message.conflict && (
+              <button
+                type="button"
+                onClick={reloadCurrent}
+                className="ml-2 font-medium underline hover:no-underline"
+              >
+                {t('admin.artifacts.reload', 'Load the current settings')}
+              </button>
+            )}
           </p>
         ) : null
       }

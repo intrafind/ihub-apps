@@ -151,4 +151,43 @@ describe('downloads', () => {
     const off = blobOf(PAGE);
     expect(await downloadableArtifactBlob(off, 'sales.html', { enabled: false })).toBe(off);
   });
+
+  test('a name cut after ".html " still counts as HTML', async () => {
+    const saved = await downloadableArtifactBlob(blobOf(PAGE), 'sales.html ', { enabled: true });
+    expect(await read(saved)).toContain('chart.js source');
+  });
+
+  test('is refused, not handed over half done, when a library cannot be fetched', async () => {
+    mockFetchSource.mockImplementation(() => Promise.reject(new Error('offline')));
+    await expect(
+      downloadableArtifactBlob(blobOf(PAGE), 'sales.html', { enabled: true })
+    ).rejects.toMatchObject({ code: 'library-unavailable', missing: ['chart.js'] });
+  });
+});
+
+test('shows the Code view at once while the libraries are still on their way', async () => {
+  let release;
+  mockFetchSource.mockImplementation(
+    () => new Promise(resolve => (release = () => resolve('/* chart.js source */')))
+  );
+  mockPlatform.current = { artifacts: { scriptHosts: [], libraryKit: { enabled: true } } };
+  const { container, rerender } = render(
+    <ArtifactPreview
+      artifact={artifact}
+      getBlob={() => Promise.resolve(blobOf(PAGE))}
+      viewMode="code"
+    />
+  );
+  await waitFor(() => expect(container.textContent).toContain('data-ihub-lib="chart.js"'));
+  // The preview waits for the kit instead of running the page without its library.
+  rerender(
+    <ArtifactPreview
+      artifact={artifact}
+      getBlob={() => Promise.resolve(blobOf(PAGE))}
+      viewMode="preview"
+    />
+  );
+  expect(screen.queryByTitle('sales.html')).toBeNull();
+  release();
+  await waitFor(async () => expect(await srcdocOf('sales.html')).toContain('chart.js source'));
 });

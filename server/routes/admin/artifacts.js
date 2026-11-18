@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
+import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import logger from '../../utils/logger.js';
@@ -43,6 +44,26 @@ const artifactsBodySchema = z
 function configResponse(platform) {
   const settings = artifactSettings(platform);
   return { ...settings, libraries: artifactLibraryList() };
+}
+
+/**
+ * The revision of the artifact settings, answered as `ETag`: a hash of the
+ * settings in force. A PUT with `If-Match` is refused when they changed since
+ * that read, so a form loaded before someone else's save cannot put back a
+ * host the other admin removed.
+ */
+function revisionOf(platform) {
+  const digest = createHash('sha256')
+    .update(JSON.stringify(artifactSettings(platform)))
+    .digest('hex');
+  return `"${digest.slice(0, 32)}"`;
+}
+
+/** Answer the settings with their revision. */
+function sendConfig(res, platform) {
+  res.setHeader('ETag', revisionOf(platform));
+  res.setHeader('Cache-Control', 'no-store');
+  res.json(configResponse(platform));
 }
 
 export default function registerAdminArtifactRoutes(app) {
@@ -90,7 +111,7 @@ export default function registerAdminArtifactRoutes(app) {
    *                       available: { type: boolean }
    */
   app.get(buildServerPath('/api/admin/artifacts/config'), adminAuth, async (req, res) => {
-    res.json(configResponse(configCache.getPlatform() || {}));
+    sendConfig(res, configCache.getPlatform() || {});
   });
 
   /**
@@ -123,11 +144,19 @@ export default function registerAdminArtifactRoutes(app) {
    *                 type: object
    *                 properties:
    *                   enabled: { type: boolean }
+   *     parameters:
+   *       - in: header
+   *         name: If-Match
+   *         required: false
+   *         schema: { type: string }
+   *         description: The ETag of the GET the form was loaded from
    *     responses:
    *       200:
-   *         description: The settings now in force (same shape as the GET)
+   *         description: The settings now in force (same shape as the GET), with their new ETag
    *       400:
    *         description: Invalid settings (`VALIDATION_FAILED`, `BAD_REQUEST`)
+   *       412:
+   *         description: PRECONDITION_FAILED, the settings changed since the read named in If-Match
    */
   app.put(buildServerPath('/api/admin/artifacts/config'), adminAuth, async (req, res) => {
     const parsed = artifactsBodySchema.safeParse(req.body ?? {});
@@ -154,7 +183,14 @@ export default function registerAdminArtifactRoutes(app) {
       changes.scriptHosts = hosts;
     }
 
+    const expected = req.headers['if-match'];
     await updatePlatform(platform => {
+      if (expected && expected !== revisionOf(platform)) {
+        throw new ServiceError(
+          'PRECONDITION_FAILED',
+          'The artifact settings changed since they were loaded. Reload them and make your change again.'
+        );
+      }
       const current = platform.artifacts || {};
       platform.artifacts = {
         ...current,
@@ -179,6 +215,6 @@ export default function registerAdminArtifactRoutes(app) {
       details: changes
     });
 
-    res.json(configResponse(configCache.getPlatform() || {}));
+    sendConfig(res, configCache.getPlatform() || {});
   });
 }

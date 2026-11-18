@@ -34,8 +34,12 @@ export function artifactLibraryDir() {
   return path.join(getRootDir(), 'server', 'artifactLibraries');
 }
 
-// id -> source (string) or null when the file is missing or does not match.
+// id -> verified source. A file that is missing or does not match is not
+// cached for good: it is tried again after RETRY_MS, so restoring the file
+// takes effect without a restart.
 const cache = new Map();
+const failedAt = new Map();
+const RETRY_MS = 60 * 1000;
 
 /**
  * The verified source of a kit library, or null.
@@ -47,6 +51,7 @@ export function artifactLibrarySource(id) {
   const library = artifactLibraryById(id);
   if (!library) return null;
   if (cache.has(library.id)) return cache.get(library.id);
+  if (Date.now() - (failedAt.get(library.id) ?? -Infinity) < RETRY_MS) return null;
   let source = null;
   try {
     const data = readFileSync(path.join(artifactLibraryDir(), library.file));
@@ -68,8 +73,20 @@ export function artifactLibrarySource(id) {
       error: error.message
     });
   }
-  cache.set(library.id, source);
+  if (source === null) failedAt.set(library.id, Date.now());
+  else {
+    cache.set(library.id, source);
+    failedAt.delete(library.id);
+  }
   return source;
+}
+
+/**
+ * Read and verify every kit file once, at startup, so that no request pays
+ * for the first (synchronous) read of about half a megabyte.
+ */
+export function warmArtifactLibraries() {
+  for (const library of ARTIFACT_LIBRARIES) artifactLibrarySource(library.id);
 }
 
 /**
