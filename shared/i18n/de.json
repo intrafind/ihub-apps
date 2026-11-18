@@ -8977,6 +8977,7 @@
     "created": "{{what}} erstellt",
     "preparingTool": "{{name}} wird vorbereitet…",
     "outputWebArtifact": "Web-Artefakt",
+    "outputDashboard": "Dashboard",
     "outputDocument": "Dokument",
     "outputPresentation": "Präsentation",
     "outputWorkbook": "Excel-Arbeitsmappe",

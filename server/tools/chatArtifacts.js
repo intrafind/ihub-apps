@@ -8,10 +8,11 @@
  * (`chatArtifactCandidates`). See `services/chat/chatContextTools.js`.
  *
  * Artifacts are write-once: the model changes a file by creating a new one
- * (a web artifact through `edit_web_artifact`, a Word, PowerPoint or Excel
- * file through `edit_docx` / `edit_pptx` / `edit_xlsx`, which write the new
- * version). For such a document the read returns the source it was made from
- * (its Markdown, slides or sheets), the text those edits are copied from.
+ * (a web artifact through `edit_web_artifact`, a dashboard through
+ * `edit_dashboard`, a Word, PowerPoint or Excel file through `edit_docx` /
+ * `edit_pptx` / `edit_xlsx`, which write the new version). For a document or a
+ * dashboard the read returns the source it was made from (its Markdown, slides,
+ * sheets or spec), the text those edits are copied from.
  *
  * @module tools/chatArtifacts
  */
@@ -26,6 +27,7 @@ import { chatArtifactCandidates, selectChatFiles } from '../services/documents/f
 import { extractText } from '../services/projects/extractText.js';
 import { TEXT_FILE_MEDIA_TYPES } from '../../shared/generatedFiles.js';
 import { readSource, sourceViewOf } from '../services/documents/editableSource.js';
+import { dashboardSourceOf } from '../services/documents/webArtifacts/dashboardPreset.js';
 
 /** Kinds that hold no text to read. */
 const UNREADABLE_KINDS = new Set(['image', 'archive']);
@@ -148,6 +150,18 @@ function sourceNoteOf(view) {
   };
 }
 
+/**
+ * The source of a file the chat made, as `edit_*` changes it: the Markdown,
+ * slides or sheets of an Office file, the spec of a dashboard page. `null` for
+ * every other file, which is read as it is.
+ */
+async function sourceViewOfFile(candidate, data) {
+  if (!isPlainText(candidate)) return sourceViewOf(await readSource(data));
+  if (!/\.html?$/i.test(String(candidate.name || ''))) return null;
+  const dashboard = dashboardSourceOf(data.toString('utf8'));
+  return dashboard ? { text: dashboard.text, format: 'json', editTool: 'edit_dashboard' } : null;
+}
+
 /** The answer for a file that holds no text (a picture, an archive). */
 function unreadableResult(described, kind) {
   return {
@@ -185,8 +199,8 @@ export async function read(params) {
     if (!data) {
       return chatContextError(`The file "${candidate.name}" is no longer stored.`, 'ARTIFACT_GONE');
     }
-    // A document the chat made carries its source: that is what an edit changes.
-    const view = isPlainText(candidate) ? null : sourceViewOf(await readSource(data));
+    // A document or dashboard the chat made carries its source: that is what an edit changes.
+    const view = await sourceViewOfFile(candidate, data);
     const page = pageOfText(view ? view.text : await textOf(candidate, data), params.offset);
     return {
       ...described,

@@ -1411,11 +1411,10 @@ Output rules:
    */
   async _activateSkillsIntoState(skillNames, state, context, config) {
     if (!Array.isArray(skillNames) || skillNames.length === 0) return;
-    const usableNames = new Set(
-      (await getUsableSkills({ skillIds: config?.skills, user: context?.user }))
-        .filter(isModelInvocable)
-        .map(s => s.name)
-    );
+    const usable = await getUsableSkills({ skillIds: config?.skills, user: context?.user });
+    const usableNames = new Set(usable.filter(isModelInvocable).map(s => s.name));
+    // What a skill's instructions may point to: every skill the planner has.
+    const available = usable.map(s => s.name);
     const activated = { ...state?.data?._activatedSkills };
     const { getSkillContent } = await import('../../skillLoader.js');
     const profileId = context?.user?.profileId;
@@ -1432,7 +1431,7 @@ Output rules:
         continue;
       }
       try {
-        const content = await getSkillContent(name);
+        const content = await getSkillContent(name, undefined, { available });
         if (!content || !content.body) {
           this.logger.warn('Planner requested unknown skill', {
             component: 'PlannerNodeExecutor',

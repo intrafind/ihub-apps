@@ -3,6 +3,10 @@
 
 import { getLocalizedString } from '../utils/localize.js';
 import { CREATE_DOCX_TOOL, EDIT_DOCX_TOOL } from './documents/docx/docxToolDefinitions.js';
+import {
+  CREATE_DASHBOARD_TOOL,
+  EDIT_DASHBOARD_TOOL
+} from './documents/webArtifacts/dashboardToolDefinitions.js';
 import { CREATE_FILE_TOOL, CREATE_ZIP_TOOL } from './documents/files/fileToolDefinitions.js';
 import { CREATE_PDF_TOOL, PREVIEW_PDF_TOOL } from './documents/pdf/pdfToolDefinitions.js';
 import {
@@ -34,6 +38,7 @@ const docxTools = () => import('./documents/docx/docxTools.js');
 const pptxTools = () => import('./documents/pptx/pptxTools.js');
 const xlsxTools = () => import('./documents/xlsx/xlsxTools.js');
 const webArtifactTools = () => import('./documents/webArtifacts/webArtifactTools.js');
+const dashboardTools = () => import('./documents/webArtifacts/dashboardTools.js');
 const fileTools = () => import('./documents/files/fileTools.js');
 
 const REGISTRY = new Map([
@@ -88,6 +93,20 @@ const REGISTRY = new Map([
     {
       definition: EDIT_WEB_ARTIFACT_TOOL,
       run: async params => (await webArtifactTools()).runEditWebArtifact(params)
+    }
+  ],
+  [
+    CREATE_DASHBOARD_TOOL.id,
+    {
+      definition: CREATE_DASHBOARD_TOOL,
+      run: async params => (await dashboardTools()).runCreateDashboard(params)
+    }
+  ],
+  [
+    EDIT_DASHBOARD_TOOL.id,
+    {
+      definition: EDIT_DASHBOARD_TOOL,
+      run: async params => (await dashboardTools()).runEditDashboard(params)
     }
   ],
   [

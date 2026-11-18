@@ -666,7 +666,7 @@ export class WebsiteCorpusService {
         'Show the report to the user unchanged (tables and chart), then add the verdict, the oddities and the next steps. ' +
         'Never recalculate a figure.' +
         (dashboard === true
-          ? ' Then create the dashboard: activate the "dashboard" skill and call create_web_artifact with preset "dashboard" and the "dashboard" field of this result, unchanged, as the JSON text of "data".'
+          ? ' Then create the dashboard: activate the "dashboard" skill and call create_dashboard with the "dashboard" field of this result, unchanged, as the JSON text of "data".'
           : '')
     };
   }
