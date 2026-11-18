@@ -43,7 +43,8 @@
  *
  *  - **request/reply** — `request(type, payload, {route})` asks another worker a
  *    question and awaits its answer; `respond(type, handler)` answers. Built on
- *    pub/sub with correlation ids, so the primary stays a dumb repeater. Needed
+ *    pub/sub with correlation ids, so the primary stays a dumb repeater; the
+ *    question carries the asker's worker id and the reply goes to it alone. Needed
  *    when the state cannot be replicated because reading it *mutates* it — a
  *    single-use OAuth authorization code has to be consumed on exactly one
  *    worker, so the worker holding it is asked to consume it rather than being
@@ -69,7 +70,9 @@
  * owner) and are JSON-serialised each way. Chat chunks are small and the
  * primary has no other work in round-robin mode, but this does put token
  * traffic through a single process. `getBusStats()` exposes the relay counters
- * so a deployment can see how much of its traffic is crossing workers.
+ * so a deployment can see how much of its traffic is crossing workers. Most of
+ * it is model text, so `RunStream` merges a stream's text deltas into one frame
+ * per `DELTA_COALESCE_MS` window before they get here.
  *
  * Going cross-*pod* (Kubernetes replicas) needs the same interface backed by
  * Redis pub/sub instead of `process.send`. Keeping the transport behind
@@ -78,6 +81,7 @@
 
 import cluster from 'node:cluster';
 import logger from './utils/logger.js';
+import { Histogram, registerGauge, statRecord } from './telemetry/waitDiagnostics.js';
 
 /** Envelope marker so bus traffic never collides with other IPC messages. */
 const ENVELOPE = '__ihubBus';
@@ -136,6 +140,35 @@ const sharedKinds = new Set();
 const primaryResponders = new Map();
 
 const stats = { published: 0, received: 0, presenceAnnounced: 0 };
+
+// Per-type counters for `GET /api/admin/system/resources` (`diagnostics`).
+// A type is a publish channel (`sse:event`, `quota:delta`, `x:reply`, …) or,
+// for presence traffic, the message kind (`presence:sync`); a worker's own
+// presence announcements are counted per presence kind (`presence:sse`).
+// One Map lookup and an increment per message; nothing is allocated.
+const busTypeRecord = () => ({ published: 0, received: 0, relayed: 0, broadcasts: 0 });
+const busType = type => statRecord('busTypes', type, busTypeRecord);
+const requestRecord = () => ({
+  count: 0,
+  nullReplies: 0,
+  timeouts: 0,
+  unsent: 0,
+  latency: new Histogram()
+});
+const gatherRecord = () => ({
+  count: 0,
+  replies: 0,
+  fullTimeouts: 0,
+  latency: new Histogram()
+});
+const lookupRecord = () => ({
+  count: 0,
+  mirrorHits: 0,
+  hits: 0,
+  misses: 0,
+  timeouts: 0,
+  latency: new Histogram()
+});
 
 function remoteBucket(kind) {
   let bucket = remoteOwnership.get(kind);
@@ -316,6 +349,8 @@ export function initPrimaryBus({ getWorkers }) {
 
   cluster.on('message', (worker, message) => {
     if (!message || message[ENVELOPE] !== true) return;
+    const relayStats = busType(message.type ?? message.kind);
+    relayStats.relayed += 1;
 
     switch (message.kind) {
       case MSG_PUBLISH: {
@@ -323,6 +358,11 @@ export function initPrimaryBus({ getWorkers }) {
         // A question only the primary can answer (quota counters): repeating it
         // to every worker would make each one deserialise and drop it.
         if (message.primaryOnly) break;
+        // A reply names the worker that asked; nobody else holds its id.
+        if (message.to !== undefined) {
+          sendTo(message.to, message);
+          break;
+        }
         // A directed message names the presence entry that should receive it.
         // The primary is the only process that knows who owns what, so it can
         // deliver straight to that worker; chat token streams are the hot path
@@ -352,6 +392,7 @@ export function initPrimaryBus({ getWorkers }) {
           // dropping the message. The sender's view of presence may simply be
           // newer than the primary's, and a wasted fan-out beats a lost event.
         }
+        relayStats.broadcasts += 1;
         broadcast(message, worker.id);
         break;
       }
@@ -523,6 +564,7 @@ export function initWorkerBus() {
 
   process.on('message', message => {
     if (!message || message[ENVELOPE] !== true) return;
+    busType(message.type ?? message.kind).received += 1;
 
     switch (message.kind) {
       case MSG_PUBLISH: {
@@ -618,14 +660,20 @@ export function isClusterBusActive() {
  * @param {object} [options]
  * @param {boolean} [options.primaryOnly=false] - Only the primary's responder
  *   sees the message; it is not repeated to the workers.
+ * @param {number} [options.to] - Cluster worker id to deliver to, and only to.
+ *   Replies use it to reach the asker; the route is then ignored.
  * @returns {boolean} Whether the message was handed to the primary.
  */
-export function publish(type, payload, route, { primaryOnly = false } = {}) {
+export function publish(type, payload, route, { primaryOnly = false, to } = {}) {
   if (!busActive) return false;
   const message = { kind: MSG_PUBLISH, type, payload, route };
   if (primaryOnly) message.primaryOnly = true;
+  if (to !== undefined) message.to = to;
   const sent = sendToPrimary(message);
-  if (sent) stats.published += 1;
+  if (sent) {
+    stats.published += 1;
+    busType(type).published += 1;
+  }
   return sent;
 }
 
@@ -665,8 +713,8 @@ const replyChannels = new Set();
 let nextRequestId = 1;
 
 /**
- * Correlation id. The pid makes it unique across the cluster, so a reply
- * broadcast can never settle a different worker's pending request.
+ * Correlation id. The pid makes it unique across the cluster, so a reply can
+ * never settle a different worker's pending request.
  */
 function newRequestId() {
   return `${process.pid}:${nextRequestId++}`;
@@ -678,7 +726,7 @@ function ensureReplyChannel(type) {
   subscribe(type + REPLY_SUFFIX, message => {
     const id = message?.requestId;
     if (typeof id !== 'string') return;
-    // Replies fan out to every worker; only the originator holds the id.
+    // Replies are addressed to the asker (`replyTo`), so the id is ours.
     const collect = pendingGathers.get(id);
     if (collect) {
       collect(message.reply);
@@ -716,10 +764,14 @@ export function request(type, payload, { route, timeoutMs = 1500, primaryOnly = 
 
   ensureReplyChannel(type);
   const requestId = newRequestId();
+  const diag = statRecord('busRequests', type, requestRecord);
+  diag.count += 1;
+  const startedAt = performance.now();
 
   return new Promise(resolve => {
     const timer = setTimeout(() => {
       pendingRequests.delete(requestId);
+      diag.timeouts += 1;
       logger.warn({
         component: 'ClusterBus',
         message: 'Cross-worker request timed out',
@@ -733,12 +785,17 @@ export function request(type, payload, { route, timeoutMs = 1500, primaryOnly = 
 
     pendingRequests.set(requestId, reply => {
       clearTimeout(timer);
+      diag.latency.record(performance.now() - startedAt);
+      if (reply === undefined || reply === null) diag.nullReplies += 1;
       resolve(reply === undefined ? null : reply);
     });
 
-    if (!publish(type, { requestId, payload }, route, { primaryOnly })) {
+    if (
+      !publish(type, { requestId, payload, replyTo: cluster.worker?.id }, route, { primaryOnly })
+    ) {
       clearTimeout(timer);
       pendingRequests.delete(requestId);
+      diag.unsent += 1;
       resolve(null);
     }
   });
@@ -768,14 +825,22 @@ export function gather(type, payload, { expected, timeoutMs = 1000 } = {}) {
   ensureReplyChannel(type);
   const requestId = newRequestId();
   const replies = [];
+  const diag = statRecord('busGathers', type, gatherRecord);
+  diag.count += 1;
+  const startedAt = performance.now();
 
   return new Promise(resolve => {
     const finish = () => {
       clearTimeout(timer);
       pendingGathers.delete(requestId);
+      diag.replies += replies.length;
+      diag.latency.record(performance.now() - startedAt);
       resolve(replies);
     };
-    const timer = setTimeout(finish, timeoutMs);
+    const timer = setTimeout(() => {
+      diag.fullTimeouts += 1;
+      finish();
+    }, timeoutMs);
     timer.unref?.();
 
     pendingGathers.set(requestId, reply => {
@@ -783,7 +848,7 @@ export function gather(type, payload, { expected, timeoutMs = 1000 } = {}) {
       if (Number.isFinite(expected) && replies.length >= expected) finish();
     });
 
-    if (!publish(type, { requestId, payload })) finish();
+    if (!publish(type, { requestId, payload, replyTo: cluster.worker?.id })) finish();
   });
 }
 
@@ -842,7 +907,9 @@ export function respond(type, handler) {
     }
 
     if (reply === undefined) return;
-    publish(type + REPLY_SUFFIX, { requestId, reply });
+    // Straight back to the asker; without `replyTo` every other worker would
+    // receive, parse and drop the reply.
+    publish(type + REPLY_SUFFIX, { requestId, reply }, undefined, { to: message.replyTo });
   });
 }
 
@@ -859,12 +926,14 @@ export function respond(type, handler) {
  */
 export function createPresenceMap(kind, { shared = false } = {}) {
   if (shared) sharedKinds.add(kind);
+  const announceStats = busType(`presence:${kind}`);
   class PresenceMap extends Map {
     set(key, value) {
       const isNew = !super.has(key);
       const result = super.set(key, value);
       if (isNew && busActive) {
         stats.presenceAnnounced += 1;
+        announceStats.published += 1;
         sendToPrimary({ kind: MSG_PRESENCE_SET, ownKind: kind, key, owned: true, shared });
       }
       return result;
@@ -873,6 +942,7 @@ export function createPresenceMap(kind, { shared = false } = {}) {
     delete(key) {
       const existed = super.delete(key);
       if (existed && busActive) {
+        announceStats.published += 1;
         sendToPrimary({ kind: MSG_PRESENCE_SET, ownKind: kind, key, owned: false, shared });
       }
       return existed;
@@ -926,11 +996,18 @@ let nextLookupId = 1;
  */
 export function lookupRemote(kind, key, { timeoutMs = 1000 } = {}) {
   if (!busActive) return Promise.resolve(false);
-  if (hasRemote(kind, key)) return Promise.resolve(true);
+  const diag = statRecord('busLookups', kind, lookupRecord);
+  diag.count += 1;
+  if (hasRemote(kind, key)) {
+    diag.mirrorHits += 1;
+    return Promise.resolve(true);
+  }
   const lookupId = nextLookupId++;
+  const startedAt = performance.now();
   return new Promise(resolve => {
     const timer = setTimeout(() => {
       pendingLookups.delete(lookupId);
+      diag.timeouts += 1;
       logger.warn({
         component: 'ClusterBus',
         message: 'Presence lookup timed out',
@@ -942,6 +1019,9 @@ export function lookupRemote(kind, key, { timeoutMs = 1000 } = {}) {
     timer.unref?.();
     pendingLookups.set(lookupId, held => {
       clearTimeout(timer);
+      diag.latency.record(performance.now() - startedAt);
+      if (held) diag.hits += 1;
+      else diag.misses += 1;
       resolve(held);
     });
     if (!sendToPrimary({ kind: MSG_PRESENCE_LOOKUP, ownKind: kind, key, lookupId })) {
@@ -961,6 +1041,10 @@ export function lookupRemote(kind, key, { timeoutMs = 1000 } = {}) {
 export function getBusStats() {
   return { ...stats, active: busActive, sharedKinds: [...sharedKinds].sort() };
 }
+
+registerGauge('busPendingRequests', () => pendingRequests.size);
+registerGauge('busPendingGathers', () => pendingGathers.size);
+registerGauge('busPendingLookups', () => pendingLookups.size);
 
 /** Test seam: drop all bus state so a suite can rebuild it. */
 export function resetClusterBusForTests() {

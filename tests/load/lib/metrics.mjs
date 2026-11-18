@@ -21,6 +21,7 @@ export class Metrics {
     this.counts = {}; // name -> { [stage]: number }
     this.gauges = {}; // name -> [[t, stage, value]]
     this.timeline = {}; // bucketStartMs -> { name: count }
+    this.diagnostics = {}; // stage -> { first, last }: server wait counters, see waits.mjs
   }
 
   setStage(index) {
@@ -50,19 +51,32 @@ export class Metrics {
     (this.gauges[name] ??= []).push([Date.now(), this.stage, value]);
   }
 
+  /**
+   * Server wait counters (cumulative): only the first and last snapshot of a
+   * stage are kept, which is all a per-stage difference needs.
+   * @param {Object<string, {pid: number, d: object}>} procs - by process id (`w0`, `primary`)
+   */
+  diag(procs) {
+    const sample = { t: Date.now(), procs };
+    const byStage = (this.diagnostics[this.stage] ??= {});
+    byStage.first ??= sample;
+    byStage.last = sample;
+  }
+
   toJSON() {
     return {
       trends: this.trends,
       counts: this.counts,
       gauges: this.gauges,
-      timeline: this.timeline
+      timeline: this.timeline,
+      diagnostics: this.diagnostics
     };
   }
 }
 
 /** Merge serialized metrics of several shards. */
 export function mergeMetrics(list) {
-  const out = { trends: {}, counts: {}, gauges: {}, timeline: {} };
+  const out = { trends: {}, counts: {}, gauges: {}, timeline: {}, diagnostics: {} };
   for (const m of list) {
     for (const [name, byStage] of Object.entries(m.trends || {})) {
       const target = (out.trends[name] ??= {});
@@ -76,6 +90,12 @@ export function mergeMetrics(list) {
     }
     for (const [name, samples] of Object.entries(m.gauges || {})) {
       (out.gauges[name] ??= []).push(...samples);
+    }
+    // Only shard 0 samples them; should several, keep the widest window.
+    for (const [stage, { first, last }] of Object.entries(m.diagnostics || {})) {
+      const target = (out.diagnostics[stage] ??= { first, last });
+      if (first.t < target.first.t) target.first = first;
+      if (last.t > target.last.t) target.last = last;
     }
     for (const [bucket, slot] of Object.entries(m.timeline || {})) {
       const target = (out.timeline[bucket] ??= {});

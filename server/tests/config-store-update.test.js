@@ -58,8 +58,25 @@ for (const [label, relPath] of [
         assert.equal(current, null);
         return { items: ['first'] };
       });
-      assert.deepEqual(outcome, { data: { items: ['first'] }, written: true });
+      const { etag, ...rest } = outcome;
+      assert.deepEqual(rest, { data: { items: ['first'] }, written: true });
+      // Through the provider the write also reports the stored etag.
+      if (relPath.startsWith('config/')) assert.equal(typeof etag, 'string');
+      else assert.equal(etag, undefined);
       assert.deepEqual(await onDisk(relPath), { items: ['first'] });
+    });
+
+    it('probeJson changes with a write and stays without one', async () => {
+      // Its own file: the tests around it build on one shared file's contents.
+      const probed = relPath.replace('.json', '-probe.json');
+      const store = new ConfigStore();
+      await store.updateJson(probed, () => ({ items: ['probe'] }));
+      const first = await store.probeJson(probed);
+      assert.match(first, /^\d+:[\d.]+:\d+$/);
+      assert.equal(await store.probeJson(probed), first);
+      await store.updateJson(probed, () => ({ items: ['probe', 'changed'] }));
+      assert.notEqual(await store.probeJson(probed), first);
+      assert.equal(await store.probeJson(relPath.replace('.json', '-missing.json')), null);
     });
 
     it('keeps every change when two workers update at once', async () => {
@@ -74,6 +91,27 @@ for (const [label, relPath] of [
       const { items } = await onDisk(relPath);
       assert.equal(items.length, 25);
       assert.equal(new Set(items).size, 25);
+    });
+
+    it('six workers each confirming at once lose nothing and never fail', async () => {
+      // The shape of a login wave: every worker queues acknowledgements of the same file,
+      // and each change takes a while (a big users.json). With compare-and-set alone the
+      // workers kept invalidating each other's rounds until one ran out of attempts (409).
+      const target = relPath.replace('.json', '-wave.json');
+      const workers = Array.from({ length: 6 }, () => new ConfigStore());
+      const slowAdd = item => async current => {
+        await new Promise(resolve => setTimeout(resolve, 2));
+        return { items: [...(current?.items || []), item] };
+      };
+      await Promise.all(
+        workers.flatMap((worker, w) =>
+          Array.from({ length: 10 }, (_, i) =>
+            worker.updateJson(target, slowAdd(`w${w}-${i}`), { attempts: 3 })
+          )
+        )
+      );
+      const { items } = await onDisk(target);
+      assert.equal(new Set(items).size, 60);
     });
 
     it('hands the change a private copy and writes nothing for undefined', async () => {
@@ -170,20 +208,24 @@ describe('ConfigStore.updateJson: a write between the read and the write', () =>
     await fs.rm(ROOT, { recursive: true, force: true });
   });
 
-  it('re-runs the change on the newer body instead of overwriting it', async () => {
+  it('a write from another worker waits for the change instead of landing inside it', async () => {
     const workerA = new ConfigStore();
     const workerB = new ConfigStore();
     await workerA.writeJson(relPath, { items: ['seed'] });
 
     const seen = [];
+    let writeB;
     await workerA.updateJson(relPath, async current => {
       seen.push(current.items.join(','));
-      // Worker B writes after A has read and before A writes.
-      if (seen.length === 1) await workerB.updateJson(relPath, addItem('from-b'));
+      // Worker B starts its write after A has read and before A writes. The
+      // provider holds the document's lock for A's whole change, so B queues.
+      writeB = workerB.updateJson(relPath, addItem('from-b'));
+      await new Promise(resolve => setTimeout(resolve, 50));
       return addItem('from-a')(current);
     });
+    await writeB;
 
-    assert.deepEqual(seen, ['seed', 'seed,from-b'], 'the change ran again on what B wrote');
-    assert.deepEqual((await onDisk(relPath)).items, ['seed', 'from-b', 'from-a']);
+    assert.deepEqual(seen, ['seed'], 'the change ran once, on the body it read');
+    assert.deepEqual((await onDisk(relPath)).items, ['seed', 'from-a', 'from-b']);
   });
 });

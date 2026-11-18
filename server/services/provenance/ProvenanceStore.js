@@ -35,8 +35,14 @@ export const PROVENANCE_META_NAMESPACE = RUNTIME_NAMESPACES.provenanceMeta;
 /** Records kept per content hash. */
 export const MAX_RECORDS_PER_HASH = 20;
 
-/** Compare-and-set attempts before a write gives up. */
-const CAS_ATTEMPTS = 4;
+/**
+ * Compare-and-set attempts before a write gives up. Writers of one hash that
+ * read the same etag lose one by one (only one put wins a round), so the
+ * budget covers a burst of concurrent writers, with a short jittered pause
+ * between attempts so the retries do not collide again.
+ */
+const CAS_ATTEMPTS = 16;
+const CAS_RETRY_MS = 5;
 
 const DOCUMENT_VERSION = 1;
 
@@ -131,6 +137,9 @@ export class ProvenanceStore {
         return;
       } catch (error) {
         if (!(error instanceof EtagMismatchError) || attempt === CAS_ATTEMPTS - 1) throw error;
+        await new Promise(resolve =>
+          setTimeout(resolve, CAS_RETRY_MS * (1 + Math.random()) * Math.min(attempt + 1, 4))
+        );
       }
     }
   }

@@ -4,6 +4,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import logger from './logger.js';
+import { lockStats, recordTiming } from '../telemetry/waitDiagnostics.js';
 
 /**
  * Create an append-only JSONL queue: entries are buffered in memory,
@@ -94,6 +95,9 @@ export function createJsonlAppender({
     }
   }
 
+  // In-process lock: reported as `mem:<component>` next to the file locks.
+  const lockPrefix = `mem:${component}`;
+  const flushKey = `appendLog.flush:${component}`;
   let writeLock = Promise.resolve();
   function withWriteLock(fn) {
     const prev = writeLock;
@@ -101,7 +105,22 @@ export function createJsonlAppender({
     writeLock = new Promise(r => {
       release = r;
     });
-    return prev.then(fn).finally(release);
+    const diag = lockStats(lockPrefix);
+    const queuedAt = performance.now();
+    let acquiredAt = queuedAt;
+    diag.waiters += 1;
+    return prev
+      .then(() => {
+        diag.waiters -= 1;
+        diag.acquisitions += 1;
+        acquiredAt = performance.now();
+        diag.wait.record(acquiredAt - queuedAt);
+        return fn();
+      })
+      .finally(() => {
+        diag.hold.record(performance.now() - acquiredAt);
+        release();
+      });
   }
 
   // Drains the current queue to disk, grouped by resolved file path. Writes
@@ -142,7 +161,12 @@ export function createJsonlAppender({
   }
 
   async function flush() {
-    return withWriteLock(drainToDisk);
+    return withWriteLock(() => {
+      // Only flushes that write something; an empty queue is a no-op.
+      if (queue.length === 0) return 0;
+      const startedAt = performance.now();
+      return drainToDisk().finally(() => recordTiming('storage', flushKey, startedAt));
+    });
   }
 
   function scheduleFlush() {

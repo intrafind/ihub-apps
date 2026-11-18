@@ -11,7 +11,11 @@ import { jest, describe, test, expect, beforeEach } from '@jest/globals';
 import express from 'express';
 import request from 'supertest';
 
-const store = { files: {}, audits: [] };
+// `versions` stands in for the file's inode/mtime/size: bumped by every write.
+const store = { files: {}, audits: [], versions: {} };
+const bump = p => {
+  store.versions[p] = (store.versions[p] ?? 0) + 1;
+};
 
 const clone = value => (value === undefined ? undefined : structuredClone(value));
 
@@ -21,8 +25,10 @@ jest.unstable_mockModule('../services/config/ConfigStore.js', () => {
     default: {
       readJson: async p => clone(store.files[p]) ?? null,
       readJsonStrict: async p => clone(store.files[p]) ?? null,
+      probeJson: async p => (store.files[p] ? `v${store.versions[p] ?? 0}` : null),
       writeJson: async (p, data) => {
         store.files[p] = clone(data);
+        bump(p);
       },
       // Sequential compare-and-set: the mutation sees the latest body.
       updateJson: (p, mutate) => {
@@ -31,6 +37,7 @@ jest.unstable_mockModule('../services/config/ConfigStore.js', () => {
           const next = await mutate(current);
           if (next === undefined) return { data: current, written: false };
           store.files[p] = clone(next);
+          bump(p);
           return { data: clone(next), written: true };
         });
         queue = run.catch(() => {});
@@ -77,7 +84,7 @@ const { default: registerUserRoutes } = await import('../routes/aiAcknowledgemen
 const { default: registerAdminRoutes } = await import('../routes/admin/aiAcknowledgements.js');
 const { default: errorHandler } = await import('../middleware/errorHandler.js');
 const { ServiceError } = await import('../utils/ServiceError.js');
-const { recordAiAcknowledgement, clearAiAcknowledgements } =
+const { recordAiAcknowledgement, clearAiAcknowledgements, loadUsersFresh } =
   await import('../utils/userManager.js');
 const { setGuestId, guestOwnerId } = await import('../services/chat/chatOwner.js');
 const { mergeSettingsForSave, describeSettingsChange } = service;
@@ -277,28 +284,30 @@ describe('guest cookie', () => {
   const subject = `guest:${GUEST_ID}`;
 
   test('a signed cookie verifies; tampering, another guest and old versions do not', () => {
-    const value = guest.signAcknowledgement(subject, 1);
-    expect(guest.verifyAcknowledgement(value, subject, settings)).toBe(true);
-    expect(guest.verifyAcknowledgement(value + 'x', subject, settings)).toBe(false);
-    expect(guest.verifyAcknowledgement(value, `guest:${'b'.repeat(64)}`, settings)).toBe(false);
-    expect(guest.verifyAcknowledgement(value, subject, { ...settings, requiredVersion: 2 })).toBe(
-      false
-    );
-    expect(guest.verifyAcknowledgement('garbage', subject, settings)).toBe(false);
-    expect(guest.verifyAcknowledgement(undefined, subject, settings)).toBe(false);
+    const issued = Date.now() - 1000;
+    const value = guest.signAcknowledgement(subject, 1, issued);
+    // A valid cookie answers with its issue time.
+    expect(guest.verifyAcknowledgement(value, subject, settings)).toBe(issued);
+    expect(guest.verifyAcknowledgement(value + 'x', subject, settings)).toBeNull();
+    expect(guest.verifyAcknowledgement(value, `guest:${'b'.repeat(64)}`, settings)).toBeNull();
+    expect(
+      guest.verifyAcknowledgement(value, subject, { ...settings, requiredVersion: 2 })
+    ).toBeNull();
+    expect(guest.verifyAcknowledgement('garbage', subject, settings)).toBeNull();
+    expect(guest.verifyAcknowledgement(undefined, subject, settings)).toBeNull();
   });
 
   test('a cookie issued before resetAt stops counting', () => {
     const issued = Date.now() - 60_000;
     const value = guest.signAcknowledgement(subject, 1, issued);
     const resetAt = new Date(Date.now() - 1000).toISOString();
-    expect(guest.verifyAcknowledgement(value, subject, { ...settings, resetAt })).toBe(false);
+    expect(guest.verifyAcknowledgement(value, subject, { ...settings, resetAt })).toBeNull();
     expect(
       guest.verifyAcknowledgement(value, subject, {
         ...settings,
         resetAt: new Date(issued - 1000).toISOString()
       })
-    ).toBe(true);
+    ).toBe(issued);
   });
 });
 
@@ -367,6 +376,48 @@ describe('428 guard', () => {
     spy.mockRestore();
   });
 
+  describe('signed cookie of a user whose cached record says "not yet"', () => {
+    const cookieFor = (id, issuedAt, version = 1) =>
+      `${guest.ACK_COOKIE}=${guest.signAcknowledgement(`user:${id}`, version, issuedAt)}`;
+
+    test('passes without re-reading users.json', async () => {
+      const { default: configStore } = await import('../services/config/ConfigStore.js');
+      const spy = jest.spyOn(configStore, 'readJsonStrict');
+      try {
+        const app = buildApp();
+        expect((await post(app, asUser('alice'), cookieFor('alice'))).status).toBe(200);
+        expect(spy).not.toHaveBeenCalled();
+        // Bound to the user: alice's cookie does not let another user through.
+        expect((await post(app, asUser('=evil'), cookieFor('alice'))).status).toBe(428);
+      } finally {
+        spy.mockRestore();
+      }
+    });
+
+    test('a cookie issued before a per-user removal is refused, a newer one passes', async () => {
+      const app = buildApp();
+      const before = cookieFor('bob', Date.now() - 5000);
+      expect((await post(app, asUser('bob'), before)).status).toBe(200);
+      await clearAiAcknowledgements('bob', service.usersFilePath());
+      expect(typeof store.files[USERS].users.bob.aiAcknowledgementsClearedAt).toBe('string');
+      expect((await post(app, asUser('bob'), before)).status).toBe(428);
+      expect((await post(app, asUser('bob'), cookieFor('bob', Date.now() + 1000))).status).toBe(
+        200
+      );
+    });
+
+    test('after a version bump the old cookie is refused', async () => {
+      const app = buildApp();
+      const v1 = cookieFor('alice');
+      expect((await post(app, asUser('alice'), v1)).status).toBe(200);
+      store.files[PLATFORM].aiAcknowledgement.requiredVersion = 2;
+      expect((await post(app, asUser('alice'), v1)).status).toBe(428);
+      expect((await post(app, asUser('alice'), cookieFor('alice', Date.now(), 2))).status).toBe(
+        200
+      );
+    });
+  });
+
   test('guests: no cookie refused; valid cookie passes; wrong guest refused', async () => {
     const app = buildApp();
     expect((await post(app, 'guest')).status).toBe(428);
@@ -396,6 +447,25 @@ describe('user routes', () => {
     });
     expect(res.body.textHash).toBe(service.textHash('KI verantwortungsvoll nutzen.'));
     expect(res.body.history).toEqual([]);
+  });
+
+  test('GET re-reads users.json for a "not yet" only when enforcement is on', async () => {
+    const { default: configStore } = await import('../services/config/ConfigStore.js');
+    const spy = jest.spyOn(configStore, 'readJsonStrict');
+    const app = buildApp();
+    const me = () =>
+      request(app).get('/api/eu-ai-act/acknowledgements/me').set('x-user', asUser('alice'));
+    try {
+      store.files[PLATFORM].aiAcknowledgement.enforce = false;
+      for (let i = 0; i < 3; i++) expect((await me()).body.acknowledged).toBe(false);
+      expect(spy).not.toHaveBeenCalled();
+
+      store.files[PLATFORM].aiAcknowledgement.enforce = true;
+      expect((await me()).body.acknowledged).toBe(false);
+      expect(spy).toHaveBeenCalledTimes(1);
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   test('GET with the feature off carries no text', async () => {
@@ -712,9 +782,7 @@ describe('admin routes', () => {
     expect(Object.values(store.files[USERS].users).some(u => u.aiAcknowledgements)).toBe(false);
     const { resetAt } = store.files[PLATFORM].aiAcknowledgement;
     expect(typeof resetAt).toBe('string');
-    expect(guest.verifyAcknowledgement(old, `guest:${GUEST_ID}`, service.getSettings())).toBe(
-      false
-    );
+    expect(guest.verifyAcknowledgement(old, `guest:${GUEST_ID}`, service.getSettings())).toBeNull();
     expect(store.audits.at(-1)).toMatchObject({ action: 'delete', resourceId: '*' });
     expect(store.audits.at(-1).details).toMatchObject({ users: 1, entries: 1 });
   });
@@ -778,6 +846,44 @@ describe('userManager helpers', () => {
       entries: 0,
       found: true
     });
+  });
+
+  test('a fresh read skips an unchanged users.json and re-reads a changed one', async () => {
+    const { default: configStore } = await import('../services/config/ConfigStore.js');
+    const spy = jest.spyOn(configStore, 'readJsonStrict');
+    const file = service.usersFilePath();
+    try {
+      await loadUsersFresh(file);
+      await loadUsersFresh(file);
+      expect(spy).toHaveBeenCalledTimes(1);
+
+      // Another worker rewrote the file: its token changed.
+      bump(USERS);
+      await loadUsersFresh(file);
+      expect(spy).toHaveBeenCalledTimes(2);
+
+      // This worker's own write leaves the cached copy current: no read after it.
+      const entry = { version: 1, textHash: 'sha256:x', acknowledgedAt: 'now' };
+      await recordAiAcknowledgement('u0', entry, file);
+      const reads = spy.mock.calls.length;
+      expect((await loadUsersFresh(file)).users.u0.aiAcknowledgements).toHaveLength(1);
+      expect(spy).toHaveBeenCalledTimes(reads);
+
+      // A shared volume can keep the token after another host's write: past
+      // a few seconds the file is read again although its token matches.
+      const now = Date.now();
+      const clock = jest.spyOn(Date, 'now').mockReturnValue(now + 5_000);
+      try {
+        await loadUsersFresh(file);
+        expect(spy).toHaveBeenCalledTimes(reads + 1);
+        await loadUsersFresh(file);
+        expect(spy).toHaveBeenCalledTimes(reads + 1);
+      } finally {
+        clock.mockRestore();
+      }
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   test('deleting a user removes their acknowledgements with the record', () => {

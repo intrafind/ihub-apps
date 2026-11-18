@@ -567,6 +567,31 @@ export class ConfigStore {
   }
 
   /**
+   * A cheap change token of a JSON configuration file (inode, mtime and size),
+   * for a caller that keeps its own parsed copy and wants to skip re-reading an
+   * unchanged file. Equal tokens mean unchanged; null means "cannot tell", so
+   * read. A provider without `probe` (not the local filesystem) always answers
+   * null.
+   *
+   * @param {string} relPath - Path relative to `contents/`
+   * @returns {Promise<string|null>}
+   */
+  async probeJson(relPath) {
+    const location = parseRawRelPath(relPath);
+    const documents = location ? documentsFor(location.ns) : null;
+    if (documents) {
+      if (typeof documents.probe !== 'function') return null;
+      return documents.probe(location.ns, location.key).catch(() => null);
+    }
+    try {
+      const stat = await fs.stat(await resolveConfigPath(relPath));
+      return `${stat.ino}:${stat.mtimeMs}:${stat.size}`;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * Read a JSON configuration file, refusing to report a corrupt one as absent.
    *
    * Use this wherever the result is merged and written back. `readJson`'s
@@ -677,12 +702,18 @@ export class ConfigStore {
    * that read the same body and each add a record both write, and the second
    * write erases the first record. Here the write only lands on the body the
    * change was computed from. On the document path that is the provider's
-   * etag compare-and-set (a provider only serves configuration when it
-   * declares conditional writes), retried with a fresh read on a conflict; on
-   * the filesystem path it is a lock file every worker honours.
+   * `update` under the document's lock when it has one, else its etag
+   * compare-and-set (a provider only serves configuration when it declares
+   * conditional writes), retried with a fresh read on a conflict; on the
+   * filesystem path it is a lock file every worker honours.
    *
    * `mutate` may run more than once, so it must derive everything from the
    * body it is handed and keep no effect of an earlier run.
+   *
+   * `mutate` runs while the file's lock is held, so it must not take another
+   * file lock (no `updateJson`, `writeJson` or `withFileLock` of another file):
+   * two workers doing that in opposite orders would wait on each other until
+   * both time out. Read what it needs before the call, write the rest after.
    *
    * @param {string} relPath - Path relative to `contents/`
    * @param {(current: any|null) => any|Promise<any>} mutate - Gets a private
@@ -690,8 +721,9 @@ export class ConfigStore {
    *   the body to write, or `undefined` to leave the file as it is
    * @param {Object} [options]
    * @param {number} [options.attempts=16] - Conflicting writes tolerated before giving up
-   * @returns {Promise<{data: any|null, written: boolean}>} The body now stored
-   *   and whether this call wrote it
+   * @returns {Promise<{data: any|null, written: boolean, etag?: string|null}>} The
+   *   body now stored and whether this call wrote it; on a write through the
+   *   provider also the stored etag (see ConfigCache#setCacheEntry)
    * @throws {Error} When the file exists but cannot be read or parsed (a
    *   change computed from nothing would erase it), when `mutate` throws, or
    *   with `code === 'ETAG_MISMATCH'` when every attempt met a conflicting write
@@ -747,6 +779,14 @@ export class ConfigStore {
     const documents = location ? documentsFor(location.ns) : null;
     if (!documents) return updateOnDisk(relPath, mutate);
 
+    // A provider that can change a document under its lock does: the compare-and-set
+    // below, with a users.json rewrite per acknowledgement from several workers at once,
+    // lost round after round and ran out of attempts (a 409 to the person confirming).
+    if (typeof documents.update === 'function') {
+      const outcome = await documents.update(location.ns, location.key, mutate);
+      if (outcome) return outcome;
+    }
+
     for (let attempt = 1; ; attempt++) {
       const document = await documents.get(location.ns, location.key);
       if (!document && (await this.exists(relPath))) {
@@ -756,10 +796,10 @@ export class ConfigStore {
       const next = await mutate(current);
       if (next === undefined) return { data: current, written: false };
       try {
-        await documents.put(location.ns, location.key, next, {
+        const stored = await documents.put(location.ns, location.key, next, {
           etag: document ? document.etag : null
         });
-        return { data: next, written: true };
+        return { data: next, written: true, etag: stored?.etag ?? null };
       } catch (error) {
         if (error?.code !== 'ETAG_MISMATCH' || attempt >= attempts) throw error;
         // Another process wrote in between. Spread the retries so two workers

@@ -165,8 +165,13 @@ const SERVER_COUNTER_KEY = '_meta__server-bytes';
 /** How long the counter is trusted before an exact recount heals any drift. */
 const SERVER_COUNTER_RECOUNT_MS = 5 * 60 * 1000;
 
-/** Attempts of a compare-and-set update of the counter before giving up. */
-const SERVER_COUNTER_CAS_ATTEMPTS = 8;
+/**
+ * Attempts of a compare-and-set update of the counter before giving up.
+ * Concurrent writers that read the same etag lose one by one, so the budget
+ * covers a burst, with a short jittered pause so retries do not collide again.
+ */
+const SERVER_COUNTER_CAS_ATTEMPTS = 16;
+const SERVER_COUNTER_RETRY_MS = 5;
 
 /** Share of `maxServerBytes` above which an upload checks the exact total. */
 const SERVER_QUOTA_EXACT_FRACTION = 0.9;
@@ -842,6 +847,12 @@ export class ChatFileRepository {
           });
           return;
         }
+        await new Promise(resolve =>
+          setTimeout(
+            resolve,
+            SERVER_COUNTER_RETRY_MS * (1 + Math.random()) * Math.min(attempt + 1, 4)
+          )
+        );
       }
     }
     // Contention beyond the retries: drop the counter's age so the next check recounts.

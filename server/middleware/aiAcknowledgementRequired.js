@@ -21,7 +21,11 @@ import {
   isMachinePrincipal,
   usersFilePath
 } from '../services/aiAcknowledgement/aiAcknowledgementService.js';
-import { hasValidAcknowledgementCookie } from '../services/aiAcknowledgement/guestAcknowledgement.js';
+import {
+  ACK_COOKIE,
+  hasValidAcknowledgementCookie,
+  verifyAcknowledgement
+} from '../services/aiAcknowledgement/guestAcknowledgement.js';
 import { loadUsers, loadUsersFresh } from '../utils/userManager.js';
 import { ServiceError } from '../utils/ServiceError.js';
 import configCache from '../configCache.js';
@@ -30,8 +34,12 @@ import logger from '../utils/logger.js';
 /**
  * Whether the caller has a valid acknowledgement.
  *
- * A principal with a users.json record is judged by it (re-read once from the
- * store before refusing: another worker may have written it milliseconds ago).
+ * A principal with a users.json record is judged by it. When the cached copy
+ * says "not yet", the signed cookie `POST /me` set counts too, unless it was
+ * issued before an admin removed this user's acknowledgements
+ * (`aiAcknowledgementsClearedAt`): the confirmation may have landed on another
+ * worker milliseconds ago. Without the cookie, enforcement re-reads the record
+ * once from the store before refusing; ask-only answers from the cached copy.
  * Anyone else, an anonymous guest above all, by the signed cookie.
  *
  * @param {import('express').Request} req
@@ -50,6 +58,13 @@ export async function evaluateAcknowledgement(req, settings) {
   let user = record(userId);
   if (user) {
     if (isAcknowledged(user, settings)) return { acknowledged: true, hasRecord: true };
+    if (cookieCountsFor(req, userId, user, settings))
+      return { acknowledged: true, hasRecord: true };
+    // Ask-only (`enforce: false`) blocks nothing, so a cached "not yet" costs at most a
+    // dialog shown again until the config sync reaches this worker. Re-reading there ran
+    // on every page load (GET /me) of everyone who never confirms: a full read, parse
+    // and re-cache of users.json each time.
+    if (!settings.enforce) return { acknowledged: false, hasRecord: true };
     try {
       const fresh = (await loadUsersFresh(file)).users || {};
       user = Object.hasOwn(fresh, userId) ? fresh[userId] : null;
@@ -62,6 +77,23 @@ export async function evaluateAcknowledgement(req, settings) {
     return { acknowledged: user ? isAcknowledged(user, settings) : false, hasRecord: true };
   }
   return { acknowledged: hasValidAcknowledgementCookie(req, settings), hasRecord: false };
+}
+
+/**
+ * Whether the request's acknowledgement cookie proves a confirmation by this
+ * user that a per-user removal has not revoked since.
+ *
+ * @param {import('express').Request} req
+ * @param {string} userId - Key in users.json
+ * @param {Object} record - The user's (cached) users.json record
+ * @param {Object} settings - See `getSettings`
+ * @returns {boolean}
+ */
+function cookieCountsFor(req, userId, record, settings) {
+  const issuedAt = verifyAcknowledgement(req.cookies?.[ACK_COOKIE], `user:${userId}`, settings);
+  if (issuedAt === null) return false;
+  const clearedAt = Date.parse(record.aiAcknowledgementsClearedAt);
+  return !Number.isFinite(clearedAt) || issuedAt > clearedAt;
 }
 
 /**

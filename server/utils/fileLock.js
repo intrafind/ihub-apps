@@ -25,6 +25,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import logger from './logger.js';
 import { LockTimeoutError } from '../storage/errors.js';
+import { lockPrefix, lockStats, recordLockHold } from '../telemetry/waitDiagnostics.js';
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -88,9 +89,6 @@ const MIN_UNPARSEABLE_TTL_MS = 30_000;
  * read and an unlink, so this is generous; see {@link removeLease}.
  */
 const CLAIM_STALE_MS = 10_000;
-
-/** Error codes of a filesystem that has no hard links (some SMB/FAT mounts). */
-const NO_HARD_LINKS = new Set(['EPERM', 'ENOTSUP', 'EOPNOTSUPP', 'ENOSYS', 'EXDEV']);
 
 /**
  * Whether an existing lease may be taken over.
@@ -160,7 +158,12 @@ export async function readLease(lockPath) {
   }
   try {
     const stat = await handle.stat();
-    const text = await handle.readFile('utf8');
+    // One positional read sized by that stat (`readFile` would fstat again);
+    // the extra byte notices a lease that grew meanwhile, which is read whole.
+    const buffer = Buffer.allocUnsafe(stat.size + 1);
+    const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
+    const text =
+      bytesRead > stat.size ? await handle.readFile('utf8') : buffer.toString('utf8', 0, bytesRead);
     let data = null;
     try {
       data = JSON.parse(text);
@@ -185,31 +188,46 @@ export function leasePayload(owner, ttlMs, token) {
 }
 
 /**
- * Put a lease on the path unless one is there: atomically, and whole.
+ * Put a lease on the path unless one is there.
  *
- * The content goes to a scratch file first, which is then hard-linked onto the
- * lease path. `link` refuses an existing target with `EEXIST`, so it is the
- * same election `O_EXCL` is, but the lease appears with its content already in
- * it; created with `O_EXCL` and written afterwards a lease spends a moment as
- * an empty file. Without hard links this falls back to `O_EXCL`, where an empty
- * lease was written just now and counts as held (see {@link isExpiredLease}).
+ * `O_EXCL` is the election: exactly one caller creates the file. The content
+ * follows on the same handle, so for a moment the lease is an empty file; a
+ * reader that catches it finds an unparseable lease written just now, which
+ * counts as held (see {@link isExpiredLease}), so nobody takes it over. That
+ * is three syscalls (open,
+ * write, close); writing a scratch file and hard-linking it onto the path took
+ * five, plus a `mkdir` every time. The directory is created only when the
+ * first attempt reports it missing.
+ *
+ * A failed write removes the file again: it was created by this call a moment
+ * ago and is nobody else's lease.
  *
  * @returns {Promise<boolean>} True when this call created the lease
  */
 export async function publishLease(lockPath, content) {
-  await fs.mkdir(path.dirname(lockPath), { recursive: true });
-  const scratch = `${lockPath}.new-${crypto.randomUUID()}`;
+  let handle;
   try {
-    await fs.writeFile(scratch, content, { encoding: 'utf8', flag: 'wx' });
-    await fs.link(scratch, lockPath);
-    return true;
+    handle = await fs.open(lockPath, 'wx');
   } catch (err) {
     if (err.code === 'EEXIST') return false;
-    if (NO_HARD_LINKS.has(err.code)) return tryCreateExclusive(lockPath, content);
-    throw err;
-  } finally {
-    await removeIfExists(scratch).catch(() => {});
+    if (err.code !== 'ENOENT') throw err;
+    await fs.mkdir(path.dirname(lockPath), { recursive: true });
+    try {
+      handle = await fs.open(lockPath, 'wx');
+    } catch (retryErr) {
+      if (retryErr.code === 'EEXIST') return false;
+      throw retryErr;
+    }
   }
+  try {
+    await handle.writeFile(content, 'utf8');
+    await handle.close();
+  } catch (err) {
+    await handle.close().catch(() => {});
+    await removeIfExists(lockPath).catch(() => {});
+    throw err;
+  }
+  return true;
 }
 
 /**
@@ -228,7 +246,7 @@ export async function publishLease(lockPath, content) {
  * — a waiter taking it over, or its holder releasing it — first creates a claim
  * file named after that lease's identity with `O_EXCL`; exactly one worker wins
  * it. The winner re-reads the path. The lease at a path changes in only two
- * ways: a new one is published, which `link` allows only while the path is
+ * ways: a new one is published, which `O_EXCL` allows only while the path is
  * empty, or the current one is removed, which needs its claim. So when the
  * re-read still finds the expected lease, it stays until the claim holder
  * unlinks it, and that unlink removes exactly that lease. Nothing is ever moved
@@ -302,7 +320,32 @@ async function claimRemoval(lockPath, identity) {
  * @param {string} [opts.component]
  * @throws {LockTimeoutError} When the budget ran out
  */
-export async function acquireLease(
+export async function acquireLease(lockPath, owner, opts) {
+  // Wait time, timeouts and current waiters per lock prefix, for the
+  // `diagnostics` of `GET /api/admin/system/resources`.
+  const diag = lockStats(lockPrefix(opts.name, opts.component ?? COMPONENT));
+  const startedAt = performance.now();
+  diag.waiters += 1;
+  try {
+    await acquireLeaseUntimed(lockPath, owner, opts);
+    diag.acquisitions += 1;
+    diag.wait.record(performance.now() - startedAt);
+  } catch (error) {
+    if (error instanceof LockTimeoutError) diag.timeouts += 1;
+    throw error;
+  } finally {
+    diag.waiters -= 1;
+  }
+}
+
+/**
+ * Longest pause between two looks at a held lease, as a multiple of `pollMs`.
+ * Kept short because a busy worker only leaves the lease free for about this
+ * long between its runs (see `passTurn`).
+ */
+const MAX_POLL_FACTOR = 4;
+
+async function acquireLeaseUntimed(
   lockPath,
   owner,
   { ttlMs, waitMs, pollMs, name, component = COMPONENT }
@@ -314,16 +357,19 @@ export async function acquireLease(
   const publish = () => publishLease(lockPath, leasePayload(owner, ttlMs));
   const timedOut = () =>
     new LockTimeoutError(`Timed out after ${waitMs}ms waiting for lock "${short(name)}"`);
-  // At least one attempt even with a zero budget; every path that retries
-  // without sleeping found the lease gone or removed an expired one.
-  let attempted = false;
+  // At least one attempt even with a zero budget.
+  if (await publish()) return;
+  // A waiter only reads the lease (open, fstat, read, close) and publishes
+  // once it is gone; publishing on every round cost a create attempt on top.
+  // The pause doubles from `pollMs` up to MAX_POLL_FACTOR times it, jittered so
+  // waiters in different workers do not poll in step.
+  let pause = pollMs;
   for (;;) {
-    if (attempted && Date.now() >= deadline) throw timedOut();
-    attempted = true;
-    if (await publish()) return;
-
     const existing = await readLease(lockPath);
-    if (!existing) continue; // released between the two calls — retry at once
+    if (!existing) {
+      if (await publish()) return;
+      continue; // someone else published first — read theirs
+    }
     if (isExpiredLease(existing, ttlMs)) {
       const outcome = await removeLease(lockPath, existing, current =>
         isExpiredLease(current, ttlMs)
@@ -344,8 +390,10 @@ export async function acquireLease(
       // 'changed' (another lease is there now, or this one was refreshed) or
       // 'busy' (another worker is removing it): wait as for any lease.
     }
-    if (Date.now() >= deadline) throw timedOut();
-    await sleep(pollMs);
+    const left = deadline - Date.now();
+    if (left <= 0) throw timedOut();
+    await sleep(Math.min(left, pause * (0.5 + Math.random() / 2)));
+    pause = Math.min(pause * 2, pollMs * MAX_POLL_FACTOR);
   }
 }
 
@@ -412,6 +460,7 @@ export async function touchLease(lockPath, owner, ttlMs, name, token, component 
  * Keep a held lease young while its critical section runs, so `ttlMs` bounds
  * only how long a *crashed* holder blocks the path. The timer is unref'd.
  *
+ * @param {() => void} [onLost] - Called once the lease is found to be no longer ours
  * @returns {() => void} Stops the renewal; safe to call more than once
  */
 export function startLeaseRenewal(
@@ -421,7 +470,8 @@ export function startLeaseRenewal(
   renewMs,
   name,
   token,
-  component = COMPONENT
+  component = COMPONENT,
+  onLost
 ) {
   let stopped = false;
   let inFlight = false;
@@ -434,7 +484,10 @@ export function startLeaseRenewal(
     inFlight = true;
     void touchLease(lockPath, owner, ttlMs, name, token, component)
       .then(kept => {
-        if (!kept) stop();
+        if (!kept) {
+          stop();
+          onLost?.();
+        }
       })
       .finally(() => {
         inFlight = false;
@@ -448,31 +501,104 @@ export function startLeaseRenewal(
  * Remove the lease, but only while it is still ours — a holder whose lease was
  * taken over must not delete the new owner's. It goes through the same removal
  * claim as a takeover, so a release racing a takeover cannot remove the lease
- * the taker publishes next. Never throws: the section already ran, and the TTL
- * makes a leftover lease recoverable.
+ * the taker publishes next. The holder knows its lease's identity (its owner
+ * token), so the lease is read once, under the claim, not before it as well.
+ * Never throws: the section already ran, and the TTL makes a leftover lease
+ * recoverable.
  */
 export async function releaseLease(lockPath, owner, name, component = COMPONENT) {
   try {
-    const existing = await readLease(lockPath);
-    if (!existing) return;
-    if (existing.data?.owner !== owner) {
+    const outcome = await removeLease(lockPath, { data: { owner } }, () => true);
+    if (outcome === 'changed') {
       logger.warn('Lease was taken over before release', { component, name: short(name) });
-      return;
     }
-    await removeLease(lockPath, existing, () => true);
   } catch (error) {
     logger.error('Failed to release lease', { component, name: short(name), error });
   }
 }
 
 /**
+ * How long one worker may keep a lease by passing it from local waiter to local
+ * waiter before it releases it for the other workers.
+ */
+const MAX_RUN_MS = 200;
+
+/**
+ * After a run ended with local waiters still queued, the next local waiter
+ * sleeps this long (times 1 to 1.25, jittered) before re-acquiring. It covers
+ * the longest pause of another worker's waiter, so that waiter sees the lease
+ * free at least once instead of losing it to a re-acquire microseconds later.
+ * ponytail: blind yield, paid even when no other worker waits; replace with
+ * want-markers (a waiter announces itself) to yield only when someone does.
+ */
+const YIELD_FACTOR = MAX_POLL_FACTOR;
+
+/**
+ * This process's holders and waiters per lock path. `withFileLock` callers in
+ * one worker line up here, in memory, in front of the lease file: only the
+ * head of the line touches the file, and a holder passes its lease straight to
+ * the next local waiter instead of releasing and re-creating it.
+ *
+ * @type {Map<string, {waiters: Array<() => void>, lease: {owner: string, stopRenewal: (() => void)|null, lost: boolean}|null, runStartedAt: number, yieldFirst: boolean}>}
+ */
+const localLines = new Map();
+
+/** Wait for this process's turn at `line`, or throw once `deadline` passes. */
+function waitLocalTurn(line, deadline, waitMs, name) {
+  return new Promise((resolve, reject) => {
+    const turn = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    const timer = setTimeout(
+      () => {
+        const at = line.waiters.indexOf(turn);
+        if (at >= 0) line.waiters.splice(at, 1);
+        reject(
+          new LockTimeoutError(`Timed out after ${waitMs}ms waiting for lock "${short(name)}"`)
+        );
+      },
+      Math.max(0, deadline - Date.now())
+    );
+    line.waiters.push(turn);
+  });
+}
+
+/**
+ * End a turn at `line`: hand the lease to the next local waiter while it is
+ * renewed and still ours (and the run is younger than MAX_RUN_MS), else
+ * release it; then wake the next waiter, or forget the line. A run ended by
+ * its age makes the next local waiter yield first (see YIELD_FACTOR).
+ */
+async function passTurn(lockPath, line, name, component) {
+  const lease = line.lease;
+  const canHandOff = lease && lease.stopRenewal && !lease.lost && line.waiters.length > 0;
+  const runOver = performance.now() - line.runStartedAt >= MAX_RUN_MS;
+  if (lease && (!canHandOff || runOver)) {
+    line.lease = null;
+    line.yieldFirst = Boolean(canHandOff);
+    lease.stopRenewal?.();
+    await releaseLease(lockPath, lease.owner, name, component);
+  }
+  const next = line.waiters.shift();
+  if (next) next();
+  else localLines.delete(lockPath);
+}
+
+/**
  * Run `fn` while holding the lock file at `lockPath`.
  *
- * Waits (polling) up to `timeoutMs` for a lock held elsewhere, then throws
+ * Waits up to `timeoutMs` for a lock held elsewhere, then throws
  * {@link LockTimeoutError} (503) — `fn` **never** runs without the lock. A
  * lease nobody renewed for `staleMs` is presumed abandoned and taken over; a
  * live holder renews every `staleMs / 3`, so it is never preempted however long
  * `fn` takes. Release only removes a lease that is still this holder's.
+ *
+ * Callers in one process queue in memory first (see `localLines`): the next
+ * local caller inherits a held, renewed lease without touching the file, so
+ * the file is contended only between processes. A run of local hand-offs is
+ * capped in time, and the worker then pauses before re-acquiring, so other
+ * workers get their turn.
  *
  * Not reentrant: a nested call on the same path waits for its own caller's
  * lease and times out.
@@ -481,9 +607,11 @@ export async function releaseLease(lockPath, owner, name, component = COMPONENT)
  * @param {() => Promise<T>} fn
  * @param {Object} [opts]
  * @param {number} [opts.staleMs=15000] - Age at which an unrenewed lease is taken over
- * @param {number} [opts.timeoutMs=5000] - Acquisition budget
- * @param {number} [opts.pollMs=20]
- * @param {number} [opts.renewMs] - Renewal interval; default `staleMs / 3`, 0 disables
+ * @param {number} [opts.timeoutMs=5000] - Acquisition budget, local wait included
+ * @param {number} [opts.pollMs=20] - First pause between looks at a lease held
+ *   by another process; doubles up to 4x
+ * @param {number} [opts.renewMs] - Renewal interval; default `staleMs / 3`, 0
+ *   disables (and disables hand-off, since nothing keeps the lease young)
  * @param {string} [opts.component='FileLock']
  * @returns {Promise<T>}
  * @throws {LockTimeoutError} When the lock was not acquired within `timeoutMs`
@@ -494,25 +622,74 @@ export async function withFileLock(
   fn,
   { staleMs = 15_000, timeoutMs = 5_000, pollMs = 20, renewMs, component = COMPONENT } = {}
 ) {
-  const owner = crypto.randomUUID();
   const name = path.basename(lockPath);
-  await acquireLease(lockPath, owner, {
-    ttlMs: staleMs,
-    waitMs: timeoutMs,
-    pollMs,
-    name,
-    component
-  });
-  const renew = renewMs ?? Math.max(1, Math.floor(staleMs / 3));
-  const stopRenewal =
-    renew > 0
-      ? startLeaseRenewal(lockPath, owner, staleMs, renew, name, undefined, component)
-      : null;
+  const diag = lockStats(lockPrefix(name, component));
+  const startedAt = performance.now();
+  const deadline = Date.now() + timeoutMs;
+
+  let line = localLines.get(lockPath);
+  if (line) {
+    diag.waiters += 1;
+    try {
+      await waitLocalTurn(line, deadline, timeoutMs, name);
+    } catch (error) {
+      diag.timeouts += 1;
+      throw error;
+    } finally {
+      diag.waiters -= 1;
+    }
+  } else {
+    line = { waiters: [], lease: null, runStartedAt: 0, yieldFirst: false };
+    localLines.set(lockPath, line);
+  }
+
+  // This call holds the turn from here on and must pass it on, whatever happens.
+  try {
+    if (!line.lease) {
+      if (line.yieldFirst) {
+        line.yieldFirst = false;
+        const pause = pollMs * YIELD_FACTOR * (1 + Math.random() / 4);
+        await sleep(Math.min(pause, Math.max(0, deadline - Date.now())));
+      }
+      const owner = crypto.randomUUID();
+      await acquireLease(lockPath, owner, {
+        ttlMs: staleMs,
+        waitMs: Math.max(0, deadline - Date.now()),
+        pollMs,
+        name,
+        component
+      });
+      const lease = { owner, stopRenewal: null, lost: false };
+      const renew = renewMs ?? Math.max(1, Math.floor(staleMs / 3));
+      if (renew > 0) {
+        lease.stopRenewal = startLeaseRenewal(
+          lockPath,
+          owner,
+          staleMs,
+          renew,
+          name,
+          undefined,
+          component,
+          () => (lease.lost = true)
+        );
+      }
+      line.lease = lease;
+      line.runStartedAt = performance.now();
+    } else {
+      diag.acquisitions += 1;
+      diag.wait.record(performance.now() - startedAt);
+    }
+  } catch (error) {
+    await passTurn(lockPath, line, name, component);
+    throw error;
+  }
+
+  const acquiredAt = performance.now();
   try {
     return await fn();
   } finally {
-    stopRenewal?.();
-    await releaseLease(lockPath, owner, name, component);
+    await passTurn(lockPath, line, name, component);
+    recordLockHold(lockPrefix(name, component), acquiredAt);
   }
 }
 

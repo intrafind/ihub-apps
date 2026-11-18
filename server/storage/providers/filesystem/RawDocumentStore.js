@@ -373,9 +373,67 @@ export class RawDocumentStore extends DocumentStore {
     );
 
     // Published outside the critical section: subscribers must not be able to
-    // hold the key's lock while they work.
-    await this._publish({ type: 'document.put', ns, key, ownerId: null });
+    // hold the key's lock while they work. The etag lets the writer's own cache
+    // tell its own write from somebody else's.
+    await this._publish({ type: 'document.put', ns, key, ownerId: null, etag: document.etag });
     return document;
+  }
+
+  /**
+   * Read, change and write one document under its lock, so the change always
+   * applies to the latest body and never loses to a concurrent writer.
+   *
+   * The compare-and-set loop (`get`, change, `put` with the etag) does the
+   * same without holding the lock between the read and the write, and under
+   * many writers in several processes it wastes whole read-parse-write rounds
+   * on conflicts and can run out of attempts. Here the lock is held for one
+   * round, and writers queue instead of colliding.
+   *
+   * `mutate` runs under the document's lock, so it must not take another lock
+   * (no write of another document or config file): two processes doing that in
+   * opposite orders would wait on each other until both time out.
+   *
+   * @param {string} ns - Raw namespace
+   * @param {string} key - Document key
+   * @param {(current: any|null) => any|Promise<any>} mutate - Gets the parsed
+   *   body (null when absent) to change; returns the new body, or `undefined`
+   *   to write nothing
+   * @returns {Promise<{data: any|null, written: boolean, etag: string|null}>}
+   * @throws {Error} When the file exists but cannot be parsed (a change computed
+   *   from nothing would erase it)
+   */
+  async update(ns, key, mutate) {
+    this._assertNamespace(ns);
+    assertValidKey(key);
+    const filePath = this._docPath(ns, key);
+    const outcome = await withFileLock(
+      this._lockPath(ns, key),
+      async () => {
+        const existing = await this._readFile(ns, key);
+        let current = null;
+        if (existing) {
+          current = this._parse(ns, key, existing.bytes);
+          if (current === undefined) throw new Error(`${ns}/${key} exists but could not be read`);
+        }
+        const next = await mutate(current);
+        if (next === undefined) {
+          return {
+            data: current,
+            written: false,
+            etag: existing ? documentEtag(existing.bytes) : null
+          };
+        }
+        const json = serializeRaw(next);
+        await fs.mkdir(this._dirs.get(ns), { recursive: true });
+        await atomicWriteFile(filePath, json, 'utf8');
+        return { data: JSON.parse(json), written: true, etag: documentEtag(json) };
+      },
+      { component: COMPONENT }
+    );
+    if (outcome.written) {
+      await this._publish({ type: 'document.put', ns, key, ownerId: null, etag: outcome.etag });
+    }
+    return outcome;
   }
 
   /**
@@ -523,6 +581,26 @@ export class RawDocumentStore extends DocumentStore {
       // are not allowed to look at — which is "present but unreadable", the
       // case this method is for.
       return true;
+    }
+  }
+
+  /**
+   * A cheap change token of a document: its file's inode, modification time
+   * and size, without reading it. Equal tokens mean the file was not replaced
+   * or rewritten in between (an atomic save renames a new inode in).
+   *
+   * @param {string} ns - Raw namespace name
+   * @param {string} key - Document key
+   * @returns {Promise<string|null>} The token, or null when the file cannot be stat'ed
+   */
+  async probe(ns, key) {
+    this._assertNamespace(ns);
+    assertValidKey(key);
+    try {
+      const stat = await fs.stat(this._docPath(ns, key));
+      return `${stat.ino}:${stat.mtimeMs}:${stat.size}`;
+    } catch {
+      return null;
     }
   }
 
