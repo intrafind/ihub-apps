@@ -85,6 +85,7 @@ defaults.
 | `context.compactKeepRecent`       | 6       | `elide`: trailing messages kept verbatim when compacting               |
 | `context.compactTargetShare`      | 0.6     | `digest`: compact down to this share of the threshold                  |
 | `context.digestKeepRecentBatches` | 2       | `digest`: newest tool batches kept verbatim (the newest is never condensed) |
+| `context.maxNotesShare`           | 0.4     | `digest`: share of the model's input (window less output cap) all digests of a run may take together |
 | `context.maxCompactionsPerRun`    | 12      | `digest`: digests written with the summary model per run; later ones keep calls and sources only |
 | `context.summaryTimeoutMs`        | 90000   | `digest`: timeout of one summary call                                  |
 | `context.summaryMaxTokens`        | 4096    | `digest`: output tokens of one summary call                            |
@@ -200,6 +201,10 @@ projected at `compactTargetShare` of the threshold
   of one compaction get twice `summaryTimeoutMs` together, and no call runs
   past that. A chunk whose answer stopped at the output limit makes the
   compaction `lossy` (`summary_partial`).
+- All digests of a run together take at most `maxNotesShare` of what the
+  model takes as input; a new digest gets what is left. Once that is used
+  up, digests keep calls and sources only, without a summary call, and the
+  run wraps up: more results could not be kept.
 - The digest stays within `maxDigestChars` (at least 2,000) and within what
   the condensed results held less their stubs, and it must free tokens too
   (a repetitive result can count fewer tokens than shorter notes): it is made

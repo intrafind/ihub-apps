@@ -31,6 +31,7 @@ import {
   selectBatches,
   stripThinking,
   summarizeCalls,
+  notesOf,
   MIN_DIGEST_CHARS,
   summaryFailureOf,
   taskOf,
@@ -335,6 +336,19 @@ test('summarizeCalls: no chunk runs past the deadline; a chunk cut at the output
   assert.equal(partial.facts.length, 1, 'the facts before the cut are kept');
   assert.equal(partial.truncatedChunks, 1);
   assert.equal(summaryFailureOf(partial, [calls[0]]), 'summary_partial');
+});
+
+test('notesOf counts the digests of a transcript and what they take', () => {
+  const block =
+    '<condensed_results digest="1" refs="r1">\nFacts:\n- [r1] NVIDIA 5.1T\n</condensed_results>';
+  const notes = notesOf([
+    { role: 'system', content: block },
+    { role: 'tool', content: `[condensed result r1 of webSearch: …]\n${block}` },
+    { role: 'tool', content: 'a raw result' }
+  ]);
+  assert.equal(notes.count, 1, 'only digests in tool results');
+  assert.equal(notes.chars, block.length);
+  assert.ok(notes.tokens > 0);
 });
 
 test('a digest limit below what its fixed text needs is rejected', () => {

@@ -89,6 +89,13 @@ export const contextPoliciesSchema = z.object({
    * (`MIN_DIGEST_CHARS`), which its fixed text and a list of its calls need.
    */
   maxDigestChars: z.number().int().min(2000).prefault(24_000),
+  /**
+   * `digest`: share of what the model takes as input (its window less the
+   * output cap) that all digests of a run may take together. A new digest
+   * gets what is left; once it is used up, digests keep calls and sources
+   * only and the run wraps up (#3819).
+   */
+  maxNotesShare: z.number().min(0.05).max(0.8).prefault(0.4),
   /** `digest`: how often a run may read a condensed result again. */
   maxRecallsPerRun: z.number().int().nonnegative().prefault(20),
   /** Bytes above which tool results are spilled to disk and previewed in the transcript. */

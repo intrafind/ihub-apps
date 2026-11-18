@@ -3270,6 +3270,11 @@
                 "minimum": 2000,
                 "maximum": 9007199254740991
               },
+              "maxNotesShare": {
+                "type": "number",
+                "minimum": 0.05,
+                "maximum": 0.8
+              },
               "maxRecallsPerRun": {
                 "type": "integer",
                 "minimum": 0,
@@ -3293,6 +3298,7 @@
               "summaryTimeoutMs",
               "summaryMaxTokens",
               "maxDigestChars",
+              "maxNotesShare",
               "maxRecallsPerRun",
               "spillThresholdBytes"
             ],

@@ -879,6 +879,40 @@ test('past the per-run cap a compaction keeps calls and sources without a summar
   );
 });
 
+test('the notes of a run are bounded: once their share is used up, digests keep calls only and the run wraps up', async () => {
+  const many = Array.from(
+    { length: 40 },
+    (_, i) =>
+      `FACT | r1 | NVIDIA statement ${String.fromCharCode(97 + (i % 26))}${String.fromCharCode(97 + Math.floor(i / 26))} about the market cap | https://x.test/nvidia`
+  ).join('\n');
+  const { loop, summaryRequests, stepRequests } = makeLoop(
+    [
+      toolTurn('c1', 'webSearch', { query: 'nvidia' }, 1000),
+      toolTurn('c2', 'webSearch', { query: 'apple' }, 4000),
+      toolTurn('c3', 'webSearch', { query: 'meta' }, 6000),
+      textTurn('done')
+    ],
+    [many, many]
+  );
+  const infos = [];
+  const result = await loop.run({
+    model: { ...model, contextWindow: 30_000, maxOutputTokens: 2000 },
+    messages: baseMessages,
+    tools: [searchTool],
+    // 5 % of 28,000 tokens of input: 1,400 tokens of notes for the whole run.
+    policies: { context: { ...policies.context, maxNotesShare: 0.05 } },
+    seams: [{ onCompaction: (_ctx, info) => infos.push(info) }],
+    executeTool: async (_call, { args }) => searchResult(args.query)
+  });
+  assert.equal(result.status, 'completed', JSON.stringify(result.error));
+  assert.equal(infos.length, 2);
+  assert.equal(summaryRequests.length, 1, 'no summary call once the notes are full');
+  assert.equal(infos[1].fallbackReason, 'compaction_limit');
+  assert.equal(infos[1].wrapUp, true);
+  const tools = (stepRequests.at(-1).body.tools || []).map(t => t.function?.name || t.id || t.name);
+  assert.ok(!tools.includes('webSearch'), 'no more searching');
+});
+
 test('near the window the second kept batch is condensed too; well below it, it stays', async () => {
   const run = async contextWindow => {
     const { loop } = makeLoop(

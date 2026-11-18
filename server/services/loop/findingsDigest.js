@@ -962,6 +962,29 @@ export function renderDigest({
   return { text: `${text}\n${closing}`, factsShown: shown, notFoundShown };
 }
 
+/**
+ * The digests in a transcript and their size: what the notes of the run take
+ * of the context, by the same estimate as the prompt.
+ *
+ * @param {Array<Object>} messages
+ * @returns {{count: number, chars: number, tokens: number}}
+ */
+export function notesOf(messages) {
+  const block = new RegExp(`<${DIGEST_TAG}[\\s\\S]*?</${DIGEST_TAG}>`, 'g');
+  let count = 0;
+  let chars = 0;
+  let tokens = 0;
+  for (const message of Array.isArray(messages) ? messages : []) {
+    if (message?.role !== 'tool' || typeof message.content !== 'string') continue;
+    for (const match of message.content.matchAll(block)) {
+      count += 1;
+      chars += match[0].length;
+      tokens += estimateMessageTokens({ role: 'tool', content: match[0] });
+    }
+  }
+  return { count, chars, tokens };
+}
+
 /** The one-line stub a condensed result is replaced with. */
 export function condensedStub(call, digestNumber) {
   return `${CONDENSED_PREFIX}${call.ref} of ${call.name}: what it found is in condensed results ${digestNumber}. Read it in full with ${RECALL_TOOL_ID} {"ref":"${call.ref}"}.]`;

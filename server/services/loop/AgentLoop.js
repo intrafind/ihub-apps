@@ -74,6 +74,7 @@ import {
   recallToolDefinition,
   renderDigest,
   digestRoomOf,
+  notesOf,
   DIGEST_FALLBACK_REASONS,
   MIN_DIGEST_CHARS,
   selectBatches,
@@ -1621,7 +1622,13 @@ export class AgentLoop {
 
     // The model is asked while it has not failed twice and the run is under its
     // cap — never after an overflow, which must free room before the retry.
-    const useModel = !overflow && state.failures < 2 && state.count < policy.maxCompactionsPerRun;
+    // The notes of the run are bounded: once their share of the window is
+    // used up, a digest keeps calls and sources only, without a summary
+    // call, and the run wraps up — more results could not be kept.
+    const notesLeft = this._notesLeftChars(ctx, options);
+    const notesFull = notesLeft < MIN_DIGEST_CHARS;
+    const useModel =
+      !overflow && !notesFull && state.failures < 2 && state.count < policy.maxCompactionsPerRun;
     let summary = null;
     let fallbackReason = null;
     // A result over the spill threshold is a preview in the transcript: the
@@ -1690,7 +1697,11 @@ export class AgentLoop {
       });
     // Within the characters the results leave, then smaller until it frees
     // tokens too; at the smallest size, calls and sources only.
-    let digestChars = Math.min(policy.maxDigestChars, digestRoom);
+    let digestChars = Math.min(
+      policy.maxDigestChars,
+      digestRoom,
+      Math.max(MIN_DIGEST_CHARS, notesLeft)
+    );
     let rendered = render(digestChars);
     while (freedBy(rendered.text) <= 0 && digestChars > MIN_DIGEST_CHARS) {
       digestChars = Math.max(MIN_DIGEST_CHARS, Math.floor(digestChars * 0.7));
@@ -1743,7 +1754,7 @@ export class AgentLoop {
     // newest batch stay and the digest turned out larger, that batch goes
     // next (`condenseNewest`), before gathering stops.
     const stillFull = urgent && tokensBefore - freedTokens > answerLine;
-    const wrapUp = stillFull && kept === 0;
+    const wrapUp = (stillFull && kept === 0) || notesFull;
     if (wrapUp) state.wrapUp = true;
     if (stillFull && kept > 0) state.condenseNewest = true;
     const record = {
@@ -1851,12 +1862,36 @@ export class AgentLoop {
    * @private
    */
   _answerLine(ctx, options) {
-    const window = Number(ctx.model?.contextWindow) || 0;
-    const reserve = Number(options?.maxTokens ?? ctx.model?.maxOutputTokens) || 0;
-    const inputLimit = window ? Math.max(window - reserve, window * 0.5) : 0;
+    const inputLimit = this._inputLimit(ctx, options);
     return inputLimit
       ? inputLimit * URGENT_WINDOW_SHARE
       : ctx.policies.context.compactThresholdTokens * 1.6;
+  }
+
+  /**
+   * What the model takes as input: its window less the output the call asks
+   * for (vLLM counts `maxTokens` against the window), at least half the
+   * window; 0 when the window is not known.
+   * @private
+   */
+  _inputLimit(ctx, options) {
+    const window = Number(ctx.model?.contextWindow) || 0;
+    const reserve = Number(options?.maxTokens ?? ctx.model?.maxOutputTokens) || 0;
+    return window ? Math.max(window - reserve, window * 0.5) : 0;
+  }
+
+  /**
+   * How many characters the notes of the run may still grow by: all digests
+   * together take at most `maxNotesShare` of the model's input (of twice the
+   * compaction threshold when the window is not known). Digest text is dense,
+   * so about three characters to a token.
+   * @private
+   */
+  _notesLeftChars(ctx, options) {
+    const policy = ctx.policies.context;
+    const inputLimit = this._inputLimit(ctx, options) || policy.compactThresholdTokens * 2;
+    const left = policy.maxNotesShare * inputLimit - notesOf(ctx.messages).tokens;
+    return Math.max(0, Math.floor(left * 3));
   }
 
   /**
