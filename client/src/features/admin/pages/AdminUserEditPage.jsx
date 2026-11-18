@@ -224,10 +224,12 @@ function AdminUserEditPage() {
   const [jsonSchema, setJsonSchema] = useState(null);
   const [availableGroups, setAvailableGroups] = useState([]);
   const { user: currentUser } = useAuth();
-  // Set when an update that sent `active` failed: the server may or may not
-  // have stored it, so the next save sends the admin's status choice even
-  // when it matches the loaded user.
-  const activeUncertainRef = useRef(false);
+  // The id of the user whose update that sent `active` failed: the server may
+  // or may not have stored it, so that user's next save sends the admin's
+  // status choice even when it matches the loaded user. Keyed by user, so a
+  // save that fails after the editor moved on to another user does not force
+  // `active` into that user's save (and one that succeeds does not clear it).
+  const activeUncertainRef = useRef(null);
 
   // Generate a unique ID for new users
   const generateUserId = () => `user_${crypto.randomUUID().replaceAll('-', '_')}`;
@@ -282,7 +284,7 @@ function AdminUserEditPage() {
       const apiData = buildUserSavePayload(data, {
         isNew,
         initial: acceptedUser,
-        forceActive: activeUncertainRef.current
+        forceActive: !isNew && activeUncertainRef.current === id
       });
 
       // For new local auth users, ensure password is provided
@@ -299,15 +301,15 @@ function AdminUserEditPage() {
           body: apiData
         });
       } catch (err) {
-        if ('active' in apiData) activeUncertainRef.current = true;
+        if (!isNew && 'active' in apiData) activeUncertainRef.current = id;
         throw err;
       }
-      activeUncertainRef.current = false;
+      if (activeUncertainRef.current === id) activeUncertainRef.current = null;
     }
   });
 
   useEffect(() => {
-    activeUncertainRef.current = false;
+    activeUncertainRef.current = null;
   }, [userId]);
 
   useEffect(() => {

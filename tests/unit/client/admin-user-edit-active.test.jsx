@@ -252,6 +252,78 @@ describe('AdminUserEditPage: the baseline for active', () => {
   });
 });
 
+describe('AdminUserEditPage: the uncertain active flag belongs to one user', () => {
+  function GoTo({ path }) {
+    const navigate = useNavigate();
+    return (
+      <button type="button" onClick={() => navigate(path)}>
+        go
+      </button>
+    );
+  }
+
+  test("a save of user A that fails after the editor moved to user B does not force active into B's save", async () => {
+    const userA = { ...DISABLED_USER, id: 'user_a', username: 'anna', active: false };
+    const userB = {
+      ...DISABLED_USER,
+      id: 'user_b',
+      username: 'bert',
+      email: 'bert-old@example.com',
+      active: true
+    };
+    const users = { [userA.id]: userA, [userB.id]: userB };
+    let failFirstSave;
+    let saves = 0;
+    mockMakeAdminApiCall.mockImplementation((url, options = {}) => {
+      if (options.method) {
+        saves += 1;
+        if (saves === 1) {
+          return new Promise((resolve, reject) => {
+            failFirstSave = () => reject(new Error('Network Error'));
+          });
+        }
+        return Promise.resolve({ data: {} });
+      }
+      if (url === '/admin/auth/users') return Promise.resolve({ data: { users } });
+      return Promise.resolve({ data: { groups: {} } });
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/admin/users/user_a']}>
+        <GoTo path="/admin/users/user_b" />
+        <Routes>
+          <Route path="/admin/users/:userId" element={<AdminUserEditPage />} />
+          <Route path="/admin/users" element={<div>Users list</div>} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    // Enable anna and save; the request is still running when the editor moves on.
+    fireEvent.click(await screen.findByLabelText('Enabled'));
+    fireEvent.click(screen.getByRole('button', { name: 'Save User' }));
+    await waitFor(() => expect(writes()).toHaveLength(1));
+    fireEvent.click(screen.getByRole('button', { name: 'go' }));
+    const discard = screen.queryByRole('button', { name: 'Discard changes' });
+    if (discard) fireEvent.click(discard);
+    await waitFor(() =>
+      expect(screen.getByPlaceholderText('Enter email address')).toHaveValue('bert-old@example.com')
+    );
+
+    // Anna's save fails now, with bert loaded.
+    await act(async () => failFirstSave());
+
+    fireEvent.change(screen.getByPlaceholderText('Enter email address'), {
+      target: { value: 'bert@example.com' }
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save User' }));
+
+    await waitFor(() => expect(writes()).toHaveLength(2));
+    expect(writes()[1][0]).toBe('/admin/auth/users/user_b');
+    expect(writes()[1][1].body.email).toBe('bert@example.com');
+    expect(writes()[1][1].body).not.toHaveProperty('active');
+  });
+});
+
 describe('buildUserSavePayload', () => {
   test('a create always sends active', () => {
     expect(buildUserSavePayload({ username: 'n', active: true }, { isNew: true }).active).toBe(
