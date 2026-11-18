@@ -493,7 +493,7 @@ export const compactionKindsSchema = z.object({
 
 export const contextCompactionData = z.object({
   step: z.number().int().nonnegative(),
-  trigger: z.enum(['proactive', 'overflow', 'manual']),
+  trigger: z.enum(['proactive', 'overflow', 'manual', 'retried_call']),
   collapsed: z.number().int().nonnegative(),
   freedChars: z.number().int().nonnegative(),
   shadowedRange: z.tuple([z.number().int(), z.number().int()]).optional(),

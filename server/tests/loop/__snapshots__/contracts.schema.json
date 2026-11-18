@@ -2018,7 +2018,7 @@
               },
               "trigger": {
                 "type": "string",
-                "enum": ["proactive", "overflow", "manual"]
+                "enum": ["proactive", "overflow", "manual", "retried_call"]
               },
               "collapsed": {
                 "type": "integer",

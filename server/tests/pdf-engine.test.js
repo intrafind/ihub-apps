@@ -443,7 +443,10 @@ describe('rendering', () => {
     assert.equal(spec.showTitle, false);
     assert.equal(spec.date, '2026-10-15');
     assert.equal(spec.themeOptions.accentColor, '#0f766e');
-    assert.throws(() => specFromToolArgs({ title: 't', blocks: '[' }), DocumentGenerationError);
+    assert.throws(
+      () => specFromToolArgs({ title: 't', blocks: '[{"text":"x" "style":"badge"}]' }),
+      DocumentGenerationError
+    );
   });
 
   it('strips a duplicate opening H1 from the first markdown block when title is shown on top', () => {

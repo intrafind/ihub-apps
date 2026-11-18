@@ -33,7 +33,10 @@ loop:
    JSON) and applies schema defaults;
 4. runs the calls through the segment planner (`planToolBatches`), appends
    results in the model's original order, and applies the circuit breakers;
-5. compacts the transcript when it grows large; forces a final tool-less turn
+5. shortens the long argument values of a failed tool call once the model has
+   called that tool again (`elideRetriedCallArguments`: only the newest attempt
+   is replayed in full), compacts the transcript when it grows large; forces a
+   final tool-less turn
    when every tool is dead, the run token budget is spent, or the last allowed
    round is reached;
 6. returns a `LoopResult`.
@@ -128,7 +131,7 @@ is an object with any of these hooks; register it for every run with
 | `onHallucinated(ctx, info)`     | Model called an unregistered tool                                   | Record for audit                                   |
 | `onCircuitBroken(ctx, info)`    | A tool was withheld                                                 | Record / notify                                    |
 | `onCompactionStart(ctx, info)`  | A findings digest is about to be written (`compactionId`, `tokensBefore`, `itemsSummarised`, `kinds`) | Tell the user (the summary call takes a while) |
-| `onCompaction(ctx, info)`       | Transcript was compacted: the fields of the ledger's `context/compaction` (`compactionId`, `trigger`, `strategy`, `lossy`, `tokensBefore`, `tokensAfter`, `digest`, …) plus `freedTokens` and the new `messages` | Telemetry, rebase a context figure |
+| `onCompaction(ctx, info)`       | Transcript was compacted: the fields of the ledger's `context/compaction` (`compactionId`, `trigger` (`proactive`, `overflow`, `retried_call`), `strategy`, `lossy`, `tokensBefore`, `tokensAfter`, `digest`, …) plus `freedTokens` and the new `messages` | Telemetry, rebase a context figure |
 | `onAnswer(ctx, info)`           | The model answered without a tool call (`info.stepText` — this step's answer; `info.content` — the run's text so far; `info.canRetry`) | Return `{ handled, retry, error? }` to reject the answer: the loop appends it and the `retry` correction, and the model answers again (only while `canRetry`) |
 
 Built-in seams live in `server/services/loop/seams/`:

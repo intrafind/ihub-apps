@@ -983,7 +983,9 @@ test('an overflow that nothing can condense shortens failed calls, then answers 
   const retry = shortened.stepRequests.at(-1).body.messages;
   const callArgs = id =>
     retry.flatMap(m => m.tool_calls || []).find(c => c.id === id).function.arguments;
-  assert.match(callArgs('c1'), /were removed to free context/);
+  // Shortened, by the retried-call elision (the same tool was called again)
+  // or, failing that, by the overflow recovery.
+  assert.ok(callArgs('c1').length < 1000, callArgs('c1'));
   assert.ok(callArgs('c2').length > 4000, 'the newest failed call keeps its arguments');
 
   // Nothing to condense or shorten: the answer comes without tools.
