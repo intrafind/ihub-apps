@@ -480,6 +480,9 @@
       "enabled": false,
       "modelId": ""
     },
+    "compaction": {
+      "modelId": ""
+    },
     "evidence": {
       "enabled": true,
       "maxContentBytes": 10485760

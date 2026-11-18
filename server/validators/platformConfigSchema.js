@@ -647,6 +647,15 @@ export const platformConfigSchema = z
           })
           .passthrough()
           .prefault({}),
+        // Condensing a long tool loop (#3819): the model that writes the
+        // findings digest. Empty means the chat's own model; a configured
+        // model is used only for users whose groups may use it.
+        compaction: z
+          .object({
+            modelId: z.string().prefault('')
+          })
+          .passthrough()
+          .prefault({}),
         // Chat evidence record (#3687): per stored answer, what went into
         // every model call and tool call. `maxContentBytes` caps one item (a
         // tool result, a message); a larger one keeps only its hash and size.

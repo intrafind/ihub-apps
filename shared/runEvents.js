@@ -123,6 +123,12 @@ export const SSE_V2_EVENTS = Object.freeze({
   KNOWLEDGE_SCOPE: 'knowledge/scope',
   /** How full the model's context window is, as the server counts it (live; not stored). */
   CONTEXT_USAGE: 'context/usage',
+  /**
+   * The loop condensed or shortened earlier tool results to free context
+   * (#3819): `running` while a findings digest is being written, `completed`
+   * once the transcript changed. Projected from the ledger's `context/compaction`.
+   */
+  CONTEXT_COMPACTED: 'context/compacted',
   INTERACTION_RAISED: 'interaction/raised',
   INTERACTION_ANSWERED: 'interaction/answered',
   PROGRESS_NODE: 'progress/node',

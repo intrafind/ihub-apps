@@ -265,6 +265,30 @@ describe('evidence record settings (platform.chats.evidence)', () => {
   });
 });
 
+describe('compaction model setting (platform.chats.compaction)', () => {
+  test("reads the chat's own model by default and writes a model under chats.compaction", async () => {
+    const app = createTestApp();
+    const read = await request(app).get('/api/admin/chat-history');
+    expect(read.body.settings.compaction).toEqual({ modelId: '' });
+
+    const response = await request(app)
+      .put('/api/admin/chat-history/settings')
+      .send({ compaction: { modelId: ' small-model ' } });
+
+    expect(response.status).toBe(200);
+    expect(response.body.changed).toEqual(['chats.compaction.modelId']);
+    expect(state.stored.chats.compaction).toEqual({ modelId: 'small-model' });
+    expect(response.body.settings.compaction.modelId).toBe('small-model');
+  });
+
+  test('rejects an unknown field', async () => {
+    const response = await request(createTestApp())
+      .put('/api/admin/chat-history/settings')
+      .send({ compaction: { enabled: true } });
+    expect(response.status).toBe(400);
+  });
+});
+
 describe('uploaded files settings (platform.uploads)', () => {
   test('reads the effective upload settings with defaults filled in', async () => {
     const response = await request(createTestApp()).get('/api/admin/chat-history');

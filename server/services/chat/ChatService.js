@@ -86,7 +86,8 @@ import {
 } from './chatToolApproval.js';
 import { buildPendingConnect, connectResumeMessages, loopResumeOf } from './chatConnectResume.js';
 import { describeChatError } from './chatErrors.js';
-import { scheduleChatTitle } from './chatTitles.js';
+import { resolveTitleModel, scheduleChatTitle } from './chatTitles.js';
+import { chatCompactionSettings } from './chatPersistence.js';
 import { appendSchedulingContextNote } from '../scheduler/tasks/schedulingContext.js';
 import * as defaultTelemetry from './chatTelemetry.js';
 import modelDiscoveryService from '../ModelDiscoveryService.js';
@@ -163,6 +164,37 @@ export function chatCompactThresholdTokens(model) {
   }
   if (!Number.isFinite(window) || window <= 0) return CHAT_COMPACT_MIN_TOKENS;
   return Math.max(CHAT_COMPACT_MIN_TOKENS, Math.floor(window * CHAT_COMPACT_WINDOW_SHARE));
+}
+
+/**
+ * Context policies of a chat turn: the threshold above, and tool results
+ * condensed into a findings digest instead of collapsed to previews (#3819),
+ * so a long research turn keeps what it found and the model does not search
+ * again.
+ *
+ * @param {Object} model - resolved model config
+ * @returns {Object} `policies.context`
+ */
+export function chatContextPolicies(model) {
+  return { compactThresholdTokens: chatCompactThresholdTokens(model), strategy: 'digest' };
+}
+
+/**
+ * The model that writes a chat turn's findings digests (#3819): the one an
+ * admin set (`chats.compaction.modelId`) when this user may use it, else the
+ * chat's own model. Chosen like the chat-title model: a configured model the
+ * user's groups do not allow is never used.
+ *
+ * @param {Object} params
+ * @param {Object} params.model - the chat's model
+ * @param {Object} [params.user]
+ * @param {Object} [params.platform] - platform configuration (default: the cached one)
+ * @returns {Object} resolved model config
+ */
+export function chatCompactionModel({ model, user, platform = configCache.getPlatform?.() }) {
+  const { modelId } = chatCompactionSettings(platform || {});
+  if (!modelId || modelId === model?.id) return model;
+  return resolveTitleModel({ configuredId: modelId, chatModel: model, user }) || model;
 }
 /** Aggregate bound on the tool output an app invocation retains for its caller. */
 export const APP_INVOKE_COLLECT_CAP_BYTES = 256 * 1024;
@@ -670,6 +702,12 @@ class ChatService {
       // Never a second `run/start` in the paused run's journal.
       if (!continued) runId = newRunId('chat');
     }
+    // A turn that could not continue its paused run still reaches the results
+    // that run condensed (#3819): its journal is kept while it is paused.
+    const archiveRunIds =
+      continueRun && !continued && givenRunId !== runId && isValidRunId(givenRunId)
+        ? [givenRunId]
+        : [];
     // What the run used before the pause: its end counts the whole turn.
     const carriedUsage = continued?.paused?.data?.usage || null;
 
@@ -1027,8 +1065,10 @@ class ChatService {
           // Chat tools have side effects and the client renders tool frames in
           // order — run one call at a time.
           tools: { parallel: false, choice: app.toolChoice },
-          context: { compactThresholdTokens: chatCompactThresholdTokens(model) }
+          context: chatContextPolicies(model)
         },
+        summaryModel: chatCompactionModel({ model, user }),
+        ...(archiveRunIds.length ? { archiveRunIds } : {}),
         options: { maxTokens, responseFormat, responseSchema, ...llmOptions },
         language,
         signal: controller.signal,
@@ -1987,8 +2027,9 @@ class ChatService {
         policies: {
           budgets: { maxToolRounds: CHAT_MAX_TOOL_ROUNDS, maxWallClockMs },
           tools: { parallel: false, choice: app.toolChoice },
-          context: { compactThresholdTokens: chatCompactThresholdTokens(model) }
+          context: chatContextPolicies(model)
         },
+        summaryModel: chatCompactionModel({ model, user }),
         options: { maxTokens, responseFormat, responseSchema, ...llmOptions },
         language,
         signal: abortSignal,

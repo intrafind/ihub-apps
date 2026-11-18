@@ -63,6 +63,41 @@ export const contextPoliciesSchema = z.object({
   compactKeepRecent: z.number().int().nonnegative().prefault(6),
   maxReactiveAttempts: z.number().int().nonnegative().prefault(2),
   reactiveKeepRecent: z.number().int().nonnegative().prefault(4),
+  /**
+   * What the proactive compaction does with old tool results (#3819).
+   * `elide` collapses them to short previews (the data is lost); `digest`
+   * condenses whole tool batches into a findings digest an LLM extracts and
+   * the loop checks, and keeps the originals readable by ref
+   * (`recall_tool_result`). See `services/loop/findingsDigest.js`.
+   */
+  strategy: z.enum(['elide', 'digest']).prefault('elide'),
+  /** `digest`: compact down to this share of `compactThresholdTokens` (hysteresis). */
+  compactTargetShare: z.number().min(0.1).max(0.95).prefault(0.6),
+  /** `digest`: newest tool batches kept verbatim (the newest is never condensed). */
+  digestKeepRecentBatches: z.number().int().positive().prefault(2),
+  /**
+   * `digest`: digests written with the summary model per run; later ones keep
+   * the calls and their sources only (`lossy`, `compaction_limit`).
+   */
+  maxCompactionsPerRun: z.number().int().positive().prefault(12),
+  /** `digest`: timeout of one summary call (one chunk). */
+  summaryTimeoutMs: z.number().int().positive().prefault(90_000),
+  /** `digest`: output tokens of one summary call. */
+  summaryMaxTokens: z.number().int().positive().prefault(4096),
+  /**
+   * `digest`: characters of one digest as the model reads it; at least 2,000
+   * (`MIN_DIGEST_CHARS`), which its fixed text and a list of its calls need.
+   */
+  maxDigestChars: z.number().int().min(2000).prefault(24_000),
+  /**
+   * `digest`: share of what the model takes as input (its window less the
+   * output cap) that all digests of a run may take together. A new digest
+   * gets what is left; once it is used up, digests keep calls and sources
+   * only and the run wraps up (#3819).
+   */
+  maxNotesShare: z.number().min(0.05).max(0.8).prefault(0.4),
+  /** `digest`: how often a run may read a condensed result again. */
+  maxRecallsPerRun: z.number().int().nonnegative().prefault(20),
   /** Bytes above which tool results are spilled to disk and previewed in the transcript. */
   spillThresholdBytes: z
     .number()

@@ -486,6 +486,13 @@
               },
               "supersedes": {
                 "type": "string"
+              },
+              "archiveRunIds": {
+                "maxItems": 16,
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
               }
             },
             "required": ["segment", "purpose"],
@@ -2011,7 +2018,7 @@
               },
               "trigger": {
                 "type": "string",
-                "enum": ["proactive", "overflow", "retried_call"]
+                "enum": ["proactive", "overflow", "manual", "retried_call"]
               },
               "collapsed": {
                 "type": "integer",
@@ -2061,6 +2068,104 @@
                 },
                 "required": ["path", "bytes"],
                 "additionalProperties": false
+              },
+              "archiveRef": {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "type": "string"
+                  },
+                  "bytes": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "sha256": {
+                    "type": "string"
+                  },
+                  "contentType": {
+                    "type": "string"
+                  }
+                },
+                "required": ["path", "bytes"],
+                "additionalProperties": false
+              },
+              "compactionId": {
+                "type": "string"
+              },
+              "strategy": {
+                "type": "string",
+                "enum": ["digest", "elide"]
+              },
+              "lossy": {
+                "type": "boolean"
+              },
+              "fallbackReason": {
+                "type": "string"
+              },
+              "wrapUp": {
+                "type": "boolean"
+              },
+              "tokensBefore": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "tokensAfter": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "itemsSummarised": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "kinds": {
+                "type": "object",
+                "properties": {
+                  "search": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "fetch": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "tool": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": ["search", "fetch", "tool"],
+                "additionalProperties": false
+              },
+              "digest": {
+                "type": "string"
+              },
+              "digestTruncated": {
+                "type": "boolean"
+              },
+              "facts": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "droppedFacts": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "model": {
+                "type": "string"
+              },
+              "durationMs": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
               }
             },
             "required": ["step", "trigger", "collapsed", "freedChars"],
@@ -3131,6 +3236,50 @@
                 "minimum": 0,
                 "maximum": 9007199254740991
               },
+              "strategy": {
+                "type": "string",
+                "enum": ["elide", "digest"]
+              },
+              "compactTargetShare": {
+                "type": "number",
+                "minimum": 0.1,
+                "maximum": 0.95
+              },
+              "digestKeepRecentBatches": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              "maxCompactionsPerRun": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              "summaryTimeoutMs": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              "summaryMaxTokens": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              "maxDigestChars": {
+                "type": "integer",
+                "minimum": 2000,
+                "maximum": 9007199254740991
+              },
+              "maxNotesShare": {
+                "type": "number",
+                "minimum": 0.05,
+                "maximum": 0.8
+              },
+              "maxRecallsPerRun": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
               "spillThresholdBytes": {
                 "type": "integer",
                 "exclusiveMinimum": 0,
@@ -3142,6 +3291,15 @@
               "compactKeepRecent",
               "maxReactiveAttempts",
               "reactiveKeepRecent",
+              "strategy",
+              "compactTargetShare",
+              "digestKeepRecentBatches",
+              "maxCompactionsPerRun",
+              "summaryTimeoutMs",
+              "summaryMaxTokens",
+              "maxDigestChars",
+              "maxNotesShare",
+              "maxRecallsPerRun",
               "spillThresholdBytes"
             ],
             "additionalProperties": false
@@ -5771,6 +5929,127 @@
           },
           "type": {
             "type": "string",
+            "const": "context/compacted"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "compactionId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "step": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "status": {
+                "type": "string",
+                "enum": ["running", "completed"]
+              },
+              "trigger": {
+                "type": "string",
+                "enum": ["proactive", "overflow", "manual"]
+              },
+              "strategy": {
+                "type": "string",
+                "enum": ["digest", "elide"]
+              },
+              "lossy": {
+                "type": "boolean"
+              },
+              "fallbackReason": {
+                "type": "string",
+                "maxLength": 200
+              },
+              "wrapUp": {
+                "type": "boolean"
+              },
+              "tokensBefore": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "tokensAfter": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "itemsSummarised": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "kinds": {
+                "type": "object",
+                "properties": {
+                  "search": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "fetch": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "tool": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": ["search", "fetch", "tool"],
+                "additionalProperties": false
+              },
+              "digest": {
+                "type": "string",
+                "maxLength": 8020
+              },
+              "digestTruncated": {
+                "type": "boolean"
+              },
+              "facts": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "durationMs": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": ["compactionId", "step", "status", "trigger", "lossy", "itemsSummarised"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["v", "seq", "runId", "ts", "type", "data"],
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "properties": {
+          "v": {
+            "type": "number",
+            "const": 2
+          },
+          "seq": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "runId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "ts": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          },
+          "type": {
+            "type": "string",
             "const": "interaction/raised"
           },
           "data": {
@@ -6530,6 +6809,7 @@
     "sources/added",
     "knowledge/scope",
     "context/usage",
+    "context/compacted",
     "interaction/raised",
     "interaction/answered",
     "progress/node",

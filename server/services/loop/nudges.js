@@ -45,6 +45,28 @@ export const ROUND_CAP_NUDGE =
   'some details are missing, state them briefly but still deliver the best complete ' +
   'answer you can.';
 
+/**
+ * The context is nearly full (#3819): the earlier results are condensed into
+ * notes, searching and reading pages are withdrawn, and the room that is left
+ * goes to the answer and the files the user asked for.
+ */
+export const CONTEXT_WRAP_UP_NUDGE =
+  '[system] The context is nearly full. The tool results so far are condensed in the notes ' +
+  'above, and searching and reading more pages is no longer available. Produce your COMPLETE ' +
+  'final response now from those notes, including any file the user asked for (use the tools ' +
+  'that create it). Take every figure, date and name from the notes or from a result you read ' +
+  'back with recall_tool_result; when one is not there, state that it is not available. Never ' +
+  'fill a gap from memory, not even approximately.';
+
+/**
+ * The context is full and nothing more can be condensed (#3819): the tools
+ * are gone for this answer, which is written from what the notes hold.
+ */
+export const CONTEXT_FULL_NUDGE =
+  '[system] The context is full. Tools are no longer available. Write your COMPLETE final ' +
+  'answer now from the notes and results above. Take every figure, date and name from them; ' +
+  'when one is not there, state that it is not available. Never fill a gap from memory.';
+
 /** Build the nudge message object the loop appends to the transcript. */
 export function nudgeMessage(content) {
   return { role: 'user', content, _nudge: true };

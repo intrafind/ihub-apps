@@ -8,6 +8,7 @@ import { hostnameOf } from '../../../../../shared/run/groundingSources.js';
 import { foldSkillItems } from '../../../../../shared/run/toolActivity.js';
 import {
   awaitingApprovalLabel,
+  compactionLabel,
   createdLabel,
   creatingLabel,
   failedLabel,
@@ -269,8 +270,16 @@ function IdleLine({ idle }) {
 
 const FACT_TONE = {
   empty: 'text-gray-700 dark:text-gray-300',
-  failed: 'text-red-600 dark:text-red-400'
+  failed: 'text-red-600 dark:text-red-400',
+  attention: ATTENTION
 };
+
+/** The notes as a person reads them: without the block's opening and closing tags. */
+function notesText(digest) {
+  return String(digest || '')
+    .replace(/^<condensed_results[^>]*>\n?/, '')
+    .replace(/\n?<\/condensed_results>\s*$/, '');
+}
 
 /**
  * Facts of a segment or row, each one unbreakable, with a middle dot after it
@@ -300,6 +309,7 @@ function SegmentIcon({ segment, busy }) {
   let tone = 'text-gray-500 dark:text-gray-400';
   if (skill) tone = 'text-purple-600 dark:text-purple-400';
   else if (segment.tone === 'failed') tone = 'text-red-500';
+  else if (segment.tone === 'attention') tone = ATTENTION;
   return <Icon name={segment.icon} size="sm" className={`shrink-0 ${tone}`} />;
 }
 
@@ -350,7 +360,9 @@ function Segment({ segment, busy = false }) {
             className={`font-medium me-0.5 ${
               segment.tone === 'failed'
                 ? 'text-red-600 dark:text-red-400'
-                : 'text-gray-800 group-hover:text-gray-900 dark:text-gray-200 dark:group-hover:text-gray-100'
+                : segment.tone === 'attention'
+                  ? ATTENTION
+                  : 'text-gray-800 group-hover:text-gray-900 dark:text-gray-200 dark:group-hover:text-gray-100'
             }`}
           >
             {segment.noun}
@@ -470,6 +482,7 @@ function RowLine({ icon, children }) {
 
 function ActivityItem({ item, stalled = false, details = false }) {
   if (item.kind === 'skill') return <SkillRow item={item} />;
+  if (item.kind === 'compaction') return <CompactionRow item={item} details={details} />;
   // A call whose arguments were never seen to start (still being written,
   // waiting for approval, stopped or refused first) knows no query or page yet:
   // it reads as a plain call, whatever the server said it is.
@@ -508,6 +521,127 @@ function SkillRow({ item }) {
           <span className="whitespace-nowrap text-gray-500 dark:text-gray-400">{reason}</span>
         )}
       </RowLine>
+    </li>
+  );
+}
+
+/**
+ * Earlier results the server condensed into notes, or shortened when it could
+ * not (#3819): why the context figure dropped, and what the model kept. The
+ * notes open on request; a lossy compaction says so in amber.
+ */
+function CompactionRow({ item, details }) {
+  const { t, i18n } = useTranslation();
+  const notesId = useId();
+  const [showNotes, setShowNotes] = useState(false);
+  const running = item.status === 'running';
+  const lossy = item.status === 'completed' && item.lossy;
+  let icon;
+  if (running) icon = <BusyIcon />;
+  else if (lossy) icon = <Icon name="exclamation-triangle" size="sm" className={ATTENTION} />;
+  else icon = <Icon name="archive-box" size="sm" className="text-gray-500 dark:text-gray-400" />;
+  const facts = [];
+  if (item.status === 'completed' && Number.isInteger(item.facts) && item.facts > 0) {
+    facts.push({ key: 'facts', text: t('toolActivity.compaction.facts', { count: item.facts }) });
+  }
+  const hasNotes = item.status === 'completed' && Boolean(item.digest);
+  const number = value => {
+    try {
+      return new Intl.NumberFormat(i18n?.language).format(value);
+    } catch {
+      return String(value);
+    }
+  };
+  const tokens =
+    Number.isInteger(item.tokensBefore) && Number.isInteger(item.tokensAfter)
+      ? t('toolActivity.compaction.detailTokens', {
+          before: number(item.tokensBefore),
+          after: number(item.tokensAfter)
+        })
+      : null;
+  const chip =
+    'm-0 px-1.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-mono break-all';
+  return (
+    <li>
+      <RowLine icon={icon}>
+        <span
+          className={`min-w-0 break-words ${running ? ACTIVE_LABEL : ''} ${lossy ? ATTENTION : ''}`}
+        >
+          {compactionLabel(t, item)}
+        </span>
+        {facts.length > 0 && (
+          <span className="text-gray-500 dark:text-gray-400">
+            <Facts facts={facts} />
+          </span>
+        )}
+        {hasNotes && (
+          <button
+            type="button"
+            onClick={() => setShowNotes(!showNotes)}
+            aria-expanded={showNotes}
+            aria-controls={notesId}
+            className="inline-flex min-h-6 items-center gap-0.5 rounded-sm text-indigo-600 hover:underline dark:text-indigo-400 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500"
+          >
+            {showNotes
+              ? t('toolActivity.compaction.hideNotes')
+              : t('toolActivity.compaction.showNotes')}
+            <Icon
+              name="chevron-down"
+              size="xs"
+              className={`transition-transform motion-reduce:transition-none ${showNotes ? 'rotate-180' : ''}`}
+            />
+          </button>
+        )}
+      </RowLine>
+      {lossy && (
+        <p className={`mt-1 ms-5.5 break-words ${ATTENTION}`}>
+          {item.strategy === 'digest'
+            ? t('toolActivity.compaction.lossyRecall')
+            : t('toolActivity.compaction.lossyElided')}
+        </p>
+      )}
+      {item.wrapUp && (
+        <p className={`mt-1 ms-5.5 break-words ${ATTENTION}`}>
+          {t('toolActivity.compaction.wrapUp')}
+        </p>
+      )}
+      {details && (tokens || item.trigger) && (
+        <dl className="mt-0.5 mb-1 ms-5.5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          {item.trigger && (
+            <div className="inline-flex flex-wrap items-baseline gap-1 min-w-0">
+              <dt className="text-gray-500 dark:text-gray-400">
+                {t('toolActivity.compaction.detailTrigger')}
+              </dt>
+              <dd className={chip}>{t(`toolActivity.compaction.trigger.${item.trigger}`)}</dd>
+            </div>
+          )}
+          {tokens && (
+            <div className="inline-flex flex-wrap items-baseline gap-1 min-w-0">
+              <dt className="text-gray-500 dark:text-gray-400">
+                {t('toolActivity.compaction.detailContext')}
+              </dt>
+              <dd className={chip}>{tokens}</dd>
+            </div>
+          )}
+        </dl>
+      )}
+      {hasNotes && showNotes && (
+        <div id={notesId} className="mt-1 ms-5.5">
+          {!lossy && (
+            <p className="mb-1 break-words text-gray-500 dark:text-gray-400">
+              {t('toolActivity.compaction.why')}
+            </p>
+          )}
+          <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-md border border-gray-200 bg-gray-50 p-2 font-sans text-xs text-gray-700 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-300">
+            {notesText(item.digest)}
+          </pre>
+          {item.digestTruncated && (
+            <p className="mt-1 text-gray-500 dark:text-gray-400">
+              {t('toolActivity.compaction.notesTruncated')}
+            </p>
+          )}
+        </div>
+      )}
     </li>
   );
 }

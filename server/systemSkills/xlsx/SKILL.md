@@ -48,6 +48,16 @@ Pass `sheets` as a JSON array of 1–20 worksheet objects:
 
 - `"currency"` (`#,##0.00`), `"integer"` (`#,##0`), `"decimal"` (`#,##0.00`), `"percent"` (`0.0%`, pass `0.125` for `12.5%`), `"date"` (`yyyy-mm-dd`, pass ISO strings `"2026-10-15"`), `"text"`, or any custom Excel format string like `"#,##0 \"€\""` or `"$#,##0;($#,##0);\"-\""`.
 
+## Figures from research
+
+When the workbook holds figures from a web search or other sources:
+
+- Put a figure in a cell only when a source you read in this conversation states it (a search result, a page you read, the condensed notes, or a result you read back). Never fill a cell from memory, not even approximately: leave it empty or write `n/a`.
+- Keep every column the user asked for, with `n/a` in the cells no source gives. Of the columns you add yourself, choose those the sources actually provide: one that would be mostly `n/a` is better left out and named as not available in your answer.
+- The header states the unit and scale of the values exactly as they are entered, e.g. `Market cap (USD bn)` with `5121` for 5.121 trillion. Convert every row to that scale, or keep the unit of the source in the header.
+- For a ranking or "the largest …", use the top 10 unless the user names a number or asks for all of them (then list the complete ranking), and say in your answer when you used the top 10.
+- Add a `Sources` column or sheet naming where the figures come from.
+
 ## Formula & financial modelling rules
 
 1. **Always use live formulas instead of hardcoded calculated numbers**:
