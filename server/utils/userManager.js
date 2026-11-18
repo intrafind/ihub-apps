@@ -316,12 +316,14 @@ export async function updateUsersFile(usersFilePath, change) {
 
   if (!relPath) {
     // A file outside contents/ has no compare-and-set: the read, the change and the
-    // write run under a lock file, so two confirmations at once both land.
+    // write run under a lock file, so two confirmations at once both land. Read
+    // from the file itself: `loadUsersFresh` may answer the cached copy (its
+    // stat token, a read shared with a caller that started before the lock).
     return await withFileLock(
       `${fullPath}.lock`,
       async () => {
-        const usersConfig = await loadUsersFresh(usersFilePath);
-        if (change(usersConfig) === false) return false;
+        const usersConfig = apply(await readUsersFileFresh({ fullPath, relPath }));
+        if (usersConfig === undefined) return false;
         await saveUsers(usersConfig, usersFilePath);
         return true;
       },
