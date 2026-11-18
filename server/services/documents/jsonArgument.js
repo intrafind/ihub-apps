@@ -50,55 +50,75 @@ export class JsonArgumentError extends Error {
 export function closeMissingBrackets(text) {
   if (typeof text !== 'string') return null;
   const stack = [];
-  let out = '';
+  const parts = [];
   let last = 0;
   let closed = 0;
-  let inString = false;
-  let escaped = false;
   for (let i = 0; i < text.length; i++) {
     const ch = text[i];
-    if (inString) {
-      if (escaped) escaped = false;
-      else if (ch === '\\') escaped = true;
-      else if (ch === '"') inString = false;
-      continue;
-    }
-    if (ch === '"') inString = true;
-    else if (ch === '{' || ch === '[') stack.push(ch);
-    else if (ch === '}' || ch === ']') {
-      const opener = OPENER[ch];
-      if (stack.at(-1) === opener) {
-        stack.pop();
-        continue;
-      }
-      const at = stack.lastIndexOf(opener);
-      if (at === -1) return null;
-      for (let k = stack.length - 1; k > at; k--) {
-        if (stack[k] === stack[k - 1]) return null;
-      }
-      const closers = stack
-        .splice(at + 1)
-        .reverse()
-        .map(open => CLOSER[open])
-        .join('');
-      out += text.slice(last, i) + closers;
+    const opener = OPENER[ch];
+    if (ch === '"') {
+      const end = stringEnd(text, i);
+      if (end === -1) return null;
+      i = end - 1;
+    } else if (CLOSER[ch]) {
+      stack.push(ch);
+    } else if (opener && stack.at(-1) === opener) {
+      stack.pop();
+    } else if (opener) {
+      const closers = closersUntil(stack, opener);
+      if (closers === null) return null;
+      parts.push(text.slice(last, i), closers);
       last = i;
       closed += closers.length;
-      stack.pop();
+      // The containers just closed, and the one this bracket closes.
+      stack.length -= closers.length + 1;
     }
   }
-  if (inString) return null;
-  out += text.slice(last);
-  if (stack.length) {
-    out =
-      out.trimEnd() +
-      [...stack]
-        .reverse()
-        .map(open => CLOSER[open])
-        .join('');
-    closed += stack.length;
+  parts.push(text.slice(last));
+  if (stack.length === 0) return closed ? { text: parts.join(''), closed } : null;
+  const closers = stack
+    .reverse()
+    .map(open => CLOSER[open])
+    .join('');
+  return { text: parts.join('').trimEnd() + closers, closed: closed + closers.length };
+}
+
+/**
+ * Index after the string whose opening quote is at `start`, or -1 when the
+ * text ends inside it.
+ *
+ * @param {string} text
+ * @param {number} start
+ * @returns {number}
+ */
+function stringEnd(text, start) {
+  for (let i = start + 1; i < text.length; i++) {
+    if (text[i] === '\\') i++;
+    else if (text[i] === '"') return i + 1;
   }
-  return closed ? { text: out, closed } : null;
+  return -1;
+}
+
+/**
+ * The closing brackets for the containers above the innermost `opener` on the
+ * stack, innermost first; null when there is no such opener, or when one of
+ * those containers sits directly in one of its own kind.
+ *
+ * @param {string[]} stack - Open brackets, outermost first.
+ * @param {string} opener
+ * @returns {string|null}
+ */
+function closersUntil(stack, opener) {
+  const at = stack.lastIndexOf(opener);
+  if (at === -1) return null;
+  for (let k = stack.length - 1; k > at; k--) {
+    if (stack[k] === stack[k - 1]) return null;
+  }
+  return stack
+    .slice(at + 1)
+    .reverse()
+    .map(open => CLOSER[open])
+    .join('');
 }
 
 /** `sheets[0].rows[3]` for a root name and a list of keys and indexes. */
@@ -139,6 +159,25 @@ export function locateJsonError(text) {
     while (i < text.length && ' \t\n\r'.includes(text[i])) i++;
   };
 
+  /** One escape in a string; `i` is at its backslash. */
+  function readEscape() {
+    const next = text[i + 1];
+    if (next === 'u') {
+      if (!/^[0-9a-fA-F]{4}$/.test(text.slice(i + 2, i + 6))) {
+        i += 2;
+        stop(String.raw`four hex digits after "\u"`);
+      }
+      i += 6;
+      return;
+    }
+    if (next && String.raw`"\/bfnrt`.includes(next)) {
+      i += 2;
+      return;
+    }
+    i++;
+    stop(String.raw`one of " \ / b f n r t u after a backslash`);
+  }
+
   function readString() {
     i++;
     while (i < text.length) {
@@ -148,23 +187,12 @@ export function locateJsonError(text) {
         return;
       }
       if (ch === '\\') {
-        const next = text[i + 1];
-        if (next === 'u') {
-          if (!/^[0-9a-fA-F]{4}$/.test(text.slice(i + 2, i + 6))) {
-            i += 2;
-            stop('four hex digits after "\\u"');
-          }
-          i += 6;
-          continue;
-        }
-        if (next !== undefined && '"\\/bfnrt'.includes(next)) {
-          i += 2;
-          continue;
-        }
-        i++;
-        stop('one of " \\ / b f n r t u after a backslash');
+        readEscape();
+        continue;
       }
-      if (ch < ' ') stop('an escape such as "\\n" instead of a control character in a string');
+      if (ch < ' ') {
+        stop(String.raw`an escape such as "\n" instead of a control character in a string`);
+      }
       i++;
     }
     stop('a closing quote (")');
@@ -176,6 +204,21 @@ export function locateJsonError(text) {
     const match = re.exec(text);
     if (!match) stop('a value');
     i += match[0].length;
+  }
+
+  /** A property name and its colon; returns the name. */
+  function readKey(first) {
+    skipSpace();
+    if (text[i] !== '"') {
+      stop(first ? 'a property name in double quotes, or "}"' : 'a property name in double quotes');
+    }
+    const keyStart = i;
+    readString();
+    const key = JSON.parse(text.slice(keyStart, i));
+    skipSpace();
+    if (text[i] !== ':') stop('":"');
+    i++;
+    return key;
   }
 
   function readContainer(depth, kind) {
@@ -190,25 +233,7 @@ export function locateJsonError(text) {
       return;
     }
     for (let index = 0; ; index++) {
-      if (kind === 'object') {
-        skipSpace();
-        if (text[i] !== '"') {
-          stop(
-            index === 0
-              ? 'a property name in double quotes, or "}"'
-              : 'a property name in double quotes'
-          );
-        }
-        const keyStart = i;
-        readString();
-        const key = JSON.parse(text.slice(keyStart, i));
-        skipSpace();
-        if (text[i] !== ':') stop('":"');
-        i++;
-        path.push(key);
-      } else {
-        path.push(index);
-      }
+      path.push(kind === 'object' ? readKey(index === 0) : index);
       readValue(depth + 1);
       path.pop();
       skipSpace();
@@ -216,12 +241,10 @@ export function locateJsonError(text) {
         i++;
         continue;
       }
-      if (text[i] === closer) {
-        i++;
-        open.pop();
-        return;
-      }
-      stop(`"," or "${closer}"`);
+      if (text[i] !== closer) stop(`"," or "${closer}"`);
+      i++;
+      open.pop();
+      return;
     }
   }
 
