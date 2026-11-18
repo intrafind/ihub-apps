@@ -3482,8 +3482,16 @@
         "tabs": {
           "overview": "Übersicht",
           "content": "Inhalt",
+          "files": "Dateien ({{count}})",
           "releases": "Releases"
         }
+      },
+      "files": {
+        "listLabel": "Dateien dieses Skills",
+        "loadFailed": "Diese Datei konnte nicht geladen werden.",
+        "retry": "Erneut versuchen",
+        "showSource": "Quelltext anzeigen",
+        "showRendered": "Gerendert anzeigen"
       },
       "modelReview": {
         "title": "Prüfen Sie dieses Modell, bevor Sie es testen oder aktivieren",

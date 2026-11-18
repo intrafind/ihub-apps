@@ -1173,18 +1173,20 @@ export const installMarketplaceItem = async (registryId, type, name, { replaceLo
 };
 
 /**
- * Fetches a Markdown companion file of an integration catalog item (a
- * release's notes) from its registry, without installing the item.
+ * Fetches one text file of a catalog item from its registry, without
+ * installing the item: a Markdown companion of an integration (a release's
+ * notes) or any file of a skill's folder, `SKILL.md` included.
  *
  * @param {string} registryId - The registry ID the item belongs to
+ * @param {'integration'|'skill'} type - The item type
  * @param {string} name - The item name identifier
- * @param {string} path - The companion path as the catalog lists it
+ * @param {string} path - The file path as the catalog lists it
  * @returns {Promise<string>} The file's text
  */
-export const fetchMarketplaceItemFile = async (registryId, name, path) => {
+export const fetchMarketplaceItemFile = async (registryId, type, name, path) => {
   const query = new URLSearchParams({ path });
   const response = await makeAdminApiCall(
-    `/admin/marketplace/registries/${registryId}/items/integration/${name}/_file?${query}`,
+    `/admin/marketplace/registries/${registryId}/items/${type}/${name}/_file?${query}`,
     { responseType: 'text' }
   );
   return typeof response.data === 'string' ? response.data : String(response.data ?? '');

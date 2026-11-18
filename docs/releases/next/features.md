@@ -2431,6 +2431,20 @@ column on the right on wide screens, marking the entry you are reading. **Newer 
 release** at the bottom move through the releases, and every release has its own address
 (`/admin/changelog?version=5.6.4`), so Back, a bookmark or a reload return to it.
 
+## Marketplace: Review the Files of a Skill Before Installing It
+
+The details of a marketplace skill now have a **Files** tab when the skill brings more than its
+`SKILL.md`. It lists every file an install would write — references, scripts, templates — and shows
+the one you select, fetched from the registry when you open it, so you can review what a skill
+contains before you install it. Markdown files read rendered; **Show source** shows exactly what
+they contain, including what rendering hides, such as comments. A file over 512 KB or a binary one
+is not shown. See [Marketplace → Browsing](../../marketplace.md#browsing).
+
+For API callers: `GET /api/admin/marketplace/registries/{registryId}/items/{type}/{name}/_file`
+replaces the integration-only `…/items/integration/{name}/_file` and serves `integration` and
+`skill` items. Existing integration URLs keep working unchanged, and a skill's item detail now carries
+a `files` list.
+
 ## Model Hints Can Be Set in the Model Editor
 
 Admins can now give a model a hint — the message users see above the chat input when they select
