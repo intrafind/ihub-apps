@@ -1,12 +1,11 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { LOG_COMPONENTS } from '../utils/logComponents';
 import { makeAdminApiCall } from '../../../api/adminApi';
-import { createConfigRevision } from '../../../api/adminConfigRevision';
 import AdminLoadGate from '../components/AdminLoadGate';
 import { useAdminConfigLoad } from '../hooks/useAdminConfigLoad';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
@@ -62,12 +61,6 @@ function AdminLoggingPage() {
 
   const availableLevels = ['error', 'warn', 'info', 'http', 'verbose', 'debug', 'silly'];
 
-  // The revision of platform.json the auth-debug form was loaded from (then:
-  // last saved). Its save sends exactly this as If-Match; a 412 leaves it as it
-  // is, so the next save is refused again until the page reloads or the admin
-  // chooses "Keep my changes and overwrite" (which re-reads into this holder).
-  const revisionRef = useRef(null);
-
   // No form and no Save until all three settings loaded. Each save sends
   // what was loaded; after a failed load the defaults above would be saved
   // instead (e.g. audit IP anonymization switched off, OB-B2).
@@ -108,17 +101,9 @@ function AdminLoggingPage() {
       // server reads); merge over defaults so fields an older config omits keep
       // sensible values.
       platform: {
-        load: async () => {
-          const revision = createConfigRevision();
-          const response = await makeAdminApiCall('/admin/configs/platform', {
-            method: 'GET',
-            revision
-          });
-          return { platform: response.data || {}, revision: revision.current };
-        },
-        // Only a current (not stale) load sets the form's revision.
-        onLoad: ({ platform, revision }) => {
-          revisionRef.current = revision;
+        load: async () =>
+          (await makeAdminApiCall('/admin/configs/platform', { method: 'GET' })).data || {},
+        onLoad: platform => {
           if (platform.auth?.debug) {
             setAuthDebugConfig(prev => ({ ...prev, ...platform.auth.debug }));
           }
@@ -185,24 +170,13 @@ function AdminLoggingPage() {
       setSaving(true);
       setMessage('');
 
-      // Load current platform config for the sections this page does not show.
-      // This read does not change the revision the save sends (the one the
-      // form loaded).
-      const platformResponse = await makeAdminApiCall('/admin/configs/platform', {
-        method: 'GET'
-      });
-      const platformConfig = platformResponse.data;
-
-      // Persist under the canonical `auth.debug` key that the server reads.
-      // The platform save route merges the whole `auth` object, so keep the
-      // rest of the auth config intact.
-      platformConfig.auth = { ...platformConfig.auth, debug: authDebugConfig };
-
-      // Save back
+      // A scoped PATCH of `auth.debug` only (the server reads it there), never
+      // a full-config POST: the logging and privacy saves on this page write
+      // platform.json too, and a guarded POST would report them as a conflict.
+      // The rest of `auth` keeps its stored value.
       await makeAdminApiCall('/admin/configs/platform', {
-        method: 'POST',
-        body: platformConfig,
-        revision: revisionRef
+        method: 'PATCH',
+        body: { auth: { debug: authDebugConfig } }
       });
       setBaseline(prev => (prev ? { ...prev, authDebug: authDebugConfig } : prev));
 

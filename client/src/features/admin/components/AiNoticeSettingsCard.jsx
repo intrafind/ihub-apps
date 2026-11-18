@@ -1,11 +1,11 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 import { makeAdminApiCall } from '../../../api/adminApi';
-import { createConfigRevision } from '../../../api/adminConfigRevision';
+import { localizedTextPatch, textOrNull } from '../utils/platformPatch';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import EuAiActCard from './euAiAct/EuAiActCard';
 import EuAiActStateNote from './euAiAct/EuAiActStateNote';
@@ -34,22 +34,14 @@ function AiNoticeSettingsCard({ onSaved }) {
   const [message, setMessage] = useState(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [loadAttempt, setLoadAttempt] = useState(0);
-  // The revision of platform.json this form was loaded from (then: last saved).
-  // Its save sends exactly this as If-Match; a 412 leaves it as it is, so the
-  // next save is refused again until the form reloads or the admin chooses
-  // "Keep my changes and overwrite" (which re-reads into this holder).
-  const revisionRef = useRef(null);
 
   useEffect(() => {
     let cancelled = false;
     setLoadFailed(false);
-    // The load's own holder: a cancelled (stale) load must not set the form's revision.
-    const loadedRevision = createConfigRevision();
-    makeAdminApiCall('/admin/configs/platform', { method: 'GET', revision: loadedRevision })
+    makeAdminApiCall('/admin/configs/platform', { method: 'GET' })
       .then(response => {
         const current = response.data?.aiDisclosure?.firstTurnNotice;
         if (cancelled) return;
-        revisionRef.current = loadedRevision.current;
         const loadedNotice = { enabled: current?.enabled !== false, text: current?.text || {} };
         const loadedGuardrail = response.data?.aiDisclosure?.guardrail?.text || '';
         setNotice(loadedNotice);
@@ -69,30 +61,21 @@ function AiNoticeSettingsCard({ onSaved }) {
     setSaving(true);
     setMessage(null);
     try {
-      // Read-modify-write: platform.json carries settings this card does not show.
-      // This read only supplies those other settings; it does not change the
-      // revision the save sends (the one this form was loaded from).
-      const response = await makeAdminApiCall('/admin/configs/platform', { method: 'GET' });
-      const platform = response.data || {};
-      // The read is redacted (proxy JWT provider `jwkUrl` values are left out), and the route
-      // keeps the stored proxyAuth when none is sent: posting the redacted one would erase them.
-      delete platform.proxyAuth;
-      const text = Object.fromEntries(
-        Object.entries(notice.text).filter(([, value]) => typeof value === 'string' && value.trim())
-      );
-      platform.aiDisclosure = {
-        ...platform.aiDisclosure,
-        firstTurnNotice: {
-          ...platform.aiDisclosure?.firstTurnNotice,
-          enabled: notice.enabled,
-          text
-        },
-        guardrail: { ...platform.aiDisclosure?.guardrail, text: guardrailText.trim() }
-      };
+      // A scoped PATCH of this card's fields only (never a full-config POST):
+      // the other cards on the EU AI Act page save platform.json too, and a
+      // guarded POST would report their saves as a conflict. A text the form
+      // cleared is sent as null, which removes it (empty uses the built-in wording).
       await makeAdminApiCall('/admin/configs/platform', {
-        method: 'POST',
-        body: platform,
-        revision: revisionRef
+        method: 'PATCH',
+        body: {
+          aiDisclosure: {
+            firstTurnNotice: {
+              enabled: notice.enabled,
+              text: localizedTextPatch(savedValues?.notice?.text, notice.text)
+            },
+            guardrail: { text: textOrNull(guardrailText) }
+          }
+        }
       });
       setSavedValues({ notice, guardrailText });
       setMessage({ type: 'success', text: t('admin.aiDisclosure.saved', 'AI notice saved') });

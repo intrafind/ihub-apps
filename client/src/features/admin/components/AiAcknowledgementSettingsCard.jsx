@@ -1,11 +1,11 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 import { makeAdminApiCall } from '../../../api/adminApi';
-import { createConfigRevision } from '../../../api/adminConfigRevision';
+import { localizedTextPatch, textOrNull } from '../utils/platformPatch';
 import { useAiAcknowledgementAdmin } from '../hooks/useAiAcknowledgementAdmin';
 import EuAiActCard from './euAiAct/EuAiActCard';
 import EuAiActStateNote from './euAiAct/EuAiActStateNote';
@@ -36,21 +36,13 @@ function AiAcknowledgementSettingsCard({ onSaved, requiredVersion }) {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
   const admin = useAiAcknowledgementAdmin();
-  // The revision of platform.json this form was loaded from (then: last saved).
-  // Its save sends exactly this as If-Match; a 412 leaves it as it is, so the
-  // next save is refused again until the page reloads or the admin chooses
-  // "Keep my changes and overwrite" (which re-reads into this holder).
-  const revisionRef = useRef(null);
 
   useEffect(() => {
     let cancelled = false;
-    // The load's own holder: a cancelled (stale) load must not set the form's revision.
-    const loadedRevision = createConfigRevision();
-    makeAdminApiCall('/admin/configs/platform', { method: 'GET', revision: loadedRevision })
+    makeAdminApiCall('/admin/configs/platform', { method: 'GET' })
       .then(response => {
         const block = response.data?.aiAcknowledgement || {};
         if (!cancelled) {
-          revisionRef.current = loadedRevision.current;
           const loaded = {
             enabled: block.enabled !== false,
             enforce: block.enforce !== false,
@@ -74,27 +66,20 @@ function AiAcknowledgementSettingsCard({ onSaved, requiredVersion }) {
     setSaving(true);
     setMessage(null);
     try {
-      // Read-modify-write: platform.json carries settings this card does not show.
-      // This read only supplies those other settings; it does not change the
-      // revision the save sends (the one this form was loaded from).
-      const response = await makeAdminApiCall('/admin/configs/platform', { method: 'GET' });
-      const platform = response.data || {};
-      // The read is redacted (proxy JWT provider `jwkUrl` values are left out), and the route
-      // keeps the stored proxyAuth when none is sent: posting the redacted one would erase them.
-      delete platform.proxyAuth;
-      const text = Object.fromEntries(
-        Object.entries(form.text).filter(([, value]) => typeof value === 'string' && value.trim())
-      );
-      platform.aiAcknowledgement = {
-        enabled: form.enabled,
-        enforce: form.enforce,
-        text,
-        policyUrl: form.policyUrl.trim()
-      };
+      // A scoped PATCH of this card's block only (never a full-config POST):
+      // the other cards on the EU AI Act page save platform.json too, and a
+      // guarded POST would report their saves as a conflict. A field the form
+      // cleared is sent as null, which removes it.
       await makeAdminApiCall('/admin/configs/platform', {
-        method: 'POST',
-        body: platform,
-        revision: revisionRef
+        method: 'PATCH',
+        body: {
+          aiAcknowledgement: {
+            enabled: form.enabled,
+            enforce: form.enforce,
+            text: localizedTextPatch(savedForm?.text, form.text),
+            policyUrl: textOrNull(form.policyUrl)
+          }
+        }
       });
       setSavedForm(form);
       setMessage({

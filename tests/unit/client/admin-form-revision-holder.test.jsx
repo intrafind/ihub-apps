@@ -2,23 +2,29 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * Every admin form that saves platform.json with a full `POST` keeps the
- * revision it was loaded from in a holder of its own (CodeRabbit on #3769).
+ * How the admin pages save platform.json (CodeRabbit on #3769).
  *
- * The holder is filled by the read that fills the form, sent as `If-Match` on
- * each save, and kept after a `412`: closing the conflict dialog and saving
- * again is refused again. Only a reload of the form or "Keep my changes and
- * overwrite" (which re-reads into the refused form's holder) moves it on, and a
- * successful save advances it. A save may re-read platform.json to merge the
- * settings it does not show, but that read's ETag never reaches the holder;
- * before this fix each save took the ETag of its own fresh read, so the second
- * save after a closed conflict dialog silently overwrote the other change.
+ * A form that is the only platform.json writer on its page and POSTs the whole
+ * config (Telemetry, Voice input, both OAuth pages) keeps the revision it was
+ * loaded from in a holder of its own. The holder is filled by the read that
+ * fills the form, sent as `If-Match` on each save, and kept after a `412`:
+ * closing the conflict dialog and saving again is refused again. Only a reload
+ * of the form or "Keep my changes and overwrite" (which re-reads into the
+ * refused form's holder) moves it on, and a successful save advances it. A
+ * save may re-read platform.json to merge the settings it does not show, but
+ * that read's ETag never reaches the holder.
+ *
+ * A card that shares its page with other platform.json writers (the EU AI Act
+ * cards, Logging → authentication debug, Feedback → storage) saves its own
+ * fields with the scoped `PATCH` instead, so saving one card never makes a
+ * sibling's save fail with 412.
  *
  * The tests run against a fake server that refuses a `POST` whose `If-Match`
- * is not its current revision, like the real route does.
+ * is not its current revision, like the real route does, and counts every
+ * write of platform.json (POST, PATCH, and the dedicated PUTs that write it).
  */
 import '@testing-library/jest-dom';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 const mockRequest = jest.fn();
 jest.mock('../../../client/src/api/client', () => ({
@@ -120,6 +126,8 @@ const AdminOAuthClientsPage =
 const AdminOAuthServerPage =
   require('../../../client/src/features/admin/pages/AdminOAuthServerPage').default;
 
+const { localizedTextPatch } = require('../../../client/src/features/admin/utils/platformPatch');
+
 const PLATFORM_URL = '/admin/configs/platform';
 
 /** The fake server: platform.json and its revision, plus the other reads the pages make. */
@@ -136,6 +144,13 @@ const conflict = () => {
   return error;
 };
 
+/** Routes that write platform.json besides the config route itself. */
+const PLATFORM_WRITING_PUTS = new Set([
+  '/admin/logging/config',
+  '/admin/audit-log/settings',
+  '/admin/usage/meta'
+]);
+
 const OTHER_READS = {
   '/admin/features': { items: [{ id: 'feedback', enabled: true }] },
   '/admin/apps': { items: [] },
@@ -148,6 +163,8 @@ const OTHER_READS = {
 beforeEach(() => {
   server.revision = 1;
   server.posts = [];
+  server.patches = [];
+  server.failPatch = false;
   server.platform = DEFAULT_PLATFORM;
   localStorage.clear();
   mockRequest.mockReset();
@@ -156,6 +173,22 @@ beforeEach(() => {
     const path = config.url.split('?')[0];
     if (path === PLATFORM_URL && method === 'GET') {
       return ok(structuredClone(server.platform), etagOf(server.revision));
+    }
+    if (path === PLATFORM_URL && method === 'PATCH') {
+      server.patches.push({ body: config.data, ifMatch: config.headers?.['If-Match'] ?? null });
+      if (server.failPatch) {
+        server.failPatch = false;
+        const error = new Error('Request failed with status code 500');
+        error.response = { status: 500, data: { status: 500, detail: 'boom' } };
+        throw error;
+      }
+      server.revision += 1;
+      return ok(structuredClone(server.platform), etagOf(server.revision));
+    }
+    if (PLATFORM_WRITING_PUTS.has(path) && method === 'PUT') {
+      // These routes write platform.json too: its revision moves on.
+      server.revision += 1;
+      return ok(OTHER_READS[path] ?? {});
     }
     if (path === PLATFORM_URL && method === 'POST') {
       const ifMatch = config.headers?.['If-Match'] ?? null;
@@ -231,16 +264,6 @@ const renderWithNotice = element =>
 /** The pages, each with how to reach the control that saves its platform.json form. */
 const FORMS = [
   {
-    name: 'EU AI Act → AI acknowledgement card',
-    element: <AiAcknowledgementSettingsCard />,
-    save: () => screen.getByRole('button', { name: 'Save' })
-  },
-  {
-    name: 'EU AI Act → AI notice card',
-    element: <AiNoticeSettingsCard />,
-    save: () => screen.getByRole('button', { name: 'Save' })
-  },
-  {
     name: 'Telemetry',
     element: <AdminTelemetryPage />,
     save: () => screen.getByRole('button', { name: 'Save Telemetry Settings' })
@@ -249,11 +272,6 @@ const FORMS = [
     name: 'Voice input',
     element: <AdminVoiceInputPage />,
     save: () => screen.getByRole('button', { name: 'Save' })
-  },
-  {
-    name: 'Logging → authentication debug',
-    element: <AdminLoggingPage />,
-    save: () => screen.getByRole('button', { name: 'Save Authentication Debug Settings' })
   },
   {
     name: 'OAuth clients → enable toggle',
@@ -301,37 +319,135 @@ describe('a successful save advances the form revision', () => {
   });
 });
 
-describe('Feedback settings', () => {
-  const storeSwitch = () => screen.getByRole('switch', { name: 'Store feedback' });
-  const saveButton = () => screen.getByRole('button', { name: 'Save Changes' });
+describe('cards that share their page with other platform.json writers save with PATCH', () => {
+  const patchBodies = () => server.patches.map(patch => patch.body);
 
-  test('a refused storage save stays refused after Close, until "Keep my changes and overwrite"', async () => {
-    renderWithNotice(<AdminFeedbackPage />);
-    await waitFor(() => expect(storeSwitch()).toBeInTheDocument());
-    fireEvent.click(storeSwitch());
-    await expectRefusedUntilOverwrite(saveButton);
+  test('EU AI Act: the AI notice card, then the AI acknowledgement card, both save (no 412)', async () => {
+    server.platform = {
+      aiDisclosure: { firstTurnNotice: { enabled: true, text: {} } },
+      aiAcknowledgement: { enabled: true, enforce: true, text: {}, policyUrl: '/policy' }
+    };
+    renderWithNotice(
+      <>
+        <div data-testid="notice">
+          <AiNoticeSettingsCard />
+        </div>
+        <div data-testid="ack">
+          <AiAcknowledgementSettingsCard />
+        </div>
+      </>
+    );
+    const saveIn = id => within(screen.getByTestId(id)).getByRole('button', { name: 'Save' });
+    await waitFor(() => expect(saveIn('notice')).toBeInTheDocument());
+    await waitFor(() => expect(saveIn('ack')).toBeInTheDocument());
+
+    fireEvent.click(saveIn('notice'));
+    await waitFor(() => expect(server.patches).toHaveLength(1));
+
+    // The admin clears the policy link: the PATCH removes it with null.
+    fireEvent.change(screen.getByLabelText('AI policy link (https://… or /path)'), {
+      target: { value: '' }
+    });
+    fireEvent.click(saveIn('ack'));
+    await waitFor(() => expect(server.patches).toHaveLength(2));
+    await act(async () => {});
+
+    expect(patchBodies()[0]).toEqual({
+      aiDisclosure: { firstTurnNotice: { enabled: true, text: {} }, guardrail: { text: null } }
+    });
+    expect(patchBodies()[1]).toEqual({
+      aiAcknowledgement: { enabled: true, enforce: true, text: {}, policyUrl: null }
+    });
+    expect(server.patches.every(patch => patch.ifMatch === null)).toBe(true);
+    expect(posts()).toEqual([]);
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(screen.getAllByText(/saved/).length).toBeGreaterThanOrEqual(2);
   });
 
-  test('a collection change that was saved before the platform save was refused is not sent again', async () => {
-    renderWithNotice(<AdminFeedbackPage />);
-    await waitFor(() => expect(storeSwitch()).toBeInTheDocument());
-    const collectionSwitch = screen.getByRole('switch', { name: /Collect feedback/i });
-    fireEvent.click(collectionSwitch);
-    fireEvent.click(storeSwitch());
-    someoneElseSaves();
+  test('Logging: the logging save, then the authentication debug save, both succeed (no 412)', async () => {
+    server.platform = { auth: { debug: { enabled: false } } };
+    renderWithNotice(<AdminLoggingPage />);
+    const saveLogging = () => screen.getByRole('button', { name: 'Save Logging Configuration' });
+    const saveDebug = () =>
+      screen.getByRole('button', { name: 'Save Authentication Debug Settings' });
+    await waitFor(() => expect(saveDebug()).toBeInTheDocument());
 
-    fireEvent.click(saveButton());
-    await screen.findByRole('alertdialog');
-    const featurePuts = () =>
-      mockRequest.mock.calls.filter(
-        ([config]) => config.url === '/admin/features' && config.method === 'PUT'
-      );
-    expect(featurePuts()).toHaveLength(1);
+    fireEvent.click(saveLogging());
+    await waitFor(() => expect(server.revision).toBe(2));
+    await waitFor(() => expect(saveDebug()).not.toBeDisabled());
+    fireEvent.click(saveDebug());
+    await waitFor(() => expect(server.patches).toHaveLength(1));
+    await act(async () => {});
 
-    // The collection PUT succeeded: its baseline moved on, the storage one did not.
-    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
-    fireEvent.click(saveButton());
-    await waitFor(() => expect(posts()).toHaveLength(2));
-    expect(featurePuts()).toHaveLength(1);
+    const [body] = patchBodies();
+    expect(Object.keys(body)).toEqual(['auth']);
+    expect(Object.keys(body.auth)).toEqual(['debug']);
+    expect(body.auth.debug.enabled).toBe(false);
+    expect(posts()).toEqual([]);
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(
+      screen.getByText('Authentication debug configuration saved successfully')
+    ).toBeInTheDocument();
+  });
+
+  describe('Feedback settings', () => {
+    const storeSwitch = () => screen.getByRole('switch', { name: 'Store feedback' });
+    const saveButton = () => screen.getByRole('button', { name: 'Save Changes' });
+
+    test('storage and identification mode save, then storage again: no 412', async () => {
+      renderWithNotice(<AdminFeedbackPage />);
+      await waitFor(() => expect(storeSwitch()).toBeInTheDocument());
+
+      // Storage off and a new identification mode (a PUT that writes platform.json).
+      fireEvent.click(storeSwitch());
+      fireEvent.change(screen.getByRole('combobox'), { target: { value: 'anonymous' } });
+      fireEvent.click(saveButton());
+      await waitFor(() => expect(server.revision).toBe(3));
+      await waitFor(() => expect(saveButton()).toBeDisabled());
+
+      // Storage on again, after the mode save moved the revision on.
+      fireEvent.click(storeSwitch());
+      fireEvent.click(saveButton());
+      await waitFor(() => expect(server.patches).toHaveLength(2));
+      await act(async () => {});
+
+      expect(patchBodies()).toEqual([
+        { features: { feedbackTracking: false } },
+        { features: { feedbackTracking: true } }
+      ]);
+      expect(posts()).toEqual([]);
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    });
+
+    test('a collection change saved before the storage save failed is not sent again', async () => {
+      renderWithNotice(<AdminFeedbackPage />);
+      await waitFor(() => expect(storeSwitch()).toBeInTheDocument());
+      fireEvent.click(screen.getByRole('switch', { name: /Collect feedback/i }));
+      fireEvent.click(storeSwitch());
+      server.failPatch = true;
+
+      fireEvent.click(saveButton());
+      await waitFor(() => expect(server.patches).toHaveLength(1));
+      await waitFor(() => expect(saveButton()).not.toBeDisabled());
+      const featurePuts = () =>
+        mockRequest.mock.calls.filter(
+          ([config]) => config.url === '/admin/features' && config.method === 'PUT'
+        );
+      expect(featurePuts()).toHaveLength(1);
+
+      // The collection PUT succeeded: its baseline moved on, the storage one did not.
+      fireEvent.click(saveButton());
+      await waitFor(() => expect(server.patches).toHaveLength(2));
+      expect(featurePuts()).toHaveLength(1);
+    });
+  });
+});
+
+describe('localizedTextPatch', () => {
+  test('keeps the non-empty texts and sends null for a language that was emptied or removed', () => {
+    expect(
+      localizedTextPatch({ en: 'Hi', de: 'Hallo', fr: 'Salut' }, { en: 'Hello', de: '  ' })
+    ).toEqual({ en: 'Hello', de: null, fr: null });
+    expect(localizedTextPatch(undefined, { en: 'Hi' })).toEqual({ en: 'Hi' });
   });
 });
