@@ -42,50 +42,31 @@ CRITICAL HEADERS FOR VITE PROXY:
 - req.headers.referer = "http://localhost:5173/..."
 ```
 
-### NTLM Skip in Vite Proxy (Development Only)
+### NTLM Through the Vite Proxy (Development)
 
-**Code Location**: `/server/middleware/ntlmAuth.js` (lines 237-254)
+**Code Location**: `/client/vite.config.js` (connection-affine proxy agent)
 
-```javascript
-const isViteProxy =
-  skipNtlmForVite &&                                    // Controlled by env var
-  process.env.NODE_ENV === 'development' &&            // Only in dev mode
-  (req.hostname === 'localhost' || req.hostname === '127.0.0.1') &&
-  (req.headers.origin?.includes('5173') ||             // Check origin header
-   req.headers.referer?.includes('5173'));             // Check referer header
-
-if (isViteProxy) {
-  return next();  // SKIP NTLM PROCESSING
-}
-```
-
-**Why NTLM is Skipped:**
-
-NTLM requires multiple round trips (challenge-response):
+NTLM authenticates a TCP connection, not a request. The handshake needs several round trips on the
+same connection:
 
 ```
 Round 1: Browser --> Server
-  Request Header: GET /api/auth/status
-  Response: 401 + WWW-Authenticate: NTLM (Type 1 Message)
-  
-Round 2: Browser --> Server  
-  Request Header: Authorization: NTLM (Type 2 Message)
-  Response: 401 + WWW-Authenticate: NTLM (Type 2 Response)
-  
+  Request: GET /api/auth/ntlm/login
+  Response: 401 + WWW-Authenticate: NTLM
+
+Round 2: Browser --> Server
+  Request Header: Authorization: NTLM <Type 1 message>
+  Response: 401 + WWW-Authenticate: NTLM <Type 2 message>
+
 Round 3: Browser --> Server
-  Request Header: Authorization: NTLM (Type 3 Message)
-  Response: 200 OK (Authenticated!)
+  Request Header: Authorization: NTLM <Type 3 message>
+  Response: 302 to returnUrl?ntlm=success + Set-Cookie: authToken (signed in)
 ```
 
-Vite's HTTP proxy may not preserve:
-- Connection state across requests
-- Proper NTLM negotiation headers
-- Multipart authentication flow
-
-**Solution**: Vite skips NTLM by default. For testing with NTLM:
-```bash
-SKIP_NTLM_VITE_PROXY=false npm run dev
-```
+The Vite dev proxy keeps each browser connection on one upstream connection to the Express server,
+so the handshake works through `npm run dev` without any flag. The handshake runs only on
+`/api/auth/ntlm/login`; all other requests through the proxy are signed in by the `authToken`
+session cookie.
 
 ---
 
@@ -117,8 +98,7 @@ SKIP_NTLM_VITE_PROXY=false npm run dev
     "debug": false,
     "ldapGroupLookupProvider": "corporate-ldap",
     "defaultGroups": ["ntlm-users", "authenticated"],
-    "sessionTimeoutMinutes": 480,
-    "generateJwtToken": true
+    "sessionTimeoutMinutes": 480
   }
 }
 ```
@@ -133,8 +113,7 @@ SKIP_NTLM_VITE_PROXY=false npm run dev
 | `debug` | boolean | No | false | Enable debug logging |
 | `ldapGroupLookupProvider` | string | No | - | Entry in `ldapAuth.providers` that supplies the user's groups |
 | `defaultGroups` | array | No | [] | Groups to assign all NTLM users |
-| `sessionTimeoutMinutes` | number | No | 480 | JWT token expiration (8 hours) |
-| `generateJwtToken` | boolean | No | true | Generate JWT for API access |
+| `sessionTimeoutMinutes` | number | No | 480 | Lifetime of the session cookie issued at sign-in (8 hours) |
 | `name` | string | No | "ntlm" | Internal provider name |
 | `options` | object | No | {} | Additional options for express-ntlm |
 
@@ -142,34 +121,63 @@ SKIP_NTLM_VITE_PROXY=false npm run dev
 
 ## Request Flow: Step-by-Step
 
-### Step 1: Initial Request
+The NTLM middleware runs the handshake only on `/api/auth/ntlm/login` (GET for the browser, POST
+for API clients). Every other request is signed in by the `authToken` session cookie, the same way
+as after a local, LDAP or OIDC sign-in. Each handshake is a logon at the domain controller, so a
+wrong password counts as one failed logon, not one per API call.
+
+### Step 1: Auth Status
 
 ```
-Browser makes request from http://localhost:5173/apps/chat
+Browser loads http://localhost:5173/apps/chat; the auth gate asks:
 
 GET /api/auth/status HTTP/1.1
 Host: localhost:3000
-Origin: http://localhost:5173
-Referer: http://localhost:5173/apps/chat
-User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)
 ```
 
-### Step 2: Vite Proxy Check
+The NTLM middleware does nothing here (not the login path). Without a session cookie the request is
+anonymous, and the response tells the client where to sign in:
 
 ```javascript
-// NTLM Middleware checks:
-const isViteProxy = 
-  req.headers.origin?.includes('5173') ||  // ✓ TRUE
-  req.headers.referer?.includes('5173');   // ✓ TRUE
-
-if (isViteProxy && SKIP_NTLM_VITE_PROXY) {
-  return next();  // ✓ SKIP NTLM
-}
+res.json({
+  authenticated: false,
+  autoRedirect: { provider: 'ntlm', url: '<basePath>/api/auth/ntlm/login' },
+  authMethods: {
+    ntlm: { enabled: true, domain: "EXAMPLE.COM" }
+  }
+});
 ```
 
-**Result**: NTLM skipped, request continues to next middleware
+`autoRedirect` is set for a signed-out browser when NTLM is the only enabled sign-in method
+(anonymous off), or when the browser has the `ntlmRequested` cookie (it signed in with Windows
+before; logout clears it). The client follows it without a click, the same mechanism as OIDC
+`autoRedirect`, and also when the session cookie expires. With several methods enabled and no
+`ntlmRequested` cookie, the user clicks "Windows sign-in" on the login screen.
 
-### Step 3: JWT Middleware
+### Step 2: NTLM Login
+
+```javascript
+// ntlmAuthMiddleware: only the login path runs the handshake
+if (!ntlmAuth.enabled || !isNtlmLoginPath(req.path)) {
+  return next();
+}
+// express-ntlm: 401 challenges until req.ntlm.Authenticated
+```
+
+The `GET /api/auth/ntlm/login?returnUrl=…` route then calls `processNtlmLogin()`, which looks up
+groups, persists the user and issues the session token. The route sets the `authToken` and
+`ntlmRequested=1` cookies and redirects to `returnUrl?ntlm=success`.
+
+On any failure (domain controller rejected the logon, did not answer within 5 seconds, NTLM
+disabled, cooldown after a rejection) GET redirects to `/?auth=error&message=…`, which the auth gate
+shows on its login screen. POST answers JSON on success, and problem+json on failure with 403
+(rejected), 429 (cooldown) or 503 (domain controller timeout).
+
+After a rejection, the account's next NTLM answers are held back for 60 seconds (429) so they do
+not count as further failed logons. This also works when the browser sends no domain (a machine
+outside the domain); express-ntlm then uses `ntlmAuth.domain`.
+
+### Step 3: Later Requests (JWT Middleware)
 
 ```javascript
 // Check for token in cookie
@@ -187,20 +195,7 @@ if (token) {
 return next();
 ```
 
-### Step 4: Route Handler
-
-```javascript
-app.get('/api/auth/status', (req, res) => {
-  // req.user is undefined if no token
-  // Return available auth methods
-  res.json({
-    authenticated: false,
-    authMethods: {
-      ntlm: { enabled: true, domain: "EXAMPLE.COM" }
-    }
-  });
-});
-```
+`/api/health` never signs in.
 
 ---
 
@@ -233,7 +228,7 @@ app.get('/api/auth/status', (req, res) => {
          │ (localhost:3000)     │
          │                      │
          │ NTLM Middleware      │
-         │ (NOT SKIPPED)        │
+         │ (login path only)    │
          └──────────────────────┘
 ```
 
@@ -242,7 +237,7 @@ app.get('/api/auth/status', (req, res) => {
 #### Request 1: Initial Request
 
 ```http
-GET https://yourdomain.com/apps/chat HTTP/1.1
+GET https://yourdomain.com/api/auth/ntlm/login?returnUrl=%2Fapps%2Fchat HTTP/1.1
 Host: yourdomain.com
 User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)
 ```
@@ -285,23 +280,24 @@ Authorization: NTLM <base64-encoded-type-3-message>
 **Server validates Type 3 against domain controller:**
 
 ```javascript
-// In ntlmAuthMiddleware
+// In ntlmAuthMiddleware (login path only)
 const ntlmMiddleware = getNtlmMiddleware(ntlmAuth);
 ntlmMiddleware(req, res, (err) => {
-  if (req.ntlm && req.ntlm.Authenticated) {
-    // User authenticated!
-    const user = processNtlmUser(req, ntlmAuth);
-    req.user = user;
-  }
+  // express-ntlm relays the messages to the domain controller and
+  // sets req.ntlm.Authenticated; the login route then calls processNtlmLogin()
 });
 ```
 
-**Server responds with authenticated content:**
+**Server sets the session cookie and redirects:**
 
 ```http
-HTTP/1.1 200 OK
+HTTP/1.1 302 Found
+Location: /apps/chat?ntlm=success
 Set-Cookie: authToken=<jwt>; HttpOnly; Secure; SameSite=Lax
+Set-Cookie: ntlmRequested=1
 ```
+
+All further requests carry the `authToken` cookie and run no NTLM handshake.
 
 ---
 
@@ -335,7 +331,7 @@ express-ntlm checks the sign-in and nothing else: it relays the NTLM messages to
    user = enhanceUserGroups(user, authConfig, ntlmAuth);
    // Example: admin -> users -> authenticated -> anonymous
 
-6. Generate JWT (if enabled)
+6. Issue the session token (always)
    const token = generateJwt(user, {
      authMode: 'ntlm',
      additionalClaims: { domain: user.domain }
@@ -486,8 +482,10 @@ Check List:
 1. ✓ Is NTLM enabled in platform.json?
    {"ntlmAuth": {"enabled": true}}
 
-2. ✓ In development, is SKIP_NTLM_VITE_PROXY set correctly?
-   export SKIP_NTLM_VITE_PROXY=false  // to test NTLM
+2. ✓ What does the login screen say?
+   A failed sign-in redirects to /?auth=error&message=...
+   (rejected by the domain controller, no answer within 5 s,
+   or 60 s cooldown after a rejection)
 
 3. ✓ Is the server running on localhost:3000?
    npm run dev  // or npm run start:prod
@@ -528,8 +526,8 @@ Check List:
 
 ```
 Check List:
-1. ✓ Is generateJwtToken enabled?
-   {"generateJwtToken": true}
+1. ✓ Did the sign-in go through /api/auth/ntlm/login?
+   Only that endpoint runs the handshake and sets the cookie
 
 2. ✓ Is JWT_SECRET configured?
    JWT_SECRET=your-secret-key
@@ -544,7 +542,7 @@ Check List:
    });
 
 5. ✓ Check server logs:
-   [NTLM Auth] JWT token generation failed: ...
+   NTLM login failed (with an error code)
 ```
 
 ---
@@ -577,9 +575,6 @@ Documentation:
 ```bash
 # JWT Token Generation
 JWT_SECRET="secret-key-min-32-chars"
-
-# Development NTLM Testing
-SKIP_NTLM_VITE_PROXY=false
 
 # Base Path (subpath deployment)
 BASE_PATH=/ai-hub
