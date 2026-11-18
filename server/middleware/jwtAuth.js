@@ -680,6 +680,9 @@ async function authenticateToken(req, res, next, token, { fromHeader, cookieFall
             email: decoded.email || '',
             groups: decoded.groups || [],
             authMode: 'local',
+            // The provider the token was minted for; the admin lockout guard
+            // (utils/adminGuards.js) keeps this route open.
+            authProvider: decoded.authProvider,
             timestamp: Date.now()
           };
         } catch (loadError) {
@@ -728,6 +731,7 @@ async function authenticateToken(req, res, next, token, { fromHeader, cookieFall
           email: decoded.email || '',
           groups: decoded.groups || [],
           authMode: 'oidc',
+          authProvider: decoded.authProvider,
           timestamp: Date.now()
         };
       } catch (loadError) {
@@ -765,6 +769,7 @@ async function authenticateToken(req, res, next, token, { fromHeader, cookieFall
           // the login request itself.
           domain: decoded.domain,
           authMode: 'ldap',
+          authProvider: decoded.authProvider,
           timestamp: Date.now()
         };
       } catch (loadError) {
@@ -793,6 +798,7 @@ async function authenticateToken(req, res, next, token, { fromHeader, cookieFall
           email: decoded.email || decoded.userPrincipalName,
           groups: decoded.groups || [],
           authMode: 'teams',
+          authProvider: decoded.authProvider,
           timestamp: Date.now()
         };
       } catch (loadError) {
@@ -821,6 +827,7 @@ async function authenticateToken(req, res, next, token, { fromHeader, cookieFall
           email: decoded.email || '',
           groups: decoded.groups || [],
           authMode: 'ntlm',
+          authProvider: decoded.authProvider,
           domain: decoded.domain,
           timestamp: Date.now()
         };

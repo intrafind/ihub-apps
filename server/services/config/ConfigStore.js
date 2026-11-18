@@ -365,27 +365,42 @@ async function readFromDisk(relPath, kind) {
  *
  * Unlike the lenient boot-path read, only a missing file reads as null here;
  * an unreadable or malformed one throws, so the change never replaces data
- * that is still there.
+ * that is still there. With `replaceUnparseable`, a file that was read but is
+ * not valid JSON is handed to `mutate` as `null` with `{ unparseable: true }`
+ * instead; a file that could not be read (EACCES, EIO, …) still throws.
  *
  * @param {string} relPath - Path relative to `contents/`
- * @param {(current: any|null) => any|Promise<any>} mutate - See updateJson
+ * @param {(current: any|null, info: {unparseable: boolean}) => any|Promise<any>} mutate - See updateJson
+ * @param {boolean} replaceUnparseable - See updateJson
  * @returns {Promise<{data: any|null, written: boolean}>}
  */
-async function updateOnDisk(relPath, mutate) {
+async function updateOnDisk(relPath, mutate, replaceUnparseable) {
   const filePath = await resolveConfigPath(relPath);
   await fs.mkdir(path.dirname(filePath), { recursive: true });
   return withFileLock(
     `${filePath}.lock`,
     async () => {
-      let current = null;
+      let text = null;
       try {
-        current = JSON.parse(await fs.readFile(filePath, 'utf8'));
+        text = await fs.readFile(filePath, 'utf8');
       } catch (error) {
         if (error.code !== 'ENOENT') {
           throw new Error(`${relPath} exists but could not be read`, { cause: error });
         }
       }
-      const next = await mutate(current);
+      let current = null;
+      let unparseable = false;
+      if (text !== null) {
+        try {
+          current = JSON.parse(text);
+        } catch (error) {
+          if (!replaceUnparseable) {
+            throw new Error(`${relPath} exists but could not be read`, { cause: error });
+          }
+          unparseable = true;
+        }
+      }
+      const next = await mutate(current, { unparseable });
       if (next === undefined) return { data: current, written: false };
       await atomicWriteJSON(filePath, next);
       return { data: next, written: true };
@@ -721,6 +736,11 @@ export class ConfigStore {
    *   the body to write, or `undefined` to leave the file as it is
    * @param {Object} [options]
    * @param {number} [options.attempts=16] - Conflicting writes tolerated before giving up
+   * @param {boolean} [options.replaceUnparseable=false] - On the filesystem
+   *   path, call `mutate(null, { unparseable: true })` under the same lock when
+   *   the file was read but is not valid JSON, so a full replacement can repair
+   *   it. A file that could not be read still throws, and so does the document
+   *   path, which cannot tell a malformed document from an unreadable one.
    * @returns {Promise<{data: any|null, written: boolean, etag?: string|null}>} The
    *   body now stored and whether this call wrote it; on a write through the
    *   provider also the stored etag (see ConfigCache#setCacheEntry)
@@ -728,11 +748,13 @@ export class ConfigStore {
    *   change computed from nothing would erase it), when `mutate` throws, or
    *   with `code === 'ETAG_MISMATCH'` when every attempt met a conflicting write
    */
-  async updateJson(relPath, mutate, { attempts = 16 } = {}) {
+  async updateJson(relPath, mutate, { attempts = 16, replaceUnparseable = false } = {}) {
     // Updates of one file from this process queue behind each other, so the
     // compare-and-set below only ever races other processes — a handful of
     // workers — rather than every request this worker is serving.
-    return this.#serialize(relPath, () => this.#updateJsonNow(relPath, mutate, attempts));
+    return this.#serialize(relPath, () =>
+      this.#updateJsonNow(relPath, mutate, attempts, replaceUnparseable)
+    );
   }
 
   /** Writers of each file in flight in this process, by path. */
@@ -774,10 +796,10 @@ export class ConfigStore {
     return run;
   }
 
-  async #updateJsonNow(relPath, mutate, attempts) {
+  async #updateJsonNow(relPath, mutate, attempts, replaceUnparseable) {
     const location = parseRawRelPath(relPath);
     const documents = location ? documentsFor(location.ns) : null;
-    if (!documents) return updateOnDisk(relPath, mutate);
+    if (!documents) return updateOnDisk(relPath, mutate, replaceUnparseable);
 
     // A provider that can change a document under its lock does: the compare-and-set
     // below, with a users.json rewrite per acknowledgement from several workers at once,
@@ -793,7 +815,7 @@ export class ConfigStore {
         throw new Error(`${relPath} exists but could not be read`);
       }
       const current = document ? structuredClone(document.data ?? null) : null;
-      const next = await mutate(current);
+      const next = await mutate(current, { unparseable: false });
       if (next === undefined) return { data: current, written: false };
       try {
         const stored = await documents.put(location.ns, location.key, next, {

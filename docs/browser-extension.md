@@ -97,26 +97,18 @@ Before starting the rollout, confirm:
    its own user identity — it logs users in via iHub's OAuth Authorization
    Code flow. Confirm regular browser sign-in works first.
 4. **`integrations` feature flag.** Same flag the Outlook add-in uses —
-   without it, all browser-extension routes return 404.
+   without it, all browser-extension routes answer `403 Feature 'integrations' is not enabled`.
 5. **Browser support.** Chrome 114+, Edge 114+, or Firefox 128+ (with
    `sidePanel` MV3 support). Older Firefox versions can run a popup
    fallback in a future release.
 
 ---
 
-## Step 1 — Enable the `integrations` feature flag
+## Step 1 — Check that integrations are on
 
-In **Admin → Platform → Features**, or directly in `contents/config/platform.json`:
-
-```json
-{
-  "features": {
-    "integrations": true
-  }
-}
-```
-
-Save and (if you edited the file directly) restart the server.
+The **Integrations** feature is on by default. If someone switched it off, turn it on in
+**Admin → Platform → Features** (`integrations` in `contents/config/features.json`); no restart is
+needed.
 
 ---
 
@@ -412,12 +404,15 @@ The extension ID has not been added to **Admin → Browser Extension →
 Extension IDs**. Note the ID from `chrome://extensions`, paste it in,
 click **Save**, and try **Sign in** again.
 
+### `403 Feature 'integrations' is not enabled`
+
+The **Integrations** feature is off. Turn it on in **Admin → Platform → Features** (Step 1); no
+restart is needed.
+
 ### `404 Browser extension integration is not enabled`
 
-Either the `integrations` feature flag is off (Step 1), or you haven't
-clicked **Enable** on the admin page (Step 2). Check
-`contents/config/platform.json` — `features.integrations` and
-`browserExtension.enabled` must both be `true`.
+The integration itself is not switched on: click **Enable** on **Admin → Browser Extension**
+(Step 2).
 
 ### Sign-in window opens, user authenticates, but page shows *"This account is not enabled for Browser Extension"*
 

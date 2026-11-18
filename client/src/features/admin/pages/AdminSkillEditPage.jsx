@@ -9,7 +9,6 @@ import { marked } from 'marked';
 import Icon from '../../../shared/components/Icon';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
-import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import ContentAccessSection from '../components/ContentAccessSection';
 import SystemSkillBadge from '../components/SystemSkillBadge';
 import {
@@ -21,6 +20,10 @@ import {
   updateSkill
 } from '../../../api/adminApi';
 import AdminLoadError from '../components/AdminLoadError';
+import ConfirmDialog from '../../../shared/components/ConfirmDialog';
+import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
+import { useConfirmAction } from '../hooks/useConfirmAction';
+import { deleteConfirmText } from '../utils/confirmText';
 /**
  * AdminSkillEditPage - Detail / edit page for a single installed skill.
  *
@@ -35,6 +38,7 @@ import AdminLoadError from '../components/AdminLoadError';
  */
 function AdminSkillEditPage() {
   const { t } = useTranslation();
+  const { requestConfirm, dialogProps: confirmDialogProps } = useConfirmAction();
   const { skillName } = useParams();
   const navigate = useNavigate();
 
@@ -140,20 +144,22 @@ function AdminSkillEditPage() {
   };
 
   /**
-   * Deletes the skill after user confirmation, then navigates back to the list.
+   * Asks for a named confirmation, deletes the skill, then navigates back to
+   * the list. A failure stays in the dialog.
    */
-  const handleDelete = async () => {
-    if (!confirm(t('admin.skills.deleteConfirm', 'Are you sure you want to delete this skill?'))) {
-      return;
-    }
-
-    try {
-      await deleteSkill(skillName);
-      navigate('/admin/skills');
-    } catch (err) {
-      console.error('Error deleting skill:', err);
-      setError(err.message || 'Failed to delete skill');
-    }
+  const handleDelete = () => {
+    requestConfirm({
+      ...deleteConfirmText({
+        typeKey: 'skill',
+        typeFallback: 'skill',
+        name: skill?.displayName || skillName,
+        t
+      }),
+      action: async () => {
+        await deleteSkill(skillName);
+        navigate('/admin/skills');
+      }
+    });
   };
 
   // ---------------------------------------------------------------------------
@@ -654,7 +660,7 @@ function AdminSkillEditPage() {
                   <textarea
                     id="override-description"
                     rows={3}
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-300 focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    className="mt-1 block w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-md shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-300 focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                     placeholder={t(
                       'admin.skills.field.customDescriptionPlaceholder',
                       'Enter a custom description to override the default...'
@@ -696,16 +702,8 @@ function AdminSkillEditPage() {
         )}
       </div>
 
-      <ConfirmDialog
-        isOpen={blocker.state === 'blocked'}
-        title="Unsaved Changes"
-        message="You have unsaved changes. Leave anyway?"
-        confirmLabel="Leave"
-        denyLabel="Stay"
-        danger={false}
-        onConfirm={() => blocker.proceed?.()}
-        onDeny={() => blocker.reset?.()}
-      />
+      <UnsavedChangesDialog blocker={blocker} />
+      <ConfirmDialog {...confirmDialogProps} />
     </div>
   );
 }

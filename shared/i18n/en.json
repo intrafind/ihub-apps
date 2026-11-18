@@ -173,7 +173,30 @@
     "expandObject": "Expand object ({{count}} fields)",
     "details": "Details",
     "tryAgain": "Try again",
-    "done": "Done"
+    "done": "Done",
+    "dismiss": "Dismiss",
+    "confirmDialog": {
+      "irreversible": "This can't be undone.",
+      "typeToConfirm": "To confirm, type",
+      "copyToken": "Copy",
+      "busy": "Working…"
+    },
+    "discardDialog": {
+      "title": "Discard changes?",
+      "body": "What you entered will be lost.",
+      "bodyNamed": "What you entered in \"{{title}}\" will be lost.",
+      "keepEditing": "Keep editing",
+      "discard": "Discard"
+    },
+    "secretReveal": {
+      "onlyOnce": "This is the only time the secret is shown. Store it now.",
+      "fieldLabel": "Secret",
+      "copied": "Copied",
+      "copyFailed": "Couldn't copy. Select the text and copy it.",
+      "notCopiedWarning": "You haven't copied the secret yet. Close anyway?",
+      "closeAnyway": "Close anyway"
+    },
+    "note": "Note"
   },
   "chatActions": {
     "menu": "Actions menu",
@@ -590,6 +613,17 @@
     }
   },
   "admin": {
+    "configConflict": {
+      "title": "This changed since you opened it",
+      "message": "Someone saved the {{resource}} after you opened this page (another administrator, another tab or a script). Your changes were not saved and are still on the page. Reload to see the current version and make your changes again, or keep your changes: your next save then replaces the newer version, including what the other person changed. If you close this dialog, your next save is refused again.",
+      "close": "Close",
+      "reload": "Reload and discard my changes",
+      "keep": "Keep my changes and overwrite on next save",
+      "resource": {
+        "platform": "platform configuration",
+        "ui": "UI customization"
+      }
+    },
     "chatHistory": {
       "chats": {
         "enabled": "Keep chats in a history",
@@ -950,7 +984,8 @@
         "tryIt": "Try it",
         "tryFlagOff": "Enable the \"Voice Mode\" preview feature first",
         "tryItHint": "Starts a voice session in this browser with the speech service chosen under \"Voice input\" above, the text-to-speech model and the settings in this form, without saving them. With a transcription model, \"Enable voice mode\" must have been saved once; it needs the microphone and a text-to-speech model that is enabled."
-      }
+      },
+      "resource": "voice settings"
     },
     "agents": {
       "memory": {
@@ -973,7 +1008,10 @@
         }
       },
       "edit": {
-        "projects": "Projects"
+        "projects": "Projects",
+        "jsonInvalid": "The JSON is not valid. Fix it before you save or switch to the form.",
+        "skillsHelper": "Search and select skills to add to this agent. Click on selected skills to remove them.",
+        "hitlHint": "Users in any of these groups can approve human-checkpoint pauses for this profile. Pick a group or type its ID and press Enter or a comma."
       }
     },
     "providers": {
@@ -1251,7 +1289,8 @@
         "basicInfo": "Basic Information",
         "basicInfoDesc": "Basic information about the model",
         "configuration": "Configuration",
-        "configurationDesc": "Advanced configuration options for the model"
+        "configurationDesc": "Advanced configuration options for the model",
+        "resource": "model \"{{id}}\""
       },
       "fields": {
         "id": "Model ID",
@@ -1392,7 +1431,6 @@
         "presets": "Preset voices ({{count}})",
         "useDefault": "Use as voice",
         "useFor": "Use for {{language}}",
-        "deleteConfirm": "Delete the voice \"{{name}}\" from the provider account? Models that use it can no longer speak with it.",
         "deleteError": "Could not delete the voice",
         "createTitle": "Create a custom voice",
         "createHint": "Record or upload 10–30 seconds of one person speaking naturally, without music or background noise. The voice is created in the provider account straight away; it reads every language, with the accent of the recording.",
@@ -1414,7 +1452,9 @@
         "create": "Create voice",
         "creating": "Creating…",
         "createError": "Could not create the voice",
-        "created": "Voice \"{{name}}\" created ({{id}}). Use it below, then save the model."
+        "created": "Voice \"{{name}}\" created ({{id}}). Use it below, then save the model.",
+        "deleteTitle": "Delete voice \"{{name}}\"?",
+        "deleteConsequence": "The voice is deleted from the provider account. Models that use it can no longer speak with it."
       },
       "import": {
         "button": "Import from URL",
@@ -1528,7 +1568,9 @@
         "done": "(done)",
         "todo": "(to do)"
       },
-      "moreActions": "More model actions"
+      "moreActions": "More model actions",
+      "disableAllDefault": "The default model setting is cleared. When models are enabled again, the first chat model in the list becomes the default.",
+      "disableAllDefaultNamed": "The default model setting is cleared (\"{{name}}\" is the default now). When models are enabled again, the first chat model in the list becomes the default, not necessarily \"{{name}}\"."
     },
     "auth": {
       "configuration": "Authentication Configuration",
@@ -1599,7 +1641,22 @@
         "noModelsSelected": "No models selected — no client-level restriction (user keeps full group permissions; machine-to-machine tokens get no models)",
         "noPromptsSelected": "No prompts selected — no client-level restriction (user keeps full group permissions; machine-to-machine tokens get no prompts)",
         "permissionsHintTitle": "How Resource Restrictions Work",
-        "permissionsHint": "By default, \"All (*)\" is selected, meaning this OAuth client can access all resources the user has permission for. Selecting specific apps, models, or prompts narrows down access. For example, if a user has 5 apps but you only select 3 here, this OAuth client can only access those 3 apps - acting as a filter on top of the user's existing permissions.",
+        "permissionsHintMachine": "Client credentials (machine-to-machine): there is no user behind the token, so these lists ARE the grant. The client can use exactly the apps, models and prompts listed here, and none of a kind whose list is empty. \"All (*)\" grants every one, including ones added later.",
+        "permissionsHintDelegated": "Authorization code (user login): the token acts as the signed-in user. These lists narrow what that user's groups allow; an empty list adds no restriction. \"All (*)\" sets no limit, so users reach everything their groups allow, including items added later.",
+        "permissionsHintPersonal": "Personal API key: the token acts as the user who owns the key. These lists narrow what that user's groups allow; an empty list adds no restriction. \"All (*)\" sets no limit, so the key reaches everything the owner's groups allow, including items added later.",
+        "permissionsHintNoGrant": "Select a grant type below. For client credentials these lists are the grant; for authorization code they narrow the signed-in user's permissions.",
+        "noAppsSelectedMachine": "Nothing selected: this client can use no apps.",
+        "noModelsSelectedMachine": "Nothing selected: this client can use no models.",
+        "noPromptsSelectedMachine": "Nothing selected: this client can use no prompts.",
+        "noAppsSelectedDelegated": "Nothing selected: no client-level restriction (users keep the apps their groups allow).",
+        "noModelsSelectedDelegated": "Nothing selected: no client-level restriction (users keep the models their groups allow).",
+        "noPromptsSelectedDelegated": "Nothing selected: no client-level restriction (users keep the prompts their groups allow).",
+        "allGrantWarning": "All (*) gives this client-credentials client every item of this kind, including items added later. Prefer listing only what it needs.",
+        "allGrantWarningDelegated": "All (*) sets no client-level limit: users of this client reach every item of this kind their groups allow, including items added later. Prefer listing only what it needs.",
+        "machineClientNeedsGrant": "A client-credentials client needs at least one app, model or prompt. Select what it may use, or choose \"All (*)\".",
+        "machineClientHasNoGrant": "This client-credentials client has no apps, models or prompts, so its tokens can do nothing. Select what it may use, or choose \"All (*)\".",
+        "machineClientHasNoModels": "This client has apps but no models. Every app call needs a model the client may use, so these calls will fail. Select the models it may use, or choose \"All (*)\".",
+        "grantTypesChangedWarning": "You changed the grant types, which changes what the allowed apps, models and prompts mean. For client-credentials tokens an empty list means nothing and the lists are the full grant; for authorization-code tokens an empty list means no extra restriction. Review the lists above before saving.",
         "tokenExpiration": "Token Expiration (minutes)",
         "active": "Active",
         "suspended": "Suspended",
@@ -1691,7 +1748,8 @@
           "disabledDesc": "Enable the authorization server to allow external applications and resource servers to authenticate via OAuth 2.0.",
           "enabledSuccess": "Authorization server enabled successfully",
           "disabledSuccess": "Authorization server disabled successfully",
-          "toggleError": "Failed to update authorization server"
+          "toggleError": "Failed to update authorization server",
+          "resource": "authorization server settings"
         },
         "personalKeys": {
           "enable": "Personal API Keys",
@@ -1804,6 +1862,13 @@
           "tokenExpirationHelp": "Also the window a block takes to bite: an access token already issued stays valid until it expires.",
           "unblock": "Unblock",
           "unblocked": "Unblocked {{name}}"
+        },
+        "redirectUriInvalid": "Not added: redirect URIs must use HTTPS (or http://localhost for development).",
+        "rotateSecretNamedTitle": "Rotate the secret of \"{{name}}\"?",
+        "rotateSecretAction": "Rotate secret",
+        "secretReveal": {
+          "title": "New secret for \"{{name}}\"",
+          "createdTitle": "Client \"{{name}}\" created"
         }
       },
       "ldap": {
@@ -1879,7 +1944,13 @@
         "sharedSecretHeaderLabel": "Shared Secret Header",
         "sharedSecretLabel": "Shared Secret",
         "sharedSecretHelp": "A secret the proxy sends in the shared secret header. When set, the headers are used only on requests that carry it. Together with trusted proxies, both must match: for a proxy elsewhere, add its address above or clear the list to rely on the secret alone."
-      }
+      },
+      "resource": "authentication settings",
+      "subtitle": "Configure multiple authentication methods and user access settings. Enable dual authentication for maximum flexibility.",
+      "save": "Save Configuration",
+      "saving": "Saving...",
+      "saved": "Authentication configuration saved.",
+      "saveFailed": "Failed to save configuration: {{error}}"
     },
     "officeIntegration": {
       "title": "Office Integration",
@@ -2001,9 +2072,11 @@
       "addinId": "Add-in ID",
       "addinIdShared": "Every iHub installation ships this ID. Generate a new one to install this server next to another one (for example dev and production) in the same Outlook.",
       "regenerateAddinId": "Generate new ID",
-      "regenerateAddinIdConfirm": "Outlook treats a manifest with a new ID as a different add-in. Everyone using the add-in must install the new manifest, and the old one keeps pointing at this server until it is removed. Continue?",
       "regenerateAddinIdDone": "New add-in ID generated. Download the manifest and deploy it again.",
-      "regenerateAddinIdError": "Failed to generate a new add-in ID"
+      "regenerateAddinIdError": "Failed to generate a new add-in ID",
+      "regenerateAddinIdTitle": "Generate a new add-in ID?",
+      "regenerateAddinIdConsequence": "Outlook treats a manifest with a new ID as a different add-in. Everyone using the add-in must install the new manifest, and the old one keeps pointing at this server until it is removed.",
+      "resource": "Office integration settings"
     },
     "nextcloudEmbed": {
       "title": "Nextcloud Embed",
@@ -2046,7 +2119,8 @@
       "step1": "Configure a Nextcloud cloud-storage provider under Admin → Integrations → Nextcloud (this powers the OAuth + WebDAV flow).",
       "step2": "Add your Nextcloud origin (e.g. https://cloud.example.com) above so the embed page accepts iframe and postMessage from it.",
       "step3": "Build & install the bundled Nextcloud app skeleton (see nextcloud-app/README.md in the iHub repo).",
-      "step4": "Users right-click any file in Nextcloud Files → \"Chat with iHub\" — the embed opens with the documents pre-attached."
+      "step4": "Users right-click any file in Nextcloud Files → \"Chat with iHub\" — the embed opens with the documents pre-attached.",
+      "resource": "Nextcloud embed settings"
     },
     "cloudStorage": {
       "office365": "Microsoft Office 365",
@@ -2057,7 +2131,7 @@
       "forceTitle": "Force Client Refresh",
       "forceDesc": "Trigger a force refresh for all clients. This will clear all browser caches, localStorage, and force clients to reload all assets (JS, CSS, fonts, configurations) without using browser cache. The disclaimer acceptance will be preserved.",
       "warningTitle": "Warning",
-      "warningDesc": "This action will force all connected clients to reload their browsers on their next page interaction. Use this when deploying critical updates or when clients need to clear cached data.",
+      "warningDesc": "Every browser that uses iHub clears its cached files and reloads the next time iHub is loaded in it. Use this when deploying critical updates or when clients need to clear cached data.",
       "trigger": "Trigger Force Refresh",
       "triggering": "Triggering Force Refresh...",
       "triggerSuccess": "Force refresh triggered successfully! New salt: {{salt}}. All clients will refresh on their next page load.",
@@ -2142,7 +2216,8 @@
         "configSaveError": "Failed to save SSL configuration",
         "securityWarning": "Security Warning",
         "securityWarningDesc": "Disabling SSL certificate validation makes your application vulnerable to man-in-the-middle attacks. Only use this feature in secure, trusted network environments.",
-        "globalWarning": "No domains are currently whitelisted. SSL certificate validation is enabled for ALL external connections. Add specific domains above to bypass SSL validation for those domains only."
+        "globalWarning": "No domains are currently whitelisted. SSL certificate validation is enabled for ALL external connections. Add specific domains above to bypass SSL validation for those domains only.",
+        "ssrfTrustNotice": "These hosts are also trusted by the SSRF guard of web sources, website crawls, the page reader and the watermark detector: these may reach them even when they resolve to private network addresses. This applies whether or not \"Ignore Invalid SSL Certificates\" is on. Tools and MCP servers do not use this list."
       },
       "ssrf": {
         "title": "SSRF Allowlist",
@@ -2151,7 +2226,10 @@
         "removeHost": "Remove",
         "hostPlaceholder": "*.intrafind.io, api.internal.company.com",
         "patternHelp": "Supported patterns: exact hostname (api.example.com), wildcard (*.example.com), subdomain (.example.com).",
-        "noHosts": "No hosts allowed. Outbound calls to private/internal IPs are blocked.",
+        "noHosts": "No hosts explicitly added to the SSRF allowlist.",
+        "tlsTrustedTitle": "Also trusted: SSL domain whitelist",
+        "tlsTrustedDesc": "Hosts on the SSL domain whitelist are trusted as well by web sources, website crawls, the page reader and the watermark detector (not by tools and MCP servers), whether or not \"Ignore Invalid SSL Certificates\" is on. They are edited on the SSL card.",
+        "tlsTrustedNone": "The SSL domain whitelist is empty.",
         "saveConfig": "Save allowlist",
         "savingConfig": "Saving…",
         "configSaved": "SSRF allowlist saved successfully",
@@ -2255,7 +2333,13 @@
         "securityWarning": "Security Warning",
         "securityWarningDesc": "Disabling the secure cookie flag allows cookies to be transmitted over unencrypted HTTP connections. This makes your authentication tokens vulnerable to interception. Only use this in secure, internal network environments without SSL.",
         "defaultBehavior": "By default, cookies are marked as secure in production environments, which means they will only be sent over HTTPS connections. This is the recommended security setting."
-      }
+      },
+      "forceRefreshConfirmTitle": "Force a refresh for all users?",
+      "forceRefreshConfirmMessage": "Every browser that uses iHub clears its cached files and its locally stored data, then reloads the next time iHub is loaded in it. Pages that are open now are not interrupted.",
+      "forceRefreshConfirmKept": "The disclaimer acceptance is kept; other settings stored only in the browser are cleared.",
+      "forceRefreshConfirmSignIn": "Users whose sign-in is stored in the browser may have to sign in again.",
+      "forceRefreshConfirmAction": "Force refresh",
+      "forceRefreshDone": "Force refresh triggered. Every browser clears its cached files and reloads the next time iHub is loaded in it."
     },
     "security": {
       "description": "SSL, CORS, cookie settings, rate limits, outbound proxy, and encryption configuration",
@@ -2303,7 +2387,7 @@
           },
           "adminApi": {
             "name": "Admin API",
-            "description": "Everything under /api/admin."
+            "description": "Everything under /api/admin. Counted per signed-in user or API client; only requests without a sign-in count per address."
           },
           "authApi": {
             "name": "Sign-in",
@@ -2365,7 +2449,9 @@
         "backToList": "Back to Users",
         "cancel": "Cancel",
         "save": "Save User",
-        "saving": "Saving..."
+        "saving": "Saving...",
+        "selfDeactivateHint": "You cannot deactivate your own account.",
+        "saveFailedTitle": "Could not save the user"
       },
       "groups": "Groups",
       "groupsPlaceholder": "Search groups or type a name…",
@@ -2422,7 +2508,7 @@
       "jsonDescription": "Structured JSON logging for parsing and analysis",
       "textDescription": "Human-readable text format with colors",
       "enableComponentFilter": "Enable component filtering",
-      "componentFilterHelp": "When enabled, only logs from selected components will be shown",
+      "componentFilterHelp": "When enabled, only logs from the selected components are written. Errors are always written, whichever component logs them.",
       "selectAll": "Select All",
       "deselectAll": "Deselect All",
       "enableFileLogging": "Enable file logging",
@@ -2455,7 +2541,51 @@
       "note2": "Log level changes are persisted to platform.json configuration",
       "note3": "Lower levels (error, warn) show fewer messages, higher levels (debug, silly) show more",
       "note4": "Use \"info\" level for production, \"debug\" for development",
-      "note5": "Authentication debug logging is separate and requires restart"
+      "note5": "Authentication debug logging is separate and requires restart",
+      "components": {
+        "WorkflowEngine": {
+          "name": "Workflow Engine",
+          "description": "Workflow runs: node scheduling, state, retries and failures"
+        },
+        "NtlmAuth": {
+          "name": "NTLM Authentication",
+          "description": "Windows (NTLM/Kerberos) sign-in and group lookup"
+        },
+        "OidcAuth": {
+          "name": "OIDC Authentication",
+          "description": "OpenID Connect sign-in: redirects, token exchange, group mapping"
+        },
+        "LdapAuth": {
+          "name": "LDAP Authentication",
+          "description": "LDAP and Active Directory sign-in and group lookup"
+        },
+        "ProxyAuth": {
+          "name": "Proxy Authentication",
+          "description": "Sign-in from headers or tokens set by a reverse proxy"
+        },
+        "Authorization": {
+          "name": "Authorization",
+          "description": "Group inheritance and permission checks for apps, models and tools"
+        },
+        "IFinderService": {
+          "name": "iFinder",
+          "description": "iFinder document search and retrieval"
+        },
+        "JiraService": {
+          "name": "Jira",
+          "description": "Jira integration: sign-in and issue requests"
+        },
+        "WebSearch": {
+          "name": "Web Search",
+          "description": "Web search requests to Brave, Staan, Qwant and other search engines"
+        },
+        "McpClientManager": {
+          "name": "MCP Clients",
+          "description": "Connections to MCP servers: connect, list tools, reconnect"
+        }
+      },
+      "resource": "logging settings",
+      "currentLevel": "Current Level"
     },
     "nav": {
       "chatHistory": "Chat History",
@@ -2559,7 +2689,11 @@
         "cimdApprovalRequired": "Require approval (recommended)",
         "cimdApprovalAuto": "Connect automatically",
         "a2aDefaultSkill": "A2A default skill",
-        "a2aDefaultSkillDesc": "The app or workflow a message runs when the A2A client names none, as app__<appId> or workflow__<workflowId>. Clients can always choose a skill with metadata.skillId or by using the per-skill endpoint /a2a/skills/<skillId>. Leave empty to require a choice (a caller with exactly one skill needs none)."
+        "a2aDefaultSkillDesc": "The app or workflow a message runs when the A2A client names none, as app__<appId> or workflow__<workflowId>. Clients can always choose a skill with metadata.skillId or by using the per-skill endpoint /a2a/skills/<skillId>. Leave empty to require a choice (a caller with exactly one skill needs none).",
+        "resource": "MCP gateway settings",
+        "discoveryLabel": "Discovery:",
+        "endpointLabel": "Endpoint:",
+        "transportStateless": "Stateless mode"
       }
     },
     "telemetry": {
@@ -2602,7 +2736,8 @@
       "save": "Save Telemetry Settings",
       "referenceTitle": "Reference",
       "refEnvHint": "Standard OTEL_* environment variables (OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_SERVICE_NAME, ...) are honored at startup.",
-      "refMetricsHint": "Custom iHub metrics: ihub.app.usage, ihub.prompt.usage, ihub.errors, ihub.conversations, ihub.active.users, ihub.active.chats."
+      "refMetricsHint": "Custom iHub metrics: ihub.app.usage, ihub.prompt.usage, ihub.errors, ihub.conversations, ihub.active.users, ihub.active.chats.",
+      "resource": "telemetry settings"
     },
     "systemResources": {
       "title": "System resources",
@@ -2817,7 +2952,11 @@
           "removePin": "Remove pin",
           "addPin": "Add pin",
           "pinInvalid": "Each pin needs an item as <type>:<name> (for example integration:org.ckan__open-data-portal) and a version range."
-        }
+        },
+        "deleteConsequence": "Its catalog disappears from the marketplace and the cached catalog data is removed. Items already installed from it stay installed.",
+        "deleteShipped": "This registry ships with iHub. There is no \"restore default\": to get it back, you have to add it again by hand.",
+        "refreshFailed": "Refresh failed",
+        "updateFailed": "Update failed"
       },
       "detail": {
         "description": "Description",
@@ -3162,7 +3301,10 @@
         "toolSearchOff": "Off: send every tool",
         "toolSearchHelp": "When the tools of this app are too many for one request, the biggest integrations are left out and listed in the prompt; the model finds a tool with search_tools and the tools it finds are added to the request. Keeps requests small and tool choice sharp. Set \"Always loaded\" on an integration to keep it out of the search.",
         "toolSearchBudget": "Token budget for tool definitions",
-        "toolSearchBudgetHelp": "Tokens the tool definitions of one request may take before integrations are left to the search. Default 6000; never more than a tenth of the model's context window."
+        "toolSearchBudgetHelp": "Tokens the tool definitions of one request may take before integrations are left to the search. Default 6000; never more than a tenth of the model's context window.",
+        "selectCategory": "Select category...",
+        "resource": "app \"{{id}}\"",
+        "backToApps": "Back to Apps"
       },
       "reorder": "Reorder",
       "reorderHelp": "Drag a row or use the arrows to set the order apps appear in for users — in the apps browser, on the start page and in the sidebar. Every app is listed, so search and filters do not apply here. Nothing is saved until you choose \"Save order\".",
@@ -3373,10 +3515,14 @@
         "connectedAt": "since {{date}}",
         "expired": "expired",
         "disconnect": "Disconnect",
-        "disconnectConfirm": "Disconnect \"{{user}}\" from {{label}}? They have to sign in again to use it.",
         "resetRegistration": "Reset OAuth client registration",
-        "resetConfirm": "Reset the OAuth client registration of {{label}}? The next sign-in registers iHub afresh; connected users may have to connect again.",
-        "resetDone": "OAuth client registration reset"
+        "resetDone": "OAuth client registration reset",
+        "disconnectTitle": "Disconnect \"{{user}}\" from {{label}}?",
+        "disconnectAction": "Disconnect",
+        "resetTitle": "Reset the OAuth client registration of {{label}}?",
+        "resetAction": "Reset registration",
+        "disconnectConsequence": "They have to sign in again to use {{label}}.",
+        "resetConsequence": "The next sign-in registers iHub afresh; connected users may have to connect again."
       },
       "runsCode": "Runs code on this server",
       "incompatibleReason": "This installation offers no actions: its definition {{reason}}.",
@@ -4459,17 +4605,13 @@
         "unsaved": "You have unsaved changes",
         "discard": "Discard"
       },
-      "unsaved": {
-        "title": "Unsaved changes",
-        "message": "You have unsaved changes. Leave anyway?",
-        "leave": "Leave",
-        "stay": "Stay"
-      },
       "saved": "UI configuration saved successfully",
       "backedUp": "Configuration backed up to: {{path}}",
       "missingSection": "The configuration lacks the section \"{{section}}\".",
       "assets": {
-        "savedNotice": "Uploads and deletions here take effect immediately; they are not part of the unsaved changes. Use the path of an uploaded file in the other tabs."
+        "savedNotice": "Uploads and deletions here take effect immediately; they are not part of the unsaved changes. Use the path of an uploaded file in the other tabs.",
+        "deleteConsequence": "Pages, styles and settings that link to this file show a broken link.",
+        "deleted": "Asset deleted successfully"
       },
       "footer": {
         "title": "Footer",
@@ -4508,8 +4650,15 @@
       },
       "linkTarget": "Open link in",
       "styles": {
-        "colorPicker": "{{name}} (color picker)"
-      }
+        "colorPicker": "{{name}} (color picker)",
+        "variableName": "Name (without --)",
+        "variableValue": "Value",
+        "addVariableRequired": "Enter a name and a value for the variable.",
+        "addVariableConfirm": "Add variable"
+      },
+      "resource": "UI settings",
+      "title": "UI Customization",
+      "description": "Customize the appearance and branding of $t(product.name)"
     },
     "groupSelect": {
       "placeholder": "Search groups or type a name…",
@@ -4573,7 +4722,9 @@
         "other": "Other entries",
         "otherHelp": "Entries the list above does not show: definition ids, or installations that no longer exist.",
         "remove": "Remove {{key}}"
-      }
+      },
+      "deleteBlockedTitle": "Cannot delete group",
+      "deleteFailed": "The group could not be deleted."
     },
     "contentAccess": {
       "title": "Group access",
@@ -4629,7 +4780,7 @@
       "retentionDays": "Retain {{days}} days",
       "retentionForever": "Retain forever",
       "retentionDisabled": "Cleanup disabled",
-      "retentionHint": "Configured in platform.json → audit. Edit under Platform → Advanced.",
+      "retentionHint": "Set in platform.json (audit.retentionDays, audit.cleanupEnabled). No admin page edits these yet.",
       "runCleanup": "Run cleanup now",
       "cleanupRunning": "Running…",
       "cleanupRemoved": "{{count}} files removed",
@@ -4713,7 +4864,10 @@
         "noGroups": "None",
         "moreDetails": "More details",
         "rawEntry": "Raw entry (JSON)"
-      }
+      },
+      "cleanupConfirmTitle": "Delete audit entries older than {{date}}?",
+      "cleanupConfirmMessage": "The audit log files older than the retention period ({{days}} days) are deleted from the server now, instead of at the next scheduled cleanup.",
+      "cleanupConfirmAction": "Delete old entries"
     },
     "filters": {
       "multiSelect": {
@@ -4734,7 +4888,6 @@
     },
     "changelog": {
       "title": "What's New",
-      "subtitle": "Release notes for every $t(product.name) release, newest first.",
       "loading": "Loading changelog...",
       "loadingRelease": "Loading release notes...",
       "loadError": "Failed to load changelog",
@@ -4758,7 +4911,9 @@
       "breakingChangesHint": "Action is needed before or after upgrading.",
       "features": "New & improved",
       "fixes": "Fixes",
-      "backToContents": "Back to contents"
+      "newerRelease": "Newer release",
+      "olderRelease": "Older release",
+      "pagination": "Newer and older release"
     },
     "feedback": {
       "title": "Feedback",
@@ -4801,7 +4956,8 @@
       "review": {
         "unavailable": "Feedback statistics are not available.",
         "range": "Ratings of the last 90 days."
-      }
+      },
+      "resource": "feedback settings"
     },
     "usage": {
       "reviewFeedback": "Review feedback",
@@ -4994,7 +5150,11 @@
           "anonymousDesc": "Users and conversations are recorded as irreversible fingerprints.",
           "pseudonymousDesc": "Each conversation is recorded as its own user; no user ids are stored.",
           "identifiedDesc": "Records name the real user id.",
-          "label": "Tracking mode"
+          "label": "Tracking mode",
+          "confirmTitle": "Change the tracking mode to \"{{mode}}\"?",
+          "confirmScope": "Applies to the usage records written from now on, for every user.",
+          "confirmAction": "Change tracking mode",
+          "changed": "Tracking mode changed to \"{{mode}}\"."
         },
         "subtitle": "Requests and tokens of every model call — chats, agents, workflows, scheduled tasks and the API.",
         "surface": {
@@ -5076,7 +5236,9 @@
         "reset": "Reset to built-in",
         "none": "No keys changed yet. Search above to find a label to change.",
         "noMatches": "No matching translations.",
-        "more": "Show more"
+        "more": "Show more",
+        "languageUnsaved": "{{language}} ({{unsaved}} unsaved)",
+        "unsavedElsewhere": "Unsaved edits in {{languages}}. Switch to that language and save them before you leave this page."
       }
     },
     "prompts": {
@@ -5087,7 +5249,10 @@
         "detectedVariables": "Detected in the text",
         "describeVariable": "Describe",
         "variableDescribed": "described",
-        "variablesDescPlaceholders": "Placeholders written as {{name}} in the prompt text are asked for when the prompt is used. Describe them here to set a label, type, default value or options. {{content}} marks where the user’s own text goes; global variables such as {{user_name}} fill in by themselves."
+        "variablesDescPlaceholders": "Placeholders written as {{name}} in the prompt text are asked for when the prompt is used. Describe them here to set a label, type, default value or options. {{content}} marks where the user’s own text goes; global variables such as {{user_name}} fill in by themselves.",
+        "appId": "Opens in app",
+        "noApp": "Default chat app",
+        "appIdDesc": "The prompt library opens this prompt in this app and lists it first there. It does not limit who sees the prompt."
       },
       "userPrompts": {
         "allowEveryone": "Everyone signed in",
@@ -5124,6 +5289,9 @@
         "truncated": "Showing the first prompts only",
         "updated": "Last changed",
         "userCount": "{{count}} user(s)"
+      },
+      "details": {
+        "linkedApp": "Opens in app"
       }
     },
     "skills": {
@@ -5183,7 +5351,8 @@
       "systemTooltip": "Delivered with iHub. It cannot be changed or deleted.",
       "systemNotice": "This is a system skill delivered with iHub. It is updated with iHub and cannot be changed or deleted here. Enable it for an app in the app’s Skills settings.",
       "providedTools": "Tools this skill provides:",
-      "view": "View"
+      "view": "View",
+      "deletedNamed": "Skill \"{{name}}\" deleted."
     },
     "scheduledTasks": {
       "saved": "Settings saved",
@@ -5238,9 +5407,12 @@
       "memory": {
         "summary": "{{chars}} chars · v{{version}} · {{updatedAt}}",
         "clear": "Clear memory",
-        "confirmClear": "Clear the memory of \"{{name}}\" of {{owner}}? The owner loses these notes."
+        "clearTitle": "Clear the memory of \"{{name}}\"?",
+        "clearAction": "Clear notes",
+        "clearConsequence": "Its owner, {{owner}}, loses the notes this task has written so far."
       },
-      "memoryEnabledHint": "Off: runs neither read nor update the notes of a task (the notes are kept), and \"Only when something changed\" notifies after every run."
+      "memoryEnabledHint": "Off: runs neither read nor update the notes of a task (the notes are kept), and \"Only when something changed\" notifies after every run.",
+      "deleteConsequence": "The task stops running and its owner can no longer see it or its runs."
     },
     "overview": {
       "storage": {
@@ -5266,6 +5438,22 @@
       },
       "users": {
         "active": "{{count}} active (30d)"
+      },
+      "gettingStarted": "Getting started",
+      "setup": {
+        "installed": "Platform installed",
+        "adminAccount": "Admin account ready",
+        "addProvider": "Configure an LLM provider",
+        "createApp": "Create your first app",
+        "configureAuth": "Connect identity provider (optional)",
+        "shippedPasswordHint": "The admin account still signs in with the shipped password. Change it.",
+        "dismiss": "Hide",
+        "dismissLabel": "Hide the setup checklist"
+      },
+      "resource": "the overview",
+      "apps": {
+        "unavailable": "not loaded",
+        "enabledCount": "{{count}} enabled"
       }
     },
     "copilotAgent": {
@@ -5332,7 +5520,8 @@
       "downloading": "Building…",
       "download": "Download agent package",
       "prereqHttps": "iHub's public address uses HTTPS",
-      "prereqHttpsOff": "iHub's public address is not HTTPS, and Copilot only calls HTTPS addresses — set the MCP gateway's Public URL (or forward X-Forwarded-Proto from the proxy)"
+      "prereqHttpsOff": "iHub's public address is not HTTPS, and Copilot only calls HTTPS addresses — set the MCP gateway's Public URL (or forward X-Forwarded-Proto from the proxy)",
+      "resource": "Copilot agent settings"
     },
     "apiKeyStatus": {
       "ok": "Key found",
@@ -5379,6 +5568,10 @@
           "endWithoutOutput": "The end step {{nodes}} has no output. The workflow cannot be saved, and a run that reaches that step fails, until you set its Output in the visual editor."
         },
         "jsonInvalid": "Fix the JSON below to change these settings."
+      },
+      "table": {
+        "visibleTo": "Visible to",
+        "adminsOnly": "Admins only"
       }
     },
     "projects": {
@@ -5523,12 +5716,6 @@
         "deleteSelectedConfirm": "Delete {{count}} items from the project? This cannot be undone.",
         "deleteSelectedAction": "Delete items",
         "deleteSelectedFailed": "{{count}} items could not be deleted: {{reason}}"
-      },
-      "unsaved": {
-        "title": "Unsaved changes",
-        "message": "You have unsaved changes. Leave anyway?",
-        "leave": "Leave",
-        "stay": "Stay"
       },
       "dependencies": {
         "title": "Project is in use",
@@ -5991,7 +6178,10 @@
       "noApp": "No app selected",
       "urlHint": "A path on this server (/apps/chat) always works. A link to another website works only when its host is on the SSRF allowlist.",
       "ssrfNotice": "Short links to other websites work only for hosts on the SSRF allowlist; links to any other host answer \"Not found\".",
-      "ssrfLink": "Admin → Security → SSRF Allowlist"
+      "ssrfLink": "Admin → Security → SSRF Allowlist",
+      "urlEmptyHint": "Leave it empty to open the app or path above.",
+      "paramsLeftOut": "These params are not added to the link while “Include Params” is off.",
+      "targetPreview": "Opens:"
     },
     "toolApproval": {
       "mode": {
@@ -6029,7 +6219,8 @@
       "newOrChangedDefault": "Always ask (default)",
       "newOrChangedHelp": "An action added since the last review, or whose side effect or input changed, asks at least this way until you mark it reviewed. Applies once approval is set on this integration.",
       "presetAlwaysHelp": "Preselected: always ask. This integration sends data outside and does not declare reliably which of its actions only read. You can change it now or later on the integration page.",
-      "presetWritesHelp": "Preselected: ask unless an action only reads. You can change it now or later on the integration page."
+      "presetWritesHelp": "Preselected: ask unless an action only reads. You can change it now or later on the integration page.",
+      "resource": "tool approval settings"
     },
     "integrationBuilder": {
       "a2a": {
@@ -6220,13 +6411,7 @@
       },
       "titleEdit": "Edit in builder",
       "titleEditOf": "Edit {{id}} in the builder",
-      "titleNew": "Add manually",
-      "unsaved": {
-        "leave": "Leave",
-        "message": "The integration is not saved. Leave anyway?",
-        "stay": "Stay",
-        "title": "Unsaved changes"
-      }
+      "titleNew": "Add manually"
     },
     "usageLimits": {
       "title": "Usage limits",
@@ -6284,9 +6469,9 @@
       }
     },
     "unsavedChanges": {
-      "title": "Unsaved changes",
-      "message": "You have unsaved changes. Leave anyway?",
-      "leave": "Leave",
+      "title": "Leave without saving?",
+      "message": "Your changes will be lost.",
+      "discard": "Discard changes",
       "stay": "Stay"
     },
     "docs": {
@@ -6317,7 +6502,8 @@
       "resultCount_one": "{{count}} result",
       "resultCount_other": "{{count}} results",
       "collapseAll": "Collapse all",
-      "expandAll": "Expand all"
+      "expandAll": "Expand all",
+      "tableLabel": "Table"
     },
     "aiDisclosure": {
       "title": "AI notice",
@@ -6805,6 +6991,111 @@
       "relatedNoticeText": "— the notice in the empty chat and the guardrail wording",
       "relatedAck": "AI acknowledgement",
       "relatedAckText": "— the confirmation before the first message, stored with the user"
+    },
+    "common": {
+      "enableAll": "Enable All",
+      "disableAll": "Disable All"
+    },
+    "confirm": {
+      "deleteTitle": "Delete {{type}} \"{{name}}\"?",
+      "deleteMessage": "The {{type}} is removed for all users.",
+      "delete": "Delete",
+      "failed": "The action failed.",
+      "andMore_one": "and {{count}} more",
+      "andMore_other": "and {{count}} more",
+      "types": {
+        "app": "app",
+        "model": "model",
+        "prompt": "prompt",
+        "provider": "provider",
+        "skill": "skill",
+        "workflow": "workflow",
+        "registry": "registry",
+        "asset": "asset",
+        "credential": "credential"
+      },
+      "plural": {
+        "apps": "apps",
+        "models": "models",
+        "prompts": "prompts"
+      },
+      "bulk": {
+        "enableTitle": "Enable all {{items}}?",
+        "disableTitle": "Disable all {{items}}?",
+        "enableMessage_one": "{{count}} of {{total}} {{items}} is disabled now and will be enabled. Users with access see it right away:",
+        "enableMessage_other": "{{count}} of {{total}} {{items}} are disabled now and will be enabled. Users with access see them right away:",
+        "disableMessage_one": "{{count}} of {{total}} {{items}} is enabled now and will be disabled. Users lose access right away:",
+        "disableMessage_other": "{{count}} of {{total}} {{items}} are enabled now and will be disabled. Users lose access right away:",
+        "nothingToEnable": "All {{total}} {{items}} are already enabled.",
+        "nothingToDisable": "All {{total}} {{items}} are already disabled."
+      }
+    },
+    "backup": {
+      "sensitivity": {
+        "title": "Store the export like a key",
+        "body": "The export is not encrypted. It contains the encryption key for stored secrets, the JWT signing keys and the users' password hashes. Anyone who has the file can decrypt every stored secret and create valid sign-in tokens. Keep it where only administrators can read it, and delete copies you no longer need."
+      },
+      "importConfirm": {
+        "title": "Replace all contents with \"{{name}}\"?",
+        "message": "Importing replaces everything in contents/ on this server: configuration, users and groups, keys, chats and uploaded data.",
+        "file": "File: {{name}} ({{size}})",
+        "preImportCopy": "Current contents are kept as a pre-import copy in contents/.backups (the last 3 are kept).",
+        "signIn": "Users, passwords and keys come from the file: you may have to sign in again.",
+        "typeHost": "To confirm, type this server's address",
+        "action": "Import and replace"
+      }
+    },
+    "credentials": {
+      "usageUnknown": "Couldn't check which integrations use \"{{id}}\".",
+      "usageIncomplete": "Couldn't fully check which integrations use \"{{id}}\": {{count}} installed integrations could not be read. Check them before deleting.",
+      "usedBy_one": "Used by {{count}} installed integration, which stops working:",
+      "usedBy_other": "Used by {{count}} installed integrations, which stop working:",
+      "notUsedByIntegrations": "No installed integration uses it.",
+      "notChecked": "Tools, MCP servers and sign-in settings that reference it are not checked here; they fail until they get another credential.",
+      "deleteNamed": "Delete credential \"{{id}}\"",
+      "deleted": "Credential deleted",
+      "deleteError": "Delete failed: {{error}}"
+    },
+    "editor": {
+      "resetTitle": "Reset all changes?",
+      "resetAction": "Reset changes",
+      "switchToJsonTitle": "Switch to the JSON editor?",
+      "switchToFormTitle": "Switch to the form editor?",
+      "switchAction": "Switch editor",
+      "resetConsequence": "Your unsaved changes are discarded.",
+      "switchConsequence": "You have unsaved changes. Switching editors may lose some of them."
+    },
+    "pages": {
+      "fields": {
+        "allowedGroups": "Allowed Groups",
+        "allowedGroupsPlaceholder": "admins, users or *",
+        "allowedGroupsHelp": "Group IDs, separated by commas, exactly as in Admin → Groups. Leave empty or enter * to allow everyone. Only members of a listed group see the page; an ID that does not exist matches nobody.",
+        "idRequired": "ID is required"
+      }
+    },
+    "settingsPage": {
+      "sectionsNav": "Settings sections",
+      "sectionUnsaved": "(unsaved changes)",
+      "sectionUnsavedBadge": "Unsaved changes"
+    },
+    "load": {
+      "title": "Couldn't load {{resource}}",
+      "nothingChanged": "Nothing was changed.",
+      "rateLimited": "Too many requests right now.",
+      "retry": "Retry",
+      "retrying": "Retrying…",
+      "retryIn": "Retry in {{seconds}} s",
+      "forbiddenTitle": "You can't view {{resource}}",
+      "forbidden": "Your account has no access to this page.",
+      "notFoundTitle": "Not found: {{resource}}",
+      "notFound": "It may have been deleted or renamed.",
+      "resourceFallback": "this item"
+    },
+    "browserExtension": {
+      "resource": "browser extension settings"
+    },
+    "cors": {
+      "title": "CORS Configuration"
     }
   },
   "cloudStorage": {
@@ -6930,7 +7221,21 @@
     "documentTooLargeCombined": "The {{fileCount}} attached documents together are large (~{{estimatedTokens}} estimated tokens combined) and may exceed the model's context window of {{tokenLimit}} tokens. The request may fail. Consider removing some documents or selecting a model with a larger context window.",
     "documentTooLargeFileItem": "{{fileName}}: ~{{estimatedTokens}} tokens",
     "rendererError": "Renderer Error",
-    "noComponentFound": "No renderer found"
+    "noComponentFound": "No renderer found",
+    "fields": {
+      "REQUIRED": "Required.",
+      "NOT_A_NUMBER": "Enter a number.",
+      "NOT_A_BOOLEAN": "Choose yes or no.",
+      "INVALID_CHOICE": "Choose one of the offered values.",
+      "INVALID_URL": "Enter an http(s) URL.",
+      "NOT_A_LIST": "Enter a list of values.",
+      "NOT_A_STRING": "Enter text.",
+      "PATTERN_MISMATCH": "The value does not have the expected format.",
+      "UNKNOWN_FIELD": "This setting is not known to the integration.",
+      "SENSITIVE_VALUE": "Secret values belong in the credential store.",
+      "TOO_SMALL": "Enter {{min}} or more.",
+      "TOO_LARGE": "Enter {{max}} or less."
+    }
   },
   "toolbar": {
     "bold": "Bold",
@@ -7885,11 +8190,10 @@
       "back": "Back",
       "boundaryEdgesRemoved": "Connections crossing the loop boundary were removed — reconnect inside or outside the loop.",
       "chatIntegrationLink": "Chat integration",
-      "chatIntegrationLinkHint": "Availability in chat, how the answer is shown and its description are set on the workflow page. Unsaved changes on the canvas are lost.",
+      "chatIntegrationLinkHint": "Availability in chat, how the answer is shown and its description are set on the workflow page.",
       "chatVisible": "Show progress in chat",
       "config": "Configuration",
       "configJson": "Config (JSON)",
-      "confirmDeleteNode": "Delete this node?",
       "copied": "copied",
       "deleteEdge": "Delete connection",
       "deleteNode": "Delete node",
@@ -7961,9 +8265,6 @@
       "progressNoteWhenHelp": "Optional condition. Leave empty to always show the note.",
       "promptId": "Enter workflow ID:",
       "promptIdHint": "Use only letters, numbers, dots, underscores, and hyphens.",
-      "publish": "Publish",
-      "publishFailed": "Publish failed: {{message}}",
-      "publishSuccess": "Workflow published successfully",
       "save": "Save",
       "saveFailed": "Save failed: {{message}}",
       "saveSuccess": "Workflow saved",
@@ -8054,7 +8355,23 @@
           "wait": "Wait until the document is ready",
           "outputHelp": "State variable for the stored document. Default: {{name}}. Keep \"wait\" on when a later step reads the document."
         }
-      }
+      },
+      "localizedField": {
+        "addLanguages": "Add languages",
+        "addLanguagesTitle": "Enter this text per language",
+        "addLanguage": "Add a language",
+        "removeLanguage": "Remove {{lang}}"
+      },
+      "human": {
+        "optionLabel": "Label",
+        "optionValueN": "Value of option {{n}}",
+        "optionLabelN": "Label of option {{n}}",
+        "optionStyleN": "Style of option {{n}}",
+        "removeOptionN": "Remove option {{n}}",
+        "noOptions": "Add at least one option. Without one, nobody can answer this step and the run waits until it is cancelled."
+      },
+      "deleteNodeTitle": "Delete node \"{{name}}\"?",
+      "deleteNodeConsequence": "The node, the steps nested in it and their connections are removed. The workflow keeps its saved version until you save."
     },
     "checkpointAwaiting": "Awaiting your input",
     "join": "Join",
@@ -9622,11 +9939,13 @@
     "save": "Save",
     "saving": "Saving…",
     "clear": "Clear",
-    "clearConfirm": "Clear all notes? This removes everything written so far.",
     "reload": "Reload (discard my edits)",
     "keepEditing": "Keep editing",
     "versionConflict": "Conflict: memory was modified elsewhere. Reload to see the latest.",
-    "staleNotice": "The notes changed since you started editing (a run may have updated them)."
+    "staleNotice": "The notes changed since you started editing (a run may have updated them).",
+    "clearTitle": "Clear all notes?",
+    "clearAction": "Clear notes",
+    "clearConsequence": "Everything written so far is removed."
   },
   "usageGuide": {
     "question": "How do I use this app?",
@@ -10763,7 +11082,13 @@
     "COPILOT_REFERENCE_ID_MISSING": "The Copilot agent has no reference ID yet.",
     "COPILOT_PUBLIC_HTTPS_REQUIRED": "The Copilot agent needs a public HTTPS address.",
     "INTEGRATION_AUTH_REQUIRED": "Connect your account to use this integration.",
-    "AI_ACKNOWLEDGEMENT_REQUIRED": "Please confirm the AI-use notice before sending messages."
+    "AI_ACKNOWLEDGEMENT_REQUIRED": "Please confirm the AI-use notice before sending messages.",
+    "AUTH_LOCKOUT": "This change would turn off the sign-in method you are using, or leave no administrator who can sign in. Nothing was changed. To switch methods: enable the new method and save, sign in with it once, give that user an administrator group on the Users page (a group mapping from the identity provider alone does not count), sign in with it as that administrator, then turn off the old one.",
+    "LAST_ADMIN": "This change would leave no active administrator who can sign in. Nothing was changed. Give another active user administrator rights first.",
+    "SELF_LOCKOUT": "You cannot deactivate or delete your own account. Ask another administrator to do it.",
+    "GROUP_IN_USE": "The group \"{{groupId}}\" cannot be deleted because other groups inherit from it. Remove it from their inherited groups first.",
+    "ADMIN_CHECK_FAILED": "Could not verify that an administrator keeps access, so nothing was changed. Please try again.",
+    "PRECONDITION_FAILED": "This configuration was changed after you opened it (by another administrator, another tab or a script). Nothing was saved, and your changes are still on the page. Reload to see the current version, then apply your changes again."
   },
   "workspace": {
     "backTo": "Back to {{name}}",

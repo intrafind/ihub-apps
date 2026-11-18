@@ -1,17 +1,22 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 import ResourceSelector from '../components/ResourceSelector';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import AdminLoadGate from '../components/AdminLoadGate';
+import { useAdminConfigLoad } from '../hooks/useAdminConfigLoad';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
+import { useSavedBaseline } from '../hooks/useSavedBaseline';
 
 function AdminBrowserExtensionPage() {
   const { t } = useTranslation();
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [toggling, setToggling] = useState(false);
   const [message, setMessage] = useState(null);
@@ -25,6 +30,14 @@ function AdminBrowserExtensionPage() {
   const [allowedGroups, setAllowedGroups] = useState(['browser-extension']);
   const [availableGroups, setAvailableGroups] = useState([]);
   const [confirmDialog, setConfirmDialog] = useState(null);
+  // Unsaved-changes guard: the baseline is captured after every successful load
+  // (also the reload after Save), so a just-loaded page is never dirty.
+  const editedValues = useMemo(
+    () => ({ displayName, description, starterPrompts, extensionIds, allowedGroups }),
+    [displayName, description, starterPrompts, extensionIds, allowedGroups]
+  );
+  const { baseline, captureBaseline } = useSavedBaseline(editedValues);
+  const { blocker } = useUnsavedChanges(baseline, editedValues);
 
   const emptyPrompt = () => ({
     _id: crypto.randomUUID(),
@@ -41,29 +54,38 @@ function AdminBrowserExtensionPage() {
     return out;
   };
 
+  const fetchStatus = async () =>
+    (await makeAdminApiCall('/admin/browser-extension/status', { method: 'GET' })).data;
+
+  /** Put a loaded status into the form state. */
+  const applyStatus = data => {
+    setStatus(data);
+    setDisplayName(sanitizeLocalized(data.displayName));
+    setDescription(sanitizeLocalized(data.description));
+    setStarterPrompts(
+      Array.isArray(data.starterPrompts)
+        ? data.starterPrompts.map(p => ({
+            _id: crypto.randomUUID(),
+            title: sanitizeLocalized(p?.title),
+            message: sanitizeLocalized(p?.message)
+          }))
+        : []
+    );
+    setExtensionIds(Array.isArray(data.extensionIds) ? data.extensionIds : []);
+    setAllowedGroups(
+      Array.isArray(data.allowedGroups) && data.allowedGroups.length > 0
+        ? data.allowedGroups
+        : ['browser-extension']
+    );
+    // The loaded values are the unsaved-changes baseline (also after a reload).
+    captureBaseline();
+  };
+
+  // Reload after Enable/Disable or a save; the first load goes through the gate below.
   const loadStatus = async () => {
     try {
       setLoading(true);
-      const res = await makeAdminApiCall('/admin/browser-extension/status', { method: 'GET' });
-      const data = res.data;
-      setStatus(data);
-      setDisplayName(sanitizeLocalized(data.displayName));
-      setDescription(sanitizeLocalized(data.description));
-      setStarterPrompts(
-        Array.isArray(data.starterPrompts)
-          ? data.starterPrompts.map(p => ({
-              _id: crypto.randomUUID(),
-              title: sanitizeLocalized(p?.title),
-              message: sanitizeLocalized(p?.message)
-            }))
-          : []
-      );
-      setExtensionIds(Array.isArray(data.extensionIds) ? data.extensionIds : []);
-      setAllowedGroups(
-        Array.isArray(data.allowedGroups) && data.allowedGroups.length > 0
-          ? data.allowedGroups
-          : ['browser-extension']
-      );
+      applyStatus(await fetchStatus());
     } catch (_err) {
       setMessage({
         type: 'error',
@@ -92,13 +114,19 @@ function AdminBrowserExtensionPage() {
     }
   };
 
+  // No form, Enable or Save until the status loaded: saving after a failed
+  // load would store empty prompts and defaults over the real ones (IN-B6).
+  const load = useAdminConfigLoad({
+    sources: { status: { load: fetchStatus, onLoad: applyStatus } }
+  });
+  const ready = load.status === 'ready';
+
   useEffect(() => {
-    void loadStatus();
     void loadGroups();
-    // eslint-disable-next-line @eslint-react/exhaustive-deps
   }, []);
 
   const handleToggle = async () => {
+    if (!ready) return;
     if (!status) return;
     const action = status.enabled ? '_disable' : '_enable';
     try {
@@ -218,6 +246,7 @@ function AdminBrowserExtensionPage() {
   };
 
   const handleSaveConfig = async () => {
+    if (!ready) return;
     try {
       setSaving(true);
       setMessage(null);
@@ -340,7 +369,12 @@ function AdminBrowserExtensionPage() {
           </div>
         )}
 
-        {loading ? (
+        {!ready ? (
+          <AdminLoadGate
+            load={load}
+            resourceLabel={t('admin.browserExtension.resource', 'browser extension settings')}
+          />
+        ) : loading ? (
           <div className="flex items-center justify-center py-16">
             <div className="w-8 h-8 border-4 border-gray-200 border-t-emerald-600 rounded-full animate-spin" />
           </div>
@@ -604,7 +638,7 @@ function AdminBrowserExtensionPage() {
                     }
                   }}
                   placeholder="abcdefghijklmnopabcdefghijklmnop"
-                  className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm font-mono text-gray-700 dark:text-gray-200 focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
+                  className="flex-1 rounded-lg border border-admin-control-border dark:border-admin-control-border-dark bg-white dark:bg-gray-900 px-3 py-2 text-sm font-mono text-gray-700 dark:text-gray-200 focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
                 />
                 <button
                   type="button"
@@ -803,6 +837,7 @@ function AdminBrowserExtensionPage() {
         onConfirm={() => confirmDialog?.onConfirm()}
         onDeny={() => setConfirmDialog(null)}
       />
+      <UnsavedChangesDialog blocker={blocker} />
     </div>
   );
 }

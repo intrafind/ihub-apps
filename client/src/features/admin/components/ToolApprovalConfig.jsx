@@ -1,10 +1,13 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import AdminLoadGate from './AdminLoadGate';
+import { useAdminConfigLoad } from '../hooks/useAdminConfigLoad';
+import { useDirtyReport } from '../hooks/useDirtyReport';
 import { ApprovalModeSelect } from './ToolApprovalFields';
 
 /**
@@ -24,53 +27,80 @@ export function toolApprovalFromForm(form) {
 }
 
 /**
+ * The JSON Merge Patch that stores what the form holds: the three defaults,
+ * an empty select as `null` (which removes that default), or `null` for the
+ * whole block when nothing is set, as {@link toolApprovalFromForm} decides.
+ *
+ * @param {{default?: string, internal?: string, external?: string}} form
+ * @returns {{toolApproval: Object|null}}
+ */
+export function toolApprovalPatchFromForm(form) {
+  if (toolApprovalFromForm(form) === null) return { toolApproval: null };
+  return {
+    toolApproval: {
+      defaults: {
+        default: form.default || null,
+        internal: form.internal || null,
+        external: form.external || null
+      }
+    }
+  };
+}
+
+/**
  * Admin → Security → Tool approval (#2945): the platform defaults that decide
  * whether a person approves a model's tool call before it runs. Installations,
  * tools, actions and apps can only tighten these.
  */
-function ToolApprovalConfig() {
+/**
+ * @param {Object} props
+ * @param {(dirty: boolean) => void} [props.onDirtyChange] - Reports unsaved edits to the page.
+ */
+function ToolApprovalConfig({ onDirtyChange }) {
   const { t } = useTranslation();
   const [form, setForm] = useState({ default: '', internal: '', external: '' });
-  const [loading, setLoading] = useState(true);
+  // The form as last loaded or saved; null until it loaded.
+  const [savedForm, setSavedForm] = useState(null);
+  useDirtyReport(savedForm, form, onDirtyChange);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const response = await makeAdminApiCall('/admin/configs/platform', { method: 'GET' });
-        const defaults = response.data?.toolApproval?.defaults || {};
-        setForm({
-          default: defaults.default || '',
-          internal: defaults.internal || '',
-          external: defaults.external || ''
-        });
-      } catch (error) {
-        setMessage({
-          type: 'error',
-          text:
-            error.message ||
-            t('admin.toolApproval.loadError', 'The tool approval settings could not be loaded.')
-        });
-      } finally {
-        setLoading(false);
+  // No form and no Save until the settings loaded: saving the empty form after
+  // a failed load would clear the stored approval defaults.
+  const load = useAdminConfigLoad({
+    sources: {
+      platform: {
+        load: async () =>
+          (await makeAdminApiCall('/admin/configs/platform', { method: 'GET' })).data,
+        onLoad: data => {
+          const defaults = data?.toolApproval?.defaults || {};
+          const loaded = {
+            default: defaults.default || '',
+            internal: defaults.internal || '',
+            external: defaults.external || ''
+          };
+          setForm(loaded);
+          setSavedForm(loaded);
+        }
       }
-    };
-    void load();
-  }, [t]);
+    }
+  });
+  const ready = load.status === 'ready';
 
   const save = async () => {
+    if (!ready) return;
     setSaving(true);
     setMessage(null);
     try {
-      // Only the approval block: the save route keeps every section the body
-      // leaves out, while the GET answer it would otherwise echo back has
-      // fields removed (a proxy JWT provider's `jwkUrl`), which a full-body
-      // save would erase.
+      // A scoped change of the approval block only. Not a POST: the Security
+      // page's other cards save platform.json through their own routes, so the
+      // revision this card loaded is stale after any of them saved, and a
+      // guarded POST would report a conflict with the admin's own change.
       await makeAdminApiCall('/admin/configs/platform', {
-        method: 'POST',
-        body: { toolApproval: toolApprovalFromForm(form) }
+        method: 'PATCH',
+        body: toolApprovalPatchFromForm(form)
       });
+      setSavedForm(form);
       setMessage({
         type: 'success',
         text: t('admin.toolApproval.saved', 'Tool approval settings saved.')
@@ -87,11 +117,20 @@ function ToolApprovalConfig() {
     }
   };
 
-  if (loading) {
+  if (!ready) {
     return (
-      <div className="flex items-center justify-center py-8">
-        <Icon name="loader" className="h-6 w-6 animate-spin text-primary-600" />
-      </div>
+      <AdminLoadGate
+        load={load}
+        resourceLabel={t('admin.toolApproval.resource', 'tool approval settings')}
+        loadingFallback={
+          <div className="flex items-center justify-center py-8">
+            <Icon
+              name="loader"
+              className="h-6 w-6 animate-spin text-admin-accent dark:text-admin-accent-fg-dark"
+            />
+          </div>
+        }
+      />
     );
   }
 

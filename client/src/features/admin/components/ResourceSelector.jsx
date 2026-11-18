@@ -1,8 +1,9 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useMemo } from 'react';
+import { useId, useState, useMemo } from 'react';
 import Icon from '../../../shared/components/Icon';
+import { CHECKBOX_CLASS } from './formStyles';
 
 function ResourceSelector({
   label,
@@ -15,6 +16,10 @@ function ResourceSelector({
 }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
+  // The field label names the search input; the "All (*)" checkbox is named
+  // by its own label text plus the field label, so several selectors on one
+  // page stay distinguishable for screen readers.
+  const searchId = useId();
 
   const isWildcard = selectedResources.includes('*');
 
@@ -86,19 +91,23 @@ function ResourceSelector({
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+        <label
+          htmlFor={searchId}
+          className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+        >
           {label}
         </label>
         {allowWildcard && (
-          <div className="flex items-center">
+          <label className="flex items-center cursor-pointer">
             <input
               type="checkbox"
               checked={isWildcard}
               onChange={e => handleWildcardToggle(e.target.checked)}
-              className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 dark:border-gray-600 rounded-sm"
+              aria-label={typeof label === 'string' && label ? `${label}: All (*)` : undefined}
+              className={`${CHECKBOX_CLASS} mr-2`}
             />
             <span className="text-sm text-gray-700 dark:text-gray-300">All (*)</span>
-          </div>
+          </label>
         )}
       </div>
 
@@ -136,13 +145,14 @@ function ResourceSelector({
         <div className="relative">
           <div className="relative">
             <input
+              id={searchId}
               type="text"
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
               onFocus={handleSearchFocus}
               onBlur={handleSearchBlur}
               placeholder={placeholder}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500 focus:border-blue-500 sm:text-sm placeholder-gray-500 dark:placeholder-gray-300"
+              className="w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-md shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-admin-accent focus:border-admin-accent sm:text-sm placeholder-gray-500 dark:placeholder-gray-300"
             />
             <Icon
               name="search"

@@ -809,11 +809,18 @@ A skill that an app switches on itself (`skillSettings.autoActivate`) is no long
 the user, and a skill kept from an earlier message of the chat is now announced too instead of being
 silent. The chat shows who brought each skill in once the activity line is updated.
 
-## Two German Messages About Documents Use the Formal Address
+## German Texts Use the Formal Address
 
 When a document could not be attached to a chat, the German messages said "Du hast keinen Zugriff" and
 "steht dir nicht zur Verfügung". They now say "Sie haben keinen Zugriff" and "steht Ihnen nicht zur
 Verfügung", like the rest of the German interface.
+
+- The other German texts that still said *du* use *Sie* as well: the chat input placeholder, the
+  question before a chat is cleared, the empty chat, the feedback dialog, the sender name of your own
+  messages ("Sie"), the Nextcloud embed settings and the integration action details. Instructions
+  such as "Wähle eine App" and "Gib eine Zahl ein" now read "Wählen Sie eine App" and "Geben Sie
+  eine Zahl ein", in the app picker, the integration catalog, the tool parameter fields and the
+  answer rating.
 
 ## Source Cards Get the Search Profile Name and the "Uploaded" or "Picked" Marker Again
 
@@ -852,6 +859,294 @@ dark mode was selected; only pages reached from the chat were dark.
 The warnings at the top of the admin area (demo accounts with their shipped passwords, low disk
 space) showed one word per line on a narrow screen and filled the whole screen. The text now uses
 the full width and the links move below it.
+
+## Admins Can No Longer Lock Themselves or Everyone Out
+
+Unticking the sign-in method you were signed in with on **Authentication**, demoting or
+deactivating the last administrator on **Users**, or a save after the Authentication page failed
+to load could leave nobody able to administer iHub. Worse, the next person to sign in through
+OIDC, proxy or NTLM was then made an administrator automatically. Such changes are now refused,
+with an explanation on the page, and nothing is saved.
+
+- **Authentication:** a save that turns off your own sign-in method (or your OIDC/LDAP provider),
+  or leaves no administrator who can sign in, is refused. To switch methods: enable the new one,
+  sign in with it once, give that user record an administrator group on **Users** (a group
+  mapping from the identity provider alone does not count), sign in with it as that
+  administrator, then turn off the old one. Methods forced on through `IHUB_PLATFORM__*`
+  environment variables count as on. A rollback from the change history is checked the same way.
+- **Users:** you cannot deactivate or delete your own account; your own Enabled switch is locked.
+  Removing administrator rights from, or deactivating, the last active administrator who can
+  sign in is refused. Administrators inherited through a group count; deactivated ones and those
+  whose sign-in method is off do not.
+- **Users:** saving a user (an email change, say) no longer re-enables a deactivated account,
+  and unticking **Enabled** deactivates it again.
+- **Groups:** a group other groups inherit from can no longer be deleted; the dialog names them.
+  Deleting it used to leave the groups unresolvable, and from then on permission changes silently
+  stopped applying until a restart. Group edits and deletes that would leave no administrator are
+  refused, and a groups file that no longer resolves is listed on the admin Overview statistics
+  (`configRefreshErrors`). Such a file can be repaired from **Groups** by removing the
+  inheritance that closes the loop or creating the missing group; other group edits say that the
+  stored file is the problem.
+- A sign-in method switched on by a placeholder or environment variable that resolves to text
+  such as `"true"` counts as on for these checks and for the admin rescue, as it does for
+  sign-in itself.
+- Proxy sign-in switched on only by `PROXY_AUTH_ENABLED=true` now counts for the admin rescue as
+  it does for these checks. Before, the rescue could make the next proxy user an administrator
+  even though a proxy administrator was left.
+
+How to recover when nobody can sign in as an administrator: see
+[Authentication Quick Start → Recover Admin Access](../../AUTHENTICATION_QUICK_START.md#recover-admin-access).
+
+## Admin Saves No Longer Erase Settings They Did Not Show
+
+Several admin saves wrote back more than they showed, and lost what they could not see:
+
+- Every save of **Authentication**, of the onboarding switch on **Advanced** and of the
+  **Provenance** settings on **EU AI Act** deleted the JWKS URL of every proxy JWT provider, so
+  token sign-in through the proxy stopped working after an unrelated change. The URL is now shown
+  (with any password or token in it masked) and kept.
+- A save that left out a JWT secret or the Azure speech key deleted it. A secret is now kept unless
+  it is cleared explicitly, and a redaction placeholder can never be saved as a secret: such a save
+  is refused, naming the field.
+- Saving **UI Customization** deleted content pages created under **Pages** after the
+  customization page was opened. Pages are now always kept.
+- **Save Privacy Settings** on **Logging** also saved a pending, unsaved change of the log level.
+  It now saves only the IP anonymization; logging configuration changes are recorded in the audit
+  log and the change history.
+- The change history of the platform settings showed the JWT secrets in plain text. They are now
+  redacted, and rolling back keeps the current secrets instead of restoring older ones.
+
+No action is needed after the upgrade.
+
+## Admin Settings Pages That Failed to Load No Longer Offer Save
+
+When a settings page could not load its settings — the server answered "Too many requests", was
+restarting or could not be reached — most pages showed the error above a form filled with built-in
+defaults, and Save stayed enabled. One click wrote those defaults over the real configuration. On
+**Authentication** that meant Proxy mode with local sign-in off, shown as "All valid", which could
+lock the admin out; elsewhere it could drop the MCP gateway's OAuth settings, wipe the telemetry
+endpoint, switch audit IP anonymization off or empty the SSL, SSRF and CORS allow-lists.
+
+These pages now show **Couldn't load …**, the reason and "Nothing was changed." instead of the form,
+with no Save until the settings have loaded.
+
+- **Retry** loads again in place, without reloading the page; after "Too many requests" it counts
+  down until the server accepts requests again.
+- Affected pages: Authentication, MCP gateway, Office add-in, browser extension, Copilot agent,
+  Nextcloud embed, Telemetry, Logging, the Security cards (SSL, cookies, CORS, rate limits, SSRF,
+  tool approval, outbound proxy), UI Customization, Voice, OAuth server, Feedback settings, the
+  provider timeouts and the app and model editors.
+- On Security, only the card that failed shows the message; the other cards stay usable.
+- **Authentication** asks before you leave the page with unsaved changes.
+- The admin **Overview** no longer turns into a "fresh installation" with the getting-started
+  checklist when the list of apps fails to load; it shows the error with Retry.
+
+## Admin Pages Ask Before Unsaved Changes Are Lost
+
+Many admin pages dropped unsaved edits without a word when you clicked a sidebar entry, a link or
+the browser's Back button: the Observability and Platform settings pages, the integration pages,
+the visual workflow editor, translation overrides, the document template editor and the new
+provider form. They now ask **Leave without saving?** first, with **Stay** and **Discard changes**,
+like the other editors. The dialog reads the same on every page.
+
+- Browser Back and Forward ask too, and so does the Back button of the visual workflow editor.
+- Switching a tab or a filter on the same page no longer asks (it did on **UI Customization**).
+  Edits on an integration's **Settings** tab and on the **Limits & quotas** tab of **Usage
+  Reports** are kept while you look at another tab.
+- A page that is still loading or failed to load never asks.
+- **Security** marks each section with unsaved changes, next to its heading and in its section
+  list.
+
+## Admin: Destructive Actions Ask First and Name What They Affect
+
+Choosing a backup ZIP no longer replaces the whole configuration on the spot, and Enable All,
+Disable All, Force Client Refresh, audit cleanup and the usage tracking mode no longer act on one
+click. Every such action now opens a dialog that names the item and what will happen, with a
+button that names the action. If the action fails, the error stays in the dialog.
+
+- **Backup import:** choosing a file only opens a dialog with its name and size; you type this
+  server's address to import. The current contents are kept in `contents/.backups`. The Import
+  button now works with the keyboard.
+- **Backup page:** a warning says the export holds the encryption key, the JWT signing keys and
+  the password hashes, and must be stored like a key.
+- **Enable All / Disable All** on Apps, Models and Prompts state how many items change and name
+  them; Disable All on Models says the default model is cleared.
+- **Deletes** of apps, models, prompts, providers, skills, workflows, assets and credentials name
+  the item; a credential's dialog lists the installed integrations that use it. The shipped
+  **iHub Official Marketplace** registry asks for its id to be typed before it is deleted.
+- **Rotate Secret** on an OAuth client, and creating one, show the new secret in a dialog with
+  Copy that warns before it closes uncopied. No browser `alert`/`confirm`/`prompt` boxes remain in
+  the admin area or the workflow editor (deleting a node asks in a named dialog).
+- Dialogs with a form (Install integration, Add an existing key) ask before Escape, ✕ or Cancel
+  discards what you typed, and Escape closes only the topmost dialog.
+
+## Admin Form Fields Are Visible in Light and Dark Mode
+
+Many admin fields (the app, model, prompt, user and group editors, Authentication, Short links, Pages,
+Localization, Voice input, Updates) had no visible edge: their border had no width, so an empty field
+looked like plain page background. In dark mode, labels on **Authentication** were dark gray on a dark
+card, and the **Save** button under **Security → Cookies** had no fill.
+
+- Text fields, selects and text areas on the admin pages, including the search box, filters and
+  page-size select above admin lists, now have a visible border and padding. Their borders are darker
+  than before (gray-500, gray-400 in dark mode) so they meet the 3:1 contrast WCAG asks for.
+- Primary buttons on the admin pages that share the admin's form styles are now **indigo**, the admin's
+  accent colour, instead of blue; focus rings and checkboxes use the same colour, in a lighter indigo
+  in dark mode so they stay visible on dark cards.
+- Labels and checkbox texts on **Authentication** are readable in dark mode, and clicking a checkbox's
+  text toggles it.
+- The admin opens in your light/dark choice straight away, also while it checks your sign-in. The
+  choice is made with the theme switch in the app's sidebar (Auto, Light, Dark), and it is no longer
+  undone when the operating system switches between light and dark.
+- Custom CSS (**UI Customization → Theme & styles**) that targets `input` still applies; the admin's
+  default field border is a layered style that any custom rule overrides.
+
+## Admin Overview: The Getting Started Checklist Shows What Is Really Done
+
+The **Getting started** checklist on the admin Overview ticked "Admin account ready" while the same
+page warned that `admin` still signed in with its shipped password, and it only appeared on an
+installation without any apps, which a real installation never is. Each tick now comes from the
+server, and the checklist shows while a required step is still open.
+
+- **Admin account ready** stays open while `admin` signs in with the shipped password, says so and
+  links to **Users**.
+- **Configure an LLM provider** is ticked once an enabled model has an API key the server can use,
+  or needs none.
+- **Create your first app** is listed only when there are no apps at all.
+- **Connect identity provider** counts only OIDC and LDAP providers people can sign in with. The
+  sign-in summary under **Platform status** counts the same way, so a switched-off provider no longer
+  shows as "OIDC (1)".
+- **Hide** removes the checklist in this browser.
+
+## Admin Hints Point to the Right Place
+
+Several hints in the admin area sent admins to the wrong place or described a field wrongly.
+
+- **Prompts:** the field "Linked App" is now **Opens in app**. It sets the app a prompt opens in from
+  the prompt library and lists it first in that app's prompt search; it never limited who sees the
+  prompt, which the old label and the documentation suggested.
+- **Audit Log:** the retention chip said "Edit under Platform → Advanced", which has no audit
+  settings. It now says that retention is set in `platform.json` (`audit.retentionDays`,
+  `audit.cleanupEnabled`).
+- **Pages:** the example for **Allowed Groups** named the groups `admin` and `user`, which do not
+  exist; copying it hid the page from everyone. It now reads `admins, users or *`, with a hint that
+  the IDs must match **Admin → Groups** exactly.
+- **Integrations:** connection tests that reject a TLS certificate point to **Admin → Platform →
+  Security → SSL / TLS** instead of "Admin > Platform > SSL".
+- **Keyboard shortcuts:** the `?` cheatsheet no longer lists `n` ("New item"), which did nothing.
+
+## Short Links Lead Where You Set Them, With Their Prompt and Under the Base Path
+
+Short links created or edited under **Admin → Customization → Short Links** went somewhere else
+than the form said:
+
+- Changing a link's app, path or params had no effect: the link kept opening the old app. A
+  link's target now follows them, unless a fixed **Redirect URL** is set.
+- A link to an app with a prefilled prompt (`{ "prefill": "…" }`) opened the app without the
+  prompt, because **Include Params** was off by default. It is on now, the form warns when params
+  are left out, and **Opens:** shows the target before you save. A request to
+  `POST /api/shortlinks` that leaves `includeParams` out still keeps the params off the link.
+- On an installation under a base path (`/ihub`), **Copy link**, **Test link**, the details
+  popup and **Pages → View** left the base path out, and opening `/ihub/s/<code>` redirected to
+  `/apps/…` outside the installation. Both keep the base path now, and **Opens:** shows it too.
+  A proxy that reports the prefix `/` counts as having no base path.
+
+## Logging: The Component Filter No Longer Hides Errors
+
+With component filtering on under **Admin → Observability → Logging**, errors of every other
+component were dropped, so the failure you were tracing could vanish from the log. Errors are now
+always written, whichever component logs them. The list offers only components the server logs
+with, including **Workflow Engine**, **iFinder** and the sign-in components; three that never
+logged anything are gone.
+
+## Create App Works on Regional Browser Languages
+
+On a browser set to a regional language such as `en-US` or `de-DE`, the Create App wizard lost the
+name, description and system prompt you typed, showed an empty name on the Review step, and Create
+failed with "name.en: Localized string cannot be empty". The wizard now stores the texts under the
+base language (`en`, `de`).
+
+- **Choose App Template** lists every enabled app to copy from. It was always empty.
+- The wizard's **Category** list is the one the app editor and the apps page use; it no longer
+  offers "Productivity" and "Creativity", which the apps page could not filter by.
+
+## Agent Editor: JSON Mode Keeps Your Edits, Group Fields Take Commas
+
+- In **JSON** mode, typing a new key or a comma no longer disappears: the editor keeps the text while
+  it is not valid JSON yet, marks the error, and waits with Save until the JSON is valid.
+- **HITL approver groups** and **Service account groups** are picked from the defined groups or
+  typed. A comma separates two groups; before, `agent-operators,admins` became
+  `agent-operatorsadmins`, and approvals reached nobody.
+- The **Schedule** field is hidden: agent schedules are not run yet. A schedule already in an agent's
+  JSON is kept when you save in the editor.
+- The skill picker says "add to this agent" instead of "this app".
+
+## Workflows: Ask a Person Steps Can Always Be Answered
+
+- An **Ask a Person** step with no option could be saved, and the run then waited with a Submit
+  button that never turned on. The step's panel now flags it, and saving is refused with the step's
+  name. A new step from the palette starts with one **Continue** option, so it can be saved as it
+  comes.
+- The option labels of the shipped approval workflow showed `[object Object]`, and typing in them
+  replaced the German label. Labels are edited per language now, in a one-line field that screen
+  readers announce with the option's number.
+- Cancelling a run removes its open approvals from **Admin → Agents → Pending Approvals**. Before,
+  they stayed there with **Open run** and could never be answered.
+
+## Workflow Editor: Clearer Canvas, List and Errors
+
+- The canvas no longer draws a second white box behind every step.
+- **Publish** and the draft/published label are gone from the canvas: publishing changed nothing,
+  draft and published workflows ran the same. Save is what counts.
+- The Workflows list column **Visible to** shows the groups whose permissions grant the workflow, or
+  **Admins only**. The old **Groups** column showed a field that does not decide access.
+- Every step can read `{{input}}`, the message the run was started with from a chat or the run
+  dialog; the Variables tab lists it and the canvas no longer warns about it. In a workflow with
+  input variables the run dialog sends no message, so the Variables tab marks `{{input}}` as
+  "chat runs only".
+- A failed run names the step by its name ("Step "Summarise" failed: …") instead of an internal ID.
+
+## Secrets Stay Out of Caches and Logs: OAuth Client Secrets, Backups and Environment Overrides
+
+- **No caching of secrets:** the answers that carry a new OAuth client secret (creating a client,
+  rotating its secret), a generated static API key, and the configuration backup download (which holds the encryption key, the
+  JWT signing keys and password hashes) are sent with `Cache-Control: no-store`, so no browser or
+  proxy cache keeps a copy.
+- **Backup export log:** the "Adding to archive" line, written once per file with user ids in the
+  paths, is now a `debug` message; the export still logs its start, the file count and its end.
+- **Environment overrides:** the startup log line for each `IHUB_PLATFORM__…` / `IHUB_UI__…`
+  variable still names the setting it changes, but masks the value when the setting looks like a
+  credential (`…__JWT_SECRET`, `…__CLIENT_SECRET`, `…__SUBSCRIPTION_KEY`, …) and masks such keys
+  inside JSON values. It also masks the user and password in a URL (`IHUB_PLATFORM__PROXY__HTTPS=
+  http://user:pass@proxy:3128`, also inside a JSON value), secret query parameters such as
+  `?token=`, and every value under `headers` (for example an OTLP exporter's vendor API key header).
+  Earlier log files may still contain those values; rotate or purge them.
+
+## OpenTelemetry Export Honors the SSL Whitelist and the Proxy
+
+An OTLP collector with a certificate from a private CA failed with "unable to verify the first
+certificate", even when its host was listed in **Admin → Security → SSL / TLS → Domain Whitelist**
+with **Ignore Invalid SSL Certificates** on, and the export ignored the configured outbound proxy.
+Trace and metric export now use the same connection settings as every other outbound call; hosts
+that are not whitelisted are still verified. A CA, client certificate and key from the
+`OTEL_EXPORTER_OTLP_*CERTIFICATE` / `*CLIENT_KEY` variables still apply, so collectors that require
+mutual TLS keep working. Changing these settings takes effect for the exporter
+after a restart.
+
+## Admin Pages Show Their Icons and the "Edit" Label Again
+
+Some admin pages showed an empty box where an icon belonged: the rate-limit and outbound-proxy
+settings, the default icon of a new agent, the workflow lists and the prompt-variables hint. The
+prompt lists showed "key 'admin.prompts.edit' returned an object instead of string" instead of
+**Edit**. Both show correctly now. The **All (\*)** checkbox of the app, model and prompt pickers is
+named for screen readers ("Apps: All (\*)") and can be ticked by clicking its text, and the agent
+editor no longer offers a Skills field while skills are switched off.
+
+## Feedback: "Store Feedback" Is Saved Again
+
+Switching **Store feedback** off (or on) under **Admin → Feedback → Settings** showed "Feedback
+settings saved", but the setting was not stored, and after a reload the switch was back where it
+was. It is saved now, and feedback is kept or dropped as the switch says.
 
 ## Placeholders in User Names and Other User Data Are Kept as Written
 

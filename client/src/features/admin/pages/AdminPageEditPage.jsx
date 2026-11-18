@@ -4,6 +4,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { CHECKBOX_CLASS, INPUT_CLASS } from '../components/formStyles';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 import {
   createPage,
@@ -13,7 +14,7 @@ import {
 } from '../../../api/adminApi';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
-import ConfirmDialog from '../../../shared/components/ConfirmDialog';
+import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
 
 function AdminPageEditPage() {
   const { t } = useTranslation();
@@ -35,6 +36,8 @@ function AdminPageEditPage() {
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+  // Inline message under the Page ID field (no native alert).
+  const [idError, setIdError] = useState(null);
 
   const { blocker, markSaved } = useUnsavedChanges(initialData, page);
 
@@ -72,10 +75,14 @@ function AdminPageEditPage() {
 
   const handleSubmit = async e => {
     e.preventDefault();
-    if (!page.id) {
-      alert(t('admin.pages.fields.idRequired', 'ID is required'));
+    // An empty field is stopped by the browser (`required`); an id of only
+    // spaces passes that check and is caught here.
+    if (!page.id.trim()) {
+      setIdError(t('admin.pages.fields.idRequired', 'ID is required'));
+      document.getElementById('page-id')?.focus();
       return;
     }
+    setIdError(null);
     const trimmed = page.allowedGroups.trim();
     const pageData = {
       ...page,
@@ -123,17 +130,35 @@ function AdminPageEditPage() {
         />
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+            <label
+              htmlFor="page-id"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+            >
               {t('admin.pages.fields.id', 'Page ID')}
             </label>
             <input
+              id="page-id"
               type="text"
+              aria-invalid={idError ? 'true' : undefined}
+              aria-describedby={idError ? 'page-id-error' : undefined}
               value={page.id}
-              onChange={e => setPage(prev => ({ ...prev, id: e.target.value }))}
+              onChange={e => {
+                setIdError(null);
+                setPage(prev => ({ ...prev, id: e.target.value }));
+              }}
               disabled={!isNew}
               required
-              className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+              className={`${INPUT_CLASS} mt-1 block`}
             />
+            {idError && (
+              <p
+                id="page-id-error"
+                role="alert"
+                className="mt-1 text-sm text-red-700 dark:text-red-300"
+              >
+                {idError}
+              </p>
+            )}
           </div>
           <DynamicLanguageEditor
             label={t('admin.pages.fields.title', 'Title')}
@@ -155,7 +180,7 @@ function AdminPageEditPage() {
             <select
               value={page.contentType}
               onChange={e => setPage(prev => ({ ...prev, contentType: e.target.value }))}
-              className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+              className={`${INPUT_CLASS} mt-1 block`}
             >
               <option value="markdown">
                 {t('admin.pages.contentTypes.markdown', 'Markdown (.md)')}
@@ -182,7 +207,7 @@ function AdminPageEditPage() {
               type="checkbox"
               checked={page.authRequired}
               onChange={e => setPage(prev => ({ ...prev, authRequired: e.target.checked }))}
-              className="h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded-sm"
+              className={CHECKBOX_CLASS}
             />
             <label
               htmlFor="authRequired"
@@ -199,9 +224,19 @@ function AdminPageEditPage() {
               type="text"
               value={page.allowedGroups}
               onChange={e => setPage(prev => ({ ...prev, allowedGroups: e.target.value }))}
-              placeholder="admin, user or *"
-              className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+              placeholder={t('admin.pages.fields.allowedGroupsPlaceholder', 'admins, users or *')}
+              aria-describedby="page-allowed-groups-help"
+              className={`${INPUT_CLASS} mt-1 block`}
             />
+            <p
+              id="page-allowed-groups-help"
+              className="mt-1 text-xs text-gray-500 dark:text-gray-400"
+            >
+              {t(
+                'admin.pages.fields.allowedGroupsHelp',
+                'Group IDs, separated by commas, exactly as in Admin → Groups. Leave empty or enter * to allow everyone. Only members of a listed group see the page; an ID that does not exist matches nobody.'
+              )}
+            </p>
           </div>
           {error && <div className="text-red-600 dark:text-red-400 text-sm">{error}</div>}
           <div className="flex justify-end space-x-2">
@@ -223,16 +258,7 @@ function AdminPageEditPage() {
         </form>
       </div>
 
-      <ConfirmDialog
-        isOpen={blocker.state === 'blocked'}
-        title="Unsaved Changes"
-        message="You have unsaved changes. Leave anyway?"
-        confirmLabel="Leave"
-        denyLabel="Stay"
-        danger={false}
-        onConfirm={() => blocker.proceed?.()}
-        onDeny={() => blocker.reset?.()}
-      />
+      <UnsavedChangesDialog blocker={blocker} />
     </div>
   );
 }

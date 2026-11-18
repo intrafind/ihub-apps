@@ -257,3 +257,58 @@ describe('Drawer', () => {
     expect(screen.getByRole('button', { name: 'Close history' })).toBeInTheDocument();
   });
 });
+
+/**
+ * A ConfirmDialog opened over the drawer (as the admin pages do) gets the
+ * first Escape; the drawer yields while it is not the topmost overlay, both
+ * with focus inside the confirmation and with focus lost to <body>.
+ */
+describe('Drawer with a ConfirmDialog on top', () => {
+  const ConfirmDialog = require('../../../client/src/shared/components/ConfirmDialog').default;
+
+  function PageWithConfirm({ onDrawerClose }) {
+    const [confirming, setConfirming] = useState(false);
+    return (
+      <Drawer isOpen onClose={onDrawerClose} title="Change History">
+        <button type="button" onClick={() => setConfirming(true)}>
+          Roll back
+        </button>
+        <ConfirmDialog
+          isOpen={confirming}
+          title='Roll back "chat"?'
+          confirmLabel="Roll back"
+          onConfirm={() => setConfirming(false)}
+          onDeny={() => setConfirming(false)}
+        />
+      </Drawer>
+    );
+  }
+
+  it.each([
+    ['inside the confirmation', () => document.activeElement],
+    [
+      'on <body>',
+      () => {
+        document.activeElement.blur();
+        return document.body;
+      }
+    ]
+  ])(
+    'Escape with focus %s closes only the confirmation; a second one closes the drawer',
+    async (_label, focusTarget) => {
+      const onDrawerClose = jest.fn();
+      render(<PageWithConfirm onDrawerClose={onDrawerClose} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Roll back' }));
+      const confirm = screen.getByRole('alertdialog', { name: 'Roll back "chat"?' });
+      expect(confirm.contains(document.activeElement)).toBe(true);
+
+      fireEvent.keyDown(focusTarget(), { key: 'Escape' });
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+      expect(onDrawerClose).not.toHaveBeenCalled();
+      await flushMicrotasks();
+
+      fireEvent.keyDown(document.activeElement || document.body, { key: 'Escape' });
+      expect(onDrawerClose).toHaveBeenCalledTimes(1);
+    }
+  );
+});

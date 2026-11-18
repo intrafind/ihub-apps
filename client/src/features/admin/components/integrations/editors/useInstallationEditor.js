@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useEffect, useState } from 'react';
+import { use, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { pickText } from '../ConfigFieldInput';
 import { buildActionsPolicy, initialCheckedActions } from '../actionsPolicy';
@@ -12,6 +12,7 @@ import {
 } from '../../../../../api/integrationsAdminApi';
 import { fetchAdminGroups, getAdminApiErrorMessage } from '../../../../../api/adminApi';
 import { groupsGranting } from '../../../utils/groupIntegrationAccess';
+import { DirtyReportContext, useDirtyReport } from '../../../hooks/useDirtyReport';
 
 /** `GET /api/admin/groups` → `groups` (id → group), or an empty object. */
 function groupsOf(groupsResult) {
@@ -188,4 +189,36 @@ export default function useInstallationEditor({ instance, definition, onSaved })
     save,
     reject
   };
+}
+
+/**
+ * Reports whether a dedicated installation editor holds unsaved edits to the
+ * page (through `DirtyReportContext`), so the page can guard against leaving
+ * with them. The baseline is what the editor showed on its first render: every
+ * editor builds its form synchronously from the stored installation, and the
+ * page remounts the editor after a save, so that is the stored value.
+ *
+ * @param {ReturnType<typeof useInstallationEditor>} editor - the editor state
+ * @param {*} edited - the editor's own form state (whatever it later saves from)
+ * @returns {boolean} whether the editor is dirty
+ *
+ * @example
+ * const editor = useInstallationEditor({ instance, definition, onSaved });
+ * const [values, setValues] = useState(() => toForm(instance.values));
+ * useInstallationEditorDirty(editor, values);
+ */
+export function useInstallationEditorDirty(editor, edited) {
+  const report = use(DirtyReportContext);
+  const current = useMemo(
+    () => ({
+      edited,
+      label: editor.label,
+      description: editor.description,
+      // A Set has no own keys, so compare the checked actions as a sorted list.
+      actions: [...(editor.checkedActions || [])].sort((a, b) => String(a).localeCompare(String(b)))
+    }),
+    [edited, editor.label, editor.description, editor.checkedActions]
+  );
+  const [baseline] = useState(current);
+  return useDirtyReport(baseline, current, report);
 }

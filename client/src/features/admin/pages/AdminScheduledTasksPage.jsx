@@ -14,9 +14,13 @@ import {
   TaskStatusBadge
 } from '../../tasks/components/TaskBadges';
 import { formatDateTime, formatDuration, reasonText } from '../../tasks/utils/taskFormat';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
+import ConfirmDialog from '../../../shared/components/ConfirmDialog';
+import { useConfirmAction } from '../hooks/useConfirmAction';
 
 const input =
-  'block w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100';
+  'block w-full rounded-lg border border-admin-control-border dark:border-admin-control-border-dark bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100';
 const card = 'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5';
 const button =
   'px-2.5 py-1 rounded-md text-xs font-medium border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50';
@@ -58,10 +62,14 @@ export default function AdminScheduledTasksPage() {
   const [error, setError] = useState(null);
   const [notice, setNotice] = useState(null);
   const [settings, setSettings] = useState(null);
+  // The settings as first loaded or last saved; null until they loaded.
+  const [savedSettings, setSavedSettings] = useState(null);
+  const { blocker } = useUnsavedChanges(savedSettings, settings);
   const [saving, setSaving] = useState(false);
   const [runsFor, setRunsFor] = useState(null);
   const [runs, setRuns] = useState([]);
   const [busy, setBusy] = useState(null);
+  const { requestConfirm, dialogProps: confirmDialogProps } = useConfirmAction();
 
   const load = useCallback(async () => {
     try {
@@ -70,6 +78,7 @@ export default function AdminScheduledTasksPage() {
       });
       setData(response.data);
       setSettings(prev => prev || response.data.settings);
+      setSavedSettings(prev => prev || response.data.settings);
       setError(null);
     } catch (err) {
       setError(getAdminApiErrorMessage(err));
@@ -92,6 +101,7 @@ export default function AdminScheduledTasksPage() {
         body
       });
       setSettings(response.data.settings);
+      setSavedSettings(response.data.settings);
       setNotice(
         response.data.changed.length > 0
           ? t('admin.scheduledTasks.saved', 'Settings saved')
@@ -120,53 +130,68 @@ export default function AdminScheduledTasksPage() {
     }
   }
 
-  async function remove(task) {
-    if (
-      !window.confirm(
-        t('admin.scheduledTasks.confirmDelete', 'Delete "{{name}}" of {{owner}}?', {
-          name: task.name,
-          owner: task.owner?.name || task.ownerId
-        })
-      )
-    ) {
-      return;
-    }
-    setBusy(task.id);
-    try {
-      await makeAdminApiCall(`/admin/scheduled-tasks/${encodeURIComponent(task.id)}`, {
-        method: 'DELETE'
-      });
-      await load();
-    } catch (err) {
-      setError(getAdminApiErrorMessage(err));
-    } finally {
-      setBusy(null);
-    }
+  /**
+   * Named delete of another user's task. A failure stays in the dialog.
+   *
+   * @param {Object} task
+   */
+  function remove(task) {
+    const owner = task.owner?.name || task.ownerId;
+    requestConfirm({
+      title: t('admin.scheduledTasks.confirmDelete', 'Delete "{{name}}" of {{owner}}?', {
+        name: task.name,
+        owner
+      }),
+      message: t(
+        'admin.scheduledTasks.deleteConsequence',
+        'The task stops running and its owner can no longer see it or its runs.'
+      ),
+      confirmLabel: t('admin.confirm.delete', 'Delete'),
+      danger: true,
+      action: async () => {
+        setBusy(task.id);
+        try {
+          await makeAdminApiCall(`/admin/scheduled-tasks/${encodeURIComponent(task.id)}`, {
+            method: 'DELETE'
+          });
+          await load();
+        } finally {
+          setBusy(null);
+        }
+      }
+    });
   }
 
-  async function clearMemory(task) {
-    if (
-      !window.confirm(
-        t(
-          'admin.scheduledTasks.memory.confirmClear',
-          'Clear the memory of "{{name}}" of {{owner}}? The owner loses these notes.',
-          { name: task.name, owner: task.owner?.name || task.ownerId }
-        )
-      )
-    ) {
-      return;
-    }
-    setBusy(task.id);
-    try {
-      await makeAdminApiCall(`/admin/scheduled-tasks/${encodeURIComponent(task.id)}/memory`, {
-        method: 'DELETE'
-      });
-      await load();
-    } catch (err) {
-      setError(getAdminApiErrorMessage(err));
-    } finally {
-      setBusy(null);
-    }
+  /**
+   * Named confirmation, then clears the task's memory notes.
+   *
+   * @param {Object} task
+   */
+  function clearMemory(task) {
+    const owner = task.owner?.name || task.ownerId;
+    requestConfirm({
+      title: t('admin.scheduledTasks.memory.clearTitle', 'Clear the memory of "{{name}}"?', {
+        name: task.name
+      }),
+      message: t(
+        'admin.scheduledTasks.memory.clearConsequence',
+        'Its owner, {{owner}}, loses the notes this task has written so far.',
+        { owner }
+      ),
+      confirmLabel: t('admin.scheduledTasks.memory.clearAction', 'Clear notes'),
+      danger: true,
+      action: async () => {
+        setBusy(task.id);
+        try {
+          await makeAdminApiCall(`/admin/scheduled-tasks/${encodeURIComponent(task.id)}/memory`, {
+            method: 'DELETE'
+          });
+          await load();
+        } finally {
+          setBusy(null);
+        }
+      }
+    });
   }
 
   async function openRuns(task) {
@@ -358,7 +383,7 @@ export default function AdminScheduledTasksPage() {
             </h2>
             <select
               aria-label={t('admin.scheduledTasks.filter', 'Filter by status')}
-              className="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-1.5 text-sm"
+              className="rounded-lg border border-admin-control-border dark:border-admin-control-border-dark bg-white dark:bg-gray-800 px-3 py-1.5 text-sm"
               value={filter}
               onChange={e => setFilter(e.target.value)}
             >
@@ -566,6 +591,8 @@ export default function AdminScheduledTasksPage() {
           </div>
         </div>
       </Modal>
+      <UnsavedChangesDialog blocker={blocker} />
+      <ConfirmDialog {...confirmDialogProps} />
     </div>
   );
 }

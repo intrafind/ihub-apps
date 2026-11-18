@@ -7,11 +7,13 @@ import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import AdminDemoAccountsAlert from '../components/AdminDemoAccountsAlert';
+import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 
 function AdminAdvancedPage() {
   const { t } = useTranslation();
   const [forceRefreshLoading, setForceRefreshLoading] = useState(false);
   const [forceRefreshMessage, setForceRefreshMessage] = useState('');
+  const [confirmingForceRefresh, setConfirmingForceRefresh] = useState(false);
   const { refreshConfig } = usePlatformConfig();
   const [onboardingDisabled, setOnboardingDisabled] = useState(null);
   const [onboardingSaving, setOnboardingSaving] = useState(false);
@@ -35,11 +37,11 @@ function AdminAdvancedPage() {
     setOnboardingSaving(true);
     setOnboardingMessage(null);
     try {
-      // Read-modify-write: platform.json carries settings this page does not show.
-      const response = await makeAdminApiCall('/admin/configs/platform', { method: 'GET' });
-      const platform = response.data || {};
-      platform.setup = { ...platform.setup, disabled };
-      await makeAdminApiCall('/admin/configs/platform', { method: 'POST', body: platform });
+      // A scoped change of this one field: nothing the page does not show is sent.
+      await makeAdminApiCall('/admin/configs/platform', {
+        method: 'PATCH',
+        body: { setup: { disabled } }
+      });
       setOnboardingDisabled(disabled);
       setOnboardingMessage({
         type: 'success',
@@ -58,19 +60,23 @@ function AdminAdvancedPage() {
     }
   };
 
+  /**
+   * Bumps the refresh salt (after the confirmation, PL-B8). Every browser
+   * compares the salt when iHub loads (`utils/forceRefresh.js`), so pages
+   * reload on their next page load, not immediately.
+   */
   const handleForceRefresh = async () => {
+    setConfirmingForceRefresh(false);
     setForceRefreshLoading(true);
     setForceRefreshMessage('');
 
     try {
-      const response = await makeAdminApiCall('/admin/client/_refresh', { method: 'POST' });
-      const data = response.data;
+      await makeAdminApiCall('/admin/client/_refresh', { method: 'POST' });
       setForceRefreshMessage({
         type: 'success',
         text: t(
-          'admin.system.triggerSuccess',
-          'Force refresh triggered successfully! New salt: {{salt}}. All clients will refresh on their next page load.',
-          { salt: data.newAdminSalt }
+          'admin.system.forceRefreshDone',
+          'Force refresh triggered. Every browser clears its cached files and reloads the next time iHub is loaded in it.'
         )
       });
     } catch (error) {
@@ -177,7 +183,7 @@ function AdminAdvancedPage() {
                     <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
                       {t(
                         'admin.system.warningDesc',
-                        'This action will force all connected clients to reload their browsers on their next page interaction. Use this when deploying critical updates or when clients need to clear cached data.'
+                        'Every browser that uses iHub clears its cached files and reloads the next time iHub is loaded in it. Use this when deploying critical updates or when clients need to clear cached data.'
                       )}
                     </p>
                   </div>
@@ -214,7 +220,7 @@ function AdminAdvancedPage() {
               )}
 
               <button
-                onClick={handleForceRefresh}
+                onClick={() => setConfirmingForceRefresh(true)}
                 disabled={forceRefreshLoading}
                 className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-xs text-white ${
                   forceRefreshLoading
@@ -257,6 +263,30 @@ function AdminAdvancedPage() {
           </div>
         </div>
       </div>
+      <ConfirmDialog
+        isOpen={confirmingForceRefresh}
+        title={t('admin.system.forceRefreshConfirmTitle', 'Force a refresh for all users?')}
+        message={t(
+          'admin.system.forceRefreshConfirmMessage',
+          'Every browser that uses iHub clears its cached files and its locally stored data, then reloads the next time iHub is loaded in it. Pages that are open now are not interrupted.'
+        )}
+        consequences={[
+          t(
+            'admin.system.forceRefreshConfirmKept',
+            'The disclaimer acceptance is kept; other settings stored only in the browser are cleared.'
+          ),
+          // localStorage.clear() also removes a sign-in token kept in the
+          // browser (token / proxy sign-in); cookie sessions are not affected.
+          t(
+            'admin.system.forceRefreshConfirmSignIn',
+            'Users whose sign-in is stored in the browser may have to sign in again.'
+          )
+        ]}
+        confirmLabel={t('admin.system.forceRefreshConfirmAction', 'Force refresh')}
+        danger
+        onConfirm={handleForceRefresh}
+        onDeny={() => setConfirmingForceRefresh(false)}
+      />
     </div>
   );
 }

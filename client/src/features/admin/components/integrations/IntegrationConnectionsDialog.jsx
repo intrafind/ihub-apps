@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Modal from '../../../../shared/components/Modal';
 import Icon from '../../../../shared/components/Icon';
@@ -13,6 +13,8 @@ import {
   resetIntegrationRegistration
 } from '../../../../api/integrationsAdminApi';
 import { getAdminApiErrorMessage } from '../../../../api/adminApi';
+import ConfirmDialog from '../../../../shared/components/ConfirmDialog';
+import { useConfirmAction } from '../../hooks/useConfirmAction';
 
 /**
  * The users who connected their own account to an installation that signs
@@ -29,6 +31,9 @@ function IntegrationConnectionsDialog({ instance, onClose }) {
   const [error, setError] = useState(null);
   const [message, setMessage] = useState(null);
   const [busy, setBusy] = useState(null);
+  const { requestConfirm, dialogProps: confirmDialogProps } = useConfirmAction();
+  // Focus target after a disconnect: the user's row (and its button) is gone.
+  const closeButtonRef = useRef(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -44,52 +49,65 @@ function IntegrationConnectionsDialog({ instance, onClose }) {
     load();
   }, [load]);
 
-  const disconnect = async userId => {
-    if (
-      !window.confirm(
-        t(
-          'admin.integrationCatalog.connections.disconnectConfirm',
-          'Disconnect "{{user}}" from {{label}}? They have to sign in again to use it.',
-          { user: userId, label: instance.label }
-        )
-      )
-    )
-      return;
-    setBusy(userId);
+  /**
+   * Named confirmation (stacked over this modal; Escape closes only the
+   * confirmation), then disconnects the user.
+   *
+   * @param {string} userId
+   */
+  const disconnect = userId => {
     setMessage(null);
-    try {
-      await disconnectIntegrationUser(instance.id, userId);
-      await load();
-    } catch (err) {
-      setError(getAdminApiErrorMessage(err));
-    } finally {
-      setBusy(null);
-    }
+    requestConfirm({
+      title: t('admin.integrationCatalog.connections.disconnectTitle', {
+        user: userId,
+        label: instance.label,
+        defaultValue: 'Disconnect "{{user}}" from {{label}}?'
+      }),
+      message: t(
+        'admin.integrationCatalog.connections.disconnectConsequence',
+        'They have to sign in again to use {{label}}.',
+        { label: instance.label }
+      ),
+      confirmLabel: t('admin.integrationCatalog.connections.disconnectAction', 'Disconnect'),
+      danger: true,
+      action: async () => {
+        setBusy(userId);
+        try {
+          await disconnectIntegrationUser(instance.id, userId);
+          await load();
+        } finally {
+          setBusy(null);
+        }
+      },
+      focusAfterSuccess: closeButtonRef
+    });
   };
 
-  const reset = async () => {
-    if (
-      !window.confirm(
-        t(
-          'admin.integrationCatalog.connections.resetConfirm',
-          'Reset the OAuth client registration of {{label}}? The next sign-in registers iHub afresh; connected users may have to connect again.',
-          { label: instance.label }
-        )
-      )
-    )
-      return;
-    setBusy('reset');
+  const reset = () => {
     setMessage(null);
-    try {
-      await resetIntegrationRegistration(instance.id);
-      setMessage(
-        t('admin.integrationCatalog.connections.resetDone', 'OAuth client registration reset')
-      );
-    } catch (err) {
-      setError(getAdminApiErrorMessage(err));
-    } finally {
-      setBusy(null);
-    }
+    requestConfirm({
+      title: t('admin.integrationCatalog.connections.resetTitle', {
+        label: instance.label,
+        defaultValue: 'Reset the OAuth client registration of {{label}}?'
+      }),
+      message: t(
+        'admin.integrationCatalog.connections.resetConsequence',
+        'The next sign-in registers iHub afresh; connected users may have to connect again.'
+      ),
+      confirmLabel: t('admin.integrationCatalog.connections.resetAction', 'Reset registration'),
+      danger: true,
+      action: async () => {
+        setBusy('reset');
+        try {
+          await resetIntegrationRegistration(instance.id);
+          setMessage(
+            t('admin.integrationCatalog.connections.resetDone', 'OAuth client registration reset')
+          );
+        } finally {
+          setBusy(null);
+        }
+      }
+    });
   };
 
   return (
@@ -185,10 +203,16 @@ function IntegrationConnectionsDialog({ instance, onClose }) {
             'Reset OAuth client registration'
           )}
         </button>
-        <button type="button" className={SECONDARY_BUTTON_CLASS} onClick={onClose}>
+        <button
+          ref={closeButtonRef}
+          type="button"
+          className={SECONDARY_BUTTON_CLASS}
+          onClick={onClose}
+        >
           {t('common.close', 'Close')}
         </button>
       </div>
+      <ConfirmDialog {...confirmDialogProps} />
     </Modal>
   );
 }

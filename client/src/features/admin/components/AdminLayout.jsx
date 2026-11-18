@@ -6,6 +6,7 @@ import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAdminKeyboardShortcuts } from '../hooks/useAdminKeyboardShortcuts';
 import useDarkMode from '../../../hooks/useDarkMode';
+import useSurface from '../../../shared/hooks/useSurface';
 import { Bars3Icon } from '@heroicons/react/24/outline';
 import { useAdminAuth } from '../hooks/useAdminAuth';
 import { useAuth } from '../../../shared/contexts/AuthContext';
@@ -14,9 +15,11 @@ import { buildPath } from '../../../utils/runtimeBasePath';
 import SkipLink from '../../../shared/components/SkipLink';
 import AdminSidebar from './AdminSidebar';
 import AdminCommandPalette from './AdminCommandPalette';
+import AdminSecretRevealHost from './AdminSecretRevealHost';
 import AdminShortcutsModal from './AdminShortcutsModal';
 import AdminStorageAlert from './AdminStorageAlert';
 import AdminDemoAccountsAlert from './AdminDemoAccountsAlert';
+import AdminConfigConflictNotice from './AdminConfigConflictNotice';
 import { SidebarProvider, useSidebar } from '../contexts/SidebarContext';
 import { getAdminNavSections } from './AdminSidebarNavData';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
@@ -50,8 +53,6 @@ function AdminLayoutInner() {
   const location = useLocation();
   const { user } = useAuth();
   const mainRef = useRef(null);
-  // Applies the saved light/dark preference; the admin area has no theme toggle that would.
-  useDarkMode();
   const { showCheatsheet, setShowCheatsheet } = useAdminKeyboardShortcuts();
 
   const adminPages = platformConfig?.admin?.pages || {};
@@ -111,13 +112,21 @@ function AdminLayoutInner() {
       </div>
 
       <AdminCommandPalette />
+      <AdminSecretRevealHost />
       <AdminShortcutsModal isOpen={showCheatsheet} onClose={() => setShowCheatsheet(false)} />
+      <AdminConfigConflictNotice />
     </SidebarProvider>
   );
 }
 
 export default function AdminLayout() {
   const { t } = useTranslation();
+  // Called here, not in AdminLayoutInner, so the loading and access screens below are themed
+  // and styled as admin too: the saved light/dark preference is applied (and kept in step with
+  // the sidebar's theme toggle), and `<html data-surface="admin">` scopes the admin's
+  // form-control styles in App.css.
+  useDarkMode();
+  useSurface('admin');
   const { isAuthenticated, authRequired, isLoading } = useAdminAuth();
   const { isAuthenticated: userIsAuthenticated } = useAuth();
 

@@ -33,6 +33,9 @@ function IntegrationInstallDialog({
 }) {
   const { t } = useTranslation();
   const [definition, setDefinition] = useState(null);
+  // Unsaved input: Escape, ✕ and Cancel ask "Discard changes?"; a backdrop
+  // click does nothing (IN-B12).
+  const [dirty, setDirty] = useState(false);
   const title = instanceId
     ? t('admin.integrationCatalog.wizard.editTitle', 'Edit integration')
     : t('admin.integrationCatalog.wizard.installTitle', 'Install integration');
@@ -43,43 +46,50 @@ function IntegrationInstallDialog({
       onClose={onClose}
       maxWidthClassName="max-w-3xl"
       labelledBy="integration-install-title"
+      isDirty={dirty}
+      dirtyTitle={title}
     >
-      <div className="flex items-start justify-between px-6 pt-5 pb-3 border-b border-gray-200 dark:border-gray-700">
-        <div>
-          <h2
-            id="integration-install-title"
-            className="text-lg font-semibold text-gray-900 dark:text-gray-100"
-          >
-            {title}
-          </h2>
-          {definition && (
-            <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5">
-              {definition.name}
-              <span className="ml-2 font-mono text-xs text-gray-500 dark:text-gray-400">
-                {definition.id} · v{definition.version}
-              </span>
-            </p>
-          )}
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1 rounded-sm focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500"
-          aria-label={t('common.close', 'Close')}
-        >
-          <Icon name="x" size="md" />
-        </button>
-      </div>
-      <IntegrationInstallForm
-        variant="dialog"
-        definitionId={definitionId}
-        instanceId={instanceId}
-        takenIds={takenIds}
-        prefill={prefill}
-        onLoaded={setDefinition}
-        onCancel={onClose}
-        onSaved={onSaved}
-      />
+      {({ requestClose }) => (
+        <>
+          <div className="flex items-start justify-between px-6 pt-5 pb-3 border-b border-gray-200 dark:border-gray-700">
+            <div>
+              <h2
+                id="integration-install-title"
+                className="text-lg font-semibold text-gray-900 dark:text-gray-100"
+              >
+                {title}
+              </h2>
+              {definition && (
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5">
+                  {definition.name}
+                  <span className="ml-2 font-mono text-xs text-gray-500 dark:text-gray-400">
+                    {definition.id} · v{definition.version}
+                  </span>
+                </p>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={requestClose}
+              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1 rounded-sm focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500"
+              aria-label={t('common.close', 'Close')}
+            >
+              <Icon name="x" size="md" />
+            </button>
+          </div>
+          <IntegrationInstallForm
+            variant="dialog"
+            definitionId={definitionId}
+            instanceId={instanceId}
+            takenIds={takenIds}
+            prefill={prefill}
+            onLoaded={setDefinition}
+            onCancel={requestClose}
+            onSaved={onSaved}
+            onDirtyChange={setDirty}
+          />
+        </>
+      )}
     </Modal>
   );
 }

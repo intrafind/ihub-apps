@@ -25,6 +25,9 @@ import { appMigrationWarnings } from '../components/integrations/appMigrationWar
 import { buildPath } from '../../../utils/runtimeBasePath';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
+import { useConfirmAction } from '../hooks/useConfirmAction';
+import { buildBulkToggleConfirm } from '../utils/bulkToggleConfirm';
+import { deleteConfirmText } from '../utils/confirmText';
 import ReorderableList from '../components/ReorderableList';
 import { DataTable, SearchInput, FilterSelect } from '../components/data-table';
 import UploadConfigButton from '../components/UploadConfigButton';
@@ -202,7 +205,7 @@ function AdminAppsPage() {
   const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [uiConfig, setUiConfig] = useState(null);
   const [uploading, setUploading] = useState(false);
-  const [confirmDialog, setConfirmDialog] = useState(null);
+  const { requestConfirm, dialogProps: confirmDialogProps } = useConfirmAction();
   // Reorder mode replaces the table with a draggable list; `orderDraft` holds
   // the pending order until it is saved, so cancelling changes nothing.
   const [orderDraft, setOrderDraft] = useState(null);
@@ -286,37 +289,39 @@ function AdminAppsPage() {
     }
   };
 
-  const enableAllApps = async () => {
-    try {
-      await toggleApps('*', true);
-      setApps(prev => prev.map(app => ({ ...app, enabled: true })));
-    } catch (err) {
-      setError(getAdminApiErrorMessage(err));
-    }
+  /**
+   * Enable All / Disable All toggle every app (`*`) for every user, so they
+   * open a confirmation that names the count and the apps first (AI-B2).
+   *
+   * @param {boolean} enable - Target state.
+   */
+  const confirmToggleAll = enable => {
+    requestConfirm({
+      ...buildBulkToggleConfirm({
+        items: apps,
+        enable,
+        itemsLabel: t('admin.confirm.plural.apps', 'apps'),
+        getName: app => getLocalizedContent(app.name, currentLanguage) || app.id,
+        t
+      }),
+      action: async () => {
+        await toggleApps('*', enable);
+        setApps(prev => prev.map(app => ({ ...app, enabled: enable })));
+      }
+    });
   };
 
-  const disableAllApps = async () => {
-    try {
-      await toggleApps('*', false);
-      setApps(prev => prev.map(app => ({ ...app, enabled: false })));
-    } catch (err) {
-      setError(getAdminApiErrorMessage(err));
-    }
-  };
-
-  const deleteApp = appId => {
-    setConfirmDialog({
-      title: t('admin.apps.deleteTitle', 'Delete App'),
-      message: t('admin.apps.deleteConfirm', 'Are you sure you want to delete this app?'),
-      danger: true,
-      onConfirm: async () => {
-        setConfirmDialog(null);
-        try {
-          await makeAdminApiCall(`/admin/apps/${appId}`, { method: 'DELETE' });
-          setApps(prev => prev.filter(app => app.id !== appId));
-        } catch (err) {
-          setError(getAdminApiErrorMessage(err));
-        }
+  const deleteApp = app => {
+    requestConfirm({
+      ...deleteConfirmText({
+        typeKey: 'app',
+        typeFallback: 'app',
+        name: getLocalizedContent(app.name, currentLanguage) || app.id,
+        t
+      }),
+      action: async () => {
+        await makeAdminApiCall(`/admin/apps/${app.id}`, { method: 'DELETE' });
+        setApps(prev => prev.filter(item => item.id !== app.id));
       }
     });
   };
@@ -560,7 +565,7 @@ function AdminAppsPage() {
       label: t('admin.apps.actions.delete', 'Delete'),
       icon: 'trash',
       destructive: true,
-      onClick: app => deleteApp(app.id)
+      onClick: app => deleteApp(app)
     }
   ];
 
@@ -618,14 +623,14 @@ function AdminAppsPage() {
                 <button
                   type="button"
                   className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600"
-                  onClick={enableAllApps}
+                  onClick={() => confirmToggleAll(true)}
                 >
                   {t('admin.common.enableAll', 'Enable All')}
                 </button>
                 <button
                   type="button"
                   className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600"
-                  onClick={disableAllApps}
+                  onClick={() => confirmToggleAll(false)}
                 >
                   {t('admin.common.disableAll', 'Disable All')}
                 </button>
@@ -789,14 +794,7 @@ function AdminAppsPage() {
       {showCreationWizard && (
         <AppCreationWizard templateApp={selectedTemplate} onClose={handleWizardClose} />
       )}
-      <ConfirmDialog
-        isOpen={!!confirmDialog}
-        title={confirmDialog?.title ?? ''}
-        message={confirmDialog?.message ?? ''}
-        danger={confirmDialog?.danger}
-        onConfirm={() => confirmDialog?.onConfirm()}
-        onDeny={() => setConfirmDialog(null)}
-      />
+      <ConfirmDialog {...confirmDialogProps} />
     </div>
   );
 }

@@ -23,6 +23,7 @@ import activityTracker from '../telemetry/ActivityTracker.js';
 import { auditLogger } from './auditLogger.js';
 import { randomUUID } from 'node:crypto';
 import { ServiceError } from '../utils/ServiceError.js';
+import { isAdminDocsPagePath } from '../routes/staticRoutes.js';
 
 /**
  * Middleware to verify the Content-Length header before parsing the body.
@@ -75,7 +76,12 @@ function isStaticAssetRequest(req) {
   // SPA routes (HTML page requests without file extensions) - let them through
   // so the catch-all route in staticRoutes.js can serve index.html
   // This allows direct navigation to routes like /apps/meeting-analyser
-  const isSPARoute = !path.match(/\.[a-z0-9]+$/i) && !path.startsWith('/uploads/');
+  // The in-app documentation routes (`/admin/docs/<page>.md`) end in `.md` but are SPA routes
+  // too (see staticRoutes.js): without this, a stale or rejected session cookie on a cold load
+  // of a doc link would be answered by the auth chain with a JSON 401/403 instead of the SPA.
+  // The path is already base-path-relative here (basePathRewriteMiddleware runs first).
+  const isSPARoute =
+    (!path.match(/\.[a-z0-9]+$/i) && !path.startsWith('/uploads/')) || isAdminDocsPagePath(path);
 
   return isCommonStaticAsset || isViteAsset || isSPARoute;
 }
@@ -368,11 +374,12 @@ export function setupMiddleware(app, platformConfig = {}) {
       resolvedOrigin = makeForgivingOriginMatcher(resolvedOrigin, req);
     }
 
-    // Headers the iHub Axios client always sends. Unioned with the admin's
-    // saved allowedHeaders so that a config saved before a new client header
-    // landed (e.g. X-Session-ID) doesn't break cross-origin requests until
-    // an admin re-saves the page. Compared case-insensitively because that's
-    // how browsers compare Access-Control-Request-Headers entries.
+    // Request headers the iHub Axios client sends, always or on some requests
+    // (If-Match: on a guarded platform or UI config save). Unioned with the
+    // admin's saved allowedHeaders so that a config saved before a new client
+    // header landed (e.g. X-Session-ID, If-Match) doesn't break cross-origin
+    // requests until an admin re-saves the page. Compared case-insensitively
+    // because that's how browsers compare Access-Control-Request-Headers entries.
     const REQUIRED_ALLOWED_HEADERS = [
       'Content-Type',
       'Authorization',
@@ -383,8 +390,10 @@ export function setupMiddleware(app, platformConfig = {}) {
       'Accept',
       'Origin',
       'Cache-Control',
-      'X-File-Name'
+      'X-File-Name',
+      'If-Match'
     ];
+    const REQUIRED_EXPOSED_HEADERS = ['Content-Disposition', 'ETag'];
     let allowedHeaders;
     if (Array.isArray(corsConfig.allowedHeaders) && corsConfig.allowedHeaders.length > 0) {
       const seen = new Set(corsConfig.allowedHeaders.map(h => String(h).toLowerCase()));
@@ -403,15 +412,17 @@ export function setupMiddleware(app, platformConfig = {}) {
       // Response headers the browser lets cross-origin callers read. Without
       // Content-Disposition a download started from the browser extension's
       // side panel (origin chrome-extension://<id>) cannot see the filename
-      // the server sent and has to fall back to the document title.
+      // the server sent and has to fall back to the document title. Without
+      // ETag a cross-origin admin client cannot read the config revision it
+      // must send back as If-Match.
       exposedHeaders: Array.isArray(corsConfig.exposedHeaders)
         ? [
             ...corsConfig.exposedHeaders,
-            ...['Content-Disposition'].filter(
+            ...REQUIRED_EXPOSED_HEADERS.filter(
               h => !corsConfig.exposedHeaders.some(e => String(e).toLowerCase() === h.toLowerCase())
             )
           ]
-        : ['Content-Disposition'],
+        : REQUIRED_EXPOSED_HEADERS,
       credentials,
       optionsSuccessStatus: corsConfig.optionsSuccessStatus || 200,
       maxAge: corsConfig.maxAge || 86400,
@@ -495,6 +506,12 @@ export function setupMiddleware(app, platformConfig = {}) {
 
   // Configure OIDC providers based on platform configuration
   configureOidcProviders();
+
+  // Per-address guard for /api/admin ahead of authentication. A request the
+  // auth chain refuses (bad, expired or revoked token) is answered there and
+  // never reaches the per-user admin limiter below; this limiter counts those
+  // failures, and only failures without a signed-in caller, per address.
+  app.use(buildApiPath('/admin'), rateLimiters.adminApiUnauthenticatedLimiter);
 
   // Apply authentication middleware chain (skips static assets automatically)
   // Order matters: proxy auth first, then unified JWT validation
@@ -612,7 +629,9 @@ export function setupMiddleware(app, platformConfig = {}) {
   // Read aloud calls a paid speech model on every request.
   app.use(buildApiPath('/voice/speech'), rateLimiters.inferenceApiLimiter);
 
-  // Admin API rate limiter for administrative endpoints
+  // Admin API rate limiter. Counts per signed-in user or API client
+  // (adminApiRateLimitKey), so admins behind one NAT address or proxy do not
+  // share one budget; requests without a sign-in count per address.
   app.use(buildApiPath('/admin'), rateLimiters.adminApiLimiter);
 
   // Track every authenticated request for the activity-summary log line and

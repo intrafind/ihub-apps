@@ -19,7 +19,8 @@ import {
   withDefaultMode
 } from '../../../client/src/features/admin/components/integrations/installationApproval';
 import ToolApprovalConfig, {
-  toolApprovalFromForm
+  toolApprovalFromForm,
+  toolApprovalPatchFromForm
 } from '../../../client/src/features/admin/components/ToolApprovalConfig';
 import { makeAdminApiCall } from '../../../client/src/api/adminApi';
 import { toolApprovalAnswer } from '../../../client/src/features/chat/toolApprovalAnswer';
@@ -254,7 +255,7 @@ describe('installation approval editing', () => {
     // posting it back would write the platform config without them.
     makeAdminApiCall.mockReset();
     makeAdminApiCall.mockImplementation(async (_url, { method } = {}) =>
-      method === 'POST'
+      method === 'PATCH'
         ? { data: {} }
         : {
             data: {
@@ -265,13 +266,29 @@ describe('installation approval editing', () => {
     );
     render(<ToolApprovalConfig />);
     fireEvent.click(await screen.findByRole('button', { name: 'Save' }));
+    // A scoped PATCH (R1): the Security page's other cards save platform.json
+    // through their own routes, so a guarded POST would report a false 412.
     await waitFor(() =>
       expect(makeAdminApiCall).toHaveBeenCalledWith(
         '/admin/configs/platform',
-        expect.objectContaining({ method: 'POST' })
+        expect.objectContaining({ method: 'PATCH' })
       )
     );
-    const post = makeAdminApiCall.mock.calls.find(([, options]) => options?.method === 'POST');
-    expect(post[1].body).toEqual({ toolApproval: { defaults: { external: 'writes' } } });
+    expect(makeAdminApiCall.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(
+      false
+    );
+    const save = makeAdminApiCall.mock.calls.find(([, options]) => options?.method === 'PATCH');
+    expect(save[1].body).toEqual({
+      toolApproval: { defaults: { default: null, internal: null, external: 'writes' } }
+    });
+  });
+
+  it('the platform patch clears unset defaults with null and removes an empty block', () => {
+    expect(toolApprovalPatchFromForm({ default: 'always', internal: '', external: '' })).toEqual({
+      toolApproval: { defaults: { default: 'always', internal: null, external: null } }
+    });
+    expect(toolApprovalPatchFromForm({ default: '', internal: '', external: '' })).toEqual({
+      toolApproval: null
+    });
   });
 });

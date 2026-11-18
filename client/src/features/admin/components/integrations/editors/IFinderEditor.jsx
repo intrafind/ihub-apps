@@ -15,7 +15,7 @@ import {
   LABEL_CLASS,
   MONO_INPUT_CLASS
 } from '../../formStyles';
-import useInstallationEditor from './useInstallationEditor';
+import useInstallationEditor, { useInstallationEditorDirty } from './useInstallationEditor';
 import {
   AccessSection,
   ActionsSection,
@@ -99,6 +99,11 @@ function IFinderEditor({ instance, definition, onSaved, onCancel }) {
       : []
     ).join('\n')
   );
+  const editedValues = useMemo(
+    () => ({ values, allowedProfilesText }),
+    [values, allowedProfilesText]
+  );
+  useInstallationEditorDirty(editor, editedValues);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [oidcProviders, setOidcProviders] = useState([]);
   const [oauthIssuer, setOauthIssuer] = useState('');

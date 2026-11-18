@@ -8,6 +8,8 @@ import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContex
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import Badge from '../../../shared/components/Badge';
 import Switch from '../../../shared/components/Switch';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
 
 function AdminFeaturesPage() {
   const { t, i18n } = useTranslation();
@@ -19,12 +21,16 @@ function AdminFeaturesPage() {
   const [features, setFeatures] = useState([]);
   const [categories, setCategories] = useState({});
   const [dirtyFlags, setDirtyFlags] = useState({});
+  // The features as last loaded or saved; null until they loaded.
+  const [savedFeatures, setSavedFeatures] = useState(null);
+  const { blocker } = useUnsavedChanges(savedFeatures, features);
 
   const loadFeatures = async () => {
     try {
       setLoading(true);
       const response = await makeAdminApiCall('/admin/features', { method: 'GET' });
       setFeatures(response.data.items || []);
+      setSavedFeatures(response.data.items || []);
       setCategories(response.data.categories || {});
       setDirtyFlags({});
     } catch (error) {
@@ -59,6 +65,7 @@ function AdminFeaturesPage() {
       });
 
       setDirtyFlags({});
+      setSavedFeatures(features);
       setMessage(t('admin.features.saved', 'Features updated successfully'));
       refreshConfig();
 
@@ -172,6 +179,7 @@ function AdminFeaturesPage() {
           </div>
         )}
       </div>
+      <UnsavedChangesDialog blocker={blocker} />
     </div>
   );
 }

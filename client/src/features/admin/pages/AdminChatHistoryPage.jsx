@@ -8,9 +8,11 @@ import Icon from '../../../shared/components/Icon';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import { getLocalizedContent } from '../../../utils/localizeContent';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
 
 const inputClass =
-  'w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100';
+  'w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100';
 const cardClass = 'bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6';
 const headingClass =
   'text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center';
@@ -230,6 +232,10 @@ function AdminChatHistoryPage() {
   const [overview, setOverview] = useState(null);
   const [settings, setSettings] = useState(null);
   const [dirty, setDirty] = useState(false);
+  // The settings as last loaded (or reloaded after a save); null until they
+  // loaded, so a page that failed to load never counts as holding unsaved edits.
+  const [savedSettings, setSavedSettings] = useState(null);
+  const { blocker } = useUnsavedChanges(savedSettings, settings);
   const [confirmDialog, setConfirmDialog] = useState(null);
   const [shares, setShares] = useState({ items: [], truncated: false });
   // Text models an admin can pick as the chat title model. From the admin model
@@ -257,6 +263,7 @@ function AdminChatHistoryPage() {
         setOverview(response.data);
         if (!keepSettings) {
           setSettings(response.data.settings);
+          setSavedSettings(response.data.settings);
           setDirty(false);
         }
       } catch (error) {
@@ -1363,7 +1370,7 @@ function AdminChatHistoryPage() {
                     updateSetting('sharing', 'embedAllowedOrigins', e.target.value.split('\n'))
                   }
                   placeholder="https://portal.example.com"
-                  className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-mono text-gray-900 dark:text-gray-100"
+                  className="w-full rounded-lg border border-admin-control-border dark:border-admin-control-border-dark bg-white dark:bg-gray-700 px-3 py-2 text-sm font-mono text-gray-900 dark:text-gray-100"
                 />
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                   {t(
@@ -1546,6 +1553,7 @@ function AdminChatHistoryPage() {
         }
         onDeny={() => setConfirmDialog(null)}
       />
+      <UnsavedChangesDialog blocker={blocker} />
     </div>
   );
 }

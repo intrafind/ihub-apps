@@ -122,7 +122,7 @@ function SearchableAppsSelector({ apps, value, onChange, placeholder, currentLan
           >
             <div className="flex items-center">
               <span className="text-sm text-gray-500 dark:text-gray-400">
-                {t('admin.prompts.edit.noApp', 'No linked app')}
+                {t('admin.prompts.edit.noApp', 'Default chat app')}
               </span>
             </div>
           </div>

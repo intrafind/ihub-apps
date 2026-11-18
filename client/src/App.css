@@ -19,6 +19,210 @@
   }
 }
 
+/*
+ * Admin form controls (WCAG 1.4.11: a field's boundary needs 3:1 contrast).
+ *
+ * Tailwind 4 Preflight sets `border: 0 solid` and `padding: 0` on every
+ * element, and many admin class strings say `border-gray-300` with no border
+ * width, so those fields rendered with no visible boundary. These rules give
+ * every text-like admin field a boundary, padding and colours.
+ *
+ * - Scope: only while AdminLayout is mounted (`useSurface('admin')` sets
+ *   `<html data-surface="admin">`), so end-user pages are untouched, and
+ *   portalled admin dialogs are covered too.
+ * - Opt-outs: subtrees marked `data-surface="app"` (the test panel's embedded
+ *   end-user chat), fields marked `data-bare` (inputs inside a bordered
+ *   wrapper, like the command palette search) and third-party editors.
+ * - `@layer base`: ANY utility on the element (`border-0`, `px-0`,
+ *   `bg-transparent`, `border-red-500`, ...) still wins. Specificity (0,3,1)
+ *   only beats Preflight's `input, select, textarea` in the same layer.
+ *
+ * The field selector list below is repeated in every rule (plain CSS cannot
+ * share it). This first rule is the canonical copy: change all of them
+ * together. `tests/e2e/admin-controls-visible.spec.js` measures the result.
+ */
+@layer base {
+  [data-surface='admin']
+    :is(
+      input:not(
+        [type='checkbox'],
+        [type='radio'],
+        [type='range'],
+        [type='color'],
+        [type='file'],
+        [type='hidden'],
+        [type='button'],
+        [type='submit'],
+        [type='reset'],
+        [type='image']
+      ),
+      select,
+      textarea
+    ):not([data-surface='app'] *, [data-bare], .monaco-editor *, .cm-editor *, .react-flow *) {
+    border: 1px solid var(--color-admin-control-border, var(--color-gray-500));
+    border-radius: var(--radius-md, 0.375rem);
+    padding: 0.5rem 0.75rem;
+    background-color: var(--color-white, #fff);
+    color: var(--color-gray-900);
+  }
+
+  [data-surface='admin'][data-theme='dark']
+    :is(
+      input:not(
+        [type='checkbox'],
+        [type='radio'],
+        [type='range'],
+        [type='color'],
+        [type='file'],
+        [type='hidden'],
+        [type='button'],
+        [type='submit'],
+        [type='reset'],
+        [type='image']
+      ),
+      select,
+      textarea
+    ):not([data-surface='app'] *, [data-bare], .monaco-editor *, .cm-editor *, .react-flow *) {
+    border-color: var(--color-admin-control-border-dark, var(--color-gray-400));
+    background-color: var(--color-gray-700);
+    color: var(--color-gray-100);
+  }
+
+  /* Disabled fields are exempt from 1.4.11 but must still read as fields. */
+  [data-surface='admin']
+    :is(
+      input:not(
+        [type='checkbox'],
+        [type='radio'],
+        [type='range'],
+        [type='color'],
+        [type='file'],
+        [type='hidden'],
+        [type='button'],
+        [type='submit'],
+        [type='reset'],
+        [type='image']
+      ),
+      select,
+      textarea
+    ):not(
+      [data-surface='app'] *,
+      [data-bare],
+      .monaco-editor *,
+      .cm-editor *,
+      .react-flow *
+    ):disabled {
+    border-color: var(--color-gray-300);
+    background-color: var(--color-gray-100);
+    color: var(--color-gray-500);
+    cursor: not-allowed;
+  }
+
+  [data-surface='admin'][data-theme='dark']
+    :is(
+      input:not(
+        [type='checkbox'],
+        [type='radio'],
+        [type='range'],
+        [type='color'],
+        [type='file'],
+        [type='hidden'],
+        [type='button'],
+        [type='submit'],
+        [type='reset'],
+        [type='image']
+      ),
+      select,
+      textarea
+    ):not(
+      [data-surface='app'] *,
+      [data-bare],
+      .monaco-editor *,
+      .cm-editor *,
+      .react-flow *
+    ):disabled {
+    border-color: var(--color-gray-600);
+    background-color: var(--color-gray-800);
+    color: var(--color-gray-400);
+  }
+
+  /* A visible keyboard focus indicator, also for class strings that set a
+     ring colour but no ring width. */
+  [data-surface='admin']
+    :is(
+      input:not(
+        [type='checkbox'],
+        [type='radio'],
+        [type='range'],
+        [type='color'],
+        [type='file'],
+        [type='hidden'],
+        [type='button'],
+        [type='submit'],
+        [type='reset'],
+        [type='image']
+      ),
+      select,
+      textarea
+    ):not(
+      [data-surface='app'] *,
+      [data-bare],
+      .monaco-editor *,
+      .cm-editor *,
+      .react-flow *
+    ):focus-visible {
+    outline: 2px solid var(--color-admin-accent);
+    outline-offset: 1px;
+  }
+
+  [data-surface='admin'][data-theme='dark']
+    :is(
+      input:not(
+        [type='checkbox'],
+        [type='radio'],
+        [type='range'],
+        [type='color'],
+        [type='file'],
+        [type='hidden'],
+        [type='button'],
+        [type='submit'],
+        [type='reset'],
+        [type='image']
+      ),
+      select,
+      textarea
+    ):not(
+      [data-surface='app'] *,
+      [data-bare],
+      .monaco-editor *,
+      .cm-editor *,
+      .react-flow *
+    ):focus-visible {
+    outline-color: var(--color-admin-accent-fg-dark);
+  }
+
+  [data-surface='admin']
+    :is(input[type='checkbox'], input[type='radio']):not([data-surface='app'] *) {
+    accent-color: var(--color-admin-accent);
+  }
+
+  /* indigo-600 is 2.33:1 on the gray-800 card; the checked fill needs indigo-400 in dark mode. */
+  [data-surface='admin'][data-theme='dark']
+    :is(input[type='checkbox'], input[type='radio']):not([data-surface='app'] *) {
+    accent-color: var(--color-admin-accent-fg-dark);
+  }
+
+  /* Native checkboxes, date pickers and select popups follow the admin theme;
+     the embedded end-user chat keeps the browser default it has elsewhere. */
+  [data-surface='admin'][data-theme='dark'] {
+    color-scheme: dark;
+  }
+
+  [data-surface='admin'] [data-surface='app'] {
+    color-scheme: normal;
+  }
+}
+
 /* Persistent visual marker for admin form fields that have a validation error.
    Applied imperatively by AdminFormErrorSummary so it survives React re-renders
    without each editor having to plumb per-language error state. */
@@ -374,31 +578,48 @@ div .markdown-content .code-block-toolbar > div,
   }
 }
 
-/* Dark mode for form elements */
-[data-theme='dark'] input[type='text'],
-[data-theme='dark'] input[type='email'],
-[data-theme='dark'] input[type='password'],
-[data-theme='dark'] input[type='number'],
-[data-theme='dark'] input[type='url'],
-[data-theme='dark'] input[type='search'],
-[data-theme='dark'] input[type='tel'],
-[data-theme='dark'] input[type='date'],
-[data-theme='dark'] input[type='time'],
-[data-theme='dark'] input[type='datetime-local'],
-[data-theme='dark'] textarea:not(.bg-transparent),
-[data-theme='dark'] select {
+/* Dark mode for form elements (end-user pages).
+   The `:where()` suffix keeps this unlayered rule out of the admin, where the
+   fields' own `dark:` utilities and the layered admin rule above apply instead
+   (an unlayered rule beats every utility, including red error borders). It
+   applies again inside `data-surface="app"` subtrees (the test panel's chat).
+   `:where()` adds no specificity, so end-user pages match exactly as before. */
+[data-theme='dark']
+  input[type='text']:where(:not([data-surface='admin'] *), [data-surface='app'] *),
+[data-theme='dark']
+  input[type='email']:where(:not([data-surface='admin'] *), [data-surface='app'] *),
+[data-theme='dark']
+  input[type='password']:where(:not([data-surface='admin'] *), [data-surface='app'] *),
+[data-theme='dark']
+  input[type='number']:where(:not([data-surface='admin'] *), [data-surface='app'] *),
+[data-theme='dark'] input[type='url']:where(:not([data-surface='admin'] *), [data-surface='app'] *),
+[data-theme='dark']
+  input[type='search']:where(:not([data-surface='admin'] *), [data-surface='app'] *),
+[data-theme='dark'] input[type='tel']:where(:not([data-surface='admin'] *), [data-surface='app'] *),
+[data-theme='dark']
+  input[type='date']:where(:not([data-surface='admin'] *), [data-surface='app'] *),
+[data-theme='dark']
+  input[type='time']:where(:not([data-surface='admin'] *), [data-surface='app'] *),
+[data-theme='dark']
+  input[type='datetime-local']:where(:not([data-surface='admin'] *), [data-surface='app'] *),
+[data-theme='dark']
+  textarea:not(.bg-transparent):where(:not([data-surface='admin'] *), [data-surface='app'] *),
+[data-theme='dark'] select:where(:not([data-surface='admin'] *), [data-surface='app'] *) {
   @apply bg-gray-700 border-gray-600 text-gray-100;
 }
 
-[data-theme='dark'] input::placeholder,
-[data-theme='dark'] textarea::placeholder {
+[data-theme='dark']
+  input:where(:not([data-surface='admin'] *), [data-surface='app'] *)::placeholder,
+[data-theme='dark']
+  textarea:where(:not([data-surface='admin'] *), [data-surface='app'] *)::placeholder {
   @apply text-gray-400;
 }
 
 /* Dark mode for disabled inputs */
-[data-theme='dark'] input:disabled,
-[data-theme='dark'] select:disabled,
-[data-theme='dark'] textarea:disabled {
+[data-theme='dark'] input:disabled:where(:not([data-surface='admin'] *), [data-surface='app'] *),
+[data-theme='dark'] select:disabled:where(:not([data-surface='admin'] *), [data-surface='app'] *),
+[data-theme='dark']
+  textarea:disabled:where(:not([data-surface='admin'] *), [data-surface='app'] *) {
   @apply bg-gray-800 text-gray-500;
 }
 

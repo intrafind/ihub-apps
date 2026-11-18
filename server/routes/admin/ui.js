@@ -18,6 +18,7 @@ import { recordUpload } from '../../telemetry/metrics.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import { APP_ID_PATTERN, APP_ID_MAX_LENGTH } from '../../../shared/validationPatterns.js';
 import { sendCreated, segment } from '../../utils/created.js';
+import { assertIfMatch, revisionOf, setRevisionHeaders } from '../../utils/configRevision.js';
 
 /**
  * Views `ui.json → startPage.defaultPage` may name as the "/" route: the
@@ -37,6 +38,28 @@ const MAX_APP_SHORTCUTS = 12;
 
 /** Nobody curates more default apps than this; the counts cap the lists anyway. */
 const MAX_FEATURED_APPS = 50;
+
+/** The UI configuration, as a path relative to `contents/`. */
+const UI_FILE = 'config/ui.json';
+
+/**
+ * The revision of `ui.json` as the UI form sees it: the stored body without
+ * `pages`. The save keeps the stored page registry whatever it is sent, so a
+ * page created, changed or deleted after the form loaded cannot conflict with
+ * it and must not make its save fail with 412. GET, POST and the `If-Match`
+ * comparison all use this one definition.
+ *
+ * @param {Object|null} stored - The stored `ui.json`, `null` when missing
+ * @returns {string}
+ */
+export function uiRevisionOf(stored) {
+  if (stored === null || typeof stored !== 'object' || Array.isArray(stored)) {
+    return revisionOf(stored);
+  }
+  const withoutPages = { ...stored };
+  delete withoutPages.pages;
+  return revisionOf(withoutPages);
+}
 
 export default function registerAdminUIRoutes(app) {
   // Configure multer for file uploads
@@ -226,14 +249,31 @@ export default function registerAdminUIRoutes(app) {
   /**
    * Get UI configuration
    */
-  app.get(buildServerPath('/api/admin/ui/config'), authRequired, adminAuth, (req, res) => {
-    const uiConfig = configCache.getUI();
+  app.get(buildServerPath('/api/admin/ui/config'), authRequired, adminAuth, async (req, res) => {
+    // Body and revision come from the same read of the stored file, which is
+    // what a save with `If-Match` is compared against. The runtime cache can
+    // lag behind another worker's write, and a stale body paired with a fresh
+    // revision would let a save erase that write. The cache is only the
+    // fallback when there is no readable file (the revision is then that of a
+    // missing file, as the save sees it).
+    const stored = await configStore.readJson(UI_FILE);
+    const body = stored ?? configCache.getUI()?.data ?? {};
 
-    res.json(uiConfig?.data || {});
+    setRevisionHeaders(res, uiRevisionOf(stored));
+    res.json(body);
   });
 
   /**
-   * Update UI configuration
+   * Update UI configuration.
+   *
+   * Replaces `ui.json` with `config`, except `pages`: the content pages are
+   * owned by the pages routes (`/api/admin/pages`), so the registry stored on
+   * disk is always kept and a `pages` member in the request is ignored. A UI
+   * form opened before a page was created can therefore no longer delete it.
+   *
+   * Optional `If-Match` (the `ETag` of GET /api/admin/ui/config): a stale one
+   * is refused with 412 `PRECONDITION_FAILED` and nothing is written. The 204
+   * carries the new `ETag`.
    */
   app.post(buildServerPath('/api/admin/ui/config'), authRequired, adminAuth, async (req, res) => {
     const { config } = req.body;
@@ -245,11 +285,37 @@ export default function registerAdminUIRoutes(app) {
     // Validate the configuration structure (basic validation)
     validateUIConfig(config);
 
-    // Write the updated configuration atomically
-    await configStore.writeJson('config/ui.json', config);
+    // Read, compare and write under the file's update lock, the repair of an
+    // unparseable file included: two repairs cannot both pass the check.
+    const { data: stored } = await configStore.updateJson(
+      UI_FILE,
+      (current, { unparseable } = {}) => {
+        if (unparseable) {
+          // The stored file was read but is not valid JSON (edited by hand). A
+          // full save replaces the whole file, so it is the admin's way to
+          // repair it. There is no stored body: the read answered the revision
+          // of a missing file and served the runtime cache, so `If-Match` is
+          // checked against a missing file, and the `pages` registry is the one
+          // the form sent (from that cache), since none can be read from disk.
+          // A file that could not be read at all (EACCES, EIO) is not repaired:
+          // `updateJson` throws for it.
+          logger.warn('ui.json could not be parsed; the UI configuration save replaces it', {
+            component: 'AdminUI'
+          });
+          assertIfMatch(req, null, 'ui', uiRevisionOf);
+          return { ...config };
+        }
+        assertIfMatch(req, current, 'ui', uiRevisionOf);
+        const next = { ...config };
+        if (current?.pages !== undefined) next.pages = current.pages;
+        else delete next.pages;
+        return next;
+      },
+      { replaceUnparseable: true }
+    );
 
     // Refresh the cache
-    await configCache.refreshCacheEntry('config/ui.json');
+    await configCache.refreshCacheEntry(UI_FILE);
 
     logAudit({
       req,
@@ -258,6 +324,7 @@ export default function registerAdminUIRoutes(app) {
       summary: 'Updated UI configuration'
     });
 
+    setRevisionHeaders(res, uiRevisionOf(stored));
     res.status(204).end();
   });
 

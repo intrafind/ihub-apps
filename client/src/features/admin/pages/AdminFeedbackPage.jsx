@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { fetchUsageFeedbackSummary } from '../../../api/usageReportsAdminApi';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
@@ -19,6 +19,10 @@ import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import Icon from '../../../shared/components/Icon';
 import Switch from '../../../shared/components/Switch';
 import FeedbackReview from '../components/feedback/FeedbackReview';
+import AdminLoadGate from '../components/AdminLoadGate';
+import { useAdminConfigLoad } from '../hooks/useAdminConfigLoad';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
 
 const TRACKING_MODES = ['anonymous', 'pseudonymous', 'identified'];
 
@@ -53,7 +57,6 @@ function AdminFeedbackPage() {
   const { refreshConfig } = usePlatformConfig();
 
   const [activeTab, setActiveTab] = useState('settings');
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
 
@@ -65,56 +68,57 @@ function AdminFeedbackPage() {
   });
   // Edited state
   const [draft, setDraft] = useState(saved);
+  // Whether the settings loaded; until then (or after a failed load) the page
+  // never counts as holding unsaved edits.
+  const [hasLoaded, setHasLoaded] = useState(false);
+  const { blocker } = useUnsavedChanges(hasLoaded ? saved : null, draft);
   const [apps, setApps] = useState([]);
   const [appSaving, setAppSaving] = useState(null);
   const [usage, setUsage] = useState(null);
 
-  const load = async () => {
-    try {
-      setLoading(true);
-      const [featuresResponse, platformResponse, meta, appList, usageData] = await Promise.all([
-        makeAdminApiCall('/admin/features', { method: 'GET' }),
-        makeAdminApiCall('/admin/configs/platform', { method: 'GET' }),
-        fetchAdminUsageMeta().catch(() => null),
-        fetchAdminApps().catch(() => []),
-        fetchUsageFeedbackSummary({ range: '90d' }).catch(() => null)
-      ]);
-
-      const feedbackFeature = (featuresResponse.data?.items || []).find(f => f.id === 'feedback');
-      const platform = platformResponse.data || {};
-      const next = {
-        collectionEnabled: feedbackFeature ? feedbackFeature.enabled !== false : true,
-        storageEnabled: platform.features?.feedbackTracking !== false,
-        trackingMode: meta?.trackingMode || platform.features?.usageTrackingMode || 'pseudonymous'
-      };
-      setSaved(next);
-      setDraft(next);
-      setApps(
-        (Array.isArray(appList) ? appList : []).map(app => ({
-          id: app.id,
-          name: getLocalizedContent(app.name, lang) || app.id,
-          appEnabled: app.enabled !== false,
-          feedbackEnabled: app.features?.feedback !== false
-        }))
-      );
-      setUsage(usageData);
-      setMessage(null);
-    } catch (error) {
-      setMessage({
-        type: 'error',
-        text:
-          getAdminApiErrorMessage(error) ||
-          t('admin.feedback.loadError', 'Failed to load feedback settings')
-      });
-    } finally {
-      setLoading(false);
+  // The settings tab shows no form and no Save until its settings loaded: the
+  // toggles would otherwise start from defaults that may not be what is stored.
+  const settingsLoad = useAdminConfigLoad({
+    sources: {
+      settings: {
+        load: async () => {
+          const [featuresResponse, platformResponse, meta, appList, usageData] = await Promise.all([
+            makeAdminApiCall('/admin/features', { method: 'GET' }),
+            makeAdminApiCall('/admin/configs/platform', { method: 'GET' }),
+            fetchAdminUsageMeta().catch(() => null),
+            fetchAdminApps().catch(() => []),
+            fetchUsageFeedbackSummary({ range: '90d' }).catch(() => null)
+          ]);
+          return { featuresResponse, platformResponse, meta, appList, usageData };
+        },
+        onLoad: ({ featuresResponse, platformResponse, meta, appList, usageData }) => {
+          const feedbackFeature = (featuresResponse.data?.items || []).find(
+            f => f.id === 'feedback'
+          );
+          const platform = platformResponse.data || {};
+          const next = {
+            collectionEnabled: feedbackFeature ? feedbackFeature.enabled !== false : true,
+            storageEnabled: platform.features?.feedbackTracking !== false,
+            trackingMode:
+              meta?.trackingMode || platform.features?.usageTrackingMode || 'pseudonymous'
+          };
+          setSaved(next);
+          setDraft(next);
+          setHasLoaded(true);
+          setApps(
+            (Array.isArray(appList) ? appList : []).map(app => ({
+              id: app.id,
+              name: getLocalizedContent(app.name, lang) || app.id,
+              appEnabled: app.enabled !== false,
+              feedbackEnabled: app.features?.feedback !== false
+            }))
+          );
+          setUsage(usageData);
+        }
+      }
     }
-  };
-
-  useEffect(() => {
-    void load();
-    // eslint-disable-next-line @eslint-react/exhaustive-deps
-  }, []);
+  });
+  const ready = settingsLoad.status === 'ready';
 
   const hasChanges = useMemo(
     () =>
@@ -125,34 +129,41 @@ function AdminFeedbackPage() {
   );
 
   const handleSave = async () => {
+    if (!ready) return;
+    // The three settings are saved by three requests. Each one's baseline
+    // advances as soon as its own request succeeded, so after a later failure
+    // (the platform save, say) the page compares against what the
+    // server now holds, and a retry does not resend what was already saved.
+    const target = draft;
+    const markSaved = field => setSaved(prev => ({ ...prev, [field]: target[field] }));
     try {
       setSaving(true);
       setMessage(null);
 
-      if (draft.collectionEnabled !== saved.collectionEnabled) {
+      if (target.collectionEnabled !== saved.collectionEnabled) {
         await makeAdminApiCall('/admin/features', {
           method: 'PUT',
-          body: { feedback: draft.collectionEnabled }
+          body: { feedback: target.collectionEnabled }
         });
+        markSaved('collectionEnabled');
       }
 
-      if (draft.storageEnabled !== saved.storageEnabled) {
-        // Read-modify-write, like every other page that owns one platform.json
-        // key: the file carries settings this page does not show.
-        const response = await makeAdminApiCall('/admin/configs/platform', { method: 'GET' });
-        const platform = response.data || {};
-        platform.features = {
-          ...platform.features,
-          feedbackTracking: draft.storageEnabled
-        };
-        await makeAdminApiCall('/admin/configs/platform', { method: 'POST', body: platform });
+      if (target.storageEnabled !== saved.storageEnabled) {
+        // A scoped PATCH of this one switch, never a full-config POST: the
+        // tracking-mode save below writes platform.json too, and a guarded POST
+        // would report it as a conflict. (A POST also never writes `features`.)
+        await makeAdminApiCall('/admin/configs/platform', {
+          method: 'PATCH',
+          body: { features: { feedbackTracking: target.storageEnabled } }
+        });
+        markSaved('storageEnabled');
       }
 
-      if (draft.trackingMode !== saved.trackingMode) {
-        await updateAdminUsageTrackingMode(draft.trackingMode);
+      if (target.trackingMode !== saved.trackingMode) {
+        await updateAdminUsageTrackingMode(target.trackingMode);
+        markSaved('trackingMode');
       }
 
-      setSaved(draft);
       setMessage({ type: 'success', text: t('admin.feedback.saved', 'Feedback settings saved') });
       refreshConfig();
     } catch (error) {
@@ -243,7 +254,7 @@ function AdminFeedbackPage() {
             <select
               value={draft.trackingMode}
               onChange={e => setDraft(prev => ({ ...prev, trackingMode: e.target.value }))}
-              className="rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-gray-100 px-3 py-1.5"
+              className="rounded-md border border-admin-control-border dark:border-admin-control-border-dark bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-gray-100 px-3 py-1.5"
             >
               {TRACKING_MODES.map(mode => (
                 <option key={mode} value={mode}>
@@ -373,7 +384,7 @@ function AdminFeedbackPage() {
       </div>
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {loading ? (
+        {settingsLoad.status === 'loading' ? (
           <LoadingSpinner />
         ) : (
           <>
@@ -397,10 +408,20 @@ function AdminFeedbackPage() {
               </nav>
             </div>
 
-            {activeTab === 'settings' ? renderSettings() : renderReview()}
+            {activeTab !== 'settings' ? (
+              renderReview()
+            ) : ready ? (
+              renderSettings()
+            ) : (
+              <AdminLoadGate
+                load={settingsLoad}
+                resourceLabel={t('admin.feedback.resource', 'feedback settings')}
+              />
+            )}
           </>
         )}
       </div>
+      <UnsavedChangesDialog blocker={blocker} />
     </div>
   );
 }

@@ -1,40 +1,68 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import AdminLoadGate from './AdminLoadGate';
+import { useAdminConfigLoad } from '../hooks/useAdminConfigLoad';
+import { useDirtyReport } from '../hooks/useDirtyReport';
+import { SSL_CONFIG_SAVED_EVENT } from '../utils/sslConfigEvents';
 
-function SsrfConfig() {
+/**
+ * @param {Object} props
+ * @param {(dirty: boolean) => void} [props.onDirtyChange] - Reports unsaved edits to the page.
+ */
+function SsrfConfig({ onDirtyChange }) {
   const { t } = useTranslation();
   const [allowedHosts, setAllowedHosts] = useState([]);
+  // The allowlist as last loaded or saved; null until it loaded.
+  const [savedHosts, setSavedHosts] = useState(null);
+  useDirtyReport(savedHosts, allowedHosts, onDirtyChange);
+  // Hosts on the TLS whitelist (ssl.domainWhitelist): the SSRF guard trusts
+  // them too. Shown read-only; they are edited on the SSL card. Null until
+  // loaded, or when they could not be loaded.
+  const [tlsTrustedHosts, setTlsTrustedHosts] = useState(null);
   const [newHost, setNewHost] = useState('');
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
 
+  // The card shows no form and no Save until its settings loaded: saving
+  // the defaults after a failed load would overwrite the stored ones (PL-B3).
+  const load = useAdminConfigLoad({
+    sources: {
+      config: {
+        load: async () => (await makeAdminApiCall('/admin/ssrf/config', { method: 'GET' })).data,
+        onLoad: data => {
+          const loaded = Array.isArray(data.allowedHosts) ? data.allowedHosts : [];
+          setAllowedHosts(loaded);
+          setSavedHosts(loaded);
+        }
+      }
+    }
+  });
+  const ready = load.status === 'ready';
+
+  // The TLS whitelist is informational only, so it is not part of the load
+  // gate: without it the card still shows (and saves) its own list.
   useEffect(() => {
-    const fetchConfig = async () => {
+    const fetchTlsWhitelist = async () => {
       try {
-        const response = await makeAdminApiCall('/admin/ssrf/config', { method: 'GET' });
-        setAllowedHosts(
-          Array.isArray(response.data.allowedHosts) ? response.data.allowedHosts : []
+        const response = await makeAdminApiCall('/admin/ssl/config', { method: 'GET' });
+        setTlsTrustedHosts(
+          Array.isArray(response.data?.domainWhitelist) ? response.data.domainWhitelist : []
         );
-        setMessage('');
-      } catch (error) {
-        setMessage({
-          type: 'error',
-          text:
-            error.message ||
-            t('admin.system.ssrf.configLoadError', 'Failed to load SSRF configuration')
-        });
-      } finally {
-        setLoading(false);
+      } catch {
+        setTlsTrustedHosts(null);
       }
     };
-    void fetchConfig();
-  }, [t]);
+    void fetchTlsWhitelist();
+    // Both cards stay mounted on the Security page: reload the whitelist when
+    // the SSL card saves it (only saved changes are announced).
+    window.addEventListener(SSL_CONFIG_SAVED_EVENT, fetchTlsWhitelist);
+    return () => window.removeEventListener(SSL_CONFIG_SAVED_EVENT, fetchTlsWhitelist);
+  }, []);
 
   const handleAddHost = () => {
     const trimmed = newHost.trim();
@@ -54,6 +82,7 @@ function SsrfConfig() {
   };
 
   const handleSave = async () => {
+    if (!ready) return;
     setSaving(true);
     setMessage('');
     try {
@@ -61,6 +90,7 @@ function SsrfConfig() {
         method: 'PUT',
         body: { allowedHosts }
       });
+      setSavedHosts(allowedHosts);
       setMessage({
         type: 'success',
         text: t('admin.system.ssrf.configSaved', 'SSRF allowlist saved successfully')
@@ -77,13 +107,19 @@ function SsrfConfig() {
     }
   };
 
-  if (loading) {
+  if (!ready) {
     return (
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
         <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">
           {t('admin.system.ssrf.title', 'SSRF Allowlist')}
         </h2>
-        <p className="text-gray-600 dark:text-gray-400">{t('common.loading', 'Loading...')}</p>
+        <AdminLoadGate
+          load={load}
+          resourceLabel={t('admin.system.ssrf.title', 'SSRF Allowlist')}
+          loadingFallback={
+            <p className="text-gray-600 dark:text-gray-400">{t('common.loading', 'Loading...')}</p>
+          }
+        />
       </div>
     );
   }
@@ -168,7 +204,7 @@ function SsrfConfig() {
             'admin.system.ssrf.hostPlaceholder',
             '*.intrafind.io, api.internal.company.com'
           )}
-          className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 text-sm"
+          className="flex-1 px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-md shadow-xs focus:ring-admin-accent focus:border-admin-accent dark:bg-gray-700 dark:text-gray-100 text-sm"
         />
         <button
           onClick={handleAddHost}
@@ -214,11 +250,40 @@ function SsrfConfig() {
       ) : (
         <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-md text-center mb-6">
           <p className="text-sm text-gray-600 dark:text-gray-400">
+            {t('admin.system.ssrf.noHosts', 'No hosts explicitly added to the SSRF allowlist.')}
+          </p>
+        </div>
+      )}
+
+      {/* Hosts trusted through the TLS whitelist (read-only) */}
+      {tlsTrustedHosts !== null && (
+        <div className="mb-6" data-testid="ssrf-tls-trusted-hosts">
+          <h3 className="text-md font-semibold text-gray-900 dark:text-gray-100 mb-1">
+            {t('admin.system.ssrf.tlsTrustedTitle', 'Also trusted: SSL domain whitelist')}
+          </h3>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
             {t(
-              'admin.system.ssrf.noHosts',
-              'No hosts allowed. Outbound calls to private/internal IPs are blocked.'
+              'admin.system.ssrf.tlsTrustedDesc',
+              'Hosts on the SSL domain whitelist are trusted as well by web sources, website crawls, the page reader and the watermark detector (not by tools and MCP servers), whether or not "Ignore Invalid SSL Certificates" is on. They are edited on the SSL card.'
             )}
           </p>
+          {tlsTrustedHosts.length > 0 ? (
+            <ul className="space-y-2">
+              {tlsTrustedHosts.map(host => (
+                <li
+                  key={host}
+                  className="flex items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-md"
+                >
+                  <Icon name="lock" className="w-4 h-4 text-gray-500 dark:text-gray-400 mr-2" />
+                  <span className="text-sm text-gray-900 dark:text-gray-100 font-mono">{host}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-gray-600 dark:text-gray-400 italic">
+              {t('admin.system.ssrf.tlsTrustedNone', 'The SSL domain whitelist is empty.')}
+            </p>
+          )}
         </div>
       )}
 

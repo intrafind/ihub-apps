@@ -466,9 +466,11 @@ function StartWorkflowModal({ workflow, isOpen, onClose, onStarted }) {
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   {t('workflows.startModal.message', 'Message (optional)')}
                 </label>
+                {/* Sent as `input`, the name a chat message has too, so a step
+                    reads it as {{input}} however the run was started (AX-B12). */}
                 <textarea
-                  value={initialData.message || ''}
-                  onChange={e => handleFieldChange('message', e.target.value)}
+                  value={initialData.input || ''}
+                  onChange={e => handleFieldChange('input', e.target.value)}
                   disabled={submitting}
                   rows={3}
                   placeholder={t(

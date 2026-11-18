@@ -6,10 +6,15 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall, getAdminApiErrorMessage } from '../../../api/adminApi';
-import { buildAppPayloadFromWizard } from '../../admin/utils/appWizardPayload';
+import {
+  appCategoryOptions,
+  buildAppPayloadFromWizard,
+  wizardLanguage
+} from '../../admin/utils/appWizardPayload';
+import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import { fetchModels } from '../../../api';
 import { integrationsFromAnswer } from '../../../../../shared/appGenerator.js';
-import { DEFAULT_LANGUAGE } from '../../../utils/localizeContent';
+import { DEFAULT_LANGUAGE, getLocalizedContent } from '../../../utils/localizeContent';
 import {
   validateAppId,
   APP_ID_MAX_LENGTH,
@@ -602,7 +607,7 @@ function AIGenerationStep({ appData, updateAppData }) {
   const [error, setError] = useState(null);
   const [appGeneratorPrompt, setAppGeneratorPrompt] = useState(null);
   const [loadingPrompt, setLoadingPrompt] = useState(false);
-  const [selectedLanguage, setSelectedLanguage] = useState(i18n.language || 'en');
+  const [selectedLanguage, setSelectedLanguage] = useState(() => wizardLanguage(i18n.language));
 
   // Load the app generator prompt from configuration
   useEffect(() => {
@@ -851,7 +856,7 @@ function BasicInfoStep({
   error
 }) {
   const { t, i18n } = useTranslation();
-  const [selectedLanguage, setSelectedLanguage] = useState(i18n.language || 'en');
+  const [selectedLanguage, setSelectedLanguage] = useState(() => wizardLanguage(i18n.language));
   const [fieldErrors, setFieldErrors] = useState({});
 
   const isOverridden = field => {
@@ -1131,7 +1136,7 @@ function SystemPromptStep({
   error
 }) {
   const { t, i18n } = useTranslation();
-  const [selectedLanguage, setSelectedLanguage] = useState(i18n.language || 'en');
+  const [selectedLanguage, setSelectedLanguage] = useState(() => wizardLanguage(i18n.language));
   const [fieldErrors, setFieldErrors] = useState({});
   const [availableModels, setAvailableModels] = useState([]);
   const [loadingModels, setLoadingModels] = useState(true);
@@ -1473,7 +1478,14 @@ function VariablesStep({ appData, updateAppData }) {
 
 // Step 6: Advanced Settings
 function AdvancedSettingsStep({ appData, updateAppData }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const { uiConfig } = useUIConfig() || {};
+  // The categories the apps list can filter by (`ui.json`), the same list the
+  // app editor offers (AI-B6).
+  const categoryOptions = appCategoryOptions(uiConfig, appData.category).map(category => ({
+    id: category.id,
+    label: getLocalizedContent(category.name, wizardLanguage(i18n.language)) || category.id
+  }));
 
   return (
     <div className="space-y-6">
@@ -1531,12 +1543,12 @@ function AdvancedSettingsStep({ appData, updateAppData }) {
             onChange={e => updateAppData({ category: e.target.value })}
             className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
           >
-            <option value="">Select category...</option>
-            <option value="productivity">Productivity</option>
-            <option value="creativity">Creativity</option>
-            <option value="communication">Communication</option>
-            <option value="analysis">Analysis</option>
-            <option value="utility">Utility</option>
+            <option value="">{t('admin.apps.edit.selectCategory', 'Select category...')}</option>
+            {categoryOptions.map(category => (
+              <option key={category.id} value={category.id}>
+                {category.label}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -1557,8 +1569,25 @@ function AdvancedSettingsStep({ appData, updateAppData }) {
 }
 
 // Step 7: Review
+/**
+ * The text of a localized wizard field to show: the UI language's text, or
+ * the first language that has text (the admin may have typed in another one).
+ *
+ * @param {Object<string, string>|string|undefined} value - A localized field.
+ * @param {string} language - The base UI language.
+ * @returns {string}
+ */
+function wizardText(value, language) {
+  if (!value || typeof value !== 'object') return typeof value === 'string' ? value : '';
+  if (value[language]?.trim()) return value[language];
+  return Object.values(value).find(text => typeof text === 'string' && text.trim()) || '';
+}
+
 function ReviewStep({ appData, templateApp }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const language = wizardLanguage(i18n.language);
+  const name = wizardText(appData.name, language);
+  const description = wizardText(appData.description, language);
 
   return (
     <div className="space-y-6">
@@ -1576,11 +1605,11 @@ function ReviewStep({ appData, templateApp }) {
               className="h-8 w-8 rounded-full flex items-center justify-center text-white font-bold mr-3"
               style={{ backgroundColor: appData.color }}
             >
-              {appData.name.en.charAt(0).toUpperCase()}
+              {name.charAt(0).toUpperCase()}
             </div>
             <div>
-              <h3 className="font-medium text-gray-900">{appData.name.en}</h3>
-              <p className="text-sm text-gray-600">{appData.description.en}</p>
+              <h3 className="font-medium text-gray-900">{name}</h3>
+              <p className="text-sm text-gray-600">{description}</p>
             </div>
           </div>
 

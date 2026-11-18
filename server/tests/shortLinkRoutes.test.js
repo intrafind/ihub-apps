@@ -32,6 +32,8 @@ const { default: request } = await import('supertest');
 const { default: configCache } = await import('../configCache.js');
 const { default: registerShortLinkRoutes } = await import('../routes/shortLinkRoutes.js');
 const { setupMiddleware } = await import('../middleware/setup.js');
+const { basePathDetectionMiddleware } = await import('../utils/basePath.js');
+const { shortLinkLocation } = await import('../../shared/shortLinkTargetPath.js');
 const { default: errorHandler } = await import('../middleware/errorHandler.js');
 
 const GROUPS = {
@@ -362,5 +364,178 @@ describe('rate limiting', () => {
     expect((await request(app).get('/api/shortlinks')).status).toBe(200);
     expect((await request(app).get('/api/shortlinks')).status).toBe(200);
     expect((await request(app).get('/api/shortlinks')).status).toBe(429);
+  });
+});
+
+describe('editing a short link changes where it leads (CU-B1)', () => {
+  const put = (app, code, body) =>
+    as(request(app).put(`/api/shortlinks/${code}`), 'admin').send(body);
+
+  test('a new app changes the target even when the editor sends the stored url back', async () => {
+    const app = buildApp();
+    const { body: link } = await create(app, 'admin', { appId: 'chat' });
+    expect(link.url).toBe('/apps/chat');
+
+    // The admin editor loads the whole link and saves it again with one change.
+    const res = await put(app, link.code, { ...link, appId: 'email-composer' });
+    expect(res.status).toBe(200);
+    expect(res.body.url).toBe('/apps/email-composer');
+
+    const visit = await request(app).get(`/s/${link.code}`);
+    expect(visit.headers.location).toBe('/apps/email-composer');
+  });
+
+  test('switching params on rebuilds the target with them', async () => {
+    const app = buildApp();
+    const { body: link } = await create(app, 'admin', {
+      appId: 'chat',
+      params: { prefill: 'Hello' },
+      includeParams: false
+    });
+    expect(link.url).toBe('/apps/chat');
+    const res = await put(app, link.code, { ...link, includeParams: true });
+    expect(res.body.url).toBe('/apps/chat?prefill=Hello');
+  });
+
+  test('a custom target stays until it is replaced or cleared', async () => {
+    const app = buildApp();
+    const { body: link } = await create(app, 'admin', { appId: 'chat', url: '/pages/faq' });
+    expect(link.url).toBe('/pages/faq');
+
+    const kept = await put(app, link.code, { ...link, appId: 'other' });
+    expect(kept.body.url).toBe('/pages/faq');
+
+    const replaced = await put(app, link.code, { url: '/pages/help' });
+    expect(replaced.body.url).toBe('/pages/help');
+
+    const cleared = await put(app, link.code, { url: '' });
+    expect(cleared.body.url).toBe('/apps/other');
+  });
+});
+
+describe('a prefilled prompt reaches the link (CU-B2)', () => {
+  test('params with includeParams: true are added to the target and stored', async () => {
+    const app = buildApp();
+    const res = await create(app, 'admin', {
+      appId: 'chat',
+      params: { prefill: 'Hello there' },
+      includeParams: true
+    });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      url: '/apps/chat?prefill=Hello+there',
+      includeParams: true,
+      params: { prefill: 'Hello there' }
+    });
+    const visit = await request(app).get(`/s/${res.body.code}`);
+    expect(visit.headers.location).toBe('/apps/chat?prefill=Hello+there');
+  });
+
+  test('an API caller that omits includeParams keeps the old default: params left out', async () => {
+    const app = buildApp();
+    const res = await create(app, 'alice', {
+      appId: 'chat',
+      params: { prefill: 'Hello there' }
+    });
+    expect(res.body).toMatchObject({ url: '/apps/chat', includeParams: false });
+  });
+
+  test('an explicit includeParams: false still leaves the params out', async () => {
+    const app = buildApp();
+    const res = await create(app, 'alice', {
+      appId: 'chat',
+      params: { model: 'gpt' },
+      includeParams: false
+    });
+    expect(res.body).toMatchObject({ url: '/apps/chat', includeParams: false });
+  });
+});
+
+describe('/s/:code under a base path (CU-B10)', () => {
+  /** The routes behind the real middleware, so X-Forwarded-Prefix is read as in production. */
+  function buildPrefixedApp() {
+    const app = express();
+    setupMiddleware(app, { trustProxy: 'loopback' });
+    // As in startup/worker.js: the request's base path is detected after setupMiddleware.
+    app.use(basePathDetectionMiddleware);
+    app.use((req, _res, next) => {
+      req.user = { ...USERS.admin, isAdmin: true, permissions: { adminAccess: true } };
+      next();
+    });
+    registerShortLinkRoutes(app);
+    app.use(errorHandler);
+    return app;
+  }
+
+  test('at the root, a local target is redirected as stored', async () => {
+    const app = buildPrefixedApp();
+    const { body: link } = await request(app).post('/api/shortlinks').send({ appId: 'chat' });
+    const res = await request(app).get(`/s/${link.code}`);
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toBe('/apps/chat');
+  });
+
+  test('under /ihub, a local target keeps the base path', async () => {
+    const app = buildPrefixedApp();
+    const { body: link } = await request(app)
+      .post('/ihub/api/shortlinks')
+      .set('X-Forwarded-Prefix', '/ihub')
+      .send({ appId: 'chat', params: { prefill: 'Hi' }, includeParams: true });
+    const res = await request(app).get(`/ihub/s/${link.code}`).set('X-Forwarded-Prefix', '/ihub');
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toBe('/ihub/apps/chat?prefill=Hi');
+
+    // A proxy that strips the prefix itself sends the bare path; the answer is the same.
+    const stripped = await request(app).get(`/s/${link.code}`).set('X-Forwarded-Prefix', '/ihub');
+    expect(stripped.headers.location).toBe('/ihub/apps/chat?prefill=Hi');
+  });
+
+  test('under /ihub, a target that already has the base path or names another host is left alone', async () => {
+    const app = buildPrefixedApp();
+    const prefixed = await request(app).post('/api/shortlinks').send({ url: '/ihub/apps/chat' });
+    const external = await request(app)
+      .post('/api/shortlinks')
+      .send({ url: 'https://docs.example.com/x' });
+
+    const a = await request(app).get(`/s/${prefixed.body.code}`).set('X-Forwarded-Prefix', '/ihub');
+    expect(a.headers.location).toBe('/ihub/apps/chat');
+    const b = await request(app).get(`/s/${external.body.code}`).set('X-Forwarded-Prefix', '/ihub');
+    expect(b.headers.location).toBe('https://docs.example.com/x');
+  });
+
+  test('X-Forwarded-Prefix "/" is the root: no protocol-relative //host redirect (R1)', async () => {
+    const app = buildPrefixedApp();
+    const local = await request(app).post('/api/shortlinks').send({ appId: 'chat' });
+    // A valid single-slash local path whose first segment looks like a host.
+    const hostLike = await request(app).post('/api/shortlinks').send({ path: '/evil.com/x' });
+    expect(hostLike.status).toBe(200);
+
+    const a = await request(app).get(`/s/${local.body.code}`).set('X-Forwarded-Prefix', '/');
+    expect(a.status).toBe(302);
+    expect(a.headers.location).toBe('/apps/chat');
+    const b = await request(app).get(`/s/${hostLike.body.code}`).set('X-Forwarded-Prefix', '/');
+    expect(b.status).toBe(302);
+    expect(b.headers.location).toBe('/evil.com/x');
+
+    // Under a real base path the same target stays on this server.
+    const c = await request(app).get(`/s/${hostLike.body.code}`).set('X-Forwarded-Prefix', '/ihub');
+    expect(c.headers.location).toBe('/ihub/evil.com/x');
+  });
+});
+
+describe('shortLinkLocation never leaves this server (R1)', () => {
+  test.each([
+    ['/apps/chat', '/', '/apps/chat'],
+    ['/evil.com/x', '/', '/evil.com/x'],
+    ['/evil.com/x', '', '/evil.com/x'],
+    ['/evil.com/x', '/ihub', '/ihub/evil.com/x'],
+    ['/apps/chat', '/ihub', '/ihub/apps/chat'],
+    ['/ihub/apps/chat', '/ihub', '/ihub/apps/chat'],
+    ['/ihub?x=1', '/ihub', '/ihub?x=1'],
+    ['https://docs.example.com/x', '/ihub', 'https://docs.example.com/x']
+  ])('%s under base path %j → %s', (target, basePath, expected) => {
+    const location = shortLinkLocation(target, basePath);
+    expect(location).toBe(expected);
+    expect(location.startsWith('//')).toBe(false);
   });
 });

@@ -9,8 +9,14 @@ import Icon from '../../../shared/components/Icon';
 import ReorderableList from '../components/ReorderableList';
 import ResourceSelector from '../components/ResourceSelector';
 import { makeAdminApiCall, getAdminApiErrorMessage, fetchAdminApps } from '../../../api/adminApi';
+import AdminLoadGate from '../components/AdminLoadGate';
+import { useAdminConfigLoad } from '../hooks/useAdminConfigLoad';
 import { buildApiUrl } from '../../../utils/runtimeBasePath';
 import { getLocalizedContent } from '../../../utils/localizeContent';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
+import { useSavedBaseline } from '../hooks/useSavedBaseline';
+import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 
 /** The values the task pane's landing view accepts; mirrored in server/utils/officeStartPage.js. */
 const START_PAGE_CHOICES = new Set(['start', 'apps']);
@@ -133,10 +139,11 @@ const readStartPage = value => ({
 function AdminOfficeIntegrationPage() {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [toggling, setToggling] = useState(false);
   const [regeneratingId, setRegeneratingId] = useState(false);
+  const [confirmingRegenerate, setConfirmingRegenerate] = useState(false);
   const [message, setMessage] = useState(null);
   const [status, setStatus] = useState(null);
 
@@ -170,6 +177,35 @@ function AdminOfficeIntegrationPage() {
   // Every configured app (admin endpoint), for the two app pickers below.
   const [apps, setApps] = useState([]);
   const [appsLoading, setAppsLoading] = useState(true);
+  // Unsaved-changes guard over the form fields: the baseline is captured after
+  // every successful load (also the reload after Save), so a just-loaded page is
+  // never dirty.
+  const editedValues = useMemo(
+    () => ({
+      displayName,
+      description,
+      starterPrompts,
+      officeJsMode,
+      officeJsCdnUrl,
+      officeJsCustomUrl,
+      startPage,
+      appAccess,
+      defaultMailAction
+    }),
+    [
+      displayName,
+      description,
+      starterPrompts,
+      officeJsMode,
+      officeJsCdnUrl,
+      officeJsCustomUrl,
+      startPage,
+      appAccess,
+      defaultMailAction
+    ]
+  );
+  const { baseline, captureBaseline } = useSavedBaseline(editedValues);
+  const { blocker } = useUnsavedChanges(baseline, editedValues);
 
   // Stable client-side ids are used as React keys while the prompt list is edited.
   // They are stripped before persisting so the server never sees them.
@@ -190,39 +226,48 @@ function AdminOfficeIntegrationPage() {
     return out;
   };
 
+  const fetchStatus = async () =>
+    (await makeAdminApiCall('/admin/office-integration/status', { method: 'GET' })).data;
+
+  /** Put a loaded status into the form state. */
+  const applyStatus = data => {
+    setStatus(data);
+    setDisplayName(sanitizeLocalized(data.displayName));
+    setDescription(sanitizeLocalized(data.description));
+    setOfficeJsMode(data.officeJsMode || 'cdn');
+    setOfficeJsCdnUrl(data.officeJsCdnUrl || '');
+    setOfficeJsCustomUrl(data.officeJsCustomUrl || '');
+    setOfficeJsResolvedUrl(data.officeJsResolvedUrl || '');
+    setOfficeJsResolvedMode(data.officeJsResolvedMode || '');
+    setOfficeJsPresets(Array.isArray(data.officeJsCdnPresets) ? data.officeJsCdnPresets : []);
+    setStartPage(readStartPage(data.startPage));
+    // Null when there is no OAuth client to read; the card says so.
+    const access = data.appAccess ? readAppAccess(data.appAccess) : DEFAULT_APP_ACCESS;
+    setAppAccess(access);
+    setSavedAppAccess(access);
+    setDefaultMailAction(
+      MAIL_ACTION_CHOICES.includes(data.defaultMailAction)
+        ? data.defaultMailAction
+        : DEFAULT_MAIL_ACTION
+    );
+    setStarterPrompts(
+      Array.isArray(data.starterPrompts)
+        ? data.starterPrompts.map(p => ({
+            _id: crypto.randomUUID(),
+            title: sanitizeLocalized(p?.title),
+            message: sanitizeLocalized(p?.message)
+          }))
+        : []
+    );
+    // The loaded values are the unsaved-changes baseline (also after a reload).
+    captureBaseline();
+  };
+
+  // Reload after Enable/Disable or a save; the first load goes through the gate below.
   const loadStatus = async () => {
     try {
       setLoading(true);
-      const res = await makeAdminApiCall('/admin/office-integration/status', { method: 'GET' });
-      const data = res.data;
-      setStatus(data);
-      setDisplayName(sanitizeLocalized(data.displayName));
-      setDescription(sanitizeLocalized(data.description));
-      setOfficeJsMode(data.officeJsMode || 'cdn');
-      setOfficeJsCdnUrl(data.officeJsCdnUrl || '');
-      setOfficeJsCustomUrl(data.officeJsCustomUrl || '');
-      setOfficeJsResolvedUrl(data.officeJsResolvedUrl || '');
-      setOfficeJsResolvedMode(data.officeJsResolvedMode || '');
-      setOfficeJsPresets(Array.isArray(data.officeJsCdnPresets) ? data.officeJsCdnPresets : []);
-      setStartPage(readStartPage(data.startPage));
-      // Null when there is no OAuth client to read; the card says so.
-      const access = data.appAccess ? readAppAccess(data.appAccess) : DEFAULT_APP_ACCESS;
-      setAppAccess(access);
-      setSavedAppAccess(access);
-      setDefaultMailAction(
-        MAIL_ACTION_CHOICES.includes(data.defaultMailAction)
-          ? data.defaultMailAction
-          : DEFAULT_MAIL_ACTION
-      );
-      setStarterPrompts(
-        Array.isArray(data.starterPrompts)
-          ? data.starterPrompts.map(p => ({
-              _id: crypto.randomUUID(),
-              title: sanitizeLocalized(p?.title),
-              message: sanitizeLocalized(p?.message)
-            }))
-          : []
-      );
+      applyStatus(await fetchStatus());
     } catch (_err) {
       setMessage({
         type: 'error',
@@ -233,10 +278,12 @@ function AdminOfficeIntegrationPage() {
     }
   };
 
-  useEffect(() => {
-    void loadStatus();
-    // eslint-disable-next-line @eslint-react/exhaustive-deps
-  }, []);
+  // No form, Enable or Save until the status loaded: saving after a failed
+  // load would store empty prompts and defaults over the real ones (IN-B6).
+  const load = useAdminConfigLoad({
+    sources: { status: { load: fetchStatus, onLoad: applyStatus } }
+  });
+  const ready = load.status === 'ready';
 
   useEffect(() => {
     let mounted = true;
@@ -335,6 +382,7 @@ function AdminOfficeIntegrationPage() {
   };
 
   const handleToggle = async () => {
+    if (!ready) return;
     if (!status) return;
     const action = status.enabled ? '_disable' : '_enable';
     try {
@@ -361,17 +409,10 @@ function AdminOfficeIntegrationPage() {
     }
   };
 
+  /** "Generate new ID" asks first (ConfirmDialog); the dialog calls this. */
   const handleRegenerateAddinId = async () => {
-    if (
-      !window.confirm(
-        t(
-          'admin.officeIntegration.regenerateAddinIdConfirm',
-          'Outlook treats a manifest with a new ID as a different add-in. Everyone using the add-in must install the new manifest, and the old one keeps pointing at this server until it is removed. Continue?'
-        )
-      )
-    ) {
-      return;
-    }
+    setConfirmingRegenerate(false);
+    if (!ready) return;
     try {
       setRegeneratingId(true);
       setMessage(null);
@@ -523,6 +564,7 @@ function AdminOfficeIntegrationPage() {
       : officeJsPresets;
 
   const handleSaveConfig = async () => {
+    if (!ready) return;
     // An empty "limited" list would be stored as no restriction at all, the
     // opposite of what choosing "only selected apps" means — so it is refused
     // here, and by the server, rather than saved.
@@ -625,7 +667,7 @@ function AdminOfficeIntegrationPage() {
   };
 
   const selectClass =
-    'block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-gray-100 px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed';
+    'block w-full rounded-md border border-admin-control-border dark:border-admin-control-border-dark bg-white dark:bg-gray-700 dark:text-gray-100 px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed';
   const labelClass = 'block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1';
   const helpClass = 'mt-2 text-xs text-gray-500 dark:text-gray-400';
 
@@ -682,7 +724,12 @@ function AdminOfficeIntegrationPage() {
           </div>
         )}
 
-        {loading ? (
+        {!ready ? (
+          <AdminLoadGate
+            load={load}
+            resourceLabel={t('admin.officeIntegration.resource', 'Office integration settings')}
+          />
+        ) : loading ? (
           <div className="flex items-center justify-center py-16">
             <div className="w-8 h-8 border-4 border-gray-200 border-t-indigo-600 rounded-full animate-spin" />
           </div>
@@ -761,7 +808,7 @@ function AdminOfficeIntegrationPage() {
                     type="text"
                     readOnly
                     value={manifestUrl}
-                    className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 px-3 py-2 text-sm font-mono text-gray-700 dark:text-gray-300 focus:outline-hidden"
+                    className="flex-1 rounded-lg border border-admin-control-border dark:border-admin-control-border-dark bg-gray-50 dark:bg-gray-700 px-3 py-2 text-sm font-mono text-gray-700 dark:text-gray-300 focus:outline-hidden"
                     onClick={e => e.target.select()}
                   />
                   <button
@@ -798,7 +845,7 @@ function AdminOfficeIntegrationPage() {
                   </div>
                   <button
                     type="button"
-                    onClick={handleRegenerateAddinId}
+                    onClick={() => setConfirmingRegenerate(true)}
                     disabled={regeneratingId}
                     className="shrink-0 rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
                   >
@@ -1055,7 +1102,7 @@ function AdminOfficeIntegrationPage() {
                     type="url"
                     value={officeJsCdnUrl}
                     onChange={e => setOfficeJsCdnUrl(e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-900 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:border-indigo-500 focus:ring-indigo-500"
+                    className="w-full rounded-lg border border-admin-control-border dark:border-admin-control-border-dark dark:bg-gray-900 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:border-indigo-500 focus:ring-indigo-500"
                     placeholder="https://officeapis.public.onecdn.static.microsoft/1/office.js"
                   />
                   <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -1080,7 +1127,7 @@ function AdminOfficeIntegrationPage() {
                     type="url"
                     value={officeJsCustomUrl}
                     onChange={e => setOfficeJsCustomUrl(e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-900 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:border-indigo-500 focus:ring-indigo-500"
+                    className="w-full rounded-lg border border-admin-control-border dark:border-admin-control-border-dark dark:bg-gray-900 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:border-indigo-500 focus:ring-indigo-500"
                     placeholder="https://cdn.example.com/office/office.js"
                   />
                   <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -1592,6 +1639,19 @@ function AdminOfficeIntegrationPage() {
           </>
         )}
       </div>
+      <UnsavedChangesDialog blocker={blocker} />
+      <ConfirmDialog
+        isOpen={confirmingRegenerate}
+        title={t('admin.officeIntegration.regenerateAddinIdTitle', 'Generate a new add-in ID?')}
+        message={t(
+          'admin.officeIntegration.regenerateAddinIdConsequence',
+          'Outlook treats a manifest with a new ID as a different add-in. Everyone using the add-in must install the new manifest, and the old one keeps pointing at this server until it is removed.'
+        )}
+        confirmLabel={t('admin.officeIntegration.regenerateAddinId', 'Generate new ID')}
+        danger
+        onConfirm={handleRegenerateAddinId}
+        onDeny={() => setConfirmingRegenerate(false)}
+      />
     </div>
   );
 }

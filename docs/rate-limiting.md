@@ -32,9 +32,30 @@ The system supports seven different types of rate limiters, each configurable th
   - `/api/shortlinks`
 
 ### 2. Admin API Rate Limiter
-- **Default Limit**: 300 requests per minute per signed-in user
+- **Default Limit**: 300 requests per minute per signed-in user (per worker process, see
+  [Several worker processes](#several-worker-processes)); 500 per minute per address without a
+  sign-in (`anonymousLimit`)
 - **Applied to**: Administrative endpoints:
   - `/api/admin/*` (all admin routes)
+- **Counted per caller, not per address.** Admins often share one address (a corporate NAT or a
+  reverse proxy), and one admin page sends many requests while it loads. Each caller therefore has
+  its own budget:
+  - a signed-in user (any sign-in method, a personal API key, or an OAuth token issued on a
+    user's behalf) counts on their own;
+  - an OAuth client (client credentials) or a static API key counts per client;
+  - a request without a sign-in counts per address, as the other limiters do.
+  - With `keyBy: "ip"` every request counts per address again.
+- **Refused sign-ins still count per address.** A request whose token or cookie the sign-in check
+  refuses (invalid, expired or revoked) is answered before the per-user count. A second count on
+  `/api/admin`, ahead of the sign-in check, with the per-address limit (`anonymousLimit`, else
+  `limit`) and the same window, counts those
+  requests per address, and only them: failed requests without a signed-in caller. Requests that
+  succeed and every request of a signed-in user or API client do not count there, so admins behind
+  one address do not share a budget through it. When an address reaches the limit, its further
+  `/api/admin` requests get `429` until the window ends.
+- Earlier releases shipped 100 requests per minute per address. Migration `V254` turns that
+  value into 300 per user where it was never changed (see below). A limit or window an admin set
+  stays.
 
 ### 3. Auth API Rate Limiter
 - **Limit**: 30 requests per 15 minutes per IP address **and username** in the shipped
@@ -142,7 +163,7 @@ Rate limiting is fully configurable through the `platform.json` configuration fi
     },
     "adminApi": {
       "windowMs": 60000,
-      "limit": 100,
+      "limit": 500,
       "skipFailedRequests": true
     },
     "publicApi": {

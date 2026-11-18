@@ -310,7 +310,7 @@ export function CopyableValue({ id, label, value, help }) {
           value={value}
           onFocus={e => e.target.select()}
           aria-describedby={help ? `${id}-help` : undefined}
-          className="flex-1 min-w-0 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-l-md bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-mono text-xs focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500"
+          className="flex-1 min-w-0 px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-l-md bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-mono text-xs focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500"
         />
         <button
           type="button"

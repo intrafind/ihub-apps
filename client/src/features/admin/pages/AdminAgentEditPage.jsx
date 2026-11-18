@@ -6,20 +6,29 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
-import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 import IconPicker from '../../../shared/components/IconPicker';
 import CapabilityFields from '../../../shared/components/CapabilityFields';
 import SkillsSelector from '../../../shared/components/SkillsSelector';
 import ProjectPicker from '../components/ProjectPicker';
+import GroupMultiSelect from '../components/GroupMultiSelect';
+import MonacoJsonEditor from '../../../shared/components/MonacoJsonEditor';
+import useDarkMode from '../../../hooks/useDarkMode';
+import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 import { getLocalizedContent } from '../../../utils/localizeContent';
-import { fetchAdminApps, fetchAdminModels, getAdminApiErrorMessage } from '../../../api/adminApi';
+import {
+  fetchAdminApps,
+  fetchAdminGroups,
+  fetchAdminModels,
+  getAdminApiErrorMessage
+} from '../../../api/adminApi';
 import {
   fetchAgentProfile,
   createAgentProfile,
   updateAgentProfile
 } from '../../../api/agentsAdminApi';
 import AdminLoadError from '../components/AdminLoadError';
+import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
 
 const BLANK_PROFILE = {
   id: '',
@@ -109,6 +118,9 @@ const TOP_LEVEL_FIELDS = new Set([
 
 export default function AdminAgentEditPage() {
   const { t, i18n } = useTranslation();
+  // Skills are an optional feature: without it /api/skills answers 403, so the
+  // field is not offered (stored skills stay in the profile untouched).
+  const skillsEnabled = useFeatureFlags().isEnabled('skills', false);
   const currentLanguage = i18n.language;
   const navigate = useNavigate();
   const { profileId } = useParams();
@@ -124,6 +136,11 @@ export default function AdminAgentEditPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [mode, setMode] = useState('form');
+  // Whether the text in JSON mode parses; Save and the switch back to the form
+  // wait for valid JSON instead of using the last valid state silently.
+  const [jsonValid, setJsonValid] = useState(true);
+  const [availableGroups, setAvailableGroups] = useState([]);
+  const { isDark } = useDarkMode();
 
   const { blocker, markSaved } = useUnsavedChanges(initialData, profile);
 
@@ -138,6 +155,10 @@ export default function AdminAgentEditPage() {
         console.warn('Failed to load models/apps', err);
       }
     })();
+    // The group fields suggest defined groups; without them names can still be typed.
+    fetchAdminGroups()
+      .then(result => setAvailableGroups(Object.values(result?.groups || {})))
+      .catch(() => setAvailableGroups([]));
   }, []);
 
   useEffect(() => {
@@ -208,21 +229,6 @@ export default function AdminAgentEditPage() {
       serviceAccount: { ...prev.serviceAccount, ...partial }
     }));
   }
-  function handleCronSchedule(cron) {
-    setProfile(prev => {
-      const triggers = cron ? [{ type: 'schedule', config: { cron, timezone: 'UTC' } }] : [];
-      const def = prev.workflow?.definition || {};
-      return {
-        ...prev,
-        workflow: {
-          ...prev.workflow,
-          ref: prev.workflow?.ref || 'embedded',
-          definition: { ...def, triggers }
-        }
-      };
-    });
-  }
-
   // Strip empty entries from localized maps so we don't send `{en: ''}` which
   // some schemas reject as min-length violations.
   function cleanLocalized(obj) {
@@ -320,12 +326,10 @@ export default function AdminAgentEditPage() {
   }
 
   if (loading) {
-    return <div className="p-8 text-gray-600">{t('common.loading', 'Loading…')}</div>;
+    return (
+      <div className="p-8 text-gray-600 dark:text-gray-400">{t('common.loading', 'Loading…')}</div>
+    );
   }
-
-  const cron =
-    (profile.workflow?.definition?.triggers || []).find(tr => tr.type === 'schedule')?.config
-      ?.cron || '';
 
   return (
     <div className="bg-gray-50 min-h-screen dark:bg-gray-900">
@@ -346,7 +350,8 @@ export default function AdminAgentEditPage() {
           <div className="flex gap-2">
             <button
               onClick={() => setMode(mode === 'form' ? 'json' : 'form')}
-              className="px-3 py-2 text-sm border bg-white rounded-sm hover:bg-gray-50"
+              disabled={mode === 'json' && !jsonValid}
+              className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-sm hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50"
             >
               {mode === 'form'
                 ? t('admin.common.viewJson', 'JSON')
@@ -354,14 +359,14 @@ export default function AdminAgentEditPage() {
             </button>
             <button
               onClick={handleSave}
-              disabled={saving}
+              disabled={saving || (mode === 'json' && !jsonValid)}
               className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-sm disabled:opacity-50"
             >
               {saving ? t('common.saving', 'Saving…') : t('common.save', 'Save')}
             </button>
             <button
               onClick={() => navigate('/admin/agents')}
-              className="px-3 py-2 text-sm border bg-white rounded-sm hover:bg-gray-50"
+              className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-sm hover:bg-gray-50 dark:hover:bg-gray-600"
             >
               {t('common.cancel', 'Cancel')}
             </button>
@@ -371,17 +376,25 @@ export default function AdminAgentEditPage() {
         {error && <AdminLoadError message={error} framed={false} className="mb-4" action={null} />}
 
         {mode === 'json' ? (
-          <textarea
-            className="w-full h-[600px] font-mono text-xs p-3 border rounded-sm"
-            value={JSON.stringify(profile, null, 2)}
-            onChange={e => {
-              try {
-                setProfile(JSON.parse(e.target.value));
-              } catch {
-                // ignore parse errors while typing
-              }
-            }}
-          />
+          <div>
+            {/* The editor keeps the typed text itself and passes on only valid
+                JSON, so a half-typed key or comma is not thrown away (AX-B2). */}
+            <MonacoJsonEditor
+              value={profile}
+              onChange={setProfile}
+              onValidationChange={validation => setJsonValid(validation?.isValid !== false)}
+              height="600px"
+              theme={isDark ? 'vs-dark' : 'vs'}
+            />
+            {!jsonValid && (
+              <p role="alert" className="mt-2 text-sm text-red-600 dark:text-red-400">
+                {t(
+                  'admin.agents.edit.jsonInvalid',
+                  'The JSON is not valid. Fix it before you save or switch to the form.'
+                )}
+              </p>
+            )}
+          </div>
         ) : (
           <div className="space-y-6">
             {/* Identity */}
@@ -449,14 +462,14 @@ export default function AdminAgentEditPage() {
                       type="color"
                       value={profile.color || '#6366F1'}
                       onChange={e => handleField('color', e.target.value)}
-                      className="h-9 w-12 rounded-sm border border-gray-300 cursor-pointer"
+                      className="h-9 w-12 rounded-sm border border-admin-control-border cursor-pointer"
                     />
                     <input
                       type="text"
                       value={profile.color || ''}
                       onChange={e => handleField('color', e.target.value)}
                       placeholder="#6366F1"
-                      className="block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm font-mono dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                      className="block w-full rounded-lg border-admin-control-border shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm font-mono dark:bg-gray-700 dark:border-admin-control-border-dark dark:text-gray-100"
                     />
                   </div>
                 </div>
@@ -511,7 +524,7 @@ export default function AdminAgentEditPage() {
                   <select
                     value={profile.preferredModel || ''}
                     onChange={e => handleField('preferredModel', e.target.value)}
-                    className="mt-1 block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                    className="mt-1 block w-full rounded-lg border-admin-control-border shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-admin-control-border-dark dark:text-gray-100"
                   >
                     <option value="">
                       {t('admin.agents.edit.selectModel', 'Pick a text model…')}
@@ -545,7 +558,7 @@ export default function AdminAgentEditPage() {
                     onChange={e =>
                       handleField('maxIterations', Number.parseInt(e.target.value) || 10)
                     }
-                    className="mt-1 block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                    className="mt-1 block w-full rounded-lg border-admin-control-border shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-admin-control-border-dark dark:text-gray-100"
                   />
                 </div>
               </div>
@@ -606,21 +619,27 @@ export default function AdminAgentEditPage() {
                   />
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    {t('admin.agents.edit.skills', 'Skills (instructional knowledge)')}
-                  </label>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                    {t(
-                      'admin.agents.edit.skillsHint',
-                      'Skills describe HOW to do something (e.g. "for person research, do these steps"). The planner sees the list and can pre-activate skills via the plan JSON; task workers can also activate them mid-run via the activate_skill tool. The runtime injects activated skill bodies into the system prompt so the agent follows them.'
-                    )}
-                  </p>
-                  <SkillsSelector
-                    selectedSkills={profile.skills || []}
-                    onSkillsChange={skills => handleField('skills', skills)}
-                  />
-                </div>
+                {skillsEnabled && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      {t('admin.agents.edit.skills', 'Skills (instructional knowledge)')}
+                    </label>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                      {t(
+                        'admin.agents.edit.skillsHint',
+                        'Skills describe HOW to do something (e.g. "for person research, do these steps"). The planner sees the list and can pre-activate skills via the plan JSON; task workers can also activate them mid-run via the activate_skill tool. The runtime injects activated skill bodies into the system prompt so the agent follows them.'
+                      )}
+                    </p>
+                    <SkillsSelector
+                      selectedSkills={profile.skills || []}
+                      onSkillsChange={skills => handleField('skills', skills)}
+                      helperText={t(
+                        'admin.agents.edit.skillsHelper',
+                        'Search and select skills to add to this agent. Click on selected skills to remove them.'
+                      )}
+                    />
+                  </div>
+                )}
               </div>
             </Section>
 
@@ -665,7 +684,7 @@ export default function AdminAgentEditPage() {
                         disabled={!profile.planner?.enabled}
                         value={profile.planner?.maxTasks ?? 10}
                         onChange={e => handlePlanner({ maxTasks: Number(e.target.value) })}
-                        className="mt-1 block w-32 rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 disabled:opacity-50"
+                        className="mt-1 block w-32 rounded-lg border-admin-control-border shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-admin-control-border-dark dark:text-gray-100 disabled:opacity-50"
                       />
                     </div>
                     <div>
@@ -682,7 +701,7 @@ export default function AdminAgentEditPage() {
                         disabled={!profile.planner?.enabled}
                         value={profile.planner?.modelId || ''}
                         onChange={e => handlePlanner({ modelId: e.target.value })}
-                        className="mt-1 block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 disabled:opacity-50"
+                        className="mt-1 block w-full rounded-lg border-admin-control-border shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-admin-control-border-dark dark:text-gray-100 disabled:opacity-50"
                       >
                         <option value="">
                           {t('admin.agents.edit.plannerModelInherit', '(inherit Preferred model)')}
@@ -767,7 +786,7 @@ export default function AdminAgentEditPage() {
                       disabled={!profile.dynamicTasks?.enabled}
                       value={profile.dynamicTasks?.maxDepth ?? 3}
                       onChange={e => handleDynamicTasks({ maxDepth: Number(e.target.value) })}
-                      className="mt-1 block w-32 rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 disabled:opacity-50"
+                      className="mt-1 block w-32 rounded-lg border-admin-control-border shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-admin-control-border-dark dark:text-gray-100 disabled:opacity-50"
                     />
                   </div>
                   <div>
@@ -781,7 +800,7 @@ export default function AdminAgentEditPage() {
                       disabled={!profile.dynamicTasks?.enabled}
                       value={profile.dynamicTasks?.modelId || ''}
                       onChange={e => handleDynamicTasks({ modelId: e.target.value || undefined })}
-                      className="mt-1 block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 disabled:opacity-50"
+                      className="mt-1 block w-full rounded-lg border-admin-control-border shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-admin-control-border-dark dark:text-gray-100 disabled:opacity-50"
                     >
                       <option value="">
                         {t(
@@ -841,7 +860,7 @@ export default function AdminAgentEditPage() {
                   <select
                     value={profile.synthesizer?.modelId || ''}
                     onChange={e => handleSynthesizer({ modelId: e.target.value })}
-                    className="mt-1 block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                    className="mt-1 block w-full rounded-lg border-admin-control-border shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-admin-control-border-dark dark:text-gray-100"
                   >
                     <option value="">
                       {t('admin.agents.edit.synthesizerModelInherit', '(inherit Preferred model)')}
@@ -872,7 +891,7 @@ export default function AdminAgentEditPage() {
                     step="1000"
                     value={profile.synthesizer?.maxTokens ?? 8000}
                     onChange={e => handleSynthesizer({ maxTokens: Number(e.target.value) || 8000 })}
-                    className="mt-1 block w-40 rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                    className="mt-1 block w-40 rounded-lg border-admin-control-border shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-admin-control-border-dark dark:text-gray-100"
                   />
                 </div>
                 <DynamicLanguageEditor
@@ -928,7 +947,7 @@ export default function AdminAgentEditPage() {
                   <select
                     value={profile.review?.strictness || 'balanced'}
                     onChange={e => handleReview({ strictness: e.target.value })}
-                    className="mt-1 block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                    className="mt-1 block w-full rounded-lg border-admin-control-border shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-admin-control-border-dark dark:text-gray-100"
                   >
                     <option value="lenient">
                       {t('admin.agents.edit.reviewLenient', 'Lenient')}
@@ -990,7 +1009,7 @@ export default function AdminAgentEditPage() {
                           e.target.value === '' ? undefined : Number(e.target.value) || undefined
                       })
                     }
-                    className="mt-1 block w-24 rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 disabled:opacity-50"
+                    className="mt-1 block w-24 rounded-lg border-admin-control-border shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-admin-control-border-dark dark:text-gray-100 disabled:opacity-50"
                   />
                 </div>
 
@@ -1015,7 +1034,7 @@ export default function AdminAgentEditPage() {
                           e.target.value === '' ? undefined : Number(e.target.value) || undefined
                       })
                     }
-                    className="mt-1 block w-24 rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                    className="mt-1 block w-24 rounded-lg border-admin-control-border shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-admin-control-border-dark dark:text-gray-100"
                   />
                 </div>
                 <div>
@@ -1035,7 +1054,7 @@ export default function AdminAgentEditPage() {
                     rows={3}
                     value={profile.review?.criteria || ''}
                     onChange={e => handleReview({ criteria: e.target.value })}
-                    className="mt-1 block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                    className="mt-1 block w-full rounded-lg border-admin-control-border shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-admin-control-border-dark dark:text-gray-100"
                   />
                 </div>
 
@@ -1053,7 +1072,7 @@ export default function AdminAgentEditPage() {
                     disabled={!profile.review?.enabled}
                     value={profile.review?.modelId || ''}
                     onChange={e => handleReview({ modelId: e.target.value })}
-                    className="mt-1 block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 disabled:opacity-50"
+                    className="mt-1 block w-full rounded-lg border-admin-control-border shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-admin-control-border-dark dark:text-gray-100 disabled:opacity-50"
                   >
                     <option value="">
                       {t('admin.agents.edit.reviewModelInherit', '(inherit Preferred model)')}
@@ -1088,22 +1107,9 @@ export default function AdminAgentEditPage() {
               </div>
             </Section>
 
-            {/* Schedule */}
-            <Section
-              title={t('admin.agents.edit.schedule', 'Schedule')}
-              hint={t(
-                'admin.agents.edit.scheduleHint',
-                'Optional cron expression. The agent runs on this schedule under its service-account identity. Leave empty for manual / webhook only.'
-              )}
-            >
-              <input
-                type="text"
-                placeholder="*/15 * * * *"
-                value={cron}
-                onChange={e => handleCronSchedule(e.target.value)}
-                className="block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm font-mono dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
-              />
-            </Section>
+            {/* No Schedule card: agent schedules are not run yet (AX-B1). A
+                schedule already in the profile (workflow.definition.triggers)
+                is left as it is and saved back unchanged. */}
 
             {/* Inbox */}
             <Section
@@ -1118,7 +1124,7 @@ export default function AdminAgentEditPage() {
                 placeholder="engineering-todos"
                 value={profile.inboxId || ''}
                 onChange={e => handleField('inboxId', e.target.value)}
-                className="block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                className="block w-full rounded-lg border-admin-control-border shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-admin-control-border-dark dark:text-gray-100"
               />
             </Section>
 
@@ -1157,7 +1163,7 @@ export default function AdminAgentEditPage() {
                     max="1000000"
                     value={profile.memory?.maxBytes ?? 8192}
                     onChange={e => handleMemory({ maxBytes: Number(e.target.value) })}
-                    className="mt-1 block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                    className="mt-1 block w-full rounded-lg border-admin-control-border shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-admin-control-border-dark dark:text-gray-100"
                   />
                 </div>
               </div>
@@ -1193,7 +1199,7 @@ export default function AdminAgentEditPage() {
                       disabled={profile.memory?.enabled === false}
                       value={profile.memory?.modelId || ''}
                       onChange={e => handleMemory({ modelId: e.target.value })}
-                      className="mt-1 block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 disabled:opacity-50"
+                      className="mt-1 block w-full rounded-lg border-admin-control-border shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-admin-control-border-dark dark:text-gray-100 disabled:opacity-50"
                     >
                       <option value="">
                         {t(
@@ -1255,7 +1261,7 @@ export default function AdminAgentEditPage() {
                     max="86400"
                     value={profile.budgets?.maxWallTimeSec ?? 600}
                     onChange={e => handleBudgets({ maxWallTimeSec: Number(e.target.value) })}
-                    className="mt-1 block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                    className="mt-1 block w-full rounded-lg border-admin-control-border shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-admin-control-border-dark dark:text-gray-100"
                   />
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     {t(
@@ -1274,7 +1280,7 @@ export default function AdminAgentEditPage() {
                     max="10"
                     value={profile.concurrency?.maxConcurrent ?? 1}
                     onChange={e => handleConcurrency({ maxConcurrent: Number(e.target.value) })}
-                    className="mt-1 block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                    className="mt-1 block w-full rounded-lg border-admin-control-border shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-admin-control-border-dark dark:text-gray-100"
                   />
                 </div>
               </div>
@@ -1285,22 +1291,15 @@ export default function AdminAgentEditPage() {
               title={t('admin.agents.edit.hitl', 'HITL approver groups')}
               hint={t(
                 'admin.agents.edit.hitlHint',
-                'Comma-separated group IDs. Users in any of these groups can approve human-checkpoint pauses for this profile.'
+                'Users in any of these groups can approve human-checkpoint pauses for this profile. Pick a group or type its ID and press Enter or a comma.'
               )}
             >
-              <input
-                type="text"
-                placeholder="agent-operators"
-                value={(profile.hitl?.approverGroups || []).join(',')}
-                onChange={e =>
-                  handleHitl({
-                    approverGroups: e.target.value
-                      .split(',')
-                      .map(s => s.trim())
-                      .filter(Boolean)
-                  })
-                }
-                className="block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+              <GroupMultiSelect
+                id="agent-hitl-approver-groups"
+                value={profile.hitl?.approverGroups || []}
+                onChange={approverGroups => handleHitl({ approverGroups })}
+                availableGroups={availableGroups}
+                commitOnBlur
               />
             </Section>
 
@@ -1312,35 +1311,19 @@ export default function AdminAgentEditPage() {
                 'Groups the agent principal (agent:<id>) belongs to. These determine which apps/tools/models the agent can access via the standard group permission system.'
               )}
             >
-              <input
-                type="text"
-                placeholder="agents,authenticated"
-                value={(profile.serviceAccount?.groups || []).join(',')}
-                onChange={e =>
-                  handleServiceAccount({
-                    groups: e.target.value
-                      .split(',')
-                      .map(s => s.trim())
-                      .filter(Boolean)
-                  })
-                }
-                className="block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+              <GroupMultiSelect
+                id="agent-service-account-groups"
+                value={profile.serviceAccount?.groups || []}
+                onChange={groups => handleServiceAccount({ groups })}
+                availableGroups={availableGroups}
+                commitOnBlur
               />
             </Section>
           </div>
         )}
       </div>
 
-      <ConfirmDialog
-        isOpen={blocker.state === 'blocked'}
-        title="Unsaved Changes"
-        message="You have unsaved changes. Leave anyway?"
-        confirmLabel="Leave"
-        denyLabel="Stay"
-        danger={false}
-        onConfirm={() => blocker.proceed?.()}
-        onDeny={() => blocker.reset?.()}
-      />
+      <UnsavedChangesDialog blocker={blocker} />
     </div>
   );
 }
@@ -1370,7 +1353,7 @@ function FieldText({ span, label, required, value, onChange, placeholder, disabl
         value={value || ''}
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
-        className="mt-1 block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 disabled:opacity-50"
+        className="mt-1 block w-full rounded-lg border-admin-control-border shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-admin-control-border-dark dark:text-gray-100 disabled:opacity-50"
       />
     </div>
   );

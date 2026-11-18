@@ -28,11 +28,11 @@ without reverse-engineering the codebase.
 | Usage-limit counters | Yes (when a user calls a model) | `contents/data/quota-usage.json`; users unseen for 400 d are removed | See [Usage Limits](usage-limits.md) |
 | Provenance records (hash of each AI output, EU AI Act) | Yes; **no user** unless `provenance.recordUser` names one | `provenance-records` storage namespace; **365 d** default | `provenance.storeRecords`, `provenance.retentionDays`; `provenance.recordUser` (`none` default, or `anonymous` (keyed hash) / `pseudonymous` (plain hash) / `identified` to name the user; admins only; kept on user deletion until retention ends). See [Provenance Records](provenance.md#who-a-record-names) |
 | Feedback (rating + 300-char snippet + comment) | Only when a user rates | `contents/data/feedback.jsonl`; **indefinite** default | `features.feedbackTracking: false`, **`usageTracking.feedbackRetentionDays`** (new) |
-| Structured log lines | Yes (stdout) | Console always; optional file `logs/app.log` | `logging.level`, `logging.file.enabled` |
+| Structured log lines | Yes (stdout). At the default level `info`, also each chat question and the user's name (see [§2](#2-chat-content)) | Console always; optional file `logs/app.log` | `logging.level` (`warn` stops these lines), `logging.file.enabled` |
 | Logger IP context | Yes (merged into every line) | Same as above | **`logging.anonymizeIp`** (new) |
 | OpenTelemetry signals | **No** | Disabled by default; OTLP/Prometheus when enabled | `telemetry.enabled: false` |
 | Prompts/completions in telemetry | **No** | Spans only when explicitly opted in | `telemetry.events.includePrompts/includeCompletions` |
-| File/image uploads | Not persisted | In-memory only; forwarded to LLM and discarded | n/a |
+| Files uploaded to a chat or scheduled task | **Yes** (default `uploads.storageMode: "original_and_text"`) | `chat-files` storage: the extracted text stays with its chat; the original is kept **14 d** (`uploads.originalRetentionDays`; `0` = as long as the chat), a task's files as long as the task. Quotas: 1 GB per user, 50 GB per server | **Admin → Chat History → Uploaded files**: `uploads.enabled: false`; `uploads.storageMode: "server_text_only"` (original discarded after text extraction) or `"client_text_only"` (the original never leaves the browser), also per app (`app.uploads.storageMode`). See [Chat and Task Files](chat-files.md) |
 | OAuth refresh tokens | Yes (hashed) | `contents/data/oauth-refresh-tokens.json`; **30 d** | `oauth.refreshTokenExpirationDays` |
 | Integration tokens | Yes (encrypted) | `contents/integrations/`; AES-256-GCM | Per-user revoke; admin disable |
 
@@ -43,7 +43,8 @@ without reverse-engineering the codebase.
 > local accounts are used), audit entries for admin actions,
 > anonymized-or-pseudonymous usage counters, optional feedback the user
 > explicitly submitted, and — once an admin turns the Chat History feature on —
-> the chats users keep.
+> the chats users keep. Files users upload to a chat are stored by default too:
+> their text for as long as the chat, the originals for 14 days.
 
 ## What is captured, in detail
 
@@ -96,18 +97,20 @@ Other ways chat content can become durable are:
 1. **Feedback submissions** — when a user clicks a rating, the first 300
    characters of the rated message (plus any free-text comment) are appended
    to `contents/data/feedback.jsonl` (`server/feedbackStorage.js`).
-2. **Verbose logging** — `server/utils.js`'s `logInteraction()` writes a
-   `CHAT_REQUEST` info line with the first 1000 characters of the user's
-   query; the `CHAT_RESPONSE` line carries ids only, no response text. The text
-   of attached documents is not logged: each `<content>` block is replaced by
-   its length (`[N characters omitted]`). A few other info lines also carry
-   text derived from user input: the iFinder search query
-   (`server/services/integrations/iFinderService.js`, "Searching for query in
-   profile") and the first 100 characters of a clarification question the
-   model asks (`server/services/chat/chatSeams.js`, "Clarification
-   requested"). By default the logger only writes to **stdout**, so this
-   becomes durable only if `logging.file.enabled: true` is set or stdout is
-   captured by your container runtime / log shipper; `logging.level: warn`
+2. **Application log** — at the default level `info`, every chat request,
+   including scheduled-task runs, writes a `CHAT_REQUEST` line
+   (`server/utils.js`, `logInteraction()`) with the user's name and the first
+   1000 characters of the question (`query`); the `CHAT_RESPONSE` line carries
+   ids only, no response text. Every rating writes a `FEEDBACK` line with the
+   user's name and the chat id. The text of attached documents is not logged:
+   each `<content>` block is replaced by its length (`[N characters omitted]`).
+   A few other info lines also carry text derived from user input: the iFinder
+   search query (`server/services/integrations/iFinderService.js`, "Searching
+   for query in profile") and the first 100 characters of a clarification
+   question the model asks (`server/services/chat/chatSeams.js`,
+   "Clarification requested"). Lines go to stdout and, with
+   `logging.file.enabled`, to `logs/app.log`. Whatever collects stdout
+   (container runtime, log shipper, SIEM) keeps them. `logging.level: "warn"`
    drops these info lines.
 3. **External iAssistant / iFinder integration** — when configured, full
    conversations are sent to and stored by the external iFinder server. That

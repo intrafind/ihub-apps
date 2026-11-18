@@ -8,6 +8,7 @@ import { ClockIcon, ArrowUturnLeftIcon } from '@heroicons/react/24/outline';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import Drawer from '../../../shared/components/Drawer';
 import useFocusTrap from '../../../shared/hooks/useFocusTrap';
+import useOverlayStack from '../../../shared/hooks/useOverlayStack';
 import AdminLoadError from './AdminLoadError';
 
 /**
@@ -146,8 +147,9 @@ function JsonDiff({ before, after }) {
 /**
  * ConfirmRollbackModal - Confirmation for a rollback, stacked on top of the
  * history drawer. It is a modal alert dialog of its own (rendered into
- * `document.body`, focus trapped on the Cancel button first, Escape cancels),
- * so the drawer's focus trap and Escape leave it alone while it is open.
+ * `document.body`, focus trapped on the Cancel button first, Escape cancels).
+ * It registers in the overlay stack, so the drawer's Escape leaves it alone
+ * while it is open.
  */
 function ConfirmRollbackModal({ isOpen, onConfirm, onCancel, loading, snapshot }) {
   const { t } = useTranslation();
@@ -163,16 +165,10 @@ function ConfirmRollbackModal({ isOpen, onConfirm, onCancel, loading, snapshot }
     returnFocusOnDeactivate: true
   });
 
-  useEffect(() => {
-    if (!isOpen) return undefined;
-    const handleKeyDown = event => {
-      if (event.key !== 'Escape' || loading) return;
-      event.preventDefault();
-      onCancel();
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, loading, onCancel]);
+  // Joins the shared overlay stack: Escape goes to this confirmation only, and
+  // the drawer below sees it is not on top, even when focus is on <body>.
+  // While the rollback runs, Escape is ignored (and still kept from the drawer).
+  useOverlayStack(isOpen, loading ? null : onCancel);
 
   if (!isOpen) return null;
 

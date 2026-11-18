@@ -10,7 +10,7 @@ adminPage: /admin
 The iHub Apps admin UI is the primary interface for managing your platform. This guide covers navigation, all major sections, and productivity features like keyboard shortcuts and the command palette.
 
 > [!TIP]
-> You do not need to edit JSON files directly to configure iHub Apps. Everything described in this guide can be done through the admin UI at `/admin`.
+> Most settings can be changed in the admin UI at `/admin`. Some can only be set in the configuration files; this guide says so where it applies, and [Platform configuration](platform.md) lists them.
 
 ## Accessing the Admin UI
 
@@ -29,13 +29,15 @@ The admin UI uses a **collapsible left-rail sidebar** with these sections. Click
 | **AI Workspace** | Apps, Models (tabs **Models** and **Providers**), Prompts, Skills, Projects, Workflows, Agents (Agent Factory), Marketplace |
 | **Access & Identity** | Users, Groups, Authentication, OAuth |
 | **Integrations** | Integrations (tabs **Installed**, **Catalog**, **Requests** and **Inbound**, plus **Add manually** for the integration builder: iFinder, iAssistant, web search, people directories, storage providers, MCP servers, remote A2A agents, catalog integrations; Outlook add-in, browser extension, Microsoft 365 Copilot, Nextcloud embed, MCP gateway), MCP gateway, Credentials |
-| **Customization** | UI Customization, Localization, Pages, Short Links |
+| **Customization** | UI Customization, Disclaimer, Localization, Pages, Document templates, Short Links |
 | **Observability** | Usage Reports, Feedback, Logging, Telemetry, System Resources, Chat History, Scheduled Tasks, Audit Log |
-| **Platform** | Features, Voice Input, Security, Backup & Restore, Updates, Advanced |
+| **Platform** | Features, Voice Input, Security, EU AI Act, Backup & Restore, Updates, Advanced |
 
 Pages for features that are switched off (for example Marketplace, Workflows, Agents or Scheduled Tasks, see [Features](#features)) are not listed.
 
-**Collapsing the sidebar:** Click the chevron at the bottom of the sidebar to collapse it to icon-only mode. Hover over any icon to see its label. The collapse state is remembered across sessions.
+**Collapsing the sidebar:** Click the double chevron next to the logo at the top of the sidebar to collapse it to icon-only mode. Hover over any icon to see its label. The collapse state is remembered across sessions.
+
+**Theme:** The admin has no theme switch of its own. It follows the light/dark choice made with the theme switch in the end-user sidebar, and opens in that theme straight away, including the "Checking authentication…" screen.
 
 **Mobile:** On small screens the sidebar is hidden by default. Tap the hamburger menu (☰) in the top bar to open the sidebar as a drawer.
 
@@ -63,7 +65,6 @@ Press `g` followed by a letter within 300ms:
 
 | Shortcut | Action |
 |----------|--------|
-| `n` | Create new item (on any list page) |
 | `?` | Show the full shortcut cheatsheet |
 | `Cmd+K` / `Ctrl+K` | Open the command palette |
 | `Cmd+S` / `Ctrl+S` | Save the app you are editing and stay in the editor |
@@ -99,7 +100,7 @@ The dashboard (`/admin`) gives a real-time snapshot of your platform.
 **Stat cards:**
 - **Apps** — total configured apps
 - **Users** — registered users (with active sessions in the last 30 days shown as subtitle)
-- **Conversations** — total chat sessions recorded
+- **Model calls** — model calls in the last 30 days
 - **Version** — current iHub Apps version; shows an update badge if a newer version is available
 
 **Platform status panel:** Shows enabled/total counts for providers, models and projects, the installed integrations (with a notice when newer definitions are available), plus active authentication methods, OAuth server status, and the free space on the fullest disk iHub writes to.
@@ -108,7 +109,14 @@ The dashboard (`/admin`) gives a real-time snapshot of your platform.
 
 **Quick actions:** One-click shortcuts to the most common admin tasks.
 
-**Setup checklist:** Shown on fresh installations to guide initial configuration. Disappears once the checklist steps are complete.
+**Getting started checklist:** Lists the first setup steps with links to their pages. A step is ticked only when the server confirms it:
+
+- **Admin account ready** — the `admin` account no longer signs in with its shipped password (or local sign-in is off). While it still does, the step says so and links to **Users**.
+- **Configure an LLM provider** — at least one enabled model has an API key the server can use, or needs none (a local server).
+- **Create your first app** — listed only when there are no apps at all.
+- **Connect identity provider (optional)** — an enabled OIDC or LDAP provider people can sign in with, or proxy sign-in, is set up. Optional steps do not keep the checklist on screen.
+
+The checklist is shown while a required step is open, however many apps there are. **Hide** removes it in this browser. If the list of apps could not be loaded, the dashboard says so and offers **Retry** instead; it never takes a failed request for a fresh installation.
 
 **First-run onboarding:** While the setup wizard has not been completed, a card says whether it is shown to users or hidden for everyone, shows the demo-account status and links to **Platform → Advanced → First-run onboarding**, where the wizard can be switched off (`setup.disabled`). The card disappears once onboarding is completed. See [Getting Started](GETTING_STARTED.md).
 
@@ -120,10 +128,12 @@ The dashboard (`/admin`) gives a real-time snapshot of your platform.
 
 ![What's New: the release tree and the contents of a release](assets/screenshots/admin-whats-new.png)
 
+The page is laid out like [Documentation](#documentation): a header with the breadcrumb and the documentation search, the release list on the left (behind **Releases** on small screens), the release in the same reading column and typography as a documentation page, **Newer release** / **Older release** at the bottom, and **In this release** on the right on wide screens. Each release has its own address (`/admin/changelog?version=5.6.4`), so Back, a bookmark or a reload return to it.
+
 - **Release list** (left): a tree — `5.x` holds `5.5.x` holds the releases — because an installation that has been running a while has more releases than a flat list can show. Only the groups worth opening start open: the one holding the release on screen and the one holding the installed release. Every other group stays shut behind a header that carries how many releases it holds and how many of them are new, so an upgrade spanning two series does not unfold into the long list the tree replaces. A series longer than ten releases lists the newest ten and offers the rest behind **Show N older**. The release you are running is marked **Installed**. Builds from the main branch additionally list **Unreleased** — changes that are not part of a tagged release yet.
 - **New since the upgrade**: iHub records which version it was running before the one it runs now, so every release an upgrade spanned is marked **New** — jump from 5.4.3 to 5.5.1 and all six releases in between are flagged, not just the one installed. A banner above the list names the jump. A fresh installation has nothing to compare against and shows no banner and no badges. The record lives in `contents/data/installed-version.json` and is written once per start.
-- **In this release**: a table of contents linking to every entry, grouped into **Breaking changes**, **New & improved** and **Fixes** — in that order, so what needs action comes first. Each section ends with a link back to the contents.
-- **Entries** are full Markdown: nested and numbered lists, quoted error messages, tables, links and code blocks (with copy and download buttons).
+- **In this release**: a table of contents linking to every entry, grouped into **Breaking changes**, **New & improved** and **Fixes** — in that order, so what needs action comes first. On wide screens it is the column on the right and marks the entry you are reading; on smaller screens it sits above the first entry.
+- **Entries** are full Markdown, rendered like the documentation: nested and numbered lists, quoted error messages, callouts, framed tables, links and highlighted code blocks with a copy button.
 
 The content comes from `docs/releases/` in the repository and ships with every build; see [Release Process](release-process.md) for how entries get from `next/` to a numbered release.
 
@@ -263,8 +273,6 @@ Go to **Access & Identity → Users** to view, edit, and manage user accounts.
 
 **Editing a user:** Click the user's name to open their profile. You can change their groups, disable their account, and view their authentication methods and last active date.
 
-**Bulk operations:** Select multiple users with the checkboxes to perform bulk actions (enable, disable, change group).
-
 **Deleting a user:** Deleting a user ends their access immediately, whichever way they signed in, and then removes what they owned in the background:
 
 - Always: personal API keys, OAuth connections, the credentials they stored for other systems (Office 365, Jira, Google Drive, Nextcloud, MCP servers) and their scheduled tasks.
@@ -342,8 +350,8 @@ See [Scheduled Tasks](scheduled-tasks.md).
 
 **Platform → Voice Input** configures speech for the whole platform:
 
-- **Defaults** — the dictation service of the microphone button (Browser, Azure Speech or vLLM Realtime) and the transcription model for recordings and audio/video uploads. Apps follow the defaults unless they choose a service or model of their own.
-- **vLLM Realtime** and **Azure Speech** — endpoints and keys, each with **Test connection**.
+- **Voice input (microphone button)** — the speech recognition service (the browser, Azure Speech, or a streaming transcription model such as vLLM Realtime enabled under **Models**) and the transcription model for recordings and audio/video uploads. Apps follow the defaults unless they choose a service or model of their own.
+- **Azure Speech** — endpoint and key, with **Test connection**.
 - **Read aloud (text-to-speech)** — the play button on chat messages and its model, with a test field.
 - **Voice mode (preview)** — the spoken conversation with an app: switch, default for apps, text-to-speech model, listening style, pause length, interrupting, reasoning effort, longest session, voice style instruction and a **Try it** button. Needs the **Voice Mode** preview feature under Features. See [Voice Mode](microphone-feature.md#voice-mode-spoken-conversation).
 - **Test voice input** — microphone check, live dictation and a record-and-transcribe test, run in your own browser against the saved configuration.
@@ -362,6 +370,22 @@ See [Realtime Voice & Transcription](voice-transcription.md) and [Read Aloud](te
 **Customization → UI Customization** has six tabs: **Branding** (the product name, tagline, logo, favicon and the PWA settings), **Navigation** (header links and color, footer), **Start & apps page**, **Theme & styles**, **Error pages** and **Assets** (uploads). A dot on a tab marks unsaved changes; one Save bar at the bottom saves them all. The first-visit disclaimer has its own page, **Customization → Disclaimer**. On **Start Page** you choose what `/` opens, whether users are greeted by name, the heading and subtitle, the default app whose chat input appears on the start page, the featured apps and how many app shortcuts the start page and the sidebar show. See [UI Configuration → Start Page](ui.md#start-page-configuration).
 
 ![UI customization: start page configuration](assets/screenshots/admin-ui-start-page.png)
+
+---
+
+## Short Links
+
+**Customization → Short Links** lists every short link (`/s/<code>`): who created it, how often it was opened and when it expires. **Copy link** copies the full address and **Test link** opens it; both include the base path when iHub runs under one (`https://host/ihub/s/<code>`).
+
+To create a link, click **Add New Link**:
+
+1. **Code**: leave it empty for a random code, or type your own.
+2. **App**: the app the link opens, or **Path** for another page on this server (`/pages/faq`).
+3. **Params (JSON)**: settings passed to the app, for example `{ "prefill": "Summarize this", "send": "true" }` to prefill the chat input and send it. Keep **Include Params** ticked; untick it to keep the params on the link without adding them.
+4. **Redirect URL**: leave it empty to open the app or path above. Fill it in only for a fixed target, such as a page on an allowed external host.
+5. **Opens:** shows where the link leads before you save.
+
+Editing a link works the same way: a new app, path or params change where the link leads, unless a fixed **Redirect URL** is set. Under a base path, opening `/ihub/s/<code>` redirects to `/ihub/apps/…`. Links to other websites need their host on the SSRF allowlist, see [Platform → shortLinks](platform.md#shortlinks).
 
 ---
 
@@ -466,6 +490,19 @@ time-of-day cutoff. The default view covers today and yesterday — not a rollin
 table is not near-empty just after midnight. Widen or narrow it with the date inputs or the
 quick-filter chips.
 
+### Retention and privacy
+
+The chip next to the page title shows how long entries are kept. These settings live in
+`platform.json` under `audit`:
+
+| Key | Default | Where to change it |
+|-----|---------|--------------------|
+| `audit.retentionDays` | `365` | `platform.json` only |
+| `audit.cleanupEnabled` | `true` | `platform.json` only |
+| `audit.includeEmail` | `false` (email-shaped identifiers masked) | `platform.json` only |
+| `audit.verbosity` | `metadata` | `platform.json` only |
+| `audit.anonymizeIp` | `off` | **Observability → Logging → PII & Privacy** |
+
 ### Filtering
 
 Actor, resource, action, result and source are **checkbox lists**. Open one and you get every value that actually occurs in the selected date range, each with the number of entries behind it — so when logins dominate the log you can see `login — 794` and untick exactly that. **Select all** and **Select none** are one click each, and lists longer than ten values get a type-ahead box.
@@ -513,12 +550,13 @@ The checkbox lists write the **exclusion** form for a partial selection, so a va
 
 ## Change History
 
-Every entity edit page (apps, models, prompts, sources, providers, groups, users) has a **History** button in the page header.
+The app, model, prompt and project editors have a **History** button in the page header.
 
 Opening the history drawer shows:
 - A list of every saved change, with timestamp and the admin who made it
 - A before/after diff for each change — only the fields that changed are shown
 - Both form edits and raw JSON editor changes are recorded
+- **Rollback** restores a saved version after a confirmation
 
 The drawer keeps keyboard focus while it is open: Tab moves only between its controls, and Escape
 or the close button closes it and returns focus to the **History** button.
@@ -527,9 +565,86 @@ or the close button closes it and returns focus to the **History** button.
 
 ## Unsaved Changes
 
-If you navigate away from an edit page with unsaved changes, a confirmation dialog will appear asking if you want to leave or stay. This prevents accidental data loss.
+When you have changed something on an admin page and not saved it, leaving the page asks first. A **Leave without saving?** dialog offers **Stay**, which keeps you on the page with your changes, and **Discard changes**, which leaves and drops them. It appears when you:
 
-The warning also appears if you try to close or refresh the browser tab while a form is dirty.
+- click a sidebar entry, a breadcrumb or any other link to another page,
+- use a page's own Back button (for example in the visual workflow editor),
+- use the browser's Back or Forward button.
+
+Closing or reloading the browser tab shows the browser's own warning instead.
+
+Some things never ask:
+
+- Switching a tab or a filter that stays on the same page, such as the tabs of **UI Customization**.
+- A page that is still loading, or whose settings could not be loaded: there is nothing of yours to lose.
+- Saving and then leaving.
+
+On pages with several sections that each have their own Save button, such as **Security**, every section with unsaved changes is marked with **Unsaved changes** next to its heading and a dot in the section list, and one dialog covers them all. On an integration's page and on **Usage Reports**, edits on the **Settings** and **Limits & quotas** tabs are kept when you switch to another tab of the same page and come back; leaving the page asks first.
+
+A few places do not ask yet: the **Authentication** page, the app order on the **Apps** list, the global prompt variables on the **Prompts** list, the OAuth server settings, the CIMD client editor, and forms in dialogs (such as installing an integration).
+
+### When someone else saved first
+
+**Authentication**, **MCP gateway**, **UI Customization**, **Localization** and the global prompt
+variables on **Prompts** remember which version of the settings they loaded. Each page checks its
+save against its own loaded version only; another page or card that reads the same settings later
+does not change it. If another administrator, another browser tab or a script saved the same
+settings after you opened the page, your save is refused and a dialog says **This changed since
+you opened it**. Nothing was saved, and your edits are still on the page:
+
+- **Close** (also Escape or a click outside the dialog) only closes it. Your edits stay, nothing
+  is overwritten, and your next save is refused again with the same dialog. Use it to copy your
+  edits somewhere before you reload, or to check **History** first.
+- **Reload and discard my changes** loads the current settings; make your changes again and save.
+- **Keep my changes and overwrite on next save** closes the dialog and keeps your edits. Your next
+  save goes through and replaces the newer version, including what the other person changed in
+  the settings this page saves. Check **History** first if you are not sure what that was. Only
+  this button overwrites; the dialog never chooses it for you.
+
+Other settings pages (Telemetry, Voice Input, Feedback, Logging, the AI notice and
+acknowledgement cards, OAuth) read the current settings right before they save, so they are not
+protected this way: a change someone else made to the same settings while your page was open is
+replaced by your save. Settings stored elsewhere are kept.
+
+A few settings save only their own field and are never refused: the onboarding switch on
+**Advanced**, the **Cookies** and **Tool approval** cards on **Security**, the **Provenance**
+settings on **EU AI Act**, and **Save Privacy Settings** on **Logging**, which saves only the IP
+anonymization and leaves other unsaved logging changes unsaved. Saving **UI Customization** never
+removes content pages created under **Pages** in the meantime, and creating a page while UI
+Customization is open does not make its save fail.
+
+---
+
+## When a page can't load
+
+If a settings page cannot load what it edits — the server is busy ("Too many requests"), restarting, or unreachable — the page keeps its title but shows **Couldn't load …** with the reason and **Nothing was changed.** instead of the form. There is no Save button until the settings have loaded, so a failed load can never save default values over your configuration.
+
+- **Retry** loads again in place; the rest of the page and your browser tab stay as they are. After "Too many requests", Retry counts down (**Retry in 12 s**) until the server accepts requests again.
+- **You can't view …** means your account has no access to that page; Retry is not offered.
+- On pages with several independent sections, such as **Security**, only the section that failed shows the message; the others stay usable.
+- On **Authentication**, the group list and the JSON schema are optional: if only they fail, the form still appears, with less help in the group picker and the JSON view.
+
+Dialogs with a form, such as **Install integration** and **Add an existing key** (EU AI Act), ask **Discard changes?** when you press Escape, the ✕ or Cancel after typing something; **Keep editing** returns to the form. A click beside such a dialog does nothing while it holds input. When one dialog opens over another, Escape closes only the top one.
+
+---
+
+## Confirmations
+
+Actions that remove something, change what every user sees or replace stored data ask first. The dialog names the item and what will happen, and its button names the action (**Delete**, **Disable All**, **Import and replace**), never just "OK". Cancel has the focus when the dialog opens, and Escape cancels. If the action fails, the error appears in the dialog, which stays open so you can try again or cancel.
+
+| Action | What the dialog tells you |
+| --- | --- |
+| Delete an app, model, prompt, provider, skill, workflow, asset or TTS voice | The type and name of the item |
+| Delete a credential | Which installed integrations use it and will stop working (tools, MCP servers and sign-in settings that reference it are not checked) |
+| Delete a marketplace registry | Its name; a registry that ships with iHub (**iHub Official Marketplace**) also asks you to type its id, because it has no "restore default" |
+| **Enable All** / **Disable All** on Apps, Models and Prompts | How many items change and their names. **Disable All** on Models also clears the default model; when models are enabled again, the first chat model in the list becomes the default |
+| Change the usage **Tracking mode** | What the new mode records; it applies to usage records written from then on |
+| **Run cleanup now** (Audit Log) | The cut-off date; older audit log files are deleted for good |
+| **Trigger Force Refresh** (Advanced) | Every browser clears its cached files and reloads the next time iHub is loaded in it |
+| **Rotate Secret** (OAuth client) | The client's name; the new secret then appears once in a dialog with **Copy**. If you close it without copying, it asks once more |
+| **Import Configuration** (Backup & Restore) | See [Backup & Restore](#backup--restore) |
+
+Where you have to type a value to confirm, it is shown next to the field with a **Copy** button; pasting it is fine. The value must match exactly (capital letters count).
 
 ---
 
@@ -537,9 +652,17 @@ The warning also appears if you try to close or refresh the browser tab while a 
 
 Go to **Platform → Backup & Restore** to export and import the full platform configuration.
 
-**Export:** Downloads a ZIP file containing all configuration JSON files from `contents/`. The filename includes the current timestamp.
+**Export:** Downloads a ZIP file of everything in `contents/` except `.backups`: configuration, users, chats and uploaded data. The filename includes the current timestamp.
 
-**Import:** Upload a previously exported ZIP. The current configuration is automatically backed up before the import is applied. After import, the server applies any pending configuration migrations automatically.
+> **Store the export like a key.** The ZIP is not encrypted. It contains the encryption key for stored secrets (`.encryption-key`), the JWT signing keys (`.jwt-private-key.pem`, `.jwt-secret`) and the users' password hashes (`config/users.json`). Anyone who has the file can decrypt every stored secret and create valid sign-in tokens. Keep it where only administrators can read it and delete copies you no longer need. The page shows the same warning.
+
+**Import:**
+
+1. Select **Import Configuration** and choose a previously exported ZIP. Choosing the file uploads nothing yet.
+2. A dialog names the file and its size, says that everything in `contents/` is replaced, and that the current contents are kept as a pre-import copy in `contents/.backups`.
+3. Type the address of this server (shown in the dialog, for example `ihub.example.com`) and select **Import and replace**. Cancel or Escape leaves everything as it is.
+
+If the import fails, the dialog stays open and its error says what happened to the current configuration. After an import, the server applies any pending configuration migrations automatically. Users, passwords and keys come from the file, so you may have to sign in again.
 
 The replaced configuration is kept in `contents/.backups/<timestamp>/`; the three newest backups are kept and older ones are removed. `.backups` is never exported and never restored from an archive. Only one import runs at a time; a second one started meanwhile is refused and can be retried once the first has finished.
 
@@ -557,10 +680,14 @@ The import replaces the files *inside* `contents/` rather than the folder itself
 ## Security Settings
 
 Go to **Platform → Security** to manage:
-- **SSL certificates** — upload a custom TLS certificate and key
-- **CORS** — configure allowed origins for cross-origin API requests
-- **Cookie settings** — SameSite policy, Secure flag, and session expiry
-- **Value encryption** — encrypt a plaintext secret for use in configuration files
+- **SSL / TLS** — certificate checks you relax for listed hosts
+- **Cookies** — the Secure flag
+- **CORS** — allowed origins for cross-origin API requests
+- **Rate Limits**
+- **SSRF Allowlist**
+- **Tool approval**
+- **Outbound Proxy**
+- **Value Encryption** — encrypt a plaintext secret for use in configuration files
 
 ---
 
@@ -568,7 +695,7 @@ Go to **Platform → Security** to manage:
 
 Go to **Platform → Updates** to:
 - See the current installed version
-- Check for available updates
+- See whether a newer version is available (checked when the page opens)
 - Apply an update (binary installations only)
 - Roll back to the previous version if needed
 
@@ -585,7 +712,6 @@ Go to **Platform → Updates** to:
 | `g` `g` | Go to Groups |
 | `g` `j` | Go to Projects |
 | `g` `l` | Go to Audit Log |
-| `n` | New item on current list page |
 | `?` | Show shortcut cheatsheet |
 | `Cmd+K` / `Ctrl+K` | Open command palette |
 | `Cmd+S` / `Ctrl+S` | Save (in the app editor) |

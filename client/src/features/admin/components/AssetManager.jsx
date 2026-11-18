@@ -5,6 +5,9 @@ import { useState, useEffect, useRef } from 'react';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import { buildUploadUrl } from '../../../utils/runtimeBasePath';
 import AdminLoadError from './AdminLoadError';
+import ConfirmDialog from '../../../shared/components/ConfirmDialog';
+import { useConfirmAction } from '../hooks/useConfirmAction';
+import { deleteConfirmText } from '../utils/confirmText';
 
 function AssetManager({ t }) {
   const [assets, setAssets] = useState([]);
@@ -14,11 +17,18 @@ function AssetManager({ t }) {
   const [successMessage, setSuccessMessage] = useState('');
   const [showUpload, setShowUpload] = useState(false);
   const [showDocumentation, setShowDocumentation] = useState(false);
+  const { requestConfirm, dialogProps: confirmDialogProps } = useConfirmAction();
   const fileInputRef = useRef(null);
+  // Focus target after a delete: the deleted asset's row (and its button) is gone.
+  const headingRef = useRef(null);
 
+  /**
+   * Reads the asset list. Only the first load shows the spinner (`loading`
+   * starts true); a reload after an upload or delete keeps the list, and with
+   * it an open confirmation, mounted.
+   */
   const loadAssets = async () => {
     try {
-      setLoading(true);
       setError(null);
 
       const response = await makeAdminApiCall('/admin/ui/assets');
@@ -94,22 +104,31 @@ function AssetManager({ t }) {
     }
   };
 
-  const handleDeleteAsset = async assetId => {
-    if (
-      !confirm(t('admin.ui.assets.confirmDelete', 'Are you sure you want to delete this asset?'))
-    ) {
-      return;
-    }
-
-    try {
-      await makeAdminApiCall(`/admin/ui/assets/${assetId}`, { method: 'DELETE' });
-      setSuccessMessage('Asset deleted successfully');
-      await loadAssets(); // Refresh the asset list
-      setTimeout(() => setSuccessMessage(''), 3000);
-    } catch (err) {
-      console.error('Failed to delete asset:', err);
-      setError(err.message || 'Failed to delete asset');
-    }
+  /**
+   * Named delete: the dialog names the file and says what breaks.
+   *
+   * @param {{ id: string, originalName?: string, filename?: string }} asset
+   */
+  const handleDeleteAsset = asset => {
+    requestConfirm({
+      ...deleteConfirmText({
+        typeKey: 'asset',
+        typeFallback: 'asset',
+        name: asset.originalName || asset.filename || asset.id,
+        t,
+        message: t(
+          'admin.ui.assets.deleteConsequence',
+          'Pages, styles and settings that link to this file show a broken link.'
+        )
+      }),
+      action: async () => {
+        await makeAdminApiCall(`/admin/ui/assets/${asset.id}`, { method: 'DELETE' });
+        setSuccessMessage(t('admin.ui.assets.deleted', 'Asset deleted successfully'));
+        await loadAssets(); // Refresh the asset list
+        setTimeout(() => setSuccessMessage(''), 3000);
+      },
+      focusAfterSuccess: headingRef
+    });
   };
 
   const copyToClipboard = text => {
@@ -157,7 +176,11 @@ function AssetManager({ t }) {
 
   return (
     <div className="p-6">
-      <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-6">
+      <h2
+        ref={headingRef}
+        tabIndex={-1}
+        className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-6 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 rounded-sm"
+      >
         {t('admin.ui.assets.title', 'Asset Management')}
       </h2>
 
@@ -436,7 +459,7 @@ function AssetManager({ t }) {
                                 type="text"
                                 value={asset.publicUrl}
                                 readOnly
-                                className="flex-1 text-xs bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-sm px-2 py-1 font-mono min-w-0 text-gray-900 dark:text-gray-100"
+                                className="flex-1 text-xs bg-gray-50 dark:bg-gray-800 border border-admin-control-border dark:border-admin-control-border-dark rounded-sm px-2 py-1 font-mono min-w-0 text-gray-900 dark:text-gray-100"
                               />
                               <button
                                 onClick={() => copyToClipboard(asset.publicUrl)}
@@ -464,7 +487,7 @@ function AssetManager({ t }) {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                             <button
-                              onClick={() => handleDeleteAsset(asset.id)}
+                              onClick={() => handleDeleteAsset(asset)}
                               className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300 focus:outline-hidden focus:ring-2 focus:ring-red-500 rounded-sm p-1"
                               title={t('admin.ui.assets.delete', 'Delete asset')}
                             >
@@ -493,6 +516,7 @@ function AssetManager({ t }) {
           </div>
         )}
       </div>
+      <ConfirmDialog {...confirmDialogProps} />
     </div>
   );
 }

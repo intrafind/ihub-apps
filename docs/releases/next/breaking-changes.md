@@ -941,6 +941,107 @@ went: site title, logo, favicon, tagline and PWA settings → **Branding**; the 
 Nothing changes in `ui.json` or the REST API for existing settings. `PUT /api/admin/ui/disclaimer` is
 new and saves the disclaimer on its own; `POST /api/admin/ui/config` still takes the whole configuration.
 
+## Admin API Refuses Changes That Lock Administrators Out
+
+Scripts that call the admin API can now get these refusals. Each is an `application/problem+json`
+response whose `code` says what happened; nothing is changed. There is no override.
+
+| Route | Refused when | Status | `code` |
+| --- | --- | --- | --- |
+| `POST /api/admin/configs/platform` | the caller's own sign-in method or provider would be off, or no administrator could sign in | 409 | `AUTH_LOCKOUT` |
+| `POST /api/admin/changes/platform/…/rollback` | the same, for the restored configuration | 409 | `AUTH_LOCKOUT` |
+| `PUT /api/admin/auth/users/{id}` | deactivating your own account | 409 | `SELF_LOCKOUT` |
+| `PUT /api/admin/auth/users/{id}` | no active administrator who can sign in would remain | 409 | `LAST_ADMIN` |
+| `PUT`, `POST /api/admin/auth/users…` | `active` is present and not `true` or `false` | 400 | `BAD_REQUEST` |
+| `DELETE /api/admin/auth/users/{id}` | deleting your own account | 409 | `SELF_LOCKOUT` |
+| `DELETE /api/admin/auth/users/{id}` | the last administrator who can sign in (unchanged) | 403 | `FORBIDDEN` |
+| `DELETE /api/admin/groups/{id}` | other groups inherit from it (`details.dependants`) | 409 | `GROUP_IN_USE` |
+| `PUT`, `DELETE /api/admin/groups/{id}`, group rollback | no active administrator who can sign in would remain | 409 | `LAST_ADMIN` |
+| every groups.json write (create, update, delete, content access, rollback) | the group inheritance would not resolve | 400 | `BAD_REQUEST` |
+| any of the above | the check itself could not run (a file unreadable) | 503 | `ADMIN_CHECK_FAILED` |
+
+"An administrator who can sign in" is an active user with an admin group (also inherited) whose
+sign-in method is enabled, or an LDAP provider or NTLM with an admin default group. Admins who
+get their rights only from an identity-provider group mapping are not counted.
+
+**Before upgrading:** scripts that switch the sign-in method in one call, demote or deactivate
+the account they run as, or delete parent groups before their children must change order: enable
+the new method first and sign in with it, use another admin account, and delete children first
+(the `details.dependants` of the refusal name them).
+
+## Admin API: Platform and UI Configuration Saves Keep Secrets and Pages
+
+Only scripts that call the admin API directly are affected; the admin pages need nothing.
+
+- `POST /api/admin/configs/platform`: a secret left out of a section — `auth.jwtSecret`,
+  `localAuth.jwtSecret`, `speech.azure.subscriptionKey` or a provider's `jwkUrl` under
+  `proxyAuth.jwtProviders` — is now kept, not deleted. A script that cleared a secret by sending the
+  section without it now leaves the old value in place and gets `200`; to remove one, send `null`
+  for it. The new `PATCH /api/admin/configs/platform` follows the same rule.
+- A value that is still a redaction placeholder (`***REDACTED***`, `[REDACTED]`, a URL with
+  `REDACTED` in place of a password or token) and has no stored value behind it is refused with
+  `400 VALIDATION_FAILED`; `errors[].pointer` names the field. Before, it was stored as the secret.
+- `GET /api/admin/configs/platform` now returns every field of `proxyAuth.jwtProviders`, including
+  `jwkUrl` (user info and credential query parameters such as `token`, `key`, `code`, `sig`,
+  `subscription-key` or `X-Amz-Signature` masked).
+- `POST /api/admin/ui/config` ignores `pages` and keeps the stored ones; create, change and delete
+  pages through `/api/admin/pages`.
+
+**Before upgrading:** check scripts that clear a secret by leaving it out (send `null`), that send
+a body read from the admin API with a placeholder in a field they did not mean to set, or that
+change `pages` through `POST /api/admin/ui/config`.
+
+## Workflow Run Dialog Sends the Message as `input`
+
+The **Message** box of the run dialog (shown for a workflow without input variables) now sends its
+text as `input`, the name a chat message already has. It was sent as `message`, so a workflow
+started from the dialog and one started from a chat read the text under different names.
+
+**Before upgrading:** in a workflow without input variables, replace `{{message}}` and
+`$.data.message` by `{{input}}` and `$.data.input`. A prompt step without its own prompt is not
+affected: it uses the run's message either way.
+
+## OAuth Clients: An Empty App, Model or Prompt List Grants Nothing to a Client-Credentials Client
+
+For a client-credentials (machine-to-machine) client, the allowed apps, models and prompts are the
+whole grant: there is no user behind the token. `POST /api/admin/oauth/clients` now stores these
+lists exactly as sent. An empty or missing list is stored as `[]` and means **no access**; only an
+explicit `["*"]` grants every app, model or prompt. Until now the server turned an empty or missing
+list into `["*"]`, so a client created without lists could use everything.
+
+- **Admin UI:** a new client starts with nothing selected and needs at least one app, model or
+  prompt (or **All (\*)**, which now shows a warning) before it can be saved; a client that only
+  calls the OpenAI-compatible API needs only models. An existing client whose lists are all empty,
+  or a suspended one, can still be saved for other edits. The hint explains that the lists are
+  the grant for client credentials and a filter on the signed-in user's permissions for
+  authorization code, and the editor warns when the grant types of a client change.
+- **Authorization-code clients are unchanged:** an empty list still means no extra restriction on
+  the user's group permissions.
+- **Existing clients keep what is stored.** Nothing is migrated, and no stored client loses access:
+  the server already treated a stored `[]` as "nothing" for client-credentials tokens. A client
+  created through the old defaults holds `["*"]` and still has access to everything.
+
+**Before upgrading:** scripts that create OAuth clients through the admin API and relied on the
+`["*"]` default must send `"allowedApps": ["*"]` (and the same for models and prompts), or better
+list only what the client needs. Review clients that hold `["*"]` under **Admin → OAuth → Clients**,
+including authorization-code clients: there **All (\*)** means users of the client reach everything
+their groups allow.
+
+## OAuth Token Endpoint: Client Credentials Only for Clients Registered for It
+
+`POST /api/oauth/token` with `grant_type=client_credentials` now answers `400` with
+`"error": "unauthorized_client"` for a client whose grant types do not include **Client
+Credentials**. Until now any confidential client with a valid secret could get a machine token,
+including one registered only for the authorization code flow (user login). That token was granted
+the client's lists without any user behind it: for a client created with the old `["*"]` default,
+every app, model and prompt.
+
+- Clients created as client-credentials clients, and older clients stored without grant types, are
+  unaffected.
+- **Before upgrading:** if an integration fetches tokens with client credentials using a client that
+  is set up for authorization code only, open the client under **Admin → OAuth → Clients** and add
+  the **Client Credentials** grant type, and give it only the apps, models and prompts it needs.
+
 ## Rate Limits Count per User, and Every Model Runs 25 Calls at Once
 
 The shipped limits now fit a company of 10,000 employees, even when everyone reaches iHub through
@@ -995,3 +1096,15 @@ exists, so the setting is gone. Migration V257 deletes it from `platform.json`.
 - The development setting `SKIP_NTLM_VITE_PROXY` is gone: Windows sign-in works through the Vite dev
   server (`npm run dev`) as it is.
 
+## OpenTelemetry Export Goes Through the Outbound Proxy
+
+Trace and metric export to an OTLP collector now uses the same outbound connection settings as every
+other call iHub makes, including the proxy. Before, it always connected directly. When a proxy is
+configured (**Admin → Platform → Security → Outbound Proxy**, `proxy.http` / `proxy.https` in `platform.json`, or the
+`HTTP_PROXY` / `HTTPS_PROXY` variables) and the collector's host is neither in `proxy.noProxy` (or
+`NO_PROXY`) nor excluded by `proxy.urlPatterns`, the export is sent to the proxy. A collector on the
+internal network that the proxy cannot reach then stops receiving traces and metrics; the server
+logs the export errors, chat and everything else keep working.
+
+**Before upgrading:** if iHub uses a proxy and exports to an internal collector, add the collector's
+host to `proxy.noProxy` (or `NO_PROXY`). The change takes effect for the exporter after a restart.

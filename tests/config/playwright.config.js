@@ -5,6 +5,9 @@ import { defineConfig, devices } from '@playwright/test';
  */
 export default defineConfig({
   testDir: '../e2e',
+  // Changes users and groups on the server it runs against; it runs only through
+  // its own isolated config (npm run test:e2e:admin-safety).
+  testIgnore: ['**/admin-safety-guards.spec.js'],
   /* Run tests in files in parallel */
   fullyParallel: true,
   /* Fail the build on CI if you accidentally left test.only in the source code. */
@@ -75,7 +78,8 @@ export default defineConfig({
     command: 'node tests/config/e2e-server.mjs',
     // From the repository root (the default is this file's directory).
     cwd: '../..',
-    url: 'http://localhost:5173',
+    // The API behind Vite, not only Vite itself: specs sign in first thing.
+    url: 'http://localhost:5173/api/health',
     reuseExistingServer: !process.env.CI,
     timeout: 120 * 1000
   }

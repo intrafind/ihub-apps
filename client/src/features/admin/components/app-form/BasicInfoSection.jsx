@@ -6,6 +6,7 @@ import IconPicker from '../../../../shared/components/IconPicker';
 import ResourceSelector from '../ResourceSelector';
 import { getLocalizedContent } from '../../../../utils/localizeContent';
 import { isFieldRequired } from '../../../../utils/schemaValidation';
+import { CHECKBOX_CLASS, INPUT_CLASS } from '../formStyles';
 
 function BasicInfoSection({
   app,
@@ -53,8 +54,8 @@ function BasicInfoSection({
                 required={isFieldRequired('id', jsonSchema)}
                 value={app.id || ''}
                 onChange={e => handleInputChange('id', e.target.value)}
-                className={`mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${
-                  validationErrors.id ? 'border-red-300' : ''
+                className={`${INPUT_CLASS} mt-1 block ${
+                  validationErrors.id ? 'border-red-500 dark:border-red-400' : ''
                 }`}
                 aria-invalid={!!validationErrors.id || undefined}
                 aria-describedby={validationErrors.id ? 'id-error' : undefined}
@@ -78,7 +79,7 @@ function BasicInfoSection({
               <select
                 value={app.type || 'chat'}
                 onChange={e => handleInputChange('type', e.target.value)}
-                className="mt-1 block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                className={`${INPUT_CLASS} mt-1 block`}
               >
                 <option value="chat">{t('admin.apps.edit.typeChat', 'Chat')}</option>
                 <option value="iframe">{t('admin.apps.edit.typeIframe', 'Iframe')}</option>
@@ -100,7 +101,7 @@ function BasicInfoSection({
                 type="number"
                 value={app.order || 0}
                 onChange={e => handleInputChange('order', Number.parseInt(e.target.value) || 0)}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                className={`${INPUT_CLASS} mt-1 block`}
               />
             </div>
 
@@ -111,7 +112,7 @@ function BasicInfoSection({
               <select
                 value={app.category || ''}
                 onChange={e => handleInputChange('category', e.target.value)}
-                className="mt-1 block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                className={`${INPUT_CLASS} mt-1 block`}
               >
                 <option value="">
                   {t('admin.apps.edit.selectCategory', 'Select category...')}
@@ -177,8 +178,8 @@ function BasicInfoSection({
                 type="color"
                 value={app.color || '#4F46E5'}
                 onChange={e => handleInputChange('color', e.target.value)}
-                className={`mt-1 block w-full h-10 rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${
-                  validationErrors.color ? 'border-red-300' : ''
+                className={`mt-1 block w-full h-10 rounded-md border-admin-control-border shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${
+                  validationErrors.color ? 'border-red-500 dark:border-red-400' : ''
                 }`}
                 aria-invalid={!!validationErrors.color || undefined}
                 aria-describedby={validationErrors.color ? 'color-error' : undefined}
@@ -216,7 +217,7 @@ function BasicInfoSection({
               <select
                 value={app.preferredModel || ''}
                 onChange={e => handleInputChange('preferredModel', e.target.value)}
-                className="mt-1 block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                className={`${INPUT_CLASS} mt-1 block`}
               >
                 <option value="">{t('admin.apps.edit.selectModel', 'Select model...')}</option>
                 {availableModels.map(model => (
@@ -255,7 +256,7 @@ function BasicInfoSection({
               <select
                 value={app.preferredOutputFormat || 'markdown'}
                 onChange={e => handleInputChange('preferredOutputFormat', e.target.value)}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                className={`${INPUT_CLASS} mt-1 block`}
               >
                 <option value="markdown">{t('appConfig.markdown', 'Markdown')}</option>
                 <option value="text">{t('appConfig.plainText', 'Plain Text')}</option>
@@ -270,7 +271,7 @@ function BasicInfoSection({
                   type="checkbox"
                   checked={app.enabled !== false}
                   onChange={e => handleInputChange('enabled', e.target.checked)}
-                  className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
+                  className={CHECKBOX_CLASS}
                 />
                 <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
                   {t('admin.apps.edit.enabled', 'Enabled')}
@@ -286,7 +287,7 @@ function BasicInfoSection({
                     type="checkbox"
                     checked={app.autoStart === true}
                     onChange={e => handleInputChange('autoStart', e.target.checked)}
-                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
+                    className={CHECKBOX_CLASS}
                   />
                   <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
                     {t('admin.apps.edit.autoStart', 'Auto-start conversation')}
@@ -309,7 +310,7 @@ function BasicInfoSection({
                     type="checkbox"
                     checked={app.ephemeral === true}
                     onChange={e => handleInputChange('ephemeral', e.target.checked)}
-                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
+                    className={CHECKBOX_CLASS}
                   />
                   <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
                     {t('admin.apps.edit.ephemeral', 'Ephemeral chat')}

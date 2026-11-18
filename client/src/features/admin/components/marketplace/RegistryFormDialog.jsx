@@ -220,7 +220,7 @@ function RegistryFormDialog({ registry, onSave, onCancel }) {
                 value={form.id}
                 onChange={e => set('id', e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
                 placeholder="my-registry"
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                className="w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
               />
               {errors.id && <p className="text-red-500 text-xs mt-1">{errors.id}</p>}
             </div>
@@ -236,7 +236,7 @@ function RegistryFormDialog({ registry, onSave, onCancel }) {
               value={form.name}
               onChange={e => set('name', e.target.value)}
               placeholder="My Registry"
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+              className="w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
             />
             {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name}</p>}
           </div>
@@ -250,7 +250,7 @@ function RegistryFormDialog({ registry, onSave, onCancel }) {
               type="text"
               value={form.description}
               onChange={e => set('description', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+              className="w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
             />
           </div>
 
@@ -264,7 +264,7 @@ function RegistryFormDialog({ registry, onSave, onCancel }) {
               value={form.source}
               onChange={e => set('source', e.target.value)}
               placeholder="https://example.com/catalog.json"
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm font-mono"
+              className="w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm font-mono"
             />
             {errors.source && <p className="text-red-500 text-xs mt-1">{errors.source}</p>}
           </div>
@@ -277,7 +277,7 @@ function RegistryFormDialog({ registry, onSave, onCancel }) {
             <select
               value={form.auth.type}
               onChange={e => setAuth('type', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+              className="w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
             >
               <option value="none">{t('admin.marketplace.registries.auth.none', 'None')}</option>
               <option value="bearer">
@@ -302,7 +302,7 @@ function RegistryFormDialog({ registry, onSave, onCancel }) {
                 type="password"
                 value={form.auth.token || ''}
                 onChange={e => setAuth('token', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm font-mono"
+                className="w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm font-mono"
               />
             </div>
           )}
@@ -318,7 +318,7 @@ function RegistryFormDialog({ registry, onSave, onCancel }) {
                   type="text"
                   value={form.auth.username || ''}
                   onChange={e => setAuth('username', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                  className="w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
                 />
               </div>
               <div>
@@ -329,7 +329,7 @@ function RegistryFormDialog({ registry, onSave, onCancel }) {
                   type="password"
                   value={form.auth.password || ''}
                   onChange={e => setAuth('password', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                  className="w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
                 />
               </div>
             </div>
@@ -346,7 +346,7 @@ function RegistryFormDialog({ registry, onSave, onCancel }) {
                   type="text"
                   value={form.auth.headerName || ''}
                   onChange={e => setAuth('headerName', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                  className="w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
                 />
               </div>
               <div>
@@ -357,7 +357,7 @@ function RegistryFormDialog({ registry, onSave, onCancel }) {
                   type="password"
                   value={form.auth.headerValue || ''}
                   onChange={e => setAuth('headerValue', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                  className="w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
                 />
               </div>
             </div>
@@ -415,7 +415,7 @@ function RegistryFormDialog({ registry, onSave, onCancel }) {
                   max="168"
                   value={form.refreshIntervalHours}
                   onChange={e => set('refreshIntervalHours', Number.parseInt(e.target.value))}
-                  className="w-16 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-sm bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-white"
+                  className="w-16 px-2 py-1 border border-admin-control-border dark:border-admin-control-border-dark rounded-sm bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-white"
                 />
                 <span className="text-sm text-gray-500 dark:text-gray-400">
                   {t('admin.marketplace.registries.form.hours', 'hours')}
@@ -476,7 +476,7 @@ function RegistryFormDialog({ registry, onSave, onCancel }) {
                 id="registry-channel"
                 value={form.channel}
                 onChange={e => set('channel', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                className="w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
               >
                 <option value="stable">
                   {t('admin.marketplace.registries.form.channelStable', 'Stable releases only')}
@@ -516,7 +516,7 @@ function RegistryFormDialog({ registry, onSave, onCancel }) {
                         onChange={e => setPin(index, 'key', e.target.value)}
                         placeholder="integration:org.ckan__open-data-portal"
                         aria-label={t('admin.marketplace.registries.form.pinItem', 'Item')}
-                        className="flex-1 min-w-0 px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm font-mono"
+                        className="flex-1 min-w-0 px-2 py-1.5 border border-admin-control-border dark:border-admin-control-border-dark rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm font-mono"
                       />
                       <input
                         type="text"
@@ -527,7 +527,7 @@ function RegistryFormDialog({ registry, onSave, onCancel }) {
                           'admin.marketplace.registries.form.pinRange',
                           'Version range'
                         )}
-                        className="w-28 px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm font-mono"
+                        className="w-28 px-2 py-1.5 border border-admin-control-border dark:border-admin-control-border-dark rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm font-mono"
                       />
                       <button
                         type="button"

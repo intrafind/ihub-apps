@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { LLM_TIMEOUT_KEYS, LLM_TIMEOUT_MAX_MS } from '../../../../../shared/llmProviders.js';
 
 const INPUT =
-  'w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white';
+  'w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white';
 const LABEL = 'block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2';
 const HINT = 'mt-1 text-xs text-gray-500 dark:text-gray-400';
 

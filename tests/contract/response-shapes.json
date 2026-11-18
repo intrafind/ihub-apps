@@ -341,7 +341,54 @@
   "GET /api/admin/apps/templates": {
     "status": 200,
     "shape": {
-      "items": []
+      "items": [
+        {
+          "allowEmptyContent": "boolean",
+          "allowInheritance": "boolean",
+          "autoStart": "boolean",
+          "category?": "string",
+          "color": "string",
+          "customResponseRenderer?": "string",
+          "description": "object",
+          "disallowModelSelection": "boolean",
+          "enabled": "boolean",
+          "ephemeral": "boolean",
+          "features?": "object",
+          "greeting?": "object",
+          "iassistant?": "object",
+          "icon": "string",
+          "id": "string",
+          "iframeConfig?": "object",
+          "imageGeneration?": "object",
+          "inheritanceLevel?": "number",
+          "inputMode?": "object",
+          "integrations?": "object",
+          "messagePlaceholder?": "object",
+          "name": "object",
+          "order?": "number",
+          "outputSchema?": "object",
+          "overriddenFields?": "array",
+          "parentId?": "string",
+          "preferredModel?": "string",
+          "preferredOutputFormat?": "string",
+          "preferredStyle?": "string",
+          "projects?": "array",
+          "prompt?": "object",
+          "redirectConfig?": "object",
+          "rendererConfig?": "object",
+          "requiredFeatures?": "array",
+          "sendChatHistory": "boolean",
+          "settings?": "object",
+          "skillSettings?": "object",
+          "skills?": "array",
+          "starterPrompts?": "[]|array",
+          "system?": "object",
+          "type": "string",
+          "upload?": "object",
+          "variables?": "[]|array",
+          "websearch?": "object"
+        }
+      ]
     }
   },
   "GET /api/admin/audit-log": {
@@ -1088,8 +1135,7 @@
         "azure": {
           "enabled": "boolean",
           "host": "string",
-          "region": "string",
-          "subscriptionKey": "string"
+          "region": "string"
         },
         "defaultService": "string",
         "dictation": {
@@ -1665,6 +1711,7 @@
           "requires": "string",
           "runs?": "string",
           "runsCode": "boolean",
+          "singleton": "null|object",
           "source": "string",
           "status": "string",
           "statusReason": "null",
@@ -1767,6 +1814,7 @@
       "requires": "string",
       "runsCode": "boolean",
       "scopes": "null",
+      "singleton": "null",
       "source": "string",
       "status": "string",
       "statusReason": "null",
@@ -1898,6 +1946,7 @@
         "runs": "string",
         "runsCode": "boolean",
         "scopes": "null",
+        "singleton": "null",
         "source": "string",
         "status": "string",
         "statusReason": "null",
@@ -2253,10 +2302,10 @@
       "clients": [
         {
           "active": "boolean",
-          "allowedApps": "array",
+          "allowedApps": [],
           "allowedGroups": [],
-          "allowedModels": "array",
-          "allowedPrompts": "array",
+          "allowedModels": [],
+          "allowedPrompts": [],
           "clientId": "string",
           "clientType": "string",
           "connectionCount": "number",
@@ -2289,10 +2338,10 @@
     "status": 200,
     "shape": {
       "active": "boolean",
-      "allowedApps": ["string"],
+      "allowedApps": [],
       "allowedGroups": [],
-      "allowedModels": ["string"],
-      "allowedPrompts": ["string"],
+      "allowedModels": [],
+      "allowedPrompts": [],
       "clientId": "string",
       "clientType": "string",
       "consentRequired": "boolean",
@@ -2399,6 +2448,7 @@
         "oidcProviders": "number",
         "proxy": "boolean"
       },
+      "configRefreshErrors": [],
       "groups": "number",
       "integrations": {
         "enabled": "number",

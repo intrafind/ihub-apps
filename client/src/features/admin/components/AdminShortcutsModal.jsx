@@ -22,7 +22,6 @@ const SHORTCUTS = [
   {
     category: 'Actions',
     items: [
-      { keys: ['n'], label: 'New item (on list pages)' },
       { keys: ['⌘', 'k'], label: 'Open command palette' },
       { keys: ['⌘', 's'], label: 'Save (in the app editor)' },
       { keys: ['?'], label: 'Toggle this cheatsheet' },

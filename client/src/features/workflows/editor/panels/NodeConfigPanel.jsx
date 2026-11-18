@@ -10,6 +10,7 @@ import LocalizedField from './forms/LocalizedField';
 import { NODE_TYPE_COLORS, nodeTypeDescription, nodeTypeLabel } from '../workflowEditorUtils';
 import { NodeTypeIcon } from '../nodes/nodeIcons';
 import { NodeConnections } from './NodeConnections';
+import ConfirmDialog from '../../../../shared/components/ConfirmDialog';
 
 /**
  * Editor for a node's progress note — the one-line message the step announces
@@ -117,6 +118,8 @@ export function NodeConfigPanel({
   const [configText, setConfigText] = useState('');
   const [activeTab, setActiveTab] = useState('form');
   const [parseError, setParseError] = useState(null);
+  // The node-delete confirmation (a styled, named dialog; no native confirm).
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   useEffect(() => {
     if (selectedNode) {
@@ -182,13 +185,14 @@ export function NodeConfigPanel({
     });
   };
 
+  /** Opens the confirmation; the node is removed only on confirm. */
   const handleDelete = () => {
-    if (
-      onDeleteNode &&
-      window.confirm(t('workflows.editor.confirmDeleteNode', 'Delete this node?'))
-    ) {
-      onDeleteNode(selectedNode.id);
-    }
+    if (onDeleteNode) setConfirmingDelete(true);
+  };
+
+  const handleDeleteConfirmed = () => {
+    setConfirmingDelete(false);
+    onDeleteNode(selectedNode.id);
   };
 
   return (
@@ -376,6 +380,22 @@ export function NodeConfigPanel({
           {t('workflows.editor.applyChanges', 'Apply Changes')}
         </button>
       </div>
+
+      <ConfirmDialog
+        isOpen={confirmingDelete}
+        title={t('workflows.editor.deleteNodeTitle', {
+          name: selectedNode.data.nodeName || nodeTypeLabel(nodeType, t),
+          defaultValue: 'Delete node "{{name}}"?'
+        })}
+        message={t(
+          'workflows.editor.deleteNodeConsequence',
+          'The node, the steps nested in it and their connections are removed. The workflow keeps its saved version until you save.'
+        )}
+        confirmLabel={t('workflows.editor.deleteNode', 'Delete node')}
+        danger
+        onConfirm={handleDeleteConfirmed}
+        onDeny={() => setConfirmingDelete(false)}
+      />
     </div>
   );
 }

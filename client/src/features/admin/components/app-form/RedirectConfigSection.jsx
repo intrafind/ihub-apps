@@ -1,5 +1,6 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
+import { CHECKBOX_CLASS } from '../formStyles';
 
 /**
  * Redirect Configuration card — only rendered for apps with type 'redirect'.
@@ -33,7 +34,7 @@ function RedirectConfigSection({ app, onChange, t }) {
                   })
                 }
                 placeholder="https://example.com"
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                className="mt-1 block w-full rounded-md border border-admin-control-border dark:border-admin-control-border-dark shadow-xs focus:border-admin-accent focus:ring-admin-accent sm:text-sm"
               />
             </div>
             <div className="flex items-center">
@@ -46,7 +47,7 @@ function RedirectConfigSection({ app, onChange, t }) {
                     openInNewTab: e.target.checked
                   })
                 }
-                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
+                className={CHECKBOX_CLASS}
               />
               <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
                 {t('admin.apps.edit.openInNewTab', 'Open in New Tab')}
@@ -62,7 +63,7 @@ function RedirectConfigSection({ app, onChange, t }) {
                     showWarning: e.target.checked
                   })
                 }
-                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
+                className={CHECKBOX_CLASS}
               />
               <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
                 {t('admin.apps.edit.showWarning', 'Show Warning Before Redirect')}

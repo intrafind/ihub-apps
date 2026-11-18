@@ -1,11 +1,14 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import Switch from '../../../shared/components/Switch';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import AdminLoadGate from './AdminLoadGate';
+import { useAdminConfigLoad } from '../hooks/useAdminConfigLoad';
+import { useDirtyReport } from '../hooks/useDirtyReport';
 
 const DEFAULT_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'HEAD', 'PATCH'];
 const DEFAULT_HEADERS = [
@@ -20,7 +23,11 @@ const DEFAULT_HEADERS = [
   'X-File-Name'
 ];
 
-function CorsConfig() {
+/**
+ * @param {Object} props
+ * @param {(dirty: boolean) => void} [props.onDirtyChange] - Reports unsaved edits to the page.
+ */
+function CorsConfig({ onDirtyChange }) {
   const { t } = useTranslation();
   const [config, setConfig] = useState({
     origin: [],
@@ -29,38 +36,36 @@ function CorsConfig() {
     methods: DEFAULT_METHODS,
     allowedHeaders: DEFAULT_HEADERS
   });
+  // The configuration as last loaded or saved; null until it loaded.
+  const [savedConfig, setSavedConfig] = useState(null);
+  useDirtyReport(savedConfig, config, onDirtyChange);
   const [newOrigin, setNewOrigin] = useState('');
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
 
-  useEffect(() => {
-    const fetchCorsConfig = async () => {
-      try {
-        const response = await makeAdminApiCall('/admin/cors/config', { method: 'GET' });
-        setConfig({
-          origin: Array.isArray(response.data.origin) ? response.data.origin : [],
-          credentials:
-            typeof response.data.credentials === 'boolean' ? response.data.credentials : true,
-          maxAge: typeof response.data.maxAge === 'number' ? response.data.maxAge : 86400,
-          methods: Array.isArray(response.data.methods) ? response.data.methods : DEFAULT_METHODS,
-          allowedHeaders: Array.isArray(response.data.allowedHeaders)
-            ? response.data.allowedHeaders
-            : DEFAULT_HEADERS
-        });
-        setMessage('');
-      } catch (error) {
-        setMessage({
-          type: 'error',
-          text: error.message || t('admin.cors.loadError', 'Failed to load CORS configuration')
-        });
-      } finally {
-        setLoading(false);
+  // The card shows no form and no Save until its settings loaded: saving
+  // the defaults after a failed load would overwrite the stored ones (PL-B3).
+  const load = useAdminConfigLoad({
+    sources: {
+      config: {
+        load: async () => (await makeAdminApiCall('/admin/cors/config', { method: 'GET' })).data,
+        onLoad: data => {
+          const loaded = {
+            origin: Array.isArray(data.origin) ? data.origin : [],
+            credentials: typeof data.credentials === 'boolean' ? data.credentials : true,
+            maxAge: typeof data.maxAge === 'number' ? data.maxAge : 86400,
+            methods: Array.isArray(data.methods) ? data.methods : DEFAULT_METHODS,
+            allowedHeaders: Array.isArray(data.allowedHeaders)
+              ? data.allowedHeaders
+              : DEFAULT_HEADERS
+          };
+          setConfig(loaded);
+          setSavedConfig(loaded);
+        }
       }
-    };
-
-    void fetchCorsConfig();
-  }, [t]);
+    }
+  });
+  const ready = load.status === 'ready';
 
   const handleAddOrigin = () => {
     const trimmed = newOrigin.trim();
@@ -80,10 +85,12 @@ function CorsConfig() {
   };
 
   const handleSaveConfig = async () => {
+    if (!ready) return;
     setSaving(true);
     setMessage('');
     try {
       await makeAdminApiCall('/admin/cors/config', { method: 'PUT', body: config });
+      setSavedConfig(config);
       setMessage({
         type: 'success',
         text: t('admin.cors.saved', 'CORS configuration saved successfully')
@@ -98,13 +105,19 @@ function CorsConfig() {
     }
   };
 
-  if (loading) {
+  if (!ready) {
     return (
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
         <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">
           {t('admin.cors.title', 'CORS Configuration')}
         </h2>
-        <p className="text-gray-600 dark:text-gray-400">{t('common.loading', 'Loading...')}</p>
+        <AdminLoadGate
+          load={load}
+          resourceLabel={t('admin.cors.title', 'CORS Configuration')}
+          loadingFallback={
+            <p className="text-gray-600 dark:text-gray-400">{t('common.loading', 'Loading...')}</p>
+          }
+        />
       </div>
     );
   }
@@ -179,7 +192,7 @@ function CorsConfig() {
               'admin.cors.originPlaceholder',
               'https://example.com or chrome-extension://abc123...'
             )}
-            className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 text-sm"
+            className="flex-1 px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-md shadow-xs focus:ring-admin-accent focus:border-admin-accent dark:bg-gray-700 dark:text-gray-100 text-sm"
           />
           <button
             onClick={handleAddOrigin}
@@ -284,7 +297,7 @@ function CorsConfig() {
           onChange={e =>
             setConfig(prev => ({ ...prev, maxAge: Number.parseInt(e.target.value, 10) || 0 }))
           }
-          className="w-40 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 text-sm"
+          className="w-40 px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-md shadow-xs focus:ring-admin-accent focus:border-admin-accent dark:bg-gray-700 dark:text-gray-100 text-sm"
         />
       </div>
 
@@ -312,7 +325,7 @@ function CorsConfig() {
                 .filter(Boolean)
             }))
           }
-          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 text-sm"
+          className="w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-md shadow-xs focus:ring-admin-accent focus:border-admin-accent dark:bg-gray-700 dark:text-gray-100 text-sm"
         />
       </div>
 
@@ -343,7 +356,7 @@ function CorsConfig() {
                 .filter(Boolean)
             }))
           }
-          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 text-sm font-mono"
+          className="w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-md shadow-xs focus:ring-admin-accent focus:border-admin-accent dark:bg-gray-700 dark:text-gray-100 text-sm font-mono"
         />
       </div>
 

@@ -5,7 +5,8 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
-import { makeAdminApiCall } from '../../../api/adminApi';
+import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi';
+import { apiErrorMessage } from '../../../utils/apiErrorMessage';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import { DataTable } from '../components/data-table';
 
@@ -129,13 +130,39 @@ function AdminGroupsPage() {
       ),
       danger: true,
       onConfirm: async () => {
-        setConfirmDialog(null);
         try {
           await makeAdminApiCall(`/admin/groups/${groupId}`, { method: 'DELETE' });
+          setConfirmDialog(null);
           setMessage({ type: 'success', text: 'Group deleted successfully!' });
           void loadGroups();
         } catch (error) {
-          setMessage({ type: 'error', text: `Failed to delete group: ${error.message}` });
+          // A refusal (another group inherits from this one: GROUP_IN_USE) keeps
+          // the dialog open, says why, and leaves only Close.
+          const dependants = error?.response?.data?.details?.dependants;
+          setConfirmDialog({
+            title: t('admin.groups.deleteBlockedTitle', 'Cannot delete group'),
+            message: (
+              <div role="alert">
+                <p>
+                  {apiErrorMessage(
+                    error,
+                    t,
+                    getAdminApiErrorMessage(error) ||
+                      t('admin.groups.deleteFailed', 'The group could not be deleted.')
+                  )}
+                </p>
+                {Array.isArray(dependants) && dependants.length > 0 && (
+                  <ul className="mt-2 list-disc pl-5" data-testid="group-delete-dependants">
+                    {dependants.map(id => (
+                      <li key={id}>{groups[id]?.name || id}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ),
+            danger: true,
+            blocked: true
+          });
         }
       }
     });
@@ -264,7 +291,9 @@ function AdminGroupsPage() {
         title={confirmDialog?.title ?? ''}
         message={confirmDialog?.message ?? ''}
         danger={confirmDialog?.danger}
-        onConfirm={() => confirmDialog?.onConfirm()}
+        hideConfirm={confirmDialog?.blocked === true}
+        denyLabel={confirmDialog?.blocked ? t('common.close', 'Close') : undefined}
+        onConfirm={() => confirmDialog?.onConfirm?.()}
         onDeny={() => setConfirmDialog(null)}
       />
     </div>

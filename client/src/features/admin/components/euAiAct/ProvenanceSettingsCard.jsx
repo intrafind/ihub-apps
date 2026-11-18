@@ -23,6 +23,8 @@ import {
   validateForm
 } from './provenanceSettingsForm';
 import EuAiActStateNote from './EuAiActStateNote';
+import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
+import UnsavedChangesDialog from '../UnsavedChangesDialog';
 
 const FIELD_ORDER = [
   'retentionDays',
@@ -103,6 +105,7 @@ export default function ProvenanceSettingsCard({ onSaved }) {
   const { t } = useTranslation();
   const [form, setForm] = useState(null);
   const [saved, setSaved] = useState(null);
+  const { blocker } = useUnsavedChanges(saved, form);
   const [loadError, setLoadError] = useState(null);
   const [errors, setErrors] = useState({});
   const [message, setMessage] = useState(null);
@@ -189,15 +192,13 @@ export default function ProvenanceSettingsCard({ onSaved }) {
     setSaving(true);
     setMessage(null);
     try {
-      // Read-modify-write: platform.json holds settings this card does not show.
-      const response = await makeAdminApiCall('/admin/configs/platform', { method: 'GET' });
-      const platform = response.data || {};
-      platform.provenance = buildBody(form);
+      // A scoped change of the provenance block only: the server merges it into
+      // the stored one, and nothing else in platform.json is sent or touched.
       const result = await makeAdminApiCall('/admin/configs/platform', {
-        method: 'POST',
-        body: platform
+        method: 'PATCH',
+        body: { provenance: buildBody(form) }
       });
-      const next = toForm(result.data?.config?.provenance || {});
+      const next = toForm(result.data?.provenance || {});
       setForm(next);
       setSaved(next);
       setErrors({});
@@ -281,6 +282,7 @@ export default function ProvenanceSettingsCard({ onSaved }) {
         'How long output records are kept, who may check an output, and how strict the watermark detector is. Changes apply immediately; no restart is needed. Every save is written to the audit log.'
       )}
     >
+      <UnsavedChangesDialog blocker={blocker} />
       <EuAiActStateNote hideWhenOn className="mb-4" />
       {loadError && !form ? (
         <AdminLoadError

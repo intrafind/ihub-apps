@@ -1,12 +1,15 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import TranslationOverridesEditor from '../components/TranslationOverridesEditor';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
+import { INPUT_CLASS } from '../components/formStyles';
 
 /**
  * Admin → Customization → Localization.
@@ -32,6 +35,12 @@ function AdminLocalizationPage() {
   // form still holds its initial 'en', and saving would write that over whatever
   // the install had configured.
   const [loaded, setLoaded] = useState(false);
+  // The default language as last loaded or saved; null until it loaded.
+  const [savedDefaultLanguage, setSavedDefaultLanguage] = useState(null);
+  const { blocker } = useUnsavedChanges(savedDefaultLanguage, defaultLanguage);
+  // The revision of the configuration this form loaded (or last saved): its
+  // save sends exactly this as If-Match, whatever other reads in the tab saw.
+  const revisionRef = useRef(null);
 
   /**
    * The languages this install actually has, derived the same way the end-user
@@ -58,9 +67,13 @@ function AdminLocalizationPage() {
   const loadConfiguration = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await makeAdminApiCall('/admin/configs/platform', { method: 'GET' });
+      const response = await makeAdminApiCall('/admin/configs/platform', {
+        method: 'GET',
+        revision: revisionRef
+      });
       const config = response.data || {};
       setDefaultLanguage(config.defaultLanguage || 'en');
+      setSavedDefaultLanguage(config.defaultLanguage || 'en');
       setLoaded(true);
       setMessage('');
     } catch (error) {
@@ -91,8 +104,10 @@ function AdminLocalizationPage() {
       // logins. (Several older admin pages do echo it; see the note in the PR.)
       await makeAdminApiCall('/admin/configs/platform', {
         method: 'POST',
-        body: { defaultLanguage }
+        body: { defaultLanguage },
+        revision: revisionRef
       });
+      setSavedDefaultLanguage(defaultLanguage);
 
       // The UI config carries defaultLanguage to the client and is cached for
       // ~30 minutes; without this the change appears not to take effect.
@@ -177,7 +192,7 @@ function AdminLocalizationPage() {
                 id="default-language"
                 value={defaultLanguage}
                 onChange={e => setDefaultLanguage(e.target.value)}
-                className="mt-1 block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                className={`${INPUT_CLASS} mt-1 block`}
               >
                 {availableLanguages.map(language => (
                   <option key={language.code} value={language.code}>
@@ -244,6 +259,7 @@ function AdminLocalizationPage() {
         languages={availableLanguages.filter(l => !l.untranslated).map(l => l.code)}
         initialLanguage={defaultLanguage}
       />
+      <UnsavedChangesDialog blocker={blocker} />
     </div>
   );
 }

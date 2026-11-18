@@ -30,6 +30,9 @@ import Icon from '../../../shared/components/Icon';
  * @param {boolean} [props.warnOnCustom=true] - Visually flag entries that are not defined groups
  * @param {boolean} [props.multiple=true] - Allow multiple selections; when false, a new selection replaces the current one
  * @param {boolean} [props.disabled=false] - Disable the control
+ * @param {boolean} [props.commitOnBlur=false] - Add what is typed when the field loses focus,
+ *   split at commas (`a,b` adds `a` and `b`), so a name typed without Enter or a comma is
+ *   not lost when the admin clicks Save next
  */
 function GroupMultiSelect({
   label,
@@ -43,7 +46,8 @@ function GroupMultiSelect({
   allowCustom = true,
   warnOnCustom = true,
   multiple = true,
-  disabled = false
+  disabled = false,
+  commitOnBlur = false
 }) {
   const { t } = useTranslation();
   const inputRef = useRef(null);
@@ -141,6 +145,47 @@ function GroupMultiSelect({
     addValue(match ? match.id : val);
   };
 
+  // Add every comma-separated name of the typed text at once (on blur). One
+  // onChange call with all of them: several addValue calls would each start
+  // from the same `selected` and keep only the last name.
+  const commitTypedTerms = () => {
+    const terms = searchTerm
+      .split(',')
+      .map(term => term.trim())
+      .filter(Boolean);
+    if (terms.length === 0) return;
+    const next = [...selected];
+    for (const term of terms) {
+      const match = options.find(
+        o =>
+          o.id.toLowerCase() === term.toLowerCase() || o.name.toLowerCase() === term.toLowerCase()
+      );
+      const val = match ? match.id : term;
+      if (!allowCustom && !match) continue;
+      if (next.some(v => String(v).toLowerCase() === val.toLowerCase())) continue;
+      if (multiple) next.push(val);
+      else next.splice(0, next.length, val);
+    }
+    if (next.length === selected.length && next.every((v, i) => v === selected[i])) {
+      setSearchTerm('');
+      setActiveIndex(-1);
+      return;
+    }
+    commit(next);
+  };
+
+  /**
+   * Adds the typed text as entered by Enter, a comma or the `Add "…"` option.
+   * Text that holds a comma (a pasted `a,b`) is split into one entry per name,
+   * like on blur; otherwise the single term is added.
+   *
+   * @param {string} term - The trimmed text of the search field.
+   */
+  const addTypedText = term => {
+    if (term.includes(',')) commitTypedTerms();
+    else addTerm(term);
+  };
+
   const removeValue = candidate => {
     commit(selected.filter(v => String(v) !== String(candidate)));
   };
@@ -154,7 +199,7 @@ function GroupMultiSelect({
     if (item.type === 'group') {
       addValue(item.option.id);
     } else if (item.type === 'custom') {
-      addTerm(item.term);
+      addTypedText(item.term);
     }
     inputRef.current?.focus();
   };
@@ -184,7 +229,7 @@ function GroupMultiSelect({
       }
       if (trimmedTerm) {
         e.preventDefault();
-        addTerm(trimmedTerm);
+        addTypedText(trimmedTerm);
       } else if (e.key === ',') {
         e.preventDefault();
       }
@@ -288,10 +333,13 @@ function GroupMultiSelect({
               setActiveIndex(-1);
             }}
             onFocus={openDropdown}
-            onBlur={() => setShowDropdown(false)}
+            onBlur={() => {
+              setShowDropdown(false);
+              if (commitOnBlur) commitTypedTerms();
+            }}
             onKeyDown={handleKeyDown}
             placeholder={resolvedPlaceholder}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm placeholder-gray-500 dark:placeholder-gray-300 disabled:bg-gray-100 dark:disabled:bg-gray-700"
+            className="w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-md shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-admin-accent focus:border-admin-accent sm:text-sm placeholder-gray-500 dark:placeholder-gray-300 disabled:bg-gray-100 dark:disabled:bg-gray-700"
           />
           <Icon
             name="search"

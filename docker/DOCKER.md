@@ -326,9 +326,6 @@ MISTRAL_API_KEY=your-mistral-key
 # JWT_SECRET: Auto-generated and persisted if not set
 # Only required for multi-node deployments to share the same secret
 JWT_SECRET=your-secure-jwt-secret
-
-# Admin Configuration
-ADMIN_SECRET=your-admin-secret
 ```
 
 ### Optional Services

@@ -4,12 +4,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useLocation, useNavigate, useNavigationType, useParams } from 'react-router-dom';
-import {
-  ArrowLeftIcon,
-  ArrowRightIcon,
-  Bars3BottomLeftIcon,
-  XMarkIcon
-} from '@heroicons/react/24/outline';
+import { ArrowLeftIcon, ArrowRightIcon, Bars3BottomLeftIcon } from '@heroicons/react/24/outline';
 import { ChevronRightIcon } from '@heroicons/react/20/solid';
 import './AdminDocsPage.css';
 import { makeAdminApiCall } from '../../../api/adminApi';
@@ -17,7 +12,7 @@ import { renderMarkdown } from '../../../config/marked.config';
 import { useCodeBlockInteractions } from '../../../hooks/useCodeBlockInteractions';
 import { useMermaidRenderer } from '../../../hooks/useMermaidRenderer';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
-import { useFocusTrap } from '../../../shared/hooks/useFocusTrap';
+import DocsDrawer from '../components/docs/DocsDrawer';
 import DocsNav from '../components/docs/DocsNav';
 import DocsOutline from '../components/docs/DocsOutline';
 import DocsSearch from '../components/docs/DocsSearch';
@@ -164,57 +159,6 @@ function SectionCards({ sections, t }) {
   );
 }
 
-function ContentsDrawer({ open, onClose, sections, current, t }) {
-  const panelRef = useRef(null);
-  const closeRef = useRef(null);
-  useFocusTrap(panelRef, { isActive: open, initialFocusRef: closeRef });
-  useEffect(() => {
-    if (!open) return undefined;
-    const onKeyDown = event => {
-      if (event.key === 'Escape') onClose();
-    };
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  }, [open, onClose]);
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-50 lg:hidden">
-      <button
-        type="button"
-        tabIndex={-1}
-        aria-hidden="true"
-        className="absolute inset-0 h-full w-full cursor-default bg-gray-900/40"
-        onClick={onClose}
-      />
-      <div
-        ref={panelRef}
-        role="dialog"
-        aria-modal="true"
-        aria-label={t('admin.docs.contents', 'Documentation contents')}
-        className="absolute inset-y-0 left-0 flex w-80 max-w-[85vw] flex-col bg-white shadow-xl dark:bg-gray-900"
-      >
-        <div className="flex h-14 shrink-0 items-center justify-between border-b border-gray-200 px-4 dark:border-gray-800">
-          <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-            {t('admin.docs.contentsShort', 'Contents')}
-          </span>
-          <button
-            ref={closeRef}
-            type="button"
-            onClick={onClose}
-            aria-label={t('common.close', 'Close')}
-            className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
-          >
-            <XMarkIcon className="h-5 w-5" aria-hidden="true" />
-          </button>
-        </div>
-        <div className="flex-1 overflow-y-auto px-4 py-4">
-          <DocsNav sections={sections} current={current} />
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function AdminDocsPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -298,7 +242,8 @@ function AdminDocsPage() {
                 headingIds: true,
                 docsComponents: true,
                 dropLeadingH1: true,
-                anchorLabel: t('admin.docs.linkToSection', 'Link to this section')
+                anchorLabel: t('admin.docs.linkToSection', 'Link to this section'),
+                tableLabel: t('admin.docs.tableLabel', 'Table')
               })
           })
         : '',
@@ -545,13 +490,14 @@ function AdminDocsPage() {
         </aside>
       </div>
 
-      <ContentsDrawer
+      <DocsDrawer
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
-        sections={sections}
-        current={currentPath}
-        t={t}
-      />
+        label={t('admin.docs.contents', 'Documentation contents')}
+        title={t('admin.docs.contentsShort', 'Contents')}
+      >
+        <DocsNav sections={sections} current={currentPath} />
+      </DocsDrawer>
     </div>
   );
 }

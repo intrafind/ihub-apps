@@ -101,6 +101,43 @@
         window.__BASE_PATH__ = basePath;
       })();
     </script>
+    <script data-theme-prepaint>
+      // Apply the saved light/dark theme before the first paint, so a dark-mode user never sees
+      // a white flash (or a light "Checking authentication..." screen) on a cold load.
+      // Mirrors resolveIsDark(getStoredPreference()) in client/src/utils/themePreference.js;
+      // tests/unit/client/theme-prepaint-sync.test.jsx keeps the two in step.
+      // Embeds (`embed` or `mode` in the URL, or a framed tab flagged as an embed) are left to
+      // embedBootstrap.js: their preference lives in sessionStorage and the URL may override it.
+      (function () {
+        try {
+          var params = new URLSearchParams(window.location.search);
+          if (params.has('embed') || params.has('mode')) return;
+          var framed = true;
+          try {
+            framed = window.self !== window.top;
+          } catch (e) {
+            // Reading window.top can throw in a sandboxed frame; such a page is framed.
+          }
+          if (framed && sessionStorage.getItem('ihubEmbedMode') === '1') return;
+          var stored = null;
+          try {
+            stored = localStorage.getItem('ih-dark-mode');
+          } catch (e) {
+            // localStorage may be unavailable; follow the system.
+          }
+          var dark =
+            stored === 'dark' ||
+            (stored !== 'light' &&
+              !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches));
+          if (dark) {
+            document.documentElement.setAttribute('data-theme', 'dark');
+            document.documentElement.classList.add('dark');
+          }
+        } catch (e) {
+          // Never block the page: the app applies the theme again before its first render.
+        }
+      })();
+    </script>
     <link rel="icon" type="image/svg+xml" href="./favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="A platform for AI-powered applications" />
