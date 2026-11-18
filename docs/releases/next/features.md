@@ -2362,8 +2362,11 @@ next message.
 Before each answer the server works out how full the model's context window is. It used to count
 the whole conversation again for every message, which held up the first words of a long chat by up
 to about 170 ms on a busy server and slowed the other chats of the same process. It now starts from
-the figure stored with the previous answer and counts only what is new. The context display shows
-the same figures as before.
+the figure stored with the previous answer and counts only what is new. Until the model reports its
+own count for the message, the context display can show a slightly different figure than before:
+the stored figure is the model's own count, which includes the tool definitions sent with the
+prompt. When the conversation sent differs from the one that figure describes (history switched
+back on, older files left out for space, another model), the whole conversation is counted as before.
 
 - Uploaded files are counted once, when they are stored; files uploaded before the update are
   counted the first time they are used again. Project documents use the count stored with them.
