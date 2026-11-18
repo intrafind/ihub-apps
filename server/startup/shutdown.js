@@ -82,6 +82,20 @@ export async function shutdown() {
       error: error?.message
     });
   }
+  // Provenance records wait in memory while a write of the same hash runs;
+  // write them now, within a budget like the evidence records below.
+  try {
+    const { getProvenanceStore } = await import('../services/provenance/ProvenanceStore.js');
+    await Promise.race([
+      getProvenanceStore().flush(),
+      new Promise(r => setTimeout(r, 2000).unref())
+    ]);
+  } catch (error) {
+    logger.error('Could not flush provenance records on shutdown', {
+      component: 'Server',
+      error: error?.message
+    });
+  }
   // Evidence records of answers stored just before the signal are written in
   // the background; let them land before storage closes, within a budget
   // (the force-exit timer bounds the whole shutdown anyway).

@@ -44,6 +44,16 @@ export const MAX_RECORDS_PER_HASH = 20;
 const CAS_ATTEMPTS = 16;
 const CAS_RETRY_MS = 5;
 
+/** Pause before a failed flush of a hash is tried again. */
+const FLUSH_RETRY_MS = 1000;
+
+/**
+ * Failed flushes of one hash in a row before its pending records are dropped:
+ * with storage down, memory stays bounded (at most {@link MAX_RECORDS_PER_HASH}
+ * records per hash, for a few seconds).
+ */
+const FLUSH_ATTEMPTS = 5;
+
 const DOCUMENT_VERSION = 1;
 
 /** Documents per page when the provider cannot scan. */
@@ -64,6 +74,17 @@ export const ALLOWED_RECORD_KEYS = Object.freeze([
   // Who produced it, when `provenance.recordUser` asks for it (provenanceUser.js).
   'user'
 ]);
+
+/**
+ * `batch` (oldest first) prepended to `current` (newest first): newest first,
+ * one record per output id, capped at {@link MAX_RECORDS_PER_HASH}.
+ */
+function prependAll(batch, current) {
+  const seen = new Set();
+  return [...[...batch].reverse(), ...current]
+    .filter(r => !seen.has(r.output_id) && seen.add(r.output_id))
+    .slice(0, MAX_RECORDS_PER_HASH);
+}
 
 function createdAtMs(record) {
   const parsed = Date.parse(record?.created_at);
@@ -93,6 +114,12 @@ export class ProvenanceStore {
     this.documents = documents || null;
     this.log = log;
     this._installationId = null;
+    /**
+     * Per hash, the records not yet written (`pending`, oldest first), the
+     * batch being written (`writing`), the flush running and its retry timer.
+     * @type {Map<string, Object>}
+     */
+    this._queues = new Map();
   }
 
   /** Whether the store can read and write. */
@@ -103,6 +130,16 @@ export class ProvenanceStore {
   /**
    * Store a record under its content hash (and under each of `extraHashes`,
    * e.g. the final-step text of a multi-step turn). Newest first, capped.
+   *
+   * Writes are coalesced per hash: the records of one process that arrive while
+   * a hash is being written wait in memory and go out together in the next
+   * flush, one compare-and-set loop for all of them. Without it, many turns
+   * producing the same text (a template, a short standard answer) each ran
+   * their own loop against one document and lost most rounds. The call
+   * resolves once a flush that includes the record has been tried; a failed
+   * flush is logged and retried after {@link FLUSH_RETRY_MS}, so the call never
+   * rejects for a write failure. {@link ProvenanceStore#findByHash} sees
+   * pending records at once.
    *
    * @param {Object} provenance - Provenance object with `content_hash`.
    * @param {Object} [options]
@@ -115,23 +152,109 @@ export class ProvenanceStore {
     const primary = record.content_hash?.value;
     if (!isHexHash(primary)) return false;
     const keys = [...new Set([primary, ...extraHashes.filter(isHexHash)])];
-    for (const key of keys) await this._prepend(key, record);
+    // Queued synchronously (before the first await), so a reader right after
+    // an unawaited call already sees the record.
+    await Promise.all(keys.map(key => this._enqueue(key, record)));
     return true;
   }
 
-  async _prepend(hash, record) {
+  /**
+   * Write every pending record now (shutdown). A record still pending when the
+   * process exits without this is lost: at most the last flush's worth.
+   *
+   * @returns {Promise<void>}
+   */
+  async flush() {
+    await Promise.all(
+      [...this._queues].map(([hash, queue]) => {
+        clearTimeout(queue.retry);
+        queue.retry = null;
+        return this._startFlush(hash, queue);
+      })
+    );
+  }
+
+  /** Same shape as ChatFileRepository#_adjustServerBytes: a ticket per record. */
+  async _enqueue(hash, record) {
+    let queue = this._queues.get(hash);
+    if (!queue) {
+      queue = { pending: [], writing: null, ticket: 0, flush: null, retry: null, failures: 0 };
+      this._queues.set(hash, queue);
+    }
+    queue.pending.push(record);
+    // Older ones would be trimmed from the document anyway.
+    if (queue.pending.length > MAX_RECORDS_PER_HASH) {
+      queue.pending.splice(0, queue.pending.length - MAX_RECORDS_PER_HASH);
+    }
+    queue.ticket += 1;
+    const ticket = queue.ticket;
+    // A flush already running took its batch before this record: wait for it,
+    // then start (or join) the next one.
+    while ((await this._startFlush(hash, queue)) < ticket);
+  }
+
+  /** The running flush of a hash, or a new one. Never rejects. */
+  _startFlush(hash, queue) {
+    queue.flush ??= this._flush(hash, queue).finally(() => {
+      queue.flush = null;
+      if (!queue.pending.length && !queue.retry) this._queues.delete(hash);
+    });
+    return queue.flush;
+  }
+
+  /**
+   * Write the pending batch of a hash. On failure the batch goes back to the
+   * front of the queue and a retry is scheduled; after {@link FLUSH_ATTEMPTS}
+   * failures in a row it is dropped.
+   *
+   * @returns {Promise<number>} The last ticket this flush took.
+   */
+  async _flush(hash, queue) {
+    const ticket = queue.ticket;
+    const batch = queue.pending.splice(0);
+    if (!batch.length) return ticket;
+    queue.writing = batch;
+    try {
+      await this._prepend(hash, batch);
+      queue.failures = 0;
+    } catch (error) {
+      queue.failures += 1;
+      if (queue.failures >= FLUSH_ATTEMPTS) {
+        queue.failures = 0;
+        this.log.warn('Provenance records dropped after repeated write failures', {
+          component: 'ProvenanceStore',
+          records: batch.length,
+          error: error.message
+        });
+      } else {
+        queue.pending = [...batch, ...queue.pending].slice(-MAX_RECORDS_PER_HASH);
+        this.log.warn('Could not store provenance records; retrying', {
+          component: 'ProvenanceStore',
+          records: batch.length,
+          error: error.message
+        });
+        queue.retry ??= setTimeout(() => {
+          queue.retry = null;
+          this._startFlush(hash, queue);
+        }, FLUSH_RETRY_MS);
+        queue.retry.unref?.();
+      }
+    } finally {
+      queue.writing = null;
+    }
+    return ticket;
+  }
+
+  /** Prepend `batch` (oldest first) to the hash document, compare-and-set. */
+  async _prepend(hash, batch) {
     for (let attempt = 0; attempt < CAS_ATTEMPTS; attempt += 1) {
       const existing = await this.documents.get(PROVENANCE_RECORDS_NAMESPACE, hash);
       const current = Array.isArray(existing?.data?.records) ? existing.data.records : [];
-      const records = [record, ...current.filter(r => r.output_id !== record.output_id)].slice(
-        0,
-        MAX_RECORDS_PER_HASH
-      );
       try {
         await this.documents.put(
           PROVENANCE_RECORDS_NAMESPACE,
           hash,
-          { v: DOCUMENT_VERSION, records },
+          { v: DOCUMENT_VERSION, records: prependAll(batch, current) },
           { etag: existing ? existing.etag : null }
         );
         return;
@@ -145,7 +268,8 @@ export class ProvenanceStore {
   }
 
   /**
-   * The records stored for a content hash, newest first.
+   * The records stored for a content hash, newest first, with the ones this
+   * process has not written yet in front.
    *
    * @param {string} hash - Lowercase hex SHA-256.
    * @returns {Promise<Object[]>}
@@ -153,7 +277,10 @@ export class ProvenanceStore {
   async findByHash(hash) {
     if (!this.isAvailable() || !isHexHash(hash)) return [];
     const doc = await this.documents.get(PROVENANCE_RECORDS_NAMESPACE, hash);
-    return Array.isArray(doc?.data?.records) ? doc.data.records : [];
+    const stored = Array.isArray(doc?.data?.records) ? doc.data.records : [];
+    const queue = this._queues.get(hash);
+    if (!queue) return stored;
+    return prependAll([...(queue.writing || []), ...queue.pending], stored);
   }
 
   /**

@@ -258,6 +258,63 @@ describe('ProvenanceStore', () => {
     }
   });
 
+  // Documents whose `put` is counted and can fail on demand.
+  const instrumented = (documents, { failPuts = 0 } = {}) => {
+    const calls = { puts: 0 };
+    let failures = failPuts;
+    return {
+      calls,
+      documents: {
+        get: (...a) => documents.get(...a),
+        async put(...a) {
+          calls.puts += 1;
+          if (failures > 0) {
+            failures -= 1;
+            throw new Error('disk unavailable');
+          }
+          return documents.put(...a);
+        }
+      }
+    };
+  };
+
+  it('writes concurrent records of one hash in one flush', async () => {
+    const { documents, calls } = instrumented(storage.provider.documents);
+    const coalescing = new ProvenanceStore({ documents });
+    const records = Array.from({ length: 12 }, () => make('coalesced-text'));
+    await Promise.all(records.map(r => coalescing.record(r)));
+    // The first record's flush starts alone; the other eleven share the next.
+    assert.ok(calls.puts <= 2, `puts: ${calls.puts}`);
+    const fresh = new ProvenanceStore({ documents: storage.provider.documents });
+    const found = await fresh.findByHash(hashText('coalesced-text'));
+    assert.deepEqual(
+      found.map(r => r.output_id),
+      records.map(r => r.output_id).reverse()
+    );
+  });
+
+  it('keeps the records of a failed flush, shows them, and writes them on the next', async () => {
+    const { documents } = instrumented(storage.provider.documents, { failPuts: 1 });
+    const flaky = new ProvenanceStore({ documents, log: { warn() {} } });
+    const r = make('flaky-text');
+    assert.equal(await flaky.record(r), true);
+    const fresh = new ProvenanceStore({ documents: storage.provider.documents });
+    assert.deepEqual(await fresh.findByHash(hashText('flaky-text')), []);
+    assert.equal((await flaky.findByHash(hashText('flaky-text')))[0].output_id, r.output_id);
+    await flaky.flush();
+    assert.equal((await fresh.findByHash(hashText('flaky-text')))[0].output_id, r.output_id);
+    assert.equal(flaky._queues.size, 0);
+  });
+
+  it("drops a hash's records after repeated failed flushes", async () => {
+    const { documents } = instrumented(storage.provider.documents, { failPuts: 100 });
+    const broken = new ProvenanceStore({ documents, log: { warn() {} } });
+    await broken.record(make('broken-text'));
+    for (let i = 0; i < 4; i += 1) await broken.flush();
+    assert.equal(broken._queues.size, 0);
+    assert.deepEqual(await broken.findByHash(hashText('broken-text')), []);
+  });
+
   it('is a no-op without a document store', async () => {
     const none = new ProvenanceStore({ documents: null });
     assert.equal(await none.record(make('x')), false);
@@ -333,6 +390,59 @@ describe('recordTextOutput', () => {
     const found = await getProvenanceStore().findByHash(hashText('turn answer text'));
     assert.equal(found[0].output_id, outputId);
     assert.equal(await recordTextOutput({ text: '  ', model: { id: 'm1' } }), null);
+  });
+
+  it('returns while the record write is still pending; the record lands later', async () => {
+    const store = getProvenanceStore();
+    const real = store.documents;
+    let release;
+    const gate = new Promise(resolve => (release = resolve));
+    store.documents = {
+      get: (...a) => real.get(...a),
+      put: async (...a) => {
+        await gate;
+        return real.put(...a);
+      }
+    };
+    try {
+      const p = await recordTextOutput({ text: 'a slow store answer', model: { id: 'm1' } });
+      assert.ok(p.output_id);
+      // Pending, yet already visible to a verify in this process.
+      const [pending] = await store.findByHash(hashText('a slow store answer'));
+      assert.equal(pending.output_id, p.output_id);
+      const fresh = new ProvenanceStore({ documents: real });
+      assert.deepEqual(await fresh.findByHash(hashText('a slow store answer')), []);
+      release();
+      await store.flush();
+      assert.equal(
+        (await fresh.findByHash(hashText('a slow store answer')))[0].output_id,
+        p.output_id
+      );
+    } finally {
+      release();
+      store.documents = real;
+    }
+  });
+
+  it('returns the object when the record write fails', async () => {
+    const store = getProvenanceStore();
+    const real = store.documents;
+    const log = store.log;
+    store.log = { warn() {} };
+    store.documents = {
+      get: (...a) => real.get(...a),
+      put: async () => {
+        throw new Error('disk unavailable');
+      }
+    };
+    try {
+      const p = await recordTextOutput({ text: 'a failing store answer', model: { id: 'm1' } });
+      assert.ok(p.output_id);
+    } finally {
+      store.documents = real;
+      store.log = log;
+    }
+    await store.flush();
   });
 
   it('indexes the final-step text of a multi-step turn', async () => {
