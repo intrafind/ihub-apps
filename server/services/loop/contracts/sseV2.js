@@ -73,6 +73,8 @@ export const contextUsageData = z.object({
   source: z.enum(['provider', 'estimate']).prefault('estimate'),
   /** The system prompt's share of `inputTokens` (a turn's end only): the next turn replaces it. */
   systemTokens: z.number().int().nonnegative().optional(),
+  /** The model the figure was counted for (a turn's end only). */
+  modelId: z.string().optional(),
   step: z.number().int().nonnegative().optional()
 });
 

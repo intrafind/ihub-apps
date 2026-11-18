@@ -8,7 +8,8 @@ import {
   projectTestOrigin,
   resolveProjectTestScope
 } from '../../services/knowledge/projectTestScope.js';
-import { appendMcpAppContext } from '../../services/mcp/mcpAppContext.js';
+import { appendMcpAppContext, renderMcpAppContext } from '../../services/mcp/mcpAppContext.js';
+import { isPriorAnswer } from '../../services/loop/contextTracker.js';
 import { logInteraction, trackSession } from '../../utils.js';
 import llmClient, {
   usageToOpenAI,
@@ -815,7 +816,8 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
     canApproveTools = false,
     runId = null,
     continueRun = null,
-    priorContext = null
+    priorContext = null,
+    promptResent = false
   }) {
     await logInteraction('chat_request', buildLogData(true));
 
@@ -836,7 +838,8 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
       toolApproval,
       connectResume,
       canApproveTools,
-      priorContext
+      priorContext,
+      promptResent
     });
   }
 
@@ -1384,18 +1387,6 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
         const persistedAttachments =
           turnFileAttachments.length > 0 ? turnFileAttachments : messageAttachments(newMessage);
         const includeHistory = chatApp?.sendChatHistory !== false && sendChatHistory !== false;
-        // What the last answer's prompt held, stored with it: the context
-        // figure of this turn starts from it rather than counting the history
-        // again. The history is already cut at an edit or a regenerate; an
-        // answer without text is not in the prompt (`historyForPrompt`).
-        priorContext = includeHistory
-          ? history.findLast(
-              entry =>
-                entry.role === 'assistant' &&
-                typeof entry.content === 'string' &&
-                entry.content.trim()
-            )?.context || null
-          : null;
         const hydratedHistory = includeHistory
           ? await hydrateHistoryForPrompt(chatId, history, {
               store: repository.fileStore?.()
@@ -1410,6 +1401,21 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             .map(file => file.fileId || file.id)
             .filter(Boolean)
         );
+        const repeatsHostItem =
+          currentItemIds.size > 0 &&
+          hydratedHistory.some(entry =>
+            entry.fileData?.some?.(file => currentItemIds.has(file.fileId || file.id))
+          );
+        // What the last answer's prompt held, stored with it: the context
+        // figure of this turn starts from it rather than counting the history
+        // again — only when this turn resends that prompt as it was. The
+        // history is already cut at an edit or a regenerate; an item this turn
+        // carries again is taken out of the earlier turn, which changes it.
+        // The answer is the one the tracker finds (`isPriorAnswer`).
+        priorContext =
+          includeHistory && !repeatsHostItem
+            ? history.findLast(isPriorAnswer)?.context || null
+            : null;
         const dedupedHistory =
           currentItemIds.size === 0
             ? hydratedHistory
@@ -1694,6 +1700,17 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
         // user's `/name` or composer pick, the app, or an earlier message).
         const activatedSkills = announcedSkills(prep.data.activeSkills);
 
+        // The prompt holds the history the last answer's context counted only
+        // when the file budget left nothing of it out. A next turn resends this
+        // prompt as it is only when, besides, nothing in it is this turn's
+        // alone: the app's prompt template around the message, a host item
+        // rendered from the request, what open views reported.
+        const historyFilesOmitted = prep.data.historyFilesOmitted > 0;
+        const turnOnlyContext = Boolean(
+          (preparedPromptMessage?.promptTemplate && preparedPromptMessage?.variables) ||
+          preparedPromptMessage?.hostContext ||
+          renderMcpAppContext(mcpAppContext)
+        );
         const outcome = await processChatRequest({
           prep: prep.data,
           buildLogData,
@@ -1710,7 +1727,9 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           // Only a client that draws the approval card can answer one.
           canApproveTools: toolApprovalCapable === true,
           runId: turnRunId,
-          priorContext,
+          priorContext: historyFilesOmitted ? null : priorContext,
+          promptResent:
+            includeHistory && !repeatsHostItem && !historyFilesOmitted && !turnOnlyContext,
           ...(continuesRun ? { continueRun: { interactionId: pausedTurn.interactionId } } : {})
         });
         // Refused at persistence: the chat's container changed under the

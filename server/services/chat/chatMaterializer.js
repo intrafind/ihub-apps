@@ -269,7 +269,9 @@ function normalizeContext(context) {
     inputTokens,
     maxOutputTokens: maxOutputTokens > 0 ? maxOutputTokens : 0,
     source: context.source === 'provider' ? 'provider' : 'estimate',
-    ...(systemTokens >= 0 && context.systemTokens != null ? { systemTokens } : {})
+    ...(systemTokens >= 0 && context.systemTokens != null ? { systemTokens } : {}),
+    // The model it was counted for: another model's figure is not started from.
+    ...(typeof context.modelId === 'string' && context.modelId ? { modelId: context.modelId } : {})
   };
 }
 

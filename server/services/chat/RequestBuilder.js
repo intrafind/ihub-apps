@@ -663,9 +663,13 @@ class RequestBuilder {
       // window; an older one is a stub the model reads with `chat_files_read`,
       // which the chat offers because it has files.
       let promptMessages = messages;
+      // How many files of earlier turns the budget left out: the history is then
+      // not the one the last answer's stored context counted.
+      let historyFilesOmitted = 0;
       if (chatContext?.files) {
         const budgeted = applyHistoryFileBudget(messages, { contextWindow: model.contextWindow });
         promptMessages = budgeted.messages;
+        historyFilesOmitted = budgeted.omitted || 0;
         if (budgeted.omitted > 0) {
           logger.info('Files of earlier turns left out for the context budget', {
             component: 'RequestBuilder',
@@ -881,7 +885,8 @@ class RequestBuilder {
           responseSchema: app.outputSchema,
           llmOptions,
           userFileData,
-          integrationScopes: integrationScopes || {}
+          integrationScopes: integrationScopes || {},
+          historyFilesOmitted
         }
       };
     } catch (error) {

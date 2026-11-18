@@ -14,8 +14,8 @@
  * model's reply, tool results — is estimated. Before the first model call the
  * turn starts from the context stored with the previous answer and counts only
  * the system prompt and what came after that answer; without one (a first
- * turn, another model), and for a provider that reports no usage, the whole
- * transcript is estimated. Text whose count was stored with it (attachments,
+ * turn, another model, a prompt the next turn does not resend as it was), the
+ * whole transcript is estimated. Text whose count was stored with it (attachments,
  * project documents) is never tokenized again.
  *
  * Two figures come out of it. The live one (`estimate` / `recordStep` / `last`)
@@ -122,18 +122,34 @@ function countFreshTranscript(messages) {
 }
 
 /**
+ * The answer a turn's context starts from: the last assistant message with
+ * text. The route picks the stored context by it, the tracker the place in
+ * the transcript where that context ends, so both find the same answer.
+ * @param {Object} message
+ * @returns {boolean}
+ */
+export function isPriorAnswer(message) {
+  return (
+    message?.role === 'assistant' &&
+    typeof message.content === 'string' &&
+    message.content.trim() !== ''
+  );
+}
+
+/**
  * The stored context of the previous answer, if this turn can start from it:
  * it says what the model's prompt held when that answer was written (system
  * prompt, history, question, the answer), with the system prompt's share
- * (`systemTokens`). Not when it was counted for another context window (the
- * model changed) or carries no system share (stored before it was recorded).
+ * (`systemTokens`). That share is only stored for a prompt the next turn
+ * resends as it was (see `replay`). Not when it was counted for another model.
  */
-function usablePrior(prior, contextWindow) {
+function usablePrior(prior, model, contextWindow) {
   if (!prior || typeof prior !== 'object') return null;
   const inputTokens = Number(prior.inputTokens);
   const systemTokens = Number(prior.systemTokens);
   if (!(inputTokens > 0) || !Number.isFinite(systemTokens) || systemTokens < 0) return null;
   if (Number(prior.contextWindow) !== contextWindow) return null;
+  if (!model?.id || prior.modelId !== model.id) return null;
   return { inputTokens, systemTokens };
 }
 
@@ -151,8 +167,13 @@ const isSystem = m => m?.role === 'system';
  * @param {Object} model - the resolved model (`contextWindow`, `maxOutputTokens`)
  * @param {Object} [options]
  * @param {Object|null} [options.prior] - the `context` stored with the last
- *   answer of the history this turn sends (null: no history, or a turn that
- *   continues a stored transcript)
+ *   answer of the history this turn sends (null: no history, a history the
+ *   file budget or a repeated host item changed, or a turn that continues a
+ *   stored transcript)
+ * @param {boolean} [options.resent] - the next turn resends this turn's
+ *   prompt as it was: the whole history, nothing of it left out, no context
+ *   only this turn carries, not a continued transcript. Only then does
+ *   `replay` store the system share a next turn can start from.
  * @returns {{
  *   recordStep: (usage: Object|null|undefined, messageCount: number) => Object|null,
  *   estimate: (messages: Array<Object>) => Object|null,
@@ -160,10 +181,10 @@ const isSystem = m => m?.role === 'system';
  *   replay: (answerText: string) => Object|null
  * }}
  */
-export function createContextTracker(model, { prior = null } = {}) {
+export function createContextTracker(model, { prior = null, resent = false } = {}) {
   const contextWindow = Number(model?.contextWindow) || 0;
   const maxOutputTokens = Number(model?.maxOutputTokens) || 0;
-  const previous = usablePrior(prior, contextWindow);
+  const previous = usablePrior(prior, model, contextWindow);
   // Where the history the previous answer counted ends in the transcript (the
   // index of that answer), fixed by the first estimate: later steps append.
   let boundary = -1;
@@ -172,7 +193,8 @@ export function createContextTracker(model, { prior = null } = {}) {
   let anchor = null;
   let latest = null;
   // The prompt the turn started from: what a later turn resends of it, and
-  // the system prompt's share of it.
+  // the system prompt's share of it; `fromPrior` when that figure was carried
+  // over from the previous answer rather than counted.
   let start = null;
 
   const state = (inputTokens, source) => {
@@ -191,14 +213,14 @@ export function createContextTracker(model, { prior = null } = {}) {
   const unanchored = messages => {
     const system = messages.filter(isSystem);
     const systemTokens = estimateTranscriptTokens(system);
-    if (!start && previous) boundary = messages.findLastIndex(m => m?.role === 'assistant');
-    const body =
-      previous && boundary >= 0
-        ? previous.inputTokens -
-          previous.systemTokens +
-          estimateTranscriptTokens(messages.slice(boundary + 1).filter(m => !isSystem(m)))
-        : countFreshTranscript(messages.filter(m => !isSystem(m)));
-    return { tokens: Math.max(0, systemTokens + body), systemTokens };
+    if (!start && previous) boundary = messages.findLastIndex(isPriorAnswer);
+    const fromPrior = Boolean(previous) && boundary >= 0;
+    const body = fromPrior
+      ? previous.inputTokens -
+        previous.systemTokens +
+        estimateTranscriptTokens(messages.slice(boundary + 1).filter(m => !isSystem(m)))
+      : countFreshTranscript(messages.filter(m => !isSystem(m)));
+    return { tokens: Math.max(0, systemTokens + body), systemTokens, fromPrior };
   };
 
   return {
@@ -230,8 +252,8 @@ export function createContextTracker(model, { prior = null } = {}) {
     estimate(messages) {
       if (!Array.isArray(messages)) return latest;
       if (!anchor) {
-        const { tokens, systemTokens } = unanchored(messages);
-        if (!start) start = { tokens, source: 'estimate', systemTokens };
+        const { tokens, systemTokens, fromPrior } = unanchored(messages);
+        if (!start) start = { tokens, source: 'estimate', systemTokens, fromPrior };
         return state(tokens, 'estimate');
       }
       const added = estimateTranscriptTokens(messages.slice(anchor.messageCount));
@@ -242,19 +264,27 @@ export function createContextTracker(model, { prior = null } = {}) {
      * The window as the next turn will find it: the prompt this turn started
      * from plus its answer, and the system prompt's share of it (what the next
      * turn replaces with its own). Tool calls and results of this turn are not
-     * in it.
+     * in it. The share, which lets the next turn start from this figure, is
+     * left out when the next turn does not resend this prompt as it was
+     * (`resent`) and when the figure is an estimate carried over from the
+     * previous answer: its error would be carried into every later turn.
      * @param {string} answerText - the answer stored with the turn
      * @returns {Object|null}
      */
     replay(answerText) {
       if (!contextWindow || !start) return null;
       const answer = typeof answerText === 'string' ? estimateTokens(answerText) : 0;
+      const anchors =
+        resent &&
+        Number.isFinite(start.systemTokens) &&
+        (start.source === 'provider' || !start.fromPrior);
       return {
         contextWindow,
         inputTokens: start.tokens + answer,
         maxOutputTokens,
         source: start.source,
-        ...(Number.isFinite(start.systemTokens) ? { systemTokens: start.systemTokens } : {})
+        ...(typeof model?.id === 'string' && model.id ? { modelId: model.id } : {}),
+        ...(anchors ? { systemTokens: start.systemTokens } : {})
       };
     }
   };

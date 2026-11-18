@@ -24,7 +24,8 @@ import {
 import {
   createContextTracker,
   estimateMessageTokens,
-  estimateTranscriptTokens
+  estimateTranscriptTokens,
+  isPriorAnswer
 } from '../../services/loop/contextTracker.js';
 import { compactIfOversized } from '../../services/loop/contextCompaction.js';
 import { renderProjectsBlock } from '../../services/knowledge/KnowledgeScopePlanner.js';
@@ -36,7 +37,7 @@ import {
 } from '../../services/chatFiles/ChatFileRepository.js';
 import { prepareTurnFiles } from '../../services/chatFiles/ChatFileService.js';
 
-const model = { contextWindow: 200_000, maxOutputTokens: 8_000 };
+const model = { id: 'model-a', contextWindow: 200_000, maxOutputTokens: 8_000 };
 
 /** Distinct prose of about `chars` characters (distinct so no memo answers for it). */
 function prose(chars, seed = 0) {
@@ -77,6 +78,7 @@ function priorOf(messages, overrides = {}) {
   const previous = messages.slice(0, -1);
   return {
     contextWindow: model.contextWindow,
+    modelId: model.id,
     inputTokens: estimateTranscriptTokens(reread(previous)),
     maxOutputTokens: model.maxOutputTokens,
     source: 'provider',
@@ -111,11 +113,12 @@ describe('context tracker anchored on the previous answer', () => {
 
   it('stores the system share with the replay so the next turn can start from it', () => {
     const messages = chat(2);
-    const tracker = createContextTracker(model);
+    const tracker = createContextTracker(model, { resent: true });
     tracker.estimate(messages);
     tracker.recordStep({ promptTokens: 1_234, completionTokens: 10 }, messages.length);
     const replay = tracker.replay('the answer');
     assert.equal(replay.systemTokens, estimateTokens(messages[0].content));
+    assert.equal(replay.modelId, model.id);
     assert.equal(replay.source, 'provider');
     assert.equal(replay.inputTokens, 1_234 + estimateTokens('the answer'));
   });
@@ -126,6 +129,15 @@ describe('context tracker anchored on the previous answer', () => {
     const variants = {
       'no prior': null,
       'another context window (model switched)': priorOf(messages, { contextWindow: 8_000 }),
+      // Its count (another tokenizer) is off from this model's.
+      'another model with the same window': priorOf(messages, {
+        modelId: 'model-b',
+        inputTokens: full + 1_000
+      }),
+      'stored without the model': priorOf(messages, {
+        modelId: undefined,
+        inputTokens: full + 1_000
+      }),
       'stored before the system share was recorded': priorOf(messages, {
         systemTokens: undefined
       })
@@ -184,6 +196,191 @@ describe('context tracker anchored on the previous answer', () => {
       `${state.inputTokens} vs ${exact}`
     );
     assert.ok(ms < 50, `fresh count took ${ms.toFixed(1)} ms`);
+  });
+});
+
+/**
+ * One turn as ChatService runs it: estimate before the call, the provider's
+ * count of the prompt (here the exact estimate, or none), the stored replay.
+ */
+function runTurn(
+  messages,
+  { prior = null, resent = true, usage = true, extra = 0, answer = 'the answer' } = {}
+) {
+  const tracker = createContextTracker(model, { prior, resent });
+  const estimate = tracker.estimate(messages);
+  if (usage) {
+    tracker.recordStep(
+      // `extra`: what the provider counts beyond the messages (tool definitions, another tokenizer).
+      { promptTokens: estimateTranscriptTokens(reread(messages)) + extra, completionTokens: 5 },
+      messages.length
+    );
+  }
+  return { estimate, replay: tracker.replay(answer) };
+}
+
+/**
+ * The estimate of `next` is a full count of it: within rounding, or within 1 %
+ * where a long transcript with no prior is counted from samples.
+ */
+function assertFullCount(next, prior, label) {
+  const state = createContextTracker(model, { prior }).estimate(reread(next));
+  const full = estimateTranscriptTokens(reread(next));
+  const tolerance = Math.max(2, full * 0.01);
+  assert.ok(
+    Math.abs(state.inputTokens - full) <= tolerance,
+    `${label}: ${state.inputTokens} vs ${full}`
+  );
+}
+
+describe('a stored context is only started from when the prompt it counted is resent', () => {
+  const system = { role: 'system', content: 'You are helpful.' };
+  const big = prose(60_000, 11);
+
+  it('history switched off, then on: the next turn counts the whole history', () => {
+    // Turn N without history: the prompt is the system prompt and the question.
+    const { replay } = runTurn([system, { role: 'user', content: 'q N' }], { resent: false });
+    assert.equal(replay.systemTokens, undefined);
+    const history = [];
+    for (let i = 0; i < 5; i++)
+      history.push({ role: 'user', content: big }, { role: 'assistant', content: `a${i}` });
+    const next = [
+      { ...system },
+      ...history,
+      { role: 'user', content: 'q N' },
+      { role: 'assistant', content: 'the answer' },
+      { role: 'user', content: 'q N+1' }
+    ];
+    assertFullCount(next, replay, 'history on');
+  });
+
+  it('a file the history budget turned into a stub: no prior either way', () => {
+    // Turn N had the file inline; turn N+1's budget stubs it, so the route passes no prior.
+    const first = [system, { role: 'user', content: `${big} q` }];
+    const { replay } = runTurn(first);
+    assert.ok(replay.systemTokens >= 0, 'turn N is resendable');
+    const next = [
+      { ...system },
+      { role: 'user', content: '<content omitted="true"/> q' },
+      { role: 'assistant', content: 'the answer' },
+      { role: 'user', content: 'next' }
+    ];
+    assertFullCount(next, null, 'stubbed');
+    // A turn whose own prompt had stubs stores no anchor.
+    const stubbed = runTurn(next, { resent: false }).replay;
+    assert.equal(stubbed.systemTokens, undefined);
+    assertFullCount(
+      [...next, { role: 'assistant', content: 'the answer' }, { role: 'user', content: 'more' }],
+      stubbed,
+      'after stub'
+    );
+  });
+
+  it('an approval or connect resume stores no anchor: its first count holds tool results', () => {
+    const transcript = [
+      system,
+      { role: 'user', content: 'search it' },
+      {
+        role: 'assistant',
+        content: '',
+        tool_calls: [{ function: { name: 'web', arguments: '{}' } }]
+      },
+      { role: 'tool', content: big }
+    ];
+    // ChatService passes resent: false for a continued transcript.
+    const { replay } = runTurn(transcript, { resent: false });
+    assert.equal(replay.systemTokens, undefined);
+    const next = [
+      { ...system },
+      { role: 'user', content: 'search it' },
+      { role: 'assistant', content: 'the answer' },
+      { role: 'user', content: 'thanks' }
+    ];
+    assertFullCount(next, replay, 'after resume');
+  });
+
+  it('context only the turn carried (MCP App views) stores no anchor', () => {
+    const turn = [
+      system,
+      { role: 'user', content: `q\n\n<mcp_app_context>${big}</mcp_app_context>` }
+    ];
+    const { replay } = runTurn(turn, { resent: false });
+    assert.equal(replay.systemTokens, undefined);
+    const next = [
+      { ...system },
+      { role: 'user', content: 'q' },
+      { role: 'assistant', content: 'the answer' },
+      { role: 'user', content: 'next' }
+    ];
+    assertFullCount(next, replay, 'turn-only context');
+  });
+
+  it('a model switch with the same window counts again', () => {
+    const turn = [system, { role: 'user', content: big }];
+    // Model A's tokenizer counts the prompt 1,500 tokens higher than model B's.
+    const { replay } = runTurn(turn, { extra: 1_500 });
+    const next = [
+      { ...system },
+      { role: 'user', content: big },
+      { role: 'assistant', content: 'the answer' },
+      { role: 'user', content: 'next' }
+    ];
+    const other = { ...model, id: 'model-b' };
+    const state = createContextTracker(other, { prior: replay }).estimate(reread(next));
+    assert.equal(state.inputTokens, estimateTranscriptTokens(reread(next)));
+  });
+
+  it('an estimate carried over from a prior is not stored as the next anchor', () => {
+    const turn = [system, { role: 'user', content: big }];
+    const first = runTurn(turn).replay;
+    const second = [
+      ...reread(turn),
+      { role: 'assistant', content: 'the answer' },
+      { role: 'user', content: 'next' }
+    ];
+    // A provider that reports no usage: the figure stays the carried estimate.
+    const carried = runTurn(second, { prior: first, usage: false }).replay;
+    assert.equal(carried.source, 'estimate');
+    assert.equal(carried.systemTokens, undefined);
+    // Counted from scratch (no prior), the estimate is a full count and may anchor.
+    const fresh = runTurn(second, { usage: false }).replay;
+    assert.ok(fresh.systemTokens >= 0);
+  });
+
+  it('chained resendable turns stay equal to a full count', () => {
+    let messages = [system, { role: 'user', content: prose(5_000, 21) }];
+    let prior = null;
+    for (let i = 0; i < 4; i++) {
+      const { estimate, replay } = runTurn(messages, { prior });
+      const full = estimateTranscriptTokens(reread(messages));
+      assert.ok(
+        Math.abs(estimate.inputTokens - full) <= 2,
+        `turn ${i}: ${estimate.inputTokens} vs ${full}`
+      );
+      prior = replay;
+      messages = [
+        ...reread(messages),
+        { role: 'assistant', content: 'the answer' },
+        { role: 'user', content: prose(3_000, 30 + i) }
+      ];
+    }
+  });
+
+  it('starts after the last answer with text, the one the route picks the context of', () => {
+    const answered = [system, { role: 'user', content: big }];
+    const { replay } = runTurn(answered);
+    // An answer with a file but no text is in the prompt with empty content; its
+    // stored context is not the one the route picks (`isPriorAnswer`).
+    const next = [
+      ...reread(answered),
+      { role: 'assistant', content: 'the answer' },
+      { role: 'user', content: prose(2_000, 40) },
+      { role: 'assistant', content: '', fileData: [{}] },
+      { role: 'user', content: 'next' }
+    ];
+    const routePick = next.findLast(isPriorAnswer);
+    assert.equal(routePick.content, 'the answer');
+    assertFullCount(next, replay, 'boundary');
   });
 });
 
