@@ -65,7 +65,7 @@ Colours follow the series order and stay the same when series are added, so keep
 
 ### `text`
 
-`{ "paragraphs": [ ... ] }`: 1 to 20 paragraphs, each up to 2000 characters, `**bold**` allowed. Use it for the verdict and the caveats, briefly.
+`paragraphs` is a list of 1 to 20 texts, each up to 2000 characters, `**bold**` allowed (`{ "paragraphs": [ ... ] }`). Use it for the verdict and the caveats, briefly.
 
 ## `sources[]`
 
