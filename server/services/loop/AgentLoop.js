@@ -955,22 +955,16 @@ export class AgentLoop {
             estimateTranscriptTokens(ctx.messages.slice(promptAnchor.messageCount))
           : undefined;
         if (policies.context.strategy === 'digest') {
-          // Older tool batches become a findings digest (#3819). The
-          // transcript keeps its messages, so the provider's last count stays
-          // the anchor, less what was condensed.
-          const freedTokens = await this._digestCompaction(ctx, {
+          // Older tool batches become a findings digest (#3819). The next
+          // model call sets the anchor anew before it is read again; the
+          // live context figure is rebased by the `onCompaction` seam.
+          await this._digestCompaction(ctx, {
             seams,
             iteration,
             knownTokens,
             runBudget,
             options
           });
-          if (freedTokens > 0 && promptAnchor) {
-            promptAnchor = {
-              ...promptAnchor,
-              tokens: Math.max(0, promptAnchor.tokens - freedTokens)
-            };
-          }
         } else {
           const compaction = compactIfOversized(ctx.messages, {
             thresholdTokens: policies.context.compactThresholdTokens,
