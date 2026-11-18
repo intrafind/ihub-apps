@@ -42,6 +42,7 @@ const { ServiceError } = await import('../utils/ServiceError.js');
 const { RunStreamEmitter, bindStreamRun, unbindStreamRun, emitToolProgress, buildEnvelope } =
   await import('../services/loop/RunStream.js');
 const { normalizeAbortCause } = await import('../services/chat/abortCause.js');
+const { trackedStream } = await import('../services/loop/partialRunState.js');
 const { default: registerSessionRoutes } = await import('../routes/chat/sessionRoutes.js');
 const { default: errorHandler } = await import('../middleware/errorHandler.js');
 
@@ -420,6 +421,25 @@ describe('with Accept: text/event-stream', () => {
     const res = await post('chat-late-refusal-2', message(), { accept: SSE });
     const events = framesOf(res.text).map(f => f.event);
     expect(events).toEqual(['stream/connected', 'stream/error', 'run/ended']);
+  });
+
+  test('a run that ends in a late refusal keeps no partial state', async () => {
+    // Streamed text through the emitter, then refused: run/ended is written
+    // straight to the response and never passes the emit observer.
+    ChatService.prototype.runTurn = async params => {
+      turn.calls.push(params);
+      const stream = new RunStreamEmitter({ streamId: params.chatId, runId: params.runId });
+      stream.emit('run/started', {});
+      stream.emit('step/delta', { step: 0, kind: 'text', content: 'half an answer' });
+      expect(trackedStream(params.runId)).toBe(params.chatId);
+      return {
+        status: 'error',
+        refusal: { message: 'The chat moved', code: 'CHAT_CONTAINER_CHANGED' }
+      };
+    };
+    const res = await post('chat-late-refusal-partial', message(), { accept: SSE });
+    expect(framesOf(res.text).at(-1).event).toBe('run/ended');
+    expect(trackedStream(turn.calls[0].runId)).toBeNull();
   });
 
   test('an unexpected failure after the commit point says nothing about itself', async () => {

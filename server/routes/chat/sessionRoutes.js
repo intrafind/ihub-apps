@@ -35,6 +35,7 @@ import { resumeChatRun } from '../../services/chat/chatResume.js';
 import { RunStreamEmitter, buildEnvelope, getStreamRun } from '../../services/loop/RunStream.js';
 import runLog, { newRunId, isValidRunId } from '../../services/loop/RunLog.js';
 import { resolveActorId } from '../../services/loop/runIdentity.js';
+import { dropRun } from '../../services/loop/partialRunState.js';
 import { authorizeInteraction } from '../../services/loop/runAccess.js';
 import interactionService from '../../services/loop/InteractionService.js';
 import { prepareChatApproval } from '../../services/chat/chatToolApproval.js';
@@ -1776,6 +1777,9 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
         } finally {
           // Ended however the restores went: the client is waiting for it.
           postStream?.end();
+          // A run refused late ended with frames written straight to the
+          // response, past the emit observer that frees its partial state.
+          if (postStreamRunId) dropRun(postStreamRunId);
         }
       }
     }
