@@ -610,13 +610,20 @@ export function numbersAppearIn(fact, content) {
   // A single digit is checked only with a scale word ("5 million"): alone it
   // is a count or a rank ("top 5"), too common to check.
   const checked = number => number.digitCount >= 2 || number.scales?.length > 0;
-  const wanted = numbersOf(datesApart(fact)).filter(checked);
+  // A number in digit groups ("1 234 567") is one number; numbers side by
+  // side ("2024 450", a table row) are only their parts — on both sides, so
+  // neither "234" nor "2024450" is read into either. A scale word belongs
+  // to the last of them.
+  const asWritten = number =>
+    number.grouped
+      ? [number]
+      : number.parts.map((part, i, all) => ({
+          ...part,
+          scales: i === all.length - 1 ? number.scales : []
+        }));
+  const wanted = numbersOf(datesApart(fact)).flatMap(asWritten).filter(checked);
   if (wanted.length === 0) return true;
-  // Numbers side by side in the result ("2024 450") count one by one too;
-  // the groups of one number ("1 234 567") do not.
-  const present = numbersOf(datesApart(content)).flatMap(number =>
-    number.grouped ? [number] : [number, ...number.parts.map(part => ({ ...part, scales: [] }))]
-  );
+  const present = numbersOf(datesApart(content)).flatMap(asWritten);
   const values = new Set(present.flatMap(number => number.values));
   // The value with a scale word in the fact: in the result with the same
   // scale or none (a table says "in millions" once), never with another one.
@@ -635,9 +642,7 @@ export function numbersAppearIn(fact, content) {
     number.values.some(
       value => sameValue(value, number.scales) || writtenOut(value, number.scales)
     );
-  return wanted.every(
-    number => found(number) || (number.parts.length > 1 && number.parts.every(found))
-  );
+  return wanted.every(found);
 }
 
 /**

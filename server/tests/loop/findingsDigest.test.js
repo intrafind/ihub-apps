@@ -584,6 +584,19 @@ test('text from a result cannot close or open the digest block', () => {
       'a group of a number'
     );
     assert.equal(numbersAppearIn('1,234,567 units', 'Total 1 234 567 units'), true);
+    assert.equal(
+      numbersAppearIn('1 234 567 units', '234 units and 567 units'),
+      false,
+      'one number'
+    );
+    assert.equal(numbersAppearIn('2024450 units', 'Germany 2024 450 units'), false, 'two numbers');
+    assert.equal(numbersAppearIn('Germany 2024 450 units', 'Germany 2024 450 units'), true);
+    assert.equal(
+      numbersAppearIn('2024 450 million', 'In 2024: 450 million'),
+      true,
+      'the scale word'
+    );
+    assert.equal(numbersAppearIn('2024 450 million', 'In 2024: 450 billion'), false);
   });
 
   test('a scale word must agree; a single digit with one is checked', () => {
