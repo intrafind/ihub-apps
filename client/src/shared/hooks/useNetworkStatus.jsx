@@ -18,6 +18,21 @@ const HEALTH_TIMEOUT_MS = 5000;
 const INITIAL_POLL_INTERVAL = 5000;
 const MAX_POLL_INTERVAL = 30000;
 
+/**
+ * Whether a health-check answer means the server is reachable.
+ *
+ * Only a 5xx means the server is in trouble. Any other answer, a 401 or 403
+ * included, came from a reachable server: treating a sign-in refusal as
+ * "offline" would start the poll below, and behind Windows sign-in every poll
+ * is another failed logon that can lock the user's account.
+ *
+ * @param {number} status - HTTP status of the health check
+ * @returns {boolean}
+ */
+export function isReachableStatus(status) {
+  return status < 500;
+}
+
 async function checkHealth() {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), HEALTH_TIMEOUT_MS);
@@ -27,7 +42,7 @@ async function checkHealth() {
       cache: 'no-store',
       signal: controller.signal
     });
-    return res.ok;
+    return isReachableStatus(res.status);
   } catch {
     return false;
   } finally {

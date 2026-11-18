@@ -15,6 +15,13 @@ import {
   getClearAuthCookieOptions
 } from '../utils/cookieSettings.js';
 import { clearOidcLogoutHint } from '../utils/oidcLogoutHint.js';
+import { buildServerPath } from '../utils/basePath.js';
+import { ServiceError } from '../utils/ServiceError.js';
+import {
+  parseNtlmType3Identity,
+  recordNtlmRejection,
+  ntlmCooldownRemaining
+} from '../utils/ntlmRejectionCooldown.js';
 
 /**
  * NTLM/Windows Authentication middleware and utilities
@@ -126,6 +133,8 @@ export function createNtlmMiddleware(ntlmConfig = {}) {
         authHeaderLength: auth.length,
         hint: 'AD rejected the SASL bind carrying the NTLM Type 3 token. Likely causes: channel binding enforced (LdapEnforceChannelBinding=2), NTLM restricted at DC, or the browser sent invalid/empty credentials.'
       });
+      // Hold this account's next answers back for a while (see ntlmRejectionCooldown.js).
+      recordNtlmRejection(request.ntlm?.DomainName, request.ntlm?.UserName);
       response.sendStatus(403);
     },
     internalservererror: (request, response /* , next */) => {
@@ -456,6 +465,16 @@ export function clearNtlmRequested(res, req) {
 }
 
 /**
+ * Whether a request path never runs the Windows sign-in.
+ *
+ * @param {string} path - The request path (`req.path`), including any base path
+ * @returns {boolean}
+ */
+export function isNtlmExemptPath(path) {
+  return path === buildServerPath('/api/health');
+}
+
+/**
  * NTLM authentication middleware - self-contained like other auth middlewares
  * Handles both express-ntlm initialization and user processing
  * @param {Object} req - Express request object
@@ -469,6 +488,37 @@ export function ntlmAuthMiddleware(req, res, next) {
   // Not enabled - skip
   if (!ntlmAuth.enabled) {
     return next();
+  }
+
+  // The health check is public and polled by the client and by container probes.
+  // Signing it in would turn every poll into a logon at the domain controller,
+  // which with a wrong password ends in a locked account.
+  if (isNtlmExemptPath(req.path)) {
+    return next();
+  }
+
+  // The domain controller just rejected this account: refuse its next answers
+  // here instead of relaying them, so they do not count as failed logons.
+  const identity = parseNtlmType3Identity(req.headers.authorization);
+  if (identity) {
+    const remainingMs = ntlmCooldownRemaining(identity.domain, identity.user);
+    if (remainingMs > 0) {
+      const retryAfterSeconds = Math.ceil(remainingMs / 1000);
+      logger.warn('NTLM Auth: sign-in held back after a recent rejection', {
+        component: 'NtlmAuth',
+        domain: identity.domain,
+        user: identity.user,
+        retryAfterSeconds
+      });
+      res.setHeader('Retry-After', String(retryAfterSeconds));
+      return next(
+        new ServiceError(
+          'RATE_LIMITED',
+          'Windows sign-in was rejected. Check your password and try again shortly.',
+          { details: { retryAfterMs: remainingMs } }
+        )
+      );
+    }
   }
 
   // Skip if user is already authenticated by a previous middleware (JWT, OAuth, etc.)

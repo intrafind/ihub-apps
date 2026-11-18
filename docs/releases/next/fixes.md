@@ -876,3 +876,16 @@ response.
 A chat request whose `Accept-Language` header is not a language tag (`*`, which Node's `fetch` sends by
 default) still failed with `INTERNAL_ERROR`: the weekday in the prompt variables was formatted with the raw
 header. It now uses the platform's default language, like the date.
+
+## Windows Sign-In No Longer Locks the Account After One Wrong Password
+
+With Windows sign-in (NTLM), a browser that sent a stale or wrong password locked the user's Active
+Directory account within seconds — and kept it locked for as long as the iHub tab stayed open. Until a
+sign-in succeeds, every request runs its own sign-in, so one page load counted as a dozen failed logons,
+and the connection check then retried `/api/health` every few seconds, adding another one each time.
+
+- The health check (`/api/health`) no longer asks for Windows sign-in, and a refused sign-in no longer
+  makes the app think the server is offline.
+- After the domain controller rejects an account, iHub answers that account's next sign-in attempts
+  itself for 60 seconds (`429` with `Retry-After`) instead of passing them on, so they do not count as
+  failed logons.
