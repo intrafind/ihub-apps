@@ -7,7 +7,8 @@
  * mistyped `E2E_CONTENTS_DIR` (for example `contents`) would then change or
  * wipe a developer's real configuration, including `.encryption-key`. Only a
  * directory inside the repository whose name starts with `contents-e2e` is
- * ever used, also when a parent on the way is a symlink out of the repository.
+ * ever used, also when a parent on the way is a symlink out of the repository
+ * or the directory itself is a symlink to `contents/`.
  */
 
 import fs from 'node:fs';
@@ -23,7 +24,8 @@ export const DISPOSABLE_CONTENTS_PREFIX = 'contents-e2e';
  * @param {string} contentsDir - `E2E_CONTENTS_DIR`, relative to `root`
  * @returns {string} The absolute path
  * @throws {Error} When the directory is outside `root` (also through a
- *   symlinked parent) or not named `contents-e2e*`
+ *   symlinked parent), not named `contents-e2e*` (by its own name and by the
+ *   real name a symlink points to), or is or lies in the real `contents/`
  *
  * @example
  * disposableContentsPath('/repo', 'contents-e2e-safety'); // '/repo/contents-e2e-safety'
@@ -32,10 +34,18 @@ export const DISPOSABLE_CONTENTS_PREFIX = 'contents-e2e';
 export function disposableContentsPath(root, contentsDir) {
   const resolvedRoot = path.resolve(root);
   const target = path.resolve(resolvedRoot, contentsDir);
+  const canonicalRoot = canonicalPath(resolvedRoot);
+  const canonicalTarget = canonicalPath(target);
+  // The real `contents/`, also reached through a symlink such as
+  // `contents-e2e -> contents`: the name alone would let that through.
+  const realContents = canonicalPath(path.join(resolvedRoot, 'contents'));
   if (
     !isStrictlyInside(resolvedRoot, target) ||
-    !isStrictlyInside(canonicalPath(resolvedRoot), canonicalPath(target)) ||
-    !path.basename(target).startsWith(DISPOSABLE_CONTENTS_PREFIX)
+    !isStrictlyInside(canonicalRoot, canonicalTarget) ||
+    !path.basename(target).startsWith(DISPOSABLE_CONTENTS_PREFIX) ||
+    !path.basename(canonicalTarget).startsWith(DISPOSABLE_CONTENTS_PREFIX) ||
+    canonicalTarget === realContents ||
+    isStrictlyInside(realContents, canonicalTarget)
   ) {
     throw new Error(
       `E2E_CONTENTS_DIR must be a directory inside the repository named ${DISPOSABLE_CONTENTS_PREFIX}*, which the e2e run rewrites and may delete; refusing to delete or rewrite "${contentsDir}".`

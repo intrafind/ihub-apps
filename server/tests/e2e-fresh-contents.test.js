@@ -69,6 +69,37 @@ describe('a symlinked parent', () => {
     expect(fs.existsSync(path.join(outside, 'contents-e2e', 'keep'))).toBe(true);
   });
 
+  test('a contents-e2e symlink to the real contents/ is refused, and contents/ is left alone', () => {
+    const root = tempRoot();
+    fs.mkdirSync(path.join(root, 'contents'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'contents', '.encryption-key'), 'k');
+    fs.symlinkSync(path.join(root, 'contents'), path.join(root, 'contents-e2e'), 'dir');
+
+    expect(() => e2eContentsDir(root, {})).toThrow(/refusing to delete or rewrite/);
+    expect(() => removeDisposableContents(root, 'contents-e2e')).toThrow(/refusing to delete/);
+    expect(fs.readFileSync(path.join(root, 'contents', '.encryption-key'), 'utf8')).toBe('k');
+  });
+
+  test('a contents-e2e symlink into contents/ is refused', () => {
+    const root = tempRoot();
+    fs.mkdirSync(path.join(root, 'contents', 'contents-e2e-inner'), { recursive: true });
+    fs.symlinkSync(
+      path.join(root, 'contents', 'contents-e2e-inner'),
+      path.join(root, 'contents-e2e'),
+      'dir'
+    );
+
+    expect(() => disposableContentsPath(root, 'contents-e2e')).toThrow(/refusing to delete/);
+  });
+
+  test('a contents-e2e symlink to another disposable directory is still fine', () => {
+    const root = tempRoot();
+    fs.mkdirSync(path.join(root, 'contents-e2e-real'), { recursive: true });
+    fs.symlinkSync(path.join(root, 'contents-e2e-real'), path.join(root, 'contents-e2e'), 'dir');
+
+    expect(disposableContentsPath(root, 'contents-e2e')).toBe(path.join(root, 'contents-e2e'));
+  });
+
   test('a directory that does not exist yet is still fine', () => {
     const root = tempRoot();
     expect(disposableContentsPath(root, 'contents-e2e-new')).toBe(
