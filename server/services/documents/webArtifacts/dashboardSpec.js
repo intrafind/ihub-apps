@@ -32,9 +32,10 @@ const ID_RE = /^[A-Za-z0-9_-]{1,40}$/;
 const URL_RE = /^https?:\/\/[^\s<>"']+$/i;
 const LANG_RE = /^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})?$/;
 const LABEL_KEY_RE = /^[A-Za-z]{1,20}$/;
-// The date of the data: `2026-11-09`, `2026-11` or a timestamp (`2026-11-09T10:15:00Z`), checked in two parts.
+// The date of the data: `2026-11-09`, `2026-11` or a timestamp (`2026-11-09T10:15:00Z`), checked in parts.
 const AS_OF_DATE_RE = /^(\d{4})-(\d{2})(?:-(\d{2}))?$/;
-const AS_OF_TIME_RE = /^\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?$/;
+const AS_OF_ZONE_RE = /(?:Z|[+-]\d{2}:?\d{2})$/;
+const AS_OF_TIME_RE = /^\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/;
 
 const isObject = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const isNumber = value => typeof value === 'number' && Number.isFinite(value);
@@ -89,8 +90,10 @@ function list(item, { min = 0, max }) {
 }
 
 /** An object of known fields (the others are dropped); `hint` says what it looks like. */
-const object = (shape, hint = '') =>
-  z.object(shape, { error: `must be an object${hint ? ` ${hint}` : ''}.` });
+const object = (shape, hint = '') => {
+  const looksLike = hint ? ` ${hint}` : '';
+  return z.object(shape, { error: `must be an object${looksLike}.` });
+};
 
 // ── the parts of a spec ─────────────────────────────────────────────────────
 
@@ -314,14 +317,18 @@ const block = z
 
 /** The date of the data, as `YYYY-MM-DD`, `YYYY-MM` or a timestamp. */
 export function isDateOfData(value) {
-  const [date, time, ...rest] = String(value).split(/[T ]/);
+  const [date, ...times] = String(value).split(/[T ]/);
   const match = AS_OF_DATE_RE.exec(date);
   if (!match) return false;
   const month = Number(match[2]);
   const day = match[3] ? Number(match[3]) : 1;
   // A time of day belongs to a whole date, and there is at most one.
-  const timeFits = time === undefined || (match[3] && !rest.length && AS_OF_TIME_RE.test(time));
-  return Boolean(timeFits) && month >= 1 && month <= 12 && day >= 1 && day <= 31;
+  const timeFits =
+    times.length === 0 ||
+    (match[3] !== undefined &&
+      times.length === 1 &&
+      AS_OF_TIME_RE.test(times[0].replace(AS_OF_ZONE_RE, '')));
+  return timeFits && month >= 1 && month <= 12 && day >= 1 && day <= 31;
 }
 
 const asOf = text({ max: 40, required: true }).superRefine((value, ctx) => {
@@ -384,9 +391,20 @@ function specRules(spec, ctx) {
   }
 }
 
+/** A copy without the keys whose value is `undefined`, all the way down. */
+function withoutUndefined(value) {
+  if (Array.isArray(value)) return value.map(withoutUndefined);
+  if (!isObject(value)) return value;
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([, entry]) => entry !== undefined)
+      .map(([key, entry]) => [key, withoutUndefined(entry)])
+  );
+}
+
 /** The spec without what is empty or undefined, in the order of the schema. */
 function tidy(spec) {
-  const out = JSON.parse(JSON.stringify(spec));
+  const out = withoutUndefined(spec);
   for (const key of ['notes', 'kpis', 'blocks']) if (!out[key]?.length) delete out[key];
   if (!out.method?.paragraphs?.length) delete out.method;
   if (out.labels && !Object.keys(out.labels).length) delete out.labels;
@@ -411,11 +429,12 @@ export const SPEC_FIELDS = Object.freeze({
 
 /** `blocks[0].items[1].value` for the path `['blocks', 0, 'items', 1, 'value']`. */
 function pathText(path) {
-  return path.reduce(
-    (out, part) =>
-      typeof part === 'number' ? `${out}[${part}]` : out ? `${out}.${part}` : String(part),
-    ''
-  );
+  let out = '';
+  for (const part of path) {
+    if (typeof part === 'number') out += `[${part}]`;
+    else out += out ? `.${part}` : String(part);
+  }
+  return out;
 }
 
 /** One fault as a sentence that names the field. */
@@ -431,7 +450,8 @@ function problemsOf(issues) {
   const shown = all.slice(0, MAX_PROBLEMS);
   if (shown.length === 1) return shown[0];
   const more = all.length > shown.length ? ` (${all.length - shown.length} more after these)` : '';
-  return `${all.length} problems${more}. ${shown.map((problem, i) => `(${i + 1}) ${problem}`).join(' ')} Fix all of them in the next call.`;
+  const numbered = shown.map((problem, i) => `(${i + 1}) ${problem}`).join(' ');
+  return `${all.length} problems${more}. ${numbered} Fix all of them in the next call.`;
 }
 
 /**
