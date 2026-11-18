@@ -3800,6 +3800,7 @@
         "addLanguage": "Sprache hinzufügen",
         "selectLanguage": "Auswählen...",
         "languageCode": "Sprachcode (z. B. en, de, es)",
+        "invalidLanguageCode": "Einen zweibuchstabigen Sprachcode verwenden, optional mit Region: „de“, „pt-BR“.",
         "add": "Hinzufügen",
         "removeLanguage": "Sprache {{lang}} entfernen",
         "noLanguages": "Keine Sprachen konfiguriert. Fügen Sie eine Sprache hinzu, um zu beginnen.",

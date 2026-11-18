@@ -1210,3 +1210,11 @@ messages) wrote back the field as it was when the button was clicked. Text typed
 language while the translation was running was reverted, and a language removed in the meantime
 came back. The translation now only fills in its target language and keeps everything else as it is
 when the answer arrives.
+
+## Language Codes With a Region Can Be Added to Localized Fields
+
+In the admin editors, **Add Language** on a localized field turned a code such as `pt-BR` into
+`pt-br`, and saving then failed with "Invalid language code format". Codes are now stored in the
+expected form (`pt-br`, `PT_br` and `pt-BR` all become `pt-BR`). A code that cannot be saved, such as
+a three-letter one, can no longer be added and the field says why, and the language list offers only
+codes that can be saved.

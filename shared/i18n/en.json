@@ -3304,6 +3304,7 @@
         "addLanguage": "Add Language",
         "selectLanguage": "Select...",
         "languageCode": "Language code (e.g., en, de, es)",
+        "invalidLanguageCode": "Use a two-letter language code, optionally with a region: \"de\", \"pt-BR\".",
         "add": "Add",
         "removeLanguage": "Remove language {{lang}}",
         "noLanguages": "No languages configured. Add a language to get started.",
