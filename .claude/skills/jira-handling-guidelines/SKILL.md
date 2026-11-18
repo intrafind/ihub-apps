@@ -49,7 +49,9 @@ When you edit an existing description or comment, keep both in place; when you
 add a new comment, start it with the preamble and end it with the footer.
 
 Write one footer, not two: replace tool-default attribution footers such as
-Claude Code's "🤖 Generated with [Claude Code](...)" with the one above.
+Claude Code's "🤖 Generated with [Claude Code](...)" with the one above. If the
+tool that posts the text appends its own tool line, write only the model line
+and let the tool add its line; read the posted text back.
 
 ### Draft before writing
 
