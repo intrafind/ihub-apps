@@ -1528,7 +1528,8 @@ get the space back. **New chat** brings the configured rows back.
 - A chat opened from the history starts with the one-line input; so does the canvas side panel.
 - **Outlook Add-in:** the input never grows beyond 3 lines, even for an app that asks for more rows.
 - Single-line apps now really show one line (they showed two), and a long placeholder no longer
-  makes the one-line input taller.
+  makes the one-line input taller. The one-line input is as tall as the row of buttons under it,
+  also on the start page.
 - While a multi-line message is being written, **Ctrl + Enter to send** (**⌘ + Enter** on a Mac)
   shows next to the token count, and screen readers announce how to send.
 

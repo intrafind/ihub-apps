@@ -412,17 +412,20 @@ function ChatInput({
     setExpandedByUser(false);
   }
   const expanded = expandable && expandedByUser;
-  // The one-line composer: its text row is as tall as the toolbar row (the
-  // padding is in ChatInput.css), and the icons in it sit on its one line.
-  const oneLine = compact && !expanded;
-  const textRowIconTop = oneLine ? 'top-4 sm:top-5' : 'top-3';
-  const { minLines, maxLines } = composerLineLimits({
+  const lineLimitInput = {
     multiline: multilineMode,
     rows: inputMode?.rows,
     compact,
-    maxRows,
-    expanded
-  });
+    maxRows
+  };
+  const { minLines, maxLines } = composerLineLimits({ ...lineLimitInput, expanded });
+  // A composer that starts at one line: a started chat, or a single-line app
+  // anywhere (the start page, an empty chat). Its text row is as tall as the
+  // toolbar row (the padding is in ChatInput.css), and the icons in it sit on
+  // its one line. Not when expanded, where the multi-line padding applies.
+  const startsOneLine = composerLineLimits(lineLimitInput).minLines === 1;
+  const oneLine = startsOneLine && !expanded;
+  const textRowIconTop = oneLine ? 'top-4 sm:top-5' : 'top-3';
 
   // How to send, for screen readers always and on screen while a multi-line
   // draft is being written: there Enter starts a new line, which a one-line
@@ -944,8 +947,8 @@ function ChatInput({
               onKeyDown={handleKeyDown}
               disabled={isInputDisabled || isProcessing || audioOnly}
               className={`chat-input-textarea${compact ? ' chat-input-textarea--compact' : ''}${
-                expanded ? ' chat-input-textarea--expanded' : ''
-              } w-full px-3 ${expandable ? 'pr-16' : 'pr-10'} bg-transparent border-0 focus:ring-0 focus:outline-hidden resize-none dark:text-gray-100 rounded-t-2xl`}
+                oneLine ? ' chat-input-textarea--one-line' : ''
+              }${expanded ? ' chat-input-textarea--expanded' : ''} w-full px-3 ${expandable ? 'pr-16' : 'pr-10'} bg-transparent border-0 focus:ring-0 focus:outline-hidden resize-none dark:text-gray-100 rounded-t-2xl`}
               placeholder={defaultPlaceholder}
               ref={actualInputRef}
               aria-label={t('chat.inputLabel', 'Type your message')}
@@ -1186,8 +1189,9 @@ function ChatInput({
                 currentLanguage={currentLanguage}
                 disabled={isInputDisabled || isProcessing}
                 // Not `oneLine`: the toolbar, and with it Send, keeps its
-                // place when the composer is expanded and collapsed.
-                compact={compact}
+                // place when the composer is expanded and collapsed. Its
+                // height matches the one-line text row.
+                compact={startsOneLine}
               />
             )}
 

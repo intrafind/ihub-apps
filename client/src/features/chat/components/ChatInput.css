@@ -74,19 +74,23 @@
   text-overflow: ellipsis;
 }
 
-/* The one-line composer's text row is as tall as the toolbar row under it: the
-   toolbar's buttons (2.25rem, 2.5rem from `sm`) plus its padding (0.375rem,
-   0.5rem from `sm`) above and below. With the 0.5rem of a multi-line box, the
-   line was 16px shorter than the toolbar on a desktop.
+/* A composer that starts at one line (a started chat, or a single-line app,
+   e.g. on the start page) has a text row as tall as the toolbar row under it:
+   the toolbar's buttons (2.25rem, 2.5rem from `sm`) plus its padding
+   (0.375rem, 0.5rem from `sm`) above and below. With the 0.5rem of a
+   multi-line box, the line was 16px shorter than the toolbar on a desktop.
    `block`: an inline text area sits on the text baseline, which left a 6px gap
-   under it. The expanded box keeps the multi-line padding. */
-.chat-input-textarea--compact:not(.chat-input-textarea--expanded) {
+   under it. ChatInput drops the class while the box is expanded. */
+.chat-input-textarea {
   display: block;
+}
+
+.chat-input-textarea--one-line {
   --composer-padding-y: 0.75rem;
 }
 
 @media (min-width: 40rem) {
-  .chat-input-textarea--compact:not(.chat-input-textarea--expanded) {
+  .chat-input-textarea--one-line {
     --composer-padding-y: 1rem;
   }
 }
