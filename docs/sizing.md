@@ -183,7 +183,7 @@ installation levels off at about 150 GB. Use a volume with room to grow; the adm
 
 ## GPU
 
-The GPU runs used one GPU (`gpu-01`) with **Qwen3.6-35B-A3B FP8** on vLLM: 173k context, prefix
+The GPU runs used one GPU (NVIDIA RTX PRO 5000, 48 GB) with **Qwen3.6-35B-A3B FP8** on vLLM: 173k context, prefix
 caching on, 85% of GPU memory. Same `company` mix as above, with real answers, tool calls and
 project context (12–15k prompt tokens p95). The service level here is the time until the answer's
 first visible word: p95 ≤ 6 s.
@@ -211,8 +211,6 @@ first visible word: p95 ≤ 6 s.
   one endpoint (a Kubernetes Service, or a router such as LiteLLM or vLLM's router) and register
   that. With prefix caching, route by session or prompt prefix, so a popular project's prompt stays
   cached on one GPU.
-
-GPU model of `gpu-01`: to be added.
 
 ## Examples
 

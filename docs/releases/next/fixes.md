@@ -1195,3 +1195,26 @@ Windows sign-in now works like every other sign-in method:
   example a Mac) does.
 - The health check (`/api/health`) never asks for Windows sign-in, and a refused sign-in no longer makes
   the app think the server is offline.
+
+## The Model Can Be Changed While an Alert Hint Waits for "I Understand"
+
+When the selected model had an alert hint (for example an experimental model), the model selector
+under the chat input was locked together with the input, so users had to click **I Understand**
+before they could pick another model. The selector now stays usable: sending is still blocked until
+the alert is acknowledged, but switching to a different model needs no acknowledgement.
+
+## Admin "Translate" No Longer Undoes Edits Made While It Runs
+
+In the admin editors, the **Translate** button next to a localized field (names, descriptions,
+messages) wrote back the field as it was when the button was clicked. Text typed into another
+language while the translation was running was reverted, and a language removed in the meantime
+came back. The translation now only fills in its target language and keeps everything else as it is
+when the answer arrives.
+
+## Language Codes With a Region Can Be Added to Localized Fields
+
+In the admin editors, **Add Language** on a localized field turned a code such as `pt-BR` into
+`pt-br`, and saving then failed with "Invalid language code format". Codes are now stored in the
+expected form (`pt-br`, `PT_br` and `pt-BR` all become `pt-BR`). A code that cannot be saved, such as
+a three-letter one, can no longer be added and the field says why, and the language list offers only
+codes that can be saved.

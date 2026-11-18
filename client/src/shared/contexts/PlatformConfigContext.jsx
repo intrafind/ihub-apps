@@ -121,6 +121,12 @@ export function PlatformConfigProvider({ children }) {
         // uploaded file to list.
         uploads: platformCfg.uploads,
 
+        // HTML artifacts: the CDN hosts the admin allows their sandboxed preview to load
+        // scripts and stylesheets from (`artifacts.scriptHosts`). `ArtifactPreview` builds the
+        // preview's CSP from it; dropped here, the CSP carries no host and a library such as
+        // Chart.js is blocked even though the server and the skill allow it.
+        artifacts: platformCfg.artifacts,
+
         // Platform features and settings
         features: platformCfg.features,
         // Build a boolean lookup map from the resolved features array

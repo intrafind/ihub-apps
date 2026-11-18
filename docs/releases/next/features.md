@@ -1528,7 +1528,8 @@ get the space back. **New chat** brings the configured rows back.
 - A chat opened from the history starts with the one-line input; so does the canvas side panel.
 - **Outlook Add-in:** the input never grows beyond 3 lines, even for an app that asks for more rows.
 - Single-line apps now really show one line (they showed two), and a long placeholder no longer
-  makes the one-line input taller.
+  makes the one-line input taller. The one-line input is as tall as the row of buttons under it,
+  also on the start page.
 - While a multi-line message is being written, **Ctrl + Enter to send** (**⌘ + Enter** on a Mac)
   shows next to the token count, and screen readers announce how to send.
 
@@ -2442,3 +2443,25 @@ typography — callouts, framed tables and highlighted code included — and **I
 column on the right on wide screens, marking the entry you are reading. **Newer release** and **Older
 release** at the bottom move through the releases, and every release has its own address
 (`/admin/changelog?version=5.6.4`), so Back, a bookmark or a reload return to it.
+
+## Marketplace: Review the Files of a Skill Before Installing It
+
+The details of a marketplace skill now have a **Files** tab when the skill brings more than its
+`SKILL.md`. It lists every file an install would write — references, scripts, templates — and shows
+the one you select, fetched from the registry when you open it, so you can review what a skill
+contains before you install it. Markdown files read rendered; **Show source** shows exactly what
+they contain, including what rendering hides, such as comments. A file over 512 KB or a binary one
+is not shown. See [Marketplace → Browsing](../../marketplace.md#browsing).
+
+For API callers: `GET /api/admin/marketplace/registries/{registryId}/items/{type}/{name}/_file`
+replaces the integration-only `…/items/integration/{name}/_file` and serves `integration` and
+`skill` items. Existing integration URLs keep working unchanged, and a skill's item detail now carries
+a `files` list.
+
+## Model Hints Can Be Set in the Model Editor
+
+Admins can now give a model a hint — the message users see above the chat input when they select
+it — on **Admin → Models → (model) → User Hint**, instead of editing the model's JSON file. The
+section sets the level (hint, info, warning, alert), whether users can dismiss it (hint and info
+only) and the message per language, with a preview of how it looks in the chat. Turning it off
+removes the hint from the model. See [Model Hints](../../models.md#model-hints).

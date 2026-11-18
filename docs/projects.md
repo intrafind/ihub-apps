@@ -366,9 +366,6 @@ merge again when the cause is gone. The **instructions** of a merged project are
 the dialog warns when one has any. Each merged and changed project has an entry in its change
 history, and the links that changed are in the audit log summary.
 
-The edit page warns while uploads are enabled and no malware scanner is configured
-(`platform.projects.scan`).
-
 ### Linking a project
 
 Apps, workflows, workflow steps (prompt, planner, verifier), planner task templates and agent

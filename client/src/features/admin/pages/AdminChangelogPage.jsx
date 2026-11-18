@@ -329,19 +329,53 @@ function UpgradeNotice({ previousVersion, currentVersion, newCount, t }) {
 }
 
 /**
- * "In this release" inside the reading column, for screens without the outline column: one card
- * per section with its entries, like the cards on the documentation start page.
+ * "In this release": the overview at the top of every release, on every screen width. A row of
+ * quick links jumps straight to breaking changes, new & improved or fixes; below it every entry,
+ * grouped by section, so a long release can be scanned and any entry reached in one click. Every
+ * section ends with a link back here.
  */
-function TableOfContents({ release, sectionLabel, t }) {
+function TableOfContents({ id, release, sectionLabel, t }) {
   const groups = SECTIONS.filter(section => release.sections[section.key].length > 0);
   return (
     <nav
+      id={id}
+      tabIndex={-1}
       aria-label={t('admin.changelog.contents', 'In this release')}
-      className="mb-10 rounded-lg border border-gray-200 p-4 xl:hidden dark:border-gray-800"
+      className="mb-10 scroll-mt-20 rounded-lg border border-gray-200 p-4 focus:outline-hidden dark:border-gray-800"
     >
       <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
         {t('admin.changelog.contents', 'In this release')}
       </p>
+      <ul className="mb-4 flex flex-wrap gap-2">
+        {groups.map(section => {
+          const sectionDomId = domId('release', release.version, section.key);
+          const breaking = section.key === 'breakingChanges';
+          return (
+            <li key={section.key}>
+              <a
+                href={`#${sectionDomId}`}
+                onClick={event => scrollToElement(event, sectionDomId)}
+                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium transition-colors ${
+                  breaking
+                    ? 'border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-300 dark:hover:bg-amber-900/40'
+                    : 'border border-gray-200 bg-gray-50 text-gray-800 hover:border-indigo-300 hover:text-indigo-700 dark:border-gray-700 dark:bg-gray-800/60 dark:text-gray-200 dark:hover:border-indigo-700 dark:hover:text-indigo-300'
+                }`}
+              >
+                {sectionLabel(section)}{' '}
+                <span
+                  className={`tabular-nums font-normal ${
+                    breaking
+                      ? 'text-amber-700 dark:text-amber-400'
+                      : 'text-gray-600 dark:text-gray-400'
+                  }`}
+                >
+                  {release.sections[section.key].length}
+                </span>
+              </a>
+            </li>
+          );
+        })}
+      </ul>
       <div className="space-y-4">
         {groups.map(section => {
           const entries = release.sections[section.key];
@@ -358,9 +392,11 @@ function TableOfContents({ release, sectionLabel, t }) {
                   {entries.length}
                 </span>
               </a>
-              <ul className="mt-1 space-y-1">
+              <ul
+                className={`mt-1 space-y-1 ${entries.length > 6 ? 'sm:columns-2 sm:gap-x-8' : ''}`}
+              >
                 {entries.map(entry => (
-                  <li key={entry.id}>
+                  <li key={entry.id} className="break-inside-avoid">
                     <a
                       href={`#${entry.domId}`}
                       onClick={event => scrollToElement(event, entry.domId)}
@@ -397,7 +433,7 @@ function ReleaseEntry({ entry }) {
   );
 }
 
-function ReleaseSection({ section, entries, release, first, sectionLabel, t }) {
+function ReleaseSection({ section, entries, release, first, tocId, sectionLabel, t }) {
   const breaking = section.key === 'breakingChanges';
   const sectionDomId = domId('release', release.version, section.key);
 
@@ -424,6 +460,15 @@ function ReleaseSection({ section, entries, release, first, sectionLabel, t }) {
       {entries.map(entry => (
         <ReleaseEntry key={entry.id} entry={entry} />
       ))}
+      <p className="mt-6 text-right text-sm">
+        <a
+          href={`#${tocId}`}
+          onClick={event => scrollToElement(event, tocId)}
+          className="text-gray-500 no-underline hover:text-indigo-700 dark:text-gray-400 dark:hover:text-indigo-300"
+        >
+          ↑ {t('admin.changelog.backToContents', 'Back to contents')}
+        </a>
+      </p>
     </section>
   );
 }
@@ -646,6 +691,7 @@ function AdminChangelogPage() {
   }, [documentTitle]);
 
   const releaseError = selected ? releaseErrors[selected] : '';
+  const tocId = selected ? domId('release', selected, 'contents') : 'release-contents';
   const position = index ? index.versions.findIndex(item => item.version === selected) : -1;
   const newer = position > 0 ? index.versions[position - 1] : null;
   const older = position >= 0 ? (index.versions[position + 1] ?? null) : null;
@@ -723,7 +769,7 @@ function AdminChangelogPage() {
           />
         ) : (
           <>
-            <TableOfContents release={prepared} sectionLabel={sectionLabel} t={t} />
+            <TableOfContents id={tocId} release={prepared} sectionLabel={sectionLabel} t={t} />
             {/* Documentation links inside entry bodies navigate within the admin UI. */}
             {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions */}
             <article
@@ -739,6 +785,7 @@ function AdminChangelogPage() {
                     entries={prepared.sections[section.key]}
                     release={prepared}
                     first={sectionIndex === 0}
+                    tocId={tocId}
                     sectionLabel={sectionLabel}
                     t={t}
                   />

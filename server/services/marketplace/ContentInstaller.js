@@ -635,6 +635,163 @@ function unwrapGitHubContent(text) {
 }
 
 /**
+ * The URL of the folder a skill lives in: the SKILL.md URL without its file
+ * name. A `relative` source has no `source.url`, so this is the resolved item
+ * URL.
+ *
+ * @param {string} itemUrl - Where the SKILL.md is fetched from
+ * @returns {string}
+ */
+function skillDirectoryUrl(itemUrl) {
+  return itemUrl.replace(/[?#].*$/, '').replace(/\/SKILL\.md$/, '');
+}
+
+/**
+ * The companion files of a skill catalog item: the paths its `source.companions`
+ * lists, relative to the skill folder. A catalog cached before companions were
+ * listed has no such field; a GitHub `url` source is then looked up in the
+ * repository's file tree. An empty list is an answer, not a stale cache: the
+ * catalog found no (text) companion files.
+ *
+ * @param {object} item - Catalog item of type `skill`
+ * @param {Record<string, string>} authHeaders - Auth headers for the lookup
+ * @param {object} [registry] - Registry config (`source` names its own host)
+ * @returns {Promise<string[]>}
+ * @throws {import('./marketplaceFetch.js').MarketplaceTargetError} When the lookup's host is refused
+ */
+export async function listSkillCompanions(item, authHeaders, registry) {
+  const listed = item.source?.companions;
+  if (Array.isArray(listed)) return listed;
+  if (item.source?.type === 'url' && item.source.url?.endsWith('/SKILL.md')) {
+    try {
+      return (
+        (await registryService.discoverCompanions(item.source.url, authHeaders, registry)) || []
+      );
+    } catch (error) {
+      if (error.code === MARKETPLACE_TARGET_BLOCKED) throw error;
+      logger.warn('Companion discovery fallback failed', { component: COMPONENT, error });
+    }
+  }
+  return [];
+}
+
+/**
+ * Every file of a skill catalog item, `SKILL.md` first, as the admin UI lists
+ * them for review: what installing the item would write into the skill's folder.
+ *
+ * @param {string} registryId
+ * @param {object} item - Catalog item of type `skill`
+ * @returns {Promise<string[]>}
+ * @throws {import('./marketplaceFetch.js').MarketplaceTargetError} When the lookup's host is refused
+ */
+export async function listSkillFiles(registryId, item) {
+  const registry = await registryService.getRegistryWithAuth(registryId);
+  const companions = await listSkillCompanions(item, skillAuthHeaders(item, registry), registry);
+  return ['SKILL.md', ...companions.filter(file => file !== 'SKILL.md')];
+}
+
+/**
+ * The registry's credentials for fetching a skill's files: sent only where the
+ * registry itself lives, as for an install (`sharesCredentialScope`), so the
+ * token of a mirror registry never reaches the GitHub host its items point to.
+ *
+ * @param {object} item - Catalog item of type `skill`
+ * @param {object} registry - Registry config with decrypted auth
+ * @returns {Record<string, string>}
+ */
+function skillAuthHeaders(item, registry) {
+  const itemUrl = registryService.resolveItemUrl(item, registry);
+  return itemUrl && sharesCredentialScope(itemUrl, [registry?.source])
+    ? authHeadersFor(registry)
+    : {};
+}
+
+/**
+ * Whether a path from a request can name a file inside a skill folder: no
+ * empty, `.` or `..` segment, no backslash, no query or fragment, no control
+ * character. Only a path the catalog lists is ever served; this keeps a crafted
+ * path from reaching beyond the folder even if a catalog lists one.
+ *
+ * @param {unknown} relativePath
+ * @returns {boolean}
+ */
+function isSafeSkillFilePath(relativePath) {
+  if (typeof relativePath !== 'string' || !relativePath || relativePath.length > 255) return false;
+  if ([...relativePath].some(char => char.charCodeAt(0) < 32 || '\\?#'.includes(char)))
+    return false;
+  return relativePath.split('/').every(segment => segment && segment !== '.' && segment !== '..');
+}
+
+/**
+ * One file of a skill catalog item as text, fetched from the registry without
+ * installing the item, so an admin can review what an install would bring. Only
+ * `SKILL.md` and the files the item lists (`listSkillFiles`) are served, so the
+ * endpoint is no proxy for arbitrary URLs. The registry's credentials travel
+ * only where the registry itself lives (`skillAuthHeaders`), as for an install.
+ * Returns null for a path the item does not list or a
+ * missing file.
+ *
+ * @param {string} registryId
+ * @param {string} name - Catalog item name
+ * @param {string} relativePath - Path relative to the skill folder
+ * @returns {Promise<string|null>}
+ * @throws {ServiceError} `PAYLOAD_TOO_LARGE` over 512 KB, `UNSUPPORTED_MEDIA_TYPE` for a binary file
+ */
+export async function fetchSkillFile(registryId, name, relativePath) {
+  if (!isSafeSkillFilePath(relativePath)) return null;
+  const registry = await registryService.getRegistryWithAuth(registryId);
+  const cached = await registryService.getCachedCatalogAsync(registryId);
+  if (!cached) {
+    throw new Error(
+      `No cached catalog for registry '${registryId}'. Please refresh the registry first.`
+    );
+  }
+  const item = (cached.catalog?.items || []).find(i => i.type === 'skill' && i.name === name);
+  if (!item) {
+    throw new ServiceError(
+      'NOT_FOUND',
+      `Item 'skill:${name}' not found in registry '${registryId}'`
+    );
+  }
+  const itemUrl = registryService.resolveItemUrl(item, registry);
+  if (!itemUrl) throw new Error(`Cannot resolve URL for item 'skill:${name}'`);
+  const authHeaders = skillAuthHeaders(item, registry);
+  const companions = await listSkillCompanions(item, authHeaders, registry);
+  if (relativePath !== 'SKILL.md' && !companions.includes(relativePath)) return null;
+
+  const fileUrl =
+    relativePath === 'SKILL.md'
+      ? itemUrl
+      : `${skillDirectoryUrl(itemUrl)}/${relativePath.split('/').map(encodeURIComponent).join('/')}`;
+  const res = await marketplaceFetch('marketplace-installer', fileUrl, {
+    registry,
+    headers: { Accept: 'text/plain, application/vnd.github.raw+json, */*' },
+    authHeaders
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) {
+    throw new Error(`Skill file '${relativePath}' could not be fetched (HTTP ${res.status})`);
+  }
+  const body = await res.text();
+  // Only SKILL.md can arrive wrapped (a GitHub Contents URL as its source);
+  // another file could itself be JSON that merely looks like that wrapper.
+  const text = relativePath === 'SKILL.md' ? unwrapGitHubContent(body) : body;
+  if (Buffer.byteLength(text, 'utf8') > MAX_SERVED_COMPANION_BYTES) {
+    throw new ServiceError(
+      'PAYLOAD_TOO_LARGE',
+      `Skill file '${relativePath}' exceeds the 512KB size limit`
+    );
+  }
+  if (text.includes('\u0000')) {
+    throw new ServiceError(
+      'UNSUPPORTED_MEDIA_TYPE',
+      `Skill file '${relativePath}' is not a text file`
+    );
+  }
+  return text;
+}
+
+/**
  * Build the skill content object, fetching companion files if the item source
  * lists them. Returns a `{ files: {...} }` map when companions are present,
  * or the bare markdown string when there are none.
@@ -655,28 +812,11 @@ function unwrapGitHubContent(text) {
  * @throws {import('./marketplaceFetch.js').MarketplaceTargetError} When a companion's host is refused
  */
 async function buildSkillContent(item, itemUrl, skillMd, authHeaders, registry) {
-  let companions = item.source?.companions;
+  const companions = await listSkillCompanions(item, authHeaders, registry);
 
-  // Fallback: discover companions at install time if cache is stale (no companions field). An
-  // empty list is an answer, not a stale cache: the catalog found no (text) companion files.
-  if (
-    !Array.isArray(companions) &&
-    item.source?.type === 'url' &&
-    item.source.url?.endsWith('/SKILL.md')
-  ) {
-    try {
-      companions = await registryService.discoverCompanions(item.source.url, authHeaders, registry);
-    } catch (error) {
-      if (error.code === MARKETPLACE_TARGET_BLOCKED) throw error;
-      logger.warn('Companion discovery fallback failed', { component: COMPONENT, error });
-    }
-  }
+  if (companions.length === 0) return skillMd;
 
-  if (!companions || companions.length === 0) return skillMd;
-
-  // Derive skill directory URL from the SKILL.md URL (strip the filename).
-  // A `relative` source has no `source.url`, so this is the resolved item URL.
-  const skillDirUrl = itemUrl.replace(/[?#].*$/, '').replace(/\/SKILL\.md$/, '');
+  const skillDirUrl = skillDirectoryUrl(itemUrl);
 
   const files = { 'SKILL.md': skillMd };
 

@@ -8,6 +8,9 @@
 #
 # It mounts the iHub contents volume too; a ReadWriteOnce volume can be shared by pods on
 # the same node, and a local-path volume pins the pod there.
+# On SELinux nodes (e.g. Bottlerocket) every pod gets its own MCS label and the volume
+# follows the last pod that mounted it: give this pod and iHub the same level, e.g.
+#   securityContext: { seLinuxOptions: { level: 's0:c123,c456' } }
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:

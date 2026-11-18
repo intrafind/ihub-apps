@@ -21,7 +21,7 @@ spec:
   accessModes: [ReadWriteOnce]
   storageClassName: local-path
   resources:
-    # Example policy (k3s01): at most 10Gi per claim. One 1,500-user run writes ~2.8 GB.
+    # Example policy: at most 10Gi per claim. One 1,500-user run writes ~2.8 GB.
     requests: { storage: 10Gi }
 ---
 apiVersion: apps/v1
@@ -38,10 +38,10 @@ spec:
     metadata:
       labels: { app: ihub }
     spec:
-      # Example (k3s01): pin to an otherwise idle node so neighbours do not distort the
+      # Example: pin to an otherwise idle node so neighbours do not distort the
       # numbers. Optional; a local-path volume pins the pod after the first start anyway.
       # nodeSelector:
-      #   kubernetes.io/hostname: k3s01-agent-01
+      #   kubernetes.io/hostname: <idle-node>
       automountServiceAccountToken: false
       containers:
         - name: ihub
@@ -98,7 +98,7 @@ spec:
 ---
 # Only for a runner OUTSIDE the cluster (a laptop over VPN collapses beyond a few hundred
 # connections; prefer the in-cluster Job). Hostnames, ingress class and the cert-manager /
-# external-dns annotations are examples (k3s01): replace them with your cluster's.
+# external-dns annotations are examples: replace them with your cluster's.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:

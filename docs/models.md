@@ -993,6 +993,19 @@ A model can carry a per-user token budget, `usageLimits: { "day": 50000, "week":
 
 The Model Hints feature allows administrators to display important, internationalized messages when users select specific models. This is useful for guiding users to appropriate models, warning about deprecations, or enforcing acknowledgment for experimental models.
 
+### Configuring a Hint in the Admin Interface
+
+Open **Admin → Models**, edit the model and use the **User Hint** section:
+
+- **Show a hint for this model** turns the hint on or off. Off removes `hint` from the model.
+- **Level** picks one of the four levels below.
+- **Users can dismiss it** is offered for `hint` and `info` only; warnings and alerts always stay.
+- **Message** takes one text per language (**Add Language** for more). Languages left empty are not
+  saved, and a hint without any text is not saved at all.
+
+A preview shows the banner as users will see it. The same fields can be edited as JSON in the
+editor's JSON mode, in the format below.
+
 ### Hint Severity Levels
 
 Model hints support four severity levels with different visual styling and behaviors:
@@ -1081,9 +1094,9 @@ The hint configuration uses the following schema:
 {
   "hint": {
     "message": {
-      "en": "English message (required)",
-      "de": "German message (required)",
-      // Additional languages as needed
+      "en": "English message",
+      "de": "German message",
+      // At least one language; add more as needed
     },
     "level": "hint" | "info" | "warning" | "alert",  // Required
     "dismissible": true | false  // Optional, defaults based on level
@@ -1092,7 +1105,7 @@ The hint configuration uses the following schema:
 ```
 
 **Required Fields:**
-- `message`: Object with localized strings (minimum: `en` and `de`)
+- `message`: Object with localized strings (at least one non-empty language)
 - `level`: One of the four severity levels
 
 **Optional Fields:**
@@ -1137,7 +1150,7 @@ The hint configuration uses the following schema:
 ### Internationalization
 
 All hint messages must be internationalized:
-- **Minimum**: Provide English (`en`) and German (`de`) translations
+- **Minimum**: One language; provide one per language your users use (typically `en` and `de`)
 - **Additional**: Add more language codes as needed (e.g., `fr`, `es`, `ja`)
 - **Fallback**: System falls back to English if user's language is not available
 
@@ -1167,7 +1180,7 @@ These translations are defined in `shared/i18n/en.json` and `shared/i18n/de.json
 **Alert Level:**
 1. User selects model with alert
 2. Red banner appears with "I Understand" button
-3. Input is disabled (grayed out)
+3. Input and sending are disabled (grayed out); the model selector stays usable, so the user can switch to another model instead
 4. User must click "I Understand" to enable input
 5. Acknowledgment must be repeated if user switches to another model and back
 

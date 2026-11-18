@@ -32,6 +32,7 @@ import { apiTypeLabel } from '../utils/modelImport';
 import { TOOL_SUPPORT, TOOL_SUPPORT_VALUES } from '../../../../../shared/modelCapabilities.js';
 import EuAiActStateNote from './euAiAct/EuAiActStateNote';
 import GatewaySyncDialog from './GatewaySyncDialog';
+import ModelHintSection from './ModelHintSection';
 import { CHECKBOX_CLASS, INPUT_CLASS } from './formStyles';
 
 /** English fallbacks for the tool calling dropdown (`admin.models.toolSupport.*`). */
@@ -2222,6 +2223,21 @@ function ModelFormEditor({
             </div>
           </div>
         </div>
+
+        {/* User hint shown in the chat when the model is selected */}
+        <ModelHintSection
+          hint={data.hint}
+          onChange={hint => {
+            if (hint) {
+              handleChange('hint', hint);
+            } else {
+              const rest = { ...data };
+              delete rest.hint;
+              onChange(rest);
+            }
+          }}
+          currentLanguage={i18n.language}
+        />
       </div>
       {syncVisible && (
         <GatewaySyncDialog
