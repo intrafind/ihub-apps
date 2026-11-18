@@ -199,11 +199,22 @@ describe('withAdminInvariantLock', () => {
     const mine = withAdminInvariantLock(async () => {
       events.push('mine runs');
     });
-    await new Promise(resolve => setTimeout(resolve, 100));
-    expect(events).toEqual(['other holds']);
+    // Released and settled even when an assertion fails, so a regression does
+    // not leave the other holder waiting.
+    let settled = false;
+    try {
+      await new Promise(resolve => setTimeout(resolve, 100));
+      expect(events).toEqual(['other holds']);
 
-    releaseOther();
-    await Promise.all([other, mine]);
+      releaseOther();
+      await Promise.all([other, mine]);
+      settled = true;
+    } finally {
+      if (!settled) {
+        releaseOther();
+        await Promise.allSettled([other, mine]);
+      }
+    }
     expect(events).toEqual(['other holds', 'other releases', 'mine runs']);
   });
 
