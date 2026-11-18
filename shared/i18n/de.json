@@ -5384,7 +5384,6 @@
     },
     "changelog": {
       "title": "Neuigkeiten",
-      "subtitle": "Versionshinweise zu jeder $t(product.name)-Version, neueste zuerst.",
       "loading": "Änderungsprotokoll wird geladen …",
       "loadingRelease": "Versionshinweise werden geladen …",
       "loadError": "Änderungsprotokoll konnte nicht geladen werden",
@@ -5408,7 +5407,9 @@
       "breakingChangesHint": "Vor oder nach dem Upgrade ist eine Aktion erforderlich.",
       "features": "Neu & verbessert",
       "fixes": "Fehlerbehebungen",
-      "backToContents": "Zurück zur Übersicht"
+      "newerRelease": "Neuere Version",
+      "olderRelease": "Ältere Version",
+      "pagination": "Neuere und ältere Version"
     },
     "feedback": {
       "title": "Feedback",
@@ -8467,10 +8468,7 @@
     "switchToLight": "Zu hellem Modus wechseln",
     "switchToDark": "Zu dunklem Modus wechseln",
     "switchToAuto": "Zu automatischem Modus wechseln",
-    "followingSystem": "Folgt der Systemeinstellung",
-    "themeAuto": "Darstellung: Automatisch (folgt dem System)",
-    "themeLight": "Darstellung: Hell",
-    "themeDark": "Darstellung: Dunkel"
+    "followingSystem": "Folgt der Systemeinstellung"
   },
   "theme": {
     "title": "Design & Erscheinung",

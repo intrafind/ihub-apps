@@ -4888,7 +4888,6 @@
     },
     "changelog": {
       "title": "What's New",
-      "subtitle": "Release notes for every $t(product.name) release, newest first.",
       "loading": "Loading changelog...",
       "loadingRelease": "Loading release notes...",
       "loadError": "Failed to load changelog",
@@ -4912,7 +4911,9 @@
       "breakingChangesHint": "Action is needed before or after upgrading.",
       "features": "New & improved",
       "fixes": "Fixes",
-      "backToContents": "Back to contents"
+      "newerRelease": "Newer release",
+      "olderRelease": "Older release",
+      "pagination": "Newer and older release"
     },
     "feedback": {
       "title": "Feedback",
@@ -8468,10 +8469,7 @@
     "switchToLight": "Switch to light mode",
     "switchToDark": "Switch to dark mode",
     "switchToAuto": "Switch to auto mode",
-    "followingSystem": "Following system preference",
-    "themeAuto": "Theme: Auto (follows system)",
-    "themeLight": "Theme: Light",
-    "themeDark": "Theme: Dark"
+    "followingSystem": "Following system preference"
   },
   "theme": {
     "title": "Theme & Appearance",

@@ -474,9 +474,9 @@ function AdminUsersPage() {
         </div>
 
         <div className="mb-6 bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-4">
-          <div
-            className={`grid grid-cols-1 sm:grid-cols-2 gap-4 ${ackEnabled ? 'lg:grid-cols-5' : 'lg:grid-cols-4'}`}
-          >
+          {/* Each filter takes the width its label and options need and the row wraps: fixed grid
+              columns pushed the last filter past the card when labels or options are long. */}
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
             <FilterSelect
               label="Auth Method"
               value={authMethodFilter}

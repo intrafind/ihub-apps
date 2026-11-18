@@ -2419,3 +2419,13 @@ back on, older files left out for space, another model), the whole conversation 
   counted the first time they are used again. Project documents use the count stored with them.
 - A first message in a very long conversation (another model, or no stored figure yet) is counted
   from samples, within a few percent.
+
+## What's New Looks Like the Documentation
+
+**Admin → What's New** now has the layout of **Admin → Documentation**: a header with the breadcrumb and
+the documentation search, the releases on the left in the style of the documentation contents (a
+**Releases** drawer on small screens), the release notes in the documentation's reading column and
+typography — callouts, framed tables and highlighted code included — and **In this release** as a
+column on the right on wide screens, marking the entry you are reading. **Newer release** and **Older
+release** at the bottom move through the releases, and every release has its own address
+(`/admin/changelog?version=5.6.4`), so Back, a bookmark or a reload return to it.

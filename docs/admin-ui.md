@@ -37,7 +37,7 @@ Pages for features that are switched off (for example Marketplace, Workflows, Ag
 
 **Collapsing the sidebar:** Click the double chevron next to the logo at the top of the sidebar to collapse it to icon-only mode. Hover over any icon to see its label. The collapse state is remembered across sessions.
 
-**Theme:** The button at the bottom of the sidebar shows the current theme — **Theme: Auto (follows system)**, **Theme: Light** or **Theme: Dark** — and each click moves to the next one. It is the same choice as the theme switch in the end-user sidebar, so both always agree, and the admin opens in that theme straight away, including the "Checking authentication…" screen.
+**Theme:** The admin has no theme switch of its own. It follows the light/dark choice made with the theme switch in the end-user sidebar, and opens in that theme straight away, including the "Checking authentication…" screen.
 
 **Mobile:** On small screens the sidebar is hidden by default. Tap the hamburger menu (☰) in the top bar to open the sidebar as a drawer.
 
@@ -128,10 +128,12 @@ The checklist is shown while a required step is open, however many apps there ar
 
 ![What's New: the release tree and the contents of a release](assets/screenshots/admin-whats-new.png)
 
+The page is laid out like [Documentation](#documentation): a header with the breadcrumb and the documentation search, the release list on the left (behind **Releases** on small screens), the release in the same reading column and typography as a documentation page, **Newer release** / **Older release** at the bottom, and **In this release** on the right on wide screens. Each release has its own address (`/admin/changelog?version=5.6.4`), so Back, a bookmark or a reload return to it.
+
 - **Release list** (left): a tree — `5.x` holds `5.5.x` holds the releases — because an installation that has been running a while has more releases than a flat list can show. Only the groups worth opening start open: the one holding the release on screen and the one holding the installed release. Every other group stays shut behind a header that carries how many releases it holds and how many of them are new, so an upgrade spanning two series does not unfold into the long list the tree replaces. A series longer than ten releases lists the newest ten and offers the rest behind **Show N older**. The release you are running is marked **Installed**. Builds from the main branch additionally list **Unreleased** — changes that are not part of a tagged release yet.
 - **New since the upgrade**: iHub records which version it was running before the one it runs now, so every release an upgrade spanned is marked **New** — jump from 5.4.3 to 5.5.1 and all six releases in between are flagged, not just the one installed. A banner above the list names the jump. A fresh installation has nothing to compare against and shows no banner and no badges. The record lives in `contents/data/installed-version.json` and is written once per start.
-- **In this release**: a table of contents linking to every entry, grouped into **Breaking changes**, **New & improved** and **Fixes** — in that order, so what needs action comes first. Each section ends with a link back to the contents.
-- **Entries** are full Markdown: nested and numbered lists, quoted error messages, tables, links and code blocks (with copy and download buttons).
+- **In this release**: a table of contents linking to every entry, grouped into **Breaking changes**, **New & improved** and **Fixes** — in that order, so what needs action comes first. On wide screens it is the column on the right and marks the entry you are reading; on smaller screens it sits above the first entry.
+- **Entries** are full Markdown, rendered like the documentation: nested and numbered lists, quoted error messages, callouts, framed tables, links and highlighted code blocks with a copy button.
 
 The content comes from `docs/releases/` in the repository and ships with every build; see [Release Process](release-process.md) for how entries get from `next/` to a numbered release.
 

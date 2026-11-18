@@ -995,9 +995,9 @@ card, and the **Save** button under **Security → Cookies** had no fill.
   in dark mode so they stay visible on dark cards.
 - Labels and checkbox texts on **Authentication** are readable in dark mode, and clicking a checkbox's
   text toggles it.
-- The admin opens in your light/dark choice straight away, also while it checks your sign-in, and the
-  sidebar has a **Theme** button (Auto, Light, Dark). A choice made there is no longer undone when the
-  operating system switches between light and dark.
+- The admin opens in your light/dark choice straight away, also while it checks your sign-in. The
+  choice is made with the theme switch in the app's sidebar (Auto, Light, Dark), and it is no longer
+  undone when the operating system switches between light and dark.
 - Custom CSS (**UI Customization → Theme & styles**) that targets `input` still applies; the admin's
   default field border is a layered style that any custom rule overrides.
 

@@ -16,6 +16,11 @@ jest.mock('../../../client/src/utils/runtimeBasePath', () => ({
 }));
 
 // The page reads `?version=` and the fragment from the router.
+/** The switcher's controls in reading order: group toggles are buttons, releases are links. */
+const switcherItems = nav => [...nav.querySelectorAll('a, button')].map(item => item.textContent);
+/** "In this release": inside the reading column (the outline column repeats it on wide screens). */
+const releaseContents = () => screen.getAllByRole('navigation', { name: 'In this release' })[0];
+
 const render = (ui, { route = '/admin/changelog' } = {}) =>
   rtlRender(<MemoryRouter initialEntries={[route]}>{ui}</MemoryRouter>);
 
@@ -185,35 +190,39 @@ describe('AdminChangelogPage', () => {
     render(<AdminChangelogPage />);
 
     const releases = await screen.findByRole('navigation', { name: 'Releases' });
-    expect(
-      within(releases)
-        .getAllByRole('button')
-        .map(button => button.textContent)
-    ).toEqual(['Unreleased', '5.x22 new', '5.5.x22 new', '5.5.7InstalledNew', '5.5.6New']);
+    expect(switcherItems(releases)).toEqual([
+      'Unreleased',
+      '5.x22 new',
+      '5.5.x22 new',
+      '5.5.7InstalledNew',
+      '5.5.6New'
+    ]);
 
     // Unreleased changes open first on a build that has them.
     expect(
-      await screen.findByRole('heading', { level: 2, name: 'Unreleased changes' })
+      await screen.findByRole('heading', { level: 1, name: 'Unreleased changes' })
     ).toBeVisible();
     expect(detailCalls()).toEqual(['/admin/changelog/next']);
 
     // Open the tagged release.
-    fireEvent.click(within(releases).getByRole('button', { name: /5\.5\.7/ }));
-    expect(await screen.findByRole('heading', { level: 2, name: 'Version 5.5.7' })).toBeVisible();
+    const release = within(releases).getByRole('link', { name: /5\.5\.7/ });
+    expect(release.getAttribute('href')).toBe('/admin/changelog?version=5.5.7');
+    fireEvent.click(release);
+    expect(await screen.findByRole('heading', { level: 1, name: 'Version 5.5.7' })).toBeVisible();
     expect(screen.getByText('1 Breaking changes · 1 New & improved · 1 Fixes')).toBeVisible();
     await screen.findByRole('heading', { level: 3, name: 'Image Models Save Again' });
 
     // Table of contents: one link per entry, grouped by section, breaking changes first.
-    const toc = screen.getByRole('navigation', { name: 'In this release' });
+    const toc = releaseContents();
     const links = within(toc)
       .getAllByRole('link')
       .map(link => link.textContent);
     expect(links).toEqual([
-      'Breaking changes (1)',
+      'Breaking changes 1',
       'Reasoning Effort Is a Level',
-      'New & improved (1)',
+      'New & improved 1',
       'Grant tools to a Group',
-      'Fixes (1)',
+      'Fixes 1',
       'Image Models Save Again'
     ]);
     expect(within(toc).getByText('tools').tagName).toBe('CODE');
@@ -221,14 +230,15 @@ describe('AdminChangelogPage', () => {
     // Sections in reading order.
     const sectionHeadings = screen
       .getAllByRole('heading', { level: 2 })
-      .map(heading => heading.textContent)
-      .filter(text => text !== 'Version 5.5.7');
-    expect(sectionHeadings).toEqual(['Breaking changes (1)', 'New & improved (1)', 'Fixes (1)']);
+      .map(heading => heading.textContent);
+    expect(sectionHeadings).toEqual(['Breaking changes 1', 'New & improved 1', 'Fixes 1']);
 
     // The entry body is real Markdown, hard-wrapped lines stay one paragraph, and sub-headings
     // sit below the entry's own <h3>.
-    const entry = document.getElementById('release-5-5-7-features-grant-tools-to-a-group');
-    expect(entry).not.toBeNull();
+    const entry = document
+      .getElementById('release-5-5-7-features-grant-tools-to-a-group')
+      ?.closest('article');
+    expect(entry).toBeTruthy();
     expect(within(entry).getByRole('heading', { level: 3 }).textContent).toBe(
       'Grant tools to a Group'
     );
@@ -253,8 +263,8 @@ describe('AdminChangelogPage', () => {
     expect(screen.getByText('Before upgrading:').tagName).toBe('STRONG');
 
     // Each opened release is fetched once and then kept.
-    fireEvent.click(within(releases).getByRole('button', { name: /Unreleased/ }));
-    await screen.findByRole('heading', { level: 2, name: 'Unreleased changes' });
+    fireEvent.click(within(releases).getByRole('link', { name: /Unreleased/ }));
+    await screen.findByRole('heading', { level: 1, name: 'Unreleased changes' });
     expect(detailCalls()).toEqual(['/admin/changelog/next', '/admin/changelog/5.5.7']);
   });
 
@@ -268,10 +278,10 @@ describe('AdminChangelogPage', () => {
 
     // Both releases since 5.5.5 carry the badge, not only the one being run.
     const releases = screen.getByRole('navigation', { name: 'Releases' });
-    expect(within(releases).getByRole('button', { name: /^5\.5\.7/ }).textContent).toBe(
+    expect(within(releases).getByRole('link', { name: /^5\.5\.7/ }).textContent).toBe(
       '5.5.7InstalledNew'
     );
-    expect(within(releases).getByRole('button', { name: /^5\.5\.6/ }).textContent).toBe('5.5.6New');
+    expect(within(releases).getByRole('link', { name: /^5\.5\.6/ }).textContent).toBe('5.5.6New');
   });
 
   test('says nothing about an upgrade on an installation that never had one', async () => {
@@ -288,27 +298,27 @@ describe('AdminChangelogPage', () => {
 
     const releases = await screen.findByRole('navigation', { name: 'Releases' });
     // The installed release's series is open; the others stay shut.
-    expect(
-      within(releases)
-        .getAllByRole('button')
-        .map(button => button.textContent)
-        .slice(0, 4)
-    ).toEqual(['5.x14', '5.5.x13', '5.5.12Installed', '5.5.11']);
-    expect(within(releases).queryByRole('button', { name: /^5\.4\.1/ })).toBeNull();
+    expect(switcherItems(releases).slice(0, 4)).toEqual([
+      '5.x14',
+      '5.5.x13',
+      '5.5.12Installed',
+      '5.5.11'
+    ]);
+    expect(within(releases).queryByRole('link', { name: /^5\.4\.1/ })).toBeNull();
 
     // Opening 5.4.x brings its release into the list.
     fireEvent.click(within(releases).getByRole('button', { name: '5.4.x 1' }));
-    expect(within(releases).getByRole('button', { name: /^5\.4\.1/ })).toBeVisible();
+    expect(within(releases).getByRole('link', { name: /^5\.4\.1/ })).toBeVisible();
 
     // The 4.x major is collapsed, so its releases are not listed at all.
-    expect(within(releases).queryByRole('button', { name: /^4\.9\.0/ })).toBeNull();
+    expect(within(releases).queryByRole('link', { name: /^4\.9\.0/ })).toBeNull();
     fireEvent.click(within(releases).getByRole('button', { name: '4.x 1' }));
     fireEvent.click(within(releases).getByRole('button', { name: '4.9.x 1' }));
-    expect(within(releases).getByRole('button', { name: /^4\.9\.0/ })).toBeVisible();
+    expect(within(releases).getByRole('link', { name: /^4\.9\.0/ })).toBeVisible();
 
     // Collapsing a group hides what it holds again.
     fireEvent.click(within(releases).getByRole('button', { name: '5.5.x 13' }));
-    expect(within(releases).queryByRole('button', { name: /^5\.5\.12/ })).toBeNull();
+    expect(within(releases).queryByRole('link', { name: /^5\.5\.12/ })).toBeNull();
   });
 
   test('shows the newest ten releases of a series and the rest on request', async () => {
@@ -316,19 +326,15 @@ describe('AdminChangelogPage', () => {
     render(<AdminChangelogPage />);
 
     const releases = await screen.findByRole('navigation', { name: 'Releases' });
-    const listed = () =>
-      within(releases)
-        .getAllByRole('button')
-        .map(button => button.textContent)
-        .filter(text => /^5\.5\.\d/.test(text));
+    const listed = () => switcherItems(releases).filter(text => /^5\.5\.\d/.test(text));
 
     expect(listed()).toHaveLength(10);
     expect(listed()[0]).toBe('5.5.12Installed');
-    expect(within(releases).queryByRole('button', { name: /^5\.5\.0/ })).toBeNull();
+    expect(within(releases).queryByRole('link', { name: /^5\.5\.0/ })).toBeNull();
 
     fireEvent.click(within(releases).getByRole('button', { name: 'Show 3 older' }));
     expect(listed()).toHaveLength(13);
-    expect(within(releases).getByRole('button', { name: /^5\.5\.0/ })).toBeVisible();
+    expect(within(releases).getByRole('link', { name: /^5\.5\.0/ })).toBeVisible();
   });
 
   test('links in the table of contents scroll to and focus their entry', async () => {
@@ -340,7 +346,7 @@ describe('AdminChangelogPage', () => {
     const entry = document.getElementById('release-5-5-7-fixes-image-models-save-again');
     entry.scrollIntoView = scrollIntoView;
 
-    const toc = screen.getByRole('navigation', { name: 'In this release' });
+    const toc = releaseContents();
     fireEvent.click(within(toc).getByRole('link', { name: 'Image Models Save Again' }));
 
     expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' });
