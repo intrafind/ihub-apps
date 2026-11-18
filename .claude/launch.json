@@ -4,7 +4,7 @@
     {
       "name": "Express server",
       "runtimeExecutable": "node",
-      "runtimeArgs": ["-r", "dotenv/config", "server/server.js", "dotenv_config_path=../.env"],
+      "runtimeArgs": ["--env-file-if-exists=.env", "server/server.js"],
       "port": 3000
     },
     {
