@@ -43,7 +43,8 @@ import logger from '../utils/logger.js';
  * (`aiAcknowledgementsClearedAt`). The cookie also carries a user through a
  * store that cannot be read (fail-open: a cookie of a user whose
  * acknowledgement an admin removed then counts until the store is readable
- * again; see docs/ai-act.md). An anonymous guest is judged by the cookie alone.
+ * again; see docs/ai-act.md). Without a document store configured the cookie is
+ * judged the same way. An anonymous guest is judged by the cookie alone.
  *
  * Version bumps and "Remove all" need nothing here: `requiredVersion` and
  * `resetAt` in the settings already rule out older entries and cookies.
@@ -61,8 +62,12 @@ export async function evaluateAcknowledgement(req, settings) {
   }
   let record = null;
   let storeUnreadable = false;
+  const repository = getAiAcknowledgementRepository();
+  // No document store configured: nothing records a confirmation or a removal,
+  // so the cookie is all there is, as with a store that cannot be read.
+  if (!repository.isAvailable()) storeUnreadable = true;
   try {
-    record = await getAiAcknowledgementRepository().get(userId);
+    record = await repository.get(userId);
   } catch (error) {
     storeUnreadable = true;
     logger.warn('Could not read the AI acknowledgement of a user; only the cookie counts', {
@@ -97,11 +102,12 @@ export async function aiAcknowledgementRequired(req, res, next) {
     const isUser = Boolean(userId) && userId !== 'anonymous';
     if (isUser && isRememberedAcknowledged(userId, settings)) return next();
 
+    const readStartedAt = Date.now();
     const { acknowledged, storeUnreadable } = await evaluateAcknowledgement(req, settings);
     if (acknowledged) {
-      // A yes from the cookie alone while the store was unreadable is not
-      // remembered: the store may say the acknowledgement was removed.
-      if (isUser && !storeUnreadable) rememberAcknowledged(userId, settings);
+      // A yes from the cookie alone while the store was unreadable (or absent)
+      // is not remembered: the store may say the acknowledgement was removed.
+      if (isUser && !storeUnreadable) rememberAcknowledged(userId, settings, readStartedAt);
       return next();
     }
 

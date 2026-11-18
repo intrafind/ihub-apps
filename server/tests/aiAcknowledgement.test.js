@@ -502,6 +502,19 @@ describe('428 guard', () => {
       );
     });
 
+    test('without a document store the cookie counts, and is not remembered', async () => {
+      const app = buildApp();
+      const provider = storage.current;
+      storage.current = {};
+      try {
+        expect((await post(app, asUser('bob'))).status).toBe(428);
+        expect((await post(app, asUser('bob'), cookieFor('bob'))).status).toBe(200);
+        expect(ackCache.isRememberedAcknowledged('bob', service.getSettings())).toBe(false);
+      } finally {
+        storage.current = provider;
+      }
+    });
+
     test('a store that cannot be read leaves the cookie as the proof', async () => {
       const app = buildApp();
       const spy = jest.spyOn(storage.current.documents, 'get').mockRejectedValue(new Error('down'));
@@ -614,10 +627,30 @@ describe('per-worker acknowledgement cache', () => {
 
   test('the bus message from another worker forgets the user', () => {
     const settings = { requiredVersion: 1, resetAt: null };
-    ackCache.rememberAcknowledged('bob', settings);
+    ackCache.rememberAcknowledged('bob', settings, Date.now());
     expect(ackCache.isRememberedAcknowledged('bob', settings)).toBe(true);
     ackCache.onForgetMessage({ userId: 'bob' });
     expect(ackCache.isRememberedAcknowledged('bob', settings)).toBe(false);
+  });
+
+  test('a "yes" read before a forget is not remembered after it', async () => {
+    const app = buildApp();
+    const real = repo().get.bind(repo());
+    // The admin's removal lands on another worker while this one reads the old "yes".
+    const spy = jest.spyOn(repo(), 'get').mockImplementation(async id => {
+      const record = await real(id);
+      ackCache.onForgetMessage({ userId: id });
+      return record;
+    });
+    try {
+      expect((await post(app, asUser('bob'))).status).toBe(200);
+    } finally {
+      spy.mockRestore();
+    }
+    expect(ackCache.isRememberedAcknowledged('bob', service.getSettings())).toBe(false);
+    // A read that starts after the forget is remembered again.
+    expect((await post(app, asUser('bob'))).status).toBe(200);
+    expect(ackCache.isRememberedAcknowledged('bob', service.getSettings())).toBe(true);
   });
 });
 

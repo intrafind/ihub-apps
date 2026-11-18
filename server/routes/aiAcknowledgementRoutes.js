@@ -208,13 +208,14 @@ export default function registerAiAcknowledgementRoutes(app) {
         });
 
       if (isUser) {
+        const writeStartedAt = Date.now();
         const { recorded, entry: stored } = await getAiAcknowledgementRepository().record(
           user.id,
           entry,
           { resetAt: settings.resetAt }
         );
         if (stored) {
-          rememberAcknowledged(user.id, settings);
+          rememberAcknowledged(user.id, settings, writeStartedAt);
           if (!recorded) return res.status(200).json(stored);
           audit();
           setAcknowledgementCookie(req, res, version);
