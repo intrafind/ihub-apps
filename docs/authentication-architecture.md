@@ -48,7 +48,7 @@ app.use(
     jwtAuthMiddleware,      // Step 3: JWT token validation
     localAuthMiddleware,    // Step 4: Local auth placeholder
     ldapAuthMiddleware,     // Step 5: LDAP auth placeholder
-    ntlmAuthMiddleware      // Step 6: NTLM/Windows auth
+    ntlmAuthMiddleware      // Step 6: NTLM handshake, /api/auth/ntlm/login only
   ])
 );
 ```
@@ -76,7 +76,7 @@ app.use((req, res, next) => {
 
 **Files**: 
 - `/server/middleware/ntlmAuth.js`
-- `/server/routes/auth.js` (POST /api/auth/ntlm/login)
+- `/server/routes/auth.js` (GET and POST /api/auth/ntlm/login)
 - `/docs/ldap-ntlm-authentication.md`
 
 #### NTLM Configuration
@@ -92,32 +92,37 @@ Add to `contents/config/platform.json`:
     "debug": false,
     "ldapGroupLookupProvider": "corporate-ldap",
     "defaultGroups": ["ntlm-users"],
-    "sessionTimeoutMinutes": 480,
-    "generateJwtToken": true
+    "sessionTimeoutMinutes": 480
   }
 }
 ```
 
 #### NTLM Authentication Flow
 
-1. **Request arrives at server**
-   - Client browser makes HTTP request to `localhost:3000` (in dev)
-   - Request includes Windows credentials in NTLM negotiation
+The NTLM handshake runs only on the sign-in endpoint `/api/auth/ntlm/login` (GET for the browser,
+POST for API clients). Every other request, API calls and SPA pages alike, is signed in by iHub's
+own `authToken` session cookie, the same way as after a local, LDAP or OIDC sign-in. Each NTLM
+handshake is a logon at the domain controller, so keeping it on one endpoint means a wrong password
+counts as one failed logon, not one per API call.
+
+1. **Browser starts the sign-in**
+   - The auth gate or the login screen sends the browser to
+     `GET /api/auth/ntlm/login?returnUrl=…`
+   - `GET /api/auth/status` returns `autoRedirect: { provider: 'ntlm', url: '<basePath>/api/auth/ntlm/login' }`
+     for a signed-out browser when NTLM is the only enabled sign-in method (anonymous off), or when
+     the browser has the `ntlmRequested` cookie (it signed in with Windows before; logout clears
+     it). The client follows `autoRedirect` without a click, the same mechanism as OIDC
+     `autoRedirect`, and also when the session cookie expires. With several methods enabled, the
+     user clicks "Windows sign-in" on the login screen.
 
 2. **NTLM Middleware Processing** (`ntlmAuthMiddleware`)
-   
-   a. **Vite Proxy Skip Logic** (Development Only)
+
+   a. **Login path only**
    ```javascript
-   // SKIP NTLM for Vite proxy in development to avoid authentication loops
-   const isViteProxy = 
-     process.env.NODE_ENV === 'development' &&
-     (req.headers.origin?.includes('5173') || req.headers.referer?.includes('5173'));
-   
-   if (isViteProxy && skipNtlmForVite) {
-     return next(); // Skip NTLM for Vite requests
+   if (!ntlmAuth.enabled || !isNtlmLoginPath(req.path)) {
+     return next(); // all other requests: session cookie (jwtAuthMiddleware)
    }
    ```
-   **Why?** NTLM requires multiple round trips with specific headers. Vite's dev proxy doesn't handle this well.
 
    b. **Express-NTLM Middleware Invocation**
    ```javascript
@@ -128,41 +133,35 @@ Add to `contents/config/platform.json`:
    });
    ```
 
-   c. **User Object Creation**
-   ```javascript
-   const user = processNtlmUser(req, ntlmAuth); // Extracts data from req.ntlm
-   user = enhanceUserGroups(user, authConfig, ntlmAuth); // Adds group inheritance
-   req.user = user;
-   ```
-
-   d. **Optional JWT Generation**
-   ```javascript
-   if (ntlmAuth.generateJwtToken) {
-     const { token, expiresIn } = generateJwt(user, {
-       authMode: 'ntlm',
-       expiresInMinutes: sessionTimeout
-     });
-     res.cookie('authToken', token, {
-       httpOnly: true,
-       secure: process.env.NODE_ENV === 'production',
-       sameSite: 'lax'
-     });
-   }
-   ```
-
-3. **NTLM Challenge-Response (if not authenticated)**
+3. **NTLM Challenge-Response**
    - express-ntlm sends HTTP 401 with `WWW-Authenticate: NTLM` header
    - Browser responds with NTLM negotiation token
-   - Server validates against domain controller LDAP
+   - express-ntlm relays the messages to the domain controller, which accepts or rejects the logon
+   - If the browser sends no domain (a machine outside the domain), express-ntlm uses
+     `ntlmAuth.domain`
+   - After a rejection, the account's next NTLM answers are held back for 60 seconds (429) so they
+     do not count as further failed logons
 
-4. **Group Lookup**
+4. **Session start** (`processNtlmLogin`)
+   - Builds the user from `req.ntlm`, looks up groups (below) and persists the user
+   - Always issues the `authToken` session cookie; its lifetime is `ntlmAuth.sessionTimeoutMinutes`
+     (default 480)
+   - Sets the `ntlmRequested=1` cookie
+   - GET redirects to `returnUrl?ntlm=success`; POST answers JSON
+
+   On any failure (domain controller rejected the logon, did not answer within 5 seconds, NTLM
+   disabled, cooldown after a rejection) GET redirects to `/?auth=error&message=…`, which the auth
+   gate shows on its login screen. POST answers problem+json with the failure status (403 rejected,
+   429 cooldown, 503 domain controller timeout).
+
+5. **Group Lookup**
    - express-ntlm returns only `UserName`, `DomainName`, `Workstation` and `Authenticated`; it
      never reads groups
    - When `ldapGroupLookupProvider` names an entry in `ldapAuth.providers`, the server queries
      that provider for the user's groups at sign-in (`lookupLdapGroupsForUser`)
    - Without it the user gets only `defaultGroups`
 
-5. **Group Mapping**
+6. **Group Mapping**
    ```javascript
    const mappedGroups = mapExternalGroups(groups); // Uses groups.json mappings
    user.groups = mappedGroups;
@@ -170,16 +169,18 @@ Add to `contents/config/platform.json`:
 
 #### NTLM in Development vs Production
 
-**Development Mode** (`localhost:3000`):
+**Development Mode** (`npm run dev`):
 ```
-Client (5173) --HTTP--> Vite Proxy --skips NTLM--> Server (3000)
-    └─ If SKIP_NTLM_VITE_PROXY=false, NTLM goes through
+Client (5173) --> Vite Proxy --> Server (3000)
+    └─ The proxy keeps each browser connection on one upstream connection,
+       so the NTLM handshake on /api/auth/ntlm/login works without any flag
 ```
 
 **Production Mode**:
 ```
-Client Browser --HTTPS--> Server (with NTLM challenge-response)
-    └─ Browser handles NTLM negotiation automatically
+Client Browser --HTTPS--> Server
+    └─ NTLM challenge-response only on /api/auth/ntlm/login
+    └─ All other requests use the authToken session cookie
     └─ Works only in Windows environments
     └─ Requires domain controller accessibility
 ```
@@ -633,7 +634,7 @@ localhost:3000 (Express Server)
 
 ### Vite Proxy Configuration
 
-Vite automatically proxies API requests to the server. NTLM is skipped through Vite proxy to avoid multi-step negotiation issues.
+Vite automatically proxies API requests to the server. The proxy keeps each browser connection on one upstream connection, so the NTLM handshake on `/api/auth/ntlm/login` works through `npm run dev` without any flag.
 
 ### CORS Configuration
 
@@ -692,20 +693,19 @@ Vite automatically proxies API requests to the server. NTLM is skipped through V
 │  │      ▼                     │                              │  │
 │  │ 6. ntlmAuthMiddleware()    │ Continue if no user      │  │
 │  │      │                     │                            │  │
-│  │      │ Is Vite proxy?      │                            │  │
-│  │      │ (dev mode, 5173)    │                            │  │
-│  │      │ ──► SKIP NTLM       │                            │  │
-│  │      │ No ────────────┐    │                            │  │
-│  │      ▼                │    │                            │  │
+│  │      │ Path is /api/auth/ntlm/login?                     │  │
+│  │      │ No ──► continue (session cookie, step 3)           │  │
+│  │      │ Yes ───────────┐                                   │  │
+│  │      ▼                │                                   │  │
 │  │      Apply express-ntlm middleware                     │  │
 │  │      │                │    │                            │  │
 │  │      │ NTLM Challenge?    │                            │  │
 │  │      │ ──► 401 + WWW-Authenticate header              │  │
 │  │      │ Authenticated?     │                            │  │
-│  │      │ ──► processNtlmUser()                           │  │
+│  │      │ ──► login route: processNtlmLogin()             │  │
 │  │      │      │ Extract from req.ntlm                    │  │
-│  │      │      │ Map external groups                      │  │
-│  │      │      │ req.user = enhanced user                 │  │
+│  │      │      │ LDAP group lookup, map groups            │  │
+│  │      │      │ Set authToken + ntlmRequested cookies    │  │
 │  │      │      ▼                                           │  │
 │  │      │ Continue to next                                │  │
 │  │      └────────┬───────────────────────────────────────┘  │
@@ -773,7 +773,6 @@ PROXY_AUTH_GROUPS_HEADER=x-forwarded-groups
 
 # Development
 NODE_ENV=development
-SKIP_NTLM_VITE_PROXY=true             # Skip NTLM through Vite proxy in dev
 ```
 
 ### Client Configuration
@@ -790,7 +789,8 @@ VITE_API_URL=/api                     # Optional, defaults to runtime detection
 ### Authentication
 
 - **POST /api/auth/login** - Universal authentication (supports both local and LDAP)
-- **POST /api/auth/ntlm/login** - NTLM authentication (requires Windows auth)
+- **GET /api/auth/ntlm/login?returnUrl=…** - Windows sign-in for the browser; sets the session cookie and redirects (the only endpoint that runs the NTLM handshake)
+- **POST /api/auth/ntlm/login** - Windows sign-in for API clients; answers JSON or problem+json
 - **GET /api/auth/status** - Get auth status and available methods
 - **GET /api/auth/user** - Get current user info
 - **POST /api/auth/logout** - Clear authentication cookie
@@ -813,10 +813,12 @@ app.post('/api/admin/users',
 
 ### Issue: NTLM not working in development
 
-**Solution**: NTLM is skipped through Vite proxy by default. To test:
-```bash
-SKIP_NTLM_VITE_PROXY=false npm run dev
-```
+**Solution**: NTLM works through the Vite proxy without any flag. Check:
+1. `ntlmAuth.enabled` is `true` and the server was restarted after the change
+2. The login screen message after `/?auth=error&message=…`: the domain controller rejected the
+   logon, did not answer within 5 seconds, or the account is in the 60-second cooldown after a
+   rejection
+3. The browser sends Windows credentials to the dev host (intranet zone or allow list)
 
 ### Issue: Groups not retrieved
 
@@ -844,7 +846,7 @@ The iHub Apps authentication system is designed for enterprise flexibility:
 4. **Group inheritance** creates flexible permission hierarchies
 5. **Runtime base path detection** supports subpath deployment
 6. **CORS support** enables secure cross-origin integration
-7. **Development-friendly** with NTLM bypass for Vite proxy
+7. **Development-friendly**: Windows sign-in works through the Vite proxy
 
 The system properly handles the localhost:3000 (server) ↔ localhost:5173 (client) relationship through CORS, Vite proxying, and explicit credentials configuration.
 

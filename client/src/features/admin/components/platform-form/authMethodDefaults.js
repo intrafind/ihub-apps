@@ -7,8 +7,7 @@
  *
  * The server stores each auth block as posted and its runtime readers do not
  * apply the schema defaults, so a block posted as `{ enabled: true }` alone
- * loses them. NTLM is the case that matters: without `generateJwtToken: true`
- * no session is issued and the LDAP group lookup is skipped.
+ * loses them.
  *
  * Used only when the admin turns a method on whose block is missing, never at
  * load time, so nothing is posted that the admin did not ask for.
@@ -28,8 +27,7 @@ export const AUTH_METHOD_DEFAULTS = Object.freeze({
   ntlmAuth: {
     debug: false,
     defaultGroups: [],
-    sessionTimeoutMinutes: 480,
-    generateJwtToken: true
+    sessionTimeoutMinutes: 480
   }
 });
 
@@ -48,7 +46,7 @@ export const AUTH_METHOD_DEFAULTS = Object.freeze({
  * @example
  * withAuthMethodEnabled({}, 'ntlmAuth', true)
  * // { ntlmAuth: { debug: false, defaultGroups: [], sessionTimeoutMinutes: 480,
- * //               generateJwtToken: true, enabled: true } }
+ * //               enabled: true } }
  */
 export function withAuthMethodEnabled(config, method, enabled) {
   const current = config?.[method];

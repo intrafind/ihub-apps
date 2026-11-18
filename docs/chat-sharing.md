@@ -46,11 +46,11 @@ read any chat. Neither of those opens counts as a view. A delegated
 principal — a personal API key, an Outlook add-in token — carries its owner's
 groups but not their admin rights, here as everywhere else.
 
-**Installations whose only sign-in is NTLM or an upstream proxy** challenge
-every page request before the application sees it, so a public link cannot
-reach a visitor from outside that domain. The link works for everyone the
-proxy or domain lets through; document it as internal there, or add a second
-sign-in method.
+**Installations whose only sign-in is an upstream proxy** challenge every
+page request before the application sees it, so a public link cannot reach a
+visitor the proxy does not let through; document it as internal there, or add
+a second sign-in method. Windows sign-in (NTLM) runs only on its login
+endpoint, not on page requests, so it does not block public links.
 
 **Pseudonymized identity mode** (`platform.runLog.identityMode`) records no
 names against a chat, and a share written in that mode carries none either:

@@ -634,10 +634,13 @@ NTLM (Windows Integrated Authentication) allows users on domain-joined Windows m
 
 #### How It Works
 
-1. The browser answers iHub's `WWW-Authenticate: NTLM` challenge automatically (no login form required for SSO)
-2. `server/middleware/ntlmAuth.js` handles the multi-round NTLM handshake
+1. The browser opens `GET /api/auth/ntlm/login?returnUrl=…`, the only endpoint that runs the NTLM handshake
+2. The browser answers iHub's `WWW-Authenticate: NTLM` challenge automatically (no login form required for SSO); `server/middleware/ntlmAuth.js` handles the multi-round handshake
 3. The domain controller checks the sign-in; it returns no groups. When `ldapGroupLookupProvider` names an LDAP provider, the user's groups are looked up there
-4. Groups are mapped to iHub internal groups and a JWT token is optionally generated
+4. Groups are mapped to iHub internal groups, the `authToken` session cookie is set (lifetime `sessionTimeoutMinutes`), and the browser is redirected to `returnUrl?ntlm=success`
+5. All further requests are signed in by the session cookie, as with local, LDAP and OIDC sign-in
+
+On failure (domain controller rejected the logon, did not answer within 5 seconds, NTLM disabled, or cooldown after a rejection) the browser is redirected to `/?auth=error&message=…` and the login screen shows the message. API clients use `POST /api/auth/ntlm/login`, which answers JSON or problem+json (403 rejected, 429 cooldown, 503 domain controller timeout).
 
 #### Configuration
 
@@ -648,7 +651,6 @@ NTLM (Windows Integrated Authentication) allows users on domain-joined Windows m
     "domain": "COMPANY",
     "domainController": "ldaps://dc.company.com:636",
     "ldapGroupLookupProvider": "corporate-ldap",
-    "generateJwtToken": true,
     "defaultGroups": ["authenticated"],
     "sessionTimeoutMinutes": 480
   }
@@ -659,16 +661,16 @@ NTLM (Windows Integrated Authentication) allows users on domain-joined Windows m
 
 #### Multiple Provider Co-existence
 
-When NTLM is enabled alongside other providers (local, LDAP, OIDC), automatic NTLM SSO is suppressed for non-NTLM flows. NTLM authentication is only activated when:
+For a signed-out browser, `GET /api/auth/status` returns `autoRedirect: { provider: 'ntlm', url: '<basePath>/api/auth/ntlm/login' }` when:
 
-- The user explicitly requests it via `?ntlm=true`, or
-- The request targets the `POST /api/auth/ntlm/login` endpoint
+- NTLM is the only enabled sign-in method (anonymous access off), or
+- The browser has the `ntlmRequested` cookie, set by an earlier Windows sign-in and cleared on logout
 
-This prevents the NTLM multi-round handshake from blocking access to standard login forms.
+The client follows `autoRedirect` (the same mechanism as OIDC `autoRedirect`), so NTLM-only setups sign in without a click and renew the session when the cookie expires. With several methods enabled and no `ntlmRequested` cookie, the login screen shows the forms and a "Windows sign-in" button.
 
 #### Development Notes
 
-NTLM authentication is automatically skipped for requests proxied through Vite's dev server (port 5173) to prevent authentication loops. Set `SKIP_NTLM_VITE_PROXY=false` to override this behaviour during local testing.
+Windows sign-in works through `npm run dev` without any flag: the Vite dev proxy keeps the NTLM handshake on one upstream connection per browser connection.
 
 #### Security Notes
 

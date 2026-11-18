@@ -874,6 +874,8 @@ For detailed setup instructions see [LDAP/NTLM Authentication](ldap-ntlm-authent
 ### **ntlmAuth**
 Windows NTLM authentication for domain-joined environments. iHub checks the NTLM sign-in by relaying it to the domain controller; Kerberos (`Negotiate`) is not supported — see [LDAP/NTLM Authentication](ldap-ntlm-authentication.md#kerberos).
 
+The NTLM handshake runs only on the sign-in endpoint `/api/auth/ntlm/login`. A successful sign-in sets iHub's session cookie, and every other request is signed in by that cookie, as with the other sign-in methods.
+
 ```json
 {
   "ntlmAuth": {
@@ -883,8 +885,7 @@ Windows NTLM authentication for domain-joined environments. iHub checks the NTLM
     "debug": false,
     "ldapGroupLookupProvider": "corporate-ldap",
     "defaultGroups": ["users"],
-    "sessionTimeoutMinutes": 480,
-    "generateJwtToken": true
+    "sessionTimeoutMinutes": 480
   }
 }
 ```
@@ -897,8 +898,7 @@ Windows NTLM authentication for domain-joined environments. iHub checks the NTLM
 | `debug`                     | Boolean | `false`  | Enable verbose NTLM debugging output                                                                 |
 | `ldapGroupLookupProvider`   | String  | -        | Name of an entry in `ldapAuth.providers` that supplies the user's groups at sign-in. NTLM itself returns none |
 | `defaultGroups`             | Array   | `[]`     | Groups automatically assigned to all NTLM-authenticated users                                       |
-| `sessionTimeoutMinutes`     | Number  | `480`    | Session lifetime in minutes                                                                          |
-| `generateJwtToken`          | Boolean | `true`   | Issue a JWT token after successful NTLM authentication so subsequent requests use standard auth      |
+| `sessionTimeoutMinutes`     | Number  | `480`    | Lifetime of the session cookie issued at sign-in, in minutes                                         |
 | `options`                   | Object  | -        | Additional options passed directly to the underlying NTLM library                                   |
 
 For detailed setup instructions see [LDAP/NTLM Authentication](ldap-ntlm-authentication.md).

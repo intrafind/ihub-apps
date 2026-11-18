@@ -12,6 +12,7 @@ import { jest } from '@jest/globals';
 import express from 'express';
 import rateLimit from 'express-rate-limit';
 import request from 'supertest';
+import { ServiceError } from '../utils/ServiceError.js';
 
 const platform = {
   localAuth: { enabled: true },
@@ -36,8 +37,9 @@ jest.unstable_mockModule('../middleware/ldapAuth.js', () => ({
 }));
 jest.unstable_mockModule('../middleware/ntlmAuth.js', () => ({
   processNtlmLogin: (...args) => processNtlmLogin(...args),
-  markNtlmRequested: () => {},
-  clearNtlmRequested: () => {}
+  markNtlmRequested: res => res.cookie('ntlmRequested', '1'),
+  clearNtlmRequested: res => res.clearCookie('ntlmRequested'),
+  NTLM_REQUESTED_COOKIE: 'ntlmRequested'
 }));
 jest.unstable_mockModule('../services/AuditLogService.js', () => ({ logAudit: () => {} }));
 jest.unstable_mockModule('../telemetry/metrics.js', () => ({ recordAuthEvent: () => {} }));
@@ -46,13 +48,14 @@ const { default: registerAuthRoutes } = await import('../routes/auth.js');
 const { default: errorHandler } = await import('../middleware/errorHandler.js');
 const { resetLoginLockouts } = await import('../utils/loginLockout.js');
 
-function buildApp({ ntlm } = {}) {
+function buildApp({ ntlm, ntlmFailure } = {}) {
   const app = express();
   // Harness-only limiter: the production app rate-limits at the server level.
   app.use(rateLimit({ windowMs: 60000, limit: 1000 }));
   app.use(express.json());
   app.use((req, res, next) => {
     if (ntlm) req.ntlm = ntlm;
+    if (ntlmFailure) req.ntlmFailure = ntlmFailure;
     next();
   });
   registerAuthRoutes(app);
@@ -115,6 +118,22 @@ describe('POST /api/auth/local/login', () => {
   });
 });
 
+describe('local sign-in and the Windows preference', () => {
+  test('a local sign-in forgets an earlier Windows sign-in', async () => {
+    // Otherwise /api/auth/status would send this browser to Windows sign-in
+    // when the local session expires.
+    loginUser.mockResolvedValue({ user: { id: 'ada' }, token: 't', expiresIn: 3600 });
+    const res = await request(buildApp())
+      .post('/api/auth/local/login')
+      .set('Cookie', 'ntlmRequested=1')
+      .send({ username: 'ada', password: 'pw' });
+    expect(res.status).toBe(200);
+    const cookies = res.headers['set-cookie'].join(';');
+    expect(cookies).toMatch(/ntlmRequested=;/);
+    expect(cookies).not.toMatch(/ntlmRequested=1/);
+  });
+});
+
 describe('POST /api/auth/ldap/login', () => {
   const login = body => request(buildApp()).post('/api/auth/ldap/login').send(body);
 
@@ -170,20 +189,53 @@ describe('POST /api/auth/ldap/login', () => {
 });
 
 describe('NTLM login', () => {
-  test('GET answers 400 when NTLM is turned off', async () => {
+  // The browser sign-in is a page navigation: every failure goes back to the
+  // app with ?auth=error, which the auth gate shows on its login screen.
+  function expectSignInFailedRedirect(res, message) {
+    expect(res.status).toBe(302);
+    const location = new URL(res.headers.location, 'http://localhost');
+    expect(location.pathname).toBe('/');
+    expect(location.searchParams.get('auth')).toBe('error');
+    if (message) expect(location.searchParams.get('message')).toMatch(message);
+  }
+
+  test('GET sends the browser back with an error when NTLM is turned off', async () => {
     platform.ntlmAuth = { enabled: false };
-    expectProblem(await request(buildApp()).get('/api/auth/ntlm/login'), 400, 'BAD_REQUEST');
+    const res = await request(buildApp()).get('/api/auth/ntlm/login');
+    expectSignInFailedRedirect(res, /not enabled/);
   });
 
-  test('GET answers 401 while the NTLM handshake is not finished', async () => {
+  test('GET sends the browser back with an error when the handshake did not finish', async () => {
     const res = await request(buildApp()).get('/api/auth/ntlm/login');
-    expectProblem(res, 401, 'AUTH_REQUIRED');
-    expect(res.body.detail).toMatch(/NTLM authentication in progress/);
+    expectSignInFailedRedirect(res, /did not complete/);
+  });
+
+  test('GET sends the browser back with the reason the domain controller refused', async () => {
+    const ntlmFailure = new ServiceError('FORBIDDEN', 'Windows sign-in was rejected.');
+    const res = await request(buildApp({ ntlmFailure })).get('/api/auth/ntlm/login');
+    expectSignInFailedRedirect(res, /rejected/);
+    expect(processNtlmLogin).not.toHaveBeenCalled();
+  });
+
+  test('GET signs in, remembers the choice and returns to the page', async () => {
+    processNtlmLogin.mockResolvedValue({ user: { id: 'jane' }, token: 't', expiresIn: 60 });
+    const res = await request(buildApp({ ntlm: { Authenticated: true } })).get(
+      '/api/auth/ntlm/login?returnUrl=/apps/chat'
+    );
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toBe('/apps/chat?ntlm=success');
+    expect(res.headers['set-cookie'].join(';')).toMatch(/ntlmRequested=1/);
   });
 
   test('POST answers 401 without NTLM data', async () => {
     const res = await request(buildApp()).post('/api/auth/ntlm/login');
     expectProblem(res, 401, 'AUTH_REQUIRED');
+  });
+
+  test('POST answers with the failure the NTLM middleware left', async () => {
+    const ntlmFailure = new ServiceError('FORBIDDEN', 'Windows sign-in was rejected.');
+    const res = await request(buildApp({ ntlmFailure })).post('/api/auth/ntlm/login');
+    expectProblem(res, 403, 'FORBIDDEN');
   });
 
   test('POST fails closed: a failing NTLM login answers 401, not 500', async () => {

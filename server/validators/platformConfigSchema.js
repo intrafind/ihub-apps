@@ -446,7 +446,6 @@ export const platformConfigSchema = z
         ldapGroupLookupProvider: z.string().optional(),
         defaultGroups: z.array(z.string()).prefault([]),
         sessionTimeoutMinutes: z.number().min(1).prefault(480),
-        generateJwtToken: z.boolean().prefault(true),
         tlsOptions: z.record(z.any()).optional(),
         options: z.record(z.any()).optional()
       })

@@ -1079,6 +1079,23 @@ inference API; raise `rateLimit.publicApi.limit` or `rateLimit.inferenceApi.limi
 more. If a crawled site cannot take 25 parallel fetches, lower `requestConcurrency` (models with
 their own `concurrency` keep it).
 
+## Windows Sign-In: `ntlmAuth.generateJwtToken` Is Removed
+
+Windows sign-in (NTLM) now runs only on `/api/auth/ntlm/login`, which always sets iHub's session
+cookie; every other request is signed in by that cookie (see the fix "Windows Sign-In Happens Once, Not
+on Every Request"). The setting `ntlmAuth.generateJwtToken` (**Generate JWT Token** in the NTLM
+settings) chose between a session cookie and a Windows sign-in on every request; the second no longer
+exists, so the setting is gone. Migration V257 deletes it from `platform.json`.
+
+- Installations that had it **on** (the default) see no difference.
+- Installations that had it **off** now get a session of `ntlmAuth.sessionTimeoutMinutes` (default 480)
+  after the Windows sign-in.
+- API clients that sent `Authorization: NTLM …` with every call sign in once with
+  `POST /api/auth/ntlm/login` and send the returned session cookie afterwards. `?ntlm=true` on other
+  requests has no effect any more.
+- The development setting `SKIP_NTLM_VITE_PROXY` is gone: Windows sign-in works through the Vite dev
+  server (`npm run dev`) as it is.
+
 ## OpenTelemetry Export Goes Through the Outbound Proxy
 
 Trace and metric export to an OTLP collector now uses the same outbound connection settings as every

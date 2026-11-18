@@ -1172,15 +1172,26 @@ A chat request whose `Accept-Language` header is not a language tag (`*`, which 
 default) still failed with `INTERNAL_ERROR`: the weekday in the prompt variables was formatted with the raw
 header. It now uses the platform's default language, like the date.
 
-## Windows Sign-In No Longer Locks the Account After One Wrong Password
+## Windows Sign-In Happens Once, Not on Every Request
 
-With Windows sign-in (NTLM), a browser that sent a stale or wrong password locked the user's Active
-Directory account within seconds — and kept it locked for as long as the iHub tab stayed open. Until a
-sign-in succeeds, every request runs its own sign-in, so one page load counted as a dozen failed logons,
-and the connection check then retried `/api/health` every few seconds, adding another one each time.
+With Windows sign-in (NTLM), every request the browser sent ran its own sign-in at the domain controller
+until one succeeded. One page load was a dozen sign-ins, so a stale or wrong password locked the user's
+Active Directory account within seconds and kept it locked while the iHub tab stayed open. A domain
+controller that answered slowly signed the user out of iHub.
 
-- The health check (`/api/health`) no longer asks for Windows sign-in, and a refused sign-in no longer
-  makes the app think the server is offline.
-- After the domain controller rejects an account, iHub answers that account's next sign-in attempts
-  itself for 60 seconds (`429` with `Retry-After`) instead of passing them on, so they do not count as
-  failed logons.
+Windows sign-in now works like every other sign-in method:
+
+- **Only the sign-in page asks for Windows credentials** (`/api/auth/ntlm/login`). It signs the user in
+  once and sets iHub's session cookie; every other request is signed in by that cookie.
+- **No click needed when Windows is the only way in.** A signed-out browser is sent to the Windows
+  sign-in automatically, and again when the session ends. With other sign-in methods enabled, users
+  choose **Windows sign-in** on the login screen; a browser that signed in with Windows before is sent
+  back to it until the user logs out.
+- **A failed sign-in shows the login screen with the reason** (rejected, domain controller not
+  answering) instead of an empty error page.
+- **After the domain controller rejects an account**, iHub answers that account's next sign-in attempts
+  itself for 60 seconds instead of passing them on, so they do not count as failed logons. This also
+  holds when the browser sends the user name without a domain, as a computer outside the domain (for
+  example a Mac) does.
+- The health check (`/api/health`) never asks for Windows sign-in, and a refused sign-in no longer makes
+  the app think the server is offline.

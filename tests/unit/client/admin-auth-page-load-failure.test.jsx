@@ -267,7 +267,7 @@ describe('AdminAuthPage turning on a method whose block is missing (R1)', () => 
   /** The checkbox in the auth-method row titled `label`. */
   const methodCheckbox = label => screen.getByRole('checkbox', { name: label });
 
-  it('posts the NTLM defaults (JWT session on), not a bare { enabled: true }', async () => {
+  it('posts the NTLM defaults, not a bare { enabled: true }', async () => {
     renderPage();
     await flush();
 
@@ -283,8 +283,7 @@ describe('AdminAuthPage turning on a method whose block is missing (R1)', () => 
       enabled: true,
       debug: false,
       defaultGroups: [],
-      sessionTimeoutMinutes: 480,
-      generateJwtToken: true
+      sessionTimeoutMinutes: 480
     });
     // Nothing else was seeded: blocks the admin did not touch stay absent.
     expect(body).not.toHaveProperty('ldapAuth');
