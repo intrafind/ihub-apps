@@ -973,8 +973,11 @@ the new method first and sign in with it, use another admin account, and delete 
 
 Only scripts that call the admin API directly are affected; the admin pages need nothing.
 
-- `POST /api/admin/configs/platform`: a JWT secret or the speech key left out of a section is now
-  kept, not deleted. To remove one, send `null` for it.
+- `POST /api/admin/configs/platform`: a secret left out of a section — `auth.jwtSecret`,
+  `localAuth.jwtSecret`, `speech.azure.subscriptionKey` or a provider's `jwkUrl` under
+  `proxyAuth.jwtProviders` — is now kept, not deleted. A script that cleared a secret by sending the
+  section without it now leaves the old value in place and gets `200`; to remove one, send `null`
+  for it. The new `PATCH /api/admin/configs/platform` follows the same rule.
 - A value that is still a redaction placeholder (`***REDACTED***`, `[REDACTED]`, a URL with
   `REDACTED` in place of a password or token) and has no stored value behind it is refused with
   `400 VALIDATION_FAILED`; `errors[].pointer` names the field. Before, it was stored as the secret.
@@ -1075,3 +1078,16 @@ requests per minute per worker instead of 500 per address, on the web app API an
 inference API; raise `rateLimit.publicApi.limit` or `rateLimit.inferenceApi.limit` if it needs
 more. If a crawled site cannot take 25 parallel fetches, lower `requestConcurrency` (models with
 their own `concurrency` keep it).
+
+## OpenTelemetry Export Goes Through the Outbound Proxy
+
+Trace and metric export to an OTLP collector now uses the same outbound connection settings as every
+other call iHub makes, including the proxy. Before, it always connected directly. When a proxy is
+configured (**Admin → Platform → Security → Outbound Proxy**, `proxy.http` / `proxy.https` in `platform.json`, or the
+`HTTP_PROXY` / `HTTPS_PROXY` variables) and the collector's host is neither in `proxy.noProxy` (or
+`NO_PROXY`) nor excluded by `proxy.urlPatterns`, the export is sent to the proxy. A collector on the
+internal network that the proxy cannot reach then stops receiving traces and metrics; the server
+logs the export errors, chat and everything else keep working.
+
+**Before upgrading:** if iHub uses a proxy and exports to an internal collector, add the collector's
+host to `proxy.noProxy` (or `NO_PROXY`). The change takes effect for the exporter after a restart.
