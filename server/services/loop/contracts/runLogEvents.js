@@ -481,7 +481,7 @@ export const budgetExhaustedData = z.object({
 
 export const contextCompactionData = z.object({
   step: z.number().int().nonnegative(),
-  trigger: z.enum(['proactive', 'overflow']),
+  trigger: z.enum(['proactive', 'overflow', 'retried_call']),
   collapsed: z.number().int().nonnegative(),
   freedChars: z.number().int().nonnegative(),
   shadowedRange: z.tuple([z.number().int(), z.number().int()]).optional(),

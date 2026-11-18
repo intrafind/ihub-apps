@@ -2011,7 +2011,7 @@
               },
               "trigger": {
                 "type": "string",
-                "enum": ["proactive", "overflow"]
+                "enum": ["proactive", "overflow", "retried_call"]
               },
               "collapsed": {
                 "type": "integer",

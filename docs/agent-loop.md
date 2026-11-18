@@ -33,7 +33,10 @@ loop:
    JSON) and applies schema defaults;
 4. runs the calls through the segment planner (`planToolBatches`), appends
    results in the model's original order, and applies the circuit breakers;
-5. compacts the transcript when it grows large; forces a final tool-less turn
+5. shortens the long argument values of a failed tool call once the model has
+   called that tool again (`elideRetriedCallArguments`: only the newest attempt
+   is replayed in full), compacts the transcript when it grows large; forces a
+   final tool-less turn
    when every tool is dead, the run token budget is spent, or the last allowed
    round is reached;
 6. returns a `LoopResult`.
@@ -118,7 +121,7 @@ is an object with any of these hooks; register it for every run with
 | `postTool(ctx, info, outcome)`  | After a tool executed                                               | Rewrite `outcome.message`, lift images, add knowledge sources |
 | `onHallucinated(ctx, info)`     | Model called an unregistered tool                                   | Record for audit                                   |
 | `onCircuitBroken(ctx, info)`    | A tool was withheld                                                 | Record / notify                                    |
-| `onCompaction(ctx, info)`       | Transcript was compacted (`trigger: 'proactive' | 'overflow'`)      | Telemetry                                          |
+| `onCompaction(ctx, info)`       | Transcript was compacted (`trigger: 'proactive' | 'overflow' | 'retried_call'`) | Telemetry                                          |
 | `onAnswer(ctx, info)`           | The model answered without a tool call (`info.stepText` — this step's answer; `info.content` — the run's text so far; `info.canRetry`) | Return `{ handled, retry, error? }` to reject the answer: the loop appends it and the `retry` correction, and the model answers again (only while `canRetry`) |
 
 Built-in seams live in `server/services/loop/seams/`:

@@ -59,6 +59,7 @@ import {
 } from './toolChoice.js';
 import {
   compactIfOversized,
+  elideRetriedCallArguments,
   microcompactMessages,
   isContextOverflowError,
   estimateTokens
@@ -899,6 +900,27 @@ export class AgentLoop {
 
         if (aborted) throw aborted;
         if (terminal) return terminalResult(terminal);
+
+        // ── failed calls sent again: only the newest attempt in full ────
+        const retried = elideRetriedCallArguments(ctx.messages);
+        if (retried.collapsed > 0) {
+          ctx.messages = retried.messages;
+          promptAnchor = null;
+          this.logger.info('Shortened the arguments of failed tool calls sent again', {
+            component: COMPONENT,
+            runId,
+            iteration,
+            collapsed: retried.collapsed,
+            freedChars: retried.freedChars
+          });
+          this._ledger(ledgerId, RUN_LOG_EVENTS.CONTEXT_COMPACTION, {
+            step: iteration,
+            trigger: 'retried_call',
+            collapsed: retried.collapsed,
+            freedChars: retried.freedChars
+          });
+          await runHooks(seams, 'onCompaction', ctx, { trigger: 'retried_call', ...retried });
+        }
 
         // ── proactive compaction ────────────────────────────────────────
         const compaction = compactIfOversized(ctx.messages, {

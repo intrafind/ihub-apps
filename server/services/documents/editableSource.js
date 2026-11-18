@@ -3,6 +3,7 @@
 
 import JSZip from 'jszip';
 import { parseStructured } from './documentToolHelpers.js';
+import { parseJsonArgument } from './jsonArgument.js';
 import { chatArtifactCandidates, selectChatFiles } from './files/fileTools.js';
 import { GeneratedFileError } from './generatedFiles.js';
 
@@ -402,7 +403,9 @@ export function sourceViewOf(source) {
   let text;
   if (typeof value === 'string' && view.format === 'markdown') text = value;
   else {
-    const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+    // The arguments as the model sent them: JSON it left brackets open in
+    // was closed when the file was made, so it is read the same way here.
+    const parsed = typeof value === 'string' ? parseJsonArgument(value).value : value;
     text = JSON.stringify(parsed ?? null, null, 2);
   }
   return { text, format: view.format, editTool: view.editTool };

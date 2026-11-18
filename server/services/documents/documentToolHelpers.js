@@ -4,6 +4,7 @@
 import { DocumentGenerationError } from './renderService.js';
 import { GeneratedFileError } from './generatedFiles.js';
 import { DocumentTemplateError } from './templates/DocumentTemplateService.js';
+import { JsonArgumentError, parseJsonArgument } from './jsonArgument.js';
 
 /**
  * Helpers shared by the tools of the document system skills (`create_pdf`,
@@ -15,7 +16,10 @@ export const MAX_SPEC_CHARS = 4 * 1024 * 1024;
 
 /**
  * A structured argument, given as a value or as its JSON (some providers'
- * schemas cannot declare free-form objects).
+ * schemas cannot declare free-form objects). JSON with closing brackets left
+ * out is closed (`parseJsonArgument`); other broken JSON is refused with what
+ * is wrong and where, so the model fixes that spot instead of sending the same
+ * call again.
  *
  * @param {unknown} value
  * @param {string} name - Parameter name, for the message.
@@ -26,9 +30,13 @@ export function parseStructured(value, name, what) {
   if (value === undefined || value === null || value === '') return undefined;
   if (typeof value === 'string') {
     try {
-      return JSON.parse(value);
-    } catch {
-      throw new DocumentGenerationError(`"${name}" must be ${what} (or its JSON).`, 'invalid');
+      return parseJsonArgument(value, name).value;
+    } catch (error) {
+      if (!(error instanceof JsonArgumentError)) throw error;
+      throw new DocumentGenerationError(
+        `"${name}" must be ${what} (or its JSON), and this JSON is not valid: ${error.message}. Nothing was created; send the call again with that spot fixed.`,
+        'invalid'
+      );
     }
   }
   return value;
