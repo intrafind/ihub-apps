@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useId, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from './Icon';
 import { translateText } from '../../api/adminApi';
@@ -67,6 +67,11 @@ const DynamicLanguageEditor = ({
   const effectiveValidationErrors = validationErrors ?? contextErrors;
   const [showAddLanguage, setShowAddLanguage] = useState(false);
   const [newLanguageCode, setNewLanguageCode] = useState('');
+  // The value and handler of the latest render: a translation answers after an
+  // `await`, by which time other languages may have been edited or the target
+  // language removed. The answer is applied to what the field holds then.
+  const latestRef = useRef({ value, onChange });
+  latestRef.current = { value, onChange };
 
   // If fieldType is provided, we're working with nested objects
   const currentValue = fieldType
@@ -301,7 +306,13 @@ const DynamicLanguageEditor = ({
     if (!text) return;
     try {
       const result = await translateText({ text, from: sourceLang, to: lang });
-      handleLanguageChange(lang, result.translation);
+      const { value: latest, onChange: change } = latestRef.current;
+      if (!Object.prototype.hasOwnProperty.call(latest, lang)) return;
+      change(
+        fieldType
+          ? { ...latest, [lang]: { ...latest[lang], [fieldType]: result.translation } }
+          : { ...latest, [lang]: result.translation }
+      );
     } catch (err) {
       console.error('Translation failed', err);
     }
