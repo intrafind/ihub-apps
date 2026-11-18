@@ -105,6 +105,25 @@ describe('atomicWrite permissions', { skip: process.platform === 'win32' }, () =
     assert.deepEqual(await fs.readdir(dir), ['doc.json'], 'no temp file left behind');
   });
 
+  it('atomicCreateJSON takes an EEXIST for its own link (a retried NFS request) as success', async () => {
+    const dir = path.join(ROOT, 'nfs-retry');
+    await fs.mkdir(dir);
+    const file = path.join(dir, 'doc.json');
+    const realLink = fs.link;
+    // The link is made, then the retransmitted request finds the name taken.
+    fs.link = async (from, to) => {
+      await realLink(from, to);
+      throw Object.assign(new Error('exists'), { code: 'EEXIST' });
+    };
+    try {
+      await atomicCreateJSON(file, { a: 1 });
+    } finally {
+      fs.link = realLink;
+    }
+    assert.deepEqual(JSON.parse(await fs.readFile(file, 'utf8')), { a: 1 });
+    assert.deepEqual(await fs.readdir(dir), ['doc.json'], 'no temp file left behind');
+  });
+
   it('leaves no temp file behind', async () => {
     const dir = path.join(ROOT, 'tmpcheck');
     await fs.mkdir(dir);

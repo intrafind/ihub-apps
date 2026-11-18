@@ -170,6 +170,12 @@ export async function atomicWriteJSON(filePath, data, options = {}) {
 /** `link` errors of a filesystem that has no hard links. */
 const NO_HARD_LINKS = new Set(['EPERM', 'ENOTSUP', 'ENOSYS', 'EOPNOTSUPP']);
 
+/** Hard links of `file`, 0 when it cannot be stat'ed. */
+async function linkCount(file) {
+  // lgtm[js/path-injection] -- the temp file of a caller-validated path.
+  return (await fs.stat(file).catch(() => null))?.nlink ?? 0;
+}
+
 export async function atomicCreateJSON(filePath, data) {
   const jsonData = JSON.stringify(data, null, 2);
   const dir = dirname(filePath);
@@ -187,11 +193,16 @@ export async function atomicCreateJSON(filePath, data) {
       // lgtm[js/path-injection] -- caller-validated path; see function doc.
       await fs.link(tempPath, filePath);
     } catch (error) {
-      if (!NO_HARD_LINKS.has(error.code)) throw error;
-      // A filesystem without hard links (some network and FUSE mounts): an
-      // exclusive create of the target, briefly visible half-written.
-      // lgtm[js/path-injection] -- caller-validated path; see function doc.
-      await fs.writeFile(filePath, jsonData, { encoding: 'utf8', flag: 'wx' });
+      // NFS: the link was made, its reply lost, and the retried request
+      // answered EEXIST. The temp file's second name is the target: ours.
+      const linkedAfterAll = error.code === 'EEXIST' && (await linkCount(tempPath)) === 2;
+      if (!linkedAfterAll) {
+        if (!NO_HARD_LINKS.has(error.code)) throw error;
+        // A filesystem without hard links (some network and FUSE mounts): an
+        // exclusive create of the target, briefly visible half-written.
+        // lgtm[js/path-injection] -- caller-validated path; see function doc.
+        await fs.writeFile(filePath, jsonData, { encoding: 'utf8', flag: 'wx' });
+      }
     }
   } finally {
     // lgtm[js/path-injection] -- caller-validated path; see function doc.
