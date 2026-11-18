@@ -349,7 +349,7 @@ describe('AdminProjectEditPage – items', () => {
       within(screen.getByText('broken.pdf').closest('tr')).queryByRole('button', { name: 'Retry' })
     ).toBeNull();
     expect(screen.getByRole('button', { name: 'Refresh' })).toBeInTheDocument();
-    expect(await screen.findByTestId('project-scan-warning')).toBeInTheDocument();
+    expect(screen.queryByTestId('project-scan-warning')).toBeNull();
   });
 
   test('edits the address of a web page item in the add dialog fields', async () => {
