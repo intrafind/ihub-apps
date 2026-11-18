@@ -401,6 +401,44 @@ describe('UI config: ETag, optional If-Match and pages (CU-B3)', () => {
     expect(JSON.parse(await readText('ui.json')).title).toEqual({ en: 'Again' });
   });
 
+  test('two repairs of an unparseable ui.json with the same ETag: one wins, the other is 412', async () => {
+    const app = appFor();
+    state.staleUI = structuredClone(UI);
+    await fs.writeFile(file('ui.json'), 'not json');
+    const etag = (await getUI(app)).headers.etag;
+
+    const [a, b] = await Promise.all([
+      saveUI(app, { ...UI, title: { en: 'First' } }, etag),
+      saveUI(app, { ...UI, title: { en: 'Second' } }, etag)
+    ]);
+
+    expect([a.status, b.status].sort()).toEqual([204, 412]);
+    const winner = a.status === 204 ? 'First' : 'Second';
+    expect(JSON.parse(await readText('ui.json')).title).toEqual({ en: winner });
+    state.staleUI = null;
+  });
+
+  test('a ui.json that cannot be read (EIO) is not repaired: the save fails and nothing is written', async () => {
+    const app = appFor();
+    state.staleUI = structuredClone(UI);
+    const before = await readText('ui.json');
+    const readFile = fs.readFile;
+    const failing = jest.spyOn(fs, 'readFile').mockImplementation((target, ...rest) => {
+      if (String(target) === file('ui.json')) {
+        return Promise.reject(Object.assign(new Error('EIO: i/o error'), { code: 'EIO' }));
+      }
+      return readFile.call(fs, target, ...rest);
+    });
+    try {
+      const response = await saveUI(app, { ...UI, title: { en: 'Replaced' } });
+      expect(response.status).toBe(500);
+    } finally {
+      failing.mockRestore();
+      state.staleUI = null;
+    }
+    expect(await readText('ui.json')).toBe(before);
+  });
+
   test('a stale If-Match on an unparseable ui.json is still 412 and leaves the file as it is', async () => {
     const app = appFor();
     const stale = (await getUI(app)).headers.etag;

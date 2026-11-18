@@ -43,17 +43,6 @@ const MAX_FEATURED_APPS = 50;
 const UI_FILE = 'config/ui.json';
 
 /**
- * Whether a configuration file is present but cannot be parsed, so neither a
- * read nor `updateJson` can use it.
- *
- * @param {string} relPath - Path relative to `contents/`
- * @returns {Promise<boolean>}
- */
-async function isUnparseable(relPath) {
-  return (await configStore.readJson(relPath)) === null && (await configStore.exists(relPath));
-}
-
-/**
  * The revision of `ui.json` as the UI form sees it: the stored body without
  * `pages`. The save keeps the stored page registry whatever it is sent, so a
  * page created, changed or deleted after the form loaded cannot conflict with
@@ -296,33 +285,34 @@ export default function registerAdminUIRoutes(app) {
     // Validate the configuration structure (basic validation)
     validateUIConfig(config);
 
-    let stored;
-    try {
-      // Read, compare and write under the file's update lock.
-      ({ data: stored } = await configStore.updateJson(UI_FILE, current => {
+    // Read, compare and write under the file's update lock, the repair of an
+    // unparseable file included: two repairs cannot both pass the check.
+    const { data: stored } = await configStore.updateJson(
+      UI_FILE,
+      (current, { unparseable } = {}) => {
+        if (unparseable) {
+          // The stored file was read but is not valid JSON (edited by hand). A
+          // full save replaces the whole file, so it is the admin's way to
+          // repair it. There is no stored body: the read answered the revision
+          // of a missing file and served the runtime cache, so `If-Match` is
+          // checked against a missing file, and the `pages` registry is the one
+          // the form sent (from that cache), since none can be read from disk.
+          // A file that could not be read at all (EACCES, EIO) is not repaired:
+          // `updateJson` throws for it.
+          logger.warn('ui.json could not be parsed; the UI configuration save replaces it', {
+            component: 'AdminUI'
+          });
+          assertIfMatch(req, null, 'ui', uiRevisionOf);
+          return { ...config };
+        }
         assertIfMatch(req, current, 'ui', uiRevisionOf);
         const next = { ...config };
         if (current?.pages !== undefined) next.pages = current.pages;
         else delete next.pages;
         return next;
-      }));
-    } catch (error) {
-      if (error instanceof ServiceError || !(await isUnparseable(UI_FILE))) throw error;
-      // The stored file is there but cannot be parsed (edited by hand). A full
-      // save replaces the whole file, so it is the admin's way to repair it,
-      // as it was before saves went through `updateJson`. There is no stored
-      // body: the read answered the revision of a missing file and served the
-      // runtime cache, so `If-Match` is checked against a missing file, and
-      // the `pages` registry is the one the form sent (from that cache), since
-      // none can be read from disk.
-      logger.warn('ui.json could not be parsed; the UI configuration save replaces it', {
-        component: 'AdminUI',
-        error
-      });
-      assertIfMatch(req, null, 'ui', uiRevisionOf);
-      stored = { ...config };
-      await configStore.writeJson(UI_FILE, stored);
-    }
+      },
+      { replaceUnparseable: true }
+    );
 
     // Refresh the cache
     await configCache.refreshCacheEntry(UI_FILE);
