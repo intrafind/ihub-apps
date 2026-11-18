@@ -261,6 +261,27 @@ export function createContextTracker(model, { prior = null, resent = false } = {
     },
     last: () => latest,
     /**
+     * The transcript was compacted in place (#3819): the messages the last
+     * provider count held are now `freedTokens` smaller, while their number
+     * stayed the same. Without this the next estimate would add what came
+     * after to the old, larger count until the next model call. Only what
+     * was freed inside that count counts: a message added after it is
+     * estimated as it is now, already shortened.
+     * @param {number} freedTokens
+     * @param {Array<[number, number]>} [freedByMessage] - [message index, tokens freed];
+     *   negative where a message grew (the one that carries the digest)
+     */
+    compacted(freedTokens, freedByMessage) {
+      if (!anchor) return;
+      const net = Array.isArray(freedByMessage)
+        ? freedByMessage
+            .filter(([index]) => index < anchor.messageCount)
+            .reduce((sum, [, tokens]) => sum + (Number(tokens) || 0), 0)
+        : Math.max(0, Number(freedTokens) || 0);
+      const change = Math.floor(net);
+      if (change !== 0) anchor = { ...anchor, tokens: Math.max(0, anchor.tokens - change) };
+    },
+    /**
      * The window as the next turn will find it: the prompt this turn started
      * from plus its answer, and the system prompt's share of it (what the next
      * turn replaces with its own). Tool calls and results of this turn are not

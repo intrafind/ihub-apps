@@ -6,7 +6,9 @@
  *
  * - `microcompactMessages` collapses the content of old, bulky `tool` /
  *   `assistant` messages into short placeholders while keeping the last
- *   `keepRecent` messages verbatim and never touching system/user prompts.
+ *   `keepRecent` messages verbatim and never touching system/user prompts or
+ *   a condensed result (a findings digest, `findingsDigest.js`). What it
+ *   collapses is lost: the loop uses it as the lossy path (`lossy: true`).
  * - `compactIfOversized` runs it only when the estimated prompt size exceeds a
  *   threshold (the O(N²) prompt-growth fix); under the threshold it returns the
  *   same array reference.
@@ -22,6 +24,7 @@
 import { estimateTokens } from '../../../shared/tokenEstimator.js';
 import { estimateTranscriptTokens } from './contextTracker.js';
 import { isLLMError } from './contracts/errors.js';
+import { isCondensedContent } from './findingsDigest.js';
 import { classifyToolResult } from './toolClassify.js';
 
 export function microcompactMessages(messages, opts = {}) {
@@ -36,6 +39,9 @@ export function microcompactMessages(messages, opts = {}) {
   const out = messages.map((msg, i) => {
     if (i >= cutoff) return msg;
     if (!msg || typeof msg.content !== 'string') return msg;
+    // A condensed result holds a findings digest: what the model learned from
+    // results that are gone from the transcript already (#3819).
+    if (isCondensedContent(msg.content)) return msg;
     const isCompactable = msg.role === 'tool' || msg.role === 'assistant';
     if (!isCompactable || msg.content.length <= maxChars) return msg;
     freedChars += msg.content.length;
@@ -47,6 +53,74 @@ export function microcompactMessages(messages, opts = {}) {
     };
   });
   return { messages: out, freedChars, collapsed };
+}
+
+/**
+ * Whether a tool result says its call failed (`{ success: false }`, a truthy
+ * `error`, "Error: …"); `{ error: false }` is a success, as in toolClassify.
+ */
+export function isFailedResult(content) {
+  const text = String(content ?? '').trim();
+  if (/^error\b/i.test(text)) return true;
+  if (!text.startsWith('{')) return false;
+  try {
+    const value = JSON.parse(text);
+    return value?.success === false || (!!value?.error && value?.success !== true);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The arguments of failed tool calls, shortened: a last way to free context
+ * when the results are condensed already and a model resent a long call that
+ * was refused (a workbook whose JSON did not parse, three times). The newest
+ * failed call keeps its arguments, so the model can see what it sent last;
+ * its error stays in its result.
+ *
+ * @param {Array<Object>} messages
+ * @param {{maxArgsChars?: number, failedIds?: Iterable<string>}} [opts] -
+ *   `failedIds`: calls known to have failed when they ran, whose result may
+ *   since have been elided or bounded and no longer say so.
+ * @returns {{messages: Array<Object>, freedChars: number, shortened: number}}
+ */
+export function shrinkFailedToolCalls(messages, opts = {}) {
+  const maxArgsChars = opts.maxArgsChars ?? 1000;
+  if (!Array.isArray(messages)) return { messages, freedChars: 0, shortened: 0 };
+  const failed = new Set(opts.failedIds || []);
+  for (const m of messages) {
+    if (m?.role === 'tool' && m.tool_call_id && isFailedResult(m.content)) {
+      failed.add(m.tool_call_id);
+    }
+  }
+  // The newest failed call with long arguments keeps them.
+  let newest = null;
+  for (const message of messages) {
+    for (const call of message?.role === 'assistant' ? message.tool_calls || [] : []) {
+      if (failed.has(call?.id) && String(call.function?.arguments ?? '').length > maxArgsChars) {
+        newest = call.id;
+      }
+    }
+  }
+  let freedChars = 0;
+  let shortened = 0;
+  const out = messages.map(message => {
+    if (message?.role !== 'assistant' || !Array.isArray(message.tool_calls)) return message;
+    let changed = false;
+    const calls = message.tool_calls.map(call => {
+      const args = String(call?.function?.arguments ?? '');
+      if (!failed.has(call?.id) || call.id === newest || args.length <= maxArgsChars) return call;
+      const replacement = JSON.stringify({
+        omitted: `the arguments of this failed call (${args.length} characters) were removed to free context; its error is in its result`
+      });
+      freedChars += args.length - replacement.length;
+      shortened += 1;
+      changed = true;
+      return { ...call, function: { ...call.function, arguments: replacement } };
+    });
+    return changed ? { ...message, tool_calls: calls } : message;
+  });
+  return { messages: out, freedChars, shortened };
 }
 
 /**

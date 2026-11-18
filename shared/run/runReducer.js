@@ -72,6 +72,9 @@ export function createRunState(runId, init = {}) {
     usage: null,
     // How full the model's context window is, as the server counts it.
     context: null,
+    // Earlier tool results the server condensed or shortened to free context
+    // (`context/compacted`, #3819), by compaction id, in arrival order.
+    compactions: [],
     refs: init.refs || {},
     model: init.model || null,
     parentRunId: init.parentRunId || null,
@@ -839,6 +842,18 @@ export function reduceRunEvent(state, envelope) {
 
     case SSE_V2_EVENTS.CONTEXT_USAGE:
       return withRun(next, { ...run, context: data || run.context });
+
+    case SSE_V2_EVENTS.CONTEXT_COMPACTED: {
+      if (!data?.compactionId) return next;
+      const list = Array.isArray(run.compactions) ? run.compactions : [];
+      const known = list.find(c => c.compactionId === data.compactionId);
+      // The `running` frame keeps its time: the row stays where it first appeared.
+      const entry = { ...known, ...data, at: known?.at || ts };
+      const compactions = known
+        ? list.map(c => (c.compactionId === data.compactionId ? entry : c))
+        : [...list, entry];
+      return withRun(next, { ...run, compactions });
+    }
 
     case SSE_V2_EVENTS.SOURCES_ADDED: {
       // The run's set, and — for a tool call's frame — that call's own list,

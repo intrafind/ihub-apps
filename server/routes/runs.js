@@ -158,8 +158,8 @@ export default function registerRunRoutes(app) {
     // what it did is in its evidence record (`/evidence`) from then on.
     if (events.length === 0 && (await runLog.isJournalDeleted(runId))) throw journalNotKept();
     // The cursor stands for the last raw ledger sequence this page read. A
-    // projected page can be empty (headers, budget events, compactions
-    // produce no envelopes) while more of the ledger remains, so the walk
+    // projected page can be empty (headers and budget events produce no
+    // envelopes) while more of the ledger remains, so the walk
     // follows the cursor, never the items: it ends on a page that read nothing.
     const nextCursor = events.length ? offsetCursor(events[events.length - 1].seq) : null;
     // No `lastSeq`. It used to be answered per page, and on a provider whose

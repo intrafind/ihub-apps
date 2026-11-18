@@ -22,6 +22,9 @@
  *    activation, saying who brought it in (the user with `/name`, the app, the
  *    model, or an earlier message of the chat; the earliest and most explicit
  *    route wins). The `activate_skill` call itself is not a row.
+ *  - `context/compacted` frames: one `compaction` row per compaction, placed
+ *    by time — earlier results the server condensed into notes (or shortened,
+ *    `lossy`) to free context. The notes are the server's (`digest`).
  *  - provider-run web search (Google Search grounding, Anthropic web search):
  *    the queries the provider reports on the grounding metadata
  *    (`webSearchQueries`). Its sources are listed in the sources panel.
@@ -234,6 +237,50 @@ function skillRows(run) {
         sources: [],
         error: null,
         durationMs: null
+      }
+    });
+  }
+  return rows;
+}
+
+/**
+ * One row per compaction of the run (`context/compacted`, #3819): earlier
+ * results condensed into notes, or shortened when that was not possible
+ * (`lossy`). What happened, how many results and of which kind, and the
+ * notes themselves are the server's; nothing is worked out here.
+ */
+function compactionRows(run, finished) {
+  const rows = [];
+  for (const entry of run.compactions || []) {
+    if (!entry?.compactionId) continue;
+    let status = entry.status === 'completed' ? 'completed' : 'running';
+    // A turn that ended while the notes were being written never got them.
+    if (status === 'running' && finished) status = 'stopped';
+    rows.push({
+      at: Date.parse(entry.at),
+      item: {
+        id: `compaction-${entry.compactionId}`,
+        kind: 'compaction',
+        toolId: null,
+        name: '',
+        status,
+        trigger: entry.trigger || 'proactive',
+        strategy: entry.strategy || null,
+        lossy: entry.lossy === true,
+        fallbackReason: entry.fallbackReason || null,
+        wrapUp: entry.wrapUp === true,
+        itemsSummarised: Number.isInteger(entry.itemsSummarised) ? entry.itemsSummarised : 0,
+        kinds: entry.kinds || null,
+        tokensBefore: Number.isInteger(entry.tokensBefore) ? entry.tokensBefore : null,
+        tokensAfter: Number.isInteger(entry.tokensAfter) ? entry.tokensAfter : null,
+        facts: Number.isInteger(entry.facts) ? entry.facts : null,
+        digest: typeof entry.digest === 'string' ? entry.digest : null,
+        digestTruncated: entry.digestTruncated === true,
+        step: Number.isInteger(entry.step) ? entry.step : null,
+        details: [],
+        sources: [],
+        error: null,
+        durationMs: Number.isInteger(entry.durationMs) ? entry.durationMs : null
       }
     });
   }
@@ -570,7 +617,11 @@ export function buildToolActivity(run) {
   const toolRows = callsInOrder(run)
     .map(call => callRow(run, call, finished))
     .filter(Boolean);
-  const items = foldSkillItems(mergeSkillRows(toolRows, skillRows(run)).map(row => row.item));
+  const placed = mergeSkillRows(
+    mergeSkillRows(toolRows, skillRows(run)),
+    compactionRows(run, finished)
+  );
+  const items = foldSkillItems(placed.map(row => row.item));
   const native = nativeSearchRow(run, finished);
   if (native) items.push(native);
 

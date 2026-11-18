@@ -2490,3 +2490,37 @@ three searches, one line each, with **Show all N searches** to unfold the rest.
 
 - Unfolded, the full queries scroll in a list of their own, so the sources below stay visible.
 - Hovering a shortened search shows it in full.
+
+## Chat: Long Research Turns Keep What They Found
+
+When a turn with many tool calls fills the model's context, iHub no longer cuts older search
+results and page reads down to short previews. It condenses them into notes: the facts and figures
+they held with their sources, the calls that already ran, and what was looked for and not found.
+The model therefore does not run the same searches again, and its answer keeps the earlier figures.
+
+- **Checked notes:** the model writes the facts; iHub keeps a fact only when its figures appear in
+  the result it cites, and builds the list of calls and sources itself.
+- **Full results stay readable:** the model can read a condensed result in full instead of
+  running the search again. Within a turn this always works; after the turn paused (for an
+  approval or a question) it needs the run log, which keeps the results while the turn is
+  paused.
+- **Room for the answer:** when the context is nearly full even after condensing, the turn stops
+  searching and writes its answer, and any file the user asked for, from the notes.
+- **Figures from sources, not memory:** the model is told to take figures only from its searches,
+  page reads and notes, and to say a figure is not available instead of filling it in.
+- **Plan first:** with web search on, the model is told to plan what the answer needs before the
+  first search, and for a list or a table to find the items first and then their details. A
+  workbook built from research is meant to hold only figures from sources (`n/a` otherwise),
+  states units and scale in its headers, and lists a ranking's top 10 unless the user names a
+  number or asks for all; this is guidance to the model, not a check of the workbook.
+- **Visible in the chat:** the answer's activity shows "Condensed 9 earlier search results into
+  notes", which opens to the notes, and explains why the context figure dropped. When the notes
+  could not be written, or the model's context window was full, the row says that details may be
+  missing.
+- **Cost:** writing the notes takes one or more extra calls per condensation (long results are
+  split into parts), at most 12 condensations with notes per turn, by default to the chat's own
+  model; admins can
+  pick another one for all chats (a fast one with a large context window) under **Admin → Chat
+  History → Long research turns**. Its tokens appear in usage reports and count toward usage
+  limits. Turns that stay under half the context window are unchanged.
+- Workflows and agent nodes are unchanged.

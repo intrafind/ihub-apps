@@ -23,7 +23,7 @@
  * @module services/loop/RunStream
  */
 import { SSE_V2_EVENTS, RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
-import { parseSseV2EventData } from './contracts/sseV2.js';
+import { compactedFrameOf, parseSseV2EventData } from './contracts/sseV2.js';
 import logger from '../../utils/logger.js';
 
 const COMPONENT = 'RunStream';
@@ -757,6 +757,10 @@ export function projectLedgerEvent(ev) {
             })
           ]
         : [];
+    case RUN_LOG_EVENTS.CONTEXT_COMPACTION:
+      // A compaction the chat shows as an activity row (#3819). Journals
+      // written before it carried an id have none, and no row.
+      return d.compactionId ? [wrap(SSE_V2_EVENTS.CONTEXT_COMPACTED, compactedFrameOf(d))] : [];
     case RUN_LOG_EVENTS.ERROR:
       return [
         wrap(SSE_V2_EVENTS.STREAM_ERROR, {

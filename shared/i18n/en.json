@@ -739,6 +739,13 @@
         "modelChat": "The chat's own model",
         "modelIdHelp": "A small, cheap model is enough. It is used only for users whose groups may use it; for everyone else the chat's own model writes the title. No other model is ever used."
       },
+      "compaction": {
+        "title": "Long research turns",
+        "description": "When a turn with many tool calls fills half the model's context, older results are condensed into notes: their facts with sources, and the calls that ran. The model can read a condensed result in full again.",
+        "modelId": "Model that writes the notes",
+        "modelChat": "The chat's own model",
+        "modelIdHelp": "A fast model with a large context window keeps long turns quick. It reads the tool results of the chat, so pick one approved for that data. It is used only for users whose groups may use it; for everyone else the chat's own model writes the notes. Its tokens count toward the user's usage."
+      },
       "evidence": {
         "title": "Evidence record",
         "description": "For every stored answer, a record of what went in and what came out: the system prompt, the messages and tool definitions of every model call, every tool call with its arguments and result, and the model settings. It lives and is deleted with the chat. The owner and admins can read it; a shared chat does not share it.",
@@ -9011,6 +9018,39 @@
     "documentsFound_other": "{{count}} documents found"
   },
   "toolActivity": {
+    "compaction": {
+      "running": "Condensing earlier results…",
+      "condensed_one": "Condensed {{count}} earlier result into notes",
+      "condensed_other": "Condensed {{count}} earlier results into notes",
+      "condensedSearches_one": "Condensed {{count}} earlier search result into notes",
+      "condensedSearches_other": "Condensed {{count}} earlier search results into notes",
+      "reduced_one": "Shortened {{count}} earlier result to its call and sources",
+      "reduced_other": "Shortened {{count}} earlier results to their calls and sources",
+      "shortened_one": "Shortened {{count}} earlier result to free context",
+      "shortened_other": "Shortened {{count}} earlier results to free context",
+      "contextFull_one": "Context full: shortened {{count}} earlier result",
+      "contextFull_other": "Context full: shortened {{count}} earlier results",
+      "someShortened_one": "{{count}} only shortened",
+      "someShortened_other": "{{count}} only shortened",
+      "stopped": "Condensing stopped",
+      "why": "Frees room in the model's context, so the turn can go on without running these calls again.",
+      "lossyRecall": "Some details may be missing from the notes. The model can read the full results again.",
+      "lossyElided": "Some details of these results are no longer available to the model.",
+      "wrapUp": "The context is nearly full: no more searching. The answer is written from these notes.",
+      "showNotes": "Show notes",
+      "hideNotes": "Hide notes",
+      "notesTruncated": "The notes are shortened here.",
+      "facts_one": "{{count}} fact",
+      "facts_other": "{{count}} facts",
+      "detailContext": "Context",
+      "detailTokens": "{{before}} → {{after}} tokens",
+      "detailTrigger": "Trigger",
+      "trigger": {
+        "proactive": "context threshold",
+        "overflow": "context window full",
+        "manual": "requested"
+      }
+    },
     "searchingFor": "Searching for “{{query}}”",
     "runningTool": "Running {{name}}",
     "ranTool": "Ran {{name}}",

@@ -1209,6 +1209,13 @@
         "modelChat": "Das Modell des Chats",
         "modelIdHelp": "Ein kleines, günstiges Modell genügt. Es wird nur für Nutzende verwendet, deren Gruppen es nutzen dürfen; für alle anderen schreibt das Modell des Chats den Titel. Ein anderes Modell wird nie verwendet."
       },
+      "compaction": {
+        "title": "Lange Recherche-Antworten",
+        "description": "Füllt eine Antwort mit vielen Tool-Aufrufen die Hälfte des Modellkontexts, werden ältere Ergebnisse zu Notizen verdichtet: ihre Fakten mit Quellen und die gelaufenen Aufrufe. Das Modell kann ein verdichtetes Ergebnis vollständig erneut lesen.",
+        "modelId": "Modell, das die Notizen schreibt",
+        "modelChat": "Das Modell des Chats",
+        "modelIdHelp": "Ein schnelles Modell mit großem Kontextfenster hält lange Antworten zügig. Es liest die Tool-Ergebnisse des Chats; wählen Sie eines, das für diese Daten freigegeben ist. Es wird nur für Nutzer verwendet, deren Gruppen es nutzen dürfen; für alle anderen schreibt das Modell des Chats die Notizen. Seine Tokens zählen zur Nutzung des Nutzers."
+      },
       "evidence": {
         "title": "Nachweis",
         "description": "Für jede gespeicherte Antwort ein Nachweis, was eingegangen und was herausgekommen ist: der Systemprompt, die Nachrichten und Tool-Definitionen jedes Modellaufrufs, jeder Tool-Aufruf mit Argumenten und Ergebnis sowie die Modelleinstellungen. Er lebt mit dem Chat und wird mit ihm gelöscht. Lesen können ihn der Eigentümer und Admins; ein geteilter Chat teilt ihn nicht.",
@@ -9010,6 +9017,39 @@
     "documentsFound_other": "{{count}} Dokumente gefunden"
   },
   "toolActivity": {
+    "compaction": {
+      "running": "Frühere Ergebnisse werden verdichtet…",
+      "condensed_one": "{{count}} früheres Ergebnis zu Notizen verdichtet",
+      "condensed_other": "{{count}} frühere Ergebnisse zu Notizen verdichtet",
+      "condensedSearches_one": "{{count}} früheres Suchergebnis zu Notizen verdichtet",
+      "condensedSearches_other": "{{count}} frühere Suchergebnisse zu Notizen verdichtet",
+      "reduced_one": "{{count}} früheres Ergebnis auf Aufruf und Quellen gekürzt",
+      "reduced_other": "{{count}} frühere Ergebnisse auf Aufrufe und Quellen gekürzt",
+      "shortened_one": "{{count}} früheres Ergebnis gekürzt, um Kontext freizugeben",
+      "shortened_other": "{{count}} frühere Ergebnisse gekürzt, um Kontext freizugeben",
+      "contextFull_one": "Kontext voll: {{count}} früheres Ergebnis gekürzt",
+      "contextFull_other": "Kontext voll: {{count}} frühere Ergebnisse gekürzt",
+      "someShortened_one": "{{count}} nur gekürzt",
+      "someShortened_other": "{{count}} nur gekürzt",
+      "stopped": "Verdichten abgebrochen",
+      "why": "Schafft Platz im Kontext des Modells, damit die Antwort weitergehen kann, ohne diese Aufrufe zu wiederholen.",
+      "lossyRecall": "In den Notizen können einzelne Details fehlen. Das Modell kann die vollständigen Ergebnisse erneut lesen.",
+      "lossyElided": "Einzelne Details dieser Ergebnisse stehen dem Modell nicht mehr zur Verfügung.",
+      "wrapUp": "Der Kontext ist fast voll: keine weitere Suche. Die Antwort entsteht aus diesen Notizen.",
+      "showNotes": "Notizen anzeigen",
+      "hideNotes": "Notizen ausblenden",
+      "notesTruncated": "Die Notizen sind hier gekürzt.",
+      "facts_one": "{{count}} Fakt",
+      "facts_other": "{{count}} Fakten",
+      "detailContext": "Kontext",
+      "detailTokens": "{{before}} → {{after}} Tokens",
+      "detailTrigger": "Auslöser",
+      "trigger": {
+        "proactive": "Kontextschwelle",
+        "overflow": "Kontextfenster voll",
+        "manual": "angefordert"
+      }
+    },
     "searchingFor": "Sucht nach „{{query}}“",
     "runningTool": "Führt {{name}} aus",
     "ranTool": "{{name}} ausgeführt",

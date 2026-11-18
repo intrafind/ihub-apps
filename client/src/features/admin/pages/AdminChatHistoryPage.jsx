@@ -330,6 +330,7 @@ function AdminChatHistoryPage() {
         body: {
           chats: settings.chats,
           titles: settings.titles,
+          compaction: settings.compaction,
           evidence: settings.evidence,
           runLog: settings.runLog,
           sharing: settings.sharing,
@@ -1214,6 +1215,51 @@ function AdminChatHistoryPage() {
             </div>
           </div>
         </div>
+
+        {/* Compaction model (#3819) */}
+        {settings.compaction && (
+          <div className={cardClass}>
+            <h2 className={headingClass}>
+              <Icon name="archive-box" className="w-5 h-5 mr-2 text-blue-500" />
+              {t('admin.chatHistory.compaction.title', 'Long research turns')}
+            </h2>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              {t(
+                'admin.chatHistory.compaction.description',
+                "When a turn with many tool calls fills half the model's context, older results are condensed into notes: their facts with sources, and the calls that ran. The model can read a condensed result in full again."
+              )}
+            </p>
+            <div>
+              <label
+                htmlFor="compaction-model-id"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+              >
+                {t('admin.chatHistory.compaction.modelId', 'Model that writes the notes')}
+              </label>
+              <select
+                id="compaction-model-id"
+                value={settings.compaction.modelId}
+                onChange={e => updateSetting('compaction', 'modelId', e.target.value)}
+                className={inputClass}
+              >
+                <option value="">
+                  {t('admin.chatHistory.compaction.modelChat', "The chat's own model")}
+                </option>
+                {titleModels.map(model => (
+                  <option key={model.id} value={model.id}>
+                    {getLocalizedContent(model.name, i18n.language) || model.id}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                {t(
+                  'admin.chatHistory.compaction.modelIdHelp',
+                  "A fast model with a large context window keeps long turns quick. It reads the tool results of the chat, so pick one approved for that data. It is used only for users whose groups may use it; for everyone else the chat's own model writes the notes. Its tokens count toward the user's usage."
+                )}
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Evidence record settings */}
         {settings.evidence && (

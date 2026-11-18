@@ -44,7 +44,7 @@ import {
   sourcesFromGrounding
 } from '../../../shared/sources/index.js';
 import { planToolBatches } from './segmentPlanner.js';
-import { takeSteers, steerMessage } from './steering.js';
+import { takeSteers, steerMessage, STEER_MARKER } from './steering.js';
 import {
   isNativeWebSearchRejection,
   isNativeWebSearchUnavailable,
@@ -62,14 +62,40 @@ import {
   elideRetriedCallArguments,
   microcompactMessages,
   isContextOverflowError,
+  shrinkFailedToolCalls,
+  isFailedResult,
   estimateTokens
 } from './contextCompaction.js';
 import { estimateTranscriptTokens } from './contextTracker.js';
+import {
+  RECALL_TOOL_ID,
+  applyDigest,
+  collectCalls,
+  condensedStateOf,
+  kindsOf,
+  recallPage,
+  recallToolDefinition,
+  renderDigest,
+  digestRoomOf,
+  escapeCondensedPrefix,
+  factsRoomOf,
+  isCondensedContent,
+  notesOf,
+  DIGEST_FALLBACK_REASONS,
+  MIN_DIGEST_CHARS,
+  selectBatches,
+  summarizeCalls,
+  summaryFailureOf,
+  taskOf
+} from './findingsDigest.js';
+import { MAX_COMPACTION_DIGEST_CHARS } from './contracts/sseV2.js';
 import {
   toolDisabledNudge,
   ALL_TOOLS_DEAD_NUDGE,
   tokenBudgetNudge,
   ROUND_CAP_NUDGE,
+  CONTEXT_WRAP_UP_NUDGE,
+  CONTEXT_FULL_NUDGE,
   nudgeMessage
 } from './nudges.js';
 
@@ -164,7 +190,16 @@ export class AgentLoop {
 
   /**
    * Register a seam `{ name, preStep, preTool, liftResult, postTool, stepEnd,
-   * onChunk, streamEnd, onHallucinated, onCircuitBroken, onCompaction, onAnswer }`.
+   * onChunk, streamEnd, onHallucinated, onCircuitBroken, onCompactionStart,
+   * onCompaction, onAnswer }`.
+   *
+   * `onCompactionStart(ctx, info)` runs before a findings digest is written
+   * (it can take a while: the summary model reads the results), and
+   * `onCompaction(ctx, info)` once the transcript was compacted, by a digest
+   * or by collapsing messages (`lossy`). `info` carries the fields of the
+   * ledger's `context/compaction` (`compactionId`, `trigger`, `strategy`,
+   * `lossy`, `tokensBefore`, `tokensAfter`, `itemsSummarised`, `kinds`,
+   * `digest`, …) plus `freedTokens` and the new `messages`.
    *
    * `streamEnd(ctx, { outcome, result? })` closes every model call that `preStep`
    * opened, however it ended: `outcome` is `completed` (with the accumulated
@@ -199,6 +234,11 @@ export class AgentLoop {
    * @param {Object} [request.channel] - `{ onChunk(chunk, ctx), onToolStart(info), onToolEnd(info) }`
    * @param {Object} [request.state] - `{ budget: {input, output, total} }` shared run-level budget
    * @param {Object} [request.meta] - opaque caller data forwarded to seams
+   * @param {Object} [request.summaryModel] - the model that writes findings digests
+   *   (`policies.context.strategy: 'digest'`); default: `request.model`
+   * @param {string[]} [request.archiveRunIds] - earlier runs of the same chat turn (a
+   *   turn that continued a paused run under a new id) whose condensed results
+   *   `recall_tool_result` may read; a run of another chat is ignored
    * @param {Array} [request.seams] - per-run seams (in addition to `use()`d ones)
    * @param {string} [request.purpose='agent-step']
    * @param {number} [request.timeoutMs] - hard timeout for each model call
@@ -353,12 +393,44 @@ export class AgentLoop {
     let forcedFinalOffered = false; // a tool-less final call was made after a budget gate fired
     let terminal = null; // { status, finishReason, pendingInteraction?, toolCalls? }
 
-    this._ledger(ledgerId, RUN_LOG_EVENTS.SEGMENT_START, { segment: segmentId, purpose });
+    const archiveRunIds = (
+      Array.isArray(request.archiveRunIds) ? request.archiveRunIds : []
+    ).filter(id => isValidRunId(id) && id !== ledgerId);
+    this._ledger(ledgerId, RUN_LOG_EVENTS.SEGMENT_START, {
+      segment: segmentId,
+      purpose,
+      ...(archiveRunIds.length ? { archiveRunIds: archiveRunIds.slice(0, 16) } : {})
+    });
 
     const assertNotAborted = () => {
       if (deadline?.signal.aborted) throw wallClockError();
       if (signal?.aborted) throw abortError('Agent loop aborted (cancelled or timed out)');
     };
+
+    // What the turn condensed so far (#3819). A turn resumed after a pause
+    // carries its digests in the transcript: refs and digest numbers go on
+    // from there, and the recall tool is offered again.
+    const condensedSoFar = condensedStateOf(ctx.messages);
+    ctx.compaction = {
+      nextRef: condensedSoFar.nextRef,
+      digests: condensedSoFar.digests,
+      // Carried over a pause: the cap and the failures hold for the whole run.
+      count: condensedSoFar.summarized,
+      failures: condensedSoFar.failures,
+      recalls: 0,
+      archive: new Map(),
+      archiveLoading: null,
+      archiveRuns: [],
+      // Calls that failed when they ran: their result may later be elided or
+      // bounded and no longer say so (shrinkFailedToolCalls).
+      failedCallIds: new Set(),
+      // A turn resumed after a pause that had wrapped up stays wrapped up:
+      // its transcript holds the wrap-up nudge after its user message.
+      ...(wrappedUpIn(ctx.messages) ? { wrapUp: true, wrapUpTold: true } : {}),
+      // The prompt after the last digest (0: none yet), for the cooldown.
+      lastTokensAfter: 0
+    };
+    if (condensedSoFar.nextRef > 1) this._offerRecall(ctx);
 
     const buildResult = (status, extra = {}) => ({
       runId,
@@ -524,7 +596,17 @@ export class AgentLoop {
         try {
           await runHooks(seams, 'preStep', ctx);
 
-          const availableTools = tools.filter(t => !ctx.disabledTools.has(t.id));
+          // Wrapping up (the context is nearly full): told once, and the
+          // tools that gather more — searches, page reads — are withdrawn;
+          // the tools that make the answer's files stay.
+          const wrapUp = ctx.compaction?.wrapUp === true;
+          if (wrapUp && !ctx.compaction.wrapUpTold) {
+            ctx.compaction.wrapUpTold = true;
+            ctx.messages.push(nudgeMessage(CONTEXT_WRAP_UP_NUDGE));
+          }
+          const availableTools = tools.filter(
+            t => !ctx.disabledTools.has(t.id) && !(wrapUp && gathers(t))
+          );
           const offeredTools =
             availableTools.length > 0 && !forceFinish ? availableTools : undefined;
           ctx.offeredTools = offeredTools || [];
@@ -551,7 +633,7 @@ export class AgentLoop {
               ...options,
               ...(choicePlan.force ? { toolChoice: 'required' } : {}),
               tools: offeredTools,
-              nativeWebSearch: forceFinish ? null : nativeWebSearch,
+              nativeWebSearch: forceFinish || ctx.compaction?.wrapUp ? null : nativeWebSearch,
               responseSchema,
               responseFormat: options.responseFormat
             },
@@ -626,11 +708,36 @@ export class AgentLoop {
             isContextOverflowError(err) &&
             reactiveAttempts < policies.context.maxReactiveAttempts
           ) {
+            // A digest first: everything but the newest batch condensed to its
+            // calls and sources, without a model call, and still readable by
+            // ref. Only when that frees nothing are old bodies collapsed.
+            if (policies.context.strategy === 'digest') {
+              const freed = await this._digestCompaction(ctx, {
+                seams,
+                iteration,
+                knownTokens: undefined,
+                runBudget,
+                options,
+                overflow: true
+              });
+              if (freed > 0) {
+                reactiveAttempts++;
+                promptAnchor = null;
+                iteration--;
+                continue;
+              }
+            }
             const mc = microcompactMessages(ctx.messages, {
               keepRecent: policies.context.reactiveKeepRecent
             });
             if (mc.freedChars > 0) {
               reactiveAttempts++;
+              const elided = elisionInfo(ctx.messages, mc, {
+                step: iteration,
+                trigger: 'overflow',
+                fallbackReason: 'context_overflow'
+              });
+              const freedByMessage = freedByMessageOf(ctx.messages, mc.messages);
               ctx.messages = mc.messages;
               promptAnchor = null;
               this.logger.warn('Reactive context recovery: microcompacted messages, retrying', {
@@ -640,13 +747,51 @@ export class AgentLoop {
                 freedChars: mc.freedChars,
                 collapsed: mc.collapsed
               });
-              this._ledger(ledgerId, RUN_LOG_EVENTS.CONTEXT_COMPACTION, {
-                step: iteration,
-                trigger: 'overflow',
-                collapsed: mc.collapsed,
-                freedChars: mc.freedChars
+              this._ledger(ledgerId, RUN_LOG_EVENTS.CONTEXT_COMPACTION, elided);
+              await runHooks(seams, 'onCompaction', ctx, {
+                ...mc,
+                ...elided,
+                freedByMessage
               });
-              await runHooks(seams, 'onCompaction', ctx, { trigger: 'overflow', ...mc });
+              iteration--;
+              continue;
+            }
+            // Nothing left to condense or shorten: long arguments of calls
+            // that were refused (a model resending a broken workbook), then,
+            // as a last resort, an answer without tools — the tool list
+            // leaves the prompt, and the turn ends with an answer, not an
+            // error.
+            const shrunk = shrinkFailedToolCalls(ctx.messages, {
+              failedIds: ctx.compaction?.failedCallIds
+            });
+            if (shrunk.freedChars > 0) {
+              reactiveAttempts++;
+              ctx.messages = shrunk.messages;
+              promptAnchor = null;
+              this.logger.warn('Reactive context recovery: shortened failed tool calls, retrying', {
+                component: COMPONENT,
+                runId,
+                attempt: reactiveAttempts,
+                freedChars: shrunk.freedChars,
+                shortened: shrunk.shortened
+              });
+              iteration--;
+              continue;
+            }
+            // Only when the call offered tools or native web search (a
+            // wrap-up has withdrawn that already): without them the retry
+            // would send the same prompt again.
+            const sentNativeSearch = !!nativeWebSearch && !ctx.compaction?.wrapUp;
+            if (!forceFinish && (ctx.offeredTools.length > 0 || sentNativeSearch)) {
+              reactiveAttempts++;
+              forceFinish = true;
+              ctx.messages.push(nudgeMessage(CONTEXT_FULL_NUDGE));
+              promptAnchor = null;
+              this.logger.warn('Reactive context recovery: answering without tools', {
+                component: COMPONENT,
+                runId,
+                attempt: reactiveAttempts
+              });
               iteration--;
               continue;
             }
@@ -904,6 +1049,9 @@ export class AgentLoop {
         // ── failed calls sent again: only the newest attempt in full ────
         const retried = elideRetriedCallArguments(ctx.messages);
         if (retried.collapsed > 0) {
+          // Per message, so a context figure anchored on a provider count is
+          // rebased only by what was freed inside it.
+          const freedByMessage = freedByMessageOf(ctx.messages, retried.messages);
           ctx.messages = retried.messages;
           promptAnchor = null;
           this.logger.info('Shortened the arguments of failed tool calls sent again', {
@@ -919,39 +1067,85 @@ export class AgentLoop {
             collapsed: retried.collapsed,
             freedChars: retried.freedChars
           });
-          await runHooks(seams, 'onCompaction', ctx, { trigger: 'retried_call', ...retried });
+          await runHooks(seams, 'onCompaction', ctx, {
+            trigger: 'retried_call',
+            ...retried,
+            freedByMessage,
+            freedTokens: freedByMessage.reduce((sum, [, tokens]) => sum + tokens, 0)
+          });
         }
 
         // ── proactive compaction ────────────────────────────────────────
-        const compaction = compactIfOversized(ctx.messages, {
-          thresholdTokens: policies.context.compactThresholdTokens,
-          keepRecent: policies.context.compactKeepRecent,
-          knownTokens: promptAnchor
-            ? promptAnchor.tokens +
-              estimateTranscriptTokens(ctx.messages.slice(promptAnchor.messageCount))
-            : undefined
-        });
-        if (compaction.compacted) {
-          ctx.messages = compaction.messages;
-          promptAnchor = null;
-          this.logger.info('Proactively compacted agent context', {
-            component: COMPONENT,
-            runId,
+        const knownTokens = promptAnchor
+          ? promptAnchor.tokens +
+            estimateTranscriptTokens(ctx.messages.slice(promptAnchor.messageCount))
+          : undefined;
+        if (policies.context.strategy === 'digest') {
+          // Older tool batches become a findings digest (#3819). The next
+          // model call sets the anchor anew before it is read again; the
+          // live context figure is rebased by the `onCompaction` seam.
+          let freed = await this._digestCompaction(ctx, {
+            seams,
             iteration,
-            collapsed: compaction.collapsed,
-            freedChars: compaction.freedChars
+            knownTokens,
+            runBudget,
+            options
           });
-          this._ledger(ledgerId, RUN_LOG_EVENTS.CONTEXT_COMPACTION, {
-            step: iteration,
-            trigger: 'proactive',
-            collapsed: compaction.collapsed,
-            freedChars: compaction.freedChars
+          // Still near the window with the newest batch kept: it is condensed
+          // too, before the run wraps up.
+          if (ctx.compaction.condenseNewest) {
+            ctx.compaction.condenseNewest = false;
+            const known =
+              Number.isFinite(knownTokens) && knownTokens > 0
+                ? Math.max(0, knownTokens - freed)
+                : undefined;
+            const more = await this._digestCompaction(ctx, {
+              seams,
+              iteration,
+              knownTokens: known,
+              runBudget,
+              options,
+              keepNone: true
+            });
+            if (more === 0) this._wrapUpIfFull(ctx, options, known);
+            freed += more;
+          }
+          if (freed === 0) this._wrapUpIfFull(ctx, options, knownTokens);
+        } else {
+          const compaction = compactIfOversized(ctx.messages, {
+            thresholdTokens: policies.context.compactThresholdTokens,
+            keepRecent: policies.context.compactKeepRecent,
+            knownTokens
           });
-          await runHooks(seams, 'onCompaction', ctx, { trigger: 'proactive', ...compaction });
+          if (compaction.compacted) {
+            const elided = elisionInfo(ctx.messages, compaction, {
+              step: iteration,
+              trigger: 'proactive',
+              knownTokens
+            });
+            const freedByMessage = freedByMessageOf(ctx.messages, compaction.messages);
+            ctx.messages = compaction.messages;
+            promptAnchor = null;
+            this.logger.info('Proactively compacted agent context', {
+              component: COMPONENT,
+              runId,
+              iteration,
+              collapsed: compaction.collapsed,
+              freedChars: compaction.freedChars
+            });
+            this._ledger(ledgerId, RUN_LOG_EVENTS.CONTEXT_COMPACTION, elided);
+            await runHooks(seams, 'onCompaction', ctx, {
+              ...compaction,
+              ...elided,
+              freedByMessage
+            });
+          }
         }
 
         // ── force-finish gates: exactly one per iteration ───────────────
-        if (tools.length > 0 && tools.every(t => ctx.disabledTools.has(t.id))) {
+        // The recall tool only reads this run's own results: it keeps no turn going.
+        const workingTools = tools.filter(t => !t.isCompactionRecall);
+        if (workingTools.length > 0 && workingTools.every(t => ctx.disabledTools.has(t.id))) {
           forceFinish = true;
           forceReason = 'tools_dead';
           ctx.messages.push(nudgeMessage(ALL_TOOLS_DEAD_NUDGE));
@@ -1097,6 +1291,37 @@ export class AgentLoop {
 
     if (ctx.signal?.aborted) throw abortError('Agent loop aborted (cancelled or timed out)');
 
+    // Withdrawn for the wrap-up: a model can still repeat a search it saw
+    // earlier in the turn. Refused before any seam sees it, so it asks for no
+    // approval, is taken over by no passthrough and shows no search starting.
+    if (ctx.compaction?.wrapUp && gathers(toolDef)) {
+      const content = JSON.stringify(WITHDRAWN_RESULT);
+      const callId = call.id || `${call.index}`;
+      this._ledger(ledgerId, RUN_LOG_EVENTS.TOOL_CALL, {
+        step: iteration,
+        callId,
+        toolId,
+        name,
+        ...display,
+        args,
+        argsRepaired,
+        execution: toolExecution,
+        parallelGroup: groupIndex
+      });
+      this._ledger(ledgerId, RUN_LOG_EVENTS.TOOL_RESULT, {
+        step: iteration,
+        callId,
+        toolId,
+        name,
+        resultPreview: previewValue(content),
+        resultBytes: content.length,
+        error: { message: WITHDRAWN_RESULT.message, rateLimited: false },
+        durationMs: 0
+      });
+      messages.push({ role: 'tool', tool_call_id: call.id, name, content });
+      return { position, messages, terminate: null };
+    }
+
     // pre-tool seams may take the call over (approval gate, question, passthrough)
     const handled = await runHooks(seams, 'preTool', ctx, info);
     if (handled) {
@@ -1158,7 +1383,11 @@ export class AgentLoop {
       });
     } else {
       try {
-        if (toolDef.isToolSearch && ctx.toolSearch) {
+        if (toolDef.isCompactionRecall) {
+          // A condensed result read again by ref (#3819): answered from this
+          // run's own results, never from a path the model names.
+          rawResult = await this._recall(ctx, args);
+        } else if (toolDef.isToolSearch && ctx.toolSearch) {
           // `search_tools` answers from the tools this request left out, and
           // what it finds joins the tools the model is offered from its next
           // step on (`availableTools` is read again on every round).
@@ -1231,7 +1460,13 @@ export class AgentLoop {
     // Whether the call failed, from the result as the tool returned it: once an
     // oversized result is bounded, the transcript holds a preview wrapper that
     // no longer says so.
-    const callFailed = !!failure || classifyToolResult(message).failed;
+    // Only a result the loop condensed may start like a condensed stub.
+    if (isCondensedContent(message.content)) {
+      message = { ...message, content: escapeCondensedPrefix(message.content) };
+    }
+    const callFailed =
+      !!failure || classifyToolResult(message).failed || isFailedResult(message.content);
+    if (callFailed && call.id) ctx.compaction?.failedCallIds.add(call.id);
     const bound = await this._boundToolMessage(ctx, message, { call, toolId, iteration });
     const outcome = {
       rawResult,
@@ -1354,6 +1589,639 @@ export class AgentLoop {
     return { position, messages, terminate: null };
   }
 
+  /**
+   * Offer the tool that reads a condensed result again, once per run.
+   * @private
+   */
+  _offerRecall(ctx) {
+    if (ctx.policies.context.maxRecallsPerRun <= 0) return;
+    if (ctx.tools.some(tool => tool?.id === RECALL_TOOL_ID)) return;
+    ctx.tools.push(recallToolDefinition(ctx.request.language));
+  }
+
+  /**
+   * Proactive compaction with a findings digest (#3819): when the prompt is
+   * over the threshold, the oldest complete tool batches are condensed until
+   * it is projected at `compactTargetShare` of the threshold. The decision
+   * uses the provider's count (`knownTokens`), which holds the tool
+   * definitions; only without one is the transcript estimated, tool
+   * definitions included.
+   *
+   * The summary model pulls the facts out (`summarizeCalls`); when it fails,
+   * the same batches still get a digest of their calls and sources, marked
+   * `lossy`. After two failures, or `maxCompactionsPerRun` digests, the run
+   * goes on with such digests without asking the model. An abort of the run
+   * is thrown.
+   *
+   * @private
+   * @returns {Promise<number>} the tokens freed (0 when nothing was condensed)
+   */
+  async _digestCompaction(
+    ctx,
+    { seams, iteration, knownTokens, runBudget, options, overflow = false, keepNone = false }
+  ) {
+    const policy = ctx.policies.context;
+    const threshold = policy.compactThresholdTokens;
+    const tokensBefore =
+      Number.isFinite(knownTokens) && knownTokens > 0
+        ? Math.round(knownTokens)
+        : estimateTranscriptTokens(ctx.messages) + toolDefinitionTokens(ctx.offeredTools);
+    // Near the model's window the next call may be refused as too long: then
+    // neither the cooldown nor the second kept batch stands in the way. A
+    // model whose output cap is large next to its window has its answer line
+    // below the threshold: it condenses from there, before it would wrap up.
+    const answerLine = this._answerLine(ctx, options);
+    if (!overflow && tokensBefore <= Math.min(threshold, answerLine)) return 0;
+
+    const state = ctx.compaction;
+    const urgent = overflow || tokensBefore > answerLine;
+    // The last compaction could not bring the prompt under the threshold (what
+    // cannot be condensed — the system prompt, uploads, digests — is that
+    // large): the next one waits until the prompt has grown by a tenth of the
+    // threshold, instead of paying a summary call on every step.
+    if (
+      !urgent &&
+      state.lastTokensAfter > threshold &&
+      tokensBefore < state.lastTokensAfter + threshold * MIN_COMPACTION_PROGRESS
+    ) {
+      return 0;
+    }
+    const toolOf = name => matchTool(name, ctx.tools);
+    const targetTokens = Math.floor(threshold * policy.compactTargetShare);
+    // How many of the newest batches the selection kept as they are.
+    let kept = keepNone ? 0 : overflow ? 1 : policy.digestKeepRecentBatches;
+    let selection = selectBatches(ctx.messages, {
+      tokensBefore,
+      // After an overflow the estimate is below what the provider counted:
+      // everything but the newest batch goes.
+      targetTokens: overflow ? 0 : targetTokens,
+      keepRecentBatches: kept,
+      toolOf
+    });
+    // Urgent and the kept batches are what fills the window (large results,
+    // a small window): keep only the newest, which the model has not read.
+    if (urgent && !overflow && selection.projectedTokens > targetTokens && kept > 1) {
+      kept = 1;
+      selection = selectBatches(ctx.messages, {
+        tokensBefore,
+        targetTokens,
+        keepRecentBatches: 1,
+        toolOf
+      });
+    }
+    // Still above the line with only the newest batch kept: that batch is
+    // condensed too. The answer needs the room more than the raw pages do,
+    // and its facts are in the notes.
+    if (urgent && kept > 0 && selection.projectedTokens > answerLine) {
+      kept = 0;
+      selection = selectBatches(ctx.messages, {
+        tokensBefore,
+        targetTokens: overflow ? 0 : targetTokens,
+        keepRecentBatches: 0,
+        toolOf
+      });
+    }
+    const { batches, freedTokens: projectedFreed } = selection;
+    // Too little to free for what a compaction costs (a summary call, the
+    // prompt cache from the first condensed message on, and of the tool list
+    // when the recall tool joins it): left as it is. After an overflow any
+    // room helps.
+    if (
+      batches.length === 0 ||
+      (!overflow && projectedFreed < tokensBefore * MIN_COMPACTION_PROGRESS)
+    ) {
+      return 0;
+    }
+    const calls = collectCalls(ctx.messages, batches, { nextRef: state.nextRef, toolOf });
+    if (calls.length === 0) return 0;
+    // A digest never makes the transcript longer: it gets at most the room
+    // the results leave, and results too short for one are left as they are.
+    const digestNumber = state.digests + 1;
+    const digestRoom = digestRoomOf(ctx.messages, calls, digestNumber);
+    if (digestRoom < MIN_DIGEST_CHARS) return 0;
+    // Nor more tokens: a repetitive result can count fewer than shorter,
+    // denser notes. What a digest frees, by the same estimate as the prompt.
+    const replaced = estimateTranscriptTokens(calls.map(call => ctx.messages[call.index]));
+    const freedBy = text => {
+      const next = applyDigest(ctx.messages, calls, text, digestNumber);
+      return replaced - estimateTranscriptTokens(calls.map(call => next[call.index]));
+    };
+    // The smallest digest — calls and sources only — must free tokens with
+    // whatever reason it may come to name, or the results are left as they
+    // are: it is what a digest falls back to when a larger one would not.
+    const smallest = reason =>
+      renderDigest({
+        number: digestNumber,
+        calls,
+        fallbackReason: reason,
+        maxChars: MIN_DIGEST_CHARS
+      });
+    if ([null, ...DIGEST_FALLBACK_REASONS].some(reason => freedBy(smallest(reason).text) <= 0)) {
+      return 0;
+    }
+
+    const started = Date.now();
+    const compactionId = `cmp-${crypto.randomUUID().slice(0, 8)}`;
+    const summaryModel = ctx.request.summaryModel || ctx.model;
+    const info = {
+      compactionId,
+      step: iteration,
+      trigger: overflow ? 'overflow' : 'proactive',
+      strategy: 'digest',
+      tokensBefore,
+      itemsSummarised: calls.length,
+      kinds: kindsOf(calls, toolDef => startedDisplayOf(toolDef).activityKind)
+    };
+    state.nextRef += calls.length;
+    for (const call of calls) {
+      state.archive.set(call.ref, {
+        ref: call.ref,
+        name: call.name,
+        args: call.args,
+        callId: call.callId,
+        content: call.content
+      });
+    }
+    await runHooks(seams, 'onCompactionStart', ctx, info);
+
+    // The model is asked while it has not failed twice and the run is under its
+    // cap — never after an overflow, which must free room before the retry.
+    // The notes of the run are bounded: once their share of the window is
+    // used up, a digest keeps calls and sources only, without a summary
+    // call, and the run wraps up — more results could not be kept.
+    const notesLeftTokens = this._notesLeftTokens(ctx, options);
+    const notesLeft = Math.floor(notesLeftTokens * NOTES_CHARS_PER_TOKEN);
+    const notesFull = notesLeft < MIN_DIGEST_CHARS;
+    const useModel =
+      !overflow && !notesFull && state.failures < 2 && state.count < policy.maxCompactionsPerRun;
+    let summary = null;
+    let fallbackReason = null;
+    // A result over the spill threshold is a preview in the transcript: the
+    // summary reads the original (the transcript stays bounded), or the
+    // digest says the result was only partly read.
+    const unread = useModel ? await this._readSpilledForSummary(ctx, calls) : 0;
+    if (useModel) {
+      try {
+        summary = await summarizeCalls({
+          llmClient: this.llmClient,
+          model: summaryModel,
+          calls,
+          task: taskOf(ctx.messages),
+          signal: ctx.signal,
+          timeoutMs: policy.summaryTimeoutMs,
+          maxTokens: policy.summaryMaxTokens,
+          // The user the turn runs for: usage limits and reports count the summary.
+          options: options.user ? { user: options.user } : {},
+          language: ctx.request.language,
+          // The room its lines have once condensed: told to the model, so it
+          // chooses what to drop instead of losing the end of the notes.
+          roomChars: factsRoomOf(
+            Math.min(policy.maxDigestChars, digestRoom, Math.max(MIN_DIGEST_CHARS, notesLeft))
+          ),
+          telemetry: {
+            // No ledger run of its own: the turn's `context/compaction` records it.
+            autoRun: false,
+            kind: 'utility',
+            purpose: 'context-compaction',
+            appId: ctx.refs.appId,
+            chatId: ctx.refs.chatId,
+            executionId: ctx.refs.executionId,
+            reportUser: ctx.request.user ?? null
+          }
+        });
+      } catch (err) {
+        if (isAbortError(err)) throw err;
+        // Stopped (or out of time) while the digest was written: the run ends as it would mid-step.
+        if (ctx.signal?.aborted) throw abortError('Agent loop aborted (cancelled or timed out)');
+        summary = null;
+        this.logger.warn('Findings digest failed', {
+          component: COMPONENT,
+          runId: ctx.runId,
+          error: err?.message
+        });
+      }
+      fallbackReason = summaryFailureOf(summary, calls) || (unread > 0 ? 'summary_partial' : null);
+      if (fallbackReason === 'summary_failed' || fallbackReason === 'summary_empty') {
+        state.failures += 1;
+      }
+    } else {
+      if (overflow) fallbackReason = 'context_overflow';
+      else fallbackReason = state.failures >= 2 ? 'summary_unavailable' : 'compaction_limit';
+    }
+    if (summary?.usage) {
+      runBudget.input += summary.usage.promptTokens || 0;
+      runBudget.output += summary.usage.completionTokens || 0;
+      runBudget.total = runBudget.input + runBudget.output;
+    }
+
+    const factsFound = summary?.facts?.length || 0;
+    const notFoundFound = summary?.notFound?.length || 0;
+    const render = maxChars =>
+      renderDigest({
+        number: digestNumber,
+        calls,
+        facts: summary?.facts || [],
+        notFound: summary?.notFound || [],
+        fallbackReason,
+        maxChars
+      });
+    // Within the characters the results leave, then smaller until it frees
+    // tokens too; at the smallest size, calls and sources only.
+    let digestChars = Math.min(
+      policy.maxDigestChars,
+      digestRoom,
+      Math.max(MIN_DIGEST_CHARS, notesLeft)
+    );
+    // The notes budget is in tokens: dense figures can take more of them than
+    // the characters suggest.
+    const overNotes = text =>
+      estimateTranscriptTokens([{ role: 'tool', content: text }]) > notesLeftTokens;
+    let rendered = render(digestChars);
+    while (
+      (freedBy(rendered.text) <= 0 || overNotes(rendered.text)) &&
+      digestChars > MIN_DIGEST_CHARS
+    ) {
+      digestChars = Math.max(MIN_DIGEST_CHARS, Math.floor(digestChars * 0.7));
+      rendered = render(digestChars);
+    }
+    // At the smallest size and still freeing nothing, or still over what the
+    // notes have left: calls and sources only. The notes are then spent, and
+    // the run wraps up — more results could not be kept.
+    const notesSpent = overNotes(rendered.text);
+    if (freedBy(rendered.text) <= 0 || notesSpent) {
+      rendered = smallest(
+        fallbackReason || (factsFound + notFoundFound > 0 ? 'digest_truncated' : null)
+      );
+    }
+    const { text: digestText, factsShown, notFoundShown } = rendered;
+    // Findings that did not fit — facts or what was not found — are in the
+    // results only (the model is told to read them again): the compaction
+    // lost something the summary had.
+    if (!fallbackReason && (factsShown < factsFound || notFoundShown < notFoundFound)) {
+      fallbackReason = 'digest_truncated';
+    }
+    const before = calls.map(call => ctx.messages[call.index]);
+    const next = applyDigest(ctx.messages, calls, digestText, digestNumber);
+    const after = calls.map(call => next[call.index]);
+    const freedTokens = Math.max(
+      0,
+      estimateTranscriptTokens(before) - estimateTranscriptTokens(after)
+    );
+    const freedChars = Math.max(
+      0,
+      before.reduce((n, m) => n + String(m?.content ?? '').length, 0) -
+        after.reduce((n, m) => n + String(m?.content ?? '').length, 0)
+    );
+    ctx.messages = next;
+    state.digests = digestNumber;
+    // `maxCompactionsPerRun` counts the digests the summary model was asked for.
+    if (useModel) state.count += 1;
+    state.lastTokensAfter = Math.max(0, tokensBefore - freedTokens);
+    this._offerRecall(ctx);
+
+    // The originals and a long digest go to the run's spill store: the
+    // recall tool reads them after a resume, an admin from the journal.
+    const archiveRef = await this._spill(ctx, `${compactionId}-results`, {
+      refs: Object.fromEntries(calls.map(call => [call.ref, state.archive.get(call.ref)]))
+    });
+    const summaryRef =
+      digestText.length > MAX_COMPACTION_DIGEST_CHARS
+        ? await this._spill(ctx, `${compactionId}-digest`, digestText, 'text/plain')
+        : null;
+
+    // Still near the window after condensing: no room for more results and
+    // the answer. The run wraps up — gathering stops, the answer is written.
+    // Only once nothing is left to condense: when the projection let the
+    // newest batch stay and the digest turned out larger, that batch goes
+    // next (`condenseNewest`), before gathering stops.
+    const stillFull = urgent && tokensBefore - freedTokens > answerLine;
+    const wrapUp = (stillFull && kept === 0) || notesFull || notesSpent;
+    if (wrapUp) state.wrapUp = true;
+    if (stillFull && kept > 0) state.condenseNewest = true;
+    const record = {
+      ...info,
+      ...(wrapUp ? { wrapUp: true } : {}),
+      collapsed: calls.length,
+      freedChars,
+      lossy: Boolean(fallbackReason),
+      ...(fallbackReason ? { fallbackReason } : {}),
+      tokensAfter: Math.max(0, tokensBefore - freedTokens),
+      digest:
+        digestText.length > MAX_COMPACTION_DIGEST_CHARS
+          ? `${digestText.slice(0, MAX_COMPACTION_DIGEST_CHARS)}…`
+          : digestText,
+      ...(digestText.length > MAX_COMPACTION_DIGEST_CHARS ? { digestTruncated: true } : {}),
+      facts: factsShown,
+      droppedFacts: (summary?.dropped || 0) + (factsFound - factsShown),
+      ...(useModel && summaryModel?.id ? { model: String(summaryModel.id) } : {}),
+      durationMs: Date.now() - started,
+      ...(archiveRef ? { archiveRef } : {}),
+      ...(summaryRef ? { summaryRef } : {})
+    };
+    this.logger.info('Condensed earlier tool results into a findings digest', {
+      component: COMPONENT,
+      runId: ctx.runId,
+      iteration,
+      items: calls.length,
+      facts: record.facts,
+      droppedFacts: record.droppedFacts,
+      tokensBefore,
+      tokensAfter: record.tokensAfter,
+      lossy: record.lossy,
+      fallbackReason: fallbackReason || undefined,
+      durationMs: record.durationMs
+    });
+    this._ledger(ctx.ledgerId, RUN_LOG_EVENTS.CONTEXT_COMPACTION, record);
+    await runHooks(seams, 'onCompaction', ctx, {
+      ...record,
+      digest: digestText,
+      freedTokens,
+      // Per message: a context figure anchored on a provider count subtracts
+      // only what was freed inside it (the newest batch may lie after it).
+      // Signed: the result that carries the digest can grow while the
+      // others shrink.
+      freedByMessage: calls.map((call, i) => [
+        call.index,
+        estimateTranscriptTokens([before[i]]) - estimateTranscriptTokens([after[i]])
+      ]),
+      messages: ctx.messages
+    });
+    return freedTokens;
+  }
+
+  /**
+   * The originals of spilled results, for the summary only: a result over the
+   * spill threshold is a bounded preview in the transcript, and a figure
+   * after the preview could not reach the digest. Read from this run or a
+   * run of the same chat; one that cannot be read is marked partly read.
+   * Mutates `call.content` / `call.cut` of the calls being condensed (their
+   * originals are archived before).
+   * @private
+   * @returns {Promise<number>} how many spilled results could not be read
+   */
+  async _readSpilledForSummary(ctx, calls) {
+    let unread = 0;
+    for (const call of calls) {
+      let bounded = null;
+      try {
+        bounded = JSON.parse(call.content);
+      } catch {
+        continue;
+      }
+      if (bounded?.truncated !== true) continue;
+      let original = null;
+      if (bounded.spill?.path && typeof ctx.runLog?.readSpill === 'function') {
+        await this._loadArchived(ctx, null);
+        original = await this._readSpillOf(ctx, bounded.spill, [
+          ctx.ledgerId,
+          ...ctx.compaction.archiveRuns
+        ]);
+      }
+      if (typeof original === 'string' && original.length > 0) {
+        call.content = original;
+      } else {
+        call.cut = true;
+        unread += 1;
+      }
+    }
+    return unread;
+  }
+
+  /**
+   * The prompt size above which the next call leaves too little room for
+   * more tool results and the answer: {@link URGENT_WINDOW_SHARE} of what the
+   * model takes as input — its window less the output the call asks for
+   * (vLLM counts `maxTokens` against the window). Without a known window, a
+   * multiple of the compaction threshold.
+   * @private
+   */
+  _answerLine(ctx, options) {
+    const inputLimit = this._inputLimit(ctx, options);
+    return inputLimit
+      ? inputLimit * URGENT_WINDOW_SHARE
+      : ctx.policies.context.compactThresholdTokens * 1.6;
+  }
+
+  /**
+   * What the model takes as input: its window less the output the call asks
+   * for (vLLM counts `maxTokens` against the window), at least half the
+   * window; 0 when the window is not known.
+   * @private
+   */
+  _inputLimit(ctx, options) {
+    const window = Number(ctx.model?.contextWindow) || 0;
+    const reserve = Number(options?.maxTokens ?? ctx.model?.maxOutputTokens) || 0;
+    return window ? Math.max(window - reserve, window * 0.5) : 0;
+  }
+
+  /**
+   * How many tokens the notes of the run may still grow by: all digests
+   * together take at most `maxNotesShare` of the model's input (of twice the
+   * compaction threshold when the window is not known).
+   * @private
+   */
+  _notesLeftTokens(ctx, options) {
+    const policy = ctx.policies.context;
+    const inputLimit = this._inputLimit(ctx, options) || policy.compactThresholdTokens * 2;
+    return Math.max(0, policy.maxNotesShare * inputLimit - notesOf(ctx.messages).tokens);
+  }
+
+  /**
+   * After a compaction that freed nothing: a prompt still above the answer
+   * line leaves no room for more results, so the run wraps up.
+   * @private
+   */
+  _wrapUpIfFull(ctx, options, knownTokens) {
+    if (!ctx.compaction || ctx.compaction.wrapUp) return;
+    const tokens =
+      Number.isFinite(knownTokens) && knownTokens > 0
+        ? knownTokens
+        : estimateTranscriptTokens(ctx.messages) + toolDefinitionTokens(ctx.offeredTools);
+    if (tokens > this._answerLine(ctx, options)) ctx.compaction.wrapUp = true;
+  }
+
+  /**
+   * Store a compaction's payload in the run's spill store; null when the
+   * ledger does not persist or the write failed (the recall tool then reads
+   * from memory only).
+   * @private
+   */
+  async _spill(ctx, name, payload, contentType = 'application/json') {
+    if (!ctx.ledgerId || typeof ctx.runLog?.spill !== 'function') return null;
+    try {
+      const content = typeof payload === 'string' ? payload : JSON.stringify(payload);
+      return await ctx.runLog.spill(ctx.ledgerId, name, content, contentType);
+    } catch (err) {
+      this.logger.warn('Compaction spill failed', {
+        component: COMPONENT,
+        runId: ctx.runId,
+        error: err.message
+      });
+      return null;
+    }
+  }
+
+  /**
+   * `recall_tool_result`: one page of a condensed result of this run. A result
+   * the loop had spilled (over the transcript limit) is read in full from the
+   * spill store.
+   * @private
+   */
+  async _recall(ctx, args) {
+    const state = ctx.compaction;
+    const ref = /r\s*(\d+)/i.exec(String(args?.ref ?? ''))?.[1];
+    if (!ref) {
+      return { error: true, message: 'Pass the ref of a condensed result, e.g. "r3".' };
+    }
+    const limitReached = () => ({
+      error: true,
+      message:
+        'The limit of results read again in this turn is reached. Work with the condensed results.'
+    });
+    if (state.recalls >= ctx.policies.context.maxRecallsPerRun) return limitReached();
+    const entry = state.archive.get(`r${ref}`) || (await this._loadArchived(ctx, `r${ref}`));
+    if (!entry) {
+      // A ref the transcript names whose original this run cannot reach (an
+      // earlier run of the turn, or a ledger that does not persist).
+      const known = Number(ref) < state.nextRef;
+      return {
+        error: true,
+        message: known
+          ? `The full text of r${ref} is no longer available. Work with the condensed results; run the call again only if they do not hold what you need.`
+          : `There is no condensed result r${ref} in this turn. The refs are listed in the condensed results.`
+      };
+    }
+    // Checked again after the wait: parallel recalls may have used the limit up.
+    if (state.recalls >= ctx.policies.context.maxRecallsPerRun) return limitReached();
+    state.recalls += 1;
+    let content = entry.content;
+    let bounded = null;
+    try {
+      bounded = JSON.parse(content);
+    } catch {
+      /* not a spilled result */
+    }
+    if (bounded?.truncated === true && bounded.spill?.path) {
+      // The run that spilled it: the entry's, this one, or an earlier run of
+      // the turn — only runs whose chat was checked (`_loadArchived`), never
+      // a run id the request merely names.
+      await this._loadArchived(ctx, null);
+      const original = await this._readSpillOf(ctx, bounded.spill, [
+        entry.runId,
+        ctx.ledgerId,
+        ...state.archiveRuns
+      ]);
+      if (original !== null) content = original;
+    }
+    return recallPage({ ...entry, content: String(content ?? '') }, Number(args?.offset) || 0);
+  }
+
+  /**
+   * The condensed results of earlier segments of this run (a turn resumed
+   * after a pause) and of the paused runs the turn continues from under a new
+   * id, read once from the journals' spill stores. Each segment records the
+   * runs it continues (`segment/start.archiveRunIds`), so a chain of pauses —
+   * same id or new ones — is followed back, at most {@link MAX_ARCHIVE_RUNS}
+   * runs and only those of the same chat.
+   * @private
+   */
+  async _loadArchived(ctx, ref) {
+    const state = ctx.compaction;
+    if (typeof ctx.runLog?.readEvents !== 'function') return null;
+    // Loaded once; parallel recalls in one batch all wait for the same load.
+    state.archiveLoading ??= this._loadArchiveRuns(ctx);
+    await state.archiveLoading;
+    return ref ? state.archive.get(ref) || null : null;
+  }
+
+  /**
+   * A spilled original, read from the run its reference names — only if that
+   * run is one of `runs` (this run, or a checked run of the same chat) — and
+   * checked against its hash when the reference carries one. Never another
+   * run's blob of the same name.
+   * @private
+   * @returns {Promise<string|null>}
+   */
+  async _readSpillOf(ctx, spill, runs) {
+    const checked = runs.filter(
+      (id, index, all) => id && isValidRunId(id) && all.indexOf(id) === index
+    );
+    const owner = /^spill\/([^/]+)\/[^/]+$/.exec(String(spill?.path ?? ''))?.[1];
+    for (const runId of owner ? checked.filter(id => id === owner) : checked) {
+      let text;
+      try {
+        text = await ctx.runLog.readSpill(runId, { path: spill.path });
+      } catch {
+        continue; // not this run's spill
+      }
+      if (
+        typeof spill.sha256 === 'string' &&
+        crypto.createHash('sha256').update(text, 'utf8').digest('hex') !== spill.sha256
+      ) {
+        continue;
+      }
+      return text;
+    }
+    return null;
+  }
+
+  /** @private */
+  async _loadArchiveRuns(ctx) {
+    const state = ctx.compaction;
+    const queue = [
+      ctx.ledgerId,
+      ...(Array.isArray(ctx.request.archiveRunIds) ? ctx.request.archiveRunIds : [])
+    ];
+    const seen = new Set();
+    while (queue.length > 0 && seen.size < MAX_ARCHIVE_RUNS) {
+      const runId = queue.shift();
+      if (!runId || !isValidRunId(runId) || seen.has(runId)) continue;
+      seen.add(runId);
+      let events = [];
+      try {
+        events = await ctx.runLog.readEvents(runId);
+      } catch (err) {
+        this.logger.warn('Condensed results could not be read back', {
+          component: COMPONENT,
+          runId: ctx.runId,
+          from: runId,
+          error: err.message
+        });
+        continue;
+      }
+      if (runId !== ctx.ledgerId) {
+        const start = events.find(event => event?.type === RUN_LOG_EVENTS.RUN_START);
+        if (!ctx.refs.chatId || start?.data?.refs?.chatId !== ctx.refs.chatId) continue;
+      }
+      state.archiveRuns.push(runId);
+      for (const event of events) {
+        if (event?.type === RUN_LOG_EVENTS.SEGMENT_START) {
+          for (const earlier of event.data?.archiveRunIds || []) queue.push(earlier);
+          continue;
+        }
+        const archiveRef =
+          event?.type === RUN_LOG_EVENTS.CONTEXT_COMPACTION && event.data?.archiveRef;
+        if (!archiveRef) continue;
+        try {
+          const stored = JSON.parse(await ctx.runLog.readSpill(runId, archiveRef));
+          for (const [key, entry] of Object.entries(stored?.refs || {})) {
+            if (!state.archive.has(key) && typeof entry?.content === 'string') {
+              state.archive.set(key, { ...entry, runId });
+            }
+          }
+        } catch (err) {
+          // One unreadable archive leaves the others readable.
+          this.logger.warn('Condensed results could not be read back', {
+            component: COMPONENT,
+            runId: ctx.runId,
+            from: runId,
+            error: err.message
+          });
+        }
+      }
+    }
+  }
+
   _ledger(runId, type, data) {
     if (!runId) return;
     try {
@@ -1366,6 +2234,125 @@ export class AgentLoop {
         error: err.message
       });
     }
+  }
+}
+
+/**
+ * A digest compaction must free at least this share of the prompt, or it is
+ * not worth its summary call and the prompt cache it breaks.
+ */
+const MIN_COMPACTION_PROGRESS = 0.1;
+
+/**
+ * Share of the model's context window above which a compaction is urgent: the
+ * next model call may be refused as too long (#3819).
+ */
+const URGENT_WINDOW_SHARE = 0.8;
+
+/** What a search or page read gets once the wrap-up has withdrawn it. */
+const WITHDRAWN_RESULT = Object.freeze({
+  error: true,
+  reason: 'tool_withdrawn',
+  message:
+    'The context is nearly full, so searches and page reads are withdrawn. Answer from the condensed results; say a figure is not available rather than search again.'
+});
+
+/** Digest text is dense: about three characters to a token, for sizing it. */
+const NOTES_CHARS_PER_TOKEN = 3;
+
+/** How many runs a recall follows back through a chain of paused turns. */
+const MAX_ARCHIVE_RUNS = 8;
+
+/**
+ * The record of a compaction that collapsed messages to previews (`elide`):
+ * the data is gone, so it is `lossy`. Before/after are estimates unless the
+ * provider's count of the transcript is known.
+ */
+/**
+ * Whether the current turn of a transcript already wrapped up: the wrap-up
+ * nudge comes after its last user message (a turn resumed after a pause). A
+ * nudge from an earlier turn does not count.
+ */
+function wrappedUpIn(messages) {
+  if (!Array.isArray(messages)) return false;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i];
+    if (message?.role !== 'user') continue;
+    if (message.content === CONTEXT_WRAP_UP_NUDGE) return true;
+    // Loop nudges start with "[system]" and mid-run steers with their
+    // marker: neither starts a new turn, also when a stored transcript lost
+    // the flag.
+    const text = String(message.content ?? '');
+    const synthetic =
+      message._nudge ||
+      message._steer ||
+      text.startsWith('[system] ') ||
+      text.startsWith(STEER_MARKER);
+    if (!synthetic) return false;
+  }
+  return false;
+}
+
+/**
+ * Whether a tool gathers more material (a search or a page read) rather than
+ * producing. Reading a condensed result back is not gathering: it is how a
+ * wrap-up gets an exact figure the notes do not hold.
+ */
+function gathers(toolDef) {
+  if (toolDef?.isCompactionRecall) return false;
+  const kind = startedDisplayOf(toolDef).activityKind;
+  return kind === 'search' || kind === 'fetch';
+}
+
+function elisionInfo(messagesBefore, result, { step, trigger, knownTokens, fallbackReason }) {
+  const estimatedBefore = estimateTranscriptTokens(messagesBefore);
+  const estimatedAfter = estimateTranscriptTokens(result.messages);
+  const tokensBefore =
+    Number.isFinite(knownTokens) && knownTokens > 0 ? Math.round(knownTokens) : estimatedBefore;
+  return {
+    compactionId: `cmp-${crypto.randomUUID().slice(0, 8)}`,
+    step,
+    trigger,
+    strategy: 'elide',
+    collapsed: result.collapsed,
+    freedChars: result.freedChars,
+    lossy: true,
+    ...(fallbackReason ? { fallbackReason } : {}),
+    tokensBefore,
+    tokensAfter: Math.max(0, tokensBefore - Math.max(0, estimatedBefore - estimatedAfter)),
+    itemsSummarised: result.collapsed
+  };
+}
+
+/**
+ * What an elision freed per message, as [index, tokens] (signed), for a
+ * context figure anchored on a provider count: only what was freed inside
+ * that count is subtracted from it (contextTracker.compacted).
+ */
+function freedByMessageOf(before, after) {
+  const freed = [];
+  for (let i = 0; i < before.length; i++) {
+    if (before[i] === after[i]) continue;
+    freed.push([i, estimateTranscriptTokens([before[i]]) - estimateTranscriptTokens([after[i]])]);
+  }
+  return freed;
+}
+
+/** Estimated tokens of the tool definitions sent with a call. */
+function toolDefinitionTokens(tools) {
+  if (!Array.isArray(tools) || tools.length === 0) return 0;
+  try {
+    return estimateTokens(
+      JSON.stringify(
+        tools.map(tool => ({
+          name: tool?.id || tool?.name,
+          description: tool?.description,
+          parameters: tool?.parameters
+        }))
+      )
+    );
+  } catch {
+    return 0;
   }
 }
 

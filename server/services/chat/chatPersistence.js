@@ -250,6 +250,21 @@ export function chatTitleSettings(platformConfig) {
   };
 }
 
+/**
+ * Settings of the findings digest of a long chat turn (#3819):
+ * `chats.compaction` in platform.json. Read live.
+ *
+ * @param {Object} platformConfig - Platform configuration.
+ * @returns {{modelId: string}} `modelId` is empty when the chat's own model is
+ *   to write the digest.
+ */
+export function chatCompactionSettings(platformConfig) {
+  const compaction = platformConfig?.chats?.compaction;
+  return {
+    modelId: typeof compaction?.modelId === 'string' ? compaction.modelId.trim() : ''
+  };
+}
+
 /** Default cap of one evidence item, in bytes (`chats.evidence.maxContentBytes`). */
 export const DEFAULT_EVIDENCE_MAX_CONTENT_BYTES = 10 * 1024 * 1024;
 
