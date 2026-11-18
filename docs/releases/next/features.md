@@ -91,12 +91,18 @@ milliseconds under load; they now run in worker threads. The results are the sam
 
 In a container with a memory limit, iHub no longer starts four workers that each size their memory as if they
 had the whole container to themselves. When `WORKERS` (or `NUM_WORKERS`) is not set, the server starts as
-many workers as fit into the memory limit (768 MB each after 160 MB for the primary), at most one per CPU and
-never more than four, and gives each worker a heap limit of its share, so memory is reclaimed before the
-container is killed. A 2 GB container now runs 2 workers instead of 4; a 1 GB container runs a single process.
-Without a memory limit nothing changes (4 workers).
+many workers as fit into the memory limit (1.7 GB each after 160 MB for the primary, the memory a worker was
+measured to use under load), at most one per CPU and
+never more than four, and gives each worker a heap limit of its share minus what a worker uses outside the heap,
+so memory is reclaimed before the container is killed. A 4 GB container now runs 2 workers instead of 4; up to
+3 GB a single process runs. Without a memory limit nothing changes (4 workers). Workers with enough memory
+(about 1.4 GB or more each) also get a larger young generation for short-lived objects, which shortens
+garbage-collection pauses under load: in a test with 1,500 users the event-loop peak dropped by about 30%. An
+explicit `WORKERS` that does not fit into the limit (less than 1.7 GB per worker) is logged as a warning that
+names how many workers fit and how much memory the requested count needs — for example, 14 workers need about
+23.4 GB, and an 18 GB container holds at most 10.
 
-An explicit `WORKERS` and an explicit `--max-old-space-size` in `NODE_OPTIONS` still win. The decision is
+An explicit `WORKERS`, `--max-old-space-size` or `--max-semi-space-size` in `NODE_OPTIONS` still wins. The decision is
 logged at startup ("Worker sizing: …"), and the container start banner no longer claims a worker count the
 server does not use. See [Scaling with Multiple Workers](../../scaling.md#sizing-from-the-container).
 

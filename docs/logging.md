@@ -252,6 +252,9 @@ When `logging.format` is set to `"json"` (default), logs are output as structure
 }
 ```
 
+`query` holds at most the first 1,000 characters of the user's message. The text of attached documents
+is never logged: their `<content …>` tag stays, the text is replaced by `[N characters omitted]`.
+
 **Field Order Guarantee:**
 
 The JSON formatter guarantees a consistent field order in all log entries:

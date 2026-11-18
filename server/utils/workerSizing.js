@@ -20,15 +20,37 @@
  *   {@link DEFAULT_WORKERS}, as before.
  * - **Heap per worker.** A `--max-old-space-size` in `NODE_OPTIONS` or on the
  *   command line wins. Otherwise, with a memory limit and more than one
- *   worker, each worker gets its share of the limit minus what a Node process
- *   uses outside the old-space heap ({@link WORKER_NON_HEAP_MB}), never less
- *   than {@link MIN_WORKER_HEAP_MB}. A single process keeps Node's own
- *   default, which already follows the container limit.
+ *   worker, each worker's share of the limit is split: what a Node process
+ *   uses outside its V8 heap ({@link WORKER_NON_HEAP_MB}), the young
+ *   generation (about {@link YOUNG_GENERATION_FACTOR} times the semi-space),
+ *   and the rest as the old-space limit (at least
+ *   {@link LOWEST_WORKER_HEAP_MB}) — so old space, young generation and
+ *   non-heap together never exceed the share. When an explicit `WORKERS`
+ *   leaves a worker less than {@link WORKER_BUDGET_MB}, the workers do not
+ *   fit: the decision is logged as a warning naming how many workers fit and
+ *   how much memory the requested count needs.
+ *   A single process keeps Node's own default, which already follows the
+ *   container limit.
+ * - **Young generation per worker.** A `--max-semi-space-size` given by the
+ *   admin wins. Otherwise a worker with a heap limit from the memory limit gets
+ *   a larger young generation when its share allows it ({@link semiSpaceMbFor}):
+ *   chat turns allocate many short-lived objects, and Node's default young
+ *   generation promotes them into the old space, whose collections paused the
+ *   event loop for up to a second. A load test at 1,500 users measured the
+ *   event-loop peak about 30% lower with 64 MB.
+ *
+ * Measured on Kubernetes (k3s, no swap, 14 workers, 2,000–2,500 users): a
+ * worker uses 1.5–1.7 GB RSS under load, largely independent of its heap
+ * limit — 1.5 GB even with a 657 MB heap, most of it outside the main heap
+ * (worker-thread isolates up to their caps, buffers, code). 14 workers in
+ * 24 GiB ran without OOM; in 18 GiB they were OOM-killed, in 14 GiB
+ * repeatedly.
  *
  * @module utils/workerSizing
  */
 import fs from 'node:fs';
 import os from 'node:os';
+import v8 from 'node:v8';
 
 /** Workers without a memory limit, and the ceiling of a derived count. */
 export const DEFAULT_WORKERS = 4;
@@ -37,19 +59,26 @@ export const DEFAULT_WORKERS = 4;
 export const PRIMARY_RESERVE_MB = 160;
 
 /**
- * Memory one worker is planned with: ~450–550 MB RSS idle after boot, plus
- * headroom for the requests it serves (file extraction, large chats).
+ * Memory one worker is planned with: the derived count fits this many MB per
+ * worker, and a share below it does not fit (measured 1.5–1.7 GB RSS per
+ * worker under load).
  */
-export const WORKER_BUDGET_MB = 768;
+export const WORKER_BUDGET_MB = 1700;
 
 /**
- * What a worker process uses besides its old-space heap: code, the young
- * generation, buffers and native allocations.
+ * What a worker process uses outside its main V8 heap: the isolates of its
+ * worker threads (up to their caps), buffers, native allocations and code.
  */
-export const WORKER_NON_HEAP_MB = 300;
+export const WORKER_NON_HEAP_MB = 850;
 
-/** Lowest heap limit handed to a worker. */
-export const MIN_WORKER_HEAP_MB = 512;
+/** The young generation takes about this many times the semi-space size. */
+export const YOUNG_GENERATION_FACTOR = 3;
+
+/** Node's default semi-space size on 64-bit systems, in MB. */
+export const NODE_DEFAULT_SEMI_SPACE_MB = 16;
+
+/** Smallest heap a worker is given, even when its share cannot hold it. */
+export const LOWEST_WORKER_HEAP_MB = 256;
 
 /** cgroup v2, then v1. */
 const CGROUP_LIMIT_FILES = Object.freeze([
@@ -64,6 +93,20 @@ const CGROUP_LIMIT_FILES = Object.freeze([
 const UNLIMITED_THRESHOLD = 2 ** 60;
 
 const HEAP_FLAG = /--max[-_]old[-_]space[-_]size(?:=|\s|$)/;
+const SEMI_SPACE_FLAG = /--max[-_]semi[-_]space[-_]size(?:=|\s|$)/;
+
+/**
+ * Semi-space size for a worker's share of the memory limit: 64 MB from
+ * 2,000 MB per worker, 32 MB from 1,400 MB, otherwise Node's default.
+ *
+ * @param {number} shareMb - Memory per worker (limit minus the primary's reserve, divided by workers)
+ * @returns {number|null} MB, or null for Node's default
+ */
+export function semiSpaceMbFor(shareMb) {
+  if (shareMb >= 2000) return 64;
+  if (shareMb >= 1400) return 32;
+  return null;
+}
 
 /**
  * The container's memory limit, from the cgroup.
@@ -99,6 +142,17 @@ export function hasHeapLimitFlag(nodeOptions = '', execArgv = []) {
 }
 
 /**
+ * Whether a V8 semi-space size was already given to this process.
+ *
+ * @param {string} [nodeOptions] - `NODE_OPTIONS`
+ * @param {string[]} [execArgv] - `process.execArgv`
+ * @returns {boolean}
+ */
+export function hasSemiSpaceFlag(nodeOptions = '', execArgv = []) {
+  return SEMI_SPACE_FLAG.test(nodeOptions || '') || execArgv.some(arg => SEMI_SPACE_FLAG.test(arg));
+}
+
+/**
  * Decide the worker count and the heap limit per worker.
  *
  * @param {Object} input
@@ -106,11 +160,19 @@ export function hasHeapLimitFlag(nodeOptions = '', execArgv = []) {
  * @param {number|null} input.memoryLimitBytes - Container memory limit, or null
  * @param {number} input.cpus - Available parallelism
  * @param {boolean} input.heapFlagSet - Whether `--max-old-space-size` was given
+ * @param {boolean} [input.semiSpaceFlagSet] - Whether `--max-semi-space-size` was given
  * @returns {{workers: number, workersSource: 'env'|'memory limit'|'default',
  *   heapMb: number|null, heapSource: 'NODE_OPTIONS'|'memory limit'|'node default',
+ *   semiSpaceMb: number|null, shareMb: number|null, fits: boolean,
  *   limitMb: number|null, cpus: number}}
  */
-export function decideWorkerSizing({ explicitWorkers, memoryLimitBytes, cpus, heapFlagSet }) {
+export function decideWorkerSizing({
+  explicitWorkers,
+  memoryLimitBytes,
+  cpus,
+  heapFlagSet,
+  semiSpaceFlagSet = false
+}) {
   const limitMb =
     Number.isFinite(memoryLimitBytes) && memoryLimitBytes > 0
       ? Math.floor(memoryLimitBytes / (1024 * 1024))
@@ -133,15 +195,32 @@ export function decideWorkerSizing({ explicitWorkers, memoryLimitBytes, cpus, he
 
   let heapMb = null;
   let heapSource = 'node default';
+  let semiSpaceMb = null;
+  let shareMb = null;
+  let fits = true;
   if (heapFlagSet) {
     heapSource = 'NODE_OPTIONS';
   } else if (limitMb !== null && workers > 1) {
-    const share = Math.floor((limitMb - PRIMARY_RESERVE_MB) / workers);
-    heapMb = Math.max(MIN_WORKER_HEAP_MB, share - WORKER_NON_HEAP_MB);
+    shareMb = Math.floor((limitMb - PRIMARY_RESERVE_MB) / workers);
+    if (!semiSpaceFlagSet) semiSpaceMb = semiSpaceMbFor(shareMb);
+    // An admin semi-space flag is not parsed; Node's default is assumed for it.
+    const youngMb = YOUNG_GENERATION_FACTOR * (semiSpaceMb ?? NODE_DEFAULT_SEMI_SPACE_MB);
+    fits = shareMb >= WORKER_BUDGET_MB;
+    heapMb = Math.max(LOWEST_WORKER_HEAP_MB, shareMb - WORKER_NON_HEAP_MB - youngMb);
     heapSource = 'memory limit';
   }
 
-  return { workers, workersSource, heapMb, heapSource, limitMb, cpus: cpuCount };
+  return {
+    workers,
+    workersSource,
+    heapMb,
+    heapSource,
+    semiSpaceMb,
+    shareMb,
+    fits,
+    limitMb,
+    cpus: cpuCount
+  };
 }
 
 /**
@@ -167,27 +246,41 @@ export function workerSizingForProcess({
     explicitWorkers,
     memoryLimitBytes: memoryLimit(),
     cpus: availableParallelism(),
-    heapFlagSet: hasHeapLimitFlag(env.NODE_OPTIONS, execArgv)
+    heapFlagSet: hasHeapLimitFlag(env.NODE_OPTIONS, execArgv),
+    semiSpaceFlagSet: hasSemiSpaceFlag(env.NODE_OPTIONS, execArgv)
   });
 }
 
 /**
  * The decision as one log line, written once by the process that starts the
- * cluster (or by the single process).
+ * cluster (or by the single process); log it as a warning when `sizing.fits`
+ * is false.
  *
  * @param {ReturnType<typeof decideWorkerSizing>} sizing - The decision
  * @returns {Object} Log fields, `message` included
  */
 export function describeWorkerSizing(sizing) {
+  const fits = sizing.fits !== false;
+  const maxWorkers = Math.max(
+    1,
+    Math.floor((sizing.limitMb - PRIMARY_RESERVE_MB) / WORKER_BUDGET_MB)
+  );
+  const neededMb = PRIMARY_RESERVE_MB + sizing.workers * WORKER_BUDGET_MB;
   return {
     component: 'Server',
     message: `Worker sizing: ${sizing.workers} worker(s) (${sizing.workersSource}), heap per worker ${
       sizing.heapMb ? `${sizing.heapMb} MB` : 'Node default'
-    } (${sizing.heapSource})`,
+    } (${sizing.heapSource})${sizing.semiSpaceMb ? `, young generation ${sizing.semiSpaceMb} MB semi-space` : ''}${
+      fits
+        ? ''
+        : ` — ${sizing.workers} workers do not fit into the memory limit: ${sizing.shareMb} MB each, a worker needs ${WORKER_BUDGET_MB} MB. At most ${maxWorkers} worker(s) fit into ${sizing.limitMb} MB; ${sizing.workers} workers need ${neededMb} MB. Lower WORKERS or raise the limit`
+    }`,
     workers: sizing.workers,
     workersSource: sizing.workersSource,
     heapPerWorkerMb: sizing.heapMb,
     heapSource: sizing.heapSource,
+    semiSpaceMb: sizing.semiSpaceMb ?? null,
+    shareMb: sizing.shareMb ?? null,
     memoryLimitMb: sizing.limitMb,
     cpus: sizing.cpus
   };
@@ -195,13 +288,33 @@ export function describeWorkerSizing(sizing) {
 
 /**
  * The flags a worker is started with: the primary's own, plus the heap limit
- * when one was decided.
+ * and the semi-space size when they were decided.
  *
- * @param {{heapMb: number|null}} sizing - The decision
+ * @param {{heapMb: number|null, semiSpaceMb?: number|null}} sizing - The decision
  * @param {string[]} [execArgv] - The primary's flags
  * @returns {string[]}
  */
 export function workerExecArgv(sizing, execArgv = process.execArgv) {
-  if (!sizing?.heapMb) return [...execArgv];
-  return [...execArgv, `--max-old-space-size=${sizing.heapMb}`];
+  const flags = [...execArgv];
+  if (sizing?.heapMb) flags.push(`--max-old-space-size=${sizing.heapMb}`);
+  if (sizing?.semiSpaceMb) flags.push(`--max-semi-space-size=${sizing.semiSpaceMb}`);
+  return flags;
+}
+
+/**
+ * Let this process's worker threads use their own heap limits.
+ *
+ * V8 heap flags are process-wide: a `--max-old-space-size` or
+ * `--max-semi-space-size` given to a process (by {@link workerExecArgv},
+ * `NODE_OPTIONS` or the command line) also overrides the `resourceLimits` of
+ * every worker thread it starts — a thread asking for 256 MB got the worker's
+ * whole heap limit. The main isolate reads the flags once, when it is created,
+ * so resetting them to V8's "not set" afterwards keeps this process's own
+ * limits and lets each thread's `resourceLimits` apply again. Call it before
+ * the first thread starts. Node calls `v8.setFlagsFromString` after startup
+ * unsupported; `server/tests/thread-heap-limits.test.js` pins the behaviour.
+ */
+export function releaseThreadHeapFlags() {
+  v8.setFlagsFromString('--max-old-space-size=0');
+  v8.setFlagsFromString('--max-semi-space-size=0');
 }

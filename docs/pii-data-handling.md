@@ -96,11 +96,19 @@ Other ways chat content can become durable are:
 1. **Feedback submissions** — when a user clicks a rating, the first 300
    characters of the rated message (plus any free-text comment) are appended
    to `contents/data/feedback.jsonl` (`server/feedbackStorage.js`).
-2. **Verbose logging** — `server/utils.js`'s `logInteraction()` calls
-   `logger.info(...)` with the user query and the first 1000 characters of the
-   response. By default the logger only writes to **stdout**, so this becomes
-   durable only if `logging.file.enabled: true` is set or stdout is captured
-   by your container runtime / log shipper.
+2. **Verbose logging** — `server/utils.js`'s `logInteraction()` writes a
+   `CHAT_REQUEST` info line with the first 1000 characters of the user's
+   query; the `CHAT_RESPONSE` line carries ids only, no response text. The text
+   of attached documents is not logged: each `<content>` block is replaced by
+   its length (`[N characters omitted]`). A few other info lines also carry
+   text derived from user input: the iFinder search query
+   (`server/services/integrations/iFinderService.js`, "Searching for query in
+   profile") and the first 100 characters of a clarification question the
+   model asks (`server/services/chat/chatSeams.js`, "Clarification
+   requested"). By default the logger only writes to **stdout**, so this
+   becomes durable only if `logging.file.enabled: true` is set or stdout is
+   captured by your container runtime / log shipper; `logging.level: warn`
+   drops these info lines.
 3. **External iAssistant / iFinder integration** — when configured, full
    conversations are sent to and stored by the external iFinder server. That
    is a deliberate third-party integration; the data belongs to that backend.
@@ -265,7 +273,7 @@ honours it immediately.
 | `usageTracking.eventRetentionDays` | `90` | Delete usage events older than N days |
 | `usageTracking.dailyRetentionDays` | `365` | Delete daily rollups older than N days *(now wired in 5.4.0)* |
 | `usageTracking.monthlyRetentionDays` | `-1` | Delete monthly rollups older than N days |
-| `logging.level` | `info` | `warn` suppresses the `logInteraction()` full-prompt info logs |
+| `logging.level` | `info` | `warn` suppresses the `logInteraction()` query info lines and other info lines with user-derived text |
 | `logging.file.enabled` | `false` | Keep logs ephemeral on stdout |
 | `auth.sessionTimeoutMinutes` | `480` | JWT lifetime (= cookie lifetime) |
 | `anonymousAuth.enabled` | `true` | Anonymous users avoid the user-fingerprint code path |
