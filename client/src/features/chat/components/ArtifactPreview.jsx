@@ -17,6 +17,7 @@ import {
   previewTypeOf,
   withPreviewCsp
 } from '../utils/artifactFiles';
+import { libraryKitOf, withArtifactLibraries } from '../utils/artifactLibraryKit';
 import ArtifactPromptRequest from './ArtifactPromptRequest';
 
 // A preview that fills the full-screen pane scrolls behind the composer dock; the workspace sets
@@ -198,6 +199,9 @@ export default function ArtifactPreview({
   // server that does not send the list keeps the preview offline.
   const configuredHosts = platformConfig?.artifacts?.scriptHosts;
   const scriptHosts = Array.isArray(configuredHosts) ? configuredHosts : [];
+  // The library kit: `<script data-ihub-lib="chart.js">` markers become the libraries' source
+  // in the preview, so no CDN is needed. The Code view keeps the stored markup.
+  const libraryKitEnabled = libraryKitOf(platformConfig).enabled;
   const type = previewTypeOf(artifact);
   const name = artifactDisplayName(artifact);
   const [state, setState] = useState({ status: 'loading' });
@@ -246,6 +250,14 @@ export default function ArtifactPreview({
     setState({ status: 'loading' });
     getBlob(artifact.id)
       .then(blob => loadPreview(type, blob))
+      .then(async content =>
+        type === 'html'
+          ? {
+              ...content,
+              runText: await withArtifactLibraries(content.text, { enabled: libraryKitEnabled })
+            }
+          : content
+      )
       .then(content => {
         url = content.url || null;
         if (active) setState({ status: 'ready', ...content });
@@ -258,7 +270,7 @@ export default function ArtifactPreview({
       active = false;
       if (url) URL.revokeObjectURL(url);
     };
-  }, [artifact.id, type, getBlob, controlled]);
+  }, [artifact.id, type, getBlob, controlled, libraryKitEnabled]);
 
   if (state.status === 'loading') {
     return (
@@ -394,7 +406,11 @@ export default function ArtifactPreview({
             ref={iframeRef}
             sandbox="allow-scripts"
             referrerPolicy="no-referrer"
-            srcDoc={withPreviewCsp(state.text, { scriptHosts, theme, promptBridge })}
+            srcDoc={withPreviewCsp(state.runText ?? state.text, {
+              scriptHosts,
+              theme,
+              promptBridge
+            })}
             title={name}
             className={`w-full ${tall} ${frame} bg-white`}
           />

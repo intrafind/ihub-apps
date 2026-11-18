@@ -14,6 +14,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DEFAULT_ARTIFACT_SCRIPT_HOSTS } from '../../shared/artifactPreview.js';
+import { requestedArtifactLibraries } from '../../shared/artifactLibraries.js';
 import { applyTextEdits } from '../services/documents/editableSource.js';
 import { inspectWebArtifactFindings } from '../services/documents/webArtifacts/webArtifactTools.js';
 import { renderDashboard } from '../services/documents/webArtifacts/dashboardPreset.js';
@@ -49,13 +50,21 @@ describe('web-artifacts examples', () => {
       assert.match(page, /prefers-color-scheme: dark/);
       // Follow-up questions only where the chat can answer them.
       if (page.includes('sendPrompt(')) assert.match(page, /sendPrompt\.available/);
+      // Libraries come from the kit, never from a CDN (#3822).
+      assert.doesNotMatch(page, /<script\b[^>]*\bsrc\s*=/i);
     });
+  });
+
+  it('loads Chart.js, Alpine.js and D3 from the library kit', () => {
+    const libraries = pages.map(page => requestedArtifactLibraries(page));
+    assert.deepEqual(libraries, [['chart.js'], ['alpinejs'], [], ['d3']]);
   });
 
   it('the edit example applies to example 1, and the result still passes', () => {
     const [call] = blocksOf(markdown, 'json').map(text => JSON.parse(text));
     const edited = applyTextEdits(pages[0], call.edits);
-    assert.match(edited, /fill:#047857/);
+    assert.match(edited, /backgroundColor: '#047857'/);
+    assert.match(edited, /data-ihub-lib="chart\.js"/);
     assert.match(edited, /name: 'Central'/);
     assert.deepEqual(inspectWebArtifactFindings(edited, 'html'), []);
   });

@@ -71,6 +71,7 @@ export function apiDocGlobs(routesDir, sep = path.sep) {
   return {
     normal: [
       'generalRoutes.js',
+      'artifactLibraries.js',
       'modelRoutes.js',
       'appSessionRoutes.js',
       'pageRoutes.js',

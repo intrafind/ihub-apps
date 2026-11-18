@@ -179,12 +179,22 @@ takes effect without a restart:
 | `maxZipFiles` | `200`      | Files in one ZIP archive (download or `create_zip`); `<= 0` uncapped |
 | `maxZipBytes` | `104857600` | Content bytes in one ZIP archive, before compression; `<= 0` uncapped |
 | `scriptHosts` | `["cdnjs.cloudflare.com", "cdn.jsdelivr.net", "unpkg.com"]` | CDN hosts an HTML artifact's preview may load scripts and stylesheets from; `[]` keeps the preview offline. See [HTML previews](#html-previews) |
+| `libraryKit.enabled` | `true` | Inline the vetted libraries iHub ships (Chart.js, D3, Alpine.js) where an HTML artifact asks for them. See [The library kit](#the-library-kit) |
+
+Every key is edited in **Admin → Artifacts** (`/admin/artifacts`, through
+`GET`/`PUT /api/admin/artifacts/config`): the master switch, the size and ZIP
+limits, the CDN hosts (with "Remove all (offline)" and "Use the public
+defaults") and the library kit, whose table shows each library's version,
+license, size and whether its file passed the checksum check. A `PUT` changes
+only the fields it names; a host that is not a plain host name is refused
+rather than silently dropped.
 
 Migration V106 seeds the block into existing installations at its defaults, so
 an upgrade changes nothing on its own. Migration V190 adds the two ZIP limits
 the same way. Migration V245 adds `scriptHosts` with the three default
 CDNs, so after the upgrade HTML artifacts can load libraries from them; set
-`[]` to keep the preview fully offline, as it was before.
+`[]` to keep the preview fully offline, as it was before. Migration V258 adds
+`libraryKit.enabled: true`, keeping a value an installation already set.
 
 The settings live here rather than under `chats` precisely because a workflow
 reading its own limits must not have to reach into the chat settings to find
@@ -204,12 +214,62 @@ in `shared/artifactPreview.js`:
 | Inline `<script>` and `<style>`, `eval` / `new Function`        | `fetch`, XHR, WebSocket, form posts                        |
 | Scripts and stylesheets over `https` from `artifacts.scriptHosts` | Every other host, and `http:`                              |
 | `data:` / `blob:` images and media, `data:` fonts               | Remote images and fonts, CSS `url()` / `@import` elsewhere |
+| [Library kit](#the-library-kit) markers, inlined before the frame runs | |
 
 `scriptHosts` takes bare host names (`cdn.example.com`, or
 `https://cdn.example.com`); a wildcard, path, port or `http:` entry is dropped.
 An internal mirror of a public CDN works too: list its host. The names reach the
 browser through `GET /api/configs/platform` (`artifacts.scriptHosts`), because
 it builds the policy.
+
+### The library kit
+
+**Offline mode is `scriptHosts: []` plus the kit.** iHub ships a small,
+vetted, version-pinned set of browser libraries in `server/artifactLibraries/`,
+described in `shared/artifactLibraries.js`:
+
+| Marker | Library | Defines | License |
+| --- | --- | --- | --- |
+| `<script data-ihub-lib="chart.js"></script>` | Chart.js 4.5.1 | `Chart` | MIT |
+| `<script data-ihub-lib="d3"></script>` | D3 7.9.0 | `d3` | ISC |
+| `<script data-ihub-lib="alpinejs"></script>` | Alpine.js 3.17.3 (last in `<body>`) | `Alpine` | MIT |
+
+The model writes the marker; the stored file keeps it, so it stays small and
+an edit never touches the library. Wherever the markup leaves the store to run
+or to be saved, the marker is replaced with the library's source as inline
+script: the chat's preview (the client fetches the source from
+`GET /api/artifact-libraries/{libraryId}/source`), the share embed page, a share
+download (`?download=1`), every `.html` download and attachment from the
+chat, and every ZIP. The CSP stays as it is: no origin is added, and nothing
+depends on the public origin or base path.
+
+- **Exact names only.** `chart.js`, `d3`, `alpinejs`, optionally with the
+  kit's own version (`chart.js@4.5.1`). A marker's value is matched against the
+  manifest and never becomes a path.
+- **Once, and capped.** Each library is inlined once however often it is asked
+  for, and at most 2 MB of library source go into one document (the whole kit
+  is about 540 KB).
+- **Checks.** `create_web_artifact` and `edit_web_artifact` report a marker
+  that names nothing in the kit, a version the kit does not ship, a marker with
+  code or a `src` of its own, an Alpine.js marker in `<head>`, and any marker
+  while the kit is off. A `<script src>` from a CDN for a library the kit has
+  is a note that points to the marker. The tool description lists the kit, and
+  the `web-artifacts` skill uses it by default and a CDN only when the user
+  asks.
+- **Supply chain.** The files are copied unchanged from npm. Their size and
+  SHA-256 are recorded in the manifest; the server verifies both before it
+  serves a file (a file that does not match is treated as missing and logged),
+  and `node scripts/check-artifact-libraries.js` (CI: *Artifact libraries*)
+  compares the vendored files with the published packages. Third-party notices
+  are in `REUSE.toml` and `LICENSES/`. Upgrading a library: change its version
+  in the manifest, run the script with `--write`, and copy the printed size and
+  SHA-256 into the manifest.
+- **Off.** With `libraryKit.enabled: false` markers stay empty scripts, the
+  source route answers `404` and the tools say so; an internal mirror in
+  `scriptHosts` is the alternative.
+
+Not in the kit: map libraries (Leaflet needs remote tiles, which the CSP
+blocks), web fonts and remote images.
 
 **Theme.** `prefers-color-scheme` inside the frame follows the operating
 system, not iHub's own light/dark switch. The preview therefore sets
@@ -271,6 +331,8 @@ Today the surface is the chat's, because chats are the only producer:
 | `GET /api/shares/:shareId/artifacts/:artifactId/provenance` | The same provenance answer, through the share         |
 | `POST /api/chats/:chatId/artifacts/zip`        | Several of the chat's artifacts as one ZIP           |
 | `POST /api/shares/:shareId/artifacts/zip`      | Several of a share's artifacts as one ZIP            |
+| `GET /api/artifact-libraries`                  | The [library kit](#the-library-kit): `{ enabled, items }`; no sign-in needed |
+| `GET /api/artifact-libraries/:libraryId/source` | One kit library's source as `text/plain`; `404` for another name or while the kit is off |
 
 The ZIP routes take `{ "artifactIds": ["…", "…"] }`, or no body for every
 artifact the caller may read (oldest first). They are authorized exactly like
@@ -517,6 +579,8 @@ is the only one that writes a file, and it writes into the agent tree.
 | `server/storage/providers/filesystem/FilesystemBlobStore.js` | It, on files                                  |
 | `server/services/artifacts/ArtifactRepository.js`   | The store: scopes, keys, put/get/list/delete            |
 | `server/services/artifacts/artifactPolicy.js`       | Kinds, media-type allowlists, caps and the master switch |
+| `shared/artifactLibraries.js`, `server/services/artifacts/artifactLibraryKit.js`, `server/artifactLibraries/` | The library kit: manifest, markers, inlining, the vendored files |
+| `server/routes/admin/artifacts.js`, `client/src/features/admin/pages/AdminArtifactsPage.jsx` | Admin → Artifacts |
 | `server/services/chat/chatMaterializer.js`          | The chat producer: a turn's images become artifacts     |
 | `server/routes/chats.js`                            | The chat-scoped endpoints                               |
 | `client/src/features/chat/components/GeneratedImage.jsx` | Renders a live, a stored or an unavailable image   |

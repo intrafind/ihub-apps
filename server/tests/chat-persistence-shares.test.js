@@ -941,6 +941,24 @@ describe('artifacts as one ZIP', () => {
     });
   });
 
+  it('inlines the library kit into an HTML file, and leaves other files alone (#3822)', async () => {
+    const chatId = await seedChat(ADA, { turns: 0 });
+    const marker = '<script data-ihub-lib="d3"></script>';
+    await seedFile(
+      chatId,
+      'chart.html',
+      `<html><head>${marker}</head><body></body></html>`,
+      'text/plain'
+    );
+    await seedFile(chatId, 'notes.md', marker, 'text/markdown');
+    const res = await driveZip(chatZipHandlers, { params: { chatId }, user: ADA });
+    assert.equal(res.statusCode, 200);
+    assert.match(res.files['chart.html'], /<script data-ihub-lib-inlined="d3@7\.9\.0">/);
+    assert.match(res.files['chart.html'], /d3js\.org v7\.9\.0/);
+    assert.equal(res.files['chart.html'].includes(marker), false);
+    assert.equal(res.files['notes.md'], marker);
+  });
+
   it('names the archive after a title cut inside an emoji without failing', async () => {
     chatCounter += 1;
     const chatId = `chat-${chatCounter}`;
@@ -1423,6 +1441,46 @@ describe('the embed page', () => {
     assert.equal(res.body.includes('<h1>hello</h1>'), false, 'markup is escaped into srcdoc');
     assert.match(res.body, /&lt;h1&gt;hello&lt;\/h1&gt;/);
     assert.equal(res.headers['cache-control'], 'private, no-store');
+  });
+
+  it('inlines the library kit into the framed markup, and only while the kit is on (#3822)', async () => {
+    const chatId = await seedChat(ADA);
+    const page = await seedHtmlArtifact(
+      chatId,
+      '<!DOCTYPE html><html><head><script data-ihub-lib="chart.js"></script></head><body><canvas></canvas><script>new Chart()</script></body></html>'
+    );
+    const created = await shareArtifact(ADA, chatId, page.id, { mode: 'public', embeddable: true });
+    assert.equal(created.statusCode, 201, JSON.stringify(created.body));
+    const res = await drive(embedHandlers, { params: { shareId: created.body.id } });
+    assert.equal(res.statusCode, 200);
+    // Escaped into srcdoc: the inlined library, never the marker, and no new script origin.
+    assert.match(res.body, /data-ihub-lib-inlined=&quot;chart\.js@4\.5\.1&quot;/);
+    assert.equal(res.body.includes('data-ihub-lib=&quot;chart.js&quot;'), false);
+    assert.match(res.body, /Chart\.js v4\.5\.1/);
+    assert.equal(/script-src[^;]*'self'/.test(res.headers['content-security-policy']), false);
+
+    // A download carries the library; the inline bytes are the stored ones, marker and all.
+    const bytes = { shareId: created.body.id, artifactId: page.id };
+    const inline = await drive(artifactHandlers, { params: bytes });
+    assert.equal(inline.statusCode, 200);
+    assert.match(Buffer.from(inline.body).toString(), /data-ihub-lib="chart\.js"/);
+    const saved = await drive(artifactHandlers, { params: bytes, query: { download: '1' } });
+    assert.equal(saved.statusCode, 200);
+    const savedText = Buffer.from(saved.body).toString();
+    assert.match(savedText, /data-ihub-lib-inlined="chart\.js@4\.5\.1"/);
+    assert.equal(savedText.includes('data-ihub-lib="'), false);
+    assert.equal(saved.headers['content-length'], String(saved.body.length));
+
+    platform.artifacts = { ...platform.artifacts, libraryKit: { enabled: false } };
+    configCache.setCacheEntry('config/platform.json', platform);
+    try {
+      const off = await drive(embedHandlers, { params: { shareId: created.body.id } });
+      assert.equal(off.body.includes('data-ihub-lib-inlined'), false);
+      assert.match(off.body, /data-ihub-lib=&quot;chart\.js&quot;/);
+    } finally {
+      platform.artifacts = { ...platform.artifacts, libraryKit: { enabled: true } };
+      configCache.setCacheEntry('config/platform.json', platform);
+    }
   });
 
   it('answers 404 for everything that is not an active, public, embeddable artifact share', async () => {

@@ -31,6 +31,7 @@ import { getChatShareRepository, isShareId } from '../services/chat/ChatShareRep
 import { authorizeShareView } from '../services/chat/chatShareAccess.js';
 import { chatSharingSettings, isChatSharingConfigured } from '../services/chat/chatSharing.js';
 import { artifactSettings } from '../services/artifacts/artifactPolicy.js';
+import { inlineKitLibraries } from '../services/artifacts/artifactLibraryKit.js';
 import { artifactPreviewCsp, prepareHtmlPreview } from '../../shared/artifactPreview.js';
 
 const COMPONENT = 'ShareEmbedPage';
@@ -121,10 +122,11 @@ function notFound(res) {
  *
  * @param {Object} share - Share document.
  * @param {Object} stored - `{ data: Buffer, mimeType, name }` from the artifact store.
- * @param {string[]} scriptHosts - Hosts an HTML artifact may load scripts from.
+ * @param {{scriptHosts: string[], libraryKit: {enabled: boolean}}} settings - Hosts an HTML
+ *   artifact may load scripts from, and whether the library kit is inlined.
  * @returns {string} Body markup.
  */
-function renderBody(share, stored, scriptHosts) {
+function renderBody(share, stored, { scriptHosts, libraryKit }) {
   const withCsp = html => prepareHtmlPreview(html, { scriptHosts });
   const artifact = { ...share.artifact, mimeType: stored.mimeType, name: stored.name };
   const type = embedTypeOf(artifact);
@@ -136,7 +138,12 @@ function renderBody(share, stored, scriptHosts) {
   if (type === 'pdf')
     return `<iframe src="${escapeHtml(url)}" title="${escapeHtml(title)}"></iframe>`;
   if (!tooLarge && type === 'html') {
-    return sandboxedFrame(withCsp(stored.data.toString('utf8')), title);
+    // The library kit's markers become the libraries' source: inline script,
+    // so the frame's policy needs no further origin.
+    return sandboxedFrame(
+      withCsp(inlineKitLibraries(stored.data.toString('utf8'), libraryKit)),
+      title
+    );
   }
   if (!tooLarge && type === 'svg') {
     return sandboxedFrame(
@@ -203,7 +210,7 @@ export default function registerShareEmbedPageRoutes(app) {
       );
       if (!stored) return notFound(res);
 
-      const { scriptHosts } = artifactSettings(platform);
+      const { scriptHosts, libraryKit } = artifactSettings(platform);
 
       if (access.counts) {
         const { counted } = await repository.recordView(share.id, null, { recordAs: null });
@@ -220,7 +227,7 @@ export default function registerShareEmbedPageRoutes(app) {
       res.setHeader('Referrer-Policy', 'no-referrer');
       res.set('Content-Type', 'text/html; charset=utf-8');
       return res.send(
-        page(renderBody(share, { ...stored, id: share.artifact.id }, scriptHosts), {
+        page(renderBody(share, { ...stored, id: share.artifact.id }, { scriptHosts, libraryKit }), {
           title: share.title
         })
       );

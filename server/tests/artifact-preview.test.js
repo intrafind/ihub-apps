@@ -189,7 +189,7 @@ describe('create_web_artifact checks', () => {
   it('accepts scripts and stylesheets from an allowed host', () => {
     const html =
       '<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">' +
-      '<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>';
+      '<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>';
     assert.deepEqual(inspectWebArtifact(html, 'html', { scriptHosts: hosts }), []);
   });
 

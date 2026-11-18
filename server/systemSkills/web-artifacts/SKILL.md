@@ -3,7 +3,7 @@ name: web-artifacts
 description: Build and change interactive, self-contained HTML web artifacts (.html) — live dashboards, calculators, ROI/pricing simulators, interactive data explorers, clickable UI prototypes, HTML5 Canvas/generative visualizations — and standalone vector graphics (.svg) that render live in the chat's Artifacts panel. Use whenever the user asks for an interactive web app, dashboard, calculator, UI prototype, interactive visualization or standalone SVG graphic, or for a change to one this chat already made. Do not use for static print PDFs/posters (use pdf), multi-file code repositories (use files/create_zip), or quick inline chat flowcharts (use a ```mermaid code block in chat).
 metadata:
   author: IntraFind
-  version: '1.4'
+  version: '1.5'
 allowed-tools: create_web_artifact edit_web_artifact
 ---
 
@@ -25,10 +25,20 @@ You create live, interactive web artifacts and vector graphics with the `create_
 Every `.html` artifact renders inside `<iframe sandbox="allow-scripts" referrerPolicy="no-referrer" srcDoc="…">`. Follow these rules strictly:
 
 1. **One self-contained file**: put all CSS inside `<style>` and all JavaScript inside `<script>`. Never reference relative sibling files (`<script src="./app.js">` or `<link href="./styles.css">`) — `srcDoc` has no base URL and relative paths fail.
-2. **Network: allowlisted CDNs only.** Scripts and stylesheets may load over `https` from the CDN hosts this installation allows — by default `cdnjs.cloudflare.com`, `cdn.jsdelivr.net` and `unpkg.com`. Everything else is blocked: no `fetch`, XHR, WebSocket, remote images or fonts, and no CSS `url()`/`@import` from the network (so no Google Fonts). Only `data:` and `blob:` images and `data:` fonts load.
-   - Reach for a library only when it earns its weight (Chart.js, D3, Leaflet, Three.js, Mermaid, KaTeX, Tailwind's Play CDN, Alpine.js). A few bars, a line or a KPI strip are better as inline SVG (see the reference).
-   - **Pin an exact version** in the URL (`https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js`), never `@latest` or a bare package name.
-   - A library still needs the viewer to reach the CDN. If `create_web_artifact` warns that a URL will not load, the host is not allowed here: inline the code instead.
+2. **Libraries come from the offline library kit, always.** iHub ships a small set of vetted, version-pinned libraries. Load one with an empty marker element, and iHub puts the library itself in its place wherever the file runs or is downloaded (Artifacts panel, shared links and embeds, `.html` and `.zip` downloads). It works without internet access and in air-gapped installations, and the stored file stays small.
+
+   | Library          | Marker                                       | Defines  | Use it for                                                                                                               |
+   | ---------------- | -------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------ |
+   | Chart.js 4.5.1   | `<script data-ihub-lib="chart.js"></script>` | `Chart`  | Standard charts: line, bar, area, pie/doughnut, radar, scatter, bubble, with tooltips and click events                   |
+   | D3 7.9.0         | `<script data-ihub-lib="d3"></script>`       | `d3`     | Custom SVG visualizations and diagrams: scales, axes, shapes, hierarchies (tree, treemap, sunburst), force layouts       |
+   | Alpine.js 3.17.3 | `<script data-ihub-lib="alpinejs"></script>` | `Alpine` | Declarative state in the markup (`x-data`, `x-model`, `x-show`, `x-for`, `@click`) for calculators, forms, tabs, filters |
+   - Put the Chart.js and D3 markers in `<head>` (or anywhere before the script that uses them). Put the Alpine.js marker **last in `<body>`**, after the script that registers `Alpine.data(…)` in a `document.addEventListener('alpine:init', …)` listener.
+   - Keep the marker empty: no `src`, no code inside, no version (or exactly the kit's). Your own code goes into a separate `<script>` after it. Each library once.
+   - Names are exact: `chart.js`, `d3`, `alpinejs`. Anything else is not in the kit and `create_web_artifact` reports it.
+   - A few bars, a sparkline or a KPI strip need no library: draw them as inline SVG (see the reference).
+   - **Public CDNs only on request.** Load a library from a CDN only when the user explicitly asks for a CDN, or for a library the kit does not have. Then use one of the hosts this installation allows (by default `cdnjs.cloudflare.com`, `cdn.jsdelivr.net`, `unpkg.com`), **pin an exact version** (`https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.min.js`, never `@latest`), and tell the user the artifact then needs internet access. If `create_web_artifact` warns that the URL will not load, the host is not allowed here: inline the code instead.
+   - **Nothing else reaches the network**: no `fetch`, XHR, WebSocket, remote images or fonts, and no CSS `url()`/`@import` from the network (so no Google Fonts). Only `data:` and `blob:` images and `data:` fonts load.
+
 3. **Sandbox storage safety**: because the preview iframe runs without `allow-same-origin`, accessing `localStorage`, `sessionStorage`, or `document.cookie` throws a `SecurityError` unless guarded. Always keep primary state in memory and wrap any persistence helper in `try { … } catch {}`.
 4. **No dead links**: the preview cannot leave the file and opens no new tabs or windows, so a link to anything outside the file does nothing. To let the user ask about something, use `sendPrompt` (next section) instead of a link. Never use `href="#"`, external URLs, file paths, `target="_blank"` or `window.open()` unless the user explicitly asks for a link to a given address. Everything a link, button, menu item, tab, "Sources" / "Quellen" or "Details" control points to must exist **inside the same file**: give it a real in-page target — a `#id` anchor to a section that exists, or a click handler that switches a view, opens a drawer, modal or dialog and shows the content (sample sources, details, a detail page, a help text). Navigation items must switch to a view, even a short one. If something is not part of the prototype, do not render it as a link or clickable control; show it as plain text or disable it.
 5. **Complete implementation**: never leave `// TODO` or `// rest of code here` placeholders. Pre-load realistic sample data so the dashboard, calculator, or explorer is immediately useful on first render, and include controls to edit or reset the data.
@@ -66,8 +76,8 @@ Writing a file costs as long as the file is. Once an artifact exists, change it 
 
 ## When the tool reports something
 
-- **`warnings`** are problems that break the preview: a script that does not parse, unguarded `localStorage`, a script or stylesheet that will not load, relative files, a file that was cut off. The user already sees the broken version. Do not answer yet: fix each with `edit_web_artifact`, changing only the faulty lines. A file that was cut off is too long: write a more compact one with `create_web_artifact`, not the same one again.
-- **`notes`** are things that work but could be better: a dead link, a remote image, a missing `viewBox`, a placeholder comment. Never write the file again for them. Fix one with `edit_web_artifact` when it is a small change, otherwise leave it.
+- **`warnings`** are problems that break the preview: a script that does not parse, unguarded `localStorage`, a script or stylesheet that will not load, a library marker that names nothing in the kit (or the kit is switched off on this installation: then draw inline SVG and write the code inline), relative files, a file that was cut off. The user already sees the broken version. Do not answer yet: fix each with `edit_web_artifact`, changing only the faulty lines. A file that was cut off is too long: write a more compact one with `create_web_artifact`, not the same one again.
+- **`notes`** are things that work but could be better: a library from a public CDN that the kit has (switch to its marker unless the user asked for the CDN), a dead link, a remote image, a missing `viewBox`, a placeholder comment. Never write the file again for them. Fix one with `edit_web_artifact` when it is a small change, otherwise leave it.
 
 ## Corporate brand tokens & anti-"AI slop" design
 
@@ -100,9 +110,9 @@ When creating an `.svg` artifact (`format: "svg"`):
 
 ## Examples
 
-Before writing an artifact, read the complete example closest to the job in `references/examples.md` (`read_skill_resource`, `skill_name` `web-artifacts`, `file_path` `references/examples.md`): a KPI overview with a clickable chart, a calculator, a data explorer, a clickable diagram, and an `edit_web_artifact` call. Keep the structure, the theme tokens and the keyboard handling; replace the content. Its figures are invented: never reuse them.
+Before writing an artifact, read the complete example closest to the job in `references/examples.md` (`read_skill_resource`, `skill_name` `web-artifacts`, `file_path` `references/examples.md`): a KPI overview with a clickable Chart.js chart, an Alpine.js calculator, a data explorer in plain JavaScript, a clickable D3 diagram, and an `edit_web_artifact` call. Each loads its library from the kit. Keep the structure, the theme tokens and the keyboard handling; replace the content. Its figures are invented: never reuse them.
 
-For ready-to-use patterns (interactive calculators, KPI dashboards, sortable tables, inline SVG charts, and seeded HTML5 `<canvas>` generative visuals), read `references/ui-and-charts.md` with `read_skill_resource` (`skill_name` `web-artifacts`, `file_path` `references/ui-and-charts.md`).
+For ready-to-use patterns (the library kit with Chart.js, D3 and Alpine.js in light and dark mode, interactive calculators, KPI dashboards, sortable tables, inline SVG charts, and seeded HTML5 `<canvas>` generative visuals), read `references/ui-and-charts.md` with `read_skill_resource` (`skill_name` `web-artifacts`, `file_path` `references/ui-and-charts.md`).
 
 ## Answer
 

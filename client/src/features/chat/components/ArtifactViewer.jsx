@@ -6,6 +6,8 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { GHOST_BUTTON } from '../../../shared/utils/buttonTokens';
 import { saveBlobAs } from '../../../utils/externalNavigation';
+import { usePlatformConfig } from '../../../shared/contexts/platformConfigContextValue';
+import { downloadableArtifactBlob, libraryKitOf } from '../utils/artifactLibraryKit';
 import PaneHeader from '../../workspace/components/PaneHeader';
 import SelectionScope from '../../workspace/components/SelectionScope';
 import ArtifactPreview from './ArtifactPreview';
@@ -82,6 +84,7 @@ export default function ArtifactViewer({
   toolbarExtra = null
 }) {
   const { t } = useTranslation();
+  const kit = libraryKitOf(usePlatformConfig().platformConfig);
   const containerRef = useRef(null);
   const isPage = mode === 'page';
   const [viewMode, setViewMode] = useState('preview');
@@ -140,11 +143,12 @@ export default function ArtifactViewer({
   };
 
   const readText = async () => (await getBlob(artifact)).text();
+  // What leaves as a file: an HTML artifact with its library-kit libraries inlined.
+  const savedBlob = async () => downloadableArtifactBlob(await getBlob(artifact), name, kit);
 
   const download = async () => {
     try {
-      const blob = await getBlob(artifact);
-      if (!saveBlobAs(blob, saveName(name))) throw new Error('save');
+      if (!saveBlobAs(await savedBlob(), saveName(name))) throw new Error('save');
     } catch {
       say('error', t('chatArtifacts.downloadFailed', 'The download failed. Please try again.'));
     }
@@ -174,7 +178,7 @@ export default function ArtifactViewer({
   const exportAs = async format => {
     try {
       if (type === 'html' && format === 'html') {
-        if (!saveBlobAs(await getBlob(artifact), saveName(name))) throw new Error('save');
+        if (!saveBlobAs(await savedBlob(), saveName(name))) throw new Error('save');
         return;
       }
       const text = await readText();

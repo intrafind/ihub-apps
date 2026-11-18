@@ -17,6 +17,7 @@ import { PassThrough } from 'node:stream';
 import { ZipArchive } from 'archiver';
 import { safeArchivePath } from '../documents/generatedFiles.js';
 import { artifactPolicy } from './artifactPolicy.js';
+import { withKitLibraries } from './artifactLibraryKit.js';
 import { buildContentDisposition } from '../../utils/safeContentDisposition.js';
 import logger from '../../utils/logger.js';
 import { ServiceError } from '../../utils/ServiceError.js';
@@ -283,7 +284,13 @@ export async function sendArtifactsZip(
   for (const item of planned) {
     const artifact = await repository.get(scope, item.id);
     if (!artifact) throw new ServiceError('NOT_FOUND', 'Artifact not found');
-    entries.push({ path: item.path, data: artifact.data, date: artifact.createdAt });
+    // An HTML file leaves iHub here: its library-kit markers become the
+    // libraries' source, so the file works opened from disk.
+    entries.push({
+      path: item.path,
+      data: withKitLibraries(artifact.data, item.path),
+      date: artifact.createdAt
+    });
   }
 
   res.setHeader('Content-Type', 'application/zip');

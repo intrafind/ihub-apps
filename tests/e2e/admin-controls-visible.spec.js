@@ -60,6 +60,7 @@ const STRICT_ROUTES = [
   // The update page shows its text fields only while an update is staged or a file is chosen.
   { path: '/admin/updates', minFields: 0 },
   { path: '/admin/security', minFields: 3 },
+  { path: '/admin/artifacts', minFields: 3 },
   // A DataTable list page: the search box, filter selects and page-size select.
   { path: '/admin/apps', minFields: 1 }
 ];

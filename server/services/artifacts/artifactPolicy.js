@@ -199,10 +199,14 @@ function readNumber(value, fallback) {
  * or less removes their cap too. `scriptHosts` are the CDN hosts an HTML
  * artifact's preview may load scripts and stylesheets from (see
  * `shared/artifactPreview.js`): absent means the defaults, `[]` none.
+ * `libraryKit.enabled` says whether library markers in an HTML artifact are
+ * replaced with the vetted libraries iHub ships (`shared/artifactLibraries.js`);
+ * on unless switched off.
  *
  * @param {Object} [platformConfig] - Platform configuration.
  * @returns {{enabled: boolean, maxBytes: number, maxPerBatch: number,
- *   maxZipFiles: number, maxZipBytes: number, scriptHosts: string[]}}
+ *   maxZipFiles: number, maxZipBytes: number, scriptHosts: string[],
+ *   libraryKit: {enabled: boolean}}}
  */
 export function artifactSettings(platformConfig) {
   const artifacts = platformConfig?.artifacts || {};
@@ -212,7 +216,8 @@ export function artifactSettings(platformConfig) {
     maxPerBatch: readNumber(artifacts.maxPerBatch, DEFAULT_MAX_ARTIFACTS_PER_BATCH),
     maxZipFiles: readNumber(artifacts.maxZipFiles, DEFAULT_MAX_ZIP_FILES),
     maxZipBytes: readNumber(artifacts.maxZipBytes, DEFAULT_MAX_ZIP_BYTES),
-    scriptHosts: normalizeScriptHosts(artifacts.scriptHosts)
+    scriptHosts: normalizeScriptHosts(artifacts.scriptHosts),
+    libraryKit: { enabled: artifacts.libraryKit?.enabled !== false }
   };
 }
 
