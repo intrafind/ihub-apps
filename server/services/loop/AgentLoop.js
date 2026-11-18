@@ -1763,9 +1763,11 @@ export class AgentLoop {
       freedTokens,
       // Per message: a context figure anchored on a provider count subtracts
       // only what was freed inside it (the newest batch may lie after it).
+      // Signed: the result that carries the digest can grow while the
+      // others shrink.
       freedByMessage: calls.map((call, i) => [
         call.index,
-        Math.max(0, estimateTranscriptTokens([before[i]]) - estimateTranscriptTokens([after[i]]))
+        estimateTranscriptTokens([before[i]]) - estimateTranscriptTokens([after[i]])
       ]),
       messages: ctx.messages
     });

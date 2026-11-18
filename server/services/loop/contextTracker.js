@@ -268,17 +268,18 @@ export function createContextTracker(model, { prior = null, resent = false } = {
      * was freed inside that count counts: a message added after it is
      * estimated as it is now, already shortened.
      * @param {number} freedTokens
-     * @param {Array<[number, number]>} [freedByMessage] - [message index, tokens freed]
+     * @param {Array<[number, number]>} [freedByMessage] - [message index, tokens freed];
+     *   negative where a message grew (the one that carries the digest)
      */
     compacted(freedTokens, freedByMessage) {
       if (!anchor) return;
-      const counted = Array.isArray(freedByMessage)
+      const net = Array.isArray(freedByMessage)
         ? freedByMessage
             .filter(([index]) => index < anchor.messageCount)
             .reduce((sum, [, tokens]) => sum + (Number(tokens) || 0), 0)
-        : Number(freedTokens) || 0;
-      const freed = Math.max(0, Math.floor(counted));
-      if (freed > 0) anchor = { ...anchor, tokens: Math.max(0, anchor.tokens - freed) };
+        : Math.max(0, Number(freedTokens) || 0);
+      const change = Math.floor(net);
+      if (change !== 0) anchor = { ...anchor, tokens: Math.max(0, anchor.tokens - change) };
     },
     /**
      * The window as the next turn will find it: the prompt this turn started

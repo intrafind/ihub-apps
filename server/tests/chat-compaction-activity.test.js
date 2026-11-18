@@ -95,6 +95,28 @@ test('only what was freed inside the provider count is subtracted; a newer batch
   assert.equal(usage.data.inputTokens, 99_000, 'the newest batch is not subtracted twice');
 });
 
+test('the result that carries the digest may grow: the figure drops by the net change', () => {
+  const tracker = createContextTracker({ id: 'm', contextWindow: 173_184 });
+  tracker.recordStep({ promptTokens: 100_000, completionTokens: 100, source: 'provider' }, 5);
+  const { seam, ctx, frames } = seamWith(tracker);
+  seam.onCompaction(ctx, {
+    compactionId: 'cmp-4',
+    step: 6,
+    trigger: 'proactive',
+    strategy: 'digest',
+    tokensBefore: 100_000,
+    tokensAfter: 97_100,
+    freedTokens: 2_900,
+    freedByMessage: [
+      [2, 4_900],
+      [4, -2_000]
+    ],
+    itemsSummarised: 2
+  });
+  const usage = frames.find(f => f.type === SSE_V2_EVENTS.CONTEXT_USAGE);
+  assert.equal(usage.data.inputTokens, 97_100);
+});
+
 test('a shortened (elided) compaction drops the context figure too, from its sizes before and after', () => {
   const tracker = createContextTracker({ id: 'm', contextWindow: 173_184 });
   tracker.recordStep({ promptTokens: 100_000, completionTokens: 100, source: 'provider' }, 1);
