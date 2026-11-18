@@ -319,7 +319,8 @@ function validatePlatformSections(newConfig) {
     let container = newConfig;
     for (let depth = 0; depth < segments.length - 1; depth++) {
       container = container[segments[depth]];
-      if (container === undefined || container === null) break;
+      // Missing or explicitly `null`: nothing to walk (`== null` covers both).
+      if (container == null) break;
       if (!isPlainObject(container)) {
         throw new ServiceError(
           'BAD_REQUEST',
