@@ -390,7 +390,17 @@ text nor the live tail, and `/status.processing` is per pod.
 The SPA uses the POST stream when the `chatPostStream` feature is on
 (Admin → Features); turning it off takes effect on the next message. The
 surfaces that run without the platform configuration (the Office add-in, the
-browser extension) always use the GET and the JSON POST.
+browser extension) always use the GET and the JSON POST. Should they ever use
+the POST stream: a 401 on it does not expire the main app's session while a
+host sign-in is registered (`setSseAuthProvider`), as the API client's
+interceptor skips `_isOfficeRequest`.
+
+A POST that gets no answer at all (a proxy's 502/504 while the server is still
+preparing the turn, a network failure, no headers within 300 seconds) may have
+started the turn anyway. The SPA then reads the chat: if it is `running`, it
+re-attaches to its `activeRunId` instead of reporting a failure, so a retry does
+not run the turn twice. A re-attached turn re-reads the stored transcript once
+it has settled.
 
 ## A workflow run on the wire
 

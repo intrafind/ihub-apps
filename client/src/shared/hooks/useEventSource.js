@@ -19,6 +19,9 @@ import { RUN_EVENTS } from '../../../../shared/run/runReducer.js';
  */
 const TURN_ACCEPT_TIMEOUT_MS = 300000;
 
+/** Statuses of a reply lost on its way (a proxy gave up), not of a refusal. */
+const LOST_REPLY_STATUSES = new Set([502, 504]);
+
 /**
  * How long an accepted turn's POST stream may stay silent before it counts as
  * dropped: twice the server's 30-second heartbeat. A half-open connection
@@ -431,11 +434,20 @@ function useEventSource({
    *   `@workflow` mention, whose frames come over the GET).
    * - `onAccepted()` — the turn is committed (headers arrived).
    * - `onEnded()` — the stream ended with the turn's own end.
-   * - `onDropped(runId)` — the stream broke before the turn's end, or stayed
-   *   silent for {@link TURN_IDLE_TIMEOUT_MS} (a half-open connection); the
-   *   turn may still be running on the server and can be re-attached to.
-   *   Without a run id yet, a synthetic `stream/error` is emitted instead.
-   *   Never after Stop: that turn is over.
+   * - `onDropped(runId, { durable })` — the stream broke before the turn's
+   *   end, or stayed silent for {@link TURN_IDLE_TIMEOUT_MS} (a half-open
+   *   connection); the turn may still be running on the server and can be
+   *   re-attached to. `durable` is what the server said on `stream/connected`
+   *   (whether the turn outlives the connection), undefined if it said
+   *   nothing. Without a run id yet, a synthetic `stream/error` is emitted
+   *   instead. Never after Stop: that turn is over.
+   * - `onLost(refuse)` — the request was lost before the response headers: a
+   *   502/504 (a proxy timed out while the server was still preparing the
+   *   turn), a network failure, or no answer within
+   *   {@link TURN_ACCEPT_TIMEOUT_MS}. The server may have committed the turn
+   *   all the same. The handler finds out; `refuse()` reports it as the
+   *   failure it would otherwise be (`onRefused`, or the timeout error).
+   *   Without `onLost` that happens at once.
    *
    * No status polling: the response itself ends with the turn. Stop works as for
    * {@link initEventSource}: the stop is sent while this request is still open.
@@ -445,7 +457,7 @@ function useEventSource({
    * @param {Object} [handlers] - See above
    */
   const startTurn = useCallback(
-    async (url, body, { onRefused, onAnswer, onAccepted, onEnded, onDropped } = {}) => {
+    async (url, body, { onRefused, onAnswer, onAccepted, onEnded, onDropped, onLost } = {}) => {
       abortAndClearTimers();
       if (onProcessingChange) onProcessingChange(true);
       serverRunActiveRef.current = true;
@@ -454,6 +466,7 @@ function useEventSource({
       abortControllerRef.current = ac;
       const keep = createRseqFilter();
       let turnRunId = null;
+      let durable;
       let ended = false;
       let timedOut = false;
       let accepted = false;
@@ -513,6 +526,7 @@ function useEventSource({
             if (name === 'error') return;
             const envelope = toRunEnvelope(name, data, chatId);
             if (!envelope || !keep(envelope)) return;
+            if (envelope.type === RUN_EVENTS.STREAM_CONNECTED) durable = envelope.data?.durable;
             if (startsTurn(envelope, turnRunId)) turnRunId = envelope.runId;
             const ownEnd =
               (envelope.type === RUN_EVENTS.RUN_ENDED || envelope.type === RUN_EVENTS.RUN_PAUSED) &&
@@ -542,25 +556,32 @@ function useEventSource({
       } catch {
         // already aborted — nothing to do
       }
-      if (timedOut) {
+      // Not answered at all: told as the failure it looks like, unless the
+      // caller finds the turn running after all (`onLost`).
+      const refuse = () => {
         if (onProcessingChange) onProcessingChange(false);
-        emit(
-          syntheticStreamError(
-            chatId,
-            'Connection timeout. Please try again.',
-            TRANSPORT_ERROR_CODES.TIMEOUT
-          )
-        );
+        if (timedOut) {
+          emit(
+            syntheticStreamError(
+              chatId,
+              'Connection timeout. Please try again.',
+              TRANSPORT_ERROR_CODES.TIMEOUT
+            )
+          );
+          return;
+        }
+        serverRunActiveRef.current = false;
+        onRefused?.(failure);
+      };
+      if (timedOut || (current && failure)) {
+        const lost = timedOut || !failure.status || LOST_REPLY_STATUSES.has(failure.status);
+        if (lost && onLost) onLost(refuse);
+        else refuse();
         return;
       }
       if (!current) return;
       if (onProcessingChange) onProcessingChange(false);
 
-      if (failure) {
-        serverRunActiveRef.current = false;
-        onRefused?.(failure);
-        return;
-      }
       if (answer !== undefined) {
         onAnswer?.(answer);
         return;
@@ -572,7 +593,7 @@ function useEventSource({
       // Stopped: the turn is over, there is nothing to re-attach to.
       if (stoppingRef.current === ac) return;
       if (turnRunId && onDropped) {
-        onDropped(turnRunId);
+        onDropped(turnRunId, { durable });
         return;
       }
       serverRunActiveRef.current = false;

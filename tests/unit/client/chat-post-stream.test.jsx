@@ -35,13 +35,15 @@ jest.mock('../../../client/src/shared/hooks/useMyUsage', () => ({
 const mockApi = {
   sendAppChatMessage: jest.fn().mockResolvedValue({}),
   checkAppChatStatus: jest.fn().mockResolvedValue({ active: true, processing: true }),
-  stopAppChatStream: jest.fn().mockResolvedValue({})
+  stopAppChatStream: jest.fn().mockResolvedValue({}),
+  fetchChat: jest.fn().mockResolvedValue(null)
 };
 jest.mock('../../../client/src/api', () => ({
   __esModule: true,
   sendAppChatMessage: (...args) => mockApi.sendAppChatMessage(...args),
   checkAppChatStatus: (...args) => mockApi.checkAppChatStatus(...args),
-  stopAppChatStream: (...args) => mockApi.stopAppChatStream(...args)
+  stopAppChatStream: (...args) => mockApi.stopAppChatStream(...args),
+  fetchChat: (...args) => mockApi.fetchChat(...args)
 }));
 
 let mockFlagOn = true;
@@ -79,7 +81,9 @@ jest.mock('../../../client/src/shared/utils/openSseStream', () => {
   };
 });
 
-const { SseHttpError } = jest.requireActual('../../../client/src/shared/utils/openSseStream');
+const { SseHttpError, setSseAuthProvider } = jest.requireActual(
+  '../../../client/src/shared/utils/openSseStream'
+);
 const {
   fetchWithAuthRetry: mockFetchLedger
 } = require('../../../client/src/shared/utils/openSseStream');
@@ -151,6 +155,7 @@ beforeEach(() => {
   sessionStorage.clear();
   localStorage.clear();
   Object.values(mockApi).forEach(fn => fn.mockClear());
+  mockApi.fetchChat.mockReset().mockResolvedValue(null);
 });
 
 /** Ledger frames of a turn that started (and ran a tool), as the replay reads them. */
@@ -450,6 +455,126 @@ describe('flag on: the POST streams the turn', () => {
     expect(lastAssistant(result).content).not.toMatch(/Failed to generate/);
   });
 
+  test('the server’s word on durability decides, not the surface’s ephemeral prop', async () => {
+    // The server made the chat temporary on its own (an anonymous user).
+    const kept = render();
+    send(kept.result);
+    const stream = mockStreams[0];
+    await open(stream);
+    const frames = answerFrames(lastAssistant(kept.result).id, 'Partial');
+    await play(
+      stream,
+      envelope('stream/connected', { runId: CHAT_ID, lastSeq: 0, durable: false }, CHAT_ID),
+      frames[1],
+      frames[2]
+    );
+    mockLedger.events = ledgerOf(frames[1]);
+    await end(stream);
+    await flush();
+    expect(mockStreams).toHaveLength(1);
+    expect(lastAssistant(kept.result).content).toContain('The connection was lost');
+    kept.unmount();
+
+    // A surface that asked for a temporary chat in a chat the server keeps.
+    mockStreams.length = 0;
+    const temp = render({ ephemeral: true });
+    send(temp.result);
+    await open(mockStreams[0]);
+    const frames2 = answerFrames(lastAssistant(temp.result).id, 'Partial');
+    await play(
+      mockStreams[0],
+      envelope('stream/connected', { runId: CHAT_ID, lastSeq: 0, durable: true }, CHAT_ID),
+      frames2[1],
+      frames2[2]
+    );
+    mockLedger.events = ledgerOf(frames2[1]);
+    await end(mockStreams[0]);
+    await flush();
+    expect(mockStreams).toHaveLength(2);
+    expect(mockStreams[1].url).toContain(`resumeRun=${RUN_ID}`);
+  });
+
+  test('a resumed turn re-reads the stored transcript once it has settled', async () => {
+    const { result } = render();
+    const { stream, frames } = await partialTurn(result);
+    mockLedger.events = ledgerOf(frames[1]);
+    await end(stream);
+    await flush();
+    expect(mockStreams).toHaveLength(2);
+    mockApi.fetchChat.mockResolvedValueOnce({
+      chat: { id: CHAT_ID, status: 'active' },
+      messages: [
+        { id: 'u1', role: 'user', content: 'hi' },
+        { id: 'a1', role: 'assistant', content: 'The stored answer', runId: RUN_ID }
+      ]
+    });
+    await open(mockStreams[1]);
+    await play(
+      mockStreams[1],
+      envelope('stream/connected', { runId: CHAT_ID, lastSeq: 0, protocol: 2 }, CHAT_ID),
+      envelope('run/ended', { status: 'completed', finishReason: 'stop' })
+    );
+    await flush();
+    expect(mockApi.fetchChat).toHaveBeenCalledWith(CHAT_ID);
+    expect(lastAssistant(result).content).toBe('The stored answer');
+  });
+
+  describe('a POST lost before its answer may still have started the turn', () => {
+    const running = { chat: { id: CHAT_ID, status: 'running', activeRunId: RUN_ID } };
+
+    test.each([
+      ['a 502 from the proxy', () => new SseHttpError('Bad Gateway', 502, null)],
+      ['a 504 from the proxy', () => new SseHttpError('Gateway Timeout', 504, null)],
+      ['a network failure', () => new TypeError('Failed to fetch')]
+    ])('%s: a running turn is followed, not reported', async (_what, error) => {
+      mockApi.fetchChat.mockResolvedValueOnce(running);
+      mockLedger.events = [
+        {
+          v: 2,
+          seq: 1,
+          runId: RUN_ID,
+          ts: new Date().toISOString(),
+          type: 'run/started',
+          data: { kind: 'chat', refs: { chatId: CHAT_ID } }
+        }
+      ];
+      const onMessageAccepted = jest.fn();
+      const { result } = render({ onMessageAccepted });
+      send(result);
+      await fail(mockStreams[0], error());
+      await flush();
+      await flush();
+      expect(mockApi.fetchChat).toHaveBeenCalledWith(CHAT_ID);
+      expect(mockStreams).toHaveLength(2);
+      expect(mockStreams[1].url).toBe(
+        `/api/apps/acme/chat/chat-1?resumeRun=${RUN_ID}&afterLedgerSeq=1`
+      );
+      expect(onMessageAccepted).toHaveBeenCalledWith(CHAT_ID);
+      expect(result.current.messages.filter(m => m.role === 'assistant')).toHaveLength(1);
+      expect(lastAssistant(result).content).not.toMatch(/error|Failed/i);
+      expect(result.current.processing).toBe(true);
+    });
+
+    test('a 502 with nothing running is reported as before', async () => {
+      const { result } = render();
+      send(result);
+      await fail(mockStreams[0], new SseHttpError('Bad Gateway', 502, null));
+      await flush();
+      expect(mockApi.fetchChat).toHaveBeenCalledWith(CHAT_ID);
+      expect(mockStreams).toHaveLength(1);
+      expect(lastAssistant(result).content).toMatch(/server error|Failed to generate|Bad Gateway/i);
+      expect(result.current.processing).toBe(false);
+    });
+
+    test('a refusal is not looked into', async () => {
+      const { result } = render();
+      send(result);
+      await fail(mockStreams[0], new SseHttpError('raw', 500, { code: 'X', detail: 'raw' }));
+      await flush();
+      expect(mockApi.fetchChat).not.toHaveBeenCalled();
+    });
+  });
+
   test('a temporary chat keeps what was drawn when its POST breaks', async () => {
     const { result } = render({ ephemeral: true });
     const { stream } = await partialTurn(result);
@@ -592,6 +717,26 @@ describe('flag on: the POST streams the turn', () => {
         expect(localStorage.getItem('authToken')).toBeNull();
         expect(lastAssistant(result).content).toMatch(/Your session has expired/);
       } finally {
+        window.removeEventListener('authTokenExpired', expired);
+      }
+    });
+
+    test('401 of a host with its own sign-in leaves the main app’s session alone', async () => {
+      localStorage.setItem('authToken', 'main-app');
+      const expired = jest.fn();
+      window.addEventListener('authTokenExpired', expired);
+      setSseAuthProvider({ getToken: () => 'office', onUnauthorized: async () => false });
+      try {
+        const { result } = render();
+        send(result);
+        await fail(
+          mockStreams[0],
+          new SseHttpError('Authentication required', 401, { code: 'UNAUTHORIZED' })
+        );
+        expect(expired).not.toHaveBeenCalled();
+        expect(localStorage.getItem('authToken')).toBe('main-app');
+      } finally {
+        setSseAuthProvider(null);
         window.removeEventListener('authTokenExpired', expired);
       }
     });

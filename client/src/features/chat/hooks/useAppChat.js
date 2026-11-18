@@ -6,7 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { useTranslation } from 'react-i18next';
 import useChatMessages from './useChatMessages';
 import useEventSource from '../../../shared/hooks/useEventSource';
-import { sendAppChatMessage, checkAppChatStatus } from '../../../api';
+import { sendAppChatMessage, checkAppChatStatus, fetchChat } from '../../../api';
 import { enhanceApiError, expireSession } from '../../../api/utils/apiErrors';
 import { buildApiUrl } from '../../../utils/runtimeBasePath';
 import { setConversationId } from '../../../utils/chatId';
@@ -22,7 +22,8 @@ import {
 import { projectMessageRuns } from '../runToMessage';
 import { toolApprovalAnswer } from '../toolApprovalAnswer';
 import { fetchAllLedgerEvents, lastLifecycleType } from '../../../shared/run/ledgerPages';
-import { fetchWithAuthRetry } from '../../../shared/utils/openSseStream';
+import { fetchWithAuthRetry, hasSseAuthProvider } from '../../../shared/utils/openSseStream';
+import { invalidateChatsCache } from '../../../shared/hooks/chatListStore';
 import { takeMcpAppModelContext } from '../mcpApps/modelContextStore';
 import { splitFilesForWire } from '../utils/chatFileUpload';
 import { refreshMyUsage } from '../../../shared/hooks/useMyUsage';
@@ -50,7 +51,10 @@ function sendErrorOf(error) {
     failed.originalError = error;
     return failed;
   }
-  if (error.status === 401) expireSession();
+  // A host with its own sign-in (the Office add-in) already refreshed or
+  // expired its session on the 401 (`setSseAuthProvider`), as its axios
+  // interceptor does for `_isOfficeRequest`: the main app's session is not it.
+  if (error.status === 401 && !hasSseAuthProvider()) expireSession();
   return enhanceApiError({
     message: error.message,
     response: { status: error.status, data: error.body }
@@ -826,22 +830,47 @@ function useAppChat({
   );
 
   /**
+   * Re-read the stored transcript of this chat once a re-attached turn has
+   * settled: the store is the authority on what the answer finally was, and
+   * fills what a re-attach could not (a resume that timed out, a gap).
+   */
+  const rereadStoredChat = useCallback(async () => {
+    const stillCurrent = () => currentChatIdRef.current === chatId;
+    if (!chatId || !stillCurrent()) return;
+    try {
+      const settled = await fetchChat(chatId);
+      if (!stillCurrent() || !Array.isArray(settled?.messages)) return;
+      loadServerMessages(settled.messages);
+      invalidateChatsCache();
+    } catch (err) {
+      // The live projection stays on screen; it is very probably right.
+      console.warn('Could not re-read the settled chat:', err.message);
+    }
+  }, [chatId, loadServerMessages]);
+
+  /**
    * Re-attach to a turn whose POST stream broke before its end. The turn may
    * still be running (a kept chat's turn outlives its connection; a temporary
    * one was stopped by the server, so its drawn answer is kept as it is). The
    * same message is redrawn from the ledger plus the server's snapshot of the
    * step in progress, so nothing is doubled; when the replay has nothing, what
-   * was drawn is put back.
+   * was drawn is put back. Once the turn has settled the stored transcript is
+   * re-read.
    *
    * @param {string} runId - The turn's run
+   * @param {Object} [options]
+   * @param {boolean} [options.durable] - What the server said on the stream's
+   *   `stream/connected`: whether the turn outlives its connection. Unknown
+   *   (an older server) falls back to whether this surface asked for a
+   *   temporary chat.
    */
   const resumeDroppedTurn = useCallback(
-    runId => {
+    (runId, { durable } = {}) => {
       const messageId = runMessageMapRef.current.get(runId) || lastMessageIdRef.current;
       const drawn = messagesRef.current.find(m => m.id === messageId)?.content || '';
       // The server stopped a temporary chat's turn when its stream closed:
       // there is nothing to re-attach to, and what was drawn is all there is.
-      if (ephemeral) {
+      if (typeof durable === 'boolean' ? !durable : ephemeral) {
         keepDroppedAnswer(messageId, drawn);
         return;
       }
@@ -857,10 +886,41 @@ function useAppChat({
       // drawn is put back, with the error under it.
       void reattachToRunRef.current?.(runId, {
         replaceMessageId: messageId,
-        onNothing: () => keepDroppedAnswer(messageId, drawn)
+        onNothing: () => keepDroppedAnswer(messageId, drawn),
+        onSettled: rereadStoredChat
       });
     },
-    [ephemeral, keepDroppedAnswer, messagesRef]
+    [ephemeral, keepDroppedAnswer, messagesRef, rereadStoredChat]
+  );
+
+  /**
+   * A turn whose POST got no answer at all (a proxy's 502/504 while the server
+   * was still preparing it, a network failure, the accept timeout) may have
+   * been committed all the same. As the JSON path does for a lost reply: ask,
+   * and follow the chat's running turn instead of reporting a failure (a
+   * retry would run it twice).
+   *
+   * @param {Object} pending - The send this was
+   * @param {Function} refuse - Reports the failure as it is
+   */
+  const followLostTurn = useCallback(
+    async (pending, refuse) => {
+      const stored = isCancellingRef.current
+        ? null
+        : await fetchChat(pending.chatId).catch(() => null);
+      const runId = stored?.chat?.status === 'running' ? stored.chat.activeRunId : null;
+      if (!runId || currentChatIdRef.current !== pending.chatId) {
+        refuse();
+        return;
+      }
+      if (pendingMessageDataRef.current === pending) pendingMessageDataRef.current = null;
+      onMessageAcceptedRef.current?.(pending.chatId);
+      void reattachToRunRef.current?.(runId, {
+        replaceMessageId: lastMessageIdRef.current,
+        onSettled: rereadStoredChat
+      });
+    },
+    [rereadStoredChat]
   );
 
   /**
@@ -900,10 +960,18 @@ function useAppChat({
           onMessageAcceptedRef.current?.(pending.chatId);
           initEventSource(url);
         },
-        onDropped: resumeDroppedTurn
+        onDropped: resumeDroppedTurn,
+        onLost: refuse => void followLostTurn(pending, refuse)
       }
     );
-  }, [initEventSource, startTurn, toolApprovals, handleSendError, resumeDroppedTurn]);
+  }, [
+    initEventSource,
+    startTurn,
+    toolApprovals,
+    handleSendError,
+    resumeDroppedTurn,
+    followLostTurn
+  ]);
   openTurnRef.current = openTurn;
 
   /**
