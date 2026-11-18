@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
@@ -73,15 +73,28 @@ function AdminTelemetryPage() {
   // The configuration as last loaded or saved; null until it loaded.
   const [savedConfig, setSavedConfig] = useState(null);
   const { blocker } = useUnsavedChanges(savedConfig, config);
+  // The revision of platform.json this form was loaded from (then: last saved).
+  // Its save sends exactly this as If-Match; a 412 leaves it as it is, so the
+  // next save is refused again until the page reloads or the admin chooses
+  // "Keep my changes and overwrite" (which re-reads into this holder).
+  const revisionRef = useRef(null);
 
   // No form and no Save until the platform config loaded: saving after a failed
   // load would write the defaults below over the real telemetry block (OB-B1).
   const load = useAdminConfigLoad({
     sources: {
       platform: {
-        load: async () =>
-          (await makeAdminApiCall('/admin/configs/platform', { method: 'GET' })).data || {},
-        onLoad: platform => {
+        load: async () => {
+          const revision = createConfigRevision();
+          const response = await makeAdminApiCall('/admin/configs/platform', {
+            method: 'GET',
+            revision
+          });
+          return { platform: response.data || {}, revision: revision.current };
+        },
+        // Only a current (not stale) load sets the form's revision.
+        onLoad: ({ platform, revision }) => {
+          revisionRef.current = revision;
           const loaded = deepMerge(DEFAULT_TELEMETRY, platform.telemetry || {});
           setConfig(loaded);
           setSavedConfig(loaded);
@@ -96,18 +109,15 @@ function AdminTelemetryPage() {
     try {
       setSaving(true);
       setMessage('');
-      // This save's own read: its POST sends the read's ETag as If-Match.
-      const revision = createConfigRevision();
-      const response = await makeAdminApiCall('/admin/configs/platform', {
-        method: 'GET',
-        revision
-      });
+      // Read-modify-write for the sections this page does not show. This read
+      // does not change the revision the save sends (the one the form loaded).
+      const response = await makeAdminApiCall('/admin/configs/platform', { method: 'GET' });
       const platform = response.data || {};
       platform.telemetry = config;
       await makeAdminApiCall('/admin/configs/platform', {
         method: 'POST',
         body: platform,
-        revision
+        revision: revisionRef
       });
       setSavedConfig(config);
       setMessage({

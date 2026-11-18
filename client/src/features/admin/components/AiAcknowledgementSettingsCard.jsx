@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 import { makeAdminApiCall } from '../../../api/adminApi';
@@ -36,13 +36,21 @@ function AiAcknowledgementSettingsCard({ onSaved, requiredVersion }) {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
   const admin = useAiAcknowledgementAdmin();
+  // The revision of platform.json this form was loaded from (then: last saved).
+  // Its save sends exactly this as If-Match; a 412 leaves it as it is, so the
+  // next save is refused again until the page reloads or the admin chooses
+  // "Keep my changes and overwrite" (which re-reads into this holder).
+  const revisionRef = useRef(null);
 
   useEffect(() => {
     let cancelled = false;
-    makeAdminApiCall('/admin/configs/platform', { method: 'GET' })
+    // The load's own holder: a cancelled (stale) load must not set the form's revision.
+    const loadedRevision = createConfigRevision();
+    makeAdminApiCall('/admin/configs/platform', { method: 'GET', revision: loadedRevision })
       .then(response => {
         const block = response.data?.aiAcknowledgement || {};
         if (!cancelled) {
+          revisionRef.current = loadedRevision.current;
           const loaded = {
             enabled: block.enabled !== false,
             enforce: block.enforce !== false,
@@ -67,12 +75,9 @@ function AiAcknowledgementSettingsCard({ onSaved, requiredVersion }) {
     setMessage(null);
     try {
       // Read-modify-write: platform.json carries settings this card does not show.
-      // This save's own read: its POST sends the read's ETag as If-Match.
-      const revision = createConfigRevision();
-      const response = await makeAdminApiCall('/admin/configs/platform', {
-        method: 'GET',
-        revision
-      });
+      // This read only supplies those other settings; it does not change the
+      // revision the save sends (the one this form was loaded from).
+      const response = await makeAdminApiCall('/admin/configs/platform', { method: 'GET' });
       const platform = response.data || {};
       // The read is redacted (proxy JWT provider `jwkUrl` values are left out), and the route
       // keeps the stored proxyAuth when none is sent: posting the redacted one would erase them.
@@ -89,7 +94,7 @@ function AiAcknowledgementSettingsCard({ onSaved, requiredVersion }) {
       await makeAdminApiCall('/admin/configs/platform', {
         method: 'POST',
         body: platform,
-        revision
+        revision: revisionRef
       });
       setSavedForm(form);
       setMessage({

@@ -1,12 +1,11 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
-import { createConfigRevision } from '../../../api/adminConfigRevision';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import OAuthTabsHeader from '../components/OAuthTabsHeader';
@@ -52,6 +51,11 @@ function AdminOAuthClientsPage() {
   // server answered: the new secret cannot get lost behind a closed dialog.
   const { requestConfirm: requestRotateConfirm, dialogProps: rotateDialogProps } =
     useConfirmAction();
+  // The revision of platform.json this page was loaded from (then: last saved).
+  // Its saves send exactly this as If-Match; a 412 leaves it as it is, so the
+  // next save is refused again until the page reloads or the admin chooses
+  // "Keep my changes and overwrite" (which re-reads into this holder).
+  const revisionRef = useRef(null);
 
   useEffect(() => {
     void checkOAuthStatus();
@@ -61,7 +65,10 @@ function AdminOAuthClientsPage() {
 
   const checkOAuthStatus = async () => {
     try {
-      const response = await makeAdminApiCall('/admin/configs/platform');
+      // This read fills the page's toggle, so it sets the page's revision.
+      const response = await makeAdminApiCall('/admin/configs/platform', {
+        revision: revisionRef
+      });
       const data = response.data;
       setClientsEnabled(data?.oauth?.enabled?.clients || false);
     } catch (error) {
@@ -73,9 +80,9 @@ function AdminOAuthClientsPage() {
     const newStatus = !clientsEnabled;
 
     try {
-      // This save's own read: its POST sends the read's ETag as If-Match.
-      const revision = createConfigRevision();
-      const response = await makeAdminApiCall('/admin/configs/platform', { revision });
+      // Read-modify-write for the sections this page does not show. This read
+      // does not change the revision the save sends (the one the page loaded).
+      const response = await makeAdminApiCall('/admin/configs/platform');
       const platformConfig = response.data;
 
       const updatedConfig = {
@@ -93,7 +100,7 @@ function AdminOAuthClientsPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: updatedConfig,
-        revision
+        revision: revisionRef
       });
 
       setClientsEnabled(newStatus);

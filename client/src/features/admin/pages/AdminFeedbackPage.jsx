@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { fetchUsageFeedbackSummary } from '../../../api/usageReportsAdminApi';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
@@ -72,6 +72,11 @@ function AdminFeedbackPage() {
   // Whether the settings loaded; until then (or after a failed load) the page
   // never counts as holding unsaved edits.
   const [hasLoaded, setHasLoaded] = useState(false);
+  // The revision of platform.json this form was loaded from (then: last saved).
+  // Its save sends exactly this as If-Match; a 412 leaves it as it is, so the
+  // next save is refused again until the page reloads or the admin chooses
+  // "Keep my changes and overwrite" (which re-reads into this holder).
+  const revisionRef = useRef(null);
   const { blocker } = useUnsavedChanges(hasLoaded ? saved : null, draft);
   const [apps, setApps] = useState([]);
   const [appSaving, setAppSaving] = useState(null);
@@ -83,16 +88,26 @@ function AdminFeedbackPage() {
     sources: {
       settings: {
         load: async () => {
+          const revision = createConfigRevision();
           const [featuresResponse, platformResponse, meta, appList, usageData] = await Promise.all([
             makeAdminApiCall('/admin/features', { method: 'GET' }),
-            makeAdminApiCall('/admin/configs/platform', { method: 'GET' }),
+            makeAdminApiCall('/admin/configs/platform', { method: 'GET', revision }),
             fetchAdminUsageMeta().catch(() => null),
             fetchAdminApps().catch(() => []),
             fetchUsageFeedbackSummary({ range: '90d' }).catch(() => null)
           ]);
-          return { featuresResponse, platformResponse, meta, appList, usageData };
+          return {
+            featuresResponse,
+            platformResponse,
+            meta,
+            appList,
+            usageData,
+            revision: revision.current
+          };
         },
-        onLoad: ({ featuresResponse, platformResponse, meta, appList, usageData }) => {
+        onLoad: ({ featuresResponse, platformResponse, meta, appList, usageData, revision }) => {
+          // Only a current (not stale) load sets the form's revision.
+          revisionRef.current = revision;
           const feedbackFeature = (featuresResponse.data?.items || []).find(
             f => f.id === 'feedback'
           );
@@ -131,43 +146,47 @@ function AdminFeedbackPage() {
 
   const handleSave = async () => {
     if (!ready) return;
+    // The three settings are saved by three requests. Each one's baseline
+    // advances as soon as its own request succeeded, so after a later failure
+    // (a 412 on the platform config, say) the page compares against what the
+    // server now holds, and a retry does not resend what was already saved.
+    const target = draft;
+    const markSaved = field => setSaved(prev => ({ ...prev, [field]: target[field] }));
     try {
       setSaving(true);
       setMessage(null);
 
-      if (draft.collectionEnabled !== saved.collectionEnabled) {
+      if (target.collectionEnabled !== saved.collectionEnabled) {
         await makeAdminApiCall('/admin/features', {
           method: 'PUT',
-          body: { feedback: draft.collectionEnabled }
+          body: { feedback: target.collectionEnabled }
         });
+        markSaved('collectionEnabled');
       }
 
-      if (draft.storageEnabled !== saved.storageEnabled) {
+      if (target.storageEnabled !== saved.storageEnabled) {
         // Read-modify-write, like every other page that owns one platform.json
-        // key: the file carries settings this page does not show.
-        // This save's own read: its POST sends the read's ETag as If-Match.
-        const revision = createConfigRevision();
-        const response = await makeAdminApiCall('/admin/configs/platform', {
-          method: 'GET',
-          revision
-        });
+        // key: the file carries settings this page does not show. This read
+        // does not change the revision the save sends (the one the form loaded).
+        const response = await makeAdminApiCall('/admin/configs/platform', { method: 'GET' });
         const platform = response.data || {};
         platform.features = {
           ...platform.features,
-          feedbackTracking: draft.storageEnabled
+          feedbackTracking: target.storageEnabled
         };
         await makeAdminApiCall('/admin/configs/platform', {
           method: 'POST',
           body: platform,
-          revision
+          revision: revisionRef
         });
+        markSaved('storageEnabled');
       }
 
-      if (draft.trackingMode !== saved.trackingMode) {
-        await updateAdminUsageTrackingMode(draft.trackingMode);
+      if (target.trackingMode !== saved.trackingMode) {
+        await updateAdminUsageTrackingMode(target.trackingMode);
+        markSaved('trackingMode');
       }
 
-      setSaved(draft);
       setMessage({ type: 'success', text: t('admin.feedback.saved', 'Feedback settings saved') });
       refreshConfig();
     } catch (error) {

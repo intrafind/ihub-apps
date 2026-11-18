@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { LOG_COMPONENTS } from '../utils/logComponents';
@@ -62,6 +62,12 @@ function AdminLoggingPage() {
 
   const availableLevels = ['error', 'warn', 'info', 'http', 'verbose', 'debug', 'silly'];
 
+  // The revision of platform.json the auth-debug form was loaded from (then:
+  // last saved). Its save sends exactly this as If-Match; a 412 leaves it as it
+  // is, so the next save is refused again until the page reloads or the admin
+  // chooses "Keep my changes and overwrite" (which re-reads into this holder).
+  const revisionRef = useRef(null);
+
   // No form and no Save until all three settings loaded. Each save sends
   // what was loaded; after a failed load the defaults above would be saved
   // instead (e.g. audit IP anonymization switched off, OB-B2).
@@ -102,9 +108,17 @@ function AdminLoggingPage() {
       // server reads); merge over defaults so fields an older config omits keep
       // sensible values.
       platform: {
-        load: async () =>
-          (await makeAdminApiCall('/admin/configs/platform', { method: 'GET' })).data || {},
-        onLoad: platform => {
+        load: async () => {
+          const revision = createConfigRevision();
+          const response = await makeAdminApiCall('/admin/configs/platform', {
+            method: 'GET',
+            revision
+          });
+          return { platform: response.data || {}, revision: revision.current };
+        },
+        // Only a current (not stale) load sets the form's revision.
+        onLoad: ({ platform, revision }) => {
+          revisionRef.current = revision;
           if (platform.auth?.debug) {
             setAuthDebugConfig(prev => ({ ...prev, ...platform.auth.debug }));
           }
@@ -171,12 +185,11 @@ function AdminLoggingPage() {
       setSaving(true);
       setMessage('');
 
-      // Load current platform config
-      // This save's own read: its POST sends the read's ETag as If-Match.
-      const revision = createConfigRevision();
+      // Load current platform config for the sections this page does not show.
+      // This read does not change the revision the save sends (the one the
+      // form loaded).
       const platformResponse = await makeAdminApiCall('/admin/configs/platform', {
-        method: 'GET',
-        revision
+        method: 'GET'
       });
       const platformConfig = platformResponse.data;
 
@@ -189,7 +202,7 @@ function AdminLoggingPage() {
       await makeAdminApiCall('/admin/configs/platform', {
         method: 'POST',
         body: platformConfig,
-        revision
+        revision: revisionRef
       });
       setBaseline(prev => (prev ? { ...prev, authDebug: authDebugConfig } : prev));
 

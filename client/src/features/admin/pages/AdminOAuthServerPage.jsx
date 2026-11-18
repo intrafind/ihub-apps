@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
@@ -41,14 +41,25 @@ function AdminOAuthServerPage() {
   const [clientsEnabled, setClientsEnabled] = useState(false);
   const [jwtAlgorithm, setJwtAlgorithm] = useState('RS256');
   const [savingConfig, setSavingConfig] = useState(false);
+  // The revision of platform.json this page was loaded from (then: last saved).
+  // Its saves send exactly this as If-Match; a 412 leaves it as it is, so the
+  // next save is refused again until the page reloads or the admin chooses
+  // "Keep my changes and overwrite" (which re-reads into this holder).
+  const revisionRef = useRef(null);
 
   // No settings and no Save until the platform config loaded: saving after a
   // failed load would write the defaults above over the stored OAuth settings.
   const load = useAdminConfigLoad({
     sources: {
       platform: {
-        load: async () => (await makeAdminApiCall('/admin/configs/platform')).data,
-        onLoad: data => {
+        load: async () => {
+          const revision = createConfigRevision();
+          const response = await makeAdminApiCall('/admin/configs/platform', { revision });
+          return { data: response.data, revision: revision.current };
+        },
+        // Only a current (not stale) load sets the page's revision.
+        onLoad: ({ data, revision }) => {
+          revisionRef.current = revision;
           setOAuthEnabled(data?.oauth?.enabled?.authz || false);
           if (data?.oauth) {
             setOauthConfig(prev => ({
@@ -115,9 +126,9 @@ function AdminOAuthServerPage() {
     const newStatus = !oauthEnabled;
 
     try {
-      // This save's own read: its POST sends the read's ETag as If-Match.
-      const revision = createConfigRevision();
-      const response = await makeAdminApiCall('/admin/configs/platform', { revision });
+      // Read-modify-write for the sections this page does not show. This read
+      // does not change the revision the save sends (the one the page loaded).
+      const response = await makeAdminApiCall('/admin/configs/platform');
       const platformConfig = response.data;
 
       const updatedConfig = {
@@ -137,7 +148,7 @@ function AdminOAuthServerPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: updatedConfig,
-        revision
+        revision: revisionRef
       });
 
       setOAuthEnabled(newStatus);
@@ -166,9 +177,9 @@ function AdminOAuthServerPage() {
     setMessage('');
 
     try {
-      // This save's own read: its POST sends the read's ETag as If-Match.
-      const revision = createConfigRevision();
-      const response = await makeAdminApiCall('/admin/configs/platform', { revision });
+      // Read-modify-write for the sections this page does not show. This read
+      // does not change the revision the save sends (the one the page loaded).
+      const response = await makeAdminApiCall('/admin/configs/platform');
       const currentPlatformConfig = response.data;
 
       const updatedConfig = {
@@ -195,7 +206,7 @@ function AdminOAuthServerPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: updatedConfig,
-        revision
+        revision: revisionRef
       });
 
       setMessage({

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
@@ -91,6 +91,11 @@ function AdminVoiceInputPage() {
   // Whether the settings loaded; until then (or after a failed load) the page
   // never counts as holding unsaved edits.
   const [hasLoaded, setHasLoaded] = useState(false);
+  // The revision of platform.json this form was loaded from (then: last saved).
+  // Its save sends exactly this as If-Match; a 412 leaves it as it is, so the
+  // next save is refused again until the page reloads or the admin chooses
+  // "Keep my changes and overwrite" (which re-reads into this holder).
+  const revisionRef = useRef(null);
   const { blocker } = useUnsavedChanges(hasLoaded ? savedConfig : null, config);
   const [azureTesting, setAzureTesting] = useState(false);
   const [azureTestResult, setAzureTestResult] = useState(null);
@@ -125,9 +130,13 @@ function AdminVoiceInputPage() {
     };
   }, []);
 
-  // Read platform.speech into the form and the saved snapshot.
+  // Read platform.speech into the form and the saved snapshot. This read
+  // fills the form, so it also sets the form's revision.
   const fetchSpeech = async () => {
-    const response = await makeAdminApiCall('/admin/configs/platform', { method: 'GET' });
+    const response = await makeAdminApiCall('/admin/configs/platform', {
+      method: 'GET',
+      revision: revisionRef
+    });
     const speech = toFormSpeech((response.data || {}).speech);
     setConfig(speech);
     setSavedConfig(speech);
@@ -140,12 +149,17 @@ function AdminVoiceInputPage() {
   const load = useAdminConfigLoad({
     sources: {
       platform: {
-        load: async () =>
-          toFormSpeech(
-            ((await makeAdminApiCall('/admin/configs/platform', { method: 'GET' })).data || {})
-              .speech
-          ),
-        onLoad: speech => {
+        load: async () => {
+          const revision = createConfigRevision();
+          const response = await makeAdminApiCall('/admin/configs/platform', {
+            method: 'GET',
+            revision
+          });
+          return { speech: toFormSpeech((response.data || {}).speech), revision: revision.current };
+        },
+        // Only a current (not stale) load sets the form's revision.
+        onLoad: ({ speech, revision }) => {
+          revisionRef.current = revision;
           setConfig(speech);
           setSavedConfig(speech);
           setHasLoaded(true);
@@ -160,12 +174,9 @@ function AdminVoiceInputPage() {
     try {
       setSaving(true);
       setMessage('');
-      // This save's own read: its POST sends the read's ETag as If-Match.
-      const revision = createConfigRevision();
-      const response = await makeAdminApiCall('/admin/configs/platform', {
-        method: 'GET',
-        revision
-      });
+      // Read-modify-write for the sections this page does not show. This read
+      // does not change the revision the save sends (the one the form loaded).
+      const response = await makeAdminApiCall('/admin/configs/platform', { method: 'GET' });
       const platform = response.data || {};
       platform.speech = {
         ...platform.speech,
@@ -178,7 +189,7 @@ function AdminVoiceInputPage() {
       await makeAdminApiCall('/admin/configs/platform', {
         method: 'POST',
         body: platform,
-        revision
+        revision: revisionRef
       });
       // Re-read so the keys show their redacted state again. Not the first load:
       // it blanks the page while loading and clears the message, so the
