@@ -32,6 +32,7 @@ import { getStorage, readFacet } from '../../storage/bootstrap.js';
 import { BLOB_NAMESPACES, RUNTIME_NAMESPACES } from '../../storage/namespaces.js';
 import { walkBlobs, walkDocuments } from '../../storage/walk.js';
 import { ChatEvidenceRepository } from '../chat/ChatEvidenceRepository.js';
+import { estimateTokens, tokenizerInfo } from '../../../shared/tokenEstimator.js';
 import {
   canUseFileAsTemplate,
   chatFilePolicy,
@@ -347,6 +348,10 @@ export function toFileDescriptor(id, data) {
       : {}),
     ...(data.truncated === true ? { truncated: true } : {}),
     ...(typeof data.sha256 === 'string' && data.sha256 ? { sha256: data.sha256 } : {}),
+    // The text's tokens as stored with it, when counted by the tokenizer in use.
+    ...(Number.isFinite(data.tokens) && data.tokenizer === tokenizerInfo().method
+      ? { tokens: data.tokens }
+      : {}),
     ...(typeof data.origin === 'string' && data.origin ? { origin: data.origin } : {}),
     ...(data.meta && typeof data.meta === 'object' ? { meta: data.meta } : {}),
     ...(data.source && typeof data.source === 'object' ? { source: data.source } : {}),
@@ -580,6 +585,9 @@ export class ChatFileRepository {
       ...(Number.isFinite(pages) ? { pages } : {}),
       ...(validPages.length > 0 ? { pageImageCount: validPages.length } : {}),
       ...(truncated === true ? { truncated: true } : {}),
+      // The text's tokens, counted once here: the text never changes, and every
+      // turn that sends it adds this number instead of counting it again.
+      ...(textStr ? { tokens: estimateTokens(textStr), tokenizer: tokenizerInfo().method } : {}),
       origin: fileOrigin,
       ...(sanitizeFileMeta(meta) ? { meta: sanitizeFileMeta(meta) } : {}),
       ...(sanitizeFileSource(source) ? { source: sanitizeFileSource(source) } : {}),
@@ -1038,8 +1046,48 @@ export class ChatFileRepository {
     return {
       ...toFileDescriptor(fileId, data),
       text,
+      ...(text ? { tokens: await this._storedTokens(key, doc, text) } : {}),
       ...(Array.isArray(pageImages) && pageImages.length > 0 ? { pageImages } : {})
     };
+  }
+
+  /**
+   * The token count of a file's text, as stored with it. A file stored before
+   * counts were recorded (or counted by another tokenizer) is counted here,
+   * once, and the count is written to its record for every later turn. The
+   * write is conditional and best effort: a record changed meanwhile keeps its
+   * version, and the next read counts again.
+   *
+   * @param {string} key
+   * @param {{data: Object, etag?: string}} doc
+   * @param {string} text
+   * @returns {Promise<number>}
+   * @private
+   */
+  async _storedTokens(key, doc, text) {
+    const { data } = doc;
+    const tokenizer = tokenizerInfo().method;
+    if (Number.isFinite(data.tokens) && data.tokenizer === tokenizer) return data.tokens;
+    const tokens = estimateTokens(text);
+    try {
+      await this.documents.put(
+        CHAT_FILES_NAMESPACE,
+        key,
+        { ...data, tokens, tokenizer },
+        {
+          ...(data.ownerId ? { ownerId: String(data.ownerId) } : {}),
+          ...(typeof doc.etag === 'string' ? { etag: doc.etag } : {})
+        }
+      );
+    } catch (error) {
+      if (error?.code !== 'ETAG_MISMATCH') {
+        this.logger.warn('Token count of a chat file not stored', {
+          component: COMPONENT,
+          error: error.message
+        });
+      }
+    }
+    return tokens;
   }
 
   /**

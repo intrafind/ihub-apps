@@ -19,6 +19,7 @@ import { appDefaultEnabledTools, appHasToolBindings } from '../integrations/appI
 import { resolveMaxOutputTokens } from '../../../shared/outputTokens.js';
 import { matchesModelFilter, modelSupportsTools } from '../../../shared/modelCapabilities.js';
 import { applyHistoryFileBudget } from '../../../shared/historyFileBudget.js';
+import { copyKnownTokenParts } from '../../../shared/tokenEstimator.js';
 import { chatContextInventory } from './chatContextTools.js';
 import { applyProjectTestScope } from '../knowledge/projectTestScope.js';
 import {
@@ -56,7 +57,9 @@ export function attachDocumentPageImages(messages) {
       : msg.imageData
         ? [msg.imageData]
         : [];
-    return { ...msg, imageData: [...existing, ...pageImages] };
+    const copy = { ...msg, imageData: [...existing, ...pageImages] };
+    copyKnownTokenParts(msg, copy);
+    return copy;
   });
 }
 

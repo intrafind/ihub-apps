@@ -90,3 +90,27 @@ test('messages without a template keep dollar patterns intact while global place
   );
   assert.equal(out, 'plain $& text for Ada');
 });
+
+test('a stored file’s count is noted on the message, so its text is not counted again', async () => {
+  const { tokenizerStats, estimateTokens } = await import('../../shared/tokenEstimator.js');
+  const { estimateMessageTokens } = await import('../services/loop/contextTracker.js');
+  const text = 'Die Plattform durchsucht Dokumente im Unternehmen. '.repeat(400);
+  const [, user] = await PromptService.processMessageTemplates(
+    [
+      {
+        role: 'user',
+        content: 'Summarize it.',
+        fileData: [{ fileName: 'a.txt', content: text, tokens: 4321, chatFile: true }]
+      }
+    ],
+    app,
+    null,
+    null,
+    'en'
+  );
+  assert.ok(user.content.includes(text.trim()));
+  const before = tokenizerStats.chars;
+  const tokens = estimateMessageTokens(user);
+  assert.ok(tokenizerStats.chars - before < 2000, 'only the framing is tokenized');
+  assert.ok(tokens >= 4321 && tokens < 4321 + estimateTokens(text) / 4);
+});
