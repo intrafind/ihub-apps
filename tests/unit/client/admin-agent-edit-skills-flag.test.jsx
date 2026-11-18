@@ -50,6 +50,7 @@ jest.mock('../../../client/src/features/admin/hooks/useUnsavedChanges', () => ({
 jest.mock('../../../client/src/api/adminApi', () => ({
   fetchAdminApps: jest.fn(async () => []),
   fetchAdminModels: jest.fn(async () => []),
+  fetchAdminGroups: jest.fn(async () => ({ groups: {} })),
   getAdminApiErrorMessage: () => 'error'
 }));
 jest.mock('../../../client/src/api/agentsAdminApi', () => ({

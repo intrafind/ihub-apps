@@ -68,6 +68,11 @@ jest.mock('../../../client/src/shared/components/CapabilityFields', () => ({
   __esModule: true,
   default: () => <div data-testid="capabilities" />
 }));
+// The Skills field is shown only while the skills feature is on (#3778).
+jest.mock('../../../client/src/shared/hooks/useFeatureFlags', () => ({
+  __esModule: true,
+  default: () => ({ isEnabled: (name, fallback) => (name === 'skills' ? true : fallback) })
+}));
 jest.mock('../../../client/src/shared/components/SkillsSelector', () => ({
   __esModule: true,
   default: ({ helperText }) => <p data-testid="skills">{helperText}</p>
