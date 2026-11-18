@@ -73,6 +73,11 @@ export function setSseAuthProvider(provider) {
   sseAuthProvider = provider || null;
 }
 
+/** Whether a host (the Office add-in) handles this app's sign-in on streams. */
+export function hasSseAuthProvider() {
+  return sseAuthProvider !== null;
+}
+
 /**
  * Build auth headers for stream / re-sync requests.
  * Mirrors the behaviour of the apiClient request interceptors:

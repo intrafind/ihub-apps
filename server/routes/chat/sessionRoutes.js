@@ -1590,7 +1590,13 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
         // wait for outdated documents below already streams. From here on a
         // refusal is a `stream/error` frame (see the catch below).
         if (wantsStream) {
-          postStream = openChatPostStream({ req, res, chatId });
+          postStream = openChatPostStream({
+            req,
+            res,
+            chatId,
+            runId: turnRunId,
+            durable: !persistence.temporary
+          });
           postStreamRunId = turnRunId;
           // Whether the reader is still there when a durable turn ends (the
           // stored answer is marked unread otherwise): this stream, or a GET

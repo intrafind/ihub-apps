@@ -870,3 +870,9 @@ the extracted text of every attached file. One message with a spreadsheet put se
 document content into the server log. The line now names attached documents with their size instead of
 their text (`[N characters omitted]`) and keeps at most the first 1,000 characters of the message, like the
 response.
+
+## Chat Requests With `Accept-Language: *` Answer Again
+
+A chat request whose `Accept-Language` header is not a language tag (`*`, which Node's `fetch` sends by
+default) still failed with `INTERNAL_ERROR`: the weekday in the prompt variables was formatted with the raw
+header. It now uses the platform's default language, like the date.

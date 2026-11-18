@@ -24,7 +24,7 @@
  */
 import { combinePlans as combineTextPlans } from '../provenance/watermark/watermarkPlan.js';
 import crypto from 'node:crypto';
-import defaultLlmClient from './LLMClient.js';
+import defaultLlmClient, { isErrorLedgered } from './LLMClient.js';
 import runLogSingleton, { isValidRunId } from './RunLog.js';
 import { raceAbort } from './abortRace.js';
 import defaultLogger from '../../utils/logger.js';
@@ -954,23 +954,29 @@ export class AgentLoop {
       // an abort; report it as the budget failure it is.
       const err = deadline?.signal.aborted && isAbortError(caught) ? wallClockError() : caught;
       const llmErr = isLLMError(err) ? err : null;
+      // A failed model call is already in the ledger, written by the client.
+      const ledgered = isErrorLedgered(err, ledgerId);
       if (isAbortError(err)) {
-        this._ledger(ledgerId, RUN_LOG_EVENTS.ERROR, {
-          step: iteration,
-          code: LLM_ERROR_CODES.ABORTED,
-          message: err.message,
-          recoverable: false
-        });
+        if (!ledgered) {
+          this._ledger(ledgerId, RUN_LOG_EVENTS.ERROR, {
+            step: iteration,
+            code: LLM_ERROR_CODES.ABORTED,
+            message: err.message,
+            recoverable: false
+          });
+        }
         return buildResult('aborted', { error: err, finishReason: 'aborted' });
       }
-      this._ledger(ledgerId, RUN_LOG_EVENTS.ERROR, {
-        step: iteration,
-        code: llmErr?.code || 'LOOP_ERROR',
-        message: err.message,
-        providerCode: llmErr?.providerCode ?? null,
-        status: llmErr?.status ?? null,
-        recoverable: false
-      });
+      if (!ledgered) {
+        this._ledger(ledgerId, RUN_LOG_EVENTS.ERROR, {
+          step: iteration,
+          code: llmErr?.code || 'LOOP_ERROR',
+          message: err.message,
+          providerCode: llmErr?.providerCode ?? null,
+          status: llmErr?.status ?? null,
+          recoverable: false
+        });
+      }
       return buildResult('error', { error: err, finishReason: 'error' });
     } finally {
       if (deadlineTimer) clearTimeout(deadlineTimer);

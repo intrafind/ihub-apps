@@ -4292,6 +4292,9 @@
               "protocol": {
                 "type": "number",
                 "const": 2
+              },
+              "durable": {
+                "type": "boolean"
               }
             },
             "required": ["lastSeq", "protocol"],
