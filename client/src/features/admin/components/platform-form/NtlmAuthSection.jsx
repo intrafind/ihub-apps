@@ -102,20 +102,6 @@ function NtlmAuthSection({ config, onChange, t, availableGroups = [] }) {
             Log detailed NTLM authentication information
           </p>
         </div>
-        <div>
-          <label className="flex items-center">
-            <input
-              type="checkbox"
-              checked={config.ntlmAuth?.generateJwtToken !== false}
-              onChange={e => updateNtlmAuth('generateJwtToken', e.target.checked)}
-              className="mr-2"
-            />
-            <span className="text-sm font-medium text-gray-700">Generate JWT Token</span>
-          </label>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            Generate JWT tokens for API access after NTLM authentication
-          </p>
-        </div>
         <div className="md:col-span-2">
           <label className="flex items-center space-x-3 cursor-pointer">
             <input

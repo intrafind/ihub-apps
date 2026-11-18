@@ -9,12 +9,7 @@ import { validateAndPersistExternalUser } from '../utils/userManager.js';
 import { getLdapProviderByName, lookupLdapGroupsForUser } from './ldapAuth.js';
 import logger from '../utils/logger.js';
 import authDebugService from '../utils/authDebugService.js';
-import {
-  getAuthCookieOptions,
-  setAuthCookie,
-  getClearAuthCookieOptions
-} from '../utils/cookieSettings.js';
-import { clearOidcLogoutHint } from '../utils/oidcLogoutHint.js';
+import { getAuthCookieOptions, getClearAuthCookieOptions } from '../utils/cookieSettings.js';
 import { buildServerPath } from '../utils/basePath.js';
 import { ServiceError } from '../utils/ServiceError.js';
 import {
@@ -118,12 +113,13 @@ export function createNtlmMiddleware(ntlmConfig = {}) {
     ...(ntlmConfig.tlsOptions && { tlsOptions: ntlmConfig.tlsOptions }),
     // Pipe express-ntlm's internal debug output through our logger
     debug: createNtlmDebugFn(ntlmDebug),
-    // Wrap the default response handlers so we see exactly which path fired and
-    // what the request looked like when express-ntlm gave up. The 403 path is
+    // The failure handlers do not answer themselves: they log what happened and
+    // leave a ServiceError on `request.ntlmFailure` for the login route, which
+    // turns it into a redirect (browser) or a problem response (API). The 403 path is
     // the most useful: it means the AD SASL bind with the user's NTLM Type 3
     // token returned a non-success LDAP result code (commonly: channel binding
     // enforced, NTLM restricted at the DC, or invalid credentials).
-    forbidden: (request, response /* , next */) => {
+    forbidden: (request, response, next) => {
       const auth = request.headers.authorization || '';
       logger.warn('NTLM Auth: 403 Forbidden from express-ntlm', {
         component: 'NtlmAuth',
@@ -135,24 +131,36 @@ export function createNtlmMiddleware(ntlmConfig = {}) {
       });
       // Hold this account's next answers back for a while (see ntlmRejectionCooldown.js).
       recordNtlmRejection(request.ntlm?.DomainName, request.ntlm?.UserName);
-      response.sendStatus(403);
+      request.ntlmFailure = new ServiceError(
+        'FORBIDDEN',
+        'Windows sign-in was rejected by the domain controller.'
+      );
+      next();
     },
-    internalservererror: (request, response /* , next */) => {
+    internalservererror: (request, response, next) => {
       logger.error('NTLM Auth: 500 from express-ntlm', {
         component: 'NtlmAuth',
         url: request.originalUrl,
         ntlm: request.ntlm || null,
         hint: 'Usually means the connection cache lost the proxy between Type 1 and Type 3 (HTTP keep-alive broken by an intermediary), or the AD socket errored.'
       });
-      response.sendStatus(500);
+      request.ntlmFailure = new ServiceError(
+        'SERVICE_UNAVAILABLE',
+        'Windows sign-in could not reach the domain controller. Try again shortly.'
+      );
+      next();
     },
-    badrequest: (request, response /* , next */) => {
+    badrequest: (request, response, next) => {
       logger.warn('NTLM Auth: 400 Bad Request from express-ntlm', {
         component: 'NtlmAuth',
         url: request.originalUrl,
         authHeader: request.headers.authorization ? 'present' : 'missing'
       });
-      response.sendStatus(400);
+      request.ntlmFailure = new ServiceError(
+        'BAD_REQUEST',
+        'The browser sent a Windows sign-in this server cannot read (only NTLM is supported).'
+      );
+      next();
     },
     unauthorized: (request, response /* , next */) => {
       // Always challenge with NTLM, never Negotiate. express-ntlm only parses
@@ -424,28 +432,11 @@ async function enhanceUserWithLdapGroups(user, ntlmConfig) {
 }
 
 /**
- * Check if multiple authentication providers are enabled
- * @param {Object} platform - Platform configuration
- * @returns {boolean} True if more than one auth provider is enabled
- */
-function hasMultipleAuthProviders(platform) {
-  const enabledProviders = [
-    platform.localAuth?.enabled,
-    platform.ldapAuth?.enabled,
-    platform.oidcAuth?.enabled,
-    platform.proxyAuth?.enabled
-  ].filter(Boolean).length;
-
-  return enabledProviders > 0; // NTLM + at least one other provider
-}
-
-/**
- * Cookie that records "this browser chose NTLM". With several auth providers
- * NTLM only negotiates once the user picked it, and this keeps that choice for
- * later requests (e.g. to renew silently after the JWT expires) until logout.
- * A cookie rather than a server-side session, so every cluster worker sees the
- * same answer — and a logout handled by one worker ends it on all of them.
- * Not a credential: `?ntlm=true` opts a request in just the same.
+ * Cookie that records "this browser signed in with Windows". While it is set,
+ * /api/auth/status tells the client to send a signed-out browser straight to
+ * the NTLM login endpoint (for example when the session cookie expired),
+ * until logout clears it. A cookie rather than a server-side session, so every
+ * cluster worker sees the same answer. Not a credential.
  */
 export const NTLM_REQUESTED_COOKIE = 'ntlmRequested';
 const NTLM_REQUESTED_MAX_AGE_MS = 24 * 60 * 60 * 1000;
@@ -465,13 +456,17 @@ export function clearNtlmRequested(res, req) {
 }
 
 /**
- * Whether a request path never runs the Windows sign-in.
+ * Whether a request is a Windows sign-in: the only requests that run the NTLM
+ * handshake. Every other request is signed in by the session cookie (or not at
+ * all), exactly as with local, LDAP and OIDC sign-in: a handshake per request
+ * would make every API call a logon at the domain controller, and a wrong
+ * password would lock the account within one page load.
  *
  * @param {string} path - The request path (`req.path`), including any base path
  * @returns {boolean}
  */
-export function isNtlmExemptPath(path) {
-  return path === buildServerPath('/api/health');
+export function isNtlmLoginPath(path) {
+  return path === buildServerPath('/api/auth/ntlm/login');
 }
 
 /** How long one NTLM step may wait for the domain controller. */
@@ -527,8 +522,11 @@ export function createNtlmResponse(res, { isTimedOut, onSend }) {
 }
 
 /**
- * NTLM authentication middleware - self-contained like other auth middlewares
- * Handles both express-ntlm initialization and user processing
+ * NTLM authentication middleware. Runs the NTLM handshake on the Windows
+ * sign-in endpoint only (see isNtlmLoginPath) and leaves the result on the
+ * request for the route: `req.ntlm` when the domain controller answered, and
+ * `req.ntlmFailure` (a ServiceError) when the sign-in cannot go on. The route
+ * issues the session cookie; every later request is signed in by it.
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
  * @param {Function} next - Express next function
@@ -537,15 +535,7 @@ export function ntlmAuthMiddleware(req, res, next) {
   const platform = configCache.getPlatform() || {};
   const ntlmAuth = platform.ntlmAuth || {};
 
-  // Not enabled - skip
-  if (!ntlmAuth.enabled) {
-    return next();
-  }
-
-  // The health check is public and polled by the client and by container probes.
-  // Signing it in would turn every poll into a logon at the domain controller,
-  // which with a wrong password ends in a locked account.
-  if (isNtlmExemptPath(req.path)) {
+  if (!ntlmAuth.enabled || !isNtlmLoginPath(req.path)) {
     return next();
   }
 
@@ -567,84 +557,17 @@ export function ntlmAuthMiddleware(req, res, next) {
         retryAfterSeconds
       });
       res.setHeader('Retry-After', String(retryAfterSeconds));
-      return next(
-        new ServiceError(
-          'RATE_LIMITED',
-          'Windows sign-in was rejected. Check your password and try again shortly.',
-          { details: { retryAfterMs: remainingMs } }
-        )
+      req.ntlmFailure = new ServiceError(
+        'RATE_LIMITED',
+        'Windows sign-in was rejected. Check your password and try again shortly.',
+        { details: { retryAfterMs: remainingMs } }
       );
+      return next();
     }
   }
 
-  // Skip if user is already authenticated by a previous middleware (JWT, OAuth, etc.)
-  if (req.user && req.user.id && req.user.id !== 'anonymous') {
-    // Debug logging in development
-    if (process.env.NODE_ENV === 'development') {
-      logger.debug('NTLM Debug: skipping NTLM - user already authenticated', {
-        component: 'NtlmAuth',
-        userId: req.user.id,
-        authMode: req.user.authMode,
-        url: req.url
-      });
-    }
-    return next();
-  }
-
-  // Debug logging in development
-  const isDev = process.env.NODE_ENV === 'development';
-  if (isDev) {
-    logger.debug('NTLM Debug: request', {
-      component: 'NtlmAuth',
-      url: req.url,
-      hostname: req.hostname,
-      origin: req.headers.origin,
-      referer: req.headers.referer,
-      userAgent: req.headers['user-agent']
-    });
-  }
-
-  // Skip NTLM for Vite proxy in development to avoid authentication loops
-  // NTLM requires multiple round trips with specific headers that Vite proxy doesn't handle well
-  // Set SKIP_NTLM_VITE_PROXY=false to test NTLM through Vite (may cause issues)
-  const skipNtlmForVite = process.env.SKIP_NTLM_VITE_PROXY !== 'false';
-  const isViteProxy =
-    skipNtlmForVite &&
-    process.env.NODE_ENV === 'development' &&
-    (req.hostname === 'localhost' || req.hostname === '127.0.0.1') &&
-    (req.headers.origin?.includes('5173') || req.headers.referer?.includes('5173'));
-
-  if (isViteProxy) {
-    if (isDev) {
-      logger.info('NTLM Debug: skipping NTLM for Vite proxy', { component: 'NtlmAuth' });
-    }
-    return next();
-  }
-
-  // When multiple auth providers are configured, NTLM should only activate when explicitly requested
-  // This prevents automatic NTLM SSO from blocking access to local/LDAP login
-  const multipleProviders = hasMultipleAuthProviders(platform);
-  const ntlmRequested = req.query.ntlm === 'true' || req.cookies?.[NTLM_REQUESTED_COOKIE] === '1';
-
-  // Check if this is the NTLM login endpoint - use exact path matching for security
-  const isNtlmLoginEndpoint =
-    req.path === '/api/auth/ntlm/login' || req.path.startsWith('/api/auth/ntlm/login?');
-
-  if (multipleProviders && !ntlmRequested && !isNtlmLoginEndpoint) {
-    if (isDev) {
-      logger.info('NTLM Debug: multiple providers configured, skipping auto-NTLM', {
-        component: 'NtlmAuth'
-      });
-    }
-    return next();
-  }
-
-  if (isDev) {
-    logger.debug('NTLM Debug: applying NTLM middleware', { component: 'NtlmAuth' });
-  }
-
-  // Get or create the express-ntlm middleware instance
   const ntlmMiddleware = getNtlmMiddleware(ntlmAuth);
+  const isDev = process.env.NODE_ENV === 'development';
 
   // express-ntlm answers through `ntlmRes`, never through `res` directly, so
   // its writes can be seen (responseSent) and, once this request has timed
@@ -659,21 +582,14 @@ export function ntlmAuthMiddleware(req, res, next) {
       if (isDev) {
         logger.debug('NTLM Debug: response sent by express-ntlm', {
           component: 'NtlmAuth',
-          status: res.statusCode
+          status: res.statusCode,
+          headers: res.getHeaders()
         });
-        if (res.statusCode === 401) {
-          logger.debug('NTLM Debug: NTLM challenge sent', {
-            component: 'NtlmAuth',
-            headers: res.getHeaders()
-          });
-        }
       }
     }
   });
 
-  // The domain controller did not answer. Fail this request with 503 instead
-  // of letting it through unauthenticated: an unauthenticated request ends in
-  // 401, which the client reads as an expired session and signs the user out.
+  // The domain controller did not answer: the route reports it as 503.
   const timeout = setTimeout(() => {
     if (responseSent) return;
     timedOut = true;
@@ -683,139 +599,25 @@ export function ntlmAuthMiddleware(req, res, next) {
     });
     if (res.headersSent) return;
     res.setHeader('Retry-After', '5');
-    next(
-      new ServiceError(
-        'SERVICE_UNAVAILABLE',
-        'The domain controller did not answer the Windows sign-in in time. Try again shortly.'
-      )
+    req.ntlmFailure = new ServiceError(
+      'SERVICE_UNAVAILABLE',
+      'The domain controller did not answer the Windows sign-in in time. Try again shortly.'
     );
+    next();
   }, NTLM_HANDSHAKE_TIMEOUT_MS);
 
-  // Apply express-ntlm middleware first to populate req.ntlm
   try {
-    ntlmMiddleware(req, ntlmRes, async err => {
+    ntlmMiddleware(req, ntlmRes, err => {
       clearTimeout(timeout);
-      if (timedOut) return; // already answered with 503
-
-      if (responseSent) {
-        if (isDev) {
-          logger.debug('NTLM Debug: express-ntlm sent response directly, not calling next', {
-            component: 'NtlmAuth'
-          });
-        }
-        return; // Don't call next() if response was already sent
-      }
-
+      if (timedOut || responseSent) return;
       if (err) {
         logger.error('NTLM Auth: error in express-ntlm middleware', {
           component: 'NtlmAuth',
           error: err,
-          url: req.url,
-          method: req.method,
-          headers: req.headers
+          url: req.originalUrl
         });
-        // Continue without NTLM authentication on error
-        return next();
       }
-
-      // Now process the NTLM data if available
-      try {
-        if (isDev) {
-          logger.debug('NTLM Debug: after express-ntlm', { component: 'NtlmAuth', ntlm: req.ntlm });
-        }
-
-        // Check if NTLM data is available (should be set by express-ntlm middleware)
-        if (!req.ntlm) {
-          // This is normal for public endpoints - just continue without authentication
-          if (isDev) {
-            logger.debug('NTLM Debug: no NTLM data, continuing without auth', {
-              component: 'NtlmAuth'
-            });
-          }
-          return next();
-        }
-
-        // Process NTLM user data
-        let user = processNtlmUser(req, ntlmAuth);
-
-        if (!user) {
-          // User not authenticated via NTLM - continue without setting req.user
-          return next();
-        }
-
-        // Enhance user with authenticated group
-        const authConfig = platform.auth || {};
-        user = enhanceUserGroups(user, authConfig, ntlmAuth);
-
-        // LDAP group lookup - only when generating JWT (session start).
-        // When generateJwtToken is false, NTLM re-authenticates every request
-        // and LDAP lookup would be too expensive.
-        // Skip for login endpoints — processNtlmLogin() handles LDAP lookup
-        // separately to avoid duplicate LDAP queries on the same request.
-        if (ntlmAuth.ldapGroupLookupProvider && ntlmAuth.generateJwtToken && !isNtlmLoginEndpoint) {
-          user = await enhanceUserWithLdapGroups(user, ntlmAuth);
-          // Re-apply: enhanceUserWithLdapGroups replaces user.groups with freshly
-          // mapped groups, so we need to re-add authenticated/provider default groups.
-          user = enhanceUserGroups(user, authConfig, ntlmAuth);
-        }
-
-        // Validate and persist NTLM user (similar to OIDC/Proxy)
-        // User must be persisted - if this fails, authentication fails
-        user = await validateAndPersistExternalUser(user, platform);
-        logger.info('NTLM Auth: user persisted', {
-          component: 'NtlmAuth',
-          userId: user.id,
-          groups: user.groups.join(', ')
-        });
-
-        // Set user in request
-        req.user = user;
-
-        // Optional: Generate JWT token for stateless operation
-        if (ntlmAuth.generateJwtToken) {
-          try {
-            const sessionTimeout =
-              ntlmAuth.sessionTimeoutMinutes || platform.localAuth?.sessionTimeoutMinutes || 480;
-            const { token, expiresIn } = generateJwt(user, {
-              authMode: 'ntlm',
-              authProvider: user.provider,
-              expiresInMinutes: sessionTimeout,
-              additionalClaims: {
-                domain: user.domain
-              }
-            });
-            req.jwtToken = token;
-            req.jwtExpiresIn = expiresIn;
-
-            // Set HTTP-only cookie for authentication
-            setAuthCookie(req, res, token, expiresIn);
-            // Drop any oidcLogoutHint left over from an earlier OIDC login on this
-            // browser: it would keep an ID token around and send this session's logout
-            // through an unrelated provider. See utils/oidcLogoutHint.js.
-            clearOidcLogoutHint(res, req);
-          } catch (tokenError) {
-            logger.error('NTLM Auth: JWT token generation failed', {
-              component: 'NtlmAuth',
-              error: tokenError
-            });
-            // Continue without token - NTLM auth still valid
-          }
-        }
-
-        logger.info('NTLM Auth: user authenticated', {
-          component: 'NtlmAuth',
-          userId: user.id,
-          groups: user.groups.join(', ')
-        });
-        next();
-      } catch (error) {
-        logger.error('NTLM Auth: error processing NTLM authentication', {
-          component: 'NtlmAuth',
-          error
-        });
-        // Don't block the request - continue without authentication
-        next();
-      }
+      next();
     });
   } catch (error) {
     clearTimeout(timeout);
@@ -823,7 +625,6 @@ export function ntlmAuthMiddleware(req, res, next) {
       component: 'NtlmAuth',
       error
     });
-    // Continue without NTLM authentication on error
     next();
   }
 }

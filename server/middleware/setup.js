@@ -47,10 +47,9 @@ export function checkContentLength(limit) {
  * Check if the request should bypass authentication
  * Includes static assets and HTML page requests (for SPA routing)
  * @param {import('express').Request} req - Express request object
- * @param {Object} platformConfig - Platform configuration object
  * @returns {boolean} - True if the request should bypass authentication
  */
-function isStaticAssetRequest(req, platformConfig = {}) {
+function isStaticAssetRequest(req) {
   const path = req.path || req.url;
   const isDevelopment = process.env.NODE_ENV === 'development';
 
@@ -73,17 +72,10 @@ function isStaticAssetRequest(req, platformConfig = {}) {
       path.startsWith('/@fs/') ||
       path.startsWith('/node_modules/'));
 
-  // NTLM authentication requires the auth middleware to run on initial page requests
-  // to perform the challenge-response handshake. Do NOT bypass auth for SPA routes
-  // when NTLM is enabled.
-  const isNtlmEnabled = platformConfig?.ntlmAuth?.enabled === true;
-
   // SPA routes (HTML page requests without file extensions) - let them through
   // so the catch-all route in staticRoutes.js can serve index.html
   // This allows direct navigation to routes like /apps/meeting-analyser
-  // EXCEPTION: When NTLM is enabled, SPA routes MUST go through auth middleware
-  const isSPARoute =
-    !isNtlmEnabled && !path.match(/\.[a-z0-9]+$/i) && !path.startsWith('/uploads/');
+  const isSPARoute = !path.match(/\.[a-z0-9]+$/i) && !path.startsWith('/uploads/');
 
   return isCommonStaticAsset || isViteAsset || isSPARoute;
 }
@@ -91,13 +83,12 @@ function isStaticAssetRequest(req, platformConfig = {}) {
 /**
  * Middleware wrapper that skips authentication for static assets
  * @param {Function[]} authMiddlewares - Array of authentication middleware functions
- * @param {Object} platformConfig - Platform configuration object
  * @returns {import('express').RequestHandler}
  */
-function createAuthChain(authMiddlewares, platformConfig = {}) {
+function createAuthChain(authMiddlewares) {
   return (req, res, next) => {
-    // Skip auth for static assets (respects NTLM requirements)
-    if (isStaticAssetRequest(req, platformConfig)) {
+    // Skip auth for static assets and SPA pages
+    if (isStaticAssetRequest(req)) {
       return next();
     }
 
@@ -507,20 +498,17 @@ export function setupMiddleware(app, platformConfig = {}) {
 
   // Apply authentication middleware chain (skips static assets automatically)
   // Order matters: proxy auth first, then unified JWT validation
-  // IMPORTANT: When NTLM is enabled, SPA routes will NOT bypass auth to allow
-  // the NTLM challenge-response handshake to complete
+  // NTLM runs its handshake only on /api/auth/ntlm/login; everything else is
+  // signed in by the session cookie, as with every other sign-in method.
   app.use(
-    createAuthChain(
-      [
-        proxyAuth,
-        teamsAuthMiddleware,
-        jwtAuthMiddleware,
-        localAuthMiddleware, // Now mainly a placeholder for local auth specific logic
-        ldapAuthMiddleware, // LDAP auth placeholder for any LDAP-specific logic
-        ntlmAuthMiddleware // NTLM handles its own initialization internally
-      ],
-      platformConfig // Pass platform config to respect NTLM requirements
-    )
+    createAuthChain([
+      proxyAuth,
+      teamsAuthMiddleware,
+      jwtAuthMiddleware,
+      localAuthMiddleware, // Now mainly a placeholder for local auth specific logic
+      ldapAuthMiddleware, // LDAP auth placeholder for any LDAP-specific logic
+      ntlmAuthMiddleware // NTLM handles its own initialization internally
+    ])
   );
 
   // Populate the request logging context with the authenticated identity so

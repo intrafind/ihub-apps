@@ -72,8 +72,7 @@ function AdminAuthPage() {
       debug: false,
       ldapGroupLookupProvider: '',
       defaultGroups: [],
-      sessionTimeoutMinutes: 480,
-      generateJwtToken: true
+      sessionTimeoutMinutes: 480
     }
     // Authentication debug logging is configured on the Logging page
     // (Platform → Logging) under the canonical `auth.debug` key.

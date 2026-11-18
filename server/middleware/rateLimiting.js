@@ -184,13 +184,15 @@ function submittedUsername(req) {
  * Whether a sign-in request did not fail. An NTLM handshake answers its first
  * two requests with a 401 challenge (`WWW-Authenticate: NTLM`) before the
  * browser sends credentials; those steps are not failed sign-ins. A rejected
- * NTLM credential answers 403.
+ * NTLM credential answers 403 to the API, and redirects the browser back to the
+ * app (a 302) with `res.locals.signInFailed` set.
  *
  * @param {import('express').Request} req
  * @param {import('express').Response} res
  * @returns {boolean}
  */
 function signInDidNotFail(req, res) {
+  if (res.locals?.signInFailed) return false;
   if (res.statusCode < 400) return true;
   return res.statusCode === 401 && /^NTLM\b/i.test(String(res.getHeader('WWW-Authenticate') || ''));
 }

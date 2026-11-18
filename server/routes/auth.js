@@ -9,7 +9,12 @@ import {
   configuredProviders
 } from '../middleware/oidcAuth.js';
 import { loginLdapUser, getConfiguredLdapProviders } from '../middleware/ldapAuth.js';
-import { processNtlmLogin, markNtlmRequested, clearNtlmRequested } from '../middleware/ntlmAuth.js';
+import {
+  processNtlmLogin,
+  markNtlmRequested,
+  clearNtlmRequested,
+  NTLM_REQUESTED_COOKIE
+} from '../middleware/ntlmAuth.js';
 import { teamsTokenExchange, teamsClientConfig } from '../middleware/teamsAuth.js';
 import configCache from '../configCache.js';
 import { isJiraConfigured } from '../services/integrations/jiraConfig.js';
@@ -231,6 +236,7 @@ export default function registerAuthRoutes(app) {
 
       // Set HTTP-only cookie for authentication
       setAuthCookie(req, res, result.token, result.expiresIn);
+      markNtlmRequested(res, req);
       // Drop any OIDC logout hint from an earlier login on this browser.
       clearOidcLogoutHint(res, req);
 
@@ -429,6 +435,7 @@ export default function registerAuthRoutes(app) {
 
       // Set HTTP-only cookie for authentication
       setAuthCookie(req, res, result.token, result.expiresIn);
+      markNtlmRequested(res, req);
       // Drop any OIDC logout hint from an earlier login on this browser.
       clearOidcLogoutHint(res, req);
 
@@ -439,8 +446,11 @@ export default function registerAuthRoutes(app) {
   });
 
   /**
-   * NTLM authentication initiation (GET) - triggers NTLM authentication flow
-   * Used when multiple auth providers are available and user explicitly selects NTLM
+   * Windows sign-in for the browser (GET). The only page that runs the NTLM
+   * handshake: the auth gate sends the browser here, the NTLM middleware
+   * negotiates with the domain controller, and this route issues the session
+   * cookie and redirects to `returnUrl`. A failed sign-in goes back to the app
+   * with `?auth=error`, which the auth gate shows on its login screen.
    */
   app.get(buildServerPath('/api/auth/ntlm/login'), async (req, res) => {
     try {
@@ -450,26 +460,17 @@ export default function registerAuthRoutes(app) {
       if (!ntlmAuthConfig.enabled) {
         throw refusal(400, 'NTLM authentication is not enabled');
       }
-
-      // Remember that NTLM was explicitly requested
-      // This allows the NTLM middleware to activate
-      markNtlmRequested(res, req);
-
-      // Check if NTLM data is available from the middleware
+      if (req.ntlmFailure) throw req.ntlmFailure;
       if (!req.ntlm || !req.ntlm.Authenticated) {
-        // NTLM middleware will handle the challenge-response
-        // This response should not be reached if middleware is working
-        throw refusal(
-          401,
-          'NTLM authentication in progress. Please ensure Windows Integrated Authentication is enabled in your browser.'
-        );
+        throw refusal(401, 'Windows sign-in did not complete.');
       }
 
-      // User is authenticated via NTLM
       const result = await processNtlmLogin(req, ntlmAuthConfig);
 
       // Set HTTP-only cookie for authentication
       setAuthCookie(req, res, result.token, result.expiresIn);
+      // Send this browser back here when its session ends (see /auth/status).
+      markNtlmRequested(res, req);
       // Drop any OIDC logout hint from an earlier login on this browser.
       clearOidcLogoutHint(res, req);
 
@@ -528,7 +529,14 @@ export default function registerAuthRoutes(app) {
       // returnUrl has been validated above: same-origin check, no //, no backslash -- lgtm[js/server-side-unvalidated-url-redirection]
       res.redirect(appendQueryParams(returnUrl, { ntlm: 'success' })); // lgtm[js/server-side-unvalidated-url-redirection]
     } catch (error) {
-      throw loginFailure(error, 'NTLM login error', 'NTLM authentication failed');
+      // A browser navigation, not an API call: answer with the app and the
+      // reason instead of an error document the user would be stranded on.
+      const failure = loginFailure(error, 'NTLM login error', 'NTLM authentication failed');
+      logger.warn('NTLM login failed', { component: 'Auth', code: failure.code });
+      res.locals.signInFailed = true; // counts as a failed sign-in (rateLimiting.js)
+      res.redirect(
+        appendQueryParams(buildServerPath('/'), { auth: 'error', message: failure.message })
+      );
     }
   });
 
@@ -544,10 +552,7 @@ export default function registerAuthRoutes(app) {
         throw refusal(400, 'NTLM authentication is not enabled');
       }
 
-      // Remember that NTLM was explicitly requested
-      markNtlmRequested(res, req);
-
-      // Check if NTLM data is available from the middleware
+      if (req.ntlmFailure) throw req.ntlmFailure;
       if (!req.ntlm || !req.ntlm.Authenticated) {
         throw refusal(
           401,
@@ -576,6 +581,7 @@ export default function registerAuthRoutes(app) {
 
       // Set HTTP-only cookie for authentication
       setAuthCookie(req, res, result.token, result.expiresIn);
+      markNtlmRequested(res, req);
       // Drop any OIDC logout hint from an earlier login on this browser.
       clearOidcLogoutHint(res, req);
 
@@ -705,6 +711,25 @@ export default function registerAuthRoutes(app) {
       !isOidcCallback &&
       !isAdminRoute;
 
+    // Windows sign-in runs only on its login page, so a signed-out browser is
+    // sent there: always when NTLM is the only way in, and otherwise when this
+    // browser signed in with Windows before (until it logs out).
+    const signedIn = Boolean(req.user && req.user.id !== 'anonymous');
+    const shouldNtlmRedirect =
+      !signedIn &&
+      ntlmAuthConfig.enabled === true &&
+      (enabledAuthMethods === 1 || req.cookies?.[NTLM_REQUESTED_COOKIE] === '1');
+
+    let autoRedirect = null;
+    if (shouldAutoRedirect) {
+      autoRedirect = {
+        provider: autoRedirectProvider.name,
+        url: `/api/auth/oidc/${autoRedirectProvider.name}`
+      };
+    } else if (shouldNtlmRedirect) {
+      autoRedirect = { provider: 'ntlm', url: buildServerPath('/api/auth/ntlm/login') };
+    }
+
     const status = {
       authMode: authConfig.mode || 'proxy',
       anonymousAuth: {
@@ -717,12 +742,7 @@ export default function registerAuthRoutes(app) {
       // session came from the cookie (see jwtAuth). The client drops the stored
       // token so it stops sending it.
       bearerTokenRejected: req.bearerTokenRejected === true,
-      autoRedirect: shouldAutoRedirect
-        ? {
-            provider: autoRedirectProvider.name,
-            url: `/api/auth/oidc/${autoRedirectProvider.name}`
-          }
-        : null,
+      autoRedirect,
       user:
         req.user && req.user.id !== 'anonymous'
           ? {
