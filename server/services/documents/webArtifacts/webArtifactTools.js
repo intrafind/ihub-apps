@@ -221,14 +221,15 @@ function markerOf(library) {
   return `<script ${ARTIFACT_LIBRARY_ATTRIBUTE}="${library.id}"></script>`;
 }
 
-/** The major version a CDN URL pins for a package (`chart.js@2.9.4` → 2), or null. */
+/** The major version a CDN URL pins for a package (`chart.js@2.9.4`, `chart.js@2` → 2), or null. */
 function majorVersionInUrl(url, packageName) {
   const lower = String(url).toLowerCase();
   const name = packageName.toLowerCase();
   for (const separator of ['@', '/']) {
     const at = lower.indexOf(`/${name}${separator}`);
     if (at === -1) continue;
-    const digits = /^v?(\d+)\./.exec(lower.slice(at + name.length + 2));
+    // `2.9.4`, `2/dist/…`, a bare `@2` at the end, or `2?…` / `2#…`.
+    const digits = /^v?(\d+)(?=[./?#]|$)/.exec(lower.slice(at + name.length + 2));
     if (digits) return Number(digits[1]);
   }
   return null;
@@ -236,8 +237,9 @@ function majorVersionInUrl(url, packageName) {
 
 /**
  * How to move one kit library from a CDN to the kit: the marker, and, when
- * the page pins another major version than the kit ships, a warning that the
- * API may differ. The kit never swaps a version silently.
+ * the page pins another major version than the kit ships or no version that
+ * can be read, a warning to check the code first. The kit never swaps a
+ * version silently.
  *
  * @param {object} library - A kit library.
  * @param {string[]} urls - The CDN URLs of the page.
@@ -247,10 +249,15 @@ function kitReplacementOf(library, urls) {
   const kitMajor = Number(library.version.split('.')[0]);
   const majors = urls
     .filter(url => kitLibraryOfUrl(url) === library)
-    .map(url => majorVersionInUrl(url, library.npm.package))
-    .filter(major => major !== null && major !== kitMajor);
-  if (!majors.length) return markerOf(library);
-  return `${markerOf(library)} only after checking that the code works with ${library.name} ${library.version}: the page uses version ${majors[0]}, whose API differs`;
+    .map(url => majorVersionInUrl(url, library.npm.package));
+  const other = majors.find(major => major !== null && major !== kitMajor);
+  if (other !== undefined) {
+    return `${markerOf(library)} only after checking that the code works with ${library.name} ${library.version}: the page uses version ${other}, whose API differs`;
+  }
+  if (majors.includes(null)) {
+    return `${markerOf(library)} only after checking that the code works with ${library.name} ${library.version}: the URL does not say which version the page uses`;
+  }
+  return markerOf(library);
 }
 
 /**

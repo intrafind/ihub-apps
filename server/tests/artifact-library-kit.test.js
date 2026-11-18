@@ -269,6 +269,24 @@ describe('create_web_artifact and the kit', () => {
       older,
       /only after checking that the code works with Chart\.js 4\.5\.1: the page uses version 2/
     );
+    // A major-only pin is read too, on an allowed and on a blocked host.
+    const majorOnly =
+      '<script src="https://cdn.jsdelivr.net/npm/chart.js@2/dist/Chart.min.js"></script>';
+    for (const scriptHosts of [['cdn.jsdelivr.net'], []]) {
+      const [finding] = texts(doc(majorOnly), { scriptHosts });
+      assert.match(finding, /the page uses version 2, whose API differs/);
+    }
+    const [bare] = texts(doc('<script src="https://cdn.jsdelivr.net/npm/chart.js@2"></script>'), {
+      scriptHosts: ['cdn.jsdelivr.net']
+    });
+    assert.match(bare, /the page uses version 2/);
+    // No version in the URL: check first as well.
+    const unpinned =
+      '<script src="https://cdn.jsdelivr.net/npm/chart.js/dist/chart.umd.min.js"></script>';
+    for (const scriptHosts of [['cdn.jsdelivr.net'], []]) {
+      const [finding] = texts(doc(unpinned), { scriptHosts });
+      assert.match(finding, /the URL does not say which version the page uses/);
+    }
     const [blocked] = texts(doc(cdn), { scriptHosts: [] });
     assert.match(blocked, /^P The sandboxed preview will not load .*library kit instead/);
     // An off kit is not offered.
