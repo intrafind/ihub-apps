@@ -336,17 +336,21 @@ describe("the policy is the installation's, not the producer's", () => {
       maxPerBatch: 8,
       maxZipFiles: 200,
       maxZipBytes: 104857600,
-      scriptHosts: ['cdnjs.cloudflare.com', 'cdn.jsdelivr.net', 'unpkg.com']
+      scriptHosts: ['cdnjs.cloudflare.com', 'cdn.jsdelivr.net', 'unpkg.com'],
+      libraryKit: { enabled: true }
     });
     assert.deepEqual(
-      artifactSettings({ artifacts: { enabled: false, maxBytes: 0, scriptHosts: [] } }),
+      artifactSettings({
+        artifacts: { enabled: false, maxBytes: 0, scriptHosts: [], libraryKit: { enabled: false } }
+      }),
       {
         enabled: false,
         maxBytes: 0,
         maxPerBatch: 8,
         maxZipFiles: 200,
         maxZipBytes: 104857600,
-        scriptHosts: []
+        scriptHosts: [],
+        libraryKit: { enabled: false }
       }
     );
   });

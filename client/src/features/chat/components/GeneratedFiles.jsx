@@ -6,6 +6,8 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { fetchChatArtifact } from '../../../api';
 import { saveBlobAs } from '../../../utils/externalNavigation';
+import { usePlatformConfig } from '../../../shared/contexts/platformConfigContextValue';
+import { downloadableArtifactBlob, libraryKitOf } from '../utils/artifactLibraryKit';
 import { useArtifactFetcher } from '../contexts/ArtifactFetchContext';
 import { useArtifactViewer } from '../contexts/ArtifactViewerContext';
 import {
@@ -32,6 +34,7 @@ import {
 function GeneratedFileCard({ file, chatId }) {
   const { t } = useTranslation();
   const customFetch = useArtifactFetcher();
+  const kit = libraryKitOf(usePlatformConfig().platformConfig);
   const [state, setState] = useState(file.unavailable ? 'missing' : 'idle');
   const canFetch = Boolean(file.data || (file.stored && file.id && chatId));
   const viewer = useArtifactViewer();
@@ -49,7 +52,9 @@ function GeneratedFileCard({ file, chatId }) {
       const blob = file.data
         ? blobOfBase64(file.data, file.mimeType)
         : await (customFetch || fetchChatArtifact)(chatId, file.id);
-      setState(saveBlobAs(blob, saveName(file.name)) ? 'idle' : 'error');
+      // An HTML file leaves with its library-kit libraries inlined, so it works from disk.
+      const saved = await downloadableArtifactBlob(blob, file.name, kit);
+      setState(saveBlobAs(saved, saveName(file.name)) ? 'idle' : 'error');
     } catch (error) {
       setState(error?.response?.status === 404 || error?.status === 404 ? 'missing' : 'error');
     }

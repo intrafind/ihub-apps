@@ -11,6 +11,8 @@ export default [
       'build/**',
       'coverage/**',
       '*.min.js',
+      // Library kit for HTML artifacts: npm builds vendored unchanged (shared/artifactLibraries.js).
+      'server/artifactLibraries/**',
       'client/node_modules/**',
       'server/node_modules/**',
       'client/dist/**',

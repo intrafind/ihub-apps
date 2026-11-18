@@ -797,7 +797,14 @@ export const platformConfigSchema = z
         // stylesheets from (shared/artifactPreview.js). Absent: the defaults;
         // [] keeps the preview offline. Entries that are not plain hosts are
         // dropped when the policy is built.
-        scriptHosts: z.array(z.string()).optional()
+        scriptHosts: z.array(z.string()).optional(),
+        // Library kit (#3822): `<script data-ihub-lib="chart.js">` markers in an
+        // HTML artifact become the vetted libraries iHub ships
+        // (shared/artifactLibraries.js), so charts work without a CDN.
+        libraryKit: z
+          .object({ enabled: z.boolean().prefault(true) })
+          .passthrough()
+          .prefault({})
       })
       .passthrough()
       .prefault({}),

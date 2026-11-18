@@ -391,6 +391,34 @@
       ]
     }
   },
+  "GET /api/admin/artifacts/config": {
+    "status": 200,
+    "shape": {
+      "enabled": "boolean",
+      "libraries": [
+        {
+          "available": "boolean",
+          "bytes": "number",
+          "global": "string",
+          "homepage": "string",
+          "id": "string",
+          "license": "string",
+          "name": "string",
+          "sha256": "string",
+          "use": "string",
+          "version": "string"
+        }
+      ],
+      "libraryKit": {
+        "enabled": "boolean"
+      },
+      "maxBytes": "number",
+      "maxPerBatch": "number",
+      "maxZipBytes": "number",
+      "maxZipFiles": "number",
+      "scriptHosts": ["string"]
+    }
+  },
   "GET /api/admin/audit-log": {
     "status": 200,
     "shape": {
@@ -814,6 +842,9 @@
       },
       "artifacts": {
         "enabled": "boolean",
+        "libraryKit": {
+          "enabled": "boolean"
+        },
         "maxBytes": "number",
         "maxPerBatch": "number",
         "maxZipBytes": "number",
@@ -4389,6 +4420,30 @@
   "GET /api/apps/:appId/chat/:chatId/status": {
     "skipped": "its parent path is not a readable list"
   },
+  "GET /api/artifact-libraries": {
+    "status": 200,
+    "shape": {
+      "enabled": "boolean",
+      "items": [
+        {
+          "available": "boolean",
+          "bytes": "number",
+          "global": "string",
+          "homepage": "string",
+          "id": "string",
+          "license": "string",
+          "name": "string",
+          "sha256": "string",
+          "use": "string",
+          "version": "string"
+        }
+      ]
+    }
+  },
+  "GET /api/artifact-libraries/:libraryId/source": {
+    "status": 200,
+    "type": "text/plain"
+  },
   "GET /api/auth/ntlm/login": {
     "skipped": "a redirect or sign-in flow"
   },
@@ -4873,6 +4928,9 @@
         }
       },
       "artifacts": {
+        "libraryKit": {
+          "enabled": "boolean"
+        },
         "scriptHosts": ["string"]
       },
       "chats": {

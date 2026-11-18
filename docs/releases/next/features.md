@@ -113,8 +113,8 @@ blank in the preview.
 
 - **Allowlisted CDNs only.** Scripts and stylesheets load over https from `cdnjs.cloudflare.com`,
   `cdn.jsdelivr.net` and `unpkg.com`. Everything else stays blocked: no `fetch`, no remote images or fonts.
-- **Admins decide.** Change the list in Admin → Platform Configuration (`artifacts.scriptHosts`), for example to
-  an internal mirror; `[]` keeps the preview fully offline, as before.
+- **Admins decide.** Change the list in Admin → Artifacts (`artifacts.scriptHosts`), for example to an internal
+  mirror; removing every host keeps the preview fully offline, as before.
 - **Light and dark.** Artifacts now follow iHub's own light/dark switch instead of the operating system's.
 - **Fewer broken artifacts.** Before you see the result, iHub checks that the page's JavaScript parses and that
   the file was not cut off, and has the model fix it.
@@ -1824,7 +1824,7 @@ for it once the results are in.
   the server lays it out. The skill has tools of its own, `create_dashboard` and `edit_dashboard`,
   so the run activity reads **Create dashboard** / **Edit dashboard** (**Dashboard erstellen** /
   **Dashboard bearbeiten**) instead of "web artifact", and "make a dashboard, do not use web
-  artifacts" works. A faulty spec comes back as a message that names the field at fault, and a
+  artifacts" works. A faulty spec comes back as one message that names every field at fault, and a
   change is an edit of the spec, not a page written again.
 - **Numbers are not recalculated, and the server holds the rules.** The skill has the model copy
   every figure from the data; the page works out shares, order, the sum of a folded tail and table
@@ -2465,6 +2465,21 @@ it — on **Admin → Models → (model) → User Hint**, instead of editing the
 section sets the level (hint, info, warning, alert), whether users can dismiss it (hint and info
 only) and the message per language, with a preview of how it looks in the chat. Turning it off
 removes the hint from the model. See [Model Hints](../../models.md#model-hints).
+
+## Charts in HTML Artifacts Work Offline: Built-in Library Kit
+
+iHub now ships Chart.js 4.5.1, D3 7.9.0 and Alpine.js 3.17.3 with the product. Dashboards, charts and
+calculators the assistant builds as HTML artifacts load them from iHub instead of a public CDN, so they work
+on installations without internet access and with every CDN host removed.
+
+- **Used by default.** The `web-artifacts` skill and the marketplace skill "HTML Dashboard Maker" use the kit
+  and reach for a public CDN only when a user asks for one.
+- **Everywhere the file goes.** The library is put into the page in the chat's preview, on shared links and
+  embeds, and in every `.html` or `.zip` download, so a downloaded file also works opened from disk.
+- **Vetted files.** The libraries are copied unchanged from npm at exactly these versions and checked
+  against their recorded checksum before use. Admin → Artifacts lists them.
+- **New page Admin → Artifacts.** One place for every artifact setting: keeping generated files, the size
+  limits, the ZIP limits, the CDN hosts and the library kit (on by default). Changes apply right away.
 
 ## Chat: Long Research Turns Keep What They Found
 

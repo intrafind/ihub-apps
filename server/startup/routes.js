@@ -34,6 +34,7 @@ import registerRunRoutes from '../routes/runs.js';
 import registerStoredChatRoutes from '../routes/chats.js';
 import registerChatShareRoutes from '../routes/chatShares.js';
 import registerShareEmbedPageRoutes from '../routes/shareEmbedPage.js';
+import registerArtifactLibraryRoutes from '../routes/artifactLibraries.js';
 import registerScheduledTaskRoutes from '../routes/scheduledTasks.js';
 import runLog from '../services/loop/RunLog.js';
 import { startChatRetentionSweep } from '../services/chat/chatRetention.js';
@@ -120,6 +121,7 @@ const ROUTE_STEPS = [
   app => registerStoredChatRoutes(app),
   app => registerChatShareRoutes(app),
   app => registerShareEmbedPageRoutes(app),
+  app => registerArtifactLibraryRoutes(app),
   app => registerScheduledTaskRoutes(app),
   // An answered workflow checkpoint resumes its execution (one answer endpoint);
   // overdue interactions expire on a sweep (an expired checkpoint fails its run).

@@ -376,6 +376,7 @@ const CLEAN_PAGES = [
   '/admin/changelog',
   '/admin/features',
   '/admin/security',
+  '/admin/artifacts',
   '/admin/eu-ai-act',
   '/admin/updates',
   '/admin/advanced',

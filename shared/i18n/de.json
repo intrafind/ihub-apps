@@ -3146,7 +3146,8 @@
       "advanced": "Erweitert",
       "docs": "Dokumentation",
       "euAiAct": "EU-KI-Verordnung",
-      "disclaimer": "Haftungsausschluss"
+      "disclaimer": "Haftungsausschluss",
+      "artifacts": "Artefakte"
     },
     "mcp": {
       "common": {
@@ -7624,6 +7625,60 @@
     },
     "cors": {
       "title": "CORS-Konfiguration"
+    },
+    "artifacts": {
+      "hosts": {
+        "invalid": "Kein reiner Hostname. Einen Host wie cdn.example.com angeben, ohne Platzhalter, Pfad, Port oder http:.",
+        "description": "Hosts, von denen die Vorschau eines HTML-Artefakts Skripte und Stylesheets über https laden darf. Alles andere bleibt gesperrt: kein fetch, keine entfernten Bilder oder Schriften. Ohne Hosts bleiben Vorschauen vollständig offline; mit eingeschaltetem Bibliotheks-Kit funktionieren Diagramme trotzdem.",
+        "offlineWithKit": "Offline: Vorschauen laden nichts aus dem Internet. Chart.js, D3 und Alpine.js kommen aus dem Bibliotheks-Kit.",
+        "offlineNoKit": "Offline: Vorschauen laden nichts aus dem Internet, und mit ausgeschaltetem Bibliotheks-Kit steht keine Bibliothek zur Verfügung.",
+        "add": "Host hinzufügen",
+        "addButton": "Hinzufügen",
+        "list": "Erlaubte Hosts",
+        "removeNamed": "{{host}} entfernen",
+        "remove": "Entfernen",
+        "goOffline": "Alle entfernen (offline)",
+        "restoreDefaults": "Öffentliche Standards verwenden"
+      },
+      "invalidNumbers": "In jedes Feld eine Zahl von null oder mehr eingeben.",
+      "saved": "Artefakt-Einstellungen gespeichert. Sie gelten sofort.",
+      "saveError": "Die Artefakt-Einstellungen konnten nicht gespeichert werden.",
+      "sections": {
+        "storage": "Speicherung",
+        "downloads": "ZIP-Downloads",
+        "libraryKit": "Bibliotheks-Kit",
+        "scriptHosts": "CDN-Hosts"
+      },
+      "resource": "Artefakt-Einstellungen",
+      "enabled": "Erzeugte Dateien aufbewahren",
+      "enabledHint": "Bilder, Dokumente, Web-Artefakte und andere Dateien, die Chats, Workflows und Agenten erzeugen, werden mit ihnen gespeichert. Aus: Eine Datei ist sichtbar, solange sie angezeigt wird, und danach verloren.",
+      "maxBytes": "Größte Datei",
+      "maxBytesHint": "Pro Datei. 0 = keine Grenze.",
+      "maxPerBatch": "Dateien pro Schritt",
+      "maxPerBatchHint": "Wie viele Dateien eine Antwort oder ein Schritt auf einmal speichern darf. 0 = keine Grenze.",
+      "downloadsHint": "Grenzen eines ZIP-Archivs: „Alle herunterladen“ in einem Chat oder einer Freigabe und Archive, die das Werkzeug create_zip erstellt.",
+      "maxZipFiles": "Dateien pro Archiv",
+      "zeroNoLimit": "0 = keine Grenze.",
+      "maxZipBytes": "Archivgröße",
+      "maxZipBytesHint": "Inhalt vor der Komprimierung. 0 = keine Grenze.",
+      "kit": {
+        "enabled": "HTML-Artefakten die mitgelieferten Bibliotheken anbieten",
+        "enabledHint": "Diagramme und interaktive Seiten funktionieren ohne Internetzugang: iHub bettet diese geprüften Bibliotheken in die Vorschau, die Einbettungsseite und jeden Download ein. Der Assistent nutzt sie standardmäßig und ein öffentliches CDN nur, wenn eine Person ausdrücklich danach fragt.",
+        "tableCaption": "Bibliotheken im Kit",
+        "library": "Bibliothek",
+        "version": "Version",
+        "marker": "Marker",
+        "license": "Lizenz",
+        "size": "Größe",
+        "status": "Status",
+        "available": "Geprüft",
+        "missing": "Datei fehlt oder wurde verändert",
+        "supplyChain": "Die Dateien werden mit iHub ausgeliefert, unverändert aus npm in genau diesen Versionen übernommen und vor der Verwendung gegen ihre hinterlegte SHA-256-Prüfsumme geprüft."
+      },
+      "description": "Erzeugte Dateien: Speicherung, Größengrenzen und was HTML-Artefakte laden dürfen",
+      "conflict": "Jemand anderes hat die Artefakt-Einstellungen geändert, nachdem Sie diese Seite geöffnet haben, daher wurde nichts gespeichert. Ihre Änderungen sind noch da: Laden Sie die aktuellen Einstellungen und nehmen Sie Ihre Änderung erneut vor.",
+      "reload": "Aktuelle Einstellungen laden",
+      "reloadError": "Die aktuellen Einstellungen konnten nicht geladen werden."
     }
   },
   "cloudStorage": {

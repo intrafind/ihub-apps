@@ -49,6 +49,7 @@ import { getChatRepository } from '../services/chat/ChatRepository.js';
 import { getArtifactRepository } from '../services/artifacts/ArtifactRepository.js';
 import { downloadName, sendArtifactsZip } from '../services/artifacts/artifactZip.js';
 import { servedMediaType } from '../services/artifacts/artifactPolicy.js';
+import { withKitLibraries } from '../services/artifacts/artifactLibraryKit.js';
 import { providerMarkingOfArtifact } from '../services/provenance/artifactProvenance.js';
 import { requireEuAiActEnabled } from '../services/euAiAct/conformity.js';
 import { isChatHistoryConfigured } from '../services/chat/chatPersistence.js';
@@ -686,19 +687,27 @@ export default function registerChatShareRoutes(app) {
     // chat's scope — an image from a turn after the share, one from an
     // edited-away exchange — answers 404 exactly like an unknown id.
     if (!(share.artifactIds || []).includes(artifactId)) throw notFound('Artifact');
-    const artifact = await getArtifactRepository().get(
+    let artifact = await getArtifactRepository().get(
       getChatRepository().artifactScope(share.chatId),
       artifactId
     );
     if (!artifact) throw notFound('Artifact');
-    const body = artifact.data;
     const download = req.query.download === '1' || req.query.download === 'true';
+    // A downloaded HTML file gets its library-kit libraries inlined, so it
+    // works opened from disk. Everything else, images included, and the
+    // inline answer go out as the stored bytes.
+    if (download) {
+      artifact = { ...artifact, data: withKitLibraries(artifact.data, downloadName(artifact)) };
+    }
+    const body = artifact.data;
     res.setHeader('Content-Type', servedMediaType(artifact.mimeType));
     res.setHeader('Content-Length', String(body.length));
-    // Written once, keyed by a fresh uuid: the bytes behind this URL cannot
-    // change. `private`, because the link may be revoked and a shared cache
-    // must not keep serving what the owner took back.
-    res.setHeader('Cache-Control', 'private, max-age=31536000, immutable');
+    // Inline: written once under a fresh uuid, so immutable; `private`, as the
+    // link may be revoked. A download depends on the library kit: not stored.
+    res.setHeader(
+      'Cache-Control',
+      download ? 'private, no-store' : 'private, max-age=31536000, immutable'
+    );
     res.setHeader('X-Content-Type-Options', 'nosniff');
     if (share.mode === 'public') res.setHeader('X-Robots-Tag', 'noindex, nofollow');
     if (download) {

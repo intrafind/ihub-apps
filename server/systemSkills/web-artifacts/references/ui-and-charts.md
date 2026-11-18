@@ -81,15 +81,42 @@
 </html>
 ```
 
-## 2. Interactive SVG charts (zero dependencies)
+## 2. Libraries from the kit (offline)
 
-For a handful of bars, lines or a donut, render responsive SVG charts directly from state rather than loading a chart library (it also works where a corporate proxy blocks the CDN):
+iHub ships Chart.js, D3 and Alpine.js with the product. Load them with their markers; iHub inlines the library wherever the file runs or is downloaded, so nothing is fetched from the internet. Use a public CDN only when the user asks for one.
+
+```html
+<head>
+  <script data-ihub-lib="chart.js"></script>
+  <!-- defines Chart -->
+  <script data-ihub-lib="d3"></script>
+  <!-- defines d3 -->
+</head>
+<body>
+  …
+  <script>
+    document.addEventListener('alpine:init', () => {
+      /* Alpine.data(…) */
+    });
+  </script>
+  <script data-ihub-lib="alpinejs"></script>
+  <!-- defines Alpine; always last in <body> -->
+</body>
+```
+
+- **Chart.js** draws on a `<canvas>`, which cannot read CSS variables. Read the theme once and pass colours in: `const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();` then `backgroundColor: css('--primary')`, `ticks: { color: css('--muted') }`, `grid: { color: css('--border') }`. Wrap the canvas in a box with a fixed height (`position:relative; height:240px`) and set `maintainAspectRatio: false`. Give the canvas `role="img"` and an `aria-label`, and offer the click targets (`onClick`) as buttons too, for the keyboard.
+- **D3** builds SVG from data: `d3.select('#chart').selectAll('rect').data(rows).join('rect')`. Style with CSS classes that use the theme variables, so light and dark mode work without redrawing. Make clickable marks focusable (`tabindex="0"`, `role="button"`) with a keydown handler for Enter and Space.
+- **Alpine.js** keeps state in the markup: `x-data="calc"`, `x-model.number="amount"`, `x-text="eur(total)"`, `@click="reset()"`. Register components with `Alpine.data('calc', () => ({ … }))` inside an `alpine:init` listener, and put the Alpine marker after that script, last in `<body>`.
+
+## 3. Interactive SVG charts (zero dependencies)
+
+For a handful of bars, a sparkline or a donut, render responsive SVG charts directly from state rather than loading a library:
 
 - Map data values to SVG coordinates inside a fixed `viewBox="0 0 640 240"`.
 - Add `<g>` hover targets or `<title>` tooltips on bars and points.
 - Re-render the SVG innerHTML whenever sliders, filters, or scenario buttons change.
 
-## 3. HTML5 `<canvas>` & generative visuals (`algorithmic-art`)
+## 4. HTML5 `<canvas>` & generative visuals (`algorithmic-art`)
 
 When building interactive simulations, particle systems, flow fields, or generative art:
 

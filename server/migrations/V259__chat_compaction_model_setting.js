@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * Migration V258 — the model that condenses a long chat turn (#3819)
+ * Migration V259 — the model that condenses a long chat turn (#3819)
  *
  * When a chat turn with many tool calls fills half the model's context, older
  * tool results are condensed into notes by a model call. By default the
@@ -15,7 +15,7 @@
  * Nothing changes for an installation that does not touch it.
  */
 
-export const version = '258';
+export const version = '259';
 export const description = 'chat_compaction_model_setting';
 
 export async function precondition(ctx) {

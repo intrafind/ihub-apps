@@ -33,6 +33,7 @@ import { EMU_PER_INCH, metricCardStyle, metricCards } from '../services/document
 import {
   injectBrandTokens,
   inspectWebArtifact,
+  inspectWebArtifactFindings,
   runCreateWebArtifact
 } from '../services/documents/webArtifacts/webArtifactTools.js';
 import { assemblePdfText, formatFormAnnotations } from '../../shared/documentExtraction/pdfText.js';
@@ -490,9 +491,21 @@ describe('Web artifacts skill tool (create_web_artifact) & PDF AcroForm extracti
       /"https:\/\/img\.example\/a\.png" will not show/
     );
     assert.deepEqual(inspectWebArtifact('<img src="data:image/png;base64,AAAA">', 'html'), []);
-    // An allowlisted CDN loads; an image from it still does not.
+    // An allowlisted CDN loads; an image from it still does not. The script
+    // is Chart.js, so a note (not a problem) points to the offline kit.
     const hosts = { scriptHosts: ['cdn.example'] };
-    assert.deepEqual(inspectWebArtifact(cdn, 'html', hosts), []);
+    const allowed = inspectWebArtifactFindings(cdn, 'html', hosts);
+    assert.deepEqual(
+      allowed.filter(finding => finding.blocking),
+      []
+    );
+    assert.equal(allowed.length, 1);
+    assert.match(allowed[0].text, /data-ihub-lib="chart\.js"/);
+    // Without the kit, nothing to suggest: the allowlisted CDN is fine.
+    assert.deepEqual(
+      inspectWebArtifact(cdn, 'html', { ...hosts, libraryKit: { enabled: false } }),
+      []
+    );
     assert.equal(
       inspectWebArtifact('<img src="https://cdn.example/a.png">', 'html', hosts).length,
       1

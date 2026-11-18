@@ -2650,7 +2650,8 @@
       "advanced": "Advanced",
       "docs": "Documentation",
       "euAiAct": "EU AI Act",
-      "disclaimer": "Disclaimer"
+      "disclaimer": "Disclaimer",
+      "artifacts": "Artifacts"
     },
     "mcp": {
       "common": {
@@ -7128,6 +7129,60 @@
     },
     "cors": {
       "title": "CORS Configuration"
+    },
+    "artifacts": {
+      "hosts": {
+        "invalid": "Not a plain host name. Use a host such as cdn.example.com, without wildcard, path, port or http:.",
+        "description": "Hosts the preview of an HTML artifact may load scripts and stylesheets from over https. Everything else stays blocked: no fetch, no remote images or fonts. Remove every host to keep previews fully offline; with the library kit on, charts still work.",
+        "offlineWithKit": "Offline: previews load nothing from the internet. Chart.js, D3 and Alpine.js come from the library kit.",
+        "offlineNoKit": "Offline: previews load nothing from the internet, and with the library kit off no library is available at all.",
+        "add": "Add a host",
+        "addButton": "Add",
+        "list": "Allowed hosts",
+        "removeNamed": "Remove {{host}}",
+        "remove": "Remove",
+        "goOffline": "Remove all (offline)",
+        "restoreDefaults": "Use the public defaults"
+      },
+      "invalidNumbers": "Enter a number of zero or more in every field.",
+      "saved": "Artifact settings saved. They apply right away.",
+      "saveError": "The artifact settings could not be saved.",
+      "sections": {
+        "storage": "Storage",
+        "downloads": "ZIP downloads",
+        "libraryKit": "Library kit",
+        "scriptHosts": "CDN hosts"
+      },
+      "resource": "artifact settings",
+      "enabled": "Keep generated files",
+      "enabledHint": "Images, documents, web artifacts and other files that chats, workflows and agents produce are stored with them. Off: a file is visible while it is shown and gone afterwards.",
+      "maxBytes": "Largest file",
+      "maxBytesHint": "Per file. 0 = no limit.",
+      "maxPerBatch": "Files per step",
+      "maxPerBatchHint": "How many files one answer or step may store at once. 0 = no limit.",
+      "downloadsHint": "Limits of one ZIP archive: \"Download all\" in a chat or a share, and archives the create_zip tool builds.",
+      "maxZipFiles": "Files per archive",
+      "zeroNoLimit": "0 = no limit.",
+      "maxZipBytes": "Archive size",
+      "maxZipBytesHint": "Content before compression. 0 = no limit.",
+      "kit": {
+        "enabled": "Offer the built-in libraries to HTML artifacts",
+        "enabledHint": "Charts and interactive pages work without internet access: iHub inlines these vetted libraries into the preview, the embed page and every download. The assistant uses them by default and a public CDN only when a user asks for one.",
+        "tableCaption": "Libraries in the kit",
+        "library": "Library",
+        "version": "Version",
+        "marker": "Marker",
+        "license": "License",
+        "size": "Size",
+        "status": "Status",
+        "available": "Verified",
+        "missing": "File missing or changed",
+        "supplyChain": "The files ship with iHub, copied unchanged from npm at exactly these versions and checked against their recorded SHA-256 before they are used."
+      },
+      "description": "Generated files: storage, size limits, and what HTML artifacts may load",
+      "conflict": "Someone else changed the artifact settings after you opened this page, so nothing was saved. Your edits are still here: load the current settings, then make your change again.",
+      "reload": "Load the current settings",
+      "reloadError": "The current settings could not be loaded."
     }
   },
   "cloudStorage": {
