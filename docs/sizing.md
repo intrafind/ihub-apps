@@ -6,17 +6,22 @@ type: reference
 
 # Sizing
 
-How much CPU, memory, storage and GPU an iHub installation needs, from the load tests of
-5.7.0-RC10 (November 2026). The numbers come from `tests/load` (see its README) and can be
-re-measured with your own mix.
+How much CPU, memory, storage and GPU an iHub installation needs, from the load tests of November
+2026, with the [evidence record](chat-evidence.md) on. The iHub numbers were measured on Kubernetes
+(one pod on a Xeon node) with the release that contains the performance work of #3794–#3795; the
+first measurements of 5.7.0-RC12 on a laptop are kept below for comparison. The numbers come from
+`tests/load` (see its README) and can be re-measured with your own mix.
 
 ## Short answer
 
 For a company of **1,000 employees** with the usage described below:
 
-- **iHub:** one pod, `WORKERS=2`, 3 vCPU, 4 GiB RAM. It carries about twice the expected peak.
-  Use `WORKERS=4`, 5 vCPU, 8 GiB if you want room for growth or a second pod for availability.
-- **Storage:** about 50 GB per month of chats, uploads and run records, before retention.
+- **iHub:** one pod with 8 vCPU, 12 GiB RAM and `WORKERS=6` carries the expected peak with room
+  to spare. Use a second pod for availability.
+- **10,000 employees:** one pod with 15 vCPU, 24 GiB RAM and `WORKERS=14` carries about 2,000 test
+  users, twice the expected peak of 1,000. Two such pods for availability.
+- **Storage:** about 50 GB per month of chats, uploads, run records and evidence records, before
+  retention.
 - **GPU:** the GPU is the real limit. One GPU with Qwen3.6-35B-A3B (FP8, vLLM) serves about **30
   busy users at once without thinking**, and far fewer with thinking. 1,000 employees need **2–4
   such GPUs** without thinking, plus one spare.
@@ -73,7 +78,34 @@ quarter of an hour**. Two ways to get the number of test users to plan for:
 
 ## iHub server
 
-### Measured capacity of one pod
+### Measured capacity on Kubernetes
+
+One pod on a dedicated Kubernetes node (Intel Xeon Gold 6242R; one vCPU = one hyperthread, no
+swap), the `company` mix, stub model, chat turns streamed on their own POST (the `chatPostStream`
+feature on), load generators in the same cluster. Same service levels as below.
+
+| Workers | vCPU | Memory (limit) | Test users | Result | Worker CPU | Event loop p95 | Extra latency p95 |
+| ------: | ---: | -------------: | ---------: | ------ | ---------: | -------------: | ----------------: |
+|       6 |    7 |         12 GiB |      1,500 | CPU full | 100% | 252 ms | 1.0 s |
+|      14 |   15 |         24 GiB |      2,000 | passes (2 of 3 runs; the third 1.52 s / 153 ms) | 62–64% | 51–153 ms | 0.7–1.5 s |
+|      14 |   15 |         24 GiB |      2,500 | extra latency too high | 76% | 123–136 ms | 1.8–1.9 s |
+|      14 |   15 |         24 GiB |      3,000 | CPU nearly full | 86% | 255 ms | 8.7 s |
+
+- **Capacity of one 15-vCPU pod: about 2,000 test users.** Up to 2,500 the event loop stays within
+  150 ms; what fails first is the time iHub adds before the first token. Most of it is counting the
+  transcript's tokens before every model call, which is the next thing to improve.
+- **No errors** at any of these levels: no failed turn, no lock timeout, no restart.
+- **A Xeon hyperthread does less than a laptop core.** The same 7-vCPU setup that carried 1,500 on
+  an Apple M2 laptop was CPU-bound at 1,500 here. Measure on your own hardware before planning
+  close to these numbers.
+- **The POST stream matters.** In the laptop lab, streaming turns on their own POST cut worker CPU by
+  about 20 points at 1,500 users. With the feature off, plan more CPU.
+- **Memory:** a worker uses 1.5–1.7 GB under load, most of it outside the main heap (extraction
+  and search threads, buffers). 14 workers in 18 GiB and in 14 GiB were killed for lack of memory
+  (Kubernetes has no swap). Plan **1.7 GiB per worker plus 1 GiB** for the pod; iHub warns at
+  startup when `WORKERS` does not fit the memory limit.
+
+### First measurements: one pod on a laptop (5.7.0-RC12)
 
 One pod, the `company` mix above, stub model, data written during the runs (no old history).
 Capacity is the largest number of test users at which **every** service level held:
@@ -84,54 +116,67 @@ Capacity is the largest number of test users at which **every** service level he
 - average worker CPU ≤ 80%;
 - event-loop delay peak p95 ≤ 150 ms.
 
-| Workers | vCPU | Memory (limit) | Capacity (test users) | First failing step                        | Worker CPU at capacity | Memory per worker |
-| ------: | ---: | -------------: | --------------------: | ----------------------------------------- | ---------------------: | ----------------: |
-|       2 |    3 |          4 GiB |                   300 | 500: event loop 160 ms                    |                    34% |          1.4 GB |
-|       4 |    5 |          6 GiB |       800 (500–800)¹ | 1,000: event loop 161 ms                  |                    48% |          1.4 GB |
-|       6 |    7 |          8 GiB |                   800 | 1,000: event loop 158 ms                  |                    41% |          1.3 GB |
-|       8 |    9 |         10 GiB |                 1,000 | 1,250: event loop 223 ms; overload 2,000 |                    47% |          1.2 GB |
+| Workers | vCPU | Memory (limit) | Capacity (test users) | First failing step       | Worker CPU at capacity | Memory per worker |  RC10 |
+| ------: | ---: | -------------: | --------------------: | ------------------------ | ---------------------: | ----------------: | ----: |
+|       2 |    3 |          4 GiB |                ≥ 650¹ | none up to 650           |                    63% |            1.4 GB |   300 |
+|       4 |    5 |          6 GiB |                  800² | 1,000: event loop 182 ms |                    52% |            1.3 GB |   800 |
+|       6 |    7 |          8 GiB |                 1,000 | 1,250: event loop 168 ms |                    58% |            1.3 GB |   800 |
+|       8 |    9 |         10 GiB |                  650³ | 1,000: event loop 164 ms |                    28% |            1.1 GB | 1,000 |
 
-¹ With project questions spread over all projects: 500.
+¹ Every step passed (event loop 107 ms at 650); the limit is higher but was not measured.
+² With project questions spread over all projects (RC10): 500.
+³ Lab limit, not an iHub limit: with 8 workers, iHub, the load generator and the stubs crowd the
+laptop's 12 cores. With the evidence record off, 8 workers carried 1,000.
 
-- The event loop, not the CPU, sets the limit: it crossed 150 ms at 40–60% average CPU. Up to the
+- The event loop, not the CPU, sets the limit: it crossed 150 ms at 50–70% average CPU. Up to the
   capacity, iHub added at most 0.3 s (p95) to the model's time to first token, and no request
-  failed up to 1,500 test users.
-- At 2,000 test users with 8 workers the CPU was full, and answers took 9 s longer to start.
-- Changes merged after RC10 (#3684 ledger, #3685 usage limits, #3686 storage) lowered the event-loop
-  peak at 800 test users and 8 workers from 153 to 116 ms with fresh data, and from 184 to 130 ms
-  with 48 GB of old history. The capacities above are therefore conservative for releases that
-  contain them.
+  failed up to 1,250 test users.
+- At 2,000 test users with 8 workers the CPU was full, and answers took 7–8 s longer to start.
+- With 48 GB of old history, 8 workers carried 500 (800: event loop 156 ms).
+
+### Evidence record
+
+The [evidence record](chat-evidence.md) stores what went into and came out of every answer. Measured
+on and off with the same data:
+
+- **CPU:** 5–14% more worker CPU per message, the more the higher the load. With 4 and 8 workers
+  the pod carried one step less (800 instead of 1,000 test users).
+- **Storage:** about 40 MB more per 1,000 messages (about 40 KB per answer). Project answers store
+  their excerpts, so the share is larger where many questions go to projects.
+
+Turn it off (`chats.evidence.enabled`) only if no one needs to prove what an answer was based on.
 
 ### Recommended setups
 
-Plan for 70% of the measured capacity, so a peak or a slow day still fits:
+Plan for 70% of the measured capacity, so a peak or a slow day still fits. Measured on the Xeon node
+above; the small and medium sizes are scaled down from it, not measured on their own:
 
 | Setup  | Workers | vCPU | Memory | Test users | Employees (10% rule) |
 | ------ | ------: | ---: | -----: | ---------: | -------------------: |
-| Small  |       2 |    3 |  4 GiB |        200 |        up to 2,000 |
-| Medium |       4 |    5 |  8 GiB |        400 |        up to 4,000 |
-| Large  |       6 |    7 | 10 GiB |        550 |        up to 5,500 |
-| XL     |       8 |    9 | 12 GiB |        700 |        up to 7,000 |
+| Small  |       2 |    3 |  5 GiB |       ~250 |        up to 2,500 |
+| Medium |       6 |    7 | 12 GiB |       ~700 |        up to 7,000 |
+| Large  |      14 |   15 | 24 GiB |      1,400 |       up to 14,000 |
 
 - **vCPU = workers + 1.** The primary process needs its own core. It relays answers between
   workers, and its load grows with the number of workers.
-- **Memory:** a worker uses 1.2–1.45 GB at load. Give the pod at least 1.5 GiB per worker plus 1–2
-  GiB. Leave the rest for the file cache: chats, projects and indexes are read from disk, and an
-  installation whose data no longer fits into the cache is slower.
+- **Memory:** a worker uses 1.5–1.7 GB at load (measured on Kubernetes; the laptop measured less
+  because Docker Desktop let it swap). Give the pod 1.7 GiB per worker plus 1 GiB. Leave the rest for
+  the file cache: chats, projects and indexes are read from disk, and an installation whose data no
+  longer fits into the cache is slower.
 - **Set `WORKERS` explicitly** to vCPU − 1. Without it, the server derives the number from the memory
   limit (see [Scaling with Multiple Workers](scaling.md)).
-- **Beyond one pod:** above about 700 test users, run several pods with 6 workers each behind a load
-  balancer ([Multi-Server Deployment](multi-server-deployment.md)). Several pods were not measured
-  in this lab. Two pods also make sense for availability below that size.
+- **Beyond one pod:** above about 1,400 test users, run several pods behind a load balancer
+  ([Multi-Server Deployment](multi-server-deployment.md)) with routing by chat id, so Stop and
+  re-attaching to a running answer reach the pod that runs it. Several pods were not measured. Two
+  pods also make sense for availability below that size.
 
 ### Storage
 
-The `company` mix wrote **about 230 MB per 1,000 messages**: chats, uploaded files, project
-documents and the run records. With the run-ledger change (#3684) it was 170–230 MB, before it
-290–320 MB. Uploads and project documents make up most of it, so an installation where few people
+The `company` mix wrote **about 200–220 MB per 1,000 messages**: chats, uploaded files, project
+documents, the run records and the evidence records (about 40 MB of it; without them 155–180 MB). Uploads and project documents make up most of it, so an installation where few people
 upload files needs less.
 
-Example: 1,000 employees × 10 messages per working day × 21 days ≈ 210,000 messages per month ≈ **50
+Example: 1,000 employees × 10 messages per working day × 21 days ≈ 210,000 messages per month ≈ **45–50
 GB per month**. Chats and their files are kept for `chats.retentionDays` (default 90 days), so this
 installation levels off at about 150 GB. Use a volume with room to grow; the admin overview warns at
 80% and 90% full.
@@ -174,8 +219,8 @@ GPU model of `gpu-01`: to be added.
 | Employees | Test users at the peak | iHub                                               | GPUs (thinking off) | Storage per month |
 | --------: | ---------------------: | -------------------------------------------------- | ------------------: | ----------------: |
 |       500 |                     50 | 1 pod: 2 workers, 3 vCPU, 4 GiB                    |                 2–3 |             25 GB |
-|     1,000 |                    100 | 1 pod: 2 workers, 3 vCPU, 4 GiB (or 4 / 5 / 8 GiB) |                 4–5 |             50 GB |
-|     5,000 |                    500 | 1 pod: 8 workers, 9 vCPU, 12 GiB, or 2 × medium    |               17–18 |            250 GB |
+|     1,000 |                    100 | 1 pod: 2 workers, 3 vCPU, 4 GiB                    |                 4–5 |             50 GB |
+|     5,000 |                    500 | 1 pod: 6 workers, 7 vCPU, 10 GiB, or 2 × small     |               17–18 |            250 GB |
 |    20,000 |                  2,000 | 4 pods: 6 workers, 7 vCPU, 10 GiB each             |                 ~67 |              1 TB |
 
 GPU numbers use the 10% rule and count every active user as a busy test user. Measured message
@@ -229,9 +274,12 @@ shipped ones (migration `V254`); values an admin set stay.
 
 ## Limits of these measurements
 
-- The lab was a laptop (Apple silicon, Docker Desktop with 12 CPUs): iHub, the load generator and the
-  stubs shared the same cores. With 8 workers that crowding showed: the event loop was already
-  slower at low load than with 4 or 6 workers. Dedicated nodes will do at least as well.
+- The Kubernetes measurements ran one pod on a node it shared with the stubs and the load
+  generators (CPU limits kept them apart). The first measurements ran on a laptop (Apple silicon,
+  Docker Desktop with 12 CPUs, swap allowed), where iHub, the load generator and the stubs shared the
+  same cores.
+- A real model streams differently from the stub (token rate, thinking); the stub sends 40 tokens
+  per second for every answer.
 - One pod only. Several pods, an ingress, and a long soak (memory over days) were not measured.
 - One GPU and one model. Other GPUs, models, quantizations and vLLM settings change the GPU numbers
   more than anything on the iHub side.
