@@ -638,9 +638,10 @@ function renderRateLimits(result, a) {
     const wantAuth = Math.ceil(r.usersPerIp * 1.2);
     const win = `${Math.round(auth.windowMs / 60000)} min`;
     if (auth.perIpLimit) {
-      // Servers with per-user limits: `limit` counts per IP and username, `perIpLimit` per IP.
+      // Servers with per-user limits: `limit` counts per IP and username, `perIpLimit` failed
+      // sign-ins per IP, so successful logins of an office behind one address never reach it.
       L.push(
-        `- **authApi** counts only credential POSTs (local, LDAP, NTLM login); OIDC sign-in is exempt. \`limit\` (${auth.limit} per ${win}) counts per IP **and username**, so it limits one account, not an office. \`perIpLimit\` (${auth.perIpLimit} per ${win}, cluster-wide) is the ceiling of one address: ${r.usersPerIp} users behind one IP logging in within one window need **≥ ${wantAuth}**${auth.perIpLimit >= wantAuth ? ' — the current value is enough.' : ` — **the current ${auth.perIpLimit} locks out everyone behind that address after the ${auth.perIpLimit}th login of the window**.`} Accounts also lock after 5 failed logins.`
+        `- **authApi** counts only credential POSTs (local, LDAP, NTLM login); OIDC sign-in is exempt. \`limit\` (${auth.limit} per ${win}) counts per IP **and username**, so it limits one account, not an office. \`perIpLimit\` (${auth.perIpLimit} per ${win}, cluster-wide) counts only **failed** sign-ins of one address, so ${r.usersPerIp} users behind one IP logging in successfully are not limited by it; raise it only if more than ${auth.perIpLimit} mistyped passwords per window come from one address. Accounts also lock after 5 failed logins.`
       );
     } else {
       L.push(

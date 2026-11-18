@@ -10,7 +10,7 @@
  * - the general limiters count a signed-in request per user, an anonymous one
  *   per address (`anonymousLimit`), and `keyBy: "ip"` brings back per address;
  * - the sign-in limiter counts per address and submitted username, with a
- *   separate, higher ceiling per address (`perIpLimit`).
+ *   separate ceiling of failed sign-ins per address (`perIpLimit`).
  */
 
 import request from 'supertest';
