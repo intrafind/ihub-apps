@@ -5403,6 +5403,7 @@
       "upgradedReleases": "{{count}} Releases sind neu in dieser Installation – jedes davon ist mit „Neu“ markiert.",
       "installed": "Installiert",
       "contents": "In dieser Version",
+      "backToContents": "Zurück zur Übersicht",
       "breakingChanges": "Breaking Changes",
       "breakingChangesHint": "Vor oder nach dem Upgrade ist eine Aktion erforderlich.",
       "features": "Neu & verbessert",
