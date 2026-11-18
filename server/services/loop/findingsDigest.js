@@ -110,6 +110,16 @@ export function isCondensedContent(content) {
 }
 
 /**
+ * A raw tool result as it enters the transcript: one that starts like a
+ * condensed stub gets a backslash in front, so only a result the loop
+ * condensed itself ever starts with one (notes accounting, the state a
+ * resumed turn reads back). Everything else is left as it is.
+ */
+export function escapeCondensedPrefix(content) {
+  return isCondensedContent(content) ? `\\${content}` : content;
+}
+
+/**
  * The tool batches of a transcript, oldest first: an assistant message with
  * tool calls and every tool message up to the next assistant message.
  *

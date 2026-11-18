@@ -75,6 +75,8 @@ import {
   recallToolDefinition,
   renderDigest,
   digestRoomOf,
+  escapeCondensedPrefix,
+  isCondensedContent,
   notesOf,
   DIGEST_FALLBACK_REASONS,
   MIN_DIGEST_CHARS,
@@ -1402,6 +1404,10 @@ export class AgentLoop {
     // Whether the call failed, from the result as the tool returned it: once an
     // oversized result is bounded, the transcript holds a preview wrapper that
     // no longer says so.
+    // Only a result the loop condensed may start like a condensed stub.
+    if (isCondensedContent(message.content)) {
+      message = { ...message, content: escapeCondensedPrefix(message.content) };
+    }
     const callFailed = !!failure || classifyToolResult(message).failed;
     if (callFailed && call.id) ctx.compaction?.failedCallIds.add(call.id);
     const bound = await this._boundToolMessage(ctx, message, { call, toolId, iteration });
