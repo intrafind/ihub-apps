@@ -321,6 +321,22 @@ export function workerExecArgv(sizing, execArgv = process.execArgv) {
   return flags;
 }
 
+/** Young generation of a worker thread, in MB (V8 adds about half again on top). */
+export const THREAD_YOUNG_GENERATION_MB = 32;
+
+/**
+ * The `resourceLimits` of a worker thread (extraction, search, document
+ * rendering): its old-space cap and a small young generation. Without the
+ * young cap a thread takes Node's container default — a thread capped at
+ * 256 MB old space had a 448 MB heap limit in a 4 GB container.
+ *
+ * @param {number} maxOldGenerationSizeMb - The thread's old-space cap
+ * @returns {{maxOldGenerationSizeMb: number, maxYoungGenerationSizeMb: number}}
+ */
+export function threadResourceLimits(maxOldGenerationSizeMb) {
+  return { maxOldGenerationSizeMb, maxYoungGenerationSizeMb: THREAD_YOUNG_GENERATION_MB };
+}
+
 /**
  * Let this process's worker threads use their own heap limits.
  *

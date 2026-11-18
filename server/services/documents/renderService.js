@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { Worker } from 'node:worker_threads';
+import { threadResourceLimits } from '../../utils/workerSizing.js';
 
 /**
  * Renders documents (PDF, Word, PowerPoint) in worker threads.
@@ -65,7 +66,7 @@ function runWorker(format, payload, timeoutMs) {
   const label = FORMAT_LABELS[format] || 'document';
   return new Promise((resolve, reject) => {
     const worker = new Worker(WORKER_URL, {
-      resourceLimits: { maxOldGenerationSizeMb: WORKER_MEMORY_MB }
+      resourceLimits: threadResourceLimits(WORKER_MEMORY_MB)
     });
     let settled = false;
     const finish = (fn, value) => {

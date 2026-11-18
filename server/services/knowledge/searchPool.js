@@ -4,6 +4,7 @@
 import { Worker } from 'node:worker_threads';
 import configCache from '../../configCache.js';
 import logger from '../../utils/logger.js';
+import { threadResourceLimits } from '../../utils/workerSizing.js';
 import { projectSettings } from '../projects/projectSettings.js';
 import { createIndexCache, searchIndex } from './corpusSearch.js';
 
@@ -83,7 +84,7 @@ function failure(message) {
 
 function spawn(index) {
   const { memoryMb } = projectSettings(configCache.getPlatform?.() || {}).extraction;
-  const worker = new Worker(workerUrl, { resourceLimits: { maxOldGenerationSizeMb: memoryMb } });
+  const worker = new Worker(workerUrl, { resourceLimits: threadResourceLimits(memoryMb) });
   const slot = { worker, pending: new Map(), size: { entries: 0, chars: 0 }, answered: false };
   worker.on('message', ({ id, ok, result, error }) => {
     slot.answered = true;
