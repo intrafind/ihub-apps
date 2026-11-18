@@ -126,8 +126,11 @@ test('replays what the ledger already holds, then follows the stream', async () 
   expect(assistant).toHaveLength(1);
   expect(assistant[0].content).toBe('Searching the web…');
   expect(result.current.processing).toBe(true);
-  // And the surface is now following the live stream for the rest of it.
-  expect(mockOpenCalls).toEqual(['/api/apps/acme/chat/chat-abc']);
+  // And the surface is now following the live stream for the rest of it,
+  // resumed after the last ledger event it replayed.
+  expect(mockOpenCalls).toEqual([
+    `/api/apps/acme/chat/chat-abc?resumeRun=${RUN_ID}&afterLedgerSeq=3`
+  ]);
 });
 
 test('does not attach to a run that already ended, and settles instead', async () => {
@@ -316,7 +319,9 @@ test('a ledger that cannot be read still connects rather than giving up', async 
   // Without the replay the surface misses what already happened, but the rest
   // of the answer is still worth having — and it is what the store will hold.
   expect(attached).toBe(true);
-  expect(mockOpenCalls).toEqual(['/api/apps/acme/chat/chat-abc']);
+  expect(mockOpenCalls).toEqual([
+    `/api/apps/acme/chat/chat-abc?resumeRun=${RUN_ID}&afterLedgerSeq=0`
+  ]);
 });
 
 test('a chat left mid-replay gets neither the rest of the replay nor the stream', async () => {

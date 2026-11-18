@@ -17,7 +17,16 @@
  */
 
 import { createPresenceMap, hasRemote, lookupRemote, publish, subscribe } from './clusterBus.js';
-import { setEnvelopeDelivery, resetStream, stampSeq } from './services/loop/RunStream.js';
+import {
+  setEnvelopeDelivery,
+  resetStream,
+  stampSeq,
+  buildEnvelope,
+  currentSeq,
+  flushStream
+} from './services/loop/RunStream.js';
+import { SSE_V2_EVENTS } from '../shared/runEvents.js';
+import { createSseChannel } from './utils/sseChannel.js';
 import logger from './utils/logger.js';
 import {
   abortCause,
@@ -28,6 +37,17 @@ import {
 
 /** streamId → { response, lastActivity, appId? } for locally held SSE streams. */
 export const clients = createPresenceMap('sse');
+
+/**
+ * chatId → `{ response, lastActivity, seq }` for chat turns streamed on their
+ * own POST (`Accept: text/event-stream`).
+ *
+ * A plain Map, not a presence map: the frames of such a turn are produced in
+ * the worker that holds its POST, so nobody else ever needs to know about it,
+ * and registering one costs no bus traffic. {@link routeEnvelope} tries it
+ * before the GET streams, which is what keeps the turn's frames off the bus.
+ */
+export const postStreams = new Map();
 
 /** chatId → AbortController for model turns running in this worker. */
 export const activeRequests = createPresenceMap('request');
@@ -63,9 +83,15 @@ const EVENT_CHANNEL = 'sse:event';
 const ABORT_CHANNEL = 'chat:abort';
 const CLOSE_CHANNEL = 'chat:close';
 
-/** Write one SSE frame. `data` is serialized as JSON unless it already is a string. */
+/**
+ * Write one SSE frame. `data` is serialized as JSON unless it already is a
+ * string. An envelope with a run frame counter also gets an `id:` line
+ * (`{runId}:{rseq}`); the client does not rely on it, the resume does not need
+ * it, but it names the frame for any SSE reader that wants to.
+ */
 export function sendSSE(res, event, data) {
   res.write(`event: ${event}\n`);
+  if (data && typeof data === 'object' && data.rseq) res.write(`id: ${data.runId}:${data.rseq}\n`);
   res.write(`data: ${typeof data === 'string' ? data : JSON.stringify(data)}\n\n`);
 }
 
@@ -84,6 +110,12 @@ export function deliverEnvelope(streamId, envelope) {
 
   const clientEntry = clients.get(streamId);
   clientEntry.lastActivity = new Date(); // Keep connection marked as active
+  // A stream being resumed holds live frames until its snapshot is written
+  // (`writeStreamStart`).
+  if (clientEntry.held) {
+    clientEntry.held.push(envelope);
+    return true;
+  }
   try {
     // This worker owns the stream, so it owns the stream's sequence: frames
     // produced here and frames relayed from other workers get one counter.
@@ -128,19 +160,189 @@ export function deliverEnvelope(streamId, envelope) {
 }
 
 /**
+ * Write one envelope to a POST stream entry. The POST stream numbers its own
+ * frames: it starts a sequence epoch with its `stream/connected`, and sharing
+ * the GET counter would interleave two connections' numbers.
+ *
+ * @param {string} streamId
+ * @param {object} entry - The `postStreams` entry
+ * @param {object} envelope
+ * @returns {boolean} True if written. False when its socket is dead (it is then
+ *   torn down like a GET whose write failed).
+ */
+function writePostEntry(streamId, entry, envelope) {
+  if (entry.response.destroyed) return false;
+  try {
+    entry.seq += 1;
+    entry.lastActivity = new Date();
+    sendSSE(entry.response, envelope.type, { ...envelope, seq: entry.seq });
+    if (envelope.type === SSE_V2_EVENTS.RUN_ENDED) entry.endedRuns.add(envelope.runId);
+    return true;
+  } catch (error) {
+    logger.error('Error writing to a chat POST stream; tearing it down', {
+      component: 'SSE',
+      streamId,
+      type: envelope.type,
+      error: error?.message || String(error)
+    });
+    if (postStreams.get(streamId) === entry) postStreams.delete(streamId);
+    abortChatRequestOnDisconnect(
+      streamId,
+      abortCause('client_disconnected', { via: 'POST stream write failed' })
+    );
+    return false;
+  }
+}
+
+/**
+ * Write one envelope to the current POST stream of a turn on this chat, if
+ * this worker holds one.
+ *
+ * @param {string} streamId
+ * @param {object} envelope
+ * @returns {boolean} True if written.
+ */
+export function deliverToPostStream(streamId, envelope) {
+  const entry = postStreams.get(streamId);
+  if (!entry || !envelope) return false;
+  return writePostEntry(streamId, entry, envelope);
+}
+
+/**
+ * Stream a chat turn on its own POST response (`Accept: text/event-stream`).
+ *
+ * Called at the turn's commit point: from here on the response is an SSE
+ * stream, and a refusal can only be a `stream/error` frame. Registers the
+ * response as this chat's POST stream, writes `stream/connected`, and on the
+ * connection closing early aborts a temporary turn (a durable one keeps
+ * running, as with the GET).
+ *
+ * The returned handle belongs to this request: `write` reaches this response
+ * only, and does nothing once a newer POST on the same chat took its place, so
+ * a late frame of one turn never lands on the next turn's stream.
+ *
+ * A POST's `req` emits `close` as soon as its body has been read, so the
+ * disconnect is taken from `res`, which closes with the connection.
+ *
+ * @param {object} params
+ * @param {import('express').Request} params.req
+ * @param {import('express').Response} params.res
+ * @param {string} params.chatId
+ * @returns {{isOpen: () => boolean, write: (envelope: object) => boolean,
+ *   hasEnded: (runId: string) => boolean, end: () => void}} `hasEnded`: whether
+ *   this stream already carried that run's `run/ended`.
+ */
+export function openChatPostStream({ req, res, chatId }) {
+  // Gone before the turn committed (the client gave up while the request was
+  // being checked): never registered, so another POST's entry stays in place
+  // and nothing is written to a dead socket.
+  if (res.destroyed) {
+    return { isOpen: () => false, write: () => false, hasEnded: () => false, end: () => {} };
+  }
+  const channel = createSseChannel({
+    req,
+    res,
+    closeOn: res,
+    id: chatId,
+    map: postStreams,
+    component: 'sessionRoutes',
+    onClose: ({ isCurrent }) => {
+      if (!isCurrent || res.writableFinished) return;
+      abortChatRequestOnDisconnect(
+        chatId,
+        abortCause('client_disconnected', { via: 'POST stream closed' })
+      );
+    }
+  });
+  const entry = channel.entry;
+  entry.seq = 0;
+  entry.endedRuns = new Set();
+  const isOpen = () => channel.isCurrent() && !res.destroyed;
+  const write = envelope => isOpen() && writePostEntry(chatId, entry, envelope);
+  write(
+    buildEnvelope({
+      streamId: chatId,
+      runId: chatId,
+      type: SSE_V2_EVENTS.STREAM_CONNECTED,
+      data: { runId: chatId, lastSeq: 0 }
+    })
+  );
+  return {
+    isOpen,
+    write,
+    hasEnded: runId => entry.endedRuns.has(runId),
+    end: () => {
+      // What the turn's last delta window still holds goes out first.
+      if (channel.isCurrent()) {
+        flushStream(chatId);
+        postStreams.delete(chatId);
+      }
+      if (!res.writableEnded) res.end();
+    }
+  };
+}
+
+/**
+ * Start a GET stream: write `stream/connected`, then — for a resumed run — the
+ * resume frames, then whatever arrived live meanwhile.
+ *
+ * Written straight to this connection rather than routed: a POST stream on the
+ * same chat would otherwise get this connection's own first frames too.
+ *
+ * A resumed stream holds its live frames (`entry.held`, see
+ * {@link deliverEnvelope}) while the snapshot is being fetched. Frames of the
+ * resumed run numbered up to the snapshot's cursor (`rseq <= upTo`) are in the
+ * snapshot already and are dropped; everything else is written after it.
+ *
+ * @param {string} streamId - The chat id
+ * @param {object} entry - This connection's `clients` entry
+ * @param {object} [resume]
+ * @param {object[]} [resume.frames] - Snapshot and ledger frames, in order
+ * @param {string} [resume.runId] - The resumed run
+ * @param {number} [resume.upTo] - The run frame counter the frames cover
+ * @returns {boolean} False when this connection is no longer the chat's stream.
+ */
+export function writeStreamStart(streamId, entry, { frames = [], runId = null, upTo = 0 } = {}) {
+  const held = entry.held || [];
+  delete entry.held;
+  if (clients.get(streamId) !== entry) return false;
+  deliverEnvelope(
+    streamId,
+    buildEnvelope({
+      streamId,
+      runId: streamId,
+      type: SSE_V2_EVENTS.STREAM_CONNECTED,
+      data: { runId: streamId, lastSeq: currentSeq(streamId) }
+    })
+  );
+  for (const frame of frames) deliverEnvelope(streamId, frame);
+  for (const frame of held) {
+    if (runId && frame.runId === runId && frame.rseq && frame.rseq <= upTo) continue;
+    deliverEnvelope(streamId, frame);
+  }
+  return true;
+}
+
+/**
  * Deliver locally or relay to the worker holding the stream. Installed as the
  * RunStream delivery function, so every producer in the process goes through
  * here without knowing about the cluster.
  */
 export function routeEnvelope(streamId, envelope) {
+  // A POST stream and a GET stream on the same chat both get every frame: a
+  // second tab, or a client that re-attached on the GET while its old POST
+  // socket is half-open and not yet detected as dead, must still see the
+  // turn end. With only the POST (the usual case) nothing below matches and
+  // the bus stays quiet.
+  const toPost = deliverToPostStream(streamId, envelope);
   if (deliverEnvelope(streamId, envelope)) return true;
   // Not ours. If another worker registered this stream, hand the envelope
-  // over; otherwise nobody is listening anywhere and dropping it is correct.
+  // over; otherwise nobody else is listening.
   if (hasRemote('sse', streamId)) {
     publish(EVENT_CHANNEL, { streamId, envelope }, { kind: 'sse', key: streamId });
     return true;
   }
-  return false;
+  return toPost;
 }
 
 setEnvelopeDelivery(routeEnvelope);
@@ -168,7 +370,9 @@ subscribe(EVENT_CHANNEL, ({ streamId, envelope }) => {
 });
 
 /**
- * Whether an SSE stream for this chat is open anywhere in the cluster.
+ * Whether an SSE stream for this chat is open anywhere in the cluster: a GET
+ * stream, or the POST of a turn streamed on its own response (held by this
+ * worker, which produces that turn's frames).
  *
  * The request path uses this to choose between streaming and the synchronous
  * answer, so it has to account for streams held by other workers — a local
@@ -181,7 +385,7 @@ export function hasChatClient(chatId) {
     clients.get(chatId).lastActivity = new Date();
     return true;
   }
-  return hasRemote('sse', chatId);
+  return postStreams.has(chatId) || hasRemote('sse', chatId);
 }
 
 /**

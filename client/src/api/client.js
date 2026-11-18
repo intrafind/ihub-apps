@@ -4,6 +4,7 @@
 import axios from 'axios';
 import { getSessionId, shouldRenewSession, renewSession } from '../utils/sessionManager';
 import { buildApiUrl } from '../utils/runtimeBasePath';
+import { expireSession } from './utils/apiErrors';
 
 // Use dynamic API URL based on runtime base path detection
 const API_URL = import.meta.env.VITE_API_URL || buildApiUrl('');
@@ -97,18 +98,9 @@ const addResponseInterceptor = client => {
           return Promise.reject(error);
         }
 
-        // Token expired or invalid - clear localStorage token for backward compatibility
-        const currentToken = localStorage.getItem('authToken');
-        if (currentToken) {
-          console.log('Authentication token expired or invalid, clearing localStorage token');
-          localStorage.removeItem('authToken');
-        }
-
         // Don't trigger token-expired handling for /auth/status — it's called by
         // the handler itself, so re-dispatching would cause an infinite loop
-        if (!originalRequest.url?.includes('/auth/status')) {
-          window.dispatchEvent(new CustomEvent('authTokenExpired'));
-        }
+        expireSession({ notify: !originalRequest.url?.includes('/auth/status') });
 
         // Don't retry auth requests to avoid infinite loops
         return Promise.reject(error);

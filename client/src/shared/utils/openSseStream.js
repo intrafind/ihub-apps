@@ -121,32 +121,54 @@ export async function fetchWithAuthRetry(url, init = {}) {
  * Resolves when the server closes the stream or `signal` is aborted; rejects
  * with `SseHttpError` on a non-OK response, or with the underlying fetch error.
  *
+ * Also used to send a chat turn that streams on its own POST: pass `method`,
+ * `body` and `headers`. Such an endpoint may still answer with JSON (an
+ * `@workflow` mention streams elsewhere); the parsed body is then the resolved
+ * value instead of a stream.
+ *
  * @param {string} url - Stream URL
  * @param {Object} options
  * @param {AbortSignal} [options.signal] - Abort to close the stream
  * @param {Function} options.onEvent - `(eventName, payload) => void` for each frame
  * @param {Function} [options.onOpen] - Called once with the Response when headers arrived
- * @returns {Promise<void>}
+ * @param {Function} [options.onChunk] - Called for every chunk read, heartbeat comments included
+ * @param {string} [options.method='GET'] - HTTP method
+ * @param {Object} [options.body] - JSON request body (sent as `application/json`)
+ * @param {Object} [options.headers] - Extra request headers
+ * @returns {Promise<Object|undefined>} The parsed body of a JSON answer, else undefined
  */
-export async function openSseStream(url, { signal, onEvent, onOpen } = {}) {
+export async function openSseStream(
+  url,
+  { signal, onEvent, onOpen, onChunk, method = 'GET', body, headers } = {}
+) {
   const res = await fetchWithAuthRetry(url, {
-    method: 'GET',
-    headers: { Accept: 'text/event-stream' },
+    method,
+    headers: {
+      Accept: 'text/event-stream',
+      ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+      ...headers
+    },
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
     signal
   });
 
   if (!res.ok) {
-    let body = null;
+    let errorBody = null;
     try {
-      body = await res.json();
+      errorBody = await res.json();
     } catch {
       // non-JSON error body — keep the status-based message
     }
     throw new SseHttpError(
-      (body && body.message) || `SSE connection failed (${res.status})`,
+      (errorBody && (errorBody.detail || errorBody.message)) ||
+        `SSE connection failed (${res.status})`,
       res.status,
-      body
+      errorBody
     );
+  }
+
+  if (/application\/json/i.test(res.headers?.get?.('content-type') || '')) {
+    return res.json();
   }
 
   if (!res.body) {
@@ -154,7 +176,8 @@ export async function openSseStream(url, { signal, onEvent, onOpen } = {}) {
   }
 
   if (onOpen) onOpen(res);
-  await parseSseStream(res.body, onEvent, signal);
+  await parseSseStream(res.body, onEvent, signal, onChunk);
+  return undefined;
 }
 
 /**

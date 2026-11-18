@@ -9,7 +9,48 @@ import {
   syntheticStreamError,
   TRANSPORT_ERROR_CODES
 } from '../utils/openSseStream';
+import { getSessionId } from '../../utils/sessionManager';
 import { RUN_EVENTS } from '../../../../shared/run/runReducer.js';
+
+/**
+ * How long a turn sent on its own POST may take to be accepted (its headers).
+ * The request is checked and its files prepared before that, so this matches
+ * the POST timeout of the JSON path, not the GET connect timeout.
+ */
+const TURN_ACCEPT_TIMEOUT_MS = 300000;
+
+/**
+ * How long an accepted turn's POST stream may stay silent before it counts as
+ * dropped: twice the server's 30-second heartbeat. A half-open connection
+ * (the peer gone without a close) otherwise stays "streaming" forever.
+ */
+export const TURN_IDLE_TIMEOUT_MS = 60000;
+
+/**
+ * Per connection: drop a frame of a run this connection has already passed.
+ *
+ * The server numbers a run's frames (`rseq`). A re-attached stream starts with
+ * a snapshot that covers the frames up to a cursor and the server drops the
+ * live ones below it; this is the safety net for anything that still slips
+ * through. A new connection (`stream/connected`) starts over, because a run
+ * continued on another worker counts again from 1. Gaps are not checked.
+ *
+ * @returns {(envelope: Object) => boolean} Whether to keep the frame
+ */
+function createRseqFilter() {
+  const lastByRun = new Map();
+  return envelope => {
+    if (envelope.type === RUN_EVENTS.STREAM_CONNECTED) {
+      lastByRun.clear();
+      return true;
+    }
+    const rseq = envelope.rseq;
+    if (!Number.isInteger(rseq)) return true;
+    if (rseq <= (lastByRun.get(envelope.runId) || 0)) return false;
+    lastByRun.set(envelope.runId, rseq);
+    return true;
+  };
+}
 
 /** The first top-level `run/started` on a connection is the turn's own run. */
 function startsTurn(envelope, turnRunId) {
@@ -74,6 +115,19 @@ function useEventSource({
   // The stream whose Stop is on its way to the server: it delivers no more
   // frames, but stays open until the server has the stop (see stopEventSource).
   const stoppingRef = useRef(null);
+  // Whether this hook is still mounted. Declared before the teardown effect so
+  // its cleanup runs first (and before the
+  // callbacks that open a stream, which check it): React destroys effects in declaration order, so by
+  // the time the teardown below runs on a real unmount this is already false,
+  // while a mere dependency change leaves it true.
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
   // Whether a run this surface started or followed may still be going on the
   // server. A detached surface has no stream and is not "processing", yet the
   // run lives on (a stored turn keeps going), so "Clear chat" still has to stop
@@ -229,6 +283,9 @@ function useEventSource({
    */
   const initEventSource = useCallback(
     async url => {
+      // A surface that is gone opens nothing (a re-attach finishing its replay
+      // after an unmount would otherwise leak a GET).
+      if (!mountedRef.current) return;
       // Synchronously detach any prior stream first. Only detach: the server
       // sees the old connection close, and the turn the new stream follows or
       // starts supersedes whatever was still running. Telling it to stop here
@@ -246,6 +303,7 @@ function useEventSource({
       // Only ITS `run/ended` closes the stream (a chat-launched child run
       // ending must not end the turn).
       let turnRunId = null;
+      const keep = createRseqFilter();
 
       const emit = envelope => {
         if (stoppingRef.current === ac) return;
@@ -292,7 +350,7 @@ function useEventSource({
           },
           onEvent: (name, data) => {
             const envelope = toRunEnvelope(name, data, chatId);
-            if (!envelope) return;
+            if (!envelope || !keep(envelope)) return;
 
             if (envelope.type === RUN_EVENTS.STREAM_CONNECTED) {
               connectionEstablished = true;
@@ -359,17 +417,175 @@ function useEventSource({
     ]
   );
 
-  // Whether this hook is still mounted. Declared before the teardown effect so
-  // its cleanup runs first: React destroys effects in declaration order, so by
-  // the time the teardown below runs on a real unmount this is already false,
-  // while a mere dependency change leaves it true.
-  const mountedRef = useRef(true);
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
+  /**
+   * Send a chat turn and read its frames from the same request: the POST with
+   * `Accept: text/event-stream` (no GET first). One connection per turn.
+   *
+   * Frames go to `onEvent` exactly as from {@link initEventSource}. What only
+   * the sender can act on goes to the callbacks instead:
+   *
+   * - `onRefused(error)` — the server refused the request before the turn
+   *   started (`SseHttpError` with `status` and the problem body), or the
+   *   request never reached it. Nothing was emitted for it.
+   * - `onAnswer(body)` — the server answered with JSON instead of a stream (an
+   *   `@workflow` mention, whose frames come over the GET).
+   * - `onAccepted()` — the turn is committed (headers arrived).
+   * - `onEnded()` — the stream ended with the turn's own end.
+   * - `onDropped(runId)` — the stream broke before the turn's end, or stayed
+   *   silent for {@link TURN_IDLE_TIMEOUT_MS} (a half-open connection); the
+   *   turn may still be running on the server and can be re-attached to.
+   *   Without a run id yet, a synthetic `stream/error` is emitted instead.
+   *   Never after Stop: that turn is over.
+   *
+   * No status polling: the response itself ends with the turn. Stop works as for
+   * {@link initEventSource}: the stop is sent while this request is still open.
+   *
+   * @param {string} url - The chat URL
+   * @param {Object} body - The JSON body of the chat POST
+   * @param {Object} [handlers] - See above
+   */
+  const startTurn = useCallback(
+    async (url, body, { onRefused, onAnswer, onAccepted, onEnded, onDropped } = {}) => {
+      abortAndClearTimers();
+      if (onProcessingChange) onProcessingChange(true);
+      serverRunActiveRef.current = true;
+
+      const ac = new AbortController();
+      abortControllerRef.current = ac;
+      const keep = createRseqFilter();
+      let turnRunId = null;
+      let ended = false;
+      let timedOut = false;
+      let accepted = false;
+      let idle = false;
+      let idleTimer = null;
+
+      const emit = envelope => {
+        if (stoppingRef.current === ac) return;
+        if (onEvent) onEvent({ type: envelope.type, envelope });
+      };
+      const abort = () => {
+        try {
+          ac.abort();
+        } catch {
+          // already aborted — nothing to do
+        }
+      };
+      // This stream's own timers: a newer stream's are never touched.
+      const acceptTimer = setTimeout(() => {
+        timedOut = true;
+        abort();
+      }, TURN_ACCEPT_TIMEOUT_MS);
+      connectionTimeoutRef.current = acceptTimer;
+      const clearAcceptTimer = () => {
+        clearTimeout(acceptTimer);
+        if (connectionTimeoutRef.current === acceptTimer) connectionTimeoutRef.current = null;
+      };
+      // Any byte (a frame or the server's heartbeat comment) proves the
+      // connection alive; silence past the limit is a drop.
+      const touch = () => {
+        clearTimeout(idleTimer);
+        idleTimer = setTimeout(() => {
+          if (ac.signal.aborted) return;
+          idle = true;
+          abort();
+        }, TURN_IDLE_TIMEOUT_MS);
+      };
+
+      let answer;
+      let failure = null;
+      try {
+        answer = await openSseStream(url, {
+          method: 'POST',
+          body,
+          headers: { 'X-Session-ID': getSessionId() },
+          signal: ac.signal,
+          onOpen: () => {
+            accepted = true;
+            clearAcceptTimer();
+            touch();
+            onAccepted?.();
+          },
+          onChunk: touch,
+          onEvent: (name, data) => {
+            // The parser reports a broken read as an `error` frame and then
+            // throws: a drop, decided below.
+            if (name === 'error') return;
+            const envelope = toRunEnvelope(name, data, chatId);
+            if (!envelope || !keep(envelope)) return;
+            if (startsTurn(envelope, turnRunId)) turnRunId = envelope.runId;
+            const ownEnd =
+              (envelope.type === RUN_EVENTS.RUN_ENDED || envelope.type === RUN_EVENTS.RUN_PAUSED) &&
+              envelope.runId === turnRunId;
+            // A stream error is the server's last word on this request.
+            if (ownEnd || envelope.type === RUN_EVENTS.STREAM_ERROR) ended = true;
+            if (envelope.type === RUN_EVENTS.RUN_ENDED && envelope.runId === turnRunId) {
+              serverRunActiveRef.current = false;
+            }
+            emit(envelope);
+          }
+        });
+      } catch (err) {
+        // Once accepted, a broken read is a drop (decided below), not a refusal.
+        if (!accepted) failure = err;
+      } finally {
+        clearAcceptTimer();
+        clearTimeout(idleTimer);
+      }
+
+      // Detached, stopped or replaced: whoever did that owns what happens next.
+      // A silent connection was aborted here, and is still this hook's to handle.
+      const current = abortControllerRef.current === ac && (!ac.signal.aborted || idle);
+      if (abortControllerRef.current === ac) abortControllerRef.current = null;
+      try {
+        ac.abort();
+      } catch {
+        // already aborted — nothing to do
+      }
+      if (timedOut) {
+        if (onProcessingChange) onProcessingChange(false);
+        emit(
+          syntheticStreamError(
+            chatId,
+            'Connection timeout. Please try again.',
+            TRANSPORT_ERROR_CODES.TIMEOUT
+          )
+        );
+        return;
+      }
+      if (!current) return;
+      if (onProcessingChange) onProcessingChange(false);
+
+      if (failure) {
+        serverRunActiveRef.current = false;
+        onRefused?.(failure);
+        return;
+      }
+      if (answer !== undefined) {
+        onAnswer?.(answer);
+        return;
+      }
+      if (ended) {
+        onEnded?.();
+        return;
+      }
+      // Stopped: the turn is over, there is nothing to re-attach to.
+      if (stoppingRef.current === ac) return;
+      if (turnRunId && onDropped) {
+        onDropped(turnRunId);
+        return;
+      }
+      serverRunActiveRef.current = false;
+      emit(
+        syntheticStreamError(
+          chatId,
+          'Streaming connection failed. Please try again.',
+          TRANSPORT_ERROR_CODES.READ
+        )
+      );
+    },
+    [abortAndClearTimers, chatId, onProcessingChange, onEvent]
+  );
 
   // Read through a ref so the teardown below stays keyed on the stream's
   // identity alone: an unstable callback in the dependency array would abort a
@@ -397,6 +613,7 @@ function useEventSource({
 
   return {
     initEventSource,
+    startTurn,
     detachEventSource,
     stopEventSource,
     eventSourceRef,

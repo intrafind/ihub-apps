@@ -7,7 +7,8 @@ type: reference
 # Streaming Events
 
 Every run-scoped stream the server offers speaks the same dialect: the chat
-stream (`GET /api/apps/:appId/chat/:chatId`), the workflow execution stream
+stream (`GET /api/apps/:appId/chat/:chatId`, or the chat POST itself, see
+[A chat turn on its own POST](#a-chat-turn-on-its-own-post)), the workflow execution stream
 (`GET /api/workflows/executions/:id/stream`) and the agent run stream
 (`GET /api/agents/runs/:id/stream`). Each frame is
 
@@ -305,6 +306,81 @@ replaces the earlier one.
 `knowledge_*` call; `sources` is what an admin configured.
 `tool/completed.knowledgeSource` and `step/completed.sources` are per-tool and
 per-step detail, not the answer's basis.
+
+## A chat turn on its own POST
+
+A client can also read a turn from the request that sends it, without opening
+the GET first: `POST /api/apps/:appId/chat/:chatId` with
+`Accept: text/event-stream`. The type has to be named and preferred over JSON
+(q-values count); a wildcard alone (`*/*`, `text/*`) is not enough. Without it
+the POST answers exactly as before (`{ status: 'streaming', chatId }` once the
+turn has ended, frames on the GET).
+
+- **Before the turn starts** every refusal keeps its status and
+  `application/problem+json` body: authentication, validation, an unknown chat,
+  `CLIENT_HISTORY_NOT_ALLOWED`, `AI_ACKNOWLEDGEMENT_REQUIRED` (428),
+  `CHAT_STORAGE_UNAVAILABLE` (503) and the rest. The SSE headers go out only
+  once the turn is committed (its run is named).
+- **After that** the answer is `200 text/event-stream`: `stream/connected`, then
+  the same frames as on the GET (tool progress, the wait for outdated documents,
+  a workflow a tool launched), ending after the turn's `run/ended` or
+  `run/paused`. The stream numbers its own `seq` from its `stream/connected`. A
+  preparation failure is the failed run (`run/started`, `stream/error`,
+  `run/ended`). A refusal or failure after the commit point is a `stream/error`
+  frame with the `code` and message its problem+json body would have (a 5xx
+  message only when it is safe to show) and `details.status`, then
+  `run/ended { status: 'error' }` of the turn's run, then the end.
+- An `@workflow` mention is still answered with JSON; its frames come over the
+  GET, which backfills what it missed when it connects.
+- Closing the response stops a temporary chat's turn (cause
+  `client_disconnected`, via `POST stream closed`); a kept chat's turn keeps
+  running and is stored, like a closed GET.
+- The frames of such a turn are written by the worker that holds the POST, so
+  they never cross the cluster bus. The 30-second `: heartbeat` comment keeps
+  proxies from timing out a long turn; the SPA counts a POST that stays silent
+  for 60 seconds as dropped and re-attaches.
+- A GET opened on the same chat meanwhile (a second tab, or a client that
+  re-attached while its old POST socket is half-open) gets every frame too, in
+  this worker or relayed to the worker holding it. Only then does a POST
+  turn's traffic cross the bus.
+- While the POST is open the chat counts as connected: `/status` answers
+  `active: true` with `processing`.
+
+Every frame a turn emits carries `rseq`, a counter per run assigned where the
+frame is produced, and is written with an SSE `id: {runId}:{rseq}` line. The
+stream `seq` stays as described above. The server ignores `Last-Event-ID`: a
+client re-attaches with `resumeRun` (below).
+
+### Re-attaching mid-step
+
+The ledger has no `step/delta` frames and no thinking. A client that re-attaches
+to a running turn (a reload, a second tab, a POST stream that broke) replays the
+ledger, then opens the GET with `?resumeRun={runId}&afterLedgerSeq={last ledger seq replayed}`.
+The worker producing the run answers, before the stream goes live, with:
+
+1. the ledger events after `afterLedgerSeq`, read after a flush;
+2. the run's partial state as ordinary `step/delta` frames: the thinking of
+   every step so far and the text of each step that has not completed, minus
+   the text of a step the ledger above completed (at most 256 KB of unfinished
+   text and 512 KB of thinking per run; past either a `…` marks where it was
+   cut and the transcript re-read at the end fills it in).
+
+The ledger comes first so that a step that completed after the client's replay
+is completed before the next step's text is appended.
+
+Live frames of that run numbered at or below the snapshot are dropped, so
+nothing is doubled; the client additionally drops a frame whose `rseq` it has
+already seen on the connection. Across workers this is one bus request and one
+reply per re-attach (`services/chat/chatResume.js`).
+
+Known limits without sticky sessions across pods: Stop reaches a turn only on
+its own pod, a re-attach on another pod gets the ledger but neither the partial
+text nor the live tail, and `/status.processing` is per pod.
+
+The SPA uses the POST stream when the `chatPostStream` feature is on
+(Admin → Features); turning it off takes effect on the next message. The
+surfaces that run without the platform configuration (the Office add-in, the
+browser extension) always use the GET and the JSON POST.
 
 ## A workflow run on the wire
 

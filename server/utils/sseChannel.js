@@ -24,8 +24,21 @@ import logger from './logger.js';
  * Set up an SSE connection registered under `id` in `map`, with a heartbeat
  * and pinned-entry close teardown. Returns helpers for sending events and
  * checking whether this connection is still the current one for `id`.
+ *
+ * `closeOn` is what signals the disconnect, `req` by default. A POST's `req`
+ * emits `close` once its body has been read, long before the client goes away,
+ * so a stream answered on a POST passes `res` instead.
  */
-export function createSseChannel({ req, res, id, map, component, heartbeatMs = 30000, onClose }) {
+export function createSseChannel({
+  req,
+  res,
+  id,
+  map,
+  component,
+  heartbeatMs = 30000,
+  onClose,
+  closeOn = req
+}) {
   // No `Connection: keep-alive` here on purpose: it is a hop-by-hop header that
   // HTTP/1.1 already implies, and RFC 9113 §8.2.2 forbids it in HTTP/2. Proxies
   // that translate this response to HTTP/2 without stripping it make the stream
@@ -70,7 +83,7 @@ export function createSseChannel({ req, res, id, map, component, heartbeatMs = 3
     }
   }, heartbeatMs);
 
-  req.on('close', () => {
+  closeOn.on('close', () => {
     clearInterval(heartbeatInterval);
     const wasCurrent = isCurrent();
     if (wasCurrent) map.delete(id);

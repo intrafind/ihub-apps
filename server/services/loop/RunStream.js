@@ -41,6 +41,13 @@ export const MAX_TRACKED_STREAMS = 10000;
 const seqByStream = new Map();
 /** streamId → current run binding `{ runId, emitter }` (chat turns register themselves). */
 const currentByStream = new Map();
+/**
+ * runId → last run frame counter (`rseq`). Stamped by the producer, so a frame
+ * carries the same number whichever worker delivers it: a re-attaching client
+ * and the resume snapshot (`services/chat/chatResume.js`) agree on what "up to
+ * here" means. Not the stream `seq`, which the delivering worker assigns.
+ */
+const rseqByRun = new Map();
 let deliver = null;
 
 /** Re-insert `key` so Map iteration order doubles as LRU order; evict the oldest past the cap. */
@@ -67,7 +74,7 @@ const emitObservers = new Set();
  * to record what a chat turn did (`services/chat/runActivity.js`). An observer
  * must be cheap and must not throw into the producer.
  *
- * @param {(envelope: Object) => void} fn
+ * @param {(envelope: Object, streamId: string) => void} fn
  * @returns {() => void} unsubscribe
  */
 export function observeEmittedEnvelopes(fn) {
@@ -76,10 +83,10 @@ export function observeEmittedEnvelopes(fn) {
   return () => emitObservers.delete(fn);
 }
 
-function notifyEmitObservers(envelope) {
+function notifyEmitObservers(envelope, streamId) {
   for (const fn of emitObservers) {
     try {
-      fn(envelope);
+      fn(envelope, streamId);
     } catch (err) {
       logger.warn('SSE v2 emit observer failed', {
         component: COMPONENT,
@@ -103,6 +110,17 @@ export function trackedStreamCount() {
 
 export function currentSeq(streamId) {
   return seqByStream.get(streamId) || 0;
+}
+
+/** The last run frame counter stamped for `runId` on this worker (0 when none). */
+export function currentRseq(runId) {
+  return rseqByRun.get(runId) || 0;
+}
+
+function nextRseq(runId) {
+  const next = (rseqByRun.get(runId) || 0) + 1;
+  touch(rseqByRun, runId, next);
+  return next;
 }
 
 /**
@@ -215,8 +233,12 @@ function openWindow(streamId) {
   coalescing.set(streamId, slot);
 }
 
-/** Close the stream's window, delivering what it holds. */
-function flushStream(streamId) {
+/**
+ * Close the stream's window, delivering what it holds. Exported for the
+ * resume snapshot, which must not straddle a half-filled window, and for a
+ * POST stream about to end.
+ */
+export function flushStream(streamId) {
   const slot = coalescing.get(streamId);
   if (!slot) return;
   clearTimeout(slot.timer);
@@ -235,6 +257,8 @@ function deliverCoalesced(streamId, envelope) {
     }
     if (sameDelta(slot.pending, envelope)) {
       slot.pending.data.content += envelope.data.content;
+      // The merged frame holds every chunk up to this one.
+      if (envelope.rseq) slot.pending.rseq = envelope.rseq;
       return;
     }
   }
@@ -292,7 +316,10 @@ export class RunStreamEmitter {
       });
       return null;
     }
-    if (emitObservers.size > 0) notifyEmitObservers(envelope);
+    // Only frames on the installed delivery (the chat stream) are numbered per
+    // run: an override is an in-process sink nobody re-attaches to.
+    if (!this._deliver) envelope.rseq = nextRseq(envelope.runId);
+    if (emitObservers.size > 0) notifyEmitObservers(envelope, this.streamId);
     // A delivery override is an in-process sink (an API response, a recorder)
     // with nothing to relay, so only the installed delivery coalesces.
     if (!this._deliver) {

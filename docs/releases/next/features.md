@@ -2334,3 +2334,20 @@ with a clickable chart, a calculator, a data explorer and a clickable diagram â€
 `dashboard` reference with a second full example. The model reads the closest one before it
 writes, so artifacts are more consistent, work on phones and with the keyboard, and come out
 right the first time more often.
+
+## Chat: Answers on One Connection, and Reopened Turns Show Their Text So Far
+
+A chat answer can now stream on the request that sends the message, instead of the browser first
+opening a second stream connection. This halves the connections per message (Compare mode uses one
+per panel) and keeps answer text off the traffic between server workers. It is off by default: turn
+on **Chat answers on one connection** under **Admin â†’ Features**; switching it takes effect on the
+next message.
+
+- Reopening a chat whose answer is still being written (a reload, a second tab, a dropped
+  connection) now shows the text and the reasoning written so far at once, instead of only from the
+  next words on.
+- With the feature on, a connection that drops mid-answer reconnects to the running answer on its
+  own. A stored chat's answer keeps running; a temporary chat's answer stops, as before.
+- API callers can use the same: send `Accept: text/event-stream` with the chat message. Requests
+  without it get the same answer as before. Without sticky sessions across several pods, Stop and
+  reopening a running answer work only on the pod running it.

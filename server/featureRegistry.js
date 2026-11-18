@@ -261,6 +261,17 @@ export const featureRegistry = [
     // place an admin decides what to trust.
     category: 'platform',
     default: true
+  },
+  {
+    id: 'chatPostStream',
+    name: { en: 'Chat answers on one connection', de: 'Chat-Antworten über eine Verbindung' },
+    description: {
+      en: 'The browser receives a chat answer on the request that sent the message, instead of opening a second stream connection first. Fewer connections per message and less traffic between server workers; turn it off to go back to the separate stream',
+      de: 'Der Browser empfängt eine Chat-Antwort über die Anfrage, mit der die Nachricht gesendet wurde, statt zuerst eine zweite Stream-Verbindung zu öffnen. Weniger Verbindungen pro Nachricht und weniger Verkehr zwischen den Server-Workern; ausschalten, um zum separaten Stream zurückzukehren'
+    },
+    category: 'platform',
+    // Off until measured (rollout phase 5 turns it on).
+    default: false
   }
 ];
 
