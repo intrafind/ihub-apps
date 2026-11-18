@@ -15,6 +15,7 @@
  */
 .chat-input-textarea {
   --composer-padding-y: 0.5rem;
+  display: block;
   line-height: 1.5;
   padding-top: var(--composer-padding-y);
   padding-bottom: var(--composer-padding-y);
@@ -80,11 +81,8 @@
    (0.375rem, 0.5rem from `sm`) above and below. With the 0.5rem of a
    multi-line box, the line was 16px shorter than the toolbar on a desktop.
    `block`: an inline text area sits on the text baseline, which left a 6px gap
-   under it. ChatInput drops the class while the box is expanded. */
-.chat-input-textarea {
-  display: block;
-}
-
+   under it (see `display` on .chat-input-textarea above). ChatInput drops the
+   class while the box is expanded. */
 .chat-input-textarea--one-line {
   --composer-padding-y: 0.75rem;
 }
