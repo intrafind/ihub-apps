@@ -61,7 +61,7 @@ const MIN_CHUNK_CHARS = 8_000;
 /** Characters of the arguments shown per call in the digest. */
 const MAX_ARGS_CHARS = 300;
 const MAX_SOURCES_PER_CALL = 8;
-const MAX_FACT_CHARS = 500;
+const MAX_FACT_CHARS = 1000;
 const MAX_LINES_PER_CHUNK = 400;
 
 /** Characters of the task handed to the summariser as a relevance hint. */
@@ -374,6 +374,7 @@ const SYSTEM_PROMPT = [
   '',
   'Write densely, every character counts:',
   '- One FACT line per entity and result: the entity once, then its facts as label and value, separated by "; ". Example: FACT | r3 | NVIDIA (NVDA): market cap 5.1 trillion USD; price 211.40 USD; P/E 45.2; 1Y +38% | stockanalysis.com',
+  '- A line holds at most 1,000 characters; an entity with more continues on another FACT line for the same result, starting with the entity again.',
   '- A table row is one line: the row name, then its columns as label and value.',
   '- No sentences, articles or filler; common short labels (P/E, EPS, YoY, Q3 2026, mcap) are fine.',
   '- Every figure of a line comes from the result the line cites; figures from another result go on a line citing that result.',
@@ -489,7 +490,7 @@ export function parseDigestLines(text) {
       // A fact may hold a `|` itself: everything up to the last column is the fact.
       const body = parts.length > 4 ? parts.slice(2, -1).join(' | ') : factText;
       const source = parts.length > 3 ? parts[parts.length - 1] || null : null;
-      facts.push({ ref, text: truncate(body, MAX_FACT_CHARS), source });
+      for (const text of factLinesOf(body)) facts.push({ ref, text, source });
     } else {
       const what = parts.slice(2).join(' | ');
       if (what) notFound.push({ ref, text: truncate(what, MAX_FACT_CHARS) });
@@ -497,6 +498,33 @@ export function parseDigestLines(text) {
     if (facts.length + notFound.length >= MAX_LINES_PER_CHUNK) break;
   }
   return { facts, notFound };
+}
+
+/**
+ * A fact line as stored: up to {@link MAX_FACT_CHARS}. A longer dense line
+ * (`Entity: label value; label value; …`) is split at its fields into lines
+ * that each start with the entity, so no field is lost to a cut; a single
+ * field longer than that is cut.
+ */
+function factLinesOf(body) {
+  if (body.length <= MAX_FACT_CHARS) return [body];
+  const colon = body.indexOf(': ');
+  const entity = colon > 0 && colon < 120 ? body.slice(0, colon) : '';
+  const fields = (entity ? body.slice(colon + 2) : body).split(/;\s+/);
+  const lines = [];
+  let line = '';
+  for (const field of fields) {
+    const next = line ? `${line}; ${field}` : field;
+    const head = entity ? `${entity}: ` : '';
+    if (line && head.length + next.length > MAX_FACT_CHARS) {
+      lines.push(`${head}${line}`);
+      line = field;
+    } else {
+      line = next;
+    }
+  }
+  if (line) lines.push(`${entity ? `${entity}: ` : ''}${line}`);
+  return lines.map(text => truncate(text, MAX_FACT_CHARS));
 }
 
 function normalizeRef(value) {
@@ -773,9 +801,11 @@ export async function summarizeCalls({
   // The room for the notes, shared among the chunks by how much each holds.
   const sizes = chunks.map(chunk => chunk.reduce((sum, call) => sum + call.content.length, 0));
   const total = sizes.reduce((sum, size) => sum + size, 0) || 1;
+  // Never more in total than the room: a chunk told it has more than its
+  // share would write lines the digest then drops.
   const roomOf = index =>
     Number(roomChars) > 0
-      ? Math.max(MIN_ROOM_CHARS, Math.floor((Number(roomChars) * sizes[index]) / total))
+      ? Math.max(1, Math.floor((Number(roomChars) * sizes[index]) / total))
       : undefined;
   for (const [index, chunk] of chunks.entries()) {
     if (Date.now() >= deadline) {
@@ -863,9 +893,6 @@ export const MIN_DIGEST_CHARS = 2000;
 
 /** Share of a digest the list of calls may take; the rest is for the facts. */
 const CALLS_SHARE = 0.4;
-
-/** The least room a summary chunk is told it has, so it can still write a line or two. */
-const MIN_ROOM_CHARS = 300;
 
 /**
  * The characters a digest of `maxChars` leaves for fact and not-found lines:

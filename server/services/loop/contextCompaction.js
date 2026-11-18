@@ -55,7 +55,7 @@ export function microcompactMessages(messages, opts = {}) {
  * Whether a tool result says its call failed (`{ success: false }`, a truthy
  * `error`, "Error: …"); `{ error: false }` is a success, as in toolClassify.
  */
-function isFailedResult(content) {
+export function isFailedResult(content) {
   const text = String(content ?? '').trim();
   if (/^error\b/i.test(text)) return true;
   if (!text.startsWith('{')) return false;

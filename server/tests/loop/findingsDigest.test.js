@@ -295,9 +295,26 @@ test('summarizeCalls: the model is told the room its lines have, shared among th
     roomChars: 4000
   });
   const rooms = seen.map(text => Number(/at most (\d+) characters/.exec(text)?.[1]));
-  assert.ok(rooms.length >= 2, `${rooms.length} chunks`);
-  assert.ok(rooms.every(room => room >= 300));
-  assert.ok(rooms.reduce((a, b) => a + b, 0) <= 4000 + 300 * rooms.length);
+  // One chunk per result, each told its share by size, never more than the room.
+  assert.equal(rooms.length, 2);
+  const sizes = calls.map(call => call.content.length);
+  const total = sizes[0] + sizes[1];
+  assert.deepEqual(
+    rooms,
+    sizes.map(size => Math.floor((4000 * size) / total))
+  );
+  assert.ok(rooms[0] + rooms[1] <= 4000);
+
+  // A room too small for every chunk is shared, not raised.
+  seen.length = 0;
+  await summarizeCalls({
+    llmClient,
+    model: { id: 'm', contextWindow: 8_000, maxOutputTokens: 1000 },
+    calls,
+    roomChars: 100
+  });
+  const small = seen.map(text => Number(/at most (\d+) characters/.exec(text)?.[1]));
+  assert.ok(small.reduce((a, b) => a + b, 0) <= 100, JSON.stringify(small));
   assert.deepEqual(
     summary.facts.map(f => f.text),
     ['NVIDIA (NVDA): market cap 5.1 trillion USD; P/E 45.2'],
@@ -306,6 +323,16 @@ test('summarizeCalls: the model is told the room its lines have, shared among th
   const without = buildSummaryMessages(calls.slice(0, 1), { chunkChars: 96_000 });
   assert.doesNotMatch(without[1].content, /Size limit/, 'no room given, none told');
   assert.match(without[0].content, /Write densely/);
+});
+
+test('a dense line over the line limit is split at its fields, each part naming the entity', () => {
+  const fields = Array.from({ length: 80 }, (_, i) => `metric ${i} ${i}.5 USD`);
+  const { facts } = parseDigestLines(`FACT | r1 | NVIDIA (NVDA): ${fields.join('; ')} | x.test`);
+  assert.ok(facts.length >= 2, `${facts.length} lines`);
+  assert.ok(facts.every(f => f.text.startsWith('NVIDIA (NVDA): ') && f.text.length <= 1000));
+  const kept = facts.flatMap(f => f.text.slice('NVIDIA (NVDA): '.length).split('; '));
+  assert.deepEqual(kept, fields, 'no field is lost');
+  assert.ok(facts.every(f => f.source === 'x.test'));
 });
 
 test('summarizeCalls: a failed chunk is reported, an abort of the run is thrown', async () => {

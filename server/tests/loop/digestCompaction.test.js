@@ -13,6 +13,7 @@ import { shrinkFailedToolCalls } from '../../services/loop/contextCompaction.js'
 import { projectLedgerEvent } from '../../services/loop/RunStream.js';
 import { RUN_LOG_EVENTS, SSE_V2_EVENTS } from '../../../shared/runEvents.js';
 import { RECALL_TOOL_ID, notesOf } from '../../services/loop/findingsDigest.js';
+import { CONTEXT_WRAP_UP_NUDGE } from '../../services/loop/nudges.js';
 import {
   makeClient,
   sseResponse,
@@ -1255,6 +1256,13 @@ test('an overflow of a call that sent only native web search is retried without 
       { status: 400 }
     );
   const { loop, stepRequests } = makeLoop([overflow, textTurn('the answer')]);
+  // What the loop hands the client per call: the directive goes, the prompt stays.
+  const sent = [];
+  const execute = loop.llmClient.execute.bind(loop.llmClient);
+  loop.llmClient.execute = params => {
+    sent.push(params.options?.nativeWebSearch ?? null);
+    return execute(params);
+  };
   const result = await loop.run({
     model,
     messages: baseMessages,
@@ -1266,6 +1274,64 @@ test('an overflow of a call that sent only native web search is retried without 
   assert.equal(result.status, 'completed', JSON.stringify(result.error));
   assert.equal(result.content, 'the answer');
   assert.equal(stepRequests.length, 2);
+  assert.deepEqual(sent, [{ enabled: true }, null], 'the retry goes without native search');
+});
+
+test('a turn resumed after it wrapped up stays wrapped up: no search is offered again', async () => {
+  const { loop, stepRequests } = makeLoop([textTurn('the answer')]);
+  const result = await loop.run({
+    model,
+    messages: [
+      ...baseMessages,
+      { role: 'assistant', content: 'working on it' },
+      { role: 'user', content: CONTEXT_WRAP_UP_NUDGE }
+    ],
+    tools: [searchTool],
+    policies,
+    executeTool: async () => 'never'
+  });
+  assert.equal(result.status, 'completed', JSON.stringify(result.error));
+  const offered = (stepRequests[0].body.tools || []).map(t => t.function?.name || t.name);
+  assert.ok(!offered.includes('webSearch'), JSON.stringify(offered));
+  const nudges = stepRequests[0].body.messages.filter(m => m.content === CONTEXT_WRAP_UP_NUDGE);
+  assert.equal(nudges.length, 1, 'not told twice');
+
+  // A nudge from an earlier turn does not carry over into a new one.
+  const fresh = makeLoop([textTurn('ok')]);
+  await fresh.loop.run({
+    model,
+    messages: [
+      ...baseMessages,
+      { role: 'user', content: CONTEXT_WRAP_UP_NUDGE },
+      { role: 'assistant', content: 'earlier answer' },
+      { role: 'user', content: 'and now something new' }
+    ],
+    tools: [searchTool],
+    policies,
+    executeTool: async () => 'never'
+  });
+  const again = (fresh.stepRequests[0].body.tools || []).map(t => t.function?.name || t.name);
+  assert.ok(again.includes('webSearch'), JSON.stringify(again));
+});
+
+test('a long result with success false is recorded as failed before it is bounded', async () => {
+  const { loop } = makeLoop([toolTurn('c1', 'webSearch', { query: 'x' }), textTurn('done')]);
+  let seen = null;
+  await loop.run({
+    model,
+    messages: baseMessages,
+    tools: [searchTool],
+    policies: { context: { ...policies.context, spillThresholdBytes: 4096 } },
+    seams: [
+      {
+        postTool: ctx => {
+          seen = new Set(ctx.compaction.failedCallIds);
+        }
+      }
+    ],
+    executeTool: async () => JSON.stringify({ success: false, detail: 'z'.repeat(20_000) })
+  });
+  assert.ok(seen?.has('c1'), 'success false counts as a failure');
 });
 
 test('a raw result that starts like a condensed stub is escaped, so it never counts as notes', async () => {
@@ -1290,7 +1356,7 @@ test('a raw result that starts like a condensed stub is escaped, so it never cou
 test('a digest still over the notes budget at its smallest size keeps calls only, and the run wraps up', async () => {
   // Rare characters: a few tokens each, so the smallest digest with facts
   // counts more tokens than the notes have left.
-  const dense = '龘靐齉麤'.repeat(150);
+  const dense = '龘靐齉麤'.repeat(165);
   const wide = Array.from({ length: 3000 }, (_, i) => `w${i}`).join(' ');
   const { loop } = makeLoop(
     [

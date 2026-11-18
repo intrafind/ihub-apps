@@ -53,9 +53,9 @@ Pass `sheets` as a JSON array of 1–20 worksheet objects:
 When the workbook holds figures from a web search or other sources:
 
 - Put a figure in a cell only when a source you read in this conversation states it (a search result, a page you read, the condensed notes, or a result you read back). Never fill a cell from memory, not even approximately: leave it empty or write `n/a`.
-- Choose the columns the sources actually provide. A column that would be mostly `n/a` is better left out and named as not available in your answer.
+- Keep every column the user asked for, with `n/a` in the cells no source gives. Of the columns you add yourself, choose those the sources actually provide: one that would be mostly `n/a` is better left out and named as not available in your answer.
 - The header states the unit and scale of the values exactly as they are entered, e.g. `Market cap (USD bn)` with `5121` for 5.121 trillion. Convert every row to that scale, or keep the unit of the source in the header.
-- For a ranking or "the largest …", use the top 10 unless the user names a number, and say so in your answer.
+- For a ranking or "the largest …", use the top 10 unless the user names a number or asks for all of them (then list the complete ranking), and say in your answer when you used the top 10.
 - Add a `Sources` column or sheet naming where the figures come from.
 
 ## Formula & financial modelling rules

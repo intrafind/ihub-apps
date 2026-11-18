@@ -262,9 +262,10 @@ export const WEB_SEARCH_READER_CITATION_GUIDANCE =
  * as researched. Applies to every search setup.
  */
 export const WEB_SEARCH_FIGURES_GUIDANCE =
-  'Take figures, prices, dates and names only from what your searches and page reads ' +
-  'returned. When one you need is missing, search for it; if it still cannot be found, say ' +
-  'that it is not available. Never fill it in from memory, not even approximately.';
+  'Take figures, prices, dates and names about the world only from what your searches, page ' +
+  'reads and condensed notes returned; figures the user gave you, and what you calculate from ' +
+  'them, are fine. When one you need is missing, search for it; if it still cannot be found, ' +
+  'say that it is not available. Never fill it in from memory, not even approximately.';
 
 /**
  * No list of sources at the end of the answer — the chat lists the cited

@@ -62,6 +62,7 @@ import {
   microcompactMessages,
   isContextOverflowError,
   shrinkFailedToolCalls,
+  isFailedResult,
   estimateTokens
 } from './contextCompaction.js';
 import { estimateTranscriptTokens } from './contextTracker.js';
@@ -422,6 +423,9 @@ export class AgentLoop {
       // Calls that failed when they ran: their result may later be elided or
       // bounded and no longer say so (shrinkFailedToolCalls).
       failedCallIds: new Set(),
+      // A turn resumed after a pause that had wrapped up stays wrapped up:
+      // its transcript holds the wrap-up nudge after its user message.
+      ...(wrappedUpIn(ctx.messages) ? { wrapUp: true, wrapUpTold: true } : {}),
       // The prompt after the last digest (0: none yet), for the cooldown.
       lastTokensAfter: 0
     };
@@ -1409,7 +1413,8 @@ export class AgentLoop {
     if (isCondensedContent(message.content)) {
       message = { ...message, content: escapeCondensedPrefix(message.content) };
     }
-    const callFailed = !!failure || classifyToolResult(message).failed;
+    const callFailed =
+      !!failure || classifyToolResult(message).failed || isFailedResult(message.content);
     if (callFailed && call.id) ctx.compaction?.failedCallIds.add(call.id);
     const bound = await this._boundToolMessage(ctx, message, { call, toolId, iteration });
     const outcome = {
@@ -2015,13 +2020,12 @@ export class AgentLoop {
     if (!ref) {
       return { error: true, message: 'Pass the ref of a condensed result, e.g. "r3".' };
     }
-    if (state.recalls >= ctx.policies.context.maxRecallsPerRun) {
-      return {
-        error: true,
-        message:
-          'The limit of results read again in this turn is reached. Work with the condensed results.'
-      };
-    }
+    const limitReached = () => ({
+      error: true,
+      message:
+        'The limit of results read again in this turn is reached. Work with the condensed results.'
+    });
+    if (state.recalls >= ctx.policies.context.maxRecallsPerRun) return limitReached();
     const entry = state.archive.get(`r${ref}`) || (await this._loadArchived(ctx, `r${ref}`));
     if (!entry) {
       // A ref the transcript names whose original this run cannot reach (an
@@ -2034,6 +2038,8 @@ export class AgentLoop {
           : `There is no condensed result r${ref} in this turn. The refs are listed in the condensed results.`
       };
     }
+    // Checked again after the wait: parallel recalls may have used the limit up.
+    if (state.recalls >= ctx.policies.context.maxRecallsPerRun) return limitReached();
     state.recalls += 1;
     let content = entry.content;
     let bounded = null;
@@ -2201,6 +2207,22 @@ const MAX_ARCHIVE_RUNS = 8;
  * the data is gone, so it is `lossy`. Before/after are estimates unless the
  * provider's count of the transcript is known.
  */
+/**
+ * Whether the current turn of a transcript already wrapped up: the wrap-up
+ * nudge comes after its last user message (a turn resumed after a pause). A
+ * nudge from an earlier turn does not count.
+ */
+function wrappedUpIn(messages) {
+  if (!Array.isArray(messages)) return false;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i];
+    if (message?.role !== 'user') continue;
+    if (message.content === CONTEXT_WRAP_UP_NUDGE) return true;
+    if (!message._nudge) return false;
+  }
+  return false;
+}
+
 /**
  * Whether a tool gathers more material (a search or a page read) rather than
  * producing. Reading a condensed result back is not gathering: it is how a

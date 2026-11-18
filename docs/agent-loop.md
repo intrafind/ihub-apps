@@ -201,11 +201,18 @@ projected at `compactTargetShare` of the threshold
   of one compaction get twice `summaryTimeoutMs` together, and no call runs
   past that. A chunk whose answer stopped at the output limit makes the
   compaction `lossy` (`summary_partial`).
-- All digests of a run together take at most `maxNotesShare` of what the
-  model takes as input, counted in tokens; a new digest gets what is left.
-  Once that is used up — or a digest at its smallest size would still take
-  more — digests keep calls and sources only, without a summary call, and
-  the run wraps up: more results could not be kept.
+- `maxNotesShare` is the budget for the findings kept in digests: all digests
+  of a run together take at most that share of what the model takes as input,
+  counted in tokens, and a new digest gets what is left. Two cases end it:
+  - The notes are already used up: the digest keeps calls and sources only,
+    and no summary call is made.
+  - The summary was written, but even at its smallest size it would take more
+    than is left: its findings are dropped and the digest keeps calls and
+    sources only. That summary call has been made and counts toward usage.
+
+  Either way the run then wraps up, as more results could not be kept. The
+  calls-and-sources digest itself can go past the budget: it is what replaces
+  the results, and the run stops gathering after it.
 - The digest stays within `maxDigestChars` (at least 2,000) and within what
   the condensed results held less their stubs, and it must free tokens too
   (a repetitive result can count fewer tokens than shorter notes): it is made
