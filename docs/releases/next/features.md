@@ -2503,7 +2503,7 @@ The model therefore does not run the same searches again, and its answer keeps t
   could not be written, or the model's context window was full, the row says that details may be
   missing.
 - **Cost:** writing the notes takes one or more extra calls per condensation (long results are
-  split into parts), at most four condensations with notes per turn, by default to the chat's own
+  split into parts), at most 12 condensations with notes per turn, by default to the chat's own
   model; admins can
   pick another one for all chats (a fast one with a large context window) under **Admin → Chat
   History → Long research turns**. Its tokens appear in usage reports and count toward usage

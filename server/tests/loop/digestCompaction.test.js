@@ -8,7 +8,7 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { AgentLoop } from '../../services/loop/AgentLoop.js';
+import { AgentLoop, resolvePolicies } from '../../services/loop/AgentLoop.js';
 import { projectLedgerEvent } from '../../services/loop/RunStream.js';
 import { RUN_LOG_EVENTS, SSE_V2_EVENTS } from '../../../shared/runEvents.js';
 import { RECALL_TOOL_ID } from '../../services/loop/findingsDigest.js';
@@ -849,6 +849,34 @@ test('when the digest comes out larger than projected, the newest batch is conde
   );
   const tools = (stepRequests.at(-1).body.tools || []).map(t => t.function?.name || t.id || t.name);
   assert.ok(tools.includes('webSearch'), 'room again: searching goes on');
+});
+
+test('past the per-run cap a compaction keeps calls and sources without a summary call; the default cap is 12', async () => {
+  assert.equal(resolvePolicies({}).context.maxCompactionsPerRun, 12);
+  const { loop, summaryRequests } = makeLoop(
+    [
+      toolTurn('c1', 'webSearch', { query: 'nvidia' }, 1000),
+      toolTurn('c2', 'webSearch', { query: 'apple' }, 4000),
+      toolTurn('c3', 'webSearch', { query: 'meta' }, 4000),
+      textTurn('done')
+    ],
+    ['FACT | r1 | NVIDIA market cap 5.1 trillion USD | https://x.test/nvidia']
+  );
+  const infos = [];
+  const result = await loop.run({
+    model,
+    messages: baseMessages,
+    tools: [searchTool],
+    policies: { context: { ...policies.context, maxCompactionsPerRun: 1 } },
+    seams: [{ onCompaction: (_ctx, info) => infos.push(info) }],
+    executeTool: async (_call, { args }) => searchResult(args.query)
+  });
+  assert.equal(result.status, 'completed', JSON.stringify(result.error));
+  assert.equal(summaryRequests.length, 1, 'one summary call, the cap');
+  assert.deepEqual(
+    infos.map(i => i.fallbackReason || null),
+    [null, 'compaction_limit']
+  );
 });
 
 test('near the window the second kept batch is condensed too; well below it, it stays', async () => {

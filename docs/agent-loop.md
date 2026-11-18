@@ -85,7 +85,7 @@ defaults.
 | `context.compactKeepRecent`       | 6       | `elide`: trailing messages kept verbatim when compacting               |
 | `context.compactTargetShare`      | 0.6     | `digest`: compact down to this share of the threshold                  |
 | `context.digestKeepRecentBatches` | 2       | `digest`: newest tool batches kept verbatim (the newest is never condensed) |
-| `context.maxCompactionsPerRun`    | 4       | `digest`: digests written with the summary model per run; later ones keep calls and sources only |
+| `context.maxCompactionsPerRun`    | 12      | `digest`: digests written with the summary model per run; later ones keep calls and sources only |
 | `context.summaryTimeoutMs`        | 90000   | `digest`: timeout of one summary call                                  |
 | `context.summaryMaxTokens`        | 4096    | `digest`: output tokens of one summary call                            |
 | `context.maxDigestChars`          | 24000   | `digest`: characters of one digest as the model reads it; at least 2000 |

@@ -79,7 +79,7 @@ export const contextPoliciesSchema = z.object({
    * `digest`: digests written with the summary model per run; later ones keep
    * the calls and their sources only (`lossy`, `compaction_limit`).
    */
-  maxCompactionsPerRun: z.number().int().positive().prefault(4),
+  maxCompactionsPerRun: z.number().int().positive().prefault(12),
   /** `digest`: timeout of one summary call (one chunk). */
   summaryTimeoutMs: z.number().int().positive().prefault(90_000),
   /** `digest`: output tokens of one summary call. */
