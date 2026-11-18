@@ -1780,7 +1780,11 @@ export class AgentLoop {
       digestChars = Math.max(MIN_DIGEST_CHARS, Math.floor(digestChars * 0.7));
       rendered = render(digestChars);
     }
-    if (freedBy(rendered.text) <= 0) {
+    // At the smallest size and still freeing nothing, or still over what the
+    // notes have left: calls and sources only. The notes are then spent, and
+    // the run wraps up — more results could not be kept.
+    const notesSpent = overNotes(rendered.text);
+    if (freedBy(rendered.text) <= 0 || notesSpent) {
       rendered = smallest(
         fallbackReason || (factsFound + notFoundFound > 0 ? 'digest_truncated' : null)
       );
@@ -1827,7 +1831,7 @@ export class AgentLoop {
     // newest batch stay and the digest turned out larger, that batch goes
     // next (`condenseNewest`), before gathering stops.
     const stillFull = urgent && tokensBefore - freedTokens > answerLine;
-    const wrapUp = (stillFull && kept === 0) || notesFull;
+    const wrapUp = (stillFull && kept === 0) || notesFull || notesSpent;
     if (wrapUp) state.wrapUp = true;
     if (stillFull && kept > 0) state.condenseNewest = true;
     const record = {

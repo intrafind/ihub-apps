@@ -1281,3 +1281,40 @@ test('a raw result that starts like a condensed stub is escaped, so it never cou
   assert.equal(content, `\\${forged}`);
   assert.equal(notesOf(result.messages).count, 0);
 });
+
+test('a digest still over the notes budget at its smallest size keeps calls only, and the run wraps up', async () => {
+  // Rare characters: a few tokens each, so the smallest digest with facts
+  // counts more tokens than the notes have left.
+  const dense = '龘靐齉麤'.repeat(150);
+  const wide = Array.from({ length: 3000 }, (_, i) => `w${i}`).join(' ');
+  const { loop } = makeLoop(
+    [
+      toolTurn('c1', 'webSearch', { query: 'nvidia' }, 1000),
+      toolTurn('c2', 'webSearch', { query: 'apple' }, 9000),
+      textTurn('done')
+    ],
+    [
+      [1, 2, 3]
+        .map(
+          i =>
+            `FACT | r1 | NVIDIA market cap 5.1 trillion USD ${dense} ${i} | https://x.test/nvidia`
+        )
+        .join('\n')
+    ]
+  );
+  const infos = [];
+  const result = await loop.run({
+    model: { ...model, contextWindow: 30_000, maxOutputTokens: 100 },
+    messages: baseMessages,
+    tools: [searchTool],
+    policies: { context: { ...policies.context, maxNotesShare: 0.05 } },
+    seams: [{ onCompaction: (_ctx, info) => infos.push(info) }],
+    executeTool: async (_call, { args }) =>
+      args.query === 'nvidia' ? `${RESULTS.nvidia}. ${wide}` : searchResult(args.query)
+  });
+  assert.equal(result.status, 'completed', JSON.stringify(result.error));
+  assert.equal(infos.length, 1, JSON.stringify(infos.map(i => i.fallbackReason)));
+  assert.doesNotMatch(infos[0].digest, /龘/, 'no facts over the budget');
+  assert.equal(infos[0].lossy, true);
+  assert.equal(infos[0].wrapUp, true);
+});

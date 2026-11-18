@@ -202,9 +202,10 @@ projected at `compactTargetShare` of the threshold
   past that. A chunk whose answer stopped at the output limit makes the
   compaction `lossy` (`summary_partial`).
 - All digests of a run together take at most `maxNotesShare` of what the
-  model takes as input; a new digest gets what is left. Once that is used
-  up, digests keep calls and sources only, without a summary call, and the
-  run wraps up: more results could not be kept.
+  model takes as input, counted in tokens; a new digest gets what is left.
+  Once that is used up — or a digest at its smallest size would still take
+  more — digests keep calls and sources only, without a summary call, and
+  the run wraps up: more results could not be kept.
 - The digest stays within `maxDigestChars` (at least 2,000) and within what
   the condensed results held less their stubs, and it must free tokens too
   (a repetitive result can count fewer tokens than shorter notes): it is made
