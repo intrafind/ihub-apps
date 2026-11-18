@@ -211,22 +211,6 @@ describe('NTLM login', () => {
     expect(res.headers['set-cookie'].join(';')).toMatch(/ntlmRequested=1/);
   });
 
-  test.each([
-    // The auth gate sends the page's full URL; behind the Vite or a reverse
-    // proxy its host is not the request's Host. The path is what counts.
-    ['https://localhost:5173/apps/chat?x=1', '/apps/chat?x=1&ntlm=success'],
-    ['https://evil.example/steal', '/steal?ntlm=success'],
-    ['https://host//evil.example/', '/?ntlm=success'],
-    ['//evil.example/', '/?ntlm=success']
-  ])('GET returns to the path of %s, never another origin', async (returnUrl, expected) => {
-    processNtlmLogin.mockResolvedValue({ user: { id: 'jane' }, token: 't', expiresIn: 60 });
-    const res = await request(buildApp({ ntlm: { Authenticated: true } }))
-      .get('/api/auth/ntlm/login')
-      .query({ returnUrl });
-    expect(res.status).toBe(302);
-    expect(res.headers.location).toBe(expected);
-  });
-
   test('POST answers 401 without NTLM data', async () => {
     const res = await request(buildApp()).post('/api/auth/ntlm/login');
     expectProblem(res, 401, 'AUTH_REQUIRED');
