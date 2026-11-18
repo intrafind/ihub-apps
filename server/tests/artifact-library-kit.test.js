@@ -105,6 +105,19 @@ describe('library markers', () => {
     assert.match(markers[1].attributes, /defer/);
   });
 
+  it('ignore lookalike elements and unclosed scripts, and stay linear on hostile input', () => {
+    assert.deepEqual(
+      artifactLibraryMarkers(
+        '<scripts data-ihub-lib="d3"></scripts><script-x data-ihub-lib="d3"></script-x><script data-ihub-lib="d3">'
+      ),
+      []
+    );
+    const hostile = '<script ' + ' '.repeat(200000) + 'x'.repeat(200000);
+    const started = Date.now();
+    assert.deepEqual(artifactLibraryMarkers(hostile.repeat(5)), []);
+    assert.ok(Date.now() - started < 1000, 'a long unclosed tag is scanned once');
+  });
+
   it('inline each library once and drop unknown names, duplicates and the unavailable', () => {
     const html =
       '<head><script data-ihub-lib="chart.js"></script><script data-ihub-lib="nope"></script></head>' +

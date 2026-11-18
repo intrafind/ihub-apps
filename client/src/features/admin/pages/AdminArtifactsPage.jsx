@@ -11,14 +11,12 @@ import { CHECKBOX_CLASS } from '../components/formStyles';
 import AdminLoadGate from '../components/AdminLoadGate';
 import { useAdminConfigLoad } from '../hooks/useAdminConfigLoad';
 import { deepEqual } from '../hooks/useUnsavedChanges';
+import { bareScriptHost, isScriptHost } from '../../../../../shared/artifactPreview.js';
 
 const MB = 1024 * 1024;
 
 /** The public CDNs iHub allows when nothing is configured (`shared/artifactPreview.js`). */
 const DEFAULT_SCRIPT_HOSTS = ['cdnjs.cloudflare.com', 'cdn.jsdelivr.net', 'unpkg.com'];
-
-// A plain host name, as the server accepts it (`normalizeScriptHosts`).
-const HOST_RE = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/;
 
 const INPUT =
   'block w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-xs focus:ring-admin-accent focus:border-admin-accent sm:text-sm';
@@ -78,7 +76,7 @@ function changesOf(form, saved) {
     if (form[field] === saved[field]) continue;
     const value = parse(form[field]);
     if (value === null) invalid.push(field);
-    else body[key] = value < 0 ? 0 : value;
+    else body[key] = Math.max(0, value);
   }
   if (!deepEqual(form.scriptHosts, saved.scriptHosts)) body.scriptHosts = form.scriptHosts;
   if (form.libraryKitEnabled !== saved.libraryKitEnabled) {
@@ -189,13 +187,9 @@ function AdminArtifactsPage() {
   };
 
   const addHost = () => {
-    const host = newHost
-      .trim()
-      .toLowerCase()
-      .replace(/^https:\/\//, '')
-      .replace(/\/+$/, '');
+    const host = bareScriptHost(newHost);
     if (!host) return;
-    if (!HOST_RE.test(host)) {
+    if (!isScriptHost(host)) {
       setHostError(
         t(
           'admin.artifacts.hosts.invalid',

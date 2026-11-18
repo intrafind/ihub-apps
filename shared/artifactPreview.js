@@ -52,14 +52,38 @@ export function normalizeScriptHosts(value) {
   const hosts = [];
   for (const entry of value) {
     if (typeof entry !== 'string') continue;
-    const host = entry
-      .trim()
-      .toLowerCase()
-      .replace(/^https:\/\//, '')
-      .replace(/\/+$/, '');
-    if (HOST_RE.test(host) && host.length <= 253 && !hosts.includes(host)) hosts.push(host);
+    const host = bareScriptHost(entry);
+    if (isScriptHost(host) && !hosts.includes(host)) hosts.push(host);
   }
   return hosts;
+}
+
+/**
+ * A script host entry as typed, made comparable: trimmed, lower case, without
+ * a leading `https://` and trailing slashes. Not validated: see
+ * {@link isScriptHost}.
+ *
+ * @param {unknown} entry
+ * @returns {string}
+ */
+export function bareScriptHost(entry) {
+  let host = String(entry ?? '')
+    .trim()
+    .toLowerCase();
+  if (host.startsWith('https://')) host = host.slice('https://'.length);
+  while (host.endsWith('/')) host = host.slice(0, -1);
+  return host;
+}
+
+/**
+ * Whether a bare host ({@link bareScriptHost}) may be a script host: a plain
+ * DNS name with a dot, no wildcard, port or path.
+ *
+ * @param {string} host
+ * @returns {boolean}
+ */
+export function isScriptHost(host) {
+  return host.length <= 253 && HOST_RE.test(host);
 }
 
 /**

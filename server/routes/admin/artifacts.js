@@ -11,7 +11,7 @@ import { updatePlatform } from '../../utils/platformConfigStore.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import { artifactSettings } from '../../services/artifacts/artifactPolicy.js';
 import { artifactLibraryList } from '../../services/artifacts/artifactLibraryKit.js';
-import { normalizeScriptHosts } from '../../../shared/artifactPreview.js';
+import { bareScriptHost, normalizeScriptHosts } from '../../../shared/artifactPreview.js';
 
 /**
  * Admin → Artifacts: `platform.artifacts`, the store of what runs produce and
@@ -143,20 +143,12 @@ export default function registerAdminArtifactRoutes(app) {
       // Every entry must survive normalization: a silently dropped host would
       // leave the admin believing a CDN is allowed when it is not.
       const hosts = normalizeScriptHosts(changes.scriptHosts);
-      const rejected = changes.scriptHosts.filter(
-        entry =>
-          !hosts.includes(
-            String(entry)
-              .trim()
-              .toLowerCase()
-              .replace(/^https:\/\//, '')
-              .replace(/\/+$/, '')
-          )
-      );
+      const rejected = changes.scriptHosts.filter(entry => !hosts.includes(bareScriptHost(entry)));
       if (rejected.length) {
+        const names = rejected.map(entry => JSON.stringify(entry)).join(', ');
         throw new ServiceError(
           'BAD_REQUEST',
-          `Not a plain host name: ${rejected.map(entry => `"${entry}"`).join(', ')}. Use a host such as cdn.example.com, without wildcard, path, port or http:.`
+          `Not a plain host name: ${names}. Use a host such as cdn.example.com, without wildcard, path, port or http:.`
         );
       }
       changes.scriptHosts = hosts;

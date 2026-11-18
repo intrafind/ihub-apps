@@ -51,10 +51,10 @@ export function libraryKitOf(platformConfig) {
  * without it rather than not at all.
  *
  * @param {string} html
- * @param {{ enabled?: boolean }} [kit]
+ * @param {{ enabled?: boolean }} [kit] - On unless `enabled: false`.
  * @returns {Promise<string>}
  */
-export async function withArtifactLibraries(html, kit = { enabled: true }) {
+export async function withArtifactLibraries(html, kit) {
   if (kit?.enabled === false || !hasArtifactLibraryMarker(html)) return html;
   const ids = requestedArtifactLibraries(html);
   const loaded = new Map();

@@ -107,9 +107,7 @@ const BY_ID = new Map(ARTIFACT_LIBRARIES.map(library => [library.id, library]));
  * @returns {{ library: object } | { error: 'unknown'|'version', id: string, version?: string }}
  */
 export function resolveArtifactLibrary(ref) {
-  const value = String(ref ?? '')
-    .trim()
-    .toLowerCase();
+  const value = (typeof ref === 'string' ? ref : '').trim().toLowerCase();
   const at = value.lastIndexOf('@');
   const id = at > 0 ? value.slice(0, at) : value;
   const version = at > 0 ? value.slice(at + 1) : null;
@@ -126,29 +124,50 @@ export function artifactLibraryById(id) {
   return BY_ID.get(String(id ?? '')) || null;
 }
 
-// A marker: a <script> element with a data-ihub-lib attribute, its (empty) body
-// and its end tag. The attribute value may be quoted either way or bare.
-const MARKER_RE =
-  /<script\b([^>]*?)\sdata-ihub-lib\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))([^>]*)>([\s\S]*?)<\/script\s*>/gi;
+// The data-ihub-lib attribute inside one start tag, quoted either way or bare.
+// Run on the start tag only (bounded by its `>`), never on the whole document.
+const MARKER_ATTRIBUTE_RE = /\sdata-ihub-lib\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/i;
 
 /**
- * Every library marker in a document, in order.
+ * Every library marker in a document, in order: a `<script>` element whose
+ * start tag carries `data-ihub-lib`, with its (normally empty) body and its
+ * end tag. Found with `indexOf` scans, so the time stays linear in the length
+ * of the document whatever a model wrote into it.
  *
  * @param {unknown} html
  * @returns {Array<{ start: number, end: number, ref: string, attributes: string,
  *   body: string, resolved: ReturnType<typeof resolveArtifactLibrary> }>}
  */
 export function artifactLibraryMarkers(html) {
-  const text = String(html ?? '');
+  const text = typeof html === 'string' ? html : '';
+  const lower = text.toLowerCase();
   const markers = [];
-  for (const match of text.matchAll(MARKER_RE)) {
-    const ref = match[2] ?? match[3] ?? match[4] ?? '';
+  let from = 0;
+  for (;;) {
+    const start = lower.indexOf('<script', from);
+    if (start === -1) break;
+    const tagEnd = lower.indexOf('>', start);
+    if (tagEnd === -1) break;
+    const next = lower.charAt(start + 7);
+    const tag = text.slice(start + 7, tagEnd);
+    const close = lower.indexOf('</script', tagEnd);
+    const closeEnd = close === -1 ? -1 : lower.indexOf('>', close);
+    from = closeEnd === -1 ? tagEnd + 1 : closeEnd + 1;
+    // `<scripts>` or `<script-x>` is another element; an unclosed script is no marker.
+    if (!/[\s/>]/.test(next) || closeEnd === -1) continue;
+    const match = MARKER_ATTRIBUTE_RE.exec(tag);
+    if (!match) continue;
+    const ref = match[1] ?? match[2] ?? match[3] ?? '';
     markers.push({
-      start: match.index,
-      end: match.index + match[0].length,
+      start,
+      end: closeEnd + 1,
       ref,
-      attributes: `${match[1]} ${match[5]}`.trim(),
-      body: match[6],
+      attributes: (
+        tag.slice(0, match.index) +
+        ' ' +
+        tag.slice(match.index + match[0].length)
+      ).trim(),
+      body: text.slice(tagEnd + 1, close),
       resolved: resolveArtifactLibrary(ref)
     });
   }
@@ -157,7 +176,7 @@ export function artifactLibraryMarkers(html) {
 
 /** Whether a document asks for a kit library at all (cheap check before any work). */
 export function hasArtifactLibraryMarker(html) {
-  return String(html ?? '').includes(ARTIFACT_LIBRARY_ATTRIBUTE);
+  return typeof html === 'string' && html.includes(ARTIFACT_LIBRARY_ATTRIBUTE);
 }
 
 /**
@@ -187,7 +206,7 @@ export function requestedArtifactLibraries(html) {
  * @returns {string}
  */
 export function inlineScriptSource(source) {
-  return String(source).replace(/<\/(script)/gi, '<\\/$1');
+  return String(source).replace(/<\/(script)/gi, String.raw`<\/$1`);
 }
 
 /**
@@ -212,7 +231,7 @@ export function inlineArtifactLibraries(
   sourceOf,
   { maxBytes = MAX_INLINED_LIBRARY_BYTES } = {}
 ) {
-  const text = String(html ?? '');
+  const text = typeof html === 'string' ? html : '';
   if (!hasArtifactLibraryMarker(text)) return { html: text, inlined: [], missing: [] };
   const markers = artifactLibraryMarkers(text);
   if (!markers.length) return { html: text, inlined: [], missing: [] };
