@@ -81,7 +81,14 @@ it needs. For an integration the details add **Integration facts**: the four fac
 the definition declares, each with its effect (read, write, destructive, unknown) as a badge. When
 the definition could not be read from the registry, the details say so and the card shows no
 facts. The **Content** tab previews the item itself — the app or model JSON, or a skill's
-`SKILL.md`. An integration with a release history gets a **Releases** tab: one entry per version
+`SKILL.md`. A skill that brings more than its `SKILL.md` (references, scripts, templates) gets a
+**Files** tab: the list of every file an install would write, `SKILL.md` first, and the text of the
+one you select, fetched from the registry when you open it and without installing anything. A
+Markdown file reads rendered; **Show source** shows exactly what it contains, including what
+rendering hides (comments, link targets). A file over 512 KB or a binary one is not shown. Only
+files the catalog lists for the skill can be opened — a skill whose catalog entry has no list is
+looked up in its GitHub repository, as an install does. An integration with a release history gets
+a **Releases** tab: one entry per version
 with its date and summary, and the notes per category (features, fixes, breaking changes) are
 fetched from the registry and rendered when you open them, without installing anything.
 
@@ -399,8 +406,8 @@ add skills with are listed under [Skills → API](skills.md#api).
 | Method & path                                                                 | Purpose                                     |
 | ----------------------------------------------------------------------------- | ------------------------------------------- |
 | `GET /api/admin/marketplace`                                                  | Browse items (type, search, registry, status filters); an integration item carries `facts` (`authModes`, `effect`, `runs`, `actionCount`, `protocol`; null when its definition could not be read) |
-| `GET /api/admin/marketplace/registries/:registryId/items/:type/:name`         | One item with its content preview, `compatible`, `requires`; an integration also `facts` with its `actions` (`name`, `title`, `sideEffect`), and an installed one `migrationPreview` (below) |
-| `GET …/items/integration/:name/_file?path=…`                                  | One Markdown companion file of an integration item (a release's notes), fetched from the registry |
+| `GET /api/admin/marketplace/registries/:registryId/items/:type/:name`         | One item with its content preview, `compatible`, `requires`; an integration also `facts` with its `actions` (`name`, `title`, `sideEffect`), and an installed one `migrationPreview` (below); a skill also `files` (`SKILL.md` first, then the files an install would write) |
+| `GET …/items/:type/:name/_file?path=…`                                        | One text file of an item, fetched from the registry without installing it: for `integration` a Markdown companion (a release's notes), for `skill` `SKILL.md` or any file the catalog lists for the skill (`404` for another path, `413` over 512 KB, `415` for a binary file) |
 | `POST …/items/:type/:name/_install`                                            | Install (`{ "replaceLocal": true }` to replace a local copy; `{ "version": "…" }` for a listed version, default the offered one) |
 | `POST …/items/:type/:name/_update` · `_uninstall` · `_detach`                  | Update (`{ "version": "…" }` optional, default the offered version; `409 VERSION_NOT_NEWER` for an older one), uninstall, detach; an integration update answers with `integrationMigrations` (one result per installation: `migrated`, `stamped`, `failed`, `skipped`) and is `409 MIGRATION_LOCKED` while a migration of one of them runs |
 | `GET /api/admin/marketplace/installations`                                    | What the marketplace installed              |

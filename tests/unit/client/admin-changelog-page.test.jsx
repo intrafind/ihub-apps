@@ -212,12 +212,16 @@ describe('AdminChangelogPage', () => {
     expect(screen.getByText('1 Breaking changes · 1 New & improved · 1 Fixes')).toBeVisible();
     await screen.findByRole('heading', { level: 3, name: 'Image Models Save Again' });
 
-    // Table of contents: one link per entry, grouped by section, breaking changes first.
+    // Table of contents: a quick link per section, then one link per entry, grouped by section,
+    // breaking changes first.
     const toc = releaseContents();
     const links = within(toc)
       .getAllByRole('link')
       .map(link => link.textContent);
     expect(links).toEqual([
+      'Breaking changes 1',
+      'New & improved 1',
+      'Fixes 1',
       'Breaking changes 1',
       'Reasoning Effort Is a Level',
       'New & improved 1',
@@ -356,6 +360,22 @@ describe('AdminChangelogPage', () => {
 
     expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' });
     expect(document.activeElement).toBe(entry);
+  });
+
+  test('every section links back to the table of contents', async () => {
+    mockApi({ index: { ...INDEX, versions: INDEX.versions.slice(1) } });
+    render(<AdminChangelogPage />);
+
+    await screen.findByRole('heading', { level: 3, name: 'Image Models Save Again' });
+    const toc = releaseContents();
+    toc.scrollIntoView = jest.fn();
+
+    const back = screen.getAllByRole('link', { name: /Back to contents/ });
+    expect(back).toHaveLength(3);
+    fireEvent.click(back[2]);
+
+    expect(toc.scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' });
+    expect(document.activeElement).toBe(toc);
   });
 
   test('shows an error for a release that fails to load and retries on request', async () => {

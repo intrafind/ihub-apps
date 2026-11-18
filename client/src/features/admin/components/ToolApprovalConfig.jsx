@@ -119,25 +119,30 @@ function ToolApprovalConfig({ onDirtyChange }) {
 
   if (!ready) {
     return (
-      <AdminLoadGate
-        load={load}
-        resourceLabel={t('admin.toolApproval.resource', 'tool approval settings')}
-        loadingFallback={
-          <div className="flex items-center justify-center py-8">
-            <Icon
-              name="loader"
-              className="h-6 w-6 animate-spin text-admin-accent dark:text-admin-accent-fg-dark"
-            />
-          </div>
-        }
-      />
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
+        <AdminLoadGate
+          load={load}
+          resourceLabel={t('admin.toolApproval.resource', 'tool approval settings')}
+          loadingFallback={
+            <div className="flex items-center justify-center py-8">
+              <Icon
+                name="loader"
+                className="h-6 w-6 animate-spin text-admin-accent dark:text-admin-accent-fg-dark"
+              />
+            </div>
+          }
+        />
+      </div>
     );
   }
 
   const set = key => mode => setForm(prev => ({ ...prev, [key]: mode || '' }));
 
   return (
-    <div className="space-y-6" data-testid="tool-approval-config">
+    <div
+      className="space-y-6 bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6"
+      data-testid="tool-approval-config"
+    >
       <div>
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
           {t('admin.toolApproval.title', 'Tool approval')}

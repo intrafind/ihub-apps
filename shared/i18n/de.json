@@ -2040,7 +2040,22 @@
       },
       "moreActions": "Weitere Modell-Aktionen",
       "disableAllDefault": "Die Einstellung für das Standardmodell wird entfernt. Werden Modelle wieder aktiviert, wird das erste Chat-Modell der Liste zum Standard.",
-      "disableAllDefaultNamed": "Die Einstellung für das Standardmodell wird entfernt (derzeit „{{name}}“). Werden Modelle wieder aktiviert, wird das erste Chat-Modell der Liste zum Standard, nicht unbedingt „{{name}}“."
+      "disableAllDefaultNamed": "Die Einstellung für das Standardmodell wird entfernt (derzeit „{{name}}“). Werden Modelle wieder aktiviert, wird das erste Chat-Modell der Liste zum Standard, nicht unbedingt „{{name}}“.",
+      "hint": {
+        "title": "Hinweis für Benutzer",
+        "description": "Eine Nachricht über der Chat-Eingabe, wenn Benutzer dieses Modell auswählen, z. B. eine Empfehlung oder eine Warnung zu einem experimentellen Modell.",
+        "enabled": "Hinweis für dieses Modell anzeigen",
+        "level": "Stufe",
+        "levels": {
+          "hint": "Hinweis (blau)",
+          "info": "Info (cyan)",
+          "warning": "Warnung (gelb, nicht ausblendbar)",
+          "alert": "Alarm (rot, muss vor dem Senden bestätigt werden)"
+        },
+        "dismissible": "Benutzer können ihn ausblenden",
+        "message": "Nachricht",
+        "preview": "Vorschau"
+      }
     },
     "chat": {
       "title": "Chat",
@@ -3467,8 +3482,16 @@
         "tabs": {
           "overview": "Übersicht",
           "content": "Inhalt",
+          "files": "Dateien ({{count}})",
           "releases": "Releases"
         }
+      },
+      "files": {
+        "listLabel": "Dateien dieses Skills",
+        "loadFailed": "Diese Datei konnte nicht geladen werden.",
+        "retry": "Erneut versuchen",
+        "showSource": "Quelltext anzeigen",
+        "showRendered": "Gerendert anzeigen"
       },
       "modelReview": {
         "title": "Prüfen Sie dieses Modell, bevor Sie es testen oder aktivieren",
@@ -3785,6 +3808,7 @@
         "addLanguage": "Sprache hinzufügen",
         "selectLanguage": "Auswählen...",
         "languageCode": "Sprachcode (z. B. en, de, es)",
+        "invalidLanguageCode": "Einen zweibuchstabigen Sprachcode verwenden, optional mit Region: „de“, „pt-BR“.",
         "add": "Hinzufügen",
         "removeLanguage": "Sprache {{lang}} entfernen",
         "noLanguages": "Keine Sprachen konfiguriert. Fügen Sie eine Sprache hinzu, um zu beginnen.",
@@ -5403,6 +5427,7 @@
       "upgradedReleases": "{{count}} Releases sind neu in dieser Installation – jedes davon ist mit „Neu“ markiert.",
       "installed": "Installiert",
       "contents": "In dieser Version",
+      "backToContents": "Zurück zur Übersicht",
       "breakingChanges": "Breaking Changes",
       "breakingChangesHint": "Vor oder nach dem Upgrade ist eine Aktion erforderlich.",
       "features": "Neu & verbessert",
@@ -8984,6 +9009,7 @@
     "created": "{{what}} erstellt",
     "preparingTool": "{{name}} wird vorbereitet…",
     "outputWebArtifact": "Web-Artefakt",
+    "outputDashboard": "Dashboard",
     "outputDocument": "Dokument",
     "outputPresentation": "Präsentation",
     "outputWorkbook": "Excel-Arbeitsmappe",

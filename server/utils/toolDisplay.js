@@ -16,7 +16,7 @@
  *  - `publicHits`: `true` when what the call found is on the open web (a shipped
  *    web search engine); a share keeps those hits and drops every other call's
  *  - `outputKind`: for the built-in creators of a file or a document (a web
- *    artifact, a PDF, a workbook …), what they produce. It is sent on the
+ *    artifact, a dashboard, a PDF, a workbook …), what they produce. It is sent on the
  *    `args` progress frames while the arguments still stream, where the chat
  *    words "Creating {{what}}…"; `tool/started` and the run ledger do not carry
  *    it ({@link startedDisplayOf})
@@ -53,6 +53,7 @@ export { activityOriginOfSource } from '../services/chat/answerBasis.js';
 /** What the built-in creator tools produce; the chat words each one. */
 export const OUTPUT_KINDS = Object.freeze([
   'webArtifact',
+  'dashboard',
   'document',
   'presentation',
   'workbook',
@@ -69,7 +70,7 @@ export const OUTPUT_KINDS = Object.freeze([
  * or an MCP server provides cannot claim one.
  *
  * @param {Object|null|undefined} toolDef - the resolved tool definition
- * @returns {'webArtifact'|'document'|'presentation'|'workbook'|'pdf'|'file'|'archive'|undefined}
+ * @returns {'webArtifact'|'dashboard'|'document'|'presentation'|'workbook'|'pdf'|'file'|'archive'|undefined}
  *   `undefined` for every other tool (also `preview_pdf`, which creates nothing)
  */
 export function outputKindOf(toolDef) {

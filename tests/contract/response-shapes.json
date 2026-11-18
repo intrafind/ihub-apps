@@ -2160,7 +2160,7 @@
   "GET /api/admin/marketplace/registries/:registryId/items/:type/:name": {
     "skipped": "reaches the network"
   },
-  "GET /api/admin/marketplace/registries/:registryId/items/integration/:name/_file": {
+  "GET /api/admin/marketplace/registries/:registryId/items/:type/:name/_file": {
     "skipped": "a download"
   },
   "GET /api/admin/marketplace/updates": {

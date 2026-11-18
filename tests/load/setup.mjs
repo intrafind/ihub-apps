@@ -158,7 +158,7 @@ for (const g of flags['skip-models'] ? [] : cfg.setup.gpus) {
       console.error(
         `Model discovery at ${v1(g.url)} failed (${res.status}): ${JSON.stringify(res.body).slice(0, 300)}\n` +
           `  If the GPU uses the internal CA: add ${new URL(g.url).host} to ssl.domainWhitelist and set ssl.ignoreInvalidCertificates\n` +
-          '  (IHUB_PLATFORM__SSL__DOMAIN_WHITELIST=\'["gpu-01.local.intrafind.io", …]\'), or set LT_LLM_MODEL_NAME to skip discovery.'
+          '  (IHUB_PLATFORM__SSL__DOMAIN_WHITELIST=\'["gpu.example.com", …]\'), or set LT_LLM_MODEL_NAME to skip discovery.'
       );
       process.exit(2);
     }
@@ -179,7 +179,7 @@ for (const g of flags['skip-models'] ? [] : cfg.setup.gpus) {
     supportsTools: g.supportsTools,
     concurrency: g.concurrency,
     // Without it iHub never sends `enable_thinking`, so LT_THINKING has no effect
-    // and gpu-01's template default (no thinking) applies. With it, thinking is on
+    // and the chat template's default applies. With it, thinking is on
     // unless a turn sends thinkingEnabled=false (LT_THINKING=off).
     thinking: { enabled: true },
     enabled: true,

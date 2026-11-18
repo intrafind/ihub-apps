@@ -21,6 +21,7 @@ import { KIND_ICON, MAX_NAMED_KINDS } from './components/answerBasisModel';
 /** `outputKind` the server sends, to the string key and English default of its noun. */
 const OUTPUT_NOUNS = {
   webArtifact: ['toolActivity.outputWebArtifact', 'web artifact'],
+  dashboard: ['toolActivity.outputDashboard', 'dashboard'],
   document: ['toolActivity.outputDocument', 'document'],
   presentation: ['toolActivity.outputPresentation', 'presentation'],
   workbook: ['toolActivity.outputWorkbook', 'Excel workbook'],
@@ -32,6 +33,7 @@ const OUTPUT_NOUNS = {
 /** `outputKind` to the glyph of a finished row; the server chooses the kind, the client only draws it. */
 const OUTPUT_GLYPHS = {
   webArtifact: 'code-bracket',
+  dashboard: 'chart-bar',
   document: 'document-plus',
   pdf: 'document-plus',
   presentation: 'presentation-chart-bar',

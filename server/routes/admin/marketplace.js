@@ -25,7 +25,9 @@ import { invalidIdMessage, isValidId } from '../../utils/pathSecurity.js';
 import { ServiceError } from '../../utils/ServiceError.js';
 import registryService from '../../services/marketplace/RegistryService.js';
 import contentInstaller, {
-  fetchIntegrationCompanion
+  fetchIntegrationCompanion,
+  fetchSkillFile,
+  listSkillFiles
 } from '../../services/marketplace/ContentInstaller.js';
 import logger from '../../utils/logger.js';
 import { logAudit } from '../../services/AuditLogService.js';
@@ -335,6 +337,8 @@ export default function registerAdminMarketplaceRoutes(app) {
    * planned from the catalog's releases and migrations; `planFromCatalog`
    * is false when an installation is older than the releases the catalog
    * lists (the plan then runs at update time). Nothing is written.
+   * A skill item carries `files`: `SKILL.md` first, then the files an install
+   * would write next to it; each can be read with `…/_file?path=`.
    */
   app.get(
     buildServerPath('/api/admin/marketplace/registries/:registryId/items/:type/:name'),
@@ -364,33 +368,59 @@ export default function registerAdminMarketplaceRoutes(app) {
           item.migrationPreview = null;
         }
       }
+      if (type === 'skill') {
+        try {
+          // What an install would write into the skill's folder, for review
+          item.files = await listSkillFiles(registryId, item);
+        } catch (error) {
+          // The detail still loads; the files tab then shows SKILL.md only.
+          logger.warn('Could not list the files of a skill', {
+            component: COMPONENT,
+            name,
+            error: error.message
+          });
+          item.files = ['SKILL.md'];
+        }
+      }
       res.json(item);
     }
   );
 
   /**
-   * GET /api/admin/marketplace/registries/:registryId/items/integration/:name/_file?path=<companion>
-   * A Markdown companion file of an integration item (a release's notes, the
-   * README), fetched from the registry without installing the item. Only
-   * paths the catalog lists for the item are served; anything else is 404.
+   * GET /api/admin/marketplace/registries/:registryId/items/:type/:name/_file?path=<file>
+   * One text file of a catalog item, fetched from the registry without
+   * installing the item, so an admin can review it first. `type` is
+   * `integration` (a Markdown companion: a release's notes, the README) or
+   * `skill` (`SKILL.md` or any text file of the skill's folder). Only paths
+   * the catalog lists for the item are served; anything else is 404.
    */
   app.get(
-    buildServerPath('/api/admin/marketplace/registries/:registryId/items/integration/:name/_file'),
+    buildServerPath('/api/admin/marketplace/registries/:registryId/items/:type/:name/_file'),
     adminAuth,
     featureGuard,
     async (req, res) => {
-      const { registryId, name } = req.params;
+      const { registryId, type, name } = req.params;
       if (!isValidId(registryId)) {
         throw new ServiceError('BAD_REQUEST', invalidIdMessage('registryId'));
+      }
+      if (type !== 'integration' && type !== 'skill') {
+        throw new ServiceError('BAD_REQUEST', 'Only integration and skill items have files');
       }
       if (!isValidId(name)) throw new ServiceError('BAD_REQUEST', 'Invalid item name');
       const relPath = typeof req.query.path === 'string' ? req.query.path : '';
       if (!relPath || relPath.length > 255) {
         throw new ServiceError('BAD_REQUEST', 'Missing or invalid path');
       }
-      const text = await fetchIntegrationCompanion(registryId, name, relPath);
-      if (text === null) throw new ServiceError('NOT_FOUND', 'Companion file not found');
-      res.type('text/markdown; charset=utf-8').send(text);
+      const text =
+        type === 'skill'
+          ? await fetchSkillFile(registryId, name, relPath)
+          : await fetchIntegrationCompanion(registryId, name, relPath);
+      if (text === null) throw new ServiceError('NOT_FOUND', 'File not found');
+      // Shown as text by the admin UI, never rendered by the browser
+      res
+        .type(/\.md$/i.test(relPath) ? 'text/markdown; charset=utf-8' : 'text/plain; charset=utf-8')
+        .set('X-Content-Type-Options', 'nosniff')
+        .send(text);
     }
   );
 

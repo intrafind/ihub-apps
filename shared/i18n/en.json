@@ -1570,7 +1570,22 @@
       },
       "moreActions": "More model actions",
       "disableAllDefault": "The default model setting is cleared. When models are enabled again, the first chat model in the list becomes the default.",
-      "disableAllDefaultNamed": "The default model setting is cleared (\"{{name}}\" is the default now). When models are enabled again, the first chat model in the list becomes the default, not necessarily \"{{name}}\"."
+      "disableAllDefaultNamed": "The default model setting is cleared (\"{{name}}\" is the default now). When models are enabled again, the first chat model in the list becomes the default, not necessarily \"{{name}}\".",
+      "hint": {
+        "title": "User Hint",
+        "description": "A message shown above the chat input when users select this model, for example a recommendation or a warning about an experimental model.",
+        "enabled": "Show a hint for this model",
+        "level": "Level",
+        "levels": {
+          "hint": "Hint (blue)",
+          "info": "Info (cyan)",
+          "warning": "Warning (yellow, cannot be dismissed)",
+          "alert": "Alert (red, must be acknowledged before sending)"
+        },
+        "dismissible": "Users can dismiss it",
+        "message": "Message",
+        "preview": "Preview"
+      }
     },
     "auth": {
       "configuration": "Authentication Configuration",
@@ -2971,8 +2986,16 @@
         "tabs": {
           "overview": "Overview",
           "content": "Content",
+          "files": "Files ({{count}})",
           "releases": "Releases"
         }
+      },
+      "files": {
+        "listLabel": "Files of this skill",
+        "loadFailed": "Could not load this file.",
+        "retry": "Try again",
+        "showSource": "Show source",
+        "showRendered": "Show rendered"
       },
       "modelReview": {
         "title": "Review this model before you test or enable it",
@@ -3289,6 +3312,7 @@
         "addLanguage": "Add Language",
         "selectLanguage": "Select...",
         "languageCode": "Language code (e.g., en, de, es)",
+        "invalidLanguageCode": "Use a two-letter language code, optionally with a region: \"de\", \"pt-BR\".",
         "add": "Add",
         "removeLanguage": "Remove language {{lang}}",
         "noLanguages": "No languages configured. Add a language to get started.",
@@ -4907,6 +4931,7 @@
       "upgradedReleases": "{{count}} releases are new to this installation — every one of them is marked New.",
       "installed": "Installed",
       "contents": "In this release",
+      "backToContents": "Back to contents",
       "breakingChanges": "Breaking changes",
       "breakingChangesHint": "Action is needed before or after upgrading.",
       "features": "New & improved",
@@ -8985,6 +9010,7 @@
     "created": "Created {{what}}",
     "preparingTool": "Preparing {{name}}…",
     "outputWebArtifact": "web artifact",
+    "outputDashboard": "dashboard",
     "outputDocument": "document",
     "outputPresentation": "presentation",
     "outputWorkbook": "Excel workbook",

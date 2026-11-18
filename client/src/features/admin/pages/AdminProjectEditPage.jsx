@@ -46,7 +46,6 @@ import {
   createEmptyProjectForm,
   parseTags,
   projectIdFromName,
-  uploadsAreUnscanned,
   validateProjectForm
 } from '../utils/projectAdmin';
 import { localizedText } from '../../projects/utils/projectItems';
@@ -502,21 +501,8 @@ function AdminProjectEditPageContent({ id }) {
           )}
         </div>
 
-        {uploadsAreUnscanned(config) && (
-          <div
-            role="status"
-            data-testid="project-scan-warning"
-            className="mb-6 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-lg p-4 flex items-start gap-2"
-          >
-            <Icon name="exclamation-triangle" className="h-5 w-5 text-amber-500 shrink-0" />
-            <p className="text-sm text-amber-800 dark:text-amber-200">
-              {t(
-                'admin.projects.scanWarning',
-                'Uploads are not scanned for malware. Configure platform.projects.scan to scan them.'
-              )}
-            </p>
-          </div>
-        )}
+        {/* The "uploads are not scanned" warning is hidden until the scan setup
+            has an admin UI; see the malware-scanning issue. */}
 
         {error && (
           <div

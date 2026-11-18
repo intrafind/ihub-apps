@@ -8,7 +8,6 @@ import { optionalString, toolFailure } from '../documentToolHelpers.js';
 import { applyTextEdits, chatFileToEdit, textEditsOf } from '../editableSource.js';
 import { GeneratedFileError, holdGeneratedFile, safeFileName } from '../generatedFiles.js';
 import { templateBundleFor } from '../templates/applyTemplate.js';
-import { DASHBOARD_PRESET, renderDashboard } from './dashboardPreset.js';
 
 /**
  * The tool the `web-artifacts` system skill brings (see
@@ -19,6 +18,8 @@ import { DASHBOARD_PRESET, renderDashboard } from './dashboardPreset.js';
  * hands the file to the chat as a live-previewable artifact.
  * `edit_web_artifact` changes such a file by exact text replacements, so a fix
  * or a small change does not make the model write the whole file again.
+ * `packageWebArtifact` is the step they share with the dashboard tools
+ * (`dashboardTools.js`), whose page the server lays out itself.
  *
  * The checks sort what they find into problems that break the preview
  * (`warnings`: the model fixes them before it answers) and notes on things
@@ -348,25 +349,21 @@ export function injectBrandTokens(html, brand = {}) {
 
 /**
  * What the model is told about a stored artifact and its findings. A problem
- * is fixed before the answer, with `edit_web_artifact` (or, for a preset, the
- * corrected data); a note is mentioned or fixed in passing, never by writing
- * the file again.
+ * is fixed before the answer, with `edit_web_artifact`; a note is mentioned or
+ * fixed in passing, never by writing the file again.
  *
  * @param {Object} params
  * @param {string} params.verb - "Created" or "Updated".
  * @param {'html'|'svg'} params.format
  * @param {string} params.name - The stored file name.
  * @param {Array<{text: string, blocking: boolean}>} params.findings
- * @param {boolean} params.preset - The page came from a preset's data.
  * @returns {{message: string, warnings?: string[], notes?: string[]}}
  */
-function reportOf({ verb, format, name, findings, preset }) {
+function reportOf({ verb, format, name, findings }) {
   const warnings = findings.filter(f => f.blocking).map(f => f.text);
   const notes = findings.filter(f => !f.blocking).map(f => f.text);
   const kind = format.toUpperCase();
-  const fix = preset
-    ? 'call create_web_artifact again with the same filename, the preset and the corrected "data"'
-    : `call edit_web_artifact with filename "${name}" and "edits" that replace only the faulty text. Write the whole file again with create_web_artifact only when it was cut off, and then more compactly`;
+  const fix = `call edit_web_artifact with filename "${name}" and "edits" that replace only the faulty text. Write the whole file again with create_web_artifact only when it was cut off, and then more compactly`;
   let message;
   if (warnings.length) {
     message = `${verb} the ${kind} artifact "${name}", but ${warnings.length} problem(s) in "warnings" break the preview, and the user already sees it broken. Do NOT answer yet: ${fix}. Then answer, without pasting the code or adding a link.`;
@@ -381,7 +378,8 @@ function reportOf({ verb, format, name, findings, preset }) {
 
 /**
  * Check, brand and hold a finished web artifact, and say what the model is to
- * do next. Shared by `create_web_artifact` and `edit_web_artifact`.
+ * do next. Shared by `create_web_artifact`, `edit_web_artifact` and the
+ * dashboard tools.
  *
  * @param {Object} params - The tool call's parameters and trusted context.
  * @param {Object} artifact
@@ -389,10 +387,12 @@ function reportOf({ verb, format, name, findings, preset }) {
  * @param {'html'|'svg'} artifact.format
  * @param {string} artifact.name - File name, extension included or not.
  * @param {string} artifact.verb - "Created" or "Updated".
- * @param {boolean} [artifact.preset]
+ * @param {(held: {name: string, findings: Array<{text: string, blocking: boolean}>}) => Object} [artifact.report] -
+ *   Words the result, in place of the web artifact's own wording: `{ message,
+ *   warnings?, notes? }`.
  * @returns {Promise<Object>} The tool result.
  */
-async function packageWebArtifact(params, { content, format, name, verb, preset = false }) {
+export async function packageWebArtifact(params, { content, format, name, verb, report }) {
   const findings = inspectWebArtifactFindings(content, format, {
     scriptHosts: artifactPolicy().scriptHosts
   });
@@ -433,7 +433,9 @@ async function packageWebArtifact(params, { content, format, name, verb, preset 
     file,
     files: [file],
     ...(bundle?.template?.id ? { template: bundle.template.id } : {}),
-    ...reportOf({ verb, format, name: file.name, findings, preset })
+    ...(report
+      ? report({ name: file.name, findings })
+      : reportOf({ verb, format, name: file.name, findings }))
   };
 }
 
@@ -446,35 +448,15 @@ async function packageWebArtifact(params, { content, format, name, verb, preset 
  */
 export async function runCreateWebArtifact(params) {
   try {
-    const preset = optionalString(params.preset, 40);
-    if (preset && preset !== DASHBOARD_PRESET) {
-      throw new GeneratedFileError(
-        `Unknown preset "${preset}". The only preset is "${DASHBOARD_PRESET}".`,
-        'invalid'
-      );
-    }
-    // A preset is a page the server lays out from a small JSON spec; the
-    // markup of any other artifact comes from the model.
-    const rawContent = preset
-      ? renderDashboard(params.data)
-      : typeof params.content === 'string'
-        ? params.content.trim()
-        : '';
+    const rawContent = typeof params.content === 'string' ? params.content.trim() : '';
     if (!rawContent) {
-      throw new GeneratedFileError(
-        'Provide the HTML or SVG markup in "content", or a preset with its "data".',
-        'invalid'
-      );
+      throw new GeneratedFileError('Provide the HTML or SVG markup in "content".', 'invalid');
     }
-    const format = preset
-      ? 'html'
-      : detectFormat(params.filename || params.name, params.format, rawContent);
     return await packageWebArtifact(params, {
       content: rawContent,
-      format,
+      format: detectFormat(params.filename || params.name, params.format, rawContent),
       name: params.filename || params.name || params.title || 'artifact',
-      verb: 'Created',
-      preset: Boolean(preset)
+      verb: 'Created'
     });
   } catch (error) {
     return toolFailure(error, 'The web artifact could not be created.');
