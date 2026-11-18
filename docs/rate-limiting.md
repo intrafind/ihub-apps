@@ -38,14 +38,25 @@ The system supports seven different types of rate limiters, each configurable th
 
 ### 3. Auth API Rate Limiter
 - **Limit**: 30 requests per 15 minutes per IP address **and username** in the shipped
-  `platform.json` (`rateLimit.authApi.limit`), plus a ceiling of 5,000 per 15 minutes per IP
-  address over all usernames (`rateLimit.authApi.perIpLimit`). The code-level fallback, used only
-  when no `rateLimit.authApi` section is present at all, is 50 per 15 minutes.
+  `platform.json` (`rateLimit.authApi.limit`), plus a ceiling of 300 **failed** sign-ins per 15
+  minutes per IP address over all usernames (`rateLimit.authApi.perIpLimit`). The code-level
+  fallback, used only when no `rateLimit.authApi` section is present at all, is 50 per 15 minutes.
+- **Why failed only:** successful sign-ins never count against the per-address ceiling, so a login
+  wave behind one corporate NAT address is not limited by it, while one address trying passwords
+  over many usernames is stopped after 300 failures. Every local attempt checks a password hash
+  (about 0.3 s of CPU, also for unknown usernames); at most two checks run at once per server
+  process, the rest wait. If many people behind one address mistype their passwords (more than
+  300 failures in 15 minutes), raise `perIpLimit`, for example to 1,000, and set `trustProxy` so
+  the real client address is counted.
 - **Why per username:** an office behind one NAT address used to share 30 sign-ins per 15 minutes,
   so a Monday-morning login wave was refused after 30 people. Guessing one account's password is
   stopped earlier by the per-account lockout (5 failures, `localAuth.lockout`); the per-address
   ceiling stops trying many usernames from one address. The username is the submitted `username`
-  field, trimmed and lower-cased; requests without one count per address alone.
+  field, trimmed and lower-cased. Requests without one (NTLM, Teams token exchange) count only
+  against the per-address ceiling; an NTLM handshake's `401` challenges are not failures.
+- **LDAP:** failed LDAP sign-ins also lock the username from any address (`ldapAuth.lockout`, 5
+  failures, 15 minutes), so iHub stops binding before the directory locks the account. NTLM
+  credentials are checked by the domain controller, whose own lockout policy applies.
 - **Applied to**: Endpoints under `/api/auth` that verify credentials:
   - `POST /api/auth/local/login`
   - `POST /api/auth/ldap/login`
@@ -182,7 +193,8 @@ Each rate limiter supports the following configuration options:
   IP address
 - `anonymousLimit` (same limiters, with `keyBy: "user"`): the limit of a request without a
   sign-in, per IP address. Falls back to `limit`
-- `perIpLimit` (`authApi` only): the ceiling per IP address over all usernames
+- `perIpLimit` (`authApi` only): failed sign-ins per IP address over all usernames; successful
+  sign-ins do not count
 
 ### Changing the limits
 
@@ -195,7 +207,8 @@ Each rate limiter supports the following configuration options:
   400 or higher;
 - **Count per** (web app, admin and inference API): signed-in user or client address, and
   **Requests per address (not signed in)** (`anonymousLimit`);
-- **Requests per address (all usernames)** (sign-in): the per-address ceiling (`perIpLimit`).
+- **Failed sign-ins per address (all usernames)** (sign-in): the per-address ceiling
+  (`perIpLimit`), counting failed attempts whatever **Which requests count** says.
 
 The page saves to `rateLimit` in `platform.json` and keeps the other fields of each section, such
 as `message`. The limiters are built when the server starts, so **changes apply after a restart**.
@@ -213,7 +226,8 @@ Environment variables override `platform.json`, for example
   counts as its client id). A request without a sign-in counts for its IP address, against
   `anonymousLimit`. These limiters run after authentication, so the user is already known; they
   cost no extra work per request. Set `keyBy: "ip"` to count every request per address as before.
-- **Sign-in** (`authApi`): per IP address and username, with `perIpLimit` per address.
+- **Sign-in** (`authApi`): per IP address and username, with `perIpLimit` failed attempts per
+  address.
 - **OAuth limiters and the provenance lookup:** per IP address.
 
 Measured in the load test, a busy user makes 2 requests per minute at the median, 18 at the 99th
@@ -223,7 +237,8 @@ the busiest user. See [Sizing](sizing.md#limits-for-large-installations).
 Earlier releases counted the general limiters per address only (100 / 500 per minute). Migration
 `V254` turns the shipped values into the new per-user ones and adds `keyBy`, `anonymousLimit`
 and `perIpLimit`; a limit an admin set stays, now per user, and keeps applying per address to
-anonymous requests.
+anonymous requests. Migration `V256` lowers a `perIpLimit` still at the 5,000 that `V254` set to
+300 failed sign-ins; a value an admin set stays.
 
 ### Proxy hops and the rate-limit key
 

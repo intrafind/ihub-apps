@@ -951,20 +951,29 @@ model ran at most 5 calls at once.
 - **Web app, admin and inference API** count per signed-in user: 300 requests per minute each
   (`keyBy: "user"`). Requests without a sign-in count per address: 500 per minute
   (`anonymousLimit`). `keyBy: "ip"` brings back counting per address.
-- **Sign-in** counts per address and username: 30 attempts per 15 minutes, with a ceiling of 5,000
-  per address over all usernames (`perIpLimit`). The account lockout after 5 failures is
-  unchanged.
+- **Sign-in** counts per address and username: 30 attempts per 15 minutes, with a ceiling of 300
+  **failed** sign-ins per address over all usernames (`perIpLimit`). Successful sign-ins never
+  count against the ceiling, so a login wave behind one address passes. NTLM and Teams sign-ins,
+  which carry no username, count only against the ceiling. The account lockout after 5 failures is
+  unchanged, and now also applies to LDAP sign-ins per username (`ldapAuth.lockout`), so iHub stops
+  binding before the directory locks the account. If many people behind one address mistype their
+  passwords, raise `perIpLimit`.
 - **Every model without its own `concurrency`** now gets 25 calls at once instead of 5
-  (`requestConcurrency`). A model's own `concurrency` still wins.
+  (`requestConcurrency`). A model's own `concurrency` still wins. The same applies to every other
+  throttled id without its own setting: tools, page reads (`read_url`), project website crawls
+  (`project_crawl`), the HTTP workflow node and marketplace downloads.
 - When calls wait 2 seconds or more for a free slot, the server logs
   `Request throttle: calls waited for a free slot`, at most once a minute per model.
 - **Admin → Security → Rate limits** shows the new settings.
-- The update applies the new values only where the old shipped ones were still set (migration
-  V254). Limits and a concurrency you set yourself stay; your own rate limits now count per user,
+- The update applies the new values only where the old shipped ones were still set (migrations
+  V254 and V256). Limits and a concurrency you set yourself stay; your own rate limits now count per user,
   and requests without a sign-in keep them per address.
 
 **Before upgrading:** For a model on a small backend (LM Studio or Ollama on one machine, a GPU
 without batching) or on a cloud API key with a low rate limit, set `concurrency` on that model to
 what it can take. Otherwise it receives up to 25 calls at once instead of 5. A single heavy API
-client signed in as one user now has 300 requests per minute per worker instead of 500 per
-address; raise `rateLimit.publicApi.limit` if it needs more.
+client signed in as one user (a service account, an API key or an OAuth client) now has 300
+requests per minute per worker instead of 500 per address, on the web app API and on the
+inference API; raise `rateLimit.publicApi.limit` or `rateLimit.inferenceApi.limit` if it needs
+more. If a crawled site cannot take 25 parallel fetches, lower `requestConcurrency` (models with
+their own `concurrency` keep it).
