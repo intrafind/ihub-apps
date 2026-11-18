@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Drawer from '../../../../shared/components/Drawer';
@@ -16,6 +16,7 @@ import {
 } from '../../../../api/adminApi';
 import MarketplaceModelReviewNotice from './MarketplaceModelReviewNotice';
 import MarketplaceIntegrationSection from './MarketplaceIntegrationFacts';
+import MarketplaceSkillFiles from './MarketplaceSkillFiles';
 import IntegrationReleaseNotes, { releasesBetween } from '../integrations/IntegrationReleaseNotes';
 import { IntegrationUpdatePreview, IntegrationUpdateReport } from './IntegrationUpdateMigrations';
 import { apiErrorMessage } from '../../../../utils/apiErrorMessage';
@@ -72,6 +73,8 @@ const TYPE_COLORS = {
  * - Overview: description, tags, and metadata (registry, category, license, install date,
  *   compatibility)
  * - Content: raw JSON preview of the item's content
+ * - Files (skills with more than SKILL.md): every file an install would write, readable
+ *   one by one, fetched from the registry on demand
  * - Releases (integrations with a release history): the summary per version and the
  *   note files, fetched on demand
  *
@@ -117,13 +120,33 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
   // server (its channel and the item's pin applied), else the catalog's.
   const targetVersion = item?.offeredVersion || item?.version;
   const hasReleases = item?.type === 'integration' && (item?.releases?.length || 0) > 0;
-  const tabs = hasReleases ? ['overview', 'content', 'releases'] : ['overview', 'content'];
+  // A skill that is more than its SKILL.md: the files can be reviewed one by one
+  const skillFiles =
+    item?.type === 'skill' && Array.isArray(item.files) && item.files.length > 1
+      ? item.files
+      : null;
+  const tabs = [
+    'overview',
+    'content',
+    ...(skillFiles ? ['files'] : []),
+    ...(hasReleases ? ['releases'] : [])
+  ];
   const tabLabels = {
     overview: t('admin.marketplace.detail.tabs.overview', 'Overview'),
     content: t('admin.marketplace.detail.tabs.content', 'Content'),
+    files: t('admin.marketplace.detail.tabs.files', 'Files ({{count}})', {
+      count: skillFiles?.length || 0
+    }),
     releases: t('admin.marketplace.detail.tabs.releases', 'Releases')
   };
-  const loadNoteFile = path => fetchMarketplaceItemFile(item.registryId, item.name, path);
+  const registryId = item?.registryId;
+  const itemType = item?.type;
+  const itemName = item?.name;
+  // Stable between renders: the file viewer fetches when this changes
+  const loadItemFile = useCallback(
+    path => fetchMarketplaceItemFile(registryId, itemType, itemName, path),
+    [registryId, itemType, itemName]
+  );
 
   /**
    * Fetches full item detail from server when the panel opens.
@@ -445,7 +468,7 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
                     item.installation?.version,
                     targetVersion
                   )}
-                  loadFile={loadNoteFile}
+                  loadFile={loadItemFile}
                   emptyText={t(
                     'admin.marketplace.noReleasesBetween',
                     'The catalog lists no release notes between these versions.'
@@ -709,8 +732,19 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
             <div className="p-6">
               <IntegrationReleaseNotes
                 releases={item.releases}
-                loadFile={loadNoteFile}
+                loadFile={loadItemFile}
                 installedVersion={item?.installation?.version}
+              />
+            </div>
+          )}
+
+          {/* Files tab - every file of a skill, read from the registry on demand */}
+          {!loading && activeTab === 'files' && skillFiles && (
+            <div className="p-6">
+              <MarketplaceSkillFiles
+                key={`${registryId}:${itemName}`}
+                files={skillFiles}
+                loadFile={loadItemFile}
               />
             </div>
           )}

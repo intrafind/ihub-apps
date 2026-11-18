@@ -2971,8 +2971,16 @@
         "tabs": {
           "overview": "Overview",
           "content": "Content",
+          "files": "Files ({{count}})",
           "releases": "Releases"
         }
+      },
+      "files": {
+        "listLabel": "Files of this skill",
+        "loadFailed": "Could not load this file.",
+        "retry": "Try again",
+        "showSource": "Show source",
+        "showRendered": "Show rendered"
       },
       "modelReview": {
         "title": "Review this model before you test or enable it",
