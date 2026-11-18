@@ -192,8 +192,11 @@ projected at `compactTargetShare` of the threshold
   "1,200,000"); single digits are not checked. This catches invented
   figures, not a figure attached to the wrong entity or period. A source URL
   not in the result is dropped from the fact. Large inputs are split into
-  chunks the summary model can take, one call each; a result cut for the
-  summary is marked "partly read for these notes" in the digest. All chunks
+  chunks the summary model can take, one call each. A result over the spill
+  threshold, a preview in the transcript, is read in full from the run's spill
+  store for the summary. A result cut for the summary, or whose original
+  cannot be read, is marked "partly read for these notes" in the digest
+  (an unreadable original makes the compaction `lossy`, `summary_partial`). All chunks
   of one compaction get twice `summaryTimeoutMs` together, and no call runs
   past that. A chunk whose answer stopped at the output limit makes the
   compaction `lossy` (`summary_partial`).

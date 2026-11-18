@@ -1606,6 +1606,10 @@ export class AgentLoop {
     const useModel = !overflow && state.failures < 2 && state.count < policy.maxCompactionsPerRun;
     let summary = null;
     let fallbackReason = null;
+    // A result over the spill threshold is a preview in the transcript: the
+    // summary reads the original (the transcript stays bounded), or the
+    // digest says the result was only partly read.
+    const unread = useModel ? await this._readSpilledForSummary(ctx, calls) : 0;
     if (useModel) {
       try {
         summary = await summarizeCalls({
@@ -1641,7 +1645,7 @@ export class AgentLoop {
           error: err?.message
         });
       }
-      fallbackReason = summaryFailureOf(summary, calls);
+      fallbackReason = summaryFailureOf(summary, calls) || (unread > 0 ? 'summary_partial' : null);
       if (fallbackReason === 'summary_failed' || fallbackReason === 'summary_empty') {
         state.failures += 1;
       }
@@ -1766,6 +1770,51 @@ export class AgentLoop {
       messages: ctx.messages
     });
     return freedTokens;
+  }
+
+  /**
+   * The originals of spilled results, for the summary only: a result over the
+   * spill threshold is a bounded preview in the transcript, and a figure
+   * after the preview could not reach the digest. Read from this run or a
+   * run of the same chat; one that cannot be read is marked partly read.
+   * Mutates `call.content` / `call.cut` of the calls being condensed (their
+   * originals are archived before).
+   * @private
+   * @returns {Promise<number>} how many spilled results could not be read
+   */
+  async _readSpilledForSummary(ctx, calls) {
+    let unread = 0;
+    for (const call of calls) {
+      let bounded = null;
+      try {
+        bounded = JSON.parse(call.content);
+      } catch {
+        continue;
+      }
+      if (bounded?.truncated !== true) continue;
+      let original = null;
+      if (bounded.spill?.path && typeof ctx.runLog?.readSpill === 'function') {
+        if (!ctx.compaction.archiveLoaded) await this._loadArchived(ctx, null);
+        const runs = [ctx.ledgerId, ...ctx.compaction.archiveRuns].filter(
+          (id, index, all) => id && isValidRunId(id) && all.indexOf(id) === index
+        );
+        for (const runId of runs) {
+          try {
+            original = await ctx.runLog.readSpill(runId, { path: bounded.spill.path });
+            break;
+          } catch {
+            /* not this run's spill */
+          }
+        }
+      }
+      if (typeof original === 'string' && original.length > 0) {
+        call.content = original;
+      } else {
+        call.cut = true;
+        unread += 1;
+      }
+    }
+    return unread;
   }
 
   /**

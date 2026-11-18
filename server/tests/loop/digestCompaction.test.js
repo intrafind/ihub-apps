@@ -598,6 +598,48 @@ test('a recall reads a spilled original only from runs of its own chat, never fr
   await runLog.stop();
 });
 
+test('the summary reads a spilled original; one it cannot read is marked partly read and lossy', async () => {
+  // The figure comes after the preview the transcript keeps.
+  const big = `${'filler text '.repeat(1000)} LATE FIGURE 7.77 trillion USD`;
+  const run = async withLedger => {
+    const { runLog } = await captureRunLog();
+    const { runId } = await runLog.startRun({ kind: 'chat', user: { id: 'u1' } });
+    const { loop, summaryRequests } = makeLoop(
+      [
+        toolTurn('c1', 'webSearch', { query: 'nvidia' }, 1000),
+        toolTurn('c2', 'webSearch', { query: 'apple' }, 4000),
+        textTurn('done')
+      ],
+      ['FACT | r1 | LATE FIGURE 7.77 trillion USD |\nNOTFOUND | r1 | the revenue of the year'],
+      { runLog }
+    );
+    const infos = [];
+    const result = await loop.run({
+      ...(withLedger ? { runId } : {}),
+      model,
+      messages: baseMessages,
+      tools: [searchTool],
+      policies: { context: { ...policies.context, spillThresholdBytes: 4096 } },
+      seams: [{ onCompaction: (_ctx, info) => infos.push(info) }],
+      executeTool: async (_call, { args }) =>
+        args.query === 'nvidia' ? big : searchResult(args.query)
+    });
+    await runLog.stop();
+    return { result, info: infos[0], prompt: summaryRequests[0]?.body.messages[1].content || '' };
+  };
+
+  const read = await run(true);
+  assert.equal(read.result.status, 'completed', JSON.stringify(read.result.error));
+  assert.match(read.prompt, /LATE FIGURE 7\.77 trillion/, 'the summary saw the whole result');
+  assert.equal(read.info.lossy, false);
+  assert.match(read.info.digest, /LATE FIGURE 7\.77 trillion/);
+
+  const unread = await run(false);
+  assert.doesNotMatch(unread.prompt, /LATE FIGURE/, 'only the preview was there to read');
+  assert.equal(unread.info.fallbackReason, 'summary_partial');
+  assert.match(unread.info.digest, /partly read for these notes/);
+});
+
 test('a recall follows a chain of pauses back: same id (A, B, B) and new ids (A, B, C)', async () => {
   const { runLog } = await captureRunLog();
   const refs = { chatId: 'chat-1', appId: 'app' };
