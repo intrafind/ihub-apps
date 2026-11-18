@@ -24,7 +24,8 @@ import {
   knowledgeScopeData,
   answerBasisSchema,
   abortCauseSchema,
-  placeSchema
+  placeSchema,
+  compactionKindsSchema
 } from './runLogEvents.js';
 import { MAX_PLACES } from '../../../../shared/run/places.js';
 import { interactionSchema, interactionAnswerSchema } from './interaction.js';
@@ -77,6 +78,85 @@ export const contextUsageData = z.object({
   modelId: z.string().optional(),
   step: z.number().int().nonnegative().optional()
 });
+
+/** Characters of a digest a `context/compacted` frame carries (the activity row shows it). */
+export const MAX_COMPACTION_DIGEST_CHARS = 8000;
+
+/**
+ * Earlier tool results were condensed (a findings digest) or shortened (lossy)
+ * to free context (#3819). The server says what happened; the chat renders it.
+ */
+export const contextCompactedData = z.object({
+  compactionId: z.string().min(1),
+  step: z.number().int().nonnegative().prefault(0),
+  status: z.enum(['running', 'completed']),
+  trigger: z.enum(['proactive', 'overflow', 'manual']).prefault('proactive'),
+  /** `digest`: condensed into notes; `elide`: collapsed to previews. */
+  strategy: z.enum(['digest', 'elide']).optional(),
+  /** Data was dropped rather than condensed. */
+  lossy: z.boolean().prefault(false),
+  fallbackReason: z.string().max(200).optional(),
+  tokensBefore: z.number().int().nonnegative().optional(),
+  tokensAfter: z.number().int().nonnegative().optional(),
+  /** Tool results condensed or shortened. */
+  itemsSummarised: z.number().int().nonnegative().prefault(0),
+  kinds: compactionKindsSchema.optional(),
+  /** The digest (bounded to {@link MAX_COMPACTION_DIGEST_CHARS}). */
+  digest: z
+    .string()
+    .max(MAX_COMPACTION_DIGEST_CHARS + 20)
+    .optional(),
+  digestTruncated: z.boolean().optional(),
+  facts: z.number().int().nonnegative().optional(),
+  durationMs: z.number().int().nonnegative().optional()
+});
+
+/**
+ * The `context/compacted` frame of a compaction: from the ledger's
+ * `context/compaction` data (re-sync) or the loop's `onCompaction` info (live),
+ * which carry the same fields. `status` defaults to `completed`.
+ *
+ * @param {Object} info
+ * @param {'running'|'completed'} [status='completed']
+ * @returns {Object}
+ */
+export function compactedFrameOf(info, status = 'completed') {
+  const d = info || {};
+  const digest = typeof d.digest === 'string' ? d.digest : undefined;
+  const truncated = digest !== undefined && digest.length > MAX_COMPACTION_DIGEST_CHARS;
+  const int = value => (Number.isInteger(value) && value >= 0 ? value : undefined);
+  return {
+    compactionId: String(d.compactionId),
+    step: int(d.step) ?? 0,
+    status,
+    trigger: ['proactive', 'overflow', 'manual'].includes(d.trigger) ? d.trigger : 'proactive',
+    ...(d.strategy === 'digest' || d.strategy === 'elide' ? { strategy: d.strategy } : {}),
+    lossy: d.lossy === true,
+    ...(typeof d.fallbackReason === 'string' && d.fallbackReason
+      ? { fallbackReason: d.fallbackReason.slice(0, 200) }
+      : {}),
+    ...(int(d.tokensBefore) !== undefined ? { tokensBefore: int(d.tokensBefore) } : {}),
+    ...(int(d.tokensAfter) !== undefined ? { tokensAfter: int(d.tokensAfter) } : {}),
+    itemsSummarised: int(d.itemsSummarised) ?? int(d.collapsed) ?? 0,
+    ...(d.kinds && typeof d.kinds === 'object'
+      ? {
+          kinds: {
+            search: int(d.kinds.search) ?? 0,
+            fetch: int(d.kinds.fetch) ?? 0,
+            tool: int(d.kinds.tool) ?? 0
+          }
+        }
+      : {}),
+    ...(digest !== undefined
+      ? {
+          digest: truncated ? `${digest.slice(0, MAX_COMPACTION_DIGEST_CHARS)}…` : digest,
+          ...(truncated || d.digestTruncated === true ? { digestTruncated: true } : {})
+        }
+      : {}),
+    ...(int(d.facts) !== undefined ? { facts: int(d.facts) } : {}),
+    ...(int(d.durationMs) !== undefined ? { durationMs: int(d.durationMs) } : {})
+  };
+}
 
 export const runEndedData = z.object({
   status: z.enum(RUN_STATUSES),
@@ -328,6 +408,11 @@ export const sseV2EventSchema = z.discriminatedUnion('type', [
   z.object({ ...base, type: z.literal(SSE_V2_EVENTS.CONTEXT_USAGE), data: contextUsageData }),
   z.object({
     ...base,
+    type: z.literal(SSE_V2_EVENTS.CONTEXT_COMPACTED),
+    data: contextCompactedData
+  }),
+  z.object({
+    ...base,
     type: z.literal(SSE_V2_EVENTS.INTERACTION_RAISED),
     data: interactionRaisedData
   }),
@@ -355,6 +440,7 @@ export const sseV2EventDataSchemas = Object.freeze({
   [SSE_V2_EVENTS.SOURCES_ADDED]: sourcesAddedData,
   [SSE_V2_EVENTS.KNOWLEDGE_SCOPE]: knowledgeScopeData,
   [SSE_V2_EVENTS.CONTEXT_USAGE]: contextUsageData,
+  [SSE_V2_EVENTS.CONTEXT_COMPACTED]: contextCompactedData,
   [SSE_V2_EVENTS.INTERACTION_RAISED]: interactionRaisedData,
   [SSE_V2_EVENTS.INTERACTION_ANSWERED]: interactionAnsweredData,
   [SSE_V2_EVENTS.PROGRESS_NODE]: progressNodeData,

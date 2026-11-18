@@ -261,6 +261,17 @@ export function createContextTracker(model, { prior = null, resent = false } = {
     },
     last: () => latest,
     /**
+     * The transcript was compacted in place (#3819): the messages the last
+     * provider count held are now `freedTokens` smaller, while their number
+     * stayed the same. Without this the next estimate would add what came
+     * after to the old, larger count until the next model call.
+     * @param {number} freedTokens
+     */
+    compacted(freedTokens) {
+      const freed = Math.max(0, Math.floor(Number(freedTokens) || 0));
+      if (anchor && freed > 0) anchor = { ...anchor, tokens: Math.max(0, anchor.tokens - freed) };
+    },
+    /**
      * The window as the next turn will find it: the prompt this turn started
      * from plus its answer, and the system prompt's share of it (what the next
      * turn replaces with its own). Tool calls and results of this turn are not

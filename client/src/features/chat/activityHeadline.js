@@ -58,6 +58,69 @@ export function isActiveItem(item) {
   return ['preparing', 'awaiting', 'running'].includes(item?.status);
 }
 
+/**
+ * What a `compaction` row says (#3819): earlier results condensed into notes,
+ * or — when the server says data was lost (`lossy`) — shortened. Every fact in
+ * it is the server's: how many results, which kind, why.
+ *
+ * @param {Function} t
+ * @param {Object} item - a `compaction` row of `buildToolActivity`
+ * @returns {string}
+ */
+export function compactionLabel(t, item) {
+  if (item?.status === 'running') return t('toolActivity.compaction.running');
+  if (item?.status === 'stopped') return t('toolActivity.compaction.stopped');
+  const count = Number.isInteger(item?.itemsSummarised) ? item.itemsSummarised : 0;
+  if (item?.strategy === 'digest') {
+    if (item.lossy) return t('toolActivity.compaction.reduced', { count });
+    const kinds = item.kinds || {};
+    const onlySearches = count > 0 && (kinds.search || 0) === count;
+    return t(
+      onlySearches
+        ? 'toolActivity.compaction.condensedSearches'
+        : 'toolActivity.compaction.condensed',
+      { count }
+    );
+  }
+  return t(
+    item?.trigger === 'overflow'
+      ? 'toolActivity.compaction.contextFull'
+      : 'toolActivity.compaction.shortened',
+    { count }
+  );
+}
+
+/** The compactions of a turn as one headline segment, or none (a turn that never compacted). */
+function compactionSegments(t, items) {
+  const done = items.filter(item => item.kind === 'compaction' && item.status === 'completed');
+  if (done.length === 0) return [];
+  const lossy = done.some(item => item.lossy);
+  // Several compactions read as one: the strategy of the last, the results of all.
+  const merged = {
+    ...done[done.length - 1],
+    lossy,
+    itemsSummarised: done.reduce((n, item) => n + (item.itemsSummarised || 0), 0),
+    kinds: done.reduce(
+      (acc, item) => ({
+        search: acc.search + (item.kinds?.search || 0),
+        fetch: acc.fetch + (item.kinds?.fetch || 0),
+        tool: acc.tool + (item.kinds?.tool || 0)
+      }),
+      { search: 0, fetch: 0, tool: 0 }
+    )
+  };
+  return [
+    {
+      key: 'compaction',
+      type: 'compaction',
+      icon: lossy ? 'exclamation-triangle' : 'archive-box',
+      noun: compactionLabel(t, merged),
+      tone: lossy ? 'attention' : null,
+      facts: []
+    }
+  ];
+}
+
 /** Whether the server said what the call makes (`outputKind` it knows a noun for). */
 export function hasOutputKind(item) {
   return Boolean(item?.outputKind && OUTPUT_NOUNS[item.outputKind]);
@@ -451,7 +514,7 @@ export function headlineSegments(t, items) {
     groups.get(key).items.push(item);
   };
   for (const item of items) {
-    if (item.kind === 'skill' || hasOutputKind(item)) continue;
+    if (item.kind === 'skill' || item.kind === 'compaction' || hasOutputKind(item)) continue;
     if (item.origin) {
       const key =
         item.origin === 'integration' ? `integration:${item.integration || ''}` : item.origin;
@@ -488,7 +551,12 @@ export function headlineSegments(t, items) {
   const more = placed.slice(MAX_NAMED_KINDS);
   const shown = origins.filter(segment => segment.type === 'neutral' || named.includes(segment));
   return {
-    segments: [...skillSegments(t, items), ...shown, ...outputSegments(t, items)],
+    segments: [
+      ...skillSegments(t, items),
+      ...shown,
+      ...outputSegments(t, items),
+      ...compactionSegments(t, items)
+    ],
     named,
     more
   };
@@ -518,6 +586,7 @@ export function segmentText(t, segment) {
  * @returns {string}
  */
 export function activeLabel(t, item, reading = null) {
+  if (item?.kind === 'compaction') return compactionLabel(t, item);
   const noun = outputNounOf(t, item?.outputKind);
   if (noun) return creatingLabel(t, noun);
   if (item?.status === 'preparing') {

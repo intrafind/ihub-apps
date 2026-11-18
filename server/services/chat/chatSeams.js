@@ -13,6 +13,7 @@
  * @module services/chat/chatSeams
  */
 import { SSE_V2_EVENTS } from '../../../shared/runEvents.js';
+import { compactedFrameOf } from '../loop/contracts/sseV2.js';
 import logger from '../../utils/logger.js';
 import { MAX_CLARIFICATIONS_PER_CONVERSATION, validateAskUserParams } from '../../tools/askUser.js';
 import * as defaultTelemetry from './chatTelemetry.js';
@@ -142,6 +143,24 @@ export function chatTurnSeam({
   };
   return {
     name: 'chat-turn',
+    // Earlier results are being condensed (#3819): the summary takes a while,
+    // so the chat says so instead of going quiet.
+    onCompactionStart(ctx, info) {
+      if (info?.compactionId) {
+        emit(ctx, SSE_V2_EVENTS.CONTEXT_COMPACTED, compactedFrameOf(info, 'running'));
+      }
+    },
+    // The transcript shrank in place: the activity row says what happened,
+    // and the context figure drops with it, explained.
+    onCompaction(ctx, info) {
+      if (info?.compactionId) {
+        emit(ctx, SSE_V2_EVENTS.CONTEXT_COMPACTED, compactedFrameOf(info, 'completed'));
+      }
+      if (contextTracker) {
+        if (Number(info?.freedTokens) > 0) contextTracker.compacted?.(info.freedTokens);
+        reportContext(ctx, contextTracker.estimate(ctx.messages));
+      }
+    },
     async preStep(ctx) {
       if (ctx.iteration === 1) {
         for (const source of detectContextSources(ctx.messages)) ctx.addKnowledgeSource(source);

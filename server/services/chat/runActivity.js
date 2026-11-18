@@ -58,6 +58,10 @@ const RECORDED_PROGRESS_PHASES = new Set(['search.status', 'skill.activation', '
 export const MAX_STORED_TOOL_ITEMS = 100;
 export const MAX_STORED_ITEM_SOURCES = 50;
 export const MAX_STORED_WORKFLOW_STEPS = 200;
+/** Characters of the notes a stored `compaction` row keeps (the live frame's bound). */
+export const MAX_STORED_DIGEST_CHARS = 8000;
+/** What is left of the notes when the stored activity is over its size. */
+const SHORT_DIGEST_CHARS = 1000;
 export const MAX_STORED_LIST = 50;
 export const MAX_STORED_ACTIVITY_BYTES = 256 * 1024;
 const MAX_TEXT_CHARS = 2000;
@@ -153,6 +157,9 @@ function slim(envelope) {
       return data?.callId ? envelope : null;
     // Which projects the turn reached and how: shown with the stored answer.
     case SSE_V2_EVENTS.KNOWLEDGE_SCOPE:
+      return envelope;
+    // Earlier results condensed or shortened (#3819): a row of its own.
+    case SSE_V2_EVENTS.CONTEXT_COMPACTED:
       return envelope;
     case SSE_V2_EVENTS.PROGRESS_NODE:
       // A reconnecting client is sent the steps again (`replayChatWorkflowProgress`);
@@ -394,7 +401,36 @@ function boundToolItem(item) {
       .map(boundSource)
       .filter(Boolean),
     error: text(item.error),
-    durationMs: Number.isFinite(item.durationMs) ? item.durationMs : null
+    durationMs: Number.isFinite(item.durationMs) ? item.durationMs : null,
+    ...(item.kind === 'compaction' ? boundCompactionFields(item) : {})
+  });
+}
+
+const COMPACTION_TRIGGERS = new Set(['proactive', 'overflow', 'manual']);
+
+/** What a `compaction` row keeps beyond the common fields: see `shared/run/toolActivity`. */
+function boundCompactionFields(item) {
+  const kinds = item.kinds && typeof item.kinds === 'object' ? item.kinds : null;
+  return compact({
+    trigger: COMPACTION_TRIGGERS.has(item.trigger) ? item.trigger : undefined,
+    strategy: item.strategy === 'digest' || item.strategy === 'elide' ? item.strategy : undefined,
+    lossy: item.lossy === true ? true : undefined,
+    fallbackReason: text(item.fallbackReason, 100),
+    itemsSummarised: integer(item.itemsSummarised),
+    kinds: kinds
+      ? {
+          search: integer(kinds.search) ?? 0,
+          fetch: integer(kinds.fetch) ?? 0,
+          tool: integer(kinds.tool) ?? 0
+        }
+      : undefined,
+    tokensBefore: integer(item.tokensBefore),
+    tokensAfter: integer(item.tokensAfter),
+    facts: integer(item.facts),
+    step: integer(item.step),
+    // The notes, as the live row showed them (bounded by the frame already).
+    digest: text(item.digest, MAX_STORED_DIGEST_CHARS),
+    digestTruncated: item.digestTruncated === true ? true : undefined
   });
 }
 
@@ -491,7 +527,8 @@ export function boundStoredActivity(activity) {
         details: item.details.map(d => ({ ...d, values: d.values.map(v => ({ text: v.text })) }))
       }),
       item => ({ ...item, sources: item.sources.slice(0, 5) }),
-      item => ({ ...item, details: [], sources: [] })
+      item => (item.digest ? { ...item, digest: text(item.digest, SHORT_DIGEST_CHARS) } : item),
+      item => ({ ...item, details: [], sources: [], digest: undefined })
     ];
     for (const trim of trims) {
       out.toolActivity.items = out.toolActivity.items.map(trim);
@@ -588,6 +625,17 @@ export function shareableActivity(activity) {
                 : undefined,
               query: item?.query,
               queries: item?.queries,
+              // A compaction row says that results were condensed, and how
+              // many; the notes hold what the calls found, and stay out.
+              ...(item?.kind === 'compaction'
+                ? {
+                    trigger: item.trigger,
+                    strategy: item.strategy,
+                    lossy: item.lossy,
+                    itemsSummarised: item.itemsSummarised,
+                    kinds: item.kinds
+                  }
+                : {}),
               details: [],
               sources: [],
               error: null,

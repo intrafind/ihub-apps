@@ -63,6 +63,28 @@ export const contextPoliciesSchema = z.object({
   compactKeepRecent: z.number().int().nonnegative().prefault(6),
   maxReactiveAttempts: z.number().int().nonnegative().prefault(2),
   reactiveKeepRecent: z.number().int().nonnegative().prefault(4),
+  /**
+   * What the proactive compaction does with old tool results (#3819).
+   * `elide` collapses them to short previews (the data is lost); `digest`
+   * condenses whole tool batches into a findings digest an LLM extracts and
+   * the loop checks, and keeps the originals readable by ref
+   * (`recall_tool_result`). See `services/loop/findingsDigest.js`.
+   */
+  strategy: z.enum(['elide', 'digest']).prefault('elide'),
+  /** `digest`: compact down to this share of `compactThresholdTokens` (hysteresis). */
+  compactTargetShare: z.number().min(0.1).max(0.95).prefault(0.6),
+  /** `digest`: newest tool batches kept verbatim (the newest is never condensed). */
+  digestKeepRecentBatches: z.number().int().positive().prefault(2),
+  /** `digest`: compactions per run before the loop falls back to `elide`. */
+  maxCompactionsPerRun: z.number().int().positive().prefault(4),
+  /** `digest`: timeout of one summary call (one chunk). */
+  summaryTimeoutMs: z.number().int().positive().prefault(90_000),
+  /** `digest`: output tokens of one summary call. */
+  summaryMaxTokens: z.number().int().positive().prefault(4096),
+  /** `digest`: characters of one digest as the model reads it. */
+  maxDigestChars: z.number().int().positive().prefault(24_000),
+  /** `digest`: how often a run may read a condensed result again. */
+  maxRecallsPerRun: z.number().int().nonnegative().prefault(10),
   /** Bytes above which tool results are spilled to disk and previewed in the transcript. */
   spillThresholdBytes: z
     .number()

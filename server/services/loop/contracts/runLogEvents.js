@@ -479,13 +479,42 @@ export const budgetExhaustedData = z.object({
   limits: budgetLimitsSchema.prefault({})
 });
 
+/** Calls a compaction condensed, per activity kind (server `utils/toolDisplay`). */
+export const compactionKindsSchema = z.object({
+  search: z.number().int().nonnegative().prefault(0),
+  fetch: z.number().int().nonnegative().prefault(0),
+  tool: z.number().int().nonnegative().prefault(0)
+});
+
 export const contextCompactionData = z.object({
   step: z.number().int().nonnegative(),
-  trigger: z.enum(['proactive', 'overflow']),
+  trigger: z.enum(['proactive', 'overflow', 'manual']),
   collapsed: z.number().int().nonnegative(),
   freedChars: z.number().int().nonnegative(),
   shadowedRange: z.tuple([z.number().int(), z.number().int()]).optional(),
-  summaryRef: spillRefSchema.optional()
+  /** The digest as the model reads it, when it is longer than `digest` (spill store). */
+  summaryRef: spillRefSchema.optional(),
+  /** The condensed results, readable by ref (`recall_tool_result` after a resume). */
+  archiveRef: spillRefSchema.optional(),
+  compactionId: z.string().optional(),
+  /** `digest`: condensed into a findings digest; `elide`: collapsed to previews. */
+  strategy: z.enum(['digest', 'elide']).optional(),
+  /** Data was dropped rather than condensed (elide, overflow, a failed summary). */
+  lossy: z.boolean().optional(),
+  /** Why a digest compaction lost data: `summary_failed`, `summary_partial`, `summary_empty`, … */
+  fallbackReason: z.string().optional(),
+  tokensBefore: z.number().int().nonnegative().optional(),
+  tokensAfter: z.number().int().nonnegative().optional(),
+  itemsSummarised: z.number().int().nonnegative().optional(),
+  kinds: compactionKindsSchema.optional(),
+  /** The digest, bounded for display. */
+  digest: z.string().optional(),
+  digestTruncated: z.boolean().optional(),
+  facts: z.number().int().nonnegative().optional(),
+  droppedFacts: z.number().int().nonnegative().optional(),
+  /** The model that wrote the digest. */
+  model: z.string().optional(),
+  durationMs: z.number().int().nonnegative().optional()
 });
 
 export const errorData = z.object({

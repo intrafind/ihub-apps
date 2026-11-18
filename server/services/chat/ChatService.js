@@ -163,6 +163,19 @@ export function chatCompactThresholdTokens(model) {
   if (!Number.isFinite(window) || window <= 0) return CHAT_COMPACT_MIN_TOKENS;
   return Math.max(CHAT_COMPACT_MIN_TOKENS, Math.floor(window * CHAT_COMPACT_WINDOW_SHARE));
 }
+
+/**
+ * Context policies of a chat turn: the threshold above, and tool results
+ * condensed into a findings digest instead of collapsed to previews (#3819),
+ * so a long research turn keeps what it found and the model does not search
+ * again.
+ *
+ * @param {Object} model - resolved model config
+ * @returns {Object} `policies.context`
+ */
+export function chatContextPolicies(model) {
+  return { compactThresholdTokens: chatCompactThresholdTokens(model), strategy: 'digest' };
+}
 /** Aggregate bound on the tool output an app invocation retains for its caller. */
 export const APP_INVOKE_COLLECT_CAP_BYTES = 256 * 1024;
 
@@ -1023,7 +1036,7 @@ class ChatService {
           // Chat tools have side effects and the client renders tool frames in
           // order — run one call at a time.
           tools: { parallel: false, choice: app.toolChoice },
-          context: { compactThresholdTokens: chatCompactThresholdTokens(model) }
+          context: chatContextPolicies(model)
         },
         options: { maxTokens, responseFormat, responseSchema, ...llmOptions },
         language,
@@ -1981,7 +1994,7 @@ class ChatService {
         policies: {
           budgets: { maxToolRounds: CHAT_MAX_TOOL_ROUNDS, maxWallClockMs },
           tools: { parallel: false, choice: app.toolChoice },
-          context: { compactThresholdTokens: chatCompactThresholdTokens(model) }
+          context: chatContextPolicies(model)
         },
         options: { maxTokens, responseFormat, responseSchema, ...llmOptions },
         language,

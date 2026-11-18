@@ -8931,6 +8931,36 @@
     "documentsFound_other": "{{count}} documents found"
   },
   "toolActivity": {
+    "compaction": {
+      "running": "Condensing earlier results…",
+      "condensed_one": "Condensed {{count}} earlier result into notes",
+      "condensed_other": "Condensed {{count}} earlier results into notes",
+      "condensedSearches_one": "Condensed {{count}} earlier search result into notes",
+      "condensedSearches_other": "Condensed {{count}} earlier search results into notes",
+      "reduced_one": "Shortened {{count}} earlier result to its call and sources",
+      "reduced_other": "Shortened {{count}} earlier results to their calls and sources",
+      "shortened_one": "Shortened {{count}} earlier result to free context",
+      "shortened_other": "Shortened {{count}} earlier results to free context",
+      "contextFull_one": "Context full: shortened {{count}} earlier result",
+      "contextFull_other": "Context full: shortened {{count}} earlier results",
+      "stopped": "Condensing stopped",
+      "why": "Frees room in the model's context, so the turn can go on without running these calls again.",
+      "lossyRecall": "Some details may be missing from the notes. The model can read the full results again.",
+      "lossyElided": "Some details of these results are no longer available to the model.",
+      "showNotes": "Show notes",
+      "hideNotes": "Hide notes",
+      "notesTruncated": "The notes are shortened here.",
+      "facts_one": "{{count}} fact",
+      "facts_other": "{{count}} facts",
+      "detailContext": "Context",
+      "detailTokens": "{{before}} → {{after}} tokens",
+      "detailTrigger": "Trigger",
+      "trigger": {
+        "proactive": "context threshold",
+        "overflow": "context window full",
+        "manual": "requested"
+      }
+    },
     "searchingFor": "Searching for “{{query}}”",
     "runningTool": "Running {{name}}",
     "ranTool": "Ran {{name}}",

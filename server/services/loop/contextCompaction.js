@@ -6,7 +6,9 @@
  *
  * - `microcompactMessages` collapses the content of old, bulky `tool` /
  *   `assistant` messages into short placeholders while keeping the last
- *   `keepRecent` messages verbatim and never touching system/user prompts.
+ *   `keepRecent` messages verbatim and never touching system/user prompts or
+ *   a condensed result (a findings digest, `findingsDigest.js`). What it
+ *   collapses is lost: the loop uses it as the lossy path (`lossy: true`).
  * - `compactIfOversized` runs it only when the estimated prompt size exceeds a
  *   threshold (the O(N²) prompt-growth fix); under the threshold it returns the
  *   same array reference.
@@ -19,6 +21,7 @@
 import { estimateTokens } from '../../../shared/tokenEstimator.js';
 import { estimateTranscriptTokens } from './contextTracker.js';
 import { isLLMError } from './contracts/errors.js';
+import { isCondensedContent } from './findingsDigest.js';
 
 export function microcompactMessages(messages, opts = {}) {
   const keepRecent = opts.keepRecent ?? 4;
@@ -32,6 +35,9 @@ export function microcompactMessages(messages, opts = {}) {
   const out = messages.map((msg, i) => {
     if (i >= cutoff) return msg;
     if (!msg || typeof msg.content !== 'string') return msg;
+    // A condensed result holds a findings digest: what the model learned from
+    // results that are gone from the transcript already (#3819).
+    if (isCondensedContent(msg.content)) return msg;
     const isCompactable = msg.role === 'tool' || msg.role === 'assistant';
     if (!isCompactable || msg.content.length <= maxChars) return msg;
     freedChars += msg.content.length;
