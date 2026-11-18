@@ -258,8 +258,9 @@ function AdminArtifactsPage() {
             }
           : {
               type: 'error',
+              // The server's problem+json `detail` names the field; axios's own text does not.
               text:
-                error.message ||
+                error?.response?.data?.detail ||
                 t('admin.artifacts.saveError', 'The artifact settings could not be saved.')
             }
       );
@@ -278,7 +279,7 @@ function AdminArtifactsPage() {
         type: 'error',
         conflict: true,
         text:
-          error.message ||
+          error?.response?.data?.detail ||
           t('admin.artifacts.reloadError', 'The current settings could not be loaded.')
       });
     }

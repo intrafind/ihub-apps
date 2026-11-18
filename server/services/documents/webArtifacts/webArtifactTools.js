@@ -201,20 +201,30 @@ function scriptSyntaxErrors(text) {
 
 /**
  * The kit library a CDN URL loads, judged by the package name in its path
- * (`/npm/chart.js@4.4.1/…`, `/ajax/libs/Chart.js/…`, `/d3@7`, `/alpinejs@3`).
+ * (`/npm/chart.js@4.4.1/…`, `/npm/chart.js`, `/ajax/libs/Chart.js/…`,
+ * `/d3@7`, `/alpinejs@3`), or by a library's own CDN (`d3js.org/d3.v7.min.js`).
  *
  * @param {string} url
  * @returns {object|null}
  */
 function kitLibraryOfUrl(url) {
   const lower = String(url).toLowerCase();
+  if (OWN_CDN.d3.test(lower)) return ARTIFACT_LIBRARIES.find(library => library.id === 'd3');
   return (
     ARTIFACT_LIBRARIES.find(library => {
       const name = library.npm.package.toLowerCase();
-      return lower.includes(`/${name}@`) || lower.includes(`/${name}/`);
+      const at = lower.indexOf(`/${name}`);
+      if (at === -1 || !/^(?:[@/?#]|$)/.test(lower.slice(at + name.length + 1))) return false;
+      // A package path of a CDN (`/npm/x`, `/ajax/libs/x`, or right under the
+      // host as on unpkg), not any file that happens to be called `chart.js`.
+      const before = lower.slice(0, at);
+      return /(?:\/npm|\/libs)$/.test(before) || /^(?:https?:)?\/\/[^/]+$/.test(before);
     }) || null
   );
 }
+
+/** Libraries' own CDNs, whose URLs do not carry the npm package path. */
+const OWN_CDN = Object.freeze({ d3: /\/\/d3js\.org\/d3(?:\.v(\d+))?(?:\.min)?\.js/ });
 
 /** The marker that loads a kit library offline, as the model writes it. */
 function markerOf(library) {
@@ -225,6 +235,8 @@ function markerOf(library) {
 function majorVersionInUrl(url, packageName) {
   const lower = String(url).toLowerCase();
   const name = packageName.toLowerCase();
+  const own = name === 'd3' ? OWN_CDN.d3.exec(lower) : null;
+  if (own) return own[1] ? Number(own[1]) : null;
   for (const separator of ['@', '/']) {
     const at = lower.indexOf(`/${name}${separator}`);
     if (at === -1) continue;
@@ -250,14 +262,19 @@ function kitReplacementOf(library, urls) {
   const majors = urls
     .filter(url => kitLibraryOfUrl(url) === library)
     .map(url => majorVersionInUrl(url, library.npm.package));
+  // Alpine.js must come last in <body>, so it is not a swap in place.
+  const action =
+    library.placement === 'body'
+      ? `remove the <script src> and put ${markerOf(library)} at the end of <body>, after any script with an "alpine:init" listener`
+      : `replace the <script src> with ${markerOf(library)}`;
   const other = majors.find(major => major !== null && major !== kitMajor);
   if (other !== undefined) {
-    return `${markerOf(library)} only after checking that the code works with ${library.name} ${library.version}: the page uses version ${other}, whose API differs`;
+    return `${action}, but only after checking that the code works with ${library.name} ${library.version}: the page uses version ${other}, whose API differs`;
   }
   if (majors.includes(null)) {
-    return `${markerOf(library)} only after checking that the code works with ${library.name} ${library.version}: the URL does not say which version the page uses`;
+    return `${action}, but only after checking that the code works with ${library.name} ${library.version}: the URL does not say which version the page uses`;
   }
-  return markerOf(library);
+  return action;
 }
 
 /**
@@ -313,12 +330,24 @@ function libraryMarkerFindings(text, libraryKit, problem) {
   const alpineEarly = markers.some(
     marker => marker.resolved.library?.placement === 'body' && bodyAt >= 0 && marker.start < bodyAt
   );
+  const alpineMarker = markers.find(marker => marker.resolved.library?.placement === 'body');
   if (alpineEarly) {
     problem(
       `Alpine.js starts as soon as it is loaded and needs <body> to exist, so its marker in <head> does nothing. Move ${markerOf(
-        ARTIFACT_LIBRARIES.find(library => library.id === 'alpinejs')
+        alpineMarker.resolved.library
       )} to the end of <body>, after any script that registers Alpine.data() in an "alpine:init" listener.`
     );
+  } else if (alpineMarker) {
+    // Alpine fires "alpine:init" once, while it starts: a listener added by a
+    // later script misses it, and the Alpine.data() components never exist.
+    const listenerAt = text.indexOf('alpine:init', alpineMarker.end);
+    if (listenerAt !== -1) {
+      problem(
+        `The "alpine:init" listener comes after the Alpine.js marker, but Alpine starts (and fires "alpine:init") as soon as its marker runs, so the listener and its Alpine.data() components are never used. Move ${markerOf(
+          alpineMarker.resolved.library
+        )} after that script, to the end of <body>.`
+      );
+    }
   }
 }
 
@@ -408,7 +437,7 @@ function htmlFindings(text, { truncated, scriptHosts, libraryKit, problem, note 
       blockedCode.some(url => kitLibraryOfUrl(url) === library)
     );
     const fix = blockedKit.length
-      ? `Load ${blockedKit.map(library => library.name).join(', ')} from iHub's library kit instead: replace the <script src> with ${replacements(blockedKit)}.`
+      ? `Load ${blockedKit.map(library => library.name).join(', ')} from iHub's library kit instead: ${replacements(blockedKit)}.`
       : 'Switch to an allowed host or inline the code.';
     problem(
       `The sandboxed preview will not load ${quoteList(blockedCode, 3)}, so the code that needs it does not run. ${allowed}. ${fix}`
@@ -419,7 +448,7 @@ function htmlFindings(text, { truncated, scriptHosts, libraryKit, problem, note 
   );
   if (kitAllowed.length) {
     note(
-      `${kitAllowed.map(library => library.name).join(', ')} come${kitAllowed.length === 1 ? 's' : ''} from a public CDN here, so the artifact needs internet access to work. iHub ships ${kitAllowed.length === 1 ? 'it' : 'them'} in its offline library kit: unless the user asked for the CDN, replace the <script src> with ${replacements(kitAllowed)}.`
+      `${kitAllowed.map(library => library.name).join(', ')} come${kitAllowed.length === 1 ? 's' : ''} from a public CDN here, so the artifact needs internet access to work. iHub ships ${kitAllowed.length === 1 ? 'it' : 'them'} in its offline library kit: unless the user asked for the CDN, ${replacements(kitAllowed)}.`
     );
   }
   libraryMarkerFindings(text, libraryKit, problem);

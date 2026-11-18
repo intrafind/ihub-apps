@@ -243,7 +243,7 @@ or to be saved, the marker is replaced with the library's source as inline
 script: the chat's preview (the client fetches the source from
 `GET /api/artifact-libraries/{libraryId}/source`), the share embed page, a share
 download (`?download=1`), every `.html` download and attachment from the
-chat, and every ZIP. The CSP stays as it is: no origin is added, and nothing
+chat, and every ZIP (the chat's and the share's downloads, and archives the `create_zip` tool builds). The CSP stays as it is: no origin is added, and nothing
 depends on the public origin or base path.
 
 - **Exact names only.** `chart.js`, `d3`, `alpinejs`, optionally with the

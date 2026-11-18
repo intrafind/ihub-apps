@@ -300,6 +300,26 @@ describe('create_zip', () => {
     });
   });
 
+  it('packs an HTML file with its library-kit libraries inlined (#3822)', async () => {
+    const result = await runCreateZip({
+      user: USER,
+      chatId: CHAT,
+      filename: 'dashboard',
+      files: [
+        {
+          name: 'index.html',
+          content: '<html><head><script data-ihub-lib="d3"></script></head></html>'
+        },
+        { name: 'notes.md', content: '<script data-ihub-lib="d3"></script>' }
+      ]
+    });
+    assert.equal(result.success, true, result.error);
+    const files = await unzip(heldGeneratedFile(USER, result.file.id, { chatId: CHAT }).data);
+    assert.match(files['index.html'], /<script data-ihub-lib-inlined="d3@7\.9\.0">/);
+    assert.equal(files['index.html'].includes('data-ihub-lib="d3"'), false);
+    assert.equal(files['notes.md'], '<script data-ihub-lib="d3"></script>');
+  });
+
   it('packs files created earlier in the chat, by name, id or all at once', async () => {
     const a = await runCreateFile({ user: USER, chatId: CHAT, name: 'src/a.js', content: '1' });
     await runCreateFile({ user: USER, chatId: CHAT, name: 'b.md', content: '2' });

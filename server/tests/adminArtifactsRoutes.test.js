@@ -27,7 +27,7 @@ jest.unstable_mockModule('../utils/platformConfigStore.js', () => ({
   }
 }));
 jest.unstable_mockModule('../configCache.js', () => ({
-  default: { getPlatform: () => state.platform, refreshCacheEntry: async () => {} }
+  default: { getPlatform: () => state.cache ?? state.platform, refreshCacheEntry: async () => {} }
 }));
 jest.unstable_mockModule('../services/AuditLogService.js', () => ({
   logAudit: () => {}
@@ -45,6 +45,7 @@ registerAdminArtifactRoutes(app);
 app.use(errorHandler);
 
 beforeEach(() => {
+  state.cache = undefined;
   state.platform = {
     artifacts: { enabled: true, maxBytes: 1234567, scriptHosts: ['cdn.jsdelivr.net'] },
     other: { kept: true }
@@ -124,6 +125,19 @@ describe('Admin artifact settings', () => {
       .expect(200);
     expect(state.platform.artifacts.maxPerBatch).toBe(3);
     expect(state.platform.artifacts.scriptHosts).toEqual([]);
+  });
+
+  it("does not count an environment-resolved value as someone else's change", async () => {
+    // The file holds a placeholder; the value in force (the cache) is resolved.
+    state.platform.artifacts.maxPerBatch = '${ARTIFACT_BATCH}';
+    state.cache = { artifacts: { ...state.platform.artifacts, maxPerBatch: 12 } };
+    const read = await request(app).get('/api/admin/artifacts/config').expect(200);
+    expect(read.body.maxPerBatch).toBe(12);
+    await request(app)
+      .put('/api/admin/artifacts/config')
+      .send({ maxPerBatch: 4, expected: { maxPerBatch: read.body.maxPerBatch } })
+      .expect(200);
+    expect(state.platform.artifacts.maxPerBatch).toBe(4);
   });
 
   it.each([

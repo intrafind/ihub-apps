@@ -297,12 +297,58 @@ describe('create_web_artifact and the kit', () => {
     assert.deepEqual(off, []);
   });
 
+  it('recognizes bare package URLs and D3s own CDN, not any file named chart.js', () => {
+    const offline = { scriptHosts: [] };
+    for (const src of [
+      'https://cdn.jsdelivr.net/npm/chart.js',
+      'https://unpkg.com/chart.js',
+      'https://d3js.org/d3.v7.min.js'
+    ]) {
+      const [finding] = texts(doc(`<script src="${src}"></script>`), offline);
+      assert.match(
+        finding,
+        /library kit instead: replace the <script src> with <script data-ihub-lib=/,
+        src
+      );
+    }
+    const [other] = texts(doc('<script src="https://example.com/app/chart.js"></script>'), offline);
+    assert.match(other, /Switch to an allowed host or inline the code/);
+    const [d3v5] = texts(doc('<script src="https://d3js.org/d3.v5.min.js"></script>'), offline);
+    assert.match(d3v5, /the page uses version 5, whose API differs/);
+  });
+
+  it('places Alpine.js at the end of <body> when it replaces a CDN script', () => {
+    const page = doc(
+      '<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>'
+    );
+    const [finding] = texts(page, { scriptHosts: [] });
+    assert.match(
+      finding,
+      /remove the <script src> and put <script data-ihub-lib="alpinejs"><\/script> at the end of <body>, after any script with an "alpine:init" listener/
+    );
+  });
+
+  it('asks for the alpine:init listener before the Alpine.js marker', () => {
+    const early = doc(
+      '',
+      '<script data-ihub-lib="alpinejs"></script><script>document.addEventListener("alpine:init", () => {})</script>'
+    );
+    const [finding] = texts(early);
+    assert.match(finding, /^P The "alpine:init" listener comes after the Alpine\.js marker/);
+    const right = doc(
+      '',
+      '<script>document.addEventListener("alpine:init", () => {})</script><script data-ihub-lib="alpinejs"></script>'
+    );
+    assert.deepEqual(texts(right), []);
+  });
+
   it('is described to the model with every library', () => {
     for (const library of ARTIFACT_LIBRARIES) {
       assert.ok(CREATE_WEB_ARTIFACT_TOOL.description.en.includes(`"${library.id}"`), library.id);
       assert.ok(CREATE_WEB_ARTIFACT_TOOL.description.de.includes(`"${library.id}"`), library.id);
     }
     assert.match(CREATE_WEB_ARTIFACT_TOOL.description.en, /only when the user explicitly asks/);
+    assert.match(CREATE_WEB_ARTIFACT_TOOL.description.en, /kit is switched off/);
   });
 });
 

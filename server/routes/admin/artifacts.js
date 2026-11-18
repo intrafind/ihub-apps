@@ -182,9 +182,17 @@ export default function registerAdminArtifactRoutes(app) {
     }
 
     await updatePlatform(platform => {
+      // The form loaded the settings in force (the cache, with `${VAR}`
+      // placeholders and IHUB_* overrides resolved); the update sees the file.
+      // A field counts as changed by someone else only when it differs from
+      // the loaded value in both, so an overridden field can still be saved.
       const stored = artifactSettings(platform);
+      const inForce = artifactSettings(configCache.getPlatform() || {});
       const stale = Object.keys(changes).filter(
-        key => key in expected && !sameValue(stored[key], expected[key])
+        key =>
+          key in expected &&
+          !sameValue(stored[key], expected[key]) &&
+          !sameValue(inForce[key], expected[key])
       );
       if (stale.length) {
         throw new ServiceError(
