@@ -518,12 +518,35 @@ function writtenNumber(written) {
 }
 
 /**
+ * Scale words and the powers of ten they stand for ("billion" is 10^9 in
+ * English and 10^12 in German, so both).
+ */
+const SCALES = [
+  [/^(?:thousand|tausend|k)$/i, [3]],
+  [/^(?:million|millionen|mio|mn|m)$/i, [6]],
+  [/^(?:billion|billionen|bn|b)$/i, [9, 12]],
+  [/^(?:milliarde|milliarden|mrd)$/i, [9]],
+  [/^(?:trillion|tn|bio)$/i, [12]]
+];
+const SCALE_WORD = /^[\s\u00a0\u202f]*([a-z]+)\b\.?/i;
+
+/** The powers of ten of the scale word after a number ("5,100 billion" → [9, 12]). */
+function scaleAfter(text, end) {
+  const word = SCALE_WORD.exec(text.slice(end, end + 20))?.[1];
+  if (!word) return [];
+  return SCALES.find(([pattern]) => pattern.test(word))?.[1] || [];
+}
+
+/**
  * The numbers of a text: how many digits each has, the values it can stand
- * for, and its parts if a space in it separated two numbers ("2024 450").
+ * for, the scale word after it, and its parts if a space in it separated two
+ * numbers ("2024 450").
  */
 function numbersOf(text) {
-  return [...String(text || '').matchAll(NUMBER_PATTERN)].map(m => ({
+  const source = String(text || '');
+  return [...source.matchAll(NUMBER_PATTERN)].map(m => ({
     ...writtenNumber(m[0]),
+    scales: scaleAfter(source, m.index + m[0].length),
     parts: m[0]
       .split(/[\u00a0\u202f ]/)
       .filter(part => /\d/.test(part))
@@ -545,12 +568,12 @@ function datesApart(text) {
  * compared by value — "5.1" never matches "51", "5.0" never "51", "51" never
  * "5.51". A dotted date is read as its day, month and year, in the fact and
  * in the result ("17 Nov" for "17.11.2026", "07.03.2026" for "7.3.2026"),
- * never as a decimal. A whole number of four digits or
- * more may also be the start of a longer whole number in the result
- * ("5,100 billion" for "5,100,000,000,000"), never any other part of it: IDs
- * and timestamps would let invented figures through. A number read across a
- * space ("2024 450") also counts when each of its parts is found; a part of
- * one digit is not checked.
+ * never as a decimal. A whole number followed by a scale word also counts
+ * when the result holds it written out ("5,100 billion" for
+ * "5,100,000,000,000"); nothing else of a longer number counts ("1,200" is
+ * not "1,200,000", and IDs and timestamps let no figure through). A number
+ * read across a space ("2024 450") also counts when each of its parts is
+ * found; a part of one digit is not checked.
  *
  * @param {string} fact
  * @param {string} content
@@ -561,14 +584,11 @@ export function numbersAppearIn(fact, content) {
   if (wanted.length === 0) return true;
   const present = numbersOf(datesApart(content)).flatMap(number => number.values);
   const exact = new Set(present);
-  const wholes = present.filter(value => !value.includes('.'));
+  const scaled = (value, scales = []) =>
+    !value.includes('.') && scales.some(power => exact.has(`${value}${'0'.repeat(power)}`));
   const found = number =>
     number.digitCount < 2 ||
-    number.values.some(
-      value =>
-        exact.has(value) ||
-        (!value.includes('.') && value.length >= 4 && wholes.some(p => p.startsWith(value)))
-    );
+    number.values.some(value => exact.has(value) || scaled(value, number.scales));
   return wanted.every(
     number => found(number) || (number.parts.length > 1 && number.parts.every(found))
   );

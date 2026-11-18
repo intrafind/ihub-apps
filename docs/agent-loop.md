@@ -186,9 +186,10 @@ projected at `compactTargetShare` of the threshold
   and `NOTFOUND | ref | …` lines, with thinking off. A fact is kept only if
   its ref is one of the results it was given and its numbers appear in that
   result, compared by value whatever the separators ("1.234,5" = "1,234.5",
-  never "5.1" = "51"). A whole number of four digits or more may also be the
-  start of a longer one in the result ("5,100 billion" for
-  "5,100,000,000,000"); single digits are not checked. This catches invented
+  never "5.1" = "51"); a dotted date is read as day, month and year. A whole
+  number with a scale word also counts written out ("5,100 billion" for
+  "5,100,000,000,000"), never as part of a longer number ("1,200" is not
+  "1,200,000"); single digits are not checked. This catches invented
   figures, not a figure attached to the wrong entity or period. A source URL
   not in the result is dropped from the fact. Large inputs are split into
   chunks the summary model can take, one call each; a result cut for the

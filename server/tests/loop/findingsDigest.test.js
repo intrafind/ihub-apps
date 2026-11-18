@@ -292,11 +292,14 @@ test('summarizeCalls: no chunk runs past the deadline; a chunk cut at the output
     content: `Revenue 5.1 million USD ${'x'.repeat(200_000)}`,
     sources: []
   }));
+  // Each chunk takes 60 % of one call's time: the third starts at 120 % of
+  // it, inside the deadline (200 %), with 80 % left — less than a full call.
+  // Wide margins: a slow CI runner must not push the third past the deadline.
   const seen = [];
   const slow = {
     complete: async params => {
       seen.push(params.timeoutMs);
-      await new Promise(resolve => setTimeout(resolve, 90));
+      await new Promise(resolve => setTimeout(resolve, 300));
       return { content: '', finishReason: 'stop' };
     }
   };
@@ -304,11 +307,12 @@ test('summarizeCalls: no chunk runs past the deadline; a chunk cut at the output
     llmClient: slow,
     model: { id: 'm' },
     calls,
-    timeoutMs: 100
+    timeoutMs: 500
   });
   assert.equal(timed.chunks, 3);
-  assert.equal(seen[0], 100);
-  assert.ok(seen[2] < 100, `the third chunk gets only what is left (${seen[2]} ms)`);
+  assert.equal(seen.length, 3, 'all three chunks ran');
+  assert.equal(seen[0], 500);
+  assert.ok(seen[2] < 500, `the third chunk gets only what is left (${seen[2]} ms)`);
 
   const cut = {
     complete: async () => ({
@@ -524,11 +528,16 @@ test('text from a result cannot close or open the digest block', () => {
 });
 
 {
-  test('a short number must match exactly; a long one only as the start of a longer one', () => {
+  test('a number matches exactly, or written out with its scale word; never as part of a longer one', () => {
     const content = '{"id":"98712345","ts":1731830400000} Revenue 5,100,000,000,000 USD';
     assert.equal(numbersAppearIn('revenue 1234 million', content), false, 'not inside an id');
     assert.equal(numbersAppearIn('revenue 3083 million', content), false, 'not inside a timestamp');
-    assert.equal(numbersAppearIn('5,100 billion USD', content), true, 'the start of a figure');
+    assert.equal(numbersAppearIn('5,100 billion USD', content), true, 'written out');
+    assert.equal(numbersAppearIn('5,100 Mrd. USD', content), true, 'German scale word');
+    assert.equal(numbersAppearIn('5,100 USD', content), false, 'not the start of a longer one');
+    assert.equal(numbersAppearIn('1,200 USD', 'Price 1,200,000 USD'), false);
+    assert.equal(numbersAppearIn('1,200 million USD', 'Price 1,200,000 USD'), false, 'wrong scale');
+    assert.equal(numbersAppearIn('1,200 thousand USD', 'Price 1,200,000 USD'), true);
   });
 
   test('numbers separated by a space are not read as one', () => {
