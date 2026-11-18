@@ -359,10 +359,21 @@ test('summarizeCalls: a chunk whose share of the room rounds to nothing is skipp
   assert.equal(summaryFailureOf(summary, calls), 'summary_partial');
 });
 
-test('a single field longer than a line is cut and counted, so the notes are marked partial', () => {
-  const parsed = parseDigestLines(`FACT | r1 | NVIDIA (NVDA): note ${'z'.repeat(1500)} | x.test`);
+test('a single field longer than a line is cut and counted, so the notes are marked partial', async () => {
+  const line = `FACT | r1 | NVIDIA (NVDA): note ${'z'.repeat(1500)} | x.test`;
+  const parsed = parseDigestLines(line);
   assert.equal(parsed.cutLines, 1);
   assert.ok(parsed.facts[0].text.length <= 1001);
+
+  const calls = [
+    { ref: 'r1', name: 't', args: '{}', content: `NVIDIA (NVDA) note ${'z'.repeat(1500)}` }
+  ];
+  const summary = await summarizeCalls({
+    llmClient: { complete: async () => ({ content: line, usage: {} }) },
+    model: { id: 'm', contextWindow: 200_000 },
+    calls
+  });
+  assert.equal(summaryFailureOf(summary, calls), 'summary_partial');
 });
 
 test('summarizeCalls: a failed chunk is reported, an abort of the run is thrown', async () => {

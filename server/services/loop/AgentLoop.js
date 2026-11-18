@@ -44,7 +44,7 @@ import {
   sourcesFromGrounding
 } from '../../../shared/sources/index.js';
 import { planToolBatches } from './segmentPlanner.js';
-import { takeSteers, steerMessage } from './steering.js';
+import { takeSteers, steerMessage, STEER_MARKER } from './steering.js';
 import {
   isNativeWebSearchRejection,
   isNativeWebSearchUnavailable,
@@ -2248,9 +2248,16 @@ function wrappedUpIn(messages) {
     const message = messages[i];
     if (message?.role !== 'user') continue;
     if (message.content === CONTEXT_WRAP_UP_NUDGE) return true;
-    // Loop nudges start with "[system]"; a stored transcript may have lost
-    // their marker.
-    if (!message._nudge && !String(message.content ?? '').startsWith('[system] ')) return false;
+    // Loop nudges start with "[system]" and mid-run steers with their
+    // marker: neither starts a new turn, also when a stored transcript lost
+    // the flag.
+    const text = String(message.content ?? '');
+    const synthetic =
+      message._nudge ||
+      message._steer ||
+      text.startsWith('[system] ') ||
+      text.startsWith(STEER_MARKER);
+    if (!synthetic) return false;
   }
   return false;
 }

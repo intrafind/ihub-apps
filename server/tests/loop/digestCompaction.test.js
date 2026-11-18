@@ -15,6 +15,7 @@ import { RUN_LOG_EVENTS, SSE_V2_EVENTS } from '../../../shared/runEvents.js';
 import { RECALL_TOOL_ID, notesOf } from '../../services/loop/findingsDigest.js';
 import { CONTEXT_WRAP_UP_NUDGE, nudgeMessage } from '../../services/loop/nudges.js';
 import { pausedTurnTranscript } from '../../services/chat/chatToolApproval.js';
+import { steerMessage } from '../../services/loop/steering.js';
 import {
   makeClient,
   sseResponse,
@@ -1435,6 +1436,18 @@ test('a turn paused after it wrapped up resumes wrapped up from its stored appro
   assert.ok(offered.includes('create_xlsx'));
   // A transcript stored before nudges kept their marker.
   offered = await resumeOffers(small.map(({ _nudge, ...m }) => m));
+  assert.ok(!offered.includes('webSearch'), JSON.stringify(offered));
+
+  // A person's mid-run steer after the wrap-up does not start a new turn.
+  const steered = turnOf([]);
+  steered.splice(steered.length - 2, 0, steerMessage({ message: 'use EUR as well' }));
+  const stored = pausedTurnTranscript(steered, {
+    startMessage: baseMessages[1],
+    toolCallId: 'cx'
+  });
+  offered = await resumeOffers(stored);
+  assert.ok(!offered.includes('webSearch'), JSON.stringify(offered));
+  offered = await resumeOffers(stored.map(({ _nudge, _steer, ...m }) => m));
   assert.ok(!offered.includes('webSearch'), JSON.stringify(offered));
 
   // So long that only the step with the call is stored: the wrap-up is kept.

@@ -118,6 +118,7 @@ function slim(message, limit) {
   if (message.name) out.name = message.name;
   // A loop nudge stays one: a resumed turn tells it from the user's own words.
   if (message._nudge) out._nudge = true;
+  if (message._steer) out._steer = true;
   if (
     Array.isArray(message.thoughtSignatures) &&
     JSON.stringify(message.thoughtSignatures).length <= limit
