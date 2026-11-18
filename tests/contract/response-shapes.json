@@ -664,6 +664,9 @@
           "retentionDays": "number",
           "temporaryRetentionHours": "number"
         },
+        "compaction": {
+          "modelId": "string"
+        },
         "evidence": {
           "enabled": "boolean",
           "maxContentBytes": "number"
@@ -851,6 +854,9 @@
         "starterPrompts": ["object"]
       },
       "chats": {
+        "compaction": {
+          "modelId": "string"
+        },
         "enabled": "boolean",
         "evidence": {
           "enabled": "boolean",
