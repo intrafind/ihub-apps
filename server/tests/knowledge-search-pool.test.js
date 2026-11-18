@@ -16,8 +16,10 @@ import {
   evictSearchIndexes,
   searchPoolStats,
   searchProjectIndex,
+  searchThreadLimits,
   shutdownSearchPool
 } from '../services/knowledge/searchPool.js';
+import { INDEX_HEAP_BYTES_PER_CHAR } from '../utils/cacheBudgets.js';
 
 const TOPICS = ['invoices', 'travel expenses', 'holidays', 'onboarding', 'security policy'];
 
@@ -114,6 +116,40 @@ describe('search pool', () => {
     assert.ok(found.hits.length > 0, 'the search ran on the event loop');
     assert.equal(searchPoolStats().threads, 0, 'no thread was started');
     configureSearchPool({ threads: 2 });
+  });
+
+  it('searches a project that exhausts its thread on the event loop from then on', async () => {
+    // A thread that runs out of heap on its first job, like an oversized index build.
+    const oom = new URL(
+      'data:text/javascript,' +
+        encodeURIComponent(
+          "import { parentPort } from 'node:worker_threads'; const keep = [];" +
+            "parentPort.on('message', () => { for (;;) keep.push(new Array(1e6).fill(1.5)); });"
+        )
+    );
+    await shutdownSearchPool();
+    configureSearchPool({ threads: 1, workerUrl: oom });
+    const found = await searchProjectIndex('prj_big', request('prj_big:v1', { docs: DOCS }));
+    assert.ok(found.hits.length > 0, 'the failed build was retried on the event loop');
+    assert.equal(searchPoolStats().threads, 0, 'the thread was retired');
+    const again = await searchProjectIndex('prj_big', request('prj_big:v1'));
+    assert.notEqual(again.miss, true, 'the event loop holds the index');
+    assert.equal(searchPoolStats().threads, 0, 'the project no longer goes to a thread');
+    configureSearchPool({ threads: 2 });
+  });
+
+  it('keeps a thread cache well below the thread heap', () => {
+    const MB = 1024 * 1024;
+    // indexCache.maxHeapShare 0.5 of a 1,024 MB process heap, one 512 MB thread.
+    const processChars = Math.floor((512 * MB) / INDEX_HEAP_BYTES_PER_CHAR);
+    const one = searchThreadLimits({ maxEntries: 32, maxChars: processChars }, 1, 512);
+    assert.equal(one.maxChars, Math.floor((256 * MB) / INDEX_HEAP_BYTES_PER_CHAR));
+    assert.equal(one.maxEntries, 32);
+    // A small budget is only split.
+    assert.deepEqual(searchThreadLimits({ maxEntries: 32, maxChars: 1_000_000 }, 2, 512), {
+      maxEntries: 16,
+      maxChars: 500_000
+    });
   });
 
   it('stops the threads above a lowered thread count', async () => {
