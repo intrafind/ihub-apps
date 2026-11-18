@@ -702,10 +702,12 @@ export default function registerChatShareRoutes(app) {
     const body = artifact.data;
     res.setHeader('Content-Type', servedMediaType(artifact.mimeType));
     res.setHeader('Content-Length', String(body.length));
-    // Written once, keyed by a fresh uuid: the bytes behind this URL cannot
-    // change. `private`, because the link may be revoked and a shared cache
-    // must not keep serving what the owner took back.
-    res.setHeader('Cache-Control', 'private, max-age=31536000, immutable');
+    // Inline: written once under a fresh uuid, so immutable; `private`, as the
+    // link may be revoked. A download depends on the library kit: not stored.
+    res.setHeader(
+      'Cache-Control',
+      download ? 'private, no-store' : 'private, max-age=31536000, immutable'
+    );
     res.setHeader('X-Content-Type-Options', 'nosniff');
     if (share.mode === 'public') res.setHeader('X-Robots-Tag', 'noindex, nofollow');
     if (download) {

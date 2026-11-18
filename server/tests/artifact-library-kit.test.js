@@ -114,6 +114,13 @@ describe('library markers', () => {
       ),
       []
     );
+    // A lookalike before a real marker does not hide it, and its end tag is not a script's.
+    assert.deepEqual(
+      artifactLibraryMarkers(
+        '<script-widget>w</script-widget><script data-ihub-lib="chart.js"></script>'
+      ).map(m => m.ref),
+      ['chart.js']
+    );
     const hostile = '<script ' + ' '.repeat(200000) + 'x'.repeat(200000);
     const started = Date.now();
     assert.deepEqual(artifactLibraryMarkers(hostile.repeat(5)), []);

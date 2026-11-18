@@ -1506,6 +1506,8 @@ describe('the embed page', () => {
     assert.match(savedText, /data-ihub-lib-inlined="chart\.js@4\.5\.1"/);
     assert.equal(savedText.includes('data-ihub-lib="'), false);
     assert.equal(saved.headers['content-length'], String(saved.body.length));
+    assert.equal(saved.headers['cache-control'], 'private, no-store');
+    assert.match(inline.headers['cache-control'], /immutable/);
 
     platform.artifacts = { ...platform.artifacts, libraryKit: { enabled: false } };
     configCache.setCacheEntry('config/platform.json', platform);
