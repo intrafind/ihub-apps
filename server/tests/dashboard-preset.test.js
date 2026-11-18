@@ -272,10 +272,26 @@ describe('dashboard spec: the date and the sources are required', () => {
     const none = spec();
     delete none.asOf;
     invalid(none, /asOf is required/);
-    for (const bad of ['yesterday', '9 November 2026', '2026-13-01', '2026-11-32', 'Q3 2026']) {
+    for (const bad of [
+      'yesterday',
+      '9 November 2026',
+      '2026-13-01',
+      '2026-11-32',
+      'Q3 2026',
+      '2026-11T10:15',
+      '2026-11-09T10:15 11:00',
+      '2026-11-09Tnoon',
+      '2026-11-09T25'
+    ]) {
       invalid({ ...spec(), asOf: bad }, /asOf must be the date of the data as YYYY-MM-DD/);
     }
-    for (const good of ['2026-11-09', '2026-11', '2026-11-09T10:15:00Z', '2026-11-09 10:15']) {
+    for (const good of [
+      '2026-11-09',
+      '2026-11',
+      '2026-11-09T10:15:00Z',
+      '2026-11-09 10:15',
+      '2026-11-09T10:15:00.250+02:00'
+    ]) {
       assert.equal(checkDashboardSpec({ ...spec(), asOf: good }).asOf, good);
     }
   });

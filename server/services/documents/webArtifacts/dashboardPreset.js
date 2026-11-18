@@ -33,8 +33,9 @@ const MAX_SPEC_BYTES = 1024 * 1024;
 const FORMATS = new Set(['int', 'decimal', 'percent', 'compact', 'text', 'status']);
 const BLOCK_TYPES = ['bars', 'line', 'table', 'text'];
 const ID_RE = /^[A-Za-z0-9_-]{1,40}$/;
-// The date of the data: `2026-11-09`, `2026-11` or an ISO timestamp.
-const AS_OF_RE = /^(\d{4})-(\d{2})(?:-(\d{2})(?:[T ][0-9:.]+(?:Z|[+-]\d{2}:?\d{2})?)?)?$/;
+// The date of the data: `2026-11-09`, `2026-11` or a timestamp (`2026-11-09T10:15:00Z`), checked in two parts.
+const AS_OF_DATE_RE = /^(\d{4})-(\d{2})(?:-(\d{2}))?$/;
+const AS_OF_TIME_RE = /^\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?$/;
 const URL_RE = /^https?:\/\/[^\s<>"']+$/i;
 const LANG_RE = /^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})?$/;
 
@@ -225,10 +226,13 @@ const BLOCK_CHECKS = { bars: checkBars, line: checkLine, table: checkTable, text
 /** The date of the data, required, as `YYYY-MM-DD`, `YYYY-MM` or an ISO timestamp. */
 function asOfOf(value) {
   const asOf = text('asOf', value, { max: 40, required: true });
-  const match = AS_OF_RE.exec(asOf);
+  const [date, time, ...rest] = asOf.split(/[T ]/);
+  const match = AS_OF_DATE_RE.exec(date);
   const month = match ? Number(match[2]) : 0;
   const day = match?.[3] ? Number(match[3]) : 1;
-  if (!match || month < 1 || month > 12 || day < 1 || day > 31) {
+  // A time of day belongs to a whole date, and there is at most one.
+  const timeFits = time === undefined || (match?.[3] && !rest.length && AS_OF_TIME_RE.test(time));
+  if (!match || !timeFits || month < 1 || month > 12 || day < 1 || day > 31) {
     fail(
       `asOf must be the date of the data as YYYY-MM-DD (for example "2026-11-09"), got ${JSON.stringify(asOf)}. Take it from the data itself (a tool result, the file, the user), never from your own idea of the date.`
     );
