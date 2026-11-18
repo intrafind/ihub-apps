@@ -633,11 +633,18 @@ function numbersOf(text) {
  */
 function columnsOf(written) {
   const parts = written.split(/[\u00a0\u202f ]/).filter(part => /\d/.test(part));
-  for (let k = 1; k < parts.length - 1; k++) {
-    const tail = parts.slice(k).join(' ');
-    if (digitGrouping(tail)) return [...parts.slice(0, k), tail];
-  }
-  return parts;
+  const n = parts.length;
+  // The tail is a digit grouping (see digitGrouping): its first part has one
+  // to three digits, the parts after it exactly three, the last perhaps a
+  // fraction. Found from the end in one pass, not by trying every start.
+  if (n < 3 || !/^\d{3}(?:[.,]\d+)?$/.test(parts[n - 1])) return parts;
+  let m = n - 1;
+  while (m > 1 && /^\d{3}$/.test(parts[m - 1])) m -= 1;
+  const k = /^\d{1,3}$/.test(parts[Math.max(1, m - 1)])
+    ? Math.max(1, m - 1)
+    : Math.max(1, m - 1) + 1;
+  if (k > n - 2) return parts;
+  return [...parts.slice(0, k), parts.slice(k).join(' ')];
 }
 
 /** A dotted date ("17.11.2026"), not part of a longer number. */
@@ -646,6 +653,27 @@ const DOTTED_DATE = /(?<![\d.,])(\d{1,2})\.(\d{1,2})\.(\d{2,4})(?![\d.,]?\d)/g;
 /** A text with its dotted dates as day, month and year apart ("17/11/2026"), never read as decimals. */
 function datesApart(text) {
   return String(text || '').replace(DOTTED_DATE, '$1/$2/$3');
+}
+
+/**
+ * A number in digit groups ("1 234 567") is one number; numbers side by side
+ * ("2024 450", a table row) are only their parts — on both sides, so neither
+ * "234" nor "2024450" is read into either. A scale word belongs to the last
+ * of them.
+ */
+function asWritten(number) {
+  return number.grouped
+    ? [number]
+    : number.parts.map((part, i, all) => ({
+        ...part,
+        scales: i === all.length - 1 ? number.scales : []
+      }));
+}
+
+/** The numbers of a result and the set of their values, read once for all its facts. */
+function presentNumbersOf(content) {
+  const numbers = numbersOf(datesApart(content)).flatMap(asWritten);
+  return { numbers, values: new Set(numbers.flatMap(number => number.values)) };
 }
 
 /**
@@ -669,29 +697,17 @@ function datesApart(text) {
  * @param {string} content
  * @returns {boolean}
  */
-export function numbersAppearIn(fact, content) {
+export function numbersAppearIn(fact, content, present = presentNumbersOf(content)) {
   // A single digit is checked only with a scale word ("5 million"): alone it
   // is a count or a rank ("top 5"), too common to check.
   const checked = number => number.digitCount >= 2 || number.scales?.length > 0;
-  // A number in digit groups ("1 234 567") is one number; numbers side by
-  // side ("2024 450", a table row) are only their parts — on both sides, so
-  // neither "234" nor "2024450" is read into either. A scale word belongs
-  // to the last of them.
-  const asWritten = number =>
-    number.grouped
-      ? [number]
-      : number.parts.map((part, i, all) => ({
-          ...part,
-          scales: i === all.length - 1 ? number.scales : []
-        }));
   const wanted = numbersOf(datesApart(fact)).flatMap(asWritten).filter(checked);
   if (wanted.length === 0) return true;
-  const present = numbersOf(datesApart(content)).flatMap(asWritten);
-  const values = new Set(present.flatMap(number => number.values));
+  const values = present.values;
   // The value with a scale word in the fact: in the result with the same
   // scale or none (a table says "in millions" once), never with another one.
   const sameValue = (value, scales = []) =>
-    present.some(
+    present.numbers.some(
       number =>
         number.values.includes(value) &&
         (scales.length === 0 ||
@@ -722,6 +738,12 @@ export function numbersAppearIn(fact, content) {
 export function verifyDigest(parsed, callsByRef) {
   let dropped = 0;
   const facts = [];
+  // Each cited result is read for its numbers once, not once per fact.
+  const presentByRef = new Map();
+  const presentOf = call => {
+    if (!presentByRef.has(call.ref)) presentByRef.set(call.ref, presentNumbersOf(call.content));
+    return presentByRef.get(call.ref);
+  };
   for (const fact of parsed.facts) {
     const call = callsByRef.get(fact.ref);
     const urlsOf = text =>
@@ -731,7 +753,13 @@ export function verifyDigest(parsed, callsByRef) {
     // figure there); a URL anywhere must be one the result holds.
     if (
       !call ||
-      !numbersAppearIn(`${fact.text} ${fact.source ?? ''}`, call.content) ||
+      // A URL in the source is checked as a URL below, not for its digits:
+      // a mis-copied article id drops the source, not the fact.
+      !numbersAppearIn(
+        `${fact.text} ${String(fact.source ?? '').replace(URL_PATTERN, ' ')}`,
+        call.content,
+        presentOf(call)
+      ) ||
       unknownUrl(fact.text)
     ) {
       dropped += 1;

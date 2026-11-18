@@ -475,6 +475,33 @@ test('notesOf does not count a raw result that quotes a digest', () => {
   assert.equal(notes.chars, block.length);
 });
 
+test('a source URL with digits the result lacks drops the source, not the fact', () => {
+  const content = 'NVIDIA market cap 5.1 trillion USD, see https://news.test/article-48212';
+  const { facts, dropped } = verifyDigest(
+    {
+      facts: [
+        {
+          ref: 'r1',
+          text: 'NVIDIA market cap 5.1 trillion USD',
+          source: 'https://news.test/article-48213'
+        }
+      ],
+      notFound: []
+    },
+    new Map([['r1', { ref: 'r1', content }]])
+  );
+  assert.equal(dropped, 0);
+  assert.equal(facts.length, 1);
+  assert.equal(facts[0].source, null, 'the unknown URL is dropped');
+});
+
+test('a long run of digit groups is read in linear time', () => {
+  const run = Array.from({ length: 20_000 }, () => '123').join(' ');
+  const started = Date.now();
+  assert.equal(numbersAppearIn('in 1999', `1999 ${run} units`), true);
+  assert.ok(Date.now() - started < 1000, `${Date.now() - started} ms`);
+});
+
 test('a flattened table row keeps a grouped figure after a separate column', () => {
   const row = 'Germany 2024 450 567 890 units';
   assert.equal(numbersAppearIn('Germany sold 450,567,890 units', row), true);

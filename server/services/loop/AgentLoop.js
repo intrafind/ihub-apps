@@ -1291,6 +1291,37 @@ export class AgentLoop {
 
     if (ctx.signal?.aborted) throw abortError('Agent loop aborted (cancelled or timed out)');
 
+    // Withdrawn for the wrap-up: a model can still repeat a search it saw
+    // earlier in the turn. Refused before any seam sees it, so it asks for no
+    // approval, is taken over by no passthrough and shows no search starting.
+    if (ctx.compaction?.wrapUp && gathers(toolDef)) {
+      const content = JSON.stringify(WITHDRAWN_RESULT);
+      const callId = call.id || `${call.index}`;
+      this._ledger(ledgerId, RUN_LOG_EVENTS.TOOL_CALL, {
+        step: iteration,
+        callId,
+        toolId,
+        name,
+        ...display,
+        args,
+        argsRepaired,
+        execution: toolExecution,
+        parallelGroup: groupIndex
+      });
+      this._ledger(ledgerId, RUN_LOG_EVENTS.TOOL_RESULT, {
+        step: iteration,
+        callId,
+        toolId,
+        name,
+        resultPreview: previewValue(content),
+        resultBytes: content.length,
+        error: { message: WITHDRAWN_RESULT.message, rateLimited: false },
+        durationMs: 0
+      });
+      messages.push({ role: 'tool', tool_call_id: call.id, name, content });
+      return { position, messages, terminate: null };
+    }
+
     // pre-tool seams may take the call over (approval gate, question, passthrough)
     const handled = await runHooks(seams, 'preTool', ctx, info);
     if (handled) {
@@ -1352,17 +1383,7 @@ export class AgentLoop {
       });
     } else {
       try {
-        if (ctx.compaction?.wrapUp && gathers(toolDef)) {
-          // Withdrawn for the wrap-up: a model can still repeat a search it
-          // saw earlier in the turn, and its result would take the room kept
-          // for the answer.
-          rawResult = {
-            error: true,
-            reason: 'tool_withdrawn',
-            message:
-              'The context is nearly full, so searches and page reads are withdrawn. Answer from the condensed results; say a figure is not available rather than search again.'
-          };
-        } else if (toolDef.isCompactionRecall) {
+        if (toolDef.isCompactionRecall) {
           // A condensed result read again by ref (#3819): answered from this
           // run's own results, never from a path the model names.
           rawResult = await this._recall(ctx, args);
@@ -1605,12 +1626,14 @@ export class AgentLoop {
       Number.isFinite(knownTokens) && knownTokens > 0
         ? Math.round(knownTokens)
         : estimateTranscriptTokens(ctx.messages) + toolDefinitionTokens(ctx.offeredTools);
-    if (!overflow && tokensBefore <= threshold) return 0;
+    // Near the model's window the next call may be refused as too long: then
+    // neither the cooldown nor the second kept batch stands in the way. A
+    // model whose output cap is large next to its window has its answer line
+    // below the threshold: it condenses from there, before it would wrap up.
+    const answerLine = this._answerLine(ctx, options);
+    if (!overflow && tokensBefore <= Math.min(threshold, answerLine)) return 0;
 
     const state = ctx.compaction;
-    // Near the model's window the next call may be refused as too long: then
-    // neither the cooldown nor the second kept batch stands in the way.
-    const answerLine = this._answerLine(ctx, options);
     const urgent = overflow || tokensBefore > answerLine;
     // The last compaction could not bring the prompt under the threshold (what
     // cannot be condensed — the system prompt, uploads, digests — is that
@@ -2225,6 +2248,14 @@ const MIN_COMPACTION_PROGRESS = 0.1;
  * next model call may be refused as too long (#3819).
  */
 const URGENT_WINDOW_SHARE = 0.8;
+
+/** What a search or page read gets once the wrap-up has withdrawn it. */
+const WITHDRAWN_RESULT = Object.freeze({
+  error: true,
+  reason: 'tool_withdrawn',
+  message:
+    'The context is nearly full, so searches and page reads are withdrawn. Answer from the condensed results; say a figure is not available rather than search again.'
+});
 
 /** Digest text is dense: about three characters to a token, for sizing it. */
 const NOTES_CHARS_PER_TOKEN = 3;

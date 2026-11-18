@@ -1218,11 +1218,13 @@ test('a search repeated during the wrap-up is refused, not run', async () => {
     ['FACT | r1 | NVIDIA market cap 5.1 trillion USD | https://x.test/nvidia']
   );
   const ran = [];
+  const seenBySeams = [];
   const result = await loop.run({
     model: small,
     messages: baseMessages,
     tools: [searchTool],
     policies,
+    seams: [{ preTool: (_ctx, info) => void seenBySeams.push(info.call.id) }],
     executeTool: async (_call, { args }) => {
       ran.push(args.query);
       return searchResult(args.query);
@@ -1231,6 +1233,7 @@ test('a search repeated during the wrap-up is refused, not run', async () => {
   assert.equal(result.status, 'completed', JSON.stringify(result.error));
   assert.deepEqual(ran, ['nvidia', 'apple']);
   assert.match(result.messages.find(m => m.tool_call_id === 'c3').content, /tool_withdrawn/);
+  assert.ok(!seenBySeams.includes('c3'), 'refused before any seam sees it');
 });
 
 test('shrinkFailedToolCalls: error false is a success; a failure recorded when it ran survives elision', () => {
@@ -1462,4 +1465,34 @@ test('a turn paused after it wrapped up resumes wrapped up from its stored appro
   assert.ok(tight.length < 10, `${tight.length} messages stored`);
   offered = await resumeOffers(tight);
   assert.ok(!offered.includes('webSearch'), JSON.stringify(offered));
+});
+
+test('a model whose answer line lies below the threshold condenses before it wraps up', async () => {
+  // Output cap half the window (the shipped local-vllm model): the answer line
+  // is 12,800 while the chat threshold is 16,000.
+  const small = { ...model, contextWindow: 32_000, maxOutputTokens: 16_000 };
+  const { loop, summaryRequests } = makeLoop(
+    [
+      toolTurn('c1', 'webSearch', { query: 'nvidia' }, 1000),
+      toolTurn('c2', 'webSearch', { query: 'apple' }, 14_000),
+      textTurn('done')
+    ],
+    ['FACT | r1 | NVIDIA market cap 5.1 trillion USD | https://x.test/nvidia']
+  );
+  const infos = [];
+  const result = await loop.run({
+    model: small,
+    messages: baseMessages,
+    tools: [searchTool],
+    policies: { context: { strategy: 'digest', compactThresholdTokens: 16_000 } },
+    seams: [{ onCompaction: (_ctx, info) => infos.push(info) }],
+    executeTool: async (_call, { args }) => searchResult(args.query)
+  });
+  assert.equal(result.status, 'completed', JSON.stringify(result.error));
+  assert.ok(infos.length >= 1, 'a compaction ran');
+  assert.equal(summaryRequests.length >= 1, true, 'with notes');
+  assert.match(
+    result.messages.find(m => m.tool_call_id === 'c1').content,
+    /^\[condensed result r1/
+  );
 });
