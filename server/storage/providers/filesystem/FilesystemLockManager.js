@@ -533,15 +533,19 @@ export class FilesystemLockManager extends LockManager {
       if (shouldStop()) break;
       const match = LOCK_FILE_NAME.exec(entry);
       const wantMarker = match?.[2] === 'lock' && match[3] === '.want';
-      if (!match || (match[2] !== 'fence' && !wantMarker)) continue;
+      const claimFile = match?.[2] === 'lock' && match[3]?.startsWith('.claim-');
+      if (!match || (match[2] !== 'fence' && !wantMarker && !claimFile)) continue;
       const file = containedPath(this._baseDir, LOCKS_DIR, entry);
       if (!(await isIdle(file))) continue;
       await pace();
       if (shouldStop()) break;
-      if (wantMarker || match[3]) {
+      if (wantMarker || claimFile || match[3]) {
         // `<digest>.lock.want`: a waiter's request (see `signalWant` in
         // fileLock.js) left by a process that died waiting; a live one lasts
         // one lock wait.
+        // `<digest>.lock.claim-<id>-<round>`: a removal claim of a process
+        // that died holding it (see `removeLease` in fileLock.js); a live one
+        // lasts one removal, and after 10 s the next round is taken anyway.
         // `<digest>.fence.<pid>-<uuid>`: a counter write that never reached
         // its rename. A live one is milliseconds old.
         if (await removeIfExists(file)) outcome.scratch += 1;
