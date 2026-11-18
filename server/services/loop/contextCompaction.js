@@ -16,7 +16,8 @@
  *
  * @module services/loop/contextCompaction
  */
-import { estimateTokens, estimateTokensFor } from '../../../shared/tokenEstimator.js';
+import { estimateTokens } from '../../../shared/tokenEstimator.js';
+import { estimateTranscriptTokens } from './contextTracker.js';
 import { isLLMError } from './contracts/errors.js';
 
 export function microcompactMessages(messages, opts = {}) {
@@ -44,16 +45,23 @@ export function microcompactMessages(messages, opts = {}) {
   return { messages: out, freedChars, collapsed };
 }
 
+/**
+ * Per message, remembered on the message, counted like the context figure
+ * (`contextTracker.messageText`): the transcript is counted after every step
+ * and only its newest messages are new.
+ */
 export function estimateMessagesTokens(messages) {
-  // Per message, remembered on the message: the transcript is counted after
-  // every step and only its newest messages are new. The sum is within 0.1
-  // percent of counting the joined text.
-  return (Array.isArray(messages) ? messages : []).reduce(
-    (sum, m) => sum + estimateTokensFor(m, typeof m?.content === 'string' ? m.content : ''),
-    0
-  );
+  return estimateTranscriptTokens(messages);
 }
 
+/**
+ * Collapse old bulky messages when the transcript is over `thresholdTokens`.
+ * `opts.knownTokens` is what the caller already knows the prompt to hold (the
+ * provider's count of the last call plus what was added since); at or under
+ * the threshold the messages are then not counted at all. Over it, the
+ * messages are counted to decide, as without it: the provider's figure also
+ * holds the tool definitions, which the threshold does not.
+ */
 export function compactIfOversized(messages, opts = {}) {
   const thresholdTokens = opts.thresholdTokens ?? 16000;
   const keepRecent = opts.keepRecent ?? 6;
@@ -61,7 +69,11 @@ export function compactIfOversized(messages, opts = {}) {
   if (!Array.isArray(messages) || messages.length === 0) {
     return { messages, freedChars: 0, collapsed: 0, compacted: false };
   }
-  if (estimateMessagesTokens(messages) <= thresholdTokens) {
+  const known = Number(opts.knownTokens);
+  if (
+    (Number.isFinite(known) && known > 0 && known <= thresholdTokens) ||
+    estimateMessagesTokens(messages) <= thresholdTokens
+  ) {
     return { messages, freedChars: 0, collapsed: 0, compacted: false };
   }
   const result = microcompactMessages(messages, { keepRecent, maxChars });

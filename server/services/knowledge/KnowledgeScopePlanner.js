@@ -700,9 +700,12 @@ function documentListLines(project, budgetTokens = MAX_LIST_TOKENS) {
  * The `<projects>` block a plan puts into the system prompt.
  *
  * @param {Awaited<ReturnType<typeof planKnowledgeScope>>} plan
+ * @param {Array<{text: string, tokens: number}>|null} [knownParts] - receives
+ *   each document text of the block with its stored count, so the prompt's
+ *   context figure adds the counts instead of counting the text again
  * @returns {string} Empty when the scope is empty.
  */
-export function renderProjectsBlock(plan) {
+export function renderProjectsBlock(plan, knownParts = null) {
   if (!plan?.projects?.length) return '';
   const lines = ['<projects>'];
   for (const project of plan.projects) {
@@ -739,7 +742,7 @@ export function renderProjectsBlock(plan) {
       continue;
     }
     lines.push(`  <project ${attrs.join(' ')}>`);
-    for (const { doc, text, truncated, sourceFailed, excerpt } of project.injected) {
+    for (const { doc, text, tokens, truncated, sourceFailed, excerpt } of project.injected) {
       const docAttrs = [
         `id="${escapeAttribute(doc.id)}"`,
         `name="${escapeAttribute(doc.name)}"`,
@@ -749,12 +752,14 @@ export function renderProjectsBlock(plan) {
       if (truncated) docAttrs.push('truncated="true"');
       if (excerpt) docAttrs.push('excerpt="true"');
       if (sourceFailed) docAttrs.push('incomplete="true"');
+      const body = neutralizeProjectText(text);
+      if (knownParts && Number.isFinite(tokens) && body) knownParts.push({ text: body, tokens });
       lines.push(
         `    <document ${docAttrs.join(' ')}>`,
         ...(excerpt
           ? [plan.toolless || project.mode === 'pinned' ? EXCERPT_NOTE_NO_TOOLS : EXCERPT_NOTE]
           : []),
-        neutralizeProjectText(text),
+        body,
         '    </document>'
       );
     }

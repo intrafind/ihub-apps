@@ -485,6 +485,27 @@ describe('chatMaterializer: turns that did not go well', () => {
       assert.equal('usage' in answer, false);
     });
   });
+
+  it('stores the context with its system prompt share, for the next turn to start from', async () => {
+    await withRepository(async ({ repository }) => {
+      await userTurn(repository);
+      const context = {
+        contextWindow: 128000,
+        inputTokens: 5400,
+        maxOutputTokens: 4096,
+        source: 'provider',
+        systemTokens: 1200,
+        unknown: 'dropped'
+      };
+      const answer = await assistantTurn(repository, { context });
+      const { unknown: _dropped, ...expected } = context;
+      assert.deepEqual(answer.context, expected);
+      const without = { ...context, systemTokens: undefined };
+      await userTurn(repository);
+      const older = await assistantTurn(repository, { context: without });
+      assert.equal('systemTokens' in older.context, false);
+    });
+  });
 });
 
 describe('chatMaterializer: a turn that was superseded', () => {

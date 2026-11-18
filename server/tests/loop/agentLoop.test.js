@@ -26,6 +26,7 @@ import { RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
 import { reportToolCallSources } from '../../services/sources/toolCallScope.js';
 import { planToolBatches } from '../../services/loop/segmentPlanner.js';
 import { steerRun, takeSteers, STEER_MARKER } from '../../services/loop/steering.js';
+import { estimateTokens, tokenizerStats } from '../../../shared/tokenEstimator.js';
 import {
   makeClient,
   sseResponse,
@@ -1346,4 +1347,33 @@ test('a failed model call is one ledger error, not one from the call and one fro
     assert.equal(errors.length, 1, JSON.stringify(errors.map(e => e.data)));
     await runLog.stop();
   }
+});
+
+// ── token counting without provider usage ──────────────────────────────────
+
+test('without provider usage, a step counts only what is new, array content included', async () => {
+  // Under the 128 KB hash memo: only the per-message memo can spare the recount.
+  const doc = 'Die Plattform durchsucht Dokumente im Unternehmen und beantwortet Fragen. '.repeat(
+    1500
+  );
+  const messages = [
+    { role: 'system', content: 'You are a research agent.' },
+    { role: 'user', content: [{ type: 'text', text: doc }] }
+  ];
+  const { loop, requests } = makeLoop([
+    toolTurn([{ name: 'webSearch', args: { query: 'a' } }]),
+    toolTurn([{ name: 'webSearch', args: { query: 'b' } }]),
+    textTurn('done')
+  ]);
+  const before = tokenizerStats.chars;
+  const result = await loop.run({ model, messages, tools: [searchTool], executeTool: okTool });
+  const tokenized = tokenizerStats.chars - before;
+  assert.equal(requests.length, 3);
+  assert.equal(result.usage.source, 'estimate');
+  assert.ok(
+    tokenized < doc.length * 1.5,
+    `the document is counted once, not every step (${tokenized} chars tokenized for ${doc.length})`
+  );
+  // The array content is counted as its text, not as "[object Object]".
+  assert.ok(result.usage.promptTokens >= 3 * estimateTokens(doc), `${result.usage.promptTokens}`);
 });
