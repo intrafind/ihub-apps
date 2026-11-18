@@ -158,6 +158,33 @@ describe('PUT /api/admin/rate-limits', () => {
     expect(state.audit[0]).toMatchObject({ resource: 'platform', resourceId: 'rateLimit' });
   });
 
+  test('saves who a limiter counts for and the extra limits, only where they apply', async () => {
+    const app = createApp(state.platform);
+    const res = await request(app)
+      .put('/api/admin/rate-limits')
+      .send({
+        limiters: {
+          publicApi: {
+            windowMs: 60000,
+            limit: 300,
+            counts: 'all',
+            keyBy: 'ip',
+            anonymousLimit: 700
+          },
+          authApi: { windowMs: 900000, limit: 30, counts: 'all', perIpLimit: 4000 },
+          // perIpLimit means nothing for the OAuth limiter, so it is not saved.
+          oauthApi: { windowMs: 60000, limit: 300, counts: 'all', perIpLimit: 9 }
+        }
+      });
+
+    expect(res.status).toBe(200);
+    expect(state.platform.rateLimit.publicApi).toMatchObject({ keyBy: 'ip', anonymousLimit: 700 });
+    expect(state.platform.rateLimit.authApi.perIpLimit).toBe(4000);
+    expect(state.platform.rateLimit.oauthApi.perIpLimit).toBeUndefined();
+    expect(res.body.limiters.publicApi).toMatchObject({ keyBy: 'ip', anonymousLimit: 700 });
+    expect(res.body.limiters.authApi.perIpLimit).toBe(4000);
+  });
+
   test('"only successful requests" maps to skipFailedRequests', async () => {
     const app = createApp(state.platform);
     await request(app)

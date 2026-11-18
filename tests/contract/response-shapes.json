@@ -996,16 +996,21 @@
       },
       "rateLimit": {
         "adminApi": {
+          "anonymousLimit": "number",
+          "keyBy": "string",
           "limit": "number",
           "skipFailedRequests": "boolean",
           "windowMs": "number"
         },
         "authApi": {
           "limit": "number",
+          "perIpLimit": "number",
           "skipFailedRequests": "boolean",
           "windowMs": "number"
         },
         "default": {
+          "anonymousLimit": "number",
+          "keyBy": "string",
           "legacyHeaders": "boolean",
           "limit": "number",
           "skipFailedRequests": "boolean",
@@ -1014,6 +1019,8 @@
           "windowMs": "number"
         },
         "inferenceApi": {
+          "anonymousLimit": "number",
+          "keyBy": "string",
           "limit": "number",
           "windowMs": "number"
         },
@@ -1029,6 +1036,8 @@
           "windowMs": "number"
         },
         "publicApi": {
+          "anonymousLimit": "number",
+          "keyBy": "string",
           "limit": "number",
           "skipFailedRequests": "boolean",
           "windowMs": "number"
@@ -2832,17 +2841,22 @@
     "shape": {
       "limiters": {
         "adminApi": {
+          "anonymousLimit": "number",
           "counts": "string",
+          "keyBy": "string",
           "limit": "number",
           "windowMs": "number"
         },
         "authApi": {
           "counts": "string",
           "limit": "number",
+          "perIpLimit": "number",
           "windowMs": "number"
         },
         "inferenceApi": {
+          "anonymousLimit": "number",
           "counts": "string",
+          "keyBy": "string",
           "limit": "number",
           "windowMs": "number"
         },
@@ -2862,7 +2876,9 @@
           "windowMs": "number"
         },
         "publicApi": {
+          "anonymousLimit": "number",
           "counts": "string",
+          "keyBy": "string",
           "limit": "number",
           "windowMs": "number"
         }
@@ -2870,17 +2886,22 @@
       "restartRequired": "boolean",
       "running": {
         "adminApi": {
+          "anonymousLimit": "number",
           "counts": "string",
+          "keyBy": "string",
           "limit": "number",
           "windowMs": "number"
         },
         "authApi": {
           "counts": "string",
           "limit": "number",
+          "perIpLimit": "number",
           "windowMs": "number"
         },
         "inferenceApi": {
+          "anonymousLimit": "number",
           "counts": "string",
+          "keyBy": "string",
           "limit": "number",
           "windowMs": "number"
         },
@@ -2900,7 +2921,9 @@
           "windowMs": "number"
         },
         "publicApi": {
+          "anonymousLimit": "number",
           "counts": "string",
+          "keyBy": "string",
           "limit": "number",
           "windowMs": "number"
         }
@@ -4872,16 +4895,21 @@
       },
       "rateLimit": {
         "adminApi": {
+          "anonymousLimit": "number",
+          "keyBy": "string",
           "limit": "number",
           "skipFailedRequests": "boolean",
           "windowMs": "number"
         },
         "authApi": {
           "limit": "number",
+          "perIpLimit": "number",
           "skipFailedRequests": "boolean",
           "windowMs": "number"
         },
         "default": {
+          "anonymousLimit": "number",
+          "keyBy": "string",
           "legacyHeaders": "boolean",
           "limit": "number",
           "skipFailedRequests": "boolean",
@@ -4890,6 +4918,8 @@
           "windowMs": "number"
         },
         "inferenceApi": {
+          "anonymousLimit": "number",
+          "keyBy": "string",
           "limit": "number",
           "windowMs": "number"
         },
@@ -4905,6 +4935,8 @@
           "windowMs": "number"
         },
         "publicApi": {
+          "anonymousLimit": "number",
+          "keyBy": "string",
           "limit": "number",
           "skipFailedRequests": "boolean",
           "windowMs": "number"

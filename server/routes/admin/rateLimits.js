@@ -4,7 +4,11 @@
 import { z } from 'zod';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
-import { RATE_LIMITER_KEYS, resolveRateLimitConfigs } from '../../middleware/rateLimiting.js';
+import {
+  RATE_LIMITER_KEYS,
+  USER_KEYED_LIMITERS,
+  resolveRateLimitConfigs
+} from '../../middleware/rateLimiting.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { ServiceError } from '../../utils/ServiceError.js';
 import { logAudit } from '../../services/AuditLogService.js';
@@ -45,9 +49,32 @@ const limiterSchema = z
       .min(RATE_LIMIT_BOUNDS.windowMs.min)
       .max(RATE_LIMIT_BOUNDS.windowMs.max),
     limit: z.number().int().min(RATE_LIMIT_BOUNDS.limit.min).max(RATE_LIMIT_BOUNDS.limit.max),
-    counts: z.enum(COUNT_MODES)
+    counts: z.enum(COUNT_MODES),
+    // General limiters only: count per user or per IP address, and the
+    // per-address limit of anonymous requests.
+    keyBy: z.enum(['user', 'ip']).optional(),
+    anonymousLimit: z
+      .number()
+      .int()
+      .min(RATE_LIMIT_BOUNDS.limit.min)
+      .max(RATE_LIMIT_BOUNDS.limit.max)
+      .optional(),
+    // authApi only: the ceiling per IP address.
+    perIpLimit: z
+      .number()
+      .int()
+      .min(RATE_LIMIT_BOUNDS.limit.min)
+      .max(RATE_LIMIT_BOUNDS.limit.max)
+      .optional()
   })
   .strict();
+
+/** The extra fields a limiter has, beyond window, limit and counts. */
+function extraFieldsOf(key) {
+  if (USER_KEYED_LIMITERS.includes(key)) return ['keyBy', 'anonymousLimit'];
+  if (key === 'authApi') return ['perIpLimit'];
+  return [];
+}
 
 const updateSchema = z
   .object({
@@ -64,31 +91,38 @@ function countsOf(config) {
 }
 
 /**
- * The settings of every limiter, in the page's shape.
+ * The settings of every limiter, in the page's shape. The general limiters
+ * also carry `keyBy` and `anonymousLimit`, the credential limiter `perIpLimit`.
  *
  * @param {Object} platform - Platform configuration
- * @returns {Record<string, {windowMs: number, limit: number, counts: string}>}
+ * @returns {Record<string, {windowMs: number, limit: number, counts: string,
+ *   keyBy?: string, anonymousLimit?: number, perIpLimit?: number}>}
  */
 export function describeRateLimits(platform) {
   const resolved = resolveRateLimitConfigs(platform || {});
   return Object.fromEntries(
-    RATE_LIMITER_KEYS.map(key => [
-      key,
-      {
-        windowMs: resolved[key].windowMs,
-        limit: resolved[key].limit,
-        counts: countsOf(resolved[key])
+    RATE_LIMITER_KEYS.map(key => {
+      const config = resolved[key];
+      const described = {
+        windowMs: config.windowMs,
+        limit: config.limit,
+        counts: countsOf(config)
+      };
+      if (USER_KEYED_LIMITERS.includes(key)) {
+        described.keyBy = config.keyBy === 'ip' ? 'ip' : 'user';
+        described.anonymousLimit = config.anonymousLimit || config.limit;
       }
-    ])
+      if (key === 'authApi' && config.perIpLimit) described.perIpLimit = config.perIpLimit;
+      return [key, described];
+    })
   );
 }
 
+const COMPARED_FIELDS = ['windowMs', 'limit', 'counts', 'keyBy', 'anonymousLimit', 'perIpLimit'];
+
 function sameLimits(a, b) {
-  return RATE_LIMITER_KEYS.every(
-    key =>
-      a[key].windowMs === b[key].windowMs &&
-      a[key].limit === b[key].limit &&
-      a[key].counts === b[key].counts
+  return RATE_LIMITER_KEYS.every(key =>
+    COMPARED_FIELDS.every(field => a[key][field] === b[key][field])
   );
 }
 
@@ -145,6 +179,9 @@ export default function registerAdminRateLimitRoutes(app) {
    *                     windowMs: { type: integer }
    *                     limit: { type: integer }
    *                     counts: { type: string, enum: [all, failed, successful] }
+   *                     keyBy: { type: string, enum: [user, ip], description: 'publicApi, adminApi, inferenceApi' }
+   *                     anonymousLimit: { type: integer, description: 'publicApi, adminApi, inferenceApi' }
+   *                     perIpLimit: { type: integer, description: 'authApi' }
    *     responses:
    *       200:
    *         description: Saved; same shape as GET
@@ -165,7 +202,7 @@ export default function registerAdminRateLimitRoutes(app) {
     // decrypted secrets, which must not be written back.
     await updatePlatform(stored => {
       const rateLimit = { ...stored.rateLimit };
-      for (const [key, { windowMs, limit, counts }] of changes) {
+      for (const [key, { windowMs, limit, counts, ...extra }] of changes) {
         rateLimit[key] = {
           ...rateLimit[key],
           windowMs,
@@ -173,6 +210,10 @@ export default function registerAdminRateLimitRoutes(app) {
           skipSuccessfulRequests: counts === 'failed',
           skipFailedRequests: counts === 'successful'
         };
+        // Only the fields this limiter has; the others would do nothing.
+        for (const field of extraFieldsOf(key)) {
+          if (extra[field] !== undefined) rateLimit[key][field] = extra[field];
+        }
       }
       stored.rateLimit = rateLimit;
     });

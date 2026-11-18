@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { recordRateLimitHit } from '../telemetry/metrics.js';
 import { ClusterRateLimitStore } from '../utils/clusterRateLimitStore.js';
 
@@ -85,7 +85,7 @@ function createRateLimiter(
   defaults = {},
   type = 'API',
   skip = undefined,
-  { shared = false } = {}
+  { shared = false, keyGenerator = undefined, limit = undefined } = {}
 ) {
   const finalConfig = { ...defaults, ...config };
 
@@ -93,11 +93,12 @@ function createRateLimiter(
     ...(skip ? { skip } : {}),
     // Counted across all cluster workers, so the limit means what it says.
     ...(shared ? { store: new ClusterRateLimitStore(type) } : {}),
+    // Without one, express-rate-limit keys by IP (an IPv6 /56 counts as one).
+    ...(keyGenerator ? { keyGenerator } : {}),
     windowMs: finalConfig.windowMs || 1 * 60 * 1000, // 1 minute default
-    limit: finalConfig.limit || 500, // 500 requests default
+    limit: limit || finalConfig.limit || 500, // 500 requests default
     message:
-      finalConfig.message ||
-      `Too many ${type.toLowerCase()} requests from this IP, please try again later.`,
+      finalConfig.message || `Too many ${type.toLowerCase()} requests, please try again later.`,
     standardHeaders: finalConfig.standardHeaders !== undefined ? finalConfig.standardHeaders : true,
     legacyHeaders: finalConfig.legacyHeaders !== undefined ? finalConfig.legacyHeaders : false,
     skipSuccessfulRequests:
@@ -129,6 +130,83 @@ function createRateLimiter(
 }
 
 /**
+ * The limiters that run after authentication and count per signed-in user
+ * (`keyBy: "user"`, the default) or per IP address (`keyBy: "ip"`). The
+ * others guard sign-in itself and run before a user is known.
+ */
+export const USER_KEYED_LIMITERS = Object.freeze(['publicApi', 'adminApi', 'inferenceApi']);
+
+/** The signed-in user the request counts for, or null for an anonymous request. */
+function countedUserId(req) {
+  const id = req.user?.id;
+  return typeof id === 'string' && id && id !== 'anonymous' ? id : null;
+}
+
+/**
+ * Key and limit of a general limiter.
+ *
+ * With `keyBy: "user"` a signed-in request counts for its user (`limit`), so
+ * a thousand colleagues behind one corporate NAT address no longer share one
+ * budget; an anonymous request counts for its IP address (`anonymousLimit`,
+ * falling back to `limit`). With `keyBy: "ip"` every request counts for its
+ * address against `limit`, as before.
+ *
+ * The counts stay in each worker's memory (no cluster round trip per
+ * request), so with `WORKERS=N` a key can make up to N × the limit.
+ *
+ * @param {{keyBy?: string, limit: number, anonymousLimit?: number}} config
+ * @returns {{keyGenerator?: Function, limit?: Function}} Options for createRateLimiter
+ */
+export function userKeyOptions(config) {
+  if (config.keyBy === 'ip') return {};
+  const anonymousLimit = config.anonymousLimit || config.limit;
+  return {
+    keyGenerator: req => {
+      const userId = countedUserId(req);
+      return userId ? `user:${userId}` : `ip:${ipKeyGenerator(req.ip || '')}`;
+    },
+    limit: req => (countedUserId(req) ? config.limit : anonymousLimit)
+  };
+}
+
+/**
+ * The submitted username of a sign-in request, normalised so that `Alice`
+ * and ` alice ` count as one account. Empty for requests without one.
+ */
+function submittedUsername(req) {
+  const name = req.body?.username;
+  // ponytail: capped so a sprayed list of huge names cannot bloat the counters.
+  return typeof name === 'string' ? name.trim().toLowerCase().slice(0, 256) : '';
+}
+
+/**
+ * The credential limiter: `limit` per IP address and submitted username, so
+ * one office behind one address is not limited to a few logins per window
+ * together, plus a much higher `perIpLimit` per address against spraying
+ * many usernames. Guessing one account's password is stopped earlier by the
+ * per-account lockout (`utils/loginLockout.js`). Both count cluster-wide.
+ *
+ * @param {Object} config - The resolved `rateLimit.authApi` settings
+ * @returns {Function} Express middleware
+ */
+function createAuthLimiter(config) {
+  const perAccount = createRateLimiter(config, {}, 'authentication', isReadOnlyAuthRequest, {
+    shared: true,
+    keyGenerator: req => `${ipKeyGenerator(req.ip || '')}|${submittedUsername(req)}`
+  });
+  if (!(config.perIpLimit >= 1)) return perAccount;
+  const perIp = createRateLimiter(
+    { ...config, limit: config.perIpLimit },
+    {},
+    'authentication per IP',
+    isReadOnlyAuthRequest,
+    { shared: true }
+  );
+  return (req, res, next) =>
+    perIp(req, res, error => (error ? next(error) : perAccount(req, res, next)));
+}
+
+/**
  * The limiters an admin can tune, in the order Admin → Security lists them.
  * Each one is a key of `rateLimit` in platform.json; `default` is the base the
  * others inherit from and is not a limiter of its own.
@@ -152,8 +230,10 @@ const LIMITER_FALLBACKS = Object.freeze({
   adminApi: { limit: 500, skipFailedRequests: false },
   // Public API configuration - same as default
   publicApi: {},
-  // Auth API configuration - more restrictive for authentication
-  authApi: { limit: 50, windowMs: 15 * 60 * 1000, skipFailedRequests: false },
+  // Auth API configuration - more restrictive for authentication. `limit`
+  // counts per IP and username, `perIpLimit` per IP (mirrors
+  // server/defaults/config/platform.json for a config without it).
+  authApi: { limit: 50, perIpLimit: 5000, windowMs: 15 * 60 * 1000, skipFailedRequests: false },
   // OAuth API - every request under /api/oauth, browsers and servers alike.
   // Sized for real traffic: the consent screen is opened from browsers that
   // often share one NAT address, and a server-side client such as Microsoft
@@ -218,20 +298,32 @@ export function createRateLimiters(platformConfig = {}) {
   const configs = resolveRateLimitConfigs(platformConfig);
 
   return {
-    adminApiLimiter: createRateLimiter(configs.adminApi, {}, 'admin API'),
-    publicApiLimiter: createRateLimiter(configs.publicApi, {}, 'public API'),
+    // These three run after authentication (middleware/setup.js), so they can
+    // count per user.
+    adminApiLimiter: createRateLimiter(
+      configs.adminApi,
+      {},
+      'admin API',
+      undefined,
+      userKeyOptions(configs.adminApi)
+    ),
+    publicApiLimiter: createRateLimiter(
+      configs.publicApi,
+      {},
+      'public API',
+      undefined,
+      userKeyOptions(configs.publicApi)
+    ),
     // Read-only auth endpoints skip the strict credential limiter; they are
     // still bounded by the public API limiter mounted on the same path.
-    authApiLimiter: createRateLimiter(
-      configs.authApi,
+    authApiLimiter: createAuthLimiter(configs.authApi),
+    inferenceApiLimiter: createRateLimiter(
+      configs.inferenceApi,
       {},
-      'authentication',
-      isReadOnlyAuthRequest,
-      {
-        shared: true
-      }
+      'inference API',
+      undefined,
+      userKeyOptions(configs.inferenceApi)
     ),
-    inferenceApiLimiter: createRateLimiter(configs.inferenceApi, {}, 'inference API'),
     oauthApiLimiter: createRateLimiter(configs.oauthApi, {}, 'OAuth API', undefined, {
       shared: true
     })
