@@ -838,6 +838,90 @@ test('proactive compaction bounds the prompt across tool rounds', async () => {
   assert.ok(elided.length >= 1);
 });
 
+test('a failed call sent again: the earlier attempt is replayed with its long arguments left out', async () => {
+  const workbookTool = {
+    id: 'create_xlsx',
+    description: 'workbook',
+    parameters: {
+      type: 'object',
+      properties: { filename: { type: 'string' }, sheets: { type: 'string' } }
+    }
+  };
+  const sheets = n => `[{"name":"Data","rows":[${'[1,2,3],'.repeat(400)}[${n}]]`;
+  const requests = [];
+  const { loop } = makeLoop(
+    [
+      toolTurn([
+        { id: 'try_1', name: 'create_xlsx', args: { filename: 'a.xlsx', sheets: sheets(1) } }
+      ]),
+      toolTurn([
+        { id: 'try_2', name: 'create_xlsx', args: { filename: 'a.xlsx', sheets: sheets(2) } }
+      ]),
+      toolTurn([
+        { id: 'try_3', name: 'create_xlsx', args: { filename: 'a.xlsx', sheets: sheets(3) } }
+      ]),
+      textTurn('done')
+    ],
+    { onRequest: request => requests.push(request.body.messages) }
+  );
+  const compactions = [];
+  let attempt = 0;
+  const result = await loop.run({
+    model,
+    messages: baseMessages,
+    tools: [workbookTool],
+    seams: [{ onCompaction: (_ctx, info) => compactions.push(info) }],
+    executeTool: async () =>
+      ++attempt < 3 ? { success: false, error: '"sheets" is not valid JSON' } : { success: true }
+  });
+  assert.equal(result.content, 'done');
+
+  const callsIn = messages =>
+    messages.filter(m => m.role === 'assistant' && m.tool_calls).flatMap(m => m.tool_calls);
+  // Third request: try_1 is shortened, try_2 (the newest, failed) is sent in full.
+  const third = callsIn(requests[2]);
+  const first = JSON.parse(third.find(c => c.id === 'try_1').function.arguments);
+  assert.equal(first.filename, 'a.xlsx', 'short arguments stay');
+  assert.match(first.sheets, /^\[\d+ characters left out: this call failed and was sent again\]$/);
+  assert.equal(JSON.parse(third.find(c => c.id === 'try_2').function.arguments).sheets, sheets(2));
+  // The error the shortened call got is still there.
+  assert.ok(requests[2].some(m => m.role === 'tool' && m.tool_call_id === 'try_1'));
+  // Last request: both failed attempts shortened, the call that worked kept.
+  const last = callsIn(requests[3]);
+  assert.match(last.find(c => c.id === 'try_2').function.arguments, /characters left out/);
+  assert.equal(JSON.parse(last.find(c => c.id === 'try_3').function.arguments).sheets, sheets(3));
+  assert.ok(compactions.some(c => c.trigger === 'retried_call'));
+});
+
+test('a failed call not sent again keeps its arguments', async () => {
+  const workbookTool = {
+    id: 'create_xlsx',
+    description: 'workbook',
+    parameters: { type: 'object', properties: { sheets: { type: 'string' } } }
+  };
+  const big = 'x'.repeat(3000);
+  const requests = [];
+  const { loop } = makeLoop(
+    [
+      toolTurn([{ id: 'only', name: 'create_xlsx', args: { sheets: big } }]),
+      toolTurn([{ id: 'other', name: 'read_url', args: { url: 'u' } }]),
+      textTurn('done')
+    ],
+    { onRequest: request => requests.push(request.body.messages) }
+  );
+  await loop.run({
+    model,
+    messages: baseMessages,
+    tools: [workbookTool, fetchTool],
+    executeTool: async () => ({ success: false, error: 'broken' })
+  });
+  const call = requests[2]
+    .filter(m => m.role === 'assistant' && m.tool_calls)
+    .flatMap(m => m.tool_calls)
+    .find(c => c.id === 'only');
+  assert.equal(JSON.parse(call.function.arguments).sheets, big);
+});
+
 test('reactive recovery: a context-window error microcompacts and retries once without charging the round cap', async () => {
   const HUGE = 'z'.repeat(5000);
   let calls = 0;

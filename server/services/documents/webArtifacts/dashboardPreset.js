@@ -6,6 +6,7 @@ import path from 'node:path';
 import { DocumentGenerationError } from '../renderService.js';
 import { getSystemSkillsDirectory } from '../../skillLoader.js';
 import { checkDashboardSpec } from './dashboardSpec.js';
+import { JsonArgumentError, parseJsonArgument } from '../jsonArgument.js';
 
 /**
  * The page `create_dashboard` lays out.
@@ -121,9 +122,10 @@ export function prepareDashboard(data) {
   else if (typeof data === 'string') {
     if (data.length > MAX_SPEC_BYTES) fail('it is larger than 1 MB; summarise the data.');
     try {
-      spec = JSON.parse(data);
+      spec = parseJsonArgument(data, 'data').value;
     } catch (error) {
-      fail(`it is not valid JSON (${error.message}).`);
+      if (!(error instanceof JsonArgumentError)) throw error;
+      fail(`it is not valid JSON: ${error.message}. Send the call again with that spot fixed.`);
     }
   }
   if (spec === undefined || spec === null || spec === '') {

@@ -1218,3 +1218,16 @@ In the admin editors, **Add Language** on a localized field turned a code such a
 expected form (`pt-br`, `PT_br` and `pt-BR` all become `pt-BR`). A code that cannot be saved, such as
 a three-letter one, can no longer be added and the field says why, and the language list offers only
 codes that can be saved.
+
+## Workbooks, Presentations and PDFs No Longer Fail on One Missing Bracket
+
+Asked for a large workbook, presentation, PDF or dashboard, a chat could end without a file: the
+model's data was missing one closing bracket, the tool only answered that it "must be a JSON array",
+and the model sent the same call again until the conversation ran out of room.
+
+- A closing bracket left out of the data is now added, and the file is made.
+- Other broken data is refused with where it breaks and what was expected there, so the model fixes
+  that spot instead of repeating itself.
+- When a tool call fails and the model sends it again, the earlier attempt's long data is left out
+  of the conversation, so retries no longer fill the model's context window. This applies to every
+  tool.

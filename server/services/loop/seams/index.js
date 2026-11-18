@@ -16,7 +16,7 @@
  *   onChunk(ctx, chunk)                  every streamed chunk
  *   onHallucinated(ctx, info)            the model called an unregistered tool
  *   onCircuitBroken(ctx, info)           a tool was withheld for the rest of the segment
- *   onCompaction(ctx, info)              messages were compacted (proactive or overflow)
+ *   onCompaction(ctx, info)              messages were compacted (proactive, overflow or retried_call)
  *   onAnswer(ctx, info)                  the model answered without calling a tool; `info` is
  *                                        `{ content, stepText, finishReason, iteration, canRetry }`.
  *                                        Return `{ handled: true, retry: '<correction>', error? }`
