@@ -683,7 +683,14 @@ function ChatInput({
 
   const handleSubmit = e => {
     e.preventDefault();
-    if ((value.trim() || allowEmptySubmit) && !isProcessing && !sendBlockedByAttachment) {
+    // A form submit (a starter prompt, `send=true`, an MCP app) does not go
+    // through the disabled Send button: an unacknowledged alert blocks it here.
+    if (
+      (value.trim() || allowEmptySubmit) &&
+      !isProcessing &&
+      !sendBlockedByAttachment &&
+      !requiresAlertAcknowledgment
+    ) {
       onSubmit(e);
       setExpandedByUser(false);
       // Keep focus on the input so the user can continue typing
@@ -1187,7 +1194,9 @@ function ChatInput({
                 selectedModel={selectedModel}
                 onModelChange={onModelChange}
                 currentLanguage={currentLanguage}
-                disabled={isInputDisabled || isProcessing}
+                // An unacknowledged alert hint blocks sending, not switching:
+                // picking another model is the way out of it (#3811).
+                disabled={disabled || clarificationPending || isProcessing}
                 // Not `oneLine`: the toolbar, and with it Send, keeps its
                 // place when the composer is expanded and collapsed. Its
                 // height matches the one-line text row.
