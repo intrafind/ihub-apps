@@ -124,7 +124,7 @@ function AdminModelEditPage() {
     const ensureLocalizedObject = value => {
       if (!value) return { [DEFAULT_LANGUAGE]: '' };
       if (typeof value === 'string') return { [DEFAULT_LANGUAGE]: value };
-      if (typeof value === 'object' && value !== null) return value;
+      if (typeof value === 'object') return value;
       return { [DEFAULT_LANGUAGE]: '' };
     };
 
