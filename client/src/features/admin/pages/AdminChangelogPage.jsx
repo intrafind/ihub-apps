@@ -362,7 +362,13 @@ function TableOfContents({ id, release, sectionLabel, t }) {
                 }`}
               >
                 {sectionLabel(section)}{' '}
-                <span className="tabular-nums font-normal opacity-70">
+                <span
+                  className={`tabular-nums font-normal ${
+                    breaking
+                      ? 'text-amber-700 dark:text-amber-400'
+                      : 'text-gray-600 dark:text-gray-400'
+                  }`}
+                >
                   {release.sections[section.key].length}
                 </span>
               </a>
