@@ -149,6 +149,27 @@ async function run() {
   }
 
   {
+    // Node's fetch sends `Accept-Language: *`; Intl throws a RangeError on it.
+    setPlatform(CONTEXT);
+    for (const lang of ['*', 'not a tag']) {
+      let vars = null;
+      try {
+        vars = PromptService.resolveGlobalPromptVariables(null, null, lang, null);
+      } catch (error) {
+        check(`"${lang}" falls back to the default language`, false, error.message);
+      }
+      if (vars) {
+        check(
+          `"${lang}" falls back to the default language`,
+          vars.day_of_week ===
+            new Date().toLocaleDateString('en', { timeZone: 'UTC', weekday: 'long' }),
+          vars.day_of_week
+        );
+      }
+    }
+  }
+
+  {
     setPlatform(CONTEXT);
     const system = await systemPromptFor({ system: { en: 'You search the web.' } });
     const MONTHS =

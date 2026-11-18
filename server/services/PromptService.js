@@ -311,7 +311,7 @@ class PromptService {
       /** ISO-8601 calendar date in the resolved timezone — never ambiguous. */
       date_iso: isoDateInTimeZone(now, timezone),
       time: timeFormatter.format(now),
-      day_of_week: now.toLocaleDateString(language || defaultLang, {
+      day_of_week: now.toLocaleDateString(locale, {
         ...tzOptions,
         weekday: 'long'
       }),
