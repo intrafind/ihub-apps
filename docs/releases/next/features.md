@@ -2481,7 +2481,8 @@ The model therefore does not run the same searches again, and its answer keeps t
   notes", which opens to the notes, and explains why the context figure dropped. When the notes
   could not be written, or the model's context window was full, the row says that details may be
   missing.
-- **Cost:** writing the notes is one extra call to the chat's model; its tokens appear in usage
-  reports and count toward usage limits. Turns that stay under half the context window are
-  unchanged.
+- **Cost:** writing the notes is one extra call, by default to the chat's own model; admins can
+  pick another one for all chats (a fast one with a large context window) under **Admin → Chat
+  History → Long research turns**. Its tokens appear in usage reports and count toward usage
+  limits. Turns that stay under half the context window are unchanged.
 - Workflows and agent nodes are unchanged.

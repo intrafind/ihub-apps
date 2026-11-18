@@ -739,6 +739,13 @@
         "modelChat": "The chat's own model",
         "modelIdHelp": "A small, cheap model is enough. It is used only for users whose groups may use it; for everyone else the chat's own model writes the title. No other model is ever used."
       },
+      "compaction": {
+        "title": "Long research turns",
+        "description": "When a turn with many tool calls fills half the model's context, older results are condensed into notes: their facts with sources, and the calls that ran. The model can read a condensed result in full again.",
+        "modelId": "Model that writes the notes",
+        "modelChat": "The chat's own model",
+        "modelIdHelp": "A fast model with a large context window keeps long turns quick. It reads the tool results of the chat, so pick one approved for that data. It is used only for users whose groups may use it; for everyone else the chat's own model writes the notes. Its tokens count toward the user's usage."
+      },
       "evidence": {
         "title": "Evidence record",
         "description": "For every stored answer, a record of what went in and what came out: the system prompt, the messages and tool definitions of every model call, every tool call with its arguments and result, and the model settings. It lives and is deleted with the chat. The owner and admins can read it; a shared chat does not share it.",

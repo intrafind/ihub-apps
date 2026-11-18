@@ -484,3 +484,58 @@ test('once every real tool has failed, the recall tool does not keep the turn go
   assert.equal(result.status, 'completed');
   assert.equal(result.budgetReason, 'tools_dead', 'the dead-tools gate still fires');
 });
+
+test('a turn continued under a new run id still reads what its paused run condensed', async () => {
+  const { runLog } = await captureRunLog();
+  const refs = { chatId: 'chat-1', appId: 'app' };
+  const { runId: pausedRun } = await runLog.startRun({ kind: 'chat', user: { id: 'u1' }, refs });
+  const first = makeLoop(
+    [
+      toolTurn('c1', 'webSearch', { query: 'nvidia' }, 1000),
+      toolTurn('c2', 'webSearch', { query: 'apple' }, 4000),
+      textTurn('paused here')
+    ],
+    ['FACT | r1 | NVIDIA market cap 5.1 trillion USD | https://x.test/nvidia'],
+    { runLog }
+  );
+  const before = await first.loop.run({
+    runId: pausedRun,
+    refs,
+    model,
+    messages: baseMessages,
+    tools: [searchTool],
+    policies,
+    executeTool: async (_call, { args }) => searchResult(args.query)
+  });
+  await runLog.flush();
+
+  const { runId: newRun } = await runLog.startRun({ kind: 'chat', user: { id: 'u1' }, refs });
+  const { runId: otherChat } = await runLog.startRun({
+    kind: 'chat',
+    user: { id: 'u1' },
+    refs: { chatId: 'chat-2' }
+  });
+  const recall = (archiveRunIds, chatRefs = refs) =>
+    makeLoop([toolTurn('c9', RECALL_TOOL_ID, { ref: 'r1' }), textTurn('done')], [], { runLog })
+      .loop.run({
+        runId: newRun,
+        refs: chatRefs,
+        archiveRunIds,
+        model,
+        messages: before.messages,
+        tools: [searchTool],
+        policies,
+        executeTool: async () => 'never'
+      })
+      .then(result => result.messages.find(m => m.tool_call_id === 'c9').content);
+
+  assert.ok((await recall([pausedRun])).includes(RESULTS.nvidia), 'read from the paused run');
+  assert.match(await recall([]), /no longer available/, 'without it, the model is told');
+  assert.match(
+    await recall([pausedRun], { chatId: 'chat-2' }),
+    /no longer available/,
+    'a run of another chat is never read'
+  );
+  assert.ok(otherChat);
+  await runLog.stop();
+});

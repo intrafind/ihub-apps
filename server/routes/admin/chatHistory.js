@@ -31,6 +31,7 @@ import {
   chatRetentionSettings,
   chatEvidenceSettings,
   chatTitleSettings,
+  chatCompactionSettings,
   isChatHistoryConfigured,
   isChatStorageAvailable,
   MAX_TEMPORARY_RETENTION_HOURS
@@ -86,6 +87,14 @@ const runLogSettingsSchema = z
 const titlesSettingsSchema = z
   .object({
     enabled: z.boolean(),
+    modelId: z.string().trim().max(200)
+  })
+  .partial()
+  .strict();
+
+// The compaction block, `platform.chats.compaction` on disk (#3819).
+const compactionSettingsSchema = z
+  .object({
     modelId: z.string().trim().max(200)
   })
   .partial()
@@ -147,6 +156,7 @@ const settingsBodySchema = z
   .object({
     chats: chatsSettingsSchema.optional(),
     titles: titlesSettingsSchema.optional(),
+    compaction: compactionSettingsSchema.optional(),
     evidence: evidenceSettingsSchema.optional(),
     runLog: runLogSettingsSchema.optional(),
     sharing: sharingSettingsSchema.optional(),
@@ -168,7 +178,7 @@ let retentionRunning = false;
  * The effective settings, defaults filled in, in the shape the page edits.
  *
  * @param {Object} platform - Platform configuration.
- * @returns {{chats: Object, titles: Object, evidence: Object, sharing: Object, uploads: Object, runLog: Object}}
+ * @returns {{chats: Object, titles: Object, compaction: Object, evidence: Object, sharing: Object, uploads: Object, runLog: Object}}
  */
 function resolveSettings(platform) {
   const chats = platform?.chats || {};
@@ -179,6 +189,7 @@ function resolveSettings(platform) {
       ...chatRetentionSettings(platform)
     },
     titles: chatTitleSettings(platform),
+    compaction: chatCompactionSettings(platform),
     evidence: chatEvidenceSettings(platform),
     sharing: chatSharingSettings(platform),
     uploads: (() => {
@@ -277,7 +288,7 @@ export default function registerAdminChatHistoryRoutes(app) {
           .join('; ')}`
       );
     }
-    const { chats, runLog: ledger, titles, evidence, sharing, uploads } = parsed.data;
+    const { chats, runLog: ledger, titles, compaction, evidence, sharing, uploads } = parsed.data;
     // Computed from the stored file under the update lock; reruns on conflict, so
     // everything it needs is derived from the body it is handed.
     let changed = [];
@@ -297,9 +308,10 @@ export default function registerAdminChatHistoryRoutes(app) {
           changed.push(`${block}.${key}`);
         }
       }
-      // The titles and evidence form sections are `platform.chats.<section>` on disk.
+      // The titles, compaction and evidence form sections are `platform.chats.<section>` on disk.
       for (const [section, patch] of [
         ['titles', titles],
+        ['compaction', compaction],
         ['evidence', evidence]
       ]) {
         for (const [key, value] of Object.entries(patch || {})) {

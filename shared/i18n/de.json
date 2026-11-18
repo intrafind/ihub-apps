@@ -1209,6 +1209,13 @@
         "modelChat": "Das Modell des Chats",
         "modelIdHelp": "Ein kleines, günstiges Modell genügt. Es wird nur für Nutzende verwendet, deren Gruppen es nutzen dürfen; für alle anderen schreibt das Modell des Chats den Titel. Ein anderes Modell wird nie verwendet."
       },
+      "compaction": {
+        "title": "Lange Recherche-Antworten",
+        "description": "Füllt eine Antwort mit vielen Tool-Aufrufen die Hälfte des Modellkontexts, werden ältere Ergebnisse zu Notizen verdichtet: ihre Fakten mit Quellen und die gelaufenen Aufrufe. Das Modell kann ein verdichtetes Ergebnis vollständig erneut lesen.",
+        "modelId": "Modell, das die Notizen schreibt",
+        "modelChat": "Das Modell des Chats",
+        "modelIdHelp": "Ein schnelles Modell mit großem Kontextfenster hält lange Antworten zügig. Es liest die Tool-Ergebnisse des Chats; wählen Sie eines, das für diese Daten freigegeben ist. Es wird nur für Nutzer verwendet, deren Gruppen es nutzen dürfen; für alle anderen schreibt das Modell des Chats die Notizen. Seine Tokens zählen zur Nutzung des Nutzers."
+      },
       "evidence": {
         "title": "Nachweis",
         "description": "Für jede gespeicherte Antwort ein Nachweis, was eingegangen und was herausgekommen ist: der Systemprompt, die Nachrichten und Tool-Definitionen jedes Modellaufrufs, jeder Tool-Aufruf mit Argumenten und Ergebnis sowie die Modelleinstellungen. Er lebt mit dem Chat und wird mit ihm gelöscht. Lesen können ihn der Eigentümer und Admins; ein geteilter Chat teilt ihn nicht.",

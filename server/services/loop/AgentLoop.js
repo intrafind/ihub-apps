@@ -224,6 +224,9 @@ export class AgentLoop {
    * @param {Object} [request.meta] - opaque caller data forwarded to seams
    * @param {Object} [request.summaryModel] - the model that writes findings digests
    *   (`policies.context.strategy: 'digest'`); default: `request.model`
+   * @param {string[]} [request.archiveRunIds] - earlier runs of the same chat turn (a
+   *   turn that continued a paused run under a new id) whose condensed results
+   *   `recall_tool_result` may read; a run of another chat is ignored
    * @param {Array} [request.seams] - per-run seams (in addition to `use()`d ones)
    * @param {string} [request.purpose='agent-step']
    * @param {number} [request.timeoutMs] - hard timeout for each model call
@@ -1683,8 +1686,9 @@ export class AgentLoop {
     let content = entry.content;
     try {
       const bounded = JSON.parse(content);
-      if (bounded?.truncated === true && bounded.spill?.path && ctx.ledgerId) {
-        content = await ctx.runLog.readSpill(ctx.ledgerId, { path: bounded.spill.path });
+      const spillRun = entry.runId || ctx.ledgerId;
+      if (bounded?.truncated === true && bounded.spill?.path && spillRun) {
+        content = await ctx.runLog.readSpill(spillRun, { path: bounded.spill.path });
       }
     } catch {
       /* not a spilled result */
@@ -1699,38 +1703,51 @@ export class AgentLoop {
    */
   async _loadArchived(ctx, ref) {
     const state = ctx.compaction;
-    if (state.archiveLoaded || !ctx.ledgerId || typeof ctx.runLog?.readEvents !== 'function') {
-      return null;
-    }
+    if (state.archiveLoaded || typeof ctx.runLog?.readEvents !== 'function') return null;
     state.archiveLoaded = true;
-    let events = [];
-    try {
-      events = await ctx.runLog.readEvents(ctx.ledgerId);
-    } catch (err) {
-      this.logger.warn('Condensed results could not be read back', {
-        component: COMPONENT,
-        runId: ctx.runId,
-        error: err.message
-      });
-    }
-    for (const event of events) {
-      const archiveRef =
-        event?.type === RUN_LOG_EVENTS.CONTEXT_COMPACTION && event.data?.archiveRef;
-      if (!archiveRef) continue;
+    // This run's journal, then the paused runs this turn continues from under
+    // a new id (`request.archiveRunIds`) — only those of the same chat.
+    const runIds = [
+      ctx.ledgerId,
+      ...(Array.isArray(ctx.request.archiveRunIds) ? ctx.request.archiveRunIds : [])
+    ].filter((id, index, all) => id && isValidRunId(id) && all.indexOf(id) === index);
+    for (const runId of runIds) {
+      let events = [];
       try {
-        const stored = JSON.parse(await ctx.runLog.readSpill(ctx.ledgerId, archiveRef));
-        for (const [key, entry] of Object.entries(stored?.refs || {})) {
-          if (!state.archive.has(key) && typeof entry?.content === 'string') {
-            state.archive.set(key, entry);
-          }
-        }
+        events = await ctx.runLog.readEvents(runId);
       } catch (err) {
-        // One unreadable archive leaves the others readable.
         this.logger.warn('Condensed results could not be read back', {
           component: COMPONENT,
           runId: ctx.runId,
+          from: runId,
           error: err.message
         });
+        continue;
+      }
+      if (runId !== ctx.ledgerId) {
+        const start = events.find(event => event?.type === RUN_LOG_EVENTS.RUN_START);
+        if (!ctx.refs.chatId || start?.data?.refs?.chatId !== ctx.refs.chatId) continue;
+      }
+      for (const event of events) {
+        const archiveRef =
+          event?.type === RUN_LOG_EVENTS.CONTEXT_COMPACTION && event.data?.archiveRef;
+        if (!archiveRef) continue;
+        try {
+          const stored = JSON.parse(await ctx.runLog.readSpill(runId, archiveRef));
+          for (const [key, entry] of Object.entries(stored?.refs || {})) {
+            if (!state.archive.has(key) && typeof entry?.content === 'string') {
+              state.archive.set(key, { ...entry, runId });
+            }
+          }
+        } catch (err) {
+          // One unreadable archive leaves the others readable.
+          this.logger.warn('Condensed results could not be read back', {
+            component: COMPONENT,
+            runId: ctx.runId,
+            from: runId,
+            error: err.message
+          });
+        }
       }
     }
     return state.archive.get(ref) || null;

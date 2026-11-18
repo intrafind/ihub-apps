@@ -89,7 +89,7 @@ defaults.
 | `context.summaryTimeoutMs`        | 90000   | `digest`: timeout of one summary call                                  |
 | `context.summaryMaxTokens`        | 4096    | `digest`: output tokens of one summary call                            |
 | `context.maxDigestChars`          | 24000   | `digest`: characters of one digest as the model reads it               |
-| `context.maxRecallsPerRun`        | 10      | `digest`: how often a run may read a condensed result again (`recall_tool_result`) |
+| `context.maxRecallsPerRun`        | 20      | `digest`: how often a run may read a condensed result again (`recall_tool_result`) |
 | `context.maxReactiveAttempts`     | 2       | Retries after a provider "prompt too long" error, each after compaction |
 | `context.spillThresholdBytes`     | 65536   | Tool results above this are stored in the run's spill store (when the ledger persists) and replaced in the transcript by a bounded preview and reference |
 | `interactions.maxQuestions`       | 10      | Clarification cap for interactive tools (question seam)                |
@@ -180,7 +180,9 @@ projected at `compactTargetShare` of the threshold
   calls that ran (tool, arguments, ok or failed, the sources they returned),
   the facts taken from the results, and what was looked for and not found.
 - The calls and sources are built by code. The summary model (the run's
-  model, or `request.summaryModel`) writes only `FACT | ref | fact | source`
+  model, or `request.summaryModel`; a chat turn passes the model set in
+  `chats.compaction.modelId`, see
+  [Long research turns](chat-persistence.md#long-research-turns)) writes only `FACT | ref | fact | source`
   and `NOTFOUND | ref | …` lines, with thinking off. A fact is kept only if
   its ref is one of the results it was given and its numbers appear in that
   result: a number of four digits or more anywhere in one of the result's
@@ -209,10 +211,12 @@ projected at `compactTargetShare` of the threshold
   pages, from memory or, after a resume of the same run, from the run's spill
   store (`archiveRef`); a result that had been spilled is read in full. It
   only reads this run's condensed results, never a path the model names, and
-  at most `maxRecallsPerRun` times. When the original cannot be reached — the
-  turn continued as a new run (another model after an approval), or the
-  ledger does not persist and the turn resumed — the tool says so and the
-  model works with the digest.
+  at most `maxRecallsPerRun` times. A chat turn that continues a paused run
+  under a new id (another model after an approval) passes that run as
+  `request.archiveRunIds`: its journal is kept while it is paused, and only a
+  run of the same chat is read. When the original cannot be reached — the
+  ledger does not persist, so there is no spill store to read after a pause —
+  the tool says so and the model works with the digest.
 - When the summary fails, times out or keeps nothing of results that held
   something, the batches are still condensed, to their calls and sources, and
   the compaction is marked `lossy` with a `fallbackReason` (`summary_failed`,

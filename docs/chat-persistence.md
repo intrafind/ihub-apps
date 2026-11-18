@@ -322,6 +322,23 @@ No endpoint or data-model change. The call is recorded in usage with the chat's
 user but not as a ledger run, so the chat's delete cascade has nothing of it
 left behind.
 
+### Long research turns
+
+When a turn with many tool calls fills half the model's context, older tool
+results are condensed into notes (see
+[Context compaction](agent-loop.md#context-compaction)). **Model that writes the
+notes** (Admin → Chat History → Long research turns, or
+`chats.compaction.modelId`) picks the model for that, for every chat:
+
+- **Default:** empty, the model the chat ran on.
+- **Which model.** The configured one if it exists, can write text and the
+  user's groups may use it; otherwise the chat's own model. Read on every turn,
+  no restart.
+- **What it reads.** The tool results of the turn that are being condensed, and
+  the user's question as a hint. Its tokens are recorded in usage with the
+  chat's user and count toward usage limits; the call is not a ledger run of
+  its own.
+
 ### In the Outlook add-in
 
 The Outlook task pane reads the same list with its own sign-in token, and it

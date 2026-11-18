@@ -87,7 +87,7 @@ export const contextPoliciesSchema = z.object({
   /** `digest`: characters of one digest as the model reads it. */
   maxDigestChars: z.number().int().positive().prefault(24_000),
   /** `digest`: how often a run may read a condensed result again. */
-  maxRecallsPerRun: z.number().int().nonnegative().prefault(10),
+  maxRecallsPerRun: z.number().int().nonnegative().prefault(20),
   /** Bytes above which tool results are spilled to disk and previewed in the transcript. */
   spillThresholdBytes: z
     .number()
