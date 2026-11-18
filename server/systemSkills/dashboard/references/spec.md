@@ -1,21 +1,21 @@
 # Dashboard spec reference
 
-The `data` of `create_web_artifact` with `preset: "dashboard"`: one JSON object, passed as text. Unknown fields are dropped. Text may be a string or a number. Limits are checked and a message names the field that breaks one.
+The `data` of `create_dashboard`: one JSON object, passed as text. Unknown fields are dropped. Text may be a string or a number. Limits are checked and a message names the field that breaks one.
 
 ## Page
 
-| Field     | Type                       | Notes                                                                                    |
-| --------- | -------------------------- | ---------------------------------------------------------------------------------------- |
-| `title`   | text, required             | Page heading and browser title, at most 200 characters                                   |
-| `lang`    | `en`, `de`, ...            | Language of the page's own texts (buttons, headings). Built in: `en`, `de`; default `en` |
-| `summary` | text                       | The headline sentence, at most 800 characters. `**bold**` marks figures                  |
-| `notes`   | text[]                     | Up to 6 short grey lines under the summary (scope, date, what is counted)                |
-| `asOf`    | text                       | Date of the data; shown as "Data as of"                                                  |
-| `kpis`    | array                      | Up to 8 tiles, see below                                                                 |
-| `blocks`  | array                      | Up to 20 views in order, see below                                                       |
-| `method`  | `{ title?, paragraphs[] }` | Open section at the bottom, up to 10 paragraphs                                          |
-| `sources` | array                      | Up to 20, see below. Collapsed section "Sources and formulas"                            |
-| `labels`  | object                     | Replaces interface texts, see below                                                      |
+| Field     | Type                       | Notes                                                                                             |
+| --------- | -------------------------- | ------------------------------------------------------------------------------------------------- |
+| `title`   | text, required             | Page heading and browser title, at most 200 characters                                            |
+| `lang`    | `en`, `de`, ...            | Language of the page's own texts (buttons, headings). Built in: `en`, `de`; default `en`          |
+| `summary` | text                       | The headline sentence, at most 800 characters. `**bold**` marks figures                           |
+| `notes`   | text[]                     | Up to 6 short grey lines under the summary (scope, date, what is counted)                         |
+| `asOf`    | `YYYY-MM-DD`, required     | Date of the data (not today's, not a guess); shown as "Data as of". Warned when over 3 months old |
+| `kpis`    | array                      | Up to 8 tiles, see below                                                                          |
+| `blocks`  | array                      | Up to 20 views in order, see below                                                                |
+| `method`  | `{ title?, paragraphs[] }` | Open section at the bottom, up to 10 paragraphs                                                   |
+| `sources` | array, required            | 1 to 20, see below. Collapsed section "Sources and formulas"                                      |
+| `labels`  | object                     | Replaces interface texts, see below                                                               |
 
 At least one of `kpis` and `blocks` is required.
 
@@ -33,16 +33,16 @@ Every block has `type` (`bars`, `line`, `table`, `text`) and optionally `title` 
 
 ### `bars` - ranked horizontal bars
 
-| Field                        | Notes                                                                                                                                                              |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `items`                      | 1 to 500 of `{ "label", "value", "note?" }`; `value` is a number that is not negative; `note` shows in the tooltip                                                 |
-| `sort`                       | `desc` (default, largest first) or `none` (keep the order given)                                                                                                   |
-| `top`                        | 1 to 50: show this many bars and fold the rest into one grey bar with their sum                                                                                    |
-| `otherLabel`                 | Label of that bar; `{n}` is the number of items folded, e.g. `"{n} smaller sections"`                                                                              |
-| `share`                      | `true`: show each bar as a percentage of the sum of **all** items. Only when the items are parts of one whole                                                      |
-| `format`                     | Format of the values                                                                                                                                               |
-| `marks`                      | Up to 6 of `{ "label", "value" }`: vertical reference lines in the bars' scale (a limit, a target). They enlarge the scale, so a far-off mark makes the bars short |
-| `labelHeader`, `valueHeader` | Column headings of the table view                                                                                                                                  |
+| Field                        | Notes                                                                                                                                                                                         |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `items`                      | 1 to 500 of `{ "label", "value", "note?" }`; `value` is a number, negative allowed (growth, change, margin: the bar runs left of a zero line, in its own colour); `note` shows in the tooltip |
+| `sort`                       | `desc` (default, largest first) or `none` (keep the order given)                                                                                                                              |
+| `top`                        | 1 to 50: show this many bars and fold the rest into one grey bar with their sum                                                                                                               |
+| `otherLabel`                 | Label of that bar; `{n}` is the number of items folded, e.g. `"{n} smaller sections"`                                                                                                         |
+| `share`                      | `true`: show each bar as a percentage of the sum of **all** items. Only when the items are parts of one whole; refused when an item is negative                                               |
+| `format`                     | Format of the values                                                                                                                                                                          |
+| `marks`                      | Up to 6 of `{ "label", "value" }`: vertical reference lines in the bars' scale (a limit, a target). They enlarge the scale, so a far-off mark makes the bars short                            |
+| `labelHeader`, `valueHeader` | Column headings of the table view                                                                                                                                                             |
 
 ### `line` - lines over time or steps
 
@@ -69,7 +69,7 @@ Colours follow the series order and stay the same when series are added, so keep
 
 ## `sources[]`
 
-`{ "id", "name", "description?", "formula?" }`. `id` is letters, digits, `-` or `_` (at most 40). `formula` is shown in a code box: write the calculation or the query, e.g. `share(section) = tokens(section) / SUM(tokens) * 100`, or the tool and field the figures came from.
+`{ "id", "name", "description?", "formula?", "ref?", "url?" }`. `id` is letters, digits, `-` or `_` (at most 40). `formula` is shown in a code box: write the calculation or the query, e.g. `share(section) = tokens(section) / SUM(tokens) * 100`, or the tool and field the figures came from. `ref` is where the figures were taken from, as text (a document and page, a table, a tool call), up to 300 characters; `url` is an `http(s)` address, shown as text (the page opens no links). Give them whenever a reader could check the number there.
 
 ## `labels`
 
@@ -178,7 +178,8 @@ A second complete `data`, in German, using what the example in the skill does no
     {
       "id": "tickets",
       "name": "Ticket-Export",
-      "description": "Wöchentlicher Export der Queues IT und Facility."
+      "description": "Wöchentlicher Export der Queues IT und Facility.",
+      "ref": "Export tickets-2026-11.csv, Blatt Wochen"
     },
     {
       "id": "fcr",

@@ -202,7 +202,7 @@ them.
 
 ## HTML previews
 
-An HTML artifact (from the `web-artifacts` or `dashboard` system skill) is
+An HTML artifact (from the `web-artifacts` system skill, or a dashboard from the `dashboard` skill) is
 model-written markup with script in it. The chat's Artifacts panel and the
 [share embed page](chat-sharing.md) run it in
 `<iframe sandbox="allow-scripts" srcdoc="…">` — an opaque origin with no

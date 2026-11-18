@@ -6,6 +6,7 @@ import path from 'node:path';
 import { getRootDir } from '../pathUtils.js';
 import logger from '../utils/logger.js';
 import { parseFrontMatter } from '../utils/frontMatter.js';
+import { resolveSkillText } from '../utils/skillText.js';
 import { getContentsPath } from '../utils/contentsPath.js';
 import { resolveAndValidatePath, resolveAndValidateRealPath } from '../utils/pathSecurity.js';
 
@@ -349,9 +350,13 @@ async function collectSkills(skillsDir, skills, { isSystem, create }) {
  * Get the full content (body) of a skill's SKILL.md
  * @param {string} skillName - Skill name/directory
  * @param {string} [customDir] - Optional custom skills directory
+ * @param {Object} [options]
+ * @param {Iterable<string>} [options.available] - Names of the skills the app
+ *   offers: the `if-skill` text of a system skill (`utils/skillText.js`)
+ *   resolves against them. Without it, a skill reads as if it were alone.
  * @returns {Promise<{ body: string, description: string, frontmatter: object, isSystem: boolean, references: string[], scripts: string[], assets: string[] } | null>}
  */
-export async function getSkillContent(skillName, customDir) {
+export async function getSkillContent(skillName, customDir, { available } = {}) {
   // Validate skill name to prevent path traversal and enforce spec
   const nameValidation = validateSkillName(skillName);
   if (!nameValidation.valid) {
@@ -394,12 +399,14 @@ export async function getSkillContent(skillName, customDir) {
     }
   }
 
+  const isSystem = skillsDir === getSystemSkillsDirectory();
   return {
-    body: parsed.body,
+    // Only a system skill carries `if-skill` text; any other skill's text is its author's own.
+    body: isSystem ? resolveSkillText(parsed.body, available) : parsed.body,
     description:
       typeof parsed.frontmatter?.description === 'string' ? parsed.frontmatter.description : '',
     frontmatter: parsed.frontmatter,
-    isSystem: skillsDir === getSystemSkillsDirectory(),
+    isSystem,
     references,
     scripts,
     assets

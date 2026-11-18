@@ -4,8 +4,8 @@
 /**
  * The sizing result of a website corpus as a dashboard spec.
  *
- * The spec is what the `dashboard` system skill passes to `create_web_artifact`
- * (`preset: "dashboard"`, see `services/documents/webArtifacts/dashboardPreset.js`).
+ * The spec is what the `dashboard` system skill passes to `create_dashboard`
+ * (see `services/documents/webArtifacts/dashboardPreset.js`).
  * It is built here, from the same analysis as the Markdown report, so that the
  * model that presents the result hands it on unchanged instead of copying fifty
  * figures out of Markdown tables. Every number comes from
@@ -209,7 +209,7 @@ function pathOf(url) {
  * @param {Object} input.meta - `crawlDate`, `siteUrl`, `prefix`, `dropSelector`, `coverage`
  * @param {{method: string, note: string}} input.tokenizer - How tokens were counted
  * @param {'en'|'de'} [input.language]
- * @returns {Object} A spec for `create_web_artifact` with `preset: "dashboard"`
+ * @returns {Object} A spec for `create_dashboard`
  */
 export function buildDashboard({ name, analysis, nearDuplicates, meta, tokenizer, language }) {
   const lang = language === 'de' ? 'de' : 'en';
@@ -224,6 +224,8 @@ export function buildDashboard({ name, analysis, nearDuplicates, meta, tokenizer
   const dedupFit = windowFit(totals.tokensDedup);
   const smallest = dedupFit.find(entry => entry.fits);
   const coverage = meta.coverage;
+  // Where the page figures come from, so a reader can check them: the crawled site.
+  const siteRef = /^https?:\/\/[^\s<>"']+$/i.test(meta.siteUrl || '') ? { url: meta.siteUrl } : {};
   const charsPerToken =
     totals.chars && totals.tokens ? ratioText(totals.chars / totals.tokens) : '-';
 
@@ -400,11 +402,12 @@ export function buildDashboard({ name, analysis, nearDuplicates, meta, tokenizer
         id: 'sections',
         name: t.sSections,
         description: t.sSectionsText,
-        formula: t.sSectionsFormula
+        formula: t.sSectionsFormula,
+        ...siteRef
       },
       { id: 'windows', name: t.sWindows, description: t.sWindowsText, formula: t.sWindowsFormula },
       { id: 'dedup', name: t.sDedup, description: t.sDedupText, formula: t.sDedupFormula },
-      { id: 'pages', name: t.sPages, description: t.sPagesText }
+      { id: 'pages', name: t.sPages, description: t.sPagesText, ...siteRef }
     ]
   };
 }

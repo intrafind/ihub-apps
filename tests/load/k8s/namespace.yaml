@@ -3,6 +3,6 @@ kind: Namespace
 metadata:
   name: ihub-loadtest
   annotations:
-    # Clusters that run kube-downscaler (k3s01: Mon-Fri 08:00-18:00) would scale the
+    # Clusters that run kube-downscaler would scale the
     # iHub and the stubs to 0 mid-run. Harmless where there is no downscaler.
     downscaler/exclude: 'true'

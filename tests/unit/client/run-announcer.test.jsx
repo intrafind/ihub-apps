@@ -175,6 +175,17 @@ describe('deriveAnnouncements', () => {
     ]);
   });
 
+  test('names a dashboard a dashboard, not a web artifact', () => {
+    const dashboard = {
+      name: 'create_dashboard',
+      title: 'Create dashboard',
+      outputKind: 'dashboard'
+    };
+    const messages = [user, assistant([args(2, 'd1', T0, dashboard)])];
+    const result = derive(createAnnouncerState(), messages, T0 + 500);
+    expect(texts(result)).toEqual(['Creating dashboard']);
+  });
+
   test('says each event once, however often it is asked', () => {
     const messages = [user, assistant([args(2, 'x1', T0)])];
     const first = derive(createAnnouncerState(), messages, T0 + 600);

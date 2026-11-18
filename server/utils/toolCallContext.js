@@ -33,7 +33,9 @@ export const RESERVED_TOOL_CONTEXT_KEYS = Object.freeze([
   '_fileData',
   '_chatHistory',
   // The scopes the user picked for the chat (#3050), which bind the tools.
-  'integrationScopes'
+  'integrationScopes',
+  // The skills the model loaded in this turn (`services/chat/turnSkillLog.js`).
+  'turnSkills'
 ]);
 
 const RESERVED = new Set(RESERVED_TOOL_CONTEXT_KEYS);

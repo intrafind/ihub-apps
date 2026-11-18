@@ -264,9 +264,11 @@ test('the built-in creators say what they produce; the server decides, not the i
     restyle_pptx: 'presentation',
     create_xlsx: 'workbook',
     create_web_artifact: 'webArtifact',
+    create_dashboard: 'dashboard',
     // The edit tools change a file rather than create one: their rows read
     // "Edit web artifact", "Edit Word document", … instead of "Creating …".
     edit_web_artifact: undefined,
+    edit_dashboard: undefined,
     edit_docx: undefined,
     edit_pptx: undefined,
     edit_xlsx: undefined,
@@ -276,8 +278,8 @@ test('the built-in creators say what they produce; the server decides, not the i
   for (const kind of Object.values(kinds).filter(Boolean)) assert.ok(OUTPUT_KINDS.includes(kind));
   assert.equal(
     new Set(Object.values(kinds).filter(Boolean)).size,
-    7,
-    'seven creators, seven kinds'
+    8,
+    'eight creators, eight kinds'
   );
 });
 
@@ -315,4 +317,28 @@ test('toolDisplayOf carries the kind; the display of tool/started and the ledger
   const preview = creatorTools.find(tool => tool.id === 'preview_pdf');
   assert.deepEqual(startedDisplayOf(preview), toolDisplayOf(preview));
   assert.deepEqual(startedDisplayOf(null), {});
+});
+
+test('a dashboard is called a dashboard in the run activity, not a web artifact', () => {
+  const find = (tools, id) => tools.find(tool => tool.id === id);
+  assert.deepEqual(toolDisplayOf(find(creatorTools, 'create_dashboard')), {
+    title: 'Create dashboard',
+    activityKind: 'tool',
+    outputKind: 'dashboard'
+  });
+  assert.deepEqual(startedDisplayOf(find(creatorTools, 'create_dashboard')), {
+    title: 'Create dashboard',
+    activityKind: 'tool'
+  });
+  assert.deepEqual(toolDisplayOf(find(creatorTools, 'edit_dashboard')), {
+    title: 'Edit dashboard',
+    activityKind: 'tool'
+  });
+
+  const german = systemSkillToolsFor(
+    [{ name: 'all', isSystem: true, providedTools: [...SYSTEM_SKILL_TOOL_IDS] }],
+    { language: 'de' }
+  );
+  assert.equal(toolDisplayOf(find(german, 'create_dashboard')).title, 'Dashboard erstellen');
+  assert.equal(toolDisplayOf(find(german, 'edit_dashboard')).title, 'Dashboard bearbeiten');
 });

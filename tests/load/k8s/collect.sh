@@ -14,7 +14,7 @@
 # kubectl logs splits very long lines, so a larger shard result can arrive incomplete
 # ("incomplete result for …"); then rerun with the pods kept alive.
 #
-# Environment: KUBECTL (default `kubectl`, e.g. "kubectl --context k3s01"),
+# Environment: KUBECTL (default `kubectl`, e.g. "kubectl --context lab"),
 # COLLECT_TIMEOUT_MIN (default 120): how long to wait for the runs to end.
 set -euo pipefail
 NS="${1:-ihub-loadtest}"
