@@ -6,6 +6,7 @@ import configCache from '../../configCache.js';
 import { renderScannedPdfPagesInProcess } from '../documents/pdf/scannedPages.js';
 import { readCrawledPage } from './crawledPage.js';
 import { projectSettings } from './projectSettings.js';
+import { threadResourceLimits } from '../../utils/workerSizing.js';
 
 /**
  * A small pool of worker threads that read uploaded files off the event loop
@@ -183,7 +184,7 @@ function crawlPageWouldWaitForFiles() {
 
 function spawn() {
   const { memoryMb } = extractionSettings();
-  const worker = new Worker(WORKER_URL, { resourceLimits: { maxOldGenerationSizeMb: memoryMb } });
+  const worker = new Worker(WORKER_URL, { resourceLimits: threadResourceLimits(memoryMb) });
   const slot = { worker, job: null, timer: null };
   worker.on('message', envelope => {
     const { job } = slot;

@@ -19,6 +19,9 @@
  *   has none).
  * - `run/ended` / `run/paused` drop the run. A paused run continues later as a
  *   new segment, which starts empty.
+ * - All runs together keep at most {@link MAX_PARTIAL_TOTAL_BYTES}; past it the
+ *   oldest runs are dropped (as are runs past the stream count), so runs that
+ *   never end — a turn that died without `run/ended` — cannot pile up.
  * - Caps per run, text and thinking each: past one, the head is kept, the step
  *   where it was cut gets a `…` and nothing more of that kind is appended (text
  *   again from the next step on); the transcript re-read at the end of the
@@ -36,6 +39,12 @@ export const MAX_PARTIAL_TEXT_BYTES = 256 * 1024;
 /** Thinking kept per run (decision E1), counted in characters. */
 export const MAX_PARTIAL_THINKING_BYTES = 512 * 1024;
 
+/**
+ * Text and thinking kept for all runs of this process, counted in characters
+ * (about 40 runs at both per-run caps); past it the oldest runs are dropped.
+ */
+export const MAX_PARTIAL_TOTAL_BYTES = 32 * 1024 * 1024;
+
 /** Shown in place of what a capped run did not keep. */
 const TRUNCATION_MARK = '…';
 
@@ -46,9 +55,31 @@ const TRUNCATION_MARK = '…';
  * to the end when it starts, not on every frame.
  */
 const runs = new Map();
+/** Text and thinking characters held by all runs. */
+let totalBytes = 0;
+
+/**
+ * Forget a run and free what it held. The emit observer does this on
+ * `run/ended` / `run/paused`; call it for a run that ends without either
+ * passing the observer (e.g. a late refusal answered directly to the POST).
+ *
+ * @param {string} runId
+ */
+export function dropRun(runId) {
+  const entry = runs.get(runId);
+  if (!entry) return;
+  totalBytes -= entry.textBytes + entry.thinkingBytes;
+  runs.delete(runId);
+}
+
+/** Count characters added to (or freed by) a run; drop the oldest runs past the budget. */
+function charge(bytes) {
+  totalBytes += bytes;
+  while (totalBytes > MAX_PARTIAL_TOTAL_BYTES && runs.size > 0) dropRun(runs.keys().next().value);
+}
 
 function createEntry(runId, streamId) {
-  runs.delete(runId);
+  dropRun(runId);
   const entry = {
     streamId,
     steps: new Map(),
@@ -59,8 +90,7 @@ function createEntry(runId, streamId) {
     thinkingCut: null
   };
   runs.set(runId, entry);
-  // ponytail: LRU by count like the seq map; a byte budget if leaked runs ever matter.
-  while (runs.size > MAX_TRACKED_STREAMS) runs.delete(runs.keys().next().value);
+  while (runs.size > MAX_TRACKED_STREAMS) dropRun(runs.keys().next().value);
   return entry;
 }
 
@@ -72,11 +102,14 @@ function appendText(entry, step, content) {
   }
   entry.textBytes += content.length;
   entry.steps.set(step, (entry.steps.get(step) || '') + content);
+  charge(content.length);
 }
 
 function completeStep(entry, step) {
-  entry.textBytes -= (entry.steps.get(step) || '').length;
+  const freed = (entry.steps.get(step) || '').length;
+  entry.textBytes -= freed;
   entry.steps.delete(step);
+  charge(-freed);
   if (entry.textCut === step) entry.textCut = null;
 }
 
@@ -92,6 +125,7 @@ function appendThinking(entry, step, content, name) {
   // thought is its own entry.
   if (!name && last && !last.name && last.step === step) last.content += content;
   else entry.thoughts.push({ step, ...(name ? { name } : {}), content });
+  charge(content.length);
 }
 
 /**
@@ -126,7 +160,7 @@ export function recordEnvelope(envelope, streamId) {
     }
     case SSE_V2_EVENTS.RUN_ENDED:
     case SSE_V2_EVENTS.RUN_PAUSED:
-      runs.delete(runId);
+      dropRun(runId);
       break;
     default:
   }
@@ -187,6 +221,7 @@ export function snapshotRun(runId, streamId) {
 /** Test seam. */
 export function resetPartialRunState() {
   runs.clear();
+  totalBytes = 0;
 }
 
 observeEmittedEnvelopes(recordEnvelope);
