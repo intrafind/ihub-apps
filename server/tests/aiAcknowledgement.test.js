@@ -1121,6 +1121,57 @@ describe('acknowledgement documents', () => {
   });
 });
 
+describe('acknowledgements an older server wrote into users.json (rolling deploy after V255)', () => {
+  beforeEach(() => seed());
+  const post = (app, user) => request(app).post('/api/apps/x/chat/c1').set('x-user', user).send({});
+  const legacyOf = id => {
+    const { aiAcknowledgements, aiAcknowledgementsClearedAt } = store.files[USERS].users[id];
+    return { aiAcknowledgements, aiAcknowledgementsClearedAt };
+  };
+
+  test('a late confirmation is imported on the next read and stripped from users.json', async () => {
+    const late = { ...BOB_ENTRY, acknowledgedAt: '2026-03-01T00:00:00.000Z' };
+    store.files[USERS].users.alice.aiAcknowledgements = [late];
+    expect((await post(buildApp(), asUser('alice'))).status).toBe(200);
+    expect(await entriesOf('alice')).toEqual([late]);
+    expect(legacyOf('alice')).toEqual({});
+    // Imported once: a second read changes nothing.
+    expect(await entriesOf('alice')).toEqual([late]);
+  });
+
+  test('a late admin removal revokes what the document holds', async () => {
+    const app = buildApp();
+    expect((await post(app, asUser('bob'))).status).toBe(200);
+    // The old server removed bob's confirmations in users.json after V255 ran.
+    Object.assign(store.files[USERS].users.bob, {
+      aiAcknowledgements: [],
+      aiAcknowledgementsClearedAt: '2026-02-01T00:00:00.000Z'
+    });
+    // The remembered "yes" of this worker is forgotten by the import.
+    await repo().get('bob');
+    expect(await repo().get('bob')).toMatchObject({
+      aiAcknowledgements: [],
+      aiAcknowledgementsClearedAt: '2026-02-01T00:00:00.000Z'
+    });
+    expect((await post(app, asUser('bob'))).status).toBe(428);
+    expect(legacyOf('bob')).toEqual({});
+  });
+
+  test('an older removal does not revoke a newer confirmation', async () => {
+    const newer = { ...BOB_ENTRY, version: 2, acknowledgedAt: '2026-04-01T00:00:00.000Z' };
+    await repo().record('bob', newer);
+    store.files[USERS].users.bob.aiAcknowledgementsClearedAt = '2026-02-01T00:00:00.000Z';
+    expect(await entriesOf('bob')).toEqual([newer]);
+  });
+
+  test('the admin user list imports them for every user', async () => {
+    store.files[USERS].users.alice.aiAcknowledgements = [BOB_ENTRY];
+    const all = await repo().listAll();
+    expect(all.get('alice').data.aiAcknowledgements).toEqual([BOB_ENTRY]);
+    expect(legacyOf('alice')).toEqual({});
+  });
+});
+
 describe('admin user list (GET /api/admin/auth/users)', () => {
   beforeEach(() => seed());
 
