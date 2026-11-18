@@ -20,9 +20,12 @@ import runLog, { newRunId } from '../services/loop/RunLog.js';
 import { RunStreamEmitter, projectLedgerEvent } from '../services/loop/RunStream.js';
 import {
   MAX_PARTIAL_TEXT_BYTES,
+  MAX_PARTIAL_TOTAL_BYTES,
+  dropRun,
   recordEnvelope,
   resetPartialRunState,
-  snapshotRun
+  snapshotRun,
+  trackedStream
 } from '../services/loop/partialRunState.js';
 
 let baseDir;
@@ -186,6 +189,58 @@ describe('partial run state', () => {
     const { frames, truncated } = snapshotRun('r1', 'chat-a');
     expect(truncated).toBe(false);
     expect(frames.map(f => [f.data.step, f.data.content.length])).toEqual([[1, half.length]]);
+  });
+
+  test('all runs together stay within a budget; the oldest go first', () => {
+    const chunk = 'c'.repeat(MAX_PARTIAL_TEXT_BYTES / 2);
+    const runs = Math.floor(MAX_PARTIAL_TOTAL_BYTES / chunk.length) + 2;
+    for (let i = 0; i < runs; i += 1) {
+      recordEnvelope(envelope(`b${i}`, 'run/started', {}), 'chat-a');
+      recordEnvelope(
+        envelope(`b${i}`, 'step/delta', { step: 0, kind: 'text', content: chunk }),
+        'chat-a'
+      );
+    }
+    expect(snapshotRun('b0', 'chat-a').frames).toHaveLength(0);
+    expect(snapshotRun('b1', 'chat-a').frames).toHaveLength(0);
+    expect(snapshotRun('b2', 'chat-a').frames).toHaveLength(1);
+    expect(snapshotRun(`b${runs - 1}`, 'chat-a').frames).toHaveLength(1);
+    // Ended and completed text is freed: the budget holds new runs again.
+    for (let i = 2; i < runs; i += 1) recordEnvelope(envelope(`b${i}`, 'run/ended', {}), 'chat-a');
+    recordEnvelope(envelope('c0', 'run/started', {}), 'chat-a');
+    for (let step = 0; step < runs; step += 1) {
+      recordEnvelope(envelope('c0', 'step/delta', { step, kind: 'text', content: 'x' }), 'chat-a');
+      recordEnvelope(envelope('c0', 'step/completed', { step, content: 'x' }), 'chat-a');
+    }
+    recordEnvelope(envelope('c1', 'run/started', {}), 'chat-a');
+    recordEnvelope(
+      envelope('c1', 'step/delta', { step: 0, kind: 'text', content: chunk }),
+      'chat-a'
+    );
+    expect(snapshotRun('c1', 'chat-a').frames).toHaveLength(1);
+  });
+
+  test('dropRun forgets one run and frees its share of the budget', () => {
+    const chunk = 'd'.repeat(MAX_PARTIAL_TEXT_BYTES / 2);
+    const fill = Math.floor(MAX_PARTIAL_TOTAL_BYTES / chunk.length);
+    for (let i = 0; i < fill; i += 1) {
+      recordEnvelope(envelope(`d${i}`, 'run/started', {}), 'chat-a');
+      recordEnvelope(
+        envelope(`d${i}`, 'step/delta', { step: 0, kind: 'text', content: chunk }),
+        'chat-a'
+      );
+    }
+    dropRun(`d${fill - 1}`);
+    dropRun('unknown');
+    expect(trackedStream(`d${fill - 1}`)).toBeNull();
+    // The freed room takes a new run without pushing out the oldest.
+    recordEnvelope(envelope('d-new', 'run/started', {}), 'chat-a');
+    recordEnvelope(
+      envelope('d-new', 'step/delta', { step: 0, kind: 'text', content: chunk }),
+      'chat-a'
+    );
+    expect(snapshotRun('d0', 'chat-a').frames).toHaveLength(1);
+    expect(snapshotRun('d-new', 'chat-a').frames).toHaveLength(1);
   });
 
   test('a cut marks its own kind and step; thinking goes on', () => {
