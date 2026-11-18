@@ -72,6 +72,29 @@ test('the chat says a digest is being written, then what it did, and the context
   assert.equal(frames[2].data.inputTokens, 102_934 - 65_029, 'rebased on the provider count');
 });
 
+test('only what was freed inside the provider count is subtracted; a newer batch is already estimated short', () => {
+  const tracker = createContextTracker({ id: 'm', contextWindow: 173_184 });
+  // The provider counted the first message; anything after it is estimated.
+  tracker.recordStep({ promptTokens: 100_000, completionTokens: 100, source: 'provider' }, 1);
+  const { seam, ctx, frames } = seamWith(tracker);
+  seam.onCompaction(ctx, {
+    compactionId: 'cmp-3',
+    step: 5,
+    trigger: 'proactive',
+    strategy: 'digest',
+    tokensBefore: 150_000,
+    tokensAfter: 109_000,
+    freedTokens: 41_000,
+    freedByMessage: [
+      [0, 1_000],
+      [4, 40_000]
+    ],
+    itemsSummarised: 2
+  });
+  const usage = frames.find(f => f.type === SSE_V2_EVENTS.CONTEXT_USAGE);
+  assert.equal(usage.data.inputTokens, 99_000, 'the newest batch is not subtracted twice');
+});
+
 test('a shortened (elided) compaction drops the context figure too, from its sizes before and after', () => {
   const tracker = createContextTracker({ id: 'm', contextWindow: 173_184 });
   tracker.recordStep({ promptTokens: 100_000, completionTokens: 100, source: 'provider' }, 1);

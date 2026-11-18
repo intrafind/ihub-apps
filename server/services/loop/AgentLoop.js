@@ -1656,6 +1656,7 @@ export class AgentLoop {
     }
 
     const factsFound = summary?.facts?.length || 0;
+    const notFoundFound = summary?.notFound?.length || 0;
     const render = maxChars =>
       renderDigest({
         number: digestNumber,
@@ -1674,12 +1675,17 @@ export class AgentLoop {
       rendered = render(digestChars);
     }
     if (freedBy(rendered.text) <= 0) {
-      rendered = smallest(fallbackReason || (factsFound > 0 ? 'digest_truncated' : null));
+      rendered = smallest(
+        fallbackReason || (factsFound + notFoundFound > 0 ? 'digest_truncated' : null)
+      );
     }
-    const { text: digestText, factsShown } = rendered;
-    // Facts that did not fit are in the results only (the model is told to
-    // read them again): the compaction lost something the summary had.
-    if (!fallbackReason && factsShown < factsFound) fallbackReason = 'digest_truncated';
+    const { text: digestText, factsShown, notFoundShown } = rendered;
+    // Findings that did not fit — facts or what was not found — are in the
+    // results only (the model is told to read them again): the compaction
+    // lost something the summary had.
+    if (!fallbackReason && (factsShown < factsFound || notFoundShown < notFoundFound)) {
+      fallbackReason = 'digest_truncated';
+    }
     const before = calls.map(call => ctx.messages[call.index]);
     const next = applyDigest(ctx.messages, calls, digestText, digestNumber);
     const after = calls.map(call => next[call.index]);
@@ -1751,6 +1757,12 @@ export class AgentLoop {
       ...record,
       digest: digestText,
       freedTokens,
+      // Per message: a context figure anchored on a provider count subtracts
+      // only what was freed inside it (the newest batch may lie after it).
+      freedByMessage: calls.map((call, i) => [
+        call.index,
+        Math.max(0, estimateTranscriptTokens([before[i]]) - estimateTranscriptTokens([after[i]]))
+      ]),
       messages: ctx.messages
     });
     return freedTokens;
@@ -1849,13 +1861,12 @@ export class AgentLoop {
     }
     if (bounded?.truncated === true && bounded.spill?.path) {
       // The run that spilled it: the entry's, this one, or an earlier run of
-      // the turn this one continues under a new id.
-      const runs = [
-        entry.runId,
-        ctx.ledgerId,
-        ...(Array.isArray(ctx.request.archiveRunIds) ? ctx.request.archiveRunIds : []),
-        ...state.archiveRuns
-      ].filter((id, index, all) => id && isValidRunId(id) && all.indexOf(id) === index);
+      // the turn — only runs whose chat was checked (`_loadArchived`), never
+      // a run id the request merely names.
+      if (!state.archiveLoaded) await this._loadArchived(ctx, null);
+      const runs = [entry.runId, ctx.ledgerId, ...state.archiveRuns].filter(
+        (id, index, all) => id && isValidRunId(id) && all.indexOf(id) === index
+      );
       for (const runId of runs) {
         try {
           content = await ctx.runLog.readSpill(runId, { path: bounded.spill.path });

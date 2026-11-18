@@ -162,7 +162,7 @@ export function chatTurnSeam({
           Number(info?.freedTokens) ||
           Math.max(0, Number(info?.tokensBefore) - Number(info?.tokensAfter)) ||
           0;
-        if (freedTokens > 0) contextTracker.compacted?.(freedTokens);
+        if (freedTokens > 0) contextTracker.compacted?.(freedTokens, info?.freedByMessage);
         reportContext(ctx, contextTracker.estimate(ctx.messages));
       }
     },

@@ -544,6 +544,22 @@ function scaleAfter(text, end) {
 }
 
 /**
+ * Whether a number read across spaces is one number in digit groups
+ * ("1 234 567": up to three digits, then groups of exactly three) rather than
+ * numbers side by side ("2024 450", a table row). "12 450" reads as one.
+ */
+function digitGrouping(written) {
+  const groups = written.split(/[\u00a0\u202f ]/);
+  if (groups.length < 2) return true;
+  if (!/^\d{1,3}$/.test(groups[0])) return false;
+  return groups
+    .slice(1)
+    .every((group, i, rest) =>
+      i < rest.length - 1 ? /^\d{3}$/.test(group) : /^\d{3}(?:[.,]\d+)?$/.test(group)
+    );
+}
+
+/**
  * The numbers of a text: how many digits each has, the values it can stand
  * for, the scale word after it, and its parts if a space in it separated two
  * numbers ("2024 450").
@@ -552,6 +568,7 @@ function numbersOf(text) {
   const source = String(text || '');
   return [...source.matchAll(NUMBER_PATTERN)].map(m => ({
     ...writtenNumber(m[0]),
+    grouped: digitGrouping(m[0]),
     scales: scaleAfter(source, m.index + m[0].length),
     parts: m[0]
       .split(/[\u00a0\u202f ]/)
@@ -595,7 +612,11 @@ export function numbersAppearIn(fact, content) {
   const checked = number => number.digitCount >= 2 || number.scales?.length > 0;
   const wanted = numbersOf(datesApart(fact)).filter(checked);
   if (wanted.length === 0) return true;
-  const present = numbersOf(datesApart(content));
+  // Numbers side by side in the result ("2024 450") count one by one too;
+  // the groups of one number ("1 234 567") do not.
+  const present = numbersOf(datesApart(content)).flatMap(number =>
+    number.grouped ? [number] : [number, ...number.parts.map(part => ({ ...part, scales: [] }))]
+  );
   const values = new Set(present.flatMap(number => number.values));
   // The value with a scale word in the fact: in the result with the same
   // scale or none (a table says "in millions" once), never with another one.
@@ -875,7 +896,7 @@ function fallbackNote(reason) {
  * @param {Array<Object>} [params.notFound]
  * @param {string|null} [params.fallbackReason] - set when facts could not be (fully) extracted
  * @param {number} [params.maxChars=24000]
- * @returns {{text: string, factsShown: number}}
+ * @returns {{text: string, factsShown: number, notFoundShown: number}}
  */
 export function renderDigest({
   number,
@@ -915,6 +936,7 @@ export function renderDigest({
       text += `\n- … ${facts.length - shown} more facts; read the results with recall_tool_result.`;
     }
   }
+  let notFoundShown = 0;
   if (notFound.length) {
     const budget = maxChars - text.length - closing.length - 100;
     const tail = ['', 'Looked for, not found (report these as not available, not from memory):'];
@@ -922,10 +944,11 @@ export function renderDigest({
       const line = `- [${entry.ref}] ${inert(entry.text)}`;
       if (tail.join('\n').length + line.length > budget) break;
       tail.push(line);
+      notFoundShown += 1;
     }
-    if (tail.length > 2) text += `\n${tail.join('\n')}`;
+    if (notFoundShown > 0) text += `\n${tail.join('\n')}`;
   }
-  return { text: `${text}\n${closing}`, factsShown: shown };
+  return { text: `${text}\n${closing}`, factsShown: shown, notFoundShown };
 }
 
 /** The one-line stub a condensed result is replaced with. */

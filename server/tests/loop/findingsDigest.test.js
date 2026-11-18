@@ -292,22 +292,24 @@ test('summarizeCalls: a failed chunk is reported, an abort of the run is thrown'
   assert.equal(summaryFailureOf(nothing, calls), 'summary_empty');
 });
 
-test('summarizeCalls: no chunk runs past the deadline; a chunk cut at the output limit is partial', async () => {
-  const calls = ['r1', 'r2', 'r3'].map(ref => ({
+test('summarizeCalls: no chunk runs past the deadline; a chunk cut at the output limit is partial', async t => {
+  const calls = ['r1', 'r2', 'r3', 'r4', 'r5'].map(ref => ({
     ref,
     name: 'webSearch',
     args: '{}',
     content: `Revenue 5.1 million USD ${'x'.repeat(200_000)}`,
     sources: []
   }));
-  // Each chunk takes 60 % of one call's time: the third starts at 120 % of
-  // it, inside the deadline (200 %), with 80 % left — less than a full call.
-  // Wide margins: a slow CI runner must not push the third past the deadline.
+  // A controlled clock: each summary call takes 300 ms of it. With 500 ms per
+  // call, all chunks together have 1,000 ms: calls start at 0, 300, 600, 900;
+  // the fifth would start at 1,200, past the deadline, and does not.
+  let now = 1_000_000;
+  t.mock.method(Date, 'now', () => now);
   const seen = [];
   const slow = {
     complete: async params => {
       seen.push(params.timeoutMs);
-      await new Promise(resolve => setTimeout(resolve, 300));
+      now += 300;
       return { content: '', finishReason: 'stop' };
     }
   };
@@ -317,10 +319,11 @@ test('summarizeCalls: no chunk runs past the deadline; a chunk cut at the output
     calls,
     timeoutMs: 500
   });
-  assert.equal(timed.chunks, 3);
-  assert.equal(seen.length, 3, 'all three chunks ran');
-  assert.equal(seen[0], 500);
-  assert.ok(seen[2] < 500, `the third chunk gets only what is left (${seen[2]} ms)`);
+  assert.equal(timed.chunks, 5);
+  assert.deepEqual(seen, [500, 500, 400, 100], 'each call gets at most what is left');
+  assert.equal(timed.failedChunks, 1, 'the chunk past the deadline is not started');
+  assert.equal(timed.error, 'compaction time limit');
+  t.mock.restoreAll();
 
   const cut = {
     complete: async () => ({
@@ -337,6 +340,18 @@ test('summarizeCalls: no chunk runs past the deadline; a chunk cut at the output
 test('a digest limit below what its fixed text needs is rejected', () => {
   assert.equal(contextPoliciesSchema.safeParse({ maxDigestChars: 1000 }).success, false);
   assert.equal(contextPoliciesSchema.safeParse({ maxDigestChars: MIN_DIGEST_CHARS }).success, true);
+});
+
+test('a digest says how many not-found lines it kept, so a cut one is not lost silently', () => {
+  const calls = [{ ref: 'r1', name: 'webSearch', args: '{}', content: 'x', sources: [] }];
+  const notFound = Array.from({ length: 200 }, (_, i) => ({
+    ref: 'r1',
+    text: `figure number ${i} of the requested table`
+  }));
+  const small = renderDigest({ number: 1, calls, notFound, maxChars: MIN_DIGEST_CHARS });
+  assert.ok(small.notFoundShown > 0 && small.notFoundShown < 200);
+  const all = renderDigest({ number: 1, calls, notFound: notFound.slice(0, 3) });
+  assert.equal(all.notFoundShown, 3);
 });
 
 test('a digest stays within its limit with many calls, the rest named as a range', () => {
@@ -549,6 +564,20 @@ test('text from a result cannot close or open the digest block', () => {
     assert.equal(numbersAppearIn('1,200 USD', 'Price 1,200,000 USD'), false);
     assert.equal(numbersAppearIn('1,200 million USD', 'Price 1,200,000 USD'), false, 'wrong scale');
     assert.equal(numbersAppearIn('1,200 thousand USD', 'Price 1,200,000 USD'), true);
+  });
+
+  test('numbers side by side in the result count one by one; the groups of one number do not', () => {
+    assert.equal(
+      numbersAppearIn('Germany shipped 450 units in 2024', 'Germany 2024 450 units'),
+      true
+    );
+    assert.equal(numbersAppearIn('2024 sales', 'Germany 2024 450 units'), true);
+    assert.equal(
+      numbersAppearIn('234 units', 'Total 1 234 567 units'),
+      false,
+      'a group of a number'
+    );
+    assert.equal(numbersAppearIn('1,234,567 units', 'Total 1 234 567 units'), true);
   });
 
   test('a scale word must agree; a single digit with one is checked', () => {

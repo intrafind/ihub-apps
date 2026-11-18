@@ -547,6 +547,57 @@ test('a turn continued under a new run id still reads what its paused run conden
   await runLog.stop();
 });
 
+test('a recall reads a spilled original only from runs of its own chat, never from a run the request merely names', async () => {
+  const { runLog } = await captureRunLog();
+  const refs = { chatId: 'chat-1', appId: 'app' };
+  const readBack = async otherChatId => {
+    const { runId: otherRun } = await runLog.startRun({
+      kind: 'chat',
+      user: { id: 'u1' },
+      refs: { chatId: otherChatId }
+    });
+    const spillRef = await runLog.spill(
+      otherRun,
+      'tool-x',
+      'SECRET OF THE OTHER RUN',
+      'text/plain'
+    );
+    // A result in this chat that names that spill (as a carried-over result would).
+    const bounded = JSON.stringify({
+      truncated: true,
+      bytes: 50_000,
+      preview: 'p'.repeat(3000),
+      spill: { path: spillRef.path }
+    });
+    const { runId } = await runLog.startRun({ kind: 'chat', user: { id: 'u1' }, refs });
+    let calls = 0;
+    const { loop } = makeLoop(
+      [
+        toolTurn('c1', 'webSearch', { query: 'nvidia' }, 1000),
+        toolTurn('c2', 'webSearch', { query: 'apple' }, 4000),
+        toolTurn('c9', RECALL_TOOL_ID, { ref: 'r1' }),
+        textTurn('done')
+      ],
+      [''],
+      { runLog }
+    );
+    const result = await loop.run({
+      runId,
+      refs,
+      archiveRunIds: [otherRun],
+      model,
+      messages: baseMessages,
+      tools: [searchTool],
+      policies,
+      executeTool: async (_call, { args }) => (++calls === 1 ? bounded : searchResult(args.query))
+    });
+    return result.messages.find(m => m.tool_call_id === 'c9').content;
+  };
+  assert.doesNotMatch(await readBack('chat-2'), /SECRET OF THE OTHER RUN/, 'another chat');
+  assert.match(await readBack('chat-1'), /SECRET OF THE OTHER RUN/, 'a checked run of this chat');
+  await runLog.stop();
+});
+
 test('a recall follows a chain of pauses back: same id (A, B, B) and new ids (A, B, C)', async () => {
   const { runLog } = await captureRunLog();
   const refs = { chatId: 'chat-1', appId: 'app' };
@@ -648,13 +699,21 @@ test('notes that would count more tokens than the results they replace are never
     model,
     messages: baseMessages,
     tools: [searchTool],
-    policies: { context: { strategy: 'digest', compactThresholdTokens: 100_000 } },
+    // The fallback shortens what is older than the last two messages, so the retry fits.
+    policies: {
+      context: { strategy: 'digest', compactThresholdTokens: 100_000, reactiveKeepRecent: 2 }
+    },
     seams: [{ onCompaction: (_ctx, info) => compactions.push(info.strategy) }],
     executeTool: async () => sparse
   });
+  assert.equal(result.status, 'completed', JSON.stringify(result.error));
+  assert.equal(result.content, 'recovered', 'the loop recovered from the overflow');
   assert.equal(summaryRequests.length, 0);
-  assert.ok(!compactions.includes('digest'), `compactions: ${compactions.join(', ')}`);
-  assert.equal(result.messages.find(m => m.tool_call_id === 'c1').content, sparse);
+  assert.deepEqual(compactions, ['elide'], 'shortened instead of a digest that grows the prompt');
+  assert.doesNotMatch(
+    result.messages.find(m => m.tool_call_id === 'c1').content,
+    /condensed_results/
+  );
 });
 
 test('near the window the newest batch is condensed too; still full, the run wraps up with its producing tools', async () => {

@@ -264,12 +264,21 @@ export function createContextTracker(model, { prior = null, resent = false } = {
      * The transcript was compacted in place (#3819): the messages the last
      * provider count held are now `freedTokens` smaller, while their number
      * stayed the same. Without this the next estimate would add what came
-     * after to the old, larger count until the next model call.
+     * after to the old, larger count until the next model call. Only what
+     * was freed inside that count counts: a message added after it is
+     * estimated as it is now, already shortened.
      * @param {number} freedTokens
+     * @param {Array<[number, number]>} [freedByMessage] - [message index, tokens freed]
      */
-    compacted(freedTokens) {
-      const freed = Math.max(0, Math.floor(Number(freedTokens) || 0));
-      if (anchor && freed > 0) anchor = { ...anchor, tokens: Math.max(0, anchor.tokens - freed) };
+    compacted(freedTokens, freedByMessage) {
+      if (!anchor) return;
+      const counted = Array.isArray(freedByMessage)
+        ? freedByMessage
+            .filter(([index]) => index < anchor.messageCount)
+            .reduce((sum, [, tokens]) => sum + (Number(tokens) || 0), 0)
+        : Number(freedTokens) || 0;
+      const freed = Math.max(0, Math.floor(counted));
+      if (freed > 0) anchor = { ...anchor, tokens: Math.max(0, anchor.tokens - freed) };
     },
     /**
      * The window as the next turn will find it: the prompt this turn started
