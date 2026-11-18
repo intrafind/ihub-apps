@@ -195,8 +195,30 @@ function writePostEntry(streamId, entry, envelope) {
 }
 
 /**
+ * Whether a routed frame belongs to the turn of this POST stream: a frame of
+ * the chat itself (`runId` is the chat id), of the turn's run, or of a run
+ * that started while this POST was current, unless it is the child of a run
+ * that is not this turn's. A frame of an older turn still running on the chat
+ * (superseded, its POST replaced by this one) is not.
+ *
+ * @param {string} streamId
+ * @param {object} entry - The `postStreams` entry, with its `runs`
+ * @param {object} envelope
+ * @returns {boolean}
+ */
+function belongsToPostTurn(streamId, entry, envelope) {
+  const { runId, type, data } = envelope;
+  if (runId === streamId || entry.runs.has(runId)) return true;
+  if (type !== SSE_V2_EVENTS.RUN_STARTED) return false;
+  if (data?.parentRunId && !entry.runs.has(data.parentRunId)) return false;
+  entry.runs.add(runId);
+  return true;
+}
+
+/**
  * Write one envelope to the current POST stream of a turn on this chat, if
- * this worker holds one.
+ * this worker holds one and the frame belongs to that turn
+ * ({@link belongsToPostTurn}).
  *
  * @param {string} streamId
  * @param {object} envelope
@@ -204,7 +226,7 @@ function writePostEntry(streamId, entry, envelope) {
  */
 export function deliverToPostStream(streamId, envelope) {
   const entry = postStreams.get(streamId);
-  if (!entry || !envelope) return false;
+  if (!entry || !envelope || !belongsToPostTurn(streamId, entry, envelope)) return false;
   return writePostEntry(streamId, entry, envelope);
 }
 
@@ -217,9 +239,15 @@ export function deliverToPostStream(streamId, envelope) {
  * connection closing early aborts a temporary turn (a durable one keeps
  * running, as with the GET).
  *
+ * Frames routed to the chat (`routeEnvelope`) reach the chat's current POST
+ * stream only, and only those of its own turn: once a newer POST on the same
+ * chat took this one's place, the older turn's frames go to neither.
+ *
  * The returned handle belongs to this request: `write` reaches this response
  * only, and does nothing once a newer POST on the same chat took its place, so
- * a late frame of one turn never lands on the next turn's stream.
+ * a late frame of one turn never lands on the next turn's stream. It first
+ * flushes the chat's delta merge window, so text the turn emitted before a
+ * late refusal is written before it.
  *
  * A POST's `req` emits `close` as soon as its body has been read, so the
  * disconnect is taken from `res`, which closes with the connection.
@@ -228,11 +256,14 @@ export function deliverToPostStream(streamId, envelope) {
  * @param {import('express').Request} params.req
  * @param {import('express').Response} params.res
  * @param {string} params.chatId
+ * @param {string} params.runId - The turn's run
+ * @param {boolean} params.durable - Whether the turn outlives this connection
+ *   (a kept chat); told to the client on `stream/connected`
  * @returns {{isOpen: () => boolean, write: (envelope: object) => boolean,
  *   hasEnded: (runId: string) => boolean, end: () => void}} `hasEnded`: whether
  *   this stream already carried that run's `run/ended`.
  */
-export function openChatPostStream({ req, res, chatId }) {
+export function openChatPostStream({ req, res, chatId, runId, durable }) {
   // Gone before the turn committed (the client gave up while the request was
   // being checked): never registered, so another POST's entry stays in place
   // and nothing is written to a dead socket.
@@ -257,14 +288,21 @@ export function openChatPostStream({ req, res, chatId }) {
   const entry = channel.entry;
   entry.seq = 0;
   entry.endedRuns = new Set();
+  entry.runs = new Set([runId]);
   const isOpen = () => channel.isCurrent() && !res.destroyed;
-  const write = envelope => isOpen() && writePostEntry(chatId, entry, envelope);
-  write(
+  const write = envelope => {
+    if (!isOpen()) return false;
+    flushStream(chatId);
+    return writePostEntry(chatId, entry, envelope);
+  };
+  writePostEntry(
+    chatId,
+    entry,
     buildEnvelope({
       streamId: chatId,
       runId: chatId,
       type: SSE_V2_EVENTS.STREAM_CONNECTED,
-      data: { runId: chatId, lastSeq: 0 }
+      data: { runId: chatId, lastSeq: 0, durable: durable === true }
     })
   );
   return {
@@ -329,7 +367,8 @@ export function writeStreamStart(streamId, entry, { frames = [], runId = null, u
  * here without knowing about the cluster.
  */
 export function routeEnvelope(streamId, envelope) {
-  // A POST stream and a GET stream on the same chat both get every frame: a
+  // The chat's current POST stream gets the frames of its own turn
+  // (`deliverToPostStream`); a GET stream on the same chat gets every frame: a
   // second tab, or a client that re-attached on the GET while its old POST
   // socket is half-open and not yet detected as dead, must still see the
   // turn end. With only the POST (the usual case) nothing below matches and

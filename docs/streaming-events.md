@@ -48,7 +48,7 @@ reducer, `client/src/shared/run/runReducer.js`.
 
 | Type                   | Payload                                                                                                                       | Meaning                                                                       |
 | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `stream/connected`     | `{ runId, lastSeq, protocol: 2 }`                                                                                             | Subscription established                                                      |
+| `stream/connected`     | `{ runId, lastSeq, protocol: 2 }`                                                                                             | Subscription established; on a chat turn's own POST also `durable` (see below) |
 | `stream/error`         | `{ code, message, details?, retryable, isContextWindowError? }`                                                               | The run failed; always followed by `run/ended { status: 'error' }`            |
 | `run/started`          | `{ kind, model?, parentRunId?, refs }`                                                                                        | A run began (`kind`: chat, workflow, agent, subagent, inference, utility)     |
 | `run/ended`            | `{ status, finishReason, usage?, context?, knowledgeSources?, answerBasis?, toolName?, output?, cause?, error? }`                       | Terminal frame of a run                                                       |
@@ -339,6 +339,16 @@ turn has ended, frames on the GET).
   they never cross the cluster bus. The 30-second `: heartbeat` comment keeps
   proxies from timing out a long turn; the SPA counts a POST that stays silent
   for 60 seconds as dropped and re-attaches.
+- Its `stream/connected` carries `durable`: `true` when the turn outlives the
+  connection (a kept chat), `false` when closing the response stops it (a
+  temporary chat, including one the server made temporary itself: an anonymous
+  user, no chat history). A client decides on it whether a dropped stream can
+  be re-attached to.
+- The POST carries the frames of its own turn only: the turn's run, frames of
+  the chat itself, and runs started while it is the chat's current POST (a
+  child of an older turn's run excepted). An older turn still running on the
+  chat after a newer POST took over (superseded) is not written to the newer
+  one.
 - A GET opened on the same chat meanwhile (a second tab, or a client that
   re-attached while its old POST socket is half-open) gets every frame too, in
   this worker or relayed to the worker holding it. Only then does a POST

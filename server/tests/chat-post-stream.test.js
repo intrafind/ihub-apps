@@ -39,7 +39,7 @@ const { default: ChatService } = await import('../services/chat/ChatService.js')
 const { activeRequests, clients, hasChatClient, openChatPostStream, postStreams } =
   await import('../sse.js');
 const { ServiceError } = await import('../utils/ServiceError.js');
-const { RunStreamEmitter, bindStreamRun, unbindStreamRun, emitToolProgress } =
+const { RunStreamEmitter, bindStreamRun, unbindStreamRun, emitToolProgress, buildEnvelope } =
   await import('../services/loop/RunStream.js');
 const { normalizeAbortCause } = await import('../services/chat/abortCause.js');
 const { default: registerSessionRoutes } = await import('../routes/chat/sessionRoutes.js');
@@ -513,6 +513,126 @@ describe('with Accept: text/event-stream', () => {
 });
 
 describe('openChatPostStream', () => {
+  /**
+   * A bare server whose next request is handed to the queued handler, and a
+   * POST to it that resolves with the frames' `runId:type(content)`.
+   */
+  let bare;
+  let barePort;
+  const bareHandlers = [];
+  beforeAll(async () => {
+    bare = http.createServer((req, res) => bareHandlers.shift()(req, res));
+    await new Promise(resolve => bare.listen(0, resolve));
+    barePort = bare.address().port;
+  });
+  afterAll(() => new Promise(resolve => bare.close(resolve)));
+  const bareFrames = () =>
+    new Promise((resolve, reject) => {
+      http
+        .request({ port: barePort, method: 'POST', path: '/' }, res => {
+          let text = '';
+          res.setEncoding('utf8');
+          res.on('data', chunk => (text += chunk));
+          res.on('end', () =>
+            resolve(
+              framesOf(text).map(
+                f =>
+                  `${f.data.runId}:${f.event}${f.data.data?.content ? `(${f.data.data.content})` : ''}`
+              )
+            )
+          );
+        })
+        .on('error', reject)
+        .end();
+    });
+
+  test('tells the client on stream/connected whether the turn outlives it', async () => {
+    for (const durable of [true, false]) {
+      let connected;
+      bareHandlers.push((req, res) => {
+        openChatPostStream({ req, res, chatId: 'c-durable', runId: 'run-d', durable }).end();
+      });
+      const text = await new Promise(resolve =>
+        http
+          .request({ port: barePort, method: 'POST', path: '/' }, res => {
+            let body = '';
+            res.on('data', chunk => (body += chunk));
+            res.on('end', () => resolve(body));
+          })
+          .end()
+      );
+      connected = framesOf(text)[0];
+      expect(connected.event).toBe('stream/connected');
+      expect(connected.data.data.durable).toBe(durable);
+    }
+  });
+
+  test('a late refusal is written after the text still in the merge window', async () => {
+    bareHandlers.push((req, res) => {
+      const ps = openChatPostStream({ req, res, chatId: 'c-order', runId: 'run-A' });
+      const em = new RunStreamEmitter({ streamId: 'c-order', runId: 'run-A' });
+      em.emit('run/started', { kind: 'chat' });
+      em.emit('step/delta', { step: 0, kind: 'text', content: 'a' });
+      em.emit('step/delta', { step: 0, kind: 'text', content: 'b' }); // in the window
+      const frame = (type, data) =>
+        buildEnvelope({ streamId: 'c-order', runId: 'run-A', type, data });
+      ps.write(frame('stream/error', { code: 'X', message: 'boom', retryable: false }));
+      ps.write(frame('run/ended', { status: 'error', finishReason: 'error' }));
+      ps.end();
+    });
+    expect(await bareFrames()).toEqual([
+      'c-order:stream/connected',
+      'run-A:run/started',
+      'run-A:step/delta(a)',
+      'run-A:step/delta(b)',
+      'run-A:stream/error',
+      'run-A:run/ended'
+    ]);
+  });
+
+  test('frames of an older turn still running never reach the newer turn’s POST', async () => {
+    let ps1;
+    let em1;
+    const firstOpen = new Promise(resolve =>
+      bareHandlers.push((req, res) => {
+        ps1 = openChatPostStream({ req, res, chatId: 'c-two', runId: 'run-1' });
+        em1 = new RunStreamEmitter({ streamId: 'c-two', runId: 'run-1' });
+        em1.emit('run/started', { kind: 'chat' });
+        resolve();
+      })
+    );
+    const first = bareFrames();
+    await firstOpen;
+    bareHandlers.push((req, res) => {
+      const ps2 = openChatPostStream({ req, res, chatId: 'c-two', runId: 'run-2' });
+      // Turn 1 goes on after turn 2 took the chat: its text, a child, its end.
+      em1.emit('step/delta', { step: 0, kind: 'text', content: 'late' });
+      const child1 = new RunStreamEmitter({ streamId: 'c-two', runId: 'wf-of-1' });
+      child1.emit('run/started', { kind: 'workflow', parentRunId: 'run-1', refs: {} });
+      child1.emit('run/ended', { status: 'completed', finishReason: 'stop' });
+      em1.emit('run/ended', { status: 'aborted', finishReason: 'cancelled' });
+      // Turn 2's own frames, a child of it and a frame of the chat itself.
+      const em2 = new RunStreamEmitter({ streamId: 'c-two', runId: 'run-2' });
+      em2.emit('run/started', { kind: 'chat' });
+      const child2 = new RunStreamEmitter({ streamId: 'c-two', runId: 'wf-of-2' });
+      child2.emit('run/started', { kind: 'workflow', parentRunId: 'run-2', refs: {} });
+      child2.emit('run/ended', { status: 'completed', finishReason: 'stop' });
+      new RunStreamEmitter({ streamId: 'c-two' }).emit('tool/progress', { phase: 'x' });
+      em2.emit('run/ended', { status: 'completed', finishReason: 'stop' });
+      ps2.end();
+      ps1.end();
+    });
+    expect(await bareFrames()).toEqual([
+      'c-two:stream/connected',
+      'run-2:run/started',
+      'wf-of-2:run/started',
+      'wf-of-2:run/ended',
+      'c-two:tool/progress',
+      'run-2:run/ended'
+    ]);
+    expect(await first).toEqual(['c-two:stream/connected', 'run-1:run/started']);
+  });
+
   test('a response already gone is not registered and leaves another POST in place', () => {
     const other = { response: {}, lastActivity: new Date(), seq: 0, endedRuns: new Set() };
     postStreams.set('chat-dead', other);
