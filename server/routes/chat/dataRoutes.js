@@ -874,8 +874,13 @@ export default function registerDataRoutes(app) {
       }),
       // HTML artifacts: the CDN hosts their sandboxed preview may load
       // scripts and stylesheets from. The browser needs the names to build
-      // the preview's CSP, so they are sent as configured.
-      artifacts: { scriptHosts: artifactSettings(platform).scriptHosts },
+      // the preview's CSP, so they are sent as configured. `libraryKit`
+      // says whether the browser inlines the kit's libraries
+      // (shared/artifactLibraries.js) into a preview and a download.
+      artifacts: {
+        scriptHosts: artifactSettings(platform).scriptHosts,
+        libraryKit: { enabled: artifactSettings(platform).libraryKit.enabled }
+      },
       uploads: uploadsClientConfig(platform, {
         storageAvailable: getChatFileRepository().isAvailable()
       }),

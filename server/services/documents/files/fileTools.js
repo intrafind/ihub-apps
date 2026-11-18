@@ -17,6 +17,7 @@ import {
   safeArchivePath
 } from '../generatedFiles.js';
 import { artifactPolicy } from '../../artifacts/artifactPolicy.js';
+import { withKitLibraries } from '../../artifacts/artifactLibraryKit.js';
 import { getArtifactRepository } from '../../artifacts/ArtifactRepository.js';
 import { ZipLimitError, planZipEntries, zipToBuffer } from '../../artifacts/artifactZip.js';
 
@@ -249,16 +250,25 @@ export async function runCreateZip(params) {
     const freshPaths = new Set(fresh.map(file => keyOf(file.name)));
     const items = [...existing.filter(file => !freshPaths.has(keyOf(file.name))), ...fresh];
 
-    const { enabled, maxBytes: maxStoredBytes, maxZipFiles, maxZipBytes } = artifactPolicy();
+    const {
+      enabled,
+      maxBytes: maxStoredBytes,
+      maxZipFiles,
+      maxZipBytes,
+      libraryKit
+    } = artifactPolicy();
     // The archive becomes a generated file, so it may not outgrow one either.
     const maxBytes =
       maxZipBytes > 0 ? Math.min(maxZipBytes, MAX_GENERATED_FILE_BYTES) : MAX_GENERATED_FILE_BYTES;
     const planned = planZipEntries(items, { maxFiles: maxZipFiles, maxBytes });
     const entries = [];
     for (const item of planned) {
-      const data = await item.load();
-      if (!data)
+      const loaded = await item.load();
+      if (!loaded)
         throw new GeneratedFileError(`"${item.path}" is no longer available.`, 'not-found');
+      // An HTML file in the archive carries its library-kit libraries, like
+      // every other way an HTML file leaves iHub.
+      const data = withKitLibraries(loaded, item.path, libraryKit);
       entries.push({ path: item.path, data, date: item.createdAt });
     }
     const archive = await zipToBuffer(entries);

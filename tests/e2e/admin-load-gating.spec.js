@@ -53,6 +53,7 @@ const PAGES = [
       '/configs/platform'
     ]
   },
+  { name: 'Artifacts', path: '/admin/artifacts', gets: ['/artifacts/config'] },
   { name: 'UI customization', path: '/admin/ui', gets: ['/ui/config'] },
   {
     name: 'Office integration',

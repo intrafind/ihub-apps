@@ -17,6 +17,7 @@ import { PassThrough } from 'node:stream';
 import { ZipArchive } from 'archiver';
 import { safeArchivePath } from '../documents/generatedFiles.js';
 import { artifactPolicy } from './artifactPolicy.js';
+import { withKitLibraries } from './artifactLibraryKit.js';
 import { buildContentDisposition } from '../../utils/safeContentDisposition.js';
 import logger from '../../utils/logger.js';
 import { ServiceError } from '../../utils/ServiceError.js';
@@ -262,7 +263,8 @@ export async function sendArtifactsZip(
     selected = unique.map(id => byId.get(id));
   }
 
-  const { maxZipFiles, maxZipBytes } = artifactPolicy();
+  // One reading of the policy for the whole archive: limits and library kit alike.
+  const { maxZipFiles, maxZipBytes, libraryKit } = artifactPolicy();
   let planned;
   try {
     planned = planZipEntries(selected, {
@@ -280,10 +282,23 @@ export async function sendArtifactsZip(
   // Read before the first byte goes out: a payload missing now can still be
   // answered with a status, which a half-written archive cannot.
   const entries = [];
+  let contentBytes = 0;
   for (const item of planned) {
     const artifact = await repository.get(scope, item.id);
     if (!artifact) throw new ServiceError('NOT_FOUND', 'Artifact not found');
-    entries.push({ path: item.path, data: artifact.data, date: artifact.createdAt });
+    // An HTML file leaves iHub here: its library-kit markers become the
+    // libraries' source, so the file works opened from disk.
+    const data = withKitLibraries(artifact.data, item.path, libraryKit);
+    contentBytes += data.length;
+    // The plan counted the stored sizes; the inlined libraries count too.
+    if (maxZipBytes > 0 && contentBytes > maxZipBytes) {
+      throw new ServiceError(
+        'PAYLOAD_TOO_LARGE',
+        'The files are too large for one archive once the HTML files carry their libraries.',
+        { details: { reason: 'too-large' } }
+      );
+    }
+    entries.push({ path: item.path, data, date: artifact.createdAt });
   }
 
   res.setHeader('Content-Type', 'application/zip');
