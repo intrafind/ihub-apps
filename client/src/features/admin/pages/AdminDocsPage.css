@@ -235,20 +235,18 @@
   text-align: left;
   border-bottom: 1px solid #e5e7eb;
 }
-.docs-prose .docs-table td {
-  padding: 0.625rem 1rem;
-  vertical-align: top;
-  border-top: 1px solid #f3f4f6;
-}
-.docs-prose .docs-table tbody tr:first-child td {
-  border-top: 0;
-}
 /* Every column wraps, the first one too (it often holds a sentence, not just a key), so a table
    fits the reading column instead of pushing it wide. Long code tokens may break anywhere, so a
    minimum width keeps a column from being squeezed down to a letter per line; a table with more
    columns than fit still scrolls inside its frame. */
 .docs-prose .docs-table td {
   min-width: 6rem;
+  padding: 0.625rem 1rem;
+  vertical-align: top;
+  border-top: 1px solid #f3f4f6;
+}
+.docs-prose .docs-table tbody tr:first-child td {
+  border-top: 0;
 }
 .docs-prose .docs-table td:first-child {
   min-width: 8rem;
