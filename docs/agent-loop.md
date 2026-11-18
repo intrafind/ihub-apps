@@ -204,6 +204,11 @@ projected at `compactTargetShare` of the threshold
   the last compaction could not bring the prompt under the threshold (what
   cannot be condensed is that large), the next waits until the prompt has
   grown by another 10 % of the threshold.
+- Above 80 % of what the model can take as input — its window less the
+  output the call asks for (vLLM counts `maxTokens` against the window) — a
+  compaction is urgent: the cooldown does not hold it back, and when the two
+  kept batches are what fills the window, only the newest (the one the model
+  has not read) is kept.
 - A second compaction appends a new digest after the first; a digest is never
   summarised again, so the prompt prefix up to it stays cacheable.
 - From the first compaction on, the model is offered `recall_tool_result`
@@ -233,10 +238,13 @@ characters, outside the last `compactKeepRecent` messages, collapse to a
 200-character preview. The data is gone; the compaction is recorded as
 `lossy`. A condensed result is never collapsed.
 
-**Overflow.** When the provider rejects a prompt as too long, the loop
-collapses old bodies the `elide` way (`reactiveKeepRecent`) and retries, up to
-`maxReactiveAttempts` times, without charging a round. It is recorded as
-`trigger: 'overflow'`, `lossy: true`, `fallbackReason: 'context_overflow'`.
+**Overflow.** When the provider rejects a prompt as too long, a `digest` turn
+first condenses every batch but the newest to its calls and sources, without
+a summary call (the results stay readable by ref). Only when that frees
+nothing — and in an `elide` turn — are old bodies collapsed (`reactiveKeepRecent`).
+The loop then retries, up to `maxReactiveAttempts` times, without charging a
+round. It is recorded as `trigger: 'overflow'`, `lossy: true`,
+`fallbackReason: 'context_overflow'`.
 
 **What is recorded and shown.** Every compaction writes a `context/compaction`
 ledger event with `compactionId`, `strategy`, `lossy`, `tokensBefore`,

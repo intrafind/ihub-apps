@@ -87,7 +87,7 @@ function makeLoop(turns, summaries = [], { runLog, onSummary } = {}) {
       stepRequests.push({ body: JSON.parse(JSON.stringify(request.body)) });
       const next = steps.shift();
       if (!next) throw new Error('script exhausted');
-      return sseResponse(next);
+      return typeof next === 'function' ? next(request, ctx) : sseResponse(next);
     }
   });
   const loop = new AgentLoop({
@@ -537,5 +537,67 @@ test('a turn continued under a new run id still reads what its paused run conden
     'a run of another chat is never read'
   );
   assert.ok(otherChat);
+  await runLog.stop();
+});
+
+test('near the window the second kept batch is condensed too; well below it, it stays', async () => {
+  const run = async contextWindow => {
+    const { loop } = makeLoop(
+      [
+        toolTurn('c1', 'webSearch', { query: 'nvidia' }, 1000),
+        toolTurn('c2', 'webSearch', { query: 'apple' }, 2600),
+        textTurn('done')
+      ],
+      ['FACT | r1 | NVIDIA market cap 5.1 trillion USD | https://x.test/nvidia']
+    );
+    const result = await loop.run({
+      model: { ...model, contextWindow },
+      messages: baseMessages,
+      tools: [searchTool],
+      policies: { context: { strategy: 'digest', compactThresholdTokens: 3000 } },
+      executeTool: async (_call, { args }) => searchResult(args.query)
+    });
+    return result.messages.find(m => m.tool_call_id === 'c1').content;
+  };
+  assert.match(await run(3500), /^\[condensed result r1/, 'urgent: only the newest batch is kept');
+  assert.equal(await run(200_000), searchResult('nvidia'), 'not urgent: both batches are kept');
+});
+
+test('after an overflow a digest turn condenses to calls and sources first, without a summary call', async () => {
+  const { runLog } = await captureRunLog();
+  const { runId } = await runLog.startRun({ kind: 'chat', user: { id: 'u1' } });
+  const turns = [
+    toolTurn('c1', 'webSearch', { query: 'nvidia' }, 500),
+    toolTurn('c2', 'webSearch', { query: 'apple' }, 900),
+    () =>
+      textResponse(
+        '{"error":{"code":"context_length_exceeded","message":"maximum context length is 8192 tokens"}}',
+        { status: 400 }
+      ),
+    textTurn('recovered')
+  ];
+  const { loop, summaryRequests } = makeLoop(turns, [], { runLog });
+  const result = await loop.run({
+    runId,
+    model,
+    messages: baseMessages,
+    tools: [searchTool],
+    policies: { context: { strategy: 'digest', compactThresholdTokens: 100_000 } },
+    executeTool: async (_call, { args }) => searchResult(args.query)
+  });
+  assert.equal(result.status, 'completed', JSON.stringify(result.error));
+  assert.equal(summaryRequests.length, 0, 'no summary call before the retry');
+  assert.match(
+    result.messages.find(m => m.tool_call_id === 'c1').content,
+    /reason="context_overflow"/
+  );
+  assert.equal(result.messages.find(m => m.tool_call_id === 'c2').content, searchResult('apple'));
+  await runLog.flush();
+  const compaction = (await runLog.readEvents(runId)).find(
+    e => e.type === RUN_LOG_EVENTS.CONTEXT_COMPACTION
+  );
+  assert.equal(compaction.data.trigger, 'overflow');
+  assert.equal(compaction.data.strategy, 'digest');
+  assert.equal(compaction.data.lossy, true);
   await runLog.stop();
 });

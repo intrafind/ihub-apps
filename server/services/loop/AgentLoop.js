@@ -672,6 +672,25 @@ export class AgentLoop {
             isContextOverflowError(err) &&
             reactiveAttempts < policies.context.maxReactiveAttempts
           ) {
+            // A digest first: everything but the newest batch condensed to its
+            // calls and sources, without a model call, and still readable by
+            // ref. Only when that frees nothing are old bodies collapsed.
+            if (policies.context.strategy === 'digest') {
+              const freed = await this._digestCompaction(ctx, {
+                seams,
+                iteration,
+                knownTokens: undefined,
+                runBudget,
+                options,
+                overflow: true
+              });
+              if (freed > 0) {
+                reactiveAttempts++;
+                promptAnchor = null;
+                iteration--;
+                continue;
+              }
+            }
             const mc = microcompactMessages(ctx.messages, {
               keepRecent: policies.context.reactiveKeepRecent
             });
@@ -1432,37 +1451,67 @@ export class AgentLoop {
    * @private
    * @returns {Promise<number>} the tokens freed (0 when nothing was condensed)
    */
-  async _digestCompaction(ctx, { seams, iteration, knownTokens, runBudget, options }) {
+  async _digestCompaction(
+    ctx,
+    { seams, iteration, knownTokens, runBudget, options, overflow = false }
+  ) {
     const policy = ctx.policies.context;
     const threshold = policy.compactThresholdTokens;
     const tokensBefore =
       Number.isFinite(knownTokens) && knownTokens > 0
         ? Math.round(knownTokens)
         : estimateTranscriptTokens(ctx.messages) + toolDefinitionTokens(ctx.offeredTools);
-    if (tokensBefore <= threshold) return 0;
+    if (!overflow && tokensBefore <= threshold) return 0;
 
     const state = ctx.compaction;
+    // Near the model's window the next call may be refused as too long: then
+    // neither the cooldown nor the second kept batch stands in the way. The
+    // window holds the output the call asks for too (vLLM counts `maxTokens`).
+    const window = Number(ctx.model?.contextWindow) || 0;
+    const reserve = Number(options?.maxTokens ?? ctx.model?.maxOutputTokens) || 0;
+    const inputLimit = window ? Math.max(window - reserve, window * 0.5) : 0;
+    const urgent =
+      overflow || tokensBefore > (inputLimit ? inputLimit * URGENT_WINDOW_SHARE : threshold * 1.6);
     // The last compaction could not bring the prompt under the threshold (what
     // cannot be condensed — the system prompt, uploads, digests — is that
     // large): the next one waits until the prompt has grown by a tenth of the
     // threshold, instead of paying a summary call on every step.
     if (
+      !urgent &&
       state.lastTokensAfter > threshold &&
       tokensBefore < state.lastTokensAfter + threshold * MIN_COMPACTION_PROGRESS
     ) {
       return 0;
     }
     const toolOf = name => matchTool(name, ctx.tools);
-    const { batches, freedTokens: projectedFreed } = selectBatches(ctx.messages, {
+    const targetTokens = Math.floor(threshold * policy.compactTargetShare);
+    let selection = selectBatches(ctx.messages, {
       tokensBefore,
-      targetTokens: Math.floor(threshold * policy.compactTargetShare),
-      keepRecentBatches: policy.digestKeepRecentBatches,
+      // After an overflow the estimate is below what the provider counted:
+      // everything but the newest batch goes.
+      targetTokens: overflow ? 0 : targetTokens,
+      keepRecentBatches: overflow ? 1 : policy.digestKeepRecentBatches,
       toolOf
     });
+    // Urgent and the kept batches are what fills the window (large results,
+    // a small window): keep only the newest, which the model has not read.
+    if (urgent && selection.projectedTokens > targetTokens && policy.digestKeepRecentBatches > 1) {
+      selection = selectBatches(ctx.messages, {
+        tokensBefore,
+        targetTokens,
+        keepRecentBatches: 1,
+        toolOf
+      });
+    }
+    const { batches, freedTokens: projectedFreed } = selection;
     // Too little to free for what a compaction costs (a summary call, the
     // prompt cache from the first condensed message on, and of the tool list
-    // when the recall tool joins it): left as it is.
-    if (batches.length === 0 || projectedFreed < tokensBefore * MIN_COMPACTION_PROGRESS) {
+    // when the recall tool joins it): left as it is. After an overflow any
+    // room helps.
+    if (
+      batches.length === 0 ||
+      (!overflow && projectedFreed < tokensBefore * MIN_COMPACTION_PROGRESS)
+    ) {
       return 0;
     }
     const calls = collectCalls(ctx.messages, batches, { nextRef: state.nextRef, toolOf });
@@ -1475,7 +1524,7 @@ export class AgentLoop {
     const info = {
       compactionId,
       step: iteration,
-      trigger: 'proactive',
+      trigger: overflow ? 'overflow' : 'proactive',
       strategy: 'digest',
       tokensBefore,
       itemsSummarised: calls.length,
@@ -1493,8 +1542,9 @@ export class AgentLoop {
     }
     await runHooks(seams, 'onCompactionStart', ctx, info);
 
-    // The model is asked while it has not failed twice and the run is under its cap.
-    const useModel = state.failures < 2 && state.count < policy.maxCompactionsPerRun;
+    // The model is asked while it has not failed twice and the run is under its
+    // cap — never after an overflow, which must free room before the retry.
+    const useModel = !overflow && state.failures < 2 && state.count < policy.maxCompactionsPerRun;
     let summary = null;
     let fallbackReason = null;
     if (useModel) {
@@ -1537,7 +1587,8 @@ export class AgentLoop {
         state.failures += 1;
       }
     } else {
-      fallbackReason = state.failures >= 2 ? 'summary_unavailable' : 'compaction_limit';
+      if (overflow) fallbackReason = 'context_overflow';
+      else fallbackReason = state.failures >= 2 ? 'summary_unavailable' : 'compaction_limit';
     }
     if (summary?.usage) {
       runBudget.input += summary.usage.promptTokens || 0;
@@ -1785,6 +1836,12 @@ export class AgentLoop {
  * not worth its summary call and the prompt cache it breaks.
  */
 const MIN_COMPACTION_PROGRESS = 0.1;
+
+/**
+ * Share of the model's context window above which a compaction is urgent: the
+ * next model call may be refused as too long (#3819).
+ */
+const URGENT_WINDOW_SHARE = 0.8;
 
 /**
  * The record of a compaction that collapsed messages to previews (`elide`):
