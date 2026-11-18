@@ -625,6 +625,36 @@ test('results too short to leave room for a digest are left as they are', async 
   assert.equal(result.messages.find(m => m.tool_call_id === 'c1').content, short);
 });
 
+test('notes that would count more tokens than the results they replace are never committed', async () => {
+  // Long common words: few tokens for many characters, so even the smallest
+  // notes (calls and sources) count more than the result. After an overflow
+  // no 10 % progress guard holds the digest back; this one must.
+  const sparse = ' international'.repeat(160);
+  const turns = [
+    toolTurn('c1', 'webSearch', { query: 'a' }, 500),
+    toolTurn('c2', 'webSearch', { query: 'b' }, 900),
+    () =>
+      textResponse(
+        '{"error":{"code":"context_length_exceeded","message":"maximum context length is 8192 tokens"}}',
+        { status: 400 }
+      ),
+    textTurn('recovered')
+  ];
+  const { loop, summaryRequests } = makeLoop(turns, []);
+  const compactions = [];
+  const result = await loop.run({
+    model,
+    messages: baseMessages,
+    tools: [searchTool],
+    policies: { context: { strategy: 'digest', compactThresholdTokens: 100_000 } },
+    seams: [{ onCompaction: (_ctx, info) => compactions.push(info.strategy) }],
+    executeTool: async () => sparse
+  });
+  assert.equal(summaryRequests.length, 0);
+  assert.ok(!compactions.includes('digest'), `compactions: ${compactions.join(', ')}`);
+  assert.equal(result.messages.find(m => m.tool_call_id === 'c1').content, sparse);
+});
+
 test('near the window the second kept batch is condensed too; well below it, it stays', async () => {
   const run = async contextWindow => {
     const { loop } = makeLoop(

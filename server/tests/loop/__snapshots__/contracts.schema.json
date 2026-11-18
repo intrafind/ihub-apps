@@ -3264,7 +3264,7 @@
               },
               "maxDigestChars": {
                 "type": "integer",
-                "exclusiveMinimum": 0,
+                "minimum": 2000,
                 "maximum": 9007199254740991
               },
               "maxRecallsPerRun": {

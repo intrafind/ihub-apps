@@ -36,6 +36,7 @@ import {
   taskOf,
   verifyDigest
 } from '../../services/loop/findingsDigest.js';
+import { contextPoliciesSchema } from '../../services/loop/contracts/loop.js';
 
 const big = label =>
   JSON.stringify({
@@ -319,6 +320,11 @@ test('summarizeCalls: no chunk runs past the deadline; a chunk cut at the output
   assert.equal(partial.facts.length, 1, 'the facts before the cut are kept');
   assert.equal(partial.truncatedChunks, 1);
   assert.equal(summaryFailureOf(partial, [calls[0]]), 'summary_partial');
+});
+
+test('a digest limit below what its fixed text needs is rejected', () => {
+  assert.equal(contextPoliciesSchema.safeParse({ maxDigestChars: 1000 }).success, false);
+  assert.equal(contextPoliciesSchema.safeParse({ maxDigestChars: MIN_DIGEST_CHARS }).success, true);
 });
 
 test('a digest stays within its limit with many calls, the rest named as a range', () => {

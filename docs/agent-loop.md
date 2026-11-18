@@ -88,7 +88,7 @@ defaults.
 | `context.maxCompactionsPerRun`    | 4       | `digest`: digests written with the summary model per run; later ones keep calls and sources only |
 | `context.summaryTimeoutMs`        | 90000   | `digest`: timeout of one summary call                                  |
 | `context.summaryMaxTokens`        | 4096    | `digest`: output tokens of one summary call                            |
-| `context.maxDigestChars`          | 24000   | `digest`: characters of one digest as the model reads it               |
+| `context.maxDigestChars`          | 24000   | `digest`: characters of one digest as the model reads it; at least 2000 |
 | `context.maxRecallsPerRun`        | 20      | `digest`: how often a run may read a condensed result again (`recall_tool_result`) |
 | `context.maxReactiveAttempts`     | 2       | Retries after a provider "prompt too long" error, each after compaction |
 | `context.spillThresholdBytes`     | 65536   | Tool results above this are stored in the run's spill store (when the ledger persists) and replaced in the transcript by a bounded preview and reference |
@@ -197,9 +197,12 @@ projected at `compactTargetShare` of the threshold
   past that. A chunk whose answer stopped at the output limit makes the
   compaction `lossy` (`summary_partial`).
 - The digest stays within `maxDigestChars` (at least 2,000) and within what
-  the condensed results held less their stubs, so a compaction never makes
-  the transcript longer; results too short to leave 2,000 characters for a
-  digest are not condensed. The list of calls takes at most
+  the condensed results held less their stubs, and it must free tokens too
+  (a repetitive result can count fewer tokens than shorter notes): it is made
+  smaller until it does, at the smallest down to its calls and sources. A
+  compaction never makes the transcript longer; results too short to leave
+  room for the smallest digest, in characters or in tokens, are not
+  condensed. The list of calls takes at most
   40 % of it (sources, then argument length are shortened first), the facts
   the rest. Facts that still do not fit are counted in a closing line, and
   the compaction is marked `lossy` (`digest_truncated`). Text from results

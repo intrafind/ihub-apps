@@ -1528,12 +1528,29 @@ export class AgentLoop {
     if (calls.length === 0) return 0;
     // A digest never makes the transcript longer: it gets at most the room
     // the results leave, and results too short for one are left as they are.
-    const digestRoom = digestRoomOf(ctx.messages, calls, state.digests + 1);
+    const digestNumber = state.digests + 1;
+    const digestRoom = digestRoomOf(ctx.messages, calls, digestNumber);
     if (digestRoom < MIN_DIGEST_CHARS) return 0;
+    // Nor more tokens: a repetitive result can count fewer than shorter,
+    // denser notes. What a digest frees, by the same estimate as the prompt.
+    const replaced = estimateTranscriptTokens(calls.map(call => ctx.messages[call.index]));
+    const freedBy = text => {
+      const next = applyDigest(ctx.messages, calls, text, digestNumber);
+      return replaced - estimateTranscriptTokens(calls.map(call => next[call.index]));
+    };
+    // The smallest digest — calls and sources, the longest note — must free
+    // something, or the results are left as they are.
+    const smallest = reason =>
+      renderDigest({
+        number: digestNumber,
+        calls,
+        fallbackReason: reason,
+        maxChars: MIN_DIGEST_CHARS
+      });
+    if (freedBy(smallest('compaction_limit').text) <= 0) return 0;
 
     const started = Date.now();
     const compactionId = `cmp-${crypto.randomUUID().slice(0, 8)}`;
-    const digestNumber = state.digests + 1;
     const summaryModel = ctx.request.summaryModel || ctx.model;
     const info = {
       compactionId,
@@ -1611,14 +1628,27 @@ export class AgentLoop {
     }
 
     const factsFound = summary?.facts?.length || 0;
-    const { text: digestText, factsShown } = renderDigest({
-      number: digestNumber,
-      calls,
-      facts: summary?.facts || [],
-      notFound: summary?.notFound || [],
-      fallbackReason,
-      maxChars: Math.min(policy.maxDigestChars, digestRoom)
-    });
+    const render = maxChars =>
+      renderDigest({
+        number: digestNumber,
+        calls,
+        facts: summary?.facts || [],
+        notFound: summary?.notFound || [],
+        fallbackReason,
+        maxChars
+      });
+    // Within the characters the results leave, then smaller until it frees
+    // tokens too; at the smallest size, calls and sources only.
+    let digestChars = Math.min(policy.maxDigestChars, digestRoom);
+    let rendered = render(digestChars);
+    while (freedBy(rendered.text) <= 0 && digestChars > MIN_DIGEST_CHARS) {
+      digestChars = Math.max(MIN_DIGEST_CHARS, Math.floor(digestChars * 0.7));
+      rendered = render(digestChars);
+    }
+    if (freedBy(rendered.text) <= 0) {
+      rendered = smallest(fallbackReason || (factsFound > 0 ? 'digest_truncated' : null));
+    }
+    const { text: digestText, factsShown } = rendered;
     // Facts that did not fit are in the results only (the model is told to
     // read them again): the compaction lost something the summary had.
     if (!fallbackReason && factsShown < factsFound) fallbackReason = 'digest_truncated';

@@ -84,8 +84,11 @@ export const contextPoliciesSchema = z.object({
   summaryTimeoutMs: z.number().int().positive().prefault(90_000),
   /** `digest`: output tokens of one summary call. */
   summaryMaxTokens: z.number().int().positive().prefault(4096),
-  /** `digest`: characters of one digest as the model reads it. */
-  maxDigestChars: z.number().int().positive().prefault(24_000),
+  /**
+   * `digest`: characters of one digest as the model reads it; at least 2,000
+   * (`MIN_DIGEST_CHARS`), which its fixed text and a list of its calls need.
+   */
+  maxDigestChars: z.number().int().min(2000).prefault(24_000),
   /** `digest`: how often a run may read a condensed result again. */
   maxRecallsPerRun: z.number().int().nonnegative().prefault(20),
   /** Bytes above which tool results are spilled to disk and previewed in the transcript. */
