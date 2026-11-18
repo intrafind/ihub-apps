@@ -393,6 +393,12 @@ test('under the threshold nothing is condensed; the elide strategy records its l
   assert.equal(infos[0].strategy, 'elide');
   assert.equal(infos[0].lossy, true);
   assert.ok(infos[0].compactionId);
+  // Per message, so a context figure anchored on a provider count subtracts
+  // only what was freed inside it.
+  assert.ok(infos[0].freedByMessage.length >= 1);
+  for (const [index, tokens] of infos[0].freedByMessage) {
+    assert.ok(Number.isInteger(index) && tokens > 0);
+  }
 });
 
 test('the overflow path collapses once, retries, and records that it lost data', async () => {
@@ -988,11 +994,13 @@ test('an overflow that nothing can condense shortens failed calls, then answers 
 });
 
 test('near the window the second kept batch is condensed too; well below it, it stays', async () => {
+  // Not a search: the wrap-up this small window comes to does not withdraw it.
+  const lookupTool = { ...searchTool, id: 'lookup', name: 'lookup', activity: undefined };
   const run = async contextWindow => {
     const { loop } = makeLoop(
       [
-        toolTurn('c1', 'webSearch', { query: 'nvidia' }, 1000),
-        toolTurn('c2', 'webSearch', { query: 'apple' }, 2600),
+        toolTurn('c1', 'lookup', { query: 'nvidia' }, 1000),
+        toolTurn('c2', 'lookup', { query: 'apple' }, 2600),
         textTurn('done')
       ],
       ['FACT | r1 | NVIDIA market cap 5.1 trillion USD | https://x.test/nvidia']
@@ -1000,7 +1008,7 @@ test('near the window the second kept batch is condensed too; well below it, it 
     const result = await loop.run({
       model: { ...model, contextWindow },
       messages: baseMessages,
-      tools: [searchTool],
+      tools: [lookupTool],
       policies: { context: { strategy: 'digest', compactThresholdTokens: 3000 } },
       executeTool: async (_call, { args }) => searchResult(args.query)
     });
@@ -1047,4 +1055,210 @@ test('after an overflow a digest turn condenses to calls and sources first, with
   assert.equal(compaction.data.strategy, 'digest');
   assert.equal(compaction.data.lossy, true);
   await runLog.stop();
+});
+
+function toolTurnMany(calls, prompt = 100) {
+  return [
+    {
+      choices: [
+        {
+          index: 0,
+          delta: {
+            role: 'assistant',
+            tool_calls: calls.map(([id, name, args], index) => ({
+              index,
+              id,
+              type: 'function',
+              function: { name, arguments: JSON.stringify(args) }
+            }))
+          },
+          finish_reason: null
+        }
+      ]
+    },
+    { choices: [{ index: 0, delta: {}, finish_reason: 'tool_calls' }], usage: usage(prompt) },
+    '[DONE]'
+  ];
+}
+
+test('two recalls in one batch both wait for the archive of the paused run', async () => {
+  const { runLog } = await captureRunLog();
+  const refs = { chatId: 'chat-1', appId: 'app' };
+  const { runId: pausedRun } = await runLog.startRun({ kind: 'chat', user: { id: 'u1' }, refs });
+  const before = await makeLoop(
+    [
+      toolTurn('c1', 'webSearch', { query: 'nvidia' }, 1000),
+      toolTurn('c2', 'webSearch', { query: 'apple' }, 1000),
+      toolTurn('c3', 'webSearch', { query: 'meta' }, 4000),
+      textTurn('paused here')
+    ],
+    ['FACT | r1 | NVIDIA market cap 5.1 trillion USD | https://x.test/nvidia'],
+    { runLog }
+  ).loop.run({
+    runId: pausedRun,
+    refs,
+    model,
+    messages: baseMessages,
+    tools: [searchTool],
+    policies,
+    executeTool: async (_call, { args }) => searchResult(args.query)
+  });
+  await runLog.flush();
+  assert.ok(before.messages.some(m => String(m.content).startsWith('[condensed result r2')));
+
+  // The journal answers late, so both recalls are waiting at the same time.
+  const slowLog = Object.create(runLog);
+  slowLog.readEvents = async runId => {
+    await new Promise(resolve => setTimeout(resolve, 30));
+    return runLog.readEvents(runId);
+  };
+  const { runId: newRun } = await runLog.startRun({ kind: 'chat', user: { id: 'u1' }, refs });
+  const result = await makeLoop(
+    [
+      toolTurnMany([
+        ['c8', RECALL_TOOL_ID, { ref: 'r1' }],
+        ['c9', RECALL_TOOL_ID, { ref: 'r2' }]
+      ]),
+      textTurn('done')
+    ],
+    [],
+    { runLog: slowLog }
+  ).loop.run({
+    runId: newRun,
+    refs,
+    archiveRunIds: [pausedRun],
+    model,
+    messages: before.messages,
+    tools: [searchTool],
+    policies,
+    executeTool: async () => 'never'
+  });
+  const recalled = id => result.messages.find(m => m.tool_call_id === id).content;
+  assert.ok(recalled('c8').includes(RESULTS.nvidia), recalled('c8'));
+  assert.ok(recalled('c9').includes(RESULTS.apple), recalled('c9'));
+  await runLog.stop();
+});
+
+test('a spilled original is read only from the run its reference names, never a same-named blob of this run', async () => {
+  const { runLog } = await captureRunLog();
+  const refs = { chatId: 'chat-1', appId: 'app' };
+  const { runId: otherRun } = await runLog.startRun({
+    kind: 'chat',
+    user: { id: 'u1' },
+    refs: { chatId: 'chat-2' }
+  });
+  const otherRef = await runLog.spill(
+    otherRun,
+    'tool-x',
+    'ORIGINAL OF THE OTHER RUN',
+    'text/plain'
+  );
+  const { runId } = await runLog.startRun({ kind: 'chat', user: { id: 'u1' }, refs });
+  const mineRef = await runLog.spill(runId, 'tool-x', 'A BLOB OF THIS RUN', 'text/plain');
+  assert.equal(
+    otherRef.path.split('/').at(-1),
+    mineRef.path.split('/').at(-1),
+    'the same name in both runs'
+  );
+  const bounded = spill =>
+    JSON.stringify({ truncated: true, bytes: 50_000, preview: 'p'.repeat(3000), spill });
+  const recall = async spill => {
+    let calls = 0;
+    const result = await makeLoop(
+      [
+        toolTurn('c1', 'webSearch', { query: 'nvidia' }, 1000),
+        toolTurn('c2', 'webSearch', { query: 'apple' }, 4000),
+        toolTurn('c9', RECALL_TOOL_ID, { ref: 'r1' }),
+        textTurn('done')
+      ],
+      [''],
+      { runLog }
+    ).loop.run({
+      runId,
+      refs,
+      model,
+      messages: baseMessages,
+      tools: [searchTool],
+      policies,
+      executeTool: async (_call, { args }) =>
+        ++calls === 1 ? bounded(spill) : searchResult(args.query)
+    });
+    return result.messages.find(m => m.tool_call_id === 'c9').content;
+  };
+  const fromOther = await recall({ path: otherRef.path });
+  assert.doesNotMatch(fromOther, /A BLOB OF THIS RUN|ORIGINAL OF THE OTHER RUN/);
+  assert.match(await recall({ path: mineRef.path, sha256: mineRef.sha256 }), /A BLOB OF THIS RUN/);
+  assert.doesNotMatch(
+    await recall({ path: mineRef.path, sha256: '0'.repeat(64) }),
+    /A BLOB OF THIS RUN/,
+    'a hash that does not match'
+  );
+  await runLog.stop();
+});
+
+test('a search repeated during the wrap-up is refused, not run', async () => {
+  const small = { ...model, contextWindow: 9000, maxOutputTokens: 2000 };
+  const { loop } = makeLoop(
+    [
+      toolTurn('c1', 'webSearch', { query: 'nvidia' }, 1000),
+      toolTurn('c2', 'webSearch', { query: 'apple' }, 9500),
+      toolTurn('c3', 'webSearch', { query: 'meta' }),
+      textTurn('done')
+    ],
+    ['FACT | r1 | NVIDIA market cap 5.1 trillion USD | https://x.test/nvidia']
+  );
+  const ran = [];
+  const result = await loop.run({
+    model: small,
+    messages: baseMessages,
+    tools: [searchTool],
+    policies,
+    executeTool: async (_call, { args }) => {
+      ran.push(args.query);
+      return searchResult(args.query);
+    }
+  });
+  assert.equal(result.status, 'completed', JSON.stringify(result.error));
+  assert.deepEqual(ran, ['nvidia', 'apple']);
+  assert.match(result.messages.find(m => m.tool_call_id === 'c3').content, /tool_withdrawn/);
+});
+
+test('shrinkFailedToolCalls: error false is a success; a failure recorded when it ran survives elision', () => {
+  const long = JSON.stringify({ sheets: 'x'.repeat(5000) });
+  const call = id => ({ id, type: 'function', function: { name: 'create_xlsx', arguments: long } });
+  const messages = [
+    { role: 'assistant', content: '', tool_calls: [call('a')] },
+    { role: 'tool', tool_call_id: 'a', content: '{"error":false,"file":{}}' },
+    { role: 'assistant', content: '', tool_calls: [call('b')] },
+    { role: 'tool', tool_call_id: 'b', content: '[older tool output elided to save context]' },
+    { role: 'assistant', content: '', tool_calls: [call('c')] },
+    { role: 'tool', tool_call_id: 'c', content: '{"error":"bad sheets"}' }
+  ];
+  const plain = shrinkFailedToolCalls(messages);
+  assert.equal(plain.shortened, 0, 'error false is a success; the elided one says nothing');
+  const known = shrinkFailedToolCalls(messages, { failedIds: new Set(['b']) });
+  assert.equal(known.shortened, 1);
+  assert.match(known.messages[2].tool_calls[0].function.arguments, /were removed to free context/);
+  assert.equal(known.messages[0].tool_calls[0].function.arguments, long);
+  assert.equal(known.messages[4].tool_calls[0].function.arguments, long, 'the newest is kept');
+});
+
+test('an overflow of a call that sent only native web search is retried without it', async () => {
+  const overflow = () =>
+    textResponse(
+      '{"error":{"code":"context_length_exceeded","message":"maximum context length is 8192 tokens"}}',
+      { status: 400 }
+    );
+  const { loop, stepRequests } = makeLoop([overflow, textTurn('the answer')]);
+  const result = await loop.run({
+    model,
+    messages: baseMessages,
+    tools: [],
+    options: { nativeWebSearch: { enabled: true } },
+    policies: { context: { strategy: 'digest', compactThresholdTokens: 100_000 } },
+    executeTool: async () => 'never'
+  });
+  assert.equal(result.status, 'completed', JSON.stringify(result.error));
+  assert.equal(result.content, 'the answer');
+  assert.equal(stepRequests.length, 2);
 });

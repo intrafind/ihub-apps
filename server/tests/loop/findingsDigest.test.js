@@ -351,6 +351,30 @@ test('notesOf counts the digests of a transcript and what they take', () => {
   assert.ok(notes.tokens > 0);
 });
 
+test('notesOf does not count a raw result that quotes a digest', () => {
+  const block =
+    '<condensed_results digest="1" refs="r1">\nFacts:\n- [r1] NVIDIA 5.1T\n</condensed_results>';
+  const quoting = JSON.stringify({
+    url: 'https://x.test/docs',
+    text: `Example: ${block.repeat(50)}`
+  });
+  const notes = notesOf([
+    { role: 'tool', tool_call_id: 'a', content: quoting },
+    { role: 'tool', tool_call_id: 'b', content: `[condensed result r1 of webSearch: …]\n${block}` }
+  ]);
+  assert.equal(notes.count, 1, 'only the digest the loop installed');
+  assert.equal(notes.chars, block.length);
+});
+
+test('a flattened table row keeps a grouped figure after a separate column', () => {
+  const row = 'Germany 2024 450 567 890 units';
+  assert.equal(numbersAppearIn('Germany sold 450,567,890 units', row), true);
+  assert.equal(numbersAppearIn('567 units', row), false, 'a group of the figure is not a figure');
+  assert.equal(numbersAppearIn('in 2024', row), true, 'the separate column stays');
+  assert.equal(numbersAppearIn('450 units', 'Germany 2024 450 units'), true, 'two columns');
+  assert.equal(numbersAppearIn('1,234,567 units', 'total 1 234 567 units'), true, 'one figure');
+});
+
 test('a digest limit below what its fixed text needs is rejected', () => {
   assert.equal(contextPoliciesSchema.safeParse({ maxDigestChars: 1000 }).success, false);
   assert.equal(contextPoliciesSchema.safeParse({ maxDigestChars: MIN_DIGEST_CHARS }).success, true);

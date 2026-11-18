@@ -570,11 +570,22 @@ function numbersOf(text) {
     ...writtenNumber(m[0]),
     grouped: digitGrouping(m[0]),
     scales: scaleAfter(source, m.index + m[0].length),
-    parts: m[0]
-      .split(/[\u00a0\u202f ]/)
-      .filter(part => /\d/.test(part))
-      .map(writtenNumber)
+    parts: columnsOf(m[0]).map(writtenNumber)
   }));
+}
+
+/**
+ * The numbers side by side in a span read across spaces: each on its own,
+ * except a run of digit groups at the end, which is one figure ("2024 450 567
+ * 890", a flattened table row, is 2024 and 450,567,890; "2024 450" stays two).
+ */
+function columnsOf(written) {
+  const parts = written.split(/[\u00a0\u202f ]/).filter(part => /\d/.test(part));
+  for (let k = 1; k < parts.length - 1; k++) {
+    const tail = parts.slice(k).join(' ');
+    if (digitGrouping(tail)) return [...parts.slice(0, k), tail];
+  }
+  return parts;
 }
 
 /** A dotted date ("17.11.2026"), not part of a longer number. */
@@ -970,19 +981,32 @@ export function renderDigest({
  * @returns {{count: number, chars: number, tokens: number}}
  */
 export function notesOf(messages) {
-  const block = new RegExp(`<${DIGEST_TAG}[\\s\\S]*?</${DIGEST_TAG}>`, 'g');
   let count = 0;
   let chars = 0;
   let tokens = 0;
   for (const message of Array.isArray(messages) ? messages : []) {
-    if (message?.role !== 'tool' || typeof message.content !== 'string') continue;
-    for (const match of message.content.matchAll(block)) {
-      count += 1;
-      chars += match[0].length;
-      tokens += estimateMessageTokens({ role: 'tool', content: match[0] });
-    }
+    const block = installedDigestOf(message);
+    if (!block) continue;
+    count += 1;
+    chars += block.length;
+    tokens += estimateMessageTokens({ role: 'tool', content: block });
   }
   return { count, chars, tokens };
+}
+
+/**
+ * The digest the loop installed in a tool message, or null: a result it
+ * replaced (the content starts with a condensed stub) whose stub line is
+ * followed by the digest block (`applyDigest`). Tool output that merely
+ * quotes a digest is not one.
+ */
+function installedDigestOf(message) {
+  if (message?.role !== 'tool' || !isCondensedContent(message.content)) return null;
+  const content = message.content;
+  const start = content.indexOf('\n') + 1;
+  const end = content.lastIndexOf(`</${DIGEST_TAG}>`);
+  if (start <= 0 || !content.startsWith(`<${DIGEST_TAG}`, start) || end < start) return null;
+  return content.slice(start, end + DIGEST_TAG.length + 3);
 }
 
 /** The one-line stub a condensed result is replaced with. */

@@ -239,8 +239,9 @@ projected at `compactTargetShare` of the threshold
   tools that produce the answer's files and `recall_tool_result` stay, and the
   model is told once (`CONTEXT_WRAP_UP_NUDGE`) to write its complete answer
   from the notes, with figures only from the notes or a result read back. A
-  run whose prompt is above the line with nothing left to condense wraps up
-  the same way.
+  call the model still makes to a withdrawn tool (a search it saw earlier in
+  the turn) is refused with `tool_withdrawn`, not run. A run whose prompt is
+  above the line with nothing left to condense wraps up the same way.
 - The summary model is told what to keep under all circumstances, in this
   order, and writes its lines in that order (when the notes are cut, the end
   goes first): everything the task asks for (each requested figure and

@@ -51,14 +51,17 @@ export function microcompactMessages(messages, opts = {}) {
   return { messages: out, freedChars, collapsed };
 }
 
-/** Whether a tool result says its call failed (`{ success: false }`, `{ error }`, "Error: …"). */
+/**
+ * Whether a tool result says its call failed (`{ success: false }`, a truthy
+ * `error`, "Error: …"); `{ error: false }` is a success, as in toolClassify.
+ */
 function isFailedResult(content) {
   const text = String(content ?? '').trim();
   if (/^error\b/i.test(text)) return true;
   if (!text.startsWith('{')) return false;
   try {
     const value = JSON.parse(text);
-    return value?.success === false || (value?.error != null && value?.success !== true);
+    return value?.success === false || (!!value?.error && value?.success !== true);
   } catch {
     return false;
   }
@@ -72,17 +75,20 @@ function isFailedResult(content) {
  * its error stays in its result.
  *
  * @param {Array<Object>} messages
- * @param {{maxArgsChars?: number}} [opts]
+ * @param {{maxArgsChars?: number, failedIds?: Iterable<string>}} [opts] -
+ *   `failedIds`: calls known to have failed when they ran, whose result may
+ *   since have been elided or bounded and no longer say so.
  * @returns {{messages: Array<Object>, freedChars: number, shortened: number}}
  */
 export function shrinkFailedToolCalls(messages, opts = {}) {
   const maxArgsChars = opts.maxArgsChars ?? 1000;
   if (!Array.isArray(messages)) return { messages, freedChars: 0, shortened: 0 };
-  const failed = new Set(
-    messages
-      .filter(m => m?.role === 'tool' && m.tool_call_id && isFailedResult(m.content))
-      .map(m => m.tool_call_id)
-  );
+  const failed = new Set(opts.failedIds || []);
+  for (const m of messages) {
+    if (m?.role === 'tool' && m.tool_call_id && isFailedResult(m.content)) {
+      failed.add(m.tool_call_id);
+    }
+  }
   // The newest failed call with long arguments keeps them.
   let newest = null;
   for (const message of messages) {

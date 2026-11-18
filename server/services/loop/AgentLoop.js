@@ -414,8 +414,11 @@ export class AgentLoop {
       failures: condensedSoFar.failures,
       recalls: 0,
       archive: new Map(),
-      archiveLoaded: false,
+      archiveLoading: null,
       archiveRuns: [],
+      // Calls that failed when they ran: their result may later be elided or
+      // bounded and no longer say so (shrinkFailedToolCalls).
+      failedCallIds: new Set(),
       // The prompt after the last digest (0: none yet), for the cooldown.
       lastTokensAfter: 0
     };
@@ -726,6 +729,7 @@ export class AgentLoop {
                 trigger: 'overflow',
                 fallbackReason: 'context_overflow'
               });
+              const freedByMessage = freedByMessageOf(ctx.messages, mc.messages);
               ctx.messages = mc.messages;
               promptAnchor = null;
               this.logger.warn('Reactive context recovery: microcompacted messages, retrying', {
@@ -738,7 +742,8 @@ export class AgentLoop {
               this._ledger(ledgerId, RUN_LOG_EVENTS.CONTEXT_COMPACTION, elided);
               await runHooks(seams, 'onCompaction', ctx, {
                 ...mc,
-                ...elided
+                ...elided,
+                freedByMessage
               });
               iteration--;
               continue;
@@ -748,7 +753,9 @@ export class AgentLoop {
             // as a last resort, an answer without tools — the tool list
             // leaves the prompt, and the turn ends with an answer, not an
             // error.
-            const shrunk = shrinkFailedToolCalls(ctx.messages);
+            const shrunk = shrinkFailedToolCalls(ctx.messages, {
+              failedIds: ctx.compaction?.failedCallIds
+            });
             if (shrunk.freedChars > 0) {
               reactiveAttempts++;
               ctx.messages = shrunk.messages;
@@ -763,9 +770,11 @@ export class AgentLoop {
               iteration--;
               continue;
             }
-            // Only when the call offered tools: without them the retry would
-            // send the same prompt again.
-            if (!forceFinish && ctx.offeredTools.length > 0) {
+            // Only when the call offered tools or native web search (a
+            // wrap-up has withdrawn that already): without them the retry
+            // would send the same prompt again.
+            const sentNativeSearch = !!nativeWebSearch && !ctx.compaction?.wrapUp;
+            if (!forceFinish && (ctx.offeredTools.length > 0 || sentNativeSearch)) {
               reactiveAttempts++;
               forceFinish = true;
               ctx.messages.push(nudgeMessage(CONTEXT_FULL_NUDGE));
@@ -1077,6 +1086,7 @@ export class AgentLoop {
               trigger: 'proactive',
               knownTokens
             });
+            const freedByMessage = freedByMessageOf(ctx.messages, compaction.messages);
             ctx.messages = compaction.messages;
             promptAnchor = null;
             this.logger.info('Proactively compacted agent context', {
@@ -1089,7 +1099,8 @@ export class AgentLoop {
             this._ledger(ledgerId, RUN_LOG_EVENTS.CONTEXT_COMPACTION, elided);
             await runHooks(seams, 'onCompaction', ctx, {
               ...compaction,
-              ...elided
+              ...elided,
+              freedByMessage
             });
           }
         }
@@ -1304,7 +1315,17 @@ export class AgentLoop {
       });
     } else {
       try {
-        if (toolDef.isCompactionRecall) {
+        if (ctx.compaction?.wrapUp && gathers(toolDef)) {
+          // Withdrawn for the wrap-up: a model can still repeat a search it
+          // saw earlier in the turn, and its result would take the room kept
+          // for the answer.
+          rawResult = {
+            error: true,
+            reason: 'tool_withdrawn',
+            message:
+              'The context is nearly full, so searches and page reads are withdrawn. Answer from the condensed results; say a figure is not available rather than search again.'
+          };
+        } else if (toolDef.isCompactionRecall) {
           // A condensed result read again by ref (#3819): answered from this
           // run's own results, never from a path the model names.
           rawResult = await this._recall(ctx, args);
@@ -1382,6 +1403,7 @@ export class AgentLoop {
     // oversized result is bounded, the transcript holds a preview wrapper that
     // no longer says so.
     const callFailed = !!failure || classifyToolResult(message).failed;
+    if (callFailed && call.id) ctx.compaction?.failedCallIds.add(call.id);
     const bound = await this._boundToolMessage(ctx, message, { call, toolId, iteration });
     const outcome = {
       rawResult,
@@ -1662,7 +1684,8 @@ export class AgentLoop {
     // The notes of the run are bounded: once their share of the window is
     // used up, a digest keeps calls and sources only, without a summary
     // call, and the run wraps up — more results could not be kept.
-    const notesLeft = this._notesLeftChars(ctx, options);
+    const notesLeftTokens = this._notesLeftTokens(ctx, options);
+    const notesLeft = Math.floor(notesLeftTokens * NOTES_CHARS_PER_TOKEN);
     const notesFull = notesLeft < MIN_DIGEST_CHARS;
     const useModel =
       !overflow && !notesFull && state.failures < 2 && state.count < policy.maxCompactionsPerRun;
@@ -1739,8 +1762,15 @@ export class AgentLoop {
       digestRoom,
       Math.max(MIN_DIGEST_CHARS, notesLeft)
     );
+    // The notes budget is in tokens: dense figures can take more of them than
+    // the characters suggest.
+    const overNotes = text =>
+      estimateTranscriptTokens([{ role: 'tool', content: text }]) > notesLeftTokens;
     let rendered = render(digestChars);
-    while (freedBy(rendered.text) <= 0 && digestChars > MIN_DIGEST_CHARS) {
+    while (
+      (freedBy(rendered.text) <= 0 || overNotes(rendered.text)) &&
+      digestChars > MIN_DIGEST_CHARS
+    ) {
       digestChars = Math.max(MIN_DIGEST_CHARS, Math.floor(digestChars * 0.7));
       rendered = render(digestChars);
     }
@@ -1867,18 +1897,11 @@ export class AgentLoop {
       if (bounded?.truncated !== true) continue;
       let original = null;
       if (bounded.spill?.path && typeof ctx.runLog?.readSpill === 'function') {
-        if (!ctx.compaction.archiveLoaded) await this._loadArchived(ctx, null);
-        const runs = [ctx.ledgerId, ...ctx.compaction.archiveRuns].filter(
-          (id, index, all) => id && isValidRunId(id) && all.indexOf(id) === index
-        );
-        for (const runId of runs) {
-          try {
-            original = await ctx.runLog.readSpill(runId, { path: bounded.spill.path });
-            break;
-          } catch {
-            /* not this run's spill */
-          }
-        }
+        await this._loadArchived(ctx, null);
+        original = await this._readSpillOf(ctx, bounded.spill, [
+          ctx.ledgerId,
+          ...ctx.compaction.archiveRuns
+        ]);
       }
       if (typeof original === 'string' && original.length > 0) {
         call.content = original;
@@ -1918,17 +1941,15 @@ export class AgentLoop {
   }
 
   /**
-   * How many characters the notes of the run may still grow by: all digests
+   * How many tokens the notes of the run may still grow by: all digests
    * together take at most `maxNotesShare` of the model's input (of twice the
-   * compaction threshold when the window is not known). Digest text is dense,
-   * so about three characters to a token.
+   * compaction threshold when the window is not known).
    * @private
    */
-  _notesLeftChars(ctx, options) {
+  _notesLeftTokens(ctx, options) {
     const policy = ctx.policies.context;
     const inputLimit = this._inputLimit(ctx, options) || policy.compactThresholdTokens * 2;
-    const left = policy.maxNotesShare * inputLimit - notesOf(ctx.messages).tokens;
-    return Math.max(0, Math.floor(left * 3));
+    return Math.max(0, policy.maxNotesShare * inputLimit - notesOf(ctx.messages).tokens);
   }
 
   /**
@@ -2009,18 +2030,13 @@ export class AgentLoop {
       // The run that spilled it: the entry's, this one, or an earlier run of
       // the turn — only runs whose chat was checked (`_loadArchived`), never
       // a run id the request merely names.
-      if (!state.archiveLoaded) await this._loadArchived(ctx, null);
-      const runs = [entry.runId, ctx.ledgerId, ...state.archiveRuns].filter(
-        (id, index, all) => id && isValidRunId(id) && all.indexOf(id) === index
-      );
-      for (const runId of runs) {
-        try {
-          content = await ctx.runLog.readSpill(runId, { path: bounded.spill.path });
-          break;
-        } catch {
-          /* not this run's spill */
-        }
-      }
+      await this._loadArchived(ctx, null);
+      const original = await this._readSpillOf(ctx, bounded.spill, [
+        entry.runId,
+        ctx.ledgerId,
+        ...state.archiveRuns
+      ]);
+      if (original !== null) content = original;
     }
     return recallPage({ ...entry, content: String(content ?? '') }, Number(args?.offset) || 0);
   }
@@ -2036,8 +2052,47 @@ export class AgentLoop {
    */
   async _loadArchived(ctx, ref) {
     const state = ctx.compaction;
-    if (state.archiveLoaded || typeof ctx.runLog?.readEvents !== 'function') return null;
-    state.archiveLoaded = true;
+    if (typeof ctx.runLog?.readEvents !== 'function') return null;
+    // Loaded once; parallel recalls in one batch all wait for the same load.
+    state.archiveLoading ??= this._loadArchiveRuns(ctx);
+    await state.archiveLoading;
+    return ref ? state.archive.get(ref) || null : null;
+  }
+
+  /**
+   * A spilled original, read from the run its reference names — only if that
+   * run is one of `runs` (this run, or a checked run of the same chat) — and
+   * checked against its hash when the reference carries one. Never another
+   * run's blob of the same name.
+   * @private
+   * @returns {Promise<string|null>}
+   */
+  async _readSpillOf(ctx, spill, runs) {
+    const checked = runs.filter(
+      (id, index, all) => id && isValidRunId(id) && all.indexOf(id) === index
+    );
+    const owner = /^spill\/([^/]+)\/[^/]+$/.exec(String(spill?.path ?? ''))?.[1];
+    for (const runId of owner ? checked.filter(id => id === owner) : checked) {
+      let text;
+      try {
+        text = await ctx.runLog.readSpill(runId, { path: spill.path });
+      } catch {
+        continue; // not this run's spill
+      }
+      if (
+        typeof spill.sha256 === 'string' &&
+        crypto.createHash('sha256').update(text, 'utf8').digest('hex') !== spill.sha256
+      ) {
+        continue;
+      }
+      return text;
+    }
+    return null;
+  }
+
+  /** @private */
+  async _loadArchiveRuns(ctx) {
+    const state = ctx.compaction;
     const queue = [
       ctx.ledgerId,
       ...(Array.isArray(ctx.request.archiveRunIds) ? ctx.request.archiveRunIds : [])
@@ -2090,7 +2145,6 @@ export class AgentLoop {
         }
       }
     }
-    return state.archive.get(ref) || null;
   }
 
   _ledger(runId, type, data) {
@@ -2119,6 +2173,9 @@ const MIN_COMPACTION_PROGRESS = 0.1;
  * next model call may be refused as too long (#3819).
  */
 const URGENT_WINDOW_SHARE = 0.8;
+
+/** Digest text is dense: about three characters to a token, for sizing it. */
+const NOTES_CHARS_PER_TOKEN = 3;
 
 /** How many runs a recall follows back through a chain of paused turns. */
 const MAX_ARCHIVE_RUNS = 8;
@@ -2157,6 +2214,20 @@ function elisionInfo(messagesBefore, result, { step, trigger, knownTokens, fallb
     tokensAfter: Math.max(0, tokensBefore - Math.max(0, estimatedBefore - estimatedAfter)),
     itemsSummarised: result.collapsed
   };
+}
+
+/**
+ * What an elision freed per message, as [index, tokens] (signed), for a
+ * context figure anchored on a provider count: only what was freed inside
+ * that count is subtracted from it (contextTracker.compacted).
+ */
+function freedByMessageOf(before, after) {
+  const freed = [];
+  for (let i = 0; i < before.length; i++) {
+    if (before[i] === after[i]) continue;
+    freed.push([i, estimateTranscriptTokens([before[i]]) - estimateTranscriptTokens([after[i]])]);
+  }
+  return freed;
 }
 
 /** Estimated tokens of the tool definitions sent with a call. */
