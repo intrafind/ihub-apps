@@ -256,7 +256,9 @@ one notification and the comments are grouped:
 Replying to a thread that already exists (the same point was raised earlier): use
 `add_reply_to_pull_request_comment` with the numeric id from the `#discussion_r...` anchor, not the
 `PRRT_...` node id, and only when the reply adds something (new evidence, or a different fix). A
-reply starts with the preamble and ends with the footer too.
+reply starts with the preamble and ends with the footer too. Where the posting tool appends its own
+tool line (`CLAUDE.md`, AI Attribution), end the text with the model line and let the tool add the
+tool line, so each appears once.
 
 ### Choosing the review event
 
