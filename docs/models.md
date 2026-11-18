@@ -1094,9 +1094,9 @@ The hint configuration uses the following schema:
 {
   "hint": {
     "message": {
-      "en": "English message (required)",
-      "de": "German message (required)",
-      // Additional languages as needed
+      "en": "English message",
+      "de": "German message",
+      // At least one language; add more as needed
     },
     "level": "hint" | "info" | "warning" | "alert",  // Required
     "dismissible": true | false  // Optional, defaults based on level
@@ -1105,7 +1105,7 @@ The hint configuration uses the following schema:
 ```
 
 **Required Fields:**
-- `message`: Object with localized strings (minimum: `en` and `de`)
+- `message`: Object with localized strings (at least one non-empty language)
 - `level`: One of the four severity levels
 
 **Optional Fields:**
@@ -1150,7 +1150,7 @@ The hint configuration uses the following schema:
 ### Internationalization
 
 All hint messages must be internationalized:
-- **Minimum**: Provide English (`en`) and German (`de`) translations
+- **Minimum**: One language; provide one per language your users use (typically `en` and `de`)
 - **Additional**: Add more language codes as needed (e.g., `fr`, `es`, `ja`)
 - **Fallback**: System falls back to English if user's language is not available
 

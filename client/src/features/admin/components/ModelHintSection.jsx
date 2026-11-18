@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
+import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { DEFAULT_LANGUAGE } from '../../../utils/localizeContent';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
@@ -46,7 +47,15 @@ function ModelHintSection({ hint, onChange, currentLanguage }) {
     alert: t('admin.models.hint.levels.alert', 'Alert (red, must be acknowledged before sending)')
   };
 
-  const update = patch => onChange({ ...hint, ...patch });
+  // The latest hint and handler: a translation answers after an `await`, by
+  // which time the admin may have changed the level or turned the hint off.
+  const latestRef = useRef({ hint, onChange });
+  latestRef.current = { hint, onChange };
+  const update = patch => {
+    const current = latestRef.current;
+    if (!current.hint) return;
+    current.onChange({ ...current.hint, ...patch });
+  };
 
   const previewHint = normalizeModelHint(hint);
 
@@ -139,11 +148,10 @@ function ModelHintSection({ hint, onChange, currentLanguage }) {
               </div>
 
               <DynamicLanguageEditor
-                label={`${t('admin.models.hint.message', 'Message')} *`}
+                label={t('admin.models.hint.message', 'Message')}
                 name="hint.message"
                 value={hint.message || { [DEFAULT_LANGUAGE]: '' }}
                 onChange={value => update({ message: value })}
-                required={true}
                 type="textarea"
               />
 

@@ -2231,7 +2231,8 @@ function ModelFormEditor({
             if (hint) {
               handleChange('hint', hint);
             } else {
-              const { hint: _removed, ...rest } = data;
+              const rest = { ...data };
+              delete rest.hint;
               onChange(rest);
             }
           }}

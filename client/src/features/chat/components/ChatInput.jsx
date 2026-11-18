@@ -683,7 +683,14 @@ function ChatInput({
 
   const handleSubmit = e => {
     e.preventDefault();
-    if ((value.trim() || allowEmptySubmit) && !isProcessing && !sendBlockedByAttachment) {
+    // A form submit (a starter prompt, `send=true`, an MCP app) does not go
+    // through the disabled Send button: an unacknowledged alert blocks it here.
+    if (
+      (value.trim() || allowEmptySubmit) &&
+      !isProcessing &&
+      !sendBlockedByAttachment &&
+      !requiresAlertAcknowledgment
+    ) {
       onSubmit(e);
       setExpandedByUser(false);
       // Keep focus on the input so the user can continue typing

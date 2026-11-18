@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * An admin configures a model's `hint` in the model editor (#3811): on/off,
  * level, dismissible (hint/info only) and a localized message. Empty
@@ -167,5 +170,18 @@ describe('model hint in the admin model editor', () => {
     fireEvent.click(saveButton());
 
     expect(await savedBody()).not.toHaveProperty('hint');
+  });
+
+  test('saves a hint written only in German', async () => {
+    await loadModel({
+      ...MODEL,
+      hint: { message: { en: '', de: 'Nur Deutsch' }, level: 'warning' }
+    });
+
+    // An empty English field does not block the save.
+    expect(document.getElementById('hint.message.en')).not.toBeRequired();
+    fireEvent.click(saveButton());
+
+    expect((await savedBody()).hint).toEqual({ message: { de: 'Nur Deutsch' }, level: 'warning' });
   });
 });

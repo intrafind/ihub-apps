@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * A model with an `alert` hint blocks sending until the user clicks
  * "I Understand" — but not the model selector: picking another model is the
@@ -122,5 +125,17 @@ describe('alert hint of the selected model (#3811)', () => {
     renderInput({ onModelChange: () => {}, isProcessing: true });
 
     expect(screen.getByRole('combobox', { name: 'Model' })).toBeDisabled();
+  });
+
+  test('a form submit is refused until the alert is acknowledged', () => {
+    const onSubmit = jest.fn();
+    const { container } = renderInput({ onModelChange: () => {}, onSubmit });
+
+    fireEvent.submit(container.querySelector('form'));
+    expect(onSubmit).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'I Understand' }));
+    fireEvent.submit(container.querySelector('form'));
+    expect(onSubmit).toHaveBeenCalledTimes(1);
   });
 });
