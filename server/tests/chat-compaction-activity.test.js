@@ -162,3 +162,21 @@ test('a paused turn keeps its digest whole; other long results are still cut', (
   assert.equal(stored.find(m => m.tool_call_id === 'c1').content, digest);
   assert.match(stored.find(m => m.tool_call_id === 'c2').content, /\[truncated/);
 });
+
+test('notes cut to fit the stored activity are marked as cut', () => {
+  const big = 'n'.repeat(8000);
+  const items = Array.from({ length: 60 }, (_, i) => ({
+    id: `compaction-${i}`,
+    kind: 'compaction',
+    status: 'completed',
+    strategy: 'digest',
+    itemsSummarised: 1,
+    digest: big,
+    details: [],
+    sources: []
+  }));
+  const stored = boundStoredActivity({ toolActivity: { items } });
+  const row = stored.toolActivity.items[0];
+  assert.ok(row.digest.length <= 1001);
+  assert.equal(row.digestTruncated, true);
+});

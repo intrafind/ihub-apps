@@ -105,8 +105,13 @@ function compactionSegments(t, items) {
   const merged = {
     ...(digest || done[done.length - 1]),
     lossy,
-    itemsSummarised: done.reduce((n, item) => n + (item.itemsSummarised || 0), 0),
-    kinds: done.reduce(
+    // Condensed means condensed: the results that were only shortened are
+    // the fact beside it.
+    itemsSummarised: (lossy ? done : done.filter(item => !item.lossy)).reduce(
+      (n, item) => n + (item.itemsSummarised || 0),
+      0
+    ),
+    kinds: (lossy ? done : done.filter(item => !item.lossy)).reduce(
       (acc, item) => ({
         search: acc.search + (item.kinds?.search || 0),
         fetch: acc.fetch + (item.kinds?.fetch || 0),

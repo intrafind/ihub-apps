@@ -236,7 +236,7 @@ describe('the compaction row', () => {
       ])
     );
     const label = headlineOf(t, activity, false).label;
-    expect(label).toContain('toolActivity.compaction.condensedSearches:11');
+    expect(label).toContain('toolActivity.compaction.condensedSearches:9');
     expect(label).toContain('toolActivity.compaction.someShortened:2');
   });
 });

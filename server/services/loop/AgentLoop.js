@@ -1682,14 +1682,28 @@ export class AgentLoop {
     }
     state.recalls += 1;
     let content = entry.content;
+    let bounded = null;
     try {
-      const bounded = JSON.parse(content);
-      const spillRun = entry.runId || ctx.ledgerId;
-      if (bounded?.truncated === true && bounded.spill?.path && spillRun) {
-        content = await ctx.runLog.readSpill(spillRun, { path: bounded.spill.path });
-      }
+      bounded = JSON.parse(content);
     } catch {
       /* not a spilled result */
+    }
+    if (bounded?.truncated === true && bounded.spill?.path) {
+      // The run that spilled it: the entry's, this one, or an earlier run of
+      // the turn this one continues under a new id.
+      const runs = [
+        entry.runId,
+        ctx.ledgerId,
+        ...(Array.isArray(ctx.request.archiveRunIds) ? ctx.request.archiveRunIds : [])
+      ].filter((id, index, all) => id && isValidRunId(id) && all.indexOf(id) === index);
+      for (const runId of runs) {
+        try {
+          content = await ctx.runLog.readSpill(runId, { path: bounded.spill.path });
+          break;
+        } catch {
+          /* not this run's spill */
+        }
+      }
     }
     return recallPage({ ...entry, content: String(content ?? '') }, Number(args?.offset) || 0);
   }

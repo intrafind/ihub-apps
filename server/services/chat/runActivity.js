@@ -527,7 +527,10 @@ export function boundStoredActivity(activity) {
         details: item.details.map(d => ({ ...d, values: d.values.map(v => ({ text: v.text })) }))
       }),
       item => ({ ...item, sources: item.sources.slice(0, 5) }),
-      item => (item.digest ? { ...item, digest: text(item.digest, SHORT_DIGEST_CHARS) } : item),
+      item =>
+        item.digest && item.digest.length > SHORT_DIGEST_CHARS
+          ? { ...item, digest: text(item.digest, SHORT_DIGEST_CHARS), digestTruncated: true }
+          : item,
       item => ({ ...item, details: [], sources: [], digest: undefined })
     ];
     for (const trim of trims) {
