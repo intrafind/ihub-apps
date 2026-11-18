@@ -683,6 +683,17 @@ export class ProjectIngestService {
       let extracted = null;
       const releaseConvert = await this._acquireConvert(job);
       try {
+        // The wait for the slot counts towards the reconciler's budget too (see
+        // `queuedLong`): an item older than half of it is stamped again, so the
+        // conversion gets a budget of its own. One write, only after a long wait.
+        const since = Date.parse(current.refreshingAt || current.updatedAt || '') || 0;
+        if (Date.now() - since > staleMs / 2) {
+          const stamped = await patch(item => {
+            if (!owns(item)) return false;
+            if (typeof item.refreshingAt === 'string') item.refreshingAt = new Date().toISOString();
+          });
+          if (!stamped) return null;
+        }
         // 3. Scan, on the temp file (the command scanner needs a path). Text
         //    handed in is scanned as the bytes it will be stored as.
         {

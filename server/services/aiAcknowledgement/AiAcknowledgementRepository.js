@@ -33,6 +33,9 @@ import { StorageError } from '../../storage/errors.js';
 import { getStorage, readFacet } from '../../storage/bootstrap.js';
 import { RUNTIME_NAMESPACES } from '../../storage/namespaces.js';
 import { forgetAcknowledgement } from './acknowledgementCache.js';
+import configCache from '../../configCache.js';
+import { localUsersFile } from '../../utils/contentsPath.js';
+import { loadUsers, updateUsersFile } from '../../utils/userManager.js';
 
 /** Namespace holding one document per user. */
 export const AI_ACKNOWLEDGEMENTS_NAMESPACE = RUNTIME_NAMESPACES.aiAcknowledgements;
@@ -76,6 +79,58 @@ function isBefore(entry, resetAt) {
   return Number.isFinite(reset) && Date.parse(entry?.acknowledgedAt) < reset;
 }
 
+/** Whether a users.json record still carries acknowledgement fields. */
+function hasLegacyFields(user) {
+  return (
+    !!user &&
+    typeof user === 'object' &&
+    (Object.hasOwn(user, 'aiAcknowledgements') ||
+      Object.hasOwn(user, 'aiAcknowledgementsClearedAt'))
+  );
+}
+
+/** A record's acknowledgement fields, comparable as a string. */
+function legacyFingerprint(user) {
+  return JSON.stringify([user?.aiAcknowledgements, user?.aiAcknowledgementsClearedAt]);
+}
+
+/** The later of two ISO times; either may be missing. */
+function later(a, b) {
+  if (typeof a !== 'string') return typeof b === 'string' ? b : undefined;
+  if (typeof b !== 'string') return a;
+  return Date.parse(b) > Date.parse(a) ? b : a;
+}
+
+/**
+ * Merge a users.json record's acknowledgement fields into a document, by the
+ * rules of migration V255 plus one: the later cleared stamp wins and removes
+ * every entry confirmed before it, so a removal done by a server older than
+ * V255 revokes what the document holds. Then an entry per version, the
+ * document's own wins.
+ *
+ * @param {Object} current - The document's data
+ * @param {Object} record - The users.json record
+ * @returns {{next: Object|null, result: boolean}} `result`: whether the
+ *   cleared stamp moved (a removal arrived)
+ */
+function mergeLegacy(current, record) {
+  const clearedAt = later(current.aiAcknowledgementsClearedAt, record.aiAcknowledgementsClearedAt);
+  const existing = entriesOf(current);
+  const kept = existing.filter(entry => !isBefore(entry, clearedAt));
+  const known = new Set(kept.map(entry => entry?.version));
+  const added = entriesOf(record).filter(
+    entry =>
+      Number.isInteger(entry?.version) && !known.has(entry.version) && !isBefore(entry, clearedAt)
+  );
+  const cleared = clearedAt !== current.aiAcknowledgementsClearedAt;
+  if (!cleared && added.length === 0 && kept.length === existing.length) {
+    return { next: null, result: false };
+  }
+  const next = { ...current, aiAcknowledgements: [...kept, ...added] };
+  if (clearedAt) next.aiAcknowledgementsClearedAt = clearedAt;
+  return { next, result: cleared };
+}
+
 /**
  * Per-user AI acknowledgements on top of the storage abstraction.
  */
@@ -84,10 +139,14 @@ export class AiAcknowledgementRepository {
    * @param {Object} [options]
    * @param {Object|null} [options.documents] - Document facet; null makes every method a no-op
    * @param {Object} [options.logger]
+   * @param {(() => string)|null} [options.usersFilePath] - Where users.json
+   *   lives; set, acknowledgement fields still found there are imported (see
+   *   {@link importLegacy})
    */
-  constructor({ documents = null, logger: log } = {}) {
+  constructor({ documents = null, logger: log, usersFilePath = null } = {}) {
     this.documents = documents || null;
     this.logger = log || logger;
+    this.usersFilePath = usersFilePath;
   }
 
   /** Whether this repository can store anything. */
@@ -103,7 +162,51 @@ export class AiAcknowledgementRepository {
    */
   async get(userId) {
     if (!this.isAvailable() || !userId) return null;
+    await this.importLegacy([userId]);
     return ownData(await this._read(acknowledgementKey(userId)), userId);
+  }
+
+  /**
+   * Import acknowledgement fields still found on users.json records into the
+   * documents, then strip them from users.json.
+   *
+   * Migration V255 moved them once. During a rolling deploy servers older than
+   * V255 keep writing them there (a confirmation, an admin's removal), and V255
+   * never runs again: without this, those writes were lost, and a removal done
+   * on an old server would not revoke anything. Cheap when there is nothing to
+   * do (one look at the cached users.json); a failure is logged and the next
+   * read tries again. The fields are stripped only when they did not change
+   * since they were merged; changed ones are merged on a later read.
+   *
+   * @param {string[]|null} userIds - Users to look at; null for every user
+   * @returns {Promise<void>}
+   */
+  async importLegacy(userIds) {
+    if (!this.usersFilePath) return;
+    const usersFile = this.usersFilePath();
+    const users = loadUsers(usersFile).users || {};
+    const ids = (userIds || Object.keys(users)).filter(id => hasLegacyFields(users[id]));
+    for (const id of ids) {
+      const record = users[id];
+      const fingerprint = legacyFingerprint(record);
+      try {
+        if (await this._update(id, current => mergeLegacy(current, record))) {
+          forgetAcknowledgement(id);
+        }
+        await updateUsersFile(usersFile, usersConfig => {
+          const user = usersConfig.users[id];
+          if (!hasLegacyFields(user) || legacyFingerprint(user) !== fingerprint) return false;
+          delete user.aiAcknowledgements;
+          delete user.aiAcknowledgementsClearedAt;
+        });
+      } catch (error) {
+        this.logger.warn('Could not import AI acknowledgements left in users.json; retried later', {
+          component: 'AiAcknowledgement',
+          userId: id,
+          error
+        });
+      }
+    }
   }
 
   /**
@@ -140,10 +243,15 @@ export class AiAcknowledgementRepository {
       };
       const { next, result } = mutate(structuredClone(current));
       if (!next) return result;
+      // A damaged document has no etag to write against: it is overwritten
+      // unconditionally, so look once more right before, and start over when
+      // another write replaced it meanwhile.
+      // ponytail: a write landing between this look and the put is still lost;
+      // closing that needs the store to report a damaged document's etag.
+      if (doc?.damaged && !(await this._read(key))?.damaged) continue;
       try {
         await this.documents.put(AI_ACKNOWLEDGEMENTS_NAMESPACE, key, next, {
           ownerId: String(userId),
-          // A damaged document is overwritten unconditionally (see _read).
           ...(doc?.damaged ? {} : { etag: doc ? doc.etag : null })
         });
         return result;
@@ -210,6 +318,7 @@ export class AiAcknowledgementRepository {
   async listAll() {
     const all = new Map();
     if (!this.isAvailable()) return all;
+    await this.importLegacy(null);
     let cursor;
     do {
       const page = await this.documents.list(AI_ACKNOWLEDGEMENTS_NAMESPACE, {
@@ -301,7 +410,8 @@ export function getAiAcknowledgementRepository() {
     cachedProvider = provider;
     cachedRepository = new AiAcknowledgementRepository({
       documents: readFacet(provider, 'documents'),
-      logger
+      logger,
+      usersFilePath: () => localUsersFile(configCache.getPlatform()?.localAuth)
     });
   }
   return cachedRepository;

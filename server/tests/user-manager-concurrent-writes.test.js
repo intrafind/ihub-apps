@@ -16,7 +16,12 @@ import path from 'node:path';
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createOrUpdateExternalUser, updateUserActivity } from '../utils/userManager.js';
+import {
+  createOrUpdateExternalUser,
+  loadUsersFresh,
+  updateUserActivity,
+  updateUsersFile
+} from '../utils/userManager.js';
 
 let baseDir;
 
@@ -60,6 +65,20 @@ describe('concurrent writes to users.json', () => {
         .sort(),
       [...ids].sort()
     );
+  });
+
+  it('a change reads the file itself, not a cached copy whose token still matches', async () => {
+    const file = seed({ a: { username: 'a', name: 'xx' } });
+    await loadUsersFresh(file);
+    // Another host rewrote it in place, same size, same mtime: the token matches.
+    const { atimeMs, mtimeMs } = fs.statSync(file);
+    fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace('"xx"', '"yy"'));
+    fs.utimesSync(file, atimeMs / 1000, mtimeMs / 1000);
+    await updateUsersFile(file, usersConfig => {
+      usersConfig.users.b = { username: 'b' };
+    });
+    assert.equal(stored(file).a.name, 'yy');
+    assert.ok(stored(file).b);
   });
 
   it('keeps a user that an admin-made record sits next to', async () => {

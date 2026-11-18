@@ -1465,6 +1465,62 @@ describe('ingest pipeline', () => {
     }
   });
 
+  it('an item that waited long for the conversion slot is stamped when it gets it', async () => {
+    const project = await newProject();
+    const repository = getProjectRepository();
+    const realMutate = repository.mutate;
+    const realAcquire = service.ingest._acquireConvert;
+    const writes = [];
+    let slotAt = Infinity;
+    repository.mutate = async function (projectId, ...rest) {
+      const stored = await realMutate.call(this, projectId, ...rest);
+      if (projectId === project.id) writes.push({ at: Date.now(), items: stored?.items });
+      return stored;
+    };
+    service.ingest._acquireConvert = async function (job) {
+      const release = await realAcquire.call(this, job);
+      slotAt = Date.now();
+      return release;
+    };
+    let open = null;
+    try {
+      fakeFetch.entered = false;
+      fakeFetch.gate = new Promise(resolve => {
+        open = resolve;
+      });
+      const { item } = await service.addItem(
+        project.id,
+        { kind: 'fake-cloud', ref: { fileId: 'slot-long' } },
+        { user: ADA }
+      );
+      await waitFor(() => fakeFetch.entered);
+      // As if it had waited past half of `staleAfterMinutes` since it was added.
+      await realMutate.call(
+        repository,
+        project.id,
+        stored => {
+          const entry = stored.items.find(candidate => candidate.id === item.id);
+          entry.updatedAt = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
+          return stored;
+        },
+        { touchActivity: false, touchUpdated: false }
+      );
+      open();
+      const done = await settled(project.id, item.id);
+      assert.equal(done.status, 'ready', JSON.stringify(done.error));
+      // The first write after the slot is the stamp, before the result is installed.
+      const first = writes.find(write => write.at >= slotAt);
+      const stamped = first.items.find(entry => entry.id === item.id);
+      assert.notEqual(stamped.status, 'ready');
+      assert.ok(Date.now() - Date.parse(stamped.updatedAt) < 60_000, stamped.updatedAt);
+    } finally {
+      repository.mutate = realMutate;
+      service.ingest._acquireConvert = realAcquire;
+      open?.();
+      fakeFetch.gate = null;
+    }
+  });
+
   it('a new item removed while its job waited stores nothing', async () => {
     const project = await newProject();
     const repository = getProjectRepository();

@@ -502,6 +502,19 @@ describe('428 guard', () => {
       );
     });
 
+    test('without a document store the cookie counts, and is not remembered', async () => {
+      const app = buildApp();
+      const provider = storage.current;
+      storage.current = {};
+      try {
+        expect((await post(app, asUser('bob'))).status).toBe(428);
+        expect((await post(app, asUser('bob'), cookieFor('bob'))).status).toBe(200);
+        expect(ackCache.isRememberedAcknowledged('bob', service.getSettings())).toBe(false);
+      } finally {
+        storage.current = provider;
+      }
+    });
+
     test('a store that cannot be read leaves the cookie as the proof', async () => {
       const app = buildApp();
       const spy = jest.spyOn(storage.current.documents, 'get').mockRejectedValue(new Error('down'));
@@ -614,10 +627,30 @@ describe('per-worker acknowledgement cache', () => {
 
   test('the bus message from another worker forgets the user', () => {
     const settings = { requiredVersion: 1, resetAt: null };
-    ackCache.rememberAcknowledged('bob', settings);
+    ackCache.rememberAcknowledged('bob', settings, Date.now());
     expect(ackCache.isRememberedAcknowledged('bob', settings)).toBe(true);
     ackCache.onForgetMessage({ userId: 'bob' });
     expect(ackCache.isRememberedAcknowledged('bob', settings)).toBe(false);
+  });
+
+  test('a "yes" read before a forget is not remembered after it', async () => {
+    const app = buildApp();
+    const real = repo().get.bind(repo());
+    // The admin's removal lands on another worker while this one reads the old "yes".
+    const spy = jest.spyOn(repo(), 'get').mockImplementation(async id => {
+      const record = await real(id);
+      ackCache.onForgetMessage({ userId: id });
+      return record;
+    });
+    try {
+      expect((await post(app, asUser('bob'))).status).toBe(200);
+    } finally {
+      spy.mockRestore();
+    }
+    expect(ackCache.isRememberedAcknowledged('bob', service.getSettings())).toBe(false);
+    // A read that starts after the forget is remembered again.
+    expect((await post(app, asUser('bob'))).status).toBe(200);
+    expect(ackCache.isRememberedAcknowledged('bob', service.getSettings())).toBe(true);
   });
 });
 
@@ -1112,12 +1145,94 @@ describe('acknowledgement documents', () => {
     expect(await entriesOf('u0')).toHaveLength(1);
   });
 
+  test('a damaged document another write replaced meanwhile is not overwritten', async () => {
+    await repo().record('u0', entry);
+    const files = await fs.readdir(storage.dir, { recursive: true });
+    const name = files.find(file => file.endsWith(`${acknowledgementKey('u0')}.json`));
+    await fs.writeFile(path.join(storage.dir, name), '{"torn');
+    const documents = storage.current.documents;
+    const realGet = documents.get.bind(documents);
+    const other = { ...entry, version: 2 };
+    let reads = 0;
+    const spy = jest.spyOn(documents, 'get').mockImplementation(async (ns, key) => {
+      reads += 1;
+      if (reads === 2) {
+        // Another worker replaced the damaged document after the first read.
+        await documents.delete(ns, key);
+        await documents.put(
+          ns,
+          key,
+          { version: 1, userId: 'u0', aiAcknowledgements: [other] },
+          { ownerId: 'u0', etag: null }
+        );
+      }
+      return realGet(ns, key);
+    });
+    try {
+      expect((await repo().record('u0', entry)).recorded).toBe(true);
+    } finally {
+      spy.mockRestore();
+    }
+    expect(await entriesOf('u0')).toEqual([other, entry]);
+  });
+
   test('deleting a user removes their acknowledgement document', async () => {
     await repo().record('u0', entry);
     const { USER_CLEANUP_STEPS } = await import('../services/userDeletion.js');
     const step = USER_CLEANUP_STEPS.find(item => item.name === 'aiAcknowledgements');
     expect(await step.run('u0')).toEqual({ removed: 1 });
     expect(await repo().get('u0')).toBeNull();
+  });
+});
+
+describe('acknowledgements an older server wrote into users.json (rolling deploy after V255)', () => {
+  beforeEach(() => seed());
+  const post = (app, user) => request(app).post('/api/apps/x/chat/c1').set('x-user', user).send({});
+  const legacyOf = id => {
+    const { aiAcknowledgements, aiAcknowledgementsClearedAt } = store.files[USERS].users[id];
+    return { aiAcknowledgements, aiAcknowledgementsClearedAt };
+  };
+
+  test('a late confirmation is imported on the next read and stripped from users.json', async () => {
+    const late = { ...BOB_ENTRY, acknowledgedAt: '2026-03-01T00:00:00.000Z' };
+    store.files[USERS].users.alice.aiAcknowledgements = [late];
+    expect((await post(buildApp(), asUser('alice'))).status).toBe(200);
+    expect(await entriesOf('alice')).toEqual([late]);
+    expect(legacyOf('alice')).toEqual({});
+    // Imported once: a second read changes nothing.
+    expect(await entriesOf('alice')).toEqual([late]);
+  });
+
+  test('a late admin removal revokes what the document holds', async () => {
+    const app = buildApp();
+    expect((await post(app, asUser('bob'))).status).toBe(200);
+    // The old server removed bob's confirmations in users.json after V255 ran.
+    Object.assign(store.files[USERS].users.bob, {
+      aiAcknowledgements: [],
+      aiAcknowledgementsClearedAt: '2026-02-01T00:00:00.000Z'
+    });
+    // The remembered "yes" of this worker is forgotten by the import.
+    await repo().get('bob');
+    expect(await repo().get('bob')).toMatchObject({
+      aiAcknowledgements: [],
+      aiAcknowledgementsClearedAt: '2026-02-01T00:00:00.000Z'
+    });
+    expect((await post(app, asUser('bob'))).status).toBe(428);
+    expect(legacyOf('bob')).toEqual({});
+  });
+
+  test('an older removal does not revoke a newer confirmation', async () => {
+    const newer = { ...BOB_ENTRY, version: 2, acknowledgedAt: '2026-04-01T00:00:00.000Z' };
+    await repo().record('bob', newer);
+    store.files[USERS].users.bob.aiAcknowledgementsClearedAt = '2026-02-01T00:00:00.000Z';
+    expect(await entriesOf('bob')).toEqual([newer]);
+  });
+
+  test('the admin user list imports them for every user', async () => {
+    store.files[USERS].users.alice.aiAcknowledgements = [BOB_ENTRY];
+    const all = await repo().listAll();
+    expect(all.get('alice').data.aiAcknowledgements).toEqual([BOB_ENTRY]);
+    expect(legacyOf('alice')).toEqual({});
   });
 });
 
