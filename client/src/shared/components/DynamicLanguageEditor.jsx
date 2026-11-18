@@ -1,11 +1,32 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useId, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from './Icon';
 import { translateText } from '../../api/adminApi';
 import { useFormValidationErrors } from '../contexts/formValidationContext';
+
+/**
+ * The key format every localized field accepts on the server
+ * (`localizedStringSchema`): a two-letter language, optionally a region in
+ * upper case — `de`, `pt-BR`.
+ */
+const LANGUAGE_CODE = /^[a-z]{2}(-[A-Z]{2})?$/;
+
+/** `PT_br`, ` pt-br ` → `pt-BR`; the language lower case, the region upper case. */
+export function canonicalLanguageCode(raw) {
+  const [language = '', region, ...rest] = String(raw || '')
+    .trim()
+    .replace(/_/g, '-')
+    .split('-');
+  if (rest.length) return String(raw).trim();
+  return region === undefined
+    ? language.toLowerCase()
+    : `${language.toLowerCase()}-${region.toUpperCase()}`;
+}
+
+export const isValidLanguageCode = code => LANGUAGE_CODE.test(code);
 
 function LanguageInput({
   lang,
@@ -67,6 +88,11 @@ const DynamicLanguageEditor = ({
   const effectiveValidationErrors = validationErrors ?? contextErrors;
   const [showAddLanguage, setShowAddLanguage] = useState(false);
   const [newLanguageCode, setNewLanguageCode] = useState('');
+  // The value and handler of the latest render: a translation answers after an
+  // `await`, by which time other languages may have been edited or the target
+  // language removed. The answer is applied to what the field holds then.
+  const latestRef = useRef({ value, onChange });
+  latestRef.current = { value, onChange };
 
   // If fieldType is provided, we're working with nested objects
   const currentValue = fieldType
@@ -237,8 +263,14 @@ const DynamicLanguageEditor = ({
     'plf'
   ];
 
+  // What "Add" would add: the typed or picked code in the server's format.
+  const candidateCode = canonicalLanguageCode(newLanguageCode);
+  const candidateInvalid = candidateCode !== '' && !isValidLanguageCode(candidateCode);
+  const candidateTaken = languages.includes(candidateCode);
+
   const handleAddLanguage = () => {
-    if (newLanguageCode && !languages.includes(newLanguageCode)) {
+    if (candidateCode && !candidateInvalid && !candidateTaken) {
+      const newLanguageCode = candidateCode;
       if (fieldType) {
         // Handle nested object update
         onChange({
@@ -301,13 +333,22 @@ const DynamicLanguageEditor = ({
     if (!text) return;
     try {
       const result = await translateText({ text, from: sourceLang, to: lang });
-      handleLanguageChange(lang, result.translation);
+      const { value: latest, onChange: change } = latestRef.current;
+      if (!Object.hasOwn(latest, lang)) return;
+      change(
+        fieldType
+          ? { ...latest, [lang]: { ...latest[lang], [fieldType]: result.translation } }
+          : { ...latest, [lang]: result.translation }
+      );
     } catch (err) {
       console.error('Translation failed', err);
     }
   };
 
-  const availableLanguages = commonLanguages.filter(lang => !languages.includes(lang));
+  // Only codes the server accepts (the list also holds three-letter codes).
+  const availableLanguages = commonLanguages.filter(
+    lang => isValidLanguageCode(lang) && !languages.includes(lang)
+  );
 
   return (
     <div
@@ -351,19 +392,29 @@ const DynamicLanguageEditor = ({
               type="text"
               aria-label={t('admin.apps.edit.languageCode', 'Language code (e.g., en, de, es)')}
               value={newLanguageCode}
-              onChange={e => setNewLanguageCode(e.target.value.toLowerCase())}
+              onChange={e => setNewLanguageCode(e.target.value)}
+              aria-invalid={candidateInvalid || undefined}
+              aria-describedby={candidateInvalid ? `${labelId}-code-error` : undefined}
               placeholder={t('admin.apps.edit.languageCode', 'Language code (e.g., en, de, es)')}
               className="flex-1 block rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 focus:border-indigo-500 focus:ring-indigo-500"
             />
             <button
               type="button"
               onClick={handleAddLanguage}
-              disabled={!newLanguageCode || languages.includes(newLanguageCode)}
+              disabled={!candidateCode || candidateInvalid || candidateTaken}
               className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {t('admin.apps.edit.add', 'Add')}
             </button>
           </div>
+          {candidateInvalid && (
+            <p id={`${labelId}-code-error`} className="text-sm text-red-600 dark:text-red-400">
+              {t(
+                'admin.apps.edit.invalidLanguageCode',
+                'Use a two-letter language code, optionally with a region: "de", "pt-BR".'
+              )}
+            </p>
+          )}
         </div>
       )}
 

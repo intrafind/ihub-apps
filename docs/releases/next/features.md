@@ -1528,7 +1528,8 @@ get the space back. **New chat** brings the configured rows back.
 - A chat opened from the history starts with the one-line input; so does the canvas side panel.
 - **Outlook Add-in:** the input never grows beyond 3 lines, even for an app that asks for more rows.
 - Single-line apps now really show one line (they showed two), and a long placeholder no longer
-  makes the one-line input taller.
+  makes the one-line input taller. The one-line input is as tall as the row of buttons under it,
+  also on the start page.
 - While a multi-line message is being written, **Ctrl + Enter to send** (**⌘ + Enter** on a Mac)
   shows next to the token count, and screen readers announce how to send.
 
@@ -2443,3 +2444,11 @@ For API callers: `GET /api/admin/marketplace/registries/{registryId}/items/{type
 replaces the integration-only `…/items/integration/{name}/_file` and serves `integration` and
 `skill` items. Existing integration URLs keep working unchanged, and a skill's item detail now carries
 a `files` list.
+
+## Model Hints Can Be Set in the Model Editor
+
+Admins can now give a model a hint — the message users see above the chat input when they select
+it — on **Admin → Models → (model) → User Hint**, instead of editing the model's JSON file. The
+section sets the level (hint, info, warning, alert), whether users can dismiss it (hint and info
+only) and the message per language, with a preview of how it looks in the chat. Turning it off
+removes the hint from the model. See [Model Hints](../../models.md#model-hints).
