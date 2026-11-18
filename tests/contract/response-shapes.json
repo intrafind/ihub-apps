@@ -3314,6 +3314,7 @@
         "examples": ["object"],
         "properties": {
           "aiAcknowledgements": "object",
+          "aiAcknowledgementsClearedAt": "object",
           "createdAt": "object",
           "email": "object",
           "enabled": "object",
@@ -3474,6 +3475,7 @@
         {
           "cpuPercent": "number",
           "current": "boolean",
+          "diagnostics": "object",
           "eventLoopDelayMs": "null|object",
           "indexCache": "object",
           "memory": "object",
