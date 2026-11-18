@@ -580,7 +580,9 @@ function createMigrationContext(contentsDir, defaultsDir, migration) {
       try {
         entries = await fs.readdir(dirPath);
       } catch (error) {
-        if (error.code === 'ENOENT') return [];
+        // Missing, or a file rather than a folder (macOS puts a `.DS_Store`
+        // file into every folder it shows): there is nothing to list.
+        if (error.code === 'ENOENT' || error.code === 'ENOTDIR') return [];
         throw error;
       }
       if (pattern) {
