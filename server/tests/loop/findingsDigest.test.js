@@ -540,6 +540,17 @@ test('text from a result cannot close or open the digest block', () => {
     assert.equal(numbersAppearIn('1,200 thousand USD', 'Price 1,200,000 USD'), true);
   });
 
+  test('a scale word must agree; a single digit with one is checked', () => {
+    assert.equal(numbersAppearIn('5 million USD', 'Revenue 51 million USD'), false);
+    assert.equal(numbersAppearIn('5 million USD', 'Revenue 5 million USD'), true);
+    assert.equal(numbersAppearIn('51 million USD', 'Revenue 51 billion USD'), false);
+    assert.equal(numbersAppearIn('51 million USD', 'Revenue 51 Mio. USD'), true);
+    assert.equal(numbersAppearIn('51 million USD', 'Revenue (in millions): 51'), true, 'no scale');
+    assert.equal(numbersAppearIn('51 USD', 'Revenue 51 billion USD'), true, 'the fact names none');
+    assert.equal(numbersAppearIn('top 5 companies', 'the 7 largest companies'), true, 'a count');
+    assert.equal(numbersAppearIn('on 7.3.2026', 'on 07.03.2026'), true);
+  });
+
   test('numbers separated by a space are not read as one', () => {
     assert.equal(numbersAppearIn('Germany 2024 450 units', '2024: 450 units'), true);
     assert.equal(numbersAppearIn('Q3 2024 120 million', 'In Q3 2024 sales were 120 million'), true);

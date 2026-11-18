@@ -573,22 +573,41 @@ function datesApart(text) {
  * "5,100,000,000,000"); nothing else of a longer number counts ("1,200" is
  * not "1,200,000", and IDs and timestamps let no figure through). A number
  * read across a space ("2024 450") also counts when each of its parts is
- * found; a part of one digit is not checked.
+ * found. A scale word must agree: "51 million" is not "51 billion" (a number
+ * without one in the result counts, as under a table's "in millions"). A
+ * single digit is checked only with a scale word ("5 million" is not
+ * "51 million"); alone it is a count or a rank, and a part of one digit is
+ * not checked.
  *
  * @param {string} fact
  * @param {string} content
  * @returns {boolean}
  */
 export function numbersAppearIn(fact, content) {
-  const wanted = numbersOf(datesApart(fact)).filter(number => number.digitCount >= 2);
+  // A single digit is checked only with a scale word ("5 million"): alone it
+  // is a count or a rank ("top 5"), too common to check.
+  const checked = number => number.digitCount >= 2 || number.scales?.length > 0;
+  const wanted = numbersOf(datesApart(fact)).filter(checked);
   if (wanted.length === 0) return true;
-  const present = numbersOf(datesApart(content)).flatMap(number => number.values);
-  const exact = new Set(present);
-  const scaled = (value, scales = []) =>
-    !value.includes('.') && scales.some(power => exact.has(`${value}${'0'.repeat(power)}`));
+  const present = numbersOf(datesApart(content));
+  const values = new Set(present.flatMap(number => number.values));
+  // The value with a scale word in the fact: in the result with the same
+  // scale or none (a table says "in millions" once), never with another one.
+  const sameValue = (value, scales = []) =>
+    present.some(
+      number =>
+        number.values.includes(value) &&
+        (scales.length === 0 ||
+          number.scales.length === 0 ||
+          number.scales.some(power => scales.includes(power)))
+    );
+  const writtenOut = (value, scales = []) =>
+    !value.includes('.') && scales.some(power => values.has(`${value}${'0'.repeat(power)}`));
   const found = number =>
-    number.digitCount < 2 ||
-    number.values.some(value => exact.has(value) || scaled(value, number.scales));
+    !checked(number) ||
+    number.values.some(
+      value => sameValue(value, number.scales) || writtenOut(value, number.scales)
+    );
   return wanted.every(
     number => found(number) || (number.parts.length > 1 && number.parts.every(found))
   );
