@@ -335,6 +335,36 @@ test('a dense line over the line limit is split at its fields, each part naming 
   assert.ok(facts.every(f => f.source === 'x.test'));
 });
 
+test('summarizeCalls: a chunk whose share of the room rounds to nothing is skipped, and the notes are partial', async () => {
+  const calls = [
+    { ref: 'r1', name: 't', args: '{}', content: 'a'.repeat(200_000) },
+    ...[2, 3, 4].map(n => ({ ref: `r${n}`, name: 't', args: '{}', content: 'b'.repeat(8_000) }))
+  ];
+  const rooms = [];
+  const llmClient = {
+    complete: async params => {
+      rooms.push(Number(/at most (\d+) characters/.exec(params.messages[1].content)?.[1]));
+      return { content: '', usage: {} };
+    }
+  };
+  const summary = await summarizeCalls({
+    llmClient,
+    model: { id: 'm', contextWindow: 8_000, maxOutputTokens: 1000 },
+    calls,
+    roomChars: 10
+  });
+  assert.ok(rooms.length >= 1 && rooms.every(room => room >= 1), JSON.stringify(rooms));
+  assert.ok(rooms.reduce((a, b) => a + b, 0) <= 10, JSON.stringify(rooms));
+  assert.ok(summary.truncatedChunks >= 1, 'skipped chunks make the notes partial');
+  assert.equal(summaryFailureOf(summary, calls), 'summary_partial');
+});
+
+test('a single field longer than a line is cut and counted, so the notes are marked partial', () => {
+  const parsed = parseDigestLines(`FACT | r1 | NVIDIA (NVDA): note ${'z'.repeat(1500)} | x.test`);
+  assert.equal(parsed.cutLines, 1);
+  assert.ok(parsed.facts[0].text.length <= 1001);
+});
+
 test('summarizeCalls: a failed chunk is reported, an abort of the run is thrown', async () => {
   const calls = collectCalls(transcript(), findToolBatches(transcript()).slice(0, 2), {
     nextRef: 1

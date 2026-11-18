@@ -2248,7 +2248,9 @@ function wrappedUpIn(messages) {
     const message = messages[i];
     if (message?.role !== 'user') continue;
     if (message.content === CONTEXT_WRAP_UP_NUDGE) return true;
-    if (!message._nudge) return false;
+    // Loop nudges start with "[system]"; a stored transcript may have lost
+    // their marker.
+    if (!message._nudge && !String(message.content ?? '').startsWith('[system] ')) return false;
   }
   return false;
 }

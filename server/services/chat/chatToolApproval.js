@@ -39,6 +39,7 @@
  * @module services/chat/chatToolApproval
  */
 import { isCondensedContent } from '../loop/findingsDigest.js';
+import { CONTEXT_WRAP_UP_NUDGE } from '../loop/nudges.js';
 import logger from '../../utils/logger.js';
 import defaultInteractionService from '../loop/InteractionService.js';
 import { authorizeInteraction as defaultAuthorizeInteraction } from '../loop/runAccess.js';
@@ -115,6 +116,8 @@ function slim(message, limit) {
   }
   if (message.tool_call_id) out.tool_call_id = message.tool_call_id;
   if (message.name) out.name = message.name;
+  // A loop nudge stays one: a resumed turn tells it from the user's own words.
+  if (message._nudge) out._nudge = true;
   if (
     Array.isArray(message.thoughtSignatures) &&
     JSON.stringify(message.thoughtSignatures).length <= limit
@@ -163,6 +166,11 @@ export function pausedTurnTranscript(messages, { startMessage, toolCallId }) {
   if (size(bounded) > MAX_TRANSCRIPT_CHARS) {
     // Only the step that made the call: its assistant message and the results after it.
     bounded = list.slice(callAt).map(m => slim(m, TIGHT_TRANSCRIPT_MESSAGE_CHARS));
+    // A turn that had wrapped up resumes wrapped up (#3819): the nudge that
+    // says so is kept in front of the step.
+    if (turn.some(m => m.content === CONTEXT_WRAP_UP_NUDGE)) {
+      bounded.unshift({ role: 'user', content: CONTEXT_WRAP_UP_NUDGE, _nudge: true });
+    }
   }
   // Still too large (a step with very many calls): nothing is stored, and the
   // approval is cancelled by the caller rather than kept unbounded.

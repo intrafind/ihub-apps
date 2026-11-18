@@ -13,7 +13,8 @@ import { shrinkFailedToolCalls } from '../../services/loop/contextCompaction.js'
 import { projectLedgerEvent } from '../../services/loop/RunStream.js';
 import { RUN_LOG_EVENTS, SSE_V2_EVENTS } from '../../../shared/runEvents.js';
 import { RECALL_TOOL_ID, notesOf } from '../../services/loop/findingsDigest.js';
-import { CONTEXT_WRAP_UP_NUDGE } from '../../services/loop/nudges.js';
+import { CONTEXT_WRAP_UP_NUDGE, nudgeMessage } from '../../services/loop/nudges.js';
+import { pausedTurnTranscript } from '../../services/chat/chatToolApproval.js';
 import {
   makeClient,
   sseResponse,
@@ -1390,4 +1391,62 @@ test('a digest still over the notes budget at its smallest size keeps calls only
   assert.doesNotMatch(infos[0].digest, /龘/, 'no facts over the budget');
   assert.equal(infos[0].lossy, true);
   assert.equal(infos[0].wrapUp, true);
+});
+
+test('a turn paused after it wrapped up resumes wrapped up from its stored approval transcript', async () => {
+  const xlsxTool = {
+    id: 'create_xlsx',
+    name: 'create_xlsx',
+    description: 'make a spreadsheet',
+    parameters: { type: 'object', properties: { sheets: { type: 'string' } } }
+  };
+  const call = (id, name, args) => ({
+    role: 'assistant',
+    content: '',
+    tool_calls: [{ id, type: 'function', function: { name, arguments: JSON.stringify(args) } }]
+  });
+  const resumeOffers = async stored => {
+    const { loop, stepRequests } = makeLoop([textTurn('the answer')]);
+    await loop.run({
+      model,
+      messages: [...baseMessages, ...stored],
+      tools: [searchTool, xlsxTool],
+      policies,
+      executeTool: async () => 'never'
+    });
+    return (stepRequests[0].body.tools || []).map(t => t.function?.name || t.name);
+  };
+  const turnOf = earlier => [
+    ...baseMessages,
+    ...earlier,
+    nudgeMessage(CONTEXT_WRAP_UP_NUDGE),
+    // A circuit-breaker nudge after the wrap-up one.
+    nudgeMessage('[system] The tool "webSearch" is unavailable for the rest of this step.'),
+    call('cx', 'create_xlsx', { sheets: 'x' }),
+    { role: 'tool', tool_call_id: 'cx', content: '{"status":"awaiting_approval"}' }
+  ];
+
+  const small = pausedTurnTranscript(turnOf([]), {
+    startMessage: baseMessages[1],
+    toolCallId: 'cx'
+  });
+  let offered = await resumeOffers(small);
+  assert.ok(!offered.includes('webSearch'), JSON.stringify(offered));
+  assert.ok(offered.includes('create_xlsx'));
+  // A transcript stored before nudges kept their marker.
+  offered = await resumeOffers(small.map(({ _nudge, ...m }) => m));
+  assert.ok(!offered.includes('webSearch'), JSON.stringify(offered));
+
+  // So long that only the step with the call is stored: the wrap-up is kept.
+  const earlier = Array.from({ length: 120 }, (_, i) => [
+    call(`s${i}`, 'webSearch', { query: `q${i}` }),
+    { role: 'tool', tool_call_id: `s${i}`, content: 'r'.repeat(3000) }
+  ]).flat();
+  const tight = pausedTurnTranscript(turnOf(earlier), {
+    startMessage: baseMessages[1],
+    toolCallId: 'cx'
+  });
+  assert.ok(tight.length < 10, `${tight.length} messages stored`);
+  offered = await resumeOffers(tight);
+  assert.ok(!offered.includes('webSearch'), JSON.stringify(offered));
 });

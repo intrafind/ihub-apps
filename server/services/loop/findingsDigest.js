@@ -471,6 +471,7 @@ export function stripThinking(text) {
  *   notFound: Array<{ref: string, text: string}>}}
  */
 export function parseDigestLines(text) {
+  let cutLines = 0;
   const facts = [];
   const notFound = [];
   const seen = new Set();
@@ -490,21 +491,24 @@ export function parseDigestLines(text) {
       // A fact may hold a `|` itself: everything up to the last column is the fact.
       const body = parts.length > 4 ? parts.slice(2, -1).join(' | ') : factText;
       const source = parts.length > 3 ? parts[parts.length - 1] || null : null;
-      for (const text of factLinesOf(body)) facts.push({ ref, text, source });
+      const lines = factLinesOf(body);
+      cutLines += lines.filter(text => text.length > MAX_FACT_CHARS).length;
+      for (const text of lines) facts.push({ ref, text: truncate(text, MAX_FACT_CHARS), source });
     } else {
       const what = parts.slice(2).join(' | ');
       if (what) notFound.push({ ref, text: truncate(what, MAX_FACT_CHARS) });
     }
     if (facts.length + notFound.length >= MAX_LINES_PER_CHUNK) break;
   }
-  return { facts, notFound };
+  return { facts, notFound, cutLines };
 }
 
 /**
  * A fact line as stored: up to {@link MAX_FACT_CHARS}. A longer dense line
  * (`Entity: label value; label value; …`) is split at its fields into lines
- * that each start with the entity, so no field is lost to a cut; a single
- * field longer than that is cut.
+ * that each start with the entity, so no field is lost to a cut. A line
+ * still longer (one field over the limit) is cut by the caller, which marks
+ * the notes partial.
  */
 function factLinesOf(body) {
   if (body.length <= MAX_FACT_CHARS) return [body];
@@ -524,7 +528,7 @@ function factLinesOf(body) {
     }
   }
   if (line) lines.push(`${entity ? `${entity}: ` : ''}${line}`);
-  return lines.map(text => truncate(text, MAX_FACT_CHARS));
+  return lines;
 }
 
 function normalizeRef(value) {
@@ -804,10 +808,14 @@ export async function summarizeCalls({
   // Never more in total than the room: a chunk told it has more than its
   // share would write lines the digest then drops.
   const roomOf = index =>
-    Number(roomChars) > 0
-      ? Math.max(1, Math.floor((Number(roomChars) * sizes[index]) / total))
-      : undefined;
+    Number(roomChars) > 0 ? Math.floor((Number(roomChars) * sizes[index]) / total) : undefined;
   for (const [index, chunk] of chunks.entries()) {
+    // No room left for this chunk's lines: it is not summarized, and the
+    // notes say they were only partly written.
+    if (roomOf(index) === 0) {
+      result.truncatedChunks += 1;
+      continue;
+    }
     if (Date.now() >= deadline) {
       result.failedChunks += 1;
       result.error = 'compaction time limit';
@@ -839,7 +847,10 @@ export async function summarizeCalls({
     // Stopped at the output limit: the rows after the cut have no facts.
     if (response?.finishReason === 'length') result.truncatedChunks += 1;
     const local = new Map(chunk.map(call => [call.ref, callsByRef.get(call.ref)]));
-    const verified = verifyDigest(parseDigestLines(response?.content || ''), local);
+    const parsed = parseDigestLines(response?.content || '');
+    // A single field longer than a line was cut: the notes are partial.
+    if (parsed.cutLines > 0) result.truncatedChunks += 1;
+    const verified = verifyDigest(parsed, local);
     result.facts.push(...verified.facts);
     result.notFound.push(...verified.notFound);
     result.dropped += verified.dropped;
