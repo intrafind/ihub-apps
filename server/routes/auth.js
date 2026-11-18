@@ -25,7 +25,12 @@ import { setAuthCookie, getClearAuthCookieOptions } from '../utils/cookieSetting
 import { appendQueryParams } from '../utils/appendQueryParams.js';
 import { buildPublicBaseUrl } from '../utils/publicBaseUrl.js';
 import { clearOidcLogoutHint, readOidcLogoutHint } from '../utils/oidcLogoutHint.js';
-import { LoginLockedError } from '../utils/loginLockout.js';
+import {
+  LoginLockedError,
+  reserveLoginAttempt,
+  resolveLockoutConfig,
+  settleLoginAttempt
+} from '../utils/loginLockout.js';
 import { pickRequestLanguage, resolveUiText } from '../utils/uiTextRefs.js';
 
 /**
@@ -77,6 +82,21 @@ function sanitizeAuthInput(value, fieldName, maxLength = 255) {
  */
 function refusal(status, message, { code, details } = {}) {
   return new ServiceError(code ?? codeOfStatus(status), message, { status, details });
+}
+
+/**
+ * The refusal of a sign-in while the account is locked after repeated failures.
+ *
+ * @param {number} retryAfterSeconds - Seconds until sign-in is possible again
+ * @returns {ServiceError}
+ */
+function lockedRefusal(retryAfterSeconds) {
+  const minutes = Math.ceil(retryAfterSeconds / 60);
+  return refusal(
+    429,
+    `Too many failed sign-in attempts. Try again in ${minutes} minute${minutes === 1 ? '' : 's'}.`,
+    { code: 'RATE_LIMITED', details: { retryAfterMs: retryAfterSeconds * 1000 } }
+  );
 }
 
 /**
@@ -205,14 +225,7 @@ export default function registerAuthRoutes(app) {
             authenticated: false
           }
         });
-        if (locked) {
-          const minutes = Math.ceil(error.retryAfterSeconds / 60);
-          throw refusal(
-            429,
-            `Too many failed sign-in attempts. Try again in ${minutes} minute${minutes === 1 ? '' : 's'}.`,
-            { code: 'RATE_LIMITED', details: { retryAfterMs: error.retryAfterSeconds * 1000 } }
-          );
-        }
+        if (locked) throw lockedRefusal(error.retryAfterSeconds);
         throw refusal(401, 'Authentication failed. Please check your username and password.');
       }
 
@@ -296,87 +309,104 @@ export default function registerAuthRoutes(app) {
         );
       }
 
+      // Failed binds count per username from any address (`ldapAuth.lockout`, same
+      // settings as `localAuth.lockout`), so iHub stops binding long before the
+      // directory locks the account, and spraying one name from many addresses stops too.
+      const lockout = resolveLockoutConfig(ldapAuthConfig);
+      const lockKey = `ldap:${sanitizedUsername.trim().toLowerCase()}`;
+      const reservation = lockout.enabled ? await reserveLoginAttempt(lockKey, lockout) : null;
+      if (reservation?.waitMs > 0) {
+        logger.warn('LDAP login refused: account locked', { component: 'Auth' });
+        recordAuthEvent('ldap', 'login_failure');
+        throw lockedRefusal(Math.ceil(reservation.waitMs / 1000));
+      }
+
       let result = null;
+      try {
+        // If a specific provider was requested, use it
+        if (sanitizedProvider) {
+          const ldapProvider = ldapAuthConfig.providers.find(p => p.name === sanitizedProvider);
+          if (!ldapProvider) {
+            throw refusal(400, `LDAP provider '${sanitizedProvider}' not found`);
+          }
 
-      // If a specific provider was requested, use it
-      if (sanitizedProvider) {
-        const ldapProvider = ldapAuthConfig.providers.find(p => p.name === sanitizedProvider);
-        if (!ldapProvider) {
-          throw refusal(400, `LDAP provider '${sanitizedProvider}' not found`);
-        }
-
-        try {
-          logger.info('[Auth] Attempting LDAP authentication (explicit)', {
-            component: 'Auth',
-            provider: sanitizedProvider
-          });
-          result = await loginLdapUser(sanitizedUsername, sanitizedPassword, ldapProvider);
-          logger.info('[Auth] LDAP authentication succeeded', { component: 'Auth' });
-          recordAuthEvent('ldap', 'login_success');
-        } catch (error) {
-          logger.warn('[Auth] LDAP authentication failed', {
-            component: 'Auth',
-            provider: sanitizedProvider,
-            error: error.message
-          });
-          recordAuthEvent('ldap', 'login_failure');
-          logAudit({
-            req,
-            action: 'login',
-            resource: 'auth',
-            result: 'failure',
-            summary: `LDAP login failed (provider: ${sanitizedProvider})`,
-            source: 'web',
-            actor: {
-              id: sanitizedUsername,
-              username: sanitizedUsername,
-              authenticated: false
-            }
-          });
-          throw refusal(401, 'Invalid credentials');
-        }
-      } else {
-        // Try each LDAP provider until one succeeds
-        for (const ldapProvider of ldapAuthConfig.providers) {
           try {
-            logger.info('[Auth] Trying LDAP provider (explicit)', {
+            logger.info('[Auth] Attempting LDAP authentication (explicit)', {
               component: 'Auth',
-              provider: ldapProvider.name
+              provider: sanitizedProvider
             });
             result = await loginLdapUser(sanitizedUsername, sanitizedPassword, ldapProvider);
-            if (result) {
-              logger.info('[Auth] LDAP authentication succeeded', {
+            logger.info('[Auth] LDAP authentication succeeded', { component: 'Auth' });
+            recordAuthEvent('ldap', 'login_success');
+          } catch (error) {
+            logger.warn('[Auth] LDAP authentication failed', {
+              component: 'Auth',
+              provider: sanitizedProvider,
+              error: error.message
+            });
+            recordAuthEvent('ldap', 'login_failure');
+            logAudit({
+              req,
+              action: 'login',
+              resource: 'auth',
+              result: 'failure',
+              summary: `LDAP login failed (provider: ${sanitizedProvider})`,
+              source: 'web',
+              actor: {
+                id: sanitizedUsername,
+                username: sanitizedUsername,
+                authenticated: false
+              }
+            });
+            throw refusal(401, 'Invalid credentials');
+          }
+        } else {
+          // Try each LDAP provider until one succeeds
+          for (const ldapProvider of ldapAuthConfig.providers) {
+            try {
+              logger.info('[Auth] Trying LDAP provider (explicit)', {
                 component: 'Auth',
                 provider: ldapProvider.name
               });
-              break;
+              result = await loginLdapUser(sanitizedUsername, sanitizedPassword, ldapProvider);
+              if (result) {
+                logger.info('[Auth] LDAP authentication succeeded', {
+                  component: 'Auth',
+                  provider: ldapProvider.name
+                });
+                break;
+              }
+            } catch (error) {
+              logger.warn('[Auth] LDAP provider failed', {
+                component: 'Auth',
+                provider: ldapProvider.name,
+                error: error.message
+              });
+              // Continue to next provider
             }
-          } catch (error) {
-            logger.warn('[Auth] LDAP provider failed', {
-              component: 'Auth',
-              provider: ldapProvider.name,
-              error: error.message
+          }
+
+          if (!result) {
+            recordAuthEvent('ldap', 'login_failure');
+            logAudit({
+              req,
+              action: 'login',
+              resource: 'auth',
+              result: 'failure',
+              summary: 'LDAP login failed',
+              source: 'web',
+              actor: {
+                id: sanitizedUsername,
+                username: sanitizedUsername,
+                authenticated: false
+              }
             });
-            // Continue to next provider
+            throw refusal(401, 'Invalid credentials');
           }
         }
-
-        if (!result) {
-          recordAuthEvent('ldap', 'login_failure');
-          logAudit({
-            req,
-            action: 'login',
-            resource: 'auth',
-            result: 'failure',
-            summary: 'LDAP login failed',
-            source: 'web',
-            actor: {
-              id: sanitizedUsername,
-              username: sanitizedUsername,
-              authenticated: false
-            }
-          });
-          throw refusal(401, 'Invalid credentials');
+      } finally {
+        if (reservation) {
+          await settleLoginAttempt(lockKey, lockout, Boolean(result), reservation.shared);
         }
       }
 

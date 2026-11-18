@@ -30,9 +30,10 @@ function createTestApp(platformConfig) {
 }
 
 const login = (app, prefix) =>
-  prefix
+  (prefix
     ? request(app).post(`${prefix}/api/auth/local/login`).set('X-Forwarded-Prefix', prefix)
-    : request(app).post('/api/auth/local/login');
+    : request(app).post('/api/auth/local/login')
+  ).send({ username: 'alice' });
 
 describe('a forwarded base path and the rate limiters', () => {
   test('a request sent under a prefix counts against the auth limiter', async () => {

@@ -83,6 +83,25 @@ async function runPrimary() {
     assert.strictEqual((await ask(b, { step: 'hit', store: 'auth', key: 'ip-1' })).totalHits, 1);
   });
 
+  await check('the primary holds at most MAX_COUNTERS, dropping the oldest', async () => {
+    const store = await import('../utils/clusterRateLimitStore.js');
+    store.resetClusterRateLimitCounters();
+    const windowMs = 900000;
+    for (let i = 0; i <= store.MAX_COUNTERS + 10; i++) {
+      store.incrementInPrimary({ storeId: 'spray', key: `ip|user-${i}`, windowMs });
+    }
+    assert.strictEqual(store.clusterRateLimitCounterCount(), store.MAX_COUNTERS);
+    const newest = `ip|user-${store.MAX_COUNTERS + 10}`;
+    assert.strictEqual(
+      store.incrementInPrimary({ storeId: 'spray', key: newest, windowMs }).totalHits,
+      2
+    );
+    assert.strictEqual(
+      store.incrementInPrimary({ storeId: 'spray', key: 'ip|user-0', windowMs }).totalHits,
+      1
+    );
+  });
+
   for (const worker of workers) worker.kill();
   if (failed) {
     console.error('\n❌ cluster rate limit store tests failed');

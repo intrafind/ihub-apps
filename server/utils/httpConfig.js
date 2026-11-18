@@ -165,10 +165,26 @@ export function isSsrfTrustedHost(hostname) {
 
 // Hosts already warned about, so a per-request check does not repeat the same
 // warning on every LLM call. Cleared when the whitelist changes, so a new
-// configuration warns again. ponytail: grows with distinct hosts, which are few.
+// configuration warns again. Capped, because crawls reach any number of hosts:
+// past the cap the oldest host is forgotten (and may be warned about again).
+const MAX_WARNED_HOSTS = 1000;
 const warnedNotWhitelisted = new Set();
 const warnedEmptyWhitelist = new Set();
 let warnedForWhitelist = '';
+
+/**
+ * Whether this is the first warning about `hostname` in `warned`; remembers it.
+ *
+ * @param {Set<string>} warned
+ * @param {string} hostname
+ * @returns {boolean}
+ */
+function firstWarning(warned, hostname) {
+  if (warned.has(hostname)) return false;
+  warned.add(hostname);
+  if (warned.size > MAX_WARNED_HOSTS) warned.delete(warned.values().next().value);
+  return true;
+}
 
 /**
  * Determine if SSL certificate validation should be ignored for a specific URL
@@ -206,8 +222,7 @@ export function shouldIgnoreSSLForURL(url, sslConfig = null) {
   // Operators upgrading from older versions used to rely on a global bypass when whitelist
   // was empty — that behavior was removed for security. This warning makes the silent skip visible.
   if (!config.domainWhitelist || config.domainWhitelist.length === 0) {
-    const firstTime = !warnedEmptyWhitelist.has(hostname);
-    if (firstTime) warnedEmptyWhitelist.add(hostname);
+    const firstTime = firstWarning(warnedEmptyWhitelist, hostname);
     logger[firstTime ? 'warn' : 'debug'](
       'SSL bypass not applied: ignoreInvalidCertificates is true but ssl.domainWhitelist is empty. Add the LLM hostname to ssl.domainWhitelist in platform.json.',
       { component: 'HttpConfig', hostname }
@@ -230,8 +245,7 @@ export function shouldIgnoreSSLForURL(url, sslConfig = null) {
     });
   } else {
     // Called on every outbound request: warn once per host per process, debug after.
-    const firstTime = !warnedNotWhitelisted.has(hostname);
-    if (firstTime) warnedNotWhitelisted.add(hostname);
+    const firstTime = firstWarning(warnedNotWhitelisted, hostname);
     logger[firstTime ? 'warn' : 'debug'](
       'SSL bypass not applied: hostname is not in ssl.domainWhitelist. Self-signed certs will be rejected for this host.',
       { component: 'HttpConfig', hostname, domainWhitelist: config.domainWhitelist }

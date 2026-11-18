@@ -256,8 +256,8 @@ requests per minute on the general API.
 | `rateLimit.publicApi` / `adminApi` / `inferenceApi` `.limit` | 300 per minute | signed-in user (`keyBy: "user"`) | 6× the busiest measured user; NAT does not matter any more                              |
 | `…anonymousLimit`                        | 500 per minute                | IP address                         | requests without a sign-in                                                                |
 | `rateLimit.authApi.limit`                | 30 per 15 minutes             | IP address and username            | one person's retries; the account lockout stops guessing after 5 failures                 |
-| `rateLimit.authApi.perIpLimit`           | 5,000 per 15 minutes          | IP address                         | a login wave of 30% of 10,000 employees in 15 minutes is 3,000 sign-ins from one address |
-| `requestConcurrency`                     | 25                            | model, unless it sets `concurrency` | one GPU served about 30 busy users at once (see [GPU](#gpu)); a small backend or a rate-limited cloud key needs its own lower `concurrency` |
+| `rateLimit.authApi.perIpLimit`           | 300 failed per 15 minutes     | IP address                         | counts failed sign-ins only, so a login wave of 3,000 successful sign-ins from one NAT address passes; stops password spraying over many usernames |
+| `requestConcurrency`                     | 25                            | model or other throttled id (tools, `read_url`, `project_crawl`), unless it sets `concurrency` | one GPU served about 30 busy users at once (see [GPU](#gpu)); a small backend or a rate-limited cloud key needs its own lower `concurrency` |
 
 - **Per-user limits count per worker,** so with `WORKERS=6` a user can make up to 6 × 300 requests
   per minute. The sign-in limits count across all workers.

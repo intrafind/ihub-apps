@@ -72,3 +72,18 @@ test('warns again about a host after the whitelist changed', () => {
     warn.mockRestore();
   }
 });
+
+test('remembers at most 1,000 warned hosts, forgetting the oldest', () => {
+  setSsl({ ignoreInvalidCertificates: true, domainWhitelist: ['capped.internal'] });
+  const warn = jest.spyOn(logger, 'warn').mockImplementation(() => {});
+  try {
+    for (let i = 0; i <= 1000; i++) skipsVerification(`https://crawl-${i}.example/`);
+    warn.mockClear();
+    skipsVerification('https://crawl-1000.example/');
+    expect(warn).not.toHaveBeenCalled();
+    skipsVerification('https://crawl-0.example/');
+    expect(warn).toHaveBeenCalledTimes(1);
+  } finally {
+    warn.mockRestore();
+  }
+});

@@ -2770,8 +2770,8 @@
           "ip": "Client-Adresse"
         },
         "anonymousLimit": "Anfragen pro Adresse (nicht angemeldet)",
-        "perIpLimit": "Anfragen pro Adresse (alle Benutzernamen)",
-        "perAddress": "Die Grenzen für Web-App, Admin und Inference zählen pro angemeldetem Benutzer, Anfragen ohne Anmeldung pro Client-Adresse. Die Anmeldung zählt pro Client-Adresse und Benutzername, mit einer höheren Obergrenze pro Adresse. Jeder Server-Worker zählt für sich, mit mehreren Workern kann ein Benutzer also entsprechend ein Vielfaches der Grenze senden. Hinter einem Reverse Proxy die Anzahl der Proxy-Hops einstellen (trustProxy in platform.json), sonst teilen sich alle anonymen Anfragen und Anmeldungen die Adresse des Proxys.",
+        "perIpLimit": "Fehlgeschlagene Anmeldungen pro Adresse (alle Benutzernamen)",
+        "perAddress": "Die Grenzen für Web-App, Admin und Inference zählen pro angemeldetem Benutzer, Anfragen ohne Anmeldung pro Client-Adresse. Die Anmeldung zählt pro Client-Adresse und Benutzername, mit einer Obergrenze für fehlgeschlagene Anmeldungen pro Adresse. Jeder Server-Worker zählt für sich, mit mehreren Workern kann ein Benutzer also entsprechend ein Vielfaches der Grenze senden. Hinter einem Reverse Proxy die Anzahl der Proxy-Hops einstellen (trustProxy in platform.json), sonst teilen sich alle anonymen Anfragen und Anmeldungen die Adresse des Proxys.",
         "save": "Ratenbegrenzung speichern",
         "saving": "Wird gespeichert...",
         "saved": "Ratenbegrenzung gespeichert. Starten Sie den Server neu, um sie anzuwenden.",

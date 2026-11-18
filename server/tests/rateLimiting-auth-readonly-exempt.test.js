@@ -98,9 +98,13 @@ describe('read-only /api/auth endpoints are exempt from the credential limiter',
     const app = createTestApp(STRICT);
 
     for (let i = 0; i < 3; i++) {
-      expect((await request(app).post('/api/auth/local/login')).status).toBe(200);
+      expect(
+        (await request(app).post('/api/auth/local/login').send({ username: 'alice' })).status
+      ).toBe(200);
     }
-    expect((await request(app).post('/api/auth/local/login')).status).toBe(429);
+    expect(
+      (await request(app).post('/api/auth/local/login').send({ username: 'alice' })).status
+    ).toBe(429);
   });
 
   test('status traffic does not consume the credential window', async () => {
@@ -111,9 +115,13 @@ describe('read-only /api/auth endpoints are exempt from the credential limiter',
     }
     // The login budget must be untouched by the status polling above.
     for (let i = 0; i < 3; i++) {
-      expect((await request(app).post('/api/auth/local/login')).status).toBe(200);
+      expect(
+        (await request(app).post('/api/auth/local/login').send({ username: 'alice' })).status
+      ).toBe(200);
     }
-    expect((await request(app).post('/api/auth/local/login')).status).toBe(429);
+    expect(
+      (await request(app).post('/api/auth/local/login').send({ username: 'alice' })).status
+    ).toBe(429);
   });
 
   test('read-only auth endpoints remain bounded by the public limiter', async () => {
@@ -194,6 +202,7 @@ describe('trustProxy decides the rate-limit identity', () => {
       (
         await request(app)
           .post('/api/auth/local/login')
+          .send({ username: 'alice' })
           .set('X-Forwarded-For', xff.replace('%d', '1'))
       ).status
     ).toBe(200);
@@ -201,6 +210,7 @@ describe('trustProxy decides the rate-limit identity', () => {
       (
         await request(app)
           .post('/api/auth/local/login')
+          .send({ username: 'alice' })
           .set('X-Forwarded-For', xff.replace('%d', '2'))
       ).status
     ).toBe(200);
@@ -209,6 +219,7 @@ describe('trustProxy decides the rate-limit identity', () => {
       (
         await request(app)
           .post('/api/auth/local/login')
+          .send({ username: 'alice' })
           .set('X-Forwarded-For', xff.replace('%d', '3'))
       ).status
     ).toBe(429);
@@ -225,6 +236,7 @@ describe('trustProxy decides the rate-limit identity', () => {
         (
           await request(app)
             .post('/api/auth/local/login')
+            .send({ username: 'alice' })
             .set('X-Forwarded-For', xff.replace('%d', client))
         ).status
       ).toBe(200);
