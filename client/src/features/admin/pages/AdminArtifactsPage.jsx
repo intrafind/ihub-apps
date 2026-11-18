@@ -160,22 +160,22 @@ function AdminArtifactsPage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
   const [invalid, setInvalid] = useState([]);
-  // The ETag of the settings the form was loaded from (or last saved as): sent
-  // as If-Match, so a save over someone else's newer change is refused.
-  const revisionRef = useRef(null);
+  // The settings as the server last answered them (load or save). A save sends
+  // the loaded values of the fields it changes as `expected`, so a field
+  // someone else changed meanwhile is refused instead of overwritten; other
+  // fields can still be saved.
+  const loadedRef = useRef(null);
 
   const apply = config => {
     const loaded = formOf(config);
+    loadedRef.current = config;
     setForm(loaded);
     setSaved(loaded);
     setLibraries(Array.isArray(config.libraries) ? config.libraries : []);
   };
 
-  const fetchConfig = async () => {
-    const response = await makeAdminApiCall('/admin/artifacts/config', { method: 'GET' });
-    revisionRef.current = response.headers?.etag || null;
-    return response.data;
-  };
+  const fetchConfig = async () =>
+    (await makeAdminApiCall('/admin/artifacts/config', { method: 'GET' })).data;
 
   // No form and no Save until the settings loaded: saving the empty form after
   // a failed load would overwrite the stored settings.
@@ -226,12 +226,13 @@ function AdminArtifactsPage() {
     setMessage(null);
     const submitted = form;
     try {
+      const loaded = loadedRef.current || {};
+      const expected = Object.fromEntries(Object.keys(body).map(key => [key, loaded[key]]));
       const response = await makeAdminApiCall('/admin/artifacts/config', {
         method: 'PUT',
-        body,
-        headers: revisionRef.current ? { 'If-Match': revisionRef.current } : {}
+        body: { ...body, expected }
       });
-      revisionRef.current = response.headers?.etag || null;
+      loadedRef.current = response.data;
       // The answer is the new saved state. Edits made while the save was on
       // its way stay in the form (and keep it dirty).
       const nowSaved = formOf(response.data);

@@ -94,29 +94,35 @@ describe('Admin artifact settings', () => {
     ]);
   });
 
-  it('refuses a save over a newer change (If-Match), and accepts one from the current read', async () => {
+  it('refuses a field someone else changed meanwhile, and saves unrelated fields', async () => {
     const read = await request(app).get('/api/admin/artifacts/config').expect(200);
-    const etag = read.headers.etag;
-    expect(etag).toMatch(/^"[0-9a-f]{32}"$/);
+    const loaded = read.body;
 
     // Someone else removes a host in between.
-    await request(app).put('/api/admin/artifacts/config').send({ scriptHosts: [] }).expect(200);
+    await request(app)
+      .put('/api/admin/artifacts/config')
+      .send({ scriptHosts: [], expected: { scriptHosts: loaded.scriptHosts } })
+      .expect(200);
+
+    // A stale replacement of the same field is refused, nothing written.
     const before = structuredClone(state.platform);
     const stale = await request(app)
       .put('/api/admin/artifacts/config')
-      .set('If-Match', etag)
-      .send({ scriptHosts: ['cdn.jsdelivr.net', 'unpkg.com'] })
+      .send({
+        scriptHosts: ['cdn.jsdelivr.net', 'unpkg.com'],
+        expected: { scriptHosts: loaded.scriptHosts }
+      })
       .expect(412);
     expect(stale.body.code).toBe('PRECONDITION_FAILED');
+    expect(stale.body.details).toEqual({ fields: ['scriptHosts'] });
     expect(state.platform).toEqual(before);
 
-    const fresh = await request(app).get('/api/admin/artifacts/config').expect(200);
-    const saved = await request(app)
+    // A change of another field from the same old read still goes through.
+    await request(app)
       .put('/api/admin/artifacts/config')
-      .set('If-Match', fresh.headers.etag)
-      .send({ maxPerBatch: 3 })
+      .send({ maxPerBatch: 3, expected: { maxPerBatch: loaded.maxPerBatch } })
       .expect(200);
-    expect(saved.headers.etag).not.toBe(fresh.headers.etag);
+    expect(state.platform.artifacts.maxPerBatch).toBe(3);
     expect(state.platform.artifacts.scriptHosts).toEqual([]);
   });
 
@@ -128,7 +134,8 @@ describe('Admin artifact settings', () => {
     [{ maxPerBatch: 1.5 }, 400, /maxPerBatch/],
     [{ libraryKit: { enabled: 'yes' } }, 400, /libraryKit\.enabled/],
     [{ libraryKit: { enabled: true, extra: 1 } }, 400, /libraryKit/],
-    [{ unknown: true }, 400, /unknown|Unrecognized/i]
+    [{ unknown: true }, 400, /unknown|Unrecognized/i],
+    [{ maxBytes: 1, expected: { maxBytes: 'x' } }, 400, /expected\.maxBytes/]
   ])('refuses %j', async (body, status, detail) => {
     const before = structuredClone(state.platform);
     const res = await request(app).put('/api/admin/artifacts/config').send(body).expect(status);

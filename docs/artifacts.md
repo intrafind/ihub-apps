@@ -187,9 +187,10 @@ limits, the CDN hosts (with "Remove all (offline)" and "Use the public
 defaults") and the library kit, whose table shows each library's version,
 license, size and whether its file passed the checksum check. A `PUT` changes
 only the fields it names; a host that is not a plain host name is refused
-rather than silently dropped. The `GET` answers an `ETag`; the page sends it as
-`If-Match`, and a save over someone else's newer change is refused with `412
-PRECONDITION_FAILED`, the admin's edits kept.
+rather than silently dropped. With each changed field the page sends the value
+it loaded (`expected`); a field someone else changed meanwhile is refused with
+`412 PRECONDITION_FAILED` (`details.fields`), the admin's edits kept, while a
+save of other fields goes through.
 
 Migration V106 seeds the block into existing installations at its defaults, so
 an upgrade changes nothing on its own. Migration V190 adds the two ZIP limits

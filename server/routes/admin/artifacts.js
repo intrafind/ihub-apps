@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import logger from '../../utils/logger.js';
@@ -27,18 +26,32 @@ import { bareScriptHost, normalizeScriptHosts } from '../../../shared/artifactPr
 
 const LIMIT = z.number().int().min(-1).max(Number.MAX_SAFE_INTEGER);
 
+const FIELDS = {
+  enabled: z.boolean(),
+  maxBytes: LIMIT,
+  maxPerBatch: LIMIT,
+  maxZipFiles: LIMIT,
+  maxZipBytes: LIMIT,
+  scriptHosts: z.array(z.string().max(300)).max(50),
+  libraryKit: z.object({ enabled: z.boolean() }).strict()
+};
+
 const artifactsBodySchema = z
   .object({
-    enabled: z.boolean(),
-    maxBytes: LIMIT,
-    maxPerBatch: LIMIT,
-    maxZipFiles: LIMIT,
-    maxZipBytes: LIMIT,
-    scriptHosts: z.array(z.string().max(300)).max(50),
-    libraryKit: z.object({ enabled: z.boolean() }).strict()
+    ...FIELDS,
+    // The values the form loaded for the fields it changes. A field whose
+    // stored value no longer matches was changed by someone else meanwhile:
+    // the save is refused instead of silently undoing that change. Fields
+    // the request does not change are not compared.
+    expected: z.object(FIELDS).partial().strict()
   })
   .partial()
   .strict();
+
+/** Whether two settings values are the same (arrays and objects by content). */
+function sameValue(a, b) {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
 
 /** The settings as the admin page shows them, with the kit's contents. */
 function configResponse(platform) {
@@ -46,22 +59,8 @@ function configResponse(platform) {
   return { ...settings, libraries: artifactLibraryList() };
 }
 
-/**
- * The revision of the artifact settings, answered as `ETag`: a hash of the
- * settings in force. A PUT with `If-Match` is refused when they changed since
- * that read, so a form loaded before someone else's save cannot put back a
- * host the other admin removed.
- */
-function revisionOf(platform) {
-  const digest = createHash('sha256')
-    .update(JSON.stringify(artifactSettings(platform)))
-    .digest('hex');
-  return `"${digest.slice(0, 32)}"`;
-}
-
-/** Answer the settings with their revision. */
+/** Answer the settings in force. */
 function sendConfig(res, platform) {
-  res.setHeader('ETag', revisionOf(platform));
   res.setHeader('Cache-Control', 'no-store');
   res.json(configResponse(platform));
 }
@@ -144,19 +143,18 @@ export default function registerAdminArtifactRoutes(app) {
    *                 type: object
    *                 properties:
    *                   enabled: { type: boolean }
-   *     parameters:
-   *       - in: header
-   *         name: If-Match
-   *         required: false
-   *         schema: { type: string }
-   *         description: The ETag of the GET the form was loaded from
+   *               expected:
+   *                 type: object
+   *                 description: >-
+   *                   The values the form loaded for the fields it changes (same keys). A
+   *                   field whose stored value differs answers 412; others are not compared.
    *     responses:
    *       200:
-   *         description: The settings now in force (same shape as the GET), with their new ETag
+   *         description: The settings now in force (same shape as the GET)
    *       400:
    *         description: Invalid settings (`VALIDATION_FAILED`, `BAD_REQUEST`)
    *       412:
-   *         description: PRECONDITION_FAILED, the settings changed since the read named in If-Match
+   *         description: PRECONDITION_FAILED, a changed field no longer has the expected value (`details.fields`)
    */
   app.put(buildServerPath('/api/admin/artifacts/config'), adminAuth, async (req, res) => {
     const parsed = artifactsBodySchema.safeParse(req.body ?? {});
@@ -167,7 +165,7 @@ export default function registerAdminArtifactRoutes(app) {
         { details: parsed.error.issues }
       );
     }
-    const changes = parsed.data;
+    const { expected = {}, ...changes } = parsed.data;
     if (changes.scriptHosts) {
       // Every entry must survive normalization: a silently dropped host would
       // leave the admin believing a CDN is allowed when it is not.
@@ -183,12 +181,16 @@ export default function registerAdminArtifactRoutes(app) {
       changes.scriptHosts = hosts;
     }
 
-    const expected = req.headers['if-match'];
     await updatePlatform(platform => {
-      if (expected && expected !== revisionOf(platform)) {
+      const stored = artifactSettings(platform);
+      const stale = Object.keys(changes).filter(
+        key => key in expected && !sameValue(stored[key], expected[key])
+      );
+      if (stale.length) {
         throw new ServiceError(
           'PRECONDITION_FAILED',
-          'The artifact settings changed since they were loaded. Reload them and make your change again.'
+          `Changed by someone else since they were loaded: ${stale.join(', ')}. Reload the settings and make your change again.`,
+          { details: { fields: stale } }
         );
       }
       const current = platform.artifacts || {};
