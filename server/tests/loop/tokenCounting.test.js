@@ -232,6 +232,42 @@ describe('stored counts in the prompt', () => {
     assert.ok(value > 18_500);
   });
 
+  it('cuts 100 known pieces out in one pass, with the count the piece-by-piece cut gave', () => {
+    // The cut before the cursor walk: each piece searched in, and cut out of, the whole rest.
+    const pieceByPiece = (text, parts, count) => {
+      let rest = text;
+      let known = 0;
+      for (const part of parts) {
+        const at = rest.indexOf(part.text);
+        if (at === -1) continue;
+        known += part.tokens;
+        rest = rest.slice(0, at) + rest.slice(at + part.text.length);
+      }
+      return known + count(rest);
+    };
+    const docs = Array.from({ length: 100 }, (_, i) => prose(10_000, 200 + i));
+    const parts = docs.map((text, i) => ({ text, tokens: 2_000 + i }));
+    const text = `You are x.\n${docs.map((d, i) => `<document id="${i}">\n${d}\n</document>`).join('\n')}`;
+    // An out-of-order piece and one that is not there are handled too.
+    const shuffled = [
+      parts[50],
+      ...parts.slice(0, 50),
+      ...parts.slice(51),
+      { text: 'absent', tokens: 7 }
+    ];
+    const count = t => estimateTokens(t);
+    assert.equal(
+      estimateTokensWithKnown(text, shuffled, count),
+      pieceByPiece(text, shuffled, count)
+    );
+    estimateTokensWithKnown(`${text} warm`, parts, count);
+    const started = performance.now();
+    const value = estimateTokensWithKnown(`${text} 1`, parts, count);
+    const ms = performance.now() - started;
+    assert.equal(value, pieceByPiece(`${text} 1`, parts, count));
+    assert.ok(ms < 8, `100 pieces took ${ms.toFixed(2)} ms`);
+  });
+
   it('remembers a 300 KB text by its hash', () => {
     const text = prose(300_000, 4);
     const first = tokenized(() => estimateTokens(text));

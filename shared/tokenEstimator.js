@@ -276,9 +276,26 @@ export function copyKnownTokenParts(from, to) {
 export function estimateTokensWithKnown(text, parts, count = estimateTokens) {
   if (typeof text !== 'string' || !text) return 0;
   if (!parts?.length) return count(text);
-  let rest = text;
+  // The pieces come in the order the text holds them: one pass with a cursor
+  // keeps the text between them, joined once. A piece not found after the
+  // cursor (out of order) is looked for in what is left afterwards.
   let known = 0;
+  let from = 0;
+  const kept = [];
+  const missed = [];
   for (const part of parts) {
+    const at = text.indexOf(part.text, from);
+    if (at === -1) {
+      missed.push(part);
+      continue;
+    }
+    known += part.tokens;
+    kept.push(text.slice(from, at));
+    from = at + part.text.length;
+  }
+  kept.push(text.slice(from));
+  let rest = kept.join('');
+  for (const part of missed) {
     const at = rest.indexOf(part.text);
     if (at === -1) continue;
     known += part.tokens;
