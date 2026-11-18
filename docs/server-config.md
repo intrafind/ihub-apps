@@ -110,7 +110,7 @@ For Model Context Protocol (MCP) servers, see [MCP Integration](mcp-integration.
 | `NO_VERSION_CHECK`         | Skip the release lookup against `api.github.com` entirely (alias: `IHUB_NO_VERSION_CHECK`). Truthy: `1`, `true`, `yes`, `on`. See [Update Procedures](INSTALLATION.md#update-procedures). | – |
 | `VERSION_CHECK_TIMEOUT_MS` | Abort deadline in milliseconds for the release lookup (alias: `IHUB_VERSION_CHECK_TIMEOUT_MS`). Clamped to 500–60000. | `1000` |
 
-The concurrency of outbound requests is configured via `requestConcurrency` in `contents/config/platform.json` and can be overridden per model or tool. If this value is omitted or below `1`, requests are not throttled.
+The concurrency of outbound requests is configured via `requestConcurrency` in `contents/config/platform.json` (default `25` calls per model at once) and can be overridden per model (`concurrency`) or tool. If the value is omitted or below `1`, requests are not throttled.
 The delay between requests can be adjusted with `requestDelayMs` in the same configuration files. A value of `0` disables the delay.
 
 ### Example: Enabling Proxy Authentication

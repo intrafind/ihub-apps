@@ -27,7 +27,11 @@ import { areAppIntegrationsEnabled } from './integrationRegistry.js';
 import { getDefinitionTypes } from './services/integrations/integrationTypes.js';
 import { findByIdCaseInsensitive } from './utils/resourceLookup.js';
 import { resolveEnvVarsInObject } from './utils/envVars.js';
-import { applyIhubEnvOverrides, ENV_VAR_SKIP_PATHS_BY_KEY } from './utils/configOverrides.js';
+import {
+  applyIhubEnvOverrides,
+  ENV_VAR_SKIP_PATHS_BY_KEY,
+  resolvesEnvVars
+} from './utils/configOverrides.js';
 import { decryptCredentials, decryptPlatformSecrets } from './utils/configSecrets.js';
 import { etagForIds } from './utils/etag.js';
 
@@ -433,6 +437,11 @@ class ConfigCache {
    * @private
    */
   _resolveEntry(key, data) {
+    // User-written data (users.json, OAuth clients, prompts, …) is cached
+    // verbatim; env placeholders are resolved only in admin-authored config.
+    // See resolvesEnvVars().
+    if (!resolvesEnvVars(key)) return { data, etag: this.generateETag(data) };
+
     // Resolve environment variables in the data, opting specific fields out
     // when they contain user-data templates instead of env var references.
     const resolvedData = resolveEnvVarsInObject(data, {

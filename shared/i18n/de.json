@@ -2752,7 +2752,7 @@
       },
       "rateLimits": {
         "title": "Ratenbegrenzung",
-        "description": "Wie viele Anfragen eine Client-Adresse senden darf, bevor sie \"429 Too Many Requests\" erhält. Änderungen gelten nach einem Neustart des Servers.",
+        "description": "Wie viele Anfragen ein Benutzer oder eine Client-Adresse senden darf, bevor er oder sie \"429 Too Many Requests\" erhält. Änderungen gelten nach einem Neustart des Servers.",
         "restartRequired": "Die gespeicherten Grenzen weichen von denen ab, mit denen der Server läuft. Starten Sie den Server neu, um sie anzuwenden.",
         "runningNow": "Aktuell aktiv: {{limit}} pro {{minutes}} Min., {{counts}}",
         "limit": "Anfragen",
@@ -2763,13 +2763,20 @@
           "failed": "Nur fehlgeschlagene",
           "successful": "Nur erfolgreiche"
         },
-        "perAddress": "Die Grenzen zählen pro Client-Adresse. Hinter einem Reverse Proxy die Anzahl der Proxy-Hops einstellen (trustProxy in platform.json), sonst teilen sich alle Benutzer die Adresse des Proxys und einen Zähler.",
+        "keyByLabel": "Zählen pro",
+        "keyBy": {
+          "user": "Angemeldetem Benutzer",
+          "ip": "Client-Adresse"
+        },
+        "anonymousLimit": "Anfragen pro Adresse (nicht angemeldet)",
+        "perIpLimit": "Anfragen pro Adresse (alle Benutzernamen)",
+        "perAddress": "Die Grenzen für Web-App, Admin und Inference zählen pro angemeldetem Benutzer, Anfragen ohne Anmeldung pro Client-Adresse. Die Anmeldung zählt pro Client-Adresse und Benutzername, mit einer höheren Obergrenze pro Adresse. Jeder Server-Worker zählt für sich, mit mehreren Workern kann ein Benutzer also entsprechend ein Vielfaches der Grenze senden. Hinter einem Reverse Proxy die Anzahl der Proxy-Hops einstellen (trustProxy in platform.json), sonst teilen sich alle anonymen Anfragen und Anmeldungen die Adresse des Proxys.",
         "save": "Ratenbegrenzung speichern",
         "saving": "Wird gespeichert...",
         "saved": "Ratenbegrenzung gespeichert. Starten Sie den Server neu, um sie anzuwenden.",
         "saveError": "Die Ratenbegrenzung konnte nicht gespeichert werden",
         "loadError": "Die Ratenbegrenzung konnte nicht geladen werden",
-        "invalid": "{{name}}: Geben Sie eine ganze Zahl von 1 bis 1.000.000 Anfragen und einen Zeitraum von einer Sekunde bis 1.440 Minuten ein.",
+        "invalid": "{{name}}: Geben Sie ganze Zahlen von 1 bis 1.000.000 Anfragen und einen Zeitraum von einer Sekunde bis 1.440 Minuten ein.",
         "limiters": {
           "publicApi": {
             "name": "Web-App-API",
@@ -2781,7 +2788,7 @@
           },
           "authApi": {
             "name": "Anmeldung",
-            "description": "Anmeldung per Passwort, LDAP, NTLM und Teams. Statusabfragen und SSO-Weiterleitungen zählen nicht."
+            "description": "Anmeldung per Passwort, LDAP, NTLM und Teams, gezählt pro Client-Adresse und Benutzername. Statusabfragen und SSO-Weiterleitungen zählen nicht."
           },
           "oauthApi": {
             "name": "OAuth-Server",
