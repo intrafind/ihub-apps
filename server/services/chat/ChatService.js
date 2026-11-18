@@ -535,6 +535,12 @@ class ChatService {
    *   than {@link DURABLE_TURN_WALL_CLOCK_MS}.
    * @param {string} [params.clientTimezone] - The user's IANA timezone, handed to the tools
    *   (the scheduling tools read it) and to the scheduling note in the system prompt.
+   * @param {Object|null} [params.priorContext] - The `context` stored with the last answer
+   *   of the history the prompt holds: the context figure starts from it instead of
+   *   counting the history again (see `loop/contextTracker.js`).
+   * @param {boolean} [params.promptResent] - The next turn resends this turn's prompt as it
+   *   is (whole history, nothing left out, no context only this turn carries): only then is
+   *   the stored context one a next turn can start from.
    * @returns {Promise<Object>} `{ runId, status, content, finishReason, usage, messages, knowledgeSources,
    *   pendingInteraction?, toolName?, error?, errorInfo?, structuredOutput?, refusal? }`
    */
@@ -563,7 +569,9 @@ class ChatService {
     trigger = null,
     maxWallClockMs = null,
     clientTimezone = null,
-    outputId = undefined
+    outputId = undefined,
+    priorContext = null,
+    promptResent = false
   }) {
     const {
       app,
@@ -823,7 +831,16 @@ class ChatService {
     // join the pictures the model generated.
     const generatedImages = [];
     // How full the model's context window is, reported live and with the end of the run.
-    const contextTracker = createContextTracker(model);
+    // It starts from the context stored with the previous answer, unless the
+    // turn continues a stored transcript (an approval or a connect), which that
+    // context does not describe.
+    // A continued transcript's first count holds the tool calls and results of
+    // before the pause, which no later turn resends: no next turn starts from it.
+    const continuesTranscript = Boolean(toolApproval?.resume || connectResume);
+    const contextTracker = createContextTracker(model, {
+      prior: continuesTranscript ? null : priorContext,
+      resent: promptResent && !continuesTranscript
+    });
     const turnSeam = chatTurnSeam({
       chatId,
       buildLogData: log,

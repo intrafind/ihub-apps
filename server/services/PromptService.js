@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { getLocalizedContent } from '../../shared/localize.js';
-import { renderUserMessage } from '../../shared/promptContext.js';
+import { normalizeFiles, renderUserMessage } from '../../shared/promptContext.js';
+import { setKnownTokenParts } from '../../shared/tokenEstimator.js';
 import configCache from '../configCache.js';
 import { isFeatureEnabled } from '../featureRegistry.js';
 import { describeSkillCatalog, prepareActiveSkills } from './skillAccess.js';
@@ -211,13 +212,14 @@ class PromptService {
    * @param {Object|null} app - App with its link fields (`projects`, `_projectId`, …)
    * @param {{user: Object|null, chatId: string|null, lang: string, modelName: string|null,
    *   scopeKey: string|null, question?: string|null}} ctx - `scopeKey` is what the knowledge
-   *   scope is noted under; `question` is what the turn asks (`focusQueryFromMessages`)
+   *   scope is noted under; `question` is what the turn asks (`focusQueryFromMessages`);
+   *   `knownParts` receives the injected document texts with their stored counts
    * @returns {Promise<string>}
    */
   async _applyProjects(
     systemPrompt,
     app,
-    { user, chatId, lang, modelName, scopeKey, question = null }
+    { user, chatId, lang, modelName, scopeKey, question = null, knownParts = null }
   ) {
     const placeholder = '{{projects}}';
     const hasPlaceholder = systemPrompt.includes(placeholder);
@@ -245,7 +247,7 @@ class PromptService {
       question
     });
     const instructions = renderProjectInstructions(plan);
-    const block = renderProjectsBlock(plan);
+    const block = renderProjectsBlock(plan, knownParts);
     let out = systemPrompt;
     if (instructions) out = out.trim() ? `${out}\n\n${instructions}` : instructions;
     if (hasPlaceholder) out = out.replace(placeholder, () => block);
@@ -502,6 +504,14 @@ class PromptService {
       if (msg.imageData) processedMsg.imageData = msg.imageData;
       if (msg.fileData) processedMsg.fileData = msg.fileData;
       if (msg.audioData) processedMsg.audioData = msg.audioData;
+      // A stored file's text was counted when it was stored: the context
+      // figure adds that count instead of counting the text again.
+      setKnownTokenParts(
+        processedMsg,
+        normalizeFiles(msg.fileData)
+          .filter(file => file.omitted !== true && typeof file.content === 'string')
+          .map(file => ({ text: file.content.trim(), tokens: file.tokens }))
+      );
       return processedMsg;
     });
 
@@ -561,8 +571,11 @@ class PromptService {
       // or left to the knowledge tools (spec 2 §6). Their instructions go
       // before the knowledge block; the block replaces `{{projects}}` or is
       // appended, exactly as sources were.
+      // The project documents' texts with their stored counts (see setKnownTokenParts).
+      const knownSystemParts = [];
       try {
         systemPrompt = await this._applyProjects(systemPrompt, app, {
+          knownParts: knownSystemParts,
           user,
           chatId,
           lang,
@@ -651,7 +664,9 @@ class PromptService {
         }
       }
 
-      llmMessages.unshift({ role: 'system', content: systemPrompt });
+      const systemMessage = { role: 'system', content: systemPrompt };
+      setKnownTokenParts(systemMessage, knownSystemParts);
+      llmMessages.unshift(systemMessage);
     }
 
     return llmMessages;

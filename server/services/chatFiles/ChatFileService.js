@@ -351,6 +351,9 @@ export function toPromptFileData(storedFile) {
     chatFile: true,
     origin: CHAT_FILE_ORIGINS.includes(storedFile.origin) ? storedFile.origin : 'upload',
     ...(storedFile.meta ? { meta: storedFile.meta } : {}),
+    // Counted once when the text was stored: the prompt's context figure adds
+    // it instead of counting the text again (see `setKnownTokenParts`).
+    ...(Number.isFinite(storedFile.tokens) ? { tokens: storedFile.tokens } : {}),
     fileSize: storedFile.bytes
   };
 }
@@ -741,7 +744,9 @@ export async function prepareTurnFiles({
             ...(meta ? { meta } : {}),
             canUseAsTemplate: storedDescriptor.canUseAsTemplate === true,
             hasOriginal: storedDescriptor.hasOriginal === true,
-            chatFile: true
+            chatFile: true,
+            // The count stored with the text, never one the request brought.
+            tokens: storedDescriptor.tokens
           });
           descriptors.push(describeStored(storedDescriptor));
           continue;
@@ -760,7 +765,10 @@ export async function prepareTurnFiles({
     }
 
     // Fallback when storage is unavailable or refused the inline file: keep inline for Turn 1.
-    resolvedPromptFiles.push(file);
+    // Without the token count the request may have brought: only a count made
+    // when the text was stored is trusted (see `setKnownTokenParts`).
+    const { tokens: _clientCount, ...inlineFile } = file;
+    resolvedPromptFiles.push(inlineFile);
     descriptors.push({
       type: String(mimeType),
       name: String(name),

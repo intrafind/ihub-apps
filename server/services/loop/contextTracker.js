@@ -11,8 +11,12 @@
  *
  * The count is anchored on what the provider reports for the last model call
  * (`promptTokens`, exact). What was added to the transcript since — the
- * model's reply, tool results — is estimated. Before the first model call, and
- * for a provider that reports no usage, the whole transcript is estimated.
+ * model's reply, tool results — is estimated. Before the first model call the
+ * turn starts from the context stored with the previous answer and counts only
+ * the system prompt and what came after that answer; without one (a first
+ * turn, another model, a prompt the next turn does not resend as it was), the
+ * whole transcript is estimated. Text whose count was stored with it (attachments,
+ * project documents) is never tokenized again.
  *
  * Two figures come out of it. The live one (`estimate` / `recordStep` / `last`)
  * is the window of the call in progress, tool results included. `replay` is
@@ -24,11 +28,29 @@
  * @module services/loop/contextTracker
  */
 import { computeContextUsage } from '../../../shared/contextUsage.js';
-import { estimateTokens, estimateTokensFor } from '../../../shared/tokenEstimator.js';
+import {
+  estimateTokens,
+  estimateTokensFor,
+  estimateTokensMemo,
+  estimateTokensSampled,
+  estimateTokensWithKnown,
+  knownTokenParts,
+  FULL_COUNT_MAX_CHARS
+} from '../../../shared/tokenEstimator.js';
 
-/** Text a message puts into the prompt: its content plus the tool calls it carries. */
-function messageText(message) {
+/**
+ * Text a message puts into the prompt: its content plus the tool calls it
+ * carries. The one definition the context figure and the compaction check
+ * count by, so both find each other's count remembered on the message.
+ * @param {Object} message
+ * @returns {string}
+ */
+export function messageText(message) {
   if (!message || typeof message !== 'object') return '';
+  const hasCalls = Array.isArray(message.tool_calls) && message.tool_calls.length > 0;
+  // The common case returns the content itself: the remembered count is then
+  // found by identity, without comparing a long string.
+  if (typeof message.content === 'string' && !hasCalls) return message.content;
   const parts = [];
   if (typeof message.content === 'string') parts.push(message.content);
   else if (Array.isArray(message.content)) {
@@ -37,7 +59,7 @@ function messageText(message) {
       else if (typeof part?.text === 'string') parts.push(part.text);
     }
   }
-  if (Array.isArray(message.tool_calls)) {
+  if (hasCalls) {
     for (const call of message.tool_calls) {
       if (call?.function?.name) parts.push(call.function.name);
       if (typeof call?.function?.arguments === 'string') parts.push(call.function.arguments);
@@ -47,19 +69,111 @@ function messageText(message) {
 }
 
 /**
+ * Estimated tokens of one message, remembered on it. Pieces whose count was
+ * stored with them (an attachment, a project document; see
+ * `setKnownTokenParts`) add that count and are not tokenized. A system
+ * message is the same text turn after turn on a new object, so what is left of
+ * it is also remembered by content.
+ * @param {Object} message
+ * @returns {number}
+ */
+export function estimateMessageTokens(message) {
+  const text = messageText(message);
+  const parts = knownTokenParts(message);
+  const count = message?.role === 'system' ? estimateTokensMemo : estimateTokens;
+  if (!parts) return estimateTokensFor(message, text, count);
+  return estimateTokensFor(message, text, t => estimateTokensWithKnown(t, parts, count));
+}
+
+/**
  * Estimated tokens of a list of transcript messages (tool calls and results included).
  * @param {Array<Object>} messages
  * @returns {number}
  */
 export function estimateTranscriptTokens(messages) {
   if (!Array.isArray(messages) || messages.length === 0) return 0;
-  return messages.reduce((sum, m) => sum + estimateTokensFor(m, messageText(m)), 0);
+  return messages.reduce((sum, m) => sum + estimateMessageTokens(m), 0);
 }
+
+/**
+ * A whole transcript counted with no earlier figure to start from. Up to
+ * `FULL_COUNT_MAX_CHARS` of text that has no stored count, every message is
+ * counted (and remembered); above it the text is counted from samples, about
+ * 5 ms however long the chat (within a few percent), so the first token of a
+ * long chat is not held up by the count.
+ * @param {Array<Object>} messages
+ * @returns {number}
+ */
+function countFreshTranscript(messages) {
+  let chars = 0;
+  for (const m of messages) {
+    if (!knownTokenParts(m)) chars += messageText(m).length;
+    if (chars > FULL_COUNT_MAX_CHARS) break;
+  }
+  if (chars <= FULL_COUNT_MAX_CHARS) return estimateTranscriptTokens(messages);
+  let known = 0;
+  const texts = [];
+  for (const m of messages) {
+    const parts = knownTokenParts(m);
+    if (parts) known += estimateMessageTokens(m);
+    else texts.push(messageText(m));
+  }
+  return known + estimateTokensSampled(texts.join(' '));
+}
+
+/**
+ * The answer a turn's context starts from: the last assistant message with
+ * text. The route picks the stored context by it, the tracker the place in
+ * the transcript where that context ends, so both find the same answer.
+ * @param {Object} message
+ * @returns {boolean}
+ */
+export function isPriorAnswer(message) {
+  return (
+    message?.role === 'assistant' &&
+    typeof message.content === 'string' &&
+    message.content.trim() !== ''
+  );
+}
+
+/**
+ * The stored context of the previous answer, if this turn can start from it:
+ * it says what the model's prompt held when that answer was written (system
+ * prompt, history, question, the answer), with the system prompt's share
+ * (`systemTokens`). That share is only stored for a prompt the next turn
+ * resends as it was (see `replay`). Not when it was counted for another model.
+ */
+function usablePrior(prior, model, contextWindow) {
+  if (!prior || typeof prior !== 'object') return null;
+  const inputTokens = Number(prior.inputTokens);
+  const systemTokens = Number(prior.systemTokens);
+  if (!(inputTokens > 0) || !Number.isFinite(systemTokens) || systemTokens < 0) return null;
+  if (Number(prior.contextWindow) !== contextWindow) return null;
+  if (!model?.id || prior.modelId !== model.id) return null;
+  return { inputTokens, systemTokens };
+}
+
+const isSystem = m => m?.role === 'system';
 
 /**
  * Tracker for one chat turn.
  *
+ * Before the first model call there is no provider count yet. With the
+ * previous answer's stored context (`prior`) the turn starts from it: the
+ * prompt that answer was written for plus the answer is what this turn resends,
+ * so only the system prompt (which may have changed) and the messages after
+ * that answer are counted. Without it the whole transcript is counted.
+ *
  * @param {Object} model - the resolved model (`contextWindow`, `maxOutputTokens`)
+ * @param {Object} [options]
+ * @param {Object|null} [options.prior] - the `context` stored with the last
+ *   answer of the history this turn sends (null: no history, a history the
+ *   file budget or a repeated host item changed, or a turn that continues a
+ *   stored transcript)
+ * @param {boolean} [options.resent] - the next turn resends this turn's
+ *   prompt as it was: the whole history, nothing of it left out, no context
+ *   only this turn carries, not a continued transcript. Only then does
+ *   `replay` store the system share a next turn can start from.
  * @returns {{
  *   recordStep: (usage: Object|null|undefined, messageCount: number) => Object|null,
  *   estimate: (messages: Array<Object>) => Object|null,
@@ -67,14 +181,20 @@ export function estimateTranscriptTokens(messages) {
  *   replay: (answerText: string) => Object|null
  * }}
  */
-export function createContextTracker(model) {
+export function createContextTracker(model, { prior = null, resent = false } = {}) {
   const contextWindow = Number(model?.contextWindow) || 0;
   const maxOutputTokens = Number(model?.maxOutputTokens) || 0;
+  const previous = usablePrior(prior, model, contextWindow);
+  // Where the history the previous answer counted ends in the transcript (the
+  // index of that answer), fixed by the first estimate: later steps append.
+  let boundary = -1;
   // The last exact count: the prompt the provider counted, and how many
   // transcript messages that prompt held.
   let anchor = null;
   let latest = null;
-  // The prompt the turn started from: what a later turn resends of it.
+  // The prompt the turn started from: what a later turn resends of it, and
+  // the system prompt's share of it; `fromPrior` when that figure was carried
+  // over from the previous answer rather than counted.
   let start = null;
 
   const state = (inputTokens, source) => {
@@ -87,6 +207,20 @@ export function createContextTracker(model) {
       source
     };
     return latest;
+  };
+
+  /** The transcript before any provider count: see the tracker's description. */
+  const unanchored = messages => {
+    const system = messages.filter(isSystem);
+    const systemTokens = estimateTranscriptTokens(system);
+    if (!start && previous) boundary = messages.findLastIndex(isPriorAnswer);
+    const fromPrior = Boolean(previous) && boundary >= 0;
+    const body = fromPrior
+      ? previous.inputTokens -
+        previous.systemTokens +
+        estimateTranscriptTokens(messages.slice(boundary + 1).filter(m => !isSystem(m)))
+      : countFreshTranscript(messages.filter(m => !isSystem(m)));
+    return { tokens: Math.max(0, systemTokens + body), systemTokens, fromPrior };
   };
 
   return {
@@ -102,7 +236,9 @@ export function createContextTracker(model) {
       anchor = { tokens: prompt, messageCount };
       // The first call the provider counted is the turn's start, even when the
       // pre-call estimate stood in for it until now.
-      if (!start || start.source !== 'provider') start = { tokens: prompt, source: 'provider' };
+      if (!start || start.source !== 'provider') {
+        start = { tokens: prompt, source: 'provider', systemTokens: start?.systemTokens };
+      }
       // Reasoning tokens are part of `completionTokens` but never of the
       // transcript: the reply that joins the context is the visible output.
       const reasoning = Number(usage.reasoningTokens) || 0;
@@ -116,8 +252,8 @@ export function createContextTracker(model) {
     estimate(messages) {
       if (!Array.isArray(messages)) return latest;
       if (!anchor) {
-        const tokens = estimateTranscriptTokens(messages);
-        if (!start) start = { tokens, source: 'estimate' };
+        const { tokens, systemTokens, fromPrior } = unanchored(messages);
+        if (!start) start = { tokens, source: 'estimate', systemTokens, fromPrior };
         return state(tokens, 'estimate');
       }
       const added = estimateTranscriptTokens(messages.slice(anchor.messageCount));
@@ -126,18 +262,29 @@ export function createContextTracker(model) {
     last: () => latest,
     /**
      * The window as the next turn will find it: the prompt this turn started
-     * from plus its answer. Tool calls and results of this turn are not in it.
+     * from plus its answer, and the system prompt's share of it (what the next
+     * turn replaces with its own). Tool calls and results of this turn are not
+     * in it. The share, which lets the next turn start from this figure, is
+     * left out when the next turn does not resend this prompt as it was
+     * (`resent`) and when the figure is an estimate carried over from the
+     * previous answer: its error would be carried into every later turn.
      * @param {string} answerText - the answer stored with the turn
      * @returns {Object|null}
      */
     replay(answerText) {
       if (!contextWindow || !start) return null;
       const answer = typeof answerText === 'string' ? estimateTokens(answerText) : 0;
+      const anchors =
+        resent &&
+        Number.isFinite(start.systemTokens) &&
+        (start.source === 'provider' || !start.fromPrior);
       return {
         contextWindow,
         inputTokens: start.tokens + answer,
         maxOutputTokens,
-        source: start.source
+        source: start.source,
+        ...(typeof model?.id === 'string' && model.id ? { modelId: model.id } : {}),
+        ...(anchors ? { systemTokens: start.systemTokens } : {})
       };
     }
   };

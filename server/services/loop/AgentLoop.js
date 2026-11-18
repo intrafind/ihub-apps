@@ -63,6 +63,7 @@ import {
   isContextOverflowError,
   estimateTokens
 } from './contextCompaction.js';
+import { estimateTranscriptTokens } from './contextTracker.js';
 import {
   toolDisabledNudge,
   ALL_TOOLS_DEAD_NUDGE,
@@ -334,6 +335,11 @@ export class AgentLoop {
     let forceFinish = false;
     let forceReason = null;
     let reactiveAttempts = 0;
+    // The provider's count of the last call's prompt and how many transcript
+    // messages it held: the compaction check adds what came after instead of
+    // counting the transcript again. Dropped when the transcript is compacted.
+    let promptAnchor = null;
+    let callMessageCount = 0;
     let iteration = 0;
     let content = '';
     let answerText = ''; // what the last model step answered, without earlier steps' prose
@@ -534,6 +540,7 @@ export class AgentLoop {
             forcedRejected: forcedToolUseRejected
           });
 
+          callMessageCount = ctx.messages.length;
           const stream = await this.llmClient.execute({
             model,
             messages: choicePlan.nudge
@@ -624,6 +631,7 @@ export class AgentLoop {
             if (mc.freedChars > 0) {
               reactiveAttempts++;
               ctx.messages = mc.messages;
+              promptAnchor = null;
               this.logger.warn('Reactive context recovery: microcompacted messages, retrying', {
                 component: COMPONENT,
                 runId,
@@ -691,12 +699,19 @@ export class AgentLoop {
           ? result.usage
           : normalizeUsage(
               {
-                promptTokens: estimateTokens(ctx.messages.map(m => m.content || '').join(' ')),
+                // Per message, remembered on it: earlier messages are not counted again.
+                promptTokens: estimateTranscriptTokens(ctx.messages),
                 completionTokens: estimateTokens(result.content || '')
               },
               'estimate'
             );
         usage = addUsage(usage, stepUsage);
+        promptAnchor =
+          result.usage &&
+          result.usage.source !== 'estimate' &&
+          Number(result.usage.promptTokens) > 0
+            ? { tokens: Number(result.usage.promptTokens), messageCount: callMessageCount }
+            : null;
         runBudget.input += stepUsage.promptTokens || 0;
         runBudget.output += stepUsage.completionTokens || 0;
         runBudget.total = runBudget.input + runBudget.output;
@@ -888,10 +903,15 @@ export class AgentLoop {
         // ── proactive compaction ────────────────────────────────────────
         const compaction = compactIfOversized(ctx.messages, {
           thresholdTokens: policies.context.compactThresholdTokens,
-          keepRecent: policies.context.compactKeepRecent
+          keepRecent: policies.context.compactKeepRecent,
+          knownTokens: promptAnchor
+            ? promptAnchor.tokens +
+              estimateTranscriptTokens(ctx.messages.slice(promptAnchor.messageCount))
+            : undefined
         });
         if (compaction.compacted) {
           ctx.messages = compaction.messages;
+          promptAnchor = null;
           this.logger.info('Proactively compacted agent context', {
             component: COMPONENT,
             runId,

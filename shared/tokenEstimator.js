@@ -18,6 +18,7 @@
  * still loaded defensively so the server can start even when the package is
  * missing from a deployment (falls back to a chars/4 heuristic).
  */
+import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 
 /** Chars/4 fallback when the real tokenizer is unavailable. */
@@ -74,21 +75,83 @@ function sampledCount(text, count) {
 }
 
 /**
- * Estimate the number of tokens in a piece of text.
- * @param {string} text
- * @returns {number} estimated token count (0 for empty/invalid input). Exact
- *   for texts up to `FULL_COUNT_MAX_CHARS`, sampled above.
+ * How much text went through the tokenizer in this process: `calls` counts and
+ * `chars` characters (of a sampled count, the samples only). A diagnostic, and
+ * what tests watch to prove a text was not counted again.
  */
-export function estimateTokens(text) {
-  if (!text || typeof text !== 'string') return 0;
+export const tokenizerStats = { calls: 0, chars: 0 };
+
+function tokenize(text) {
+  tokenizerStats.calls += 1;
+  tokenizerStats.chars += text.length;
+  return countTokensFn(text);
+}
+
+/**
+ * Count a text: in full up to `FULL_COUNT_MAX_CHARS`, sampled above.
+ * @param {string} text - non-empty
+ */
+function countText(text) {
   try {
-    if (countTokensFn && text.length > FULL_COUNT_MAX_CHARS) {
-      return sampledCount(text, countTokensFn);
-    }
-    return (countTokensFn || heuristic)(text);
+    if (countTokensFn && text.length > FULL_COUNT_MAX_CHARS) return sampledCount(text, tokenize);
+    return countTokensFn ? tokenize(text) : heuristic(text);
   } catch {
     // Fall back to the classic chars/4 heuristic if the tokenizer throws
     // (e.g. on unusual input). Better an approximate number than a crash.
+    return heuristic(text);
+  }
+}
+
+const HASH_MEMO_MAX_ENTRIES = 512;
+const hashMemo = new Map();
+
+/**
+ * The count of a long text, remembered by a hash of it: a project's knowledge
+ * block or a long system prompt is sent with every turn as a new string with
+ * the same content, and hashing it costs a fraction of counting it (SHA-1 runs
+ * at about 1 GB/s; the count at 5-11 MB/s). Only the number is kept, for at
+ * most `HASH_MEMO_MAX_ENTRIES` texts, the least recently used first out.
+ */
+function hashMemoCount(text) {
+  const key = createHash('sha1').update(text).digest('base64');
+  const hit = hashMemo.get(key);
+  if (hit !== undefined) {
+    hashMemo.delete(key);
+    hashMemo.set(key, hit);
+    return hit;
+  }
+  const tokens = countText(text);
+  hashMemo.set(key, tokens);
+  if (hashMemo.size > HASH_MEMO_MAX_ENTRIES) hashMemo.delete(hashMemo.keys().next().value);
+  return tokens;
+}
+
+/**
+ * Estimate the number of tokens in a piece of text.
+ * @param {string} text
+ * @returns {number} estimated token count (0 for empty/invalid input). Exact
+ *   for texts up to `FULL_COUNT_MAX_CHARS`, sampled above. A text longer than
+ *   `MEMO_MAX_CHARS` is counted once per process and then found by its hash.
+ */
+export function estimateTokens(text) {
+  if (!text || typeof text !== 'string') return 0;
+  if (countTokensFn && text.length > MEMO_MAX_CHARS) return hashMemoCount(text);
+  return countText(text);
+}
+
+/**
+ * A count from samples, whatever the length, never remembered: for a text
+ * built once to be counted once (a whole transcript joined), where the hash
+ * of {@link estimateTokens} would cost as much as the samples.
+ * @param {string} text
+ * @returns {number}
+ */
+export function estimateTokensSampled(text) {
+  if (!text || typeof text !== 'string') return 0;
+  if (!countTokensFn || text.length <= SAMPLE_COUNT * SAMPLE_CHARS) return countText(text);
+  try {
+    return sampledCount(text, tokenize);
+  } catch {
     return heuristic(text);
   }
 }
@@ -115,9 +178,9 @@ let memoChars = 0;
  * again and again without belonging to an object: a tool definition, a skill
  * body or catalog, a document-list line. Hashing an equal string costs about
  * a twentieth of counting it. Only texts of 256 characters to 128 KB are kept
- * (shorter ones are as cheap to count; longer ones belong on their owner, see
- * `estimateTokensFor`, or are stored with the item), and the whole memo holds
- * at most 2 M characters, the oldest first out.
+ * (shorter ones are as cheap to count; longer ones are remembered by their
+ * hash in `estimateTokens` itself), and the whole memo holds at most 2 M
+ * characters, the oldest first out.
  * @param {string} text
  * @returns {number}
  */
@@ -153,15 +216,98 @@ const counted = new WeakMap();
  * life (WeakMap), and the text is not copied.
  * @param {object} owner
  * @param {string} text
+ * @param {(text: string) => number} [count] - how to count it on a miss
+ *   (e.g. {@link estimateTokensWithKnown} for a message with stored counts)
  * @returns {number}
  */
-export function estimateTokensFor(owner, text) {
-  if (!owner || typeof owner !== 'object') return estimateTokens(text);
+export function estimateTokensFor(owner, text, count = estimateTokens) {
+  if (!owner || typeof owner !== 'object') return count(text);
   const hit = counted.get(owner);
   if (hit && hit.text === text) return hit.tokens;
-  const tokens = estimateTokens(text);
+  const tokens = count(text);
   if (typeof text === 'string' && text.length > 0) counted.set(owner, { text, tokens });
   return tokens;
+}
+
+const knownParts = new WeakMap();
+
+/**
+ * Note on `owner` (a prompt message) which pieces of its text were counted
+ * when they were stored: an attachment's extracted text, a project document.
+ * The note is not part of the message, so it never reaches a provider; a copy
+ * of the message does not carry it (see {@link copyKnownTokenParts}). Only
+ * counts the server made belong here; a piece whose count is not a finite
+ * number >= 0 is left out (its text is then counted).
+ * @param {object} owner
+ * @param {Array<{text: string, tokens: number}>} parts
+ */
+export function setKnownTokenParts(owner, parts) {
+  if (!owner || typeof owner !== 'object' || !Array.isArray(parts)) return;
+  const valid = parts.filter(
+    part =>
+      typeof part?.text === 'string' &&
+      part.text &&
+      Number.isFinite(part.tokens) &&
+      part.tokens >= 0
+  );
+  if (valid.length) knownParts.set(owner, valid);
+}
+
+/**
+ * The stored counts noted on `owner`, or null.
+ * @param {object} owner
+ * @returns {Array<{text: string, tokens: number}>|null}
+ */
+export function knownTokenParts(owner) {
+  return (owner && typeof owner === 'object' && knownParts.get(owner)) || null;
+}
+
+/** Carry the stored counts of `from` over to its copy `to`. */
+export function copyKnownTokenParts(from, to) {
+  const parts = knownTokenParts(from);
+  if (parts && to && typeof to === 'object') knownParts.set(to, parts);
+}
+
+/**
+ * Count `text` with the stored counts of the pieces it contains: each piece
+ * found in it adds its stored number and is cut out, and only what is left
+ * (the question, the framing around the pieces) goes to `count`. A piece that
+ * is not in the text (it was edited on the way) adds nothing; its text, if any,
+ * is counted with the rest.
+ * @param {string} text
+ * @param {Array<{text: string, tokens: number}>|null} parts
+ * @param {(text: string) => number} [count]
+ * @returns {number}
+ */
+export function estimateTokensWithKnown(text, parts, count = estimateTokens) {
+  if (typeof text !== 'string' || !text) return 0;
+  if (!parts?.length) return count(text);
+  // The pieces come in the order the text holds them: one pass with a cursor
+  // keeps the text between them, joined once. A piece not found after the
+  // cursor (out of order) is looked for in what is left afterwards.
+  let known = 0;
+  let from = 0;
+  const kept = [];
+  const missed = [];
+  for (const part of parts) {
+    const at = text.indexOf(part.text, from);
+    if (at === -1) {
+      missed.push(part);
+      continue;
+    }
+    known += part.tokens;
+    kept.push(text.slice(from, at));
+    from = at + part.text.length;
+  }
+  kept.push(text.slice(from));
+  let rest = kept.join('');
+  for (const part of missed) {
+    const at = rest.indexOf(part.text);
+    if (at === -1) continue;
+    known += part.tokens;
+    rest = rest.slice(0, at) + rest.slice(at + part.text.length);
+  }
+  return known + count(rest);
 }
 
 /**
