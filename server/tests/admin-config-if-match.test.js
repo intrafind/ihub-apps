@@ -32,7 +32,8 @@ jest.unstable_mockModule('../pathUtils.js', () => ({
 }));
 
 jest.unstable_mockModule('../storage/bootstrap.js', () => ({
-  getStorage: () => null
+  getStorage: () => null,
+  readFacet: () => null
 }));
 
 // The cache is the file, unless a test sets `state.staleUI` to model a cache

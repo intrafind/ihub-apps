@@ -34,7 +34,8 @@ jest.unstable_mockModule('../pathUtils.js', () => ({
 }));
 
 jest.unstable_mockModule('../storage/bootstrap.js', () => ({
-  getStorage: () => null
+  getStorage: () => null,
+  readFacet: () => null
 }));
 
 jest.unstable_mockModule('../configCache.js', () => ({

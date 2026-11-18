@@ -23,7 +23,10 @@ import path from 'path';
 const state = { rootDir: os.tmpdir() };
 
 jest.unstable_mockModule('../pathUtils.js', () => ({ getRootDir: () => state.rootDir }));
-jest.unstable_mockModule('../storage/bootstrap.js', () => ({ getStorage: () => null }));
+jest.unstable_mockModule('../storage/bootstrap.js', () => ({
+  getStorage: () => null,
+  readFacet: () => null
+}));
 jest.unstable_mockModule('../configCache.js', () => ({
   default: {
     getPlatform: () => ({}),
