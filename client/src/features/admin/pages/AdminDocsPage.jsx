@@ -242,7 +242,8 @@ function AdminDocsPage() {
                 headingIds: true,
                 docsComponents: true,
                 dropLeadingH1: true,
-                anchorLabel: t('admin.docs.linkToSection', 'Link to this section')
+                anchorLabel: t('admin.docs.linkToSection', 'Link to this section'),
+                tableLabel: t('admin.docs.tableLabel', 'Table')
               })
           })
         : '',

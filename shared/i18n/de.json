@@ -6998,7 +6998,8 @@
       "resultCount_one": "{{count}} Treffer",
       "resultCount_other": "{{count}} Treffer",
       "collapseAll": "Alle zuklappen",
-      "expandAll": "Alle aufklappen"
+      "expandAll": "Alle aufklappen",
+      "tableLabel": "Tabelle"
     },
     "aiDisclosure": {
       "title": "KI-Hinweis",

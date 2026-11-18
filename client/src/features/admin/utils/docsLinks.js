@@ -124,9 +124,10 @@ export function repositoryLinkTarget(href, sourcePath) {
  * @param {string} html
  * @param {string} sourcePath the file the HTML was rendered from, relative to docs/
  * @param {{ headingIds?: boolean, docsComponents?: boolean, dropLeadingH1?: boolean,
- *   anchorLabel?: string }} [options] `docsComponents` turns GitHub alerts into callouts, wraps
- *   tables in a scroll frame and adds `#` links to h2–h4 (needs `headingIds`); `dropLeadingH1`
- *   removes an H1 that opens the page.
+ *   anchorLabel?: string, tableLabel?: string }} [options] `docsComponents` turns GitHub alerts
+ *   into callouts, wraps tables in a scroll frame (a focusable region named `tableLabel`, so a
+ *   keyboard can scroll a wide table), makes code blocks focusable for the same reason and adds `#` links to h2–h4 (needs `headingIds`);
+ *   `dropLeadingH1` removes an H1 that opens the page.
  * @returns {string}
  */
 export function rewriteDocsHtml(
@@ -136,7 +137,8 @@ export function rewriteDocsHtml(
     headingIds = false,
     docsComponents = false,
     dropLeadingH1 = false,
-    anchorLabel = 'Link to this section'
+    anchorLabel = 'Link to this section',
+    tableLabel = 'Table'
   } = {}
 ) {
   if (typeof document === 'undefined' || !html) return html;
@@ -201,7 +203,8 @@ export function rewriteDocsHtml(
 
   if (docsComponents) {
     renderCallouts(root);
-    wrapTables(root);
+    wrapTables(root, tableLabel);
+    focusableCodeBlocks(root);
     if (headingIds && pageRoute) addHeadingAnchors(root, pageRoute, anchorLabel);
   }
 
@@ -271,13 +274,31 @@ function renderCallouts(root) {
 }
 
 /** Wrap every table so a wide one scrolls inside its frame instead of widening the page. */
-function wrapTables(root) {
+/**
+ * A scroll frame around every table. The frame scrolls sideways when the table is wider than the
+ * column, so it is a focusable, named region: a keyboard user can then scroll it with the arrow
+ * keys (WCAG 2.1.1, axe `scrollable-region-focusable`).
+ */
+function wrapTables(root, label) {
   for (const table of root.querySelectorAll('table')) {
     if (table.parentElement?.classList.contains('docs-table')) continue;
     const wrapper = document.createElement('div');
     wrapper.className = 'docs-table';
+    wrapper.setAttribute('role', 'region');
+    wrapper.setAttribute('aria-label', label);
+    wrapper.setAttribute('tabindex', '0');
     table.replaceWith(wrapper);
     wrapper.append(table);
+  }
+}
+
+/**
+ * A code block scrolls sideways when a line is longer than the column, so it takes keyboard focus:
+ * a keyboard user can then scroll it with the arrow keys (WCAG 2.1.1).
+ */
+function focusableCodeBlocks(root) {
+  for (const pre of root.querySelectorAll('pre')) {
+    if (!pre.hasAttribute('tabindex')) pre.setAttribute('tabindex', '0');
   }
 }
 

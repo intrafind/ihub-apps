@@ -6502,7 +6502,8 @@
       "resultCount_one": "{{count}} result",
       "resultCount_other": "{{count}} results",
       "collapseAll": "Collapse all",
-      "expandAll": "Expand all"
+      "expandAll": "Expand all",
+      "tableLabel": "Table"
     },
     "aiDisclosure": {
       "title": "AI notice",

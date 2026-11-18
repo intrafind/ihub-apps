@@ -252,6 +252,11 @@ describe('AdminChangelogPage', () => {
     expect(entry.querySelector('h4').textContent).toBe('Configuration');
     expect(entry.querySelector('blockquote').textContent).toContain('could not be reached');
     expect(entry.querySelector('table td code').textContent).toBe('tools');
+    // A wide table scrolls inside its frame, so the frame is a focusable, named region (WCAG 2.1.1).
+    const frame = entry.querySelector('.docs-table');
+    expect(frame.getAttribute('role')).toBe('region');
+    expect(frame.getAttribute('aria-label')).toBe('Table');
+    expect(frame.getAttribute('tabindex')).toBe('0');
     expect(entry.querySelector('a[href="https://example.com/docs"]')).not.toBeNull();
     // A repository-relative link to a doc opens Admin → Documentation, not `/integrations.md`.
     const docLink = within(entry).getByRole('link', { name: 'compatibility' });

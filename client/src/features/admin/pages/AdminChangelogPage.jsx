@@ -179,7 +179,7 @@ function ReleaseLink({ release, selected, shortLabel, t }) {
 function GroupCount({ count, newCount, t }) {
   return (
     <>
-      <span className="font-normal tabular-nums text-gray-400 dark:text-gray-500">{count}</span>
+      <span className="font-normal tabular-nums text-gray-500 dark:text-gray-400">{count}</span>
       {newCount > 0 && (
         <Badge tone="indigo">
           {t('admin.changelog.newCount', '{{count}} new', { count: newCount })}
@@ -354,7 +354,7 @@ function TableOfContents({ release, sectionLabel, t }) {
                 className="text-sm font-semibold text-gray-900 hover:text-indigo-700 dark:text-gray-100 dark:hover:text-indigo-300"
               >
                 {sectionLabel(section)}{' '}
-                <span className="font-normal text-gray-400 dark:text-gray-500">
+                <span className="font-normal text-gray-500 dark:text-gray-400">
                   {entries.length}
                 </span>
               </a>
@@ -409,7 +409,7 @@ function ReleaseSection({ section, entries, release, first, sectionLabel, t }) {
         className={`focus:outline-hidden ${first ? 'mt-0!' : ''}`}
       >
         {sectionLabel(section)}{' '}
-        <span className="font-normal text-gray-400 dark:text-gray-500">{entries.length}</span>
+        <span className="font-normal text-gray-500 dark:text-gray-400">{entries.length}</span>
       </h2>
       {breaking && (
         <div className="docs-callout docs-callout-warning">
@@ -583,7 +583,10 @@ function AdminChangelogPage() {
                 rewriteDocsHtml(
                   demoteHeadings(html),
                   releaseSourcePath(release.version, section.file),
-                  { docsComponents: true }
+                  {
+                    docsComponents: true,
+                    tableLabel: t('admin.docs.tableLabel', 'Table')
+                  }
                 )
             })
           : ''
