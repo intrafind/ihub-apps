@@ -540,6 +540,18 @@ test('text from a result cannot close or open the digest block', () => {
     assert.equal(numbersAppearIn('1.234 units', '1,234 units'), true, 'a group of three is either');
     assert.equal(numbersAppearIn('1,234,567 units', '1.234 units'), false);
     assert.equal(numbersAppearIn('price 12.34', 'price\u00a012,34 EUR'), true);
+    assert.equal(numbersAppearIn('Revenue 5.0 million USD', 'Revenue 51 million USD'), false);
+    assert.equal(numbersAppearIn('Revenue 51 million USD', 'Revenue 5.51 million USD'), false);
+    assert.equal(numbersAppearIn('Revenue 5.0 million USD', 'Revenue 5 million USD'), true);
+  });
+
+  test('the parts of a dotted date count on their own; other decimals do not', () => {
+    const content = 'Closing price on 17.11.2026: 5.51 USD';
+    assert.equal(numbersAppearIn('price on 17 Nov 2026', content), true);
+    assert.equal(numbersAppearIn('price on 17.11.2026', content), true);
+    assert.equal(numbersAppearIn('month 11 of 2026', content), true);
+    assert.equal(numbersAppearIn('price 51 USD', content), false);
+    assert.equal(numbersAppearIn('on 07.03.2026', 'on 7.3.2026'), true);
   });
 
   test('the source column and every URL of a fact are checked too', () => {

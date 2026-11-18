@@ -494,6 +494,12 @@ function decimalOf(integer, fraction) {
  * it ("1,234,567"). Spaces and apostrophes only group digits.
  */
 function valuesOf(written) {
+  const values = rawValuesOf(written);
+  // Leading zeros say nothing about the value ("07" is 7, "0.5" stays).
+  return values.map(value => value.replace(/^0+(?=\d)/, ''));
+}
+
+function rawValuesOf(written) {
   const groups = written.split(/[.,'\u00a0\u202f ]/);
   if (groups.length === 1) return [written];
   const marks = written.replace(/\d/g, '');
@@ -506,51 +512,65 @@ function valuesOf(written) {
   return [groups.join(''), decimalOf(head, tail)];
 }
 
+/** How many digits a written number has, with the values it can stand for. */
+function writtenNumber(written) {
+  return { digitCount: written.replace(/\D/g, '').length, values: valuesOf(written) };
+}
+
 /**
  * The numbers of a text: how many digits each has, the values it can stand
- * for, and the values of its parts if a space in it separated two numbers
- * ("2024 450").
+ * for, and its parts if a space in it separated two numbers ("2024 450").
  */
 function numbersOf(text) {
   return [...String(text || '').matchAll(NUMBER_PATTERN)].map(m => ({
-    digitCount: m[0].replace(/\D/g, '').length,
-    values: valuesOf(m[0]),
+    ...writtenNumber(m[0]),
     parts: m[0]
       .split(/[\u00a0\u202f ]/)
       .filter(part => /\d/.test(part))
-      .map(part => valuesOf(part))
+      .map(writtenNumber)
   }));
+}
+
+/** A dotted date ("17.11.2026"), not part of a longer number. */
+const DOTTED_DATE = /(?<![\d.,])(\d{1,2})\.(\d{1,2})\.(\d{2,4})(?![\d.,]?\d)/g;
+
+/** A text with its dotted dates as day, month and year apart ("17/11/2026"), never read as decimals. */
+function datesApart(text) {
+  return String(text || '').replace(DOTTED_DATE, '$1/$2/$3');
 }
 
 /**
  * Whether every number of a fact (two digits or more) appears in the result
  * it cites. Separators differ ("1.234,5" vs "1,234.5"), so numbers are
- * compared by value — "5.1" never matches "51"; every run of digits of the
- * result counts too (the day of "17.11.2026"). A whole number of four digits
- * or more may also be the start of a longer whole number in the result
+ * compared by value — "5.1" never matches "51", "5.0" never "51", "51" never
+ * "5.51". A dotted date is read as its day, month and year, in the fact and
+ * in the result ("17 Nov" for "17.11.2026", "07.03.2026" for "7.3.2026"),
+ * never as a decimal. A whole number of four digits or
+ * more may also be the start of a longer whole number in the result
  * ("5,100 billion" for "5,100,000,000,000"), never any other part of it: IDs
  * and timestamps would let invented figures through. A number read across a
- * space ("2024 450") also counts when each of its parts is found.
+ * space ("2024 450") also counts when each of its parts is found; a part of
+ * one digit is not checked.
  *
  * @param {string} fact
  * @param {string} content
  * @returns {boolean}
  */
 export function numbersAppearIn(fact, content) {
-  const wanted = numbersOf(fact).filter(number => number.digitCount >= 2);
+  const wanted = numbersOf(datesApart(fact)).filter(number => number.digitCount >= 2);
   if (wanted.length === 0) return true;
-  const present = numbersOf(content).flatMap(number => number.values);
-  const exact = new Set([...present, ...(String(content || '').match(/\d+/g) || [])]);
+  const present = numbersOf(datesApart(content)).flatMap(number => number.values);
+  const exact = new Set(present);
   const wholes = present.filter(value => !value.includes('.'));
-  const found = values =>
-    values.some(
+  const found = number =>
+    number.digitCount < 2 ||
+    number.values.some(
       value =>
-        value.replace(/\D/g, '').length < 2 ||
         exact.has(value) ||
         (!value.includes('.') && value.length >= 4 && wholes.some(p => p.startsWith(value)))
     );
   return wanted.every(
-    number => found(number.values) || (number.parts.length > 1 && number.parts.every(found))
+    number => found(number) || (number.parts.length > 1 && number.parts.every(found))
   );
 }
 
