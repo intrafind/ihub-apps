@@ -1123,3 +1123,9 @@ prompt lists showed "key 'admin.prompts.edit' returned an object instead of stri
 **Edit**. Both show correctly now. The **All (\*)** checkbox of the app, model and prompt pickers is
 named for screen readers ("Apps: All (\*)") and can be ticked by clicking its text, and the agent
 editor no longer offers a Skills field while skills are switched off.
+
+## Feedback: "Store Feedback" Is Saved Again
+
+Switching **Store feedback** off (or on) under **Admin → Feedback → Settings** showed "Feedback
+settings saved", but the setting was not stored, and after a reload the switch was back where it
+was. It is saved now, and feedback is kept or dropped as the switch says.

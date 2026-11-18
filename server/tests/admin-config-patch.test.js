@@ -369,6 +369,97 @@ describe('review round 4: secret containers, deletions, a missing file', () => {
   });
 });
 
+describe('scoped saves of the admin cards (no self-conflict)', () => {
+  const withFeatures = { ...PLATFORM, features: { feedbackTracking: true, tools: true } };
+
+  test('features.feedbackTracking can be patched; the other switches stay', async () => {
+    await writeConfig('platform.json', withFeatures);
+
+    await patch({ features: { feedbackTracking: false } }).expect(200);
+
+    expect((await readPlatform()).features).toEqual({ feedbackTracking: false, tools: true });
+  });
+
+  test.each([
+    ['another switch', { tools: false }],
+    ['a value that is not a boolean', { feedbackTracking: 'no' }],
+    ['null on the switch', { feedbackTracking: null }],
+    ['features that is not an object', true]
+  ])('features: %s is refused and nothing is written', async (_label, features) => {
+    await writeConfig('platform.json', withFeatures);
+    const before = await readText();
+
+    const response = await patch({ features });
+
+    expect(response.status).toBe(400);
+    expect(response.body.errors[0].pointer).toMatch(/^\/features/);
+    expect(await readText()).toBe(before);
+  });
+
+  test('a POST still never writes features', async () => {
+    await writeConfig('platform.json', withFeatures);
+    await request(appFor(LOCAL_ADMIN))
+      .post('/api/admin/configs/platform')
+      .send({ features: { feedbackTracking: false, tools: false } })
+      .expect(200);
+    expect((await readPlatform()).features).toEqual({ feedbackTracking: true, tools: true });
+  });
+
+  test('aiAcknowledgement: null on a language of text and on policyUrl removes them', async () => {
+    await writeConfig('platform.json', {
+      ...PLATFORM,
+      aiAcknowledgement: {
+        enabled: true,
+        text: { en: 'Use AI', de: 'KI nutzen' },
+        policyUrl: '/policy',
+        requiredVersion: 2
+      }
+    });
+
+    await patch({
+      aiAcknowledgement: { enabled: false, text: { en: 'Use AI', de: null }, policyUrl: null }
+    }).expect(200);
+
+    expect((await readPlatform()).aiAcknowledgement).toEqual({
+      enabled: false,
+      text: { en: 'Use AI' },
+      requiredVersion: 2
+    });
+  });
+
+  test('aiDisclosure: null on a notice language and on the guardrail text removes them', async () => {
+    await writeConfig('platform.json', {
+      ...PLATFORM,
+      aiDisclosure: {
+        firstTurnNotice: { enabled: true, text: { en: 'AI', de: 'KI' } },
+        guardrail: { text: 'Say you are an AI.' }
+      }
+    });
+
+    await patch({
+      aiDisclosure: {
+        firstTurnNotice: { enabled: false, text: { de: null } },
+        guardrail: { text: null }
+      }
+    }).expect(200);
+
+    expect((await readPlatform()).aiDisclosure).toEqual({
+      firstTurnNotice: { enabled: false, text: { en: 'AI' } },
+      guardrail: {}
+    });
+  });
+
+  test('auth.debug can be patched without touching the rest of auth', async () => {
+    await patch({ auth: { debug: { enabled: true } } }).expect(200);
+
+    expect((await readPlatform()).auth).toEqual({
+      mode: 'local',
+      jwtSecret: 'auth-secret',
+      debug: { enabled: true }
+    });
+  });
+});
+
 describe('PATCH /api/admin/configs/platform: allowlist', () => {
   test.each(['ssl', 'ssrf', 'cors', 'rateLimit', 'proxy', 'logging'])(
     '%s has its own route and is refused',
@@ -391,10 +482,10 @@ describe('PATCH /api/admin/configs/platform: allowlist', () => {
   test('an unknown key is refused, and nothing of the rest of the patch is applied', async () => {
     const before = await readText();
 
-    const response = await patch({ telemetry: { enabled: true }, features: { x: true } });
+    const response = await patch({ telemetry: { enabled: true }, storage: { x: true } });
 
     expect(response.status).toBe(400);
-    expect(response.body.errors).toEqual([expect.objectContaining({ pointer: '/features' })]);
+    expect(response.body.errors).toEqual([expect.objectContaining({ pointer: '/storage' })]);
     expect(await readText()).toBe(before);
   });
 

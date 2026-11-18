@@ -69,6 +69,15 @@ export const PATCHABLE_PLATFORM_SECTIONS = Object.freeze([
   'toolApproval'
 ]);
 
+/**
+ * Fields of `features` a PATCH may change, all booleans. The `features` block
+ * holds the platform feature switches, which a full-body `POST` never writes
+ * (a stale page posting them back must not revert a switch); a scoped PATCH of
+ * one named switch is safe. `feedbackTracking` is Admin → Feedback → "Store
+ * feedback".
+ */
+export const PATCHABLE_FEATURE_FLAGS = Object.freeze(['feedbackTracking']);
+
 /** Sections with their own route and validation, named in the PATCH refusal. */
 const DEDICATED_SECTION_ROUTES = Object.freeze({
   ssl: '/api/admin/ssl/config',
@@ -110,6 +119,36 @@ function enclosesSecret(path) {
 }
 
 /**
+ * What is wrong with the `features` member of a PATCH: it must be an object
+ * that sets only {@link PATCHABLE_FEATURE_FLAGS}, each to a boolean.
+ *
+ * @param {unknown} value
+ * @returns {Array<{path: string[], code: string, message: string}>}
+ */
+function featureFlagPatchIssues(value) {
+  if (!isPlainObject(value)) {
+    return [{ path: ['features'], code: 'invalid_type', message: '"features" must be an object' }];
+  }
+  const issues = [];
+  for (const [flag, flagValue] of Object.entries(value)) {
+    if (!PATCHABLE_FEATURE_FLAGS.includes(flag)) {
+      issues.push({
+        path: ['features', flag],
+        code: 'not_patchable',
+        message: `"features.${flag}" cannot be changed through this endpoint`
+      });
+    } else if (typeof flagValue !== 'boolean') {
+      issues.push({
+        path: ['features', flag],
+        code: 'invalid_type',
+        message: `"features.${flag}" must be a boolean`
+      });
+    }
+  }
+  return issues;
+}
+
+/**
  * Check a PATCH body before it is applied: an object, only patchable sections,
  * and no `null` where it would remove a whole section or the object a secret
  * lives in (clearing a secret is `null` on the secret itself).
@@ -124,6 +163,10 @@ function assertPatchShape(patch) {
   }
   const issues = [];
   for (const [key, value] of Object.entries(patch)) {
+    if (key === 'features') {
+      issues.push(...featureFlagPatchIssues(value));
+      continue;
+    }
     if (!PATCHABLE_PLATFORM_SECTIONS.includes(key)) {
       const route = DEDICATED_SECTION_ROUTES[key];
       issues.push({
@@ -375,6 +418,12 @@ function mergePlatformSections(existingConfig, newConfig, { mode = 'replace' } =
     toolApproval:
       newConfig.toolApproval !== undefined ? newConfig.toolApproval : existingConfig.toolApproval
   };
+  if (mode === 'merge' && newConfig.features !== undefined) {
+    // Only a PATCH writes `features`, and only the switches it may change
+    // (see PATCHABLE_FEATURE_FLAGS); `newConfig.features` is the stored block
+    // with the patch applied.
+    mergedConfig.features = newConfig.features;
+  }
   if (newConfig.toolApproval === null) {
     // `null` turns approval off: the block is removed, never stored as
     // null (the platform schema has it as an optional object).

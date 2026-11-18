@@ -582,7 +582,9 @@ section that has its own admin page with its own checks (`ssl`, `ssrf`, `cors`, 
   sections listed at the top, is refused with `400` and an `errors[].pointer` naming it. `null`
   removes a field; it cannot remove a whole section (except `toolApproval: null`, which turns
   tool approval off) or an object that holds a secret. `provenance` is merged by its own rules, as
-  in the `POST`. It answers with the configuration as the `GET` shows it.
+  in the `POST`. Of the `features` switches, which the `POST` never changes, a `PATCH` may set
+  `features.feedbackTracking` (a boolean); any other switch is refused. It answers with the
+  configuration as the `GET` shows it.
 
 Secrets in a `POST` or `PATCH` body:
 
