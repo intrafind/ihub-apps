@@ -2438,3 +2438,8 @@ the one you select, fetched from the registry when you open it, so you can revie
 contains before you install it. Markdown files read rendered; **Show source** shows exactly what
 they contain, including what rendering hides, such as comments. A file over 512 KB or a binary one
 is not shown. See [Marketplace → Browsing](../../marketplace.md#browsing).
+
+For API callers: `GET /api/admin/marketplace/registries/{registryId}/items/{type}/{name}/_file`
+replaces the integration-only `…/items/integration/{name}/_file` and serves `integration` and
+`skill` items. Existing integration URLs keep working unchanged, and a skill's item detail now carries
+a `files` list.
