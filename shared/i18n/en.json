@@ -4907,6 +4907,7 @@
       "upgradedReleases": "{{count}} releases are new to this installation — every one of them is marked New.",
       "installed": "Installed",
       "contents": "In this release",
+      "backToContents": "Back to contents",
       "breakingChanges": "Breaking changes",
       "breakingChangesHint": "Action is needed before or after upgrading.",
       "features": "New & improved",

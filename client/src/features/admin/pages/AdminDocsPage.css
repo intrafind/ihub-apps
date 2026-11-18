@@ -243,8 +243,15 @@
 .docs-prose .docs-table tbody tr:first-child td {
   border-top: 0;
 }
+/* Every column wraps, the first one too (it often holds a sentence, not just a key), so a table
+   fits the reading column instead of pushing it wide. Long code tokens may break anywhere, so a
+   minimum width keeps a column from being squeezed down to a letter per line; a table with more
+   columns than fit still scrolls inside its frame. */
+.docs-prose .docs-table td {
+  min-width: 6rem;
+}
 .docs-prose .docs-table td:first-child {
-  white-space: nowrap;
+  min-width: 8rem;
 }
 [data-theme='dark'] .docs-prose .docs-table {
   border-color: #1f2937;
