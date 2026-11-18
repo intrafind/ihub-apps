@@ -172,6 +172,8 @@ const SERVER_COUNTER_RECOUNT_MS = 5 * 60 * 1000;
  */
 const SERVER_COUNTER_CAS_ATTEMPTS = 16;
 const SERVER_COUNTER_RETRY_MS = 5;
+/** Pause before a delta a failed flush kept is tried again without a new upload. */
+const SERVER_COUNTER_RETRY_FLUSH_MS = 2000;
 
 /** Share of `maxServerBytes` above which an upload checks the exact total. */
 const SERVER_QUOTA_EXACT_FRACTION = 0.9;
@@ -376,6 +378,7 @@ export class ChatFileRepository {
     this._pendingServerBytes = 0;
     this._pendingTicket = 0;
     this._counterFlush = null;
+    this._counterRetry = null;
     this._recount = null;
   }
 
@@ -866,11 +869,13 @@ export class ChatFileRepository {
    * delta for the next one; nothing is dropped.
    *
    * @param {number} delta
+   * @param {{force?: boolean}} [options] - `force` flushes what is pending
+   *   with no delta of its own (the retry of a failed flush)
    * @returns {Promise<void>}
    * @private
    */
-  async _adjustServerBytes(delta) {
-    if (!delta) return;
+  async _adjustServerBytes(delta, { force = false } = {}) {
+    if (!delta && !force) return;
     this._pendingServerBytes += delta;
     this._pendingTicket += 1;
     const ticket = this._pendingTicket;
@@ -889,7 +894,10 @@ export class ChatFileRepository {
    * instance wrote in between. A missing counter is left alone (the next quota
    * check recounts and creates it, and the recount sees the files). When the
    * write fails — a lock timeout, a lost race beyond the retries — the delta goes
-   * back to the pending sum for the next flush.
+   * back to the pending sum, and a flush is tried again after
+   * {@link SERVER_COUNTER_RETRY_FLUSH_MS} (or earlier, with the next upload).
+   * ponytail: a delta still pending at exit is lost; the recount every
+   * {@link SERVER_COUNTER_RECOUNT_MS} corrects it.
    *
    * @returns {Promise<number>} The last ticket whose delta this flush took
    * @private
@@ -930,6 +938,11 @@ export class ChatFileRepository {
       }
     }
     this._pendingServerBytes += delta;
+    this._counterRetry ??= setTimeout(() => {
+      this._counterRetry = null;
+      this._adjustServerBytes(0, { force: true }).catch(() => {});
+    }, SERVER_COUNTER_RETRY_FLUSH_MS);
+    this._counterRetry.unref?.();
     return ticket;
   }
 

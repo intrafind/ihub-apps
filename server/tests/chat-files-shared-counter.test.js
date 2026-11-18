@@ -134,6 +134,27 @@ describe('shared server-wide quota counter', () => {
     assert.equal((await counter()).serverBytes, 114);
   });
 
+  it('a counter write that times out is retried on its own, without a next upload', async () => {
+    await put(a, 0, 'seed', 1_000_000);
+    const documents = provider.documents;
+    let failures = 1;
+    const flaky = Object.create(documents);
+    flaky.put = (ns, key, ...rest) => {
+      if (key === COUNTER_KEY && failures-- > 0) {
+        return Promise.reject(new LockTimeoutError('Timed out waiting for lock'));
+      }
+      return documents.put(ns, key, ...rest);
+    };
+    const repo = new ChatFileRepository({ documents: flaky, blobs: provider.blobs });
+    await put(repo, 1, 'x'.repeat(100), 1_000_000);
+    assert.equal((await counter()).serverBytes, 4);
+    const until = Date.now() + 5000;
+    while ((await counter()).serverBytes !== 104 && Date.now() < until) {
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    assert.equal((await counter()).serverBytes, 104);
+  });
+
   it('concurrent stale-counter checks of one instance share one recount', async () => {
     await put(a, 1, 'a'.repeat(100), 100000);
     await provider.documents.put(NS, COUNTER_KEY, {
