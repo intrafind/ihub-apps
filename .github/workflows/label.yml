@@ -4,13 +4,20 @@
 # To use this workflow, you will need to set up a .github/labeler.yml
 # file with configuration.  For more information, see:
 # https://github.com/actions/labeler
+#
+# Runs on `pull_request`, not `pull_request_target`: GitHub blocks
+# `pull_request_target` in public repositories by default from 2026-12-02.
+# Runs from forks and runs triggered by Dependabot get a read-only token and
+# cannot apply labels, so the job is skipped for them instead of failing.
 
 name: Labeler
-on: [pull_request_target]
+on: [pull_request]
 
 jobs:
   label:
-
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     permissions:
       contents: read
