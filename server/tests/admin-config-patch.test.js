@@ -277,6 +277,98 @@ describe('PATCH /api/admin/configs/platform: merge semantics', () => {
   });
 });
 
+describe('review round 4: secret containers, deletions, a missing file', () => {
+  test.each([
+    ['an array', []],
+    ['a string', 'key'],
+    ['a number', 1]
+  ])('speech.azure as %s is refused and the stored key is kept', async (_label, azure) => {
+    const before = await readText();
+
+    const response = await patch({ speech: { azure } });
+
+    expect(response.status).toBe(400);
+    expect(response.body.detail).toMatch(/speech\.azure must be an object/);
+    expect(await readText()).toBe(before);
+  });
+
+  test('a POST with speech.azure as an array is refused too', async () => {
+    const before = await readText();
+    const response = await request(appFor(LOCAL_ADMIN))
+      .post('/api/admin/configs/platform')
+      .send({ speech: { azure: [] } });
+    expect(response.status).toBe(400);
+    expect(await readText()).toBe(before);
+  });
+
+  test('a sibling speech field is still patched, and null on the key still clears it', async () => {
+    await patch({ speech: { defaultService: 'model' } }).expect(200);
+    expect((await readPlatform()).speech).toEqual({
+      defaultService: 'model',
+      azure: { region: 'westeurope', subscriptionKey: 'ENC[speech-key]' }
+    });
+
+    await patch({ speech: { azure: { subscriptionKey: null } } }).expect(200);
+    expect((await readPlatform()).speech.azure).toEqual({ region: 'westeurope' });
+  });
+
+  test('null on an aiAcknowledgement field deletes it; the server-owned fields stay', async () => {
+    await writeConfig('platform.json', {
+      ...PLATFORM,
+      aiAcknowledgement: {
+        enabled: true,
+        policyUrl: '/policy',
+        requiredVersion: 3,
+        resetAt: '2026-01-01T00:00:00.000Z'
+      }
+    });
+
+    await patch({ aiAcknowledgement: { policyUrl: null } }).expect(200);
+
+    expect((await readPlatform()).aiAcknowledgement).toEqual({
+      enabled: true,
+      requiredVersion: 3,
+      resetAt: '2026-01-01T00:00:00.000Z'
+    });
+  });
+
+  test('a POST that leaves out an aiAcknowledgement field keeps it (partial POST)', async () => {
+    await writeConfig('platform.json', {
+      ...PLATFORM,
+      aiAcknowledgement: { enabled: true, policyUrl: '/policy', requiredVersion: 3 }
+    });
+
+    await request(appFor(LOCAL_ADMIN))
+      .post('/api/admin/configs/platform')
+      .send({ aiAcknowledgement: { enabled: false } })
+      .expect(200);
+
+    expect((await readPlatform()).aiAcknowledgement).toEqual({
+      enabled: false,
+      policyUrl: '/policy',
+      requiredVersion: 3
+    });
+  });
+
+  test('If-Match: * on a missing platform.json is 412 and creates nothing', async () => {
+    await fs.rm(file('platform.json'));
+
+    const response = await patch({ setup: { disabled: true } }, { ifMatch: '*' });
+
+    expect(response.status).toBe(412);
+    await expect(fs.access(file('platform.json'))).rejects.toThrow();
+  });
+
+  test('If-Match: * on a stored empty platform.json is applied', async () => {
+    await writeConfig('platform.json', {});
+
+    const response = await patch({ setup: { disabled: true } }, { ifMatch: '*' });
+
+    expect(response.status).toBe(200);
+    expect((await readPlatform()).setup).toEqual({ disabled: true });
+  });
+});
+
 describe('PATCH /api/admin/configs/platform: allowlist', () => {
   test.each(['ssl', 'ssrf', 'cors', 'rateLimit', 'proxy', 'logging'])(
     '%s has its own route and is refused',

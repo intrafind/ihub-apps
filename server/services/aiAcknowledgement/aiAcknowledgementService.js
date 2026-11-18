@@ -285,10 +285,14 @@ export function buildCsvRows(status, { platform = configCache.getPlatform() || {
  *
  * @param {Object|undefined} incoming - `aiAcknowledgement` of the request, if any
  * @param {Object|undefined} stored - The stored block
+ * @param {Object} [options]
+ * @param {boolean} [options.complete=false] - `incoming` is the whole block
+ *   (a PATCH merged onto the stored one): a form field it lacks was deleted
+ *   and is removed. Otherwise (a POST) a field it lacks keeps its stored value.
  * @returns {Object|undefined} The block to store; `stored` when the request has none
  * @throws {ServiceError} `BAD_REQUEST` for a malformed block or an unsafe URL
  */
-export function mergeSettingsForSave(incoming, stored) {
+export function mergeSettingsForSave(incoming, stored, { complete = false } = {}) {
   if (incoming === undefined) return stored;
   if (!incoming || typeof incoming !== 'object' || Array.isArray(incoming)) {
     throw new ServiceError('BAD_REQUEST', 'aiAcknowledgement must be an object');
@@ -326,6 +330,7 @@ export function mergeSettingsForSave(incoming, stored) {
   const merged = { ...before };
   for (const key of ['enabled', 'enforce', 'text', 'policyUrl']) {
     if (incoming[key] !== undefined) merged[key] = incoming[key];
+    else if (complete) delete merged[key];
   }
   if (before.requiredVersion !== undefined) merged.requiredVersion = before.requiredVersion;
   else delete merged.requiredVersion;

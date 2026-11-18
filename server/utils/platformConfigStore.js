@@ -33,10 +33,12 @@ export const PLATFORM_FILE = 'config/platform.json';
 export const SKIP = Symbol('platform-update-skip');
 
 /**
- * @param {Object|((draft: Object) => Object|void|symbol|Promise<Object|void|symbol>)} change -
+ * @param {Object|((draft: Object, info: {exists: boolean}) => Object|void|symbol|Promise<Object|void|symbol>)} change -
  *   Either a patch of top-level keys to overwrite, or a function that gets a
  *   private copy of the stored file and either changes it in place or returns
- *   the replacement. Return {@link SKIP} to write nothing.
+ *   the replacement. Return {@link SKIP} to write nothing. A missing file is
+ *   handed over as `{}` (with `create`); `info.exists` tells it apart from a
+ *   stored `{}`, for a precondition such as `If-Match: *`.
  * @param {Object} [options]
  * @param {boolean} [options.create=false] - Allow starting from nothing when the
  *   file does not exist (first run). By default a missing file is an error: every
@@ -67,7 +69,7 @@ export async function updatePlatform(change, { create = false } = {}) {
       }
       const draft =
         current && typeof current === 'object' && !Array.isArray(current) ? current : {};
-      const returned = await mutate(draft);
+      const returned = await mutate(draft, { exists: current !== null && current !== undefined });
       if (returned === SKIP) return undefined;
       const next = returned === undefined ? draft : returned;
       return encryptPlatformSecrets(next);

@@ -267,6 +267,25 @@ function validatePlatformSections(newConfig) {
     throw new ServiceError('BAD_REQUEST', `proxyAuth.sharedSecretHeader ${secretHeaderProblem}`);
   }
 
+  // A secret is restored (kept when omitted or redacted) by walking the
+  // objects on its path. A container of another type (`speech.azure: []`)
+  // cannot be walked, so saving it would delete the stored secret without the
+  // explicit `null` that clearing one takes. `null` keeps its meaning.
+  for (const [index, segments] of SECRET_SEGMENTS.entries()) {
+    if (PLATFORM_SECRET_PATHS[index].path.includes('[]')) continue;
+    let container = newConfig;
+    for (let depth = 0; depth < segments.length - 1; depth++) {
+      container = container[segments[depth]];
+      if (container === undefined || container === null) break;
+      if (!isPlainObject(container)) {
+        throw new ServiceError(
+          'BAD_REQUEST',
+          `${segments.slice(0, depth + 1).join('.')} must be an object`
+        );
+      }
+    }
+  }
+
   if (
     newConfig.cookieSettings !== undefined &&
     (newConfig.cookieSettings === null ||
@@ -294,9 +313,13 @@ function validatePlatformSections(newConfig) {
  *
  * @param {Object} existingConfig - The stored body
  * @param {Object} newConfig - The submitted sections
+ * @param {Object} [options]
+ * @param {'replace'|'merge'} [options.mode='replace'] - `merge` (PATCH): the
+ *   submitted sections are already the stored ones with the patch applied, so
+ *   a field missing from them was deleted by the patch and stays deleted
  * @returns {Object} The body to store (secrets not yet restored)
  */
-function mergePlatformSections(existingConfig, newConfig) {
+function mergePlatformSections(existingConfig, newConfig, { mode = 'replace' } = {}) {
   const mergedConfig = {
     ...existingConfig,
     // Listed explicitly for the same reason as `mcpServer` below: this merge
@@ -316,7 +339,8 @@ function mergePlatformSections(existingConfig, newConfig) {
     // block, so a stale form cannot re-validate everyone.
     aiAcknowledgement: mergeSettingsForSave(
       newConfig.aiAcknowledgement,
-      existingConfig.aiAcknowledgement
+      existingConfig.aiAcknowledgement,
+      { complete: mode === 'merge' }
     ),
     // Provenance records (#3327): retention, store switch, verify access, media and
     // watermark tunables. Validated and deep-merged, so keys a form does not own survive.
@@ -393,15 +417,18 @@ async function applyPlatformChange(req, body, { mode }) {
   // answer 200 while replacing `features`, `cors`, `storage`, `chats`,
   // `runLog`, `rateLimit` and the rest with nothing.
   const { data: stored } = await updatePlatform(
-    async current => {
-      assertIfMatch(req, current, 'platform');
+    async (current, { exists = true } = {}) => {
+      // A missing file is handed over as `{}`; the precondition is checked
+      // against "missing" (`If-Match: *` fails, the read's ETag of a missing
+      // file matches), never against an empty file.
+      assertIfMatch(req, exists ? current : null, 'platform');
       firstRun = current === null || Object.keys(current).length === 0;
       existingConfig = structuredClone(current);
       newConfig =
         mode === 'merge' ? sectionsFromPatch(existingConfig, body) : structuredClone(body);
 
       validatePlatformSections(newConfig);
-      mergedConfig = mergePlatformSections(existingConfig, newConfig);
+      mergedConfig = mergePlatformSections(existingConfig, newConfig, { mode });
 
       // Put back what the admin read redacted or left out (JWT secrets, the
       // speech key, masked JWKS URLs): omitted keeps, null clears.
