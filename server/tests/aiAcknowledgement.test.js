@@ -1112,6 +1112,37 @@ describe('acknowledgement documents', () => {
     expect(await entriesOf('u0')).toHaveLength(1);
   });
 
+  test('a damaged document another write replaced meanwhile is not overwritten', async () => {
+    await repo().record('u0', entry);
+    const files = await fs.readdir(storage.dir, { recursive: true });
+    const name = files.find(file => file.endsWith(`${acknowledgementKey('u0')}.json`));
+    await fs.writeFile(path.join(storage.dir, name), '{"torn');
+    const documents = storage.current.documents;
+    const realGet = documents.get.bind(documents);
+    const other = { ...entry, version: 2 };
+    let reads = 0;
+    const spy = jest.spyOn(documents, 'get').mockImplementation(async (ns, key) => {
+      reads += 1;
+      if (reads === 2) {
+        // Another worker replaced the damaged document after the first read.
+        await documents.delete(ns, key);
+        await documents.put(
+          ns,
+          key,
+          { version: 1, userId: 'u0', aiAcknowledgements: [other] },
+          { ownerId: 'u0', etag: null }
+        );
+      }
+      return realGet(ns, key);
+    });
+    try {
+      expect((await repo().record('u0', entry)).recorded).toBe(true);
+    } finally {
+      spy.mockRestore();
+    }
+    expect(await entriesOf('u0')).toEqual([other, entry]);
+  });
+
   test('deleting a user removes their acknowledgement document', async () => {
     await repo().record('u0', entry);
     const { USER_CLEANUP_STEPS } = await import('../services/userDeletion.js');

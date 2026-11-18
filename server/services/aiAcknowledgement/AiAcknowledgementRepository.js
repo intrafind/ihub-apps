@@ -243,10 +243,15 @@ export class AiAcknowledgementRepository {
       };
       const { next, result } = mutate(structuredClone(current));
       if (!next) return result;
+      // A damaged document has no etag to write against: it is overwritten
+      // unconditionally, so look once more right before, and start over when
+      // another write replaced it meanwhile.
+      // ponytail: a write landing between this look and the put is still lost;
+      // closing that needs the store to report a damaged document's etag.
+      if (doc?.damaged && !(await this._read(key))?.damaged) continue;
       try {
         await this.documents.put(AI_ACKNOWLEDGEMENTS_NAMESPACE, key, next, {
           ownerId: String(userId),
-          // A damaged document is overwritten unconditionally (see _read).
           ...(doc?.damaged ? {} : { etag: doc ? doc.etag : null })
         });
         return result;
