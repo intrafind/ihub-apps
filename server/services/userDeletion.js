@@ -196,6 +196,16 @@ export const USER_CLEANUP_STEPS = [
     }
   },
   {
+    // The user's AI-use acknowledgements (the audit log keeps the record of them).
+    name: 'aiAcknowledgements',
+    kind: 'content',
+    run: async userId => {
+      const { getAiAcknowledgementRepository } =
+        await import('./aiAcknowledgement/AiAcknowledgementRepository.js');
+      return { removed: (await getAiAcknowledgementRepository().delete(userId)) ? 1 : 0 };
+    }
+  },
+  {
     // What the user's new chats start with, per app (#2923).
     name: 'integrationPreferences',
     kind: 'content',

@@ -51,7 +51,9 @@ export async function buildStatus({ refresh = false, deps = {} } = {}) {
   const enabled = allModels.filter(model => model.enabled !== false);
   const skippedDisabled = allModels.length - enabled.length;
   const activeKeyId = deps.activeKeyId !== undefined ? deps.activeKeyId : getActiveKeyId() || null;
-  const acknowledgements = (deps.acknowledgementSummary || acknowledgementSummary)({ platform });
+  const acknowledgements = await (deps.acknowledgementSummary || acknowledgementSummary)({
+    platform
+  });
   const provenance = provenanceSettings(platform);
   const conformity = deps.conformity || getConformity();
   const acknowledgementsView = {

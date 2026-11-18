@@ -52,7 +52,8 @@ jest.unstable_mockModule('../services/ChangeHistoryService.js', () => ({
 
 // No provider, so ConfigStore takes its filesystem path under the mocked root.
 jest.unstable_mockModule('../storage/bootstrap.js', () => ({
-  getStorage: () => null
+  getStorage: () => null,
+  readFacet: () => null
 }));
 
 jest.unstable_mockModule('../configCache.js', () => ({

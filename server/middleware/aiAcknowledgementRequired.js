@@ -18,82 +18,64 @@
 import {
   getSettings,
   isAcknowledged,
-  isMachinePrincipal,
-  usersFilePath
+  isMachinePrincipal
 } from '../services/aiAcknowledgement/aiAcknowledgementService.js';
+import { getAiAcknowledgementRepository } from '../services/aiAcknowledgement/AiAcknowledgementRepository.js';
+import {
+  isRememberedAcknowledged,
+  rememberAcknowledged
+} from '../services/aiAcknowledgement/acknowledgementCache.js';
 import {
   ACK_COOKIE,
   hasValidAcknowledgementCookie,
   verifyAcknowledgement
 } from '../services/aiAcknowledgement/guestAcknowledgement.js';
-import { loadUsers, loadUsersFresh } from '../utils/userManager.js';
 import { ServiceError } from '../utils/ServiceError.js';
-import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
 
 /**
  * Whether the caller has a valid acknowledgement.
  *
- * A principal with a users.json record is judged by it. When the cached copy
- * says "not yet", the signed cookie `POST /me` set counts too, unless it was
- * issued before an admin removed this user's acknowledgements
- * (`aiAcknowledgementsClearedAt`): the confirmation may have landed on another
- * worker milliseconds ago. Without the cookie, enforcement re-reads the record
- * once from the store before refusing; ask-only answers from the cached copy.
- * Anyone else, an anonymous guest above all, by the signed cookie.
+ * A signed-in user is judged by their acknowledgement document in the shared
+ * store: one small read, the same answer on every worker and pod. When it says
+ * "not yet", the signed cookie `POST /me` set counts too, unless it was issued
+ * before an admin removed this user's acknowledgements
+ * (`aiAcknowledgementsClearedAt`). The cookie also carries a user through a
+ * store that cannot be read (fail-open: a cookie of a user whose
+ * acknowledgement an admin removed then counts until the store is readable
+ * again; see docs/ai-act.md). An anonymous guest is judged by the cookie alone.
+ *
+ * Version bumps and "Remove all" need nothing here: `requiredVersion` and
+ * `resetAt` in the settings already rule out older entries and cookies.
  *
  * @param {import('express').Request} req
  * @param {Object} settings - See `getSettings`
- * @returns {Promise<{acknowledged: boolean, hasRecord: boolean}>}
+ * @returns {Promise<{acknowledged: boolean, record: Object|null, storeUnreadable?: boolean}>}
+ *   `record` is the user's acknowledgement document, null for a guest or a user
+ *   without one; `storeUnreadable` when the document could not be read
  */
 export async function evaluateAcknowledgement(req, settings) {
   const userId = req.user?.id;
-  const file = usersFilePath(configCache.getPlatform() || {});
-  const record = id => {
-    if (!id || id === 'anonymous') return null;
-    const users = loadUsers(file).users || {};
-    return Object.hasOwn(users, id) ? users[id] : null;
-  };
-
-  let user = record(userId);
-  if (user) {
-    if (isAcknowledged(user, settings)) return { acknowledged: true, hasRecord: true };
-    if (cookieCountsFor(req, userId, user, settings))
-      return { acknowledged: true, hasRecord: true };
-    // Ask-only (`enforce: false`) blocks nothing, so a cached "not yet" costs at most a
-    // dialog shown again until the config sync reaches this worker. Re-reading there ran
-    // on every page load (GET /me) of everyone who never confirms: a full read, parse
-    // and re-cache of users.json each time.
-    if (!settings.enforce) return { acknowledged: false, hasRecord: true };
-    try {
-      const fresh = (await loadUsersFresh(file)).users || {};
-      user = Object.hasOwn(fresh, userId) ? fresh[userId] : null;
-    } catch (error) {
-      logger.debug('Could not re-read users for the acknowledgement check', {
-        component: 'AiAcknowledgement',
-        error
-      });
-    }
-    return { acknowledged: user ? isAcknowledged(user, settings) : false, hasRecord: true };
+  if (!userId || userId === 'anonymous') {
+    return { acknowledged: hasValidAcknowledgementCookie(req, settings), record: null };
   }
-  return { acknowledged: hasValidAcknowledgementCookie(req, settings), hasRecord: false };
-}
-
-/**
- * Whether the request's acknowledgement cookie proves a confirmation by this
- * user that a per-user removal has not revoked since.
- *
- * @param {import('express').Request} req
- * @param {string} userId - Key in users.json
- * @param {Object} record - The user's (cached) users.json record
- * @param {Object} settings - See `getSettings`
- * @returns {boolean}
- */
-function cookieCountsFor(req, userId, record, settings) {
+  let record = null;
+  let storeUnreadable = false;
+  try {
+    record = await getAiAcknowledgementRepository().get(userId);
+  } catch (error) {
+    storeUnreadable = true;
+    logger.warn('Could not read the AI acknowledgement of a user; only the cookie counts', {
+      component: 'AiAcknowledgement',
+      userId,
+      error
+    });
+  }
+  if (isAcknowledged(record, settings)) return { acknowledged: true, record };
   const issuedAt = verifyAcknowledgement(req.cookies?.[ACK_COOKIE], `user:${userId}`, settings);
-  if (issuedAt === null) return false;
-  const clearedAt = Date.parse(record.aiAcknowledgementsClearedAt);
-  return !Number.isFinite(clearedAt) || issuedAt > clearedAt;
+  const clearedAt = Date.parse(record?.aiAcknowledgementsClearedAt);
+  const cookieCounts = issuedAt !== null && (!Number.isFinite(clearedAt) || issuedAt > clearedAt);
+  return { acknowledged: cookieCounts, record, storeUnreadable };
 }
 
 /**
@@ -105,12 +87,23 @@ function cookieCountsFor(req, userId, record, settings) {
 export async function aiAcknowledgementRequired(req, res, next) {
   try {
     const settings = getSettings();
-    // Off or ask-only: a pure no-op, no users.json read.
+    // Off or ask-only: a pure no-op, no store read.
     if (!settings.enabled || !settings.enforce) return next();
     if (isMachinePrincipal(req.user)) return next();
 
-    const { acknowledged } = await evaluateAcknowledgement(req, settings);
-    if (acknowledged) return next();
+    // A signed-in user's "yes" is remembered on this worker (see
+    // acknowledgementCache); "not yet" is always asked again.
+    const userId = req.user?.id;
+    const isUser = Boolean(userId) && userId !== 'anonymous';
+    if (isUser && isRememberedAcknowledged(userId, settings)) return next();
+
+    const { acknowledged, storeUnreadable } = await evaluateAcknowledgement(req, settings);
+    if (acknowledged) {
+      // A yes from the cookie alone while the store was unreadable is not
+      // remembered: the store may say the acknowledgement was removed.
+      if (isUser && !storeUnreadable) rememberAcknowledged(userId, settings);
+      return next();
+    }
 
     logger.debug('AI acknowledgement required', {
       component: 'AiAcknowledgement',
