@@ -71,6 +71,8 @@ export const contextUsageData = z.object({
   maxOutputTokens: z.number().int().nonnegative().prefault(0),
   /** `provider`: anchored on the provider's count; `estimate`: counted by the server. */
   source: z.enum(['provider', 'estimate']).prefault('estimate'),
+  /** The system prompt's share of `inputTokens` (a turn's end only): the next turn replaces it. */
+  systemTokens: z.number().int().nonnegative().optional(),
   step: z.number().int().nonnegative().optional()
 });
 

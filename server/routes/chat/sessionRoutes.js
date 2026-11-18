@@ -814,7 +814,8 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
     connectResume = null,
     canApproveTools = false,
     runId = null,
-    continueRun = null
+    continueRun = null,
+    priorContext = null
   }) {
     await logInteraction('chat_request', buildLogData(true));
 
@@ -834,7 +835,8 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
       persistence,
       toolApproval,
       connectResume,
-      canApproveTools
+      canApproveTools,
+      priorContext
     });
   }
 
@@ -1263,6 +1265,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
 
         let conversation = messages;
         let persistence = null;
+        let priorContext = null;
         const newMessage = messages[0];
         const stored = await repository.getMessages(chatId);
         let history = stored.messages;
@@ -1381,6 +1384,18 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
         const persistedAttachments =
           turnFileAttachments.length > 0 ? turnFileAttachments : messageAttachments(newMessage);
         const includeHistory = chatApp?.sendChatHistory !== false && sendChatHistory !== false;
+        // What the last answer's prompt held, stored with it: the context
+        // figure of this turn starts from it rather than counting the history
+        // again. The history is already cut at an edit or a regenerate; an
+        // answer without text is not in the prompt (`historyForPrompt`).
+        priorContext = includeHistory
+          ? history.findLast(
+              entry =>
+                entry.role === 'assistant' &&
+                typeof entry.content === 'string' &&
+                entry.content.trim()
+            )?.context || null
+          : null;
         const hydratedHistory = includeHistory
           ? await hydrateHistoryForPrompt(chatId, history, {
               store: repository.fileStore?.()
@@ -1695,6 +1710,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           // Only a client that draws the approval card can answer one.
           canApproveTools: toolApprovalCapable === true,
           runId: turnRunId,
+          priorContext,
           ...(continuesRun ? { continueRun: { interactionId: pausedTurn.interactionId } } : {})
         });
         // Refused at persistence: the chat's container changed under the

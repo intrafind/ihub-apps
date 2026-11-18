@@ -535,6 +535,9 @@ class ChatService {
    *   than {@link DURABLE_TURN_WALL_CLOCK_MS}.
    * @param {string} [params.clientTimezone] - The user's IANA timezone, handed to the tools
    *   (the scheduling tools read it) and to the scheduling note in the system prompt.
+   * @param {Object|null} [params.priorContext] - The `context` stored with the last answer
+   *   of the history the prompt holds: the context figure starts from it instead of
+   *   counting the history again (see `loop/contextTracker.js`).
    * @returns {Promise<Object>} `{ runId, status, content, finishReason, usage, messages, knowledgeSources,
    *   pendingInteraction?, toolName?, error?, errorInfo?, structuredOutput?, refusal? }`
    */
@@ -563,7 +566,8 @@ class ChatService {
     trigger = null,
     maxWallClockMs = null,
     clientTimezone = null,
-    outputId = undefined
+    outputId = undefined,
+    priorContext = null
   }) {
     const {
       app,
@@ -823,7 +827,12 @@ class ChatService {
     // join the pictures the model generated.
     const generatedImages = [];
     // How full the model's context window is, reported live and with the end of the run.
-    const contextTracker = createContextTracker(model);
+    // It starts from the context stored with the previous answer, unless the
+    // turn continues a stored transcript (an approval or a connect), which that
+    // context does not describe.
+    const contextTracker = createContextTracker(model, {
+      prior: toolApproval?.resume || connectResume ? null : priorContext
+    });
     const turnSeam = chatTurnSeam({
       chatId,
       buildLogData: log,

@@ -253,7 +253,9 @@ function normalizeUsage(usage) {
 
 /**
  * The context-window state a turn ended with (see `loop/contextTracker.js`),
- * or null: what the chat reopens with, tool results included.
+ * or null: what the chat reopens with, and what the next turn's context
+ * figure starts from (`systemTokens`: the system prompt's share of it, which
+ * the next turn replaces with its own).
  */
 function normalizeContext(context) {
   if (!context || typeof context !== 'object') return null;
@@ -261,11 +263,13 @@ function normalizeContext(context) {
   const inputTokens = Math.round(Number(context.inputTokens));
   if (!(contextWindow > 0) || !(inputTokens >= 0)) return null;
   const maxOutputTokens = Math.round(Number(context.maxOutputTokens));
+  const systemTokens = Math.round(Number(context.systemTokens));
   return {
     contextWindow,
     inputTokens,
     maxOutputTokens: maxOutputTokens > 0 ? maxOutputTokens : 0,
-    source: context.source === 'provider' ? 'provider' : 'estimate'
+    source: context.source === 'provider' ? 'provider' : 'estimate',
+    ...(systemTokens >= 0 && context.systemTokens != null ? { systemTokens } : {})
   };
 }
 
