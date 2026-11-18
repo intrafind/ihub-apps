@@ -1195,3 +1195,10 @@ Windows sign-in now works like every other sign-in method:
   example a Mac) does.
 - The health check (`/api/health`) never asks for Windows sign-in, and a refused sign-in no longer makes
   the app think the server is offline.
+
+## The Model Can Be Changed While an Alert Hint Waits for "I Understand"
+
+When the selected model had an alert hint (for example an experimental model), the model selector
+under the chat input was locked together with the input, so users had to click **I Understand**
+before they could pick another model. The selector now stays usable: sending is still blocked until
+the alert is acknowledged, but switching to a different model needs no acknowledgement.

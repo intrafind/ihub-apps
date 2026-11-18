@@ -2430,3 +2430,11 @@ typography — callouts, framed tables and highlighted code included — and **I
 column on the right on wide screens, marking the entry you are reading. **Newer release** and **Older
 release** at the bottom move through the releases, and every release has its own address
 (`/admin/changelog?version=5.6.4`), so Back, a bookmark or a reload return to it.
+
+## Model Hints Can Be Set in the Model Editor
+
+Admins can now give a model a hint — the message users see above the chat input when they select
+it — on **Admin → Models → (model) → User Hint**, instead of editing the model's JSON file. The
+section sets the level (hint, info, warning, alert), whether users can dismiss it (hint and info
+only) and the message per language, with a preview of how it looks in the chat. Turning it off
+removes the hint from the model. See [Model Hints](../../models.md#model-hints).

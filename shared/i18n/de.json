@@ -2040,7 +2040,22 @@
       },
       "moreActions": "Weitere Modell-Aktionen",
       "disableAllDefault": "Die Einstellung für das Standardmodell wird entfernt. Werden Modelle wieder aktiviert, wird das erste Chat-Modell der Liste zum Standard.",
-      "disableAllDefaultNamed": "Die Einstellung für das Standardmodell wird entfernt (derzeit „{{name}}“). Werden Modelle wieder aktiviert, wird das erste Chat-Modell der Liste zum Standard, nicht unbedingt „{{name}}“."
+      "disableAllDefaultNamed": "Die Einstellung für das Standardmodell wird entfernt (derzeit „{{name}}“). Werden Modelle wieder aktiviert, wird das erste Chat-Modell der Liste zum Standard, nicht unbedingt „{{name}}“.",
+      "hint": {
+        "title": "Hinweis für Benutzer",
+        "description": "Eine Nachricht über der Chat-Eingabe, wenn Benutzer dieses Modell auswählen, z. B. eine Empfehlung oder eine Warnung zu einem experimentellen Modell.",
+        "enabled": "Hinweis für dieses Modell anzeigen",
+        "level": "Stufe",
+        "levels": {
+          "hint": "Hinweis (blau)",
+          "info": "Info (cyan)",
+          "warning": "Warnung (gelb, nicht ausblendbar)",
+          "alert": "Alarm (rot, muss vor dem Senden bestätigt werden)"
+        },
+        "dismissible": "Benutzer können ihn ausblenden",
+        "message": "Nachricht",
+        "preview": "Vorschau"
+      }
     },
     "chat": {
       "title": "Chat",

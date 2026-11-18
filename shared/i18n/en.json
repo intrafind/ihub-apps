@@ -1570,7 +1570,22 @@
       },
       "moreActions": "More model actions",
       "disableAllDefault": "The default model setting is cleared. When models are enabled again, the first chat model in the list becomes the default.",
-      "disableAllDefaultNamed": "The default model setting is cleared (\"{{name}}\" is the default now). When models are enabled again, the first chat model in the list becomes the default, not necessarily \"{{name}}\"."
+      "disableAllDefaultNamed": "The default model setting is cleared (\"{{name}}\" is the default now). When models are enabled again, the first chat model in the list becomes the default, not necessarily \"{{name}}\".",
+      "hint": {
+        "title": "User Hint",
+        "description": "A message shown above the chat input when users select this model, for example a recommendation or a warning about an experimental model.",
+        "enabled": "Show a hint for this model",
+        "level": "Level",
+        "levels": {
+          "hint": "Hint (blue)",
+          "info": "Info (cyan)",
+          "warning": "Warning (yellow, cannot be dismissed)",
+          "alert": "Alert (red, must be acknowledged before sending)"
+        },
+        "dismissible": "Users can dismiss it",
+        "message": "Message",
+        "preview": "Preview"
+      }
     },
     "auth": {
       "configuration": "Authentication Configuration",

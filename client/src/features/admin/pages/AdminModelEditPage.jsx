@@ -21,6 +21,7 @@ import AdminEditPageShell from '../../../shared/components/AdminEditPageShell';
 import MarketplaceModelReviewNotice from '../components/marketplace/MarketplaceModelReviewNotice';
 import AdminLoadError from '../components/AdminLoadError';
 import { UsageLimitBucketFields, normalizeLimitBucket } from '../components/UsageLimitsEditor';
+import { normalizeModelHint } from '../components/ModelHintSection';
 
 /**
  * A number field that accepts 0. `''`/null/undefined mean "not set" and drop
@@ -214,6 +215,8 @@ function AdminModelEditPage() {
     // previously saved budget; a new model simply leaves it out.
     dataToSend.usageLimits =
       normalizeLimitBucket(data.usageLimits) || (id === 'new' ? undefined : {});
+    // Empty languages are dropped; a hint without any text is removed.
+    dataToSend.hint = normalizeModelHint(data.hint);
     // A language added without a voice yet means nothing to save.
     if (dataToSend.tts?.voices) {
       const voices = Object.entries(dataToSend.tts.voices).filter(([, voice]) => voice);
