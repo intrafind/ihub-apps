@@ -76,6 +76,7 @@ import {
   renderDigest,
   digestRoomOf,
   escapeCondensedPrefix,
+  factsRoomOf,
   isCondensedContent,
   notesOf,
   DIGEST_FALLBACK_REASONS,
@@ -1714,6 +1715,11 @@ export class AgentLoop {
           // The user the turn runs for: usage limits and reports count the summary.
           options: options.user ? { user: options.user } : {},
           language: ctx.request.language,
+          // The room its lines have once condensed: told to the model, so it
+          // chooses what to drop instead of losing the end of the notes.
+          roomChars: factsRoomOf(
+            Math.min(policy.maxDigestChars, digestRoom, Math.max(MIN_DIGEST_CHARS, notesLeft))
+          ),
           telemetry: {
             // No ledger run of its own: the turn's `context/compaction` records it.
             autoRun: false,

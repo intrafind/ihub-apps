@@ -173,6 +173,11 @@ test('a tool loop over the threshold condenses older batches into a checked find
   assert.equal(summaryRequests.length, 1, 'one summary call');
   assert.match(summaryRequests[0].body.messages[1].content, /Compare the market caps/);
   assert.match(summaryRequests[0].body.messages[1].content, /\[r1\] webSearch/);
+  assert.match(
+    summaryRequests[0].body.messages[1].content,
+    /Size limit: all your lines together may take at most \d+ characters/,
+    'the model is told the room its notes have'
+  );
   assert.equal(summaryRequests[0].body.thinkingEnabled, false);
 
   // The step after the compaction reads the digest instead of the result.

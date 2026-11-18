@@ -267,6 +267,47 @@ test('summarizeCalls: one call per chunk with the task; facts kept with their so
   assert.equal(summaryFailureOf(summary, calls), null);
 });
 
+test('summarizeCalls: the model is told the room its lines have, shared among the chunks', async () => {
+  const calls = [
+    {
+      ref: 'r1',
+      name: 't',
+      args: '{}',
+      content: 'NVIDIA (NVDA) market cap 5.1 trillion USD, P/E 45.2 ' + 'x'.repeat(30_000)
+    },
+    { ref: 'r2', name: 't', args: '{}', content: 'y'.repeat(10_000) }
+  ];
+  const seen = [];
+  const llmClient = {
+    complete: async params => {
+      seen.push(params.messages[1].content);
+      return {
+        content: 'FACT | r1 | NVIDIA (NVDA): market cap 5.1 trillion USD; P/E 45.2 | x.test',
+        usage: {}
+      };
+    }
+  };
+  // A small window: one chunk per result.
+  const summary = await summarizeCalls({
+    llmClient,
+    model: { id: 'm', contextWindow: 8_000, maxOutputTokens: 1000 },
+    calls,
+    roomChars: 4000
+  });
+  const rooms = seen.map(text => Number(/at most (\d+) characters/.exec(text)?.[1]));
+  assert.ok(rooms.length >= 2, `${rooms.length} chunks`);
+  assert.ok(rooms.every(room => room >= 300));
+  assert.ok(rooms.reduce((a, b) => a + b, 0) <= 4000 + 300 * rooms.length);
+  assert.deepEqual(
+    summary.facts.map(f => f.text),
+    ['NVIDIA (NVDA): market cap 5.1 trillion USD; P/E 45.2'],
+    'a dense line of one entity passes the check'
+  );
+  const without = buildSummaryMessages(calls.slice(0, 1), { chunkChars: 96_000 });
+  assert.doesNotMatch(without[1].content, /Size limit/, 'no room given, none told');
+  assert.match(without[0].content, /Write densely/);
+});
+
 test('summarizeCalls: a failed chunk is reported, an abort of the run is thrown', async () => {
   const calls = collectCalls(transcript(), findToolBatches(transcript()).slice(0, 2), {
     nextRef: 1

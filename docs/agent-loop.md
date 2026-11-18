@@ -250,6 +250,11 @@ projected at `compactTargetShare` of the threshold
   `NOTFOUND` line for what the task needs and a result lacks. It never fills
   a gap; the digest and the wrap-up tell the answering model to say a missing
   figure is not available instead of supplying it from memory.
+- The summary model is told the room its lines have, in characters (what the
+  digest leaves after its calls and sources, shared among the chunks), so it
+  drops the least important lines itself instead of losing the end. It writes
+  densely: one line per entity and result, its facts as label and value
+  (`NVIDIA (NVDA): market cap 5.1 trillion USD; P/E 45.2`), no sentences.
 - A second compaction appends a new digest after the first; a digest is never
   summarised again, so the prompt prefix up to it stays cacheable.
 - From the first compaction on, the model is offered `recall_tool_result`
