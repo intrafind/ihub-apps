@@ -828,6 +828,17 @@ function callLines(calls, budget) {
   return lines;
 }
 
+/** Every reason a digest can name for what it lost (none: a full digest). */
+export const DIGEST_FALLBACK_REASONS = Object.freeze([
+  'summary_failed',
+  'summary_partial',
+  'summary_empty',
+  'summary_unavailable',
+  'compaction_limit',
+  'digest_truncated',
+  'context_overflow'
+]);
+
 /**
  * What a digest without (all) facts tells the model. Nothing is gone: every
  * result is listed by its ref and can be read in full again.

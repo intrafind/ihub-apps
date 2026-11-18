@@ -74,6 +74,7 @@ import {
   recallToolDefinition,
   renderDigest,
   digestRoomOf,
+  DIGEST_FALLBACK_REASONS,
   MIN_DIGEST_CHARS,
   selectBatches,
   summarizeCalls,
@@ -1538,8 +1539,9 @@ export class AgentLoop {
       const next = applyDigest(ctx.messages, calls, text, digestNumber);
       return replaced - estimateTranscriptTokens(calls.map(call => next[call.index]));
     };
-    // The smallest digest — calls and sources, the longest note — must free
-    // something, or the results are left as they are.
+    // The smallest digest — calls and sources only — must free tokens with
+    // whatever reason it may come to name, or the results are left as they
+    // are: it is what a digest falls back to when a larger one would not.
     const smallest = reason =>
       renderDigest({
         number: digestNumber,
@@ -1547,7 +1549,9 @@ export class AgentLoop {
         fallbackReason: reason,
         maxChars: MIN_DIGEST_CHARS
       });
-    if (freedBy(smallest('compaction_limit').text) <= 0) return 0;
+    if ([null, ...DIGEST_FALLBACK_REASONS].some(reason => freedBy(smallest(reason).text) <= 0)) {
+      return 0;
+    }
 
     const started = Date.now();
     const compactionId = `cmp-${crypto.randomUUID().slice(0, 8)}`;
