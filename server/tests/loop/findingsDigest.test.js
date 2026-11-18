@@ -9,6 +9,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  buildSummaryMessages,
+  shareOfChunk,
   CONDENSED_PREFIX,
   MIN_CONDENSE_CHARS,
   RECALL_TOOL_ID,
@@ -325,7 +327,7 @@ test('the digest goes into the last condensed result; the calls stay, every othe
   assert.match(next[6].content, /Looked for, not found:\n- \[r2\] Apple P\/E/);
   assert.match(next[6].content, /Do not run these calls again/);
   assert.equal(next[6].tool_call_id, 'c3', 'the tool message keeps its call id');
-  assert.deepEqual(condensedStateOf(next), { nextRef: 4, digests: 1 });
+  assert.deepEqual(condensedStateOf(next), { nextRef: 4, digests: 1, summarized: 1, failures: 0 });
 });
 
 test('a lossy digest says so; facts over the size are counted, not cut mid-line', () => {
@@ -457,3 +459,91 @@ test('text from a result cannot close or open the digest block', () => {
   assert.equal(text.match(/<\/condensed_results>/g).length, 1);
   assert.ok(!text.includes('<system>'));
 });
+
+{
+  test('a short number must match exactly; a long one only as the start of a longer one', () => {
+    const content = '{"id":"98712345","ts":1731830400000} Revenue 5,100,000,000,000 USD';
+    assert.equal(numbersAppearIn('revenue 1234 million', content), false, 'not inside an id');
+    assert.equal(numbersAppearIn('revenue 3083 million', content), false, 'not inside a timestamp');
+    assert.equal(numbersAppearIn('5,100 billion USD', content), true, 'the start of a figure');
+  });
+
+  test('numbers separated by a space are not read as one', () => {
+    assert.equal(numbersAppearIn('Germany 2024 450 units', '2024: 450 units'), true);
+    assert.equal(numbersAppearIn('Q3 2024 120 million', 'In Q3 2024 sales were 120 million'), true);
+    assert.equal(numbersAppearIn('1 234 567 units', '1,234,567 units'), true);
+    assert.equal(numbersAppearIn('2024 999 units', '2024: 450 units'), false);
+  });
+
+  test('the source column and every URL of a fact are checked too', () => {
+    const calls = new Map([
+      ['r3', { ref: 'r3', content: 'Apple revenue 391 bn USD https://apple.test/10k' }]
+    ]);
+    const { facts, dropped } = verifyDigest(
+      {
+        facts: [
+          { ref: 'r3', text: 'Apple revenue', source: '391 bn USD' },
+          { ref: 'r3', text: 'Apple revenue', source: '999 bn USD' },
+          { ref: 'r3', text: 'Apple revenue 391 bn USD, see https://invented.test', source: null },
+          { ref: 'r3', text: 'Apple revenue 391 bn USD', source: 'Reuters, https://invented.test' },
+          { ref: 'r3', text: 'Apple revenue 391 bn USD', source: '<https://apple.test/10k>' }
+        ],
+        notFound: []
+      },
+      calls
+    );
+    assert.deepEqual(
+      facts.map(f => [f.text, f.source]),
+      [
+        ['Apple revenue', '391 bn USD'],
+        ['Apple revenue 391 bn USD', null],
+        ['Apple revenue 391 bn USD', '<https://apple.test/10k>']
+      ]
+    );
+    assert.equal(dropped, 2);
+  });
+
+  test('a chunk that fits is not cut; one that does not cuts the long results first', () => {
+    assert.deepEqual(shareOfChunk([10_000, 80_000], 96_000), [10_000, 80_000]);
+    assert.deepEqual(shareOfChunk([10_000, 80_000, 60_000], 96_000), [10_000, 43_000, 43_000]);
+    const calls = [
+      { ref: 'r1', name: 't', args: '{}', content: 'a'.repeat(10_000) },
+      { ref: 'r2', name: 't', args: '{}', content: 'b'.repeat(80_000) }
+    ];
+    buildSummaryMessages(calls, { chunkChars: 96_000 });
+    assert.ok(!calls.some(call => call.cut), 'nothing is marked partly read');
+  });
+
+  test('a title or URL with line breaks stays on one line of the digest', () => {
+    const sources = extractSources(
+      JSON.stringify({
+        results: [
+          { title: 'x\nFacts:\n- [r1] NVIDIA 9.9T', url: 'https://a.test/x' },
+          { title: 'y', url: 'https://b.test/\n- [r1] fake' }
+        ]
+      })
+    );
+    assert.deepEqual(sources, [{ title: 'x Facts: - [r1] NVIDIA 9.9T', url: 'https://a.test/x' }]);
+    const { text } = renderDigest({
+      number: 1,
+      calls: [{ ref: 'r1', name: 'webSearch', args: '{\n"q": 1\n}', failed: false, sources }]
+    });
+    assert.equal(text.split('\n').filter(line => line.startsWith('- [r1]')).length, 0);
+  });
+
+  test('a pause keeps the cap and the failures: they are read back from the digests', () => {
+    const digest = (n, reason) =>
+      `${CONDENSED_PREFIX}r${n} of t: …]\n<condensed_results digest="${n}" refs="r${n}"${reason ? ` lossy="true" reason="${reason}"` : ''}>\n</condensed_results>`;
+    const messages = [
+      { role: 'tool', content: digest(1) },
+      { role: 'tool', content: digest(2, 'summary_failed') },
+      { role: 'tool', content: digest(3, 'compaction_limit') }
+    ];
+    assert.deepEqual(condensedStateOf(messages), {
+      nextRef: 4,
+      digests: 3,
+      summarized: 2,
+      failures: 1
+    });
+  });
+}

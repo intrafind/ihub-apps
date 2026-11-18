@@ -395,8 +395,9 @@ export class AgentLoop {
     ctx.compaction = {
       nextRef: condensedSoFar.nextRef,
       digests: condensedSoFar.digests,
-      count: 0,
-      failures: 0,
+      // Carried over a pause: the cap and the failures hold for the whole run.
+      count: condensedSoFar.summarized,
+      failures: condensedSoFar.failures,
       recalls: 0,
       archive: new Map(),
       archiveLoaded: false,
@@ -1532,7 +1533,9 @@ export class AgentLoop {
         });
       }
       fallbackReason = summaryFailureOf(summary, calls);
-      if (fallbackReason && fallbackReason !== 'summary_partial') state.failures += 1;
+      if (fallbackReason === 'summary_failed' || fallbackReason === 'summary_empty') {
+        state.failures += 1;
+      }
     } else {
       fallbackReason = state.failures >= 2 ? 'summary_unavailable' : 'compaction_limit';
     }
@@ -1568,7 +1571,8 @@ export class AgentLoop {
     );
     ctx.messages = next;
     state.digests = digestNumber;
-    state.count += 1;
+    // `maxCompactionsPerRun` counts the digests the summary model was asked for.
+    if (useModel) state.count += 1;
     state.lastTokensAfter = Math.max(0, tokensBefore - freedTokens);
     this._offerRecall(ctx);
 
