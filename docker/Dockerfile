@@ -25,8 +25,8 @@ WORKDIR /app
 
 # Copy package files for dependency installation
 COPY package*.json ./
-COPY client/package*.json ./client/
-COPY server/package*.json ./server/
+COPY client/package*.json client/.npmrc ./client/
+COPY server/package*.json server/.npmrc ./server/
 
 # Install all dependencies (including dev dependencies for build)
 RUN npm run install:all
