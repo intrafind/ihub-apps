@@ -270,8 +270,16 @@ function IdleLine({ idle }) {
 
 const FACT_TONE = {
   empty: 'text-gray-700 dark:text-gray-300',
-  failed: 'text-red-600 dark:text-red-400'
+  failed: 'text-red-600 dark:text-red-400',
+  attention: ATTENTION
 };
+
+/** The notes as a person reads them: without the block's opening and closing tags. */
+function notesText(digest) {
+  return String(digest || '')
+    .replace(/^<condensed_results[^>]*>\n?/, '')
+    .replace(/\n?<\/condensed_results>\s*$/, '');
+}
 
 /**
  * Facts of a segment or row, each one unbreakable, with a middle dot after it
@@ -585,15 +593,11 @@ function CompactionRow({ item, details }) {
           </button>
         )}
       </RowLine>
-      {item.status === 'completed' && (
-        <p
-          className={`mt-1 ms-5.5 break-words ${lossy ? ATTENTION : 'text-gray-500 dark:text-gray-400'}`}
-        >
-          {lossy
-            ? item.strategy === 'digest'
-              ? t('toolActivity.compaction.lossyRecall')
-              : t('toolActivity.compaction.lossyElided')
-            : t('toolActivity.compaction.why')}
+      {lossy && (
+        <p className={`mt-1 ms-5.5 break-words ${ATTENTION}`}>
+          {item.strategy === 'digest'
+            ? t('toolActivity.compaction.lossyRecall')
+            : t('toolActivity.compaction.lossyElided')}
         </p>
       )}
       {details && (tokens || item.trigger) && (
@@ -618,8 +622,13 @@ function CompactionRow({ item, details }) {
       )}
       {hasNotes && showNotes && (
         <div id={notesId} className="mt-1 ms-5.5">
+          {!lossy && (
+            <p className="mb-1 break-words text-gray-500 dark:text-gray-400">
+              {t('toolActivity.compaction.why')}
+            </p>
+          )}
           <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-md border border-gray-200 bg-gray-50 p-2 font-sans text-xs text-gray-700 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-300">
-            {item.digest}
+            {notesText(item.digest)}
           </pre>
           {item.digestTruncated && (
             <p className="mt-1 text-gray-500 dark:text-gray-400">

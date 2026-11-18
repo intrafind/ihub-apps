@@ -11,6 +11,7 @@ import assert from 'node:assert/strict';
 import { chatTurnSeam } from '../services/chat/chatSeams.js';
 import { createContextTracker } from '../services/loop/contextTracker.js';
 import { boundStoredActivity, shareableActivity } from '../services/chat/runActivity.js';
+import { pausedTurnTranscript } from '../services/chat/chatToolApproval.js';
 import { parseSseV2EventData } from '../services/loop/contracts/sseV2.js';
 import { SSE_V2_EVENTS } from '../../shared/runEvents.js';
 import { createStreamState, reduceRunEvents, getRun } from '../../shared/run/runReducer.js';
@@ -140,4 +141,24 @@ test('the stored answer keeps the row and its notes; a share keeps that it happe
   assert.equal(shared.digest, undefined, 'the notes hold what the calls found');
   assert.equal(shared.itemsSummarised, 9);
   assert.equal(shared.strategy, 'digest');
+});
+
+test('a paused turn keeps its digest whole; other long results are still cut', () => {
+  const digest = `[condensed result r1 of webSearch: …]\n<condensed_results digest="1" refs="r1">\n${'- [r1] fact\n'.repeat(1800)}</condensed_results>`;
+  const call = { id: 'c2', type: 'function', function: { name: 'send', arguments: '{}' } };
+  const messages = [
+    { role: 'user', content: 'q' },
+    {
+      role: 'assistant',
+      content: '',
+      tool_calls: [{ id: 'c1', type: 'function', function: { name: 'webSearch', arguments: '{}' } }]
+    },
+    { role: 'tool', tool_call_id: 'c1', name: 'webSearch', content: digest },
+    { role: 'assistant', content: '', tool_calls: [call] },
+    { role: 'tool', tool_call_id: 'c2', name: 'send', content: 'x'.repeat(30_000) }
+  ];
+  const stored = pausedTurnTranscript(messages, { startMessage: messages[0], toolCallId: 'c2' });
+  assert.ok(digest.length > 16_000);
+  assert.equal(stored.find(m => m.tool_call_id === 'c1').content, digest);
+  assert.match(stored.find(m => m.tool_call_id === 'c2').content, /\[truncated/);
 });

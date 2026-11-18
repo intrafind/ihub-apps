@@ -2429,3 +2429,23 @@ typography — callouts, framed tables and highlighted code included — and **I
 column on the right on wide screens, marking the entry you are reading. **Newer release** and **Older
 release** at the bottom move through the releases, and every release has its own address
 (`/admin/changelog?version=5.6.4`), so Back, a bookmark or a reload return to it.
+
+## Chat: Long Research Turns Keep What They Found
+
+When a turn with many tool calls fills the model's context, iHub no longer cuts older search
+results and page reads down to short previews. It condenses them into notes: the facts and figures
+they held with their sources, the calls that already ran, and what was looked for and not found.
+The model therefore does not run the same searches again, and its answer keeps the earlier figures.
+
+- **Checked notes:** the model writes the facts; iHub keeps a fact only when its figures appear in
+  the result it cites, and builds the list of calls and sources itself.
+- **Nothing is lost for good:** the model can read a condensed result in full again instead of
+  searching again.
+- **Visible in the chat:** the answer's activity shows "Condensed 9 earlier search results into
+  notes", which opens to the notes, and explains why the context figure dropped. When the notes
+  could not be written, or the model's context window was full, the row says that details may be
+  missing.
+- **Cost:** writing the notes is one extra call to the chat's model; its tokens appear in usage
+  reports and count toward usage limits. Turns that stay under half the context window are
+  unchanged.
+- Workflows and agent nodes are unchanged.

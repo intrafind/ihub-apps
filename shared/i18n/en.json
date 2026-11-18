@@ -8943,6 +8943,8 @@
       "shortened_other": "Shortened {{count}} earlier results to free context",
       "contextFull_one": "Context full: shortened {{count}} earlier result",
       "contextFull_other": "Context full: shortened {{count}} earlier results",
+      "someShortened_one": "{{count}} only shortened",
+      "someShortened_other": "{{count}} only shortened",
       "stopped": "Condensing stopped",
       "why": "Frees room in the model's context, so the turn can go on without running these calls again.",
       "lossyRecall": "Some details may be missing from the notes. The model can read the full results again.",

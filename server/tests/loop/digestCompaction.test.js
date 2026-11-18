@@ -456,3 +456,31 @@ test('a journal entry written before compaction ids existed projects to nothing'
     []
   );
 });
+
+test('once every real tool has failed, the recall tool does not keep the turn going', async () => {
+  const { loop } = makeLoop(
+    [
+      toolTurn('c1', 'webSearch', { query: 'nvidia' }, 1000),
+      toolTurn('c2', 'webSearch', { query: 'apple' }, 4000),
+      toolTurn('c3', 'webSearch', { query: 'meta' }, 1500),
+      toolTurn('c4', 'webSearch', { query: 'tesla' }, 1500),
+      toolTurn('c5', 'webSearch', { query: 'amd' }, 1500),
+      textTurn('answered without the tool')
+    ],
+    ['FACT | r1 | NVIDIA market cap 5.1 trillion USD | https://x.test/nvidia']
+  );
+  let calls = 0;
+  const result = await loop.run({
+    model,
+    messages: baseMessages,
+    tools: [searchTool],
+    policies,
+    executeTool: async (_call, { args }) => {
+      calls += 1;
+      if (calls <= 2) return searchResult(args.query);
+      throw new Error('upstream down');
+    }
+  });
+  assert.equal(result.status, 'completed');
+  assert.equal(result.budgetReason, 'tools_dead', 'the dead-tools gate still fires');
+});

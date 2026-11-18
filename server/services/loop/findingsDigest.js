@@ -46,8 +46,13 @@ export const CONDENSED_PREFIX = '[condensed result ';
 
 const DIGEST_TAG = 'condensed_results';
 
-/** Share of the condensed text the digest is expected to take, for planning the cut. */
-const DIGEST_RATIO = 0.15;
+/**
+ * What a condensed result is expected to leave in the transcript, for planning
+ * the cut: its stub and call line, its sources, and a share of its text as facts.
+ */
+const DIGEST_RATIO = 0.1;
+const DIGEST_TOKENS_PER_CALL = 150;
+const DIGEST_TOKENS_PER_SOURCE = 40;
 
 /** Characters of one result a summary chunk holds at most. */
 const MAX_CHUNK_CHARS = 96_000;
@@ -155,10 +160,15 @@ export function selectBatches(
   let projected = Number(tokensBefore) || 0;
   for (const batch of candidates) {
     if (projected <= targetTokens) break;
-    const tokens = batch.toolIndexes
-      .filter(i => condensable(messages[i], batch, toolOf))
-      .reduce((sum, i) => sum + estimateMessageTokens(messages[i]), 0);
-    projected -= Math.floor(tokens * (1 - DIGEST_RATIO));
+    for (const i of batch.toolIndexes) {
+      if (!condensable(messages[i], batch, toolOf)) continue;
+      const tokens = estimateMessageTokens(messages[i]);
+      const left =
+        DIGEST_TOKENS_PER_CALL +
+        DIGEST_TOKENS_PER_SOURCE * extractSources(textOf(messages[i].content)).length +
+        Math.floor(tokens * DIGEST_RATIO);
+      projected -= Math.max(0, tokens - left);
+    }
     batches.push(batch);
   }
   return {
@@ -356,6 +366,8 @@ const SYSTEM_PROMPT = [
 export function buildSummaryMessages(chunk, { task, chunkChars }) {
   const perCall = Math.max(MIN_CHUNK_CHARS / 2, Math.floor(chunkChars / Math.max(1, chunk.length)));
   const blocks = chunk.map(call => {
+    // A result cut for the summary is marked: the digest says it was only partly read.
+    if (call.content.length > perCall) call.cut = true;
     const body =
       call.content.length > perCall
         ? `${call.content.slice(0, perCall)}\n[… result cut here for the summary; ${call.content.length - perCall} more characters]`
@@ -504,7 +516,7 @@ export function verifyDigest(parsed, callsByRef) {
  * @param {Array<Object>} params.calls - see {@link collectCalls}
  * @param {string} [params.task]
  * @param {AbortSignal} [params.signal]
- * @param {number} [params.timeoutMs] - per chunk
+ * @param {number} [params.timeoutMs] - per chunk; all chunks together get twice as long
  * @param {number} [params.maxTokens] - per chunk
  * @param {Object} [params.options] - extra adapter options (`user`)
  * @param {Object} [params.telemetry]
@@ -544,13 +556,21 @@ export async function summarizeCalls({
     usage: { promptTokens: 0, completionTokens: 0 },
     error: null
   };
+  // All chunks together get twice the time of one: a compaction that would
+  // hold the turn up for minutes leaves its last chunks without facts.
+  const deadline = Number(timeoutMs) > 0 ? Date.now() + 2 * Number(timeoutMs) : Infinity;
   for (const [index, chunk] of chunks.entries()) {
+    if (Date.now() >= deadline) {
+      result.failedChunks += 1;
+      result.error = 'compaction time limit';
+      continue;
+    }
     let response;
     try {
       response = await llmClient.complete({
         model,
         messages: buildSummaryMessages(chunk, { task, chunkChars }),
-        options: { ...options, maxTokens: outputTokens, temperature: 0.2, thinkingEnabled: false },
+        options: { ...options, maxTokens: outputTokens, thinkingEnabled: false },
         language,
         signal,
         timeoutMs,
@@ -606,7 +626,63 @@ function refRange(calls) {
 }
 
 /**
- * The digest as the model reads it.
+ * Text from a tool result inside the digest: an angle bracket would let a page
+ * title or a fact close the block (or open another), so it is replaced.
+ */
+function inert(text) {
+  return String(text ?? '')
+    .replace(/</g, '‹')
+    .replace(/>/g, '›');
+}
+
+/** Share of a digest the list of calls may take; the rest is for the facts. */
+const CALLS_SHARE = 0.4;
+
+/**
+ * The calls of a digest as lines, within `budget` characters: with their
+ * sources while they fit, then without, then with shorter arguments, then
+ * only as far as they fit, the rest named by ref.
+ */
+function callLines(calls, budget) {
+  const callLine = (call, argsChars) =>
+    `- ${call.ref} · ${inert(call.name)} · ${inert(truncate(call.args, argsChars)) || '{}'} · ${call.failed ? 'failed' : 'ok'}${call.cut ? ' · partly read for these notes' : ''}`;
+  const sourceLines = call =>
+    call.sources.map(
+      source => `    ${source.title ? `${inert(source.title)} — ` : ''}${inert(source.url)}`
+    );
+  const attempts = [
+    calls.flatMap(call => [callLine(call, MAX_ARGS_CHARS), ...sourceLines(call)]),
+    calls.flatMap(call => [callLine(call, MAX_ARGS_CHARS), ...sourceLines(call).slice(0, 2)]),
+    calls.map(call => callLine(call, MAX_ARGS_CHARS)),
+    calls.map(call => callLine(call, 80))
+  ];
+  for (const lines of attempts) {
+    if (lines.join('\n').length <= budget) return lines;
+  }
+  const lines = [];
+  let used = 0;
+  for (const [index, call] of calls.entries()) {
+    const line = callLine(call, 80);
+    if (used + line.length > budget - 80) {
+      lines.push(
+        `- … ${calls.length - index} more calls: ${calls
+          .slice(index)
+          .map(c => c.ref)
+          .join(', ')}`
+      );
+      break;
+    }
+    lines.push(line);
+    used += line.length + 1;
+  }
+  return lines;
+}
+
+/**
+ * The digest as the model reads it, within `maxChars`: the list of calls takes
+ * at most {@link CALLS_SHARE} of it (shortened as needed), the facts the rest.
+ * Facts that do not fit are counted in a closing line; `factsShown` says how
+ * many the model reads.
  *
  * @param {Object} params
  * @param {number} params.number - the digest's number in the turn (1, 2, …)
@@ -615,7 +691,7 @@ function refRange(calls) {
  * @param {Array<Object>} [params.notFound]
  * @param {string|null} [params.fallbackReason] - set when facts could not be (fully) extracted
  * @param {number} [params.maxChars=24000]
- * @returns {string}
+ * @returns {{text: string, factsShown: number}}
  */
 export function renderDigest({
   number,
@@ -639,29 +715,16 @@ export function renderDigest({
         : 'Facts could not be extracted from these results: read a result with recall_tool_result before relying on what it held.'
     );
   }
-  lines.push('', 'Calls:');
-  for (const call of calls) {
-    lines.push(
-      `- ${call.ref} · ${call.name} · ${truncate(call.args, MAX_ARGS_CHARS) || '{}'} · ${call.failed ? 'failed' : 'ok'}`
-    );
-    for (const source of call.sources) {
-      lines.push(`    ${source.title ? `${source.title} — ` : ''}${source.url}`);
-    }
-  }
-  const tail = [];
-  if (notFound.length) {
-    tail.push('', 'Looked for, not found:');
-    for (const entry of notFound) tail.push(`- [${entry.ref}] ${entry.text}`);
-  }
+  lines.push('', 'Calls:', ...callLines(calls, Math.floor(maxChars * CALLS_SHARE)));
   const closing = `</${DIGEST_TAG}>`;
   let text = lines.join('\n');
+  let shown = 0;
   if (facts.length) {
     text += '\n\nFacts:';
-    const budget = maxChars - text.length - tail.join('\n').length - closing.length - 200;
+    const budget = maxChars - text.length - closing.length - 300;
     let used = 0;
-    let shown = 0;
     for (const fact of facts) {
-      const line = `\n- [${fact.ref}] ${fact.text}${fact.source ? ` (${fact.source})` : ''}`;
+      const line = `\n- [${fact.ref}] ${inert(fact.text)}${fact.source ? ` (${inert(fact.source)})` : ''}`;
       if (used + line.length > budget) break;
       text += line;
       used += line.length;
@@ -671,8 +734,17 @@ export function renderDigest({
       text += `\n- … ${facts.length - shown} more facts; read the results with recall_tool_result.`;
     }
   }
-  if (tail.length) text += `\n${tail.join('\n')}`;
-  return `${text}\n${closing}`;
+  if (notFound.length) {
+    const budget = maxChars - text.length - closing.length - 100;
+    const tail = ['', 'Looked for, not found:'];
+    for (const entry of notFound) {
+      const line = `- [${entry.ref}] ${inert(entry.text)}`;
+      if (tail.join('\n').length + line.length > budget) break;
+      tail.push(line);
+    }
+    if (tail.length > 2) text += `\n${tail.join('\n')}`;
+  }
+  return { text: `${text}\n${closing}`, factsShown: shown };
 }
 
 /** The one-line stub a condensed result is replaced with. */

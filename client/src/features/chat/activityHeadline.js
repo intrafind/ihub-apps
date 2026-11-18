@@ -94,10 +94,14 @@ export function compactionLabel(t, item) {
 function compactionSegments(t, items) {
   const done = items.filter(item => item.kind === 'compaction' && item.status === 'completed');
   if (done.length === 0) return [];
-  const lossy = done.some(item => item.lossy);
-  // Several compactions read as one: the strategy of the last, the results of all.
+  const lossyItems = done.filter(item => item.lossy);
+  // Only lossy when every compaction was: a turn whose notes were written but
+  // once had to shorten says so as a fact beside them, not as its headline.
+  const lossy = lossyItems.length === done.length;
+  const digest = done.find(item => item.strategy === 'digest' && !item.lossy);
+  // Several compactions read as one: the results of all.
   const merged = {
-    ...done[done.length - 1],
+    ...(digest || done[done.length - 1]),
     lossy,
     itemsSummarised: done.reduce((n, item) => n + (item.itemsSummarised || 0), 0),
     kinds: done.reduce(
@@ -116,7 +120,18 @@ function compactionSegments(t, items) {
       icon: lossy ? 'exclamation-triangle' : 'archive-box',
       noun: compactionLabel(t, merged),
       tone: lossy ? 'attention' : null,
-      facts: []
+      facts:
+        !lossy && lossyItems.length > 0
+          ? [
+              {
+                key: 'shortened',
+                text: t('toolActivity.compaction.someShortened', {
+                  count: lossyItems.reduce((n, item) => n + (item.itemsSummarised || 0), 0)
+                }),
+                tone: 'attention'
+              }
+            ]
+          : []
     }
   ];
 }

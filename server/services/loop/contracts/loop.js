@@ -75,7 +75,10 @@ export const contextPoliciesSchema = z.object({
   compactTargetShare: z.number().min(0.1).max(0.95).prefault(0.6),
   /** `digest`: newest tool batches kept verbatim (the newest is never condensed). */
   digestKeepRecentBatches: z.number().int().positive().prefault(2),
-  /** `digest`: compactions per run before the loop falls back to `elide`. */
+  /**
+   * `digest`: digests written with the summary model per run; later ones keep
+   * the calls and their sources only (`lossy`, `compaction_limit`).
+   */
   maxCompactionsPerRun: z.number().int().positive().prefault(4),
   /** `digest`: timeout of one summary call (one chunk). */
   summaryTimeoutMs: z.number().int().positive().prefault(90_000),

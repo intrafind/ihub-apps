@@ -8942,6 +8942,8 @@
       "shortened_other": "{{count}} frühere Ergebnisse gekürzt, um Kontext freizugeben",
       "contextFull_one": "Kontext voll: {{count}} früheres Ergebnis gekürzt",
       "contextFull_other": "Kontext voll: {{count}} frühere Ergebnisse gekürzt",
+      "someShortened_one": "{{count}} nur gekürzt",
+      "someShortened_other": "{{count}} nur gekürzt",
       "stopped": "Verdichten abgebrochen",
       "why": "Schafft Platz im Kontext des Modells, damit die Antwort weitergehen kann, ohne diese Aufrufe zu wiederholen.",
       "lossyRecall": "In den Notizen können einzelne Details fehlen. Das Modell kann die vollständigen Ergebnisse erneut lesen.",

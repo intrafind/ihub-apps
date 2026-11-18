@@ -80,8 +80,16 @@ defaults.
 | `tools.maxConsecutiveFailures`    | 3       | Consecutive failures (any error) before a tool is withheld              |
 | `tools.parallel` / `maxParallel`  | true / 4 | Segment planner: read-only tools and non-overlapping calls run concurrently |
 | `tools.choice`                    | `auto`  | `required` makes the first model call of a turn call a tool; later calls are `auto`. See [Requiring a tool call](tool-calling.md#requiring-a-tool-call) |
-| `context.compactThresholdTokens`  | 16000   | Proactive compaction threshold (old tool/assistant bodies collapse)    |
-| `context.compactKeepRecent`       | 6       | Trailing messages kept verbatim when compacting                        |
+| `context.compactThresholdTokens`  | 16000   | Proactive compaction threshold (see [Context compaction](#context-compaction)) |
+| `context.strategy`                | `elide` | `elide`: old tool/assistant bodies collapse to previews (lossy). `digest`: old tool batches are condensed into a findings digest |
+| `context.compactKeepRecent`       | 6       | `elide`: trailing messages kept verbatim when compacting               |
+| `context.compactTargetShare`      | 0.6     | `digest`: compact down to this share of the threshold                  |
+| `context.digestKeepRecentBatches` | 2       | `digest`: newest tool batches kept verbatim (the newest is never condensed) |
+| `context.maxCompactionsPerRun`    | 4       | `digest`: digests written with the summary model per run; later ones keep calls and sources only |
+| `context.summaryTimeoutMs`        | 90000   | `digest`: timeout of one summary call                                  |
+| `context.summaryMaxTokens`        | 4096    | `digest`: output tokens of one summary call                            |
+| `context.maxDigestChars`          | 24000   | `digest`: characters of one digest as the model reads it               |
+| `context.maxRecallsPerRun`        | 10      | `digest`: how often a run may read a condensed result again (`recall_tool_result`) |
 | `context.maxReactiveAttempts`     | 2       | Retries after a provider "prompt too long" error, each after compaction |
 | `context.spillThresholdBytes`     | 65536   | Tool results above this are stored in the run's spill store (when the ledger persists) and replaced in the transcript by a bounded preview and reference |
 | `interactions.maxQuestions`       | 10      | Clarification cap for interactive tools (question seam)                |
@@ -118,7 +126,8 @@ is an object with any of these hooks; register it for every run with
 | `postTool(ctx, info, outcome)`  | After a tool executed                                               | Rewrite `outcome.message`, lift images, add knowledge sources |
 | `onHallucinated(ctx, info)`     | Model called an unregistered tool                                   | Record for audit                                   |
 | `onCircuitBroken(ctx, info)`    | A tool was withheld                                                 | Record / notify                                    |
-| `onCompaction(ctx, info)`       | Transcript was compacted (`trigger: 'proactive' | 'overflow'`)      | Telemetry                                          |
+| `onCompactionStart(ctx, info)`  | A findings digest is about to be written (`compactionId`, `tokensBefore`, `itemsSummarised`, `kinds`) | Tell the user (the summary call takes a while) |
+| `onCompaction(ctx, info)`       | Transcript was compacted: the fields of the ledger's `context/compaction` (`compactionId`, `trigger`, `strategy`, `lossy`, `tokensBefore`, `tokensAfter`, `digest`, …) plus `freedTokens` and the new `messages` | Telemetry, rebase a context figure |
 | `onAnswer(ctx, info)`           | The model answered without a tool call (`info.stepText` — this step's answer; `info.content` — the run's text so far; `info.canRetry`) | Return `{ handled, retry, error? }` to reject the answer: the loop appends it and the `retry` correction, and the model answers again (only while `canRetry`) |
 
 Built-in seams live in `server/services/loop/seams/`:
@@ -145,6 +154,99 @@ Built-in seams live in `server/services/loop/seams/`:
   (the inference API's JSON Schema validation) and asks for one corrected
   attempt when it does not hold; the ledger records the rejected attempt as a
   recoverable `error` and the correction as `message/user { synthetic: 'nudge' }`.
+
+## Context compaction
+
+A long tool loop fills the model's context: every search result and page read
+stays in the transcript. Once the prompt is over
+`context.compactThresholdTokens`, the loop compacts it after the step's tool
+results are in, before the next model call. The decision uses the provider's
+count of the last call plus what was added since (the count holds the tool
+definitions); only without one is the transcript estimated, tool definitions
+included.
+
+**`digest` (chat turns).** The oldest complete tool batches (an assistant
+message with tool calls and its results) are condensed until the prompt is
+projected at `compactTargetShare` of the threshold
+(`server/services/loop/findingsDigest.js`):
+
+- The assistant messages and their tool calls stay as they are. Seeing its
+  own calls keeps the model from running them again, and providers check the
+  calls (Gemini signs each one). Only tool-result content changes, so the
+  transcript stays valid for every provider.
+- Each condensed result becomes a one-line stub with a ref
+  (`[condensed result r3 of webSearch: … recall_tool_result {"ref":"r3"}]`).
+  The last one also carries the digest, a `<condensed_results>` block: the
+  calls that ran (tool, arguments, ok or failed, the sources they returned),
+  the facts taken from the results, and what was looked for and not found.
+- The calls and sources are built by code. The summary model (the run's
+  model, or `request.summaryModel`) writes only `FACT | ref | fact | source`
+  and `NOTFOUND | ref | …` lines, with thinking off. A fact is kept only if
+  its ref is one of the results it was given and its numbers appear in that
+  result: a number of four digits or more anywhere in one of the result's
+  numbers, a shorter one as a number of its own (single digits are not
+  checked). This catches invented figures, not a figure attached to the wrong
+  entity or period. A source URL not in the result is dropped from the fact.
+  Large inputs are split into chunks the summary model can take; a result cut
+  for the summary is marked "partly read for these notes" in the digest. All
+  chunks of one compaction get twice `summaryTimeoutMs`.
+- The digest stays within `maxDigestChars`: the list of calls takes at most
+  40 % of it (sources, then argument length are shortened first), the facts
+  the rest. Facts that still do not fit are counted in a closing line, and
+  the compaction is marked `lossy` (`digest_truncated`). Text from results
+  cannot open or close the block (angle brackets are replaced).
+- What is never condensed: the newest `digestKeepRecentBatches` batches,
+  results shorter than 1,000 characters, the loop's own tools (skill
+  instructions and resources, the tool index) and `ask_user` answers. A
+  compaction that would free less than 10 % of the prompt is skipped. When
+  the last compaction could not bring the prompt under the threshold (what
+  cannot be condensed is that large), the next waits until the prompt has
+  grown by another 10 % of the threshold.
+- A second compaction appends a new digest after the first; a digest is never
+  summarised again, so the prompt prefix up to it stays cacheable.
+- From the first compaction on, the model is offered `recall_tool_result`
+  (`{ ref, offset }`). It returns the original result in 20,000-character
+  pages, from memory or, after a resume of the same run, from the run's spill
+  store (`archiveRef`); a result that had been spilled is read in full. It
+  only reads this run's condensed results, never a path the model names, and
+  at most `maxRecallsPerRun` times. When the original cannot be reached — the
+  turn continued as a new run (another model after an approval), or the
+  ledger does not persist and the turn resumed — the tool says so and the
+  model works with the digest.
+- When the summary fails, times out or keeps nothing of results that held
+  something, the batches are still condensed, to their calls and sources, and
+  the compaction is marked `lossy` with a `fallbackReason` (`summary_failed`,
+  `summary_partial`, `summary_empty`). After two failures, or
+  `maxCompactionsPerRun` digests, the run goes on with such digests without
+  asking the model (`summary_unavailable`, `compaction_limit`). Stop or the
+  run's deadline during the summary ends the run as it would mid-step.
+- The summary's tokens count toward the run budget (`state.budget`) and are
+  reported for the user the turn runs for (usage limits apply); the call has
+  no ledger run of its own.
+
+**`elide` (workflows, agent nodes).** Old tool and assistant bodies over 2,000
+characters, outside the last `compactKeepRecent` messages, collapse to a
+200-character preview. The data is gone; the compaction is recorded as
+`lossy`. A condensed result is never collapsed.
+
+**Overflow.** When the provider rejects a prompt as too long, the loop
+collapses old bodies the `elide` way (`reactiveKeepRecent`) and retries, up to
+`maxReactiveAttempts` times, without charging a round. It is recorded as
+`trigger: 'overflow'`, `lossy: true`, `fallbackReason: 'context_overflow'`.
+
+**What is recorded and shown.** Every compaction writes a `context/compaction`
+ledger event with `compactionId`, `strategy`, `lossy`, `tokensBefore`,
+`tokensAfter`, `itemsSummarised`, `kinds` (`search` / `fetch` / `tool`, as the
+server classifies the tools), the digest (bounded to 8,000 characters; a longer
+one is in the spill store as `summaryRef`), `facts`, `droppedFacts`, the
+summary `model` and `durationMs`. A chat turn sends `context/compacted` frames
+(`running` before the summary call, `completed` after; see
+[Streaming Events](streaming-events.md)) and rebases its context figure; the
+ledger projects to the same frame, so a re-sync shows it too. The chat shows
+the compaction as a row of the answer's activity ("Condensed 9 earlier search
+results into notes"), which opens to the notes; a lossy one says that details
+may be missing. The stored answer keeps the row; a share keeps that it
+happened, without the notes.
 
 ## Sources
 
@@ -207,6 +309,7 @@ Chat policies:
 | `tools.choice`           | the app's `toolChoice` (default `auto`) |
 | `budgets.maxWallClockMs` | headless invocations only (`invokeAppInternal`, default 180 s)                        |
 | `timeoutMs`              | hard timeout per model call (the chat route's `DEFAULT_TIMEOUT`)                      |
+| `context`                | `chatContextPolicies(model)`: threshold at 50 % of the model's `contextWindow` (at least 16,000), `strategy: 'digest'` |
 
 Tools execute through
 `runTool(toolId, { language, ...args, chatId, user, appConfig })`:
@@ -224,7 +327,7 @@ Seams a chat turn registers (`server/services/chat/chatSeams.js`), in order:
 | `questionSeam(chatQuestionOptions)`       | `preTool`             | `ask_user` → `interaction/raised` with the persisted interaction; per-chat counter capped at `MAX_CLARIFICATIONS_PER_CONVERSATION`; the run pauses (`run/paused`)                    |
 | `passthroughSeam(chatPassthroughOptions)` | `preTool`             | Workflow tools stream their own answer as `step/delta` frames, then `tool/completed`; the turn ends with `tool_passthrough_complete`                                                |
 | `imageLiftSeam`                           | `postTool`            | Image payloads in tool results become message image data                                                                                                                          |
-| `chatTurnSeam`                            | `preStep`, `stepEnd`  | Upload / email knowledge sources on the first step, `chatTelemetry` usage and metrics once per model call, `step/completed` per model call                                          |
+| `chatTurnSeam`                            | `preStep`, `stepEnd`, `onCompactionStart`, `onCompaction` | Upload / email knowledge sources on the first step, `chatTelemetry` usage and metrics once per model call, `step/completed` per model call, `context/compacted` frames and the rebased `context/usage` after a compaction |
 
 Streamed chunks go to the channel (`server/services/chat/chatChannel.js`),
 which projects them onto `step/delta` (text, thinking, image), `tool/progress`

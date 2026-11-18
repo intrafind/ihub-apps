@@ -38,6 +38,7 @@
  *
  * @module services/chat/chatToolApproval
  */
+import { isCondensedContent } from '../loop/findingsDigest.js';
 import logger from '../../utils/logger.js';
 import defaultInteractionService from '../loop/InteractionService.js';
 import { authorizeInteraction as defaultAuthorizeInteraction } from '../loop/runAccess.js';
@@ -82,10 +83,20 @@ function cut(text, limit) {
   return `${text.slice(0, limit)}…[truncated ${text.length - limit} chars]`;
 }
 
+/**
+ * A condensed result (a findings digest, #3819) is bounded already, and cut
+ * it would lose the facts it holds for results that are gone from the turn.
+ */
+const MAX_CONDENSED_MESSAGE_CHARS = 32_000;
+
 function slim(message, limit) {
   const out = { role: message.role };
-  if (typeof message.content === 'string') out.content = cut(message.content, limit);
-  else if (message.content === null) out.content = null;
+  if (typeof message.content === 'string') {
+    out.content = cut(
+      message.content,
+      isCondensedContent(message.content) ? Math.max(limit, MAX_CONDENSED_MESSAGE_CHARS) : limit
+    );
+  } else if (message.content === null) out.content = null;
   else if (Array.isArray(message.content)) {
     // Multimodal parts: keep the text, never the pictures.
     out.content = message.content

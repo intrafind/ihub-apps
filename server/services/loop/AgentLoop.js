@@ -396,7 +396,9 @@ export class AgentLoop {
       failures: 0,
       recalls: 0,
       archive: new Map(),
-      archiveLoaded: false
+      archiveLoaded: false,
+      // The prompt after the last digest (0: none yet), for the cooldown.
+      lastTokensAfter: 0
     };
     if (condensedSoFar.nextRef > 1) this._offerRecall(ctx);
 
@@ -688,8 +690,7 @@ export class AgentLoop {
               this._ledger(ledgerId, RUN_LOG_EVENTS.CONTEXT_COMPACTION, elided);
               await runHooks(seams, 'onCompaction', ctx, {
                 ...mc,
-                ...elided,
-                freedTokens: elided.tokensBefore - elided.tokensAfter
+                ...elided
               });
               iteration--;
               continue;
@@ -991,14 +992,15 @@ export class AgentLoop {
             this._ledger(ledgerId, RUN_LOG_EVENTS.CONTEXT_COMPACTION, elided);
             await runHooks(seams, 'onCompaction', ctx, {
               ...compaction,
-              ...elided,
-              freedTokens: elided.tokensBefore - elided.tokensAfter
+              ...elided
             });
           }
         }
 
         // ── force-finish gates: exactly one per iteration ───────────────
-        if (tools.length > 0 && tools.every(t => ctx.disabledTools.has(t.id))) {
+        // The recall tool only reads this run's own results: it keeps no turn going.
+        const workingTools = tools.filter(t => !t.isCompactionRecall);
+        if (workingTools.length > 0 && workingTools.every(t => ctx.disabledTools.has(t.id))) {
           forceFinish = true;
           forceReason = 'tools_dead';
           ctx.messages.push(nudgeMessage(ALL_TOOLS_DEAD_NUDGE));
@@ -1442,6 +1444,16 @@ export class AgentLoop {
     if (tokensBefore <= threshold) return 0;
 
     const state = ctx.compaction;
+    // The last compaction could not bring the prompt under the threshold (what
+    // cannot be condensed — the system prompt, uploads, digests — is that
+    // large): the next one waits until the prompt has grown by a tenth of the
+    // threshold, instead of paying a summary call on every step.
+    if (
+      state.lastTokensAfter > threshold &&
+      tokensBefore < state.lastTokensAfter + threshold * MIN_COMPACTION_PROGRESS
+    ) {
+      return 0;
+    }
     const toolOf = name => matchTool(name, ctx.tools);
     const { batches, freedTokens: projectedFreed } = selectBatches(ctx.messages, {
       tokensBefore,
@@ -1450,7 +1462,8 @@ export class AgentLoop {
       toolOf
     });
     // Too little to free for what a compaction costs (a summary call, the
-    // prompt cache from the first condensed message on): left as it is.
+    // prompt cache from the first condensed message on, and of the tool list
+    // when the recall tool joins it): left as it is.
     if (batches.length === 0 || projectedFreed < tokensBefore * MIN_COMPACTION_PROGRESS) {
       return 0;
     }
@@ -1532,7 +1545,8 @@ export class AgentLoop {
       runBudget.total = runBudget.input + runBudget.output;
     }
 
-    const digestText = renderDigest({
+    const factsFound = summary?.facts?.length || 0;
+    const { text: digestText, factsShown } = renderDigest({
       number: digestNumber,
       calls,
       facts: summary?.facts || [],
@@ -1540,6 +1554,9 @@ export class AgentLoop {
       fallbackReason,
       maxChars: policy.maxDigestChars
     });
+    // Facts that did not fit are in the results only (the model is told to
+    // read them again): the compaction lost something the summary had.
+    if (!fallbackReason && factsShown < factsFound) fallbackReason = 'digest_truncated';
     const before = calls.map(call => ctx.messages[call.index]);
     const next = applyDigest(ctx.messages, calls, digestText, digestNumber);
     const after = calls.map(call => next[call.index]);
@@ -1555,6 +1572,7 @@ export class AgentLoop {
     ctx.messages = next;
     state.digests = digestNumber;
     state.count += 1;
+    state.lastTokensAfter = Math.max(0, tokensBefore - freedTokens);
     this._offerRecall(ctx);
 
     // The originals and a long digest go to the run's spill store: the
@@ -1579,8 +1597,8 @@ export class AgentLoop {
           ? `${digestText.slice(0, MAX_COMPACTION_DIGEST_CHARS)}…`
           : digestText,
       ...(digestText.length > MAX_COMPACTION_DIGEST_CHARS ? { digestTruncated: true } : {}),
-      facts: summary?.facts?.length || 0,
-      droppedFacts: summary?.dropped || 0,
+      facts: factsShown,
+      droppedFacts: (summary?.dropped || 0) + (factsFound - factsShown),
       ...(useModel && summaryModel?.id ? { model: String(summaryModel.id) } : {}),
       durationMs: Date.now() - started,
       ...(archiveRef ? { archiveRef } : {}),
@@ -1651,9 +1669,14 @@ export class AgentLoop {
     }
     const entry = state.archive.get(`r${ref}`) || (await this._loadArchived(ctx, `r${ref}`));
     if (!entry) {
+      // A ref the transcript names whose original this run cannot reach (an
+      // earlier run of the turn, or a ledger that does not persist).
+      const known = Number(ref) < state.nextRef;
       return {
         error: true,
-        message: `There is no condensed result r${ref} in this turn. The refs are listed in the condensed results.`
+        message: known
+          ? `The full text of r${ref} is no longer available. Work with the condensed results; run the call again only if they do not hold what you need.`
+          : `There is no condensed result r${ref} in this turn. The refs are listed in the condensed results.`
       };
     }
     state.recalls += 1;
@@ -1680,25 +1703,35 @@ export class AgentLoop {
       return null;
     }
     state.archiveLoaded = true;
+    let events = [];
     try {
-      const events = await ctx.runLog.readEvents(ctx.ledgerId);
-      for (const event of events) {
-        const archiveRef =
-          event?.type === RUN_LOG_EVENTS.CONTEXT_COMPACTION && event.data?.archiveRef;
-        if (!archiveRef) continue;
-        const stored = JSON.parse(await ctx.runLog.readSpill(ctx.ledgerId, archiveRef));
-        for (const [key, entry] of Object.entries(stored?.refs || {})) {
-          if (!state.archive.has(key) && typeof entry?.content === 'string') {
-            state.archive.set(key, entry);
-          }
-        }
-      }
+      events = await ctx.runLog.readEvents(ctx.ledgerId);
     } catch (err) {
       this.logger.warn('Condensed results could not be read back', {
         component: COMPONENT,
         runId: ctx.runId,
         error: err.message
       });
+    }
+    for (const event of events) {
+      const archiveRef =
+        event?.type === RUN_LOG_EVENTS.CONTEXT_COMPACTION && event.data?.archiveRef;
+      if (!archiveRef) continue;
+      try {
+        const stored = JSON.parse(await ctx.runLog.readSpill(ctx.ledgerId, archiveRef));
+        for (const [key, entry] of Object.entries(stored?.refs || {})) {
+          if (!state.archive.has(key) && typeof entry?.content === 'string') {
+            state.archive.set(key, entry);
+          }
+        }
+      } catch (err) {
+        // One unreadable archive leaves the others readable.
+        this.logger.warn('Condensed results could not be read back', {
+          component: COMPONENT,
+          runId: ctx.runId,
+          error: err.message
+        });
+      }
     }
     return state.archive.get(ref) || null;
   }

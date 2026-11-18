@@ -154,7 +154,7 @@ describe('the compaction row', () => {
     const toggle = screen.getAllByRole('button')[0];
     expect(toggle).toHaveTextContent('toolActivity.compaction.condensedSearches:9');
     fireEvent.click(toggle);
-    expect(screen.getByText('toolActivity.compaction.why')).toBeInTheDocument();
+    expect(screen.queryByText('toolActivity.compaction.why')).not.toBeInTheDocument();
     expect(screen.getByText('toolActivity.compaction.facts:12')).toBeInTheDocument();
     const notes = screen.getByRole('button', { name: /toolActivity.compaction.showNotes/ });
     expect(notes).toHaveAttribute('aria-expanded', 'false');
@@ -162,6 +162,9 @@ describe('the compaction row', () => {
     fireEvent.click(notes);
     expect(notes).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByText(/NVIDIA 5\.1T/)).toBeInTheDocument();
+    expect(screen.getByText('toolActivity.compaction.why')).toBeInTheDocument();
+    // The notes are shown without the block's tags.
+    expect(screen.getByText(/NVIDIA 5\.1T/).textContent).not.toMatch(/condensed_results/);
   });
 
   test('a lossy compaction reads differently, in the attention colour', () => {
@@ -208,5 +211,32 @@ describe('the compaction row', () => {
     expect(screen.getAllByText('toolActivity.compaction.contextFull:3').length).toBeGreaterThan(0);
     expect(screen.getByText('toolActivity.compaction.lossyElided')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /showNotes/ })).not.toBeInTheDocument();
+  });
+
+  test('a turn whose notes were written and once had to shorten says both, not only the loss', () => {
+    const second = env(8, 'context/compacted', {
+      compactionId: 'cmp-2',
+      step: 4,
+      status: 'completed',
+      trigger: 'proactive',
+      strategy: 'digest',
+      lossy: true,
+      fallbackReason: 'compaction_limit',
+      itemsSummarised: 2,
+      kinds: { search: 2, fetch: 0, tool: 0 }
+    });
+    const activity = buildToolActivity(
+      runFrom([
+        started,
+        ...search(2, 'a'),
+        { ...done, seq: 5, ts: ts(5) },
+        ...search(6, 'b'),
+        second,
+        env(9, 'run/ended', { status: 'completed', finishReason: 'stop' })
+      ])
+    );
+    const label = headlineOf(t, activity, false).label;
+    expect(label).toContain('toolActivity.compaction.condensedSearches:11');
+    expect(label).toContain('toolActivity.compaction.someShortened:2');
   });
 });
