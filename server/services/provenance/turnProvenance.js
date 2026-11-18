@@ -6,8 +6,9 @@
  *
  * Every channel (chat, inference API, MCP, A2A) calls {@link recordTextOutput}
  * with the text the caller actually receives: after structured-output
- * validation, before citation markers or Markdown rendering. A failure of the
- * store never fails the user's request; the object is still returned.
+ * validation, before citation markers or Markdown rendering. The record is
+ * written in the background (the store coalesces writes per hash); a failure
+ * of the store never fails or delays the user's request.
  *
  * @module services/provenance/turnProvenance
  */
@@ -75,15 +76,18 @@ export async function recordTextOutput({
         typeof finalText === 'string' && normalizeText(finalText) !== ''
           ? [hashText(finalText)]
           : [];
-      try {
-        const named = await recordedUser({ user });
-        await store.record(named ? { ...provenance, user: named } : provenance, { extraHashes });
-      } catch (error) {
-        logger.warn('Could not store a provenance record', {
-          component: COMPONENT,
-          error: error.message
+      const named = await recordedUser({ user });
+      // Not awaited: the caller needs the object, not the stored record, and a
+      // write contended by many turns of the same text must not hold the turn.
+      // The store queues it at once, so a verify right after still finds it.
+      store
+        .record(named ? { ...provenance, user: named } : provenance, { extraHashes })
+        .catch(error => {
+          logger.warn('Could not store a provenance record', {
+            component: COMPONENT,
+            error: error.message
+          });
         });
-      }
     }
     return provenance;
   } catch (error) {
