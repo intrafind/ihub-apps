@@ -83,7 +83,14 @@ const rateLimitConfigSchema = z.object({
   standardHeaders: z.boolean().prefault(true),
   legacyHeaders: z.boolean().prefault(false),
   skipSuccessfulRequests: z.boolean().prefault(false),
-  skipFailedRequests: z.boolean().prefault(false)
+  skipFailedRequests: z.boolean().prefault(false),
+  // General limiters (publicApi, adminApi, inferenceApi): count a signed-in
+  // request per user or every request per IP address.
+  keyBy: z.enum(['user', 'ip']).optional(),
+  // With keyBy "user": the limit of an anonymous request, per IP address.
+  anonymousLimit: z.number().int().min(1).optional(),
+  // authApi: `limit` counts per IP and username; this caps one IP address.
+  perIpLimit: z.number().int().min(1).optional()
 });
 
 /**

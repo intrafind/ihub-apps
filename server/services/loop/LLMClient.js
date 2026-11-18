@@ -120,7 +120,7 @@ const STREAM_IDLE_REASON = Symbol('llm-stream-idle');
  *     ceiling that fires on such a call says so in its message.
  *   - The time measured must be time on the network. Every attempt goes through
  *     the per-model throttle queue (platform `requestConcurrency` defaults to
- *     5), and a request still queued behind five others has not been sent yet,
+ *     25), and a request still queued behind others has not been sent yet,
  *     let alone ignored. `_connect` arms the ceiling inside its throttle slot
  *     for that reason.
  *
@@ -1394,7 +1394,7 @@ export class LLMClient {
    * connect/headers ceiling on the inside.
    *
    * The order matters. Every attempt queues behind the model's own
-   * `concurrency` (or the platform's `requestConcurrency`, 5 by default), and
+   * `concurrency` (or the platform's `requestConcurrency`, 25 by default), and
    * queued time is not network time: arming the ceiling before the slot was
    * granted reported the sixth request of a batch as an unreachable endpoint
    * while the first five were still generating. So the timer starts once the

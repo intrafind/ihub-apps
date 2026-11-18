@@ -43,15 +43,70 @@ function normalizeLimit(value) {
   return typeof value === 'number' && value >= 1 ? value : Infinity;
 }
 
-function getConcurrency(id = 'default') {
+/**
+ * How many calls to an id may run at once, cluster-wide: a registered hint,
+ * then the model's own `concurrency`, then the platform's `requestConcurrency`.
+ *
+ * @param {string} id - Model id, tool id or 'default'
+ * @returns {number} The limit; Infinity for none
+ */
+export function getConcurrency(id = 'default') {
   const platform = configCache.getPlatform() || {};
   const { data: models = [] } = configCache.getModels() || {};
   const model = models.find(m => m.id === id);
   const hint = throttleHints.get(id);
   if (hint && typeof hint.concurrency === 'number') return normalizeLimit(hint.concurrency);
   if (model && typeof model.concurrency === 'number') return normalizeLimit(model.concurrency);
-  const limit = platform.requestConcurrency;
-  return normalizeLimit(limit);
+  return normalizeLimit(platform.requestConcurrency);
+}
+
+/** A call that waited at least this long for a slot is reported. */
+export const SLOW_SLOT_WAIT_MS = 2000;
+
+/** At most one warning per id in this interval; the count covers the rest. */
+const SLOW_SLOT_WAIT_LOG_INTERVAL_MS = 60 * 1000;
+
+/** id → { count, unlogged, loggedAt }, in this process. */
+const slowSlotWaits = new Map();
+
+/**
+ * Count, and log at most once a minute per id, a call that waited long for a
+ * slot: the sign that the model's concurrency is lower than the demand, so
+ * admins can raise it (or the backend's capacity).
+ *
+ * @param {string} id - Model or tool id
+ * @param {number} waitedMs - Time from asking for a slot to getting one
+ */
+function noteSlotWait(id, waitedMs) {
+  if (!(waitedMs >= SLOW_SLOT_WAIT_MS)) return;
+  const entry = slowSlotWaits.get(id) || { count: 0, unlogged: 0, loggedAt: 0 };
+  entry.count += 1;
+  entry.unlogged += 1;
+  slowSlotWaits.set(id, entry);
+  const now = Date.now();
+  if (now - entry.loggedAt < SLOW_SLOT_WAIT_LOG_INTERVAL_MS) return;
+  logger.warn(
+    'Request throttle: calls waited for a free slot; raise the concurrency if the backend can take more',
+    {
+      component: 'RequestThrottler',
+      id,
+      slowWaits: entry.unlogged,
+      lastWaitMs: Math.round(waitedMs),
+      thresholdMs: SLOW_SLOT_WAIT_MS
+    }
+  );
+  entry.loggedAt = now;
+  entry.unlogged = 0;
+}
+
+/**
+ * Calls of this process that waited at least SLOW_SLOT_WAIT_MS for a slot,
+ * per id, since start.
+ *
+ * @returns {Record<string, number>}
+ */
+export function getSlowSlotWaits() {
+  return Object.fromEntries([...slowSlotWaits].map(([id, entry]) => [id, entry.count]));
 }
 
 function getDelay(id = 'default') {
@@ -104,9 +159,11 @@ function localThrottledRun(id, fn, concurrencyOf = getConcurrency, delayOf = get
   }
 
   const queue = queues.get(id);
+  const askedAt = Date.now();
 
   return new Promise((resolve, reject) => {
     const execute = async () => {
+      noteSlotWait(id, Date.now() - askedAt);
       actives.set(id, actives.get(id) + 1);
       try {
         const delay = delayOf(id);
@@ -161,6 +218,7 @@ let nextTicket = 1;
 
 async function clusterThrottledRun(id, limit, delayMs, fn, concurrencyOf, delayOf) {
   const ticket = `${process.pid}:${nextTicket++}`;
+  const askedAt = Date.now();
   const grant = await request(
     ACQUIRE_CHANNEL,
     { id, limit, delayMs, ticket, pid: process.pid },
@@ -177,6 +235,7 @@ async function clusterThrottledRun(id, limit, delayMs, fn, concurrencyOf, delayO
     return localThrottledRun(id, fn, concurrencyOf, delayOf);
   }
   if (grant.queued) recordRateLimitHit('llm', id);
+  noteSlotWait(id, Date.now() - askedAt);
   try {
     if (grant.waitMs > 0) await new Promise(r => setTimeout(r, grant.waitMs));
     return await fn();

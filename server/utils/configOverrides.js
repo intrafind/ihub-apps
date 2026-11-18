@@ -65,6 +65,51 @@ const IHUB_ENV_PREFIXES = {
 };
 
 /**
+ * Cache keys whose `${VAR}` placeholders are resolved: configuration an admin
+ * writes (or ships in `contents/`), where a placeholder is a deliberate
+ * reference to the server's environment. An allowlist, not a denylist.
+ *
+ * Everything else is cached verbatim: user-written data such as `users.json`
+ * (names, emails, IdP attributes), `oauth-clients.json` (dynamic client
+ * registrations, personal API keys), `eu-ai-act-conformity.json`,
+ * `installations.json`, global prompts and skills (which may be promoted from
+ * a user's own), and a users or clients file kept outside `contents/` under a
+ * key of its own. Their text is kept as written, and since those files are
+ * rewritten from the cached copy, the file keeps it too.
+ *
+ * @type {ReadonlySet<string>}
+ */
+const ENV_RESOLVED_KEYS = new Set([
+  'config/platform.json',
+  'config/ui.json',
+  'config/models.json',
+  'config/providers.json',
+  'config/apps.json',
+  'config/workflows.json',
+  'config/agents.json',
+  'config/projects.json',
+  'config/groups.json',
+  'config/styles.json',
+  'config/mimetypes.json',
+  'config/features.json',
+  'config/registries.json',
+  'config/integrations.json',
+  'config/credentials.json'
+]);
+
+/**
+ * Whether a cache entry is admin-authored configuration that goes through
+ * `${VAR}` resolution and the `IHUB_*` overrides. Locale overrides
+ * (`locales/<lang>.json`) are admin-authored too.
+ *
+ * @param {string} key - Cache key, e.g. `'config/platform.json'`
+ * @returns {boolean}
+ */
+export function resolvesEnvVars(key) {
+  return ENV_RESOLVED_KEYS.has(key) || /^locales\/[^/]+\.json$/.test(key);
+}
+
+/**
  * Per-cache-key config paths that must NOT be passed through env var
  * substitution. Used by `setCacheEntry` to opt specific fields out.
  *

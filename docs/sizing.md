@@ -182,6 +182,51 @@ GPU numbers use the 10% rule and count every active user as a busy test user. Me
 rates usually bring them down by half: a real user who is active sends one message every one to
 two minutes, not 1.35 per minute.
 
+## Limits for large installations
+
+The shipped rate limits and the model concurrency fit a company of **10,000 employees**: about
+1,000 busy users at the peak, possibly all behind one corporate NAT address.
+
+**Demand per user** (load test, `company` mix, page loads included): 2 requests per minute at the
+median, 18 at the 99th percentile, at most 50. 1,000 users from one address made at most 2,025
+requests per minute on the general API.
+
+**Measured** (1,000 test users from two addresses, 6 workers, stub model with 7 s answers):
+
+| Run                                         | Chat turns/min | First word p50 / p95 | Failed turns | HTTP errors | 429s   |
+| ------------------------------------------- | -------------: | -------------------: | -----------: | ----------: | -----: |
+| Lab without limits (reference)              |          1,359 |       0.8 s / 1.1 s |           0% |          0% |      0 |
+| Old defaults: 500 per IP                    |            961 |       1.0 s / 3.4 s |      **38%** |     **45%** | 20,387 |
+| Old default: 5 calls at once per model      |            426 |      **96 s / 100 s** |           0% |          0% |      0 |
+| New defaults: 300 per user, 25 per model    |          1,359 |       0.8 s / 1.4 s |           0% |          0% |      0 |
+
+- With the old per-address limit, about 115 users per address and worker fit before the first
+  429; behind one NAT address most of the company is refused.
+- With 5 calls at once, every call waits for a slot: the server is idle (19% CPU) while the first
+  word takes a minute and a half.
+- With the new defaults, the busiest user made 48 requests per minute against a limit of 300.
+
+| Setting                                  | Default                       | Counts per                         | Why                                                                                       |
+| ---------------------------------------- | ----------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------- |
+| `rateLimit.publicApi` / `adminApi` / `inferenceApi` `.limit` | 300 per minute | signed-in user (`keyBy: "user"`) | 6× the busiest measured user; NAT does not matter any more                              |
+| `…anonymousLimit`                        | 500 per minute                | IP address                         | requests without a sign-in                                                                |
+| `rateLimit.authApi.limit`                | 30 per 15 minutes             | IP address and username            | one person's retries; the account lockout stops guessing after 5 failures                 |
+| `rateLimit.authApi.perIpLimit`           | 5,000 per 15 minutes          | IP address                         | a login wave of 30% of 10,000 employees in 15 minutes is 3,000 sign-ins from one address |
+| `requestConcurrency`                     | 25                            | model, unless it sets `concurrency` | one GPU served about 30 busy users at once (see [GPU](#gpu)); a small backend or a rate-limited cloud key needs its own lower `concurrency` |
+
+- **Per-user limits count per worker,** so with `WORKERS=6` a user can make up to 6 × 300 requests
+  per minute. The sign-in limits count across all workers.
+- **Model concurrency counts across all workers** and is per model. Behind one model URL with
+  several GPUs (a load balancer), raise the model's own `concurrency` to about 30 × GPUs.
+- **Waiting for a slot is logged.** When calls wait 2 seconds or more for a free slot, the server
+  logs `Request throttle: calls waited for a free slot` (at most once a minute per model). Raise the
+  model's `concurrency` if the backend can take more.
+- **`trustProxy`** still matters for anonymous requests and for sign-in: set it to the real number
+  of proxy hops ([Rate limiting](rate-limiting.md#proxy-hops-and-the-rate-limit-key)).
+
+Installations updated from an earlier release get these values where they still had the old
+shipped ones (migration `V254`); values an admin set stay.
+
 ## Limits of these measurements
 
 - The lab was a laptop (Apple silicon, Docker Desktop with 12 CPUs): iHub, the load generator and the

@@ -138,7 +138,7 @@ test('a ceiling that fires on a non-streamed request says the wait may be genera
 
 test('time queued behind the model throttle is not counted against the ceiling', async () => {
   // Every attempt goes through the per-model throttle (platform
-  // requestConcurrency defaults to 5, and models can set concurrency /
+  // requestConcurrency defaults to 25, and models can set concurrency /
   // requestDelayMs of their own). Arming the ceiling before the slot was
   // granted reported a request that had not been sent yet as an unreachable
   // endpoint — the failure a batch of translations hit once more than a

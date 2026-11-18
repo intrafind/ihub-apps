@@ -17,7 +17,8 @@ Rate limiting has been implemented using the `express-rate-limit` package to pro
 The system supports seven different types of rate limiters, each configurable through the platform configuration and in **Admin → Security → Rate limits** (see [Changing the limits](#changing-the-limits)):
 
 ### 1. Public API Rate Limiter
-- **Default Limit**: 500 requests per 1 minute per IP address
+- **Default Limit**: 300 requests per minute per signed-in user; 500 per minute per IP address for
+  requests without a sign-in (see [Who a request counts for](#who-a-request-counts-for))
 - **Applied to**: Regular API endpoints including:
   - `/api/apps`
   - `/api/models`
@@ -31,8 +32,9 @@ The system supports seven different types of rate limiters, each configurable th
   - `/api/shortlinks`
 
 ### 2. Admin API Rate Limiter
-- **Default Limit**: 500 requests per 1 minute **per signed-in user** (per worker process, see
-  [Several worker processes](#several-worker-processes))
+- **Default Limit**: 300 requests per minute per signed-in user (per worker process, see
+  [Several worker processes](#several-worker-processes)); 500 per minute per address without a
+  sign-in (`anonymousLimit`)
 - **Applied to**: Administrative endpoints:
   - `/api/admin/*` (all admin routes)
 - **Counted per caller, not per address.** Admins often share one address (a corporate NAT or a
@@ -42,22 +44,30 @@ The system supports seven different types of rate limiters, each configurable th
     user's behalf) counts on their own;
   - an OAuth client (client credentials) or a static API key counts per client;
   - a request without a sign-in counts per address, as the other limiters do.
+  - With `keyBy: "ip"` every request counts per address again.
 - **Refused sign-ins still count per address.** A request whose token or cookie the sign-in check
   refuses (invalid, expired or revoked) is answered before the per-user count. A second count on
-  `/api/admin`, ahead of the sign-in check and with the same limit and window, counts those
+  `/api/admin`, ahead of the sign-in check, with the per-address limit (`anonymousLimit`, else
+  `limit`) and the same window, counts those
   requests per address, and only them: failed requests without a signed-in caller. Requests that
   succeed and every request of a signed-in user or API client do not count there, so admins behind
   one address do not share a budget through it. When an address reaches the limit, its further
   `/api/admin` requests get `429` until the window ends.
-- Earlier releases shipped 100 requests per minute. Migration `V254` raises that value to 500
-  where it was never changed (100 requests per 60000 ms); a limit or window an admin set stays and
-  the migration logs that it kept it.
+- Earlier releases shipped 100 requests per minute per address. Migration `V254` turns that
+  value into 300 per user where it was never changed (see below); migration `V255` raises a
+  `rateLimit.adminApi` still at the old 100 requests per 60000 ms to the shipped value in the one
+  case `V254` leaves it (an admin had set `keyBy` already). A limit or window an admin set stays.
 
 ### 3. Auth API Rate Limiter
-- **Limit**: 30 requests per 15 minutes per IP address in the shipped
-  `platform.json` (`rateLimit.authApi.limit`). The code-level fallback, used only
+- **Limit**: 30 requests per 15 minutes per IP address **and username** in the shipped
+  `platform.json` (`rateLimit.authApi.limit`), plus a ceiling of 5,000 per 15 minutes per IP
+  address over all usernames (`rateLimit.authApi.perIpLimit`). The code-level fallback, used only
   when no `rateLimit.authApi` section is present at all, is 50 per 15 minutes.
-  Either way it is the most restrictive limiter.
+- **Why per username:** an office behind one NAT address used to share 30 sign-ins per 15 minutes,
+  so a Monday-morning login wave was refused after 30 people. Guessing one account's password is
+  stopped earlier by the per-account lockout (5 failures, `localAuth.lockout`); the per-address
+  ceiling stops trying many usernames from one address. The username is the submitted `username`
+  field, trimmed and lower-cased; requests without one count per address alone.
 - **Applied to**: Endpoints under `/api/auth` that verify credentials:
   - `POST /api/auth/local/login`
   - `POST /api/auth/ldap/login`
@@ -84,12 +94,14 @@ The system supports seven different types of rate limiters, each configurable th
   window for the whole deployment.
 
 ### 4. Inference API Rate Limiter
-- **Default Limit**: 500 requests per 1 minute per IP address (moderate)
+- **Default Limit**: 300 requests per minute per signed-in user; 500 per minute per IP address
+  without a sign-in
 - **Applied to**: AI inference endpoints:
   - `/inference/*` (all inference routes)
 
 ### 5. Default Rate Limiter
-- **Default Limit**: 500 requests per 1 minute per IP address
+- **Default Limit**: 300 requests per minute per signed-in user, 500 per IP address without a
+  sign-in (`keyBy: "user"`, `anonymousLimit: 500`)
 - **Purpose**: Base configuration that other limiters inherit from
 
 ### 6. OAuth API Rate Limiter
@@ -187,6 +199,12 @@ Each rate limiter supports the following configuration options:
 - `skipSuccessfulRequests`: Don't count successful requests (default: false)
 - `skipFailedRequests`: Don't count failed requests (default: varies by type)
 - `message`: Custom error message when limit exceeded
+- `keyBy` (`publicApi`, `adminApi`, `inferenceApi`, `default`): `"user"` (default) counts a
+  signed-in request per user and an anonymous one per IP address; `"ip"` counts every request per
+  IP address
+- `anonymousLimit` (same limiters, with `keyBy: "user"`): the limit of a request without a
+  sign-in, per IP address. Falls back to `limit`
+- `perIpLimit` (`authApi` only): the ceiling per IP address over all usernames
 
 ### Changing the limits
 
@@ -196,7 +214,10 @@ Each rate limiter supports the following configuration options:
 - **Per (minutes):** the window, from one second to 1,440 minutes;
 - **Which requests count:** all requests, failed requests only (`skipSuccessfulRequests`), or
   successful requests only (`skipFailedRequests`). A request failed when its response status is
-  400 or higher.
+  400 or higher;
+- **Count per** (web app, admin and inference API): signed-in user or client address, and
+  **Requests per address (not signed in)** (`anonymousLimit`);
+- **Requests per address (all usernames)** (sign-in): the per-address ceiling (`perIpLimit`).
 
 The page saves to `rateLimit` in `platform.json` and keeps the other fields of each section, such
 as `message`. The limiters are built when the server starts, so **changes apply after a restart**.
@@ -207,10 +228,28 @@ Environment variables override `platform.json`, for example
 `IHUB_PLATFORM__RATE_LIMIT__OAUTH_API__LIMIT=1000` (see
 [environment variables](environment-variables.md)).
 
+### Who a request counts for
+
+- **Web app, admin and inference API** (`keyBy: "user"`, the default): a signed-in request counts
+  for its user, whether it carries a session cookie, an OAuth token or an API key (an OAuth client
+  counts as its client id). A request without a sign-in counts for its IP address, against
+  `anonymousLimit`. These limiters run after authentication, so the user is already known; they
+  cost no extra work per request. Set `keyBy: "ip"` to count every request per address as before.
+- **Sign-in** (`authApi`): per IP address and username, with `perIpLimit` per address.
+- **OAuth limiters and the provenance lookup:** per IP address.
+
+Measured in the load test, a busy user makes 2 requests per minute at the median, 18 at the 99th
+percentile and at most 50, page loads included. 300 per user and minute leaves 6× headroom above
+the busiest user. See [Sizing](sizing.md#limits-for-large-installations).
+
+Earlier releases counted the general limiters per address only (100 / 500 per minute). Migration
+`V254` turns the shipped values into the new per-user ones and adds `keyBy`, `anonymousLimit`
+and `perIpLimit`; a limit an admin set stays, now per user, and keeps applying per address to
+anonymous requests.
+
 ### Proxy hops and the rate-limit key
 
-Every limiter except the admin API limiter counts per `req.ip` (the admin API limiter counts
-per signed-in user and falls back to `req.ip` only without a sign-in), and `req.ip` is derived from Express's
+The address-based limits count per `req.ip`, and `req.ip` is derived from Express's
 `trust proxy` setting — configured with `trustProxy` in `platform.json`:
 
 ```json
@@ -248,7 +287,7 @@ All rate limiters inherit from the `default` configuration. You only need to spe
 iHub runs several worker processes (`WORKERS`; 4 by default, or sized from the container memory limit) and spreads connections across them.
 
 - **Auth API, OAuth API and OAuth token API** limits count across all workers: the primary process holds the counters and every worker asks it. A limit of 30 means 30 attempts per window, whichever worker each attempt reaches. If the primary does not answer within half a second, a worker counts on its own for that request.
-- **Public, admin, inference and default** limits count per worker, so a client can make up to `WORKERS ×` the configured number of requests per window. Size them accordingly, or enforce them at the ingress.
+- **Public, admin, inference and default** limits count per worker, so a user (or an anonymous address) can make up to `WORKERS ×` the configured number of requests per window. This keeps them free of a round trip to the primary on every request. Size them accordingly, or enforce them at the ingress.
 - Several iHub replicas (pods) each count on their own, for every limiter.
 
 ## Implementation Details
@@ -277,7 +316,7 @@ When rate limits are exceeded, a 429 status code is returned with a JSON error m
 
 ```json
 {
-  "error": "Too many [type] requests from this IP, please try again later.",
+  "error": "Too many [type] requests, please try again later.",
   "retryAfter": "15 minutes"
 }
 ```

@@ -485,48 +485,18 @@ export function setupMiddleware(app, platformConfig = {}) {
   // Create configurable rate limiters based on platform configuration
   const rateLimiters = createRateLimiters(platformConfig);
 
-  // Rate limiting middleware - apply early to protect all endpoints
-  // Public API rate limiter for general endpoints
-  app.use(buildApiPath('/apps'), rateLimiters.publicApiLimiter);
-  app.use(buildApiPath('/chats'), rateLimiters.publicApiLimiter);
-  app.use(buildApiPath('/scheduled-tasks'), rateLimiters.publicApiLimiter);
-  // Share links open without a sign-in in `public` mode, so they get the
-  // general limiter like every other unauthenticated read; the recipient
-  // lookup sits under /users.
-  app.use(buildApiPath('/shares'), rateLimiters.publicApiLimiter);
-  app.use(buildApiPath('/users'), rateLimiters.publicApiLimiter);
-  app.use(buildApiPath('/tools'), rateLimiters.publicApiLimiter);
-  app.use(buildApiPath('/mcp-apps'), rateLimiters.publicApiLimiter);
-  app.use(buildApiPath('/models'), rateLimiters.publicApiLimiter);
-  app.use(buildApiPath('/prompts'), rateLimiters.publicApiLimiter);
-  app.use(buildApiPath('/projects'), rateLimiters.publicApiLimiter);
-  app.use(buildApiPath('/styles'), rateLimiters.publicApiLimiter);
-  app.use(buildApiPath('/translations'), rateLimiters.publicApiLimiter);
-  app.use(buildApiPath('/configs'), rateLimiters.publicApiLimiter);
-  app.use(buildApiPath('/sessions'), rateLimiters.publicApiLimiter);
-  app.use(buildApiPath('/pages'), rateLimiters.publicApiLimiter);
-  app.use(buildApiPath('/magic-prompt'), rateLimiters.publicApiLimiter);
-  app.use(buildApiPath('/shortlinks'), rateLimiters.publicApiLimiter);
-  app.use(buildApiPath('/integrations'), rateLimiters.publicApiLimiter);
-  // Read before every first send and when a pane regains focus (Outlook, extension).
-  app.use(buildApiPath('/eu-ai-act'), rateLimiters.publicApiLimiter);
-
+  // The credential limiters run before authentication: they guard sign-in and
+  // count per address (and username). The general limiters count per signed-in
+  // user, so they are mounted after authentication, further down.
+  //
   // Auth API rate limiters. Two layers, deliberately:
-  //   1. the public limiter bounds the whole namespace generously, and
+  //   1. the public limiter (mounted below) bounds the whole namespace
+  //      generously, and
   //   2. the strict credential limiter covers only the endpoints that verify
   //      credentials — it skips read-only ones such as /api/auth/status, which
   //      the SPA fetches on every boot and operators use as a health probe
   //      (see isReadOnlyAuthRequest in ./rateLimiting.js).
-  app.use(buildApiPath('/auth'), rateLimiters.publicApiLimiter);
   app.use(buildApiPath('/auth'), rateLimiters.authApiLimiter);
-
-  // Inference API rate limiter for AI inference endpoints
-  app.use(buildApiPath('/inference'), rateLimiters.inferenceApiLimiter);
-  // Read aloud calls a paid speech model on every request.
-  app.use(buildApiPath('/voice/speech'), rateLimiters.inferenceApiLimiter);
-
-  // The admin API limiter is mounted after the authentication chain below: it
-  // counts per signed-in user / API client, so it needs req.user.
 
   // OAuth rate limiters, two layers like /api/auth: this one bounds the volume
   // per address; the token limiter (mounted by routes/oauth.js) counts the
@@ -569,12 +539,6 @@ export function setupMiddleware(app, platformConfig = {}) {
       platformConfig // Pass platform config to respect NTLM requirements
     )
   );
-
-  // Admin API rate limiter. Runs after authentication so it can count per
-  // signed-in user or API client (adminApiRateLimitKey); admins behind one
-  // NAT address or proxy no longer share one budget. Requests without a
-  // sign-in are counted per address.
-  app.use(buildApiPath('/admin'), rateLimiters.adminApiLimiter);
 
   // Populate the request logging context with the authenticated identity so
   // every subsequent log line carries userId / oauthClientId. The store was
@@ -639,6 +603,48 @@ export function setupMiddleware(app, platformConfig = {}) {
     }
     next();
   });
+
+  // General rate limiters. After authentication, so they count per user
+  // (`keyBy: "user"`) and an anonymous request per address; see
+  // userKeyOptions in ./rateLimiting.js.
+  app.use(buildApiPath('/apps'), rateLimiters.publicApiLimiter);
+  app.use(buildApiPath('/chats'), rateLimiters.publicApiLimiter);
+  app.use(buildApiPath('/scheduled-tasks'), rateLimiters.publicApiLimiter);
+  // Share links open without a sign-in in `public` mode, so they get the
+  // general limiter like every other unauthenticated read; the recipient
+  // lookup sits under /users.
+  app.use(buildApiPath('/shares'), rateLimiters.publicApiLimiter);
+  app.use(buildApiPath('/users'), rateLimiters.publicApiLimiter);
+  app.use(buildApiPath('/tools'), rateLimiters.publicApiLimiter);
+  app.use(buildApiPath('/mcp-apps'), rateLimiters.publicApiLimiter);
+  app.use(buildApiPath('/models'), rateLimiters.publicApiLimiter);
+  app.use(buildApiPath('/prompts'), rateLimiters.publicApiLimiter);
+  app.use(buildApiPath('/projects'), rateLimiters.publicApiLimiter);
+  app.use(buildApiPath('/styles'), rateLimiters.publicApiLimiter);
+  app.use(buildApiPath('/translations'), rateLimiters.publicApiLimiter);
+  app.use(buildApiPath('/configs'), rateLimiters.publicApiLimiter);
+  app.use(buildApiPath('/sessions'), rateLimiters.publicApiLimiter);
+  app.use(buildApiPath('/pages'), rateLimiters.publicApiLimiter);
+  app.use(buildApiPath('/magic-prompt'), rateLimiters.publicApiLimiter);
+  app.use(buildApiPath('/shortlinks'), rateLimiters.publicApiLimiter);
+  app.use(buildApiPath('/integrations'), rateLimiters.publicApiLimiter);
+  // Read before every first send and when a pane regains focus (Outlook, extension).
+  app.use(buildApiPath('/eu-ai-act'), rateLimiters.publicApiLimiter);
+
+  // The public limiter also bounds the whole /api/auth namespace, generously;
+  // the strict credential limiter (mounted before authentication) covers only
+  // the endpoints that verify credentials.
+  app.use(buildApiPath('/auth'), rateLimiters.publicApiLimiter);
+
+  // Inference API rate limiter for AI inference endpoints
+  app.use(buildApiPath('/inference'), rateLimiters.inferenceApiLimiter);
+  // Read aloud calls a paid speech model on every request.
+  app.use(buildApiPath('/voice/speech'), rateLimiters.inferenceApiLimiter);
+
+  // Admin API rate limiter. Counts per signed-in user or API client
+  // (adminApiRateLimitKey), so admins behind one NAT address or proxy do not
+  // share one budget; requests without a sign-in count per address.
+  app.use(buildApiPath('/admin'), rateLimiters.adminApiLimiter);
 
   // Track every authenticated request for the activity-summary log line and
   // the ihub.active.users observable gauge. Active *chats* are still only

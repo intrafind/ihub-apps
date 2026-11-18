@@ -899,7 +899,7 @@ reach if the request streams, and two things broke that — both fixed:
   collected when the client wants one object, so the headers arrive
   immediately. The chat UI streamed already, which is why only API jobs failed.
 - **Queue time counted.** Every attempt waits for a slot in the per-model
-  throttle (`platform.requestConcurrency` defaults to **5**). With more than
+  throttle (`platform.requestConcurrency`, **5** at the time). With more than
   five requests in flight for one model, the ones still queued were timed as
   if they had been sent and ignored. The ceiling is now armed inside the slot.
 

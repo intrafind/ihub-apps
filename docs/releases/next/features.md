@@ -2270,21 +2270,16 @@ that save never writes. The new
 the same checks as a full save. See
 [Platform Configuration → Changing platform.json through the admin API](../../platform.md#changing-platformjson-through-the-admin-api).
 
-## Admin API Rate Limit Counts per User and Allows 500 Requests per Minute
+## Admin API Rate Limit: API Clients Count Separately, Refused Tokens per Address
 
-Admin pages send many requests while they load, and admins behind one office address or reverse
-proxy shared a single budget, so working through a few admin pages could end in "Too many
-requests". The admin API limit now counts per signed-in user, and its shipped value is 500
-requests per minute.
+Admin pages send many requests while they load. The admin API limit counts per signed-in user (see
+"Rate Limits Count per User, and Every Model Runs 25 Calls at Once" under breaking changes for the
+shipped values and the upgrade); two details apply to the admin API only:
 
-- Each signed-in user has their own budget; an OAuth client or static API key counts per client.
-  Requests without a sign-in still count per address, and so do requests whose sign-in is refused
-  (an invalid or expired token), with the same limit.
-- The budget is counted per server worker process, as before.
-- Upgrades: migration `V254` raises `rateLimit.adminApi` from 100 to 500 only where it still has
-  the shipped 100 requests per minute. A limit or period you changed is kept (the server log says
-  so). See **Admin → Security → Rate limits**.
-- New installations start with 500.
+- An OAuth client or static API key counts per client, apart from any user of the same id.
+- Requests whose sign-in is refused (an invalid or expired token) never reach the per-user count;
+  they are counted per address with the limit for requests without a sign-in, so a flood of bad
+  tokens is still stopped without spending the budget of admins behind the same address.
 
 ## Security: SSL Whitelist Hosts Are Shown as Trusted by the SSRF Guard
 

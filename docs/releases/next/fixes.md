@@ -1129,3 +1129,13 @@ editor no longer offers a Skills field while skills are switched off.
 Switching **Store feedback** off (or on) under **Admin → Feedback → Settings** showed "Feedback
 settings saved", but the setting was not stored, and after a reload the switch was back where it
 was. It is saved now, and feedback is kept or dropped as the switch says.
+
+## Placeholders in User Names and Other User Data Are Kept as Written
+
+Placeholders such as `${…}` in user names, emails, OAuth client names, user prompts and skills promoted
+to global ones, and other user-provided data are now kept as written instead of being replaced by server
+configuration values. Placeholders are resolved only in configuration admins write (platform, UI, models,
+providers, apps, groups and the like).
+
+- Check `users.json` for names or emails whose placeholders were replaced before the upgrade; the upgrade
+  does not restore those records.

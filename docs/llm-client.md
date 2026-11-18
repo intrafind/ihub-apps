@@ -172,7 +172,7 @@ streams, and a consumer that wants one object gets that stream collected:
   generation rather than asserting the endpoint is unreachable.
 
 **Only time on the network counts.** Every attempt first waits for a slot in
-the per-model throttle (`platform.requestConcurrency` defaults to 5). A
+the per-model throttle (`platform.requestConcurrency`, 25 by default). A
 request still queued behind others has not been sent yet, let alone ignored,
 so `_connect` takes the slot first and arms the ceiling inside it. Queue time
 is left to the whole-call deadline.
