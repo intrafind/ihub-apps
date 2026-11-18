@@ -71,6 +71,25 @@ test('the chat says a digest is being written, then what it did, and the context
   assert.equal(frames[2].data.inputTokens, 102_934 - 65_029, 'rebased on the provider count');
 });
 
+test('a shortened (elided) compaction drops the context figure too, from its sizes before and after', () => {
+  const tracker = createContextTracker({ id: 'm', contextWindow: 173_184 });
+  tracker.recordStep({ promptTokens: 100_000, completionTokens: 100, source: 'provider' }, 1);
+  const { seam, ctx, frames } = seamWith(tracker);
+  seam.onCompaction(ctx, {
+    compactionId: 'cmp-2',
+    step: 4,
+    trigger: 'overflow',
+    strategy: 'elide',
+    lossy: true,
+    fallbackReason: 'context_overflow',
+    tokensBefore: 100_000,
+    tokensAfter: 60_000,
+    itemsSummarised: 3
+  });
+  const usage = frames.find(f => f.type === SSE_V2_EVENTS.CONTEXT_USAGE);
+  assert.equal(usage.data.inputTokens, 100_000 - 40_000, 'rebased on the provider count');
+});
+
 test('the stored answer keeps the row and its notes; a share keeps that it happened, not what it found', () => {
   const ts = seq => `2026-11-18T10:00:${String(seq).padStart(2, '0')}.000Z`;
   const env = (seq, type, data) => ({ v: 2, seq, runId: 'run-1', ts: ts(seq), type, data });

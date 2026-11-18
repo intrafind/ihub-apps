@@ -185,14 +185,21 @@ projected at `compactTargetShare` of the threshold
   [Long research turns](chat-persistence.md#long-research-turns)) writes only `FACT | ref | fact | source`
   and `NOTFOUND | ref | …` lines, with thinking off. A fact is kept only if
   its ref is one of the results it was given and its numbers appear in that
-  result: a number of four digits or more anywhere in one of the result's
-  numbers, a shorter one as a number of its own (single digits are not
-  checked). This catches invented figures, not a figure attached to the wrong
-  entity or period. A source URL not in the result is dropped from the fact.
-  Large inputs are split into chunks the summary model can take; a result cut
-  for the summary is marked "partly read for these notes" in the digest. All
-  chunks of one compaction get twice `summaryTimeoutMs`.
-- The digest stays within `maxDigestChars`: the list of calls takes at most
+  result, compared by value whatever the separators ("1.234,5" = "1,234.5",
+  never "5.1" = "51"). A whole number of four digits or more may also be the
+  start of a longer one in the result ("5,100 billion" for
+  "5,100,000,000,000"); single digits are not checked. This catches invented
+  figures, not a figure attached to the wrong entity or period. A source URL
+  not in the result is dropped from the fact. Large inputs are split into
+  chunks the summary model can take, one call each; a result cut for the
+  summary is marked "partly read for these notes" in the digest. All chunks
+  of one compaction get twice `summaryTimeoutMs` together, and no call runs
+  past that. A chunk whose answer stopped at the output limit makes the
+  compaction `lossy` (`summary_partial`).
+- The digest stays within `maxDigestChars` (at least 2,000) and within what
+  the condensed results held less their stubs, so a compaction never makes
+  the transcript longer; results too short to leave 2,000 characters for a
+  digest are not condensed. The list of calls takes at most
   40 % of it (sources, then argument length are shortened first), the facts
   the rest. Facts that still do not fit are counted in a closing line, and
   the compaction is marked `lossy` (`digest_truncated`). Text from results
@@ -219,8 +226,11 @@ projected at `compactTargetShare` of the threshold
   at most `maxRecallsPerRun` times. A chat turn that continues a paused run
   under a new id (another model after an approval) passes that run as
   `request.archiveRunIds`: its journal is kept while it is paused, and only a
-  run of the same chat is read. When the original cannot be reached — the
-  ledger does not persist, so there is no spill store to read after a pause —
+  run of the same chat is read. Each run segment records these runs
+  (`segment/start.archiveRunIds`), so a recall follows a chain of pauses back
+  — the same id continued again, or new ids one after another — up to 8 runs.
+  When the original cannot be reached — the ledger does not persist, so there
+  is no spill store to read after a pause, or retention removed the journal —
   the tool says so and the model works with the digest.
 - When the summary fails, times out or keeps nothing of results that held
   something, the batches are still condensed, to their calls and sources, and

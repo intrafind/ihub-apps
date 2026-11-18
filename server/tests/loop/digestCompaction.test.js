@@ -515,10 +515,11 @@ test('a turn continued under a new run id still reads what its paused run conden
     user: { id: 'u1' },
     refs: { chatId: 'chat-2' }
   });
-  const recall = (archiveRunIds, chatRefs = refs) =>
+  const { runId: unrelatedRun } = await runLog.startRun({ kind: 'chat', user: { id: 'u1' }, refs });
+  const recall = (archiveRunIds, chatRefs = refs, runId = newRun) =>
     makeLoop([toolTurn('c9', RECALL_TOOL_ID, { ref: 'r1' }), textTurn('done')], [], { runLog })
       .loop.run({
-        runId: newRun,
+        runId,
         refs: chatRefs,
         archiveRunIds,
         model,
@@ -530,7 +531,11 @@ test('a turn continued under a new run id still reads what its paused run conden
       .then(result => result.messages.find(m => m.tool_call_id === 'c9').content);
 
   assert.ok((await recall([pausedRun])).includes(RESULTS.nvidia), 'read from the paused run');
-  assert.match(await recall([]), /no longer available/, 'without it, the model is told');
+  assert.match(
+    await recall([], refs, unrelatedRun),
+    /no longer available/,
+    'without it, the model is told'
+  );
   assert.match(
     await recall([pausedRun], { chatId: 'chat-2' }),
     /no longer available/,
@@ -538,6 +543,86 @@ test('a turn continued under a new run id still reads what its paused run conden
   );
   assert.ok(otherChat);
   await runLog.stop();
+});
+
+test('a recall follows a chain of pauses back: same id (A, B, B) and new ids (A, B, C)', async () => {
+  const { runLog } = await captureRunLog();
+  const refs = { chatId: 'chat-1', appId: 'app' };
+  const start = () => runLog.startRun({ kind: 'chat', user: { id: 'u1' }, refs });
+  const { runId: runA } = await start();
+  const first = makeLoop(
+    [
+      toolTurn('c1', 'webSearch', { query: 'nvidia' }, 1000),
+      toolTurn('c2', 'webSearch', { query: 'apple' }, 4000),
+      textTurn('paused here')
+    ],
+    ['FACT | r1 | NVIDIA market cap 5.1 trillion USD | https://x.test/nvidia'],
+    { runLog }
+  );
+  const before = await first.loop.run({
+    runId: runA,
+    refs,
+    model,
+    messages: baseMessages,
+    tools: [searchTool],
+    policies,
+    executeTool: async (_call, { args }) => searchResult(args.query)
+  });
+  // B continues A under a new id and pauses again without condensing anything.
+  const { runId: runB } = await start();
+  await makeLoop([textTurn('paused again')], [], { runLog }).loop.run({
+    runId: runB,
+    refs,
+    archiveRunIds: [runA],
+    model,
+    messages: before.messages,
+    tools: [searchTool],
+    policies,
+    executeTool: async () => 'never'
+  });
+  await runLog.flush();
+  const recallIn = runId =>
+    makeLoop([toolTurn('c9', RECALL_TOOL_ID, { ref: 'r1' }), textTurn('done')], [], { runLog })
+      .loop.run({
+        runId,
+        refs,
+        archiveRunIds: runId === runB ? [] : [runB],
+        model,
+        messages: before.messages,
+        tools: [searchTool],
+        policies,
+        executeTool: async () => 'never'
+      })
+      .then(result => result.messages.find(m => m.tool_call_id === 'c9').content);
+
+  assert.ok((await recallIn(runB)).includes(RESULTS.nvidia), 'A, B, B: B continued under its id');
+  const { runId: runC } = await start();
+  assert.ok((await recallIn(runC)).includes(RESULTS.nvidia), 'A, B, C: C reaches A through B');
+  await runLog.stop();
+});
+
+test('results too short to leave room for a digest are left as they are', async () => {
+  const { loop, summaryRequests } = makeLoop(
+    [
+      toolTurn('c1', 'webSearch', { query: 'a' }, 1000),
+      toolTurn('c2', 'webSearch', { query: 'b' }, 1600),
+      toolTurn('c3', 'webSearch', { query: 'c' }, 1600),
+      textTurn('done')
+    ],
+    ['FACT | r1 | nothing']
+  );
+  const short = 'y'.repeat(1100);
+  const result = await loop.run({
+    model,
+    messages: baseMessages,
+    tools: [searchTool],
+    // Enough to free for a compaction, too little room for a digest.
+    policies: { context: { ...policies.context, compactThresholdTokens: 1500 } },
+    executeTool: async () => short
+  });
+  assert.equal(result.status, 'completed');
+  assert.equal(summaryRequests.length, 0, 'no summary call');
+  assert.equal(result.messages.find(m => m.tool_call_id === 'c1').content, short);
 });
 
 test('near the window the second kept batch is condensed too; well below it, it stays', async () => {

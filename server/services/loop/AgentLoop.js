@@ -73,6 +73,8 @@ import {
   recallPage,
   recallToolDefinition,
   renderDigest,
+  digestRoomOf,
+  MIN_DIGEST_CHARS,
   selectBatches,
   summarizeCalls,
   summaryFailureOf,
@@ -381,7 +383,14 @@ export class AgentLoop {
     let forcedFinalOffered = false; // a tool-less final call was made after a budget gate fired
     let terminal = null; // { status, finishReason, pendingInteraction?, toolCalls? }
 
-    this._ledger(ledgerId, RUN_LOG_EVENTS.SEGMENT_START, { segment: segmentId, purpose });
+    const archiveRunIds = (
+      Array.isArray(request.archiveRunIds) ? request.archiveRunIds : []
+    ).filter(id => isValidRunId(id) && id !== ledgerId);
+    this._ledger(ledgerId, RUN_LOG_EVENTS.SEGMENT_START, {
+      segment: segmentId,
+      purpose,
+      ...(archiveRunIds.length ? { archiveRunIds: archiveRunIds.slice(0, 16) } : {})
+    });
 
     const assertNotAborted = () => {
       if (deadline?.signal.aborted) throw wallClockError();
@@ -401,6 +410,7 @@ export class AgentLoop {
       recalls: 0,
       archive: new Map(),
       archiveLoaded: false,
+      archiveRuns: [],
       // The prompt after the last digest (0: none yet), for the cooldown.
       lastTokensAfter: 0
     };
@@ -1516,6 +1526,10 @@ export class AgentLoop {
     }
     const calls = collectCalls(ctx.messages, batches, { nextRef: state.nextRef, toolOf });
     if (calls.length === 0) return 0;
+    // A digest never makes the transcript longer: it gets at most the room
+    // the results leave, and results too short for one are left as they are.
+    const digestRoom = digestRoomOf(ctx.messages, calls, state.digests + 1);
+    if (digestRoom < MIN_DIGEST_CHARS) return 0;
 
     const started = Date.now();
     const compactionId = `cmp-${crypto.randomUUID().slice(0, 8)}`;
@@ -1603,7 +1617,7 @@ export class AgentLoop {
       facts: summary?.facts || [],
       notFound: summary?.notFound || [],
       fallbackReason,
-      maxChars: policy.maxDigestChars
+      maxChars: Math.min(policy.maxDigestChars, digestRoom)
     });
     // Facts that did not fit are in the results only (the model is told to
     // read them again): the compaction lost something the summary had.
@@ -1745,7 +1759,8 @@ export class AgentLoop {
       const runs = [
         entry.runId,
         ctx.ledgerId,
-        ...(Array.isArray(ctx.request.archiveRunIds) ? ctx.request.archiveRunIds : [])
+        ...(Array.isArray(ctx.request.archiveRunIds) ? ctx.request.archiveRunIds : []),
+        ...state.archiveRuns
       ].filter((id, index, all) => id && isValidRunId(id) && all.indexOf(id) === index);
       for (const runId of runs) {
         try {
@@ -1761,20 +1776,26 @@ export class AgentLoop {
 
   /**
    * The condensed results of earlier segments of this run (a turn resumed
-   * after a pause), read once from the journal's spill store.
+   * after a pause) and of the paused runs the turn continues from under a new
+   * id, read once from the journals' spill stores. Each segment records the
+   * runs it continues (`segment/start.archiveRunIds`), so a chain of pauses —
+   * same id or new ones — is followed back, at most {@link MAX_ARCHIVE_RUNS}
+   * runs and only those of the same chat.
    * @private
    */
   async _loadArchived(ctx, ref) {
     const state = ctx.compaction;
     if (state.archiveLoaded || typeof ctx.runLog?.readEvents !== 'function') return null;
     state.archiveLoaded = true;
-    // This run's journal, then the paused runs this turn continues from under
-    // a new id (`request.archiveRunIds`) — only those of the same chat.
-    const runIds = [
+    const queue = [
       ctx.ledgerId,
       ...(Array.isArray(ctx.request.archiveRunIds) ? ctx.request.archiveRunIds : [])
-    ].filter((id, index, all) => id && isValidRunId(id) && all.indexOf(id) === index);
-    for (const runId of runIds) {
+    ];
+    const seen = new Set();
+    while (queue.length > 0 && seen.size < MAX_ARCHIVE_RUNS) {
+      const runId = queue.shift();
+      if (!runId || !isValidRunId(runId) || seen.has(runId)) continue;
+      seen.add(runId);
       let events = [];
       try {
         events = await ctx.runLog.readEvents(runId);
@@ -1791,7 +1812,12 @@ export class AgentLoop {
         const start = events.find(event => event?.type === RUN_LOG_EVENTS.RUN_START);
         if (!ctx.refs.chatId || start?.data?.refs?.chatId !== ctx.refs.chatId) continue;
       }
+      state.archiveRuns.push(runId);
       for (const event of events) {
+        if (event?.type === RUN_LOG_EVENTS.SEGMENT_START) {
+          for (const earlier of event.data?.archiveRunIds || []) queue.push(earlier);
+          continue;
+        }
         const archiveRef =
           event?.type === RUN_LOG_EVENTS.CONTEXT_COMPACTION && event.data?.archiveRef;
         if (!archiveRef) continue;
@@ -1842,6 +1868,9 @@ const MIN_COMPACTION_PROGRESS = 0.1;
  * next model call may be refused as too long (#3819).
  */
 const URGENT_WINDOW_SHARE = 0.8;
+
+/** How many runs a recall follows back through a chain of paused turns. */
+const MAX_ARCHIVE_RUNS = 8;
 
 /**
  * The record of a compaction that collapsed messages to previews (`elide`):

@@ -31,6 +31,7 @@ import {
   selectBatches,
   stripThinking,
   summarizeCalls,
+  MIN_DIGEST_CHARS,
   summaryFailureOf,
   taskOf,
   verifyDigest
@@ -282,6 +283,62 @@ test('summarizeCalls: a failed chunk is reported, an abort of the run is thrown'
   assert.equal(summaryFailureOf(nothing, calls), 'summary_empty');
 });
 
+test('summarizeCalls: no chunk runs past the deadline; a chunk cut at the output limit is partial', async () => {
+  const calls = ['r1', 'r2', 'r3'].map(ref => ({
+    ref,
+    name: 'webSearch',
+    args: '{}',
+    content: `Revenue 5.1 million USD ${'x'.repeat(200_000)}`,
+    sources: []
+  }));
+  const seen = [];
+  const slow = {
+    complete: async params => {
+      seen.push(params.timeoutMs);
+      await new Promise(resolve => setTimeout(resolve, 90));
+      return { content: '', finishReason: 'stop' };
+    }
+  };
+  const timed = await summarizeCalls({
+    llmClient: slow,
+    model: { id: 'm' },
+    calls,
+    timeoutMs: 100
+  });
+  assert.equal(timed.chunks, 3);
+  assert.equal(seen[0], 100);
+  assert.ok(seen[2] < 100, `the third chunk gets only what is left (${seen[2]} ms)`);
+
+  const cut = {
+    complete: async () => ({
+      content: 'FACT | r1 | Revenue 5.1 million USD |',
+      finishReason: 'length'
+    })
+  };
+  const partial = await summarizeCalls({ llmClient: cut, model: { id: 'm' }, calls: [calls[0]] });
+  assert.equal(partial.facts.length, 1, 'the facts before the cut are kept');
+  assert.equal(partial.truncatedChunks, 1);
+  assert.equal(summaryFailureOf(partial, [calls[0]]), 'summary_partial');
+});
+
+test('a digest stays within its limit with many calls, the rest named as a range', () => {
+  const calls = Array.from({ length: 200 }, (_, i) => ({
+    ref: `r${i + 1}`,
+    name: 'webSearch',
+    args: JSON.stringify({ query: `query number ${i}` }),
+    content: 'x',
+    sources: []
+  }));
+  const { text } = renderDigest({
+    number: 1,
+    calls,
+    fallbackReason: 'compaction_limit',
+    maxChars: 1000
+  });
+  assert.ok(text.length <= MIN_DIGEST_CHARS, `${text.length} characters`);
+  assert.match(text, /more calls: r\d+-r200\n/);
+});
+
 test('chunks: calls are packed to the size the summary model takes', () => {
   const calls = Array.from({ length: 5 }, (_, i) => ({
     ref: `r${i + 1}`,
@@ -473,6 +530,16 @@ test('text from a result cannot close or open the digest block', () => {
     assert.equal(numbersAppearIn('Q3 2024 120 million', 'In Q3 2024 sales were 120 million'), true);
     assert.equal(numbersAppearIn('1 234 567 units', '1,234,567 units'), true);
     assert.equal(numbersAppearIn('2024 999 units', '2024: 450 units'), false);
+  });
+
+  test('a decimal keeps its magnitude; equal values in other formats still match', () => {
+    assert.equal(numbersAppearIn('Revenue 51 million USD', 'Revenue was 5.1 million USD'), false);
+    assert.equal(numbersAppearIn('Revenue 5.1 million USD', 'Revenue was 51 million USD'), false);
+    assert.equal(numbersAppearIn('1,234.5 units', '1.234,5 units'), true);
+    assert.equal(numbersAppearIn('margin 12.50%', 'margin 12,5 %'), true);
+    assert.equal(numbersAppearIn('1.234 units', '1,234 units'), true, 'a group of three is either');
+    assert.equal(numbersAppearIn('1,234,567 units', '1.234 units'), false);
+    assert.equal(numbersAppearIn('price 12.34', 'price\u00a012,34 EUR'), true);
   });
 
   test('the source column and every URL of a fact are checked too', () => {

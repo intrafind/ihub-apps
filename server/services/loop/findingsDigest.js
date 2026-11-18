@@ -480,46 +480,77 @@ function normalizeRef(value) {
 
 const NUMBER_PATTERN = /\d+(?:[.,'   ]\d{3}(?!\d))*(?:[.,]\d+)?/g;
 
+/** A decimal written without trailing zeros in its fraction ("5.10" → "5.1", "5.0" → "5"). */
+function decimalOf(integer, fraction) {
+  const trimmed = fraction.replace(/0+$/, '');
+  return trimmed ? `${integer}.${trimmed}` : integer;
+}
+
 /**
- * The numbers of a text as digit strings ("1,234.5" → "12345"), each with
- * the parts it would be if a space in it separated two numbers ("2024 450").
+ * The values a written number can stand for, as canonical strings ("1,234.5"
+ * and "1.234,5" → "1234.5"). A comma or point before the last group is a
+ * decimal mark unless three digits follow it; with three it may be either
+ * ("1.234" is 1234 or 1.234), unless the same mark separated groups before
+ * it ("1,234,567"). Spaces and apostrophes only group digits.
+ */
+function valuesOf(written) {
+  const groups = written.split(/[.,'\u00a0\u202f ]/);
+  if (groups.length === 1) return [written];
+  const marks = written.replace(/\d/g, '');
+  const last = marks[marks.length - 1];
+  const head = groups.slice(0, -1).join('');
+  const tail = groups[groups.length - 1];
+  if (!'.,'.includes(last)) return [groups.join('')];
+  if (tail.length !== 3) return [decimalOf(head, tail)];
+  if (marks.slice(0, -1).includes(last)) return [groups.join('')];
+  return [groups.join(''), decimalOf(head, tail)];
+}
+
+/**
+ * The numbers of a text: how many digits each has, the values it can stand
+ * for, and the values of its parts if a space in it separated two numbers
+ * ("2024 450").
  */
 function numbersOf(text) {
   return [...String(text || '').matchAll(NUMBER_PATTERN)].map(m => ({
-    digits: m[0].replace(/\D/g, ''),
+    digitCount: m[0].replace(/\D/g, '').length,
+    values: valuesOf(m[0]),
     parts: m[0]
-      .split(/[   ]/)
-      .map(part => part.replace(/\D/g, ''))
-      .filter(Boolean)
+      .split(/[\u00a0\u202f ]/)
+      .filter(part => /\d/.test(part))
+      .map(part => valuesOf(part))
   }));
 }
 
 /**
  * Whether every number of a fact (two digits or more) appears in the result
- * it cites. Separators and formats differ ("1.234,5" vs "1,234.5"), so
- * numbers are compared by their digits; every run of digits of the result
- * counts too (the day of "17.11.2026"). A number of four digits or more may
- * also be the start of a longer one in the result ("5,100 billion" for
- * "5,100,000,000,000"), never any other part of it: IDs and timestamps would
- * let invented figures through. A number read across a space ("2024 450")
- * also counts when each of its parts is found.
+ * it cites. Separators differ ("1.234,5" vs "1,234.5"), so numbers are
+ * compared by value — "5.1" never matches "51"; every run of digits of the
+ * result counts too (the day of "17.11.2026"). A whole number of four digits
+ * or more may also be the start of a longer whole number in the result
+ * ("5,100 billion" for "5,100,000,000,000"), never any other part of it: IDs
+ * and timestamps would let invented figures through. A number read across a
+ * space ("2024 450") also counts when each of its parts is found.
  *
  * @param {string} fact
  * @param {string} content
  * @returns {boolean}
  */
 export function numbersAppearIn(fact, content) {
-  const wanted = numbersOf(fact).filter(number => number.digits.length >= 2);
+  const wanted = numbersOf(fact).filter(number => number.digitCount >= 2);
   if (wanted.length === 0) return true;
-  const present = numbersOf(content).map(number => number.digits);
+  const present = numbersOf(content).flatMap(number => number.values);
   const exact = new Set([...present, ...(String(content || '').match(/\d+/g) || [])]);
-  const found = digits =>
-    digits.length < 2 ||
-    exact.has(digits) ||
-    (digits.length >= 4 && present.some(p => p.startsWith(digits)));
+  const wholes = present.filter(value => !value.includes('.'));
+  const found = values =>
+    values.some(
+      value =>
+        value.replace(/\D/g, '').length < 2 ||
+        exact.has(value) ||
+        (!value.includes('.') && value.length >= 4 && wholes.some(p => p.startsWith(value)))
+    );
   return wanted.every(
-    number =>
-      found(number.digits) || (number.parts.length > 1 && number.parts.every(part => found(part)))
+    number => found(number.values) || (number.parts.length > 1 && number.parts.every(found))
   );
 }
 
@@ -578,7 +609,7 @@ export function verifyDigest(parsed, callsByRef) {
  * @param {Object} [params.telemetry]
  * @param {string} [params.language]
  * @returns {Promise<{facts: Array<Object>, notFound: Array<Object>, dropped: number,
- *   failedChunks: number, chunks: number, usage: {promptTokens: number, completionTokens: number},
+ *   failedChunks: number, truncatedChunks: number, chunks: number, usage: {promptTokens: number, completionTokens: number},
  *   error: string|null}>}
  */
 export async function summarizeCalls({
@@ -608,6 +639,7 @@ export async function summarizeCalls({
     notFound: [],
     dropped: 0,
     failedChunks: 0,
+    truncatedChunks: 0,
     chunks: chunks.length,
     usage: { promptTokens: 0, completionTokens: 0 },
     error: null
@@ -629,7 +661,10 @@ export async function summarizeCalls({
         options: { ...options, maxTokens: outputTokens, thinkingEnabled: false },
         language,
         signal,
-        timeoutMs,
+        // Never past the deadline of all chunks together.
+        timeoutMs: Number.isFinite(deadline)
+          ? Math.max(1, Math.min(Number(timeoutMs), deadline - Date.now()))
+          : timeoutMs,
         retries: 0,
         telemetry: { ...telemetry, step: index }
       });
@@ -641,6 +676,8 @@ export async function summarizeCalls({
     }
     result.usage.promptTokens += Number(response?.usage?.promptTokens) || 0;
     result.usage.completionTokens += Number(response?.usage?.completionTokens) || 0;
+    // Stopped at the output limit: the rows after the cut have no facts.
+    if (response?.finishReason === 'length') result.truncatedChunks += 1;
     const local = new Map(chunk.map(call => [call.ref, callsByRef.get(call.ref)]));
     const verified = verifyDigest(parseDigestLines(response?.content || ''), local);
     result.facts.push(...verified.facts);
@@ -661,7 +698,7 @@ export async function summarizeCalls({
 export function summaryFailureOf(summary, calls) {
   if (!summary) return 'summary_failed';
   if (summary.chunks > 0 && summary.failedChunks === summary.chunks) return 'summary_failed';
-  if (summary.failedChunks > 0) return 'summary_partial';
+  if (summary.failedChunks > 0 || summary.truncatedChunks > 0) return 'summary_partial';
   const substantial = calls.reduce((sum, call) => sum + call.content.length, 0) > SUBSTANTIAL_CHARS;
   if (substantial && summary.facts.length === 0 && summary.notFound.length === 0) {
     return 'summary_empty';
@@ -690,6 +727,9 @@ function inert(text) {
     .replace(/</g, '‹')
     .replace(/>/g, '›');
 }
+
+/** The smallest digest limit: its fixed text and a list of the calls fit. */
+export const MIN_DIGEST_CHARS = 2000;
 
 /** Share of a digest the list of calls may take; the rest is for the facts. */
 const CALLS_SHARE = 0.4;
@@ -720,12 +760,7 @@ function callLines(calls, budget) {
   for (const [index, call] of calls.entries()) {
     const line = callLine(call, 80);
     if (used + line.length > budget - 80) {
-      lines.push(
-        `- … ${calls.length - index} more calls: ${calls
-          .slice(index)
-          .map(c => c.ref)
-          .join(', ')}`
-      );
+      lines.push(`- … ${calls.length - index} more calls: ${refRange(calls.slice(index))}`);
       break;
     }
     lines.push(line);
@@ -774,6 +809,8 @@ export function renderDigest({
   fallbackReason = null,
   maxChars = 24_000
 }) {
+  // The fixed text of a digest takes up to about 700 characters.
+  maxChars = Math.max(Number(maxChars) || 0, MIN_DIGEST_CHARS);
   const range = refRange(calls);
   const lines = [
     `<${DIGEST_TAG} digest="${number}" refs="${range}"${fallbackReason ? ` lossy="true" reason="${fallbackReason}"` : ''}>`,
@@ -841,6 +878,25 @@ export function applyDigest(messages, calls, digestText, digestNumber) {
     };
   }
   return out;
+}
+
+/**
+ * How many characters a digest may take so that condensing the calls still
+ * shrinks the transcript: what their results hold now, less the stubs that
+ * replace them.
+ *
+ * @param {Array<Object>} messages
+ * @param {Array<Object>} calls - see {@link collectCalls}
+ * @param {number} digestNumber
+ * @returns {number}
+ */
+export function digestRoomOf(messages, calls, digestNumber) {
+  let room = -1; // the line break before the digest
+  for (const call of calls) {
+    room += String(messages[call.index]?.content ?? '').length;
+    room -= condensedStub(call, digestNumber).length;
+  }
+  return room;
 }
 
 /** Reasons that count as a failed summary (the model is not asked again after two). */

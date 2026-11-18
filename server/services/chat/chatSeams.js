@@ -157,7 +157,12 @@ export function chatTurnSeam({
         emit(ctx, SSE_V2_EVENTS.CONTEXT_COMPACTED, compactedFrameOf(info, 'completed'));
       }
       if (contextTracker) {
-        if (Number(info?.freedTokens) > 0) contextTracker.compacted?.(info.freedTokens);
+        // A digest says what it freed; an elision only its sizes before and after.
+        const freedTokens =
+          Number(info?.freedTokens) ||
+          Math.max(0, Number(info?.tokensBefore) - Number(info?.tokensAfter)) ||
+          0;
+        if (freedTokens > 0) contextTracker.compacted?.(freedTokens);
         reportContext(ctx, contextTracker.estimate(ctx.messages));
       }
     },

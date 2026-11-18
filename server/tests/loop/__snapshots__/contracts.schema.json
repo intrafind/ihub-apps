@@ -486,6 +486,13 @@
               },
               "supersedes": {
                 "type": "string"
+              },
+              "archiveRunIds": {
+                "maxItems": 16,
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
               }
             },
             "required": ["segment", "purpose"],

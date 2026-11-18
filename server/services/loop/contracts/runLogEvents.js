@@ -194,7 +194,12 @@ export const segmentStartData = z.object({
   segment: z.string(),
   purpose: z.string(),
   parentSegment: z.string().optional(),
-  supersedes: z.string().optional()
+  supersedes: z.string().optional(),
+  /**
+   * Earlier paused runs of the same chat turn this segment continues under a
+   * new id (#3819): a later recall follows them to the results they condensed.
+   */
+  archiveRunIds: z.array(z.string()).max(16).optional()
 });
 
 export const requestHeaderData = z.object({
