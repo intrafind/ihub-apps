@@ -12,5 +12,7 @@ the current version.
 The page reader (`read_url`) was treated as an internal tool, so the platform default for external
 tools (`toolApproval.defaults.external`, **Admin → Security → Tool approval**) did not apply to it,
 and its approval card said "Internal". A page address can carry data from the chat to any host, so
-it is now external: with the external default set to `always`, every page read is asked for. With
-no external default, nothing changes.
+it is now external: with the external default set to `always`, every page read is asked for. It is
+also declared a read, so `writes` (for external tools or as the general default) no longer asks for
+page reads, as it did while the page reader's side effect was unknown. With no approval default,
+nothing changes.
