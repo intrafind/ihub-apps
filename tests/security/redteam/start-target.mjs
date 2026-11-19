@@ -10,12 +10,14 @@
  * instead of the scripted one. The injection suite proves what the platform contains
  * when the model obeys; this run measures whether the model obeys at all.
  *
- * The model is Anthropic's (`ANTHROPIC_API_KEY`, required; `REDTEAM_MODEL`, default
- * `claude-haiku-5-5`). Only the API server starts (no Vite client): promptfoo calls
+ * The model is served by an OpenAI-compatible endpoint (vLLM): `REDTEAM_BASE_URL`
+ * (required, e.g. `https://gpu.example.com/v1`; kept out of the repository),
+ * `REDTEAM_MODEL` (required, the model id the endpoint lists), and `REDTEAM_API_KEY`
+ * if the endpoint wants one. Only the API server starts (no Vite client): promptfoo calls
  * the OpenAI-compatible inference API with `model: app:<appId>`, which runs the app's
  * full configuration (system prompt, projects, tools).
  *
- *   ANTHROPIC_API_KEY=... node tests/security/redteam/start-target.mjs
+ *   REDTEAM_BASE_URL=... REDTEAM_MODEL=... node tests/security/redteam/start-target.mjs
  */
 
 import fs from 'node:fs';
@@ -29,14 +31,14 @@ import { startCanary } from '../injection/canary.mjs';
 import { CANARY_PAGES, seedInjectionContents } from '../injection/seed.mjs';
 import { CANARY_PORT, LLM_PORT, SERVER_PORT, SERVER_SECRET_ENV } from '../injection/scenario.mjs';
 
-if (!process.env.ANTHROPIC_API_KEY) {
-  console.error('ANTHROPIC_API_KEY is not set: the red team needs a real model.');
-  process.exit(1);
-}
-
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const CONTENTS_DIR = 'contents-e2e-redteam';
-const MODEL = process.env.REDTEAM_MODEL || 'claude-haiku-5-5';
+if (!process.env.REDTEAM_BASE_URL || !process.env.REDTEAM_MODEL) {
+  console.error('Set REDTEAM_BASE_URL and REDTEAM_MODEL: the red team needs a real model.');
+  process.exit(1);
+}
+const BASE_URL = process.env.REDTEAM_BASE_URL.replace(/\/+$/, '');
+const MODEL = process.env.REDTEAM_MODEL;
 
 process.chdir(root);
 process.env.CONTENTS_DIR = CONTENTS_DIR;
@@ -60,9 +62,11 @@ fs.writeFileSync(
       modelId: MODEL,
       name: { en: `Red team (${MODEL})`, de: `Red Team (${MODEL})` },
       description: { en: 'The model under test.', de: 'Das getestete Modell.' },
-      url: 'https://api.anthropic.com/v1/messages',
-      provider: 'anthropic',
-      contextWindow: 200000,
+      url: `${BASE_URL}/chat/completions`,
+      // OpenAI-compatible, as for the e2e stub (docs/local-llm-providers.md).
+      provider: 'local',
+      ...(process.env.REDTEAM_API_KEY && { apiKey: process.env.REDTEAM_API_KEY }),
+      contextWindow: 60000,
       maxOutputTokens: 4096,
       supportsTools: 'auto',
       enabled: true,

@@ -978,7 +978,7 @@ Every pull request is checked automatically for the OWASP Top 10 and CWE Top 25 
 | Admin route audit (`npm run security:audit`) | `security.yml` | PRs, `main` | Yes | Job log |
 | Cross-user authorization: every user-owned resource attacked by other users, other groups and anonymous through every parameterised non-admin route (`npm run test:e2e:authz`) | `security.yml` | PRs, `main` | Yes | Job log |
 | Prompt-injection blast radius: a scripted model obeys planted instructions; rendering, SSRF, tool confirmation, project scope and secret isolation must hold (`npm run test:e2e:injection`) | `security.yml` | PRs, `main` | Yes | Playwright report |
-| LLM red team (promptfoo): the same poisoned contents answered by a real model | `redteam.yml` | Nightly, with `ANTHROPIC_API_KEY` | Any failed test | Job summary, report |
+| LLM red team (promptfoo): the same poisoned contents answered by a real model | `redteam.yml` | Nightly | Any failed test | Job summary, report |
 | Accessibility: axe-core scans and jsx-a11y on changed lines | `accessibility.yml` | PRs | Yes | Inline annotations, Playwright report |
 | Dependency scan (OSV-Scanner) of every lockfile | `dependency-scan.yml` | Nightly, `main` | — | Security tab |
 | OpenSSF Scorecard | `scorecard.yml` | Weekly, `main` | — | Security tab |
@@ -986,7 +986,6 @@ Every pull request is checked automatically for the OWASP Top 10 and CWE Top 25 
 | Infrastructure as code (Trivy config): Dockerfiles, compose files, Kubernetes manifests | `code-scanning.yml` | PRs, `main`, weekly | — | Security tab |
 | DAST: ZAP baseline and authenticated API scans, Nuclei (community and iHub templates in `tests/security/nuclei/`) against a fresh production build | `dast.yml` | Nightly | Unexpected Nuclei findings | Job summary, artifacts |
 | External scan (Nuclei) of the hosts IntraFind runs, from the `DAST_EXTERNAL_TARGETS` variable | `dast.yml` | Weekly | Any finding | Job summary |
-| SBOMs to Dependency-Track (npm and image), when `DEPENDENCY_TRACK_URL` and `DEPENDENCY_TRACK_API_KEY` are set | `build-binaries.yml`, `docker-ci.yml` | Releases | — | Dependency-Track |
 | AI review against [REVIEW.md](../REVIEW.md) | Copilot code review, CodeRabbit | PRs | — | PR comments |
 
 A failing check only stops a merge when the branch ruleset requires it (see [Repository Settings](#repository-settings)). Security-tab results stop a merge through the ruleset's code scanning rule.
@@ -1002,7 +1001,7 @@ The cross-user authorization suite (`tests/security/authz/`) starts a real serve
 Content from projects, fetched pages, MCP servers and uploads is untrusted and can carry instructions for the model. Two checks cover it:
 
 - **Blast radius, on every pull request** (`tests/security/injection/`): a scripted model obeys every instruction planted in a project document and in the pages it points to. The suite then checks what the platform still prevents: the browser loads nothing from the attacker's host, the page reader refuses internal addresses (including through redirects), tools that act need the person's confirmation, another user's chats and restricted projects stay out of reach, and no secret (environment, platform configuration, encryption and signing keys, session tokens) ever reaches the model. It asserts on side effects - requests to a canary server, tool executions, the rendered page - never on the model's wording.
-- **Red team, nightly** (`tests/security/redteam/`, `redteam.yml`): the same poisoned contents answered by a real model through the OpenAI-compatible API. promptfoo asks ordinary questions as a regular user and grades whether the attack reached the canary, produced markup that would load from elsewhere, or exposed restricted data. It needs the secret `ANTHROPIC_API_KEY`; the variable `REDTEAM_MODEL` picks the model.
+- **Red team, nightly** (`tests/security/redteam/`, `redteam.yml`): the same poisoned contents answered by a real model on IntraFind's own GPU server (vLLM), called through iHub's OpenAI-compatible API. promptfoo asks ordinary questions as a regular user and grades whether the attack reached the canary, produced markup that would load from elsewhere, or exposed restricted data; the same server grades the rubrics. No third-party model provider is involved. It runs when the secret `REDTEAM_BASE_URL` (the endpoint, ending in `/v1`) and the variable `REDTEAM_MODEL` are set; the endpoint is a secret so it stays out of the repository and the public logs, and its host is removed from the uploaded reports. The secret `REDTEAM_API_KEY` is sent if set.
 
 ### Dynamic Scans (DAST)
 
@@ -1020,7 +1019,7 @@ nuclei -u https://ihub.example.com -t tests/security/nuclei/
 
 To run the target locally: `npm run build:docker && node tests/security/dast/start-target.mjs`, then point ZAP or Nuclei at `http://localhost:3000`.
 
-Repository settings for these jobs: the variable `DAST_EXTERNAL_TARGETS` (hosts IntraFind operates, one per line; never hosts we do not own), the variable `DEPENDENCY_TRACK_URL` and the secret `DEPENDENCY_TRACK_API_KEY` (a team key with `BOM_UPLOAD` and `PROJECT_CREATION_UPLOAD`).
+Repository settings for these jobs: the variable `DAST_EXTERNAL_TARGETS` (hosts IntraFind operates, one per line; never hosts we do not own).
 
 ### Pre-commit Hook
 

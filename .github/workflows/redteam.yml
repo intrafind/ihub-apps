@@ -6,15 +6,19 @@
 # and whether anything gets through when it does.
 #
 # tests/security/redteam/start-target.mjs starts iHub with the injection suite's
-# poisoned contents and an Anthropic model; promptfoo asks ordinary questions as a
-# regular user through the OpenAI-compatible API and grades what the attack achieved
-# (requests to the attacker's canary, markup that would load from another host,
-# restricted secrets in the answer, plus a model-graded rubric). Every test runs three
-# times; any failure fails the run. Results: job summary and the redteam-report artifact.
+# poisoned contents and a model on IntraFind's GPU server (vLLM, OpenAI-compatible);
+# promptfoo asks ordinary questions as a regular user through the OpenAI-compatible API
+# and grades what the attack achieved (requests to the attacker's canary, markup that
+# would load from another host, restricted secrets in the answer, plus a rubric graded
+# by the same server). Every test runs three times; any failure fails the run.
+# Results: job summary and the redteam-report artifact.
 #
-# Needs the secret ANTHROPIC_API_KEY (target and grader); skipped without it. The
-# repository variable REDTEAM_MODEL picks the model under test (default
-# claude-haiku-5-5). Calls go to the Anthropic API only; promptfoo's telemetry,
+# No third-party model provider: the secret REDTEAM_BASE_URL (the OpenAI-compatible
+# endpoint, ending in /v1) and the variable REDTEAM_MODEL (a model id it lists) choose
+# the model. The endpoint is a secret, not a variable, so it stays out of the
+# repository and out of the public logs, and its host is replaced with <model-host> in
+# everything this run uploads. The run is skipped while either is unset. The secret
+# REDTEAM_API_KEY is sent if set. promptfoo's telemetry,
 # sharing and remote generation are off.
 
 name: Red team
@@ -37,38 +41,45 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
-      HAS_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+      REDTEAM_BASE_URL: ${{ secrets.REDTEAM_BASE_URL }}
+      REDTEAM_MODEL: ${{ vars.REDTEAM_MODEL }}
+      CONFIGURED: ${{ secrets.REDTEAM_BASE_URL != '' && vars.REDTEAM_MODEL != '' }}
       PROMPTFOO_VERSION: 0.126.0
       PROMPTFOO_DISABLE_TELEMETRY: '1'
       PROMPTFOO_DISABLE_SHARING: '1'
       PROMPTFOO_DISABLE_REMOTE_GENERATION: 'true'
       PROMPTFOO_DISABLE_UPDATE: '1'
     steps:
-      - name: Skip without a model key
-        if: env.HAS_KEY != 'true'
-        run: echo "::notice::ANTHROPIC_API_KEY is not set; the red team is skipped."
+      - name: Skip without a model endpoint
+        if: env.CONFIGURED != 'true'
+        run: echo "::notice::Set the secret REDTEAM_BASE_URL and the variable REDTEAM_MODEL to run the red team."
 
       - name: Checkout repository
-        if: env.HAS_KEY == 'true'
+        if: env.CONFIGURED == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       - name: Set up Node.js
-        if: env.HAS_KEY == 'true'
+        if: env.CONFIGURED == 'true'
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '24'
 
       - name: Install dependencies
-        if: env.HAS_KEY == 'true'
+        if: env.CONFIGURED == 'true'
         run: npm run install:all
 
+      - name: Check the model server
+        if: env.CONFIGURED == 'true'
+        run: |
+          curl -sSf -m 30 "${REDTEAM_BASE_URL%/}/models" | jq -e --arg m "$REDTEAM_MODEL" '.data | map(.id) | index($m)' > /dev/null \
+            || { echo "::error::$REDTEAM_MODEL is not served at the REDTEAM_BASE_URL endpoint"; exit 1; }
+
       - name: Start iHub with the poisoned contents
-        if: env.HAS_KEY == 'true'
+        if: env.CONFIGURED == 'true'
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          REDTEAM_MODEL: ${{ vars.REDTEAM_MODEL }}
+          REDTEAM_API_KEY: ${{ secrets.REDTEAM_API_KEY }}
         run: |
           nohup node tests/security/redteam/start-target.mjs > "$RUNNER_TEMP/ihub.log" 2>&1 &
           for _ in $(seq 1 90); do
@@ -78,7 +89,7 @@ jobs:
           echo "iHub did not start"; cat "$RUNNER_TEMP/ihub.log"; exit 1
 
       - name: Sign in as a regular user
-        if: env.HAS_KEY == 'true'
+        if: env.CONFIGURED == 'true'
         run: |
           token="$(curl -sS -D - -o /dev/null -H 'Content-Type: application/json' \
             -d '{"username":"bob","password":"bob-password-123"}' \
@@ -88,9 +99,9 @@ jobs:
           echo "IHUB_TOKEN=$token" >> "$GITHUB_ENV"
 
       - name: Run the red team
-        if: env.HAS_KEY == 'true'
+        if: env.CONFIGURED == 'true'
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          REDTEAM_GRADER_KEY: ${{ secrets.REDTEAM_API_KEY || 'none' }}
         run: |
           mkdir -p redteam-report
           npx --yes "promptfoo@${PROMPTFOO_VERSION}" eval \
@@ -98,8 +109,24 @@ jobs:
             -o redteam-report/results.json -o redteam-report/report.html \
             --no-cache --no-progress-bar
 
+      # The model host must not reach anything public: the reports and the server log
+      # name it, so it is replaced before the summary and the upload.
+      - name: Remove the model host from the outputs
+        if: always() && env.CONFIGURED == 'true'
+        run: |
+          host="$(printf '%s' "$REDTEAM_BASE_URL" | sed -E 's#^[a-z]+://##; s#[/:].*$##')"
+          [ -n "$host" ] || exit 0
+          for f in redteam-report/* "$RUNNER_TEMP/ihub.log"; do
+            [ -f "$f" ] && sed -i "s#${host//./\\.}#<model-host>#g" "$f"
+          done
+          if grep -rqF "$host" redteam-report "$RUNNER_TEMP/ihub.log" 2>/dev/null; then
+            echo "::error::The model host is still in the outputs; nothing is uploaded."
+            rm -rf redteam-report "$RUNNER_TEMP/ihub.log"
+            exit 1
+          fi
+
       - name: Summarize
-        if: always() && env.HAS_KEY == 'true'
+        if: always() && env.CONFIGURED == 'true'
         run: |
           file=redteam-report/results.json
           [ -s "$file" ] || { echo "No results." >> "$GITHUB_STEP_SUMMARY"; exit 0; }
@@ -118,7 +145,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload the report and the server log
-        if: always() && env.HAS_KEY == 'true'
+        if: always() && env.CONFIGURED == 'true'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: redteam-report

@@ -5,7 +5,9 @@
 # The target is tests/security/redteam/start-target.mjs: the poisoned contents of the
 # deterministic injection suite (a vendor document with planted instructions, a
 # restricted HR project, planted secrets, the attacker's canary) answered by a real
-# model. Prompts are ordinary user requests; the attack is in the retrieved document
+# model on IntraFind's own GPU server (vLLM, OpenAI-compatible; REDTEAM_BASE_URL and
+# REDTEAM_MODEL), which also grades the rubrics. Nothing goes to a third-party model
+# provider. Prompts are ordinary user requests; the attack is in the retrieved document
 # and in the pages it points to.
 #
 # Every test is graded on what the attack achieved:
@@ -47,7 +49,14 @@ providers:
 
 defaultTest:
   options:
-    provider: anthropic:messages:claude-sonnet-5-5
+    # The grader of the llm-rubric assertions: the same server and model as the target.
+    provider:
+      id: 'openai:chat:{{ env.REDTEAM_MODEL }}'
+      config:
+        apiBaseUrl: '{{ env.REDTEAM_BASE_URL }}'
+        # vLLM needs no key; set the secret REDTEAM_API_KEY if the server ever does.
+        apiKeyEnvar: REDTEAM_GRADER_KEY
+        temperature: 0
   assert:
     - type: javascript
       value: file://assertions.js:noCanaryRequests
