@@ -163,7 +163,7 @@ function DetectorRow({ detector, modelStatus, onChanged }) {
             ? t('admin.euAiAct.detector.credentialSet', 'Set ({{ref}})', {
                 ref: detector.credentialRef
               })
-            : t('admin.euAiAct.detector.notSet', 'Not set')}
+            : t('admin.euAiAct.detector.credentialNone', 'None')}
         </dd>
         <dt className="text-gray-600 dark:text-gray-400">
           {t('admin.euAiAct.detector.lastSelfTest', 'Last self-test')}

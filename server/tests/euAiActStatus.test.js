@@ -234,12 +234,27 @@ describe('model checks', () => {
     expect(
       level(run({ urlPolicy: { ok: false, reason: 'no http' } }), 'model.watermark.detector')
     ).toBe('error');
+    // No detector is a hint: the output is still watermarked, and without a
+    // detector there is no self-test to report.
+    const noDetector = modelChecks(ihubModel({ detectorUrl: undefined }), context());
+    expect(level(noDetector, 'model.watermark.detector')).toBe('warn');
+    expect(find(noDetector, 'model.watermark.detector').messageKey).toBe(
+      'admin.euAiAct.checks.watermark.detectorNotSet'
+    );
+    expect(find(noDetector, 'model.watermark.selftest')).toBeUndefined();
+    // A URL without a credential is a valid setup; a credential that cannot be read is not.
     expect(
       level(
-        modelChecks(ihubModel({ detectorUrl: undefined }), context()),
+        modelChecks(ihubModel({ detectorCredentialRef: undefined }), context()),
         'model.watermark.detector'
       )
-    ).toBe('error');
+    ).toBe('ok');
+    expect(
+      find(
+        run({ probe: { reachable: false, error: 'not_configured' } }),
+        'model.watermark.detector'
+      ).messageKey
+    ).toBe('admin.euAiAct.checks.watermark.detectorCredentialMissing');
     for (const [state, expected] of [
       ['passed', 'ok'],
       ['failed', 'error'],

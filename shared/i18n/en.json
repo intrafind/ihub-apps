@@ -1264,7 +1264,8 @@
         "ihub": "iHub watermark",
         "optionNone": "Not marked",
         "optionProvider": "Provider marks the output",
-        "optionIhub": "iHub watermark (vLLM)"
+        "optionIhub": "iHub watermark (vLLM)",
+        "credentialNone": "None (no authentication)"
       },
       "status": {
         "enabled": "Enabled",
@@ -1342,9 +1343,9 @@
         "markingBy": "Marking",
         "markingScheme": "Scheme",
         "markingStatementRef": "Statement reference",
-        "markingContextWidth": "Context width",
+        "markingContextWidth": "Watermark context",
         "markingTokenizer": "Tokenizer",
-        "markingDetectorCredentialRef": "Detector credential (id)",
+        "markingDetectorCredentialRef": "Detector credential",
         "markingDetectorUrl": "Detector URL",
         "samplingTopP": "Top P",
         "samplingTopK": "Top K",
@@ -1384,13 +1385,17 @@
         "marking": "Whether this model marks the text it generates as AI generated. Choose \"Provider marks the output\" only when the provider confirmed that in writing; iHub cannot check it. While the EU AI Act features are on, every output still gets a provenance record, whatever you choose here.",
         "markingStatementRef": "A document name or URL of the provider's written statement. It is only kept as a reference, never opened.",
         "imageMarking": "What the provider embeds in the images this model generates (for example SynthID, an invisible watermark, or a C2PA manifest). iHub adds no mark of its own and never re-encodes a generated image, so the provider's mark stays intact. Choose \"Provider marks the output\" only when the provider confirmed that in writing; iHub cannot detect it and records it as declared, never as detected.",
-        "markingIhub": "iHub asks vLLM to watermark every answer with the active key and recognises it again through the detector. The detector settings must equal the vLLM server settings. Greedy sampling (temperature 0) and structured output cannot be watermarked and are recorded as not applied.",
+        "markingIhub": "iHub asks vLLM to watermark every answer with the active key. Greedy sampling (temperature 0) and structured output cannot be watermarked and are recorded as not applied. The settings below are only needed to recognise the watermark again (Verify and the self-test); all of them are optional.",
         "ttsUrl": "Speech endpoint of the provider. It stays server-side and never reaches the browser.",
         "ttsVoice": "Voice id of the provider: a Mistral preset such as en_paul_neutral, gb_jane_neutral or fr_marie_neutral, or the id of a voice saved in your Mistral account. Empty uses en_paul_neutral.",
         "ttsVoiceGoogle": "One of the prebuilt Gemini voices, such as Kore, Puck or Charon. Each speaks every language, which is detected from the text. Empty uses Kore.",
         "ttsVoices": "A message written in one of these languages is read with that voice; every other language uses the voice above. The language is told from the message itself.",
         "ttsVoicesAfterSave": "Save the model once to browse the provider’s voices and create custom voices here.",
-        "linkedProvider": "Uses the API key of the provider \"{{provider}}\" and its API type ({{apiType}})."
+        "linkedProvider": "Uses the API key of the provider \"{{provider}}\" and its API type ({{apiType}}).",
+        "markingDetectorUrl": "Optional. Without a detector the output is still watermarked, but Verify cannot recognise it and the self-test cannot run.",
+        "markingDetectorCredentialRef": "Optional bearer token, if the detector asks for one.",
+        "markingTokenizer": "The detector splits a text into the same tokens as the model to find the watermark. Leave empty to use the model ID; set a Hugging Face ID or path only if vLLM serves the model under another name.",
+        "markingContextWidth": "Tokens the watermark looks back on, not the context window. Must equal context_width of vLLM (default 4)."
       },
       "placeholders": {
         "maxOutputTokens": "Default: {{value}}",
@@ -6657,7 +6662,8 @@
         "edit": "Edit detector settings",
         "test": "Test connection",
         "none": "No model is marked \"iHub watermark\". Set Output marking on a vLLM model to use the watermark.",
-        "title": "Detectors and self-test"
+        "title": "Detectors and self-test",
+        "credentialNone": "None"
       },
       "ack": {
         "title": "Acknowledgements",
@@ -6788,7 +6794,6 @@
         "watermark": {
           "keyOk": "{{model}}: active key {{keyId}}.",
           "noKey": "{{model}}: no active watermark key. Output is not marked.",
-          "detectorMissing": "{{model}}: detector URL or credential is not set.",
           "detectorUrlRefused": "{{model}}: the detector URL is not allowed: {{reason}}",
           "detectorUnreachable": "{{model}}: the detector did not answer ({{reason}}).",
           "detectorUnauthorized": "{{model}}: the detector rejected the credential.",
@@ -6798,7 +6803,9 @@
           "selfTestFailed": "{{model}}: the last self-test failed. vLLM and iHub probably do not use the same key.",
           "selfTestInconclusive": "{{model}}: the last self-test was inconclusive (text too short). Run it again.",
           "selfTestStale": "{{model}}: the key changed since the last self-test. Update vLLM, then run it again.",
-          "selfTestNever": "{{model}}: the self-test has not been run."
+          "selfTestNever": "{{model}}: the self-test has not been run.",
+          "detectorNotSet": "{{model}}: no detector URL. Verify cannot detect the watermark and the self-test cannot run.",
+          "detectorCredentialMissing": "{{model}}: the detector credential cannot be read. Check it on the Credentials page."
         }
       },
       "level": {
@@ -7087,7 +7094,15 @@
       "notChecked": "Tools, MCP servers and sign-in settings that reference it are not checked here; they fail until they get another credential.",
       "deleteNamed": "Delete credential \"{{id}}\"",
       "deleted": "Credential deleted",
-      "deleteError": "Delete failed: {{error}}"
+      "deleteError": "Delete failed: {{error}}",
+      "select": {
+        "loading": "Loading credentials…",
+        "placeholder": "Select a credential…",
+        "missing": "{{id}} (not found)",
+        "refresh": "Refresh list",
+        "loadError": "Failed to load credentials: {{error}}",
+        "createNew": "+ Create new credential"
+      }
     },
     "editor": {
       "resetTitle": "Reset all changes?",

@@ -78,7 +78,7 @@ provenance object every output carries (see [Provenance Records](provenance.md))
 | `text.by` | `none` (default): no marking. `provider`: the provider marks the output; set it only on the provider's written statement, because iHub cannot check it and reports `applied: true` on your word. `ihub`: iHub's own text watermark for vLLM models (`provider` `local`, or `openai` pointed at vLLM; any other provider is rejected). Requires `scheme: "vllm-gumbel"`; reported as applied only for requests that are not greedy and not structured output. See [Text Watermarking](ai-act-text-watermarking.md). |
 | `text.scheme` | Free label, at most 64 characters (`synthid`). |
 | `text.keyId` | Not used with `ihub` (rejected): the key store decides. |
-| `text.detectorUrl`, `text.detectorCredentialRef`, `text.tokenizer`, `text.algorithm`, `text.prf`, `text.contextWidth` | `ihub` only: the detector service, the `bearer` credential id for it, the tokenizer it loads, and the vLLM settings it must match. Left out of the public model list. |
+| `text.detectorUrl`, `text.detectorCredentialRef`, `text.tokenizer`, `text.algorithm`, `text.prf`, `text.contextWidth` | `ihub` only, all optional: the detector service, the `bearer` credential id for it (leave out if the detector asks for no token), the tokenizer it loads (default: `modelId`), and the vLLM settings it must match (`contextWidth` is the watermark's `context_width`, default 4, not the context window). Left out of the public model list. |
 | `text.statementRef` | A document name or URL of the written statement. Kept as a reference only, never opened, and left out of the public model list. |
 
 Image-generating models declare what the provider embeds under `image`, the same way:

@@ -44,11 +44,8 @@ function requireDetector(model) {
       'This model is not marked by iHub (contentMarking.text.by is not "ihub")'
     );
   }
-  if (!config.detectorUrl || !config.credentialRef) {
-    throw new ServiceError(
-      'WATERMARK_DETECTOR_NOT_CONFIGURED',
-      'This model has no detector URL or detector credential'
-    );
+  if (!config.detectorUrl) {
+    throw new ServiceError('WATERMARK_DETECTOR_NOT_CONFIGURED', 'This model has no detector URL');
   }
   return config;
 }

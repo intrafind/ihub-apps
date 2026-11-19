@@ -34,6 +34,7 @@ import EuAiActStateNote from './euAiAct/EuAiActStateNote';
 import GatewaySyncDialog from './GatewaySyncDialog';
 import ModelHintSection from './ModelHintSection';
 import { CHECKBOX_CLASS, INPUT_CLASS } from './formStyles';
+import { CredentialRefSelect } from './OpenApiToolEditor';
 
 /** English fallbacks for the tool calling dropdown (`admin.models.toolSupport.*`). */
 const TOOL_SUPPORT_LABELS = {
@@ -1540,7 +1541,7 @@ function ModelFormEditor({
                         )}
                       />
                       <div className="mt-4 grid grid-cols-6 gap-6">
-                        <div className="col-span-6 sm:col-span-2">
+                        <div className="col-span-6 sm:col-span-3">
                           <label
                             htmlFor="contentMarking.text.by"
                             className="block text-sm font-medium text-gray-700 dark:text-gray-300"
@@ -1571,50 +1572,133 @@ function ModelFormEditor({
                         </div>
                         {data.contentMarking?.text?.by === 'ihub' && (
                           <>
-                            {[
-                              ['detectorUrl', 'markingDetectorUrl', 'Detector URL', 'text', 500],
-                              [
-                                'detectorCredentialRef',
-                                'markingDetectorCredentialRef',
-                                'Detector credential (id)',
-                                'text',
-                                100
-                              ],
-                              ['tokenizer', 'markingTokenizer', 'Tokenizer', 'text', 300],
-                              ['contextWidth', 'markingContextWidth', 'Context width', 'number']
-                            ].map(([field, labelKey, fallback, type, maxLength]) => (
-                              <div key={field} className="col-span-6 sm:col-span-2">
-                                <label
-                                  htmlFor={`contentMarking.text.${field}`}
-                                  className="block text-sm font-medium text-gray-700 dark:text-gray-300"
-                                >
-                                  {t(`admin.models.fields.${labelKey}`, fallback)}
-                                </label>
-                                <input
-                                  id={`contentMarking.text.${field}`}
-                                  type={type}
-                                  maxLength={maxLength}
-                                  min={type === 'number' ? 1 : undefined}
-                                  max={type === 'number' ? 16 : undefined}
-                                  value={data.contentMarking?.text?.[field] ?? ''}
-                                  onChange={e =>
-                                    handleMarkingChange(
-                                      field,
-                                      type === 'number' && e.target.value !== ''
-                                        ? Number(e.target.value)
-                                        : e.target.value
-                                    )
-                                  }
-                                  className="mt-1 block w-full border border-admin-control-border dark:border-admin-control-border-dark dark:bg-gray-700 dark:text-gray-100 rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-admin-accent focus:border-admin-accent sm:text-sm"
-                                />
-                              </div>
-                            ))}
-                            <p className="col-span-6 text-xs text-gray-500 dark:text-gray-400">
+                            <p className="col-span-6 -mt-2 text-sm text-gray-500 dark:text-gray-400">
                               {t(
                                 'admin.models.hints.markingIhub',
-                                'iHub asks vLLM to watermark every answer with the active key and recognises it again through the detector. The detector settings must equal the vLLM server settings. Greedy sampling (temperature 0) and structured output cannot be watermarked and are recorded as not applied.'
+                                'iHub asks vLLM to watermark every answer with the active key. Greedy sampling (temperature 0) and structured output cannot be watermarked and are recorded as not applied. The settings below are only needed to recognise the watermark again (Verify and the self-test); all of them are optional.'
                               )}
                             </p>
+                            {/* Two equal columns when the card is wide enough, stacked
+                                otherwise, so a wrapping label never shifts an input. */}
+                            <div className="col-span-6 @container">
+                              <div className="grid grid-cols-1 gap-x-6 gap-y-5 @xl:grid-cols-2">
+                                <div className="min-w-0">
+                                  <label
+                                    htmlFor="contentMarking.text.detectorUrl"
+                                    className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                                  >
+                                    {t('admin.models.fields.markingDetectorUrl', 'Detector URL')}
+                                  </label>
+                                  <input
+                                    id="contentMarking.text.detectorUrl"
+                                    type="url"
+                                    maxLength={500}
+                                    value={data.contentMarking?.text?.detectorUrl ?? ''}
+                                    onChange={e =>
+                                      handleMarkingChange('detectorUrl', e.target.value)
+                                    }
+                                    placeholder="https://detector.internal:8443/detect"
+                                    aria-describedby="contentMarking.text.detectorUrl-help"
+                                    className="mt-1 block w-full border border-admin-control-border dark:border-admin-control-border-dark dark:bg-gray-700 dark:text-gray-100 rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-admin-accent focus:border-admin-accent sm:text-sm"
+                                  />
+                                  <p
+                                    id="contentMarking.text.detectorUrl-help"
+                                    className="mt-1 text-xs text-gray-500 dark:text-gray-400"
+                                  >
+                                    {t(
+                                      'admin.models.hints.markingDetectorUrl',
+                                      'Optional. Without a detector the output is still watermarked, but Verify cannot recognise it and the self-test cannot run.'
+                                    )}
+                                  </p>
+                                </div>
+                                <div className="min-w-0">
+                                  <CredentialRefSelect
+                                    id="contentMarking.text.detectorCredentialRef"
+                                    value={data.contentMarking?.text?.detectorCredentialRef || ''}
+                                    onChange={value =>
+                                      handleMarkingChange('detectorCredentialRef', value)
+                                    }
+                                    types={['bearer']}
+                                    label={t(
+                                      'admin.models.fields.markingDetectorCredentialRef',
+                                      'Detector credential'
+                                    )}
+                                    emptyLabel={t(
+                                      'admin.models.marking.credentialNone',
+                                      'None (no authentication)'
+                                    )}
+                                    help={t(
+                                      'admin.models.hints.markingDetectorCredentialRef',
+                                      'Optional bearer token, if the detector asks for one.'
+                                    )}
+                                  />
+                                </div>
+                                <div className="min-w-0">
+                                  <label
+                                    htmlFor="contentMarking.text.tokenizer"
+                                    className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                                  >
+                                    {t('admin.models.fields.markingTokenizer', 'Tokenizer')}
+                                  </label>
+                                  <input
+                                    id="contentMarking.text.tokenizer"
+                                    type="text"
+                                    maxLength={300}
+                                    value={data.contentMarking?.text?.tokenizer ?? ''}
+                                    onChange={e => handleMarkingChange('tokenizer', e.target.value)}
+                                    placeholder={data.modelId || data.id || ''}
+                                    aria-describedby="contentMarking.text.tokenizer-help"
+                                    className="mt-1 block w-full border border-admin-control-border dark:border-admin-control-border-dark dark:bg-gray-700 dark:text-gray-100 rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-admin-accent focus:border-admin-accent sm:text-sm"
+                                  />
+                                  <p
+                                    id="contentMarking.text.tokenizer-help"
+                                    className="mt-1 text-xs text-gray-500 dark:text-gray-400"
+                                  >
+                                    {t(
+                                      'admin.models.hints.markingTokenizer',
+                                      'The detector splits a text into the same tokens as the model to find the watermark. Leave empty to use the model ID; set a Hugging Face ID or path only if vLLM serves the model under another name.'
+                                    )}
+                                  </p>
+                                </div>
+                                <div className="min-w-0">
+                                  <label
+                                    htmlFor="contentMarking.text.contextWidth"
+                                    className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                                  >
+                                    {t(
+                                      'admin.models.fields.markingContextWidth',
+                                      'Watermark context'
+                                    )}
+                                  </label>
+                                  <input
+                                    id="contentMarking.text.contextWidth"
+                                    type="number"
+                                    min={1}
+                                    max={16}
+                                    step={1}
+                                    value={data.contentMarking?.text?.contextWidth ?? ''}
+                                    onChange={e =>
+                                      handleMarkingChange(
+                                        'contextWidth',
+                                        e.target.value === '' ? '' : Number(e.target.value)
+                                      )
+                                    }
+                                    placeholder="4"
+                                    aria-describedby="contentMarking.text.contextWidth-help"
+                                    className="mt-1 block w-full border border-admin-control-border dark:border-admin-control-border-dark dark:bg-gray-700 dark:text-gray-100 rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-admin-accent focus:border-admin-accent sm:text-sm"
+                                  />
+                                  <p
+                                    id="contentMarking.text.contextWidth-help"
+                                    className="mt-1 text-xs text-gray-500 dark:text-gray-400"
+                                  >
+                                    {t(
+                                      'admin.models.hints.markingContextWidth',
+                                      'Tokens the watermark looks back on, not the context window. Must equal context_width of vLLM (default 4).'
+                                    )}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
                           </>
                         )}
                         {data.contentMarking?.text?.by === 'provider' && (

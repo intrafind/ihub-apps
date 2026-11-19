@@ -10,11 +10,12 @@
  *              keys: [{ key_id, key }] }              // key: safe integer
  *   response { num_scored_tokens, results: [{ key_id, p_value, score?, is_watermarked? }] }
  *
- * The request carries every key, so: a bearer token is required (nothing is sent
- * without one), redirects are refused (one would forward token and keys to
- * another host), the target passes {@link checkDetectorUrl} at call time, DNS is
+ * The request carries every key, so: redirects are refused (one would forward
+ * token and keys to another host), the target passes {@link checkDetectorUrl} at call time, DNS is
  * pinned to the addresses that passed, the response is size-capped and
- * schema-checked, and nothing but counts and the URL is ever logged. The call
+ * schema-checked, and nothing but counts and the URL is ever logged. A bearer
+ * token is optional (a detector on an internal network may not ask for one);
+ * when a credential is referenced but cannot be read, nothing is sent. The call
  * goes through `httpFetch`, so `ssl.ignoreInvalidCertificates` +
  * `ssl.domainWhitelist` and the proxy apply.
  *
@@ -84,18 +85,22 @@ export async function callDetector({
   signal,
   resolve
 }) {
+  if (!url) {
+    throw new ServiceError('WATERMARK_DETECTOR_NOT_CONFIGURED', 'No detector URL is configured');
+  }
   const token = credentialRef ? credentialService.tryResolveSecret(credentialRef) : undefined;
-  if (!url || !token) {
-    // Keys never go out unauthenticated, and not before a target is configured.
+  if (credentialRef && !token) {
+    // A referenced credential that cannot be read is a misconfiguration: never
+    // fall back to an unauthenticated call the operator did not choose.
     throw new ServiceError(
       'WATERMARK_DETECTOR_NOT_CONFIGURED',
-      'A detector URL and a bearer credential are required'
+      'The detector credential cannot be read'
     );
   }
   const check = await checkDetectorUrl(url, { resolve });
   if (!check.ok) throw unreachable(check.reason, { reason: 'url_refused' });
 
-  const secrets = [token, ...keys.map(entry => String(entry.key))];
+  const secrets = [...(token ? [token] : []), ...keys.map(entry => String(entry.key))];
   const body = JSON.stringify({
     text,
     tokenizer,
@@ -118,7 +123,10 @@ export async function callDetector({
     try {
       res = await httpFetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
         body,
         signal: controller.signal,
         redirect: 'error',

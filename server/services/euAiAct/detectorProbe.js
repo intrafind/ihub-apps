@@ -81,7 +81,7 @@ export async function probeDetector(
  * Probe many detectors, at most {@link PROBE_CONCURRENCY} at once. Models that
  * share one detector are probed once.
  *
- * @param {Object[]} models - `by: "ihub"` models with a URL and a credential
+ * @param {Object[]} models - `by: "ihub"` models with a detector URL
  * @param {Object} [options] - See {@link probeDetector}
  * @returns {Promise<Map<string, Object>>} Result by model id
  */

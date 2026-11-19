@@ -279,17 +279,21 @@ export function modelChecks(
 
   const marking = model.contentMarking.text;
   const detectorId = 'model.watermark.detector';
-  if (!marking.detectorUrl || !marking.detectorCredentialRef) {
+  if (!marking.detectorUrl) {
+    // The output is still watermarked; only "is this text ours?" cannot detect
+    // it. A hint, not a failure, and the self-test needs a detector to run.
     out.push(
       check(
         detectorId,
-        LEVEL.ERROR,
-        'watermark.detectorMissing',
-        '{{model}}: detector URL or credential is not set.',
+        LEVEL.WARN,
+        'watermark.detectorNotSet',
+        '{{model}}: no detector URL. Verify cannot detect the watermark and the self-test cannot run.',
         { ...base, params }
       )
     );
-  } else if (urlPolicy && urlPolicy.ok === false) {
+    return out;
+  }
+  if (urlPolicy && urlPolicy.ok === false) {
     out.push(
       check(
         detectorId,
@@ -303,12 +307,13 @@ export function modelChecks(
       )
     );
   } else if (!probe || probe.error === 'not_configured') {
+    // With a URL set, only a referenced credential that cannot be read ends here.
     out.push(
       check(
         detectorId,
         LEVEL.ERROR,
-        'watermark.detectorMissing',
-        '{{model}}: detector URL or credential is not set.',
+        'watermark.detectorCredentialMissing',
+        '{{model}}: the detector credential cannot be read. Check it on the Credentials page.',
         { ...base, params }
       )
     );
