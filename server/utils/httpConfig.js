@@ -931,7 +931,9 @@ export { redactUrlSecrets };
  * @param {Object} [options] - Standard fetch options (method, headers, body, signal, etc.).
  *   A `lookup` property (dns.lookup-compatible) is extracted to pin DNS resolution for
  *   direct connections, and a `proxyConfig` property is extracted to route this one call
- *   by a config other than the live one; neither is forwarded to the underlying fetch.
+ *   by a config other than the live one, and an `onConnect` function is called once the
+ *   request has a connected socket (see {@link trackConnection}); none of the three is
+ *   forwarded to the underlying fetch.
  * @param {boolean} [forceIgnoreSSL] - Force ignore SSL (overrides global setting)
  * @returns {Promise<Response>} node-fetch Response
  */
@@ -960,7 +962,56 @@ async function sendHttpFetch(url, options = {}, forceIgnoreSSL = null) {
   // them to the agent. `lookup` is used by the workflow SSRF guard to pin
   // connections to validated IPs; `proxyConfig` lets the admin proxy test probe an
   // unsaved draft through this same path instead of a bespoke fetch of its own.
-  const { lookup = null, proxyConfig = null, ...fetchOptions } = options;
+  // `onConnect` is not a node-fetch option either: it is called once the
+  // request has a connected socket (see trackConnection).
+  const { lookup = null, proxyConfig = null, onConnect = null, ...fetchOptions } = options;
   const enhanced = enhanceFetchOptions(fetchOptions, url, forceIgnoreSSL, lookup, proxyConfig);
+  if (typeof onConnect === 'function') {
+    enhanced.agent = trackConnection(enhanced.agent, url, onConnect);
+  }
   return nodeFetch(url, enhanced);
+}
+
+/**
+ * Wrap an agent so `onConnect` is called once the request it carries has a
+ * connected socket: after TCP connect (and the TLS handshake for HTTPS) on a
+ * new socket, at once on a reused keep-alive socket, and once the proxy has
+ * handed over its tunnel for a proxied request. This is what lets a caller
+ * bound "can the endpoint be reached" without also bounding the time the
+ * endpoint takes to send its response headers, which for a provider that
+ * withholds them until its first token (Google) is generation time.
+ *
+ * The wrapper is a per-request object that inherits from the real agent and
+ * hands `addRequest` on to it, so the shared agent itself is never modified
+ * and keeps its socket pool.
+ *
+ * @param {http.Agent|Function|undefined} agent - agent from enhanceFetchOptions
+ *   (undefined means Node's global agent; node-fetch also accepts a function)
+ * @param {string} url - request URL, for the protocol's global agent
+ * @param {Function} onConnect - called at most once, with no arguments
+ * @returns {http.Agent|Function} agent to hand to node-fetch
+ */
+export function trackConnection(agent, url, onConnect) {
+  if (typeof agent === 'function') {
+    return parsedUrl => trackConnection(agent(parsedUrl), url, onConnect);
+  }
+  const base = agent || (String(url).startsWith('https:') ? https.globalAgent : http.globalAgent);
+  let called = false;
+  const connected = () => {
+    if (called) return;
+    called = true;
+    onConnect();
+  };
+  const tracked = Object.create(base);
+  tracked.addRequest = (req, requestOptions) => {
+    req.once('socket', socket => {
+      if (!socket.connecting) {
+        connected();
+        return;
+      }
+      socket.once(socket.encrypted ? 'secureConnect' : 'connect', connected);
+    });
+    return base.addRequest(req, requestOptions);
+  };
+  return tracked;
 }

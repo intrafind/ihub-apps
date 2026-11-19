@@ -1499,7 +1499,7 @@
         "title": "Timeouts für alle Provider",
         "description": "Gelten für jedes Modell, sofern nicht sein Provider oder das Modell eigene Werte setzt. Änderungen wirken ab der nächsten Anfrage; ein Neustart ist nicht nötig. Ein leeres Feld verwendet den Standardwert.",
         "connect": "Verbindungs-Timeout (ms)",
-        "connectHint": "Längste Wartezeit auf die Antwort-Header des Providers, bevor ein Aufruf als nicht erreichbar scheitert. 0 schaltet sie ab.",
+        "connectHint": "Längste Wartezeit auf die Verbindung zum Provider (DNS, TCP, TLS), bevor ein Aufruf als nicht erreichbar scheitert. Die Zeit, die das Modell bis zum ersten Antwortteil braucht, zählt nicht. 0 schaltet sie ab.",
         "streamIdle": "Stream-Leerlauf-Timeout (ms)",
         "streamIdleHint": "Längste Pause zwischen zwei Chunks eines bereits laufenden Streams. Für Denkmodelle erhöhen. 0 schaltet sie ab.",
         "save": "Timeouts speichern",

@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * Connect/headers-phase deadline specs.
+ * Connect-phase deadline specs: the ceiling bounds establishing the
+ * connection, not the provider's time to its first byte.
  *
  * The whole-call deadline (REQUEST_TIMEOUT, 5 min) is sized for long
  * generations, so on its own it also governed a provider that never answered:
@@ -107,11 +108,28 @@ test('connectTimeoutMs <= 0 disables the phase deadline', async () => {
   assert.equal(res.content, 'no phase deadline');
 });
 
-test('a ceiling that fires on a non-streamed request says the wait may be generation', async () => {
-  // Nothing in the server asks a provider for a buffered response any more (the
-  // inference API streams and collects), but `stream: false` stays available to
-  // embedders. There the ceiling cannot tell reach from generation, so the
-  // failure must not simply assert that the endpoint is unreachable.
+test('once the transport reports a connected socket, slow headers are not a connect timeout', async () => {
+  // Google withholds the headers of a streamed request until its first chunk
+  // is ready, so the wait for them is prompt reading and thinking: over a
+  // minute for Gemini with a large prompt. The ceiling covers the connection
+  // only; after `onConnected` that wait belongs to the whole-call deadline.
+  const { client } = makeClient({
+    connectTimeoutMs: 40,
+    maxRetries: 0,
+    transport: async (request, ctx) => {
+      await new Promise(r => setTimeout(r, 5));
+      ctx.onConnected();
+      await new Promise(r => setTimeout(r, 150));
+      return sseResponse(openaiText(['thought for a while']));
+    }
+  });
+
+  const stream = await client.execute({ modelId: 'oa', messages, timeoutMs: 5_000 });
+  const res = await client.collect(stream);
+  assert.equal(res.content, 'thought for a while');
+});
+
+test('a connect timeout says the connection could not be established', async () => {
   const { client } = makeClient({
     connectTimeoutMs: 40,
     maxRetries: 0,
@@ -129,8 +147,7 @@ test('a ceiling that fires on a non-streamed request says the wait may be genera
     client.execute({ modelId: 'oa', messages, stream: false, timeoutMs: 5_000 }),
     err => {
       assert.equal(err.providerCode, 'CONNECT_TIMEOUT');
-      assert.match(err.message, /did not stream/);
-      assert.match(err.message, /looks the same as an unreachable host/);
+      assert.match(err.message, /Could not connect to provider/);
       return true;
     }
   );

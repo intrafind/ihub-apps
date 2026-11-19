@@ -1029,7 +1029,7 @@
         "title": "Timeouts for all providers",
         "description": "Apply to every model unless its provider or the model sets its own. Changes take effect on the next request; no restart is needed. Leave a field empty to use the default.",
         "connect": "Connect timeout (ms)",
-        "connectHint": "Longest wait for the provider’s response headers before a call fails as unreachable. 0 turns it off.",
+        "connectHint": "Longest wait for the connection to the provider (DNS, TCP, TLS) before a call fails as unreachable. Time the model spends before its first answer chunk does not count. 0 turns it off.",
         "streamIdle": "Stream idle timeout (ms)",
         "streamIdleHint": "Longest silence between two chunks of a stream that is already running. Raise it for thinking models. 0 turns it off.",
         "save": "Save timeouts",

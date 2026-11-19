@@ -869,69 +869,48 @@ See [Projects](projects.md) for statuses, limits and settings.
 
 ## LLM Provider Problems
 
-### "Sent no response headers within N ms — endpoint unreachable"
+### "Could not connect to provider … within N ms — endpoint unreachable"
 
 **Symptoms:**
 
-- A call fails with `{"error":"Provider google sent no response headers within
-  30000 ms — endpoint unreachable","code":"TIMEOUT"}` (HTTP 504), for any
-  provider, while the same model answers fine from `curl`.
+- A call fails with `{"error":"Could not connect to provider google within
+  30000 ms — endpoint unreachable …","code":"TIMEOUT"}` (HTTP 504).
 - In chat, the same failure reads *"The google endpoint for model X could not be
   reached: it did not answer the connection attempt."*
-- It hits longer jobs — a summary, a translation pass, a batch of them — and
-  short chats through the web UI are unaffected.
-- Or it hits **one image model, every single time**, while every text model on
-  the same provider and API key is fine.
 
 **Cause:**
 
-That message comes from the connect/headers ceiling, which bounds the phase
-before the provider's first response byte so an unreachable host fails fast
-instead of hanging on the 5-minute whole-call deadline (see
-[Stream deadlines](llm-client.md#stream-deadlines)). It is only a measure of
-reach if the request streams, and two things broke that — both fixed:
+The connect ceiling bounds establishing the connection to the provider — DNS,
+TCP, the TLS handshake, or the proxy's tunnel — so an unreachable host fails
+fast instead of hanging on the 5-minute whole-call deadline (see
+[Stream deadlines](llm-client.md#stream-deadlines)). It fired, so no connection
+came up in time: the host is down, blackholed (a VPN-only endpoint with the VPN
+down), blocked by a firewall, or the configured proxy is not answering.
 
-- **The provider call was not streamed.** The OpenAI-compatible API defaults
-  `stream` to `false`, and that flag used to be passed straight through to the
-  provider. A buffered endpoint (Google's `:generateContent`, and every other
-  one) withholds its headers until the whole answer is generated, so the
-  ceiling was timing the generation. Every provider call now streams and is
-  collected when the client wants one object, so the headers arrive
-  immediately. The chat UI streamed already, which is why only API jobs failed.
-- **Queue time counted.** Every attempt waits for a slot in the per-model
-  throttle (`platform.requestConcurrency`, **5** at the time). With more than
-  five requests in flight for one model, the ones still queued were timed as
-  if they had been sent and ignored. The ceiling is now armed inside the slot.
-
-**The image-model case is different.** If the failure is confined to an image
-model, the ceiling is not misfiring — it is measuring the render. Google's
-image models (`gemini-3-pro-image`, the Nano Banana family) send nothing at all
-until the image is ready, headers included, so time-to-first-byte *is*
-generation time there however the request is sent. A 4K render at
-`thinkingLevel: high` needs well over the installation default. Those models
-ship with `connectTimeoutMs: 60000` of their own, and migration `V103` adds it
-to existing ones; raise it further for large renders on a slow link.
+Older builds printed *"Provider … sent no response headers within N ms"*: their
+ceiling also covered the wait for the response headers, which Google withholds
+until the first chunk is ready. A Gemini model with a large prompt or high
+thinking level, and every image model, then failed although the endpoint was
+reachable. On such a build, raise `connectTimeoutMs` on the affected model (it
+overrides the platform value), or set it to `0`.
 
 **Solutions:**
 
-1. Upgrade to a build that carries both fixes. On an older build, setting
-   `"llm": { "connectTimeoutMs": 0 }` in `platform.json` (or
-   `LLM_CONNECT_TIMEOUT_MS=0`) removes the ceiling and leaves the call to
-   `REQUEST_TIMEOUT`; sending `"stream": true` from the client also avoids it.
-2. If it still fires, the endpoint really is slow to *accept* a request — a
-   VPN-only host, or a gateway that authenticates before forwarding. Raise the
+1. Check reach from the server: `curl -v` the model URL from the iHub host or
+   pod, through the same proxy (`HTTPS_PROXY`) iHub uses.
+2. If the endpoint is reachable but slow to accept connections, raise the
    ceiling per installation or for the one model:
 
 ```json
 // contents/config/platform.json — the installation default (30000 as shipped)
 { "llm": { "connectTimeoutMs": 45000 } }
 
-// contents/models/gemini-3-pro-image.json — just this model
+// contents/models/<model>.json — just this model (overrides the platform value)
 { "connectTimeoutMs": 60000 }
 ```
 
-Both are editable in Admin → Models (Connect Timeout) and Admin → Platform
-Configuration, so neither needs a hand-edited file.
+Both are editable in Admin → Models (Connect Timeout) and Admin → Models →
+Providers → Timeouts for all providers, so neither needs a hand-edited file.
 
 Raise `platform.requestConcurrency` (or the model's own `concurrency`) if
 batches are queueing longer than you expect.

@@ -56,7 +56,7 @@ Each model is defined with the following properties:
 | `config`                       | Object  | -        | Provider-specific configuration options passed directly to the adapter (record of any key-value pairs) |
 | `concurrency`                  | Number  | -        | Maximum number of concurrent in-flight requests to this model (1-100). Use to prevent rate-limit errors on low-quota plans |
 | `requestDelayMs`               | Number  | -        | Optional delay in milliseconds between API requests for this model (0-10000)                  |
-| `connectTimeoutMs`             | Number  | -        | Override the connect/headers ceiling for this model (0-300000, `0` disables); empty uses the provider's value, else the installation default of `30000`. Raise it for an endpoint that is reachable but slow to accept a request, and for image models, which withhold their headers until the render is ready — see [Connect ceiling and image models](#connect-ceiling-and-image-models) and [Stream deadlines](llm-client.md#stream-deadlines) |
+| `connectTimeoutMs`             | Number  | -        | Override the connect ceiling for this model (0-300000, `0` disables); empty uses the provider's value, else the installation default of `30000`. It bounds establishing the connection (DNS, TCP, TLS) only, not the time the model takes to its first chunk; raise it for an endpoint that is slow to accept connections — see [Stream deadlines](llm-client.md#stream-deadlines) |
 | `streamIdleTimeoutMs`          | Number  | -        | Override the maximum gap between two chunks of a live stream for this model (0-300000, `0` disables). Empty: the provider's value, else the installation's — see [Stream deadlines](llm-client.md#tuning-the-ceilings)                     |
 | `thinking`                     | Object  | -        | Extended thinking configuration for models that support it. See [Thinking Configuration](#model-thinking-configuration) below |
 | `nativeWebSearch`              | Object  | -        | Native (provider-run) web search settings for this model. See [Native Web Search](#native-web-search) below |
@@ -724,36 +724,18 @@ App-level `imageGeneration` settings (see [Apps documentation](apps.md)) overrid
 
 ### Connect ceiling and image models
 
-The [connect ceiling](llm-client.md#stream-deadlines) bounds the phase before a
-provider's first response byte, so an endpoint that never answers fails in
-seconds instead of holding a browser connection for the whole five-minute
-request deadline. That works because a streamed text request gets its headers
-the moment the provider accepts it.
+The [connect ceiling](llm-client.md#stream-deadlines) bounds establishing the
+connection to the provider, so an endpoint that never answers fails in seconds
+instead of holding a browser connection for the whole five-minute request
+deadline. It stops once the socket is connected.
 
-Image models break the assumption. Google's `gemini-3-pro-image` and the Nano
-Banana family send nothing — headers included — until the render is ready, so
-time-to-first-byte *is* generation time there, and a 4K image at
-`thinkingLevel: high` takes far longer than the 30 s installation default. The
-symptom is a chat error blaming the network for a perfectly reachable endpoint:
-
-```
-The google endpoint for model gemini-3-pro-image could not be reached: it did
-not answer the connection attempt.
-```
-
-The shipped image models therefore carry their own ceiling:
-
-```json
-{
-  "id": "gemini-3-pro-image",
-  "supportsImageGeneration": true,
-  "connectTimeoutMs": 60000
-}
-```
-
-Raise it further for large renders on a slow link; `0` disables the ceiling for
-that model and leaves the call to `REQUEST_TIMEOUT`. Migration `V103` adds
-`60000` to existing image models that do not already set one.
+It used to run until the provider's response headers arrived. Google's image
+models (`gemini-3-pro-image`, the Nano Banana family), and Gemini text models
+with a large prompt, send nothing — headers included — until their first chunk
+is ready, so that wait was generation time and the error blamed a reachable
+endpoint. Migration `V103` gave the shipped image models
+`connectTimeoutMs: 60000` for that reason; the value is harmless now and can be
+removed.
 
 ## Model Thinking Configuration
 
