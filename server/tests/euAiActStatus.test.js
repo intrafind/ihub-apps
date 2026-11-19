@@ -45,7 +45,7 @@ const { setActiveKeyIdSnapshot } =
   await import('../services/provenance/watermark/activeKeySnapshot.js');
 const { LEVEL, modelChecks, platformChecks, worstLevel } =
   await import('../services/euAiAct/checks.js');
-const { clearProbeCache, probeDetector, PROBE_TIMEOUT_MS } =
+const { clearProbeCache, probeDetector, probeDetectors, PROBE_TIMEOUT_MS } =
   await import('../services/euAiAct/detectorProbe.js');
 const { recordSelfTest, selfTestSummary, stateOfDiagnosis, readSelfTests } =
   await import('../services/euAiAct/selfTestStore.js');
@@ -234,12 +234,34 @@ describe('model checks', () => {
     expect(
       level(run({ urlPolicy: { ok: false, reason: 'no http' } }), 'model.watermark.detector')
     ).toBe('error');
+    // No detector is a hint: the output is still watermarked, and without a
+    // detector there is no self-test to report.
+    const noDetector = modelChecks(ihubModel({ detectorUrl: undefined }), context());
+    expect(level(noDetector, 'model.watermark.detector')).toBe('warn');
+    expect(find(noDetector, 'model.watermark.detector').messageKey).toBe(
+      'admin.euAiAct.checks.watermark.detectorNotSet'
+    );
+    expect(find(noDetector, 'model.watermark.selftest')).toBeUndefined();
+    // A failure the self-test already recorded stays visible.
+    const failedBefore = modelChecks(
+      ihubModel({ detectorUrl: undefined }),
+      context({ selfTest: { state: 'failed' } })
+    );
+    expect(level(failedBefore, 'model.watermark.detector')).toBe('warn');
+    expect(level(failedBefore, 'model.watermark.selftest')).toBe('error');
+    // A URL without a credential is a valid setup; a credential that cannot be read is not.
     expect(
       level(
-        modelChecks(ihubModel({ detectorUrl: undefined }), context()),
+        modelChecks(ihubModel({ detectorCredentialRef: undefined }), context()),
         'model.watermark.detector'
       )
-    ).toBe('error');
+    ).toBe('ok');
+    expect(
+      find(
+        run({ probe: { reachable: false, error: 'not_configured' } }),
+        'model.watermark.detector'
+      ).messageKey
+    ).toBe('admin.euAiAct.checks.watermark.detectorCredentialMissing');
     for (const [state, expected] of [
       ['passed', 'ok'],
       ['failed', 'error'],
@@ -302,6 +324,24 @@ describe('detector probe', () => {
     t += 31_000;
     await probeDetector(model, { now });
     expect(mock.calls).toHaveLength(3);
+  });
+
+  test('models whose tokenizer falls back to different model ids are probed apart', async () => {
+    const tokenizers = [];
+    const call = async args => {
+      tokenizers.push(args.tokenizer);
+      return { latencyMs: 1 };
+    };
+    const a = { ...ihubModel(), id: 'a', modelId: 'org/a' };
+    const b = { ...ihubModel(), id: 'b', modelId: 'org/b' };
+    const shared = { ...ihubModel({ tokenizer: 'org/t' }), id: 'c' };
+    const sharedToo = { ...ihubModel({ tokenizer: 'org/t' }), id: 'd' };
+    await probeDetectors([a, b, shared, sharedToo], { call });
+    expect(tokenizers.sort()).toEqual(['org/a', 'org/b', 'org/t']);
+    // A changed modelId is a different setup, not a cache hit.
+    tokenizers.length = 0;
+    await probeDetector({ ...a, modelId: 'org/a2' }, { call });
+    expect(tokenizers).toEqual(['org/a2']);
   });
 
   test('uses the short timeout and a throwaway key', async () => {

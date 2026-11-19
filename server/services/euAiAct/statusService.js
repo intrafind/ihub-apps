@@ -95,7 +95,7 @@ export async function buildStatus({ refresh = false, deps = {} } = {}) {
   const ihubModels = enabled.filter(model => markingOf(model, 'text').by === 'ihub');
   const probeable = ihubModels.filter(model => {
     const config = detectorConfigOf(model);
-    return config?.detectorUrl && config?.credentialRef;
+    return Boolean(config?.detectorUrl);
   });
   const urlPolicy = new Map();
   await Promise.all(
@@ -144,7 +144,7 @@ export async function buildStatus({ refresh = false, deps = {} } = {}) {
       detector:
         text.by === 'ihub'
           ? {
-              configured: Boolean(text.detectorUrl && text.detectorCredentialRef),
+              configured: Boolean(text.detectorUrl),
               hasCredential: Boolean(text.detectorCredentialRef),
               urlOk: urlPolicy.get(model.id)?.ok !== false,
               reachable: probe

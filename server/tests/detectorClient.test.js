@@ -3,7 +3,7 @@
 
 /**
  * The watermark detector client (#3331) against the mock detector: request
- * shape, failure modes, redirects, and that nothing leaves iHub without a token.
+ * shape, failure modes, redirects, and that an unreadable credential stops the call.
  */
 import { describe, test, expect, beforeAll, afterAll, beforeEach, afterEach } from '@jest/globals';
 import http from 'node:http';
@@ -75,13 +75,34 @@ describe('callDetector', () => {
     ]);
   });
 
-  test('refuses before any network call without a credential', async () => {
-    setCredentials(null);
-    await expect(call()).rejects.toMatchObject({ code: 'WATERMARK_DETECTOR_NOT_CONFIGURED' });
-    await expect(call({ credentialRef: undefined })).rejects.toMatchObject({
+  test('refuses before any network call without a URL', async () => {
+    await expect(call({ url: undefined })).rejects.toMatchObject({
       code: 'WATERMARK_DETECTOR_NOT_CONFIGURED'
     });
     expect(mock.calls).toHaveLength(0);
+  });
+
+  test('refuses before any network call when the referenced credential cannot be read', async () => {
+    setCredentials(null);
+    await expect(call()).rejects.toMatchObject({ code: 'WATERMARK_DETECTOR_NOT_CONFIGURED' });
+    expect(mock.calls).toHaveLength(0);
+  });
+
+  test('without a credential the call goes out with no Authorization header', async () => {
+    const open = await startMockDetector();
+    try {
+      await callDetector({
+        url: open.url,
+        text: 'one two three',
+        keys: [{ keyId: 'wm-2026-1', key: 111111111 }],
+        tokenizer: 'org/tok',
+        timeoutMs: 400
+      });
+      expect(open.calls).toHaveLength(1);
+      expect(open.calls[0].headers.authorization).toBeUndefined();
+    } finally {
+      await open.close();
+    }
   });
 
   test.each([

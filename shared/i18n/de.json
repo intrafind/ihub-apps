@@ -1734,7 +1734,8 @@
         "ihub": "iHub-Wasserzeichen",
         "optionNone": "Nicht gekennzeichnet",
         "optionProvider": "Der Anbieter kennzeichnet die Ausgabe",
-        "optionIhub": "iHub-Wasserzeichen (vLLM)"
+        "optionIhub": "iHub-Wasserzeichen (vLLM)",
+        "credentialNone": "Keine (ohne Authentifizierung)"
       },
       "status": {
         "enabled": "Aktiviert",
@@ -1812,9 +1813,9 @@
         "markingBy": "Kennzeichnung",
         "markingScheme": "Verfahren",
         "markingStatementRef": "Verweis auf die Erklärung",
-        "markingContextWidth": "Kontextbreite",
+        "markingContextWidth": "Wasserzeichen-Kontext",
         "markingTokenizer": "Tokenizer",
-        "markingDetectorCredentialRef": "Detektor-Zugangsdaten (ID)",
+        "markingDetectorCredentialRef": "Detektor-Zugangsdaten",
         "markingDetectorUrl": "Detektor-URL",
         "samplingTopP": "Top P",
         "samplingTopK": "Top K",
@@ -1854,13 +1855,17 @@
         "marking": "Ob dieses Modell den erzeugten Text als KI-generiert kennzeichnet. Wählen Sie „Der Anbieter kennzeichnet die Ausgabe“ nur, wenn der Anbieter das schriftlich bestätigt hat; iHub kann es nicht prüfen. Solange die Funktionen zum EU AI Act eingeschaltet sind, erhält jede Ausgabe unabhängig davon einen Herkunftsnachweis.",
         "markingStatementRef": "Dokumentname oder URL der schriftlichen Erklärung des Anbieters. Sie wird nur als Verweis gespeichert und nie geöffnet.",
         "imageMarking": "Was der Anbieter in die von diesem Modell erzeugten Bilder einbettet (zum Beispiel SynthID, ein unsichtbares Wasserzeichen, oder ein C2PA-Manifest). iHub fügt keine eigene Kennzeichnung hinzu und kodiert erzeugte Bilder nie neu, sodass die Kennzeichnung des Anbieters erhalten bleibt. Wählen Sie „Der Anbieter kennzeichnet die Ausgabe“ nur, wenn der Anbieter das schriftlich bestätigt hat; iHub kann sie nicht erkennen und erfasst sie als angegeben, nie als erkannt.",
-        "markingIhub": "iHub weist vLLM an, jede Antwort mit dem aktiven Schlüssel zu kennzeichnen, und erkennt sie über den Detektor wieder. Die Detektor-Einstellungen müssen den Einstellungen des vLLM-Servers entsprechen. Greedy-Sampling (Temperatur 0) und strukturierte Ausgaben lassen sich nicht kennzeichnen und werden als „nicht angewendet“ erfasst.",
+        "markingIhub": "iHub weist vLLM an, jede Antwort mit dem aktiven Schlüssel zu kennzeichnen. Greedy-Sampling (Temperatur 0) und strukturierte Ausgaben lassen sich nicht kennzeichnen und werden als „nicht angewendet“ erfasst. Die folgenden Einstellungen werden nur gebraucht, um das Wasserzeichen wiederzuerkennen (Prüfen und Selbsttest); alle sind optional.",
         "ttsUrl": "Sprach-Endpunkt des Anbieters. Er bleibt auf dem Server und erreicht nie den Browser.",
         "ttsVoice": "Stimmen-ID des Anbieters: eine Mistral-Vorlage wie en_paul_neutral, gb_jane_neutral oder fr_marie_neutral oder die ID einer in Ihrem Mistral-Konto gespeicherten Stimme. Leer verwendet en_paul_neutral.",
         "ttsVoiceGoogle": "Eine der vorgefertigten Gemini-Stimmen, etwa Kore, Puck oder Charon. Jede spricht alle Sprachen; die Sprache wird am Text erkannt. Leer bedeutet Kore.",
         "ttsVoices": "Eine Nachricht in einer dieser Sprachen wird mit der zugeordneten Stimme gelesen; alle anderen Sprachen verwenden die Stimme oben. Die Sprache wird an der Nachricht selbst erkannt.",
         "ttsVoicesAfterSave": "Speichern Sie das Modell einmal, um hier die Stimmen des Anbieters anzuzeigen und eigene Stimmen anzulegen.",
-        "linkedProvider": "Verwendet den API-Schlüssel des Anbieters „{{provider}}“ und dessen API-Typ ({{apiType}})."
+        "linkedProvider": "Verwendet den API-Schlüssel des Anbieters „{{provider}}“ und dessen API-Typ ({{apiType}}).",
+        "markingDetectorUrl": "Optional. Ohne Detektor wird die Ausgabe trotzdem gekennzeichnet, aber „Prüfen“ kann das Wasserzeichen nicht erkennen und der Selbsttest kann nicht laufen.",
+        "markingDetectorCredentialRef": "Optionales Bearer-Token, falls der Detektor eines verlangt.",
+        "markingTokenizer": "Der Detektor zerlegt einen Text in dieselben Tokens wie das Modell, um das Wasserzeichen zu finden. Leer lassen, um die Modell-ID zu verwenden; eine Hugging-Face-ID oder einen Pfad nur angeben, wenn vLLM das Modell unter einem anderen Namen bereitstellt.",
+        "markingContextWidth": "Anzahl der vorherigen Tokens, auf die das Wasserzeichen zurückblickt, nicht das Kontextfenster. Muss context_width von vLLM entsprechen (Standard 4)."
       },
       "placeholders": {
         "maxOutputTokens": "Standard: {{value}}",
@@ -3595,6 +3600,12 @@
           "enabledByDefaultHelp": "Neue Chats starten mit eingeschalteter Integration. Aus: Sie ist nur verfügbar, und Nutzer schalten sie bei Bedarf im „+“-Menü des Chats ein.",
           "alwaysLoaded": "Immer geladen",
           "alwaysLoadedHelp": "Die Tools dieser Integration immer vollständig an das Modell senden. Aus: Sind die Tools der App für eine Anfrage zu viele, findet das Modell sie stattdessen über eine Suche.",
+          "useAll": "Alle Integrationen verwenden",
+          "useAllHelp": "Jede Integration, die dem Modell Tools gibt, auch später installierte ({{count}} derzeit), soweit die Gruppen des Nutzers sie erlauben. Websuche, Speicheranbieter und iAssistant werden in ihren eigenen Bereichen eingerichtet.",
+          "useAllOverrideHelp": "Unten eine Integration ankreuzen, um ihr eigene Einstellungen (Aktionen, Erforderlich, Bereiche) zu geben, oder sie ausschließen.",
+          "allIncluded": "Über „Alle Integrationen“ enthalten. Ankreuzen, um ihr eigene Einstellungen zu geben.",
+          "allExcluded": "Von „Alle Integrationen“ ausgenommen.",
+          "excludeFromAll": "Von „Alle Integrationen“ ausnehmen",
           "unbind": "Einbindung entfernen",
           "defaultScope": "Standard-{{scope}}",
           "pinnedScope": "Fester {{scope}}",
@@ -3721,6 +3732,9 @@
         "skillsEnabledHelp": "Skills sind Opt-in. Ist die Option aus, erhält die App keine Skill-Liste, keine Skill-Tools und keine aktiven Skills – auch wenn Nutzer eigene oder geteilte Skills haben.",
         "skillsAllowPersonal": "Persönliche Skills der Nutzer erlauben",
         "skillsAllowPersonalHelp": "Bietet zusätzlich zu den oben gelisteten Skills die eigenen und geteilten Skills der Nutzer an. Ausschalten, um nur die gelisteten Skills zu erlauben.",
+        "skillsAll": "Alle Skills",
+        "skillsAllHelp": "Jeder Skill, den die Gruppen des Nutzers erlauben, auch später installierte.",
+        "skillsSelected": "Nur ausgewählte Skills",
         "noTranscriptionModels": "Keine Transkriptionsmodelle konfiguriert. Fügen Sie eines unter Admin → Modelle hinzu (Modelltyp \"transcription\").",
         "enableVideoUpload": "Video-Upload aktivieren",
         "trackedChanges": "Word: Änderungen nachverfolgen",
@@ -4155,6 +4169,7 @@
           "installation": "über diese Installation",
           "definition": "jede {{name}}-Installation",
           "type": "jede Installation ihres Typs",
+          "all": "alle Integrationen",
           "webSearch": "ihre Websuchmaschine",
           "webSearchAuto": "Websuche auf „Automatisch“ (die erste Suchmaschine, die ein Benutzer nutzen darf)"
         },
@@ -7153,7 +7168,8 @@
         "edit": "Detektor-Einstellungen bearbeiten",
         "test": "Verbindung testen",
         "none": "Kein Modell ist mit „iHub-Wasserzeichen“ markiert. Stellen Sie bei einem vLLM-Modell die Ausgabe-Kennzeichnung ein, um das Wasserzeichen zu nutzen.",
-        "title": "Detektoren und Selbsttest"
+        "title": "Detektoren und Selbsttest",
+        "credentialNone": "Keine"
       },
       "ack": {
         "title": "Bestätigungen",
@@ -7284,7 +7300,6 @@
         "watermark": {
           "keyOk": "{{model}}: aktiver Schlüssel {{keyId}}.",
           "noKey": "{{model}}: kein aktiver Wasserzeichen-Schlüssel. Die Ausgabe wird nicht gekennzeichnet.",
-          "detectorMissing": "{{model}}: Detektor-URL oder Zugangsdaten sind nicht gesetzt.",
           "detectorUrlRefused": "{{model}}: Die Detektor-URL ist nicht erlaubt: {{reason}}",
           "detectorUnreachable": "{{model}}: Der Detektor hat nicht geantwortet ({{reason}}).",
           "detectorUnauthorized": "{{model}}: Der Detektor hat die Zugangsdaten abgelehnt.",
@@ -7294,7 +7309,9 @@
           "selfTestFailed": "{{model}}: Der letzte Selbsttest ist fehlgeschlagen. vLLM und iHub nutzen wahrscheinlich nicht denselben Schlüssel.",
           "selfTestInconclusive": "{{model}}: Der letzte Selbsttest war nicht eindeutig (Text zu kurz). Führen Sie ihn erneut aus.",
           "selfTestStale": "{{model}}: Der Schlüssel hat sich seit dem letzten Selbsttest geändert. Aktualisieren Sie vLLM und führen Sie ihn erneut aus.",
-          "selfTestNever": "{{model}}: Der Selbsttest wurde noch nicht ausgeführt."
+          "selfTestNever": "{{model}}: Der Selbsttest wurde noch nicht ausgeführt.",
+          "detectorNotSet": "{{model}}: keine Detektor-URL. „Prüfen“ kann das Wasserzeichen nicht erkennen und der Selbsttest kann nicht laufen.",
+          "detectorCredentialMissing": "{{model}}: Die Detektor-Zugangsdaten können nicht gelesen werden. Prüfen Sie sie auf der Seite Zugangsdaten."
         }
       },
       "level": {
@@ -7583,7 +7600,15 @@
       "notChecked": "Tools, MCP-Server und Anmeldeeinstellungen, die darauf verweisen, werden hier nicht geprüft; sie schlagen fehl, bis sie andere Zugangsdaten erhalten.",
       "deleteNamed": "Zugangsdaten „{{id}}“ löschen",
       "deleted": "Zugangsdaten gelöscht",
-      "deleteError": "Löschen fehlgeschlagen: {{error}}"
+      "deleteError": "Löschen fehlgeschlagen: {{error}}",
+      "select": {
+        "loading": "Zugangsdaten werden geladen…",
+        "placeholder": "Zugangsdaten auswählen…",
+        "missing": "{{id}} (nicht gefunden)",
+        "refresh": "Liste aktualisieren",
+        "loadError": "Zugangsdaten konnten nicht geladen werden: {{error}}",
+        "createNew": "+ Neue Zugangsdaten anlegen"
+      }
     },
     "editor": {
       "resetTitle": "Alle Änderungen zurücksetzen?",

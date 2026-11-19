@@ -11,6 +11,7 @@
 import { getLocalizedContent } from '../../shared/localize.js';
 import { appUsesProjects } from '../../shared/appProjects.js';
 import { appBindsStorage } from '../../shared/storageBindings.js';
+import { ALL_INTEGRATIONS_KEY } from '../../shared/appWildcards.js';
 
 /** The shipped storage provider definitions an app can bind (`app.integrations`). */
 const STORAGE_DEFINITION_IDS = Object.freeze([
@@ -113,6 +114,7 @@ function describeIntegrations(app, integrations, text) {
     // `actions: []` binds an integration for its scopes only: it offers no tools.
     .filter(([, binding]) => !(Array.isArray(binding?.actions) && binding.actions.length === 0))
     .map(([key]) => {
+      if (key === ALL_INTEGRATIONS_KEY) return '- every integration available to the user';
       const installed = integrations.find(integration => integration.id === key);
       return `- ${text(installed?.label || installed?.name) || key}`;
     });

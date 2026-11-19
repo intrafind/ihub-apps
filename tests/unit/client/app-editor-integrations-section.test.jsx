@@ -583,6 +583,92 @@ describe('IntegrationsConfigSection', () => {
   });
 });
 
+describe('IntegrationsConfigSection: all integrations', () => {
+  it('binds every integration with "*" from the switch, and off removes it', async () => {
+    mockFetchInstalled.mockResolvedValue({ items: INSTALLED });
+    const onChange = renderSection({ id: 'a' });
+    const all = await screen.findByTestId('app-integrations-all');
+    // iFinder, two directories, draw.io and the open data portal; not the
+    // engines, the storage provider or iAssistant.
+    expect(within(all).getByText(/\(5 now\)/)).toBeInTheDocument();
+    fireEvent.click(within(all).getByRole('switch', { name: 'Use all integrations' }));
+    expect(onChange.mock.calls.at(-1)[0].integrations).toEqual({ '*': {} });
+  });
+
+  it('marks the covered rows and panels, and excludes one into "exclude"', async () => {
+    mockFetchInstalled.mockResolvedValue({ items: INSTALLED });
+    const onChange = renderSection({
+      id: 'a',
+      integrations: { '*': { exclude: ['type:people-directory'] }, 'open-data-portal': {} }
+    });
+    const drawio = await screen.findByTestId('all-integrations-coverage-drawio');
+    expect(within(drawio).getByText(/Included through "All integrations"/)).toBeInTheDocument();
+    // Bound by itself: no coverage line.
+    expect(screen.queryByTestId('all-integrations-coverage-open-data-portal')).toBeNull();
+    // The people directories card says they are left out.
+    const directories = screen.getByTestId('all-integrations-coverage-type:people-directory');
+    expect(within(directories).getByRole('checkbox')).toBeChecked();
+    // iFinder's panel says it is included.
+    expect(screen.getByTestId('all-integrations-coverage-ifinder')).toBeInTheDocument();
+    // No "not installed" warning for "*".
+    expect(screen.queryByTestId('stale-integration-*')).toBeNull();
+
+    fireEvent.click(within(drawio).getByRole('checkbox'));
+    expect(onChange.mock.calls.at(-1)[0].integrations).toEqual({
+      '*': { exclude: ['type:people-directory', 'drawio'] },
+      'open-data-portal': {}
+    });
+  });
+
+  it('counts only what "All integrations" covers after its exclusions', async () => {
+    mockFetchInstalled.mockResolvedValue({ items: INSTALLED });
+    renderSection({ id: 'a', integrations: { '*': { exclude: ['type:people-directory'] } } });
+    const all = await screen.findByTestId('app-integrations-all');
+    expect(within(all).getByText(/\(3 now\)/)).toBeInTheDocument();
+  });
+
+  it('says nothing about "All integrations" on rows a type binding decides', async () => {
+    mockFetchInstalled.mockResolvedValue({ items: INSTALLED });
+    renderSection({ id: 'a', integrations: { '*': {}, 'type:people-directory': {} } });
+    const card = await screen.findByTestId('app-integrations-people-directories');
+    expect(within(card).getByText('Corporate directory')).toBeInTheDocument();
+    expect(screen.queryByTestId('all-integrations-coverage-corp')).toBeNull();
+    expect(screen.queryByTestId('all-integrations-coverage-type:people-directory')).toBeNull();
+    // draw.io is still decided by "*".
+    expect(screen.getByTestId('all-integrations-coverage-drawio')).toBeInTheDocument();
+  });
+
+  it('lists an excluded directory under the switch while the directories card is collapsed', async () => {
+    mockFetchInstalled.mockResolvedValue({ items: INSTALLED });
+    const onChange = renderSection({ id: 'a', integrations: { '*': { exclude: ['corp'] } } });
+    const all = await screen.findByTestId('app-integrations-all');
+    const corp = within(all).getByTestId('all-integrations-coverage-corp');
+    expect(within(corp).getByRole('checkbox')).toBeChecked();
+    fireEvent.click(within(corp).getByRole('checkbox'));
+    expect(onChange.mock.calls.at(-1)[0].integrations).toEqual({ '*': {} });
+  });
+
+  it('shows an iFinder exclusion by definition id on its panel, and names the key in the list', async () => {
+    mockFetchInstalled.mockResolvedValue({ items: INSTALLED });
+    renderSection({ id: 'a', integrations: { '*': { exclude: ['com.intrafind/ifinder'] } } });
+    const panel = await screen.findByTestId('all-integrations-coverage-ifinder');
+    const panelBox = within(panel).getByRole('checkbox');
+    expect(panelBox).toBeChecked();
+    expect(panelBox).toBeDisabled();
+    const all = screen.getByTestId('app-integrations-all');
+    const listed = within(all).getByTestId('all-integrations-coverage-com.intrafind/ifinder');
+    expect(within(listed).getByRole('checkbox', { name: /com\.intrafind\/ifinder/ })).toBeChecked();
+  });
+
+  it('removes "exclude" once nothing is left out', async () => {
+    mockFetchInstalled.mockResolvedValue({ items: INSTALLED });
+    const onChange = renderSection({ id: 'a', integrations: { '*': { exclude: ['drawio'] } } });
+    const drawio = await screen.findByTestId('all-integrations-coverage-drawio');
+    fireEvent.click(within(drawio).getByRole('checkbox'));
+    expect(onChange.mock.calls.at(-1)[0].integrations).toEqual({ '*': {} });
+  });
+});
+
 describe('IntegrationsConfigSection: disabled installations', () => {
   const DISABLED = [
     { id: 'iassistant', definition: 'com.intrafind/iassistant', builtIn: true, enabled: false },

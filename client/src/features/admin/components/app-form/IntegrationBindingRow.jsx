@@ -4,6 +4,7 @@
 import { useTranslation } from 'react-i18next';
 import { CHECKBOX_CLASS, HELP_CLASS, LABEL_CLASS } from '../formStyles';
 import IntegrationBindingOptions from './IntegrationBindingOptions';
+import AllIntegrationsCoverage from './AllIntegrationsCoverage';
 import { implicitActionNames, selectedActionNames, toggleBindingAction } from './bindingActions';
 
 /**
@@ -32,6 +33,9 @@ import { implicitActionNames, selectedActionNames, toggleBindingAction } from '.
  * @param {React.ReactNode} [props.notice] - shown under the row's name, e.g. the
  *   warnings a definition migration left on this binding
  * @param {boolean} [props.toolSearchEnabled] - the platform's tool search feature is on
+ * @param {{ excludedBy: string|null, onExcludeChange: (excluded: boolean) => void }|null} [props.allIntegrations] -
+ *   set while the app's `"*"` binding could cover this row: which key of its
+ *   `exclude` leaves the row out (null: covered) and how to toggle the row's own key
  */
 function IntegrationBindingRow({
   item,
@@ -39,7 +43,8 @@ function IntegrationBindingRow({
   detail,
   onBindingChange,
   notice = null,
-  toolSearchEnabled = false
+  toolSearchEnabled = false,
+  allIntegrations = null
 }) {
   const { t } = useTranslation();
   const bound = Boolean(binding);
@@ -96,6 +101,15 @@ function IntegrationBindingRow({
         </span>
       </label>
       {notice && <div className="mt-2 pl-7">{notice}</div>}
+      {!bound && allIntegrations && (
+        <AllIntegrationsCoverage
+          idPrefix={checkboxId}
+          itemKey={item.id}
+          excludedBy={allIntegrations.excludedBy}
+          onExcludeChange={allIntegrations.onExcludeChange}
+          className="mt-2 pl-7"
+        />
+      )}
       {bound && (
         <div className="mt-3 pl-7 space-y-3">
           {!withoutActions && (

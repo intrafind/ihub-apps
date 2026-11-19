@@ -45,6 +45,7 @@
 
 import { typeOfBindingKey, bindingKeyOfType } from './services/integrations/integrationTypes.js';
 import { WEB_SEARCH_TYPE, isWebSearchDefinition } from './services/search/webSearchEngines.js';
+import { ALL_INTEGRATIONS_KEY } from '../shared/appWildcards.js';
 
 /** The built-in installations (`config/integrations.json`). */
 const IFINDER_INSTANCE_ID = 'ifinder';
@@ -176,10 +177,16 @@ export function getIntegrationStatus(context = {}) {
  * Whether a binding hides its app while the installation is off. Absent means
  * required; only an explicit `required: false` makes the binding optional.
  *
+ * The `"*"` binding (every integration, `shared/appWildcards.js`) is never
+ * required.
+ *
  * @param {Object} [binding] - `app.integrations[<id>]`
+ * @param {string|null} [key] - its key
  * @returns {boolean}
  */
-export function isRequiredBinding(binding) {
+export function isRequiredBinding(binding, key = null) {
+  // `"*"` binds whatever is installed: it can never be missing.
+  if (key === ALL_INTEGRATIONS_KEY) return false;
   return binding?.required !== false;
 }
 
@@ -258,7 +265,7 @@ export function missingAppIntegrations(app, context = {}) {
 function missingBoundIntegrations(bindings, context) {
   if (!bindings || typeof bindings !== 'object') return [];
   const missing = Object.keys(bindings).filter(
-    key => isRequiredBinding(bindings[key]) && !isBindingSatisfied(key, context)
+    key => isRequiredBinding(bindings[key], key) && !isBindingSatisfied(key, context)
   );
   // iAssistant runs on the iFinder installation its `connection` names
   // (`ifinder` by default): the app is off while that connection is off too.

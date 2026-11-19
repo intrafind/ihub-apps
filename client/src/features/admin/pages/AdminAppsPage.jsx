@@ -32,6 +32,7 @@ import ReorderableList from '../components/ReorderableList';
 import { DataTable, SearchInput, FilterSelect } from '../components/data-table';
 import UploadConfigButton from '../components/UploadConfigButton';
 import AdminLoadError from '../components/AdminLoadError';
+import { ALL_INTEGRATIONS_KEY } from '../../../../../shared/appWildcards.js';
 
 function AppNameCell({ app, currentLanguage }) {
   return (
@@ -108,7 +109,10 @@ function missingFeatureNames(app, features, language) {
  */
 function requiredBindingIds(app) {
   const bindings = app.integrations && typeof app.integrations === 'object' ? app.integrations : {};
-  const bound = Object.keys(bindings).filter(id => bindings[id]?.required !== false);
+  // `"*"` (every integration) binds whatever is installed: never required.
+  const bound = Object.keys(bindings).filter(
+    id => id !== ALL_INTEGRATIONS_KEY && bindings[id]?.required !== false
+  );
   const connection = bound.includes('iassistant') ? ['ifinder'] : [];
   return [...bound, ...connection];
 }

@@ -12,6 +12,7 @@
  */
 import { callDetector } from '../provenance/watermark/DetectorClient.js';
 import { pingDetector } from '../provenance/watermark/selfTest.js';
+import { detectorConfigOf } from '../provenance/watermark/detect.js';
 
 export const PROBE_TIMEOUT_MS = 3000;
 export const PROBE_TTL_MS = 30_000;
@@ -26,16 +27,23 @@ export function clearProbeCache() {
   cache.clear();
 }
 
-function cacheKey(model) {
-  const marking = model.contentMarking?.text || {};
+/**
+ * What a probe depends on, from the effective settings (so an empty tokenizer
+ * counts as the model's `modelId` it falls back to).
+ *
+ * @param {Object} model
+ * @param {{withModelId?: boolean}} [options] - false groups models sharing one detector setup
+ */
+function cacheKey(model, { withModelId = true } = {}) {
+  const config = detectorConfigOf(model) || {};
   return JSON.stringify([
-    model.id,
-    marking.detectorUrl,
-    marking.detectorCredentialRef,
-    marking.tokenizer,
-    marking.algorithm,
-    marking.prf,
-    marking.contextWidth
+    withModelId ? model.id : '',
+    config.detectorUrl,
+    config.credentialRef,
+    config.tokenizer,
+    config.algorithm,
+    config.prf,
+    config.contextWidth
   ]);
 }
 
@@ -81,7 +89,7 @@ export async function probeDetector(
  * Probe many detectors, at most {@link PROBE_CONCURRENCY} at once. Models that
  * share one detector are probed once.
  *
- * @param {Object[]} models - `by: "ihub"` models with a URL and a credential
+ * @param {Object[]} models - `by: "ihub"` models with a detector URL
  * @param {Object} [options] - See {@link probeDetector}
  * @returns {Promise<Map<string, Object>>} Result by model id
  */
@@ -89,7 +97,7 @@ export async function probeDetectors(models, options = {}) {
   const results = new Map();
   const byKey = new Map();
   for (const model of models) {
-    const key = cacheKey({ ...model, id: '' });
+    const key = cacheKey(model, { withModelId: false });
     if (!byKey.has(key)) byKey.set(key, []);
     byKey.get(key).push(model);
   }

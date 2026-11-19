@@ -238,8 +238,9 @@ master switch, these cards:
 
 - **Configuration check.** One row per check with a level (OK, Attention, Failing) and a link to where it is fixed.
   The server decides every level (`GET /api/admin/eu-ai-act/status`, admin only, never a key or token). Failing is
-  reserved for the watermark chain of models marked "iHub" (no active key, detector missing, rejected or
-  unreachable, last self-test failed); a model that is not marked, a provider mark without a statement, the
+  reserved for the watermark chain of models marked "iHub" (no active key, detector refused, rejected or
+  unreachable, a detector credential that cannot be read, last self-test failed); a model marked "iHub" without
+  a detector URL (the output is still watermarked, but Verify cannot recognise it), a model that is not marked, a provider mark without a statement, the
   notice or acknowledgement being off, or records not being stored is Attention. A retention of 0 means "kept
   without limit" and is OK. Detectors are probed with a throwaway key (3 s timeout, cached 30 s; *Check again*
   probes again) through the SSL whitelist and proxy. **Green means "configured as designed", not "legally
@@ -254,8 +255,8 @@ master switch, these cards:
   (rollback, for example when vLLM was not updated in time). Making a key active retires the current one,
   asks you to update vLLM's `--watermark-config` (the printed option can be shown again, which is audited) and
   until then the self-test shows a mismatch. Per model: test connection and self-test (about 400 tokens). The last
-  self-test result is kept per model; after a key change it shows as outdated until run again. Detector URL and
-  credential are edited in the model editor.
+  self-test result is kept per model; after a key change it shows as outdated until run again. Detector URL,
+  credential, tokenizer and watermark context are edited in the model editor; all of them are optional.
 - **Provenance settings.** The settings of the table above as a form, with defaults and units next to each
   field. The save validates on the client and the server with the same bounds and merges into `platform.json`,
   so keys the form does not own are kept. Lowering the retention (records older than the new limit are deleted

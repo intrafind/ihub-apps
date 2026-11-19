@@ -95,6 +95,11 @@ describe('selectPickerSkills', () => {
     ]);
   });
 
+  test('"*" offers every global skill', () => {
+    const result = selectPickerSkills(PICKER_LIST, { appSkills: ['*'], allowPersonal: false });
+    expect(result.map(skill => skill.id)).toEqual(['brand-voice', 'legal-review', 'old-style']);
+  });
+
   test('an app without skills still offers personal skills', () => {
     const result = selectPickerSkills(PICKER_LIST, { appSkills: [] });
     expect(result.map(skill => skill.id)).toEqual(['usk_mine1', 'usk_shared1']);

@@ -73,8 +73,13 @@ iHub  -- text + all keys  -->   detector (HTTPS/internal, bearer)         p-valu
 
    `by: "ihub"` is accepted for `provider: "local"` and for `provider: "openai"` (pointed at vLLM) only; any other
    provider fails validation, because the `watermarking` request field would be rejected by a hosted API.
-   `detectorCredentialRef` is the id of a `bearer` credential (**Admin → Credentials**). `tokenizer` defaults to the
-   model's `modelId`. `keyId` is not used with `ihub`: the key store decides.
+   The detector fields are optional and only used to recognise the watermark again (Verify and the self-test):
+   without `detectorUrl` the output is still watermarked, and the configuration check shows *Attention*, not
+   *Failing*. `detectorCredentialRef` is the id of a `bearer` credential (**Admin → Credentials**); leave it out for
+   a detector that asks for no token. `tokenizer` defaults to the model's `modelId`: set it only when vLLM serves
+   the model under a name the detector cannot load as a Hugging Face id or path. `contextWidth` (default 4) is
+   vLLM's watermark `context_width`, the number of preceding tokens that seed the watermark, not the model's
+   context window. `keyId` is not used with `ihub`: the key store decides.
 4. **Sample explicitly.** Set `sampling.temperature` (and not `topK: 1`) on the model. If it is unset, vLLM uses the
    model's `generation_config.json`, which iHub cannot see, and that file may say temperature 0 (greedy: no
    watermark) while iHub reports `applied: true`.
@@ -183,7 +188,7 @@ iHub does not ship a detector. It calls one over HTTP:
 
 ```
 POST <detectorUrl>
-Authorization: Bearer <token of detectorCredentialRef>
+Authorization: Bearer <token of detectorCredentialRef>     (only when a credential is set)
 { "text": "...", "tokenizer": "...", "algorithm": "gumbel", "prf": "philox", "context_width": 4,
   "keys": [ { "key_id": "wm-ihub-3c0d2b6e-5a41-4e0f-9d1c-7b8a2f4e6c10-2026-2", "key": 123456789012 }, { "key_id": "wm-ihub-3c0d2b6e-5a41-4e0f-9d1c-7b8a2f4e6c10-2026-1", "key": 987654321 } ] }
 
@@ -196,11 +201,12 @@ Authorization: Bearer <token of detectorCredentialRef>
   are not calibrated. `num_scored_tokens` is lower than the raw token count (repeated contexts are skipped).
 - vLLM's example detector answers one key at a time and `is_watermarked` at p < 0.01: put a thin multi-key adapter
   in front. iHub **ignores `is_watermarked`** and any `key_id` it did not send.
-- **The detector holds every key.** Run it on an internal network, require the bearer token, and **do not log
-  request bodies**. A compromised detector would allow removing or forging watermarks.
+- **The detector holds every key.** Run it on an internal network, preferably require a bearer token, and **do
+  not log request bodies**. A compromised detector would allow removing or forging watermarks.
 - iHub accepts `https:`; plain `http:` only for loopback and private addresses (or a host on `ssl.domainWhitelist` /
   `ssrf.allowedHosts`); never a link-local or cloud-metadata address, never a URL with credentials, never a
-  redirect. The check runs at call time and DNS is pinned. Without a token iHub sends nothing. The call uses iHub's
+  redirect. The check runs at call time and DNS is pinned. When a credential is referenced but cannot be read,
+  iHub sends nothing. The call uses iHub's
   HTTP client, so `ssl.ignoreInvalidCertificates` with `ssl.domainWhitelist` and the proxy apply.
 - A mock for tests is `server/tests/helpers/mockWatermarkDetector.js`.
 
