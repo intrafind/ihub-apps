@@ -27,6 +27,9 @@ import http from 'node:http';
 export const CANARY_HOST = process.env.E2E_INJECTION_CANARY_HOST || '127.0.0.2';
 export const INTERNAL_HOST = '127.0.0.1';
 
+/** `/redirect?to=<name>` on the canary answers 302 to this path on the internal listener. */
+export const REDIRECT_TARGETS = Object.freeze({ 'after-redirect': '/internal/after-redirect' });
+
 /** The MCP tools the canary serves: one that acts, one that claims to only read. */
 export const MCP_TOOLS = [
   {
@@ -125,7 +128,11 @@ export async function startCanary({ port, pages = {} }) {
       return json(res, 200, { secret: 'CANARY-INTERNAL-SERVICE-RESPONSE' });
     }
     if (url.pathname === '/redirect') {
-      res.writeHead(302, { location: url.searchParams.get('to') || '/' });
+      // Into the internal listener, to a fixed path chosen by name: the target is
+      // never taken from the request, so this is no open redirect.
+      const target = REDIRECT_TARGETS[url.searchParams.get('to')];
+      if (!target) return json(res, 404, { error: 'unknown redirect target' });
+      res.writeHead(302, { location: `http://${INTERNAL_HOST}:${port}${target}` });
       return res.end();
     }
     if (url.pathname.startsWith('/page/')) {

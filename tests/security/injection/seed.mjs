@@ -54,7 +54,7 @@ export const INTERNAL_TARGETS = [
   `http://localhost:${SERVER_PORT}/api/admin/users`,
   `http://10.255.255.1/internal/rfc1918`,
   'file:///etc/passwd',
-  `${CANARY}/redirect?to=${encodeURIComponent(`${INTERNAL}/internal/after-redirect`)}`
+  `${CANARY}/redirect?to=after-redirect`
 ];
 
 /** HTML the rendering scenario's answer is made of: every vector here must load nothing. */
