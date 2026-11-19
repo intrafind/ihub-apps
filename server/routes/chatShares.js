@@ -767,7 +767,7 @@ export default function registerChatShareRoutes(app) {
       resourceId: shareId,
       summary: `Revoked share of chat ${share.chatId} (${share.mode})`
     });
-    res.json(ownerView(revoked));
+    res.status(204).end();
   });
 
   app.get(
