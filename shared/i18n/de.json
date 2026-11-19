@@ -4164,6 +4164,7 @@
           "installation": "über diese Installation",
           "definition": "jede {{name}}-Installation",
           "type": "jede Installation ihres Typs",
+          "all": "alle Integrationen",
           "webSearch": "ihre Websuchmaschine",
           "webSearchAuto": "Websuche auf „Automatisch“ (die erste Suchmaschine, die ein Benutzer nutzen darf)"
         },

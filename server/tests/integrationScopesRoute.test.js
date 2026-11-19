@@ -43,7 +43,8 @@ const USER = {
   id: 'user-1',
   permissions: {
     apps: new Set(['ifinder-search', 'plain-chat', 'off-app']),
-    models: new Set(['*'])
+    models: new Set(['*']),
+    integrations: new Set(['ifinder'])
   }
 };
 

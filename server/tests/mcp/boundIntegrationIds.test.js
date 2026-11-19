@@ -20,7 +20,8 @@ jest.unstable_mockModule('../../configCache.js', () => ({
   }
 }));
 
-const { getBoundIntegrationIds } = await import('../../services/mcp/permissions.js');
+const { getBoundIntegrationIds, appsBindInstallation } =
+  await import('../../services/mcp/permissions.js');
 
 const platform = {};
 
@@ -44,5 +45,32 @@ describe('getBoundIntegrationIds', () => {
     appsForUser.value = [{ id: 'a', tools: ['drawio'] }];
     const bound = await getBoundIntegrationIds({ id: 'u', groups: ['users'] }, platform);
     expect(bound.size).toBe(0);
+  });
+});
+
+describe('appsBindInstallation', () => {
+  const user = { id: 'u', groups: ['users'] };
+  const github = { id: 'github', definition: 'mcp/github' };
+  // The binding resolution of integrationTools, reduced to what these cases need.
+  const bindingKeyFor = (app, instance) => {
+    const bindings = app.integrations || {};
+    if (Object.hasOwn(bindings, instance.id)) return instance.id;
+    if (Object.hasOwn(bindings, instance.definition)) return instance.definition;
+    const exclude = bindings['*']?.exclude || [];
+    if (bindings['*'] && !exclude.includes(instance.id)) return '*';
+    return null;
+  };
+
+  it('counts an installation reached through "*", a definition or its id', async () => {
+    for (const integrations of [{ '*': {} }, { 'mcp/github': {} }, { github: {} }]) {
+      appsForUser.value = [{ id: 'a', integrations }];
+      expect(await appsBindInstallation(user, platform, github, bindingKeyFor)).toBe(true);
+    }
+  });
+
+  it('is false when "*" excludes it or no app binds it', async () => {
+    appsForUser.value = [{ id: 'a', integrations: { '*': { exclude: ['github'] } } }, { id: 'b' }];
+    expect(await appsBindInstallation(user, platform, github, bindingKeyFor)).toBe(false);
+    expect(await appsBindInstallation(user, platform, null, bindingKeyFor)).toBe(false);
   });
 });

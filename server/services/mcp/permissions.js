@@ -60,6 +60,24 @@ export async function getBoundIntegrationIds(user, platform) {
 }
 
 /**
+ * Whether an app the user can open binds an installation, by any key the
+ * binding resolution knows: its id, its definition id, its type key or `"*"`
+ * (`integrationTools.bindingKeyFor`, passed in so this module does not import
+ * the integration services and close a cycle through the MCP adapter).
+ *
+ * @param {Object} user
+ * @param {Object} platform
+ * @param {{ id: string, definition?: string }} instance
+ * @param {(app: Object, instance: Object) => string|null} bindingKeyFor
+ * @returns {Promise<boolean>}
+ */
+export async function appsBindInstallation(user, platform, instance, bindingKeyFor) {
+  if (!instance?.id || typeof bindingKeyFor !== 'function') return false;
+  const apps = await getAccessibleApps(user, platform);
+  return apps.some(app => bindingKeyFor(app, instance) !== null);
+}
+
+/**
  * Set of project ids the user may read, unioned across accessible apps'
  * `projects` links. Empty while the Projects feature is off: an app that
  * does not itself require the feature may still link projects, and the MCP

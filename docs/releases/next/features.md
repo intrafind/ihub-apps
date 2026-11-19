@@ -21,8 +21,8 @@ can still be configured or left out.
 
 - **Admin → Apps → Edit → Integrations → Use all integrations** (`"integrations": { "*": {} }`)
   binds every integration that gives the model tools: MCP servers, agents, catalog integrations,
-  iFinder and the people directories. Web search, storage providers and iAssistant keep their own
-  panels and are not included.
+  iFinder, the people directories, LDAP browsers and iHub's own tools (`ask_user`, scheduled
+  tasks). Web search, storage providers and iAssistant keep their own panels and are not included.
 - An integration the app also binds by itself keeps its own settings (actions, Required, scopes);
   **Exclude from "All integrations"** leaves one out (`"*": { "exclude": ["jira"] }`, also by
   definition id or `type:…`). "All integrations" never hides the app.

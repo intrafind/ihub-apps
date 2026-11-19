@@ -3668,6 +3668,7 @@
           "installation": "by this installation",
           "definition": "every {{name}} installation",
           "type": "every installation of its type",
+          "all": "all integrations",
           "webSearch": "its web search engine",
           "webSearchAuto": "web search on Auto (the first engine a user may use)"
         },

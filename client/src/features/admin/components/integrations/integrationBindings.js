@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { getLocalizedContent } from '../../../../utils/localizeContent';
+import { isCoveredByAllIntegrations } from '../../../../../../shared/appWildcards.js';
 
 /**
  * Which apps bind an installation. A key of `app.integrations` binds it when
@@ -11,7 +12,9 @@ import { getLocalizedContent } from '../../../../utils/localizeContent';
  * - its definition id (`"com.intrafind/ldap-directory": {}` binds every
  *   directory), or
  * - its type (`"type:people-directory": {}` binds every installation of the
- *   type, see `server/services/integrations/integrationTypes.js`).
+ *   type, see `server/services/integrations/integrationTypes.js`), or
+ * - `"*"`, every integration that gives the model tools, unless its `exclude`
+ *   names the installation (`shared/appWildcards.js`).
  *
  * A web search engine (`type: "web-search"`) is not bound: an app with web
  * search on names it in `websearch.provider` (`webSearch`), or uses it on
@@ -34,7 +37,7 @@ const WEB_SEARCH_TYPE = 'web-search';
  *
  * @param {Object} app - an app config (`integrations`)
  * @param {{ id: string, definition?: string, type?: string|null }} installation
- * @returns {'installation'|'definition'|'type'|'webSearch'|'webSearchAuto'|null}
+ * @returns {'installation'|'definition'|'type'|'all'|'webSearch'|'webSearchAuto'|null}
  */
 export function bindingKindOf(app, installation) {
   if (!installation?.id) return null;
@@ -52,6 +55,7 @@ export function bindingKindOf(app, installation) {
   if (installation.type && Object.hasOwn(bindings, `${TYPE_BINDING_PREFIX}${installation.type}`)) {
     return 'type';
   }
+  if (isCoveredByAllIntegrations(bindings, installation)) return 'all';
   return null;
 }
 
@@ -61,7 +65,7 @@ export function bindingKindOf(app, installation) {
  * @param {Object[]} apps - app configs (`GET /api/admin/apps`)
  * @param {{ id: string, definition?: string, type?: string|null }} installation
  * @param {string} language - for the app names
- * @returns {Array<{ id: string, name: string, via: 'installation'|'definition'|'type'|'webSearch'|'webSearchAuto' }>}
+ * @returns {Array<{ id: string, name: string, via: 'installation'|'definition'|'type'|'all'|'webSearch'|'webSearchAuto' }>}
  */
 export function appsBindingInstallation(apps, installation, language) {
   if (!Array.isArray(apps) || !installation) return [];

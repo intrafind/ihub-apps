@@ -36,7 +36,12 @@ import { normalizeChatSettings } from '../services/chat/ChatRepository.js';
 import { stripReservedToolContext } from '../utils/toolCallContext.js';
 import { stubInstallations } from './helpers/installedIFinder.js';
 
-const USER = { id: 'user-1', email: 'u@example.com' };
+// Their groups grant iFinder (`permissions.integrations`), as for anyone who gets its tools.
+const USER = {
+  id: 'user-1',
+  email: 'u@example.com',
+  permissions: { integrations: new Set(['ifinder']) }
+};
 // Binds the iFinder installation (its actions are the app's iFinder tools).
 const SEARCH_APP = {
   id: 'ifinder-search',
@@ -117,12 +122,24 @@ describe('scope registry', () => {
 
   it('offers iFinder scopes only to apps that bind iFinder, and only when iFinder is on', () => {
     assert.deepEqual(
-      applicableScopeProviders({ app: SEARCH_APP }).map(p => p.id),
+      applicableScopeProviders({ app: SEARCH_APP, user: USER }).map(p => p.id),
       ['ifinder']
     );
-    assert.deepEqual(applicableScopeProviders({ app: { id: 'x', tools: ['other'] } }), []);
+    assert.deepEqual(
+      applicableScopeProviders({ app: { id: 'x', tools: ['other'] }, user: USER }),
+      []
+    );
     setPlatform({ iFinder: { enabled: false } });
-    assert.deepEqual(applicableScopeProviders({ app: SEARCH_APP }), []);
+    assert.deepEqual(applicableScopeProviders({ app: SEARCH_APP, user: USER }), []);
+  });
+
+  it('offers iFinder scopes through "*" unless excluded, and never to a user without the grant', () => {
+    const ids = (app, user = USER) => applicableScopeProviders({ app, user }).map(p => p.id);
+    assert.deepEqual(ids({ id: 'all', integrations: { '*': {} } }), ['ifinder']);
+    assert.deepEqual(ids({ id: 'all', integrations: { '*': { exclude: ['ifinder'] } } }), []);
+    const ungranted = { id: 'user-2', permissions: { integrations: new Set(['jira']) } };
+    assert.deepEqual(ids(SEARCH_APP, ungranted), []);
+    assert.deepEqual(ids({ id: 'all', integrations: { '*': {} } }, ungranted), []);
   });
 
   it('offers iAssistant scopes to a chat whose model is an iAssistant', () => {

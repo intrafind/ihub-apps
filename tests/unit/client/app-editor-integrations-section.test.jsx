@@ -620,6 +620,34 @@ describe('IntegrationsConfigSection: all integrations', () => {
     });
   });
 
+  it('counts only what "All integrations" covers after its exclusions', async () => {
+    mockFetchInstalled.mockResolvedValue({ items: INSTALLED });
+    renderSection({ id: 'a', integrations: { '*': { exclude: ['type:people-directory'] } } });
+    const all = await screen.findByTestId('app-integrations-all');
+    expect(within(all).getByText(/\(3 now\)/)).toBeInTheDocument();
+  });
+
+  it('says nothing about "All integrations" on rows a type binding decides', async () => {
+    mockFetchInstalled.mockResolvedValue({ items: INSTALLED });
+    renderSection({ id: 'a', integrations: { '*': {}, 'type:people-directory': {} } });
+    const card = await screen.findByTestId('app-integrations-people-directories');
+    expect(within(card).getByText('Corporate directory')).toBeInTheDocument();
+    expect(screen.queryByTestId('all-integrations-coverage-corp')).toBeNull();
+    expect(screen.queryByTestId('all-integrations-coverage-type:people-directory')).toBeNull();
+    // draw.io is still decided by "*".
+    expect(screen.getByTestId('all-integrations-coverage-drawio')).toBeInTheDocument();
+  });
+
+  it('lists an excluded directory under the switch while the directories card is collapsed', async () => {
+    mockFetchInstalled.mockResolvedValue({ items: INSTALLED });
+    const onChange = renderSection({ id: 'a', integrations: { '*': { exclude: ['corp'] } } });
+    const all = await screen.findByTestId('app-integrations-all');
+    const corp = within(all).getByTestId('all-integrations-coverage-corp');
+    expect(within(corp).getByRole('checkbox')).toBeChecked();
+    fireEvent.click(within(corp).getByRole('checkbox'));
+    expect(onChange.mock.calls.at(-1)[0].integrations).toEqual({ '*': {} });
+  });
+
   it('removes "exclude" once nothing is left out', async () => {
     mockFetchInstalled.mockResolvedValue({ items: INSTALLED });
     const onChange = renderSection({ id: 'a', integrations: { '*': { exclude: ['drawio'] } } });
