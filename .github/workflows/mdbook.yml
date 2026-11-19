@@ -66,10 +66,21 @@ jobs:
         run: |
           if [ -d docs/book/html ]; then echo "path=docs/book/html" >> "$GITHUB_OUTPUT"; else echo "path=docs/book" >> "$GITHUB_OUTPUT"; fi
 
+      # RFC 9116 contact file for vulnerability reports (docs/.well-known/security.txt);
+      # its Expires date is checked by tests/unit/security-txt.test.js.
+      - name: Add security.txt
+        env:
+          HTML_DIR: ${{ steps.html.outputs.path }}
+        run: |
+          mkdir -p "$HTML_DIR/.well-known"
+          cp docs/.well-known/security.txt "$HTML_DIR/.well-known/security.txt"
+
       - name: Upload GitHub Pages artifact
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: ${{ steps.html.outputs.path }}
+          # .well-known/security.txt
+          include-hidden-files: true
 
       - name: Upload HTML artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
