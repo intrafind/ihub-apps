@@ -29,6 +29,10 @@ import './StreamingMarkdown.css';
  *   provider markers render as numbered badges. Hovering or focusing a badge
  *   highlights its passage and source card; a click or tap opens the sources
  *   panel on that card and pins the highlight.
+ * @param {boolean} [props.trusted] - The content was written by an admin (an app's usage
+ *   guide), not by a model or a tool: rendered with the default sanitizer profile, which keeps
+ *   external images. Everything else gets the profile for untrusted content
+ *   (`utils/untrustedHtml`).
  * @param {boolean} [props.streaming] - Whether the message is actively streaming.
  *   While true the container is GPU-promoted (will-change/translateZ) for smooth
  *   incremental updates; once streaming ends the promotion is dropped so finished
@@ -41,7 +45,7 @@ import './StreamingMarkdown.css';
  * message toggles its action row, for example) would therefore wipe and rebuild
  * the whole markdown subtree, throwing away every rendered Mermaid diagram in it.
  */
-function StreamingMarkdown({ content, citations = null, streaming = false }) {
+function StreamingMarkdown({ content, citations = null, streaming = false, trusted = false }) {
   const containerRef = useRef(null);
   const [htmlContent, setHtmlContent] = useState('');
   const lastParsedContentRef = useRef(null);
@@ -63,6 +67,7 @@ function StreamingMarkdown({ content, citations = null, streaming = false }) {
     if (contentChanged || citationsChanged) {
       try {
         const parsedContent = renderMarkdown(content, {
+          trusted,
           transformHtml: citations?.byNumber?.size
             ? html => transformSourceCitations(html, citations)
             : undefined
@@ -77,7 +82,7 @@ function StreamingMarkdown({ content, citations = null, streaming = false }) {
         console.error('Error parsing markdown:', error);
       }
     }
-  }, [content, citations]);
+  }, [content, citations, trusted]);
 
   // Citation badges: hover and focus highlight, click and tap open the
   // sources panel. Delegated on the container, whose children are replaced

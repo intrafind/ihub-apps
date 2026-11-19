@@ -17,3 +17,23 @@ also declared a read, so `writes` (for external tools or as the general default)
 page reads, as it did while the page reader's side effect was unknown. An app that sets `writes` for
 `read_url` (by tool id, by installation or as its app default) no longer asks for page reads either.
 With no approval default on the platform or the app, nothing changes.
+
+## Answers Can No Longer Load Images or Styles from Other Sites
+
+A model answer could contain an image, a video poster, a background or a stylesheet on another host, and the browser
+fetched it as soon as the answer appeared — no click needed. Text planted in a project document, a fetched web page,
+an MCP result or an upload could make the model write such markup with chat content in its URL, and so send that
+content out. A `<style>` in an answer could also restyle the whole app, for example hide the buttons of a tool
+approval. Answers and everything else iHub did not write itself are now rendered with a stricter sanitizer:
+
+- An image from another site is shown as a link to it (its alt text and host) and loads only when someone opens it.
+  Images from iHub itself and inline `data:` images still show, as do generated images and uploaded files.
+- Media, frames, `srcset`, backgrounds, SVG references to other documents, `<style>` and `style` attributes are
+  removed. Answers cannot borrow the app's own CSS classes either.
+- Mermaid diagrams that would load an image or stylesheet from another site are not drawn; their source is shown.
+- The same rules apply to the Markdown and workflow viewers, artifact previews (an SVG artifact is now shown as an
+  image), uploaded-file previews, the canvas, chat exports and the Outlook add-in's insert, reply and forward.
+
+Content an admin writes — pages, usage guides, app texts — and the shipped documentation keep external images and
+styles. An app whose prompt has the model embed images from an external service (a chart or image URL) now shows them
+as links.

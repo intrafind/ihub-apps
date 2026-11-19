@@ -593,11 +593,12 @@ location /ihub/api/ {
 
 ### 3. Content Security Policy
 
-Add CSP headers for additional security:
-
-```nginx
-add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline';" always;
-```
+iHub sends no Content-Security-Policy for the app itself; answers are kept from loading content
+from other hosts by its sanitizer. A policy at the proxy can add a second layer, but a strict one
+such as `default-src 'self'` hides web-search favicons and external logos, breaks voice mode,
+website apps and HTML artifacts that load libraries. See
+[Content Security Policy](security.md#content-security-policy) for what each directive has to
+allow, and roll a policy out as `Content-Security-Policy-Report-Only` first.
 
 ## Authentication Considerations
 

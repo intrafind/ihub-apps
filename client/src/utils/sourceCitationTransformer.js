@@ -21,6 +21,7 @@
  * @module utils/sourceCitationTransformer
  */
 import { citeMarker, hostOf, urlKey } from '../../../shared/sources/index.js';
+import { markRenderedByIhub } from './untrustedHtml';
 
 /** Block elements a citation's passage is highlighted by. */
 export const PASSAGE_SELECTOR = 'p, li, td, th, blockquote, h1, h2, h3, h4, h5, h6, dd, dt';
@@ -69,6 +70,8 @@ function isMarkerLabel(label, href, source) {
 function createBadge(doc, n, href, source) {
   const sup = doc.createElement('sup');
   sup.className = 'source-citation-ref';
+  // The answer is sanitized afterwards; classes survive only on what iHub created.
+  markRenderedByIhub(sup);
   const link = doc.createElement('a');
   link.className = 'source-citation';
   if (href) {

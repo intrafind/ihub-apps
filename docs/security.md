@@ -372,6 +372,48 @@ class ApiKeyVerifier {
 - Error message sanitization
 - No sensitive data in logs
 
+### Rendering Model Output
+
+Anything a model reads can steer what it writes: a planted instruction in a project document, a
+fetched web page, an MCP tool result or an upload can make it answer with HTML. iHub therefore
+renders answers — and everything else it did not write itself — with a strict sanitizer profile
+(`client/src/utils/untrustedHtml.js`), stricter than DOMPurify's default:
+
+- **Nothing loads from another origin without a click.** `<img>` keeps only sources on the iHub
+  server itself (relative or same-origin URLs) and inline `data:image/` URLs. An image from
+  another host is replaced by a link to it, showing its alt text and host; it is fetched only if
+  the reader opens it. Media (`<video>`, `<audio>`, `<source>`, `<picture>`), frames, plugins,
+  `<link>`, `<meta>`, `<base>`, `srcset`, `background`, `poster`, `ping`, `attributionsrc`, SVG
+  `<image>`/`<feImage>` on other hosts, `href` on SVG elements other than links, and CSS `url()`
+  in SVG presentation attributes are removed.
+- **No CSS.** `<style>` elements and `style` attributes are removed, so an answer cannot restyle
+  the app (for example hide the buttons of a tool approval).
+- **No borrowed classes.** `class` and `id` survive only on elements iHub's renderers create
+  (code blocks, citation badges, diagram placeholders); an answer cannot use the app's utility
+  classes to lay a fake dialog over the page. Forms, dialogs, popovers and inputs other than
+  task-list checkboxes are removed.
+- **Links stay links.** They load nothing until clicked; links to other origins open in a new
+  tab without opener or referrer.
+- **Mermaid diagrams** are drawn inside the page while Mermaid measures them, before any
+  sanitizing of the result. A diagram whose source names an image or stylesheet on another host
+  (an `@{ img: … }` shape, HTML tags that load something, `url()`, `image-set()` or `@import` in
+  its styles, also behind HTML, JSON/YAML or CSS escapes) is not drawn; its source is shown.
+  Label HTML is stripped of everything that loads or styles, a diagram's `%%{init}%%` or front
+  matter cannot change that or set `themeCSS`/`fontFamily`, and the finished SVG is sanitized
+  with the same resource rules. These diagram rules apply wherever a diagram is drawn, also on
+  admin-written pages.
+
+The strict profile applies to chat answers (also in shared chats), the Markdown and workflow
+viewers, workflow checkpoints, artifact previews (an SVG artifact is shown as an image, never as
+inline markup), uploaded-file previews, marketplace texts, the canvas editor, chat exports
+(HTML) and the Outlook add-in's insert, reply and forward. HTML artifacts keep running in their
+own sandboxed frame under the preview CSP (see [Artifacts](artifacts.md)).
+
+Content an admin writes or that ships with iHub is trusted and keeps external images and inline
+styles: dynamic pages, app usage guides, greetings and start-screen texts, skill bodies in the
+admin editor, the in-product documentation and release notes. In code these renderers pass
+`trusted: true` to `renderMarkdown`; everything else must not.
+
 ### Custom LLM Endpoints
 
 For custom or local LLM endpoints:
@@ -594,6 +636,31 @@ sudo update-ca-certificates
 # Alternative - Node.js specific
 export NODE_EXTRA_CA_CERTS=/path/to/certificates.pem
 ```
+
+### Content Security Policy
+
+iHub does not send a Content-Security-Policy for the app itself (its embed pages, the MCP app
+sandbox and the HTML artifact preview have their own). The defence against answers that load
+content from other hosts is the sanitizer described in
+[Rendering Model Output](#rendering-model-output). A policy at the reverse proxy can add a second
+layer, but a strict one breaks features, so check each directive against what the installation
+uses:
+
+- `img-src`: web search shows the favicons the search provider returns, from the provider's own
+  hosts, and admins may configure logos and icons on other hosts. `'self' data: blob:` alone
+  hides those.
+- `style-src` needs `'unsafe-inline'`: Mermaid diagrams carry their own `<style>` and inline
+  styles.
+- `script-src` needs `'unsafe-inline'` (the app shell's start-up scripts) and, for voice mode,
+  `blob:` and `'wasm-unsafe-eval'`; `worker-src 'self' blob:` too. See
+  [Voice mode](microphone-feature.md).
+- HTML artifacts are `srcdoc` frames, which inherit the page's policy: script hosts the admin
+  allows for artifacts must also be allowed by a proxy policy, or those artifacts stop working.
+- `frame-src`: website apps embed other sites; their hosts must be allowed.
+- `connect-src`: Azure Speech and any other browser-side speech service.
+
+Start with `Content-Security-Policy-Report-Only`, use the app (chat with web search, voice,
+artifacts, website apps, the admin pages) and watch the browser console before enforcing it.
 
 ### Network Isolation
 
