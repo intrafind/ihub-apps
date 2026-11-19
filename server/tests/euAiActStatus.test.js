@@ -45,7 +45,7 @@ const { setActiveKeyIdSnapshot } =
   await import('../services/provenance/watermark/activeKeySnapshot.js');
 const { LEVEL, modelChecks, platformChecks, worstLevel } =
   await import('../services/euAiAct/checks.js');
-const { clearProbeCache, probeDetector, PROBE_TIMEOUT_MS } =
+const { clearProbeCache, probeDetector, probeDetectors, PROBE_TIMEOUT_MS } =
   await import('../services/euAiAct/detectorProbe.js');
 const { recordSelfTest, selfTestSummary, stateOfDiagnosis, readSelfTests } =
   await import('../services/euAiAct/selfTestStore.js');
@@ -324,6 +324,24 @@ describe('detector probe', () => {
     t += 31_000;
     await probeDetector(model, { now });
     expect(mock.calls).toHaveLength(3);
+  });
+
+  test('models whose tokenizer falls back to different model ids are probed apart', async () => {
+    const tokenizers = [];
+    const call = async args => {
+      tokenizers.push(args.tokenizer);
+      return { latencyMs: 1 };
+    };
+    const a = { ...ihubModel(), id: 'a', modelId: 'org/a' };
+    const b = { ...ihubModel(), id: 'b', modelId: 'org/b' };
+    const shared = { ...ihubModel({ tokenizer: 'org/t' }), id: 'c' };
+    const sharedToo = { ...ihubModel({ tokenizer: 'org/t' }), id: 'd' };
+    await probeDetectors([a, b, shared, sharedToo], { call });
+    expect(tokenizers.sort()).toEqual(['org/a', 'org/b', 'org/t']);
+    // A changed modelId is a different setup, not a cache hit.
+    tokenizers.length = 0;
+    await probeDetector({ ...a, modelId: 'org/a2' }, { call });
+    expect(tokenizers).toEqual(['org/a2']);
   });
 
   test('uses the short timeout and a throwaway key', async () => {
