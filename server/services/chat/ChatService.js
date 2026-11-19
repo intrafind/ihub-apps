@@ -942,7 +942,10 @@ class ChatService {
         connectCalls,
         scheduledTaskProposals,
         generatedFiles,
-        generatedImages
+        generatedImages,
+        // A stored chat keeps a generated file as an artifact when the tool
+        // finishes: the client is sent the card, never the bytes.
+        artifactStore: persist?.repository?.artifactStore?.() ?? null
       }),
       ...(Array.isArray(extraSeams) ? extraSeams.filter(Boolean) : []),
       questionSeam(

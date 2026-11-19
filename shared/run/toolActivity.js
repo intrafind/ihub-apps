@@ -102,26 +102,28 @@ function resolveDocuments(items) {
   }
 }
 
-/** Longest argument value shown in full; longer ones are cut, the full text kept for a tooltip. */
+/**
+ * Longest argument value shown in full; longer ones are cut. The rest of the
+ * value is never kept: a call's arguments can carry a whole document (the
+ * markdown of a PDF, the slides of a deck), which the chat does not show.
+ */
 const DETAIL_VALUE_CHARS = 160;
 /** Most values listed for one argument; the rest are counted as `more`. */
 const DETAIL_MAX_VALUES = 12;
 
-function detailValue(value) {
-  let text;
-  if (typeof value === 'string') text = value.trim();
-  else if (typeof value === 'number' || typeof value === 'boolean') text = String(value);
-  else {
-    try {
-      text = JSON.stringify(value);
-    } catch {
-      return null;
-    }
+/** A value as one line of text, or null when it has none. */
+function valueText(value) {
+  if (typeof value === 'string') return value.trim() || null;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  try {
+    return JSON.stringify(value) || null;
+  } catch {
+    return null;
   }
-  if (!text) return null;
-  return text.length > DETAIL_VALUE_CHARS
-    ? { text: `${text.slice(0, DETAIL_VALUE_CHARS)}…`, full: text }
-    : { text };
+}
+
+function cutText(text) {
+  return text.length > DETAIL_VALUE_CHARS ? `${text.slice(0, DETAIL_VALUE_CHARS)}…` : text;
 }
 
 /**
@@ -133,22 +135,20 @@ function detailValue(value) {
  *
  * @param {Object} args - the call's arguments
  * @param {string[]} shown - argument names the row already shows
- * @returns {Array<{name: string, values: Array<{text: string, full?: string}>, more: number}>}
+ * @returns {Array<{name: string, values: Array<{text: string}>, more: number}>}
  */
 export function toolDetails(args, shown = []) {
   if (!args || typeof args !== 'object' || Array.isArray(args)) return [];
   const details = [];
   for (const [name, value] of Object.entries(args)) {
     if (shown.includes(name) || value === null || value === undefined) continue;
+    const seen = new Set();
     const values = [];
     for (const item of Array.isArray(value) ? value : [value]) {
-      const detail = detailValue(item);
-      if (
-        detail &&
-        !values.some(seen => (seen.full ?? seen.text) === (detail.full ?? detail.text))
-      ) {
-        values.push(detail);
-      }
+      const text = valueText(item);
+      if (!text || seen.has(text)) continue;
+      seen.add(text);
+      values.push({ text: cutText(text) });
     }
     if (values.length) {
       details.push({
@@ -167,6 +167,52 @@ const ROW_ARGS = {
   url: ['url', 'uri', 'link'],
   documentId: ['documentId']
 };
+const ROW_ARG_NAMES = new Set(Object.values(ROW_ARGS).flat());
+/** Longest query, link or document id sent as it is: the row shows and links it whole. */
+const ROW_ARG_CHARS = 2048;
+/** Most elements of an array argument sent; enough for the values a row lists. */
+const PREVIEW_MAX_ELEMENTS = 100;
+
+function previewValue(value) {
+  if (value === null || typeof value === 'number' || typeof value === 'boolean') return value;
+  if (typeof value === 'string') return cutText(value);
+  const text = valueText(value);
+  if (text === null) return undefined;
+  return text.length > DETAIL_VALUE_CHARS ? cutText(text) : value;
+}
+
+/**
+ * A call's arguments as the chat needs them (`tool/started`), not as the model
+ * wrote them: what the row shows (query, link, document id) whole, every other
+ * value cut to what {@link toolDetails} lists. A long value — the markdown of a
+ * PDF, the slides of a deck, the HTML of a web artifact — is cut to its first
+ * {@link DETAIL_VALUE_CHARS} characters, so the browser is never sent a
+ * document it will not show. {@link toolDetails} of the preview lists the same
+ * values as of the arguments themselves; only an array argument with more
+ * than {@link PREVIEW_MAX_ELEMENTS} elements counts fewer as `more`.
+ *
+ * @param {unknown} args - the arguments the model passed
+ * @returns {unknown} the preview; a value that is not an object is cut like an argument
+ */
+export function previewToolArgs(args) {
+  if (args === null || args === undefined) return args;
+  if (typeof args !== 'object' || Array.isArray(args)) return previewValue(args);
+  const out = {};
+  for (const [name, value] of Object.entries(args)) {
+    if (ROW_ARG_NAMES.has(name) && typeof value === 'string') {
+      out[name] = value.length > ROW_ARG_CHARS ? value.slice(0, ROW_ARG_CHARS) : value;
+    } else if (Array.isArray(value)) {
+      out[name] = value
+        .slice(0, PREVIEW_MAX_ELEMENTS)
+        .map(previewValue)
+        .filter(item => item !== undefined);
+    } else {
+      const preview = previewValue(value);
+      if (preview !== undefined) out[name] = preview;
+    }
+  }
+  return out;
+}
 
 /** Names of the arguments whose value the row already shows. */
 function shownArgs(args, row) {

@@ -74,9 +74,9 @@ import logger from '../../utils/logger.js';
 import { chatProjectConflict, deriveChatTitle } from './ChatRepository.js';
 import { getProjectService } from '../projects/ProjectService.js';
 import { recordChatInProject } from '../knowledge/chatProjects.js';
-import { getArtifactRepository } from '../artifacts/ArtifactRepository.js';
-import { artifactPolicy } from '../artifacts/artifactPolicy.js';
-import { publicImageProvenance } from '../provenance/mediaMarking.js';
+import { cardCounts, storeGeneratedArtifacts, storeGeneratedFilesNow } from './turnArtifacts.js';
+
+export { storeGeneratedArtifacts, storeGeneratedFilesNow };
 import { boundAnswerBasis } from './answerBasis.js';
 
 const COMPONENT = 'chatMaterializer';
@@ -125,111 +125,38 @@ export function normalizeAttachments(attachments) {
 }
 
 /**
- * Store the artifacts a turn produced and return the descriptors to record on
- * the assistant message.
- *
- * An artifact is anything a run produced that is content in its own right — a
- * generated image today. It is not a chat concept: the payloads go to the
- * shared `ArtifactRepository` under the scope `{ type: 'chat', id: chatId }`,
- * the same store a workflow's report or an agent's output belongs in. The
- * message keeps `{ id, kind, mimeType, bytes }`, which is what
- * `GET /api/chats/:chatId/artifacts/:artifactId` is addressed by.
- *
- * An artifact the policy refuses is still described, with `unavailable` saying
- * why. Leaving it out would make the stored answer claim the turn produced
- * less than it did, and the viewer who saw it live and comes back to a
- * transcript missing it has no way to tell a dropped artifact from one that
- * was never produced.
- *
- * Best effort, like everything else here: a storage failure costs the
- * artifact, never the answer.
- *
- * @param {Object} params
- * @param {string} params.chatId
- * @param {string} params.runId
- * @param {Array<{kind?: string, mimeType?: string, data?: string, name?: string}>} [params.artifacts]
- *   Artifacts as the loop collected them.
- * @param {import('../artifacts/ArtifactRepository.js').ArtifactRepository} [params.store]
- *   Artifact store; defaults to the shared one.
- * @param {Object} [params.policy] - Artifact policy; defaults to the live one.
- * @returns {Promise<Array<Object>>} Descriptors, in the order they came.
+ * The generated files of a turn as the stored answer keeps them: those stored
+ * while the turn ran ({@link storeGeneratedFilesNow}) by their artifact, the
+ * others still to store, and the ids of stored files a later one replaced
+ * (same name and type, see `generatedFilesOf`).
  */
-export async function storeGeneratedArtifacts({ chatId, runId, artifacts, store, policy }) {
-  const candidates = (Array.isArray(artifacts) ? artifacts : []).filter(
-    artifact => artifact && typeof artifact.data === 'string' && artifact.data.length > 0
+function splitGeneratedFiles(generatedFiles) {
+  const raw = Array.isArray(generatedFiles) ? generatedFiles : [];
+  const artifactById = new Map(
+    raw
+      .filter(file => file?.stored === true && typeof file.artifact?.id === 'string')
+      .map(file => [file.artifact.id, file.artifact])
   );
-  if (candidates.length === 0) return [];
-  const { enabled, maxBytes, maxPerBatch } = policy || artifactPolicy();
-  if (!enabled) return [];
-  const repository = store || getArtifactRepository();
-  const scope = { type: 'chat', id: chatId };
-  const descriptors = [];
-  // Counted on what was actually written, not on how many descriptors exist:
-  // an artifact refused for its size is described too, and letting it consume
-  // a slot would turn one oversized file into a cap on all the others.
-  let stored = 0;
-  for (const artifact of candidates) {
-    const kind = typeof artifact.kind === 'string' && artifact.kind ? artifact.kind : 'image';
-    const mimeType =
-      typeof artifact.mimeType === 'string' && artifact.mimeType ? artifact.mimeType : 'image/png';
-    // What the picture actually weighs. The loop reports base64; the store
-    // keeps raw bytes, so the cap is measured on the decoded size — the same
-    // number a viewer sees and the same number the store records.
-    const bytes = Buffer.byteLength(artifact.data, 'base64');
-    // A refused file keeps its name, so the card can still say which one.
-    const name = typeof artifact.name === 'string' && artifact.name ? artifact.name : null;
-    // The provenance of a generated image (#3328, EU AI Act Art. 50(2)): the
-    // output id names the record that describes it, and the object lets a
-    // reopened chat show the "AI generated" details of the picture.
-    const provenance = publicImageProvenance(artifact.provenance);
-    const described = provenance ? { outputId: provenance.output_id, provenance } : {};
-    const refused = {
-      kind,
-      mimeType,
-      bytes,
-      ...(name ? { name } : {}),
-      ...described
-    };
-    if (maxPerBatch > 0 && stored >= maxPerBatch) {
-      descriptors.push({ ...refused, unavailable: 'too-many' });
-      continue;
-    }
-    if (maxBytes > 0 && bytes > maxBytes) {
-      logger.warn('Artifact not stored: over the configured size cap', {
-        component: COMPONENT,
-        chatId,
-        runId,
-        kind,
-        bytes,
-        maxBytes
-      });
-      descriptors.push({ ...refused, unavailable: 'too-large' });
-      continue;
-    }
-    try {
-      const descriptor = await repository.put(scope, {
-        kind,
-        mimeType,
-        data: artifact.data,
-        name: artifact.name,
-        runId
-      });
-      if (descriptor) stored += 1;
-      descriptors.push(
-        descriptor ? { ...descriptor, ...described } : { ...refused, unavailable: 'not-stored' }
-      );
-    } catch (error) {
-      logger.error('Artifact not stored', {
-        component: COMPONENT,
-        chatId,
-        runId,
-        kind,
-        error: error.message
-      });
-      descriptors.push({ ...refused, unavailable: 'not-stored' });
-    }
-  }
-  return descriptors;
+  const kept = generatedFilesOf(raw).map(file =>
+    file.stored && artifactById.has(file.id) ? { artifact: artifactById.get(file.id) } : { file }
+  );
+  const keptIds = new Set(kept.filter(entry => entry.artifact).map(entry => entry.artifact.id));
+  return {
+    kept,
+    replaced: [...artifactById.keys()].filter(id => !keptIds.has(id))
+  };
+}
+
+/** Delete stored files a later version replaced, except what a share retains. */
+async function deleteReplacedFiles(repository, chatId, ids) {
+  const store = repository?.artifactStore?.();
+  if (!store || typeof store.deleteMany !== 'function') return;
+  const retained =
+    typeof repository.shareStore === 'function'
+      ? await repository.shareStore().artifactIdsRetainedByShares(chatId)
+      : new Set();
+  const deletable = ids.filter(id => !retained.has(id));
+  if (deletable.length > 0) await store.deleteMany({ type: 'chat', id: chatId }, deletable);
 }
 
 /**
@@ -666,25 +593,51 @@ export async function settleAssistantTurn({
     // PDF from `create_pdf`, a source file from `create_file`) come on
     // `summary.generatedFiles` and are stored as artifacts of kind `document`,
     // `code` or `archive` (see `generatedFileKind`).
-    const artifacts = pausedWithoutAnswer
+    //
+    // A file the turn's tools generated is usually stored already, when the
+    // tool finished (`storeGeneratedFilesNow`): its artifact is taken as it
+    // is, and one a later version replaced is deleted below.
+    const { kept: keptFiles, replaced: replacedFiles } = splitGeneratedFiles(
+      summary?.generatedFiles
+    );
+    const images = summary?.images || [];
+    const toStore = keptFiles.filter(entry => entry.file).map(entry => entry.file);
+    const newlyStored = pausedWithoutAnswer
       ? []
       : await storeGeneratedArtifacts({
           chatId,
           runId,
           artifacts: [
-            ...(summary?.images || []).map(image => ({ ...image, kind: 'image' })),
-            ...generatedFilesOf(summary?.generatedFiles).map(file => ({
+            ...images.map(image => ({ ...image, kind: 'image' })),
+            ...toStore.map(file => ({
               kind: generatedFileKind(file.mimeType),
               mimeType: file.mimeType,
               data: file.data,
               name: file.name
             }))
           ],
+          alreadyStored: keptFiles.length - toStore.length,
           // Through the chat's own store rather than the shared getter: one
           // place decides where a chat's artifacts live, and it is the
           // repository this turn is already writing through.
           store: repository?.artifactStore?.()
         });
+    let artifacts = [];
+    if (!pausedWithoutAnswer) {
+      // `storeGeneratedArtifacts` describes only what had bytes, in order.
+      const described = [...newlyStored];
+      const imageCount = images.filter(
+        image => image && typeof image.data === 'string' && image.data
+      ).length;
+      const imageDescriptors = described.splice(0, imageCount);
+      const fileDescriptors = keptFiles.flatMap(entry => {
+        if (entry.artifact) return [entry.artifact];
+        if (typeof entry.file.data !== 'string' || !entry.file.data) return [];
+        const descriptor = described.shift();
+        return descriptor ? [{ ...descriptor, ...cardCounts(entry.file) }] : [];
+      });
+      artifacts = [...imageDescriptors, ...fileDescriptors];
+    }
 
     // Store the answer BEFORE announcing the run finished. `releaseRun` clears
     // `activeRunId` and raises `hasUnseenActivity` — together, "this chat is
@@ -810,6 +763,18 @@ export async function settleAssistantTurn({
       ? { chat: appended.chat, released: appended.released === true }
       : await repository.releaseRun(chatId, runId, releasePatch);
     outcome.released = released === true;
+    // A file a later version of the same name replaced was stored when its
+    // tool finished; the answer keeps only the last one. Off the answer path,
+    // and never a file a share already hands out.
+    if (appended?.message?.id && replacedFiles.length > 0) {
+      void deleteReplacedFiles(repository, chatId, replacedFiles).catch(error =>
+        logger.warn('Replaced generated files not deleted', {
+          component: COMPONENT,
+          chatId,
+          error: error.message
+        })
+      );
+    }
     // The evidence record, off the answer path: after the answer is stored and
     // the run released, never awaited (#3687).
     if (appended?.message?.id) {

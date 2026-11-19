@@ -44,6 +44,29 @@ The contracts live in `shared/runEvents.js` (names) and
 `server/services/loop/RunStream.js`; the client folds every frame through one
 reducer, `client/src/shared/run/runReducer.js`.
 
+### What the browser is sent
+
+A frame bound for the browser — live (`server/sse.js` `routeEnvelope`), on a
+re-sync (`view=sse`) or a resumed stream — is cut to what the chat renders
+(`server/services/loop/clientProjection.js`). The producer's frame, which the
+in-process sinks of the `/v1` APIs and the run ledger read, is not changed:
+
+- `tool/started.args`: the query, link and document id whole (up to 2,048
+  characters), every other value cut to 160 characters, an array to 100
+  elements (`previewToolArgs` in `shared/run/toolActivity.js`). The whole input
+  only for an MCP App view (`mcpApp`), which is handed it.
+- `step/completed.toolCalls[]`: without `arguments` and `metadata`.
+- `tool/completed.resultPreview`: `{ limitReached: true }` for a page read the
+  per-turn cap refused, otherwise `null`.
+- `context/compacted.digest`: the notes as a person reads them — the facts and
+  what was not found, without the model's instructions and the list of calls
+  — cut to 2,000 characters (`displayDigest` in `findingsDigest.js`).
+
+A stored answer is cut the same way when a browser reads it (`GET
+/api/chats/:chatId`, a shared chat): no uncut argument values, the notes as
+above, and each call row source that `message.sources` already holds sent as
+`{ id }`, which the client fills back in (`shared/run/activitySourceRefs.js`).
+
 ## Frame types
 
 | Type                   | Payload                                                                                                                       | Meaning                                                                       |
@@ -56,9 +79,9 @@ reducer, `client/src/shared/run/runReducer.js`.
 | `run/resumed`          | `{ interactionId? }`                                                                                                          | The run continues                                                             |
 | `step/delta`           | `{ step, kind: text \| thinking \| image, content?, image?, meta? }`                                                           | Streamed answer output of model step `step`                                   |
 | `step/completed`       | `{ step, content, toolCalls, finishReason, usage?, sources?, groundingMetadata? }`                                             | A model step finished (`sources`: the knowledge-source names of the step)     |
-| `tool/started`         | `{ step, callId, toolId, name, args, execution }`                                                                             | A tool call begins (`execution`: server, caller, clarification, passthrough)  |
+| `tool/started`         | `{ step, callId, toolId, name, args, execution }`                                                                             | A tool call begins (`execution`: server, caller, clarification, passthrough); `args` cut for the browser |
 | `tool/progress`        | `{ phase, message?, data?, step?, callId?, toolId? }`                                                                         | Free-form progress (see phases below)                                         |
-| `tool/completed`       | `{ step, callId, toolId, name, resultPreview, error?, durationMs?, knowledgeSource? }`                                        | A tool call finished; `resultPreview` is bounded                              |
+| `tool/completed`       | `{ step, callId, toolId, name, resultPreview, error?, durationMs?, knowledgeSource? }`                                        | A tool call finished; `resultPreview` is bounded (the browser gets only `limitReached`) |
 | `sources/added`        | `{ step?, callId?, toolId?, items, queries?, supports? }`                                                                     | What a tool call, a model adapter or provider search found (see below)        |
 | `context/usage`        | `{ contextWindow, inputTokens, maxOutputTokens, source: provider \| estimate, step? }`                                         | How full the model's context window is, as the server counts it (see below)   |
 | `context/compacted`    | `{ compactionId, step, status: running \| completed, trigger, strategy?, lossy, fallbackReason?, wrapUp?, tokensBefore?, tokensAfter?, itemsSummarised, kinds?, digest?, digestTruncated?, facts?, durationMs? }` | Earlier tool results were condensed or shortened to free context (see below)  |
@@ -219,7 +242,8 @@ summary call, so a chat turn sends `status: running` before it and
 `completed` once the transcript changed; both carry the same `compactionId`.
 `kinds` counts the results by activity kind as the server classified their
 tools; `digest` is the digest as the model reads it, bounded to 8,000
-characters (`digestTruncated`). The ledger's `context/compaction` projects to
+characters (`digestTruncated`); the browser gets the notes without what is
+there for the model only, bounded to 2,000 characters. The ledger's `context/compaction` projects to
 the `completed` frame, so a re-sync (`view=sse`), a resumed stream and a
 rebuilt activity show it too. `wrapUp: true` says the prompt stayed near the
 window after condensing: the turn stopped searching and answers from the notes.

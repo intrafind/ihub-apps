@@ -15,7 +15,11 @@ import {
 import '@testing-library/jest-dom';
 import { createStreamState, reduceRunEvents, getRun } from '../../../shared/run/runReducer.js';
 import { projectRunToMessage } from '../../../client/src/features/chat/runToMessage';
-import { buildToolActivity, toolDetails } from '../../../shared/run/toolActivity.js';
+import {
+  buildToolActivity,
+  previewToolArgs,
+  toolDetails
+} from '../../../shared/run/toolActivity.js';
 import ToolActivity from '../../../client/src/features/chat/components/ToolActivity';
 import {
   BusyIcon,
@@ -217,12 +221,28 @@ describe('toolDetails', () => {
     ]);
   });
 
-  test('cuts a long value and keeps the full text', () => {
+  test('cuts a long value and keeps nothing of the rest', () => {
     const long = 'x'.repeat(200);
     const [detail] = toolDetails({ note: long, options: { deep: true } });
-    expect(detail.values[0].text).toBe(`${'x'.repeat(160)}…`);
-    expect(detail.values[0].full).toBe(long);
+    expect(detail.values[0]).toEqual({ text: `${'x'.repeat(160)}…` });
     expect(toolDetails({ options: { deep: true } })[0].values).toEqual([{ text: '{"deep":true}' }]);
+  });
+
+  test('shows a long value cut in the row, never the whole of it', () => {
+    const markdown = `# CV ${'line of the document '.repeat(50)}`;
+    const item = { id: 'c1', kind: 'tool', name: 'Create PDF', status: 'completed' };
+    // A row stored before the uncut text was dropped still carries it.
+    const [detail] = toolDetails({ markdown });
+    const stored = { ...detail, values: [{ ...detail.values[0], full: markdown }] };
+    render(
+      <ToolActivity
+        activity={{ items: [{ ...item, details: [stored], sources: [] }], reading: null }}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { expanded: false }));
+    fireEvent.click(screen.getByRole('switch'));
+    expect(screen.getByText(`${markdown.slice(0, 160)}…`)).toBeInTheDocument();
+    expect(screen.queryByText(markdown)).toBeNull();
   });
 
   test('lists a long array by its first values and counts the rest, without repeats', () => {
@@ -245,6 +265,57 @@ describe('toolDetails', () => {
   test('has nothing to list without arguments', () => {
     expect(toolDetails(undefined)).toEqual([]);
     expect(toolDetails({})).toEqual([]);
+  });
+});
+
+describe('previewToolArgs', () => {
+  const long = 'z'.repeat(5000);
+
+  test('cuts a document in the arguments to what the row lists', () => {
+    const preview = previewToolArgs({
+      filename: 'cv',
+      markdown: long,
+      slides: [{ title: 'a', text: long }],
+      options: { deep: true },
+      count: 3,
+      flag: false,
+      none: null
+    });
+    expect(preview).toEqual({
+      filename: 'cv',
+      markdown: `${'z'.repeat(160)}…`,
+      slides: [`${JSON.stringify({ title: 'a', text: long }).slice(0, 160)}…`],
+      options: { deep: true },
+      count: 3,
+      flag: false,
+      none: null
+    });
+  });
+
+  test('keeps what the row shows whole: the query, the link, the document id', () => {
+    const url = `https://example.com/${'p'.repeat(400)}`;
+    const query = 'q'.repeat(300);
+    expect(previewToolArgs({ url, query, documentId: 'doc-1' })).toEqual({
+      url,
+      query,
+      documentId: 'doc-1'
+    });
+  });
+
+  test('lists the same details as the arguments themselves', () => {
+    const args = {
+      markdown: long,
+      filter: ['a', 'b', 'a', { field: long }],
+      sort: { by: 'date' },
+      maxResults: 10
+    };
+    expect(toolDetails(previewToolArgs(args))).toEqual(toolDetails(args));
+  });
+
+  test('passes anything that is not an object through, cut', () => {
+    expect(previewToolArgs(undefined)).toBeUndefined();
+    expect(previewToolArgs(null)).toBeNull();
+    expect(previewToolArgs(long)).toBe(`${'z'.repeat(160)}…`);
   });
 });
 

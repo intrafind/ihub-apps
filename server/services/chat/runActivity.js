@@ -360,7 +360,7 @@ function boundDetails(details) {
     name: text(detail?.name, MAX_LABEL_CHARS) || '',
     values: (Array.isArray(detail?.values) ? detail.values : [])
       .slice(0, MAX_DETAIL_VALUES)
-      .map(value => compact({ text: text(value?.text) || '', full: text(value?.full) })),
+      .map(value => ({ text: text(value?.text) || '' })),
     more: Number.isInteger(detail?.more) ? detail.more : 0
   }));
 }
@@ -453,8 +453,8 @@ function jsonBytes(value) {
 /**
  * The activity as it is stored with an answer: known fields only, each list
  * and string bounded, and the whole under {@link MAX_STORED_ACTIVITY_BYTES}.
- * Past that, the full text of long arguments goes first, then the sources of
- * each call, then the argument lists, then the length of queries and errors —
+ * Past that, the sources of each call go first, then the length of the
+ * compaction notes, then the argument lists, then the length of queries and errors —
  * the calls themselves stay. An activity still over keeps only its answer
  * source and workflow result.
  *
@@ -523,10 +523,6 @@ export function boundStoredActivity(activity) {
 
   if (out.toolActivity && jsonBytes(out) > MAX_STORED_ACTIVITY_BYTES) {
     const trims = [
-      item => ({
-        ...item,
-        details: item.details.map(d => ({ ...d, values: d.values.map(v => ({ text: v.text })) }))
-      }),
       item => ({ ...item, sources: item.sources.slice(0, 5) }),
       item =>
         item.digest && item.digest.length > SHORT_DIGEST_CHARS
