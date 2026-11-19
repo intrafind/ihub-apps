@@ -96,6 +96,10 @@ export default function registerAgentArtifactRoutes(app) {
       const { runId } = req.params;
       assertValidId(runId, 'run');
       await assertArtifactAccess(req, runId);
+      // The root is created by the first artifact any run writes. Until then there is nothing to
+      // list; path validation below needs the root to exist and would reject the run id instead.
+      const rootStat = await fsp.stat(artifactsRootDir()).catch(() => null);
+      if (!rootStat?.isDirectory()) return res.json([]);
       const dir = await artifactsDirForRun(runId);
       if (!dir) throw new ServiceError('BAD_REQUEST', 'invalid run id');
       let entries = [];

@@ -11,6 +11,7 @@
   "script": "readUrl.js",
   "method": "readUrl",
   "activity": { "kind": "fetch", "origin": "web" },
+  "dataFlow": "external",
   "parameters": {
     "type": "object",
     "properties": {
