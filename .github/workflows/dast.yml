@@ -114,7 +114,8 @@ jobs:
           for spec in normal admin openai; do
             curl -sSf -H "Authorization: Bearer $token" -o "dast/$spec.json" "$TARGET/api/docs/$spec/swagger.json"
           done
-          chmod -R a+rw dast
+          # ZAP runs as another user in its container and only reads the documents.
+          chmod -R a+rX dast
 
       - name: ZAP API scan - chat and general API
         uses: zaproxy/action-api-scan@5158fe4d9d8fcc75ea204db81317cce7f9e5453d # v0.10.0

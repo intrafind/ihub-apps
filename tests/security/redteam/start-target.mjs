@@ -37,7 +37,8 @@ if (!process.env.REDTEAM_BASE_URL || !process.env.REDTEAM_MODEL) {
   console.error('Set REDTEAM_BASE_URL and REDTEAM_MODEL: the red team needs a real model.');
   process.exit(1);
 }
-const BASE_URL = process.env.REDTEAM_BASE_URL.replace(/\/+$/, '');
+let BASE_URL = process.env.REDTEAM_BASE_URL.trim();
+while (BASE_URL.endsWith('/')) BASE_URL = BASE_URL.slice(0, -1);
 const MODEL = process.env.REDTEAM_MODEL;
 
 process.chdir(root);

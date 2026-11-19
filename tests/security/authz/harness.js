@@ -49,7 +49,7 @@ export async function bearerContext(token) {
  * Fill `:name` and `*name` segments of an Express path with values.
  *
  * @param {string} template - e.g. `/api/chats/:chatId/files/:fileId`
- * @param {Record<string, string>} values
+ * @param {Record<string, string | number | null | undefined>} values - a missing value throws
  * @returns {string}
  */
 export function fillPath(template, values) {

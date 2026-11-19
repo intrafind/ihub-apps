@@ -37,7 +37,12 @@ const findings = fs.existsSync(findingsPath)
       .map(line => JSON.parse(line))
   : [];
 
-const cell = value => String(value ?? '').replace(/\|/g, '\\|');
+// A Markdown table cell: backslashes first, so the escape of `|` cannot be undone.
+const cell = value =>
+  String(value ?? '')
+    .replaceAll('\\', '\\\\')
+    .replaceAll('|', String.raw`\|`)
+    .replaceAll(/[\r\n]+/g, ' ');
 const unexpected = findings.filter(f => !(f['template-id'] in expected));
 const seen = new Set(findings.map(f => f['template-id']));
 const missing = Object.keys(expected).filter(id => !seen.has(id));

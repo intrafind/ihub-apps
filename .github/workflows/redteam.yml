@@ -104,7 +104,11 @@ jobs:
           REDTEAM_GRADER_KEY: ${{ secrets.REDTEAM_API_KEY || 'none' }}
         run: |
           mkdir -p redteam-report
-          npx --yes "promptfoo@${PROMPTFOO_VERSION}" eval \
+          # Installed without lifecycle scripts (it runs without them), into its own
+          # directory, at the pinned version; never fetched on demand by npx.
+          npm install --prefix "$RUNNER_TEMP/promptfoo" --ignore-scripts --no-audit --no-fund \
+            "promptfoo@${PROMPTFOO_VERSION}"
+          "$RUNNER_TEMP/promptfoo/node_modules/.bin/promptfoo" eval \
             -c tests/security/redteam/promptfooconfig.yaml \
             -o redteam-report/results.json -o redteam-report/report.html \
             --no-cache --no-progress-bar
