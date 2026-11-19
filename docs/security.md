@@ -1029,6 +1029,26 @@ gh attestation verify oci://ghcr.io/intrafind/ihub-apps:5.6.0 --repo intrafind/i
 docker buildx imagetools inspect ghcr.io/intrafind/ihub-apps:5.6.0 --format '{{ json .SBOM }}'
 ```
 
+The container image carries two more signed attestations, both from the Trivy scan of the published image:
+
+| Attestation | Predicate type | Content |
+| --- | --- | --- |
+| SBOM | `https://cyclonedx.org/bom` | CycloneDX SBOM of the image, as Trivy sees it |
+| Vulnerability report | `https://cosign.sigstore.dev/attestation/vuln/v1` | Trivy's findings of every severity at build time; findings waived in `.trivyignore` are listed as suppressed |
+
+The vulnerability report is a snapshot from the day the image was built: CVEs published later are not in it. Scan the image yourself for the current state.
+
+```bash
+gh attestation verify oci://ghcr.io/intrafind/ihub-apps:5.6.0 --repo intrafind/ihub-apps \
+  --predicate-type https://cyclonedx.org/bom \
+  --format json --jq '.[0].verificationResult.statement.predicate' > ihub-apps-5.6.0.cdx.json
+gh attestation verify oci://ghcr.io/intrafind/ihub-apps:5.6.0 --repo intrafind/ihub-apps \
+  --predicate-type https://cosign.sigstore.dev/attestation/vuln/v1 \
+  --format json --jq '.[0].verificationResult.statement.predicate' > ihub-apps-5.6.0.vuln.json
+```
+
+The CycloneDX file can be imported into tools such as Dependency-Track, or re-scanned with `trivy sbom ihub-apps-5.6.0.cdx.json`.
+
 ## Compliance & Standards
 
 ### Data Privacy Compliance
