@@ -16,15 +16,16 @@ import {
   warningsByBindingKey
 } from '../integrations/appMigrationWarningRules';
 import IntegrationBindingRow from './IntegrationBindingRow';
-import AllIntegrationsCoverage from './AllIntegrationsCoverage';
-import { AlwaysLoadedCheckbox, EnabledByDefaultCheckbox } from './IntegrationBindingOptions';
-import Switch from '../../../../shared/components/Switch';
 import {
   ALL_INTEGRATIONS_KEY,
-  allIntegrationsBindingOf,
-  isCoverableByAllIntegrations,
-  isExcludedFromAllIntegrations
-} from '../../../../../../shared/appWildcards.js';
+  AllIntegrationsSwitch,
+  PanelCoverage,
+  allIntegrationsStateOf,
+  coveredInstallationCount,
+  rowExclusionOf,
+  shownCoverageKeys,
+  withExclusion
+} from './allIntegrationsEditor';
 import TypeBindingCard from './TypeBindingCard';
 import WebSearchSection from './WebSearchSection';
 import IAssistantSection from './IAssistantSection';
@@ -216,46 +217,16 @@ function IntegrationsConfigSection({ app, onChange, toolSearchEnabled = false })
   const setBindings = patch => onChange({ ...app, integrations: patchedBindings(patch) });
   const setBinding = (id, binding) => setBindings({ [id]: binding });
 
-  // "All integrations" (`"*"`) and what it leaves out.
-  const allBinding = allIntegrationsBindingOf(bindings);
-  const allExcluded = Array.isArray(allBinding?.exclude) ? allBinding.exclude : [];
-  const setAllIntegrations = on => setBinding(ALL_INTEGRATIONS_KEY, on ? {} : null);
-  const setExcluded = (key, excluded) => {
-    const rest = allExcluded.filter(entry => entry !== key);
-    const exclude = excluded ? [...rest, key] : rest;
-    const next = { ...allBinding };
-    if (exclude.length > 0) next.exclude = exclude;
-    else delete next.exclude;
-    setBinding(ALL_INTEGRATIONS_KEY, next);
+  // "All integrations" (`"*"`, allIntegrationsEditor.jsx) and what it leaves out.
+  const { allBinding } = allIntegrationsStateOf(bindings);
+  const setAllBinding = binding => setBinding(ALL_INTEGRATIONS_KEY, binding);
+  const setExcluded = (key, excluded) => setAllBinding(withExclusion(allBinding, key, excluded));
+  /** What "All integrations" does to a row (see `IntegrationBindingRow`), or null. */
+  const rowCoverage = item => {
+    const excludedBy = rowExclusionOf({ bindings, storageRowIds }, item);
+    if (excludedBy === undefined) return null;
+    return { excludedBy, onExcludeChange: excluded => setExcluded(item.id, excluded) };
   };
-  /**
-   * What "All integrations" does to a row, or null when the app has no `"*"`
-   * binding, `"*"` cannot cover the row (a storage provider), or a broader
-   * binding of the row (its definition or type) decides it instead (see
-   * `IntegrationBindingRow`).
-   * @param {{ id: string, kind: string, definition?: string, type?: string }} item
-   * @param {string[]} keys - the row's binding keys, its own first
-   */
-  const coverageOf = (item, keys) => {
-    if (!allBinding || !isCoverableByAllIntegrations({ id: item.id, type: item.type })) {
-      return null;
-    }
-    if (storageRowIds.has(item.id)) return null;
-    if (keys.slice(1).some(key => Object.hasOwn(bindings, key))) return null;
-    return {
-      excludedBy: keys.find(key => allExcluded.includes(key)) || null,
-      onExcludeChange: excluded => setExcluded(item.id, excluded)
-    };
-  };
-  const rowCoverage = item =>
-    coverageOf(
-      item,
-      [
-        item.id,
-        item.kind === 'instance' ? item.definition : null,
-        item.type ? `${TYPE_PREFIX}${item.type}` : null
-      ].filter(Boolean)
-    );
 
   // The installations the editor offers: the enabled ones, and a disabled one
   // only while the app binds it by its id (so it can be unbound).
@@ -429,14 +400,6 @@ function IntegrationsConfigSection({ app, onChange, toolSearchEnabled = false })
     Boolean(iFinderInstallation && isEnabled(iFinderInstallation)) ||
     Object.hasOwn(bindings, IFINDER_INSTANCE_ID);
 
-  // How many enabled installations "All integrations" covers now.
-  const allCoverableCount = installed.filter(
-    item =>
-      isEnabled(item) &&
-      isCoverableByAllIntegrations(item) &&
-      !isExcludedFromAllIntegrations(allBinding, item)
-  ).length;
-
   // Bindings to installations that are gone: the app is hidden from users
   // until they are unbound, so they are listed with a way to do that.
   const staleIds = useMemo(() => {
@@ -509,49 +472,24 @@ function IntegrationsConfigSection({ app, onChange, toolSearchEnabled = false })
     />
   );
 
-  // What "All integrations" does to a panel's integration the app does not
-  // bind by itself (iFinder, the people directories).
-  // `keys`: the integration's binding keys, its own first (iFinder's
-  // definition id too), so an exclusion by any of them shows.
-  const panelCoverage = (key, boundByItself, keys = [key]) => {
-    if (boundByItself || !allBinding) return null;
-    return (
-      <AllIntegrationsCoverage
-        idPrefix={`app-integration-${key.replace(/[/:]/g, '__')}`}
-        itemKey={key}
-        excludedBy={keys.find(entry => allExcluded.includes(entry)) || null}
-        onExcludeChange={excluded => setExcluded(key, excluded)}
-      />
-    );
-  };
   const directoriesBoundByItself =
     Object.hasOwn(bindings, PEOPLE_DIRECTORY_TYPE_KEY) ||
     directoryRows.some(row => Object.hasOwn(bindings, row.id));
-
-  // The keys whose "All integrations" control is shown on a row or panel; an
-  // excluded key without one is listed under the switch, so no exclusion is
-  // hidden (a collapsed people directories card renders no rows).
-  const coverageShownKeys = new Set();
-  if (allBinding) {
-    const shownRows = [
+  const iFinderKeys = [IFINDER_INSTANCE_ID, iFinderInstallation?.definition].filter(Boolean);
+  const iFinderBoundByItself = iFinderKeys.some(key => Object.hasOwn(bindings, key));
+  // The keys whose "All integrations" control a row or panel shows.
+  const coverageShownKeys = shownCoverageKeys({
+    bindings,
+    storageRowIds,
+    rows: [
       ...groupedRows.flatMap(group => group.rows),
       ...(directoriesBoundByItself ? directoryRows : [])
-    ];
-    for (const row of shownRows) {
-      if (!Object.hasOwn(bindings, row.id) && rowCoverage(row)) coverageShownKeys.add(row.id);
-    }
-    if (
-      showIFinder &&
-      iFinderInstallation &&
-      !Object.hasOwn(bindings, IFINDER_INSTANCE_ID) &&
-      !(iFinderInstallation.definition && Object.hasOwn(bindings, iFinderInstallation.definition))
-    ) {
-      coverageShownKeys.add(IFINDER_INSTANCE_ID);
-    }
-    if (showDirectories && !directoriesBoundByItself) {
-      coverageShownKeys.add(PEOPLE_DIRECTORY_TYPE_KEY);
-    }
-  }
+    ],
+    panelKeys: [
+      showIFinder && iFinderInstallation && !iFinderBoundByItself && IFINDER_INSTANCE_ID,
+      showDirectories && !directoriesBoundByItself && PEOPLE_DIRECTORY_TYPE_KEY
+    ].filter(Boolean)
+  });
 
   // The warnings a definition migration left on a binding shown by a panel.
   const typeNotice = key =>
@@ -608,16 +546,15 @@ function IntegrationsConfigSection({ app, onChange, toolSearchEnabled = false })
             <>
               {!iFinderInstallation && notInstalledNotice(t('admin.apps.edit.ifinder', 'iFinder'))}
               {typeNotice(IFINDER_INSTANCE_ID)}
-              {iFinderInstallation &&
-                panelCoverage(
-                  IFINDER_INSTANCE_ID,
-                  Object.hasOwn(bindings, IFINDER_INSTANCE_ID) ||
-                    Boolean(
-                      iFinderInstallation.definition &&
-                      Object.hasOwn(bindings, iFinderInstallation.definition)
-                    ),
-                  [IFINDER_INSTANCE_ID, iFinderInstallation.definition].filter(Boolean)
-                )}
+              {iFinderInstallation && (
+                <PanelCoverage
+                  bindings={bindings}
+                  itemKey={IFINDER_INSTANCE_ID}
+                  keys={iFinderKeys}
+                  boundByItself={iFinderBoundByItself}
+                  onExclude={setExcluded}
+                />
+              )}
             </>
           }
         />
@@ -656,7 +593,12 @@ function IntegrationsConfigSection({ app, onChange, toolSearchEnabled = false })
           notice={
             <>
               {typeNotice(PEOPLE_DIRECTORY_TYPE_KEY)}
-              {panelCoverage(PEOPLE_DIRECTORY_TYPE_KEY, directoriesBoundByItself)}
+              <PanelCoverage
+                bindings={bindings}
+                itemKey={PEOPLE_DIRECTORY_TYPE_KEY}
+                boundByItself={directoriesBoundByItself}
+                onExclude={setExcluded}
+              />
             </>
           }
           toolSearchEnabled={toolSearchEnabled}
@@ -714,59 +656,14 @@ function IntegrationsConfigSection({ app, onChange, toolSearchEnabled = false })
         {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
         <AppMigrationWarnings warnings={unplacedWarnings} />
         {!loading && !error && (
-          <div
-            className="rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 space-y-3"
-            data-testid="app-integrations-all"
-          >
-            <div>
-              <Switch
-                id="app-integrations-all-switch"
-                checked={Boolean(allBinding)}
-                onChange={setAllIntegrations}
-                label={t('admin.apps.edit.integrations.useAll', 'Use all integrations')}
-                labelPosition="start"
-              />
-              <p className={HELP_CLASS}>
-                {t(
-                  'admin.apps.edit.integrations.useAllHelp',
-                  "Every integration that gives the model tools, including ones installed later ({{count}} now), as far as the user's groups grant them. Web search, storage providers and iAssistant are set up in their own panels.",
-                  { count: allCoverableCount }
-                )}
-              </p>
-            </div>
-            {allBinding && (
-              <div className="space-y-3">
-                <EnabledByDefaultCheckbox
-                  binding={allBinding}
-                  onBindingChange={binding => setBinding(ALL_INTEGRATIONS_KEY, binding)}
-                />
-                {toolSearchEnabled && (
-                  <AlwaysLoadedCheckbox
-                    binding={allBinding}
-                    onBindingChange={binding => setBinding(ALL_INTEGRATIONS_KEY, binding)}
-                  />
-                )}
-                <p className={HELP_CLASS}>
-                  {t(
-                    'admin.apps.edit.integrations.useAllOverrideHelp',
-                    'Tick an integration below to give it settings of its own (actions, Required, scopes), or exclude it.'
-                  )}
-                </p>
-                {allExcluded
-                  .filter(key => !coverageShownKeys.has(key))
-                  .map(key => (
-                    <AllIntegrationsCoverage
-                      key={key}
-                      idPrefix={`app-integration-${key.replace(/[/:]/g, '__')}`}
-                      itemKey={key}
-                      excludedBy={key}
-                      showKey
-                      onExcludeChange={excluded => setExcluded(key, excluded)}
-                    />
-                  ))}
-              </div>
-            )}
-          </div>
+          <AllIntegrationsSwitch
+            bindings={bindings}
+            coveredCount={coveredInstallationCount(installed, allBinding)}
+            shownKeys={coverageShownKeys}
+            toolSearchEnabled={toolSearchEnabled}
+            onAllBindingChange={setAllBinding}
+            onExclude={setExcluded}
+          />
         )}
         {!loading &&
           !error &&
