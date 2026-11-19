@@ -48,8 +48,9 @@ Skills are opt-in per app: an app offers none until it sets `skillSettings.enabl
 and no skill tools to the model, ignores `/name`, and does not carry skills over in the chat.
 
 A skill is loaded only when the current app and user may use it. For a global skill that means:
-the app enables skills, the skill is installed, listed in the app's `skills`, and granted to the
-user's groups. For a user skill: the app enables skills, the user owns the skill or it is shared
+the app enables skills, the skill is installed, listed in the app's `skills` — or the app lists
+`"*"` (**All skills** in the app editor), which assigns every skill, including ones installed
+later — and granted to the user's groups. For a user skill: the app enables skills, the user owns the skill or it is shared
 with them, and the app does not set `skillSettings.allowPersonal: false`. Agents use only the
 global skills on their profile.
 

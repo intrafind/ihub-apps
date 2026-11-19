@@ -583,3 +583,41 @@ describe('skills are opt-in per app', () => {
     assert.doesNotMatch(system.content, /available_skills|active_skill|ALPHA BODY|BETA BODY/);
   });
 });
+
+describe('"*" assigns every skill', () => {
+  test('lists every skill the user may use, and only those', async () => {
+    const all = await skillAccess.getUsableSkills({ skillIds: ['*'], user: userWith(['*']) });
+    assert.ok(names(all).includes('alpha'));
+    assert.ok(names(all).includes('gamma'));
+    // The groups still decide.
+    const granted = await skillAccess.getUsableSkills({
+      skillIds: ['*'],
+      user: userWith(['beta'])
+    });
+    assert.deepEqual(names(granted), ['beta']);
+  });
+
+  test('loads a skill the app does not name', async () => {
+    const app = { skillSettings: { enabled: true }, skills: ['*'] };
+    const usable = name =>
+      skillAccess.isSkillUsable(name, { skillIds: app.skills, user: userWith(['*']), app });
+    assert.equal(await usable('gamma'), true);
+    assert.equal(await usable('missing'), false);
+  });
+
+  test('a user can run any of them with /name, but none is activated by itself', async () => {
+    const app = { skillSettings: { enabled: true, autoActivate: true }, skills: ['*', 'alpha'] };
+    const resolved = await skillAccess.resolveSkillsForTurn({
+      text: '/gamma',
+      app,
+      user: userWith(['*'])
+    });
+    assert.deepEqual(
+      resolved.map(s => [s.name, s.origin]),
+      [
+        ['gamma', 'message'],
+        ['alpha', 'app']
+      ]
+    );
+  });
+});

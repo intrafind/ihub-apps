@@ -34,6 +34,7 @@ import {
 } from './utils/configOverrides.js';
 import { decryptCredentials, decryptPlatformSecrets } from './utils/configSecrets.js';
 import { etagForIds } from './utils/etag.js';
+import { isSkillAssigned } from '../shared/appWildcards.js';
 
 /**
  * How long change events from the storage provider accumulate before the
@@ -1551,8 +1552,8 @@ class ConfigCache {
 
     const { data: userSkills } = await this.getSkillsForUser(user, platformConfig);
 
-    // Filter to only skills assigned to this app
-    return userSkills.filter(skill => app.skills.includes(skill.name));
+    // Filter to only skills assigned to this app (`"*"` assigns every skill)
+    return userSkills.filter(skill => isSkillAssigned(app.skills, skill.name));
   }
 
   /**

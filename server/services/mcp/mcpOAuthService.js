@@ -27,7 +27,7 @@ import configCache from '../../configCache.js';
 import { enhanceUserWithPermissions, isAdmin } from '../../utils/authorization.js';
 import { getLocalizedString } from '../../utils/localize.js';
 import { isAnonymousUser } from '../loop/runIdentity.js';
-import { getBoundIntegrationIds } from './permissions.js';
+import { appsBindInstallation } from './permissions.js';
 import { getMcpOAuthClientStore } from './mcpOAuthClientStore.js';
 import { McpAuthRequiredError, McpTokenRefreshError } from './McpUserOAuthProvider.js';
 import { readUserTokens, writeUserTokens, tokenBindingFor } from './mcpUserTokens.js';
@@ -87,19 +87,21 @@ function withPermissions(user) {
  * close that cycle.
  */
 async function installationAdmitsUser(instanceId, user) {
-  const [{ default: installedIntegrationService }, { userMayUse }] = await Promise.all([
-    import('../integrations/InstalledIntegrationService.js'),
-    import('../integrations/integrationTools.js')
-  ]);
+  const [{ default: installedIntegrationService }, { userMayUse, bindingKeyFor }] =
+    await Promise.all([
+      import('../integrations/InstalledIntegrationService.js'),
+      import('../integrations/integrationTools.js')
+    ]);
   const instance = installedIntegrationService.get(instanceId);
-  return Boolean(instance) && instance.enabled !== false && userMayUse(instance, user);
+  const admitted = Boolean(instance) && instance.enabled !== false && userMayUse(instance, user);
+  return admitted ? { instance, bindingKeyFor } : null;
 }
 
 /**
  * Whether a user may connect (and use) an `oauthUser` server: admins always
  * (they configure and test it); anyone else when their groups grant the
  * installation (`permissions.integrations`) and an app they may open binds it
- * (`app.integrations`).
+ * (`app.integrations`: by its id, definition, type or `"*"`).
  *
  * @param {Object} user - Signed-in user (req.user)
  * @param {Object} serverConfig
@@ -109,10 +111,11 @@ export async function isServerVisibleToUser(user, serverConfig) {
   if (isAnonymousUser(user) || !serverConfig?.id) return false;
   const enhanced = withPermissions(user);
   if (isAdmin(enhanced)) return true;
-  if (!(await installationAdmitsUser(serverConfig.id, enhanced))) return false;
+  const admitted = await installationAdmitsUser(serverConfig.id, enhanced);
+  if (!admitted) return false;
   const platform = configCache.getPlatform() || {};
-  const bound = await getBoundIntegrationIds(enhanced, platform);
-  return bound.has(serverConfig.id);
+  // Bound by its id, its definition, its type or "every integration" (`"*"`).
+  return appsBindInstallation(enhanced, platform, admitted.instance, admitted.bindingKeyFor);
 }
 
 /**

@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
+import { isSkillAssigned } from '../../../../../shared/appWildcards.js';
+
 /**
  * The `/` picker's group for a skill, by the skill's scope. Global skills
  * keep the existing `skill` group; personal skills get their own groups after
@@ -26,7 +28,8 @@ export function pickerSkillScope(skill) {
 /**
  * Which skills the `/` picker offers in an app, ready for the search list.
  *
- * - A **global** skill is offered only when the app lists it in `app.skills`.
+ * - A **global** skill is offered only when the app lists it in `app.skills`
+ *   (`"*"` lists every skill).
  * - A **personal** skill (the caller's own, or shared with them) is offered
  *   unless the app sets `skillSettings.allowPersonal: false`.
  *
@@ -50,12 +53,11 @@ export function pickerSkillScope(skill) {
  * ); // → only the personal skill, in group 'skillMine'
  */
 export function selectPickerSkills(rawSkills, { appSkills = [], allowPersonal = true } = {}) {
-  const assigned = new Set(Array.isArray(appSkills) ? appSkills : []);
   const result = [];
   for (const skill of Array.isArray(rawSkills) ? rawSkills : []) {
     if (!skill?.name) continue;
     const scope = pickerSkillScope(skill);
-    if (scope === 'global' ? !assigned.has(skill.name) : !allowPersonal) continue;
+    if (scope === 'global' ? !isSkillAssigned(appSkills, skill.name) : !allowPersonal) continue;
     result.push({
       ...skill,
       _type: 'skill',

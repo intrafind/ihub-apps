@@ -159,6 +159,20 @@ describe('pendingDocument helpers', () => {
     expect(boundToolRefsFor({}, info)).toEqual([]);
   });
 
+  test('"*" binds the integration unless excluded, and is its tool reference when nothing else is', () => {
+    const info = { id: 'ifinder', definition: 'com.intrafind/ifinder' };
+    expect(appBindsIntegration({ integrations: { '*': {} } }, info)).toBe(true);
+    expect(appBindsIntegration({ integrations: { '*': { exclude: ['ifinder'] } } }, info)).toBe(
+      false
+    );
+    expect(boundToolRefsFor({ integrations: { '*': {} } }, info)).toEqual(['*']);
+    // A binding of its own wins over "*".
+    expect(boundToolRefsFor({ integrations: { '*': {}, ifinder: {} } }, info)).toEqual(['ifinder']);
+    // "*" never covers a storage provider.
+    const storage = { id: 'nc', definition: 'com.intrafind/nextcloud', type: 'storage' };
+    expect(appBindsIntegration({ integrations: { '*': {} } }, storage)).toBe(false);
+  });
+
   test('documentKindOf: image, audio or document, from the file name, then the types', () => {
     expect(documentKindOf({ filename: 'scan.PNG' })).toBe('image');
     expect(documentKindOf({ mediaType: 'image/jpeg' })).toBe('image');

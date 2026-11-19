@@ -16,6 +16,10 @@
  */
 import { contentTypeFromExtension } from '../../nextcloud-embed/utilities/nextcloudFileMeta';
 import { boundIntegrationRefs } from '../../../shared/utils/boundIntegrationRefs';
+import {
+  ALL_INTEGRATIONS_KEY,
+  isCoveredByAllIntegrations
+} from '../../../../../shared/appWildcards.js';
 
 export const DOCUMENT_ID_PARAM = 'documentId';
 export const DOCUMENT_INTEGRATION_PARAM = 'integration';
@@ -104,10 +108,18 @@ export function documentRefOf(doc) {
     : { id: doc.documentId };
 }
 
+/** The keys of `app.integrations` that name an integration itself, the most specific first. */
+function ownKeysOf(info) {
+  return [info.id, info.definition, info.type ? `type:${info.type}` : null].filter(
+    key => typeof key === 'string' && key
+  );
+}
+
 /**
  * Whether an app binds an integration: a key of `app.integrations` that is the installation's id,
- * its definition's id (every installation of the definition) or `type:<type>` (every
- * installation of the type). `info` is the probe's answer (`GET /api/integrations/:id/files`).
+ * its definition's id (every installation of the definition), `type:<type>` (every
+ * installation of the type) or `"*"` (every integration it does not exclude). `info` is the
+ * probe's answer (`GET /api/integrations/:id/files`).
  *
  * @param {Object} app - an entry of `GET /api/apps`
  * @param {{id: string, definition?: string, type?: string|null}} info
@@ -118,8 +130,9 @@ export function appBindsIntegration(app, info) {
   if (!info?.id || !bindings || typeof bindings !== 'object' || Array.isArray(bindings)) {
     return false;
   }
-  return [info.id, info.definition, info.type ? `type:${info.type}` : null].some(
-    key => typeof key === 'string' && Object.hasOwn(bindings, key)
+  return (
+    ownKeysOf(info).some(key => Object.hasOwn(bindings, key)) ||
+    isCoveredByAllIntegrations(bindings, info)
   );
 }
 
@@ -135,9 +148,10 @@ export function appBindsIntegration(app, info) {
 export function boundToolRefsFor(app, info) {
   if (!appBindsIntegration(app, info)) return [];
   const toolRefs = new Set(boundIntegrationRefs(app));
-  return [info.id, info.definition, info.type ? `type:${info.type}` : null].filter(
-    key => typeof key === 'string' && Object.hasOwn(app.integrations, key) && toolRefs.has(key)
-  );
+  const own = ownKeysOf(info).filter(key => Object.hasOwn(app.integrations, key));
+  // `"*"` stands for the integration only when no key of its own binds it.
+  if (own.length === 0) return toolRefs.has(ALL_INTEGRATIONS_KEY) ? [ALL_INTEGRATIONS_KEY] : [];
+  return own.filter(key => toolRefs.has(key));
 }
 
 /** The definition whose documents the server can ingest into a chat by reference. */
