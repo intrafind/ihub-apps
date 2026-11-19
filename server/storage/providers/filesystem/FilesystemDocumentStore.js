@@ -44,13 +44,8 @@ import {
   InvalidKeyError,
   StorageError
 } from '../../errors.js';
-import {
-  DOC_EXT,
-  assertValidKey,
-  assertValidNamespace,
-  containedPath,
-  ownerSegment
-} from './paths.js';
+import { assertValidKey, assertValidNamespace } from '../../keys.js';
+import { DOC_EXT, containedPath, ownerSegment } from './paths.js';
 import { PREFIXES_DIR, PrefixIndex } from './prefixIndex.js';
 
 const COMPONENT = 'FilesystemDocumentStore';

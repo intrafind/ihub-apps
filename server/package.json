@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@apidevtools/swagger-parser": "^13.1.0",
+    "@aws-sdk/client-s3": "3.1167.0",
     "@contentauth/c2pa-wasm": "0.14.0",
     "@hyzyla/pdfium": "^3.0.0",
     "@kenjiuno/decompressrtf": "^0.1.4",

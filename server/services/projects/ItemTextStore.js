@@ -23,15 +23,14 @@ import { estimateTokens } from '../../../shared/tokenEstimator.js';
 import { KnowledgeError } from '../knowledge/types.js';
 import { PROJECT_FILES_NAMESPACE, getProjectRepository } from './ProjectRepository.js';
 import { projectSettings } from './projectSettings.js';
-import { KeyAccessDenied, getKeyProvider } from './crypto/KeyProvider.js';
+import { KeyAccessDenied, getKeyProvider } from '../../crypto/KeyProvider.js';
 import {
   DEFAULT_SEGMENT_BYTES,
   FORMAT_ID,
-  associatedDataOf,
   decrypt,
   encrypt,
   newDataKey
-} from './crypto/streamingAead.js';
+} from '../../crypto/streamingAead.js';
 
 const COMPONENT = 'ItemTextStore';
 
@@ -77,6 +76,17 @@ export function mintVersionId(now = Date.now()) {
 export function textSha256(text) {
   const plaintext = Buffer.isBuffer(text) ? text : Buffer.from(text, 'utf8');
   return crypto.createHash('sha256').update(plaintext).digest('hex');
+}
+
+/**
+ * The associated data of a project item's text blob (spec 3 §5): what the
+ * ciphertext and its wrapped key are bound to.
+ *
+ * @param {{tenant?: string, projectId: string, itemId: string, versionId: string}} address
+ * @returns {string}
+ */
+export function associatedDataOf({ tenant = 'default', projectId, itemId, versionId }) {
+  return `ihub/project-files/${tenant}/${projectId}/${itemId}/${versionId}`;
 }
 
 function keyProviderFor(platform) {
@@ -181,10 +191,13 @@ export async function readText(
   });
   let dataKey = cachedKey(block.blobKey);
   if (!dataKey) {
-    const provider = getKeyProvider(
-      block.key?.provider || projectSettings(platform).encryption.keyProvider
-    );
     try {
+      // Inside the `try`: a provider id nobody registered is refused (it no
+      // longer falls back to `local-file`), and a reader gets the same
+      // KEY_ACCESS_DENIED as for a key that does not unwrap.
+      const provider = getKeyProvider(
+        block.key?.provider || projectSettings(platform).encryption.keyProvider
+      );
       dataKey = await provider.unwrap(
         Buffer.from(block.key?.wrapped || '', 'base64'),
         block.key?.keyId,

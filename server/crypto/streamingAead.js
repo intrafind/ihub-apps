@@ -19,7 +19,15 @@
  * Decryption fails on a wrong key or associated data, a reordered,
  * truncated or extended stream, and on any flipped byte.
  *
- * @module services/projects/crypto/streamingAead
+ * The associated data is mandatory: a missing or empty value throws. An
+ * object encrypted with none is bound to nothing and can be swapped with any
+ * other object under the same data key, and no test would notice.
+ *
+ * Used by the project text store (`services/projects`) and by the encrypting
+ * blob store (`storage/EncryptingBlobStore.js`), which is why it lives here
+ * and not under a domain service.
+ *
+ * @module crypto/streamingAead
  */
 import crypto from 'node:crypto';
 
@@ -48,13 +56,26 @@ export class StreamingAeadError extends Error {
   }
 }
 
+/**
+ * The associated data as bytes. A non-empty string or Buffer is required.
+ *
+ * @param {Buffer|string} associatedData
+ * @returns {Buffer}
+ * @throws {StreamingAeadError} When it is missing, empty or of another type.
+ */
+export function associatedDataBytes(associatedData) {
+  if (Buffer.isBuffer(associatedData) && associatedData.length > 0) return associatedData;
+  if (typeof associatedData === 'string' && associatedData.length > 0) {
+    return Buffer.from(associatedData, 'utf8');
+  }
+  throw new StreamingAeadError('The associated data must be a non-empty string or Buffer');
+}
+
 function deriveKey(dataKey, salt, associatedData) {
   if (!Buffer.isBuffer(dataKey) || dataKey.length !== KEY_BYTES) {
     throw new StreamingAeadError(`A data key has ${KEY_BYTES} bytes`);
   }
-  const info = Buffer.isBuffer(associatedData)
-    ? associatedData
-    : Buffer.from(String(associatedData ?? ''), 'utf8');
+  const info = associatedDataBytes(associatedData);
   return Buffer.from(crypto.hkdfSync('sha256', dataKey, salt, info, KEY_BYTES));
 }
 
@@ -174,9 +195,54 @@ export function decrypt(
   return Buffer.concat(chunks);
 }
 
-/** The associated data of a project item's text blob (spec 3 §5). */
-export function associatedDataOf({ tenant = 'default', projectId, itemId, versionId }) {
-  return `ihub/project-files/${tenant}/${projectId}/${itemId}/${versionId}`;
+/**
+ * Length of the ciphertext {@link encrypt} produces for a plaintext length.
+ *
+ * @param {number} plainBytes - Plaintext length, 0 or more.
+ * @param {number} [segmentBytes]
+ * @returns {number} Header, segments and tags together.
+ * @throws {StreamingAeadError} When `plainBytes` is not a length.
+ *
+ * @example
+ * ciphertextLength(0);  // 56: header (40) and one empty segment's tag (16)
+ */
+export function ciphertextLength(plainBytes, segmentBytes = DEFAULT_SEGMENT_BYTES) {
+  checkSegmentSize(segmentBytes);
+  if (!Number.isSafeInteger(plainBytes) || plainBytes < 0) {
+    throw new StreamingAeadError('A plaintext length is a non-negative integer');
+  }
+  const firstPlain = segmentBytes - HEADER_BYTES - TAG_BYTES;
+  const otherPlain = segmentBytes - TAG_BYTES;
+  const segments =
+    plainBytes <= firstPlain ? 1 : 1 + Math.ceil((plainBytes - firstPlain) / otherPlain);
+  return HEADER_BYTES + plainBytes + segments * TAG_BYTES;
+}
+
+/**
+ * Length of the plaintext inside a ciphertext of a given length, without
+ * reading it. The inverse of {@link ciphertextLength}: what lets a listing
+ * report payload sizes from object sizes.
+ *
+ * @param {number} cipherBytes - Ciphertext length.
+ * @param {number} [segmentBytes]
+ * @returns {number}
+ * @throws {StreamingAeadError} When no plaintext encrypts to that length.
+ */
+export function plaintextLength(cipherBytes, segmentBytes = DEFAULT_SEGMENT_BYTES) {
+  checkSegmentSize(segmentBytes);
+  if (!Number.isSafeInteger(cipherBytes) || cipherBytes < HEADER_BYTES + TAG_BYTES) {
+    throw new StreamingAeadError('Ciphertext is too short');
+  }
+  // Header and first segment fill one `segmentBytes` block, every further
+  // segment another one, so the segment count is the block count.
+  const segments = Math.ceil(cipherBytes / segmentBytes);
+  const lastSegment = cipherBytes - (segments - 1) * segmentBytes;
+  // A segment after the first holds at least one byte: `encrypt` ends on the
+  // segment that took the last byte and never appends an empty one.
+  if (segments > 1 && lastSegment <= TAG_BYTES) {
+    throw new StreamingAeadError('No plaintext encrypts to this ciphertext length');
+  }
+  return cipherBytes - HEADER_BYTES - segments * TAG_BYTES;
 }
 
 /** A fresh data key. */

@@ -42,8 +42,20 @@ import path from 'node:path';
 import { atomicWriteFile } from '../../../utils/atomicWrite.js';
 import logger from '../../../utils/logger.js';
 import { BlobStore } from '../../BlobStore.js';
-import { InvalidKeyError, StorageError } from '../../errors.js';
-import { assertValidKey, assertValidNamespace, containedPath } from './paths.js';
+import {
+  clampBlobLimit as clampLimit,
+  compareBlobKeys as compareKeys,
+  decodeBlobCursor as decodeCursor,
+  encodeBlobCursor as encodeCursor,
+  toBlobBuffer as toBuffer
+} from '../../blobSupport.js';
+import { StorageError } from '../../errors.js';
+import {
+  RESERVED_BLOB_KEY_PREFIX as TEMP_PREFIX,
+  assertValidBlobKey,
+  assertValidNamespace
+} from '../../keys.js';
+import { containedPath } from './paths.js';
 import { PREFIXES_DIR, PrefixIndex } from './prefixIndex.js';
 
 /** Directory holding every blob namespace, relative to the provider's base. */
@@ -55,64 +67,12 @@ export const BLOB_DIR = 'blobs';
  */
 export const DELETING_PREFIX = '..deleting_';
 
-/** Prefix `atomicWriteFile` gives its scratch file while a `put` is in flight. */
-const TEMP_PREFIX = '.tmp_';
-
 /** Keys a blob walk stats at once. */
 const SCAN_CONCURRENCY = 16;
 
 /** Whether a namespace directory entry is bookkeeping rather than a blob. */
 function isReservedEntry(name) {
   return name === PREFIXES_DIR || name.startsWith(DELETING_PREFIX) || name.startsWith(TEMP_PREFIX);
-}
-
-const DEFAULT_LIMIT = 100;
-const MIN_LIMIT = 1;
-const MAX_LIMIT = 1000;
-
-/** Clamp a caller's page size into the supported range instead of throwing. */
-function clampLimit(limit) {
-  if (limit === undefined || limit === null) return DEFAULT_LIMIT;
-  const value = Number(limit);
-  if (!Number.isFinite(value)) return DEFAULT_LIMIT;
-  return Math.min(MAX_LIMIT, Math.max(MIN_LIMIT, Math.floor(value)));
-}
-
-/** Key ordering: plain string comparison, so every provider pages identically. */
-function compareKeys(a, b) {
-  if (a < b) return -1;
-  if (a > b) return 1;
-  return 0;
-}
-
-function encodeCursor(key) {
-  return Buffer.from(JSON.stringify({ k: key })).toString('base64url');
-}
-
-function decodeCursor(cursor) {
-  try {
-    const parsed = JSON.parse(Buffer.from(String(cursor), 'base64url').toString('utf8'));
-    if (!parsed || typeof parsed.k !== 'string') throw new Error('cursor carries no key');
-    return parsed.k;
-  } catch (cause) {
-    throw new StorageError('Invalid blob list cursor', { code: 'INVALID_CURSOR', cause });
-  }
-}
-
-/**
- * Coerce accepted payload input into a Buffer without copying when possible.
- *
- * @param {Buffer|Uint8Array|string} data - Payload as the caller passed it.
- * @returns {Buffer}
- * @throws {StorageError} Code `INVALID_DATA` for anything else.
- */
-function toBuffer(data) {
-  if (Buffer.isBuffer(data)) return data;
-  if (data instanceof Uint8Array) return Buffer.from(data.buffer, data.byteOffset, data.byteLength);
-  if (typeof data === 'string') return Buffer.from(data, 'utf8');
-  throw new StorageError('Blob data must be a Buffer, Uint8Array or string', {
-    code: 'INVALID_DATA'
-  });
 }
 
 /**
@@ -141,12 +101,10 @@ export class FilesystemBlobStore extends BlobStore {
    */
   _path(ns, key) {
     assertValidNamespace(ns);
-    assertValidKey(key);
-    // The index directory's name, and the prefix of a write in flight: both
-    // are left out of namespace listings, so neither may be a key.
-    if (key === PREFIXES_DIR || key.startsWith(TEMP_PREFIX)) {
-      throw new InvalidKeyError(`Reserved blob key: ${key}`);
-    }
+    // Also refuses the index directory's name and the prefix `atomicWriteFile`
+    // gives its scratch file while a `put` is in flight: both are left out of
+    // namespace listings, so neither may be a key.
+    assertValidBlobKey(key);
     return containedPath(this.baseDir, BLOB_DIR, ns, key);
   }
 
@@ -192,6 +150,35 @@ export class FilesystemBlobStore extends BlobStore {
         code: 'IO_ERROR',
         cause: error
       });
+    }
+  }
+
+  /**
+   * The first bytes of one blob, without reading the rest. What the
+   * encrypting blob store looks at to tell an encrypted blob from a plaintext
+   * one while a store holds both.
+   *
+   * @param {string} ns - Namespace.
+   * @param {string} key - Key within the namespace.
+   * @param {number} length - How many bytes to read at most.
+   * @returns {Promise<Buffer|null>} Up to `length` bytes, or null when there is no blob.
+   */
+  async readHead(ns, key, length) {
+    const file = this._path(ns, key);
+    let handle;
+    try {
+      handle = await fs.open(file, 'r');
+      const buffer = Buffer.alloc(length);
+      const { bytesRead } = await handle.read(buffer, 0, length, 0);
+      return buffer.subarray(0, bytesRead);
+    } catch (error) {
+      if (error.code === 'ENOENT') return null;
+      throw new StorageError(`Failed to read blob ${ns}/${key}`, {
+        code: 'IO_ERROR',
+        cause: error
+      });
+    } finally {
+      await handle?.close();
     }
   }
 

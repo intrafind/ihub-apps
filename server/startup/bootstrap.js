@@ -102,6 +102,32 @@ export async function prepareContents() {
 }
 
 /**
+ * Load the master encryption key before the storage provider starts.
+ *
+ * A blob backend that encrypts (`storage.blobs.provider: "s3"`) needs the key
+ * at storage bootstrap: to check it against the key check object in the
+ * bucket, and to open an S3 secret or a proxy URL stored as `ENC[...]`. The
+ * key is read from `TOKEN_ENCRYPTION_KEY` or `contents/.encryption-key` with
+ * plain `fs`, so it does not need storage itself.
+ *
+ * Never throws: a key that cannot be loaded is reported here and again by the
+ * later key setup, and a blob backend that needs it then refuses to start.
+ *
+ * @returns {Promise<void>}
+ */
+export async function ensureEncryptionKey() {
+  try {
+    const { default: tokenStorageService } = await import('../services/TokenStorageService.js');
+    if (!tokenStorageService.encryptionKey) await tokenStorageService.initializeEncryptionKey();
+  } catch (error) {
+    logger.error('Failed to load the encryption key before storage', {
+      component: 'Server',
+      error: error.message
+    });
+  }
+}
+
+/**
  * Bring the storage provider up or end the process with a clear error.
  *
  * The provider is mandatory (filesystem is the default). A broken `storage`

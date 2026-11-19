@@ -21,6 +21,7 @@
     "clean:install": "npm run clean && npm run install:all",
     "// === UTILITIES ===": "",
     "health": "curl -f http://localhost:3000/api/health",
+    "s3:dev": "node server/tests/support/fakeS3Server.js",
     "loadtest:corpus": "node tests/load/tools/generate-corpus.mjs",
     "loadtest:stub": "node tests/load/stub/server.mjs",
     "loadtest:setup": "node tests/load/setup.mjs",

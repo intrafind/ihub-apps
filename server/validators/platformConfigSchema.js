@@ -1015,7 +1015,95 @@ export const platformConfigSchema = z
               )
           })
           .passthrough()
-          .prefault({})
+          .prefault({}),
+        // Encryption at rest of what the storage provider keeps. Today it
+        // covers the blob facet (uploads, extracted text, artifacts, evidence
+        // content, corpus pages), on the filesystem and on S3 alike. Off by
+        // default here, so an existing installation behaves as before and
+        // nothing is converted without the administrator's decision;
+        // `server/defaults/config/platform.json` switches it on for a fresh
+        // installation. Read from the raw file at storage bootstrap.
+        encryption: z
+          .object({
+            enabled: z
+              .boolean()
+              .prefault(false)
+              .describe(
+                'Encrypt stored blobs with the master key (contents/.encryption-key or TOKEN_ENCRYPTION_KEY). On: every blob write is encrypted. Off: blobs are written as they are; blobs encrypted earlier are still decrypted. Changing it requires a restart. Back up the master key: without it encrypted blobs cannot be read.'
+              )
+          })
+          .passthrough()
+          .prefault({}),
+        // Where blobs go (uploads, extracted text, artifacts, evidence content,
+        // corpus pages). Optional and absent by default: without it they stay
+        // on `provider`. Documents, logs and locks always stay on `provider`.
+        // Read from the raw file at storage bootstrap and validated there in
+        // full (`storage/providers/s3/s3Config.js`), with the defaults named
+        // below; nothing here has a prefault, so saving the platform
+        // configuration never writes this block into a file that has none.
+        blobs: z
+          .object({
+            provider: z
+              .string()
+              .optional()
+              .describe(
+                'Where blobs are stored: "default" (the storage provider itself) or "s3". Override per environment with IHUB_STORAGE_BLOBS_PROVIDER. Changing it requires a restart, and existing blobs are not moved.'
+              ),
+            s3: z
+              .object({
+                endpoint: z
+                  .string()
+                  .optional()
+                  .describe(
+                    'URL of the S3-compatible service, e.g. https://s3.example.internal:7070. Empty means AWS S3 in "region". Plain http is refused unless the host is this machine or allowInsecureHttp is true.'
+                  ),
+                region: z.string().optional().describe('Region. Default us-east-1.'),
+                bucket: z
+                  .string()
+                  .optional()
+                  .describe('Bucket name. The bucket must exist; iHub never creates one.'),
+                prefix: z
+                  .string()
+                  .optional()
+                  .describe(
+                    'Key prefix inside the bucket. Use one bucket or prefix per installation.'
+                  ),
+                accessKeyId: z.string().optional().describe('Access key ID, or ${ENV_VAR}.'),
+                secretAccessKey: z
+                  .string()
+                  .optional()
+                  .describe(
+                    'Secret access key: ${ENV_VAR}, or a value that is encrypted at rest (ENC[...]) when the platform configuration is saved.'
+                  ),
+                forcePathStyle: z
+                  .boolean()
+                  .optional()
+                  .describe('Address the bucket in the path, not the host name. Default true.'),
+                allowInsecureHttp: z
+                  .boolean()
+                  .optional()
+                  .describe('Accept a plain http endpoint on another host. Default false.'),
+                maxObjectBytes: z
+                  .number()
+                  .int()
+                  .positive()
+                  .optional()
+                  .describe('Largest blob accepted, in bytes before encryption. Default 64 MiB.'),
+                connectTimeoutMs: z.number().int().positive().optional().describe('Default 5000.'),
+                requestTimeoutMs: z.number().int().positive().optional().describe('Default 60000.'),
+                maxAttempts: z
+                  .number()
+                  .int()
+                  .min(1)
+                  .max(10)
+                  .optional()
+                  .describe('Attempts per request, retries included. Default 3.')
+              })
+              .passthrough()
+              .optional()
+          })
+          .passthrough()
+          .optional()
       })
       .passthrough()
       .prefault({}),

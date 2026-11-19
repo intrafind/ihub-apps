@@ -74,7 +74,9 @@ function describeCapabilities(provider) {
       locking: caps.locking,
       multiInstance: caps.multiInstance,
       blobs: caps.blobs,
-      blobStore: caps.blobStore
+      blobStore: caps.blobStore,
+      // Where the blob facet lives when `storage.blobs.provider` moved it.
+      blobBackend: provider.blobBackend || 'default'
     };
   } catch {
     return {};
@@ -175,6 +177,22 @@ export function readFacet(provider, facet) {
  */
 export function isStorageReady() {
   return activeProvider !== null;
+}
+
+/**
+ * Where the blobs of the running provider live and how the last check of that
+ * backend went, for a health or status endpoint. Reads what the provider
+ * already holds; it never contacts the backend.
+ *
+ * @returns {{provider: string|null, status: 'ok'|'error'|'unknown'}}
+ *   `provider` is `default` when the storage provider serves its own blobs,
+ *   the blob backend's name (`s3`) otherwise, and null before the bootstrap.
+ */
+export function describeBlobStorage() {
+  if (!activeProvider) return { provider: null, status: 'unknown' };
+  const backend = activeProvider.blobBackendHandle;
+  if (!backend) return { provider: 'default', status: 'ok' };
+  return { provider: backend.name, status: backend.lastProbe?.status || 'unknown' };
 }
 
 /**

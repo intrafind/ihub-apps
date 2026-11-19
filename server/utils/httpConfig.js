@@ -70,15 +70,26 @@ export class TlsForwardingHttpsProxyAgent extends HttpsProxyAgent {
 }
 
 /**
+ * The SSL settings of a platform configuration, with their defaults. Pure: it
+ * reads nothing but its argument, so it also serves code that runs before the
+ * configuration cache exists (the storage bootstrap).
+ *
+ * @param {Object} [platformConfig] - A platform configuration (`ssl` is read).
+ * @returns {{ignoreInvalidCertificates: boolean, domainWhitelist: string[]}}
+ */
+export function readSSLConfig(platformConfig) {
+  return {
+    ignoreInvalidCertificates: platformConfig?.ssl?.ignoreInvalidCertificates || false,
+    domainWhitelist: platformConfig?.ssl?.domainWhitelist || []
+  };
+}
+
+/**
  * Get SSL configuration from platform config
  * @returns {Object} SSL configuration object with ignoreInvalidCertificates and domainWhitelist
  */
 export function getSSLConfig() {
-  const platformConfig = configCache.getPlatform() || {};
-  const sslConfig = {
-    ignoreInvalidCertificates: platformConfig.ssl?.ignoreInvalidCertificates || false,
-    domainWhitelist: platformConfig.ssl?.domainWhitelist || []
-  };
+  const sslConfig = readSSLConfig(configCache.getPlatform() || {});
 
   // Log SSL config on first access for debugging
   if (!getSSLConfig._logged) {
@@ -473,11 +484,15 @@ export function normalizeNoProxy(noProxy) {
  * - `environment` — from `config.env` / process environment
  * - `default`     — not configured anywhere; the built-in default applies
  *
+ * @param {Object} [platformConfigOverride] - Read `proxy` from this platform
+ *   configuration instead of the cached one. For code that runs before the
+ *   configuration cache exists (the storage bootstrap); it must have its
+ *   `${VAR}` placeholders resolved already.
  * @returns {Object} `{ enabled, http, https, noProxy, urlPatterns }`, each
  *   `{ value, source, placeholderIgnored? }`
  */
-export function getProxyProvenance() {
-  const platformConfig = configCache.getPlatform() || {};
+export function getProxyProvenance(platformConfigOverride = null) {
+  const platformConfig = platformConfigOverride || configCache.getPlatform() || {};
   const proxyConfig = platformConfig.proxy || {};
 
   const urlField = (platformValue, envValue) => {
@@ -885,6 +900,80 @@ export function createAgentWithTls(url = '', tlsOptions = {}) {
     return new TlsForwardingHttpsProxyAgent(routing.proxyUrl, bypass, material);
   }
   return new https.Agent({ keepAlive: true, ...material, ...bypass, lookup: guardedLookup });
+}
+
+/**
+ * A keep-alive agent for one endpoint that the caller owns and may destroy,
+ * built with the routing and TLS rules of `createAgent`: the proxy
+ * configuration (`describeProxyRouting`), the SSL whitelist bypass
+ * (`getTlsBypassOptions`, host-whitelist-only) and the DNS guard.
+ *
+ * For a client library that keeps its own connection pool and destroys its
+ * agent when it is closed (the AWS SDK does). Handing such a library the
+ * shared agents of `createAgent` would end every other outbound call with it,
+ * and those have no keep-alive.
+ *
+ * `platformConfig` makes the decision independent of the configuration cache:
+ * the storage bootstrap runs before the cache exists, and reading the cache
+ * there would silently skip the whitelist and the proxy for exactly the
+ * private-CA endpoints the whitelist is for.
+ *
+ * @param {string} url - The endpoint (`http://` or `https://`).
+ * @param {Object} [options]
+ * @param {boolean} [options.keepAlive=true]
+ * @param {number} [options.maxSockets] - Connections kept to the endpoint.
+ * @param {Object} [options.platformConfig] - Read `ssl` and `proxy` from this
+ *   platform configuration (placeholders resolved) instead of the cache.
+ * @returns {{agent: http.Agent|https.Agent, routing: {decision: string, reason: string}, tlsBypass: boolean}}
+ *   The agent, how the endpoint is reached, and whether certificate
+ *   verification is skipped for it. `routing` never holds the proxy URL.
+ *
+ * @example
+ * const { agent } = createDedicatedAgent('https://s3.internal:7070', {
+ *   maxSockets: 32,
+ *   platformConfig: rawPlatform
+ * });
+ */
+export function createDedicatedAgent(
+  url,
+  { keepAlive = true, maxSockets, platformConfig = null } = {}
+) {
+  const isHttps = String(url).startsWith('https://');
+  const sslConfig = platformConfig ? readSSLConfig(platformConfig) : getSSLConfig();
+  // Bypass only for a whitelisted host, exactly as createAgent decides it.
+  const bypass = isHttps ? getTlsBypassOptions(url, sslConfig) : {};
+  let proxyConfig;
+  if (platformConfig) {
+    const provenance = getProxyProvenance(platformConfig);
+    proxyConfig = {
+      enabled: provenance.enabled.value,
+      http: provenance.http.value,
+      https: provenance.https.value,
+      noProxy: provenance.noProxy.value,
+      urlPatterns: provenance.urlPatterns.value
+    };
+  } else {
+    proxyConfig = getProxyConfig();
+  }
+  const routing = describeProxyRouting(url, proxyConfig);
+  const pool = {
+    keepAlive,
+    ...(Number.isInteger(maxSockets) && maxSockets > 0 ? { maxSockets } : {})
+  };
+  let agent;
+  if (routing.decision === 'proxied') {
+    agent = isHttps
+      ? new TlsForwardingHttpsProxyAgent(routing.proxyUrl, { ...pool, ...bypass })
+      : new HttpProxyAgent(routing.proxyUrl, pool);
+  } else {
+    const options = { ...pool, ...bypass, lookup: guardedLookup };
+    agent = isHttps ? new https.Agent(options) : new http.Agent(options);
+  }
+  return {
+    agent,
+    routing: { decision: routing.decision, reason: routing.reason },
+    tlsBypass: bypass.rejectUnauthorized === false
+  };
 }
 
 /**

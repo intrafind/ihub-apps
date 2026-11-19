@@ -33,10 +33,11 @@ const SECRET_HEADERS = new Set([
 /**
  * Key names that look like a credential. Anchored on word parts so that
  * `author`, `tokens_used` or `keyword` are not caught, while `apiKey`,
- * `api_key`, `client_secret`, `accessToken`, `password` and `passwd` are.
+ * `api_key`, `client_secret`, `accessToken`, `secretAccessKey`, `password` and
+ * `passwd` are.
  */
 const SECRET_KEY_PATTERN =
-  /(^|[_\-.])(pass(word|wd)?|secret|client[_-]?secret|api[_-]?key|apikey|access[_-]?token|refresh[_-]?token|id[_-]?token|auth[_-]?token|token|bearer|authorization|cookie|session[_-]?id|private[_-]?key|credentials?|signature)$/i;
+  /(^|[_\-.])(pass(word|wd)?|secret|client[_-]?secret|secret[_-]?access[_-]?key|api[_-]?key|apikey|access[_-]?token|refresh[_-]?token|id[_-]?token|auth[_-]?token|token|bearer|authorization|cookie|session[_-]?id|private[_-]?key|credentials?|signature)$/i;
 
 /**
  * Whether a key or header name names a credential.

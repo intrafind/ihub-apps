@@ -16,7 +16,7 @@ import { confirmUpdateOnStartup, isUpdateAwaitingConfirmation } from '../service
 import { initSystemResources } from '../services/systemResources.js';
 import { shutdownStorageBootstrap } from '../storage/bootstrap.js';
 import config from '../config.js';
-import { prepareContents, bootstrapStorageOrExit } from './bootstrap.js';
+import { prepareContents, bootstrapStorageOrExit, ensureEncryptionKey } from './bootstrap.js';
 import { describeWorkerSizing, workerExecArgv } from '../utils/workerSizing.js';
 
 /**
@@ -65,6 +65,10 @@ export async function startPrimary({ workerCount, stickyRouting }) {
     } catch {
       // Same tolerance as the worker: a missing platform.json means defaults.
     }
+    // The master key first, as in the worker. With an empty contents directory
+    // the primary is also the one process that creates the key file, and with
+    // an S3 blob backend the one that writes its key check object.
+    await ensureEncryptionKey();
     await bootstrapStorageOrExit(primaryPlatformConfig);
     await shutdownStorageBootstrap();
   }

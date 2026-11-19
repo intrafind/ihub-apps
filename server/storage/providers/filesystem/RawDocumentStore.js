@@ -49,7 +49,8 @@ import { DocumentStore } from '../../DocumentStore.js';
 import { documentEtag } from '../../etag.js';
 import { EtagMismatchError, NotSupportedError, StorageError } from '../../errors.js';
 import { CONFIG_NAMESPACES, RAW_DOC_EXT } from '../../namespaces.js';
-import { assertValidKey, containedPath } from './paths.js';
+import { assertValidKey } from '../../keys.js';
+import { containedPath } from './paths.js';
 
 const COMPONENT = 'RawDocumentStore';
 

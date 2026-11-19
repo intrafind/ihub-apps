@@ -32,7 +32,7 @@ import {
   LocalFileKeyProvider,
   _resetKeyProvider,
   registerKeyProvider
-} from '../services/projects/crypto/KeyProvider.js';
+} from '../crypto/KeyProvider.js';
 import { getProjectService } from '../services/projects/ProjectService.js';
 import { getProjectRepository } from '../services/projects/ProjectRepository.js';
 import {

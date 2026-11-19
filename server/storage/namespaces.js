@@ -348,9 +348,24 @@ export const RUNTIME_NAMESPACES = Object.freeze({
 });
 
 /**
+ * Blob namespace a blob backend keeps for itself: the key check object of the
+ * encrypting blob store (`_ihub/keycheck`) and the objects a start-up or
+ * health probe writes and removes (`_ihub/probe-<uuid>`). No feature stores
+ * blobs here, and a copy between backends leaves it out.
+ */
+export const INTERNAL_BLOB_NAMESPACE = '_ihub';
+
+/**
  * Blob namespaces. Blobs are addressed by `(namespace, key)` on the blob
  * facet and have no owner index, so a declaration here is only what keeps
  * two features from picking the same name.
+ *
+ * Every namespace a feature writes blobs to is listed here, also the two
+ * whose documents share the name (`artifacts`, `website-corpora`, declared in
+ * `RUNTIME_NAMESPACES` as well): a tool that walks all blobs (a copy between
+ * backends, the start-up check for blobs left on the previous backend) reads
+ * this list. A blob store itself accepts any valid namespace and never
+ * consults it.
  *
  * @type {Readonly<Record<string, string>>}
  */
@@ -377,7 +392,17 @@ export const BLOB_NAMESPACES = Object.freeze({
    */
   chatEvidenceContent: 'chat-evidence-content',
   /** The same for runs without a chat: one pack under `<scope(runId)>__<scope(runId)>`. */
-  runEvidenceContent: 'run-evidence-content'
+  runEvidenceContent: 'run-evidence-content',
+  /**
+   * Payloads of artifacts, keyed like their documents in
+   * `RUNTIME_NAMESPACES.artifacts`: `<scopeType>__<scopeId>__<artifactId>`.
+   */
+  artifacts: 'artifacts',
+  /**
+   * Pages and URL lists of website corpora, keyed like their documents in
+   * `RUNTIME_NAMESPACES.websiteCorpora`.
+   */
+  websiteCorpora: 'website-corpora'
 });
 
 /**

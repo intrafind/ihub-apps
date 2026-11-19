@@ -465,6 +465,9 @@ function redactSensitiveData(data) {
     'clientsecret',
     'client_secret',
     'clientSecret',
+    // S3 credentials of the blob storage (`storage.blobs.s3`); compared in lower case.
+    'secretaccesskey',
+    'secret_access_key',
     'privatekey',
     'private_key',
     'privateKey',

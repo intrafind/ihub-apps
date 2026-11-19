@@ -166,7 +166,7 @@ A document without a collection membership therefore never survives unnoticed.
 ## 6. Encryption
 
 - **Format:** `tink-aes-gcm-hkdf-v1`, Tink `AesGcmHkdfStreaming`, 1 MiB segments, as spec 4 fixes it.
-  iHub already ships a Node implementation in `server/services/projects/crypto/streamingAead.js`. The
+  iHub already ships a Node implementation in `server/crypto/streamingAead.js`. The
   Java side uses Tink 1.15, which the repo pins, and which contains the streaming primitive.
 - **Associated data:** tenant, object key, version id. Both sides derive it from fields stored on the
   document, never from a path.
