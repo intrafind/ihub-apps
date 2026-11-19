@@ -464,13 +464,15 @@ try {
   // Create the output directory structure
   console.log('Creating output directory structure...');
 
-  // Recursively copy the server directory excluding node_modules and
-  // package-lock.json so that any new folders are automatically included.
+  // Recursively copy the server directory excluding node_modules so that any
+  // new folders are automatically included. package.json and
+  // package-lock.json come along: the dependencies are installed from the
+  // lock file below.
   const copyServerFiles = (src, dest) => {
     fs.mkdirSync(dest, { recursive: true });
     for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
-      if (entry.name === 'node_modules' || entry.name === 'package-lock.json') {
-        continue; // skip installed modules and lock file
+      if (entry.name === 'node_modules') {
+        continue; // skip installed modules
       }
 
       const srcPath = path.join(src, entry.name);
@@ -494,23 +496,22 @@ try {
     ['scripts/build-api-docs.js', path.join(outputDir, 'server', 'generated', 'openapi')],
     { cwd: __dirname, stdio: 'inherit' }
   );
-  // Create a package.json for the server
-  const serverPackageJson = {
-    name: 'ihub-apps-server',
-    version,
-    private: true,
-    type: 'module',
-    dependencies: require('./server/package.json').dependencies
-  };
+  // The server's package.json, stamped with the release version. It keeps its
+  // devDependencies and overrides: `npm ci` refuses a package.json that is out
+  // of sync with the lock file, and --omit=dev leaves the dev packages out.
+  const serverPackageJson = { ...require('./server/package.json'), version, private: true };
 
   fs.writeFileSync(
     path.join(outputDir, 'server', 'package.json'),
     JSON.stringify(serverPackageJson, null, 2)
   );
 
-  // Install server dependencies
+  // Install the server dependencies at the versions locked in
+  // server/package-lock.json, the ones CI tested. `npm install` would resolve
+  // the ranges afresh, so a release would ship whatever was published since
+  // and fail once a locked version is younger than min-release-age (.npmrc).
   console.log('Installing server dependencies...');
-  execSync('npm install --omit=dev', {
+  execSync('npm ci --omit=dev', {
     cwd: path.join(outputDir, 'server'),
     stdio: 'inherit'
   });
