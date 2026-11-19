@@ -12,8 +12,11 @@ the current version.
 The page reader (`read_url`) was treated as an internal tool, so the platform default for external
 tools (`toolApproval.defaults.external`, **Admin → Security → Tool approval**) did not apply to it,
 and its approval card said "Internal". A page address can carry data from the chat to any host, so
-it is now external: with the external default set to `always`, every page read is asked for. With
-no external default, nothing changes.
+it is now external: with the external default set to `always`, every page read is asked for. It is
+also declared a read, so `writes` (for external tools or as the general default) no longer asks for
+page reads, as it did while the page reader's side effect was unknown. An app that sets `writes` for
+`read_url` (by tool id, by installation or as its app default) no longer asks for page reads either.
+With no approval default on the platform or the app, nothing changes.
 
 ## Answers Can No Longer Load Images or Styles from Other Sites
 

@@ -12,6 +12,7 @@
   "method": "readUrl",
   "activity": { "kind": "fetch", "origin": "web" },
   "dataFlow": "external",
+  "sideEffect": "read",
   "parameters": {
     "type": "object",
     "properties": {

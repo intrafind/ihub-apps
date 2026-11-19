@@ -11,13 +11,18 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
 const { platformToolDefinitions } = await import('../services/tools/platformTools.js');
-const { resolveDataFlow } = await import('../utils/toolApproval.js');
+const { resolveDataFlow, resolveSideEffect } = await import('../utils/toolApproval.js');
 
 describe('read_url data flow', () => {
   it('is external, so the platform default for external tools applies', () => {
     const reader = platformToolDefinitions().find(tool => tool.id === 'read_url');
     assert.ok(reader, 'read_url is a platform tool');
     assert.equal(resolveDataFlow(reader), 'external');
+  });
+
+  it('is a read, so only an "always" default asks before a page read', () => {
+    const reader = platformToolDefinitions().find(tool => tool.id === 'read_url');
+    assert.deepEqual(resolveSideEffect(reader), { sideEffect: 'read', sideEffectSource: 'tool' });
   });
 
   it('every other platform tool keeps its own data flow', () => {
