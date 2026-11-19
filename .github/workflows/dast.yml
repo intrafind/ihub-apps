@@ -177,10 +177,18 @@ jobs:
       - name: Restart iHub on a fresh install
         if: always()
         run: |
+          # Stop the first target and wait until it is gone (its server and the model
+          # stub hold the ports), so the health check below cannot see the old one.
           pkill -f start-target.mjs || true
-          sleep 3
+          for _ in $(seq 1 30); do
+            pgrep -f 'start-target.mjs|dist/server/server.js' > /dev/null || break
+            sleep 1
+          done
+          pkill -9 -f 'start-target.mjs|dist/server/server.js' || true
           nohup node tests/security/dast/start-target.mjs > "$RUNNER_TEMP/ihub.log" 2>&1 &
+          pid=$!
           for _ in $(seq 1 90); do
+            if ! kill -0 "$pid" 2> /dev/null; then echo "iHub exited"; cat "$RUNNER_TEMP/ihub.log"; exit 1; fi
             if curl -sf "$TARGET/api/health" > /dev/null; then echo "iHub is up"; exit 0; fi
             sleep 2
           done
@@ -200,7 +208,8 @@ jobs:
       - name: Nuclei
         if: always()
         run: |
-          out="$RUNNER_TEMP/nuclei"
+          # Not $RUNNER_TEMP/nuclei: that is the executable.
+          out="$RUNNER_TEMP/nuclei-findings"
           mkdir -p "$out"
           common=(-u "$TARGET" -disable-update-check -rate-limit 50 -no-color -silent)
           # Community templates: exposures, misconfigurations, default logins.
@@ -221,7 +230,7 @@ jobs:
         with:
           name: nuclei-and-server-log
           path: |
-            ${{ runner.temp }}/nuclei/
+            ${{ runner.temp }}/nuclei-findings/
             ${{ runner.temp }}/ihub.log
           retention-days: 14
 

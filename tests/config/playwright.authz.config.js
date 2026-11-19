@@ -30,7 +30,7 @@ export default defineConfig({
     command: 'node tests/config/authz-server.mjs',
     cwd: '../..',
     env: {
-      AUTHZ_CONTENTS_DIR: 'contents-e2e-authz',
+      AUTHZ_CONTENTS_DIR: process.env.AUTHZ_CONTENTS_DIR || 'contents-e2e-authz',
       AUTHZ_SERVER_PORT: String(SERVER_PORT),
       AUTHZ_LLM_PORT: String(LLM_PORT),
       // `0` runs the whole suite with anonymous access off (default: on).

@@ -71,8 +71,12 @@ jobs:
 
       - name: Check the model server
         if: env.CONFIGURED == 'true'
+        env:
+          REDTEAM_API_KEY: ${{ secrets.REDTEAM_API_KEY }}
         run: |
-          curl -sSf -m 30 "${REDTEAM_BASE_URL%/}/models" | jq -e --arg m "$REDTEAM_MODEL" '.data | map(.id) | index($m)' > /dev/null \
+          auth=()
+          if [ -n "$REDTEAM_API_KEY" ]; then auth=(-H "Authorization: Bearer $REDTEAM_API_KEY"); fi
+          curl -sSf -m 30 "${auth[@]}" "${REDTEAM_BASE_URL%/}/models" | jq -e --arg m "$REDTEAM_MODEL" '.data | map(.id) | index($m)' > /dev/null \
             || { echo "::error::$REDTEAM_MODEL is not served at the REDTEAM_BASE_URL endpoint"; exit 1; }
 
       - name: Start iHub with the poisoned contents
@@ -124,21 +128,31 @@ jobs:
       # The model host must not reach anything public: the reports and the server log
       # name it, so it is replaced before the summary and the upload.
       - name: Remove the model host from the outputs
+        id: scrub
         if: always() && env.CONFIGURED == 'true'
         run: |
-          host="$(printf '%s' "$REDTEAM_BASE_URL" | sed -E 's#^[a-z]+://##; s#[/:].*$##')"
-          [ -n "$host" ] || exit 0
+          # The host as a URL parser reads it (IPv6 brackets included), replaced literally.
+          host="$(node -e 'console.log(new URL(process.argv[1]).hostname)' "$REDTEAM_BASE_URL")"
+          [ -n "$host" ] || { echo "::error::Cannot read the host of REDTEAM_BASE_URL"; exit 1; }
+          bare="${host#[}"; bare="${bare%]}" # an IPv6 address also appears without brackets
           for f in redteam-report/* "$RUNNER_TEMP/ihub.log"; do
-            [ -f "$f" ] && sed -i "s#${host//./\\.}#<model-host>#g" "$f"
+            [ -f "$f" ] || continue
+            HOST="$host" BARE="$bare" node -e '
+              const fs = require("fs");
+              const f = process.argv[1];
+              let text = fs.readFileSync(f, "utf8");
+              for (const h of [process.env.HOST, process.env.BARE]) text = text.split(h).join("<model-host>");
+              fs.writeFileSync(f, text);
+            ' "$f"
           done
-          if grep -rqF "$host" redteam-report "$RUNNER_TEMP/ihub.log" 2>/dev/null; then
+          if grep -rqF -e "$host" -e "$bare" redteam-report "$RUNNER_TEMP/ihub.log" 2>/dev/null; then
             echo "::error::The model host is still in the outputs; nothing is uploaded."
             rm -rf redteam-report "$RUNNER_TEMP/ihub.log"
             exit 1
           fi
 
       - name: Summarize
-        if: always() && env.CONFIGURED == 'true'
+        if: always() && steps.scrub.outcome == 'success'
         run: |
           file=redteam-report/results.json
           [ -s "$file" ] || { echo "No results." >> "$GITHUB_STEP_SUMMARY"; exit 0; }
@@ -157,7 +171,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload the report and the server log
-        if: always() && env.CONFIGURED == 'true'
+        if: always() && steps.scrub.outcome == 'success'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: redteam-report

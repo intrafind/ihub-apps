@@ -220,6 +220,13 @@ export async function recordBrowserRequests(page, host = 'canary.invalid') {
       return route.abort();
     }
   );
+  // WebSockets bypass HTTP routing: record every attempt to open one to the host (it cannot
+  // connect, the host does not resolve), on this page and in the frames it opens.
+  const recordSocket = socket => {
+    if (new URL(socket.url()).hostname === host) hits.push(socket.url());
+  };
+  page.on('websocket', recordSocket);
+  page.context().on('page', opened => opened.on('websocket', recordSocket));
   return hits;
 }
 

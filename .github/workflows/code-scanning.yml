@@ -5,9 +5,10 @@
 #   and JavaScript rules. Every finding carries its CWE and OWASP category.
 # - zizmor: security audit of the GitHub Actions workflows (template
 #   injection, cache poisoning, credential persistence, permissions).
-# - Trivy (config): infrastructure as code - the Dockerfiles, the compose files
-#   and the Kubernetes manifests (root user, privileged containers, missing
-#   resource limits, secrets in images, writable root file systems).
+# - Trivy (config): infrastructure as code - the Dockerfiles and the Kubernetes
+#   manifests (root user, privileged containers, missing resource limits,
+#   secrets in images, writable root file systems). Trivy has no checks for
+#   Compose files.
 #
 # All three upload SARIF and do not fail the job; GitHub shows new alerts on the
 # PR. To block merges on them, add a "Require code scanning results" rule to
@@ -130,7 +131,7 @@ jobs:
           annotations: ${{ env.FORK_PR == 'true' }}
 
   trivy-config:
-    name: Trivy (Dockerfiles, compose, Kubernetes)
+    name: Trivy (Dockerfiles, Kubernetes)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -155,6 +156,8 @@ jobs:
           format: 'sarif'
           output: 'trivy-config.sarif'
           severity: 'CRITICAL,HIGH,MEDIUM'
+          # Without it the action drops the severity filter for SARIF output.
+          limit-severities-for-sarif: true
           trivyignores: '.trivyignore'
           skip-dirs: 'node_modules,client/node_modules,server/node_modules,dist,contents,contents-e2e,tests/fixtures'
 

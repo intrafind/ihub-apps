@@ -272,6 +272,21 @@ for (const viewer of ['bob', 'carol']) {
   });
 }
 
+test('every list endpoint answers its owner or an admin (no list check passes on a 404)', async () => {
+  // The list checks above fail only on a 5xx; a mistyped or removed list URL answers
+  // 404 to everyone and would pass them without testing anything.
+  const dead = [];
+  for (const { url } of LISTS) {
+    const asAlice = await send(ctx.alice, { method: 'GET', url });
+    if (asAlice.status >= 200 && asAlice.status < 300) continue;
+    const asAdmin = await send(ctx.admin, { method: 'GET', url });
+    if (asAdmin.status < 200 || asAdmin.status >= 300) {
+      dead.push(`${url} -> alice ${asAlice.status}, admin ${asAdmin.status}`);
+    }
+  }
+  expect(dead).toEqual([]);
+});
+
 test('the owner sees her items in the same lists (the list checks are not vacuous)', async () => {
   const expectations = [
     ['/api/chats', ids.chatId],

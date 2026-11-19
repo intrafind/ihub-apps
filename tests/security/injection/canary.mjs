@@ -162,6 +162,15 @@ export async function startCanary({ port, pages = {} }) {
       server.listen(port, host, () => resolve(server));
     });
   const servers = [await listen(CANARY_HOST, 'canary'), await listen(INTERNAL_HOST, 'internal')];
+  // The internal network over IPv6 too, so a page read of http://[::1]:<port>/ that slipped
+  // past the SSRF guard would be recorded, not refused for want of a listener. Without IPv6
+  // on the host such a request cannot connect at all, so there is nothing to observe.
+  try {
+    servers.push(await listen('::1', 'internal'));
+  } catch (error) {
+    if (!['EAFNOSUPPORT', 'EADDRNOTAVAIL'].includes(error.code)) throw error;
+    console.warn(`[canary] no IPv6 loopback on this host (${error.code}); [::1] is unreachable`);
+  }
   return {
     close: () =>
       Promise.all(servers.map(server => new Promise(resolve => server.close(resolve)))).then(
