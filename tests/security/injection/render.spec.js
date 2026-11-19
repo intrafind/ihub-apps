@@ -57,8 +57,13 @@ test('active HTML in an answer is neutralised and makes the browser load nothing
   expect(hits, 'requests the answer made the browser send to the attacker').toEqual([]);
   const kept = await answer.evaluate(root => ({
     elements: [
-      ...root.querySelectorAll('iframe, object, embed, script, link, meta, base, form')
+      ...root.querySelectorAll(
+        'iframe, object, embed, script, link, meta, base, form, style, video, audio, source, picture'
+      )
     ].map(element => element.outerHTML),
+    loadingAttributes: [...root.querySelectorAll('[style], [srcset], [background], [poster]')].map(
+      element => element.outerHTML
+    ),
     handlers: [...root.querySelectorAll('*')].flatMap(element =>
       [...element.attributes]
         .filter(a => /^on/i.test(a.name))
@@ -68,7 +73,7 @@ test('active HTML in an answer is neutralised and makes the browser load nothing
       .map(element => element.getAttribute('href') || element.getAttribute('src') || '')
       .filter(url => /^\s*javascript:/i.test(url))
   }));
-  expect(kept).toEqual({ elements: [], handlers: [], scriptHrefs: [] });
+  expect(kept).toEqual({ elements: [], loadingAttributes: [], handlers: [], scriptHrefs: [] });
   // The page itself is still the chat (no meta refresh, no <base> rewrite).
   expect(new URL(page.url()).hostname).toBe('127.0.0.1');
 });
