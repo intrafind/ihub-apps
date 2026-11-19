@@ -864,7 +864,12 @@ export default function registerUserSkillRoutes(app) {
     assertValidId(skillId, 'skill');
     if (!isUserSkillId(skillId)) throw new ServiceError('NOT_FOUND', 'Skill not found');
     const deps = requireUserSkills(req, { manage: true });
-    await loadUserSkill(req, deps.repo); // a 404 unless the caller may see the skill
+    const loaded = await loadUserSkill(req, deps.repo); // a 404 unless the caller may see the skill
+    // History can hold text the owner has since taken out; it is for the
+    // people who may change the skill, not for everyone who may use it.
+    if (!loaded.permissions.canEdit && !loaded.permissions.isOwner) {
+      throw refusal('You cannot see the history of this skill');
+    }
     const versions = await deps.repo.listVersions(skillId);
     res.json(
       versions.map(version => ({
@@ -886,7 +891,12 @@ export default function registerUserSkillRoutes(app) {
       assertValidId(skillId, 'skill');
       if (!isUserSkillId(skillId)) throw new ServiceError('NOT_FOUND', 'Skill not found');
       const deps = requireUserSkills(req, { manage: true });
-      await loadUserSkill(req, deps.repo); // a 404 unless the caller may see the skill
+      const loaded = await loadUserSkill(req, deps.repo); // a 404 unless the caller may see the skill
+      // History can hold text the owner has since taken out; it is for the
+      // people who may change the skill, not for everyone who may use it.
+      if (!loaded.permissions.canEdit && !loaded.permissions.isOwner) {
+        throw refusal('You cannot see the history of this skill');
+      }
       const version = await deps.repo.getVersion(skillId, Number(req.params.revision));
       if (!version) throw new ServiceError('NOT_FOUND', 'Version not found');
       res.json({
