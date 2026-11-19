@@ -52,6 +52,7 @@
  */
 
 import { marked } from 'marked';
+import { sanitizeUntrustedHtml } from '../../../utils/untrustedHtml';
 import { isMailboxAvailable } from './officeCapabilities';
 import { getOfficeRemote } from './officeRemote';
 import { describeOfficeError, logOfficeError } from './officeLog';
@@ -529,7 +530,10 @@ export async function runOutlookMailAction(action, markdownText, options = {}) {
   }
 
   const plainText = String(markdownText ?? '');
-  const html = marked.parse(plainText);
+  // The answer is model output going into an email: sanitized like an answer in
+  // the chat, so it cannot put an image from another host (fetched by Outlook,
+  // and by every recipient's mail client) into the message.
+  const html = sanitizeUntrustedHtml(marked.parse(plainText));
 
   let item = null;
   try {

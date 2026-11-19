@@ -25,6 +25,7 @@ import useAppSettings from '../../../shared/hooks/useAppSettings';
 import useCanvas from '../hooks/useCanvas';
 import { deleteChat, fetchAppDetails } from '../../../api';
 import { markdownToHtml, isMarkdown } from '../../../utils/markdownUtils';
+import { sanitizeUntrustedHtml } from '../../../utils/untrustedHtml';
 import { getOrCreateChatId, readChatId, resetChatId } from '../../../utils/chatId';
 import useStoredChatHydration from '../../chat/hooks/useStoredChatHydration';
 
@@ -497,7 +498,9 @@ export default function AppCanvas() {
     text => {
       if (!quillRef.current || !text) return;
       const quill = quillRef.current.getEditor();
-      const html = isMarkdown(text) ? markdownToHtml(text) : text;
+      // A model's answer: Markdown is rendered (and sanitized) as in the chat;
+      // anything else is pasted as HTML, so it is sanitized the same way first.
+      const html = isMarkdown(text) ? markdownToHtml(text) : sanitizeUntrustedHtml(text);
       const index = selection ? selection.index : cursorPosition;
       if (selection && selection.length > 0) {
         quill.deleteText(selection.index, selection.length);
@@ -553,9 +556,10 @@ export default function AppCanvas() {
     const initialContent = searchParams.get('content');
     if (initialContent) {
       // Convert markdown to HTML if needed
+      // From the chat (or a link someone else made): sanitized like an answer.
       const contentToSet = isMarkdown(initialContent)
         ? markdownToHtml(initialContent)
-        : initialContent;
+        : sanitizeUntrustedHtml(initialContent);
 
       // Use confirmation modal if there's existing content
       const loadInitialContent = async () => {

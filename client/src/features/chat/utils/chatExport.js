@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { Marked } from 'marked';
-import DOMPurify from 'dompurify';
 import { exportPdfOnServer } from '../../../api/endpoints/exports';
 import { buildChatExportFilename, buildChatExportTitle } from '../../../utils/exportNaming';
 import { saveBlobAs } from '../../../utils/externalNavigation';
 import { htmlToMarkdown } from '../../../utils/markdownUtils';
 import { exportableMessage } from '../messageAttachments/exportMessage';
+import { sanitizeUntrustedHtml } from '../../../utils/untrustedHtml';
 
 // Chat export (PDF, HTML, JSON, JSONL, Markdown). Lives with the chat feature,
 // next to its only consumer (ExportDialog); `api/endpoints/apps.js` stays a
@@ -23,11 +23,14 @@ const exportMarked = new Marked({
   pedantic: false
 });
 
-// Convert message markdown to sanitized HTML for export documents.
+// Convert message markdown to sanitized HTML for export documents. The messages
+// are model output, so they get the profile for untrusted content: an image on
+// another host would be fetched (carrying whatever its URL holds) when the file
+// is opened, and becomes a link instead.
 const renderMarkdownForExport = content => {
   if (!content) return '';
   const html = exportMarked.parse(String(content));
-  return DOMPurify.sanitize(html, { USE_PROFILES: { html: true } });
+  return sanitizeUntrustedHtml(html);
 };
 
 // HTML-escape arbitrary text for safe interpolation into the export

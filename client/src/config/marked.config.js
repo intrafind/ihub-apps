@@ -16,6 +16,7 @@ import {
   MERMAID_CONTAINER_TOKEN,
   MERMAID_CONTAINER_TOKEN_ATTRIBUTE
 } from '../utils/mermaidSecurity';
+import { RENDERED_BY_IHUB_MARKUP, sanitizeUntrustedHtml } from '../utils/untrustedHtml';
 
 // Occurrence counter for the parse currently in progress. Diagram IDs are
 // derived from the diagram source so that re-parsing the same markdown yields
@@ -38,7 +39,7 @@ const renderMermaidPlaceholder = (code, language) => {
   const detectedType = detectDiagramType(code);
 
   return `
-    <div class="mermaid-diagram-container" id="${diagramId}" ${MERMAID_CONTAINER_TOKEN_ATTRIBUTE}="${MERMAID_CONTAINER_TOKEN}" data-code="${encodeURIComponent(code)}" data-language="${language || 'mermaid'}" data-diagram-type="${detectedType}">
+    <div class="mermaid-diagram-container" id="${diagramId}" ${RENDERED_BY_IHUB_MARKUP} ${MERMAID_CONTAINER_TOKEN_ATTRIBUTE}="${MERMAID_CONTAINER_TOKEN}" data-code="${encodeURIComponent(code)}" data-language="${language || 'mermaid'}" data-diagram-type="${detectedType}">
       <div class="mermaid-diagram-placeholder">
         <div class="flex items-center justify-center p-8 bg-gray-50 border border-gray-200 rounded-lg">
           <div class="flex items-center gap-2 text-gray-600">
@@ -177,8 +178,18 @@ const pinLinkTargets = node => {
  * turn every external link into a same-tab navigation away from the chat) and then decides it
  * itself via {@link pinLinkTargets}. The hook lives only for this synchronous call, so other
  * DOMPurify users are unaffected.
+ *
+ * Without `trusted`, the HTML is sanitized with the profile for content iHub did not write
+ * (`utils/untrustedHtml`): nothing in it loads from another origin without a click, and it
+ * carries no CSS.
  */
-const sanitizeHtml = (html, sanitizeOptions = {}) => {
+const sanitizeHtml = (html, sanitizeOptions = {}, { trusted = false } = {}) => {
+  if (!trusted) {
+    return sanitizeUntrustedHtml(html, {
+      afterSanitizeAttributes: pinLinkTargets,
+      addAttr: [...(sanitizeOptions?.ADD_ATTR || []), 'target']
+    });
+  }
   DOMPurify.addHook('afterSanitizeAttributes', pinLinkTargets);
   try {
     return DOMPurify.sanitize(html, {
@@ -225,7 +236,7 @@ const createRenderer = t => {
     const highlightedCode = highlightCode(actualCode, lang);
 
     return `
-      <div class="code-block-container relative group my-4 border border-gray-200 rounded-lg shadow-xs">
+      <div ${RENDERED_BY_IHUB_MARKUP} class="code-block-container relative group my-4 border border-gray-200 rounded-lg shadow-xs">
         <pre class="bg-gray-900 text-gray-100 rounded-t-lg p-4 overflow-x-auto"><code class="language-${lang}">${highlightedCode}</code></pre>
         <div class="code-block-toolbar select-none flex items-center justify-between bg-gray-50 border-t border-gray-200 px-3 py-2 rounded-b-lg">
           <span class="text-xs font-medium text-gray-600">${displayLanguage}</span>
@@ -349,14 +360,19 @@ const getMarkedInstance = (t, { breaks = true } = {}) => {
  * @param {Function} [options.t] - Translation function for renderer labels.
  * @param {Function} [options.transformHtml] - Optional post-parse HTML transform.
  *   The transformed HTML is still sanitized by DOMPurify afterwards.
- * @param {Object} [options.sanitizeOptions] - DOMPurify sanitize options.
+ * @param {Object} [options.sanitizeOptions] - DOMPurify sanitize options (trusted content only;
+ *   untrusted content always gets the fixed profile of `utils/untrustedHtml`).
  * @param {boolean} [options.breaks=true] - Turn single newlines into `<br>` (chat-style text).
  *   Pass `false` for hand-written, hard-wrapped Markdown such as release notes, where a line
  *   break inside a paragraph is just wrapping.
+ * @param {boolean} [options.trusted=false] - The Markdown was written by an admin or ships with
+ *   iHub (pages, usage guides, documentation, release notes): sanitize with DOMPurify's default
+ *   profile, which keeps external images and inline styles. Leave it off for everything a
+ *   model, a tool, an upload or another outside source produced.
  * @returns {string} Sanitized HTML string.
  */
 export const renderMarkdown = (markdown, options = {}) => {
-  const { t, transformHtml, sanitizeOptions, breaks = true } = options;
+  const { t, transformHtml, sanitizeOptions, breaks = true, trusted = false } = options;
   const source = String(markdown ?? '');
 
   try {
@@ -366,10 +382,10 @@ export const renderMarkdown = (markdown, options = {}) => {
     mermaidIdScope = new Map();
     const html = marked.parse(source);
     const transformedHtml = typeof transformHtml === 'function' ? transformHtml(html) : html;
-    return sanitizeHtml(transformedHtml, sanitizeOptions);
+    return sanitizeHtml(transformedHtml, sanitizeOptions, { trusted });
   } catch (error) {
     console.error('Error rendering markdown:', error);
-    return sanitizeHtml(`<pre>${escapeHtml(source)}</pre>`, sanitizeOptions);
+    return sanitizeHtml(`<pre>${escapeHtml(source)}</pre>`, sanitizeOptions, { trusted });
   }
 };
 
@@ -380,19 +396,20 @@ export const renderMarkdown = (markdown, options = {}) => {
  * @param {string} markdown - Markdown source string, expected to be one line.
  * @param {Object} [options] - Optional rendering behavior.
  * @param {Function} [options.t] - Translation function for renderer labels.
- * @param {Object} [options.sanitizeOptions] - DOMPurify sanitize options.
+ * @param {Object} [options.sanitizeOptions] - DOMPurify sanitize options (trusted content only).
+ * @param {boolean} [options.trusted=false] - As for {@link renderMarkdown}.
  * @returns {string} Sanitized HTML string.
  */
 export const renderInlineMarkdown = (markdown, options = {}) => {
-  const { t, sanitizeOptions } = options;
+  const { t, sanitizeOptions, trusted = false } = options;
   const source = String(markdown ?? '');
 
   try {
     const marked = getMarkedInstance(t);
-    return sanitizeHtml(marked.parseInline(source), sanitizeOptions);
+    return sanitizeHtml(marked.parseInline(source), sanitizeOptions, { trusted });
   } catch (error) {
     console.error('Error rendering inline markdown:', error);
-    return sanitizeHtml(escapeHtml(source), sanitizeOptions);
+    return sanitizeHtml(escapeHtml(source), sanitizeOptions, { trusted });
   }
 };
 
