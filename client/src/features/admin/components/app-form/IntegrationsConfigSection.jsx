@@ -511,13 +511,15 @@ function IntegrationsConfigSection({ app, onChange, toolSearchEnabled = false })
 
   // What "All integrations" does to a panel's integration the app does not
   // bind by itself (iFinder, the people directories).
-  const panelCoverage = (key, boundByItself) => {
+  // `keys`: the integration's binding keys, its own first (iFinder's
+  // definition id too), so an exclusion by any of them shows.
+  const panelCoverage = (key, boundByItself, keys = [key]) => {
     if (boundByItself || !allBinding) return null;
     return (
       <AllIntegrationsCoverage
         idPrefix={`app-integration-${key.replace(/[/:]/g, '__')}`}
         itemKey={key}
-        excludedBy={allExcluded.includes(key) ? key : null}
+        excludedBy={keys.find(entry => allExcluded.includes(entry)) || null}
         onExcludeChange={excluded => setExcluded(key, excluded)}
       />
     );
@@ -538,7 +540,12 @@ function IntegrationsConfigSection({ app, onChange, toolSearchEnabled = false })
     for (const row of shownRows) {
       if (!Object.hasOwn(bindings, row.id) && rowCoverage(row)) coverageShownKeys.add(row.id);
     }
-    if (showIFinder && iFinderInstallation && !Object.hasOwn(bindings, IFINDER_INSTANCE_ID)) {
+    if (
+      showIFinder &&
+      iFinderInstallation &&
+      !Object.hasOwn(bindings, IFINDER_INSTANCE_ID) &&
+      !(iFinderInstallation.definition && Object.hasOwn(bindings, iFinderInstallation.definition))
+    ) {
       coverageShownKeys.add(IFINDER_INSTANCE_ID);
     }
     if (showDirectories && !directoriesBoundByItself) {
@@ -602,7 +609,15 @@ function IntegrationsConfigSection({ app, onChange, toolSearchEnabled = false })
               {!iFinderInstallation && notInstalledNotice(t('admin.apps.edit.ifinder', 'iFinder'))}
               {typeNotice(IFINDER_INSTANCE_ID)}
               {iFinderInstallation &&
-                panelCoverage(IFINDER_INSTANCE_ID, Object.hasOwn(bindings, IFINDER_INSTANCE_ID))}
+                panelCoverage(
+                  IFINDER_INSTANCE_ID,
+                  Object.hasOwn(bindings, IFINDER_INSTANCE_ID) ||
+                    Boolean(
+                      iFinderInstallation.definition &&
+                      Object.hasOwn(bindings, iFinderInstallation.definition)
+                    ),
+                  [IFINDER_INSTANCE_ID, iFinderInstallation.definition].filter(Boolean)
+                )}
             </>
           }
         />
@@ -745,6 +760,7 @@ function IntegrationsConfigSection({ app, onChange, toolSearchEnabled = false })
                       idPrefix={`app-integration-${key.replace(/[/:]/g, '__')}`}
                       itemKey={key}
                       excludedBy={key}
+                      showKey
                       onExcludeChange={excluded => setExcluded(key, excluded)}
                     />
                   ))}

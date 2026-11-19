@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import SkillsSelector from '../../../../shared/components/SkillsSelector';
 import { ALL_SKILLS, assignsAllSkills } from '../../../../../../shared/appWildcards.js';
@@ -37,18 +36,12 @@ function SkillsConfigSection({
 }) {
   const { t } = useTranslation();
   const allSkills = assignsAllSkills(selectedSkills);
-  // The skills picked one by one, kept while "All skills" is chosen so that
-  // switching back restores them.
-  const [picked, setPicked] = useState(() => selectedSkills.filter(name => name !== ALL_SKILLS));
-
+  // The skills picked one by one stay next to "*": `skillSettings.autoActivate`
+  // still runs them, and switching back to "Only selected skills" restores them.
   const chooseAll = all => {
     if (all === allSkills) return;
-    if (all) {
-      setPicked(selectedSkills);
-      onSkillsChange([ALL_SKILLS]);
-    } else {
-      onSkillsChange(picked);
-    }
+    const named = selectedSkills.filter(name => name !== ALL_SKILLS);
+    onSkillsChange(all ? [ALL_SKILLS, ...named] : named);
   };
 
   return (

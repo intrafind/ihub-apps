@@ -648,6 +648,18 @@ describe('IntegrationsConfigSection: all integrations', () => {
     expect(onChange.mock.calls.at(-1)[0].integrations).toEqual({ '*': {} });
   });
 
+  it('shows an iFinder exclusion by definition id on its panel, and names the key in the list', async () => {
+    mockFetchInstalled.mockResolvedValue({ items: INSTALLED });
+    renderSection({ id: 'a', integrations: { '*': { exclude: ['com.intrafind/ifinder'] } } });
+    const panel = await screen.findByTestId('all-integrations-coverage-ifinder');
+    const panelBox = within(panel).getByRole('checkbox');
+    expect(panelBox).toBeChecked();
+    expect(panelBox).toBeDisabled();
+    const all = screen.getByTestId('app-integrations-all');
+    const listed = within(all).getByTestId('all-integrations-coverage-com.intrafind/ifinder');
+    expect(within(listed).getByRole('checkbox', { name: /com\.intrafind\/ifinder/ })).toBeChecked();
+  });
+
   it('removes "exclude" once nothing is left out', async () => {
     mockFetchInstalled.mockResolvedValue({ items: INSTALLED });
     const onChange = renderSection({ id: 'a', integrations: { '*': { exclude: ['drawio'] } } });

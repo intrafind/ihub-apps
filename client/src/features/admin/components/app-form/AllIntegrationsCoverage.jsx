@@ -16,9 +16,17 @@ import { CHECKBOX_CLASS } from '../formStyles';
  * @param {string} props.itemKey - the integration's own binding key
  * @param {string|null} props.excludedBy - the `exclude` entry that leaves it out, null when covered
  * @param {(excluded: boolean) => void} props.onExcludeChange
+ * @param {boolean} [props.showKey] - name the key in the label (an exclusion without a row of its own)
  * @param {string} [props.className]
  */
-function AllIntegrationsCoverage({ idPrefix, itemKey, excludedBy, onExcludeChange, className }) {
+function AllIntegrationsCoverage({
+  idPrefix,
+  itemKey,
+  excludedBy,
+  onExcludeChange,
+  showKey = false,
+  className
+}) {
   const { t } = useTranslation();
   const inputId = `${idPrefix}-exclude-all`;
   const byOtherKey = Boolean(excludedBy) && excludedBy !== itemKey;
@@ -46,9 +54,9 @@ function AllIntegrationsCoverage({ idPrefix, itemKey, excludedBy, onExcludeChang
         />
         <span>
           {t('admin.apps.edit.integrations.excludeFromAll', 'Exclude from "All integrations"')}
-          {byOtherKey && (
+          {(byOtherKey || showKey) && (
             <span className="ml-1 font-mono text-xs text-gray-500 dark:text-gray-400">
-              ({excludedBy})
+              ({excludedBy || itemKey})
             </span>
           )}
         </span>
