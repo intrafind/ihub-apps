@@ -3,7 +3,13 @@
 
 import { useEffect } from 'react';
 import { validateMermaidCode, processMermaidCode, escapeHtml } from '../utils/markdownHelpers';
-import { isTrustedMermaidContainer, sanitizeMermaidSvg } from '../utils/mermaidSecurity';
+import {
+  MERMAID_LABEL_SANITIZE_OPTIONS,
+  MERMAID_SECURE_CONFIG_KEYS,
+  isTrustedMermaidContainer,
+  mermaidExternalResourceReason,
+  sanitizeMermaidSvg
+} from '../utils/mermaidSecurity';
 
 // Loaded together with Mermaid, only once a diagram is on the page.
 let svgPanZoom = null;
@@ -54,6 +60,10 @@ const setCachedRender = (key, entry) => {
 const renderedSvgByContainer = new WeakMap();
 
 const DIAGRAM_CONTAINER_SELECTOR = '.mermaid-diagram-container';
+
+// Error code of a diagram that is not drawn because it would load content
+// from another site (see mermaidExternalResourceReason).
+const MERMAID_BLOCKED = 'MERMAID_EXTERNAL_RESOURCE';
 
 // Mermaid link tokens, used to estimate a diagram's edge count before
 // rendering it. An arrow (`-->`) needs no alternative of its own: nothing else
@@ -178,6 +188,14 @@ export const useMermaidRenderer = ({ t }) => {
             // (which this hook never bound anyway). It renders inline like
             // 'loose'; only 'sandbox' uses iframes.
             securityLevel: 'strict',
+            // Label HTML is drawn in the page while Mermaid measures it, so it is
+            // stripped of everything that loads or styles before that happens, and a
+            // diagram's own %%{init}%% or front matter cannot loosen it or write CSS.
+            dompurifyConfig: {
+              FORBID_TAGS: [...MERMAID_LABEL_SANITIZE_OPTIONS.FORBID_TAGS],
+              FORBID_ATTR: [...MERMAID_LABEL_SANITIZE_OPTIONS.FORBID_ATTR]
+            },
+            secure: [...MERMAID_SECURE_CONFIG_KEYS],
             fontFamily: 'ui-sans-serif, system-ui, sans-serif',
             // Disable useMaxWidth to allow diagrams to render at their natural size
             flowchart: { useMaxWidth: false, htmlLabels: true },
@@ -244,6 +262,16 @@ export const useMermaidRenderer = ({ t }) => {
         const cached = getCachedRender(processedCode);
 
         try {
+          // Mermaid draws the diagram inside the page to measure it, so an image or
+          // stylesheet on another host would be fetched before any sanitizing of the
+          // result. Such a diagram is not drawn; its source is shown instead.
+          const blockedReason = mermaidExternalResourceReason(processedCode);
+          if (blockedReason) {
+            throw Object.assign(new Error(`Diagram not drawn. ${blockedReason}`), {
+              code: MERMAID_BLOCKED
+            });
+          }
+
           let svg = cached?.svg;
           let renderId = cached?.renderId;
 
@@ -445,7 +473,7 @@ export const useMermaidRenderer = ({ t }) => {
           container.innerHTML = `
             <div class="code-block-container relative group border border-red-200 rounded-lg overflow-hidden bg-red-50 shadow-xs">
               <div class="bg-red-900 text-red-100 rounded-t-lg p-4 overflow-x-auto">
-                <div class="text-sm text-red-200 mb-2">Mermaid Syntax Error:</div>
+                <div class="text-sm text-red-200 mb-2">${err?.code === MERMAID_BLOCKED ? 'Mermaid:' : 'Mermaid Syntax Error:'}</div>
                 <div class="text-red-100 text-sm mb-3">${escapeHtml(err?.message ?? '')}</div>
                 <pre class="text-red-200 text-xs"><code>${escapeHtml(code)}</code></pre>
               </div>

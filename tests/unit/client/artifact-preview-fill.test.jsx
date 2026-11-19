@@ -134,4 +134,15 @@ describe('ArtifactPreview sizing', () => {
     expect(table.parentElement.className).toContain('overflow-auto');
     expect(table.parentElement.className).toContain('flex-1');
   });
+
+  it('shows an SVG as an image, never as inline markup', async () => {
+    const markup =
+      '<svg xmlns="http://www.w3.org/2000/svg"><style>body{display:none}</style>' +
+      '<image href="https://evil.example/x.png"/></svg>';
+    getBlob.mockResolvedValueOnce(blobOf(markup));
+    render(<ArtifactPreview artifact={svg} getBlob={getBlob} />);
+    const img = await screen.findByRole('img', { name: 'shape.svg' });
+    expect(img.getAttribute('src')).toMatch(/^blob:/);
+    expect(document.querySelector('svg image, style')).toBeNull();
+  });
 });

@@ -48,9 +48,10 @@ function UsageGuideDialog({ isOpen, question, content, onClose }) {
         </button>
       </div>
       {/* The chat's own markdown renderer (sanitized), so the guide reads like
-          an answer. */}
+          an answer. An admin wrote or approved the guide, so it is trusted
+          content: its images may come from other sites. */}
       <div className="overflow-y-auto px-6 py-5">
-        <StreamingMarkdown content={content || ''} />
+        <StreamingMarkdown content={content || ''} trusted />
       </div>
     </Modal>
   );

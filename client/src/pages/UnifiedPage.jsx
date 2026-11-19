@@ -25,7 +25,9 @@ export default function UnifiedPage() {
   // new, so a fresh literal on every render would rebuild the whole subtree and
   // discard rendered Mermaid diagrams even though the markup never changed.
   const parsedContent = useMemo(
-    () => ({ __html: contentType === 'react' ? '' : renderMarkdown(pageContent || '') }),
+    () => ({
+      __html: contentType === 'react' ? '' : renderMarkdown(pageContent || '', { trusted: true })
+    }),
     [contentType, pageContent]
   );
 

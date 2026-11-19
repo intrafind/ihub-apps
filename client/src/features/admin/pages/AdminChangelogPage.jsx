@@ -617,12 +617,14 @@ function AdminChangelogPage() {
       sections[section.key] = (release.sections?.[section.key] ?? []).map(entry => ({
         ...entry,
         domId: domId('release', release.version, section.key, entry.id),
-        titleHtml: renderInlineMarkdown(entry.title, { t }),
+        titleHtml: renderInlineMarkdown(entry.title, { t, trusted: true }),
         // Release notes are hard-wrapped by hand; a newline inside a paragraph is wrapping,
         // not a line break.
         bodyHtml: entry.body
           ? renderMarkdown(entry.body, {
               t,
+              // Release notes ship with iHub.
+              trusted: true,
               breaks: false,
               transformHtml: html =>
                 rewriteDocsHtml(

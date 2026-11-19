@@ -5,7 +5,6 @@ import { Fragment, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import DOMPurify from 'dompurify';
 import { highlightCode, renderMarkdown } from '../../../config/marked.config';
-import { sanitizeMermaidSvg } from '../../../utils/mermaidSecurity';
 import { usePlatformConfig } from '../../../shared/contexts/platformConfigContextValue';
 import useDocumentTheme from '../../../shared/hooks/useDocumentTheme';
 import {
@@ -29,12 +28,23 @@ const DOCK_CLEARANCE_2REM = 'calc(2rem + var(--workspace-dock-clearance, 0px))';
 
 /**
  * Read what a preview shows of a blob: an object URL for a picture or PDF, the
- * text (cut at {@link MAX_PREVIEW_BYTES}) for everything readable.
+ * text (cut at {@link MAX_PREVIEW_BYTES}) for everything readable. An SVG gets
+ * both: the text for the Code view, and an object URL of the whole file for the
+ * preview, which shows it as an image. A model wrote the SVG; drawn as an image
+ * it runs nothing, loads nothing from other hosts and its `<style>` cannot reach
+ * the page, which inline markup could.
  */
 async function loadPreview(type, blob) {
   if (type === 'image' || type === 'pdf') return { url: URL.createObjectURL(blob) };
   const truncated = blob.size > MAX_PREVIEW_BYTES;
   const text = await (truncated ? blob.slice(0, MAX_PREVIEW_BYTES) : blob).text();
+  if (type === 'svg') {
+    return {
+      text,
+      truncated,
+      url: URL.createObjectURL(new Blob([blob], { type: 'image/svg+xml' }))
+    };
+  }
   return { text, truncated };
 }
 
@@ -167,9 +177,10 @@ function FillRoot({ children, type }) {
  * or highlighted code. Office documents and archives have no preview; the
  * panel offers their download.
  *
- * Everything rendered as HTML is sanitized: Markdown by `renderMarkdown`,
- * highlighted code by DOMPurify (highlight.js escapes, but the text is a
- * model's).
+ * Everything rendered as HTML is sanitized: Markdown by `renderMarkdown` (with
+ * the profile for untrusted content), highlighted code by DOMPurify
+ * (highlight.js escapes, but the text is a model's). An SVG is shown as an
+ * image, never as inline markup.
  *
  * @param {Object} props
  * @param {Object} props.artifact - Descriptor `{ id, kind, mimeType, bytes, name? }`.
@@ -440,16 +451,17 @@ export default function ArtifactPreview({
     if (type === 'svg') {
       return (
         <Root {...rootProps}>
-          {truncatedNote}
+          {/* No truncation note: the image is drawn from the whole file. */}
           {modeToggle}
           <div
             className={
               fill
-                ? 'flex flex-1 min-h-0 items-center justify-center overflow-auto bg-white dark:bg-gray-900 p-4 [&>svg]:max-h-full [&>svg]:max-w-full'
+                ? 'flex flex-1 min-h-0 items-center justify-center overflow-auto bg-white dark:bg-gray-900 p-4 [&>img]:max-h-full [&>img]:max-w-full'
                 : `flex items-center justify-center p-4 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-auto ${maxTall}`
             }
-            dangerouslySetInnerHTML={{ __html: sanitizeMermaidSvg(state.text) }}
-          />
+          >
+            <img src={state.url} alt={name} className="max-w-full h-auto" />
+          </div>
         </Root>
       );
     }
