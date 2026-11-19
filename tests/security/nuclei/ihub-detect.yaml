@@ -1,0 +1,33 @@
+id: ihub-detect
+
+info:
+  name: iHub Apps - Detect
+  author: intrafind
+  severity: info
+  description: |
+    Detects an iHub Apps installation by its public auth status endpoint, so the other
+    ihub-* templates are only meaningful against a host this one matches.
+  tags: ihub,tech,detect
+
+http:
+  - method: GET
+    path:
+      - '{{BaseURL}}/api/auth/status'
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: word
+        part: body
+        words:
+          - '"authenticated"'
+          - '"authMethods"'
+        condition: and
+
+    extractors:
+      - type: json
+        name: auth-mode
+        json:
+          - '.authMode'

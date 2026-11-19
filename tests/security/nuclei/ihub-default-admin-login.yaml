@@ -1,0 +1,36 @@
+id: ihub-default-admin-login
+
+info:
+  name: iHub Apps - Shipped Admin Password Still Accepted
+  author: intrafind
+  severity: critical
+  description: |
+    A fresh install ships the local account admin / password123. If it still signs in,
+    anyone can take over the installation. Change the password or disable local
+    authentication (Admin → Users, Admin → Authentication).
+  remediation: Change the admin password, or disable local authentication when OIDC, LDAP or proxy auth is used.
+  tags: ihub,default-login,misconfig
+
+http:
+  - raw:
+      - |
+        POST /api/auth/local/login HTTP/1.1
+        Host: {{Hostname}}
+        Content-Type: application/json
+        Accept: application/json
+
+        {"username":"admin","password":"password123"}
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: word
+        part: header
+        words:
+          - 'authToken='
+      - type: word
+        part: body
+        words:
+          - '"user"'
