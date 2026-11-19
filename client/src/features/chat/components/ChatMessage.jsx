@@ -275,15 +275,18 @@ function ChatMessage({
     nothingWritten;
   // The answer hit the model's output limit. The server says whether the
   // thinking used it all up (`limitReachedIn`); an answer stored before it
-  // did falls back to whether anything was written.
+  // did falls back to whether anything was written. A turn that produced a
+  // file or an image has an answer, so it is never "no answer".
   const outputLimit =
     message.finishReason !== 'length'
       ? null
-      : message.limitReachedIn === 'reasoning'
-        ? 'reasoning'
-        : nothingWritten
-          ? 'noAnswer'
-          : 'cutOff';
+      : !nothingWritten
+        ? 'cutOff'
+        : message.limitReachedIn === 'reasoning'
+          ? 'reasoning'
+          : 'noAnswer';
+  // Retry needs a place that can resend: not a shared, read-only transcript.
+  const canRetry = !readOnly && typeof onResend === 'function';
   const skillDraft = useMemo(
     () =>
       onSaveAsSkill && !isUser && !isError && !readOnly && !message.loading && !interrupted
@@ -1274,7 +1277,7 @@ function ChatMessage({
                         'The answer is incomplete: the model reached its output limit. Ask it to continue, or for a shorter answer.'
                       )}
               </span>
-              {outputLimit !== 'cutOff' && (
+              {outputLimit !== 'cutOff' && canRetry && (
                 <button
                   type="button"
                   onClick={() => handleResend()}

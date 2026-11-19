@@ -33,6 +33,22 @@ export const THINKING_LEVEL_BUDGETS = Object.freeze({
 export const THINKING_MAX_SHARE = 0.75;
 
 /**
+ * Whether the model config asks for `thinking_token_budget`.
+ *
+ * Opt-in: vLLM rejects the field with HTTP 400 unless the server has a
+ * reasoning config (a `--reasoning-parser` with start/end strings, such as
+ * Qwen3's, or `--reasoning-config`), and iHub cannot see how the server was
+ * started. `thinking.tokenBudget: true` turns it on; a `budgetTokens` number
+ * does too.
+ *
+ * @param {Object} model - Model config
+ * @returns {boolean}
+ */
+export function usesThinkingTokenBudget(model) {
+  return model.thinking?.tokenBudget === true || Number.isInteger(model.thinking?.budgetTokens);
+}
+
+/**
  * The reasoning budget for one request.
  *
  * `thinking.budgetTokens` wins over the level; with neither, the reasoning
@@ -127,7 +143,7 @@ class VLLMAdapterClass extends BaseAdapter {
       // A hard cap on the reasoning, in tokens. Qwen's chat template ignores
       // `reasoning_effort`, so without it a model can think through its whole
       // `max_tokens` and end with `finish_reason: length` and no answer.
-      if (thinkingEnabled) {
+      if (thinkingEnabled && usesThinkingTokenBudget(model)) {
         body.thinking_token_budget = resolveThinkingTokenBudget(model, level, maxTokens);
       }
       // Hide the reasoning text: vLLM still generates the reasoning tokens (so

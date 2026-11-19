@@ -154,37 +154,56 @@ describe('vLLM reasoning — thinking_token_budget', () => {
     expect(req.body.thinking_token_budget).toBeUndefined();
   });
 
-  test('each level maps to its budget', async () => {
+  test('no budget unless the model opts in: vLLM answers 400 without a reasoning config', async () => {
+    const plain = await request({ enabled: true });
+    expect(plain.body.thinking_token_budget).toBeUndefined();
+    const withLevel = await request({ enabled: true, level: 'low' });
+    expect(withLevel.body.thinking_token_budget).toBeUndefined();
+    expect(withLevel.body.reasoning_effort).toBe('low');
+    const off = await request({ enabled: true, level: 'low', tokenBudget: false });
+    expect(off.body.thinking_token_budget).toBeUndefined();
+  });
+
+  test('tokenBudget: each level maps to its budget', async () => {
     for (const [level, budget] of Object.entries(THINKING_LEVEL_BUDGETS)) {
-      const req = await request({ enabled: true, level });
+      const req = await request({ enabled: true, level, tokenBudget: true });
       expect(req.body.thinking_token_budget).toBe(budget);
     }
   });
 
   test('a per-request level wins over the model level', async () => {
-    const req = await request({ enabled: true, level: 'high' }, { thinkingLevel: 'low' });
+    const req = await request(
+      { enabled: true, level: 'high', tokenBudget: true },
+      { thinkingLevel: 'low' }
+    );
     expect(req.body.thinking_token_budget).toBe(THINKING_LEVEL_BUDGETS.low);
   });
 
-  test('budgetTokens wins over the level', async () => {
+  test('budgetTokens turns the budget on and wins over the level', async () => {
     const req = await request({ enabled: true, level: 'low', budgetTokens: 4000 });
     expect(req.body.thinking_token_budget).toBe(4000);
   });
 
-  test('without level or budgetTokens the reasoning may take 75% of max_tokens', async () => {
-    const req = await request({ enabled: true });
+  test('tokenBudget without level or budgetTokens: 75% of max_tokens', async () => {
+    const req = await request({ enabled: true, tokenBudget: true });
     expect(req.body.thinking_token_budget).toBe(24576);
   });
 
   test('the budget never leaves less than a quarter of max_tokens for the answer', async () => {
     const req = await request({ enabled: true, budgetTokens: 100000 }, { maxTokens: 8000 });
     expect(req.body.thinking_token_budget).toBe(6000);
-    const high = await request({ enabled: true, level: 'high' }, { maxTokens: 4096 });
+    const high = await request(
+      { enabled: true, level: 'high', tokenBudget: true },
+      { maxTokens: 4096 }
+    );
     expect(high.body.thinking_token_budget).toBe(3072);
   });
 
   test('no budget when thinking is turned off for the request', async () => {
-    const req = await request({ enabled: true, level: 'low' }, { thinkingEnabled: false });
+    const req = await request(
+      { enabled: true, level: 'low', tokenBudget: true },
+      { thinkingEnabled: false }
+    );
     expect(req.body.thinking_token_budget).toBeUndefined();
   });
 

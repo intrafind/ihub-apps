@@ -424,15 +424,18 @@ support reasoning — iHub reads `reasoning` (current vLLM) or `reasoning_conten
   setting still overrides it (so reasoning can be turned off even for a non-`enable_thinking`
   key). Multi-key overrides are passed through verbatim for advanced setups.
 - `"level": "minimal"|"low"|"medium"|"high"` is sent as `reasoning_effort` (honored by
-  e.g. gpt-oss) **and** as a reasoning token budget, `thinking_token_budget`: `minimal`
-  512, `low` 2,048, `medium` 8,192, `high` 16,384. When the budget is spent, vLLM ends the
-  reasoning and the model writes the answer. This is what makes the level work on Qwen3,
-  whose chat template ignores `reasoning_effort`.
-- `"budgetTokens": 4000` sets the budget directly and wins over the level. With neither,
-  the budget is 75% of the output limit. Whatever the source, the budget is capped at 75% of
-  the output limit, so the model always has room left for the answer. Only the dedicated
-  `"provider": "local"` sends it. A vLLM version without `thinking_token_budget` ignores the
-  field.
+  e.g. gpt-oss). Qwen3's chat template ignores it; to limit Qwen3's thinking, turn on the
+  token budget below.
+- `"tokenBudget": true` sends a reasoning token cap, `thinking_token_budget`, taken from the
+  level: `minimal` 512, `low` 2,048, `medium` 8,192, `high` 16,384 (no level: 75% of the
+  output limit). When the budget is spent, vLLM ends the reasoning and the model writes the
+  answer. `"budgetTokens": 4000` sets the number directly and turns the budget on by itself.
+  Either way the budget is capped at 75% of the output limit, so the answer always has room.
+  Only the dedicated `"provider": "local"` sends it.
+- The budget is **off by default** because vLLM refuses it with HTTP 400 ("thinking_token_budget
+  is set but reasoning_config is not configured") unless the server has a reasoning config: a
+  `--reasoning-parser` with start and end markers (such as `qwen3` or `deepseek_r1`) or
+  `--reasoning-config`. Turn it on only for such servers.
 - To let the model reason without showing the reasoning, set `"thoughts": false`. iHub then
   sends `include_reasoning: false`: vLLM still generates the reasoning tokens (answer quality
   is unchanged, and they still take time and count against `maxOutputTokens`) but leaves them
@@ -443,9 +446,9 @@ support reasoning — iHub reads `reasoning` (current vLLM) or `reasoning_conten
 
 - **Reasoning uses the output limit.** vLLM counts reasoning tokens against `max_tokens`
   (`maxOutputTokens`). The reasoning budget above keeps a quarter of it for the answer. If a
-  model still runs out while thinking (a server without `thinking_token_budget`), the answer
+  model still runs out while thinking (without the budget), the answer
   is empty and the message says the model used its whole output limit for thinking, with a
-  **Retry** button. Lower `level` or `budgetTokens`, or raise `maxOutputTokens` (keep prompt +
+  **Retry** button. Turn on `tokenBudget`, lower `level` or `budgetTokens`, or raise `maxOutputTokens` (keep prompt +
   `maxOutputTokens` within the server's `max_model_len`). `"thoughts": false` only hides the
   text.
 

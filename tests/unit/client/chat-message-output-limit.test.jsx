@@ -56,13 +56,15 @@ jest.mock('../../../client/src/utils/runtimeBasePath', () => ({
  * (`limitReachedIn`); the bubble names it in words a user can act on.
  */
 
-function renderAnswer({ content = '', ...message } = {}) {
+function renderAnswer({ content = '', readOnly = false, onResend = jest.fn(), ...message } = {}) {
   render(
     <ChatMessage
       message={{ id: 'msg-1', role: 'assistant', content, finishReason: 'length', ...message }}
       appId="chat"
       chatId="chat-1"
       modelId="m"
+      readOnly={readOnly}
+      onResend={onResend}
     />
   );
 }
@@ -85,6 +87,21 @@ describe('ChatMessage output limit notice', () => {
     renderAnswer({ content: 'Here are the first jokes', limitReachedIn: 'answer' });
     expect(screen.getByText(/The answer is incomplete/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
+  });
+
+  it('offers no Retry where nothing can be resent (shared transcript)', () => {
+    renderAnswer({ limitReachedIn: 'reasoning', readOnly: true });
+    expect(screen.getByText(/used its whole output limit for thinking/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
+  });
+
+  it('does not say "no answer" when the turn produced a file', () => {
+    renderAnswer({
+      limitReachedIn: 'reasoning',
+      generatedFiles: [{ id: 'f1', name: 'report.pdf' }]
+    });
+    expect(screen.getByText(/The answer is incomplete/)).toBeInTheDocument();
+    expect(screen.queryByText(/never got to the answer/)).not.toBeInTheDocument();
   });
 
   it('shows nothing for an answer that finished normally', () => {
