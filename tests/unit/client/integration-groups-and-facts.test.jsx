@@ -350,6 +350,18 @@ describe('apps binding an installation', () => {
     expect(appsBindingInstallation(APPS, { id: 'lonely', definition: 'x/y' }, 'en')).toEqual([]);
   });
 
+  test('"*" binds every integration it does not exclude, never storage', () => {
+    const apps = [
+      { id: 'all', name: { en: 'All' }, integrations: { '*': {} } },
+      { id: 'all-but', name: { en: 'All but' }, integrations: { '*': { exclude: ['drawio'] } } }
+    ];
+    expect(appsBindingInstallation(apps, { id: 'drawio', definition: 'mcp/drawio' }, 'en')).toEqual(
+      [{ id: 'all', name: 'All', via: 'all' }]
+    );
+    const nextcloud = { id: 'nc', definition: 'com.intrafind/nextcloud', type: 'storage' };
+    expect(appsBindingInstallation(apps, nextcloud, 'en')).toEqual([]);
+  });
+
   test('a web search engine: the apps that name it, and the apps on Auto', () => {
     const apps = [
       { id: 'named', name: { en: 'Named' }, websearch: { enabled: true, provider: 'brave' } },

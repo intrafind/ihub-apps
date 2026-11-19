@@ -117,6 +117,8 @@ function bindingViaLabel(app, instance, t) {
       return t('admin.integrations.page.via.definition', 'every {{name}} installation', {
         name: instance.definitionName || instance.definition
       });
+    case 'all':
+      return t('admin.integrations.page.via.all', 'all integrations');
     case 'webSearch':
       return t('admin.integrations.page.via.webSearch', 'its web search engine');
     case 'webSearchAuto':

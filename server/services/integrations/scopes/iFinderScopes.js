@@ -23,8 +23,12 @@ import iFinderService from '../iFinderService.js';
 import iFinderSearchProfiles from '../iFinderSearchProfiles.js';
 import logger from '../../../utils/logger.js';
 import { appScopeSettings, pickDefaultScope } from './common.js';
+import { isCoveredByAllIntegrations } from '../../../../shared/appWildcards.js';
+import { mayUseIntegration } from '../integrationAccess.js';
 
 export const INTEGRATION_ID = 'ifinder';
+/** The definition of the built-in iFinder installation. */
+const DEFINITION_ID = 'com.intrafind/ifinder';
 
 /** Prefix of the tools that belong to the iFinder integration. */
 const TOOL_PREFIX = 'iFinder_';
@@ -81,10 +85,20 @@ const iFinderScopes = {
     );
   },
 
-  appliesTo({ app }) {
+  appliesTo({ app, user }) {
     if (!iFinderService.getConfig().enabled) return false;
-    // The app binds the iFinder installation (its actions come from there).
-    return Boolean(app?.integrations?.[INTEGRATION_ID]);
+    // The app binds the iFinder installation (its actions come from there):
+    // by its id, its definition or through "every integration" (`"*"`).
+    const bindings = app?.integrations;
+    const instance = { id: INTEGRATION_ID, definition: DEFINITION_ID };
+    const bound =
+      Boolean(bindings?.[INTEGRATION_ID]) ||
+      Boolean(bindings?.[DEFINITION_ID]) ||
+      isCoveredByAllIntegrations(bindings, instance);
+    // A user whose groups do not grant iFinder gets none of its tools, so the
+    // search profile picker and the "searches the profile" note would be
+    // about nothing (and cost an iFinder request per turn).
+    return bound && mayUseIntegration(instance, user);
   },
 
   /**

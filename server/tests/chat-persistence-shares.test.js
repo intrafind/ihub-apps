@@ -1133,8 +1133,8 @@ describe('limits and revocation close a link the same way', () => {
       200
     );
     const owner = await drive(revokeHandlers, { params: { shareId: share.id }, user: ADA });
-    assert.equal(owner.statusCode, 200);
-    assert.equal(owner.body.state, 'revoked');
+    assert.equal(owner.statusCode, 204);
+    assert.equal(owner.body, null);
     assert.equal(
       (await drive(openHandlers, { params: { shareId: share.id }, user: ANONYMOUS })).statusCode,
       404
@@ -1142,9 +1142,9 @@ describe('limits and revocation close a link the same way', () => {
     // Idempotent, and an admin may do it too.
     const second = (await createShare(ADA, chatId, { mode: 'public' })).body;
     const admin = await drive(revokeHandlers, { params: { shareId: second.id }, user: ROOT });
-    assert.equal(admin.statusCode, 200);
+    assert.equal(admin.statusCode, 204);
     const again = await drive(revokeHandlers, { params: { shareId: second.id }, user: ADA });
-    assert.equal(again.statusCode, 200);
+    assert.equal(again.statusCode, 204);
   });
 });
 

@@ -16,6 +16,16 @@ import {
   warningsByBindingKey
 } from '../integrations/appMigrationWarningRules';
 import IntegrationBindingRow from './IntegrationBindingRow';
+import {
+  ALL_INTEGRATIONS_KEY,
+  AllIntegrationsSwitch,
+  PanelCoverage,
+  allIntegrationsStateOf,
+  coveredInstallationCount,
+  rowExclusionOf,
+  shownCoverageKeys,
+  withExclusion
+} from './allIntegrationsEditor';
 import TypeBindingCard from './TypeBindingCard';
 import WebSearchSection from './WebSearchSection';
 import IAssistantSection from './IAssistantSection';
@@ -142,6 +152,14 @@ function Card({ title, description, children, testId }) {
  * definition or type binding still covers the disabled installations once
  * they are enabled.
  *
+ * **All integrations** (`app.integrations["*"]`, a switch on top of the
+ * Integrations card) binds every integration that gives the model tools, the
+ * ones installed later included: the Integrations rows, the people directories
+ * and iFinder; web search, storage providers and iAssistant keep their panels.
+ * A row the app does not bind by itself then says it is included, with a
+ * switch that adds it to the binding's `exclude`; ticking the row gives it
+ * settings of its own, which win over "All integrations".
+ *
  * A binding a definition migration changed (an action it named was removed,
  * or a type binding names a renamed action or scope) shows the warning next
  * to its row (`appMigrationWarnings`); a warning about a binding without a
@@ -198,6 +216,17 @@ function IntegrationsConfigSection({ app, onChange, toolSearchEnabled = false })
   };
   const setBindings = patch => onChange({ ...app, integrations: patchedBindings(patch) });
   const setBinding = (id, binding) => setBindings({ [id]: binding });
+
+  // "All integrations" (`"*"`, allIntegrationsEditor.jsx) and what it leaves out.
+  const { allBinding } = allIntegrationsStateOf(bindings);
+  const setAllBinding = binding => setBinding(ALL_INTEGRATIONS_KEY, binding);
+  const setExcluded = (key, excluded) => setAllBinding(withExclusion(allBinding, key, excluded));
+  /** What "All integrations" does to a row (see `IntegrationBindingRow`), or null. */
+  const rowCoverage = item => {
+    const excludedBy = rowExclusionOf({ bindings, storageRowIds }, item);
+    if (excludedBy === undefined) return null;
+    return { excludedBy, onExcludeChange: excluded => setExcluded(item.id, excluded) };
+  };
 
   // The installations the editor offers: the enabled ones, and a disabled one
   // only while the app binds it by its id (so it can be unbound).
@@ -325,7 +354,11 @@ function IntegrationsConfigSection({ app, onChange, toolSearchEnabled = false })
   useEffect(() => {
     // Storage providers have no actions to load.
     const ids = Object.keys(bindings).filter(
-      id => !id.startsWith(TYPE_PREFIX) && !details[id] && !storageRowIds.has(id)
+      id =>
+        id !== ALL_INTEGRATIONS_KEY &&
+        !id.startsWith(TYPE_PREFIX) &&
+        !details[id] &&
+        !storageRowIds.has(id)
     );
     if (ids.length === 0 || loading) return;
     let cancelled = false;
@@ -381,6 +414,8 @@ function IntegrationsConfigSection({ app, onChange, toolSearchEnabled = false })
       ...definitionRows.map(row => row.id),
       // Their cards show while the app binds them, installed or not.
       PEOPLE_DIRECTORY_TYPE_KEY,
+      // "All integrations" binds whatever is installed.
+      ALL_INTEGRATIONS_KEY,
       ...storageRowIds
     ]);
     return Object.keys(bindings).filter(id => !known.has(id));
@@ -428,6 +463,7 @@ function IntegrationsConfigSection({ app, onChange, toolSearchEnabled = false })
       detail={details[item.id]}
       onBindingChange={binding => setBinding(item.id, binding)}
       toolSearchEnabled={toolSearchEnabled}
+      allIntegrations={rowCoverage(item)}
       notice={
         migrationWarnings.has(item.id) ? (
           <AppMigrationWarnings warnings={migrationWarnings.get(item.id)} />
@@ -435,6 +471,25 @@ function IntegrationsConfigSection({ app, onChange, toolSearchEnabled = false })
       }
     />
   );
+
+  const directoriesBoundByItself =
+    Object.hasOwn(bindings, PEOPLE_DIRECTORY_TYPE_KEY) ||
+    directoryRows.some(row => Object.hasOwn(bindings, row.id));
+  const iFinderKeys = [IFINDER_INSTANCE_ID, iFinderInstallation?.definition].filter(Boolean);
+  const iFinderBoundByItself = iFinderKeys.some(key => Object.hasOwn(bindings, key));
+  // The keys whose "All integrations" control a row or panel shows.
+  const coverageShownKeys = shownCoverageKeys({
+    bindings,
+    storageRowIds,
+    rows: [
+      ...groupedRows.flatMap(group => group.rows),
+      ...(directoriesBoundByItself ? directoryRows : [])
+    ],
+    panelKeys: [
+      showIFinder && iFinderInstallation && !iFinderBoundByItself && IFINDER_INSTANCE_ID,
+      showDirectories && !directoriesBoundByItself && PEOPLE_DIRECTORY_TYPE_KEY
+    ].filter(Boolean)
+  });
 
   // The warnings a definition migration left on a binding shown by a panel.
   const typeNotice = key =>
@@ -491,6 +546,15 @@ function IntegrationsConfigSection({ app, onChange, toolSearchEnabled = false })
             <>
               {!iFinderInstallation && notInstalledNotice(t('admin.apps.edit.ifinder', 'iFinder'))}
               {typeNotice(IFINDER_INSTANCE_ID)}
+              {iFinderInstallation && (
+                <PanelCoverage
+                  bindings={bindings}
+                  itemKey={IFINDER_INSTANCE_ID}
+                  keys={iFinderKeys}
+                  boundByItself={iFinderBoundByItself}
+                  onExclude={setExcluded}
+                />
+              )}
             </>
           }
         />
@@ -526,7 +590,17 @@ function IntegrationsConfigSection({ app, onChange, toolSearchEnabled = false })
           rows={directoryRows}
           renderRow={renderRow}
           onBindingsChange={setBindings}
-          notice={typeNotice(PEOPLE_DIRECTORY_TYPE_KEY)}
+          notice={
+            <>
+              {typeNotice(PEOPLE_DIRECTORY_TYPE_KEY)}
+              <PanelCoverage
+                bindings={bindings}
+                itemKey={PEOPLE_DIRECTORY_TYPE_KEY}
+                boundByItself={directoriesBoundByItself}
+                onExclude={setExcluded}
+              />
+            </>
+          }
           toolSearchEnabled={toolSearchEnabled}
         />
       )}
@@ -581,6 +655,16 @@ function IntegrationsConfigSection({ app, onChange, toolSearchEnabled = false })
         )}
         {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
         <AppMigrationWarnings warnings={unplacedWarnings} />
+        {!loading && !error && (
+          <AllIntegrationsSwitch
+            bindings={bindings}
+            coveredCount={coveredInstallationCount(installed, allBinding)}
+            shownKeys={coverageShownKeys}
+            toolSearchEnabled={toolSearchEnabled}
+            onAllBindingChange={setAllBinding}
+            onExclude={setExcluded}
+          />
+        )}
         {!loading &&
           !error &&
           groupedRows.length === 0 &&

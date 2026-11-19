@@ -11,6 +11,7 @@ import {
 } from '../../shared/validationPatterns.js';
 import { VOICE_LISTENING_STYLES } from '../../shared/voiceMode.js';
 import { APPROVAL_MODES } from '../../shared/toolApproval.js';
+import { ALL_INTEGRATIONS_KEY, ALL_INTEGRATIONS_OPTIONS } from '../../shared/appWildcards.js';
 import { zHttpUrl, zSafeId } from './common.js';
 import { projectLinksSchema } from './projectSchema.js';
 import { FEATURE_IDS } from '../featureRegistry.js';
@@ -499,6 +500,10 @@ const integrationScopeSettingsSchema = z
 // the installation's actions. A key may also be a definition id
 // (`com.intrafind/ldap-directory`, with its one `/`): that binds every
 // installation of the definition, including ones installed later.
+/** An installation id, a definition id (with its one `/`) or a type key. */
+const INTEGRATION_KEY_PATTERN =
+  /^(?:[a-zA-Z0-9._-]{1,64}(\/[a-zA-Z0-9._-]{1,64})?|type:[a-z][a-z-]{0,63})$/;
+
 const appIntegrationBindingSchema = integrationScopeSettingsSchema
   .extend({
     // Offer "all my search profiles" (iFinder 6.9+) beside the iAssistants.
@@ -517,22 +522,49 @@ const appIntegrationBindingSchema = integrationScopeSettingsSchema
     enabledByDefault: z.boolean().optional(),
     // `true`: the integration's tools are always sent to the model in full,
     // never left to tool search (`toolSearch`, the `toolSearch` feature).
-    alwaysLoaded: z.boolean().optional()
+    alwaysLoaded: z.boolean().optional(),
+    // Only on the `"*"` binding: installations it leaves out, by installation
+    // id, definition id or type key (see shared/appWildcards.js).
+    exclude: z.array(z.string().regex(INTEGRATION_KEY_PATTERN, 'Invalid integration id')).optional()
   })
   .strict();
 
 export const appIntegrationsSchema = z
   .record(
-    // An installation id, a definition id (with its one `/`) or a type
-    // (`type:people-directory`, see services/integrations/integrationTypes.js).
+    // An installation id, a definition id (with its one `/`), a type
+    // (`type:people-directory`, see services/integrations/integrationTypes.js)
+    // or `"*"`: every integration that gives the model tools, the ones
+    // installed later included (shared/appWildcards.js).
     z
       .string()
-      .regex(
-        /^(?:[a-zA-Z0-9._-]{1,64}(\/[a-zA-Z0-9._-]{1,64})?|type:[a-z][a-z-]{0,63})$/,
+      .refine(
+        key => key === ALL_INTEGRATIONS_KEY || INTEGRATION_KEY_PATTERN.test(key),
         'Invalid integration id'
       ),
     appIntegrationBindingSchema
   )
+  .superRefine((bindings, ctx) => {
+    for (const [key, binding] of Object.entries(bindings || {})) {
+      if (key === ALL_INTEGRATIONS_KEY) {
+        // A binding of everything has no actions or scopes of its own and is
+        // never required: it cannot be missing.
+        for (const option of Object.keys(binding || {})) {
+          if (ALL_INTEGRATIONS_OPTIONS.includes(option)) continue;
+          ctx.addIssue({
+            code: 'custom',
+            path: [key, option],
+            message: `"${option}" cannot be set on the "*" binding; bind the integration by its id to set it`
+          });
+        }
+      } else if (binding?.exclude !== undefined) {
+        ctx.addIssue({
+          code: 'custom',
+          path: [key, 'exclude'],
+          message: '"exclude" is only allowed on the "*" binding'
+        });
+      }
+    }
+  })
   .optional();
 
 // Base app config schema without refinements
