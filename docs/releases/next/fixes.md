@@ -14,5 +14,6 @@ tools (`toolApproval.defaults.external`, **Admin → Security → Tool approval*
 and its approval card said "Internal". A page address can carry data from the chat to any host, so
 it is now external: with the external default set to `always`, every page read is asked for. It is
 also declared a read, so `writes` (for external tools or as the general default) no longer asks for
-page reads, as it did while the page reader's side effect was unknown. With no approval default,
-nothing changes.
+page reads, as it did while the page reader's side effect was unknown. An app that sets `writes` for
+`read_url` (by tool id, by installation or as its app default) no longer asks for page reads either.
+With no approval default on the platform or the app, nothing changes.
