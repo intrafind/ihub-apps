@@ -5,8 +5,12 @@
 #   and JavaScript rules. Every finding carries its CWE and OWASP category.
 # - zizmor: security audit of the GitHub Actions workflows (template
 #   injection, cache poisoning, credential persistence, permissions).
+# - Trivy (config): infrastructure as code - the Dockerfiles and the Kubernetes
+#   manifests (root user, privileged containers, missing resource limits,
+#   secrets in images, writable root file systems). Trivy has no checks for
+#   Compose files.
 #
-# Both upload SARIF and do not fail the job; GitHub shows new alerts on the
+# All three upload SARIF and do not fail the job; GitHub shows new alerts on the
 # PR. To block merges on them, add a "Require code scanning results" rule to
 # the main branch ruleset (see docs/security.md#automated-security-checks).
 #
@@ -125,3 +129,53 @@ jobs:
           version: 1.30.1
           advanced-security: ${{ env.FORK_PR != 'true' }}
           annotations: ${{ env.FORK_PR == 'true' }}
+
+  trivy-config:
+    name: Trivy (Dockerfiles, Kubernetes)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      security-events: write
+    env:
+      FORK_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Misconfigurations only (scanners: misconfig); dependency CVEs are covered by
+      # OSV-Scanner and the image scan. Findings that are accepted go into .trivyignore
+      # with a reason, like image CVEs.
+      - name: Scan infrastructure as code
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: 'config'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-config.sarif'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+          # Without it the action drops the severity filter for SARIF output.
+          limit-severities-for-sarif: true
+          trivyignores: '.trivyignore'
+          skip-dirs: 'node_modules,client/node_modules,server/node_modules,dist,contents,contents-e2e,tests/fixtures'
+
+      - name: Upload results to code scanning
+        if: always() && env.FORK_PR != 'true' && hashFiles('trivy-config.sarif') != ''
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          sarif_file: trivy-config.sarif
+          category: trivy-config
+
+      - name: Summarize findings
+        if: always() && hashFiles('trivy-config.sarif') != ''
+        run: |
+          {
+            echo "### Trivy (config): $(jq '[.runs[].results[]] | length' trivy-config.sarif) finding(s)"
+            echo
+            echo "| Rule | Location |"
+            echo "| --- | --- |"
+            jq -r '.runs[].results[] | .locations[0].physicalLocation as $loc
+              | "| \(.ruleId) | \($loc.artifactLocation.uri | gsub("[|`\r\n]";"")):\($loc.region.startLine) |"' trivy-config.sarif
+          } >> "$GITHUB_STEP_SUMMARY"

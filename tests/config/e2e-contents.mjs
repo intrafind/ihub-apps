@@ -16,9 +16,10 @@ const RAISED_LIMIT = 1_000_000;
 
 /**
  * Seed `contentsDir` (relative to `root`) and start the model stub on `llmPort`.
- * `process.env.CONTENTS_DIR` must already name the directory.
+ * `process.env.CONTENTS_DIR` must already name the directory. `stubOptions` go to
+ * `startLlmStub` (a scripted model, see e2e-llm-stub.mjs).
  */
-export async function prepareE2eContents({ root, contentsDir, llmPort }) {
+export async function prepareE2eContents({ root, contentsDir, llmPort, stubOptions }) {
   const CONTENTS_DIR = contentsDir;
   const LLM_PORT = llmPort;
   // Seed and migrate exactly as a first start does (a pre-copied platform.json
@@ -69,7 +70,7 @@ export async function prepareE2eContents({ root, contentsDir, llmPort }) {
 
   // One model, the default, served by a local stub (see e2e-llm-stub.mjs): a chat
   // turn runs end to end without a model key or network.
-  await startLlmStub(LLM_PORT);
+  await startLlmStub(LLM_PORT, stubOptions);
   fs.writeFileSync(
     path.resolve(root, CONTENTS_DIR, 'models', 'e2e-stub.json'),
     `${JSON.stringify(

@@ -12,3 +12,8 @@ c3986d01bb25d1088497ca1d17ce5038987b7e4e:server/tests/integrations/actionTester.
 # (secret-reveal-dialog.test.jsx) of a commit already pushed, which cannot be
 # rewritten. The line itself now uses a stopword value (.gitleaks.toml).
 fcc8cbb9fc944177758eb3358fb86700cfc4229e:tests/unit/client/secret-reveal-dialog.test.jsx:generic-api-key:25
+
+# A test fixture, not a secret: the canary the cross-user authorization suite
+# (tests/security/authz/resources.js) plants in alice's resources, in a commit
+# already pushed. The line itself now uses a stopword value (.gitleaks.toml).
+c437a8d91b353d6f17cf96279d851943ea486c9e:tests/security/authz/resources.js:generic-api-key:44

@@ -1,0 +1,31 @@
+id: ihub-api-docs-unauthenticated
+
+info:
+  name: iHub Apps - API Documentation Readable Without Sign-in
+  author: intrafind
+  severity: medium
+  description: |
+    Anyone can read the full API description, admin routes included, which maps the
+    attack surface. swagger.requireAuth only asks for a sign-in when anonymous access
+    is off: with anonymousAuth.enabled (the shipped default) the documents are public.
+  remediation: Set swagger.enabled to false in platform.json, or disable anonymous access.
+  tags: ihub,exposure,misconfig
+
+http:
+  - method: GET
+    path:
+      - '{{BaseURL}}/api/docs/admin/swagger.json'
+      - '{{BaseURL}}/api/docs/normal/swagger.json'
+
+    stop-at-first-match: true
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: word
+        part: body
+        words:
+          - '"openapi"'
+          - '"paths"'
+        condition: and

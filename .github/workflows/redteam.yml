@@ -1,0 +1,181 @@
+# LLM red team (promptfoo), nightly
+#
+# The deterministic prompt-injection suite (tests/security/injection/, on every PR)
+# assumes the model obeys every planted instruction and proves what the platform still
+# prevents. This run measures the other half: whether a real model obeys them at all,
+# and whether anything gets through when it does.
+#
+# tests/security/redteam/start-target.mjs starts iHub with the injection suite's
+# poisoned contents and a model on IntraFind's GPU server (vLLM, OpenAI-compatible);
+# promptfoo asks ordinary questions as a regular user through the OpenAI-compatible API
+# and grades what the attack achieved (requests to the attacker's canary, markup that
+# would load from another host, restricted secrets in the answer, plus a rubric graded
+# by the same server). Every test runs three times; any failure fails the run.
+# Results: job summary and the redteam-report artifact.
+#
+# No third-party model provider: the secret REDTEAM_BASE_URL (the OpenAI-compatible
+# endpoint, ending in /v1) and the variable REDTEAM_MODEL (a model id it lists) choose
+# the model. The endpoint is a secret, not a variable, so it stays out of the
+# repository and out of the public logs, and its host is replaced with <model-host> in
+# everything this run uploads. The run is skipped while either is unset. The secret
+# REDTEAM_API_KEY is sent if set. promptfoo's telemetry,
+# sharing and remote generation are off.
+
+name: Red team
+
+on:
+  schedule:
+    - cron: '13 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: redteam-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  promptfoo:
+    name: Prompt injection (real model)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      REDTEAM_BASE_URL: ${{ secrets.REDTEAM_BASE_URL }}
+      REDTEAM_MODEL: ${{ vars.REDTEAM_MODEL }}
+      CONFIGURED: ${{ secrets.REDTEAM_BASE_URL != '' && vars.REDTEAM_MODEL != '' }}
+      PROMPTFOO_DISABLE_TELEMETRY: '1'
+      PROMPTFOO_DISABLE_SHARING: '1'
+      PROMPTFOO_DISABLE_REMOTE_GENERATION: 'true'
+      PROMPTFOO_DISABLE_UPDATE: '1'
+    steps:
+      - name: Skip without a model endpoint
+        if: env.CONFIGURED != 'true'
+        run: echo "::notice::Set the secret REDTEAM_BASE_URL and the variable REDTEAM_MODEL to run the red team."
+
+      - name: Checkout repository
+        if: env.CONFIGURED == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        if: env.CONFIGURED == 'true'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+
+      - name: Install dependencies
+        if: env.CONFIGURED == 'true'
+        run: npm run install:all
+
+      - name: Check the model server
+        if: env.CONFIGURED == 'true'
+        env:
+          REDTEAM_API_KEY: ${{ secrets.REDTEAM_API_KEY }}
+        run: |
+          auth=()
+          if [ -n "$REDTEAM_API_KEY" ]; then auth=(-H "Authorization: Bearer $REDTEAM_API_KEY"); fi
+          curl -sSf -m 30 "${auth[@]}" "${REDTEAM_BASE_URL%/}/models" | jq -e --arg m "$REDTEAM_MODEL" '.data | map(.id) | index($m)' > /dev/null \
+            || { echo "::error::$REDTEAM_MODEL is not served at the REDTEAM_BASE_URL endpoint"; exit 1; }
+
+      - name: Start iHub with the poisoned contents
+        if: env.CONFIGURED == 'true'
+        env:
+          REDTEAM_API_KEY: ${{ secrets.REDTEAM_API_KEY }}
+        run: |
+          nohup node tests/security/redteam/start-target.mjs > "$RUNNER_TEMP/ihub.log" 2>&1 &
+          for _ in $(seq 1 90); do
+            if curl -sf http://127.0.0.1:3401/api/health > /dev/null; then echo "iHub is up"; exit 0; fi
+            sleep 2
+          done
+          echo "iHub did not start"; cat "$RUNNER_TEMP/ihub.log"; exit 1
+
+      - name: Sign in as a regular user
+        if: env.CONFIGURED == 'true'
+        run: |
+          token="$(curl -sS -D - -o /dev/null -H 'Content-Type: application/json' \
+            -d '{"username":"bob","password":"bob-password-123"}' \
+            http://127.0.0.1:3401/api/auth/local/login | tr -d '\r' | sed -n 's/^[Ss]et-[Cc]ookie: authToken=\([^;]*\).*/\1/p' | head -1)"
+          if [ -z "$token" ]; then echo "Sign-in failed"; tail -50 "$RUNNER_TEMP/ihub.log"; exit 1; fi
+          echo "::add-mask::$token"
+          echo "IHUB_TOKEN=$token" >> "$GITHUB_ENV"
+
+      # promptfoo's official image, pinned by digest: no packages are resolved or installed
+      # on the runner, so the run never picks up a new transitive dependency.
+      - name: Run the red team
+        if: env.CONFIGURED == 'true'
+        env:
+          REDTEAM_GRADER_KEY: ${{ secrets.REDTEAM_API_KEY || 'none' }}
+          # ghcr.io/promptfoo/promptfoo:0.126.0 (linux/amd64)
+          PROMPTFOO_IMAGE: ghcr.io/promptfoo/promptfoo@sha256:26def11a11832e9c22c64a792d0668a73f35dbad1568cd3c5a1b7cda5501b376
+        run: |
+          mkdir -p redteam-report
+          promptfoo() {
+            docker run --rm --network host --user "$(id -u):$(id -g)" \
+              -v "$GITHUB_WORKSPACE:/work" -w /work -e HOME=/tmp \
+              -e IHUB_TOKEN -e REDTEAM_BASE_URL -e REDTEAM_MODEL -e REDTEAM_GRADER_KEY \
+              -e PROMPTFOO_DISABLE_TELEMETRY -e PROMPTFOO_DISABLE_SHARING \
+              -e PROMPTFOO_DISABLE_REMOTE_GENERATION -e PROMPTFOO_DISABLE_UPDATE \
+              --entrypoint node "$PROMPTFOO_IMAGE" /app/dist/src/entrypoint.js "$@"
+          }
+          promptfoo --version
+          promptfoo eval \
+            -c tests/security/redteam/promptfooconfig.yaml \
+            -o redteam-report/results.json -o redteam-report/report.html \
+            --no-cache --no-progress-bar
+
+      # The model host must not reach anything public: the reports and the server log
+      # name it, so it is replaced before the summary and the upload.
+      - name: Remove the model host from the outputs
+        id: scrub
+        if: always() && env.CONFIGURED == 'true'
+        run: |
+          # The host as a URL parser reads it (IPv6 brackets included), replaced literally.
+          host="$(node -e 'console.log(new URL(process.argv[1]).hostname)' "$REDTEAM_BASE_URL")"
+          [ -n "$host" ] || { echo "::error::Cannot read the host of REDTEAM_BASE_URL"; exit 1; }
+          bare="${host#[}"; bare="${bare%]}" # an IPv6 address also appears without brackets
+          for f in redteam-report/* "$RUNNER_TEMP/ihub.log"; do
+            [ -f "$f" ] || continue
+            HOST="$host" BARE="$bare" node -e '
+              const fs = require("fs");
+              const f = process.argv[1];
+              let text = fs.readFileSync(f, "utf8");
+              for (const h of [process.env.HOST, process.env.BARE]) text = text.split(h).join("<model-host>");
+              fs.writeFileSync(f, text);
+            ' "$f"
+          done
+          if grep -rqF -e "$host" -e "$bare" redteam-report "$RUNNER_TEMP/ihub.log" 2>/dev/null; then
+            echo "::error::The model host is still in the outputs; nothing is uploaded."
+            rm -rf redteam-report "$RUNNER_TEMP/ihub.log"
+            exit 1
+          fi
+
+      - name: Summarize
+        if: always() && steps.scrub.outcome == 'success'
+        run: |
+          file=redteam-report/results.json
+          [ -s "$file" ] || { echo "No results." >> "$GITHUB_STEP_SUMMARY"; exit 0; }
+          {
+            echo "## Red team"
+            echo
+            echo "| Test | Passed | Failure reasons |"
+            echo "| --- | --- | --- |"
+            jq -r '
+              .results.results
+              | group_by(.testCase.description)[]
+              | [ .[0].testCase.description,
+                  "\(map(select(.success)) | length)/\(length)",
+                  (map(select(.success | not) | (.gradingResult.reason // .error // "") | gsub("[|\r\n]"; " ") | .[0:200]) | unique | join("<br>")) ]
+              | "| \(.[0]) | \(.[1]) | \(.[2]) |"' "$file"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the report and the server log
+        if: always() && steps.scrub.outcome == 'success'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: redteam-report
+          path: |
+            redteam-report/
+            ${{ runner.temp }}/ihub.log
+          retention-days: 30

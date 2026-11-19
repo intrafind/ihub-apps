@@ -8,6 +8,17 @@
 #   .gitleaks.toml. Pair with GitHub push protection, which runs server-side.
 # - Admin route audit: every route under server/routes/admin must be guarded
 #   by adminAuth or contentAdminAuth (scripts/audit-admin-endpoints.js).
+# - Cross-user authorization: a real server with users alice, bob, carol (a
+#   group without some permissions), an admin and anonymous; bob, carol and
+#   anonymous attack every resource alice owns through every parameterised
+#   non-admin route, and a new route with a path parameter fails the check
+#   until it is attacked or exempted with a reason (tests/security/authz/).
+#   Runs with anonymous access on and off.
+# - Prompt-injection blast radius: a scripted model obeys instructions planted
+#   in a project document and a fetched page; the check fails when the platform
+#   lets that reach the attacker (rendered markup that loads from elsewhere,
+#   SSRF, acting tools without confirmation, other users' or restricted
+#   projects' data, secrets in the model's context) (tests/security/injection/).
 #
 # See docs/security.md#automated-security-checks.
 
@@ -122,3 +133,77 @@ jobs:
 
       - name: Check every admin route has an admin guard
         run: npm run security:audit
+
+  cross-user-authz:
+    name: Cross-user authorization
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        anonymous: ['1', '0']
+    env:
+      CI: 'true'
+      AUTHZ_ANONYMOUS: ${{ matrix.anonymous }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+
+      - name: Install dependencies
+        run: npm run install:all
+
+      # API requests only: no browser to install.
+      - name: Attack every user-owned resource as another user
+        run: npm run test:e2e:authz
+
+      - name: Upload the report
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: cross-user-authz-report-anonymous-${{ matrix.anonymous }}
+          path: tests/config/test-results/authz/
+          retention-days: 14
+
+  prompt-injection:
+    name: Prompt-injection blast radius
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CI: 'true'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+
+      - name: Install dependencies
+        run: npm run install:all
+
+      - name: Install Playwright browsers
+        # --no-install: the Playwright version pinned by the lockfile.
+        run: npx --no-install playwright install --with-deps chromium
+
+      - name: Attack through planted instructions
+        run: npm run test:e2e:injection
+
+      - name: Upload the report
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: prompt-injection-report
+          path: |
+            tests/security/injection/playwright-report/
+            tests/security/injection/test-results/
+          retention-days: 14

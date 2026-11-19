@@ -976,17 +976,50 @@ Every pull request is checked automatically for the OWASP Top 10 and CWE Top 25 
 | Dependency review: new dependencies with a high/critical advisory or a license outside the allow-list | `security.yml` | PRs | Yes | Job summary |
 | Secret scan (gitleaks) of the new commits | `security.yml` | PRs, `main` | Yes | Job log (redacted) |
 | Admin route audit (`npm run security:audit`) | `security.yml` | PRs, `main` | Yes | Job log |
+| Cross-user authorization: every user-owned resource attacked by other users, other groups and anonymous through every parameterised non-admin route (`npm run test:e2e:authz`) | `security.yml` | PRs, `main` | Yes | Job log |
+| Prompt-injection blast radius: a scripted model obeys planted instructions; rendering, SSRF, tool confirmation, project scope and secret isolation must hold (`npm run test:e2e:injection`) | `security.yml` | PRs, `main` | Yes | Playwright report |
+| LLM red team (promptfoo): the same poisoned contents answered by a real model | `redteam.yml` | Nightly | Any failed test | Job summary, report |
 | Accessibility: axe-core scans and jsx-a11y on changed lines | `accessibility.yml` | PRs | Yes | Inline annotations, Playwright report |
 | Dependency scan (OSV-Scanner) of every lockfile | `dependency-scan.yml` | Nightly, `main` | — | Security tab |
 | OpenSSF Scorecard | `scorecard.yml` | Weekly, `main` | — | Security tab |
 | Container image scan (Trivy) | `docker-ci.yml` | Image builds | Critical findings | Security tab |
+| Infrastructure as code (Trivy config): Dockerfiles, compose files, Kubernetes manifests | `code-scanning.yml` | PRs, `main`, weekly | — | Security tab |
+| DAST: ZAP baseline and authenticated API scans, Nuclei (community and iHub templates in `tests/security/nuclei/`) against a fresh production build | `dast.yml` | Nightly | Unexpected Nuclei findings | Job summary, artifacts |
+| External scan (Nuclei) of the hosts IntraFind runs, from the `DAST_EXTERNAL_TARGETS` variable | `dast.yml` | Weekly | Any finding | Job summary |
 | AI review against [REVIEW.md](../REVIEW.md) | Copilot code review, CodeRabbit | PRs | — | PR comments |
 
 A failing check only stops a merge when the branch ruleset requires it (see [Repository Settings](#repository-settings)). Security-tab results stop a merge through the ruleset's code scanning rule.
 
 ### OWASP Top 10 and CWE Top 25 Coverage
 
-Every CodeQL and Semgrep alert lists the CWE it belongs to, and Semgrep alerts also name their OWASP Top 10:2025 category, so the Security tab can be filtered by either. Pattern-based analysis finds injection, cross-site scripting, weak cryptography and unsafe configuration well, but hardly sees broken access control (A01), the most common risk for this platform. That is covered by the admin route audit, the permission checks in `server/utils/authorization.js`, and the access-control section of [REVIEW.md](../REVIEW.md).
+Every CodeQL and Semgrep alert lists the CWE it belongs to, and Semgrep alerts also name their OWASP Top 10:2025 category, so the Security tab can be filtered by either. Pattern-based analysis finds injection, cross-site scripting, weak cryptography and unsafe configuration well, but hardly sees broken access control (A01), the most common risk for this platform. That is covered by the admin route audit, the cross-user authorization suite, the permission checks in `server/utils/authorization.js`, and the access-control section of [REVIEW.md](../REVIEW.md).
+
+The cross-user authorization suite (`tests/security/authz/`) starts a real server with the users `alice` and `bob`, `carol` in a group that lacks some permissions, an admin and anonymous access. alice creates one of every user-owned resource; bob, carol and anonymous then try to read, change, delete and run every action on each one, and must be refused without any of alice's data in the answer. List, search and usage endpoints must not show her items or count them, and group-restricted apps, models, prompts and skills must stay out of reach through chat, the OpenAI-compatible API, MCP and A2A. The server dumps its live route table, and a route with a path parameter that is neither attacked nor exempted with a reason fails the check: when you add one, add it to the matrix in `tests/security/authz/resources.js`.
+
+### Prompt Injection
+
+Content from projects, fetched pages, MCP servers and uploads is untrusted and can carry instructions for the model. Two checks cover it:
+
+- **Blast radius, on every pull request** (`tests/security/injection/`): a scripted model obeys every instruction planted in a project document and in the pages it points to. The suite then checks what the platform still prevents: the browser loads nothing from the attacker's host, the page reader refuses internal addresses (including through redirects), tools that act need the person's confirmation, another user's chats and restricted projects stay out of reach, and no secret (environment, platform configuration, encryption and signing keys, session tokens) ever reaches the model. It asserts on side effects - requests to a canary server, tool executions, the rendered page - never on the model's wording.
+- **Red team, nightly** (`tests/security/redteam/`, `redteam.yml`): the same poisoned contents answered by a real model on IntraFind's own GPU server (vLLM), called through iHub's OpenAI-compatible API. promptfoo asks ordinary questions as a regular user and grades whether the attack reached the canary, produced markup that would load from elsewhere, or exposed restricted data; the same server grades the rubrics. No third-party model provider is involved. It runs when the secret `REDTEAM_BASE_URL` (the endpoint, ending in `/v1`) and the variable `REDTEAM_MODEL` are set; the endpoint is a secret so it stays out of the repository and the public logs, and its host is removed from the uploaded reports. The secret `REDTEAM_API_KEY` is sent if set.
+
+### Dynamic Scans (DAST)
+
+`dast.yml` builds the production bundle, starts it on a fresh install with a stubbed model (`tests/security/dast/start-target.mjs`), and attacks it:
+
+- **ZAP baseline**: spider and passive scan of the UI, unauthenticated (security headers, cookies, information leaks).
+- **ZAP API scans**: active scans of the three OpenAPI documents (`/api/docs/{normal,openai,admin}/swagger.json`), signed in as the default admin. A route without `@swagger` annotations is not in a document and is not scanned.
+- **Nuclei**: community templates for exposures, misconfigurations and default logins, plus iHub's own templates in `tests/security/nuclei/`: the shipped admin password, demo accounts on the login page, API documents readable without sign-in, and contents files (encryption key, JWT key, `users.json`) served over HTTP. Findings a fresh install is expected to produce are listed with a reason in `tests/security/dast/nuclei-expected.json`; any other finding fails the run.
+
+The iHub templates also work against any installation, for example to check a customer system before go-live (with the customer's permission):
+
+```bash
+nuclei -u https://ihub.example.com -t tests/security/nuclei/
+```
+
+To run the target locally: `npm run build:docker && node tests/security/dast/start-target.mjs`, then point ZAP or Nuclei at `http://localhost:3000`.
+
+Repository settings for these jobs: the variable `DAST_EXTERNAL_TARGETS` (hosts IntraFind operates, one per line; never hosts we do not own).
 
 ### Pre-commit Hook
 
