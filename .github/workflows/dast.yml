@@ -1,0 +1,267 @@
+# Dynamic application security testing (DAST)
+#
+# Attacks a running iHub instead of reading its code, which finds what static analysis
+# cannot: missing security headers, routes that answer without sign-in, injection that
+# only shows at runtime, exposed files, shipped defaults left in place.
+#
+# - target: builds the production bundle (`npm run build:docker`, what the container image
+#   ships) and starts it on a fresh install (tests/security/dast/start-target.mjs), with a
+#   local model stub instead of a model key.
+#   - ZAP baseline: unauthenticated spider and passive scan of the web UI (headers,
+#     cookies, information leaks).
+#   - ZAP API scans: active scans of the three OpenAPI documents, signed in as the
+#     default admin, so the scanner reaches every route. The admin document runs last
+#     because its active scan rewrites the configuration.
+#   - Nuclei: the community templates for exposures, misconfigurations and default
+#     logins, plus iHub's own templates (tests/security/nuclei/). Findings not listed in
+#     tests/security/dast/nuclei-expected.json fail the job.
+# - hosted: weekly Nuclei scan of the hosts IntraFind runs itself (demo systems, update
+#   and download servers), listed one per line in the repository variable
+#   DAST_EXTERNAL_TARGETS. Skipped while it is empty. List only hosts we operate: never
+#   GitHub Pages, a customer's installation or anything else we do not own.
+#
+# ZAP results are in the job summary and the zap-* artifacts. ZAP does not fail the run
+# yet; once the first reports are triaged, add a rules file (rules_file_name) with FAIL
+# rules. See docs/security.md#automated-security-checks.
+
+name: DAST
+
+on:
+  schedule:
+    - cron: '41 1 * * *' # nightly: target
+    - cron: '23 2 * * 3' # weekly: hosted
+  workflow_dispatch:
+    inputs:
+      hosted:
+        description: 'Also scan the hosts in DAST_EXTERNAL_TARGETS'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dast-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  NUCLEI_VERSION: 3.11.1
+  # sha256 of nuclei_${NUCLEI_VERSION}_linux_amd64.zip from the release's
+  # nuclei_${NUCLEI_VERSION}_checksums.txt. Update both together.
+  NUCLEI_SHA256: ea63d4ae232808cd7c6bc00d0142428e231fab59dae01042246097d195835ab6
+
+jobs:
+  target:
+    name: Scan a fresh install
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '41 1 * * *'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      TARGET: http://localhost:3000
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm run install:all
+
+      - name: Build the production bundle
+        run: npm run build:docker
+
+      - name: Start iHub
+        run: |
+          nohup node tests/security/dast/start-target.mjs > "$RUNNER_TEMP/ihub.log" 2>&1 &
+          for _ in $(seq 1 90); do
+            if curl -sf "$TARGET/api/health" > /dev/null; then echo "iHub is up"; exit 0; fi
+            sleep 2
+          done
+          echo "iHub did not start"; cat "$RUNNER_TEMP/ihub.log"; exit 1
+
+      - name: ZAP baseline (unauthenticated)
+        uses: zaproxy/action-baseline@de8ad967d3548d44ef623df22cf95c3b0baf8b25 # v0.15.0
+        with:
+          target: ${{ env.TARGET }}/
+          cmd_options: '-a'
+          allow_issue_writing: false
+          fail_action: false
+          artifact_name: zap-baseline
+
+      - name: Summarize the baseline
+        if: always()
+        run: |
+          { echo "## ZAP baseline"; echo; cat report_md.md 2>/dev/null || echo "No report."; } >> "$GITHUB_STEP_SUMMARY"
+
+      # Signs in again before each scan: an active scan may sign the admin out or rotate
+      # keys. The token is masked in the log and lives only as long as this job.
+      - name: Sign in for the chat and general API
+        run: &signin |
+          for _ in $(seq 1 30); do curl -sf "$TARGET/api/health" > /dev/null && break; sleep 2; done
+          token="$(curl -sS -D - -o /dev/null -H 'Content-Type: application/json' \
+            -d '{"username":"admin","password":"password123"}' \
+            "$TARGET/api/auth/local/login" | tr -d '\r' | sed -n 's/^[Ss]et-[Cc]ookie: authToken=\([^;]*\).*/\1/p' | head -1)"
+          if [ -z "$token" ]; then echo "Sign-in failed"; tail -50 "$RUNNER_TEMP/ihub.log"; exit 1; fi
+          echo "::add-mask::$token"
+          echo "ZAP_AUTH_HEADER_VALUE=Bearer $token" >> "$GITHUB_ENV"
+          mkdir -p dast
+          for spec in normal admin openai; do
+            curl -sSf -H "Authorization: Bearer $token" -o "dast/$spec.json" "$TARGET/api/docs/$spec/swagger.json"
+          done
+          chmod -R a+rw dast
+
+      - name: ZAP API scan - chat and general API
+        uses: zaproxy/action-api-scan@5158fe4d9d8fcc75ea204db81317cce7f9e5453d # v0.10.0
+        with:
+          target: dast/normal.json
+          format: openapi
+          cmd_options: '-O ${{ env.TARGET }} -z "-config scanner.maxScanDurationInMins=25"'
+          allow_issue_writing: false
+          fail_action: false
+          artifact_name: zap-api-normal
+
+      - name: Summarize the chat and general API scan
+        if: always()
+        run: &summarize |
+          { echo "## ZAP API scan: $SCAN"; echo; cat report_md.md 2>/dev/null || echo "No report."; } >> "$GITHUB_STEP_SUMMARY"
+        env:
+          SCAN: chat and general API
+
+      - name: Sign in for the OpenAI-compatible API
+        run: *signin
+
+      - name: ZAP API scan - OpenAI-compatible API
+        uses: zaproxy/action-api-scan@5158fe4d9d8fcc75ea204db81317cce7f9e5453d # v0.10.0
+        with:
+          target: dast/openai.json
+          format: openapi
+          cmd_options: '-O ${{ env.TARGET }} -z "-config scanner.maxScanDurationInMins=15"'
+          allow_issue_writing: false
+          fail_action: false
+          artifact_name: zap-api-openai
+
+      - name: Summarize the OpenAI-compatible API scan
+        if: always()
+        run: *summarize
+        env:
+          SCAN: OpenAI-compatible API
+
+      - name: Sign in for the admin API
+        run: *signin
+
+      - name: ZAP API scan - admin API
+        uses: zaproxy/action-api-scan@5158fe4d9d8fcc75ea204db81317cce7f9e5453d # v0.10.0
+        with:
+          target: dast/admin.json
+          format: openapi
+          cmd_options: '-O ${{ env.TARGET }} -z "-config scanner.maxScanDurationInMins=30"'
+          allow_issue_writing: false
+          fail_action: false
+          artifact_name: zap-api-admin
+
+      - name: Summarize the admin API scan
+        if: always()
+        run: *summarize
+        env:
+          SCAN: admin API
+
+      # The admin scan may have changed the configuration: start from a fresh install
+      # again, so Nuclei sees the shipped defaults it expects.
+      - name: Restart iHub on a fresh install
+        if: always()
+        run: |
+          pkill -f start-target.mjs || true
+          sleep 3
+          nohup node tests/security/dast/start-target.mjs > "$RUNNER_TEMP/ihub.log" 2>&1 &
+          for _ in $(seq 1 90); do
+            if curl -sf "$TARGET/api/health" > /dev/null; then echo "iHub is up"; exit 0; fi
+            sleep 2
+          done
+          echo "iHub did not start"; cat "$RUNNER_TEMP/ihub.log"; exit 1
+
+      - name: Install Nuclei
+        if: always()
+        run: &install-nuclei |
+          archive="$RUNNER_TEMP/nuclei.zip"
+          curl --proto '=https' --tlsv1.2 -sSfL -o "$archive" \
+            "https://github.com/projectdiscovery/nuclei/releases/download/v${NUCLEI_VERSION}/nuclei_${NUCLEI_VERSION}_linux_amd64.zip"
+          echo "${NUCLEI_SHA256}  ${archive}" | sha256sum --check --strict -
+          unzip -q -o "$archive" nuclei -d "$RUNNER_TEMP"
+          "$RUNNER_TEMP/nuclei" -version
+          "$RUNNER_TEMP/nuclei" -update-templates -silent
+
+      - name: Nuclei
+        if: always()
+        run: |
+          out="$RUNNER_TEMP/nuclei"
+          mkdir -p "$out"
+          common=(-u "$TARGET" -disable-update-check -rate-limit 50 -no-color -silent)
+          # Community templates: exposures, misconfigurations, default logins.
+          "$RUNNER_TEMP/nuclei" "${common[@]}" \
+            -tags exposure,misconfig,config,default-login,files,token \
+            -severity low,medium,high,critical \
+            -jsonl-export "$out/community.jsonl"
+          # iHub's own templates (all severities but info).
+          "$RUNNER_TEMP/nuclei" "${common[@]}" \
+            -t tests/security/nuclei/ -severity low,medium,high,critical \
+            -jsonl-export "$out/ihub.jsonl"
+          cat "$out"/*.jsonl > "$out/findings.jsonl" 2>/dev/null || true
+          node tests/security/dast/check-nuclei-findings.mjs "$out/findings.jsonl" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Nuclei findings and the server log
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: nuclei-and-server-log
+          path: |
+            ${{ runner.temp }}/nuclei/
+            ${{ runner.temp }}/ihub.log
+          retention-days: 14
+
+  hosted:
+    name: Scan IntraFind-hosted services
+    if: >-
+      vars.DAST_EXTERNAL_TARGETS != '' &&
+      (github.event.schedule == '23 2 * * 3' || (github.event_name == 'workflow_dispatch' && inputs.hosted))
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Nuclei
+        run: *install-nuclei
+
+      - name: Nuclei
+        env:
+          TARGETS: ${{ vars.DAST_EXTERNAL_TARGETS }}
+        run: |
+          printf '%s\n' "$TARGETS" | tr ',' '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | grep -v '^$' > "$RUNNER_TEMP/targets.txt"
+          echo "Scanning $(wc -l < "$RUNNER_TEMP/targets.txt") host(s)"
+          common=(-l "$RUNNER_TEMP/targets.txt" -disable-update-check -rate-limit 30 -no-color -silent -severity medium,high,critical)
+          "$RUNNER_TEMP/nuclei" "${common[@]}" \
+            -tags exposure,misconfig,default-login,cve,takeover,ssl \
+            -jsonl-export "$RUNNER_TEMP/community.jsonl"
+          "$RUNNER_TEMP/nuclei" "${common[@]}" -t tests/security/nuclei/ \
+            -jsonl-export "$RUNNER_TEMP/ihub.jsonl"
+          cat "$RUNNER_TEMP"/community.jsonl "$RUNNER_TEMP"/ihub.jsonl > "$RUNNER_TEMP/hosted.jsonl" 2>/dev/null || true
+          # No findings are expected on our own hosts: every one fails the run.
+          echo '{}' > "$RUNNER_TEMP/none-expected.json"
+          node tests/security/dast/check-nuclei-findings.mjs "$RUNNER_TEMP/hosted.jsonl" "$RUNNER_TEMP/none-expected.json" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload findings
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: nuclei-hosted
+          path: ${{ runner.temp }}/hosted.jsonl
+          if-no-files-found: ignore
+          retention-days: 30

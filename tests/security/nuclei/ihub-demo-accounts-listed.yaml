@@ -1,0 +1,26 @@
+id: ihub-demo-accounts-listed
+
+info:
+  name: iHub Apps - Demo Accounts Listed on the Login Page
+  author: intrafind
+  severity: low
+  description: |
+    localAuth.showDemoAccounts is on (the default), so the login page prints the demo
+    credentials. Turn it off for any installation others can reach.
+  remediation: Set localAuth.showDemoAccounts to false (Admin → Authentication).
+  tags: ihub,misconfig
+
+http:
+  - method: GET
+    path:
+      - '{{BaseURL}}/api/auth/status'
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: regex
+        part: body
+        regex:
+          - '"showDemoAccounts"\s*:\s*true'

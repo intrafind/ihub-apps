@@ -521,3 +521,39 @@ jobs:
           # so a release candidate published as a pre-release stays one.
           # This will update the existing release instead of creating a new one
           overwrite_files: true
+
+      # Dependency-Track keeps watching every released version for advisories published
+      # after the release (customers run old versions for months). One project per SBOM
+      # (ihub-apps-root, -server, -client), one project version per release. Configure
+      # the repository variable DEPENDENCY_TRACK_URL (base URL, no /api) and the secret
+      # DEPENDENCY_TRACK_API_KEY (a team key with BOM_UPLOAD and PROJECT_CREATION_UPLOAD);
+      # without them this step does nothing. A failed upload never fails the release.
+      - name: Send the SBOMs to Dependency-Track
+        if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
+        continue-on-error: true
+        env:
+          DEPENDENCY_TRACK_URL: ${{ vars.DEPENDENCY_TRACK_URL }}
+          DEPENDENCY_TRACK_API_KEY: ${{ secrets.DEPENDENCY_TRACK_API_KEY }}
+        run: |
+          if [ -z "$DEPENDENCY_TRACK_URL" ] || [ -z "$DEPENDENCY_TRACK_API_KEY" ]; then
+            echo "Dependency-Track is not configured (DEPENDENCY_TRACK_URL, DEPENDENCY_TRACK_API_KEY); skipping."
+            exit 0
+          fi
+          status=0
+          for part in root server client; do
+            sbom="./artifacts/sbom/ihub-apps-$VERSION-$part.cdx.json"
+            code="$(curl --proto '=https' --tlsv1.2 -sS -o "$RUNNER_TEMP/dt-$part.json" -w '%{http_code}' \
+              -X POST "${DEPENDENCY_TRACK_URL%/}/api/v1/bom" \
+              -H "X-Api-Key: $DEPENDENCY_TRACK_API_KEY" \
+              --form-string "projectName=ihub-apps-$part" \
+              --form-string "projectVersion=${VERSION#v}" \
+              --form-string "autoCreate=true" \
+              -F "bom=@$sbom")" || code=000
+            echo "ihub-apps-$part ${VERSION#v}: HTTP $code"
+            [ "$code" = 200 ] || { cat "$RUNNER_TEMP/dt-$part.json" 2>/dev/null; status=1; }
+          done
+          if [ "$status" -ne 0 ]; then
+            echo "::warning::Not every SBOM reached Dependency-Track; see the log above."
+          fi
+          exit "$status"
+        shell: bash

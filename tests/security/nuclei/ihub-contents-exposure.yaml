@@ -1,0 +1,49 @@
+id: ihub-contents-exposure
+
+info:
+  name: iHub Apps - Contents Directory Served Over HTTP
+  author: intrafind
+  severity: critical
+  description: |
+    Files of the contents directory are reachable over HTTP: the encryption key for
+    secrets at rest, the JWT signing key, platform.json, users.json (password hashes) or OAuth clients. A
+    reverse proxy or static file server pointed at the installation directory usually
+    causes this.
+  remediation: Serve only the iHub server port; never expose the installation or contents directory through a web server.
+  tags: ihub,exposure,config,files
+
+http:
+  - method: GET
+    path:
+      - '{{BaseURL}}/.encryption-key'
+      - '{{BaseURL}}/contents/.encryption-key'
+      - '{{BaseURL}}/.jwt-private-key.pem'
+      - '{{BaseURL}}/contents/.jwt-private-key.pem'
+      - '{{BaseURL}}/contents/config/platform.json'
+      - '{{BaseURL}}/contents/config/users.json'
+      - '{{BaseURL}}/contents/config/oauth-clients.json'
+      - '{{BaseURL}}/config/platform.json'
+      - '{{BaseURL}}/config/users.json'
+      - '{{BaseURL}}/.env'
+
+    stop-at-first-match: true
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: word
+        part: header
+        negative: true
+        words:
+          - 'text/html'
+      - type: regex
+        part: body
+        condition: or
+        regex:
+          - '^[A-Fa-f0-9]{64}\s*$'
+          - '"passwordHash"'
+          - '-----BEGIN (RSA |EC )?PRIVATE KEY-----'
+          - '"clientSecret"'
+          - '"localAuth"'
+          - '(?m)^(JWT_SECRET|OPENAI_API_KEY|ANTHROPIC_API_KEY|[A-Z_]+_API_KEY)='

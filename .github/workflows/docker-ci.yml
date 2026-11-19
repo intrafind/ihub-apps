@@ -259,6 +259,43 @@ jobs:
           path: trivy-results.sarif
           retention-days: 30
 
+      # The image's own SBOM (OS packages and Node runtime included) for Dependency-Track,
+      # next to the npm SBOMs build-binaries.yml sends. Releases only, and only when
+      # DEPENDENCY_TRACK_URL and DEPENDENCY_TRACK_API_KEY are set; never fails the build.
+      - name: Generate the image SBOM (CycloneDX)
+        if: github.event_name == 'release' && vars.DEPENDENCY_TRACK_URL != ''
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ needs.build-and-test.outputs.image-digest }}
+          format: 'cyclonedx'
+          output: 'image.cdx.json'
+
+      - name: Send the image SBOM to Dependency-Track
+        if: github.event_name == 'release' && vars.DEPENDENCY_TRACK_URL != ''
+        continue-on-error: true
+        env:
+          DEPENDENCY_TRACK_URL: ${{ vars.DEPENDENCY_TRACK_URL }}
+          DEPENDENCY_TRACK_API_KEY: ${{ secrets.DEPENDENCY_TRACK_API_KEY }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          if [ -z "$DEPENDENCY_TRACK_API_KEY" ] || [ ! -s image.cdx.json ]; then
+            echo "No API key or no SBOM; skipping."; exit 0
+          fi
+          code="$(curl --proto '=https' --tlsv1.2 -sS -o "$RUNNER_TEMP/dt.json" -w '%{http_code}' \
+            -X POST "${DEPENDENCY_TRACK_URL%/}/api/v1/bom" \
+            -H "X-Api-Key: $DEPENDENCY_TRACK_API_KEY" \
+            --form-string "projectName=ihub-apps-image" \
+            --form-string "projectVersion=${RELEASE_TAG#v}" \
+            --form-string "autoCreate=true" \
+            -F "bom=@image.cdx.json")" || code=000
+          echo "ihub-apps-image ${RELEASE_TAG#v}: HTTP $code"
+          if [ "$code" != 200 ]; then
+            cat "$RUNNER_TEMP/dt.json" 2>/dev/null
+            echo "::warning::The image SBOM did not reach Dependency-Track."
+            exit 1
+          fi
+
       - name: Check for critical vulnerabilities
         run: |
           # Severity has to be read from the rule tags, not from the SARIF

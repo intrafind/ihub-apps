@@ -980,6 +980,10 @@ Every pull request is checked automatically for the OWASP Top 10 and CWE Top 25 
 | Dependency scan (OSV-Scanner) of every lockfile | `dependency-scan.yml` | Nightly, `main` | — | Security tab |
 | OpenSSF Scorecard | `scorecard.yml` | Weekly, `main` | — | Security tab |
 | Container image scan (Trivy) | `docker-ci.yml` | Image builds | Critical findings | Security tab |
+| Infrastructure as code (Trivy config): Dockerfiles, compose files, Kubernetes manifests | `code-scanning.yml` | PRs, `main`, weekly | — | Security tab |
+| DAST: ZAP baseline and authenticated API scans, Nuclei (community and iHub templates in `tests/security/nuclei/`) against a fresh production build | `dast.yml` | Nightly | Unexpected Nuclei findings | Job summary, artifacts |
+| External scan (Nuclei) of the hosts IntraFind runs, from the `DAST_EXTERNAL_TARGETS` variable | `dast.yml` | Weekly | Any finding | Job summary |
+| SBOMs to Dependency-Track (npm and image), when `DEPENDENCY_TRACK_URL` and `DEPENDENCY_TRACK_API_KEY` are set | `build-binaries.yml`, `docker-ci.yml` | Releases | — | Dependency-Track |
 | AI review against [REVIEW.md](../REVIEW.md) | Copilot code review, CodeRabbit | PRs | — | PR comments |
 
 A failing check only stops a merge when the branch ruleset requires it (see [Repository Settings](#repository-settings)). Security-tab results stop a merge through the ruleset's code scanning rule.
@@ -987,6 +991,24 @@ A failing check only stops a merge when the branch ruleset requires it (see [Rep
 ### OWASP Top 10 and CWE Top 25 Coverage
 
 Every CodeQL and Semgrep alert lists the CWE it belongs to, and Semgrep alerts also name their OWASP Top 10:2025 category, so the Security tab can be filtered by either. Pattern-based analysis finds injection, cross-site scripting, weak cryptography and unsafe configuration well, but hardly sees broken access control (A01), the most common risk for this platform. That is covered by the admin route audit, the permission checks in `server/utils/authorization.js`, and the access-control section of [REVIEW.md](../REVIEW.md).
+
+### Dynamic Scans (DAST)
+
+`dast.yml` builds the production bundle, starts it on a fresh install with a stubbed model (`tests/security/dast/start-target.mjs`), and attacks it:
+
+- **ZAP baseline**: spider and passive scan of the UI, unauthenticated (security headers, cookies, information leaks).
+- **ZAP API scans**: active scans of the three OpenAPI documents (`/api/docs/{normal,openai,admin}/swagger.json`), signed in as the default admin. A route without `@swagger` annotations is not in a document and is not scanned.
+- **Nuclei**: community templates for exposures, misconfigurations and default logins, plus iHub's own templates in `tests/security/nuclei/`: the shipped admin password, demo accounts on the login page, API documents readable without sign-in, and contents files (encryption key, JWT key, `users.json`) served over HTTP. Findings a fresh install is expected to produce are listed with a reason in `tests/security/dast/nuclei-expected.json`; any other finding fails the run.
+
+The iHub templates also work against any installation, for example to check a customer system before go-live (with the customer's permission):
+
+```bash
+nuclei -u https://ihub.example.com -t tests/security/nuclei/
+```
+
+To run the target locally: `npm run build:docker && node tests/security/dast/start-target.mjs`, then point ZAP or Nuclei at `http://localhost:3000`.
+
+Repository settings for these jobs: the variable `DAST_EXTERNAL_TARGETS` (hosts IntraFind operates, one per line; never hosts we do not own), the variable `DEPENDENCY_TRACK_URL` and the secret `DEPENDENCY_TRACK_API_KEY` (a team key with `BOM_UPLOAD` and `PROJECT_CREATION_UPLOAD`).
 
 ### Pre-commit Hook
 

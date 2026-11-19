@@ -1,0 +1,6 @@
+{
+  "_comment": "Nuclei findings the DAST target is expected to produce, by template id, with the reason. The target is a fresh install, so the shipped defaults show up here; each one doubles as a check that its template still works. Anything not listed fails the run (check-nuclei-findings.mjs).",
+  "ihub-default-admin-login": "Fresh install: admin / password123 is shipped on purpose and must be changed by the installer.",
+  "ihub-demo-accounts-listed": "Fresh install: localAuth.showDemoAccounts defaults to on.",
+  "ihub-api-docs-unauthenticated": "Fresh install: anonymous access is on, and swagger.requireAuth does not apply to anonymous users."
+}
