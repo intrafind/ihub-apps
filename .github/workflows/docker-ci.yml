@@ -218,8 +218,11 @@ jobs:
     needs: build-and-test
     permissions:
       contents: read
-      packages: read
+      # Push the SBOM and vulnerability-report attestations next to the image.
+      packages: write
       security-events: write
+      id-token: write
+      attestations: write
 
     steps:
       # Needed so Trivy can read .trivyignore and so the SARIF upload can
@@ -250,13 +253,64 @@ jobs:
         if: always()
         continue-on-error: true  # Add this line
         with:
-          sarif_file: 'trivy-results.sarif'          
+          sarif_file: 'trivy-results.sarif'
+
+      # Trivy's own SBOM of the image, next to the one BuildKit attaches at build time. With
+      # `--format cyclonedx` and no `scanners`, Trivy writes the SBOM without vulnerabilities.
+      - name: Generate CycloneDX SBOM with Trivy
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ needs.build-and-test.outputs.image-digest }}
+          format: 'cyclonedx'
+          output: 'trivy-sbom.cdx.json'
+          skip-setup-trivy: true
+
+      # The vulnerability report as it stood at build time, in the cosign vuln predicate format.
+      # It lists every severity; findings waived in .trivyignore are kept as suppressed entries
+      # with their justification instead of being dropped.
+      - name: Generate vulnerability report with Trivy
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        env:
+          TRIVY_SHOW_SUPPRESSED: 'true'
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ needs.build-and-test.outputs.image-digest }}
+          format: 'cosign-vuln'
+          output: 'trivy-vuln.json'
+          scanners: 'vuln'
+          trivyignores: '.trivyignore'
+          skip-setup-trivy: true
+
+      # Signed attestations pushed to the registry before the critical-CVE gate below, so a
+      # failed build still shows what it failed on. Verify and read them with
+      # `gh attestation verify oci://<image> --repo ${{ github.repository }} --predicate-type <type>`.
+      - name: Attest Trivy SBOM
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ needs.build-and-test.outputs.image-digest }}
+          sbom-path: 'trivy-sbom.cdx.json'
+          push-to-registry: true
+          # The provenance attestation in build-and-test already records where the image is stored.
+          create-storage-record: false
+
+      - name: Attest Trivy vulnerability report
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ needs.build-and-test.outputs.image-digest }}
+          predicate-type: 'https://cosign.sigstore.dev/attestation/vuln/v1'
+          predicate-path: 'trivy-vuln.json'
+          push-to-registry: true
+          create-storage-record: false
 
       - name: Upload Trivy results as artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: trivy-scan-results
-          path: trivy-results.sarif
+          path: |
+            trivy-results.sarif
+            trivy-sbom.cdx.json
+            trivy-vuln.json
           retention-days: 30
 
       - name: Check for critical vulnerabilities

@@ -543,7 +543,7 @@ deploy:
 The repository includes a comprehensive GitHub Actions workflow that:
 
 - Builds multi-platform Docker images
-- Runs security scans with Trivy
+- Runs security scans with Trivy and attaches Trivy's SBOM and vulnerability report to the image as signed attestations (see [Verifying a Release](../docs/security.md#verifying-a-release))
 - Publishes to GitHub Container Registry
 - Supports automated deployments
 
