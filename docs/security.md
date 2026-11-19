@@ -977,6 +977,8 @@ Every pull request is checked automatically for the OWASP Top 10 and CWE Top 25 
 | Secret scan (gitleaks) of the new commits | `security.yml` | PRs, `main` | Yes | Job log (redacted) |
 | Admin route audit (`npm run security:audit`) | `security.yml` | PRs, `main` | Yes | Job log |
 | Cross-user authorization: every user-owned resource attacked by other users, other groups and anonymous through every parameterised non-admin route (`npm run test:e2e:authz`) | `security.yml` | PRs, `main` | Yes | Job log |
+| Prompt-injection blast radius: a scripted model obeys planted instructions; rendering, SSRF, tool confirmation, project scope and secret isolation must hold (`npm run test:e2e:injection`) | `security.yml` | PRs, `main` | Yes | Playwright report |
+| LLM red team (promptfoo): the same poisoned contents answered by a real model | `redteam.yml` | Nightly, with `ANTHROPIC_API_KEY` | Any failed test | Job summary, report |
 | Accessibility: axe-core scans and jsx-a11y on changed lines | `accessibility.yml` | PRs | Yes | Inline annotations, Playwright report |
 | Dependency scan (OSV-Scanner) of every lockfile | `dependency-scan.yml` | Nightly, `main` | — | Security tab |
 | OpenSSF Scorecard | `scorecard.yml` | Weekly, `main` | — | Security tab |
@@ -994,6 +996,13 @@ A failing check only stops a merge when the branch ruleset requires it (see [Rep
 Every CodeQL and Semgrep alert lists the CWE it belongs to, and Semgrep alerts also name their OWASP Top 10:2025 category, so the Security tab can be filtered by either. Pattern-based analysis finds injection, cross-site scripting, weak cryptography and unsafe configuration well, but hardly sees broken access control (A01), the most common risk for this platform. That is covered by the admin route audit, the cross-user authorization suite, the permission checks in `server/utils/authorization.js`, and the access-control section of [REVIEW.md](../REVIEW.md).
 
 The cross-user authorization suite (`tests/security/authz/`) starts a real server with the users `alice` and `bob`, `carol` in a group that lacks some permissions, an admin and anonymous access. alice creates one of every user-owned resource; bob, carol and anonymous then try to read, change, delete and run every action on each one, and must be refused without any of alice's data in the answer. List, search and usage endpoints must not show her items or count them, and group-restricted apps, models, prompts and skills must stay out of reach through chat, the OpenAI-compatible API, MCP and A2A. The server dumps its live route table, and a route with a path parameter that is neither attacked nor exempted with a reason fails the check: when you add one, add it to the matrix in `tests/security/authz/resources.js`.
+
+### Prompt Injection
+
+Content from projects, fetched pages, MCP servers and uploads is untrusted and can carry instructions for the model. Two checks cover it:
+
+- **Blast radius, on every pull request** (`tests/security/injection/`): a scripted model obeys every instruction planted in a project document and in the pages it points to. The suite then checks what the platform still prevents: the browser loads nothing from the attacker's host, the page reader refuses internal addresses (including through redirects), tools that act need the person's confirmation, another user's chats and restricted projects stay out of reach, and no secret (environment, platform configuration, encryption and signing keys, session tokens) ever reaches the model. It asserts on side effects - requests to a canary server, tool executions, the rendered page - never on the model's wording.
+- **Red team, nightly** (`tests/security/redteam/`, `redteam.yml`): the same poisoned contents answered by a real model through the OpenAI-compatible API. promptfoo asks ordinary questions as a regular user and grades whether the attack reached the canary, produced markup that would load from elsewhere, or exposed restricted data. It needs the secret `ANTHROPIC_API_KEY`; the variable `REDTEAM_MODEL` picks the model.
 
 ### Dynamic Scans (DAST)
 
