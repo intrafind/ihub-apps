@@ -583,6 +583,52 @@ describe('IntegrationsConfigSection', () => {
   });
 });
 
+describe('IntegrationsConfigSection: all integrations', () => {
+  it('binds every integration with "*" from the switch, and off removes it', async () => {
+    mockFetchInstalled.mockResolvedValue({ items: INSTALLED });
+    const onChange = renderSection({ id: 'a' });
+    const all = await screen.findByTestId('app-integrations-all');
+    // iFinder, two directories, draw.io and the open data portal; not the
+    // engines, the storage provider or iAssistant.
+    expect(within(all).getByText(/\(5 now\)/)).toBeInTheDocument();
+    fireEvent.click(within(all).getByRole('switch', { name: 'Use all integrations' }));
+    expect(onChange.mock.calls.at(-1)[0].integrations).toEqual({ '*': {} });
+  });
+
+  it('marks the covered rows and panels, and excludes one into "exclude"', async () => {
+    mockFetchInstalled.mockResolvedValue({ items: INSTALLED });
+    const onChange = renderSection({
+      id: 'a',
+      integrations: { '*': { exclude: ['type:people-directory'] }, 'open-data-portal': {} }
+    });
+    const drawio = await screen.findByTestId('all-integrations-coverage-drawio');
+    expect(within(drawio).getByText(/Included through "All integrations"/)).toBeInTheDocument();
+    // Bound by itself: no coverage line.
+    expect(screen.queryByTestId('all-integrations-coverage-open-data-portal')).toBeNull();
+    // The people directories card says they are left out.
+    const directories = screen.getByTestId('all-integrations-coverage-type:people-directory');
+    expect(within(directories).getByRole('checkbox')).toBeChecked();
+    // iFinder's panel says it is included.
+    expect(screen.getByTestId('all-integrations-coverage-ifinder')).toBeInTheDocument();
+    // No "not installed" warning for "*".
+    expect(screen.queryByTestId('stale-integration-*')).toBeNull();
+
+    fireEvent.click(within(drawio).getByRole('checkbox'));
+    expect(onChange.mock.calls.at(-1)[0].integrations).toEqual({
+      '*': { exclude: ['type:people-directory', 'drawio'] },
+      'open-data-portal': {}
+    });
+  });
+
+  it('removes "exclude" once nothing is left out', async () => {
+    mockFetchInstalled.mockResolvedValue({ items: INSTALLED });
+    const onChange = renderSection({ id: 'a', integrations: { '*': { exclude: ['drawio'] } } });
+    const drawio = await screen.findByTestId('all-integrations-coverage-drawio');
+    fireEvent.click(within(drawio).getByRole('checkbox'));
+    expect(onChange.mock.calls.at(-1)[0].integrations).toEqual({ '*': {} });
+  });
+});
+
 describe('IntegrationsConfigSection: disabled installations', () => {
   const DISABLED = [
     { id: 'iassistant', definition: 'com.intrafind/iassistant', builtIn: true, enabled: false },

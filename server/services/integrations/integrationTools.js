@@ -7,6 +7,14 @@ import { isToolSelected } from '../../utils/toolSelection.js';
 import installedIntegrationService from './InstalledIntegrationService.js';
 import { bindingKeyOfType, getDefinitionTypes } from './integrationTypes.js';
 import {
+  ALL_INTEGRATIONS_KEY,
+  allIntegrationsBindingOf,
+  isCoverableByAllIntegrations,
+  isExcludedFromAllIntegrations
+} from '../../../shared/appWildcards.js';
+import { isStorageBindingKey } from '../../../shared/storageBindings.js';
+import { isWebSearchDefinition } from '../search/webSearchEngines.js';
+import {
   grantsIntegration,
   integrationPermissionsOf,
   mayUseIntegration
@@ -50,6 +58,11 @@ import {
  * that binds every installation of the definition, the ones installed later
  * included, with the same `actions` and `required` settings. A binding of
  * one installation wins over the binding of its definition.
+ *
+ * The key `"*"` binds every installation that gives the model tools, the ones
+ * installed later included, except those its `exclude` names
+ * (`shared/appWildcards.js`). It is the weakest binding: any other key that
+ * binds an installation wins over it.
  */
 
 const COMPONENT = 'IntegrationTools';
@@ -120,9 +133,41 @@ export function toolFromAction(resolved, rawAction, language, fingerprint = null
 }
 
 /**
+ * The type of an installation's definition (`people-directory`, …), as the
+ * definitions registry published it, or null.
+ * @param {{ definition?: string }} instance
+ * @returns {string|null}
+ */
+function typeOfInstance(instance) {
+  const definition = instance?.definition;
+  if (!definition) return null;
+  const types = getDefinitionTypes();
+  return Object.hasOwn(types, definition) ? types[definition] : null;
+}
+
+/**
+ * Whether the `"*"` binding covers an installation. A built-in web search
+ * engine and a shipped storage provider are left out even before the
+ * definitions registry published their type.
+ * @param {Object} allBinding - the app's `"*"` binding
+ * @param {{ id: string, definition?: string }} instance
+ * @param {string|null} type - from {@link typeOfInstance}
+ * @returns {boolean}
+ */
+function coveredByAll(allBinding, instance, type) {
+  const installation = { id: instance.id, definition: instance.definition, type };
+  if (!type && isWebSearchDefinition(instance.definition)) installation.type = 'web-search';
+  if (!type && isStorageBindingKey(instance.definition)) installation.type = 'storage';
+  return (
+    isCoverableByAllIntegrations(installation) &&
+    !isExcludedFromAllIntegrations(allBinding, installation)
+  );
+}
+
+/**
  * The key under `app.integrations` that binds an installation: its own id,
- * else its definition id, else its definition's type key (`type:<type>`).
- * Null when the app binds none of them.
+ * else its definition id, else its definition's type key (`type:<type>`),
+ * else `"*"` when that covers it. Null when the app binds none of them.
  * @param {object} app
  * @param {{ id: string, definition?: string }|null|undefined} instance
  * @returns {string|null}
@@ -134,12 +179,10 @@ export function bindingKeyFor(app, instance) {
   if (instance.definition && Object.hasOwn(bindings, instance.definition)) {
     return instance.definition;
   }
-  const types = getDefinitionTypes();
-  const type =
-    instance.definition && Object.hasOwn(types, instance.definition)
-      ? types[instance.definition]
-      : null;
+  const type = typeOfInstance(instance);
   if (type && Object.hasOwn(bindings, bindingKeyOfType(type))) return bindingKeyOfType(type);
+  const all = allIntegrationsBindingOf(bindings);
+  if (all && coveredByAll(all, instance, type)) return ALL_INTEGRATIONS_KEY;
   return null;
 }
 

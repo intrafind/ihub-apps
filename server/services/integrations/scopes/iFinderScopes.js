@@ -23,8 +23,11 @@ import iFinderService from '../iFinderService.js';
 import iFinderSearchProfiles from '../iFinderSearchProfiles.js';
 import logger from '../../../utils/logger.js';
 import { appScopeSettings, pickDefaultScope } from './common.js';
+import { isCoveredByAllIntegrations } from '../../../../shared/appWildcards.js';
 
 export const INTEGRATION_ID = 'ifinder';
+/** The definition of the built-in iFinder installation. */
+const DEFINITION_ID = 'com.intrafind/ifinder';
 
 /** Prefix of the tools that belong to the iFinder integration. */
 const TOOL_PREFIX = 'iFinder_';
@@ -83,8 +86,15 @@ const iFinderScopes = {
 
   appliesTo({ app }) {
     if (!iFinderService.getConfig().enabled) return false;
-    // The app binds the iFinder installation (its actions come from there).
-    return Boolean(app?.integrations?.[INTEGRATION_ID]);
+    // The app binds the iFinder installation (its actions come from there),
+    // by its id or through "every integration" (`"*"`).
+    return (
+      Boolean(app?.integrations?.[INTEGRATION_ID]) ||
+      isCoveredByAllIntegrations(app?.integrations, {
+        id: INTEGRATION_ID,
+        definition: DEFINITION_ID
+      })
+    );
   },
 
   /**

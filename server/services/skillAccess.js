@@ -7,8 +7,8 @@
  * Two kinds of skill reach a request:
  *
  * - A **global skill** (a folder under `contents/skills/`) is usable when it
- *   is installed, listed on the app (or the agent node) the request runs in,
- *   and granted to the user's groups.
+ *   is installed, listed on the app (or the agent node) the request runs in —
+ *   by name, or by `"*"` for every skill — and granted to the user's groups.
  * - A **user skill** (`usk_…`, written by a user, see
  *   `services/skills/UserSkillRepository.js`) is usable when user skills are
  *   switched on, the app does not opt out (`skillSettings.allowPersonal:
@@ -38,6 +38,7 @@
 import configCache from '../configCache.js';
 import { isFeatureEnabled } from '../featureRegistry.js';
 import { estimateTokensMemo } from '../../shared/tokenEstimator.js';
+import { ALL_SKILLS } from '../../shared/appWildcards.js';
 import { disablesModelInvocation, getSkillContent, getSkillResource } from './skillLoader.js';
 import { getUserSkillRepository, isUserSkillId } from './skills/UserSkillRepository.js';
 import { isUserSkillsConfigured } from './skills/userSkillSettings.js';
@@ -533,6 +534,7 @@ export function earlierSkillRefs(messages) {
 /**
  * The global skills an app activates on every turn: its `skills`, when it
  * sets `skillSettings.autoActivate`. Agent nodes (`_skillIds`) never do.
+ * `"*"` (every skill) activates none by itself: only the skills the app names.
  *
  * @param {Object} [app] - App config
  * @returns {string[]}
@@ -540,7 +542,9 @@ export function earlierSkillRefs(messages) {
 function autoActivatedSkillIds(app) {
   if (!skillsEnabledIn(app) || app?._skillIds || app?.skillSettings?.autoActivate !== true)
     return [];
-  return Array.isArray(app.skills) ? app.skills.filter(name => typeof name === 'string') : [];
+  return Array.isArray(app.skills)
+    ? app.skills.filter(name => typeof name === 'string' && name !== ALL_SKILLS)
+    : [];
 }
 
 /**
