@@ -470,14 +470,12 @@ describe('the stored form of the activity', () => {
     assert.deepEqual(first.sources, [
       { id: 'url:a', provider: 'web', kind: 'page', url: 'https://a', title: 't', private: false }
     ]);
-    // A hundred calls with long arguments are past the size bound: the full
-    // text of the arguments goes first, the calls themselves stay.
-    assert.equal(first.details[0].values[0].full, undefined);
-    assert.equal(first.details[0].values[0].text, 'short');
+    // The uncut text of an argument is never kept, only what the row shows.
+    assert.deepEqual(first.details[0].values[0], { text: 'short' });
     assert.ok(Buffer.byteLength(JSON.stringify(stored)) <= 256 * 1024);
   });
 
-  it('cuts the full text of a long argument to the string bound', () => {
+  it('drops the uncut text of a long argument', () => {
     const long = 'y'.repeat(5000);
     const stored = boundStoredActivity({
       toolActivity: {
@@ -494,9 +492,7 @@ describe('the stored form of the activity', () => {
         ]
       }
     });
-    const value = stored.toolActivity.items[0].details[0].values[0];
-    assert.equal(value.full.length, 2001);
-    assert.ok(value.full.endsWith('…'));
+    assert.deepEqual(stored.toolActivity.items[0].details[0].values, [{ text: 'y…' }]);
   });
 
   it('keeps the end of a long workflow', () => {

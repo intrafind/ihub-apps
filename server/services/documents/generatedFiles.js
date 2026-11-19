@@ -14,13 +14,15 @@ import { GENERATED_FILE_MEDIA_TYPES, ZIP_MEDIA_TYPE } from '../../../shared/gene
  *
  * 1. The tool holds the bytes here and returns only a descriptor, so the model
  *    never sees them.
- * 2. The chat tool seam streams the bytes to the client on the tool's
- *    `tool/completed` event, where the chat shows a download card.
- * 3. When the chat is stored, the materializer stores them with the answer as
- *    artifacts of the chat (`document`, `code` or `archive`), served by
- *    `GET /api/chats/:chatId/artifacts/:artifactId` and a share's artifact
- *    route, and deleted with the chat. A chat that is not stored keeps the
- *    file as long as the page does, like a generated picture.
+ * 2. The chat tool seam stores them as artifacts of the chat (`document`,
+ *    `code` or `archive`) as soon as the tool finishes, and sends the client
+ *    the download card on the tool's `tool/completed` event — name, type,
+ *    size, never the bytes. The card fetches them from
+ *    `GET /api/chats/:chatId/artifacts/:artifactId` (or a share's artifact
+ *    route) when it is opened; they are deleted with the chat.
+ * 3. The materializer names them on the stored answer. A file that could not
+ *    be stored (no chat store, artifacts turned off, over the size cap) is
+ *    sent with its bytes instead and kept as long as the page is open.
  *
  * A file stays held for {@link HOLD_MS} so `preview_pdf` can render a page of
  * what `create_pdf` just made. In memory and per process, bounded in count

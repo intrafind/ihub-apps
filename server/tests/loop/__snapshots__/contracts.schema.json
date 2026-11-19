@@ -5510,11 +5510,20 @@
                       "exclusiveMinimum": 0,
                       "maximum": 9007199254740991
                     },
+                    "sheets": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "stored": {
+                      "type": "boolean",
+                      "const": true
+                    },
                     "data": {
                       "type": "string"
                     }
                   },
-                  "required": ["id", "name", "mimeType", "bytes", "data"],
+                  "required": ["id", "name", "mimeType", "bytes"],
                   "additionalProperties": false
                 }
               }

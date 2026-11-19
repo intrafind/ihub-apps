@@ -44,6 +44,7 @@ import { redactInteractionForViewer } from '../utils/toolApproval.js';
 import { steerRun } from '../services/loop/steering.js';
 import { RUN_LOG_EVENTS } from '../../shared/runEvents.js';
 import { projectLedgerEvent, getStreamRun } from '../services/loop/RunStream.js';
+import { clientEnvelope } from '../services/loop/clientProjection.js';
 import { getExecutionRegistry } from '../services/workflow/ExecutionRegistry.js';
 import { getWorkflowEngine } from '../services/workflow/WorkflowEngine.js';
 import { abortChatRequest } from '../sse.js';
@@ -173,7 +174,11 @@ export default function registerRunRoutes(app) {
     // the reads for the whole of it.
     if (req.query.view === 'sse') {
       // Client re-sync: the same envelopes the live stream would have carried.
-      return res.json({ runId, items: events.flatMap(projectLedgerEvent), nextCursor });
+      return res.json({
+        runId,
+        items: events.flatMap(projectLedgerEvent).map(clientEnvelope),
+        nextCursor
+      });
     }
     res.json({ runId, items: events, nextCursor });
   });

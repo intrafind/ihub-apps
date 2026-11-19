@@ -92,6 +92,7 @@ import { getLocalizedError } from '../serverHelpers.js';
 import { markRunChatSeen } from '../services/scheduler/tasks/taskService.js';
 import { publicChatView } from '../services/chat/chatToolApproval.js';
 import { sendCreated, segment } from '../utils/created.js';
+import { clientMessages } from '../services/loop/clientProjection.js';
 
 const COMPONENT = 'ChatRoutes';
 
@@ -373,7 +374,7 @@ export default function registerChatRoutes(app) {
     // schema version rides alongside it so a future migration is visible.
     res.json({
       chat: publicChatView(seen || chat),
-      messages: stored.messages,
+      messages: clientMessages(stored.messages),
       version: stored.version
     });
   });

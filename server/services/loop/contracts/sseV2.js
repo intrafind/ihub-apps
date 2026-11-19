@@ -339,8 +339,12 @@ export const toolCompletedData = z.object({
   /**
    * Files a system skill tool generated for the user (a PDF, Word document
    * or presentation from `create_pdf`, `create_docx`, `create_pptx`): the
-   * chat shows a download card for each. `data` is the file, base64 — the
-   * model's tool result never carries it.
+   * chat shows a download card for each. In a stored chat the file is an
+   * artifact of the chat already (`stored: true`, `id` is the artifact's), and
+   * the card fetches it from the artifact route when it is opened. Only a file
+   * that could not be stored (no chat store, artifacts turned off, over the
+   * size cap) carries its bytes, base64, in `data`. The model's tool result
+   * never carries them.
    */
   files: z
     .array(
@@ -351,7 +355,9 @@ export const toolCompletedData = z.object({
         bytes: z.number().int().nonnegative(),
         pages: z.number().int().positive().optional(),
         slides: z.number().int().positive().optional(),
-        data: z.string()
+        sheets: z.number().int().positive().optional(),
+        stored: z.literal(true).optional(),
+        data: z.string().optional()
       })
     )
     .optional()

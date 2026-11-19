@@ -362,7 +362,7 @@ describe('chatMaterializer: a resume after a connect', () => {
         silent: true
       });
 
-      assert.deepEqual(outcome, { message: null, refusal: null });
+      assert.deepEqual(outcome, { message: null, refusal: null, chatStored: true });
       const chat = await repository.getChat(CHAT_ID);
       assert.equal(chat.activeRunId, runId);
       assert.equal(chat.status, 'running');
@@ -1405,5 +1405,39 @@ describe('chatMaterializer: the evidence record', () => {
       await evidenceWritesSettled();
       assert.equal((await stored(provider)).docs, 1, 'only the stored answer keeps a record');
     });
+  });
+});
+
+describe('chatMaterializer: whether the turn has a chat to store into', () => {
+  const turn = repository =>
+    settleUserTurn({
+      repository,
+      chatId: CHAT_ID,
+      ownerId: OWNER,
+      identityMode: 'default',
+      appId: 'chat',
+      modelId: 'gpt-4o',
+      runId: 'chat-run-stored',
+      content: 'hello'
+    });
+
+  it('says so when the chat is stored', async () => {
+    await withRepository(async ({ repository }) => {
+      const outcome = await turn(repository);
+      assert.equal(outcome.chatStored, true);
+      assert.ok(outcome.message?.id);
+    });
+  });
+
+  it('says not when the chat could not be created, so no file is stored under it', async () => {
+    const unavailable = await turn({ ensureChat: async () => null });
+    assert.equal(unavailable.chatStored, false);
+    const failing = await turn({
+      ensureChat: async () => {
+        throw new Error('disk full');
+      }
+    });
+    assert.equal(failing.chatStored, false);
+    assert.equal((await settleUserTurn({ repository: null })).chatStored, false);
   });
 });

@@ -1082,6 +1082,42 @@ export function renderDigest({
   return { text: `${text}\n${closing}`, factsShown: shown, notFoundShown };
 }
 
+/** Longest compaction notes the chat is sent: the facts a person reads, not the model's working copy. */
+export const DISPLAY_DIGEST_CHARS = 2000;
+
+const NOT_FOUND_HEADING = 'Looked for, not found';
+
+/**
+ * A digest as the chat shows it under "notes" (`context/compacted`, the stored
+ * compaction row): the facts and what was not found, without what is there
+ * for the model only — the instructions, and the list of calls with their
+ * sources, which the call rows above it already show. A digest with no facts
+ * and nothing not found keeps its calls, so the notes are never empty. Cut to
+ * {@link DISPLAY_DIGEST_CHARS}. Text that is not a rendered digest (an older
+ * row, notes already reduced) is only cut, so applying this twice is the same
+ * as once.
+ *
+ * @param {unknown} digest - see {@link renderDigest}
+ * @param {number} [maxChars=DISPLAY_DIGEST_CHARS]
+ * @returns {{digest: string, truncated: boolean}|null} null without a digest
+ */
+export function displayDigest(digest, maxChars = DISPLAY_DIGEST_CHARS) {
+  if (typeof digest !== 'string' || !digest) return null;
+  let text = digest;
+  const calls = text.indexOf('\nCalls:\n');
+  if (text.startsWith(`<${DIGEST_TAG}`) && calls >= 0) {
+    const body = text.slice(calls + 1).replace(new RegExp(`\\n?</${DIGEST_TAG}>\\s*$`), '');
+    const facts = body.search(/\n\n(Facts:|Looked for, not found)/);
+    text = (facts >= 0 ? body.slice(facts + 2) : body).replace(
+      /^Looked for, not found \(.*\):$/m,
+      `${NOT_FOUND_HEADING}:`
+    );
+  }
+  return text.length > maxChars
+    ? { digest: `${text.slice(0, maxChars)}…`, truncated: true }
+    : { digest: text, truncated: false };
+}
+
 /**
  * The digests in a transcript and their size: what the notes of the run take
  * of the context, by the same estimate as the prompt.
