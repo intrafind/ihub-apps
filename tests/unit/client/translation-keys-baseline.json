@@ -234,13 +234,6 @@
     "admin.auth.oauth.tabs.overview",
     "admin.auth.oauth.tabs.server"
   ],
-  "features/admin/components/OpenApiToolEditor.jsx": [
-    "admin.credentials.select.createNew",
-    "admin.credentials.select.loadError",
-    "admin.credentials.select.loading",
-    "admin.credentials.select.placeholder",
-    "admin.credentials.select.refresh"
-  ],
   "features/admin/components/PlatformFormEditor.jsx": [
     "admin.auth.debugMovedHelp",
     "admin.auth.debugMovedTitle",

@@ -54,9 +54,20 @@ const MONO_INPUT_CLASS = `${INPUT_CLASS} font-mono`;
  * @param {string} [props.label] - Field label
  * @param {string} [props.help] - Help text shown beneath the select
  * @param {boolean} [props.required] - Mark the field as required
+ * @param {string} [props.emptyLabel] - Text of the empty option (default
+ *   "Select a credential…"); use it to name what "no credential" means.
  * @returns {JSX.Element}
  */
-export function CredentialRefSelect({ id, value, onChange, types, label, help, required }) {
+export function CredentialRefSelect({
+  id,
+  value,
+  onChange,
+  types,
+  label,
+  help,
+  required,
+  emptyLabel
+}) {
   const { t } = useTranslation();
   const [credentials, setCredentials] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -83,6 +94,10 @@ export function CredentialRefSelect({ id, value, onChange, types, label, help, r
     Array.isArray(types) && types.length > 0
       ? credentials.filter(c => types.includes(c.type))
       : credentials;
+
+  // A stored id the list does not offer (deleted, or of another type) stays
+  // visible instead of the select silently showing the empty option.
+  const missingValue = !loading && value && !filtered.some(c => c.id === value) ? value : null;
 
   const profileLabel = profile => {
     const name = typeof profile.name === 'string' ? profile.name : profile.name?.en;
@@ -112,8 +127,13 @@ export function CredentialRefSelect({ id, value, onChange, types, label, help, r
           <option value="">
             {loading
               ? t('admin.credentials.select.loading', 'Loading credentials…')
-              : t('admin.credentials.select.placeholder', 'Select a credential…')}
+              : emptyLabel || t('admin.credentials.select.placeholder', 'Select a credential…')}
           </option>
+          {missingValue && (
+            <option value={missingValue}>
+              {t('admin.credentials.select.missing', '{{id}} (not found)', { id: missingValue })}
+            </option>
+          )}
           {filtered.map(c => (
             <option key={c.id} value={c.id}>
               {profileLabel(c)}
@@ -136,8 +156,8 @@ export function CredentialRefSelect({ id, value, onChange, types, label, help, r
           })}
         </p>
       )}
-      <div className="mt-1 flex items-center justify-between">
-        {help && <p className="text-xs text-gray-500 dark:text-gray-400">{help}</p>}
+      <div className="mt-1 flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
+        {help && <p className="min-w-48 flex-1 text-xs text-gray-500 dark:text-gray-400">{help}</p>}
         <Link
           to="/admin/credentials"
           target="_blank"
