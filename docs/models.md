@@ -773,18 +773,21 @@ For models that support extended thinking (such as Claude claude-3-7-sonnet), th
 | ------------------ | ------- | --------------------------------------------------------------------------------------------------------------------------- |
 | `thinking.enabled` | Boolean | Enable extended thinking mode for this model                                                                                |
 | `thinking.thoughts`| Boolean | Whether the model's internal thinking steps are returned and shown in the response. Defaults to `true` when thinking is enabled; set `false` to keep the reasoning hidden. On Gemini it maps to `includeThoughts`, on vLLM (`provider: "local"`) to `include_reasoning`. This is the model default — an app's `thinking.thoughts` and the user's "Show thinking process" toggle override it |
-| `thinking.level`   | String  | Reasoning effort: `minimal`, `low`, `medium`, or `high`. Defaults to `medium`. The only way to ask for more or less reasoning — Gemini sends it as `thinkingLevel`, OpenAI/vLLM as `reasoning_effort` |
+| `thinking.level`   | String  | Reasoning effort: `minimal`, `low`, `medium`, or `high`. Defaults to `medium`. Gemini sends it as `thinkingLevel`, OpenAI and vLLM as `reasoning_effort`; on vLLM with `thinking.tokenBudget` it also sets the reasoning token budget |
 | `thinking.chatTemplateKwargs` | Object | vLLM only: per-request chat-template knobs to toggle reasoning, e.g. `{ "enable_thinking": false }` (Qwen3) or `{ "thinking": true }` (Granite). When omitted, the vLLM adapter defaults to `{ "enable_thinking": <toggle> }` |
+| `thinking.tokenBudget` | Boolean | vLLM (`provider: "local"`) only: send a reasoning token cap, `thinking_token_budget`. The level sets it: `minimal` 512, `low` 2,048, `medium` 8,192, `high` 16,384; no level: 75% of the output limit. Off by default: vLLM answers HTTP 400 unless the server has a reasoning config (a `--reasoning-parser` with start and end markers, such as `qwen3`, or `--reasoning-config`). See [Local LLM providers](local-llm-providers.md) |
+| `thinking.budgetTokens` | Integer | vLLM only: the budget as a number instead of the level's; setting it turns `tokenBudget` on. Always capped at 75% of the output limit so the answer has room |
 
 App-level `thinking` settings override these model defaults for a specific app.
 
 > [!IMPORTANT]
-> **Reasoning effort is a level, never a number.** `thinking.budget` is gone
+> **Reasoning effort is a level.** `thinking.budget` is gone
 > from model, app and workflow-node configs alike, and from the API. It looked
 > like a token allowance and was nothing of the kind: no adapter ever put the
 > number on the wire — every one bucketed it into one of these four levels
 > first — so a budget of `1024` and a budget of `32768` were the same request
-> while looking like a considered choice.
+> while looking like a considered choice. (`thinking.budgetTokens` is a
+> different, vLLM-only field, and that number does go on the wire.)
 >
 > Migration `V105` converts everything stored, with the mapping the adapters
 > already applied: `0`→`minimal`, `-1`→`medium`, `1-100`→`low`,

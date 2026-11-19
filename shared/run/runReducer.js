@@ -69,6 +69,8 @@ export function createRunState(runId, init = {}) {
     /** ts of the last run/started|ended|paused|resumed frame — null while only inferred. */
     lastLifecycleAt: null,
     finishReason: null,
+    // Where the answer ran out when it hit the output limit (server-decided).
+    limitReachedIn: null,
     usage: null,
     // How full the model's context window is, as the server counts it.
     context: null,
@@ -650,6 +652,7 @@ export function reduceRunEvent(state, envelope) {
         ...run,
         status: data.status || 'completed',
         finishReason: data.finishReason ?? null,
+        limitReachedIn: data.limitReachedIn ?? null,
         usage: data.usage || run.usage,
         context: data.context || run.context,
         answerBasis:

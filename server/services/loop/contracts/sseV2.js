@@ -23,6 +23,7 @@ import {
   sourcesAddedData,
   knowledgeScopeData,
   answerBasisSchema,
+  limitReachedInSchema,
   abortCauseSchema,
   placeSchema,
   compactionKindsSchema
@@ -172,6 +173,8 @@ export const runEndedData = z.object({
   knowledgeSources: z.array(z.string()).optional(),
   /** What the answer is based on: the kinds of source it used (chat turns). */
   answerBasis: answerBasisSchema.optional(),
+  /** Where the answer ran out when it hit the output limit (chat turns). */
+  limitReachedIn: limitReachedInSchema.optional(),
   /** Provenance of the answer (EU AI Act Art. 50(2)); chat turns with text. */
   provenance: provenanceContractSchema.optional(),
   /** Workflow output (chat-visible result) when the run produced one. */

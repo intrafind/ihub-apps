@@ -250,6 +250,10 @@
                   "additionalProperties": false
                 }
               },
+              "limitReachedIn": {
+                "type": "string",
+                "enum": ["reasoning", "answer"]
+              },
               "provenance": {
                 "type": "object",
                 "properties": {
@@ -4728,6 +4732,10 @@
                   "required": ["kind"],
                   "additionalProperties": false
                 }
+              },
+              "limitReachedIn": {
+                "type": "string",
+                "enum": ["reasoning", "answer"]
               },
               "provenance": {
                 "type": "object",

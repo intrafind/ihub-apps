@@ -45,3 +45,22 @@ can still be configured or left out.
 
 See [Apps → Integrations](../../apps.md#integrations-binding-an-installed-integration) and
 [Skill Settings](../../apps.md#skill-settings).
+
+## vLLM: Limit How Long a Reasoning Model Thinks
+
+vLLM models can now cap their reasoning in tokens, so a model like Qwen3 no longer thinks
+through its whole output limit and ends with an empty answer. Qwen ignores the reasoning effort
+level; the token budget is enforced by vLLM itself.
+
+- **Admin → Models → Edit → Reasoning → Limit reasoning in tokens** (`thinking.tokenBudget`)
+  turns it on. Reasoning effort then sets the budget: Minimal 512, Low 2,048, Medium 8,192,
+  High 16,384 tokens. When it is spent, the model stops thinking and writes the answer.
+- **Reasoning budget** (`thinking.budgetTokens`) sets an exact number instead.
+- The budget never takes more than 75% of the output limit, so the answer always has room.
+- Off by default: the vLLM server must run with a reasoning parser that has start and end
+  markers (such as `qwen3`) or with `--reasoning-config`, otherwise vLLM rejects the requests.
+- When an answer still hits the output limit, the chat now says what happened instead of showing
+  "Truncated": the model used the limit for thinking and wrote no answer (with **Retry**), or the
+  answer is incomplete (ask it to continue).
+
+See [Local LLM providers](../../local-llm-providers.md).

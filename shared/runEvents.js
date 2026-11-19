@@ -41,6 +41,13 @@ export const RUN_STATUSES = Object.freeze([
 export const MODEL_KNOWLEDGE_SOURCE = 'llm';
 
 /**
+ * Where an answer that hit the model's output limit ran out
+ * (`run/ended.limitReachedIn`): `reasoning` — the thinking used it all and no
+ * answer was written; `answer` — the answer was cut off.
+ */
+export const LIMIT_REACHED_IN = Object.freeze(['reasoning', 'answer']);
+
+/**
  * The kinds of source an answer can be based on (`run/ended.answerBasis`), in
  * the order the footer's chip names them. `model` stands alone: nothing was used.
  */

@@ -69,6 +69,7 @@ export function transformStoredMessage(msg) {
   // The context window as the server counted it when the answer ended.
   if (msg.context) message.context = msg.context;
   if (msg.finishReason) message.finishReason = msg.finishReason;
+  if (msg.limitReachedIn) message.limitReachedIn = msg.limitReachedIn;
   // Where the answer came from (EU AI Act Art. 50(2)): the "AI generated" details.
   if (msg.provenance && typeof msg.provenance === 'object') message.provenance = msg.provenance;
   // What the answer is based on: the kinds of source the server named. A message

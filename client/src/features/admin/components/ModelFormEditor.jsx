@@ -414,6 +414,23 @@ function ModelFormEditor({
   // `thinking` is an optional nested object and the schema is strict, so an
   // empty `{}` would fail validation: turning reasoning off drops the key
   // entirely rather than leaving `{ enabled: false }` behind.
+  // vLLM reasoning token budget: opt-in, and a budget number implies it.
+  const tokenBudgetOn =
+    data.thinking?.tokenBudget === true ||
+    (data.thinking?.budgetTokens !== undefined && data.thinking?.budgetTokens !== '');
+  const handleTokenBudgetToggle = on => {
+    const { tokenBudget: _flag, budgetTokens: _budget, ...rest } = data.thinking || {};
+    onChange({ ...data, thinking: on ? { ...rest, tokenBudget: true } : rest });
+  };
+  // Emptying the number keeps the budget on (taken from the level again).
+  const handleBudgetTokensChange = value => {
+    const { budgetTokens: _old, ...rest } = data.thinking || {};
+    onChange({
+      ...data,
+      thinking: { ...rest, tokenBudget: true, ...(value === '' ? {} : { budgetTokens: value }) }
+    });
+  };
+
   const handleThinkingChange = (key, value) => {
     const next = { ...data.thinking, [key]: value };
     if (key === 'enabled' && !value) {
@@ -1907,10 +1924,79 @@ function ModelFormEditor({
                             <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                               {t(
                                 'admin.models.hints.thinkingLevel',
-                                'Sent as reasoning_effort (OpenAI, vLLM) or thinkingLevel (Gemini). Servers that do not support it ignore the value — leave on provider default unless the model documents these levels.'
+                                'Sent as reasoning_effort (OpenAI, vLLM) or thinkingLevel (Gemini). Servers that do not support it ignore the value. On vLLM with "Limit reasoning in tokens" it also sets the reasoning budget.'
                               )}
                             </p>
                           </div>
+                          {data.provider === 'local' && (
+                            <div className="space-y-3">
+                              <div className="flex items-start">
+                                <div className="flex items-center h-5">
+                                  <input
+                                    id="thinking.tokenBudget"
+                                    type="checkbox"
+                                    checked={tokenBudgetOn}
+                                    onChange={e => handleTokenBudgetToggle(e.target.checked)}
+                                    className={CHECKBOX_CLASS}
+                                  />
+                                </div>
+                                <div className="ml-3 text-sm">
+                                  <label
+                                    htmlFor="thinking.tokenBudget"
+                                    className="font-medium text-gray-700 dark:text-gray-300"
+                                  >
+                                    {t(
+                                      'admin.models.fields.thinkingTokenBudget',
+                                      'Limit reasoning in tokens'
+                                    )}
+                                  </label>
+                                  <p className="text-gray-500 dark:text-gray-400">
+                                    {t(
+                                      'admin.models.hints.thinkingTokenBudget',
+                                      'Sends thinking_token_budget, so the model stops thinking and answers once the budget is spent. The vLLM server needs a reasoning parser with start and end markers (for example qwen3) or --reasoning-config; otherwise every request fails.'
+                                    )}
+                                  </p>
+                                </div>
+                              </div>
+                              {tokenBudgetOn && (
+                                <div className="max-w-xs ml-7">
+                                  <label
+                                    htmlFor="thinking.budgetTokens"
+                                    className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                                  >
+                                    {t(
+                                      'admin.models.fields.thinkingBudgetTokens',
+                                      'Reasoning budget'
+                                    )}
+                                  </label>
+                                  <input
+                                    id="thinking.budgetTokens"
+                                    type="number"
+                                    min="1"
+                                    step="1"
+                                    inputMode="numeric"
+                                    value={data.thinking?.budgetTokens ?? ''}
+                                    onChange={e => {
+                                      if (/^\d*$/.test(e.target.value)) {
+                                        handleBudgetTokensChange(e.target.value);
+                                      }
+                                    }}
+                                    placeholder={t(
+                                      'admin.models.fields.thinkingBudgetTokensPlaceholder',
+                                      'From reasoning effort'
+                                    )}
+                                    className={`${INPUT_CLASS} mt-1 block`}
+                                  />
+                                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                                    {t(
+                                      'admin.models.hints.thinkingBudgetTokens',
+                                      'Empty uses the reasoning effort: minimal 512, low 2,048, medium 8,192, high 16,384 tokens (none set: 75% of the output limit). Never more than 75% of the output limit.'
+                                    )}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          )}
                           <div className="flex items-start">
                             <div className="flex items-center h-5">
                               <input

@@ -808,6 +808,7 @@ export class RunLog {
       durationMs,
       knowledgeSources,
       answerBasis,
+      limitReachedIn,
       cause,
       provenance
     } = {}
@@ -820,6 +821,7 @@ export class RunLog {
       durationMs,
       ...(knowledgeSources ? { knowledgeSources } : {}),
       ...(answerBasis ? { answerBasis } : {}),
+      ...(limitReachedIn ? { limitReachedIn } : {}),
       ...(provenance ? { provenance } : {}),
       // Who stopped an aborted run (`services/chat/abortCause.js`).
       ...(cause ? { cause } : {})

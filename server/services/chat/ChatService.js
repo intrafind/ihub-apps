@@ -49,6 +49,7 @@ import {
   carriedBasis,
   settleKnowledgeScope
 } from './answerBasis.js';
+import { limitReachedIn } from './outputLimit.js';
 import { recordAnswerOriginMetrics } from './answerOriginMetrics.js';
 import {
   approvalSeam,
@@ -436,6 +437,7 @@ class ChatService {
       error,
       knowledgeSources,
       answerBasis,
+      limitReachedIn: limitReached,
       cause,
       provenance,
       startedAt
@@ -450,6 +452,7 @@ class ChatService {
         // answer the same way the live stream did.
         ...(Array.isArray(knowledgeSources) ? { knowledgeSources } : {}),
         ...(Array.isArray(answerBasis) ? { answerBasis } : {}),
+        ...(limitReached ? { limitReachedIn: limitReached } : {}),
         ...(provenance ? { provenance } : {}),
         // Why an aborted turn was stopped (`services/chat/abortCause.js`).
         ...(cause ? { cause } : {}),
@@ -1240,6 +1243,7 @@ class ChatService {
         error: outcome.error || (outcome.errorInfo ? outcome.errorInfo : undefined),
         knowledgeSources: outcome.knowledgeSources,
         answerBasis: outcome.answerBasis,
+        limitReachedIn: outcome.limitReachedIn,
         provenance: outcome.provenance,
         cause: outcome.abortCause,
         startedAt
@@ -1852,11 +1856,20 @@ class ChatService {
     const finishReason = result.finishReason || 'stop';
     const knowledgeSources = this.resolveAnswerSources(loopSources, promptSources);
     const answerBasis = answerBasisFor(knowledgeSources);
+    // Hit the output limit: thinking it all away reads differently from an
+    // answer cut off mid-sentence (see outputLimit.js).
+    const limitReached = limitReachedIn({
+      finishReason,
+      answerText: result.answerText,
+      stepUsage: result.stepUsage
+    });
+    if (limitReached) summary.limitReachedIn = limitReached;
     await attachProvenance();
     reportSettledScope();
     endRun({
       status: result.status || 'completed',
       finishReason,
+      ...(limitReached ? { limitReachedIn: limitReached } : {}),
       knowledgeSources,
       answerBasis,
       ...provenanceOf()

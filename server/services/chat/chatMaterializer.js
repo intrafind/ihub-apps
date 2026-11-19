@@ -755,6 +755,7 @@ export async function settleAssistantTurn({
             ts: new Date().toISOString(),
             runId,
             finishReason: summary?.finishReason ?? null,
+            ...(summary?.limitReachedIn ? { limitReachedIn: summary.limitReachedIn } : {}),
             ...(usage ? { usage } : {}),
             ...(storedContext ? { context: storedContext } : {}),
             ...(error ? { error } : {}),

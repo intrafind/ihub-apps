@@ -31,10 +31,9 @@ const localizedStringSchema = z.record(
 const thinkingSchema = z
   .object({
     enabled: z.boolean(),
-    // Reasoning effort — the only way to ask for more or less reasoning.
-    // Gemini sends it as `thinkingLevel`, OpenAI/vLLM as `reasoning_effort`.
-    // There is no token-budget alternative: no provider ever took one, and the
-    // number only ever got bucketed into one of these four levels anyway.
+    // Reasoning effort. Gemini sends it as `thinkingLevel`, OpenAI and vLLM as
+    // `reasoning_effort`. Qwen's chat template ignores `reasoning_effort`; on
+    // vLLM with `tokenBudget` the level also sets `thinking_token_budget`.
     // The JSON wire format is lowercase (minimal | low | medium | high); the
     // uppercase spellings are the SDK constants, and the adapter normalizes
     // down to lowercase before sending. Schema accepts both cases so legacy /
@@ -50,7 +49,17 @@ const thinkingSchema = z
     // chat-template knobs that toggle reasoning. Model-specific keys, e.g.
     // { "enable_thinking": false } (Qwen3) or { "thinking": true } (Granite).
     // When omitted, the vLLM adapter defaults to { enable_thinking: <toggle> }.
-    chatTemplateKwargs: z.record(z.any()).optional()
+    chatTemplateKwargs: z.record(z.any()).optional(),
+    // vLLM (provider "local") only: send a reasoning token cap,
+    // `thinking_token_budget`, taken from `level` (minimal 512, low 2048,
+    // medium 8192, high 16384; none: 75% of `max_tokens`). Opt-in because vLLM
+    // answers 400 when the server has no reasoning config (a reasoning parser
+    // with start/end strings, e.g. qwen3). Other providers ignore it.
+    tokenBudget: z.boolean().optional(),
+    // vLLM only: the budget as a number, instead of the level's. Setting it
+    // turns `tokenBudget` on. Capped at 75% of `max_tokens` either way, so an
+    // answer has room.
+    budgetTokens: z.number().int().positive().optional()
   })
   .strict();
 
