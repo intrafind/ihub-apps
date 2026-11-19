@@ -475,6 +475,39 @@ describe('ownership, copies and history', () => {
     assert.equal(restored.body.body, 'WEEKLY BODY');
   });
 
+  it('shows the history only to the people who may change the skill', async () => {
+    const skill = await create(ADA, { name: 'history-gated' });
+    await drive(route.update, {
+      user: ADA,
+      params: { skillId: skill.id },
+      body: { ...SKILL, name: 'history-gated', body: 'CLEANED', expectedRevision: 1 }
+    });
+    await share(ADA, skill.id, [
+      { type: 'user', id: GRACE.id, permission: 'use' },
+      { type: 'group', id: 'engineers', permission: 'edit' }
+    ]);
+
+    // A user may use the current version but not read the removed text.
+    const current = await drive(route.get, { user: GRACE, params: { skillId: skill.id } });
+    assert.equal(current.body.body, 'CLEANED');
+    const list = await drive(route.versions, { user: GRACE, params: { skillId: skill.id } });
+    assert.equal(list.statusCode, 403);
+    const old = await drive(route.version, {
+      user: GRACE,
+      params: { skillId: skill.id, revision: '1' }
+    });
+    assert.equal(old.statusCode, 403);
+    assert.ok(!JSON.stringify(old.body).includes('WEEKLY BODY'));
+
+    // An editor may, as with prompts.
+    const editor = await drive(route.version, {
+      user: CAROL,
+      params: { skillId: skill.id, revision: '1' }
+    });
+    assert.equal(editor.statusCode, 200);
+    assert.equal(editor.body.body, 'WEEKLY BODY');
+  });
+
   it('copies a shared skill and a global skill into my skills', async () => {
     const skill = await create(ADA, { name: 'copy-me' });
     await share(ADA, skill.id, [{ type: 'user', id: GRACE.id, permission: 'use' }]);
