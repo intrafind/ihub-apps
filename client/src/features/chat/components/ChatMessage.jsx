@@ -261,16 +261,29 @@ function ChatMessage({
     message.cancelled === true || INTERRUPTED_FINISH_REASONS.has(message.finishReason);
   // The model finished normally but wrote nothing — a reasoning model can end
   // its turn right after thinking. Without a notice the bubble is just blank.
+  const nothingWritten =
+    !answerText.trim() &&
+    !message.images?.length &&
+    !message.generatedFiles?.length &&
+    !message.artifacts?.length;
   const emptyAnswer =
     !isUser &&
     !isError &&
     !message.loading &&
     !message.cancelled &&
     message.finishReason === 'stop' &&
-    !answerText.trim() &&
-    !message.images?.length &&
-    !message.generatedFiles?.length &&
-    !message.artifacts?.length;
+    nothingWritten;
+  // The answer hit the model's output limit. The server says whether the
+  // thinking used it all up (`limitReachedIn`); an answer stored before it
+  // did falls back to whether anything was written.
+  const outputLimit =
+    message.finishReason !== 'length'
+      ? null
+      : message.limitReachedIn === 'reasoning'
+        ? 'reasoning'
+        : nothingWritten
+          ? 'noAnswer'
+          : 'cutOff';
   const skillDraft = useMemo(
     () =>
       onSaveAsSkill && !isUser && !isError && !readOnly && !message.loading && !interrupted
@@ -1236,18 +1249,41 @@ function ChatMessage({
 
       {/* Info about finish reason and retry options */}
       {!isUser && !isError && !message.loading && message.finishReason && (
-        <div className="flex items-center gap-2 text-xs text-gray-600 mb-1">
-          {message.finishReason === 'length' && (
-            <span
-              className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
-              title={t(
-                'pages.appChat.truncatedHint',
-                'The model reached its output limit before it finished. Reasoning models spend the same limit on their thinking, so a long thought can use it up before the answer starts. Raise "Max Output Tokens" of the model, or lower its reasoning effort.'
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-600 mb-1">
+          {outputLimit && (
+            <>
+              <Icon
+                name="exclamation-triangle"
+                size="sm"
+                className="shrink-0 text-amber-500"
+                aria-hidden="true"
+              />
+              <span className="text-amber-800 dark:text-amber-300">
+                {outputLimit === 'reasoning'
+                  ? t(
+                      'pages.appChat.outputLimit.reasoning',
+                      'The model used its whole output limit for thinking and never got to the answer. Try again, or ask for something smaller, such as one change at a time.'
+                    )
+                  : outputLimit === 'noAnswer'
+                    ? t(
+                        'pages.appChat.outputLimit.noAnswer',
+                        'The model reached its output limit before it wrote an answer. Try again, or ask for something smaller.'
+                      )
+                    : t(
+                        'pages.appChat.outputLimit.cutOff',
+                        'The answer is incomplete: the model reached its output limit. Ask it to continue, or for a shorter answer.'
+                      )}
+              </span>
+              {outputLimit !== 'cutOff' && (
+                <button
+                  type="button"
+                  onClick={() => handleResend()}
+                  className="underline text-amber-700 dark:text-amber-300"
+                >
+                  {t('common.retry', 'Retry')}
+                </button>
               )}
-            >
-              <Icon name="exclamation-triangle" size="sm" />
-              {t('pages.appChat.truncated', 'Truncated')}
-            </span>
+            </>
           )}
           {emptyAnswer && (
             <>

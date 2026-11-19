@@ -388,6 +388,7 @@ export class AgentLoop {
     const markingPlans = [];
     let finishReason = null;
     let usage = null;
+    let lastStepUsage = null; // the final model call's own usage, not the turn's sum
     const thoughtSignatures = [];
     const images = [];
     let forcedFinalOffered = false; // a tool-less final call was made after a budget gate fired
@@ -440,6 +441,7 @@ export class AgentLoop {
       marking: (plan => (plan ? { text: plan } : null))(combineTextPlans(markingPlans)),
       finishReason: extra.finishReason ?? finishReason,
       usage: usage || { promptTokens: 0, completionTokens: 0, totalTokens: 0, source: 'estimate' },
+      stepUsage: lastStepUsage,
       runUsage: {
         promptTokens: runBudget.input,
         completionTokens: runBudget.output,
@@ -852,6 +854,7 @@ export class AgentLoop {
               'estimate'
             );
         usage = addUsage(usage, stepUsage);
+        lastStepUsage = stepUsage;
         promptAnchor =
           result.usage &&
           result.usage.source !== 'estimate' &&

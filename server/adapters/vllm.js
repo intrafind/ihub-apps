@@ -16,6 +16,43 @@ import { BaseAdapter } from './BaseAdapter.js';
 import { formatOpenAICompatibleMessages } from './openaiCompatibleMessages.js';
 import logger from '../utils/logger.js';
 
+/**
+ * Reasoning tokens per `thinking.level`, sent as vLLM's `thinking_token_budget`.
+ * vLLM ends the reasoning when the budget is spent and the model goes on to the
+ * answer, so this is what makes the level do something on models whose chat
+ * template ignores `reasoning_effort` (Qwen3).
+ */
+export const THINKING_LEVEL_BUDGETS = Object.freeze({
+  minimal: 512,
+  low: 2048,
+  medium: 8192,
+  high: 16384
+});
+
+/** Share of `max_tokens` the reasoning may use at most; the rest is the answer's. */
+export const THINKING_MAX_SHARE = 0.75;
+
+/**
+ * The reasoning budget for one request.
+ *
+ * `thinking.budgetTokens` wins over the level; with neither, the reasoning
+ * may take {@link THINKING_MAX_SHARE} of `max_tokens`. Whatever the source,
+ * the budget never exceeds that share, so an answer always has room.
+ *
+ * @param {Object} model - Model config (`thinking.budgetTokens`)
+ * @param {string|undefined} level - Resolved reasoning level (request or model)
+ * @param {number} maxTokens - `max_tokens` of the request
+ * @returns {number} Reasoning tokens
+ */
+export function resolveThinkingTokenBudget(model, level, maxTokens) {
+  const ceiling = Math.max(1, Math.floor(maxTokens * THINKING_MAX_SHARE));
+  const configured = model.thinking?.budgetTokens;
+  const wanted = Number.isInteger(configured)
+    ? configured
+    : THINKING_LEVEL_BUDGETS[String(level || '').toLowerCase()];
+  return wanted ? Math.min(wanted, ceiling) : ceiling;
+}
+
 class VLLMAdapterClass extends BaseAdapter {
   /**
    * Format messages for vLLM API (same as OpenAI, including audio support —
@@ -86,6 +123,12 @@ class VLLMAdapterClass extends BaseAdapter {
       const level = options.thinkingLevel ?? model.thinking.level;
       if (thinkingEnabled && level) {
         body.reasoning_effort = this.resolveReasoningEffort(options, model);
+      }
+      // A hard cap on the reasoning, in tokens. Qwen's chat template ignores
+      // `reasoning_effort`, so without it a model can think through its whole
+      // `max_tokens` and end with `finish_reason: length` and no answer.
+      if (thinkingEnabled) {
+        body.thinking_token_budget = resolveThinkingTokenBudget(model, level, maxTokens);
       }
       // Hide the reasoning text: vLLM still generates the reasoning tokens (so
       // answer quality is unchanged) but leaves them out of the response. The

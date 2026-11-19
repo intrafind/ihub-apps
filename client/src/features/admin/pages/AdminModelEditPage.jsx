@@ -211,6 +211,13 @@ function AdminModelEditPage() {
     if ((dataToSend.modelType || 'chat') !== 'chat') dataToSend.default = false;
     // Left out of the payload when empty (the loop below drops undefined).
     dataToSend.sampling = samplingPayload(data);
+    // The reasoning budget is typed as text; it is saved as a whole number or
+    // not at all.
+    if (dataToSend.thinking) {
+      const { budgetTokens, ...thinking } = dataToSend.thinking;
+      const budget = toOptionalInt(budgetTokens);
+      dataToSend.thinking = budget > 0 ? { ...thinking, budgetTokens: budget } : thinking;
+    }
     // Per-user token budget. An empty object tells the server to clear a
     // previously saved budget; a new model simply leaves it out.
     dataToSend.usageLimits =

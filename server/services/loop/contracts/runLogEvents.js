@@ -20,6 +20,7 @@ import { z } from 'zod';
 import { provenanceContractSchema } from '../../provenance/provenanceSchema.js';
 import {
   ANSWER_BASIS_KINDS,
+  LIMIT_REACHED_IN,
   ACTIVITY_ORIGINS,
   RUN_KINDS,
   RUN_STATUSES,
@@ -141,6 +142,9 @@ export const abortCauseSchema = z.object({
  * source it used, and one per connected system (named by `label`). `model`
  * stands alone when nothing was used. The server decides it, the chat draws it.
  */
+/** Where an answer that hit the output limit ran out (`run/ended.limitReachedIn`). */
+export const limitReachedInSchema = z.enum(LIMIT_REACHED_IN);
+
 export const answerBasisSchema = z.array(
   z.object({
     kind: z.enum(ANSWER_BASIS_KINDS),
@@ -156,6 +160,8 @@ export const runEndData = z.object({
   knowledgeSources: z.array(z.string()).optional(),
   /** What the answer is based on, for the footer's basis chip (chat turns). */
   answerBasis: answerBasisSchema.optional(),
+  /** Where the answer ran out when it hit the output limit (chat turns). */
+  limitReachedIn: limitReachedInSchema.optional(),
   /** Provenance of the answer, so a replay of the ledger keeps it. */
   provenance: provenanceContractSchema.optional(),
   cost: z.number().nonnegative().optional(),

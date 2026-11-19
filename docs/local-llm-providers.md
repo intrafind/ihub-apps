@@ -423,8 +423,16 @@ support reasoning — iHub reads `reasoning` (current vLLM) or `reasoning_conten
   override is a single boolean toggle, its value is the default and the app/user thinking
   setting still overrides it (so reasoning can be turned off even for a non-`enable_thinking`
   key). Multi-key overrides are passed through verbatim for advanced setups.
-- For models that honor `reasoning_effort` (e.g. gpt-oss), add `"level": "low"|"medium"|
-  "high"` and iHub will also send `reasoning_effort`.
+- `"level": "minimal"|"low"|"medium"|"high"` is sent as `reasoning_effort` (honored by
+  e.g. gpt-oss) **and** as a reasoning token budget, `thinking_token_budget`: `minimal`
+  512, `low` 2,048, `medium` 8,192, `high` 16,384. When the budget is spent, vLLM ends the
+  reasoning and the model writes the answer. This is what makes the level work on Qwen3,
+  whose chat template ignores `reasoning_effort`.
+- `"budgetTokens": 4000` sets the budget directly and wins over the level. With neither,
+  the budget is 75% of the output limit. Whatever the source, the budget is capped at 75% of
+  the output limit, so the model always has room left for the answer. Only the dedicated
+  `"provider": "local"` sends it. A vLLM version without `thinking_token_budget` ignores the
+  field.
 - To let the model reason without showing the reasoning, set `"thoughts": false`. iHub then
   sends `include_reasoning: false`: vLLM still generates the reasoning tokens (answer quality
   is unchanged, and they still take time and count against `maxOutputTokens`) but leaves them
@@ -434,11 +442,12 @@ support reasoning — iHub reads `reasoning` (current vLLM) or `reasoning_conten
   not send it, because the OpenAI API rejects unknown fields.
 
 - **Reasoning uses the output limit.** vLLM counts reasoning tokens against `max_tokens`
-  (`maxOutputTokens`). If the model is still thinking when the limit is reached, the answer is
-  empty and the message shows a **Truncated** label. Raise `maxOutputTokens` (keep prompt +
-  `maxOutputTokens` within the server's `max_model_len`) or turn reasoning off for the app or
-  chat. `reasoning_effort` does not shorten the thinking on models that ignore it (Qwen3), and
-  `"thoughts": false` only hides the text.
+  (`maxOutputTokens`). The reasoning budget above keeps a quarter of it for the answer. If a
+  model still runs out while thinking (a server without `thinking_token_budget`), the answer
+  is empty and the message says the model used its whole output limit for thinking, with a
+  **Retry** button. Lower `level` or `budgetTokens`, or raise `maxOutputTokens` (keep prompt +
+  `maxOutputTokens` within the server's `max_model_len`). `"thoughts": false` only hides the
+  text.
 
 > [!NOTE]
 > The `reasoning` field only appears when vLLM was started with a matching

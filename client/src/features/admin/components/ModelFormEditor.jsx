@@ -1911,6 +1911,40 @@ function ModelFormEditor({
                               )}
                             </p>
                           </div>
+                          {data.provider === 'local' && (
+                            <div className="max-w-xs">
+                              <label
+                                htmlFor="thinking.budgetTokens"
+                                className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                              >
+                                {t('admin.models.fields.thinkingBudgetTokens', 'Reasoning budget')}
+                              </label>
+                              <input
+                                id="thinking.budgetTokens"
+                                type="number"
+                                min="1"
+                                step="1"
+                                inputMode="numeric"
+                                value={data.thinking?.budgetTokens ?? ''}
+                                onChange={e => {
+                                  if (/^\d*$/.test(e.target.value)) {
+                                    handleThinkingChange('budgetTokens', e.target.value);
+                                  }
+                                }}
+                                placeholder={t(
+                                  'admin.models.fields.thinkingBudgetTokensPlaceholder',
+                                  'From reasoning effort'
+                                )}
+                                className={`${INPUT_CLASS} mt-1 block`}
+                              />
+                              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                                {t(
+                                  'admin.models.hints.thinkingBudgetTokens',
+                                  'vLLM (provider "local") only: the most tokens the model may think before it must answer (thinking_token_budget). Empty uses the reasoning effort: minimal 512, low 2,048, medium 8,192, high 16,384. Never more than 75% of the output limit.'
+                                )}
+                              </p>
+                            </div>
+                          )}
                           <div className="flex items-start">
                             <div className="flex items-center h-5">
                               <input

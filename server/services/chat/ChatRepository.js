@@ -170,6 +170,8 @@ const OPTIONAL_MESSAGE_FIELDS = [
   'context',
   'error',
   'finishReason',
+  // Where an answer that hit the output limit ran out (see services/chat/outputLimit.js).
+  'limitReachedIn',
   'attachments',
   'artifacts',
   // MCP App views of an assistant answer (see services/mcp/mcpApps.js).

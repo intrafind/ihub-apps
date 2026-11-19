@@ -215,6 +215,8 @@ function addCompletionMetadata(extras, run, finished) {
     if (run.finishReason !== null && run.finishReason !== undefined) {
       extras.finishReason = run.finishReason;
     }
+    // Where an answer that hit the output limit ran out, as the server decided.
+    if (run.limitReachedIn) extras.limitReachedIn = run.limitReachedIn;
   }
 }
 

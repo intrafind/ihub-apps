@@ -1694,6 +1694,48 @@ test('prompt sources on the prep end up in run/ended.knowledgeSources and never 
   assert.deepEqual(frame(frames, RUN_ENDED).data.answerBasis, [{ kind: 'model' }]);
 });
 
+test('a turn that thinks until the output limit says so: run/ended, summary and ledger carry limitReachedIn', async t => {
+  const chatId = newChatId('limit-reasoning');
+  const frames = captureFrames(t, chatId);
+  const thoughtOut = {
+    prompt_tokens: 100,
+    completion_tokens: 4096,
+    total_tokens: 4196,
+    completion_tokens_details: { reasoning_tokens: 4096 }
+  };
+  const cutOff = {
+    prompt_tokens: 100,
+    completion_tokens: 4096,
+    total_tokens: 4196,
+    completion_tokens_details: { reasoning_tokens: 1000 }
+  };
+  const { service, runLog } = makeService([
+    textTurn('', { usage: thoughtOut, finishReason: 'length' }),
+    textTurn('The first half of', { usage: cutOff, finishReason: 'length' }),
+    textTurn('Done.')
+  ]);
+
+  const thought = await runTurn(service, { chatId, prep: makePrep() });
+  assert.equal(thought.finishReason, 'length');
+  assert.equal(thought.limitReachedIn, 'reasoning');
+  assert.equal(frame(frames, RUN_ENDED).data.limitReachedIn, 'reasoning');
+  assert.equal(
+    runLog.endRun.calls[0][1].limitReachedIn,
+    'reasoning',
+    'a ledger replay says it too'
+  );
+
+  frames.length = 0;
+  const partial = await runTurn(service, { chatId, prep: makePrep() });
+  assert.equal(partial.limitReachedIn, 'answer');
+  assert.equal(frame(frames, RUN_ENDED).data.limitReachedIn, 'answer');
+
+  frames.length = 0;
+  const normal = await runTurn(service, { chatId, prep: makePrep() });
+  assert.equal(normal.limitReachedIn, undefined);
+  assert.equal(frame(frames, RUN_ENDED).data.limitReachedIn, undefined);
+});
+
 test('a turn superseded after it started answering keeps its own sources; the newer turn keeps the ones its request loaded', async t => {
   const chatId = newChatId('supersede-sources');
   const frames = captureFrames(t, chatId);
