@@ -130,8 +130,9 @@ function cutText(text) {
  * What a call asked for, beyond what its row already shows: every argument
  * the model passed, in its order, e.g. an iFinder search's `filter`, `sort`,
  * `maxResults` and `returnFacets`, or the `facet` a facet lookup enumerated.
- * An array argument keeps one value per distinct element, so each filter
- * reads on its own.
+ * An array argument keeps one value per distinct element as it is shown, so
+ * each filter reads on its own and two long values that read the same once cut
+ * are one value.
  *
  * @param {Object} args - the call's arguments
  * @param {string[]} shown - argument names the row already shows
@@ -146,9 +147,11 @@ export function toolDetails(args, shown = []) {
     const values = [];
     for (const item of Array.isArray(value) ? value : [value]) {
       const text = valueText(item);
-      if (!text || seen.has(text)) continue;
-      seen.add(text);
-      values.push({ text: cutText(text) });
+      if (!text) continue;
+      const shown = cutText(text);
+      if (seen.has(shown)) continue;
+      seen.add(shown);
+      values.push({ text: shown });
     }
     if (values.length) {
       details.push({
@@ -168,8 +171,6 @@ const ROW_ARGS = {
   documentId: ['documentId']
 };
 const ROW_ARG_NAMES = new Set(Object.values(ROW_ARGS).flat());
-/** Longest query, link or document id sent as it is: the row shows and links it whole. */
-const ROW_ARG_CHARS = 2048;
 /** Most elements of an array argument sent; enough for the values a row lists. */
 const PREVIEW_MAX_ELEMENTS = 100;
 
@@ -183,7 +184,8 @@ function previewValue(value) {
 
 /**
  * A call's arguments as the chat needs them (`tool/started`), not as the model
- * wrote them: what the row shows (query, link, document id) whole, every other
+ * wrote them: what the row shows (query, link, document id) whole — a link is
+ * opened from the row, so it is never cut — every other
  * value cut to what {@link toolDetails} lists. A long value — the markdown of a
  * PDF, the slides of a deck, the HTML of a web artifact — is cut to its first
  * {@link DETAIL_VALUE_CHARS} characters, so the browser is never sent a
@@ -200,7 +202,7 @@ export function previewToolArgs(args) {
   const out = {};
   for (const [name, value] of Object.entries(args)) {
     if (ROW_ARG_NAMES.has(name) && typeof value === 'string') {
-      out[name] = value.length > ROW_ARG_CHARS ? value.slice(0, ROW_ARG_CHARS) : value;
+      out[name] = value;
     } else if (Array.isArray(value)) {
       out[name] = value
         .slice(0, PREVIEW_MAX_ELEMENTS)

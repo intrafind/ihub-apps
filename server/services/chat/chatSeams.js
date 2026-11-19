@@ -584,14 +584,18 @@ export function chatToolSeam({
       // A stored chat keeps each file as an artifact right away, so the client
       // is sent its card and fetches the bytes when the user opens it. Without
       // a store (or when the policy refuses the file) the card carries them.
+      // Calls run in parallel: the slots are taken before the write and the
+      // unused ones handed back, so together they never pass the cap.
+      const before = filesStored;
+      filesStored += lifted.files.length;
       const kept = await storeGeneratedFilesNow({
         chatId,
         runId: ctx?.runId || chatId,
         files: lifted.files,
         store: artifactStore,
-        alreadyStored: filesStored
+        alreadyStored: before
       });
-      filesStored += kept.stored;
+      filesStored -= lifted.files.length - kept.stored;
       const files = kept.files;
       if (files.length && Array.isArray(generatedFiles)) generatedFiles.push(...files);
       for (const image of lifted.images) {

@@ -293,7 +293,8 @@ describe('previewToolArgs', () => {
   });
 
   test('keeps what the row shows whole: the query, the link, the document id', () => {
-    const url = `https://example.com/${'p'.repeat(400)}`;
+    // A download link with a long token: the row opens it, so it is never cut.
+    const url = `https://example.com/download?token=${'p'.repeat(3000)}`;
     const query = 'q'.repeat(300);
     expect(previewToolArgs({ url, query, documentId: 'doc-1' })).toEqual({
       url,
@@ -306,10 +307,16 @@ describe('previewToolArgs', () => {
     const args = {
       markdown: long,
       filter: ['a', 'b', 'a', { field: long }],
+      // Two slides that read the same once cut are one value, live and stored alike.
+      slides: [
+        { layout: 'content', title: 'Overview', text: `${long}1` },
+        { layout: 'content', title: 'Overview', text: `${long}2` }
+      ],
       sort: { by: 'date' },
       maxResults: 10
     };
     expect(toolDetails(previewToolArgs(args))).toEqual(toolDetails(args));
+    expect(toolDetails(args).find(detail => detail.name === 'slides').values).toHaveLength(1);
   });
 
   test('passes anything that is not an object through, cut', () => {

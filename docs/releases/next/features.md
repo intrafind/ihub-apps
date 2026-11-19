@@ -8,9 +8,13 @@ wrote into a tool call.
 
 - A generated file (PDF, Word, PowerPoint, Excel, code, ZIP) is stored with the chat as soon as the
   tool finishes. The chat shows its card right away and loads the file only when it is opened or
-  downloaded; before, the whole file was streamed into the chat.
+  downloaded; before, the whole file was streamed into the chat. A file that cannot be stored — in
+  a chat that is not stored, with artifacts turned off, or over the artifact size limit — is still
+  sent with its card, so it stays downloadable while the page is open.
 - The details of a tool call show each value cut to 160 characters. The full Markdown of a PDF, the
-  slides of a presentation or the HTML of a web page are no longer sent along with it.
+  slides of a presentation or the HTML of a web page are no longer sent along with it. Search
+  queries, links and document ids stay complete, and an interactive MCP App view still receives
+  its whole input.
 - The notes of a condensed search show the facts found and what was not found. The instructions
   meant for the model and the repeated list of calls are left out, and the notes are cut at 2,000
   characters.

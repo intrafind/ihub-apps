@@ -287,7 +287,8 @@ export async function materializeUserTurn(params) {
  * is stored then, the chat document included.
  *
  * @param {Parameters<typeof materializeUserTurn>[0]} params
- * @returns {Promise<{message: Object|null, refusal: {code: string, message: string}|null}>}
+ * @returns {Promise<{message: Object|null, refusal: {code: string, message: string}|null,
+ *   chatStored: boolean}>} `chatStored`: the chat is in the store
  */
 export async function settleUserTurn({
   repository,
@@ -312,8 +313,11 @@ export async function settleUserTurn({
   temporary = false,
   silent = false
 }) {
-  const none = { message: null, refusal: null };
+  // `chatStored`: the chat exists in the store, so what the turn produces can
+  // be stored under it while it runs (a generated file, `storeGeneratedFilesNow`).
+  const none = { message: null, refusal: null, chatStored: false };
   if (!repository) return none;
+  let chatStored = false;
   const text = typeof content === 'string' ? content : '';
   const title = deriveChatTitle(
     typeof titleText === 'string' && titleText.trim() ? titleText : text
@@ -339,6 +343,7 @@ export async function settleUserTurn({
       });
       return none;
     }
+    chatStored = true;
     const turnPatch = {
       ...(chatPatch && typeof chatPatch === 'object' ? chatPatch : {}),
       activeRunId: runId,
@@ -389,7 +394,7 @@ export async function settleUserTurn({
     // the turn's patch, so the claim is that patch on its own.
     if (silent) {
       if (coalesced) await repository.updateChat(chatId, turnPatch);
-      return { message: null, refusal: null };
+      return { message: null, refusal: null, chatStored };
     }
     const userMessage = {
       ...(message && typeof message === 'object' ? message : {}),
@@ -432,7 +437,7 @@ export async function settleUserTurn({
         .noteChatTurn(projectId)
         .catch(() => {});
     }
-    return { message: appended?.message ?? null, refusal: null };
+    return { message: appended?.message ?? null, refusal: null, chatStored };
   } catch (error) {
     logger.error('Chat user turn not materialized', {
       component: COMPONENT,
@@ -440,7 +445,7 @@ export async function settleUserTurn({
       runId,
       error: error.message
     });
-    return none;
+    return { ...none, chatStored };
   }
 }
 

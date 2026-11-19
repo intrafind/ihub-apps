@@ -51,8 +51,8 @@ re-sync (`view=sse`) or a resumed stream — is cut to what the chat renders
 (`server/services/loop/clientProjection.js`). The producer's frame, which the
 in-process sinks of the `/v1` APIs and the run ledger read, is not changed:
 
-- `tool/started.args`: the query, link and document id whole (up to 2,048
-  characters), every other value cut to 160 characters, an array to 100
+- `tool/started.args`: the query, link and document id whole (the row shows
+  and opens them), every other value cut to 160 characters, an array to 100
   elements (`previewToolArgs` in `shared/run/toolActivity.js`). The whole input
   only for an MCP App view (`mcpApp`), which is handed it.
 - `step/completed.toolCalls[]`: without `arguments` and `metadata`.
