@@ -39,7 +39,8 @@ Every tool has a side effect (`read`, `write`, `destructive`, `unknown`) and a d
    is still asked for until an admin confirms it as a read with an action override.
 5. Otherwise `unknown`, which `writes` treats as a write.
 
-Remote MCP servers and A2A agents are `external`; integrations declare their data flow; every
+Remote MCP servers and A2A agents are `external`; integrations declare their data flow; the page
+reader `read_url` is `external` (whatever its URL carries reaches the host it opens); every
 other tool is `internal` unless its tool file says otherwise. An admin can set an action's data
 flow on the installation (`actions.overrides[<action>].dataFlow`); it wins over the declared one
 and decides which platform default applies.
