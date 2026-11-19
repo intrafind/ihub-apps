@@ -279,9 +279,22 @@ export function modelChecks(
 
   const marking = model.contentMarking.text;
   const detectorId = 'model.watermark.detector';
+  const stId = 'model.watermark.selftest';
+  const stFix = { href: '/admin/eu-ai-act#watermark-keys', labelKey: `${FIX}.runSelfTest` };
+  const stBase = { ...base, fix: stFix, params };
+  const selfTestFailed = () =>
+    check(
+      stId,
+      LEVEL.ERROR,
+      'watermark.selfTestFailed',
+      '{{model}}: the last self-test failed. vLLM and iHub probably do not use the same key.',
+      stBase
+    );
+
   if (!marking.detectorUrl) {
     // The output is still watermarked; only "is this text ours?" cannot detect
-    // it. A hint, not a failure, and the self-test needs a detector to run.
+    // it. A hint, not a failure. The self-test needs a detector to run, so only
+    // a failure it already recorded is still reported.
     out.push(
       check(
         detectorId,
@@ -291,9 +304,10 @@ export function modelChecks(
         { ...base, params }
       )
     );
+    if (selfTest?.state === SELF_TEST_STATE.FAILED) out.push(selfTestFailed());
     return out;
   }
-  if (urlPolicy && urlPolicy.ok === false) {
+  if (urlPolicy?.ok === false) {
     out.push(
       check(
         detectorId,
@@ -366,9 +380,6 @@ export function modelChecks(
     );
   }
 
-  const stId = 'model.watermark.selftest';
-  const stFix = { href: '/admin/eu-ai-act#watermark-keys', labelKey: `${FIX}.runSelfTest` };
-  const stBase = { ...base, fix: stFix, params };
   switch (selfTest?.state) {
     case SELF_TEST_STATE.PASSED:
       out.push(
@@ -382,15 +393,7 @@ export function modelChecks(
       );
       break;
     case SELF_TEST_STATE.FAILED:
-      out.push(
-        check(
-          stId,
-          LEVEL.ERROR,
-          'watermark.selfTestFailed',
-          '{{model}}: the last self-test failed. vLLM and iHub probably do not use the same key.',
-          stBase
-        )
-      );
+      out.push(selfTestFailed());
       break;
     case SELF_TEST_STATE.INCONCLUSIVE:
       out.push(

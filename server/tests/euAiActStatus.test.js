@@ -242,6 +242,13 @@ describe('model checks', () => {
       'admin.euAiAct.checks.watermark.detectorNotSet'
     );
     expect(find(noDetector, 'model.watermark.selftest')).toBeUndefined();
+    // A failure the self-test already recorded stays visible.
+    const failedBefore = modelChecks(
+      ihubModel({ detectorUrl: undefined }),
+      context({ selfTest: { state: 'failed' } })
+    );
+    expect(level(failedBefore, 'model.watermark.detector')).toBe('warn');
+    expect(level(failedBefore, 'model.watermark.selftest')).toBe('error');
     // A URL without a credential is a valid setup; a credential that cannot be read is not.
     expect(
       level(
