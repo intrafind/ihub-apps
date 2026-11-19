@@ -41,7 +41,7 @@ import {
 } from './principals.js';
 
 /** In everything alice writes; never in what an attacker gets back. */
-export const SECRET = 'ALICE-SECRET-7f3a';
+export const SECRET = 'ALICE-TEST-SECRET-7f3a';
 
 const FAKE_ARTIFACT_ID = 'a'.repeat(32);
 const FAKE_SHA256 = 'b'.repeat(64);
