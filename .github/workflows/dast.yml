@@ -184,7 +184,16 @@ jobs:
             pgrep -f 'start-target.mjs|dist/server/server.js' > /dev/null || break
             sleep 1
           done
-          pkill -9 -f 'start-target.mjs|dist/server/server.js' || true
+          if pgrep -f 'start-target.mjs|dist/server/server.js' > /dev/null; then
+            pkill -9 -f 'start-target.mjs|dist/server/server.js' || true
+            for _ in $(seq 1 10); do
+              pgrep -f 'start-target.mjs|dist/server/server.js' > /dev/null || break
+              sleep 1
+            done
+            if pgrep -f 'start-target.mjs|dist/server/server.js' > /dev/null; then
+              echo "The first target did not exit"; exit 1
+            fi
+          fi
           nohup node tests/security/dast/start-target.mjs > "$RUNNER_TEMP/ihub.log" 2>&1 &
           pid=$!
           for _ in $(seq 1 90); do
