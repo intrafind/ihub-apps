@@ -71,10 +71,12 @@ INTERNAL_TARGETS.forEach((url, index) => {
     expect(turn.status).toBe(200);
     // The model did call the page reader (the scenario ran) …
     expect(startedTools(turn).map(frame => frame.data.toolId)).toEqual(['read_url']);
-    // … and was handed a refusal, not a page.
+    // … and was handed a refusal, not a page. The page reader itself refused: a
+    // reader that was never offered (`tool_not_registered`) would prove nothing.
     const results = [...(await toolResultsSeenByModel()).values()];
     expect(results).toHaveLength(1);
     expect(JSON.parse(results[0])).toMatchObject({ error: true });
+    expect(JSON.parse(results[0]).reason).not.toBe('tool_not_registered');
     expect(results[0]).not.toContain(SECRETS.INTERNAL);
     expect(await internalHits(), 'requests that reached the internal network').toEqual([]);
   });

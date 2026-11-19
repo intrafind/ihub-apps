@@ -43,6 +43,10 @@ const MODEL = process.env.REDTEAM_MODEL;
 
 process.chdir(root);
 process.env.CONTENTS_DIR = CONTENTS_DIR;
+// As in the injection suite: the web research app has a page reader only when a fresh
+// install sets up the Staan engine (migration V204 needs this key while seeding).
+// The search tool is not part of the scenarios; the key is never sent anywhere.
+process.env.STAAN_API_KEY ||= 'dummy-staan-key-never-used';
 removeDisposableContents(root, CONTENTS_DIR);
 await prepareE2eContents({ root, contentsDir: CONTENTS_DIR, llmPort: LLM_PORT });
 

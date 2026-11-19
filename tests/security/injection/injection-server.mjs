@@ -42,6 +42,12 @@ const contentsDir = e2eContentsDir(root, { E2E_CONTENTS_DIR: CONTENTS_DIR });
 process.chdir(root);
 // Before any server module is imported: they read it once.
 process.env.CONTENTS_DIR = contentsDir;
+// The suite's web search app gets the page reader only through an installed,
+// configured engine, and a fresh install sets up Staan only when this key is in
+// the environment while it is seeded (migration V204); the server reads it too.
+// The search tool itself is never called, so the key is never sent anywhere.
+// Without it (as on CI runners) the app has no page reader at all.
+process.env.STAAN_API_KEY = 'dummy-staan-key-never-used';
 removeDisposableContents(root, contentsDir);
 
 await prepareE2eContents({
