@@ -44,7 +44,6 @@ jobs:
       REDTEAM_BASE_URL: ${{ secrets.REDTEAM_BASE_URL }}
       REDTEAM_MODEL: ${{ vars.REDTEAM_MODEL }}
       CONFIGURED: ${{ secrets.REDTEAM_BASE_URL != '' && vars.REDTEAM_MODEL != '' }}
-      PROMPTFOO_VERSION: 0.126.0
       PROMPTFOO_DISABLE_TELEMETRY: '1'
       PROMPTFOO_DISABLE_SHARING: '1'
       PROMPTFOO_DISABLE_REMOTE_GENERATION: 'true'
@@ -98,17 +97,26 @@ jobs:
           echo "::add-mask::$token"
           echo "IHUB_TOKEN=$token" >> "$GITHUB_ENV"
 
+      # promptfoo's official image, pinned by digest: no packages are resolved or installed
+      # on the runner, so the run never picks up a new transitive dependency.
       - name: Run the red team
         if: env.CONFIGURED == 'true'
         env:
           REDTEAM_GRADER_KEY: ${{ secrets.REDTEAM_API_KEY || 'none' }}
+          # ghcr.io/promptfoo/promptfoo:0.126.0 (linux/amd64)
+          PROMPTFOO_IMAGE: ghcr.io/promptfoo/promptfoo@sha256:26def11a11832e9c22c64a792d0668a73f35dbad1568cd3c5a1b7cda5501b376
         run: |
           mkdir -p redteam-report
-          # Installed without lifecycle scripts (it runs without them), into its own
-          # directory, at the pinned version; never fetched on demand by npx.
-          npm install --prefix "$RUNNER_TEMP/promptfoo" --ignore-scripts --no-audit --no-fund \
-            "promptfoo@${PROMPTFOO_VERSION}"
-          "$RUNNER_TEMP/promptfoo/node_modules/.bin/promptfoo" eval \
+          promptfoo() {
+            docker run --rm --network host --user "$(id -u):$(id -g)" \
+              -v "$GITHUB_WORKSPACE:/work" -w /work -e HOME=/tmp \
+              -e IHUB_TOKEN -e REDTEAM_BASE_URL -e REDTEAM_MODEL -e REDTEAM_GRADER_KEY \
+              -e PROMPTFOO_DISABLE_TELEMETRY -e PROMPTFOO_DISABLE_SHARING \
+              -e PROMPTFOO_DISABLE_REMOTE_GENERATION -e PROMPTFOO_DISABLE_UPDATE \
+              --entrypoint node "$PROMPTFOO_IMAGE" /app/dist/src/entrypoint.js "$@"
+          }
+          promptfoo --version
+          promptfoo eval \
             -c tests/security/redteam/promptfooconfig.yaml \
             -o redteam-report/results.json -o redteam-report/report.html \
             --no-cache --no-progress-bar
