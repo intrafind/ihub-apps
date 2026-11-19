@@ -100,7 +100,7 @@ function LlmTimeoutsCard() {
       label: t('admin.providers.timeouts.connect', 'Connect timeout (ms)'),
       hint: t(
         'admin.providers.timeouts.connectHint',
-        'Longest wait for the provider’s response headers before a call fails as unreachable. 0 turns it off.'
+        'Longest wait for the connection to the provider (DNS, TCP, TLS) before a call fails as unreachable. Time the model spends before its first answer chunk does not count. 0 turns it off.'
       )
     },
     {

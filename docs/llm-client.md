@@ -145,31 +145,36 @@ different failures and only the middle one deserves patience:
 
 | Phase                                   | Deadline                       | `providerCode` on expiry |
 | --------------------------------------- | ------------------------------ | ------------------------ |
-| Connect + response headers, per attempt | 30 s (60 s on image models)    | `CONNECT_TIMEOUT`        |
-| Headers → first stream chunk            | the call's `timeoutMs` (5 min) | `TIMEOUT`                |
+| Connection (DNS, TCP, TLS), per attempt | 30 s                           | `CONNECT_TIMEOUT`        |
+| Connected → first stream chunk          | the call's `timeoutMs` (5 min) | `TIMEOUT`                |
 | Gap between two stream chunks           | 60 s                           | `STREAM_IDLE_TIMEOUT`    |
 
-Two properties make the connect ceiling a measure of *reach* rather than of
-generation, and both are load-bearing:
+The connect ceiling measures *reach*, nothing else. The transport
+(`httpFetch` with `onConnect`) reports the moment the request has a connected
+socket — after the TLS handshake for HTTPS, at once for a reused keep-alive
+socket, once the proxy has handed over its tunnel for a proxied request — and
+the timer stops there. Waiting for the response headers is not part of it:
+Google withholds the headers of a streamed request until its first chunk is
+ready, so for Gemini with a large prompt, and for every image model's render,
+time-to-first-byte is generation time. When the ceiling still covered the
+headers, each such model needed its own raised `connectTimeoutMs`, and the
+error blamed a reachable endpoint.
 
-**Every provider call streams.** A non-streamed response arrives in one piece
-and the provider withholds its headers until the whole answer has been
-generated — Google's `:generateContent`, and every other buffered completion
-endpoint — so its time-to-first-byte *is* generation time, and timing it caps
-generation instead of detecting an unreachable host. So the transport always
-streams, and a consumer that wants one object gets that stream collected:
+A transport passed to `new LLMClient({ transport })` should call
+`ctx.onConnected()` once it is connected; one that does not is bounded up to
+its response headers instead.
+
+**Every provider call streams.** A consumer that wants one object gets the
+stream collected rather than a buffered request upstream:
 
 - `execute({ stream: false })` and `complete()` return a `CompletionResult`
-  built by `collect()`, not a buffered request upstream.
+  built by `collect()`.
 - The [OpenAI-compatible API](openai-compatible-api.md) does the same: a client
   request with `stream: false` (its default) still streams from the provider
   and is collected into one `chat.completion`. The client-visible wire is
-  unchanged — the golden tests in `openaiProxy.test.js` pin it — but the
-  provider call now flushes its headers immediately.
+  unchanged — the golden tests in `openaiProxy.test.js` pin it.
 - `stream: false` is still honoured for embedders, and adapters keep their
-  non-streamed parsers (the conformance matrix covers both). A ceiling that
-  fires on such a call says in its message that the wait may have been
-  generation rather than asserting the endpoint is unreachable.
+  non-streamed parsers (the conformance matrix covers both).
 
 **Only time on the network counts.** Every attempt first waits for a slot in
 the per-model throttle (`platform.requestConcurrency`, 25 by default). A
@@ -212,19 +217,17 @@ because the client reads them on every call. The provider is the entry the
 model takes its key from (`providerId`, else its `provider`), so one value
 covers all Google models, or all models of a gateway.
 
-Raise the connect ceiling for an endpoint that is reachable but slow to accept
-a request — a VPN-only host, or a gateway that authenticates before it
-forwards. A `CONNECT_TIMEOUT` names both knobs in its message:
+Raise the connect ceiling for an endpoint that is slow to accept a connection —
+a VPN-only host, or a proxy that is slow to open its tunnel. A slow model is
+not a reason: the time it spends before its first chunk does not count. A
+`CONNECT_TIMEOUT` names both knobs in its message:
 
 ```
-Provider google sent no response headers within 30000 ms — endpoint
-unreachable. Raise llm.connectTimeoutMs in platform.json, or connectTimeoutMs
-on model gemini-2.5-flash, if this endpoint is reachable but slow to answer.
+Could not connect to provider google within 30000 ms — endpoint unreachable.
+Raise llm.connectTimeoutMs in platform.json, or connectTimeoutMs on model
+gemini-pro-latest or its provider, if this endpoint is reachable but slow to
+accept connections.
 ```
-
-On a call that opted out of streaming the message instead says that a slow
-generation is indistinguishable from an unreachable host there, and suggests
-streaming the request.
 
 The endpoint it tried is logged rather than returned, with URL secrets
 redacted, because the message reaches inference-API clients.
