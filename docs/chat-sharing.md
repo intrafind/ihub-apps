@@ -146,7 +146,8 @@ not count.
 
 **Revoking** is immediate: `DELETE /api/shares/:shareId` by the owner (or an
 administrator from Admin → Chat History) closes the link, and the record stays
-in the owner's list marked _Revoked_. Deleting the chat deletes its shares and
+in the owner's list marked _Revoked_. The call answers `204 No Content`, also
+when the share was already revoked. Deleting the chat deletes its shares and
 their snapshots, as does the retention sweep.
 
 A viewer cannot tell the reasons apart. Unknown, revoked, expired and used-up

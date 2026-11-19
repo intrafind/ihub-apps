@@ -106,6 +106,25 @@ describe('agent artifact routes: errors', () => {
     expect(res.body).toEqual([]);
   });
 
+  it('answers the owner of a run that produced no artifacts with an empty list', async () => {
+    state.runs.quiet = { data: { _agent: { triggeredBy: { userId: 'owner' } } } };
+    const res = await request(app).get('/api/agents/runs/quiet/artifacts').expect(200);
+    expect(res.body).toEqual([]);
+  });
+
+  it('answers the owner with an empty list before any run has ever produced an artifact', async () => {
+    const root = path.join(tmpRoot, 'data', 'agent-artifacts');
+    const parked = `${root}-parked`;
+    fs.renameSync(root, parked);
+    try {
+      state.runs.quiet = { data: { _agent: { triggeredBy: { userId: 'owner' } } } };
+      const res = await request(app).get('/api/agents/runs/quiet/artifacts').expect(200);
+      expect(res.body).toEqual([]);
+    } finally {
+      fs.renameSync(parked, root);
+    }
+  });
+
   it('answers a failing engine lookup with the generic FORBIDDEN, without leaking the cause', async () => {
     state.getStateFails = true;
     const res = await request(app).get('/api/agents/runs/run1/artifacts').expect(403);

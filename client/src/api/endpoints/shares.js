@@ -109,7 +109,7 @@ export const fetchChatShares = async (chatId, { artifactId } = {}) => {
  * the owner's list marked revoked.
  *
  * @param {string} shareId - Share id.
- * @returns {Promise<{ share: Object }>} the response body
+ * @returns {Promise<void>} resolves on `204 No Content`
  */
 export const revokeChatShare = async shareId => {
   if (!shareId) {
