@@ -118,6 +118,7 @@ test('durations become <ms>; a limit in milliseconds is a setting and stays', ()
       lat: 16,
       ttft: 15,
       took: 3,
+      pausedMs: 27,
       timeoutMs: 120000,
       maxWallClockMs: 180000,
       nested: [{ durationMs: 0 }]
@@ -128,6 +129,7 @@ test('durations become <ms>; a limit in milliseconds is a setting and stays', ()
       latencyMs: '<ms>',
       maxWallClockMs: 180000,
       nested: [{ durationMs: '<ms>' }],
+      pausedMs: '<ms>',
       timeoutMs: 120000,
       took: '<ms>',
       ttft: '<ms>'
@@ -192,6 +194,16 @@ test('a surface can name more volatile keys', () => {
       nested: { etag: '<volatile>' },
       port: '<volatile>'
     }
+  );
+});
+
+test('a surface can name more text rules, for a date that is written in a form of its own', () => {
+  const { normalise } = createNormaliser({
+    textRules: [{ pattern: / · \w{3}, \d{1,2} \w{3} \d{4}, \d{2}:\d{2}$/, replace: ' · <when>' }]
+  });
+  assert.deepEqual(
+    normalise({ title: 'Release watch · Fri, 20 Nov 2026, 12:19', name: 'Release watch' }),
+    { name: 'Release watch', title: 'Release watch · <when>' }
   );
 });
 

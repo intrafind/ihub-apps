@@ -58,6 +58,8 @@ export const DURATION_KEYS = new Set([
   'ttftMs',
   'waitMs',
   'queuedMs',
+  // How long a paused run waited for its answer.
+  'pausedMs',
   'took',
   // The short names of a usage record: latency and time to first token.
   'lat',
@@ -124,13 +126,17 @@ function sortKeys(value) {
  * @param {string[]} [options.tmpDirs=[os.tmpdir()]] - Directories under which temporary paths are created.
  * @param {RegExp[]} [options.idPatterns] - Added to {@link DEFAULT_ID_PATTERNS}; one capture group each.
  * @param {string[]} [options.volatileKeys] - More keys whose value is replaced by `<volatile>`.
+ * @param {Array<{pattern: RegExp, replace: string}>} [options.textRules] - More replacements inside
+ *   strings, for a value that holds the date in a form of its own (the title of a scheduled run's
+ *   chat). Applied before the id patterns.
  * @returns {{normalise: (value: any) => any, text: (value: string) => string, ids: Map<string, number>}}
  */
 export function createNormaliser({
   appVersion,
   tmpDirs = [os.tmpdir()],
   idPatterns = [],
-  volatileKeys = []
+  volatileKeys = [],
+  textRules = []
 } = {}) {
   /** @type {Map<string, number>} */
   const ids = new Map();
@@ -152,6 +158,7 @@ export function createNormaliser({
     for (const pattern of tmpPatterns) out = out.replace(pattern, '<tmp>');
     out = applyDateRule(out);
     out = out.replace(ISO_TIMESTAMP, '<ts>');
+    for (const rule of textRules) out = out.replace(rule.pattern, rule.replace);
     for (const pattern of patterns) {
       out = out.replace(pattern, (match, id) => match.replace(id, idToken(id)));
     }

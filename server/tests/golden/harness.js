@@ -77,7 +77,7 @@ const NAME = /^[a-z0-9][a-z0-9-]*$/;
  * @param {string} definition.name - Lower-case name of the case, unique within the surface.
  * @param {string} definition.title - One sentence: what the case pins.
  * @param {Object|(() => Object)} definition.config - What the config cache holds, see
- *   {@link startGoldenEnv}; also `idPatterns` and `volatileKeys` for the normaliser.
+ *   {@link startGoldenEnv}; also `idPatterns`, `volatileKeys` and `textRules` for the normaliser.
  * @param {(env: Object) => Array} definition.script - The model's answers, one turn per model call
  *   (`helpers/scriptedModel.js`).
  * @param {(env: Object) => Promise<Object|void>} definition.run - Drives the surface. What it returns is
@@ -114,6 +114,7 @@ export function defineCase(definition) {
  * @param {Object} [config.platform] - `config/platform.json`.
  * @param {Object[]} [config.apps]
  * @param {Object[]} [config.models]
+ * @param {Object[]} [config.workflows] - `config/workflows.json`.
  * @param {Object} [config.groups] - `config/groups.json` (`{ groups: {...} }`).
  * @param {Object} [config.users] - The `users` of `config/users.json`.
  * @param {Object|(() => Object)} [config.integrations] - `config/integrations.json`; a function is called
@@ -187,6 +188,7 @@ async function setUp(config, restore, stop) {
     'config/models.json': config.models ?? [],
     'config/groups.json': config.groups ?? { groups: {} },
     'config/users.json': { users: config.users ?? {} },
+    'config/workflows.json': config.workflows ?? [],
     'config/integrations.json':
       typeof config.integrations === 'function'
         ? config.integrations()
@@ -334,7 +336,8 @@ export async function recordCase(goldenCase) {
     const normaliser = createNormaliser({
       appVersion: getAppVersion(),
       idPatterns: config.idPatterns,
-      volatileKeys: config.volatileKeys
+      volatileKeys: config.volatileKeys,
+      textRules: config.textRules
     });
     const usageRecords = await env.usageRecords();
 
