@@ -41,6 +41,7 @@ import crypto from 'node:crypto';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 import { atomicWriteFile, atomicWriteStream } from '../../../utils/atomicWrite.js';
+import { fileRangeStream } from '../../../utils/fileRangeStream.js';
 import logger from '../../../utils/logger.js';
 import { BlobStore } from '../../BlobStore.js';
 import {
@@ -50,7 +51,6 @@ import {
   encodeBlobCursor as encodeCursor,
   assertStreamLength,
   guardStream,
-  mapStreamError,
   streamLengthError,
   toBlobBuffer as toBuffer
 } from '../../blobSupport.js';
@@ -208,7 +208,7 @@ export class FilesystemBlobStore extends BlobStore {
    * resolves, so a blob replaced or deleted afterwards is still read to its
    * end as it was (a `put` renames a new file into place and never changes
    * one). A read error arrives on the stream as a `StorageError`, code
-   * `IO_ERROR`.
+   * `IO_ERROR`, and so does a file that ends before the reported `bytes`.
    */
   async openRead(ns, key) {
     const file = this._path(ns, key);
@@ -221,19 +221,21 @@ export class FilesystemBlobStore extends BlobStore {
         await handle.close();
         return { key, bytes: 0, stream: Readable.from([], { objectMode: false }) };
       }
-      // Closes the handle when it ends or is destroyed. `end` pins the read
-      // to the size that is reported.
-      const stream = handle.createReadStream({
-        start: 0,
-        end: stat.size - 1,
-        highWaterMark: READ_CHUNK_BYTES
+      // Reads the open file, closes the handle when it ends or is destroyed,
+      // and delivers exactly the size that is reported: a file that turns out
+      // shorter (truncated from outside) fails the stream instead of ending
+      // it. A failed read reaches the consumer as a storage error, like `get`.
+      const stream = fileRangeStream(handle, {
+        end: stat.size,
+        chunkBytes: READ_CHUNK_BYTES,
+        mapError: error =>
+          error instanceof StorageError
+            ? error
+            : new StorageError(`Failed to read blob ${ns}/${key}`, {
+                code: 'IO_ERROR',
+                cause: error
+              })
       });
-      // A failed read reaches the consumer as a storage error, like `get`.
-      mapStreamError(
-        stream,
-        error =>
-          new StorageError(`Failed to read blob ${ns}/${key}`, { code: 'IO_ERROR', cause: error })
-      );
       return { key, bytes: stat.size, stream: guardStream(stream) };
     } catch (error) {
       await handle?.close().catch(() => {});

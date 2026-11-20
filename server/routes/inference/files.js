@@ -416,7 +416,11 @@ export default function registerFilesRoutes(app) {
         });
       }
       // Streamed from the store: the original is never held whole in memory.
-      const original = await store.openOriginal(scope, descriptor.id);
+      // A conditional request is answered from the recorded hash, before the
+      // original is opened.
+      const original = await store.openOriginal(scope, descriptor.id, {
+        unless: found => isFreshFor(req, res, etagOfSha256(found.sha256))
+      });
       if (!original) {
         throw new InferenceApiError(404, 'file_not_found', `No such file: ${descriptor.id}`, {
           param: 'file_id'
@@ -432,14 +436,12 @@ export default function registerFilesRoutes(app) {
           { param: 'file_id', details: { originalDeletedAt: original.originalDeletedAt || null } }
         );
       }
-      if (isFreshFor(req, res, etagOfSha256(original.sha256))) {
-        original.stream.destroy();
-        return res.status(304).end();
-      }
+      if (original.unopened) return res.status(304).end();
       // A failure after the first byte aborts the response; one before it is
-      // answered below like any other.
+      // answered below like any other, without these headers.
       return await sendStream(req, res, original.stream, {
         headers: {
+          ETag: etagOfSha256(original.sha256),
           'Content-Type': servedMediaType(original.mimeType),
           'Content-Length': String(original.originalBytes),
           'Content-Disposition': buildContentDisposition(original.name)

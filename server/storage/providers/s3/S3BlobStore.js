@@ -102,6 +102,15 @@ const RETRY_DELAY_BASE_MS = 500;
 const DEADLINE_SLACK_MS = 1000;
 
 /**
+ * How long the consumer of an `openRead` stream may take nothing before the
+ * stream is given up and its connection released. Far above any pause of a
+ * reader that is still there (a slow link, a download the browser holds
+ * back); the time the bucket may be silent is bounded separately and much
+ * tighter (`./s3BodyStream.js`).
+ */
+const ABANDONED_READ_MS = 15 * 60 * 1000;
+
+/**
  * An error the error table reads as a timeout.
  *
  * @param {string} message
@@ -242,6 +251,9 @@ export class S3BlobStore extends BlobStore {
    *   unset, what the attempts add up to (`sendBudgetMs`).
    * @param {number} [options.minThroughputBytesPerSecond] - Slowest transfer
    *   that is accepted; every call gets `bytes / rate` on top of its deadline.
+   * @param {number} [options.abandonedReadMs] - How long the consumer of an
+   *   `openRead` stream may take nothing before the stream is given up;
+   *   15 minutes by default, 0 for no bound.
    *   No allowance when unset.
    */
   constructor({
@@ -256,7 +268,8 @@ export class S3BlobStore extends BlobStore {
     connectTimeoutMs,
     maxAttempts,
     operationTimeoutMs,
-    minThroughputBytesPerSecond
+    minThroughputBytesPerSecond,
+    abandonedReadMs = ABANDONED_READ_MS
   }) {
     super();
     if (typeof bucket !== 'string' || !bucket) {
@@ -289,6 +302,9 @@ export class S3BlobStore extends BlobStore {
           : attemptsBudget;
     /** The client's request timeout of one attempt, which a large upload extends. */
     this._requestTimeoutMs = attemptsBudget === null ? null : requestTimeoutMs;
+    /** How long the reader of an `openRead` stream may take nothing; null for no bound. */
+    this._abandonedReadMs =
+      Number.isFinite(abandonedReadMs) && abandonedReadMs > 0 ? abandonedReadMs : null;
     this._minThroughput =
       Number.isFinite(minThroughputBytesPerSecond) && minThroughputBytesPerSecond > 0
         ? minThroughputBytesPerSecond
@@ -583,8 +599,11 @@ export class S3BlobStore extends BlobStore {
    * `STORAGE_UNAVAILABLE`, as does a body that is cut or has another length
    * than declared. Destroying the stream aborts the request.
    *
-   * A consumer that reads nothing for `requestTimeoutMs` loses the
-   * connection to the client's socket timeout.
+   * The time a consumer takes for itself is not the bucket's: the client's
+   * socket timeout is off the connection while the consumer does not ask for
+   * data, so a slow link or a paused download is not cut. A consumer that
+   * takes nothing for 15 minutes loses the stream with `READ_ABANDONED`,
+   * which is what releases the connection of a stream nobody reads.
    *
    * @throws {StorageError} Code `BLOB_TOO_LARGE` for an object over the limit.
    */
@@ -621,6 +640,12 @@ export class S3BlobStore extends BlobStore {
           ? null
           : Math.min(this._sendBudgetMs, this._requestTimeoutMs ?? Infinity),
       budgetMs: this._bodyDeadlineMs(startedAt, declared),
+      abandonedMs: this._abandonedReadMs,
+      socketIdleMs: this._requestTimeoutMs,
+      abandonedError: message =>
+        new StorageError(`Blob ${ns}/${key}: ${message}; the read was given up`, {
+          code: 'READ_ABANDONED'
+        }),
       mapError: error => (error instanceof StorageError ? error : this._bodyFailure(error, where)),
       timeoutError,
       lengthError: unavailable
@@ -636,7 +661,9 @@ export class S3BlobStore extends BlobStore {
    * sent once: the SDK cannot rewind it, so the retries `put` gets
    * (`maxAttempts`) do not apply and a transient failure rejects the call. An
    * object is visible only when its `PutObject` succeeded, so a failed or
-   * short stream leaves the key as it was.
+   * short stream leaves the key as it was. So does a stream that is longer
+   * than declared or fails after its last declared byte: the request's last
+   * chunk is sent only once the stream has ended.
    *
    * `bytes` and `sha256` describe what was sent. The `contentType` hint is
    * not stored.
@@ -659,6 +686,15 @@ export class S3BlobStore extends BlobStore {
       stream.destroy();
       throw error;
     }
+    if (bytes === 0) {
+      // A request without a body is complete with its headers, so nothing
+      // could be held back: the source is read to its end first.
+      for await (const chunk of stream) {
+        if (chunk.length > 0) throw streamLengthError(`${ns}/${key}`, chunk.length, 0);
+      }
+      const ref = await this.put(ns, key, Buffer.alloc(0));
+      return { key, bytes: 0, sha256: ref.sha256 };
+    }
     const hash = crypto.createHash('sha256');
     let count = 0;
     /** What the payload itself failed with, as opposed to the request. */
@@ -671,19 +707,29 @@ export class S3BlobStore extends BlobStore {
       payloadError = error;
       gaveUp.abort(error);
     };
+    // The last chunk is held back until the source has ended. The server
+    // stores the object as soon as it has the declared number of bytes; if
+    // they were all handed on at once, a source that goes on (it is longer
+    // than declared) or fails after its last byte would be noticed only
+    // after the key was replaced.
+    let held = null;
     const body = new Transform({
       transform(chunk, _encoding, callback) {
+        if (chunk.length === 0) return void callback();
         count += chunk.length;
         if (count > bytes) {
           payloadFailed(streamLengthError(`${ns}/${key}`, count, bytes));
           return void callback(payloadError);
         }
         hash.update(chunk);
-        return void callback(null, chunk);
+        const ready = held;
+        held = chunk;
+        return ready ? void callback(null, ready) : void callback();
       },
       flush(callback) {
         if (count !== bytes) payloadFailed(streamLengthError(`${ns}/${key}`, count, bytes));
-        callback(payloadError);
+        if (payloadError) return void callback(payloadError);
+        return held ? void callback(null, held) : void callback();
       }
     });
     let requestSettled = false;

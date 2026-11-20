@@ -345,15 +345,22 @@ export class ArtifactRepository {
    *
    * @param {{type: string, id: string}} scope - Scope the caller is authorized for.
    * @param {string} artifactId - Artifact id from a descriptor.
+   * @param {Object} [options]
+   * @param {(descriptor: Object) => boolean} [options.unless] - Asked with
+   *   the descriptor before the payload is opened. When it returns true the
+   *   payload is not touched and the result is the descriptor with
+   *   `unopened: true` and no stream: for a conditional request that is
+   *   answered from the recorded `sha256` alone.
    * @returns {Promise<Object|null>} The descriptor with `bytes` and `stream`
    *   (a Node `Readable`), or null when there is no such artifact.
    * @throws {import('../../storage/errors.js').StorageError} When the payload
    *   is there and cannot be opened (`CORRUPT_BLOB`, `KEY_UNAVAILABLE`,
    *   `STORAGE_UNAVAILABLE`).
    */
-  async openRead(scope, artifactId) {
+  async openRead(scope, artifactId, { unless } = {}) {
     const found = await this._locate(scope, artifactId, 'openRead');
     if (!found) return null;
+    if (unless?.(found.descriptor)) return { ...found.descriptor, unopened: true };
     const blob = await openBlobRead(this.blobs, ARTIFACTS_NAMESPACE, found.key);
     if (!blob) return this._payloadMissing(found.target, artifactId);
     return { ...found.descriptor, bytes: blob.bytes, stream: blob.stream };

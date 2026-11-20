@@ -49,7 +49,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import logger from '../../../utils/logger.js';
 import { createJsonlAppender } from '../../../utils/jsonlAppender.js';
-import { atomicWriteFile } from '../../../utils/atomicWrite.js';
+import { atomicWriteFile, writeFully } from '../../../utils/atomicWrite.js';
 import { AppendLog } from '../../AppendLog.js';
 import {
   CorruptBlobError,
@@ -1080,7 +1080,8 @@ export class FilesystemAppendLog extends AppendLog {
           pending.push(text);
           pendingBytes += text.length;
           if (pendingBytes < REWRITE_CHUNK_BYTES) return;
-          await out.write(pending.join(''));
+          // Completely: a short write must not end up in the renamed file.
+          await writeFully(out, pending.join(''));
           pending = [];
           pendingBytes = 0;
         };
@@ -1117,7 +1118,7 @@ export class FilesystemAppendLog extends AppendLog {
           }
         }
         if (counts.plain === 0 && counts.torn === 0) return counts;
-        if (pending.length > 0) await out.write(pending.join(''));
+        if (pending.length > 0) await writeFully(out, pending.join(''));
         await out.sync();
         await out.close();
         await fs.rename(scratch, file);

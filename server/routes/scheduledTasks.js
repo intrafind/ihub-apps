@@ -542,7 +542,11 @@ export default function registerScheduledTaskRoutes(app) {
       return res.json(text);
     }
     // Streamed from the store: the original is never held whole in memory.
-    const original = await store.openOriginal(scope, fileId);
+    // A conditional request is answered from the recorded hash, before the
+    // original is opened.
+    const original = await store.openOriginal(scope, fileId, {
+      unless: found => isFreshFor(req, res, etagOfSha256(found.sha256))
+    });
     if (!original) throw new ServiceError('NOT_FOUND', 'File not found');
     if (original.discarded) {
       throw new ServiceError(
@@ -552,13 +556,12 @@ export default function registerScheduledTaskRoutes(app) {
     }
     const download = req.query.download === '1' || req.query.download === 'true';
     res.setHeader('Cache-Control', 'private, no-store');
-    if (isFreshFor(req, res, etagOfSha256(original.sha256))) {
-      original.stream.destroy();
-      return res.status(304).end();
-    }
-    // A failure after the first byte aborts the response (`sendStream`).
+    if (original.unopened) return res.status(304).end();
+    // A failure after the first byte aborts the response (`sendStream`); one
+    // before it is answered without the `ETag`.
     return await sendStream(req, res, original.stream, {
       headers: {
+        ETag: etagOfSha256(original.sha256),
         'Content-Type': servedMediaType(original.mimeType),
         'Content-Length': String(original.originalBytes),
         'Content-Disposition': download ? buildContentDisposition(original.name) : 'inline',

@@ -126,11 +126,59 @@ export async function atomicWriteFile(filePath, data, options = 'utf8') {
 }
 
 /**
+ * The error for a file that holds fewer bytes than were written to it.
+ *
+ * @param {number} written - Bytes the file took.
+ * @param {number} expected - Bytes handed in.
+ * @returns {Error} Code `EIO`.
+ */
+function shortWriteError(written, expected) {
+  return Object.assign(
+    new Error(
+      `Short write: the file took ${written} of ${expected} bytes and was not put in place`
+    ),
+    { code: 'EIO' }
+  );
+}
+
+/**
+ * Write a whole buffer through an open file handle, at its current position.
+ *
+ * `FileHandle.write` is one `write(2)`: when the file system fills up inside
+ * the buffer the kernel writes what fits and reports the short count, without
+ * an error. Dropping that count leaves a truncated file that looks written.
+ * This writes the rest until the buffer is out, and fails when the file takes
+ * nothing more.
+ *
+ * @param {import('node:fs/promises').FileHandle} handle - Open for writing.
+ * @param {Buffer|Uint8Array|string} data - What to write; a string as UTF-8.
+ * @returns {Promise<void>}
+ * @throws What the write fails with (`ENOSPC`, `EIO`), or an `EIO` error when
+ *   a write made no progress.
+ *
+ * @example
+ * for await (const chunk of stream) await writeFully(handle, chunk);
+ */
+export async function writeFully(handle, data) {
+  const buffer = typeof data === 'string' ? Buffer.from(data, 'utf8') : data;
+  let offset = 0;
+  while (offset < buffer.length) {
+    const { bytesWritten } = await handle.write(buffer, offset, buffer.length - offset, null);
+    if (!(bytesWritten > 0)) throw shortWriteError(offset, buffer.length);
+    offset += bytesWritten;
+  }
+}
+
+/**
  * Atomically write a stream to a file: {@link atomicWriteFile} for content
  * that is not in memory. The stream goes to a temp file beside the target,
  * which is fsynced and renamed over the target once the stream ended, so a
  * reader sees the old file or the new one and a failed or aborted stream
  * leaves the target as it was.
+ *
+ * Every chunk is written completely ({@link writeFully}) and the temp file's
+ * size is compared with the bytes handed in before the rename: a file that is
+ * short (a full disk) is never put in place.
  *
  * `filePath` is trusted, as in {@link atomicWriteFile}.
  *
@@ -154,12 +202,20 @@ export async function atomicWriteStream(filePath, stream, { onChunk, onEnd, mode
     // lgtm[js/path-injection] -- caller-validated path; see atomicWriteFile.
     const handle = await fs.open(tempPath, 'wx', targetMode ?? 0o666);
     try {
+      let handedIn = 0;
       // Leaving the loop by a throw destroys the stream.
       for await (const chunk of stream) {
         onChunk?.(chunk);
-        await handle.write(chunk);
+        // Counted in bytes, also for a stream that yields strings.
+        const data = typeof chunk === 'string' ? Buffer.from(chunk, 'utf8') : chunk;
+        await writeFully(handle, data);
+        handedIn += data.length;
       }
       onEnd?.();
+      // The last line of defence before the rename: the file must hold every
+      // byte that was handed in, whatever the writes above reported.
+      const { size } = await handle.stat();
+      if (size !== handedIn) throw shortWriteError(size, handedIn);
       if (targetMode !== undefined) await handle.chmod(targetMode);
       await handle.sync();
     } finally {

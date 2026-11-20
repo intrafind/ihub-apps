@@ -17,7 +17,6 @@ import express from 'express';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { Readable } from 'node:stream';
 import * as realAuthRequired from '../middleware/authRequired.js';
 
 const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-artifacts-'));
@@ -185,14 +184,20 @@ describe('agent artifact routes: errors', () => {
     expect(res.text).toBe('# Report');
   });
   it('answers a read error before the first byte as an ordinary 500, not an unhandled stream error', async () => {
-    const spy = jest.spyOn(fs, 'createReadStream').mockImplementation(
-      () =>
-        new Readable({
-          read() {
-            this.destroy(new Error('EIO: disk fault at /secret/path'));
-          }
-        })
-    );
+    // The file opens and its head is read; the read of the content fails.
+    const open = fs.promises.open;
+    const spy = jest.spyOn(fs.promises, 'open').mockImplementation(async (file, ...rest) => {
+      const handle = await open(file, ...rest);
+      if (!String(file).endsWith('report.md')) return handle;
+      const read = handle.read.bind(handle);
+      let reads = 0;
+      handle.read = (...args) => {
+        reads += 1;
+        if (reads === 1) return read(...args);
+        return Promise.reject(new Error('EIO: disk fault at /secret/path'));
+      };
+      return handle;
+    });
     try {
       const res = await request(app).get('/api/agents/runs/run1/artifacts/report.md?download=1');
       expect(res.status).toBe(500);

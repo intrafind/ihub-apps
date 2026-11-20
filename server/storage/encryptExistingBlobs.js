@@ -67,7 +67,56 @@ function sameHead(stream, head) {
       yield chunk;
     }
   }
-  return Readable.from(checked(), { objectMode: false });
+  const out = Readable.from(checked(), { objectMode: false });
+  // A write that is refused before it reads (the key cannot be wrapped, the
+  // blob is over the limit) destroys `out` without ever starting the
+  // generator, whose loop is what would release the source. Tied together
+  // here, so the open file or the bucket request never outlives the wrapper.
+  out.once('close', () => stream.destroy());
+  return out;
+}
+
+/** How often one blob is sent before it is counted as failed. */
+const WRITE_ATTEMPTS = 3;
+
+/**
+ * Write one plaintext blob back through the encrypting store, as a stream.
+ *
+ * A streamed write is sent once by the backend (a stream cannot be rewound),
+ * so the retries a buffered `put` gets from the S3 client are made here, by
+ * opening the source again: a transient failure of the bucket does not leave
+ * the blob in plaintext until the next run. Only `STORAGE_UNAVAILABLE` is
+ * tried again, at most {@link WRITE_ATTEMPTS} times in all.
+ *
+ * @param {import('./EncryptingBlobStore.js').EncryptingBlobStore} store
+ * @param {string} namespace
+ * @param {{key: string, bytes: number}} item - The blob as it was listed.
+ * @param {Buffer} head - Its first bytes, by which it was judged plaintext.
+ * @returns {Promise<boolean>} False when the blob is gone.
+ * @throws {StorageError} `IO_ERROR` when the blob changed since it was looked
+ *   at; else what the write failed with.
+ */
+async function encryptBlob(store, namespace, item, head) {
+  for (let attempt = 1; ; attempt += 1) {
+    // The stream reads the object as it was when it was opened, also while
+    // its replacement is written to the same key.
+    const plain = await store.inner.openRead(namespace, item.key);
+    if (!plain) return false;
+    if (plain.bytes !== item.bytes) {
+      plain.stream.destroy();
+      throw changedMeanwhile();
+    }
+    try {
+      await store.putStream(namespace, item.key, sameHead(plain.stream, head), {
+        bytes: plain.bytes
+      });
+      return true;
+    } catch (error) {
+      // Released by `putStream` already; again for a store that did not.
+      plain.stream.destroy();
+      if (attempt >= WRITE_ATTEMPTS || error?.code !== 'STORAGE_UNAVAILABLE') throw error;
+    }
+  }
 }
 
 /**
@@ -148,17 +197,8 @@ export async function encryptExistingBlobs(
         } else {
           if (!dryRun) {
             // As a stream, so the largest blob needs no more memory than the
-            // smallest. The stream reads the object as it was when it was
-            // opened, also while its replacement is written to the same key.
-            const plain = await inner.openRead(namespace, item.key);
-            if (!plain) continue;
-            if (plain.bytes !== item.bytes) {
-              plain.stream.destroy();
-              throw changedMeanwhile();
-            }
-            await store.putStream(namespace, item.key, sameHead(plain.stream, head), {
-              bytes: plain.bytes
-            });
+            // smallest.
+            if (!(await encryptBlob(store, namespace, item, head))) continue;
           }
           counts.encrypted += 1;
           plaintextBytes += item.bytes || 0;

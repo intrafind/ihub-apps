@@ -23,6 +23,9 @@ import { Writable } from 'node:stream';
  * - `res.destroy(error)` records `res.destroyedWith` and marks the double
  *   `aborted`, which is what a client sees as a broken download.
  * - `res.end()` without a piped body stays what the double had.
+ * - `res.getHeader` and `res.removeHeader` are added to a double that keeps
+ *   its headers in `res.headers` under lower-case names and has neither: a
+ *   streaming route takes back headers that belong to a body it did not send.
  *
  * @param {Object} res - The double; needs no stream method of its own.
  * @returns {Object} The same object.
@@ -56,6 +59,12 @@ export function makeStreamable(res) {
     'write'
   ]) {
     res[name] = sink[name].bind(sink);
+  }
+  if (res.headers && typeof res.headers === 'object') {
+    res.getHeader ??= name => res.headers[String(name).toLowerCase()];
+    res.removeHeader ??= name => {
+      delete res.headers[String(name).toLowerCase()];
+    };
   }
   const end = res.end;
   res.headersSent = false;

@@ -83,6 +83,8 @@ export async function createS3Client(config, { platformConfig = null } = {}) {
       // Idle time on the socket, which also covers the response body: a server
       // that sends the headers and then nothing ends the read with an error.
       // The blob store adds an overall deadline for a body that only trickles.
+      // A streamed read (`openRead`) takes this timer off the socket while
+      // its consumer is the one not reading: see `./s3BodyStream.js`.
       socketTimeout: config.requestTimeoutMs
     }
   });

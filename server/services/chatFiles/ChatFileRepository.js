@@ -1127,14 +1127,24 @@ export class ChatFileRepository {
    *
    * @param {{type: 'chat'|'task'|'user', id: string}} scope
    * @param {string} fileId
+   * @param {Object} [options]
+   * @param {(descriptor: Object) => boolean} [options.unless] - Asked with
+   *   the descriptor of a file that has an original, before the original is
+   *   opened. When it returns true the original is not touched and the result
+   *   is the descriptor with `discarded: false`, `unopened: true` and no
+   *   stream: for a conditional request that is answered from the recorded
+   *   `sha256` alone.
    * @returns {Promise<Object|null>} The descriptor with `discarded`, and for
    *   a stored original `originalBytes` (as read from the store) and `stream`.
    * @throws {import('../../storage/errors.js').StorageError} When the original
    *   is there and cannot be opened.
    */
-  async openOriginal(scope, fileId) {
+  async openOriginal(scope, fileId, { unless } = {}) {
     const found = await this._locateOriginal(scope, fileId, 'openOriginal');
     if (!found || found.discarded) return found;
+    if (unless?.(found.descriptor)) {
+      return { ...found.descriptor, discarded: false, unopened: true };
+    }
     const blob = await openBlobRead(this.blobs, CHAT_FILE_BLOBS_NAMESPACE, found.blobKey);
     if (!blob) {
       return { ...found.descriptor, hasOriginal: false, discarded: true, data: null };

@@ -210,6 +210,12 @@ export async function writeZip(entries, output) {
     }
     await Promise.race([archive.finalize(), failed, closed]);
   } catch (error) {
+    // Unpiped first: aborting an archive ends it, and the pipe would pass
+    // that on as a clean end of `output` one tick later. Whether a response
+    // then went out as an empty `200` or as the error would depend on nothing
+    // awaiting between this throw and the answer. The caller ends or
+    // destroys `output`.
+    archive.unpipe(output);
     archive.abort();
     throw error;
   } finally {

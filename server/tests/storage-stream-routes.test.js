@@ -25,7 +25,8 @@ import { artifactKey } from '../services/artifacts/ArtifactRepository.js';
 import { chatFileKey } from '../services/chatFiles/ChatFileRepository.js';
 import registerChatRoutes from '../routes/chats.js';
 import registerChatShareRoutes from '../routes/chatShares.js';
-import { callRoute } from './support/httpRoute.js';
+import { StorageError } from '../storage/errors.js';
+import { callRoute, failNextOpenRead } from './support/httpRoute.js';
 
 const ADA = { id: 'user-ada', name: 'Ada Lovelace', email: 'ada@example.com' };
 const MIB = 1024 * 1024;
@@ -401,5 +402,89 @@ describe('streamed downloads of a share', () => {
     restore = await damage(fileBlob, LATE);
     assertCut(await callRoute(ROUTES.shareFile, { params: fileParams }), file.data, 'original');
     await restore();
+  });
+});
+
+describe('streamed downloads: what an error answer and a 304 carry', () => {
+  /** The four downloads that send an entity tag, for one seeded chat. */
+  async function downloads() {
+    const { chatId, image, file } = await seedChat();
+    const share = await shareOf(chatId);
+    return [
+      ['artifact', ROUTES.chatArtifact, { params: { chatId, artifactId: image.id }, user: ADA }],
+      ['file', ROUTES.chatFile, { params: { chatId, fileId: file.id }, user: ADA }],
+      [
+        'shared artifact',
+        ROUTES.shareArtifact,
+        { params: { shareId: share.id, artifactId: image.id } }
+      ],
+      ['shared file', ROUTES.shareFile, { params: { shareId: share.id, fileId: file.id } }]
+    ];
+  }
+
+  it('answers a read that fails before its first byte without the headers of the content', async () => {
+    const blobs = getStorage().blobs;
+    for (const [label, handlers, request] of await downloads()) {
+      const restore = failNextOpenRead(blobs, {
+        after: 0,
+        error: new StorageError('The bucket went away', { code: 'STORAGE_UNAVAILABLE' })
+      });
+      let outcome;
+      try {
+        outcome = await callRoute(handlers, request);
+      } finally {
+        restore();
+      }
+      assert.equal(outcome.status, 503, `${label}: ${outcome.body.toString('utf8', 0, 200)}`);
+      assert.match(outcome.headers['content-type'], /application\/problem\+json/, label);
+      // A cache may keep an answer with explicit freshness whatever its
+      // status: the error would be served as the content for a year.
+      assert.doesNotMatch(outcome.headers['cache-control'] || '', /max-age|immutable/, label);
+      // Express tags the error body itself (a weak tag); the content's must be gone.
+      assert.doesNotMatch(
+        outcome.headers.etag || '',
+        /^"[0-9a-f]{64}"$/,
+        `${label}: no entity tag of the content`
+      );
+      assert.equal(outcome.headers['content-disposition'], undefined, label);
+
+      // The same URL answers with the content, and its headers, afterwards.
+      const whole = await callRoute(handlers, request);
+      assert.equal(whole.status, 200, label);
+      assert.match(whole.headers.etag, /^"[0-9a-f]{64}"$/, label);
+    }
+  });
+
+  it('answers a conditional request from the recorded hash, without opening the blob', async () => {
+    const blobs = getStorage().blobs;
+    for (const [label, handlers, request] of await downloads()) {
+      const first = await callRoute(handlers, request);
+      assert.equal(first.status, 200, label);
+      const reads = [];
+      const { openRead, get } = blobs;
+      blobs.openRead = function countedOpenRead(ns, key) {
+        reads.push(`openRead ${key}`);
+        return openRead.call(this, ns, key);
+      };
+      blobs.get = function countedGet(ns, key) {
+        reads.push(`get ${key}`);
+        return get.call(this, ns, key);
+      };
+      let cached;
+      try {
+        cached = await callRoute(handlers, {
+          ...request,
+          headers: { 'if-none-match': first.headers.etag }
+        });
+      } finally {
+        blobs.openRead = openRead;
+        blobs.get = get;
+      }
+      assert.equal(cached.status, 304, label);
+      assert.equal(cached.body.length, 0, label);
+      assert.equal(cached.headers.etag, first.headers.etag, label);
+      assert.equal(cached.headers['cache-control'], first.headers['cache-control'], label);
+      assert.deepEqual(reads, [], `${label}: the blob was read for a 304`);
+    }
   });
 });

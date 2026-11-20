@@ -635,7 +635,11 @@ export default function registerChatShareRoutes(app) {
       );
     }
     // Streamed from the store: the original is never held whole in memory.
-    const original = await store.openOriginal(scope, fileId);
+    // A conditional request is answered from the recorded hash, before the
+    // original is opened.
+    const original = await store.openOriginal(scope, fileId, {
+      unless: found => isFreshFor(req, res, etagOfSha256(found.sha256))
+    });
     if (!original) throw notFound('File');
     if (original.discarded) {
       throw new ServiceError('ORIGINAL_DISCARDED', 'The original file is no longer available');
@@ -643,13 +647,12 @@ export default function registerChatShareRoutes(app) {
     const download = req.query.download === '1' || req.query.download === 'true';
     res.setHeader('Cache-Control', 'private, no-store');
     if (share.mode === 'public') res.setHeader('X-Robots-Tag', 'noindex, nofollow');
-    if (isFreshFor(req, res, etagOfSha256(original.sha256))) {
-      original.stream.destroy();
-      return res.status(304).end();
-    }
-    // A failure after the first byte aborts the response (`sendStream`).
+    if (original.unopened) return res.status(304).end();
+    // A failure after the first byte aborts the response (`sendStream`); one
+    // before it is answered without the `ETag`.
     return await sendStream(req, res, original.stream, {
       headers: {
+        ETag: etagOfSha256(original.sha256),
         'Content-Type': servedMediaType(original.mimeType),
         'Content-Length': String(original.originalBytes),
         'X-Content-Type-Options': 'nosniff',
@@ -700,21 +703,26 @@ export default function registerChatShareRoutes(app) {
     // payload: a downloaded HTML file gets its library-kit libraries inlined,
     // so it works opened from disk, and for that it is read whole. Everything
     // else, images included, and the inline answer go out as the stored bytes.
-    let artifact = await getArtifactRepository().openRead(scope, artifactId);
+    // Neither that case nor a conditional request that the recorded hash
+    // answers opens the stream.
+    let rewritten = false;
+    let artifact = await getArtifactRepository().openRead(scope, artifactId, {
+      unless: found => {
+        rewritten = download && /\.html?$/i.test(downloadName(found));
+        return rewritten || isFreshFor(req, res, etagOfSha256(found.sha256));
+      }
+    });
     if (!artifact) throw notFound('Artifact');
+    const notModified = Boolean(artifact.unopened) && !rewritten;
     let body = null;
-    if (download && /\.html?$/i.test(downloadName(artifact))) {
-      artifact.stream.destroy();
+    if (rewritten) {
       artifact = await getArtifactRepository().get(scope, artifactId);
       if (!artifact) throw notFound('Artifact');
       body = withKitLibraries(artifact.data, downloadName(artifact));
     }
     // Inline: written once under a fresh uuid, so immutable; `private`, as the
     // link may be revoked. A download depends on the library kit: not stored.
-    res.setHeader(
-      'Cache-Control',
-      download ? 'private, no-store' : 'private, max-age=31536000, immutable'
-    );
+    const cacheControl = download ? 'private, no-store' : 'private, max-age=31536000, immutable';
     if (share.mode === 'public') res.setHeader('X-Robots-Tag', 'noindex, nofollow');
     let disposition = 'inline';
     if (download) {
@@ -729,19 +737,24 @@ export default function registerChatShareRoutes(app) {
       disposition = `attachment; filename="${ascii}"; filename*=UTF-8''${encoded}`;
     }
     if (body) {
+      res.setHeader('Cache-Control', cacheControl);
       res.setHeader('Content-Type', servedMediaType(artifact.mimeType));
       res.setHeader('Content-Length', String(body.length));
       res.setHeader('X-Content-Type-Options', 'nosniff');
       res.setHeader('Content-Disposition', disposition);
       return res.send(body);
     }
-    if (isFreshFor(req, res, etagOfSha256(artifact.sha256))) {
-      artifact.stream.destroy();
+    if (notModified) {
+      res.setHeader('Cache-Control', cacheControl);
       return res.status(304).end();
     }
-    // A failure after the first byte aborts the response (`sendStream`).
+    // A failure after the first byte aborts the response (`sendStream`); one
+    // before it is answered without these headers, so that no error is
+    // cached as the artifact.
     return await sendStream(req, res, artifact.stream, {
       headers: {
+        'Cache-Control': cacheControl,
+        ETag: etagOfSha256(artifact.sha256),
         'Content-Type': servedMediaType(artifact.mimeType),
         'Content-Length': String(artifact.bytes),
         'X-Content-Type-Options': 'nosniff',

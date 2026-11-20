@@ -34,7 +34,13 @@ export function etagOfSha256(sha256) {
 
 /**
  * Whether a conditional request can be answered `304 Not Modified` for this
- * entity tag, before anything is opened. Sets the `ETag` header either way.
+ * entity tag. Asked before anything is opened: the tag comes from the
+ * metadata, so a `304` costs no read of the content.
+ *
+ * The `ETag` header is left on the response only when the answer is yes (a
+ * `304` carries it). Otherwise the caller hands the tag to
+ * {@link sendStream} with the other headers of the body, so that it does not
+ * end up on an error answer.
  *
  * @param {import('express').Request} req
  * @param {import('express').Response} res
@@ -44,8 +50,11 @@ export function etagOfSha256(sha256) {
  */
 export function isFreshFor(req, res, etag) {
   if (!etag) return false;
+  // Express compares the request's validators with the response's headers.
   res.setHeader('ETag', etag);
-  return (req.method === 'GET' || req.method === 'HEAD') && req.fresh === true;
+  const fresh = (req.method === 'GET' || req.method === 'HEAD') && req.fresh === true;
+  if (!fresh) res.removeHeader('ETag');
+  return fresh;
 }
 
 /**
@@ -57,20 +66,31 @@ export function isFreshFor(req, res, etag) {
  *   the client goes away, so its source (a file, a bucket request) is released.
  * @param {Object} [options]
  * @param {Record<string, string|number|undefined>} [options.headers] - Response
- *   headers that describe the body (`Content-Type`, `Content-Length`, …).
- *   Set here; removed again when the stream fails before the first byte, so
- *   they do not end up on the error answer.
+ *   headers that describe the body or are only right for it (`Content-Type`,
+ *   `Content-Length`, `ETag`, `Cache-Control`, …). Set here; removed again
+ *   when the stream fails before the first byte, so they do not end up on the
+ *   error answer: an error with `Cache-Control: immutable` would be kept by
+ *   the browser for as long as the content.
  * @returns {Promise<void>} Resolves when the response finished, the client
- *   closed the connection, or the response was destroyed after a late failure.
+ *   closed the connection (also when it had closed it before this was
+ *   called), or the response was destroyed after a late failure.
  * @throws What the stream failed with, when nothing was sent yet.
  *
  * @example
  * const blob = await blobs.openRead(ns, key);
  * await sendStream(req, res, blob.stream, {
- *   headers: { 'Content-Type': type, 'Content-Length': String(blob.bytes) }
+ *   headers: { 'Content-Type': type, 'Content-Length': String(blob.bytes), ETag: etag }
  * });
  */
 export async function sendStream(req, res, stream, { headers = {} } = {}) {
+  // The client hung up while the route was still working (authorization, the
+  // metadata, opening the stream): `'close'` has been emitted and will not be
+  // again, and a pipe into this response would wait for a `'drain'` that
+  // never comes, with the source open.
+  if (res.destroyed || res.closed || res.writableEnded) {
+    stream.destroy();
+    return;
+  }
   const names = [];
   for (const [name, value] of Object.entries(headers)) {
     if (value === undefined || value === null) continue;

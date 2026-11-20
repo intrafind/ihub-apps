@@ -110,10 +110,38 @@ function streamOf(buffer, pieceBytes = 70_001) {
 const unavailable = error => error?.name === 'StorageError' && error.code === 'STORAGE_UNAVAILABLE';
 const settle = ms => new Promise(resolve => setTimeout(resolve, ms));
 
+/**
+ * Wait until a metered `GetObject` stopped sending: its byte counter did not
+ * move for `stillMs`, or the body is complete. A fixed wait would be too
+ * short on a slow machine, where a download that nothing holds back is still
+ * under way when the test looks.
+ *
+ * @param {{bodyBytesSent: number, bodyComplete: boolean}} request - The entry of `s3.requests`.
+ * @param {number} [stillMs=500]
+ * @returns {Promise<void>}
+ */
+async function untilStill(request, stillMs = 500) {
+  const deadline = Date.now() + 60_000;
+  let last = -1;
+  let since = Date.now();
+  while (!request.bodyComplete && Date.now() < deadline) {
+    if (request.bodyBytesSent !== last) {
+      last = request.bodyBytesSent;
+      since = Date.now();
+    } else if (Date.now() - since >= stillMs) {
+      return;
+    }
+    await settle(25);
+  }
+}
+
 describe('S3 streamed read: the request follows the reader', () => {
   it('aborts the download when the reader leaves early', async () => {
     const { blobs } = await started();
-    const payload = crypto.randomBytes(8 * MIB);
+    // Large against what the sockets of a loopback connection buffer by
+    // themselves (several MiB, depending on the kernel's settings), which the
+    // server counts as sent: the bound below must not be a measurement of them.
+    const payload = crypto.randomBytes(48 * MIB);
     await blobs.put(NS, 'k', payload);
     s3.clearRequests();
     s3.inject({ op: 'GetObject', meterBody: true });
@@ -124,11 +152,11 @@ describe('S3 streamed read: the request follows the reader', () => {
       opened.stream.once('error', reject);
     });
     opened.stream.destroy();
-    await settle(400);
-
-    assert.ok(first.equals(payload.subarray(0, first.length)));
     const gets = s3.requests.filter(request => request.op === 'GetObject');
     assert.equal(gets.length, 1, 'one request, not one per segment');
+    await untilStill(gets[0]);
+
+    assert.ok(first.equals(payload.subarray(0, first.length)));
     assert.equal(gets[0].bodyComplete, false, 'the whole object was downloaded');
     assert.ok(
       gets[0].bodyBytesSent < payload.length / 2,
@@ -148,9 +176,11 @@ describe('S3 streamed read: the request follows the reader', () => {
     s3.inject({ op: 'GetObject', meterBody: true });
 
     const opened = await blobs.openRead(NS, 'k');
-    await settle(400);
-
     const [request] = s3.requests.filter(entry => entry.op === 'GetObject');
+    // Not a fixed time: on a slow machine an unthrottled download would still
+    // be under way after it, and would pass for a held one.
+    await untilStill(request);
+
     assert.equal(request.bodyComplete, false);
     assert.ok(
       request.bodyBytesSent < 24 * MIB,
@@ -261,6 +291,76 @@ describe('S3 streamed read: a body that stalls or is cut', () => {
   });
 });
 
+describe('S3 streamed read: a reader that is slow', () => {
+  /** Read a stream, pausing after every chunk for `gapMs` per MiB taken. */
+  async function readSlowly(stream, gapMs) {
+    const chunks = [];
+    try {
+      for await (const chunk of stream) {
+        chunks.push(chunk);
+        await settle(gapMs * (chunk.length / MIB));
+      }
+      return { data: Buffer.concat(chunks), error: null };
+    } catch (error) {
+      return { data: Buffer.concat(chunks), error };
+    }
+  }
+
+  it('is not cut by the socket timeout of the bucket connection', async () => {
+    const TIMEOUT = 400;
+    const { blobs } = await started({ config: { requestTimeoutMs: TIMEOUT } });
+    const payload = crypto.randomBytes(4 * MIB);
+    await blobs.put(NS, 'k', payload);
+
+    const opened = await blobs.openRead(NS, 'k');
+    // Steady, but each MiB takes three times as long as the bucket's socket
+    // may be idle: the socket is idle because of the reader, not the bucket.
+    const read = await within(readSlowly(opened.stream, 3 * TIMEOUT), 30_000, 'the slow read');
+
+    assert.equal(read.error, null, `${read.error?.code}: ${read.error?.message}`);
+    assert.ok(read.data.equals(payload));
+  });
+
+  it('is not cut either when the client arms its socket timer after the read began', async () => {
+    // From 6 s on the S3 client puts the timer on the socket a few seconds
+    // into the request, which is after the reader stopped here.
+    const TIMEOUT = 6000;
+    const { blobs } = await started({ config: { requestTimeoutMs: TIMEOUT } });
+    const payload = crypto.randomBytes(4 * MIB);
+    await blobs.put(NS, 'k', payload);
+
+    const opened = await blobs.openRead(NS, 'k');
+    const first = await new Promise((resolve, reject) => {
+      opened.stream.once('data', resolve);
+      opened.stream.once('error', reject);
+    });
+    opened.stream.pause();
+    await settle(TIMEOUT + 3500);
+    const rest = await within(drain(opened.stream), 30_000, 'the rest');
+
+    assert.equal(rest.error, null, `${rest.error?.code}: ${rest.error?.message}`);
+    assert.ok(Buffer.concat([first, rest.data]).equals(payload));
+  });
+
+  it('still ends a read the bucket leaves waiting while the reader wants data', async () => {
+    const TIMEOUT = 400;
+    const { blobs } = await started({ config: { requestTimeoutMs: TIMEOUT } });
+    const payload = crypto.randomBytes(3 * MIB);
+    await blobs.put(NS, 'k', payload);
+    s3.inject({ op: 'GetObject', stallBody: ENVELOPE_HEADER_BYTES + 2 * SEGMENT + 5000 });
+
+    const opened = await within(blobs.openRead(NS, 'k'), 5000, 'openRead');
+    // The reader was away for longer than the bound before it reads on: that
+    // time is not the bucket's, the silence after it is.
+    await settle(2 * TIMEOUT);
+    const startedAt = Date.now();
+    const read = await within(drain(opened.stream), 5000, 'the stalled stream');
+
+    assert.ok(unavailable(read.error), `${read.error?.name}: ${read.error?.message}`);
+    assert.ok(Date.now() - startedAt < 3000, 'within the bound');
+  });
+});
+
 describe('S3 response body stream: its bounds count waiting, not the reader', () => {
   /** A body whose chunks the test hands out by hand. */
   function manualBody() {
@@ -299,24 +399,91 @@ describe('S3 response body stream: its bounds count waiting, not the reader', ()
   });
 
   it('does not count the time a reader takes for itself', async () => {
+    // The body is all there and larger than the stream's buffer, so the
+    // stream has to hold it back: the state in which the clocks must stand.
+    const total = 400_000;
     const body = manualBody();
-    const stream = boundedBodyStream(body, { bytes: 6, idleMs: 80, budgetMs: 120, ...bounds });
-    // More than the reader's buffer takes at once, so the body is paused.
-    body.push(Buffer.from('abc'));
+    const stream = boundedBodyStream(body, { bytes: total, idleMs: 80, budgetMs: 120, ...bounds });
+    for (let i = 0; i < 4; i += 1) body.push(Buffer.alloc(100_000, i));
+    body.push(null);
     const first = await new Promise(resolve =>
       stream.once('readable', () => resolve(stream.read()))
     );
-    assert.equal(first.toString(), 'abc');
-    // The reader now asks for nothing for longer than both bounds…
-    stream.pause();
-    await settle(30);
-    body.push(Buffer.from('def'));
+    assert.ok(first.length > 0 && first.length < total, 'part of the body is held back');
+    // The reader is busy for longer than both bounds; the bucket owes nothing.
+    await settle(300);
+    const read = await drain(stream);
+    assert.equal(read.error, null, read.error?.message);
+    assert.equal(first.length + read.data.length, total);
+  });
+
+  /** A body on a socket that records what its idle timer is set to. */
+  function bodyOnSocket() {
+    const body = manualBody();
+    const timeouts = [];
+    body.socket = { setTimeout: ms => timeouts.push(ms) };
+    return { body, timeouts };
+  }
+
+  it('takes the idle timer off the socket while the reader is away, and puts it back when it reads', async () => {
+    const { body, timeouts } = bodyOnSocket();
+    const stream = boundedBodyStream(body, { bytes: 400_000, socketIdleMs: 700, ...bounds });
+    // Nobody has asked for anything yet.
+    assert.deepEqual(timeouts, [0]);
+    for (let i = 0; i < 4; i += 1) body.push(Buffer.alloc(100_000, i));
     body.push(null);
-    await settle(250);
-    // …and still gets the rest.
+    const first = await new Promise(resolve =>
+      stream.once('readable', () => resolve(stream.read()))
+    );
+    assert.ok(first.length < 400_000);
+    // The reader asked (timer on), then the stream's buffer was full (off).
+    assert.deepEqual(timeouts.slice(0, 2), [0, 700]);
+    assert.equal(timeouts.at(-1), 0, `the reader is away: ${timeouts.join(',')}`);
+    const before = timeouts.length;
     const read = await drain(stream);
     assert.equal(read.error, null);
-    assert.equal(read.data.toString(), 'def');
+    assert.equal(timeouts[before], 700, 'on again with the first read');
+    assert.equal(timeouts.includes(undefined), false);
+  });
+
+  it('gives up a stream whose reader takes nothing, and does not blame the bucket', async () => {
+    const { body, timeouts } = bodyOnSocket();
+    const stream = boundedBodyStream(body, {
+      bytes: 10,
+      idleMs: 5000,
+      budgetMs: 5000,
+      socketIdleMs: 5000,
+      abandonedMs: 60,
+      ...bounds,
+      abandonedError: message => Object.assign(new Error(message), { name: 'AbandonedError' })
+    });
+    body.push(Buffer.from('12345'));
+    const failed = await within(
+      new Promise(resolve => stream.once('error', resolve)),
+      3000,
+      'the abandoned stream'
+    );
+    assert.equal(failed.name, 'AbandonedError');
+    assert.equal(body.destroyed, true, 'the request is ended');
+    assert.equal(timeouts.at(-1), 0, 'no timer is put back on a socket that is given up');
+  });
+
+  it('does not give up a reader that keeps reading, however long the whole read takes', async () => {
+    const body = manualBody();
+    const stream = boundedBodyStream(body, { bytes: 6, abandonedMs: 100, ...bounds });
+    const chunks = [];
+    stream.on('data', chunk => chunks.push(chunk));
+    const ended = new Promise((resolve, reject) => {
+      stream.once('end', resolve);
+      stream.once('error', reject);
+    });
+    for (const letter of 'abcdef') {
+      body.push(Buffer.from(letter));
+      await settle(40);
+    }
+    body.push(null);
+    await within(ended, 3000, 'the read');
+    assert.equal(Buffer.concat(chunks).toString(), 'abcdef');
   });
 
   it('fails for a body that is shorter or longer than declared, and for one that just closes', async () => {
@@ -406,6 +573,75 @@ describe('S3 streamed write', () => {
     assert.equal(s3.rawGet(BUCKET, `${prefix}/default/${NS}/k`), null);
     await blobs.put(NS, 'k', 'usable afterwards');
     assert.equal((await blobs.get(NS, 'k')).data.toString(), 'usable afterwards');
+  });
+
+  // Without encryption nothing in front of the S3 store holds bytes back,
+  // so it is the store itself that must not complete the request early.
+  for (const encryption of [
+    { enabled: false, plaintextReads: 'accept' },
+    { enabled: true, plaintextReads: 'reject' }
+  ]) {
+    const mode = `encryption ${encryption.enabled ? 'on' : 'off'}`;
+
+    it(`leaves the key as it was when the stream goes on after its declared length (${mode})`, async () => {
+      const { blobs } = await started({ encryption });
+      await blobs.put(NS, 'k', Buffer.alloc(100, 65));
+      const tooLong = new Readable({ read() {} });
+      tooLong.push(Buffer.alloc(1000, 66));
+      // The surplus byte comes only once the declared bytes are long out.
+      setTimeout(() => {
+        tooLong.push(Buffer.alloc(1, 66));
+        tooLong.push(null);
+      }, 300);
+
+      await assert.rejects(
+        within(blobs.putStream(NS, 'k', tooLong, { bytes: 1000 }), 8000, 'putStream'),
+        { code: 'INVALID_DATA' }
+      );
+
+      assert.ok((await blobs.get(NS, 'k')).data.equals(Buffer.alloc(100, 65)));
+    });
+
+    it(`leaves the key as it was when the source fails after its last byte (${mode})`, async () => {
+      const { blobs } = await started({ encryption });
+      await blobs.put(NS, 'k', Buffer.alloc(100, 65));
+      const broken = new Error('the source failed at its end');
+      const lateFailure = new Readable({ read() {} });
+      lateFailure.push(Buffer.alloc(1000, 66));
+      setTimeout(() => lateFailure.destroy(broken), 300);
+
+      await assert.rejects(
+        within(blobs.putStream(NS, 'k', lateFailure, { bytes: 1000 }), 8000, 'putStream'),
+        error => error === broken
+      );
+
+      assert.ok((await blobs.get(NS, 'k')).data.equals(Buffer.alloc(100, 65)));
+    });
+  }
+
+  it('holds an empty stream to its declared length as well', async () => {
+    const { blobs } = await started({ encryption: { enabled: false, plaintextReads: 'accept' } });
+    await blobs.put(NS, 'k', Buffer.alloc(100, 65));
+    const notEmpty = new Readable({ read() {} });
+    setTimeout(() => {
+      notEmpty.push(Buffer.from('x'));
+      notEmpty.push(null);
+    }, 200);
+    await assert.rejects(
+      within(blobs.putStream(NS, 'k', notEmpty, { bytes: 0 }), 8000, 'putStream'),
+      { code: 'INVALID_DATA' }
+    );
+    assert.equal((await blobs.get(NS, 'k')).bytes, 100);
+
+    const ref = await blobs.putStream(NS, 'k', Readable.from([], { objectMode: false }), {
+      bytes: 0
+    });
+    assert.deepEqual(ref, {
+      key: 'k',
+      bytes: 0,
+      sha256: crypto.createHash('sha256').update('').digest('hex')
+    });
+    assert.equal((await blobs.get(NS, 'k')).bytes, 0);
   });
 
   it('the copy command sends a blob again when its transfer failed for a moment', async () => {

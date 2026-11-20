@@ -42,11 +42,12 @@
  *
  * @module storage/atRest/sealedFiles
  */
-import nodeFs, { promises as fs } from 'node:fs';
+import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { ENVELOPE_HEADER_BYTES, plainLength } from '../../crypto/blobEnvelope.js';
 import { isSealedFile, openFile, openFileStream, sealFile } from '../../crypto/fileSeal.js';
 import { atomicWriteFile } from '../../utils/atomicWrite.js';
+import { fileRangeStream } from '../../utils/fileRangeStream.js';
 import { CorruptDocumentError, KeyUnavailableError, StorageError } from '../errors.js';
 import { isFacetComplete, readAtRestState } from './state.js';
 
@@ -436,31 +437,43 @@ export async function readSealedText(store, name, filePath) {
  */
 export async function openSealedStream(store, name, filePath) {
   const what = `${store}/${name}`;
+  let handle;
   try {
-    const [head, stat] = await Promise.all([readHead(filePath), fs.stat(filePath)]);
-    if (!isSealedFile(head, stat.size)) {
+    // One open for the size, the head and the content: the file may be
+    // replaced by a rename while it is read (an agent rewriting its report),
+    // and a size from one file with the bytes of another would be a response
+    // whose `Content-Length` does not fit its body.
+    // lgtm[js/path-injection] -- the caller validated the path.
+    handle = await fs.open(filePath, 'r');
+    const { size } = await handle.stat();
+    const buffer = Buffer.alloc(Math.min(ENVELOPE_HEADER_BYTES, size));
+    const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
+    const head = buffer.subarray(0, bytesRead);
+    if (!isSealedFile(head, size)) {
       await assertPlaintextReadable(store, name);
-      // lgtm[js/path-injection] -- the caller validated the path.
-      const stream = nodeFs.createReadStream(filePath);
-      // An early failure must not become an uncaught exception; see `guardStream`.
-      stream.on('error', () => {});
-      return { bytes: stat.size, sealed: false, stream };
+      // Owns the handle from here on; fails when the file ends before `size`.
+      const stream = fileRangeStream(handle, { end: size });
+      handle = null;
+      return { bytes: size, sealed: false, stream };
     }
     const provider = await keyProvider();
+    const source = fileRangeStream(handle, { start: ENVELOPE_HEADER_BYTES, end: size });
+    handle = null;
     const opened = await openFileStream({
       keyProvider: provider,
       tenant: TENANT,
       store,
       name,
       head,
-      storedBytes: stat.size,
-      // lgtm[js/path-injection] -- the caller validated the path.
-      source: nodeFs.createReadStream(filePath, { start: ENVELOPE_HEADER_BYTES }),
+      storedBytes: size,
+      source,
       mapError: error => sealFailure(error, what)
     });
+    // An early failure must not become an uncaught exception; see `guardStream`.
     opened.stream.on('error', () => {});
     return { bytes: opened.bytes, sealed: true, stream: opened.stream };
   } catch (error) {
+    await handle?.close().catch(() => {});
     throw sealFailure(error, what);
   }
 }

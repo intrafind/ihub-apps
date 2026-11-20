@@ -961,13 +961,14 @@ missed. Run the command again afterwards.
   blobs answers a `Range` request.
 - **A streamed upload is sent once.** The retries of `maxAttempts` apply to requests whose body
   can be sent again. `storage:copy-blobs` and `storage:encrypt` send a blob as a stream and repeat
-  a failed transfer themselves (three attempts per blob in `storage:copy-blobs`; `storage:encrypt`
-  counts the blob as failed and converts it in the next run).
+  a failed transfer themselves, by reading the blob again: three attempts per blob. A blob that
+  still fails is counted as failed, and the next run takes it up again.
 - **Slow downloads.** A streamed read is paced by the client that downloads it. The store's time
   limits count only the time it waits for the bucket: no byte for `operationTimeoutMs` (at most
   `requestTimeoutMs`), or a total wait of `operationTimeoutMs` plus the object's size divided by
-  `minThroughputBytesPerSecond`, ends the download with `STORAGE_UNAVAILABLE`. A client that
-  takes nothing for `requestTimeoutMs` loses its download as well.
+  `minThroughputBytesPerSecond`, ends the download with `STORAGE_UNAVAILABLE`. The time a client
+  takes for itself is not limited by `requestTimeoutMs`: a slow link or a paused download is not
+  cut. A client that takes nothing at all for 15 minutes loses its download.
 - **Deletes.** A delete of one object costs two or three requests, because S3 does not say whether
   the object existed.
 - **Missing objects.** A read counts an object as missing only when the service answers with the
