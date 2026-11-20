@@ -192,6 +192,62 @@ describe('flag off: GET first, then the POST', () => {
     await play(mockStreams[0], answerFrames(lastAssistant(result).id)[0]);
     expect(mockApi.sendAppChatMessage).toHaveBeenCalledTimes(1);
   });
+
+  // The POST is answered when the turn ends: its timeout (or a proxy's) loses
+  // the reply, not the turn. With the real transport hook: what happens to the
+  // GET stream, and that the server is never told to stop.
+  describe('a POST whose reply is lost', () => {
+    const lostReply = () =>
+      Object.assign(new Error('Request timed out.'), {
+        isTimeout: true,
+        status: 500,
+        userFriendlyMessage: 'Request timed out.'
+      });
+
+    test('the GET stays open, the answer is drawn to its end and no stop is sent', async () => {
+      mockFlagOn = false;
+      mockApi.sendAppChatMessage.mockRejectedValueOnce(lostReply());
+      const onMessageAccepted = jest.fn();
+      const { result } = render({ onMessageAccepted });
+      send(result);
+      const stream = mockStreams[0];
+      await open(stream);
+      const frames = answerFrames(lastAssistant(result).id, 'A long answer');
+      await play(stream, frames[0]);
+      await flush();
+
+      expect(mockApi.checkAppChatStatus).toHaveBeenCalledWith('acme', CHAT_ID);
+      expect(onMessageAccepted).toHaveBeenCalledWith(CHAT_ID);
+      expect(stream.opts.signal.aborted).toBe(false);
+      expect(result.current.processing).toBe(true);
+
+      await play(stream, frames[1], frames[2], frames[3]);
+      expect(lastAssistant(result).content).toBe('A long answer');
+      expect(lastAssistant(result).loading).toBe(false);
+      expect(result.current.processing).toBe(false);
+      // One stream, one POST: the turn was neither sent again nor re-attached to.
+      expect(mockStreams).toHaveLength(1);
+      expect(mockApi.sendAppChatMessage).toHaveBeenCalledTimes(1);
+      expect(mockApi.stopAppChatStream).not.toHaveBeenCalled();
+    });
+
+    test('with nothing running the error shows and the GET is let go, without a stop', async () => {
+      mockFlagOn = false;
+      mockApi.sendAppChatMessage.mockRejectedValueOnce(lostReply());
+      mockApi.checkAppChatStatus.mockResolvedValueOnce({ active: false });
+      const { result } = render();
+      send(result);
+      const stream = mockStreams[0];
+      await open(stream);
+      await play(stream, answerFrames(lastAssistant(result).id)[0]);
+      await flush();
+
+      expect(lastAssistant(result).content).toMatch(/Request timed out\./);
+      expect(result.current.processing).toBe(false);
+      expect(stream.opts.signal.aborted).toBe(true);
+      expect(mockApi.stopAppChatStream).not.toHaveBeenCalled();
+    });
+  });
 });
 
 describe('flag on: the POST streams the turn', () => {
@@ -553,6 +609,8 @@ describe('flag on: the POST streams the turn', () => {
       expect(result.current.messages.filter(m => m.role === 'assistant')).toHaveLength(1);
       expect(lastAssistant(result).content).not.toMatch(/error|Failed/i);
       expect(result.current.processing).toBe(true);
+      // Following a turn is reading it: the server is not told to stop.
+      expect(mockApi.stopAppChatStream).not.toHaveBeenCalled();
     });
 
     test('a 502 with nothing running is reported as before', async () => {
@@ -564,6 +622,7 @@ describe('flag on: the POST streams the turn', () => {
       expect(mockStreams).toHaveLength(1);
       expect(lastAssistant(result).content).toMatch(/server error|Failed to generate|Bad Gateway/i);
       expect(result.current.processing).toBe(false);
+      expect(mockApi.stopAppChatStream).not.toHaveBeenCalled();
     });
 
     test('a refusal is not looked into', async () => {

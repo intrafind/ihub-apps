@@ -3,6 +3,33 @@
 
 import { apiClient, streamingApiClient } from '../client';
 import { handleApiResponse } from '../utils/requestHandler';
+import { shortenedTimeout } from '../utils/devTimeout';
+
+/**
+ * The request settings of the chat POST: nothing of its own, except in a
+ * development build, where a test may shorten its timeout by setting
+ * `window.__ihubStreamTimeoutMs` before the message is sent. The POST is
+ * answered when the turn ends, and its timeout is five minutes; the end-to-end
+ * proof that a turn outlasts it (`tests/e2e-agents/long-turn.spec.js`) cannot
+ * wait that long.
+ *
+ * A production build never reads the window property: Vite replaces
+ * `import.meta.env.DEV` with `false` there, and the bundler drops what follows
+ * the `return`. In a development build the value can only shorten the timeout
+ * (`shortenedTimeout`), never lengthen or remove it, and a POST that times out
+ * early stops nothing: the client asks whether the turn is running and keeps
+ * listening (`sendPendingMessage`).
+ *
+ * @returns {{timeout: number}|undefined}
+ */
+const chatPostConfig = () => {
+  if (!import.meta.env.DEV) return undefined;
+  const timeout = shortenedTimeout(
+    window.__ihubStreamTimeoutMs,
+    streamingApiClient.defaults.timeout
+  );
+  return timeout === undefined ? undefined : { timeout };
+};
 
 // Apps
 export const fetchApps = async (options = {}) => {
@@ -33,10 +60,14 @@ export const sendAppChatMessage = async (appId, chatId, messages, options = {}) 
 
   return handleApiResponse(
     () =>
-      streamingApiClient.post(`/apps/${appId}/chat/${chatId}`, {
-        messages,
-        ...options
-      }),
+      streamingApiClient.post(
+        `/apps/${appId}/chat/${chatId}`,
+        {
+          messages,
+          ...options
+        },
+        chatPostConfig()
+      ),
     null, // No caching for chat messages
     null,
     false // Don't deduplicate chat requests

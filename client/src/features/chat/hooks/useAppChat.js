@@ -62,6 +62,37 @@ function sendErrorOf(error) {
 }
 
 /**
+ * How long to wait before asking again whether a turn is running, after the
+ * check itself failed: three more attempts, seven seconds in all.
+ */
+export const LOST_REPLY_STATUS_RETRY_MS = [1000, 2000, 4000];
+
+/**
+ * Whether a failed status check is worth repeating: it got no answer (the
+ * network, a timeout; the API client reports those as 500), a server or proxy
+ * error, or "try again later". Any other 4xx is the server's answer.
+ *
+ * @param {Error} error - As the API client throws it (`status`)
+ * @returns {boolean}
+ */
+function isPassingStatusFailure(error) {
+  const status = error?.status;
+  return !status || status >= 500 || status === 408 || status === 429;
+}
+
+/** Resolves after `ms` milliseconds. */
+const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+/**
+ * The exchange id a prepared send carries: the `messageId` of its new message.
+ * The server names it on the turn's `run/started` (`refs.messageId`).
+ *
+ * @param {Object} pending - A prepared send (`pendingMessageDataRef`)
+ * @returns {string|undefined}
+ */
+const exchangeIdOf = pending => pending?.messages?.at(-1)?.messageId;
+
+/**
  * Refusals of the chat request the user can do something about, by the code
  * the server answers with: translation key and English fallback.
  */
@@ -197,6 +228,9 @@ function useAppChat({
   const pendingMessageDataRef = useRef(null);
   const lastUserMessageRef = useRef(null);
   const isCancellingRef = useRef(false);
+  // How often a person pressed Stop: `isCancellingRef` falls back after 100 ms,
+  // and the search for a lost turn (`findLostTurn`) runs for seconds.
+  const stopCountRef = useRef(0);
   const messageMetadataRef = useRef(null); // Store metadata for the current message
   // Stored id of the message an edit, a regenerate or a delete replaces.
   // Latched by `deleteFromMessage`, consumed by the next send. It survives an
@@ -508,14 +542,61 @@ function useAppChat({
   );
 
   /**
+   * What became of a turn whose POST reply was lost (`sendPendingMessage`).
+   *
+   * The server is asked whether the chat is producing. Its answer decides; a
+   * check that fails for a reason that may pass (`isPassingStatusFailure`) is
+   * repeated after {@link LOST_REPLY_STATUS_RETRY_MS}, because one lost status
+   * request says nothing about the turn. The stream is the second witness: once
+   * it has shown the run of this send (`runStarted`, set by `handleEvent`), the
+   * server has the turn, whatever the check says or however often it fails
+   * (the turn may have ended while the check was on its way).
+   *
+   * @param {Object} pending - The send whose reply was lost
+   * @returns {Promise<'running'|'missing'|'left'>} `running`: the server has
+   *   the turn. `missing`: nothing shows it; the lost reply is a failure.
+   *   `left`: this surface no longer waits for the turn, because the user
+   *   opened another chat, sent again or stopped it.
+   */
+  const findLostTurn = useCallback(async pending => {
+    const stopsBefore = stopCountRef.current;
+    const replaced = () => pendingMessageDataRef.current !== pending;
+    // One check, then one more after each wait; `null` marks the last one.
+    for (const retryIn of [...LOST_REPLY_STATUS_RETRY_MS, null]) {
+      let failure = null;
+      let status = null;
+      try {
+        status = await checkAppChatStatus(pending.appId, pending.chatId);
+      } catch (error) {
+        failure = error;
+      }
+      if (replaced()) return 'left';
+      if (status?.processing || pending.runStarted) return 'running';
+      // Stopped by the user while it was looked for: the turn is over, and
+      // what Stop wrote under the answer is all there is to say.
+      if (stopCountRef.current !== stopsBefore) return 'left';
+      // An answer is final, and so is a refusal.
+      const again = failure && retryIn !== null && isPassingStatusFailure(failure);
+      if (!again) return 'missing';
+      await wait(retryIn);
+      if (replaced()) return 'left';
+    }
+    return 'missing';
+  }, []);
+
+  /**
    * Send the message queued by sendMessage / submitClarificationResponse once
    * the stream is connected (GET-then-POST). On failure the error is rendered
    * into the assistant placeholder (401 → session expired) and the stream is
    * closed.
+   *
+   * A lost reply is not a failure and never stops the turn: the client asks
+   * whether the turn is running (`findLostTurn`) and keeps listening.
    */
   const sendPendingMessage = useCallback(async () => {
-    if (!pendingMessageDataRef.current) return;
-    const { appId, chatId, messages, params } = pendingMessageDataRef.current;
+    const pending = pendingMessageDataRef.current;
+    if (!pending) return;
+    const { appId, chatId, messages, params } = pending;
     try {
       await sendAppChatMessage(
         appId,
@@ -533,16 +614,20 @@ function useAppChat({
       // still carries every frame. Keep listening instead of reporting a failure.
       const lostReply = error?.isTimeout || error?.status === 502 || error?.status === 504;
       if (lostReply && !isCancellingRef.current) {
-        const status = await checkAppChatStatus(appId, chatId).catch(() => null);
-        if (status?.processing) {
+        const turn = await findLostTurn(pending);
+        if (turn === 'running') {
           pendingMessageDataRef.current = null;
           onMessageAcceptedRef.current?.(chatId);
           return;
         }
+        // Stopped, or the chat now open (or the send made since) owns the
+        // placeholder and the stream: reporting this reply there would write
+        // into the wrong answer and close a stream that is not this turn's.
+        if (turn === 'left') return;
       }
       handleSendError(error);
     }
-  }, [toolApprovals, handleSendError]);
+  }, [toolApprovals, handleSendError, findLostTurn]);
 
   /**
    * Resolve the assistant message a run belongs to. `run/started` binds the
@@ -641,6 +726,13 @@ function useAppChat({
       // A turn's own run (not a workflow a tool started inside it) is under way,
       // and its question is stored.
       if (type === RUN_EVENTS.RUN_STARTED && !data?.parentRunId) {
+        // The run of the send that still waits for its POST reply: proof that
+        // the server has the turn, should that reply be lost (`findLostTurn`).
+        const pending = pendingMessageDataRef.current;
+        const exchangeId = data?.refs?.messageId;
+        if (pending && typeof exchangeId === 'string' && exchangeId === exchangeIdOf(pending)) {
+          pending.runStarted = true;
+        }
         onRunStartedRef.current?.(chatId);
       }
 
@@ -1172,6 +1264,7 @@ function useAppChat({
     source => {
       // Set flag to prevent error messages during manual cancellation
       isCancellingRef.current = true;
+      stopCountRef.current += 1;
 
       // Not awaited: it reports its own failure, and the UI must not wait on the network.
       stopEventSource({

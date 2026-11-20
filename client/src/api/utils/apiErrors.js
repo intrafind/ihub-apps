@@ -9,6 +9,20 @@
  * @module api/utils/apiErrors
  */
 
+import i18next from 'i18next';
+
+/**
+ * A text of `shared/i18n` in the language of the UI. This module is no React
+ * component, so it reads the i18next instance the app initialised; until that
+ * has happened (and wherever it never does) the English text is used.
+ *
+ * @param {string} key - Translation key
+ * @param {string} fallback - The English text
+ * @returns {string}
+ */
+const translate = (key, fallback) =>
+  i18next.isInitialized ? i18next.t(key, { defaultValue: fallback }) : fallback;
+
 // Request timeout detection
 export const isTimeoutError = error => {
   return (
@@ -35,7 +49,10 @@ export function enhanceApiError(error) {
 
   // Handle specific error types with better messages
   if (isTimeoutError(error)) {
-    userFriendlyMessage = 'Request timed out. The operation may have taken longer than expected.';
+    userFriendlyMessage = translate(
+      'error.requestTimedOut',
+      'Request timed out. The operation may have taken longer than expected.'
+    );
   } else if (error.response?.status === 403) {
     userFriendlyMessage =
       'You do not have permission to access this resource. Please contact your administrator if you believe this is an error.';
