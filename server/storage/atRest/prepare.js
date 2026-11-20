@@ -18,7 +18,7 @@
  * | on | anything else | preconditions, record `converting`, conversion, verification, record `complete` |
  *
  * The conversion is crash-safe: every object is replaced in one rename and is
- * recognised by its own format, and each facet (blobs, documents, logs) is
+ * recognised by its own format, and each facet (blobs, documents, logs, files) is
  * added to the record when it has been verified. A start after a crash finds
  * `converting` and continues.
  *
@@ -35,6 +35,7 @@ import { StorageError } from '../errors.js';
 import { createProvider, resolveBlobStorageConfig, resolveStorageConfig } from '../index.js';
 import { checkMasterKey } from '../localBlobBackend.js';
 import { convertStorage, isEmptyStorage, plaintextRemaining } from './convert.js';
+import { createSealedFilesTarget } from './sealedFiles.js';
 import {
   CURRENT_FACETS,
   isConversionComplete,
@@ -56,20 +57,26 @@ const GROWTH_SHARE = 0.35;
 const ADOPT_ENV_VAR = 'IHUB_S3_ADOPT_BUCKET';
 
 /**
- * Stores under `contents/` that hold user content outside the storage layer
- * and are therefore not encrypted, relative to the contents directory or,
- * with `data: true`, to the data directory.
+ * What under `contents/` can hold user content and is not encrypted, relative
+ * to the contents directory or, with `data: true`, to the data directory:
+ *
+ * - `.backups`: what a backup import replaced, in the form it had then;
+ * - `feedback.jsonl`: read with `jq` and `grep` and rotated by hand
+ *   (docs/feedback-feature.md);
+ * - `ifinder-downloads`: documents saved for use outside iHub;
+ * - `tmp/project-uploads`: uploads waiting for extraction, removed with the
+ *   request and swept after an hour;
+ * - `debug/llm-*`: request dumps of the LLM debug switch, meant to be read.
+ *
+ * The stores of `./sealedFiles.js` are not in this list: they are converted.
  */
 const PLAINTEXT_STORES = Object.freeze([
   { path: '.backups', data: false },
-  { path: path.join('agents', 'memory'), data: false },
-  { path: 'agent-artifacts', data: true },
-  { path: 'agent-inboxes', data: true },
   { path: 'feedback.jsonl', data: true },
-  { path: 'tool-jobs', data: true },
   { path: 'ifinder-downloads', data: true },
-  { path: 'shortlinks.json', data: true },
-  { path: path.join('debug', 'llm-request'), data: true }
+  { path: path.join('tmp', 'project-uploads'), data: true },
+  { path: path.join('debug', 'llm-request'), data: true },
+  { path: path.join('debug', 'llm-failures'), data: true }
 ]);
 
 const loadKeyModule = () => import('../../crypto/KeyProvider.js');
@@ -99,11 +106,16 @@ export class StorageEncryptionError extends StorageError {
  * @returns {number} Seconds on a local SSD; a network volume takes 10 to 20 times as long.
  */
 export function estimateSeconds(report) {
-  const objects = report.documents.plaintext + report.spillBlobs.plaintext + report.blobs.plaintext;
+  const objects =
+    report.documents.plaintext +
+    report.spillBlobs.plaintext +
+    report.blobs.plaintext +
+    report.files.plaintext;
   const bytes =
     report.documents.plaintextBytes +
     report.streams.plaintextBytes +
-    report.spillBlobs.plaintextBytes;
+    report.spillBlobs.plaintextBytes +
+    report.files.plaintextBytes;
   return Math.ceil(objects * 0.0005 + report.streams.plaintext * 0.002 + bytes / 40e6);
 }
 
@@ -114,7 +126,8 @@ function summarize(report) {
     streams: report.streams.plaintext,
     records: report.records,
     spillBlobs: report.spillBlobs.plaintext,
-    blobs: report.blobs.plaintext
+    blobs: report.blobs.plaintext,
+    files: report.files.plaintext
   };
 }
 
@@ -153,7 +166,8 @@ async function checkFreeSpace(baseDir, report) {
   const largest = Math.max(
     report.documents.largestBytes,
     report.streams.largestBytes,
-    report.spillBlobs.largestBytes
+    report.spillBlobs.largestBytes,
+    report.files.largestBytes
   );
   const growing = report.documents.plaintextBytes + report.streams.plaintextBytes;
   const neededBytes = Math.ceil(largest * 1.35 + growing * GROWTH_SHARE);
@@ -270,7 +284,13 @@ export async function prepareStorageEncryption({
   const target = {
     documents: base.envelopeDocuments,
     logs: base.logs,
-    blobs: remoteBlobs ? null : blobs
+    blobs: remoteBlobs ? null : blobs,
+    // The stores outside the storage layer, in the contents directory this
+    // provider belongs to (the parent of a scratch data directory in a test).
+    files:
+      typeof base.contentsDir === 'string'
+        ? createSealedFilesTarget({ contentsDir: base.contentsDir, keyProvider })
+        : null
   };
 
   try {
@@ -345,7 +365,8 @@ export async function prepareStorageEncryption({
       before.documents.scanned +
       before.streams.scanned +
       before.spillBlobs.scanned +
-      before.blobs.scanned;
+      before.blobs.scanned +
+      before.files.scanned;
     const onProgress = event => {
       done += 1;
       onObject?.(event);
@@ -356,7 +377,7 @@ export async function prepareStorageEncryption({
       });
     };
 
-    const converted = { documents: 0, streams: 0, spillBlobs: 0, blobs: 0 };
+    const converted = { documents: 0, streams: 0, spillBlobs: 0, blobs: 0, files: 0 };
     let skipped = 0;
     let last = null;
     for (const facet of pending) {
@@ -410,7 +431,7 @@ export async function prepareStorageEncryption({
     });
     say(
       'info',
-      'Stored data is encrypted at rest: documents, append logs and blobs. Not covered and still plaintext where present: ' +
+      'Stored data is encrypted at rest: documents, append logs, blobs, and the files of agent artifacts, agent memory, agent inboxes, tool-job results and short links. Not covered and still plaintext where present: ' +
         (plaintextStores.length > 0 ? plaintextStores.join(', ') : 'none found') +
         '; earlier backups and volume snapshots.',
       { ...converted, skipped, seconds: Math.round((Date.now() - startedAt) / 1000), keyId }

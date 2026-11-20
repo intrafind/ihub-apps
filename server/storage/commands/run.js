@@ -5,11 +5,14 @@
 
 /**
  * Entry point of the storage commands, for `npm run storage:check` and
- * `npm run storage:copy-blobs` and for an installation that ships only the
- * `server/` directory (the container image):
+ * `npm run storage:copy-blobs` and, with every command of `npm run storage:*`,
+ * for an installation that ships only the `server/` directory (the container
+ * image):
  *
  *     node server/storage/commands/run.js check [--json]
  *     node server/storage/commands/run.js copy-blobs [--dry-run]
+ *     node server/storage/commands/run.js encrypt [--dry-run]
+ *     node server/storage/commands/run.js show --doc <namespace> <key>
  *
  * @module storage/commands/run
  */
@@ -19,7 +22,9 @@ import { pathToFileURL } from 'node:url';
 /** Command name → module that exports `main(argv, io)`. */
 const COMMANDS = Object.freeze({
   check: './storageCheck.js',
-  'copy-blobs': './copyBlobs.js'
+  'copy-blobs': './copyBlobs.js',
+  encrypt: './encryptStorage.js',
+  show: './showStorage.js'
 });
 
 /**
@@ -28,7 +33,7 @@ const COMMANDS = Object.freeze({
  * The process is ended explicitly: modules the commands load keep timers and
  * connections that would otherwise hold it open.
  *
- * @param {string} name - `check` or `copy-blobs`.
+ * @param {string} name - `check`, `copy-blobs`, `encrypt` or `show`.
  * @param {string[]} argv - Arguments of the command.
  * @returns {Promise<never>}
  */

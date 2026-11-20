@@ -219,7 +219,7 @@ export function describeBlobStorage() {
  * @example
  * describeStorageEncryption();
  * // { enabled: true, scope: 'storage',
- * //   conversion: { state: 'complete', facets: { blobs: 1, documents: 1, logs: 1 }, … },
+ * //   conversion: { state: 'complete', facets: { blobs: 1, documents: 1, logs: 1, files: 1 }, … },
  * //   sealedDataExists: true }
  */
 export function describeStorageEncryption() {

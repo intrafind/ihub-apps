@@ -12,7 +12,8 @@ import {
   findJob,
   isJobOwnedElsewhere,
   isTerminal,
-  listJobsEverywhere
+  listJobsEverywhere,
+  readSealedResult
 } from './jobStore.js';
 
 /** How often a progress stream for a job on another worker asks for news. */
@@ -169,6 +170,19 @@ router.get('/jobs/:jobId/download', authRequired, downloadLimiter, async (req, r
   if (found.local) {
     res.setHeader('Content-Length', job.result.length);
     res.send(job.result);
+    return;
+  }
+  // A sealed result (storage encryption) is opened as a whole; a plaintext one is streamed.
+  let sealed;
+  try {
+    sealed = await readSealedResult(job);
+  } catch (error) {
+    if (error?.code === 'ENOENT') throw new ServiceError('NOT_FOUND', 'Job result not found');
+    throw error;
+  }
+  if (sealed) {
+    res.setHeader('Content-Length', sealed.length);
+    res.send(sealed);
     return;
   }
   const stream = createReadStream(job.resultFile);

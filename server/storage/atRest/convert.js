@@ -3,7 +3,8 @@
 
 /**
  * The one-time conversion of existing data to its encrypted form: documents,
- * append-log streams with their spill blobs, and blobs.
+ * append-log streams with their spill blobs, blobs, and the files of the
+ * stores outside the storage layer (`./sealedFiles.js`).
  *
  * Used by the start-up step (`./prepare.js`) and by `npm run storage:encrypt`.
  * **It runs while nothing else writes**: before the workers exist, or with
@@ -53,6 +54,7 @@ const MAX_NAMED = 20;
  *   that held at least one plaintext record.
  * @property {FacetCount} spillBlobs
  * @property {FacetCount} blobs
+ * @property {FacetCount} files - Files of the stores outside the storage layer.
  * @property {number} records - Plaintext log records, over all streams.
  * @property {number} tornLines - Log lines that are no record (dropped when
  *   their stream is rewritten).
@@ -105,14 +107,15 @@ async function eachLimited(items, limit, signal, work) {
  * dry run it is everything that would be converted.
  *
  * @param {ConversionReport} report
- * @returns {{blobs: number, documents: number, logs: number}}
+ * @returns {{blobs: number, documents: number, logs: number, files: number}}
  */
 export function plaintextRemaining(report) {
   const left = count => count.failed + (report.dryRun ? count.plaintext : 0);
   return {
     blobs: left(report.blobs),
     documents: left(report.documents),
-    logs: left(report.streams) + left(report.spillBlobs)
+    logs: left(report.streams) + left(report.spillBlobs),
+    files: left(report.files)
   };
 }
 
@@ -127,7 +130,8 @@ export function isEmptyStorage(report) {
     report.documents.scanned +
       report.streams.scanned +
       report.spillBlobs.scanned +
-      report.blobs.scanned ===
+      report.blobs.scanned +
+      report.files.scanned ===
     0
   );
 }
@@ -141,9 +145,11 @@ export function isEmptyStorage(report) {
  * @param {Object} [target.logs] - Its append log.
  * @param {Object} [target.blobs] - An encrypting blob store that encrypts its
  *   writes and accepts plaintext reads (`EncryptingBlobStore`).
+ * @param {Object} [target.files] - The stores outside the storage layer
+ *   (`createSealedFilesTarget` of `./sealedFiles.js`).
  * @param {Object} [options]
  * @param {boolean} [options.dryRun=false] - Count only, write nothing.
- * @param {string[]} [options.facets] - `blobs`, `documents`, `logs`; all by default.
+ * @param {string[]} [options.facets] - `blobs`, `documents`, `logs`, `files`; all by default.
  * @param {AbortSignal} [options.signal] - Stop before the next object.
  * @param {(event: {facet: string, name: string}) => void} [options.onProgress] -
  *   Called once per object.
@@ -154,13 +160,13 @@ export function isEmptyStorage(report) {
  *
  * @example
  * const report = await convertStorage({ documents, logs, blobs }, { dryRun: true });
- * plaintextRemaining(report); // { blobs: 3, documents: 120, logs: 14 }
+ * plaintextRemaining(report); // { blobs: 3, documents: 120, logs: 14, files: 2 }
  */
 export async function convertStorage(
-  { documents = null, logs = null, blobs = null } = {},
+  { documents = null, logs = null, blobs = null, files = null } = {},
   {
     dryRun = false,
-    facets = ['blobs', 'documents', 'logs'],
+    facets = ['blobs', 'documents', 'logs', 'files'],
     signal,
     onProgress,
     concurrency = CONVERT_CONCURRENCY
@@ -174,6 +180,7 @@ export async function convertStorage(
     streams: emptyCount(),
     spillBlobs: emptyCount(),
     blobs: emptyCount(),
+    files: emptyCount(),
     records: 0,
     tornLines: 0,
     unreadable: []
@@ -263,6 +270,24 @@ export async function convertStorage(
         onProgress?.({ facet: 'logs', name: dir });
       }));
     if (!blobsDone) report.aborted = true;
+  }
+
+  if (files && facets.includes('files') && !report.aborted) {
+    const count = report.files;
+    const finished = await eachLimited(await files.list(), concurrency, signal, async entry => {
+      const found = await files.inspect(entry);
+      let state = found.state;
+      if (state === 'plain' && !dryRun) {
+        const outcome = await files.seal(entry);
+        state = outcome === 'sealed' ? 'plain' : outcome === 'already' ? 'sealed' : outcome;
+      }
+      if (state === 'plain') plain(count, found.bytes);
+      else if (state === 'sealed') count.sealed += 1;
+      // Anything else: deleted since it was listed.
+      if (state === 'plain' || state === 'sealed') count.scanned += 1;
+      onProgress?.({ facet: 'files', name: `${entry.store}/${entry.name}` });
+    });
+    if (!finished) report.aborted = true;
   }
 
   return report;

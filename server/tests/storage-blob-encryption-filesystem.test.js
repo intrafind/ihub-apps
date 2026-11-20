@@ -128,7 +128,12 @@ describe('filesystem blob store and storage.encryption.enabled', () => {
       env: {}
     });
     assert.equal(result.action, 'converted');
-    assert.deepEqual((await readAtRestState(baseDir)).facets, { blobs: 1, documents: 1, logs: 1 });
+    assert.deepEqual((await readAtRestState(baseDir)).facets, {
+      blobs: 1,
+      documents: 1,
+      logs: 1,
+      files: 1
+    });
 
     const provider = await start({ enabled: true });
     assert.equal(provider.blobs.acceptsPlaintext, false);

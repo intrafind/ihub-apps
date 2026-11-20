@@ -5,8 +5,9 @@
 
 /**
  * `npm run storage:encrypt`: encrypt the stored data of an installation in
- * place (documents, append logs with their spill blobs, blobs), with the
- * server stopped. It is the conversion a server start runs when
+ * place (documents, append logs with their spill blobs, blobs, and the files
+ * of agent artifacts, agent memory, agent inboxes, tool-job results and short
+ * links), with the server stopped. It is the conversion a server start runs when
  * `storage.encryption.enabled` is switched on, run ahead of time so that
  * start is fast.
  *
@@ -45,7 +46,8 @@ import {
 
 const USAGE = `Usage: npm run storage:encrypt -- [--dry-run] [--json] [--verbose]
 
-Encrypts the stored data (documents, append logs, blobs) in place.
+Encrypts the stored data (documents, append logs, blobs, agent and
+short-link files) in place.
 Stop the server first. Safe to interrupt and to run again.
 
   --dry-run   count what is still plaintext, check key and free space, change nothing
@@ -86,6 +88,9 @@ export function formatEncryptResult(result) {
     lines.push(
       `  blobs         ${formatNumber(report.blobs.plaintext)} of ${formatNumber(report.blobs.scanned)}`
     );
+    lines.push(
+      `  files         ${formatNumber(report.files.plaintext)} of ${formatNumber(report.files.scanned)} (${formatByteSize(report.files.plaintextBytes)}; agent artifacts, memory, inboxes, tool-job results, short links)`
+    );
     if (report.documents.unreadable > 0) {
       lines.push(
         `  unreadable    ${formatNumber(report.documents.unreadable)} documents are not readable in any form and would be left as they are`
@@ -101,7 +106,7 @@ export function formatEncryptResult(result) {
     if (result.plaintextStores?.length > 0) {
       lines.push(`Not covered     ${result.plaintextStores.join(', ')} (stay in plaintext)`);
     }
-    const total = left.blobs + left.documents + left.logs;
+    const total = left.blobs + left.documents + left.logs + left.files;
     lines.push(
       total === 0
         ? 'Nothing is left to encrypt. Nothing was changed.'
@@ -121,6 +126,7 @@ export function formatEncryptResult(result) {
   lines.push(`  log streams   ${formatNumber(converted.streams || 0)}`);
   lines.push(`  spill blobs   ${formatNumber(converted.spillBlobs || 0)}`);
   lines.push(`  blobs         ${formatNumber(converted.blobs || 0)}`);
+  lines.push(`  files         ${formatNumber(converted.files || 0)}`);
   if (result.state?.skipped > 0) {
     lines.push(
       `  unreadable    ${formatNumber(result.state.skipped)} objects were left as they are (see the log)`

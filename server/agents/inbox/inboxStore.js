@@ -17,6 +17,10 @@
  *   # Engineering TODOs
  *   - [ ] (P1) Review the staging deploy logs
  *   - [x] (P2) Triage Sentry  -- done by agent:todo-worker 2026-05-19T07:45Z
+ *
+ * With `storage.encryption.enabled` the file is sealed on disk (store
+ * `agent-inboxes` of `storage/atRest/sealedFiles.js`); the format above is
+ * then what the seal holds.
  */
 
 import fs from 'node:fs/promises';
@@ -28,6 +32,10 @@ import { withFileLock } from '../../utils/fileLock.js';
 import { resolveAndValidatePath } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
 import { INBOX_ID_PATTERN } from '../../validators/agentInboxSchema.js';
+import { readSealedText, sealForDisk } from '../../storage/atRest/sealedFiles.js';
+
+/** Store id the inbox files are sealed under. */
+const INBOX_STORE = 'agent-inboxes';
 
 const INBOX_DIR = 'data/agent-inboxes';
 
@@ -124,7 +132,7 @@ export async function readInboxRaw(inboxId) {
   await fs.mkdir(inboxBaseDir(), { recursive: true });
   const file = await inboxPath(inboxId);
   // lgtm[js/path-injection] -- inboxId validated by INBOX_ID_PATTERN; path canonicalized by resolveAndValidatePath.
-  const raw = await fs.readFile(file, 'utf8');
+  const raw = await readSealedText(INBOX_STORE, `${inboxId}.md`, file);
   const { frontmatter, body } = parseFrontmatter(raw);
   return { inboxId, raw, frontmatter, body };
 }
@@ -205,7 +213,7 @@ async function writeInboxLocked(inboxId, { body, expectedVersion, updatedBy }) {
   });
   const content = `${frontmatter}${body}`;
   // lgtm[js/path-injection] -- inboxId validated by INBOX_ID_PATTERN; path canonicalized by resolveAndValidatePath.
-  await atomicWriteFile(file, content);
+  await atomicWriteFile(file, await sealForDisk(INBOX_STORE, `${inboxId}.md`, content));
   logger.info('Inbox written', {
     component: 'InboxStore',
     inboxId,

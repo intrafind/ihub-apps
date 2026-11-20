@@ -10,6 +10,10 @@
  * persistence, per-task result persistence) call into here so the on-disk
  * format and SSE event emission are consistent regardless of who initiated
  * the write.
+ *
+ * With `storage.encryption.enabled` the file is sealed before it is written
+ * (store `agent-artifacts` of `storage/atRest/sealedFiles.js`); `bytes` stays
+ * the size of the content.
  */
 
 import fs from 'node:fs/promises';
@@ -18,6 +22,7 @@ import { getContentsPath } from '../../utils/contentsPath.js';
 import { atomicWriteFile } from '../../utils/atomicWrite.js';
 import { isValidId, resolveAndValidatePath } from '../../utils/pathSecurity.js';
 import { createSseEmitter } from '../../utils/sseEmitter.js';
+import { sealForDisk, sealedFileName } from '../../storage/atRest/sealedFiles.js';
 
 const emit = createSseEmitter('ArtifactStore');
 
@@ -28,6 +33,9 @@ const SAFE_ARTIFACT_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 
 // Per-run quota. write_artifact is LLM-callable; without these caps a buggy
 // or adversarial agent can fill the disk under contents/data/agent-artifacts.
+/** Store id the artifact files are sealed under. */
+export const ARTIFACT_STORE = 'agent-artifacts';
+
 const MAX_ARTIFACTS_PER_RUN = 50;
 const MAX_TOTAL_BYTES_PER_RUN = 100 * 1024 * 1024; // 100 MB
 
@@ -129,7 +137,10 @@ export async function writeArtifactDirect(args) {
   if (!file) {
     throw new Error(`writeArtifactDirect: invalid artifact path: ${safeName}`);
   }
-  await atomicWriteFile(file, content);
+  await atomicWriteFile(
+    file,
+    await sealForDisk(ARTIFACT_STORE, sealedFileName(safeRunId, safeName), content)
+  );
 
   if (state && state.data) {
     state.data._agent = state.data._agent || {};

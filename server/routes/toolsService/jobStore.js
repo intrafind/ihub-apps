@@ -16,6 +16,12 @@ import {
 import config from '../../config.js';
 import { getContentsPath } from '../../utils/contentsPath.js';
 import logger from '../../utils/logger.js';
+import {
+  assertPlaintextReadable,
+  isSealedOnDisk,
+  openFromDisk,
+  sealForDisk
+} from '../../storage/atRest/sealedFiles.js';
 
 /**
  * Jobs live in the memory of the worker that runs them — the uploaded file,
@@ -24,7 +30,9 @@ import logger from '../../utils/logger.js';
  * so ownership is announced over the cluster bus and other workers ask the
  * owner: a snapshot, a cancellation, its share of the list. The result is
  * written to the shared data directory when clustered, so any worker can
- * serve the download without shipping megabytes over IPC.
+ * serve the download without shipping megabytes over IPC. With
+ * `storage.encryption.enabled` that file is sealed (store `tool-jobs` of
+ * `storage/atRest/sealedFiles.js`).
  */
 const JOB_PRESENCE = 'tool-job';
 const BUS_GET = 'tool-job:get';
@@ -41,6 +49,9 @@ const TERMINAL_STATUSES = new Set(['completed', 'error', 'cancelled']);
 
 /** Where results are written for other workers to serve. */
 const RESULTS_DIR = getContentsPath('data', 'tool-jobs');
+
+/** Store id the result files are sealed under. */
+const RESULT_STORE = 'tool-jobs';
 
 async function removeResultFile(file) {
   if (!file) return;
@@ -222,7 +233,7 @@ export async function completeJob(job, { result, contentType, filename }) {
     const temp = `${file}.${process.pid}.tmp`;
     try {
       await fs.mkdir(RESULTS_DIR, { recursive: true });
-      await fs.writeFile(temp, result);
+      await fs.writeFile(temp, await sealForDisk(RESULT_STORE, path.basename(file), result));
       await fs.rename(temp, file);
       job.resultFile = file;
     } catch (error) {
@@ -235,6 +246,25 @@ export async function completeJob(job, { result, contentType, filename }) {
     }
   }
   job.status = 'completed';
+}
+
+/**
+ * The result of a job another worker wrote, when its file is sealed.
+ *
+ * @param {{resultFile: string}} job - The owner's snapshot of the job.
+ * @returns {Promise<Buffer|null>} The result; null when the file is plaintext
+ *   and may be served as it is (the caller streams it).
+ * @throws What `fs` throws when the file is gone (`ENOENT`), and a
+ *   `StorageError` for a sealed file that does not open or a plaintext file
+ *   while encryption is enforced.
+ */
+export async function readSealedResult(job) {
+  const name = path.basename(job.resultFile);
+  if (!(await isSealedOnDisk(job.resultFile))) {
+    assertPlaintextReadable(RESULT_STORE, name);
+    return null;
+  }
+  return openFromDisk(RESULT_STORE, name, await fs.readFile(job.resultFile));
 }
 
 /**

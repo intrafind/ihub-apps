@@ -9,10 +9,10 @@
  *
  *   { "format": 1,
  *     "state": "off" | "converting" | "complete",
- *     "facets": { "blobs": 1, "documents": 1, "logs": 1 },
+ *     "facets": { "blobs": 1, "documents": 1, "logs": 1, "files": 1 },
  *     "keyId": "1a2b3c4d",
  *     "startedAt": "…", "completedAt": "…", "disabledAt": "…",
- *     "converted": { "documents": 0, "streams": 0, "spillBlobs": 0, "blobs": 0 },
+ *     "converted": { "documents": 0, "streams": 0, "spillBlobs": 0, "blobs": 0, "files": 0 },
  *     "skipped": 0 }
  *
  * - `facets` lists what is fully encrypted **now**, each with the format
@@ -45,8 +45,11 @@ export const AT_REST_STATE_FILE = '.at-rest.json';
 /** Format number of the record. */
 export const AT_REST_STATE_FORMAT = 1;
 
-/** What this release encrypts, with the format number of each facet. */
-export const CURRENT_FACETS = Object.freeze({ blobs: 1, documents: 1, logs: 1 });
+/**
+ * What this release encrypts, with the format number of each facet. `files`
+ * are the stores outside the storage layer (`./sealedFiles.js`).
+ */
+export const CURRENT_FACETS = Object.freeze({ blobs: 1, documents: 1, logs: 1, files: 1 });
 
 /** The states a record can be in. */
 export const AT_REST_STATES = Object.freeze(['off', 'converting', 'complete']);
@@ -141,7 +144,7 @@ export async function writeAtRestState(baseDir, state) {
  * Whether a facet is recorded as fully encrypted at this release's format.
  *
  * @param {Object|null} state
- * @param {string} facet - `blobs`, `documents` or `logs`.
+ * @param {string} facet - `blobs`, `documents`, `logs` or `files`.
  * @returns {boolean}
  */
 export function isFacetComplete(state, facet) {

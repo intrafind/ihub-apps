@@ -43,6 +43,11 @@ jest.unstable_mockModule('../utils/logger.js', () => ({
 
 const { default: registerAgentArtifactRoutes } = await import('../routes/agents/artifacts.js');
 const { default: errorHandler } = await import('../middleware/errorHandler.js');
+const { writeArtifactDirect } = await import('../agents/runtime/artifactStore.js');
+const sealedFiles = await import('../storage/atRest/sealedFiles.js');
+const keyModule = await import('../crypto/KeyProvider.js');
+const { fixedKeys } = await import('./support/blobTestSupport.js');
+const testKeys = fixedKeys(keyModule);
 
 let user = { id: 'owner', groups: ['users'] };
 const app = express();
@@ -197,6 +202,63 @@ describe('agent artifact routes: errors', () => {
     } finally {
       spy.mockRestore();
     }
+  });
+
+  describe('with storage encryption on', () => {
+    const CONTENT = '# Sealed report\n\nÜbersicht: vertraulich.\n';
+    const sealedFile = () => path.join(tmpRoot, 'data', 'agent-artifacts', 'run1', 'sealed.md');
+
+    beforeAll(async () => {
+      sealedFiles.configureSealedFiles({ enabled: true, keyProvider: testKeys.provider });
+      await writeArtifactDirect({ runId: 'run1', name: 'sealed.md', content: CONTENT });
+    });
+
+    afterAll(() => {
+      sealedFiles.resetSealedFiles();
+      fs.rmSync(sealedFile(), { force: true });
+      fs.rmSync(path.join(tmpRoot, 'data', 'agent-artifacts', 'run1', 'planted.md'), {
+        force: true
+      });
+    });
+
+    it('stores the artifact sealed and lists it with the size of its content', async () => {
+      const stored = fs.readFileSync(sealedFile());
+      expect(stored.toString('ascii', 0, 4)).toBe('IHB1');
+      expect(stored.includes(Buffer.from('vertraulich'))).toBe(false);
+      const res = await request(app).get('/api/agents/runs/run1/artifacts').expect(200);
+      const listed = res.body.find(artifact => artifact.name === 'sealed.md');
+      expect(listed.bytes).toBe(Buffer.byteLength(CONTENT));
+      expect(res.body.find(artifact => artifact.name === 'report.md').bytes).toBe(8);
+    });
+
+    it('serves a sealed artifact opened, and a plaintext one from before as it is', async () => {
+      const res = await request(app)
+        .get('/api/agents/runs/run1/artifacts/sealed.md?download=1')
+        .expect(200);
+      expect(res.text).toBe(CONTENT);
+      expect(res.headers['content-type']).toMatch(/text\/markdown/);
+      expect(res.headers['content-disposition']).toMatch(/sealed\.md/);
+      const plain = await request(app).get('/api/agents/runs/run1/artifacts/report.md').expect(200);
+      expect(plain.text).toBe('# Report');
+    });
+
+    it('does not serve a sealed artifact under another name, nor plaintext once the conversion is recorded', async () => {
+      const dir = path.join(tmpRoot, 'data', 'agent-artifacts', 'run1');
+      fs.copyFileSync(sealedFile(), path.join(dir, 'planted.md'));
+      const moved = await request(app).get('/api/agents/runs/run1/artifacts/planted.md');
+      expect(moved.status).toBe(500);
+      expect(moved.text).not.toContain('vertraulich');
+
+      sealedFiles.configureSealedFiles({
+        enabled: true,
+        keyProvider: testKeys.provider,
+        state: { state: 'complete', facets: { files: 1 } }
+      });
+      const res = await request(app).get('/api/agents/runs/run1/artifacts/report.md');
+      expect(res.status).toBe(500);
+      expect(res.text).not.toContain('# Report');
+      await request(app).get('/api/agents/runs/run1/artifacts/sealed.md').expect(200);
+    });
   });
 
   // Keep this the last test of the file: it spends the rest of the route's rate-limit window.

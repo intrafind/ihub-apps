@@ -18,6 +18,14 @@ import { assertValidId, resolveAndValidatePath } from '../../utils/pathSecurity.
 import { getContentsPath } from '../../utils/contentsPath.js';
 import { getWorkflowEngine } from '../../services/workflow/index.js';
 import { buildContentDisposition } from '../../utils/safeContentDisposition.js';
+import { ARTIFACT_STORE } from '../../agents/runtime/artifactStore.js';
+import {
+  assertPlaintextReadable,
+  contentSize,
+  isSealedOnDisk,
+  openFromDisk,
+  sealedFileName
+} from '../../storage/atRest/sealedFiles.js';
 
 function getEngine() {
   return getWorkflowEngine();
@@ -51,6 +59,25 @@ function safeName(name) {
   const base = path.basename(name);
   if (base !== name) return null;
   return base;
+}
+
+/**
+ * The content of an artifact file that is sealed on disk.
+ *
+ * @param {string} file - Validated absolute path of the artifact.
+ * @param {string} name - Its name inside the store, `<runId>/<name>`.
+ * @returns {Promise<Buffer|null>} Null for a plaintext file that may be
+ *   served as it is: the caller streams it.
+ * @throws {import('../../storage/errors.js').StorageError} A sealed file that
+ *   does not open, or a plaintext file while encryption is enforced.
+ */
+async function readIfSealed(file, name) {
+  if (!(await isSealedOnDisk(file))) {
+    assertPlaintextReadable(ARTIFACT_STORE, name);
+    return null;
+  }
+  // lgtm[js/path-injection] -- file path canonicalized within artifacts root.
+  return openFromDisk(ARTIFACT_STORE, name, await fsp.readFile(file));
 }
 
 /**
@@ -121,7 +148,9 @@ export default function registerAgentArtifactRoutes(app) {
         // lgtm[js/path-injection] -- entry validated by safeName; path canonicalized.
         const stat = await fsp.stat(entryPath).catch(() => null);
         if (stat && stat.isFile()) {
-          list.push({ name: safeEntry, bytes: stat.size, mtime: stat.mtime });
+          // A sealed file is larger on disk than the artifact it holds.
+          const bytes = await contentSize(entryPath, stat.size).catch(() => stat.size);
+          list.push({ name: safeEntry, bytes, mtime: stat.mtime });
         }
       }
       res.json(list);
@@ -157,6 +186,14 @@ export default function registerAgentArtifactRoutes(app) {
       // RFC 5987 UTF-8 form alongside the ASCII fallback.
       if (req.query?.download === '1') {
         res.setHeader('Content-Disposition', buildContentDisposition(safe));
+      }
+      // A sealed artifact (storage encryption) is opened as a whole and sent; a plaintext one
+      // is streamed as before. Which one it is, is decided by the file's own format.
+      const sealed = await readIfSealed(file, sealedFileName(String(runId), safe));
+      if (sealed) {
+        res.setHeader('Content-Length', sealed.length);
+        res.end(sealed);
+        return;
       }
       // A read error (the file vanished after the stat, a disk fault) used to be an unhandled
       // 'error' event on the stream. Before the first byte it is an ordinary failure answered by

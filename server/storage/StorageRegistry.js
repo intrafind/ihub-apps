@@ -25,6 +25,7 @@ import { failedBlobProbe, runBlobProbe } from './blobProbe.js';
 import { ComposedStorageProvider } from './ComposedStorageProvider.js';
 import { createLocalBlobBackend } from './localBlobBackend.js';
 import { blobPlaintextReads, describeEncryption } from './atRest/policy.js';
+import { configureSealedFiles, resetSealedFiles } from './atRest/sealedFiles.js';
 import { readAtRestState } from './atRest/state.js';
 
 const COMPONENT = 'StorageRegistry';
@@ -490,6 +491,13 @@ export async function initializeStorage({ platformConfig, env } = {}) {
     }
     activeProvider = provider;
     activeProviderName = name;
+    // The stores outside the storage layer follow the same switch and the
+    // state record this start found (`storage/atRest/sealedFiles.js`).
+    configureSealedFiles({
+      enabled: encryption.enabled,
+      state: provider.atRest?.state ?? null,
+      loadKeys
+    });
     logger.info('Storage provider initialized', {
       component: COMPONENT,
       provider: name,
@@ -608,6 +616,7 @@ export async function shutdownStorage() {
   activeProvider = null;
   activeProviderName = null;
   if (!provider) return;
+  resetSealedFiles();
   await provider.shutdown?.();
   logger.info('Storage provider shut down', { component: COMPONENT, provider: name });
 }

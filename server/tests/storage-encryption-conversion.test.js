@@ -229,8 +229,14 @@ describe('storage encryption: conversion of an existing installation', () => {
     assert.equal(result.action, 'converted');
     const state = await readAtRestState(site.baseDir);
     assert.equal(state.state, 'complete');
-    assert.deepEqual(state.facets, { blobs: 1, documents: 1, logs: 1 });
-    assert.deepEqual(state.converted, { documents: 38, streams: 2, spillBlobs: 2, blobs: 2 });
+    assert.deepEqual(state.facets, { blobs: 1, documents: 1, logs: 1, files: 1 });
+    assert.deepEqual(state.converted, {
+      documents: 38,
+      streams: 2,
+      spillBlobs: 2,
+      blobs: 2,
+      files: 0
+    });
     assert.equal(state.skipped, 1, 'the unreadable document is counted, not converted');
     assert.equal(state.keyId.length, 8);
 
@@ -285,7 +291,13 @@ describe('storage encryption: conversion of an existing installation', () => {
     );
     const walked = await site.prepare(true);
     assert.equal(walked.action, 'converted');
-    assert.deepEqual(walked.state.converted, { documents: 0, streams: 0, spillBlobs: 0, blobs: 0 });
+    assert.deepEqual(walked.state.converted, {
+      documents: 0,
+      streams: 0,
+      spillBlobs: 0,
+      blobs: 0,
+      files: 0
+    });
     const after = await fingerprint(site.baseDir);
     delete before['.at-rest.json'];
     delete after['.at-rest.json'];
@@ -437,14 +449,20 @@ describe('storage encryption: the switch', () => {
     await assert.rejects(site.start(true), { code: 'ENCRYPTION_NOT_CONVERTED' });
     const again = await site.prepare(true);
     assert.equal(again.action, 'converted');
-    assert.deepEqual(again.state.converted, { documents: 1, streams: 1, spillBlobs: 0, blobs: 1 });
+    assert.deepEqual(again.state.converted, {
+      documents: 1,
+      streams: 1,
+      spillBlobs: 0,
+      blobs: 1,
+      files: 0
+    });
     provider = await bootstrapStorage(site.platformConfig(true));
     const described = describeStorageEncryption();
     assert.deepEqual(
       [described.enabled, described.scope, described.conversion.state],
       [true, 'storage', 'complete']
     );
-    assert.deepEqual(described.conversion.facets, { blobs: 1, documents: 1, logs: 1 });
+    assert.deepEqual(described.conversion.facets, { blobs: 1, documents: 1, logs: 1, files: 1 });
     // The public health output names the blob store and nothing about encryption.
     assert.deepEqual(describeBlobStorage(), { provider: 'default', status: 'ok' });
     assert.equal((await provider.documents.get('chats', 'while-off')).etag, written.etag);

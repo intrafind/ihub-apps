@@ -51,6 +51,7 @@ import { FilesystemLockManager } from './FilesystemLockManager.js';
 import { getContentsPath } from '../../../utils/contentsPath.js';
 import { BLOB_OPS, timeFacetMethods } from '../../facetTiming.js';
 import { decideAtRestMode, describeEncryption } from '../../atRest/policy.js';
+import { sealedStoresHoldNothing } from '../../atRest/sealedFiles.js';
 import { CURRENT_FACETS, readAtRestState, writeAtRestState } from '../../atRest/state.js';
 import { AT_REST_MODES, AtRestContext } from './atRestContext.js';
 
@@ -592,7 +593,7 @@ export class FilesystemStorageProvider extends StorageProvider {
         keyId,
         startedAt: now,
         completedAt: now,
-        converted: { documents: 0, streams: 0, spillBlobs: 0, blobs: 0 },
+        converted: { documents: 0, streams: 0, spillBlobs: 0, blobs: 0, files: 0 },
         skipped: 0
       });
       this._atRestState = state;
@@ -629,8 +630,9 @@ export class FilesystemStorageProvider extends StorageProvider {
   }
 
   /**
-   * Whether the data directory holds no document, no stream and no blob: a
-   * new installation, or a test's scratch directory.
+   * Whether the data directory holds no document, no stream and no blob, and
+   * the stores outside the storage layer hold no file: a new installation, or
+   * a test's scratch directory.
    *
    * @returns {Promise<boolean>}
    * @private
@@ -644,7 +646,7 @@ export class FilesystemStorageProvider extends StorageProvider {
     for (const ns of await this._blobs.namespaces()) {
       for await (const _item of this._blobs.scan(ns)) return false;
     }
-    return true;
+    return sealedStoresHoldNothing(this._contentsDir);
   }
 
   /**
