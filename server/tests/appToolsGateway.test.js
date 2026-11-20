@@ -53,6 +53,8 @@ jest.unstable_mockModule('../configCache.js', () => ({
   default: {
     getApps: () => ({ data: appsFixture }),
     getFeatures: () => featuresConfig.value,
+    // No fixture app needs an integration, so an empty installation list is enough.
+    getIntegrationContext: () => ({ platform: {}, installedIntegrations: [] }),
     getModels: () => ({ data: [] }),
     getPlatform: () => ({}),
     getSources: () => ({ data: [] }),
@@ -77,6 +79,8 @@ jest.unstable_mockModule('../sources/index.js', () => ({
 }));
 
 jest.unstable_mockModule('../services/skillLoader.js', () => ({
+  // skillAccess.js link-checks every name it imports, so the mock names them all.
+  disablesModelInvocation: () => false,
   getSkillContent: async () => null,
   getSkillResource: async () => null
 }));
