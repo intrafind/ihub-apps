@@ -845,7 +845,10 @@ export async function startStack({
     killPointHits() {
       if (!reachedFile) return [];
       try {
-        return fs.readFileSync(reachedFile, 'utf8').split('\n').filter(Boolean);
+        return fs
+          .readFileSync(reachedFile, 'utf8')
+          .split('\n')
+          .filter(line => line !== '');
       } catch {
         return [];
       }
@@ -917,7 +920,7 @@ export async function startStack({
         return fs
           .readFileSync(file, 'utf8')
           .split('\n')
-          .filter(Boolean)
+          .filter(line => line !== '')
           .map(line => JSON.parse(line));
       } catch {
         return [];

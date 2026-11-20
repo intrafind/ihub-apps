@@ -41,6 +41,8 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.
 const CONTENTS_DIR = 'contents-e2e-load';
 const START_TIMEOUT_MS = 180_000;
 const POLL_MS = 250;
+/** The limit of one look at a server ("does it answer?"). */
+const LOOK_TIMEOUT_MS = 2_000;
 /** How long a child may take to stop before it is killed. */
 const STOP_TIMEOUT_MS = 10_000;
 
@@ -51,7 +53,7 @@ function option(name, fallback) {
 const profiles = option('profiles', 'smoke,agentic')
   .split(',')
   .map(name => name.trim())
-  .filter(Boolean);
+  .filter(name => name !== '');
 const maxErrorPct = Number(option('max-error-pct', '0'));
 const keep = process.argv.includes('--keep');
 
@@ -102,25 +104,27 @@ function run(args, env) {
 function until(check, what) {
   return new Promise((resolve, reject) => {
     const deadline = Date.now() + START_TIMEOUT_MS;
+    // A look that fails counts as "not yet": the limit applies to it as well.
+    const look = async () => {
+      const ok = await check().catch(() => false);
+      if (ok) {
+        clearInterval(timer);
+        resolve();
+      } else if (Date.now() > deadline) {
+        clearInterval(timer);
+        reject(new Error(`Timed out waiting for ${what}`));
+      }
+    };
     const timer = setInterval(() => {
-      check().then(
-        ok => {
-          if (ok) {
-            clearInterval(timer);
-            resolve();
-          } else if (Date.now() > deadline) {
-            clearInterval(timer);
-            reject(new Error(`Timed out waiting for ${what}`));
-          }
-        },
-        () => {}
-      );
+      look().catch(reject);
     }, POLL_MS);
   });
 }
+// One look has a limit of its own: a server that takes the connection and
+// never answers must not hold the wait up beyond its limit.
 const answers = url => async () => {
   try {
-    return (await fetch(url)).ok;
+    return (await fetch(url, { signal: AbortSignal.timeout(LOOK_TIMEOUT_MS) })).ok;
   } catch {
     return false;
   }
