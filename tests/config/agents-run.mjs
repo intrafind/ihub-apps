@@ -161,7 +161,18 @@ export function gateArgs(specs) {
   return ['--grep', ['@gate', ...files].join('|'), '--grep-invert', '@slow'];
 }
 
-const GIT_PATH = '/usr/local/bin:/usr/bin:/bin';
+const GIT_BINARIES = ['/usr/bin/git', '/usr/local/bin/git', '/bin/git', '/opt/homebrew/bin/git'];
+
+/**
+ * git by its full path in a system directory, never through PATH, which a checkout
+ * could lead with a directory of its own. Where git lives elsewhere (Windows), this
+ * throws and the caller selects every spec.
+ */
+function gitBinary() {
+  const found = GIT_BINARIES.find(candidate => fs.existsSync(candidate));
+  if (!found) throw new Error('git is in none of the system directories');
+  return found;
+}
 
 /**
  * The paths a change touches: the commits since the merge base with `base`, and
@@ -177,12 +188,8 @@ const GIT_PATH = '/usr/local/bin:/usr/bin:/bin';
  */
 export function changedPaths(base, repoRoot = root) {
   const git = (...args) =>
-    execFileSync('git', args, {
+    execFileSync(gitBinary(), args, {
       cwd: repoRoot,
-      // git is looked up in the system directories only, never in a directory a
-      // checkout could put first on PATH. Where git lives elsewhere (Windows), the
-      // call fails and every spec is selected.
-      env: { ...process.env, PATH: GIT_PATH },
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe']
     })
