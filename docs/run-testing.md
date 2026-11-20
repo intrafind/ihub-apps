@@ -144,7 +144,7 @@ Some values differ between two runs and say nothing about behaviour. `normalise.
 | Temporary paths, the product version and hashes over dated content are replaced | `<tmp>`, `<version>`, `<hash>` |
 | `heartbeat` and `stream/connected` frames are dropped | |
 
-A case can name more id patterns, volatile keys and text rules in its config (`idPatterns`, `volatileKeys`, `textRules`). A text rule replaces a date that is written in a form of its own, such as the title of the chat of a scheduled run. `surfaces/fixtures.js` holds the patterns the surfaces share. Add a rule only for a value that cannot matter. A value that could matter belongs in the golden.
+A case can name more id patterns, volatile keys and text rules in its config (`idPatterns`, `volatileKeys`, `textRules`). A text rule replaces a date that is written in a form of its own, such as the title of the chat of a scheduled run. Write such a rule in `surfaces/textRules.js` and test it there against the function of the product that writes the text, over every month and in both languages: the short name of a month is not three letters long in every month (`Sept` in en-GB). `surfaces/fixtures.js` holds the patterns the surfaces share. Add a rule only for a value that cannot matter. A value that could matter belongs in the golden.
 
 Two things are left out of a golden because they cannot be equal on two runs, and each surface says so where it does it:
 
@@ -200,9 +200,9 @@ The goldens under `server/tests/golden/__goldens__/` were recorded before the fi
 | `app-as-tool` | from a chat turn, the 3-minute limit, depth 1, approval refused, question refused, a caller without resolved permissions, a user who may not open the app | a chat turn of the calling app, and `invokeAppTool` |
 | `mcp` | `tools/call` of an app, with a file, with a provider error, with a tool that needs approval | an MCP client of the SDK on the server iHub builds for the caller |
 | `a2a` | `message/send`, `message/stream`, a provider error | `dispatchA2A`, the function behind `POST /a2a` |
-| `legacy-workflow` | see [The legacy workflow path](#the-legacy-workflow-path) | the workflow runner, the trigger manager, the resume sweep |
+| `legacy-workflow` | see [The legacy workflow path](#the-legacy-workflow-path) | the workflow runner, the trigger manager, the resume sweep, and for one case the chat route and `GET /api/chats/{chatId}` |
 
-Every chat case is recorded twice, once for each position of the feature **Chat answers on one connection** (`chatPostStream`). The server does not read that flag; it tells the browser how to ask. With the flag off the browser holds a `GET` stream and the `POST` answers with JSON (`chat/<case>.json`). With the flag on the browser posts with `Accept: text/event-stream` and the frames arrive on that response (`chat/<case>-post-stream.json`). A change to the chat route has to keep both files equal.
+Every chat case is recorded twice, once for each position of the feature **Chat answers on one connection** (`chatPostStream`). The server does not read that flag; it tells the browser how to ask. With the flag off the browser holds a `GET` stream and the `POST` answers with JSON (`chat/<case>.json`). With the flag on the browser posts with `Accept: text/event-stream` and the frames arrive on that response (`chat/<case>-post-stream.json`). The two files of a case differ from each other, in the requests and in where the frames arrive. A change to the chat route has to leave both files unchanged.
 
 The routes are mounted in an Express app with the error handler of the product. One thing stands in front of them that the product does not have: a middleware that signs the request in as the user of the case. For `mcp` and `a2a` the bearer token check (`mcpAuth`) is not part of the recording for the same reason; the caller is built with the scopes of a token.
 
@@ -222,23 +222,31 @@ The engine that runs the old node types stays as it is while a new engine is bui
 
 Only a security fix changes a frozen file. It updates the hash in the same pull request and says that it is one. `node server/tests/workflow-legacy-frozen.test.js --print` prints the table for the files as they are. Everything else belongs in the new engine.
 
-**The goldens.** `surfaces/legacyWorkflow.js` records four runs of the legacy path:
+**The goldens.** `surfaces/legacyWorkflow.js` records six runs of the legacy path:
 
 | Case | What it pins |
 |---|---|
 | `law-consultation-upload` | the shipped workflow `stellungnahmen-review-v2` on six synthetic statements: one model call per readable document, the records and the report |
+| `law-consultation-ifinder` | the shipped workflow `stellungnahmen-review-ifinder-v2` on a synthetic iFinder result set: the search plan from the notes of the agent, two rounds of search, every request iHub sends to iFinder, one model call per document that could be loaded, the records and the report |
 | `paused-and-resumed` | the shipped workflow `approval-workflow` pauses on its question to a person and continues with the answer |
 | `resumed-after-restart` | an execution that was interrupted in a step is found by the sweep of a new engine and continued from its checkpoint, as the system user |
+| `delivered-after-restart` | a workflow started from a chat with `@approval-workflow` waits for a person when its server dies. The next read of the chat closes the turn with "waiting for your input", the person answers, and the read after that puts the result into the chat in the place of the waiting answer (`deliverResumedWorkflows`) |
 | `trigger-started` | a workflow started by its webhook trigger |
 
 The statements are files under `tests/fixtures/stellungnahmen/`: a PDF, a DOCX, a scan without a text layer, a PDF of 40 pages, an empty text file, and a DOCX with umlauts and a table. Everything in them is invented. They are read by the same code that reads an upload, so the golden also holds what happens to the scan (it reaches the model as a note that no text could be read) and to the empty file (it is refused before the workflow starts). `server/tests/golden/surfaces/buildStatementFixtures.mjs` is how the files were made; run it only to change a fixture, and record the goldens again afterwards.
 
+**The iFinder result set.** `tests/fixtures/stellungnahmen/ifinder/result-set.json` holds what an iFinder answers for the law consultation: the search profiles of the user, six documents and the hits of each query. It has the shape of the iFinder retrieval API as iHub reads it. It is synthetic: no iFinder installation was asked for it, and everything in it is invented. Among the documents are one that is longer than the workflow reads, one without text and one that cannot be loaded (404), which the workflow skips.
+
+`surfaces/ifinderStandIn.js` serves the result set from a real HTTP server on the loopback interface. Nothing of iHub is replaced: the iFinder installation points at the stand-in, and `iFinderService` builds, signs and sends its requests as it does to a real installation. The stand-in writes down every request with the claims of its token and whether the token was signed with the key of the installation, and the golden holds that list under `result.ifinder.requests`. The key pair is made when the recording starts; no key is in the repository. Use the stand-in and the result set for any test that needs an iFinder.
+
+**What the restart cases are.** A restart is played inside the recording process. The engine is replaced by a new one, and for `delivered-after-restart` the state a dead process takes with it is dropped by hand: the bridge between the workflow and its chat, the run the ledger held open, and the engine with its executions (`processDied` in `surfaces/legacyWorkflow.js`). No process is killed: a test that kills a real server belongs in the nightly tier (`server/tests/faults/`). Two limits follow:
+
+- The sweep of a starting server is called with the options `server/startup/worker.js` gives it for a plain workflow, written again in the test, because that file does not export them. A change to the options there does not show in these goldens.
+- A case that lets its server die calls `env.processRestarted()`. The check that `seq` increases within a run then runs on each side of the restart on its own.
+
+`delivered-after-restart` pins one behaviour that is a defect: when an answer continues an execution that the answering process did not start, the engine does not take up the sequence of the run ledger, and the run counts its events again from 1 (`result.ledgerSequence` in the golden: last before the restart 7, first after it 1). The ledger of such a run holds two events for each of these numbers. The file that decides this, `WorkflowEngine.js`, is frozen. Whoever fixes it changes the golden and adds a row.
+
 These goldens compare nothing with a rebuilt workflow. For that see [Side by side](#side-by-side).
-
-Not recorded yet:
-
-- `stellungnahmen-review-ifinder-v2`, the variant that reads its documents from iFinder. It needs a recorded iFinder result set and a stand-in for the iFinder endpoints.
-- The delivery of a continued workflow into its chat after a restart (`deliverResumedWorkflows`). The bridge between a workflow and its chat lives as long as its process, so this needs a process that really ends, which the fault tests bring.
 
 ## The difference list
 
@@ -259,7 +267,7 @@ The list starts with the differences that are known before any code moves. Each 
 | `usage-origin-agent-id` | a usage record names the origin of its run and the agent |
 | `evidence-actor` | an evidence record names the actor of the run |
 | `run-started-additive-fields` | `run/started` gains fields |
-| `app-as-tool-display-fields` | the tool row of an app call shows the name of the app |
+| `app-as-tool-display-fields` | the tool row of an app call gets the display fields of a sub-agent: the name of the app alone as its title (today `App: <name>`) and the activity kind of a sub-agent (today `tool`) |
 
 A proposed row accepts nothing yet. The pull request that makes the change edits the row (it says what was decided in the end and names the goldens and parts that really changed), records the goldens again, and gets the row signed.
 
@@ -273,16 +281,18 @@ Never record a golden again to make a test pass without a row. `differenceList.t
 
 ### A row
 
+The example is not a row of the list.
+
 ```json
 {
   "rows": [
     {
-      "id": "tool-error-text",
+      "id": "example-row",
       "title": "The text of a tool error names the tool",
       "decision": "Accepted: every surface now sends the same text.",
       "goldens": ["chat/one-tool.json"],
       "parts": ["envelopes", "ledger"],
-      "pr": "tool-runner",
+      "pr": "example-pull-request",
       "state": "proposed",
       "signedBy": null,
       "signedOn": null
@@ -353,15 +363,29 @@ The job runs on `pull_request`. GitHub then runs the pull request's own copy of 
 
 Without these settings the check still catches the honest mistake, a signature that nobody approved. It does not stop a pull request that edits the check.
 
-### A test-only pull request changes no production code
+### A test-only pull request that records goldens changes no production code
 
-A golden is worth something only when it was recorded before the code it pins was changed. The same job therefore runs `scripts/check-test-only-diff.js`: a pull request whose title has the type `test`, `docs` or `ci` may only change files under `server/tests/`, `tests/`, `docs/`, `scripts/` and `.github/`. A file anywhere else fails the job and is named. A pull request of another type is not checked; a golden it changes needs a row.
+A golden is worth something only when it was recorded before the code it pins was changed. The same job therefore runs `scripts/check-test-only-diff.js`. It checks a pull request when both of these hold:
+
+- its title has the type `test`, `docs` or `ci`, and
+- its diff adds, changes or deletes a file under `server/tests/golden/__goldens__/`.
+
+Such a pull request may not change production code: a file under `server/` outside `server/tests/`, under `shared/` or under `client/`. A file there fails the job and is named. Everything else passes: tests, fixtures, docs, concepts, scripts, workflows, `package.json`.
+
+Not checked:
+
+- A pull request of another type (`feat`, `fix`, `refactor`, ...). It may change production code, and a golden it changes needs a row.
+- A `test`, `docs` or `ci` pull request that touches no golden, for example a concept under `concepts/` or a test harness that brings an inert hook in the server with it. Nothing is recorded in it.
+
+The script reads the title from GitHub when it runs (`PR_NUMBER`, `GITHUB_REPOSITORY`, the token in `GH_TOKEN`). It does not use the title of the event that started the workflow, because a job that is run again gets the same event again, with the title the pull request had when the workflow started. When the title cannot be read, the job fails with exit code 2 and checks nothing.
+
+Changing the title does not start the workflow. After you change it, re-run the job **Golden difference list**: the re-run judges the new title.
+
+By hand, without a pull request, the title comes from `PR_TITLE`:
 
 ```bash
 PR_TITLE="test: more goldens" node scripts/check-test-only-diff.js --base origin/main
 ```
-
-Changing the title does not start the workflow. Re-run the job after you change it.
 
 ## Side by side
 
