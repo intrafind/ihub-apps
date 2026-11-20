@@ -349,12 +349,25 @@ export function normaliseEnvelopes(deliveries, normaliser) {
  * Normalise run ledger events: check and drop `seq`, order parallel groups,
  * then apply the value rules.
  *
+ * `seq` increases within a run for as long as one process writes it. A case
+ * that lets its server die names the places (`restartsAt`), and the check
+ * runs over each stretch between them on its own: what the next process does
+ * with the sequence of a run it did not start is for the case to record, not
+ * for this check to assume.
+ *
  * @param {Object[]} events - As appended, in order.
  * @param {ReturnType<typeof createNormaliser>} normaliser
+ * @param {Object} [options]
+ * @param {number[]} [options.restartsAt=[]] - Indexes into `events`: the first event after each
+ *   restart of the server.
  * @returns {Array<{type: string, runId: string, data: any}>}
  */
-export function normaliseLedger(events, normaliser) {
-  assertIncreasing(events, 'seq', event => event.runId || '');
+export function normaliseLedger(events, normaliser, { restartsAt = [] } = {}) {
+  let from = 0;
+  for (const to of [...restartsAt, events.length]) {
+    assertIncreasing(events.slice(from, to), 'seq', event => event.runId || '');
+    from = to;
+  }
   return orderParallelGroups(events).map(event =>
     normaliser.normalise({ type: event.type, runId: event.runId, data: event.data ?? null })
   );

@@ -673,7 +673,7 @@
     }
   },
   "surface": "legacy-workflow",
-  "title": "An execution that was interrupted in its second step is found by the sweep of a new engine and continued from its checkpoint.",
+  "title": "An execution that was interrupted in its second step is found by the sweep of a new engine and continued from its checkpoint. The sweep is called with the options startup/worker.js gives it for a plain workflow, written again in the test.",
   "toolCalls": [],
   "toolSchemas": {},
   "usageRecords": [

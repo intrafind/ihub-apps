@@ -75,7 +75,7 @@ const APPS = [
 const chatConfig = (extra = {}) => surfaceConfig({ apps: APPS, extra });
 
 /** Frames of a response as a golden holds them: no counters, deltas merged, parallel groups ordered. */
-function recordedFrames(frames) {
+export function recordedFrames(frames) {
   const envelopes = frames
     .map(frame => frame.data)
     .filter(envelope => envelope && typeof envelope === 'object')
@@ -95,6 +95,22 @@ function recordedFrames(frames) {
 }
 
 const typeOf = frame => frame?.data?.type;
+
+/**
+ * The frames of a GET stream that the server sent through its delivery function: every envelope
+ * but `stream/connected`, which the route writes straight to the connection when the stream
+ * opens (`writeStreamStart` in `server/sse.js`). Their number is compared with the number of
+ * envelopes the delivery function handed to the stream, so the two must count the same things.
+ *
+ * @param {Array<{data?: any}>} frames - Parsed SSE frames (`parseSse`).
+ * @returns {Object[]}
+ */
+export function deliveredFrames(frames) {
+  return frames.filter(frame => {
+    const type = typeOf(frame);
+    return typeof type === 'string' && type !== 'stream/connected' && type !== 'heartbeat';
+  });
+}
 
 /**
  * One chat as a browser drives it, in one position of `chatPostStream`.
@@ -124,9 +140,18 @@ class ChatSession {
     await this.get.until(frame => typeOf(frame) === 'stream/connected', 'stream/connected');
   }
 
-  /** The frames of the GET stream that belong to a run. */
-  getRunFrames() {
-    return this.get.frames.filter(frame => frame.data?.runId && typeOf(frame) !== 'heartbeat');
+  /**
+   * Resolves when the browser has read every frame the server sent on the GET stream so far.
+   *
+   * The POST and the GET are two sockets, and nothing orders what arrives on them: the JSON
+   * answer of a POST can be read before the last frame of its turn.
+   */
+  async allFramesRead() {
+    const sent = this.delivered;
+    await this.get.until(
+      () => deliveredFrames(this.get.frames).length >= sent,
+      `the ${sent} frames the server sent on the GET stream`
+    );
   }
 
   /**
@@ -167,10 +192,9 @@ class ChatSession {
         ? { ...response, stream: recordedFrames(response.stream) }
         : response;
       if (stream) return response.stream ?? [];
-      // The JSON answer came after the turn ended; its frames were written to the GET stream
-      // before that. Wait until the browser has read as many as the server sent.
-      const sent = this.delivered;
-      await this.get.until(() => this.getRunFrames().length >= sent, 'the frames of the turn');
+      // The JSON answer came after the turn ended, and the frames of the turn were written to
+      // the GET stream before that. Written is not read: wait for them.
+      await this.allFramesRead();
       return this.get.frames.slice(from);
     });
     return { exchange, ended };
@@ -193,6 +217,16 @@ class ChatSession {
   async close() {
     const record = { position: this.position.label, exchanges: this.exchanges };
     if (this.get) {
+      // Whatever was sent after the last turn (a stop, the end of a superseded turn) is read
+      // before the browser leaves, or the record would lack a frame on a slow machine.
+      await this.allFramesRead();
+      const read = deliveredFrames(this.get.frames).length;
+      if (read !== this.delivered) {
+        throw new Error(
+          `the GET stream holds ${read} frames, but the server sent ${this.delivered}: the two ` +
+            'counts no longer count the same frames (deliveredFrames in surfaces/chat.js)'
+        );
+      }
       this.get.abort();
       const response = await this.get.done;
       record.getStream = {
@@ -206,6 +240,26 @@ class ChatSession {
     }
     return record;
   }
+}
+
+/**
+ * The harness records every envelope; with this they also travel on, to the responses of the
+ * route, as they do in the product (`routeEnvelope` in `server/sse.js`). The harness puts the
+ * delivery of the product back when the recording ends.
+ *
+ * @param {Object} env - The environment of the recording.
+ * @param {(streamId: string, delivered: boolean) => void} [onDelivered] - Called for every envelope.
+ */
+export function recordAndRoute(env, onDelivered = () => {}) {
+  const counters = new Map();
+  setEnvelopeDelivery((streamId, envelope) => {
+    const seq = (counters.get(streamId) ?? 0) + 1;
+    counters.set(streamId, seq);
+    env.envelopes.push({ streamId, envelope: { ...envelope, seq } });
+    const delivered = routeEnvelope(streamId, envelope);
+    onDelivered(streamId, delivered);
+    return delivered;
+  });
 }
 
 /** The id of the interaction a turn raised, from its frames. */
@@ -235,15 +289,8 @@ async function runScenario(env, scenario, position) {
     appId: scenario.appId ?? 'desk',
     chatId
   });
-  // The harness records every envelope; here they also travel on, to the responses of the route.
-  const counters = new Map();
-  setEnvelopeDelivery((streamId, envelope) => {
-    const seq = (counters.get(streamId) ?? 0) + 1;
-    counters.set(streamId, seq);
-    env.envelopes.push({ streamId, envelope: { ...envelope, seq } });
-    const delivered = routeEnvelope(streamId, envelope);
+  recordAndRoute(env, (streamId, delivered) => {
     if (streamId === chatId && delivered) session.delivered++;
-    return delivered;
   });
   const server = await startRouteServer({
     user: () => user,

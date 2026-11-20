@@ -55,7 +55,7 @@
         "execution": "server",
         "name": "app__specialist",
         "step": 1,
-        "title": "App: specialist",
+        "title": "App: Claims specialist",
         "toolId": "app__specialist"
       },
       "runId": "chat-<id:1>",
@@ -271,7 +271,7 @@
             "description": "The specialist app",
             "id": "app__specialist",
             "isAppAsTool": true,
-            "name": "App: specialist",
+            "name": "App: Claims specialist",
             "parameters": {
               "properties": {
                 "message": {
@@ -288,7 +288,7 @@
             "sideEffectSource": "default"
           }
         ],
-        "toolSchemasHash": "586f8a5d92c5a6c04222fa333a6743b70a517a70f0a59904dea19d824766372d"
+        "toolSchemasHash": "31f55c3f2507ddf7a9721e7c19011afb00b8177cc6caf05ef143eb23f31c1808"
       },
       "runId": "chat-<id:1>",
       "type": "request/header"
@@ -357,7 +357,7 @@
         "name": "app__specialist",
         "parallelGroup": 0,
         "step": 1,
-        "title": "App: specialist",
+        "title": "App: Claims specialist",
         "toolId": "app__specialist"
       },
       "runId": "chat-<id:1>",
@@ -449,7 +449,8 @@
               "lookup": {}
             },
             "name": {
-              "en": "specialist"
+              "de": "Schadensspezialist",
+              "en": "Claims specialist"
             },
             "preferredModel": "golden-model",
             "system": {
@@ -813,7 +814,7 @@
         "segment": "seg-<id:4>",
         "step": 2,
         "toolExecution": "server",
-        "toolSchemasHash": "586f8a5d92c5a6c04222fa333a6743b70a517a70f0a59904dea19d824766372d"
+        "toolSchemasHash": "31f55c3f2507ddf7a9721e7c19011afb00b8177cc6caf05ef143eb23f31c1808"
       },
       "runId": "chat-<id:1>",
       "type": "request/header"

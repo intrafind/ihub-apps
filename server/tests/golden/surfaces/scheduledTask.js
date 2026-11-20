@@ -25,6 +25,7 @@ import {
   usersGroup,
   withoutContentHashes
 } from './fixtures.js';
+import { RUN_CHAT_TITLE_RULE } from './textRules.js';
 
 const APPS = [
   app('digest', {
@@ -64,7 +65,7 @@ const taskConfig = () =>
       // The prompt of a run holds the time of the run, so a hash over the request does too.
       volatileKeys: ['configHash'],
       // The chat of a run is named after the task and the time of the run.
-      textRules: [{ pattern: / · \w{3}, \d{1,2} \w{3} \d{4}, \d{2}:\d{2}$/, replace: ' · <when>' }]
+      textRules: [RUN_CHAT_TITLE_RULE]
     }
   });
 

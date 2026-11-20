@@ -89,7 +89,8 @@
               "lookup": {}
             },
             "name": {
-              "en": "specialist"
+              "de": "Schadensspezialist",
+              "en": "Claims specialist"
             },
             "preferredModel": "golden-model",
             "system": {

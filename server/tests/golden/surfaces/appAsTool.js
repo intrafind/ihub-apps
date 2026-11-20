@@ -25,8 +25,10 @@ const CALLER_CHAT = 'chat-of-the-caller';
 
 const APPS = [
   app('concierge', { apps: ['specialist', 'restricted'] }),
-  // The specialist may itself call an app: what the depth rule is about.
+  // The specialist may itself call an app: what the depth rule is about. Its name is not its id,
+  // so a golden shows which of the two a display field holds.
   app('specialist', {
+    name: { en: 'Claims specialist', de: 'Schadensspezialist' },
     apps: ['helper'],
     integrations: { lookup: {}, dangerous: {}, ihub: { actions: ['ask_user'] } }
   }),

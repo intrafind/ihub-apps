@@ -190,9 +190,9 @@
     },
     {
       "id": "app-as-tool-display-fields",
-      "title": "The tool row of an app call shows the name of the app",
+      "title": "The tool row of an app call has the display fields of a sub-agent",
       "state": "proposed",
-      "decision": "Proposed: unify to the display fields every other tool call has. Today the row of app__<id> shows the tool id; it gets the localized name of the app as its title and the activity kind of a sub-agent, decided on the server.",
+      "decision": "Proposed: unify to the display fields a sub-agent has. Today the row of app__<id> has the title \"App: <name of the app>\" (in the golden: \"App: Claims specialist\") and the activity kind of an ordinary tool call (tool). It gets the localized name of the app alone as its title and the activity kind of a sub-agent, both decided on the server.",
       "goldens": ["app-as-tool/ok.json"],
       "parts": ["envelopes", "ledger"],
       "pr": "run-service-headless",

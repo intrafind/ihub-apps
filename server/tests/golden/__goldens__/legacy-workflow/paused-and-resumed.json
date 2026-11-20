@@ -660,6 +660,35 @@
     },
     {
       "data": {
+        "answer": {
+          "approver": {
+            "groups": [],
+            "id": "golden-user",
+            "via": "owner"
+          },
+          "at": "<ts>",
+          "by": "golden-user",
+          "channel": "chat",
+          "data": {
+            "feedback": "Keep it short."
+          },
+          "value": "approve"
+        },
+        "interactionId": "ckpt-<id:2>",
+        "kind": "approval"
+      },
+      "runId": "wf-exec-<id:1>",
+      "type": "interaction/answered"
+    },
+    {
+      "data": {
+        "interactionId": "ckpt-<id:2>"
+      },
+      "runId": "wf-exec-<id:1>",
+      "type": "run/resumed"
+    },
+    {
+      "data": {
         "content": "Records are kept for ten years and every access is logged.",
         "finishReason": "stop",
         "hasImages": false,
@@ -697,35 +726,6 @@
       },
       "runId": "wf-exec-<id:1>",
       "type": "budget/checkpoint"
-    },
-    {
-      "data": {
-        "answer": {
-          "approver": {
-            "groups": [],
-            "id": "golden-user",
-            "via": "owner"
-          },
-          "at": "<ts>",
-          "by": "golden-user",
-          "channel": "chat",
-          "data": {
-            "feedback": "Keep it short."
-          },
-          "value": "approve"
-        },
-        "interactionId": "ckpt-<id:2>",
-        "kind": "approval"
-      },
-      "runId": "wf-exec-<id:1>",
-      "type": "interaction/answered"
-    },
-    {
-      "data": {
-        "interactionId": "ckpt-<id:2>"
-      },
-      "runId": "wf-exec-<id:1>",
-      "type": "run/resumed"
     },
     {
       "data": {
