@@ -1,0 +1,203 @@
+{
+  "rows": [
+    {
+      "id": "fail-open-removal",
+      "title": "An app call by a principal without resolved permissions is refused",
+      "state": "proposed",
+      "decision": "Proposed: unify to refusal. Today a caller without a permissions object may call any app as a tool (appToolsGateway.js). The run service resolves a grant for every caller and refuses a caller that has none. No option to keep the old behaviour: it is a security weakness.",
+      "goldens": ["app-as-tool/user-without-permissions.json"],
+      "parts": [
+        "ledger",
+        "modelRequests",
+        "offeredToolIds",
+        "result",
+        "title",
+        "toolSchemas",
+        "usageRecords"
+      ],
+      "pr": "run-service-headless",
+      "signedBy": null,
+      "signedOn": null
+    },
+    {
+      "id": "unattended-admin-rights",
+      "title": "An unattended run of an admin no longer carries admin rights",
+      "state": "proposed",
+      "decision": "Proposed: unify to \"admin rights only while a person is present\". A scheduled task, a follow-up or a wake of an owner who is an admin runs with the rights of the groups of the owner and without the admin flags. No option to keep them: an unattended run must not act as an administrator.",
+      "goldens": ["scheduled-task/admin-owner.json"],
+      "parts": ["ledger", "modelRequests", "offeredToolIds", "result", "toolSchemas"],
+      "pr": "chat-on-run-service",
+      "signedBy": null,
+      "signedOn": null
+    },
+    {
+      "id": "tool-result-truncation",
+      "title": "One rule for how a long tool result is cut, on every surface",
+      "state": "proposed",
+      "decision": "Proposed: unify to the rule of the chat turn (the result goes to the model whole, and the compaction condenses it later). Today an app call through the gateway or as a tool also caps the results it collects for its caller at a fixed size. The cap of the collected copy stays as an option of the headless host; the model sees the same text on every surface.",
+      "goldens": [
+        "chat/compaction.json",
+        "chat/compaction-post-stream.json",
+        "mcp/ok.json",
+        "a2a/message-send.json",
+        "inference-app/completions-non-stream.json",
+        "inference-app/responses-non-stream.json"
+      ],
+      "parts": ["envelopes", "httpResponse", "ledger", "result", "toolCalls"],
+      "pr": "tool-runner",
+      "signedBy": null,
+      "signedOn": null
+    },
+    {
+      "id": "headless-approval-policy",
+      "title": "One policy for a call that needs approval where nobody can approve",
+      "state": "proposed",
+      "decision": "Proposed: unify to \"refuse and tell the model\", with the code APPROVAL_REQUIRED_NO_USER, for every run without a person who can answer (app as a tool, MCP, A2A, the inference API). A scheduled task keeps its own route as an option: its run waits for the owner, and a refusal of the owner ends the run as cancelled.",
+      "goldens": [
+        "app-as-tool/approval-denied.json",
+        "mcp/approval-refused.json",
+        "scheduled-task/approval-denied-headless.json"
+      ],
+      "parts": ["approvals", "ledger", "modelRequests", "result", "toolCalls"],
+      "pr": "run-service-headless",
+      "signedBy": null,
+      "signedOn": null
+    },
+    {
+      "id": "tool-error-text",
+      "title": "The text a model gets for a failed or refused tool call is the same on every surface",
+      "state": "proposed",
+      "decision": "Proposed: unify to the text of the chat turn. Today the chat turn, the app call and the gateway word the same refusal differently (a tool that is not registered, a refused approval, a refused question). The codes stay as they are; only the message text changes.",
+      "goldens": [
+        "app-as-tool/depth-1.json",
+        "app-as-tool/approval-denied.json",
+        "app-as-tool/question-refused.json",
+        "mcp/approval-refused.json",
+        "mcp/error-mapping.json",
+        "a2a/error-mapping.json",
+        "chat/approval-deny.json",
+        "chat/approval-deny-post-stream.json"
+      ],
+      "parts": ["envelopes", "httpResponse", "ledger", "result", "toolCalls"],
+      "pr": "tool-runner",
+      "signedBy": null,
+      "signedOn": null
+    },
+    {
+      "id": "compaction-trigger",
+      "title": "When a long tool loop condenses its context",
+      "state": "proposed",
+      "decision": "Proposed: unify to the trigger of the chat turn (half of the context window of the model, at least 16,000 tokens, with a findings digest) for every surface that runs on the run service. Today only the chat turn uses the digest; a headless run shortens old results to previews. The preview strategy stays as an option of a run.",
+      "goldens": ["chat/compaction.json", "chat/compaction-post-stream.json"],
+      "parts": ["envelopes", "evidence", "httpResponse", "ledger", "modelRequests", "usageRecords"],
+      "pr": "chat-on-run-service",
+      "signedBy": null,
+      "signedOn": null
+    },
+    {
+      "id": "maximum-rounds",
+      "title": "One limit for the rounds of a tool loop",
+      "state": "proposed",
+      "decision": "Proposed: keep as an option per run, with one default. Today the limit of rounds and of wall-clock time differs by surface (a chat turn, an app call with its 3-minute clock, a scheduled run). The run service takes both from the budget of the run; the defaults of today stay, so no golden should change. This row is for the case that one does.",
+      "goldens": [
+        "app-as-tool/three-minute-clock.json",
+        "app-as-tool/ok.json",
+        "scheduled-task/tool.json",
+        "chat/one-tool.json",
+        "chat/one-tool-post-stream.json",
+        "mcp/ok.json"
+      ],
+      "parts": ["ledger", "result"],
+      "pr": "chat-on-run-service",
+      "signedBy": null,
+      "signedOn": null
+    },
+    {
+      "id": "abort-cause",
+      "title": "A stopped run says why it stopped in the same words on every surface",
+      "state": "proposed",
+      "decision": "Proposed: unify to the abort cause of the chat turn (a kind, who, from where). Today a stopped chat turn names its cause; a disconnected call of the inference API and a stopped headless run record only that they were aborted. The stored finish reason of a chat answer does not change.",
+      "goldens": [
+        "chat/user-stop.json",
+        "chat/user-stop-post-stream.json",
+        "chat/superseded-turn.json",
+        "chat/superseded-turn-post-stream.json",
+        "completions/disconnect.json"
+      ],
+      "parts": ["envelopes", "httpResponse", "ledger", "storedMessage"],
+      "pr": "chat-on-run-service",
+      "signedBy": null,
+      "signedOn": null
+    },
+    {
+      "id": "usage-origin-agent-id",
+      "title": "A usage record names the origin of its run and, for an agent, the agent",
+      "state": "proposed",
+      "decision": "Proposed: additive. Every usage record gains the origin of the run (person, schedule, sub-agent, gateway) and the id of the agent when there is one. Today an app call is recorded with the surface \"chat\" and is not told apart from a chat turn. No existing field changes its meaning.",
+      "goldens": [
+        "chat/plain.json",
+        "chat/plain-post-stream.json",
+        "scheduled-task/plain.json",
+        "completions/non-stream.json",
+        "inference-app/completions-non-stream.json",
+        "inference-app/responses-non-stream.json",
+        "app-as-tool/ok.json",
+        "mcp/ok.json",
+        "a2a/message-send.json"
+      ],
+      "parts": ["usageRecords"],
+      "pr": "run-envelope-taint-usage",
+      "signedBy": null,
+      "signedOn": null
+    },
+    {
+      "id": "evidence-actor",
+      "title": "An evidence record names the actor of the run",
+      "state": "proposed",
+      "decision": "Proposed: additive. The evidence record of an answer gains who acted (the person, or the schedule, sub-agent or gateway that ran for the person) beside the owner it is filed under. Nothing is removed.",
+      "goldens": [
+        "chat/plain.json",
+        "chat/plain-post-stream.json",
+        "scheduled-task/plain.json",
+        "completions/non-stream.json",
+        "inference-app/completions-non-stream.json",
+        "inference-app/responses-non-stream.json"
+      ],
+      "parts": ["evidence"],
+      "pr": "run-envelope-taint-usage",
+      "signedBy": null,
+      "signedOn": null
+    },
+    {
+      "id": "run-started-additive-fields",
+      "title": "run/started gains fields; none is removed or renamed",
+      "state": "proposed",
+      "decision": "Proposed: additive. The first event of a run gains the fields of the run context (origin, depth, whether a person is present). A client that does not know them ignores them. Every golden with a run changes in the same way, so the row names the plain case of each surface; the pull request that adds the fields lists the others.",
+      "goldens": [
+        "chat/plain.json",
+        "chat/plain-post-stream.json",
+        "scheduled-task/plain.json",
+        "inference-app/completions-non-stream.json",
+        "inference-app/responses-non-stream.json",
+        "app-as-tool/ok.json",
+        "mcp/ok.json",
+        "a2a/message-send.json"
+      ],
+      "parts": ["envelopes", "httpResponse", "ledger"],
+      "pr": "chat-on-run-service",
+      "signedBy": null,
+      "signedOn": null
+    },
+    {
+      "id": "app-as-tool-display-fields",
+      "title": "The tool row of an app call shows the name of the app",
+      "state": "proposed",
+      "decision": "Proposed: unify to the display fields every other tool call has. Today the row of app__<id> shows the tool id; it gets the localized name of the app as its title and the activity kind of a sub-agent, decided on the server.",
+      "goldens": ["app-as-tool/ok.json"],
+      "parts": ["envelopes", "ledger"],
+      "pr": "run-service-headless",
+      "signedBy": null,
+      "signedOn": null
+    }
+  ]
+}
