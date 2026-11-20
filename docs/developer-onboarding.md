@@ -788,6 +788,63 @@ npm run test:adapters
 node scripts/run-server-tests.js toolCalling
 ```
 
+### Agents End-to-End Suite
+
+The specs in `tests/e2e-agents/` drive the chat page in a real browser against the real server. Nothing of iHub is mocked: the only stand-in is the model, a local stub that does what a marker in the message tells it. The suite starts its own server, client and stub on its own ports and its own contents directory (`contents-e2e-agents/`, deleted and seeded again on every run), so it needs no model key and no network, and it does not touch your `contents/`.
+
+```bash
+# Node 24 is required (see .nvmrc)
+npm run test:e2e:agents                      # every spec
+npm run test:e2e:agents -- smoke.spec.js     # one spec
+npm run test:e2e:agents:gate                 # what the pull request job runs
+npm run test:e2e:agents:matrix               # the @matrix tests, once per overlay
+
+# When the installed Chromium is not the one this Playwright version expects
+# (a container with a pinned browser), name the executable:
+PW_CHROMIUM_PATH=/path/to/chromium npm run test:e2e:agents
+```
+
+`PW_CHROMIUM_PATH` also works for the default suite: `PW_CHROMIUM_PATH=… npx playwright test --config tests/config/playwright.config.js tests/e2e/chat.spec.js --project=chromium`.
+
+Do not run the suite at the same time as `npm run test:quick`: together they can exhaust the memory of a jest worker.
+
+#### Telling the model what to do
+
+A marker in the user message scripts the stub (`tests/config/e2e-llm-stub.mjs`). Without a marker it answers `E2E reply to: <message> (turn N)`.
+
+| Marker | The model then |
+|---|---|
+| `e2e-slow:<ms>:<n>` | writes `slow-1` … `slow-<n>`, one word every `<ms>` milliseconds |
+| `e2e-hang:<key>` | starts the answer and waits until the spec calls `stub.release('<key>')`; a hang nobody releases ends after two minutes |
+| `e2e-tool:<name>:<json-args>` | calls the tool once and then answers `E2E tool result seen: <start of the result>` |
+| `e2e-tools-parallel:<a>,<b>` | calls the tools in one step (arguments: an optional JSON array, `:[{…},{…}]`) |
+| `e2e-script:<name>` | follows the named script in `tests/config/e2e-scripts.mjs`, one turn per model call |
+| `e2e-fail` | fails with HTTP 400 |
+
+Two models are seeded: `e2e-stub` (the default, without tools) and `e2e-stub-tools`, which is offered the tools of the app. The app `e2e-tools` prefers the second and offers iHub's own tools (`ask_user`, the scheduled-task tools).
+
+A spec reads what reached the model with `stub.requests('<text of its message>')` and how many calls the server cancelled with `stub.stats()`; both are in `tests/e2e-agents/helpers.mjs`, next to `signedIn`, `chatTurn` and `restartServer`.
+
+#### Users, restarts and settings
+
+- Sign in as the default admin (`admin` / `password123`) or as one of the two regular users the suite seeds, `e2e-user` and `e2e-other` (`tests/config/agents-scenario.mjs`). Use the second to show that one user cannot see or change what the other owns.
+- `restartServer()` stops the server and starts it again on the same contents directory; `restartServer({ signal: 'SIGKILL' })` does it the hard way. The stub keeps running, with the requests it has seen.
+- Platform settings are read once at startup. A spec that needs another setting restarts the server with an overlay: `restartServer({ overlay: { platform: { … }, features: { … } } })`. The overlay is laid over the seeded `platform.json` and `features.json`; `{ overlay: {} }` goes back to them.
+
+#### Tags and the pull request gate
+
+Every test carries a tag: `test('…', { tag: '@gate' }, async ({ page }) => { … })`.
+
+| Tag | Runs |
+|---|---|
+| `@gate` | on every pull request |
+| `@matrix` | nightly and before a slice of the agents epic is merged, once per overlay in `tests/config/agents-spec-map.json` |
+| `@slow` | nightly and before a slice is merged; never in the pull request job |
+
+The pull request job (`.github/workflows/e2e.yml`, 10 minutes) runs the `@gate` tests, every test of a spec that `agents-spec-map.json` maps to a path the pull request touches, and `tests/e2e/chat.spec.js`. When you add a spec for a feature, add a row that maps the feature's directories to it. A test in the gate should finish in well under a minute.
+
+Two rules are checked by `server/tests/e2e-agents-suite.test.js`: every test has a tag, and no spec answers an `/api` request itself (`page.route` with `route.fulfill`). `route.abort()` and `route.continue()` are fine: they lose or delay a real response, they do not invent one.
+
 ### Manual Testing Checklist
 
 #### Basic Functionality
