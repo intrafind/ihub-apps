@@ -20,3 +20,25 @@ wrote into a tool call.
   characters.
 - Sources found by several searches are sent only once when a chat is opened.
 - The `/v1` APIs and the run log still receive the full data.
+
+## vLLM Reasoning Budgets Answer Sooner
+
+With **Limit reasoning in tokens** turned on, vLLM models now get much smaller reasoning budgets,
+so answers start sooner. Models such as Qwen3.6 almost always think until the budget is spent, and
+the old budgets were far above what the answers needed.
+
+- Reasoning effort now sets: Minimal 512 (unchanged), Low 1,024, Medium 2,048, High 8,192 tokens
+  (before: 2,048, 8,192 and 16,384). The levels are the same for every model.
+- Without a reasoning effort, the Medium budget applies, the same level the request already used.
+  Before, the reasoning could take 75% of the output limit.
+- The budget never takes more than half of the output limit, so the answer always keeps the other
+  half (before: a quarter).
+- A new reasoning effort, **Extra high** (`xhigh`), allows 16,384 tokens for tasks that need
+  more. It reaches that budget only with an output limit of 32,768 or more. Every provider other
+  than the vLLM budget treats it as High.
+- A model that needs an exact amount keeps working with **Reasoning budget**
+  (`thinking.budgetTokens`).
+- Give the vLLM server a transition phrase in `--reasoning-config`. Without one, a model whose
+  reasoning is cut off tends to continue it in the visible answer. The guide _Limiting Reasoning on
+  Your Own vLLM Server_ in the local LLM provider documentation shows the server options, the iHub
+  setting and how to check the result.
