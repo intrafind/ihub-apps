@@ -43,6 +43,11 @@ export function taskFileErrorText(code, t) {
         'scheduledTasks.files.errors.rejected',
         'The file was rejected by the security scan.'
       );
+    case 'UPLOAD_BUSY':
+      return t(
+        'scheduledTasks.files.errors.busy',
+        'The server is busy reading other files. Try again in a moment.'
+      );
     case 'UPLOADS_DISABLED':
       return t('scheduledTasks.files.errors.disabled', 'File uploads are switched off.');
     case 'BINARY_UPLOAD_NOT_ALLOWED':

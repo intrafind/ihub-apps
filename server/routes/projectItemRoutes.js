@@ -28,6 +28,7 @@ import { recordUpload } from '../telemetry/metrics.js';
 import { buildServerPath } from '../utils/basePath.js';
 import { ServiceError } from '../utils/ServiceError.js';
 import { assertValidId } from '../utils/pathSecurity.js';
+import { removeSpoolDir, spoolStorage } from '../services/uploads/uploadSpool.js';
 import { getItemText } from '../services/knowledge/ItemTextService.js';
 import { ProjectError, getProjectService } from '../services/projects/ProjectService.js';
 import { PROJECTS_FEATURE, projectSettings } from '../services/projects/projectSettings.js';
@@ -78,14 +79,14 @@ export function receiveUpload(req, res, next) {
   }
   const { limits } = projectSettings(platformOf());
   const project = req.project;
-  const storage = multer.diskStorage({
-    destination: (request, _file, cb) => {
-      ingest.newTempDir().then(dir => {
-        request.projectUploadDir = dir;
-        cb(null, dir);
-      }, cb);
-    },
-    filename: (_request, _file, cb) => cb(null, 'upload')
+  // The spool of all multipart uploads (`uploadSpool.js`): a private directory
+  // per request, the file in it `0600` under a fixed name.
+  const storage = spoolStorage({
+    root: () => ingest.tempDir,
+    newDir: () => ingest.newTempDir(),
+    onDir: (request, dir) => {
+      request.projectUploadDir = dir;
+    }
   });
   const upload = multer({
     storage,
@@ -170,11 +171,7 @@ async function headOf(filePath, length = 16) {
 
 async function removeUploadDir(req) {
   if (!req.projectUploadDir) return;
-  try {
-    await fs.rm(req.projectUploadDir, { recursive: true, force: true });
-  } catch {
-    // Already gone.
-  }
+  await removeSpoolDir(req.projectUploadDir);
 }
 
 /**

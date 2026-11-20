@@ -150,6 +150,17 @@ async function initFoundations() {
       component: 'Server'
     });
   }
+  // Upload and ZIP spool files a crash left behind (plaintext, also with storage
+  // encryption on) go now, and whatever is abandoned later goes on a timer.
+  try {
+    const { startSpoolSweeper } = await import('../services/uploads/uploadSpool.js');
+    await startSpoolSweeper();
+  } catch (error) {
+    logger.warn('Could not sweep the upload spool directories', {
+      component: 'Server',
+      error: error.message
+    });
+  }
   return platformConfig;
 }
 

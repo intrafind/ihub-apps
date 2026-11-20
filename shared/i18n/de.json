@@ -33,6 +33,7 @@
       "unsupportedType": "Dieser Dateityp kann nicht im Chat gespeichert werden; die Datei wird nur mit der Nachricht gesendet",
       "unreadable": "Der Server konnte diese Datei nicht lesen und hat sie daher nicht im Chat gespeichert; die Datei wird nur mit der Nachricht gesendet",
       "scanRejected": "Vom Sicherheitsscan abgelehnt und daher nicht im Chat gespeichert; die Datei wird nur mit der Nachricht gesendet",
+      "busy": "Der Server liest gerade andere Dateien und hat diese daher nicht im Chat gespeichert; die Datei wird nur mit der Nachricht gesendet",
       "notSaved": "Konnte nicht im Chat gespeichert werden; die Datei wird nur mit der Nachricht gesendet"
     },
     "stored": "Im Chat gespeichert",
@@ -10171,6 +10172,7 @@
         "unsupported": "Dieser Dateityp wird nicht unterstützt.",
         "noText": "Die Datei enthält keinen lesbaren Text.",
         "rejected": "Die Datei wurde von der Sicherheitsprüfung abgelehnt.",
+        "busy": "Der Server liest gerade andere Dateien. Versuchen Sie es gleich noch einmal.",
         "disabled": "Datei-Uploads sind ausgeschaltet.",
         "textOnly": "Diese Installation speichert nur Text: Dateien werden zuerst im Browser gelesen.",
         "failed": "Die Datei konnte nicht angehängt werden."
@@ -11058,6 +11060,9 @@
     "UNKNOWN_PROVIDER": "Der konfigurierte Speicheranbieter ist unbekannt.",
     "UNKNOWN_NAMESPACE": "Der Datenbereich ist unbekannt.",
     "CORRUPT_DOCUMENT": "Die gespeicherten Daten sind beschädigt.",
+    "PLAINTEXT_DOCUMENT": "Die gespeicherten Daten sind nicht verschlüsselt, obwohl die Speicherverschlüsselung eingeschaltet ist, und wurden nicht gelesen.",
+    "PLAINTEXT_FILE": "Die gespeicherte Datei ist nicht verschlüsselt, obwohl die Speicherverschlüsselung eingeschaltet ist, und wurde nicht gelesen.",
+    "CORRUPT_LOG": "Der gespeicherte Verlauf ist beschädigt und kann nicht gelesen werden.",
     "CORRUPT_BLOB": "Die gespeicherte Datei ist beschädigt und kann nicht gelesen werden.",
     "KEY_UNAVAILABLE": "Die gespeicherte Datei kann gerade nicht entschlüsselt werden. Bitte wenden Sie sich an Ihre Administration.",
     "BLOB_TOO_LARGE": "Die Datei ist zu groß, um gespeichert zu werden.",
@@ -11254,6 +11259,7 @@
     "NO_TEXT": "Die Datei enthält keinen Text.",
     "EXTRACTION_FAILED": "Der Text konnte nicht aus der Datei extrahiert werden.",
     "EXTRACTION_TIMEOUT": "Das Lesen der Datei hat zu lange gedauert und wurde abgebrochen. Teilen Sie die Datei auf oder entfernen Sie unnötige Inhalte.",
+    "UPLOAD_BUSY": "Der Server liest gerade andere hochgeladene Dateien. Versuchen Sie es gleich noch einmal.",
     "SOURCE_FORBIDDEN": "Sie dürfen keine Dateien aus diesem angebundenen System anhängen.",
     "SOURCE_GONE": "Die Datei existiert im angebundenen System nicht mehr.",
     "SOURCE_UNAVAILABLE": "Das angebundene System ist nicht verfügbar.",

@@ -24,6 +24,7 @@
  * @module services/chatFiles/ChatFileRepository
  */
 import { createHash, randomUUID } from 'node:crypto';
+import { createReadStream } from 'node:fs';
 import logger from '../../utils/logger.js';
 import { ServiceError } from '../../utils/ServiceError.js';
 import { isValidId } from '../../utils/pathSecurity.js';
@@ -96,6 +97,13 @@ function effectiveOrigin(origin, { rawOriginal, textBuf, pagesBuf }) {
     !pagesBuf &&
     sniffRasterImage(rawOriginal) !== null;
   return isPicture ? 'image' : 'upload';
+}
+
+/** The sha256 (hex) of a file, read as a stream. */
+async function sha256OfFile(filePath) {
+  const hash = createHash('sha256');
+  for await (const chunk of createReadStream(filePath)) hash.update(chunk);
+  return hash.digest('hex');
 }
 
 /** Largest serialized `meta` a file keeps (it rides on every listing). */
@@ -422,6 +430,10 @@ export class ChatFileRepository {
    * @param {string} [file.formatLabel] - Human-readable format label (e.g. 'PDF', 'Word').
    * @param {string} [file.text=''] - Extracted UTF-8 text.
    * @param {Buffer|Uint8Array|null} [file.originalBuffer=null] - Raw binary bytes.
+   * @param {{path: string, bytes: number, sha256?: string}|null} [file.originalFile=null] - The
+   *   original as a file on disk (an upload spool) instead of `originalBuffer`: it is streamed
+   *   into the blob store and never held in memory. `bytes` is the file's size; `sha256` its
+   *   hash when the caller has it (it is computed from the file otherwise).
    * @param {string[]} [file.pageImages] - Base64 JPEG page images for scanned PDFs.
    * @param {number} [file.pages] - Page/slide/sheet count when known.
    * @param {boolean} [file.truncated=false] - Whether extracted text was truncated.
@@ -447,6 +459,7 @@ export class ChatFileRepository {
       text = '',
       originalBuffer = null,
       originalData = null,
+      originalFile = null,
       pageImages = null,
       pages,
       truncated = false,
@@ -502,16 +515,28 @@ export class ChatFileRepository {
               )
             : null
         : null;
+    // The original on disk: kept under the same rule, streamed instead of held.
+    const hasOriginalFile =
+      !candidateOriginal &&
+      typeof originalFile?.path === 'string' &&
+      Number(originalFile.bytes) > 0;
+    const fileOriginal = mode === 'original_and_text' && hasOriginalFile ? originalFile : null;
+    const keepsOriginal = Boolean(rawOriginal || fileOriginal);
 
-    if (textBuf.length === 0 && !rawOriginal && !pagesBuf) {
+    if (textBuf.length === 0 && !keepsOriginal && !pagesBuf) {
       return null;
     }
 
+    // A picture (`origin: 'image'`) is told by its bytes and always comes as a buffer.
     const fileOrigin = effectiveOrigin(origin, { rawOriginal, textBuf, pagesBuf });
     const textBytes = textBuf.length + (pagesBuf ? pagesBuf.length : 0);
-    const originalBytes = rawOriginal ? rawOriginal.length : 0;
+    const originalBytes = rawOriginal
+      ? rawOriginal.length
+      : fileOriginal
+        ? Number(fileOriginal.bytes)
+        : 0;
     const totalBytes = textBytes + originalBytes;
-    const singleFileSize = rawOriginal ? rawOriginal.length : textBytes;
+    const singleFileSize = keepsOriginal ? originalBytes : textBytes;
 
     const id = requestedId && isValidId(requestedId) ? requestedId : mintChatFileId();
     const key = chatFileKey(target, id);
@@ -551,9 +576,11 @@ export class ChatFileRepository {
       typeof mimeType === 'string' && mimeType.trim()
         ? mimeType.split(';')[0].trim().toLowerCase()
         : 'application/octet-stream';
-    const sha256 = createHash('sha256')
-      .update(rawOriginal || textBuf)
-      .digest('hex');
+    const sha256 = fileOriginal
+      ? fileOriginal.sha256 || (await sha256OfFile(fileOriginal.path))
+      : createHash('sha256')
+          .update(rawOriginal || textBuf)
+          .digest('hex');
 
     // Write blobs first, metadata document last, cleaning up blobs if document write fails.
     await this.blobs.put(CHAT_FILE_BLOBS_NAMESPACE, textBlobKey(key), textBuf, {
@@ -568,6 +595,22 @@ export class ChatFileRepository {
       await this.blobs.put(CHAT_FILE_BLOBS_NAMESPACE, originalBlobKey(key), rawOriginal, {
         contentType: cleanMime
       });
+    } else if (fileOriginal) {
+      // From the spool file straight into the store: no copy of it in memory.
+      try {
+        await this.blobs.putStream(
+          CHAT_FILE_BLOBS_NAMESPACE,
+          originalBlobKey(key),
+          createReadStream(fileOriginal.path),
+          { bytes: originalBytes, contentType: cleanMime }
+        );
+      } catch (error) {
+        await this.blobs.delete(CHAT_FILE_BLOBS_NAMESPACE, textBlobKey(key)).catch(() => {});
+        if (pagesBuf) {
+          await this.blobs.delete(CHAT_FILE_BLOBS_NAMESPACE, pagesBlobKey(key)).catch(() => {});
+        }
+        throw error;
+      }
     }
 
     const body = {
@@ -581,7 +624,7 @@ export class ChatFileRepository {
       bytes: totalBytes,
       textBytes,
       originalBytes,
-      hasOriginal: Boolean(rawOriginal && rawOriginal.length > 0),
+      hasOriginal: Boolean((rawOriginal && rawOriginal.length > 0) || fileOriginal),
       sha256,
       ...(Number.isFinite(pages) ? { pages } : {}),
       ...(validPages.length > 0 ? { pageImageCount: validPages.length } : {}),
@@ -592,7 +635,7 @@ export class ChatFileRepository {
       origin: fileOrigin,
       ...(sanitizeFileMeta(meta) ? { meta: sanitizeFileMeta(meta) } : {}),
       ...(sanitizeFileSource(source) ? { source: sanitizeFileSource(source) } : {}),
-      ...(mode === 'server_text_only' && candidateOriginal
+      ...(mode === 'server_text_only' && (candidateOriginal || hasOriginalFile)
         ? { originalDeleteReason: 'storage_mode', originalDeletedReason: 'storage_mode' }
         : {}),
       createdAt: createdAt || now || new Date().toISOString()
@@ -610,7 +653,7 @@ export class ChatFileRepository {
       if (pagesBuf) {
         await this.blobs.delete(CHAT_FILE_BLOBS_NAMESPACE, pagesBlobKey(key)).catch(() => {});
       }
-      if (rawOriginal) {
+      if (keepsOriginal) {
         await this.blobs.delete(CHAT_FILE_BLOBS_NAMESPACE, originalBlobKey(key)).catch(() => {});
       }
       throw error;
@@ -618,7 +661,7 @@ export class ChatFileRepository {
 
     if (replaces) {
       // The new copy may have no original or no page images where the old one had.
-      if (!rawOriginal) {
+      if (!keepsOriginal) {
         await this.blobs.delete(CHAT_FILE_BLOBS_NAMESPACE, originalBlobKey(key)).catch(() => {});
       }
       if (!pagesBuf) {

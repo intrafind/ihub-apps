@@ -33,6 +33,7 @@
       "unsupportedType": "This file type cannot be saved to the chat; the file is sent with the message only",
       "unreadable": "The server could not read this file, so it was not saved to the chat; the file is sent with the message only",
       "scanRejected": "Rejected by the security scan, so it was not saved to the chat; the file is sent with the message only",
+      "busy": "The server is busy reading other files, so this one was not saved to the chat; the file is sent with the message only",
       "notSaved": "Could not be saved to the chat; the file is sent with the message only"
     },
     "stored": "Saved to this chat",
@@ -10172,6 +10173,7 @@
         "unsupported": "This file type is not supported.",
         "noText": "The file contains no readable text.",
         "rejected": "The file was rejected by the security scan.",
+        "busy": "The server is busy reading other files. Try again in a moment.",
         "disabled": "File uploads are switched off.",
         "textOnly": "This installation stores only text: files are read in the browser first.",
         "failed": "The file could not be attached."
@@ -11059,6 +11061,9 @@
     "UNKNOWN_PROVIDER": "The configured storage provider is unknown.",
     "UNKNOWN_NAMESPACE": "The data area is unknown.",
     "CORRUPT_DOCUMENT": "The stored data is damaged.",
+    "PLAINTEXT_DOCUMENT": "The stored data is not encrypted although storage encryption is on, and was not read.",
+    "PLAINTEXT_FILE": "The stored file is not encrypted although storage encryption is on, and was not read.",
+    "CORRUPT_LOG": "The stored history is damaged and cannot be read.",
     "CORRUPT_BLOB": "The stored file is damaged and cannot be read.",
     "KEY_UNAVAILABLE": "The stored file cannot be decrypted right now. Please contact your administrator.",
     "BLOB_TOO_LARGE": "The file is too large to be stored.",
@@ -11255,6 +11260,7 @@
     "NO_TEXT": "The file contains no text.",
     "EXTRACTION_FAILED": "The text could not be extracted from the file.",
     "EXTRACTION_TIMEOUT": "Reading the file took too long and was stopped. Split it or remove what it does not need.",
+    "UPLOAD_BUSY": "The server is busy reading other uploaded files. Try again in a moment.",
     "SOURCE_FORBIDDEN": "You may not attach files from this connected system.",
     "SOURCE_GONE": "The file no longer exists in the connected system.",
     "SOURCE_UNAVAILABLE": "The connected system is not available.",

@@ -716,6 +716,17 @@ export const platformConfigSchema = z
             maxApiBytes: z.number().prefault(1024 * 1024 * 1024)
           })
           .passthrough()
+          .prefault({}),
+        // How many uploaded files one server process reads (scan and text
+        // extraction) at the same time, and how many more may wait. A file
+        // that waits is on disk, not in memory; an upload that finds the queue
+        // full is answered with a retryable 503 (`UPLOAD_BUSY`, `Retry-After`).
+        extraction: z
+          .object({
+            concurrency: z.number().int().min(1).max(64).prefault(2),
+            maxQueue: z.number().int().min(0).max(10000).prefault(50)
+          })
+          .passthrough()
           .prefault({})
       })
       .passthrough()

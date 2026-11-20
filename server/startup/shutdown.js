@@ -44,6 +44,9 @@ export async function shutdown() {
     .then(({ shutdownProjects }) => shutdownProjects())
     .catch(() => {});
   stopWorkflowStateRetention();
+  import('../services/uploads/uploadSpool.js')
+    .then(({ stopSpoolSweeper }) => stopSpoolSweeper())
+    .catch(() => {});
   // The extraction threads: a file read in flight is dropped with the process.
   try {
     const { shutdownExtractionPool } = await import('../services/projects/extractionPool.js');

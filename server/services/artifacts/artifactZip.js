@@ -13,7 +13,8 @@
  *
  * @module services/artifacts/artifactZip
  */
-import { PassThrough, finished } from 'node:stream';
+import fs from 'node:fs/promises';
+import { PassThrough, Transform, Writable, finished, pipeline } from 'node:stream';
 import { ZipArchive } from 'archiver';
 import { safeArchivePath } from '../documents/generatedFiles.js';
 import { artifactPolicy } from './artifactPolicy.js';
@@ -240,6 +241,115 @@ export async function zipToBuffer(entries) {
   await writeZip(entries, sink);
   await ended;
   return Buffer.concat(chunks);
+}
+
+/**
+ * Build a ZIP archive into a file, so that neither the archive nor a member
+ * that is opened as a stream is held in memory.
+ *
+ * Both limits are enforced while writing: the archive is aborted as soon as it
+ * (or the content it was given) grows past its limit, and the file then holds
+ * at most `maxArchiveBytes`. The caller owns the file and removes it, also
+ * when this call throws.
+ *
+ * @param {Array<{ path: string, data?: Buffer,
+ *   open?: () => Promise<import('node:stream').Readable>, date?: string|Date }>} entries
+ * @param {string} filePath - An existing or new file; it is truncated.
+ * @param {Object} [limits]
+ * @param {number} [limits.maxArchiveBytes=0] - Largest archive; `<= 0` removes the cap.
+ * @param {number} [limits.maxContentBytes=0] - Most content bytes (before
+ *   compression) of all entries together; `<= 0` removes the cap. Counted as the
+ *   bytes pass, so a member that is larger than its recorded size is caught.
+ * @returns {Promise<{bytes: number, contentBytes: number}>} Size of the archive and of
+ *   the content that went into it.
+ * @throws {ZipLimitError} Code `too-large` when a limit was exceeded; `limit` is
+ *   `'archive'` when it was the archive's size.
+ */
+export async function zipToFile(
+  entries,
+  filePath,
+  { maxArchiveBytes = 0, maxContentBytes = 0 } = {}
+) {
+  const handle = await fs.open(filePath, 'w', 0o600);
+  let bytes = 0;
+  let contentBytes = 0;
+  /** The limit that stopped the archive; what the caller is told instead of `closed`. */
+  let limitError = null;
+  const countContent = length => {
+    contentBytes += length;
+    if (maxContentBytes > 0 && contentBytes > maxContentBytes && !limitError) {
+      limitError = new ZipLimitError(
+        `An archive holds at most ${formatMegabytes(maxContentBytes)} of content; the files are larger than that.`,
+        'too-large'
+      );
+    }
+    return limitError;
+  };
+  const output = new Writable({
+    write(chunk, _encoding, callback) {
+      bytes += chunk.length;
+      if (maxArchiveBytes > 0 && bytes > maxArchiveBytes) {
+        if (!limitError) {
+          limitError = new ZipLimitError(
+            `The archive is larger than ${formatMegabytes(maxArchiveBytes)}.`,
+            'too-large'
+          );
+          limitError.limit = 'archive';
+        }
+        return callback(limitError);
+      }
+      handle.write(chunk).then(() => callback(), callback);
+    },
+    final(callback) {
+      handle.close().then(() => callback(), callback);
+    },
+    destroy(error, callback) {
+      handle
+        .close()
+        .catch(() => {})
+        .then(() => callback(error));
+    }
+  });
+  // Heard here, or a failed write would be an unhandled 'error' event.
+  let outputError = null;
+  output.on('error', error => {
+    outputError = error;
+  });
+  const done = new Promise(resolve => finished(output, () => resolve()));
+
+  const counted = entries.map(entry => {
+    if (typeof entry.open !== 'function') {
+      return entry;
+    }
+    return {
+      ...entry,
+      open: async () => {
+        const source = await entry.open();
+        const counter = new Transform({
+          transform(chunk, _encoding, callback) {
+            callback(countContent(chunk.length), chunk);
+          }
+        });
+        // `pipeline` passes a failure of the source on to what the archive reads.
+        pipeline(source, counter, () => {});
+        return counter;
+      }
+    };
+  });
+  try {
+    for (const entry of counted) {
+      if (typeof entry.open !== 'function' && countContent(entry.data?.length || 0))
+        throw limitError;
+    }
+    await writeZip(counted, output);
+    await done;
+    if (limitError || outputError) throw limitError || outputError;
+    return { bytes, contentBytes };
+  } catch (error) {
+    output.destroy();
+    await done;
+    throw limitError || error;
+  }
 }
 
 /**

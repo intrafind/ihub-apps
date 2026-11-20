@@ -23,6 +23,7 @@
  * @module services/chatFiles/ChatFileService
  */
 import { createHash } from 'node:crypto';
+import fs from 'node:fs/promises';
 import logger from '../../utils/logger.js';
 import { ServiceError } from '../../utils/ServiceError.js';
 import configCache from '../../configCache.js';
@@ -45,6 +46,11 @@ import {
 import { normalizeFiles } from '../../../shared/promptContext.js';
 import { normalizeChatFilePolicy } from './chatFilePolicy.js';
 import { decodeRasterDataUrl } from './rasterImage.js';
+import {
+  ExtractionAbortedError,
+  ExtractionBusyError,
+  getExtractionLimiter
+} from '../uploads/extractionLimiter.js';
 import {
   CHAT_FILE_ORIGINS,
   ChatFileQuotaError,
@@ -96,6 +102,11 @@ function renderScannedPdfPages(bytes) {
  * @param {string} params.name
  * @param {string} [params.mimeType]
  * @param {Buffer|Uint8Array|null} [params.bytes] - Raw binary bytes (for `original_and_text` / `server_text_only`).
+ * @param {string|null} [params.filePath] - The file on disk (an upload spool file) instead of
+ *   `bytes`: it is read into memory only while it is scanned and extracted, under the
+ *   extraction cap, and its original is streamed into the store.
+ * @param {AbortSignal|null} [params.signal] - The caller went away: stop waiting for an
+ *   extraction slot.
  * @param {string|null} [params.text] - Pre-extracted text (for `client_text_only` or inline `fileData`).
  * @param {string[]|null} [params.pageImages] - Optional rendered page images for scanned PDFs.
  * @param {number} [params.pages]
@@ -109,6 +120,8 @@ function renderScannedPdfPages(bytes) {
  * @param {import('./ChatFileRepository.js').ChatFileRepository} [params.repository]
  * @param {Object} [params.scanner]
  * @returns {Promise<Object>} Stored file descriptor.
+ * @throws {ChatFileError} `UPLOAD_BUSY` (503, `details.retryAfterMs`) when too many files
+ *   wait to be read (`uploads.extraction`); the request can be repeated as it is.
  */
 export async function ingestChatFile({
   scope,
@@ -117,6 +130,9 @@ export async function ingestChatFile({
   mimeType = 'text/plain',
   bytes = null,
   buffer = null,
+  filePath = null,
+  signal = null,
+  limiter = null,
   text = null,
   pageImages = null,
   pages,
@@ -144,7 +160,11 @@ export async function ingestChatFile({
   }
 
   const rawBytes = bytes ?? buffer;
-  const hasBinary = Boolean(rawBytes && rawBytes.length > 0);
+  const hasBuffer = Boolean(rawBytes && rawBytes.length > 0);
+  // A spool file: only its size is known until its turn to be read comes.
+  const spoolPath = !hasBuffer && typeof filePath === 'string' && filePath ? filePath : null;
+  const spoolBytes = spoolPath ? (await fs.stat(spoolPath)).size : 0;
+  const hasBinary = hasBuffer || spoolBytes > 0;
   if (settings.storageMode === 'client_text_only' && hasBinary) {
     throw new ChatFileError(
       'BINARY_UPLOAD_NOT_ALLOWED',
@@ -163,15 +183,18 @@ export async function ingestChatFile({
   let truncated = false;
 
   if (hasBinary) {
-    const buf = Buffer.isBuffer(rawBytes)
-      ? rawBytes
-      : Buffer.from(rawBytes.buffer, rawBytes.byteOffset, rawBytes.byteLength);
+    const held = !hasBuffer
+      ? null
+      : Buffer.isBuffer(rawBytes)
+        ? rawBytes
+        : Buffer.from(rawBytes.buffer, rawBytes.byteOffset, rawBytes.byteLength);
+    const size = held ? held.length : spoolBytes;
 
-    if (settings.quotas.maxFileBytes > 0 && buf.length > settings.quotas.maxFileBytes) {
+    if (settings.quotas.maxFileBytes > 0 && size > settings.quotas.maxFileBytes) {
       throw new ChatFileQuotaError(
         'QUOTA_FILE_BYTES',
         `File exceeds maximum size of ${Math.floor(settings.quotas.maxFileBytes / (1024 * 1024))} MB`,
-        { limit: settings.quotas.maxFileBytes, size: buf.length },
+        { limit: settings.quotas.maxFileBytes, size },
         413
       );
     }
@@ -186,83 +209,128 @@ export async function ingestChatFile({
       );
     }
 
-    if (activeScanner && activeScanner.id !== 'none') {
-      const scanResult = await activeScanner.scan({
-        bytes: buf,
-        contentType: accepted,
-        name: name || 'upload'
-      });
-      if (scanResult?.clean === false) {
-        throw new ChatFileError(
-          'SCAN_REJECTED',
-          scanResult.reason || 'The uploaded file was rejected by the security scanner',
-          400
-        );
+    // Scan and extraction need the whole file as a Buffer. A spool file is read
+    // only here, inside a slot of the extraction cap, so that at most
+    // `uploads.extraction.concurrency` files are in memory however many uploads
+    // arrive at once; the buffer is gone when the slot is released.
+    /** sha256 of the spool file, taken while it is in memory; null for a buffer. */
+    let spoolSha256 = null;
+    const readFile = async () => {
+      const buf = held || (await fs.readFile(spoolPath));
+      if (!held && settings.storageMode === 'original_and_text') {
+        spoolSha256 = createHash('sha256').update(buf).digest('hex');
       }
-    }
 
-    try {
-      const extracted = await extractText(
-        { bytes: buf, contentType: accepted, name: name || 'upload' },
-        { maxChars: MAX_TEXT_CHARS, ...extractOptions }
-      );
-      extractedText = extracted.text || '';
-      resolvedMime = extracted.contentType || accepted;
-      if (Number.isFinite(extracted.pages)) resolvedPages = extracted.pages;
-      truncated = extracted.truncated === true;
-    } catch (error) {
-      if (error instanceof ExtractionError && error.code === 'NO_TEXT' && accepted === PDF_MIME) {
-        // Scanned PDF fallback: render page images via pdfium (PM-06).
-        try {
-          const rendered = await renderScannedPdfPages(buf);
-          resolvedPageImages = rendered.pageImages;
-          resolvedPages = rendered.pages;
-          resolvedMime = PDF_MIME;
-          extractedText = '';
-        } catch (renderError) {
-          // A thread that timed out, died or was stopped is a processing
-          // failure, not a PDF without content: keep its code.
-          if (renderError instanceof ExtractionPoolError) {
-            const failure = poolFailure(renderError, name);
-            throw new ChatFileError(failure.code, failure.message, 400);
-          }
+      if (activeScanner && activeScanner.id !== 'none') {
+        const scanResult = await activeScanner.scan({
+          bytes: buf,
+          contentType: accepted,
+          name: name || 'upload'
+        });
+        if (scanResult?.clean === false) {
           throw new ChatFileError(
-            'NO_TEXT',
-            error.message || 'The PDF contains no extractable text',
+            'SCAN_REJECTED',
+            scanResult.reason || 'The uploaded file was rejected by the security scanner',
             400
           );
         }
-      } else if (error instanceof ExtractionError) {
-        throw new ChatFileError(error.code, error.message, 400);
-      } else {
-        throw new ChatFileError(
-          'EXTRACTION_FAILED',
-          error?.message || 'Failed to extract document text',
-          400
-        );
       }
-    }
 
-    const descriptor = await activeRepo.put(scope, {
-      ownerId,
-      name: name || 'upload',
-      mimeType: resolvedMime,
-      formatLabel,
-      text: extractedText,
-      originalBuffer: settings.storageMode === 'original_and_text' ? buf : null,
-      originalData: buf,
-      pageImages: resolvedPageImages,
-      pages: resolvedPages,
-      truncated,
-      origin,
-      meta,
-      source,
-      ...(id ? { id } : {}),
-      storageMode: settings.storageMode,
-      appConfig,
-      policy: settings,
-      countEvidence
-    });
+      try {
+        const extracted = await extractText(
+          { bytes: buf, contentType: accepted, name: name || 'upload' },
+          // A spool file's buffer is not used again (the original is streamed
+          // from the file), so it moves to the extraction thread without a copy.
+          { maxChars: MAX_TEXT_CHARS, ...extractOptions, ...(held ? {} : { transferBytes: true }) }
+        );
+        extractedText = extracted.text || '';
+        resolvedMime = extracted.contentType || accepted;
+        if (Number.isFinite(extracted.pages)) resolvedPages = extracted.pages;
+        truncated = extracted.truncated === true;
+      } catch (error) {
+        if (error instanceof ExtractionError && error.code === 'NO_TEXT' && accepted === PDF_MIME) {
+          // Scanned PDF fallback: render page images via pdfium (PM-06).
+          try {
+            // The buffer of a spool file went to the extraction thread: read it again.
+            const rendered = await renderScannedPdfPages(held || (await fs.readFile(spoolPath)));
+            resolvedPageImages = rendered.pageImages;
+            resolvedPages = rendered.pages;
+            resolvedMime = PDF_MIME;
+            extractedText = '';
+          } catch (renderError) {
+            // A thread that timed out, died or was stopped is a processing
+            // failure, not a PDF without content: keep its code.
+            if (renderError instanceof ExtractionPoolError) {
+              const failure = poolFailure(renderError, name);
+              throw new ChatFileError(failure.code, failure.message, 400);
+            }
+            throw new ChatFileError(
+              'NO_TEXT',
+              error.message || 'The PDF contains no extractable text',
+              400
+            );
+          }
+        } else if (error instanceof ExtractionError) {
+          throw new ChatFileError(error.code, error.message, 400);
+        } else {
+          throw new ChatFileError(
+            'EXTRACTION_FAILED',
+            error?.message || 'Failed to extract document text',
+            400
+          );
+        }
+      }
+    };
+
+    // The slot is held until the file is stored: the extracted text (up to
+    // `MAX_TEXT_CHARS`) is in memory until then, and it is as much a part of
+    // what an upload holds as the file was.
+    const store = () =>
+      activeRepo.put(scope, {
+        ownerId,
+        name: name || 'upload',
+        mimeType: resolvedMime,
+        formatLabel,
+        text: extractedText,
+        originalBuffer: settings.storageMode === 'original_and_text' ? held : null,
+        originalData: held,
+        // The spool file is streamed into the store (`putStream`), not read again.
+        originalFile: held
+          ? null
+          : { path: spoolPath, bytes: spoolBytes, sha256: spoolSha256 || '' },
+        pageImages: resolvedPageImages,
+        pages: resolvedPages,
+        truncated,
+        origin,
+        meta,
+        source,
+        ...(id ? { id } : {}),
+        storageMode: settings.storageMode,
+        appConfig,
+        policy: settings,
+        countEvidence
+      });
+
+    let descriptor;
+    try {
+      descriptor = await (limiter || getExtractionLimiter()).run(
+        async () => {
+          await readFile();
+          return store();
+        },
+        { signal: signal || undefined }
+      );
+    } catch (error) {
+      if (error instanceof ExtractionBusyError) {
+        throw new ChatFileError('UPLOAD_BUSY', error.message, 503, {
+          retryAfterMs: error.retryAfterMs
+        });
+      }
+      if (error instanceof ExtractionAbortedError) {
+        throw new ChatFileError('BAD_REQUEST', error.message, 400);
+      }
+      throw error;
+    }
 
     if (!descriptor) {
       throw new ChatFileError('STORAGE_UNAVAILABLE', 'Failed to store uploaded file', 503);

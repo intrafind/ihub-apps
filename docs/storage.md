@@ -216,8 +216,11 @@ Which paths stream and which read whole:
 | Agent artifact download, tool-job result written by another worker | stream (sealed files, `openSealedStream`) |
 | `storage:copy-blobs`, `storage:encrypt` (blobs) | stream in both directions |
 | Extracted text and page maps, evidence packs, website corpus pages, project texts, crawl hand-overs | whole: the content is parsed or put into a prompt |
-| File tools and `create_zip` in a chat, document templates, A2A and inference file parts, image provenance, the embedded page of a shared HTML artifact, copies of task files into a run | whole: the bytes are handed to a model, a parser, a page or an archive built in memory |
-| Uploads | whole: an upload is parsed into memory before it is stored, and its text is extracted from that buffer |
+| File tools in a chat, document templates, A2A and inference file parts, image provenance, the embedded page of a shared HTML artifact, copies of task files into a run | whole: the bytes are handed to a model, a parser or a page |
+| `create_zip` in a chat | built into a spool file (`contents/data/tmp/zip-spool/`); stored artifacts are read as streams, an HTML file whole (library rewrite). The finished archive, at most 25 MB, is then held once: a generated file is handed to the chat from memory |
+| Multipart uploads to a chat, a scheduled task, the Inference API (`/v1/files`) and a project | received into a spool file (`contents/data/tmp/chat-uploads/`, `…/project-uploads/`), never into memory. The original is stored from the spool as a stream. The file is read whole only while it is scanned and its text extracted, for at most `uploads.extraction.concurrency` uploads at a time |
+| Uploads as JSON (`data`, `base64`), files fetched from a connected system | whole: the body parser or the connector delivers them in memory. They take a slot of the same extraction cap |
+| OCR uploads (`/ocr/process`, up to 20 files of 200 MB), image provenance check, document template files (admin) | whole, in memory, for as long as the job or the request runs |
 
 ## Documents
 
@@ -951,10 +954,12 @@ missed. Run the command again afterwards.
 - **Memory.** Downloads are streamed: an artifact, the original of an uploaded file, an artifact
   ZIP and the two copy and encryption commands hold a few MiB per transfer, whatever the size of
   the file (measured with `npm run test:s3:perf -- --mib 100`: 5 to 8 MiB held for a 100 MiB
-  object, against 200 MiB when it is read whole). Uploads and everything that is parsed or handed to a model are still held whole: a
-  25 MiB upload needs about three times its size in memory while it is stored, and encrypting it
-  blocks the server process for a short time. Size the memory for the largest uploads you allow
-  times the number of parallel uploads.
+  object, against 200 MiB when it is read whole). Uploads are received into a spool file and
+  read into memory only for their text extraction, `uploads.extraction.concurrency` at a time (2
+  by default): 20 parallel uploads of 25 MiB hold about 125 MiB, against about 740 MiB before
+  (see [Chat and Task Files](chat-files.md#parallel-uploads)). Size the memory for the largest
+  upload you allow times that setting, about three times over, not times the number of parallel
+  uploads. Everything that is parsed or handed to a model is still held whole.
   [Blobs: whole or as a stream](#blobs-whole-or-as-a-stream) lists the paths.
 - **One request per object.** A streamed write is one `PutObject` with the object's length known
   up front. There is no multipart upload and no range read, and none of the routes that serve

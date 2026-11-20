@@ -17,7 +17,11 @@ import express from 'express';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import * as realAuthRequired from '../middleware/authRequired.js';
+
+// Not a static import: under jest's ESM loader a static import of server code is
+// evaluated before `scratchContents.js` has finished (it awaits the server
+// configuration), and would load that configuration with the real contents directory.
+const realAuthRequired = await import('../middleware/authRequired.js');
 
 const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-artifacts-'));
 const state = { runs: {}, getStateFails: false };

@@ -9,6 +9,8 @@
  *
  * Run: node --test server/tests/generated-files-zip.test.js
  */
+// First: `create_zip` and the upload routes spool below the contents directory.
+import './support/scratchContents.js';
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import JSZip from 'jszip';

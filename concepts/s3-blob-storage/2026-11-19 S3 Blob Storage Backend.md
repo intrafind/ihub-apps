@@ -1204,9 +1204,12 @@ cross-worker tool-job downloads (`openSealedStream` in `storage/atRest/sealedFil
 
 | Path | Reason |
 | --- | --- |
-| Uploads (`multer` memory storage, chat files, inference files, OCR) | The upload is parsed into memory and its text is extracted from that buffer before anything is stored. Streaming the write would need disk storage for uploads first. |
+| Uploads while their text is extracted (chat files, inference files, project files) | **Changed after delivery:** a multipart upload is received into a spool file (`contents/data/tmp/chat-uploads/`) and its original is stored from there with `putStream`. Every extractor takes a `Buffer`, so the file is read whole for the scan and the extraction, for at most `uploads.extraction.concurrency` uploads at a time (2 by default), with a bounded queue and a retryable `503 UPLOAD_BUSY` beyond it. |
+| Uploads as JSON base64, files fetched from connected systems | The body parser or the connector delivers them in memory; they share the extraction cap. |
+| OCR uploads (`multer` memory storage, 20 files of 200 MB), image provenance, document template files | The OCR job renders pages from the PDF buffer for as long as it runs and has no queue; spooling the upload would move the read by milliseconds. Not changed. |
 | Extracted text, page maps, evidence packs, corpus pages, project texts, crawl hand-overs | The content is parsed or put into a prompt. |
-| File tools, `create_zip`, document templates, A2A and inference file parts, image provenance, the embed page | The bytes go to a model, a parser, a page or an archive built in memory. |
+| File tools, document templates, A2A and inference file parts, image provenance, the embed page | The bytes go to a model, a parser or a page. |
+| The finished archive of `create_zip` (at most 25 MB) | **Changed after delivery:** the archive is built into a spool file (`contents/data/tmp/zip-spool/`), stored members read as streams. It is then read once, because a generated file is handed to the chat from memory (`holdGeneratedFile`: the turn sends it to the client and stores it as an artifact). Storing it with `putStream` needs generated files that live on disk. |
 | HTML artifacts in a ZIP or a share download | The library-kit references are rewritten, which needs the whole file. |
 | The ledger spill blobs (`putBlob`/`getBlob` of the append log) | Another facet; payloads are small. |
 

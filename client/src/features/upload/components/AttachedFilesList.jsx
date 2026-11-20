@@ -61,6 +61,11 @@ function uploadErrorText(code, t) {
         'attachedFiles.errors.scanRejected',
         'Rejected by the security scan, so it was not saved to the chat; the file is sent with the message only'
       );
+    case 'UPLOAD_BUSY':
+      return t(
+        'attachedFiles.errors.busy',
+        'The server is busy reading other files, so this one was not saved to the chat; the file is sent with the message only'
+      );
     default:
       return t(
         'attachedFiles.errors.notSaved',

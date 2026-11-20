@@ -85,3 +85,25 @@ can now be kept in an S3-compatible bucket instead of the local disk.
   trial installation first.
 
 Details: `docs/storage.md`, section "Blob storage backends".
+
+## Uploads No Longer Held in Memory, and a Limit on Parallel File Reading
+
+Files uploaded to a chat, a scheduled task or the Inference API are now written to disk while
+they are received and stored from there, instead of being held in memory. Many large uploads at
+the same time no longer multiply the server's memory use: 20 parallel uploads of 25 MB hold about
+125 MB instead of about 740 MB.
+
+- New setting `uploads.extraction` in `platform.json`: `concurrency` (default 2) is the number
+  of uploaded files one server process reads at the same time, `maxQueue` (default 50) the number
+  that may wait. No action is needed; the defaults apply to existing installations.
+- When more uploads arrive than may wait, the server answers `503` with the code `UPLOAD_BUSY`
+  and a `Retry-After` header. In the chat the file is then sent with the message only, and the
+  file's chip says that the server is busy; in a scheduled task the user is asked to try again.
+  API clients repeat the request after the time given.
+- The temporary files are in `contents/data/tmp/chat-uploads/` and, for archives the assistant
+  builds, `contents/data/tmp/zip-spool/`. They are readable only by the server's user, removed
+  when the request ends, and cleaned up at start and every fifteen minutes after a crash. They are
+  not encrypted, also with storage encryption on: see `docs/storage-encryption.md`.
+- ZIP archives the assistant creates in a chat are built on disk in the same way.
+
+Details: `docs/chat-files.md`, section "Parallel uploads".

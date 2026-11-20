@@ -46,6 +46,8 @@ import { applyItemInfo, infoFromText } from './itemInfo.js';
 import { scannerFor } from './scan/MalwareScanner.js';
 import { isRefreshDue, isRefreshExpired, refreshesOnSchedule } from './refreshTtl.js';
 import { getItemKind } from './kinds/registry.js';
+import { getExtractionLimiter } from '../uploads/extractionLimiter.js';
+import { newSpoolDir, removeSpoolDir, sweepSpoolDirs } from '../uploads/uploadSpool.js';
 
 const COMPONENT = 'ProjectIngestService';
 
@@ -260,13 +262,9 @@ function withoutItem(project, itemId) {
   return { ...project, items: others, usage: usageOf(others) };
 }
 
-async function removeQuietly(target) {
-  if (!target) return;
-  try {
-    await fs.rm(target, { recursive: true, force: true });
-  } catch {
-    // Already gone, or never created.
-  }
+/** Remove an upload or scratch directory (`uploadSpool.js`); never throws. */
+function removeQuietly(target) {
+  return removeSpoolDir(target);
 }
 
 /** A version id as `ItemTextStore.mintVersionId` mints it: base36 time, random hex. */
@@ -357,8 +355,8 @@ export class ProjectIngestService {
 
   /** A fresh private directory for one upload. */
   async newTempDir() {
-    await fs.mkdir(this.tempDir, { recursive: true, mode: 0o700 });
-    return fs.mkdtemp(path.join(this.tempDir, 'u-'));
+    // The sweep is told what is in use by `_busyTempDirs`.
+    return newSpoolDir(this.tempDir, { track: false });
   }
 
   // --- jobs -------------------------------------------------------------------
@@ -515,6 +513,8 @@ export class ProjectIngestService {
     const { projectId, itemId, input } = job;
     const where = { component: COMPONENT, projectId, itemId };
     let bytes = null;
+    /** Size of an uploaded file that is still on disk only (`input.path`). */
+    let pathBytes = null;
     let name = input.name;
     let contentType = input.contentType;
     let storedBlobKey = null;
@@ -658,7 +658,9 @@ export class ProjectIngestService {
       } else if (Buffer.isBuffer(input.bytes)) {
         bytes = input.bytes;
       } else if (input.path) {
-        bytes = await fs.readFile(input.path);
+        // The upload stays on disk until its turn to be scanned and extracted
+        // (step 3): a job waiting for the conversion slot holds no file in memory.
+        pathBytes = (await fs.stat(input.path)).size;
       } else {
         throw new ProjectError('INVALID_REF', 'Nothing to ingest');
       }
@@ -667,7 +669,11 @@ export class ProjectIngestService {
       //    declared length; a fetched document had none). An early refusal
       //    before the scan and the extraction; the binding check runs again
       //    under the project's lock when the text is installed (step 5).
-      const size = bytes ? bytes.length : Buffer.byteLength(text, 'utf8');
+      const size = bytes
+        ? bytes.length
+        : pathBytes !== null
+          ? pathBytes
+          : Buffer.byteLength(text, 'utf8');
       const project = await this.repository.get(projectId);
       if (!project) return null;
       // A new item was not checked at the start (`marksStart`): removed while
@@ -694,45 +700,59 @@ export class ProjectIngestService {
           });
           if (!stamped) return null;
         }
-        // 3. Scan, on the temp file (the command scanner needs a path). Text
-        //    handed in is scanned as the bytes it will be stored as.
-        {
-          const scanBytes = bytes || Buffer.from(text, 'utf8');
-          let scanPath = bytes ? input.path || null : null;
-          let scratch = null;
-          if (!scanPath && this.scanner().id !== 'none') {
-            scratch = await this.newTempDir();
-            job.scratchDir = scratch;
-            scanPath = path.join(scratch, 'fetched');
-            await fs.writeFile(scanPath, scanBytes, { mode: 0o600 });
-          }
-          try {
-            await this._scan({ path: scanPath, bytes: scanBytes, contentType, name });
-          } finally {
-            await removeQuietly(scratch);
-          }
-        }
+        // 3–4 also take a slot of the cap all upload paths share
+        //    (`uploads.extraction`). This job cannot be told to try again (its
+        //    request was answered with 202), so it waits however long the queue is.
+        extracted = await getExtractionLimiter().run(
+          async () => {
+            // An uploaded file is read into memory here, and only here.
+            const fileBytes = bytes || (input.path ? await fs.readFile(input.path) : null);
+            // 3. Scan, on the temp file (the command scanner needs a path). Text
+            //    handed in is scanned as the bytes it will be stored as.
+            {
+              const scanBytes = fileBytes || Buffer.from(text, 'utf8');
+              let scanPath = fileBytes ? input.path || null : null;
+              let scratch = null;
+              if (!scanPath && this.scanner().id !== 'none') {
+                scratch = await this.newTempDir();
+                job.scratchDir = scratch;
+                scanPath = path.join(scratch, 'fetched');
+                await fs.writeFile(scanPath, scanBytes, { mode: 0o600 });
+              }
+              try {
+                await this._scan({ path: scanPath, bytes: scanBytes, contentType, name });
+              } finally {
+                await removeQuietly(scratch);
+              }
+            }
 
-        // 4. Extract.
-        if (text !== null) {
-          const normalized = normalizeText(text, { maxChars });
-          extracted = {
-            text: normalized.text,
-            contentType,
-            truncated: normalized.truncated,
-            ...infoFromText(normalized.text)
-          };
-          if (!extracted.text) throw new ExtractionError('NO_TEXT', 'The text is empty');
-        } else {
-          const started = Date.now();
-          extracted = await extractText({ bytes, contentType, name }, { maxChars });
-          logger.debug('Extracted a project item', {
-            ...where,
-            contentType: extracted.contentType,
-            chars: extracted.text.length,
-            ms: Date.now() - started
-          });
-        }
+            // 4. Extract.
+            if (text !== null) {
+              const normalized = normalizeText(text, { maxChars });
+              const fromText = {
+                text: normalized.text,
+                contentType,
+                truncated: normalized.truncated,
+                ...infoFromText(normalized.text)
+              };
+              if (!fromText.text) throw new ExtractionError('NO_TEXT', 'The text is empty');
+              return fromText;
+            }
+            const started = Date.now();
+            const fromFile = await extractText(
+              { bytes: fileBytes, contentType, name },
+              { maxChars }
+            );
+            logger.debug('Extracted a project item', {
+              ...where,
+              contentType: fromFile.contentType,
+              chars: fromFile.text.length,
+              ms: Date.now() - started
+            });
+            return fromFile;
+          },
+          { wait: 'always' }
+        );
       } finally {
         releaseConvert();
       }
@@ -852,7 +872,11 @@ export class ProjectIngestService {
     } catch (error) {
       const failure = errorOf(error);
       logger.warn('A project item could not be ingested', { ...where, ...failure });
-      recordUpload('project', outcomeOf(failure.code), bytes ? bytes.length : undefined);
+      recordUpload(
+        'project',
+        outcomeOf(failure.code),
+        bytes ? bytes.length : (pathBytes ?? undefined)
+      );
       if (storedBlobKey) {
         await this.repository.blobs
           .delete(PROJECT_FILES_NAMESPACE, storedBlobKey)
@@ -1386,28 +1410,11 @@ export class ProjectIngestService {
    * @returns {Promise<number>}
    */
   async cleanTempDir({ now = Date.now() } = {}) {
-    let removed = 0;
-    let entries = [];
-    try {
-      entries = await fs.readdir(this.tempDir, { withFileTypes: true });
-    } catch {
-      return 0;
-    }
-    const busy = this._busyTempDirs();
-    for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
-      const dir = path.join(this.tempDir, entry.name);
-      if (busy.has(path.resolve(dir))) continue;
-      try {
-        const stat = await fs.stat(dir);
-        if (now - stat.mtimeMs < ORPHAN_AGE_MS) continue;
-        await fs.rm(dir, { recursive: true, force: true });
-        removed += 1;
-      } catch {
-        // Raced with a job, or already gone.
-      }
-    }
-    return removed;
+    return sweepSpoolDirs(this.tempDir, {
+      now,
+      maxAgeMs: ORPHAN_AGE_MS,
+      busy: this._busyTempDirs()
+    });
   }
 }
 

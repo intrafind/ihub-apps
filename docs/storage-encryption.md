@@ -72,13 +72,24 @@ it.
 | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
 | `data/feedback.jsonl`                                 | Feedback entries, including the user's comment and a snippet of the rated answer. See [Feedback](feedback-feature.md). |
 | `data/tmp/project-uploads/`                           | Files uploaded to a project while they wait for text extraction. Removed with the request, swept after one hour.       |
+| `data/tmp/chat-uploads/`                              | Files uploaded to a chat, a scheduled task or the Inference API (`/v1/files`), from the moment they are received until they are stored: normally seconds, longer while uploads queue for extraction. Removed when the request ends, swept after one hour. |
+| `data/tmp/zip-spool/`                                 | The archive `create_zip` is building, for the duration of the tool call. Removed when the call ends, swept after one hour. |
 | `data/ifinder-downloads/`                             | Documents downloaded from iFinder.                                                                                     |
 | `data/debug/llm-request/`, `data/debug/llm-failures/` | Full requests to the language model, only while the LLM debug switch is on. They contain chat content.                 |
 | `.backups/`                                           | What a backup import replaced, in the form it had then. Copies made before the switch was turned on are unencrypted.   |
-| The operating system's temp directory                 | Upload spools while a request runs.                                                                                    |
+| The operating system's temp directory                 | The upload of a backup import, while the request runs.                                                                 |
 
 The start-up log and `npm run storage:encrypt -- --dry-run` name those of these stores that hold
 data.
+
+**Spool files.** An uploaded file and a `create_zip` archive are written to disk unencrypted
+before they are stored, also with the switch on, so that they are not held in memory. Each is one
+file named `upload` in a directory of its own (`u-` and six random characters; directory mode
+`0700`, file mode `0600`); the name of the uploaded file is not used on disk. The directory is
+removed when the request or the tool call ends, whatever its outcome. What a crash leaves behind is
+removed at the next start and every fifteen minutes, once it is an hour old. Put `contents/data/tmp`
+on an encrypted volume or on a memory-backed file system if this must not reach the disk in
+plaintext; a memory-backed file system counts against the server's memory again.
 
 **Not content, and not encrypted:** the configuration (`config/`, `apps/`, `models/`, `prompts/`,
 `workflows/`, `agents/profiles/` and the other hand-edited folders; secrets inside them are
@@ -473,9 +484,11 @@ authentication tag, so they are decrypted and encrypted a segment at a time wher
 pass through: the download of an artifact, of the original of an uploaded file, of an artifact
 ZIP, of an agent artifact and of a tool-job result from another worker process, and the blobs in
 `storage:encrypt` and `storage:copy-blobs`. Such a transfer holds a few MiB whatever the size of
-the file. Content that is parsed or handed to a model (extracted text, evidence, project texts)
-and every upload is still held in memory whole, about two to three times its size while it is
-encrypted or decrypted. The list of paths is in
+the file. An upload is received into a spool file and its original is stored from there in the
+same way; it is in memory only while its text is extracted, and at most
+`uploads.extraction.concurrency` uploads at a time. Content that is parsed or handed to a model
+(extracted text, evidence, project texts) is still held in memory whole, about two to three times
+its size while it is encrypted or decrypted. The list of paths is in
 [Storage](storage.md#blobs-whole-or-as-a-stream).
 
 **A damaged file and a download.** A streamed download sends a segment only after that segment

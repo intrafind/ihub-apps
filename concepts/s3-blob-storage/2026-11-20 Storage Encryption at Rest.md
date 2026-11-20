@@ -60,10 +60,11 @@ less than 0.1 ms.
 | ------------------------------------------------------------ | ----------------------------------------------- | ---------------------------------------------------------------- |
 | `data/feedback.jsonl`                                        | Feedback with the comment and an answer snippet | Read with `jq` and `grep` and rotated by hand. Follow-up.        |
 | `data/tmp/project-uploads/`                                  | Uploads waiting for extraction                  | Temporary, removed with the request, swept after one hour.       |
+| `data/tmp/chat-uploads/`, `data/tmp/zip-spool/`              | Chat, task and API uploads until they are stored; the archive `create_zip` builds | Temporary (0700/0600), removed with the request or the tool call, swept after one hour. Decided: plaintext on disk for seconds instead of every upload in memory. |
 | `data/ifinder-downloads/`                                    | Downloaded documents                            | Saved for use outside iHub.                                      |
 | `data/debug/llm-request/`, `data/debug/llm-failures/`        | Full LLM requests while the debug switch is on  | A debug dump is meant to be read.                                |
 | `.backups/`                                                  | What a backup import replaced                   | Same form as the data it copied. Old copies stay plaintext.      |
-| Operating-system temp directory                              | Upload spools                                   | Outside `contents/`.                                             |
+| Operating-system temp directory                              | The upload of a backup import                   | Outside `contents/`.                                             |
 | Raw namespaces: `config/`, `apps/`, `models/`, `prompts/`, … | Configuration, hand-edited                      | Must stay readable and editable. Secrets in them are `ENC[...]`. |
 | `data/audit-log/`, usage and quota files                     | Actors, ids, counters. No content.              | Not content.                                                     |
 | `data/change-history/`                                       | Before and after of configuration changes       | Configuration.                                                   |
