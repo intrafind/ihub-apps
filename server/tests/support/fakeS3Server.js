@@ -199,8 +199,22 @@ class BucketStore {
  * @property {string} [code] - S3 error code of that answer (`SlowDown`,
  *   `AccessDenied`, …); a default is chosen from the status.
  * @property {number} [delayMs] - Wait before answering (or before serving).
+ * @property {Promise<void>} [hold] - Wait for this promise before answering
+ *   (or before serving). The request is in `requests` while it waits, so a
+ *   test can hold requests until a number of them have arrived.
  * @property {number} [truncateBody] - Serve a `GetObject` with its full
  *   `Content-Length`, send this many bytes, then close the connection.
+ * @property {number} [stallBody] - Serve a `GetObject` with its full
+ *   `Content-Length`, send this many bytes, then send nothing more and keep
+ *   the connection open (a body that stalls mid-stream).
+ * @property {boolean} [chunked] - Serve a `GetObject` without a
+ *   `Content-Length` (chunked transfer), so the client cannot know the size
+ *   before it reads.
+ * @property {boolean} [meterBody] - Serve a `GetObject` body in 64 KiB pieces
+ *   that wait for the client to take them, and record on the request's log
+ *   entry how many bytes were handed to the socket before the response ended
+ *   or the client went away (`bodyBytesSent`, `bodyComplete`). Shows whether
+ *   a client stopped reading early.
  * @property {boolean} [destroy] - Close the connection without an answer.
  * @property {string} [rawBody] - Answer 200 with this body as it is (a
  *   malformed listing, for one).
@@ -308,7 +322,9 @@ export async function startFakeS3Server({
       .keys()
       .filter(key => key.startsWith(prefix) && (!after || compareKeys(key, after) > 0));
     const page = matching.slice(0, maxKeys);
-    const truncated = matching.length > page.length;
+    // max-keys=0 is answered empty and not truncated: there is no key a
+    // continuation could start from.
+    const truncated = maxKeys > 0 && matching.length > page.length;
     const show = key => xml(encode ? encodeKey(key) : key);
     const body = [
       '<?xml version="1.0" encoding="UTF-8"?>',
@@ -370,6 +386,7 @@ export async function startFakeS3Server({
 
     const rule = takeInjection(op, key);
     if (rule?.delayMs) await new Promise(resolve => setTimeout(resolve, rule.delayMs));
+    if (rule?.hold) await rule.hold;
     if (res.destroyed) return undefined;
     if (rule?.destroy) return void req.socket.destroy();
     if (rule?.rawBody !== undefined) {
@@ -454,11 +471,41 @@ export async function startFakeS3Server({
       });
       return void res.end(part);
     }
+    if (op === 'GetObject' && rule?.chunked) delete headers['content-length'];
     res.writeHead(200, headers);
     if (op === 'HeadObject') return void res.end();
     const data = store.read(key);
     if (rule && Number.isInteger(rule.truncateBody)) {
       res.write(data.subarray(0, rule.truncateBody), () => req.socket.destroy());
+      return undefined;
+    }
+    if (rule && Number.isInteger(rule.stallBody)) {
+      // Never ended: the socket stays open until the client or close() ends it.
+      res.write(data.subarray(0, rule.stallBody));
+      return undefined;
+    }
+    if (rule?.meterBody) {
+      const entry = requests[requests.length - 1];
+      entry.bodyBytesSent = 0;
+      entry.bodyComplete = false;
+      const piece = 64 * 1024;
+      const closed = new Promise(resolve => res.once('close', resolve));
+      for (let offset = 0; offset < data.length && !res.destroyed; offset += piece) {
+        const chunk = data.subarray(offset, offset + piece);
+        if (!res.write(chunk)) {
+          let onDrain;
+          await Promise.race([
+            new Promise(resolve => res.once('drain', (onDrain = resolve))),
+            closed
+          ]);
+          res.removeListener('drain', onDrain);
+        }
+        if (!res.destroyed) entry.bodyBytesSent += chunk.length;
+      }
+      if (!res.destroyed) {
+        entry.bodyComplete = true;
+        res.end();
+      }
       return undefined;
     }
     return void res.end(data);

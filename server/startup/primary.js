@@ -16,7 +16,12 @@ import { confirmUpdateOnStartup, isUpdateAwaitingConfirmation } from '../service
 import { initSystemResources } from '../services/systemResources.js';
 import { shutdownStorageBootstrap } from '../storage/bootstrap.js';
 import config from '../config.js';
-import { prepareContents, bootstrapStorageOrExit, ensureEncryptionKey } from './bootstrap.js';
+import {
+  prepareContents,
+  bootstrapStorageOrExit,
+  ensureEncryptionKey,
+  prepareStorageEncryptionOrExit
+} from './bootstrap.js';
 import { describeWorkerSizing, workerExecArgv } from '../utils/workerSizing.js';
 
 /**
@@ -69,6 +74,9 @@ export async function startPrimary({ workerCount, stickyRouting }) {
     // the primary is also the one process that creates the key file, and with
     // an S3 blob backend the one that writes its key check object.
     await ensureEncryptionKey();
+    // Encrypt data stored before `storage.encryption.enabled` was switched on,
+    // here and nowhere else: the workers read strictly and never convert.
+    await prepareStorageEncryptionOrExit(primaryPlatformConfig);
     await bootstrapStorageOrExit(primaryPlatformConfig);
     await shutdownStorageBootstrap();
   }

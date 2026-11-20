@@ -156,6 +156,33 @@ export const fetchAppIntegrationStatus = async () => {
   return response.data;
 };
 
+/**
+ * Where the running server keeps its blobs, how the last check of that
+ * backend went, how the content is encrypted and whether a restart is due
+ * (`GET /api/admin/storage`). The server holds the check result; this call
+ * does not contact the backend.
+ *
+ * @returns {Promise<Object>} `{ blobs, documents, restartRequired,
+ *   configuredBlobProvider, localLeftovers, encryption }`
+ */
+export const fetchStorageStatus = async () => {
+  const response = await makeAdminApiCall('/admin/storage');
+  return response.data;
+};
+
+/**
+ * Check the running blob storage now (`POST /api/admin/storage/_test`). It
+ * resolves with the same object as {@link fetchStorageStatus} whether the
+ * check passed or failed (`blobs.status`); it rejects only when the check
+ * could not run.
+ *
+ * @returns {Promise<Object>}
+ */
+export const testStorage = async () => {
+  const response = await makeAdminApiCall('/admin/storage/_test', { method: 'POST' });
+  return response.data;
+};
+
 export const fetchAdminModels = async () => {
   try {
     const response = await makeAdminApiCall('/admin/models');

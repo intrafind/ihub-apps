@@ -44,7 +44,8 @@ const CAPABILITIES = {
   multiInstance: false,
   blobs: true,
   blobStore: true,
-  conditionalWrites: true
+  conditionalWrites: true,
+  encryptionAtRest: 'off'
 };
 
 /** The sections that touch the blob facet or the provider's lifecycle. */

@@ -25,7 +25,7 @@ import logger from '../utils/logger.js';
 // `./index.js` is what registers the built-in providers, so resolving
 // `filesystem` here works. Going straight to the registry would resolve
 // against an empty factory map.
-import { initializeStorage, shutdownStorage } from './index.js';
+import { describeProviderEncryption, initializeStorage, shutdownStorage } from './index.js';
 
 const COMPONENT = 'StorageBootstrap';
 
@@ -184,6 +184,10 @@ export function isStorageReady() {
  * backend went, for a health or status endpoint. Reads what the provider
  * already holds; it never contacts the backend.
  *
+ * Public: `/api/health` hands this out as it is. It therefore says nothing
+ * about encryption; key ids and the state of the conversion are for
+ * administrators only ({@link describeStorageEncryption}).
+ *
  * @returns {{provider: string|null, status: 'ok'|'error'|'unknown'}}
  *   `provider` is `default` when the storage provider serves its own blobs,
  *   the blob backend's name (`s3`) otherwise, and null before the bootstrap.
@@ -193,6 +197,33 @@ export function describeBlobStorage() {
   const backend = activeProvider.blobBackendHandle;
   if (!backend) return { provider: 'default', status: 'ok' };
   return { provider: backend.name, status: backend.lastProbe?.status || 'unknown' };
+}
+
+/**
+ * Encryption at rest of the running storage, **for the admin status only**
+ * (it names the master key id; never put it on a public endpoint): whether
+ * the switch is on, what it covers, and how far the one-time conversion of
+ * existing data has come. Reads what the provider holds since its start; it
+ * touches no file.
+ *
+ * @returns {{enabled: boolean, scope: 'none'|'blobs'|'storage',
+ *   conversion: {state: 'none'|'off'|'converting'|'complete', facets: Record<string, number>,
+ *   keyId: string|null, skipped: number, completedAt: string|null},
+ *   sealedDataExists: boolean}}
+ *   `scope` is `storage` when documents, append logs and blobs are encrypted,
+ *   `blobs` when only blobs are, `none` when nothing is written encrypted
+ *   (also before the bootstrap). `conversion.facets` lists what is fully
+ *   encrypted. `sealedDataExists` is true when encryption was on at some
+ *   time: the master key is then still needed, also with `enabled: false`.
+ *
+ * @example
+ * describeStorageEncryption();
+ * // { enabled: true, scope: 'storage',
+ * //   conversion: { state: 'complete', facets: { blobs: 1, documents: 1, logs: 1 }, … },
+ * //   sealedDataExists: true }
+ */
+export function describeStorageEncryption() {
+  return describeProviderEncryption(activeProvider);
 }
 
 /**

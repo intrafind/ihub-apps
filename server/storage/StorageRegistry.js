@@ -24,6 +24,8 @@ import { DEFAULT_BLOB_BACKEND, createBlobBackend } from './blobBackends.js';
 import { failedBlobProbe, runBlobProbe } from './blobProbe.js';
 import { ComposedStorageProvider } from './ComposedStorageProvider.js';
 import { createLocalBlobBackend } from './localBlobBackend.js';
+import { blobPlaintextReads, describeEncryption } from './atRest/policy.js';
+import { readAtRestState } from './atRest/state.js';
 
 const COMPONENT = 'StorageRegistry';
 
@@ -134,8 +136,10 @@ export function hasProvider(name) {
  *
  * @param {Object} [platformConfig={}] - Platform configuration.
  * @param {Object} [env=process.env] - Environment to read the override from.
- * @returns {{provider: string, config: Object}} Resolved provider name and its
- *   configuration block — always an object, `{}` when the provider has none.
+ * @returns {{provider: string, config: Object, encryption: {enabled: boolean}}}
+ *   Resolved provider name and its configuration block — always an object,
+ *   `{}` when the provider has none — and the encryption switch
+ *   (`storage.encryption.enabled`, off unless the file says `true`).
  */
 export function resolveStorageConfig(platformConfig = {}, env = process.env) {
   const storage = isPlainObject(platformConfig?.storage) ? platformConfig.storage : {};
@@ -144,7 +148,50 @@ export function resolveStorageConfig(platformConfig = {}, env = process.env) {
   // Own-property lookup only: the name may come from the environment, and
   // `storage['__proto__']` would otherwise hand back Object.prototype as config.
   const raw = Object.hasOwn(storage, provider) ? storage[provider] : null;
-  return { provider, config: isPlainObject(raw) ? resolveEnvVarsInObject(raw) : {} };
+  return {
+    provider,
+    config: isPlainObject(raw) ? resolveEnvVarsInObject(raw) : {},
+    encryption: { enabled: encryptionEnabled(storage) }
+  };
+}
+
+/** Whether `storage.encryption.enabled` is on. */
+function encryptionEnabled(storage) {
+  return isPlainObject(storage.encryption) && storage.encryption.enabled === true;
+}
+
+/**
+ * The configuration a provider is built with: its own block plus how its
+ * documents and append logs are encrypted. With the switch on the provider
+ * decides the mode itself when it initializes, from the state record of the
+ * one-time conversion (`storage/atRest/state.js`).
+ *
+ * @param {Object} config - The provider's block.
+ * @param {{enabled: boolean}} encryption - The switch.
+ * @returns {Object}
+ */
+export function providerConfigWithEncryption(config, encryption) {
+  return {
+    ...config,
+    encryption: { mode: encryption?.enabled ? 'auto' : 'off', loadKeys }
+  };
+}
+
+/**
+ * The state record of the one-time conversion in a provider's data directory.
+ *
+ * @param {StorageProvider} base - A provider, initialized or not.
+ * @returns {Promise<Object|null>} Null for a provider without a data
+ *   directory, and when there is no record.
+ */
+async function atRestStateOf(base) {
+  let baseDir = null;
+  try {
+    baseDir = base.baseDir;
+  } catch {
+    baseDir = null;
+  }
+  return typeof baseDir === 'string' && baseDir ? readAtRestState(baseDir) : null;
 }
 
 /**
@@ -172,14 +219,15 @@ export function resolveStorageConfig(platformConfig = {}, env = process.env) {
  * earlier are still decrypted.
  *
  * `encryption.plaintextReads` says what a read does with a stored object that
- * is not encrypted while encryption is on. **This is the seam for the one-time
- * conversion of existing blobs** (`encryptExistingBlobs`): the default backend
- * answers `accept`, because an installation that switches encryption on still
- * holds plaintext blobs and nothing records yet that they were converted; the
- * S3 backend answers `reject` (strict), because it starts from an empty
- * bucket. Once a completed conversion is recorded somewhere, this is where
- * `accept` turns into `reject` for the default backend.
+ * is not encrypted while encryption is on. The S3 backend answers `reject`
+ * (strict), because it starts from an empty bucket. The default backend
+ * answers `accept` until the state record of the one-time conversion
+ * (`options.atRestState`, see `storage/atRest/state.js`) lists the blob facet
+ * as complete, and `reject` from then on; without a record it is `accept`.
  *
+ * @param {Object} [options]
+ * @param {Object|null} [options.atRestState] - The state record of the
+ *   storage provider's data directory.
  * @returns {{provider: string, source: 'environment'|'platform.json'|'default',
  *   config: Object, platformConfig: {ssl: Object, proxy: Object},
  *   encryption: {enabled: boolean, plaintextReads: 'reject'|'accept'}}}
@@ -189,7 +237,11 @@ export function resolveStorageConfig(platformConfig = {}, env = process.env) {
  * // { provider: 's3', source: 'platform.json', config: { bucket: 'ihub' },
  * //   platformConfig: { ssl: {}, proxy: {} }, encryption: { enabled: false, plaintextReads: 'accept' } }
  */
-export function resolveBlobStorageConfig(platformConfig = {}, env = process.env) {
+export function resolveBlobStorageConfig(
+  platformConfig = {},
+  env = process.env,
+  { atRestState = null } = {}
+) {
   const storage = isPlainObject(platformConfig?.storage) ? platformConfig.storage : {};
   const blobs = isPlainObject(storage.blobs) ? storage.blobs : {};
   const fromEnv = readName(env?.[BLOB_PROVIDER_ENV_VAR]);
@@ -203,7 +255,7 @@ export function resolveBlobStorageConfig(platformConfig = {}, env = process.env)
     source: fromEnv ? 'environment' : fromFile ? 'platform.json' : 'default',
     config: isPlainObject(raw) ? resolveEnvVarsInObject(raw) : {},
     platformConfig: { ssl: section('ssl'), proxy: section('proxy') },
-    encryption: resolveBlobEncryption(storage, provider)
+    encryption: resolveBlobEncryption(storage, provider, atRestState)
   };
 }
 
@@ -212,13 +264,18 @@ export function resolveBlobStorageConfig(platformConfig = {}, env = process.env)
  *
  * @param {Object} storage - The `storage` block.
  * @param {string} provider - Blob backend name.
+ * @param {Object|null} [atRestState] - State record of the one-time conversion.
  * @returns {{enabled: boolean, plaintextReads: 'reject'|'accept'}}
  */
-function resolveBlobEncryption(storage, provider) {
-  const enabled = isPlainObject(storage.encryption) && storage.encryption.enabled === true;
+function resolveBlobEncryption(storage, provider, atRestState = null) {
+  const enabled = encryptionEnabled(storage);
   return {
     enabled,
-    plaintextReads: enabled && provider !== DEFAULT_BLOB_BACKEND ? 'reject' : 'accept'
+    plaintextReads: blobPlaintextReads({
+      enabled,
+      remote: provider !== DEFAULT_BLOB_BACKEND,
+      state: atRestState
+    })
   };
 }
 
@@ -389,8 +446,7 @@ export function createProvider(name, config = {}) {
  *   is not registered.
  */
 export async function initializeStorage({ platformConfig, env } = {}) {
-  const { provider: name, config } = resolveStorageConfig(platformConfig, env);
-  const blobs = resolveBlobStorageConfig(platformConfig, env);
+  const { provider: name, config, encryption } = resolveStorageConfig(platformConfig, env);
 
   if (activeProvider) {
     warnProviderChange(name, activeProviderName);
@@ -405,7 +461,13 @@ export async function initializeStorage({ platformConfig, env } = {}) {
   pendingInit = (async () => {
     // A blob backend that is unknown or misconfigured throws here, before
     // anything is initialized: the same outcome as an unknown provider.
-    const provider = composeBlobBackend(createProvider(name, config), blobs, env);
+    const base = createProvider(name, providerConfigWithEncryption(config, encryption));
+    // Filesystem blobs are read strictly once the conversion of the blob
+    // facet is recorded complete; until then blobs from before are plaintext.
+    const blobs = resolveBlobStorageConfig(platformConfig, env, {
+      atRestState: await atRestStateOf(base)
+    });
+    const provider = composeBlobBackend(base, blobs, env);
     try {
       await provider.initialize?.();
     } catch (error) {
@@ -434,6 +496,7 @@ export async function initializeStorage({ platformConfig, env } = {}) {
       blobs: blobs.provider,
       blobEncryption: blobs.encryption.enabled
     });
+    logEncryptionStatus(provider, encryption, blobs);
     return provider;
   })();
 
@@ -443,6 +506,69 @@ export async function initializeStorage({ platformConfig, env } = {}) {
     pendingInit = null;
     pendingProviderName = null;
   }
+}
+
+/**
+ * What a provider says about encryption at rest, for a status page and the
+ * start-up log.
+ *
+ * @param {StorageProvider|null} provider - The composed provider, or null.
+ * @param {{enabled: boolean}} [encryption] - The switch, for a provider that
+ *   does not describe itself.
+ * @returns {ReturnType<typeof describeEncryption>}
+ */
+export function describeProviderEncryption(provider, encryption = { enabled: false }) {
+  try {
+    const own = provider?.describeEncryption?.();
+    if (own) return own;
+  } catch {
+    // Fall through to what the switch says.
+  }
+  return describeEncryption({ enabled: encryption.enabled === true, mode: null, state: null });
+}
+
+/**
+ * One line per start that says whether storage encryption is on, and what it
+ * covers. A warning when blobs go to a remote store unencrypted.
+ *
+ * @param {StorageProvider} provider - The initialized provider.
+ * @param {{enabled: boolean}} encryption - The switch.
+ * @param {{provider: string}} blobs - The resolved blob storage.
+ * @returns {void}
+ */
+function logEncryptionStatus(provider, encryption, blobs) {
+  const described = describeProviderEncryption(provider, encryption);
+  const meta = {
+    component: COMPONENT,
+    enabled: described.enabled,
+    scope: described.scope,
+    conversion: described.conversion.state,
+    blobs: blobs.provider
+  };
+  if (described.enabled) {
+    logger.info(
+      described.scope === 'storage'
+        ? 'Storage encryption at rest is ON: documents, append logs and blobs are encrypted before they are written'
+        : 'Storage encryption at rest is ON for blobs only: this storage provider does not encrypt documents and append logs',
+      { ...meta, keyId: described.conversion.keyId }
+    );
+    return;
+  }
+  const sealed = described.sealedDataExists
+    ? ' Data encrypted earlier stays encrypted and needs the master key to be read.'
+    : '';
+  if (blobs.provider !== DEFAULT_BLOB_BACKEND) {
+    logger.warn(
+      `Storage encryption at rest is OFF (storage.encryption.enabled) while blobs are stored on "${blobs.provider}": ` +
+        `files are uploaded as they are, and documents and append logs are written in plaintext.${sealed}`,
+      { ...meta, code: 'STORAGE_ENCRYPTION_OFF' }
+    );
+    return;
+  }
+  logger.info(
+    `Storage encryption at rest is OFF (storage.encryption.enabled): documents, append logs and blobs are written in plaintext.${sealed}`,
+    meta
+  );
 }
 
 /**

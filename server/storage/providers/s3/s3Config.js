@@ -20,7 +20,9 @@ export const S3_DEFAULTS = Object.freeze({
   prefix: '',
   forcePathStyle: true,
   allowInsecureHttp: false,
-  maxObjectBytes: 64 * 1024 * 1024,
+  // Above the default size limit of an artifact ZIP (100 MB), so an artifact
+  // the server accepts is never refused by its blob store.
+  maxObjectBytes: 128 * 1024 * 1024,
   connectTimeoutMs: 5000,
   requestTimeoutMs: 60000,
   maxAttempts: 3

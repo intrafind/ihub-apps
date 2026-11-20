@@ -10,6 +10,46 @@ import logger from '../utils/logger.js';
 import { bootstrapStorage } from '../storage/bootstrap.js';
 import { performInitialSetup } from '../utils/setupUtils.js';
 import { runConfigMigrations } from '../migrations/runner.js';
+import { beginAtRestPreparation, endAtRestPreparation } from '../storage/atRest/policy.js';
+
+/** Log the reason, let the log transport flush, end the process. */
+async function exitWith(message, error) {
+  logger.error({
+    component: 'Server',
+    message,
+    error: error?.message,
+    code: error?.code,
+    stack: error?.stack,
+    pid: process.pid
+  });
+  await new Promise(resolve => setTimeout(resolve, 100));
+  process.exit(1);
+}
+
+/**
+ * Tell the key service where the storage provider keeps its data, when that
+ * is not `contents/data`, so it never generates a new master key while that
+ * directory holds encrypted data. Never throws: a missing `platform.json`
+ * means a new installation and the default location.
+ *
+ * @returns {Promise<void>}
+ */
+async function registerSealedDataLocation() {
+  try {
+    const [{ loadJson }, { createProvider, resolveStorageConfig }, { default: tokenStorage }] =
+      await Promise.all([
+        import('../configLoader.js'),
+        import('../storage/index.js'),
+        import('../services/TokenStorageService.js')
+      ]);
+    const platformConfig = (await loadJson('config/platform.json')) || {};
+    const { provider, config } = resolveStorageConfig(platformConfig);
+    const baseDir = createProvider(provider, config).baseDir;
+    if (typeof baseDir === 'string') tokenStorage.addSealedDataLocation(baseDir);
+  } catch {
+    // The default location is looked at in any case.
+  }
+}
 
 /**
  * Seed contents/ from server/defaults and apply the versioned config
@@ -26,6 +66,11 @@ import { runConfigMigrations } from '../migrations/runner.js';
  * platform.json - which a "only slot 0 does it" gate could not provide.
  */
 export async function prepareContents() {
+  // From here to the end of `prepareStorageEncryptionOrExit` this process is
+  // the one that may read plaintext and encrypted data side by side: a
+  // configuration migration that starts storage runs before the conversion.
+  beginAtRestPreparation();
+  await registerSealedDataLocation();
   try {
     await performInitialSetup();
   } catch (error) {
@@ -113,6 +158,11 @@ export async function prepareContents() {
  * Never throws: a key that cannot be loaded is reported here and again by the
  * later key setup, and a blob backend that needs it then refuses to start.
  *
+ * One case ends the process: the key is missing or unreadable while the data
+ * directory holds data that was encrypted with it (`MASTER_KEY_REQUIRED`).
+ * The key service generates no new key then, and starting without one would
+ * serve an installation whose chats and files cannot be read.
+ *
  * @returns {Promise<void>}
  */
 export async function ensureEncryptionKey() {
@@ -120,6 +170,9 @@ export async function ensureEncryptionKey() {
     const { default: tokenStorageService } = await import('../services/TokenStorageService.js');
     if (!tokenStorageService.encryptionKey) await tokenStorageService.initializeEncryptionKey();
   } catch (error) {
+    if (error?.code === 'MASTER_KEY_REQUIRED') {
+      await exitWith(`Cannot start: ${error.message}`, error);
+    }
     logger.error('Failed to load the encryption key before storage', {
       component: 'Server',
       error: error.message
@@ -152,5 +205,33 @@ export async function bootstrapStorageOrExit(platformConfig) {
     // Give the log transport a moment to flush the line that explains the exit.
     await new Promise(resolve => setTimeout(resolve, 100));
     process.exit(1);
+  }
+}
+
+/**
+ * Bring the data directory in line with `storage.encryption.enabled` before
+ * any worker exists, or end the process with a clear error: check the master
+ * key against the stored data, and encrypt data that was stored in plaintext
+ * before the switch was turned on (`storage/atRest/prepare.js`). The server
+ * does not accept requests while this runs; progress is logged every 10 s.
+ *
+ * Call it once per start: in the cluster primary before the fork, or in the
+ * single process, after `ensureEncryptionKey()` and before the storage
+ * bootstrap. Interrupting it is safe; the next start continues.
+ *
+ * @param {Object} platformConfig - Parsed platform.json (the raw file).
+ * @returns {Promise<void>}
+ */
+export async function prepareStorageEncryptionOrExit(platformConfig) {
+  try {
+    const { prepareStorageEncryption } = await import('../storage/atRest/prepare.js');
+    await prepareStorageEncryption({ platformConfig });
+  } catch (error) {
+    await exitWith(
+      `Cannot start: storage encryption could not be prepared: ${error.message}`,
+      error
+    );
+  } finally {
+    endAtRestPreparation();
   }
 }

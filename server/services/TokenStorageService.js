@@ -8,6 +8,7 @@ import path from 'node:path';
 import logger from '../utils/logger.js';
 import { atomicWriteFile } from '../utils/atomicWrite.js';
 import { getContentsPath } from '../utils/contentsPath.js';
+import serverConfig from '../config.js';
 
 /**
  * A short, non-secret fingerprint of an encryption key for logs. A SHA-256
@@ -101,6 +102,11 @@ class TokenStorageService {
     // silently switched keys is visible in the logs.
     this.keySource = null;
     this.keyFilePath = getContentsPath('.encryption-key');
+    // Data directories that may hold data encrypted with the master key. A
+    // new key is never generated while one of them does (see
+    // `_assertNoSealedData`). The default location is always looked at; the
+    // start-up adds the configured one (`addSealedDataLocation`).
+    this.sealedDataLocations = new Set([getContentsPath(serverConfig.DATA_DIR || 'data')]);
     this.algorithm = 'aes-256-gcm';
     this.storageBasePath = getContentsPath('integrations');
 
@@ -146,7 +152,8 @@ class TokenStorageService {
 
     // Priority 2: Try to load persisted key
     try {
-      const persistedKey = await fs.readFile(this.keyFilePath, 'utf8');
+      // Trimmed first: a key file that ends in a newline is still the key.
+      const persistedKey = (await fs.readFile(this.keyFilePath, 'utf8')).trim();
       if (persistedKey && persistedKey.length === 64) {
         // Validate it's a valid hex string
         if (/^[0-9a-f]{64}$/i.test(persistedKey.trim())) {
@@ -174,6 +181,9 @@ class TokenStorageService {
       }
       // File doesn't exist or error reading, will generate new key
     }
+
+    // Never replace a key that stored data depends on.
+    await this._assertNoSealedData();
 
     // Priority 3: Generate new key and persist it
     this.encryptionKey = crypto.randomBytes(32).toString('hex');
@@ -239,6 +249,51 @@ class TokenStorageService {
         keyFingerprint: this.getKeyFingerprint()
       });
     }
+  }
+
+  /**
+   * Name a data directory that may hold data encrypted with the master key
+   * (the storage provider's base directory when it is not `contents/data`).
+   *
+   * @param {string} dataDir - Absolute data directory.
+   * @returns {void}
+   */
+  addSealedDataLocation(dataDir) {
+    if (typeof dataDir === 'string' && dataDir.length > 0) {
+      this.sealedDataLocations.add(path.resolve(dataDir));
+    }
+  }
+
+  /**
+   * Refuse to generate a new master key while stored data is encrypted with
+   * one. Called when no key came from the environment and the key file is
+   * missing, unreadable or malformed.
+   *
+   * With encryption at rest the master key protects chats, files and run
+   * history, not only saved credentials. A missing key file then usually
+   * means the key volume is not mounted or the file was not restored; a new
+   * key would let the server start on data it cannot read and write new data
+   * under a key nobody has backed up.
+   *
+   * @returns {Promise<void>}
+   * @throws {Error} Code `MASTER_KEY_REQUIRED`. The start-up ends the process.
+   * @private
+   */
+  async _assertNoSealedData() {
+    const { findSealedData } = await import('../storage/atRest/keyGuard.js');
+    const found = await findSealedData(this.sealedDataLocations);
+    if (!found) return;
+    const error = new Error(
+      `The master encryption key is missing or unreadable, and ${found.dataDir} holds data that ` +
+        `was encrypted with it${found.keyId ? ` (key id ${found.keyId})` : ''}. No new key is ` +
+        `generated. Restore ${this.keyFilePath} from a backup, or set TOKEN_ENCRYPTION_KEY to ` +
+        'the key the data was written with. Without that key the encrypted data cannot be read.'
+    );
+    error.code = 'MASTER_KEY_REQUIRED';
+    error.keyId = found.keyId;
+    error.dataDir = found.dataDir;
+    logger.error(error.message, { component: 'TokenStorage', code: error.code });
+    throw error;
   }
 
   /**

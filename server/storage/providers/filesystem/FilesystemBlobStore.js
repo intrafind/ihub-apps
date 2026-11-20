@@ -55,6 +55,8 @@ import {
   assertValidBlobKey,
   assertValidNamespace
 } from '../../keys.js';
+import { INTERNAL_BLOB_NAMESPACE } from '../../namespaces.js';
+import { isValidId } from '../../../utils/pathSecurity.js';
 import { containedPath } from './paths.js';
 import { PREFIXES_DIR, PrefixIndex } from './prefixIndex.js';
 
@@ -89,6 +91,38 @@ export class FilesystemBlobStore extends BlobStore {
     super();
     this.baseDir = baseDir;
     this._prefixIndex = new PrefixIndex(keyPrefixSegments);
+    /**
+     * Set by the one-time conversion while it replaces plaintext blobs with
+     * their encrypted form: an overwrite then keeps the modification time of
+     * the blob it replaces, because orphan sweeps judge a blob by its age.
+     * @type {boolean}
+     */
+    this.keepModificationTime = false;
+  }
+
+  /**
+   * The namespaces that have a directory on disk, for the one-time
+   * conversion: a namespace of a removed feature is found here although no
+   * declaration names it any more. The internal namespace is left out.
+   *
+   * @returns {Promise<string[]>} Sorted namespace names.
+   */
+  async namespaces() {
+    let entries;
+    try {
+      entries = await fs.readdir(containedPath(this.baseDir, BLOB_DIR), { withFileTypes: true });
+    } catch (error) {
+      if (error.code === 'ENOENT') return [];
+      throw new StorageError('Failed to list the blob namespaces', {
+        code: 'IO_ERROR',
+        cause: error
+      });
+    }
+    return entries
+      .filter(entry => entry.isDirectory() && !entry.name.startsWith('.'))
+      .map(entry => entry.name)
+      .filter(name => name !== INTERNAL_BLOB_NAMESPACE && isValidId(name))
+      .sort();
   }
 
   /**
@@ -130,7 +164,9 @@ export class FilesystemBlobStore extends BlobStore {
     // Atomic (temp file + rename), so a reader never sees half a payload and
     // a crash mid-write leaves the previous bytes rather than a truncated
     // file. `fs.writeFile` ignores the encoding argument for a Buffer.
+    const previous = this.keepModificationTime ? await fs.stat(file).catch(() => null) : null;
     await atomicWriteFile(file, buffer, 'binary');
+    if (previous) await fs.utimes(file, previous.atime, previous.mtime);
     return {
       key,
       bytes: buffer.length,

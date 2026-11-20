@@ -24,9 +24,17 @@
  * addresses, OIDC subjects) that are not path-safe; the raw ownerId stays
  * readable inside every envelope.
  *
- * `etag` and `size` are derived on read from the canonical serialization of
- * `data` and never stored, so they can never drift away from the bytes they
- * describe.
+ * `etag` and `size` are minted by `put` over the canonical serialization of
+ * `data` and stored before it, so a metadata read never parses the body.
+ *
+ * Encryption at rest (#2316). With a sealing mode (see `./atRestContext.js`)
+ * a document is stored as envelope version 3: the same file, the same head,
+ * but `data` is the encrypted body and the etag is sealed in `tag`
+ * (`crypto/documentSeal.js`). Callers see no difference: the etag a read
+ * reports is the one `put` returned, in every mode. A stored document is
+ * recognised as sealed by `v: 3` alone, never by trying to decrypt it; a
+ * version 2 envelope is plaintext, which is read in the modes `off` and
+ * `converting` and is an error (`PLAINTEXT_DOCUMENT`) in the mode `enforced`.
  *
  * @module storage/providers/filesystem/FilesystemDocumentStore
  */
@@ -42,9 +50,18 @@ import {
   CorruptDocumentError,
   EtagMismatchError,
   InvalidKeyError,
+  PlaintextDocumentError,
   StorageError
 } from '../../errors.js';
 import { assertValidKey, assertValidNamespace } from '../../keys.js';
+import {
+  isSealedHead,
+  openDocument,
+  openDocumentEtag,
+  sealDocument
+} from '../../../crypto/documentSeal.js';
+import { RUNTIME_NAMESPACES } from '../../namespaces.js';
+import { AtRestContext } from './atRestContext.js';
 import { DOC_EXT, containedPath, ownerSegment } from './paths.js';
 import { PREFIXES_DIR, PrefixIndex } from './prefixIndex.js';
 
@@ -57,6 +74,21 @@ const COMPONENT = 'FilesystemDocumentStore';
  * the version-1 envelopes, which had neither).
  */
 const ENVELOPE_VERSION = 2;
+
+/**
+ * Envelope version of a sealed document: the head of version 2 without `etag`,
+ * plus the sealed members of `crypto/documentSeal.js`, `data` last.
+ */
+const SEALED_ENVELOPE_VERSION = 3;
+
+/** Plaintext documents reported once each while encryption is enforced. */
+const MAX_REPORTED_PLAINTEXT = 1000;
+
+/** Directories of the base directory that never hold documents. */
+const NON_DOCUMENT_DIRS = new Set(['logs', 'blobs', 'locks']);
+
+/** Namespaces this release declares; a legacy envelope is only trusted there. */
+const DECLARED_NAMESPACES = new Set([...Object.values(RUNTIME_NAMESPACES), '_health']);
 
 /** Bytes a metadata read takes from the start of an envelope at a time. */
 const HEAD_CHUNK = 4096;
@@ -372,8 +404,10 @@ export class FilesystemDocumentStore extends DocumentStore {
    *   store publishes `document.put` / `document.delete` on; omitted, the store stays silent
    * @param {Record<string, number>} [options.keyPrefixSegments] - Namespaces kept in the
    *   key-prefix index; defaults to `KEY_PREFIX_SEGMENTS`. `{}` switches it off (tests)
+   * @param {AtRestContext} [options.atRest] - Encryption mode and key access,
+   *   shared with the provider's append log; omitted, documents are plaintext
    */
-  constructor({ baseDir, notifier, keyPrefixSegments } = {}) {
+  constructor({ baseDir, notifier, keyPrefixSegments, atRest } = {}) {
     super();
     if (typeof baseDir !== 'string' || baseDir.length === 0) {
       throw new StorageError('FilesystemDocumentStore requires a baseDir', {
@@ -383,6 +417,9 @@ export class FilesystemDocumentStore extends DocumentStore {
     this._baseDir = path.resolve(baseDir);
     this._notifier = notifier || null;
     this._prefixIndex = new PrefixIndex(keyPrefixSegments);
+    this._atRest = atRest || new AtRestContext();
+    /** Keys of plaintext documents already reported in the mode `enforced`. */
+    this._reportedPlaintext = new Set();
   }
 
   /**
@@ -450,7 +487,20 @@ export class FilesystemDocumentStore extends DocumentStore {
         // rather than this, so it still refuses to write over one. The head
         // is all a write needs of the stored document (etag, owner, content
         // type, createdAt), so the previous body is never parsed.
-        const existing = await this._readEnvelopeHead(ns, key, { lenient: true });
+        //
+        // A sealed head is opened (its tag, 64 bytes) when the write depends
+        // on it: for a compare-and-set, and when the owner or the content
+        // type is carried over. Opening is what authenticates those two
+        // members, so an owner edited into the head on disk is never sealed
+        // into the next version. A create-only write, and an overwrite that
+        // names both, open nothing and need no key for the old document.
+        const inheritsHead =
+          !ownerRequested ||
+          !(typeof options.contentType === 'string' && options.contentType.length > 0);
+        const existing = await this._readEnvelopeHead(ns, key, {
+          lenient: true,
+          openEtag: expectedEtag !== null && (typeof expectedEtag === 'string' || inheritsHead)
+        });
 
         if (expectedEtag === null && existing) {
           throw new EtagMismatchError(`Document ${ns}/${key} already exists`);
@@ -484,6 +534,12 @@ export class FilesystemDocumentStore extends DocumentStore {
           ...documentDigest(body),
           data: body
         };
+        // What goes to disk: the envelope itself, or its sealed form. What is
+        // returned is built from `envelope` either way, so the caller gets the
+        // same document, etag included, in every mode.
+        const stored = this._atRest.writesSealed
+          ? await this._sealEnvelope(ns, key, envelope, json)
+          : envelope;
 
         // The namespace directory is created by the first write that finds it
         // missing (`writeInDirectory`), not by a `mkdir` on every put.
@@ -517,7 +573,7 @@ export class FilesystemDocumentStore extends DocumentStore {
           // then holds the winner's document, which belongs in the partition.
           await this._prefixIndex.writeMarker(nsDir, ns, key);
           try {
-            await writeInDirectory(nsDir, () => atomicCreateJSON(this._docPath(ns, key), envelope));
+            await writeInDirectory(nsDir, () => atomicCreateJSON(this._docPath(ns, key), stored));
           } catch (error) {
             if (markerCreated) await removeIfExists(markerPath);
             if (error?.code === 'EEXIST') {
@@ -555,7 +611,7 @@ export class FilesystemDocumentStore extends DocumentStore {
         // carry over (`keepMode: false` skips the stat and the chmod). Both
         // fsyncs stay.
         await writeInDirectory(nsDir, () =>
-          atomicWriteJSON(this._docPath(ns, key), envelope, { keepMode: false })
+          atomicWriteJSON(this._docPath(ns, key), stored, { keepMode: false })
         );
         // Retire the previous owner's marker only once the new envelope is on
         // disk, so the document is never missing from both indexes at once.
@@ -982,15 +1038,182 @@ export class FilesystemDocumentStore extends DocumentStore {
     if (!envelope || typeof envelope !== 'object' || Array.isArray(envelope)) {
       return this._corrupt(ns, key, lenient, null);
     }
+    // The version alone says whether a document is sealed. Nothing below
+    // tries to decrypt a plaintext envelope or to parse a sealed one.
+    if (envelope.v === SEALED_ENVELOPE_VERSION) return this._openSealed(ns, key, envelope, lenient);
+    if (this._atRest.rejectsPlaintext) return this._plaintext(ns, key, lenient);
     if (hasStoredDigest(envelope)) return envelope;
     if (isLegacyEnvelope(envelope, key)) {
       // Derived the way releases before V247 derived it on every read — the
       // same values — for this document only; the caller writes it back.
       const data = envelope.data === undefined ? null : envelope.data;
       Object.assign(envelope, documentDigest(data));
-      return markLegacy(envelope, envelope);
+      // While documents are being sealed the conversion rewrites it, sealed;
+      // writing the plaintext upgrade first would be a write for nothing.
+      return this._atRest.writesSealed ? envelope : markLegacy(envelope, envelope);
     }
     return this._corrupt(ns, key, lenient, null, 'malformed stored etag or size');
+  }
+
+  /**
+   * The address a sealed document is bound to: where the caller asked for it,
+   * and the owner and content type its head names. Those two come from the
+   * file and are authenticated by opening the document with them.
+   *
+   * @param {string} ns - Namespace.
+   * @param {string} key - Document key.
+   * @param {Object} head - Envelope or its head.
+   * @returns {import('../../../crypto/documentSeal.js').DocumentAddress}
+   * @private
+   */
+  _address(ns, key, head) {
+    return {
+      tenant: this._atRest.tenant,
+      ns,
+      key,
+      ownerId: storedOwnerId(head),
+      contentType:
+        typeof head.contentType === 'string' && head.contentType.length > 0
+          ? head.contentType
+          : DEFAULT_CONTENT_TYPE
+    };
+  }
+
+  /**
+   * Seal an envelope for the disk.
+   *
+   * @param {string} ns - Namespace.
+   * @param {string} key - Document key.
+   * @param {Object} envelope - The plaintext envelope (`etag`, `size`, `data`).
+   * @param {string} json - `envelope.data` as JSON text.
+   * @returns {Promise<Object>} Envelope version 3.
+   * @throws {KeyUnavailableError} When the data key cannot be wrapped. Nothing
+   *   is written then; there is no plaintext fallback.
+   * @private
+   */
+  async _sealEnvelope(ns, key, envelope, json) {
+    const keyProvider = await this._atRest.keyProvider();
+    let sealed;
+    try {
+      sealed = await sealDocument({
+        keyProvider,
+        address: this._address(ns, key, envelope),
+        json,
+        etag: envelope.etag
+      });
+    } catch (error) {
+      throw (
+        this._atRest.keyFailure(error, `document ${ns}/${key}`) ||
+        new StorageError(`Document ${ns}/${key} could not be sealed`, {
+          code: 'IO_ERROR',
+          cause: error
+        })
+      );
+    }
+    return {
+      v: SEALED_ENVELOPE_VERSION,
+      key,
+      ownerId: envelope.ownerId,
+      contentType: envelope.contentType,
+      createdAt: envelope.createdAt,
+      updatedAt: envelope.updatedAt,
+      size: envelope.size,
+      ...sealed
+    };
+  }
+
+  /**
+   * Whether the head of a version 3 envelope is one this store wrote.
+   *
+   * @param {Object} head - Envelope or its head.
+   * @returns {boolean}
+   * @private
+   */
+  _isSealedHead(head) {
+    return isSealedHead(head) && Number.isSafeInteger(head.size) && head.size >= 0;
+  }
+
+  /**
+   * Open a sealed envelope into the plaintext form the rest of the store
+   * works with.
+   *
+   * @param {string} ns - Namespace.
+   * @param {string} key - Document key.
+   * @param {Object} envelope - The stored envelope, version 3.
+   * @param {boolean} lenient - Answer null for a document that does not open.
+   * @returns {Promise<Object|null>}
+   * @throws {CorruptDocumentError} When it does not open (and not `lenient`).
+   * @throws {KeyUnavailableError} When the key is not here, `lenient` or not.
+   * @private
+   */
+  async _openSealed(ns, key, envelope, lenient) {
+    if (!this._isSealedHead(envelope)) {
+      return this._corrupt(ns, key, lenient, null, 'malformed sealed envelope');
+    }
+    const keyProvider = await this._atRest.keyProvider();
+    let opened;
+    let data;
+    try {
+      opened = await openDocument({
+        keyProvider,
+        address: this._address(ns, key, envelope),
+        envelope
+      });
+      data = JSON.parse(opened.json);
+    } catch (error) {
+      if (!(error instanceof SyntaxError)) {
+        const keyError = this._atRest.keyFailure(error, `document ${ns}/${key}`);
+        if (keyError) throw keyError;
+      }
+      return this._corrupt(
+        ns,
+        key,
+        lenient,
+        null,
+        `sealed document does not open (${error.code || 'not JSON'})`
+      );
+    }
+    return {
+      v: SEALED_ENVELOPE_VERSION,
+      key,
+      ownerId: envelope.ownerId,
+      contentType: envelope.contentType,
+      createdAt: envelope.createdAt,
+      updatedAt: envelope.updatedAt,
+      etag: opened.etag,
+      size: envelope.size,
+      data
+    };
+  }
+
+  /**
+   * Report a plaintext document found while encryption is enforced. Logged
+   * once per key: a listing that meets it on every page must not fill the log.
+   *
+   * @param {string} ns - Namespace.
+   * @param {string} key - Document key.
+   * @param {boolean} lenient - Whether to answer null instead of throwing.
+   * @returns {null} When `lenient`.
+   * @throws {PlaintextDocumentError} Otherwise.
+   * @private
+   */
+  _plaintext(ns, key, lenient) {
+    const id = `${ns}/${key}`;
+    if (!this._reportedPlaintext.has(id)) {
+      if (this._reportedPlaintext.size >= MAX_REPORTED_PLAINTEXT) this._reportedPlaintext.clear();
+      this._reportedPlaintext.add(id);
+      logger.error('A stored document is not encrypted although encryption at rest is enforced', {
+        component: COMPONENT,
+        code: 'PLAINTEXT_DOCUMENT',
+        ns,
+        key,
+        path: this._docPath(ns, key)
+      });
+    }
+    if (lenient) return null;
+    throw new PlaintextDocumentError(
+      `Document ${ns}/${key} is stored in plaintext although encryption at rest is enforced`
+    );
   }
 
   /**
@@ -1012,11 +1235,20 @@ export class FilesystemDocumentStore extends DocumentStore {
    * @param {boolean} [options.requireDigest=true] - False for a caller that
    *   only needs the owner (a delete), so an envelope without a stored etag
    *   can still be removed together with its index entry.
+   * @param {boolean} [options.openEtag=true] - False for a caller that does
+   *   not need the etag of a sealed document; its head is then returned as
+   *   stored, without `etag`, unauthenticated, and no key is needed.
    * @returns {Promise<Object|null>} The envelope without `data`, or null.
    * @throws {CorruptDocumentError} When the file is present but unreadable.
+   * @throws {KeyUnavailableError} When a sealed etag is needed and the key is
+   *   not here, `lenient` or not.
    * @private
    */
-  async _readEnvelopeHead(ns, key, { lenient = false, requireDigest = true } = {}) {
+  async _readEnvelopeHead(
+    ns,
+    key,
+    { lenient = false, requireDigest = true, openEtag = true } = {}
+  ) {
     let handle;
     try {
       handle = await fs.open(this._docPath(ns, key), 'r');
@@ -1043,6 +1275,38 @@ export class FilesystemDocumentStore extends DocumentStore {
       throw error;
     } finally {
       await handle.close();
+    }
+
+    if (head !== NOT_A_HEAD && head.v === SEALED_ENVELOPE_VERSION) {
+      if (!requireDigest) return head;
+      if (!this._isSealedHead(head)) {
+        return this._corrupt(ns, key, lenient, null, 'malformed sealed envelope');
+      }
+      if (!openEtag) return head;
+      const keyProvider = await this._atRest.keyProvider();
+      try {
+        const etag = await openDocumentEtag({
+          keyProvider,
+          address: this._address(ns, key, head),
+          head
+        });
+        return { ...head, etag };
+      } catch (error) {
+        const keyError = this._atRest.keyFailure(error, `document ${ns}/${key}`);
+        if (keyError) throw keyError;
+        return this._corrupt(
+          ns,
+          key,
+          lenient,
+          null,
+          `sealed document does not open (${error.code})`
+        );
+      }
+    }
+    // A plaintext head. A delete (`requireDigest: false`) still reads the
+    // owner from it; every other caller gets no plaintext once it is enforced.
+    if (head !== NOT_A_HEAD && requireDigest && this._atRest.rejectsPlaintext) {
+      return this._plaintext(ns, key, lenient);
     }
 
     const needsWhole =
@@ -1188,6 +1452,139 @@ export class FilesystemDocumentStore extends DocumentStore {
     throw new CorruptDocumentError(`Document ${ns}/${key} is present but unreadable`, {
       ...(cause ? { cause } : {})
     });
+  }
+
+  /**
+   * The namespaces that hold documents on disk, for the one-time conversion
+   * (`storage/atRest/convert.js`): every declared runtime namespace that has
+   * a directory, and every other directory that carries this store's
+   * bookkeeping (`.locks`, `.owners`, `.prefixes`), which is what a namespace
+   * of a removed feature still looks like.
+   *
+   * Found on disk and not taken from the declaration alone, so nothing a
+   * former release wrote stays plaintext. Not every directory either: the
+   * data directory also holds files of other subsystems (token files, usage
+   * counters), which are not documents and must never be rewritten.
+   *
+   * @returns {Promise<string[]>} Sorted namespace names.
+   */
+  async atRestNamespaces() {
+    let entries;
+    try {
+      entries = await fs.readdir(this._baseDir, { withFileTypes: true });
+    } catch (error) {
+      if (error.code === 'ENOENT') return [];
+      throw error;
+    }
+    const found = [];
+    for (const entry of entries) {
+      const name = entry.name;
+      if (!entry.isDirectory() || name.startsWith('.') || NON_DOCUMENT_DIRS.has(name)) continue;
+      if (!isValidId(name)) continue;
+      if (DECLARED_NAMESPACES.has(name)) {
+        found.push(name);
+        continue;
+      }
+      const inside = await this._readdirSafe(path.join(this._baseDir, name));
+      if ([OWNERS_DIR, LOCKS_DIR, PREFIXES_DIR].some(dir => inside.includes(dir))) found.push(name);
+    }
+    return found.sort(compareKeys);
+  }
+
+  /**
+   * Keys of every document file of a namespace, for the conversion.
+   *
+   * @param {string} ns - Namespace.
+   * @returns {Promise<string[]>} Sorted keys.
+   */
+  async atRestKeys(ns) {
+    assertValidNamespace(ns);
+    return (await this._namespaceKeys(ns)).sort(compareKeys);
+  }
+
+  /**
+   * How one stored document stands: sealed, plaintext, or not readable as a
+   * document at all. Reads the file and parses it; opens nothing.
+   *
+   * @param {string} ns - Namespace.
+   * @param {string} key - Document key.
+   * @returns {Promise<{state: 'sealed'|'plain'|'unreadable'|'missing', bytes: number,
+   *   envelope?: Object}>} `bytes` is the file size; `envelope` the parsed file
+   *   of a plaintext document.
+   */
+  async inspectAtRest(ns, key) {
+    assertValidNamespace(ns);
+    assertValidKey(key);
+    let raw;
+    try {
+      raw = await fs.readFile(this._docPath(ns, key), 'utf8');
+    } catch (error) {
+      if (error.code === 'ENOENT' || error.code === 'EISDIR') return { state: 'missing', bytes: 0 };
+      throw error;
+    }
+    const bytes = Buffer.byteLength(raw, 'utf8');
+    let envelope;
+    try {
+      envelope = JSON.parse(raw);
+    } catch {
+      return { state: 'unreadable', bytes };
+    }
+    if (!envelope || typeof envelope !== 'object' || Array.isArray(envelope)) {
+      return { state: 'unreadable', bytes };
+    }
+    if (envelope.v === SEALED_ENVELOPE_VERSION) {
+      const sealed = this._isSealedHead(envelope) && typeof envelope.data === 'string';
+      return { state: sealed ? 'sealed' : 'unreadable', bytes };
+    }
+    if (hasStoredDigest(envelope) && Object.hasOwn(envelope, 'data')) {
+      return { state: 'plain', bytes, envelope };
+    }
+    // A pre-V247 envelope has no marker of its own beyond `data`, so it is
+    // only taken for a document where this release expects documents.
+    if (DECLARED_NAMESPACES.has(ns) && isLegacyEnvelope(envelope, key)) {
+      const data = envelope.data === undefined ? null : envelope.data;
+      return { state: 'plain', bytes, envelope: { ...envelope, ...documentDigest(data), data } };
+    }
+    return { state: 'unreadable', bytes };
+  }
+
+  /**
+   * Seal one plaintext document in place, for the conversion. Not an edit:
+   * owner, content type, both timestamps and the etag are kept, the owner and
+   * prefix markers are not touched and no change event is published. Under
+   * the document's lock; the file is replaced in one rename, so a reader sees
+   * the plaintext or the sealed envelope, never a mix.
+   *
+   * @param {string} ns - Namespace.
+   * @param {string} key - Document key.
+   * @returns {Promise<'sealed'|'already'|'unreadable'|'missing'>} `already`
+   *   when it was sealed before; `unreadable` when the file is not a document
+   *   (left as it is).
+   * @throws {KeyUnavailableError} When the data key cannot be wrapped.
+   */
+  async sealAtRest(ns, key) {
+    return withFileLock(
+      this._lockPath(ns, key),
+      async () => {
+        const found = await this.inspectAtRest(ns, key);
+        if (found.state === 'sealed') return 'already';
+        if (found.state !== 'plain') return found.state;
+        const { envelope } = found;
+        const plain = {
+          key,
+          ownerId: storedOwnerId(envelope),
+          contentType: this._address(ns, key, envelope).contentType,
+          createdAt: envelope.createdAt,
+          updatedAt: envelope.updatedAt,
+          etag: envelope.etag,
+          size: envelope.size
+        };
+        const stored = await this._sealEnvelope(ns, key, plain, JSON.stringify(envelope.data));
+        await atomicWriteJSON(this._docPath(ns, key), stored, { keepMode: false });
+        return 'sealed';
+      },
+      { component: COMPONENT }
+    );
   }
 
   /** Project a stored envelope into the public Document shape. @private */

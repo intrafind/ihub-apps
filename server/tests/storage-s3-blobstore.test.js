@@ -676,7 +676,7 @@ describe('S3 blob backend: configuration', () => {
       secretAccessKey: 'secret',
       forcePathStyle: true,
       allowInsecureHttp: false,
-      maxObjectBytes: 64 * 1024 * 1024,
+      maxObjectBytes: 128 * 1024 * 1024,
       connectTimeoutMs: 5000,
       requestTimeoutMs: 60000,
       maxAttempts: 3

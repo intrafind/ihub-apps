@@ -102,8 +102,14 @@ describe('resolveStorageConfig', () => {
   });
 
   it('falls back to filesystem when nothing names a provider', () => {
-    assert.deepEqual(resolveStorageConfig({}, {}), { provider: 'filesystem', config: {} });
-    assert.deepEqual(resolveStorageConfig(undefined, {}), { provider: 'filesystem', config: {} });
+    // The encryption switch is off unless the file says `enabled: true`.
+    const fallback = { provider: 'filesystem', config: {}, encryption: { enabled: false } };
+    assert.deepEqual(resolveStorageConfig({}, {}), fallback);
+    assert.deepEqual(resolveStorageConfig(undefined, {}), fallback);
+    assert.equal(
+      resolveStorageConfig({ storage: { encryption: { enabled: true } } }, {}).encryption.enabled,
+      true
+    );
     assert.equal(resolveStorageConfig({ storage: {} }, {}).provider, 'filesystem');
   });
 
@@ -265,7 +271,10 @@ describe('the storage singleton', () => {
       env: {}
     });
     assert.ok(provider instanceof StubProvider);
-    assert.deepEqual(provider.config, { marker: 'configured' });
+    // The provider's own block, plus how its documents and logs are encrypted.
+    const { encryption, ...own } = provider.config;
+    assert.deepEqual(own, { marker: 'configured' });
+    assert.equal(encryption.mode, 'off');
     assert.equal(provider.initializeCount, 1);
     assert.equal(getStorageProvider(), provider);
 

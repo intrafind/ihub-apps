@@ -207,6 +207,15 @@ function AdminBackupPage() {
                         "The export is not encrypted. It contains the encryption key for stored secrets, the JWT signing keys and the users' password hashes. Anyone who has the file can decrypt every stored secret and create valid sign-in tokens. Keep it where only administrators can read it, and delete copies you no longer need."
                       )}
                     </p>
+                    <p
+                      className="text-sm text-amber-900 dark:text-amber-200 mt-2"
+                      data-testid="backup-blob-storage-notice"
+                    >
+                      {t(
+                        'admin.backup.sensitivity.blobStorage',
+                        'If blob storage is an S3 bucket, uploaded files are stored in that bucket and are not part of this export. The export contains the key that decrypts them. Back up the bucket separately and keep this export safe.'
+                      )}
+                    </p>
                   </div>
                 </div>
               </div>

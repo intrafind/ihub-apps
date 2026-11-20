@@ -155,6 +155,13 @@ export async function composeS3Provider({
     baseDir: dir,
     flushIntervalMs: 25,
     fenceSweepIntervalMs: 0,
+    // The switch as the registry hands it to the base provider
+    // (`providerConfigWithEncryption`): documents and append logs follow it,
+    // and `describeEncryption()` says what the S3 backend below does.
+    encryption: {
+      mode: encryption?.enabled === false ? 'off' : 'auto',
+      loadKeys: async () => keys
+    },
     ...filesystem
   });
   const backend = createS3BlobBackend(s3ConfigFor(s3, config), {

@@ -115,11 +115,16 @@ export function encrypt(
   const salt = crypto.randomBytes(SALT_BYTES);
   const noncePrefix = crypto.randomBytes(NONCE_PREFIX_BYTES);
   const key = deriveKey(dataKey, salt, associatedData);
-  const header = Buffer.concat([Buffer.from([HEADER_BYTES]), salt, noncePrefix]);
 
   const firstPlain = segmentBytes - HEADER_BYTES - TAG_BYTES;
   const otherPlain = segmentBytes - TAG_BYTES;
-  const chunks = [header];
+  // One buffer of the final length, filled segment by segment: the ciphertext
+  // is held once, not once as pieces and once joined.
+  const output = Buffer.allocUnsafe(ciphertextLength(input.length, segmentBytes));
+  output[0] = HEADER_BYTES;
+  salt.copy(output, 1);
+  noncePrefix.copy(output, 1 + SALT_BYTES);
+  let written = HEADER_BYTES;
   let offset = 0;
   let index = 0;
   // An empty plaintext is one empty last segment, as Tink writes it.
@@ -132,11 +137,13 @@ export function encrypt(
     const cipher = crypto.createCipheriv('aes-256-gcm', key, nonceOf(noncePrefix, index, last), {
       authTagLength: TAG_BYTES
     });
-    chunks.push(cipher.update(piece), cipher.final(), cipher.getAuthTag());
+    for (const part of [cipher.update(piece), cipher.final(), cipher.getAuthTag()]) {
+      written += part.copy(output, written);
+    }
     index += 1;
     if (index > 0xffffffff) throw new StreamingAeadError('Too many segments');
   } while (offset < input.length);
-  return Buffer.concat(chunks);
+  return output;
 }
 
 /**
@@ -164,7 +171,14 @@ export function decrypt(
   const noncePrefix = ciphertext.subarray(1 + SALT_BYTES, HEADER_BYTES);
   const key = deriveKey(dataKey, salt, associatedData);
 
-  const chunks = [];
+  // One buffer for the plaintext, filled segment by segment. Every segment
+  // carries one tag, so this is the plaintext length of a well-formed stream
+  // and at least that of any stream the loop below accepts.
+  const segments = Math.ceil(ciphertext.length / segmentBytes);
+  const output = Buffer.allocUnsafe(
+    Math.max(0, ciphertext.length - HEADER_BYTES - segments * TAG_BYTES)
+  );
+  let written = 0;
   let offset = HEADER_BYTES;
   let index = 0;
   const firstCipher = segmentBytes - HEADER_BYTES;
@@ -183,16 +197,21 @@ export function decrypt(
       { authTagLength: TAG_BYTES }
     );
     decipher.setAuthTag(tag);
+    let plain;
     try {
-      chunks.push(decipher.update(body), decipher.final());
+      // GCM is a stream mode: `update` returns every byte, `final` only checks the tag.
+      plain = decipher.update(body);
+      decipher.final();
     } catch {
       throw new StreamingAeadError('Ciphertext does not verify');
     }
+    // Nothing of a segment is kept before its tag was checked.
+    written += plain.copy(output, written);
     offset = end;
     index += 1;
     if (last) break;
   }
-  return Buffer.concat(chunks);
+  return output.subarray(0, written);
 }
 
 /**

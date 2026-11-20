@@ -38,7 +38,12 @@ import config from '../config.js';
 import { describeWorkerSizing } from '../utils/workerSizing.js';
 import { registerAllRoutes } from './routes.js';
 import { shutdown } from './shutdown.js';
-import { prepareContents, bootstrapStorageOrExit, ensureEncryptionKey } from './bootstrap.js';
+import {
+  prepareContents,
+  bootstrapStorageOrExit,
+  ensureEncryptionKey,
+  prepareStorageEncryptionOrExit
+} from './bootstrap.js';
 
 // Enable port reuse to avoid EADDRINUSE errors on quick restarts.
 // This allows the server to use a port that is in TIME_WAIT state (which can
@@ -78,6 +83,9 @@ async function initFoundations() {
   // The master key first: an encrypting blob backend checks it against the
   // bucket while storage starts, and never falls back to local disk.
   await ensureEncryptionKey();
+  // The single process converts existing data to its encrypted form itself;
+  // a cluster worker never does, its primary did before forking.
+  if (!cluster.isWorker) await prepareStorageEncryptionOrExit(platformConfig);
   await bootstrapStorageOrExit(platformConfig);
 
   // Initialize OpenTelemetry SDK. We do this in its own try/catch because a

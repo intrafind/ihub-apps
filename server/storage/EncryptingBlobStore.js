@@ -93,8 +93,11 @@ import { INTERNAL_BLOB_NAMESPACE } from './namespaces.js';
 
 const COMPONENT = 'EncryptingBlobStore';
 
-/** Largest payload accepted when the caller configures none: 64 MiB. */
-export const DEFAULT_MAX_BLOB_BYTES = 64 * 1024 * 1024;
+/**
+ * Largest payload accepted when the caller configures none: 128 MiB, the
+ * default of `storage.blobs.s3.maxObjectBytes`.
+ */
+export const DEFAULT_MAX_BLOB_BYTES = 128 * 1024 * 1024;
 
 /** Key of the key check object in {@link INTERNAL_BLOB_NAMESPACE}. */
 export const KEY_CHECK_KEY = 'keycheck';
@@ -629,10 +632,13 @@ export class EncryptingBlobStore extends BlobStore {
     } catch (error) {
       if (error instanceof KeyUnavailableError) {
         throw new KeyUnavailableError(
-          `The blob store was written with another master key: its key check object names key ` +
-            `${error.keyId ?? 'unknown'}, this installation uses key ${currentKeyId}. Restore that ` +
-            'key (TOKEN_ENCRYPTION_KEY, or TOKEN_ENCRYPTION_KEY_PREVIOUS after a key change), or ' +
-            'point storage.blobs at an empty bucket or prefix.',
+          'The master key of this installation does not match the stored blobs: the blob store ' +
+            `was written with another master key (key id ${error.keyId ?? 'unknown'}), the key ` +
+            `present here has key id ${currentKeyId ?? 'unknown'}. Restore the correct ` +
+            'contents/.encryption-key (or TOKEN_ENCRYPTION_KEY, if the key is set that way); ' +
+            'after a deliberate key change, set the old key as TOKEN_ENCRYPTION_KEY_PREVIOUS. ' +
+            'Only for a deliberate fresh start without the existing blobs: point storage.blobs ' +
+            'at an empty bucket or prefix.',
           { keyId: error.keyId, keyProviderId: error.keyProviderId, cause: error }
         );
       }

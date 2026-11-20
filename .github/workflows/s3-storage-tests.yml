@@ -1,0 +1,149 @@
+# S3 Storage Tests
+#
+# Runs the S3 blob storage suites (server/tests/storage-s3-*.test.js) and the
+# S3 end-to-end script against a real S3-compatible server: versitygw, started
+# from docker/docker-compose.s3.yml, the same file developers use
+# (`npm run s3:up`).
+#
+# The unit job (unit-tests.yml) already runs these suites on the in-repo fake
+# S3 server. The fake does not verify request signatures and lists and pages
+# the way we believe S3 does, so a green unit job is not proof against S3.
+# This job is that proof.
+#
+# No silent skips:
+# - IHUB_TEST_S3_REQUIRED=1 makes a missing or unreachable server a FAILURE in
+#   server/tests/support/s3TestBackend.js.
+# - After the run the job reads the TAP report and fails when anything was
+#   skipped, except the conformance sections the S3 runners do not select on
+#   purpose (documents, locks, …: they stay on the filesystem provider).
+#
+# The `paths` filter means the job does not run for unrelated pull requests.
+# If it is made a required status check, GitHub reports a filtered-out job as
+# passing; that is acceptable only because the unit job always runs the same
+# suites on the fake. Do not remove them from the unit job.
+
+name: S3 Storage Tests
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'server/storage/**'
+      - 'server/crypto/**'
+      - 'server/startup/**'
+      - 'server/utils/httpConfig.js'
+      - 'server/tests/storage-s3-*.test.js'
+      - 'server/tests/support/**'
+      - 'scripts/s3-e2e.js'
+      - 'docker/docker-compose.s3.yml'
+      - '.github/workflows/s3-storage-tests.yml'
+      - 'server/package.json'
+      - 'server/package-lock.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: s3-storage-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  s3-storage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      CI: 'true'
+      NODE_ENV: test
+      # Values for the throwaway container of this job only; not secrets.
+      IHUB_TEST_S3_ENDPOINT: http://127.0.0.1:7070
+      IHUB_TEST_S3_REGION: us-east-1
+      IHUB_TEST_S3_BUCKET: ihub-test
+      IHUB_TEST_S3_ACCESS_KEY: ihub-test-not-a-secret
+      IHUB_TEST_S3_SECRET_KEY: ihub-test-not-a-secret
+      IHUB_TEST_S3_REQUIRED: '1'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm run install:all
+
+      - name: Start the S3 server (versitygw)
+        run: npm run s3:up
+
+      - name: Wait for the S3 server to answer
+        run: |
+          for attempt in $(seq 1 30); do
+            # Any HTTP answer will do (an unsigned request is refused with 403).
+            if curl -s -o /dev/null --max-time 2 "$IHUB_TEST_S3_ENDPOINT/"; then
+              echo "S3 server answers after $attempt attempt(s)"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::The S3 server did not answer on $IHUB_TEST_S3_ENDPOINT"
+          exit 1
+
+      - name: Run the S3 storage suites
+        run: |
+          node --test \
+            --test-reporter=spec --test-reporter-destination=stdout \
+            --test-reporter=tap --test-reporter-destination=s3-tests.tap \
+            server/tests/storage-s3-*.test.js
+
+      - name: Fail when a test was skipped
+        if: always()
+        run: |
+          if [ ! -s s3-tests.tap ]; then
+            echo "::error::No test report was written: the suites did not run"
+            exit 1
+          fi
+          # Suites the conformance runner leaves out on purpose are reported as
+          # skipped with exactly these reasons; everything else is a finding.
+          unexpected=$(grep -E '# SKIP' s3-tests.tap \
+            | grep -vE '# SKIP (not selected|runner declares no raw namespaces)[[:space:]]*$' || true)
+          skipped=$(grep -E '^# skipped [0-9]+' s3-tests.tap | awk '{ sum += $3 } END { print sum + 0 }')
+          external=$(grep -E '^ok [0-9]+ - .*\[external S3\]' s3-tests.tap | grep -vc '# SKIP' || true)
+          echo "skipped tests: $skipped, external suites passed: $external"
+          if [ -n "$unexpected" ] || [ "$skipped" -gt 0 ]; then
+            echo "::error::Tests were skipped. A skipped S3 test is a failure in this job."
+            echo "$unexpected"
+            exit 1
+          fi
+          if [ "$external" -eq 0 ]; then
+            echo "::error::No suite ran against the external S3 server"
+            exit 1
+          fi
+
+      - name: Run the S3 end-to-end script
+        # Also when a suite above failed: its result is independent evidence.
+        if: ${{ !cancelled() }}
+        run: node scripts/s3-e2e.js
+
+      - name: Show the S3 server log
+        if: failure()
+        run: docker compose -f docker/docker-compose.s3.yml logs --no-color --tail 200
+
+      - name: Upload the test report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: s3-test-report
+          path: s3-tests.tap
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Stop the S3 server
+        if: always()
+        run: npm run s3:down

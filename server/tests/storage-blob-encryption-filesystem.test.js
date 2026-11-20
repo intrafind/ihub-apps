@@ -6,8 +6,9 @@
  * registry composes it from `platform.json`:
  * - off (the default of an existing installation): blob files are the bytes,
  *   exactly as before;
- * - on: blob files are envelopes, and blobs from before are still read and
- *   can be encrypted in place;
+ * - on: blob files are envelopes. Blobs from before are still read by the
+ *   process that prepares the data directory (the start-up step), which
+ *   encrypts them in place; every other start is refused until that is done;
  * - off again: nothing is lost.
  */
 import fs from 'node:fs/promises';
@@ -21,6 +22,14 @@ const scratch = fsSync.mkdtempSync(path.join(os.tmpdir(), 'ihub-fs-encryption-')
 process.env.CONTENTS_DIR = path.join(scratch, 'contents');
 const storage = await import('../storage/index.js');
 const { default: tokenStorageService } = await import('../services/TokenStorageService.js');
+const { beginAtRestPreparation, endAtRestPreparation } =
+  await import('../storage/atRest/policy.js');
+const { prepareStorageEncryption } = await import('../storage/atRest/prepare.js');
+const { readAtRestState } = await import('../storage/atRest/state.js');
+
+const platformConfig = encryption => ({
+  storage: { provider: 'filesystem', filesystem: { baseDir, fenceSweepIntervalMs: 0 }, encryption }
+});
 
 const baseDir = path.join(scratch, 'data');
 const blobFile = (ns, key) => path.join(baseDir, 'blobs', ns, key);
@@ -39,6 +48,7 @@ const start = encryption =>
   });
 
 afterEach(async () => {
+  endAtRestPreparation();
   await storage.shutdownStorage();
 });
 
@@ -66,7 +76,13 @@ describe('filesystem blob store and storage.encryption.enabled', () => {
     assert.equal(typeof provider.baseDir, 'string');
   });
 
-  it('on: new blobs are envelopes on disk, blobs from before are still read', async () => {
+  it('on with blobs from before: a start that did not convert them is refused', async () => {
+    await assert.rejects(start({ enabled: true }), { code: 'ENCRYPTION_NOT_CONVERTED' });
+  });
+
+  it('on, while the data directory is prepared: new blobs are envelopes, blobs from before are still read', async () => {
+    // What a configuration migration sees: it runs before the conversion.
+    beginAtRestPreparation();
     const provider = await start({ enabled: true });
     assert.equal(provider.blobBackendHandle.describe().encryption.scope, 'all');
     assert.equal(fsSync.existsSync(blobFile('_ihub', 'keycheck')), true);
@@ -88,6 +104,7 @@ describe('filesystem blob store and storage.encryption.enabled', () => {
   });
 
   it('encrypts the blobs from before in place, once', async () => {
+    beginAtRestPreparation();
     const provider = await start({ enabled: true });
     const first = await storage.encryptExistingBlobs(provider.blobs);
     assert.deepEqual([first.encrypted, first.alreadyEncrypted, first.failed], [2, 1, 0]);
@@ -105,6 +122,24 @@ describe('filesystem blob store and storage.encryption.enabled', () => {
     assert.deepEqual([second.encrypted, second.alreadyEncrypted], [0, 3]);
   });
 
+  it('the start-up step records the conversion; from then on a plaintext blob is refused', async () => {
+    const result = await prepareStorageEncryption({
+      platformConfig: platformConfig({ enabled: true }),
+      env: {}
+    });
+    assert.equal(result.action, 'converted');
+    assert.deepEqual((await readAtRestState(baseDir)).facets, { blobs: 1, documents: 1, logs: 1 });
+
+    const provider = await start({ enabled: true });
+    assert.equal(provider.blobs.acceptsPlaintext, false);
+    assert.ok((await provider.blobs.get('chat-files', 'chat__a__old.txt')).data.equals(LONG));
+    await fs.writeFile(blobFile('chat-files', 'chat__a__planted.txt'), LONG);
+    await assert.rejects(provider.blobs.get('chat-files', 'chat__a__planted.txt'), {
+      code: 'CORRUPT_BLOB'
+    });
+    await fs.rm(blobFile('chat-files', 'chat__a__planted.txt'));
+  });
+
   it('off again: encrypted blobs are still decrypted, new ones are plaintext', async () => {
     const provider = await start({ enabled: false });
     assert.ok((await provider.blobs.get('chat-files', 'chat__a__new.txt')).data.equals(LONG));
@@ -120,10 +155,11 @@ describe('filesystem blob store and storage.encryption.enabled', () => {
     const original = tokenStorageService.encryptionKey;
     tokenStorageService.encryptionKey = 'c3'.repeat(32);
     try {
-      await assert.rejects(start({ enabled: true }), {
-        code: 'STORAGE_UNAVAILABLE',
-        probeCode: 'BLOB_KEY_MISMATCH'
-      });
+      // The start-up step checks the key before it converts anything.
+      await assert.rejects(
+        prepareStorageEncryption({ platformConfig: platformConfig({ enabled: true }), env: {} }),
+        { code: 'KEY_UNAVAILABLE' }
+      );
     } finally {
       tokenStorageService.encryptionKey = original;
     }

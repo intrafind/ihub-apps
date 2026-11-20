@@ -31,6 +31,7 @@ import { StorageProvider } from './StorageProvider.js';
 import { StorageError } from './errors.js';
 import { BLOB_OPS, timeFacetMethods } from './facetTiming.js';
 import { findLocalBlobLeftovers } from './localBlobLeftovers.js';
+import { describeEncryption } from './atRest/policy.js';
 
 const COMPONENT = 'BlobStorage';
 
@@ -116,6 +117,32 @@ export class ComposedStorageProvider extends StorageProvider {
    */
   get localBlobLeftovers() {
     return this._localLeftovers.map(entry => ({ ...entry }));
+  }
+
+  /**
+   * Encryption at rest of the base provider's documents and append logs:
+   * `{ enabled, mode, state }`, or null for a provider that has none.
+   *
+   * @returns {{enabled: boolean, mode: string, state: Object|null}|null}
+   */
+  get atRest() {
+    return this._base.atRest || null;
+  }
+
+  /**
+   * What an administrator is told about encryption at rest: the switch, what
+   * it covers (`none`, `blobs`, `storage`) and the state of the one-time
+   * conversion. For a base provider that does not encrypt documents and logs
+   * the scope is `blobs` when the blob backend encrypts.
+   *
+   * @returns {{enabled: boolean, scope: 'none'|'blobs'|'storage',
+   *   conversion: {state: string, facets: Record<string, number>},
+   *   sealedDataExists: boolean}}
+   */
+  describeEncryption() {
+    if (typeof this._base.describeEncryption === 'function') return this._base.describeEncryption();
+    const enabled = this._blobs.encryptsWrites === true;
+    return describeEncryption({ enabled, mode: null, state: null });
   }
 
   get documents() {

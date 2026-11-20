@@ -2776,6 +2776,80 @@
       "resource": "telemetry settings"
     },
     "systemResources": {
+      "blobStorage": {
+        "title": "Blob storage",
+        "description": "Where uploaded files, extracted text and evidence content are kept.",
+        "statusLabel": "Status",
+        "backendLabel": "Backend",
+        "backend": {
+          "filesystem": "Local disk",
+          "s3": "S3-compatible object storage"
+        },
+        "status": {
+          "ok": "Connected",
+          "available": "Available",
+          "degraded": "Slow or partly failing",
+          "unknown": "Not checked yet",
+          "unreachable": "Not reachable",
+          "refused": "Access refused",
+          "failed": "Check failed"
+        },
+        "checked": "Checked {{when}}, {{ms}} ms",
+        "endpoint": "Endpoint",
+        "bucket": "Bucket",
+        "region": "Region",
+        "prefix": "Prefix",
+        "path": "Path",
+        "encryptionLabel": "Encryption",
+        "encryption": {
+          "storage": "Everything iHub stores is encrypted before it is written: files, chats and logs.",
+          "blobs": "Every file is encrypted by iHub before it is stored.",
+          "none": "Encryption is switched off. Files are stored as they are: whoever can read the storage can read them.",
+          "converting": "Data stored before encryption was switched on is still being encrypted."
+        },
+        "encryptionDetail": "Format {{format}}, key from {{keySource}}",
+        "configuredIn": "Configured in",
+        "source": {
+          "environment": "Environment variable IHUB_STORAGE_BLOBS_PROVIDER",
+          "default": "Default (not set in platform.json)"
+        },
+        "otherData": "Other data",
+        "otherDataValue": "Chats, logs and locks stay on: {{provider}}",
+        "readOnly": "These settings are read from platform.json. Changing them needs a restart.",
+        "restartRequired": "The saved blob storage settings differ from the ones the server is running with. Restart the server to apply them.",
+        "restartDetail": "Saved: {{configured}}. Running: {{running}}.",
+        "leftovers": "{{count}} files from before the switch are still on local disk. Users cannot open them until they are copied to the bucket.",
+        "leftoversAtLeast": "At least {{count}} files from before the switch are still on local disk. Users cannot open them until they are copied to the bucket.",
+        "leftoversHint": "Copy them while the server is stopped:",
+        "checkAgain": "Check again",
+        "checking": "Checking…",
+        "testPassed": "Check passed: a test object was written, read back and removed in {{ms}} ms.",
+        "testFailed": "Check failed: {{detail}}",
+        "testNotRun": "The check could not run: {{detail}}",
+        "details": "Details",
+        "loadFailed": "The blob storage status could not be loaded.",
+        "retry": "Try again",
+        "unreachableAlert": "Blob storage is not working. Uploads and attachments do not work right now.",
+        "hints": {
+          "S3_CONFIG_INCOMPLETE": "Correct the setting under storage.blobs.s3 in platform.json, or set the environment variable it refers to.",
+          "S3_ENDPOINT_UNREACHABLE": "Check the endpoint URL, the network path and the proxy settings.",
+          "S3_TLS_UNTRUSTED": "Add the issuing CA to the server's trust store (NODE_EXTRA_CA_CERTS), or add the host under Admin → Security → SSL → Domain Whitelist.",
+          "S3_CREDENTIALS_REJECTED": "Check the access key ID and the secret key. A secret with a trailing space or line break also causes this.",
+          "S3_CLOCK_SKEW": "Synchronize the time on the iHub server.",
+          "S3_BUCKET_NOT_FOUND": "iHub does not create buckets. Create the bucket, or correct storage.blobs.s3.bucket.",
+          "S3_ACCESS_DENIED": "The access key needs permission to list, read, write and delete objects in this bucket.",
+          "S3_REGION_MISMATCH": "Set storage.blobs.s3.region to the bucket's region.",
+          "S3_SERVICE_ERROR": "The S3 service answered with an error or asked to slow down. Check the S3 service and try again.",
+          "S3_PROBE_MISMATCH": "The S3 service or something between it and iHub changes the data. Blob storage cannot be used like this.",
+          "S3_ERROR": "See the server log for the cause.",
+          "BLOB_KEY_MISSING": "Restore contents/.encryption-key from a backup or set TOKEN_ENCRYPTION_KEY. Without the key the stored files cannot be read.",
+          "BLOB_KEY_MISMATCH": "Restore the original key, set it as TOKEN_ENCRYPTION_KEY_PREVIOUS, or use an empty bucket or prefix for a new installation.",
+          "BLOB_KEY_CHECK_MISSING": "Use an empty bucket or prefix, or set IHUB_S3_ADOPT_BUCKET=true for one start to adopt the objects as they are.",
+          "BLOB_CORRUPT": "Use one bucket or prefix per installation. If the object was changed, restore it from a backup of the bucket.",
+          "BLOB_PROVIDER_UNKNOWN": "Set storage.blobs.provider to \"default\" or \"s3\".",
+          "BLOB_STORAGE_ERROR": "See the server log for the cause."
+        }
+      },
       "title": "System resources",
       "description": "CPU, memory and disk space as reported by each server process on this host.",
       "updatedAt": "Updated {{time}}",
@@ -7091,7 +7165,8 @@
     "backup": {
       "sensitivity": {
         "title": "Store the export like a key",
-        "body": "The export is not encrypted. It contains the encryption key for stored secrets, the JWT signing keys and the users' password hashes. Anyone who has the file can decrypt every stored secret and create valid sign-in tokens. Keep it where only administrators can read it, and delete copies you no longer need."
+        "body": "The export is not encrypted. It contains the encryption key for stored secrets, the JWT signing keys and the users' password hashes. Anyone who has the file can decrypt every stored secret and create valid sign-in tokens. Keep it where only administrators can read it, and delete copies you no longer need.",
+        "blobStorage": "If blob storage is an S3 bucket, uploaded files are stored in that bucket and are not part of this export. The export contains the key that decrypts them. Back up the bucket separately and keep this export safe."
       },
       "importConfirm": {
         "title": "Replace all contents with \"{{name}}\"?",

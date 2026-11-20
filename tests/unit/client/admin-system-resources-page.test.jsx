@@ -9,9 +9,13 @@ import '@testing-library/jest-dom';
 import { act, render, screen, within } from '@testing-library/react';
 
 const mockMakeAdminApiCall = jest.fn();
+const mockFetchStorageStatus = jest.fn();
 jest.mock('../../../client/src/api/adminApi', () => ({
   __esModule: true,
-  makeAdminApiCall: (...args) => mockMakeAdminApiCall(...args)
+  makeAdminApiCall: (...args) => mockMakeAdminApiCall(...args),
+  fetchStorageStatus: (...args) => mockFetchStorageStatus(...args),
+  testStorage: jest.fn(),
+  getAdminApiErrorMessage: err => err?.message || ''
 }));
 
 const t = (key, fallback, options) => {
@@ -106,8 +110,50 @@ function snapshot(overrides = {}) {
   };
 }
 
+/** A disk snapshot with nothing to warn about. */
+function healthyStorage() {
+  return {
+    status: 'ok',
+    thresholds: { warningPercent: 80, criticalPercent: 90 },
+    volumes: [
+      {
+        paths: [{ key: 'contents', path: '/srv/ihub/contents' }],
+        total: 50 * GiB,
+        used: 10 * GiB,
+        available: 40 * GiB,
+        usedPercent: 20,
+        status: 'ok'
+      }
+    ]
+  };
+}
+
+/** `GET /api/admin/storage` of an installation that keeps its blobs on local disk. */
+function blobStorageStatus(overrides = {}) {
+  return {
+    blobs: {
+      provider: 'filesystem',
+      status: 'ok',
+      latencyMs: 0,
+      checkedAt: '2026-09-30T10:00:00.000Z',
+      location: { path: 'contents/data/blobs' },
+      encryption: { scope: 'none' },
+      source: 'default',
+      steps: []
+    },
+    documents: { provider: 'filesystem' },
+    restartRequired: false,
+    configuredBlobProvider: 'filesystem',
+    localLeftovers: [],
+    encryption: { enabled: false, scope: 'none', conversion: { state: 'none' } },
+    ...overrides
+  };
+}
+
 beforeEach(() => {
   mockMakeAdminApiCall.mockReset();
+  mockFetchStorageStatus.mockReset();
+  mockFetchStorageStatus.mockResolvedValue(blobStorageStatus());
 });
 
 test('shows each volume with its free space, status and directories', async () => {
@@ -221,4 +267,52 @@ test('the auto-refresh never starts a second load while one is still running', a
   } finally {
     jest.useRealTimers();
   }
+});
+
+test('shows the blob storage card under disk space, without an alert while it works', async () => {
+  mockMakeAdminApiCall.mockResolvedValue({ data: snapshot({ storage: healthyStorage() }) });
+  render(<AdminSystemResourcesPage />);
+
+  const heading = await screen.findByRole('heading', { level: 2, name: 'Blob storage' });
+  const headings = screen.getAllByRole('heading', { level: 2 }).map(h => h.textContent);
+  expect(headings.indexOf('Blob storage')).toBe(headings.indexOf('Disk space') + 1);
+  const card = heading.closest('section');
+  expect(within(card).getByText('Local disk')).toBeInTheDocument();
+  expect(within(card).getByText('contents/data/blobs')).toBeInTheDocument();
+  expect(screen.queryByTestId('blob-storage-alert')).not.toBeInTheDocument();
+});
+
+test('raises a page alert when the blob storage check failed', async () => {
+  mockMakeAdminApiCall.mockResolvedValue({ data: snapshot({ storage: healthyStorage() }) });
+  mockFetchStorageStatus.mockResolvedValue(
+    blobStorageStatus({
+      blobs: {
+        provider: 's3',
+        status: 'error',
+        location: { endpointHost: 's3.example.internal', bucket: 'ihub-blobs' },
+        encryption: { scope: 'all' },
+        source: 'platform.json',
+        error: { code: 'S3_ENDPOINT_UNREACHABLE', detail: 'The endpoint cannot be reached' },
+        steps: []
+      }
+    })
+  );
+  render(<AdminSystemResourcesPage />);
+
+  const alert = await screen.findByTestId('blob-storage-alert');
+  expect(alert).toHaveAttribute('role', 'alert');
+  expect(alert).toHaveTextContent('Blob storage is not working');
+});
+
+test('keeps the rest of the page when the blob storage status cannot be loaded', async () => {
+  mockMakeAdminApiCall.mockResolvedValue({ data: snapshot() });
+  mockFetchStorageStatus.mockRejectedValue(new Error('Service unavailable'));
+  render(<AdminSystemResourcesPage />);
+
+  expect(await screen.findByText('Contents · Data')).toBeInTheDocument();
+  expect(
+    await screen.findByText('The blob storage status could not be loaded.')
+  ).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+  expect(screen.getByRole('table')).toBeInTheDocument();
 });

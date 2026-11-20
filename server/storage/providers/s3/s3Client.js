@@ -71,10 +71,15 @@ export async function createS3Client(config, { platformConfig = null } = {}) {
       httpAgent: agent,
       httpsAgent: agent,
       connectionTimeout: config.connectTimeoutMs,
+      // Until the response headers are there; the handler's timer ends then.
       requestTimeout: config.requestTimeoutMs,
       // Without this the handler only logs a warning when the time is up and
       // keeps waiting: a bucket that hangs would hang the request with it.
-      throwOnRequestTimeout: true
+      throwOnRequestTimeout: true,
+      // Idle time on the socket, which also covers the response body: a server
+      // that sends the headers and then nothing ends the read with an error.
+      // The blob store adds an overall deadline for a body that only trickles.
+      socketTimeout: config.requestTimeoutMs
     }
   });
   let destroyed = false;

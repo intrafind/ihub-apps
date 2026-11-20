@@ -87,6 +87,9 @@ export function createS3BlobBackend(rawConfig, context = {}) {
     locks,
     endpointHost: config.endpointHost,
     maxObjectBytes: maxStoredBytes(config.maxObjectBytes),
+    requestTimeoutMs: config.requestTimeoutMs,
+    connectTimeoutMs: config.connectTimeoutMs,
+    maxAttempts: config.maxAttempts,
     connect: async () => {
       keys = keys || (await loadKeys());
       await keys.ensureMasterKey();

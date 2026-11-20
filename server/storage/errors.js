@@ -38,6 +38,8 @@ export const STORAGE_CODE_STATUS = Object.freeze({
   UNKNOWN_PROVIDER: 500,
   UNKNOWN_NAMESPACE: 400,
   CORRUPT_DOCUMENT: 500,
+  PLAINTEXT_DOCUMENT: 500,
+  CORRUPT_LOG: 500,
   CORRUPT_BLOB: 500,
   KEY_UNAVAILABLE: 503,
   BLOB_TOO_LARGE: 413,
@@ -209,6 +211,47 @@ export class CorruptDocumentError extends StorageError {
   constructor(message, options = {}) {
     super(message, { ...options, code: 'CORRUPT_DOCUMENT' });
     this.name = 'CorruptDocumentError';
+  }
+}
+
+/**
+ * A stored document is plaintext while encryption at rest is enforced: the
+ * one-time conversion has completed, so nothing legitimate writes plaintext
+ * any more. Never returned and never repaired by a read; whoever can write
+ * the data directory could otherwise plant content.
+ *
+ * A subclass of {@link CorruptDocumentError}, so every caller that already
+ * treats a present-but-unreadable document correctly treats this one the same.
+ */
+export class PlaintextDocumentError extends CorruptDocumentError {
+  /**
+   * @param {string} message - Human-readable description.
+   * @param {Object} [options]
+   * @param {unknown} [options.cause] - Underlying error, kept for logging.
+   */
+  constructor(message, options = {}) {
+    super(message, options);
+    this.name = 'PlaintextDocumentError';
+    this.code = 'PLAINTEXT_DOCUMENT';
+  }
+}
+
+/**
+ * A record of an append-log stream exists but cannot be returned: a sealed
+ * record that does not open (changed bytes, moved to another stream or
+ * sequence number), one that names a key line the file does not hold, or a
+ * plaintext record while encryption at rest is enforced. Never skipped
+ * silently; an unparseable line (the torn tail of a crashed write) still is.
+ */
+export class CorruptLogError extends StorageError {
+  /**
+   * @param {string} message - Human-readable description; never record content.
+   * @param {Object} [options]
+   * @param {unknown} [options.cause] - Underlying error, kept for logging.
+   */
+  constructor(message, options = {}) {
+    super(message, { ...options, code: 'CORRUPT_LOG' });
+    this.name = 'CorruptLogError';
   }
 }
 

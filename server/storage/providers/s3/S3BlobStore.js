@@ -28,6 +28,16 @@
  *   lock manager of the provider this store is composed with, so the promise
  *   reaches as far as that provider's `locking` capability. Without a lock
  *   manager (a unit test, a tool) the exclusion is per process.
+ * - A `HeadObject` 404 has no body and so does not say whether the key or the
+ *   bucket is missing. `delete` asks `HeadBucket` before it answers "nothing
+ *   to delete": the status of that request is the one signal every
+ *   S3-compatible server gives; error names and headers of a HEAD differ.
+ * - Every call ends. The client's request timeout stops at the response
+ *   headers, so the store bounds the rest itself: each request (with its
+ *   retries) and each body read has a deadline derived from the configured
+ *   timeouts, after which the request is aborted and the call rejects with
+ *   `STORAGE_UNAVAILABLE`. The wait for the delete lock covers the longest a
+ *   delete in front of it may take.
  * - `list` pages with its own cursor and `StartAfter`, not with the backend's
  *   continuation token, which is opaque and differs per server.
  * - S3 lists in UTF-8 byte order, which equals the contract's code-unit order
@@ -50,7 +60,7 @@ import {
   encodeBlobCursor,
   toBlobBuffer
 } from '../../blobSupport.js';
-import { InvalidKeyError, StorageError } from '../../errors.js';
+import { InvalidKeyError, LockTimeoutError, StorageError } from '../../errors.js';
 import { assertValidBlobKey, assertValidNamespace, isReservedBlobKey } from '../../keys.js';
 import { isValidId } from '../../../utils/pathSecurity.js';
 import { describeS3Error, isNotFound, mapS3Error } from './s3Errors.js';
@@ -65,25 +75,110 @@ const PREFIX_PATTERN = /^[A-Za-z0-9._-]*$/;
 
 const CONTENT_TYPE = 'application/octet-stream';
 
+/** Longest pause the SDK's standard retry mode takes between two attempts. */
+const RETRY_DELAY_CAP_MS = 20_000;
+
+/** First pause of the SDK's retry backoff for a throttled request; it doubles per attempt. */
+const RETRY_DELAY_BASE_MS = 500;
+
+/** Added to every deadline, so the SDK's own timeout (with its better error) fires first. */
+const DEADLINE_SLACK_MS = 1000;
+
 /**
- * Read a response body into one Buffer, giving up at `limit` bytes.
+ * An error the error table reads as a timeout.
+ *
+ * @param {string} message
+ * @returns {Error} Named `TimeoutError`, code `ETIMEDOUT`.
+ */
+function timeoutError(message) {
+  return Object.assign(new Error(message), { name: 'TimeoutError', code: 'ETIMEDOUT' });
+}
+
+/**
+ * The longest one command may take with its retries: every attempt may use
+ * the connect and the request timeout, and the SDK pauses between attempts.
+ *
+ * @param {Object} timeouts
+ * @param {number} [timeouts.requestTimeoutMs]
+ * @param {number} [timeouts.connectTimeoutMs=0]
+ * @param {number} [timeouts.maxAttempts=1]
+ * @returns {number|null} Milliseconds, or null without a request timeout.
+ *
+ * @example
+ * sendBudgetMs({ requestTimeoutMs: 60000, connectTimeoutMs: 5000, maxAttempts: 3 }); // 197500
+ */
+export function sendBudgetMs({ requestTimeoutMs, connectTimeoutMs = 0, maxAttempts = 1 } = {}) {
+  if (!Number.isFinite(requestTimeoutMs) || requestTimeoutMs <= 0) return null;
+  const attempts = Number.isInteger(maxAttempts) && maxAttempts > 0 ? maxAttempts : 1;
+  const connect = Number.isFinite(connectTimeoutMs) && connectTimeoutMs > 0 ? connectTimeoutMs : 0;
+  let pauses = 0;
+  for (let retry = 0; retry < attempts - 1; retry++) {
+    pauses += Math.min(RETRY_DELAY_CAP_MS, RETRY_DELAY_BASE_MS * 2 ** retry);
+  }
+  return attempts * (connect + requestTimeoutMs) + pauses + DEADLINE_SLACK_MS;
+}
+
+/**
+ * Read a response body into one Buffer.
+ *
+ * With `expected` (the declared length) the bytes go straight into one buffer
+ * of that size, so the body is held once and not once as chunks and once
+ * joined. The read ends early, with `data: null`, when the body is longer
+ * than `limit` or than `expected`; with `stopAt` it ends, successfully, as
+ * soon as that many bytes are there.
  *
  * @param {AsyncIterable<Uint8Array>} body
- * @param {number} limit
- * @returns {Promise<Buffer|null>} The body, or null when it is longer than `limit`.
+ * @param {Object} options
+ * @param {number} options.limit - Give up above this many bytes.
+ * @param {number|null} [options.expected] - Declared length, when known.
+ * @param {number} [options.stopAt] - Stop reading at this many bytes.
+ * @param {number|null} [options.deadlineMs] - Abort the read after this long.
+ * @returns {Promise<{data: Buffer|null, bytes: number}>} `bytes` is what
+ *   arrived until the read ended.
+ * @throws {Error} A `TimeoutError` when the deadline passes; the body is destroyed.
  */
-async function readBody(body, limit) {
-  const chunks = [];
-  let total = 0;
-  for await (const chunk of body) {
-    total += chunk.length;
-    if (total > limit) {
-      body.destroy?.();
-      return null;
+async function readBody(
+  body,
+  { limit, expected = null, stopAt = Infinity, deadlineMs = null } = {}
+) {
+  const consume = async () => {
+    const target = expected === null ? null : Buffer.allocUnsafe(expected);
+    const chunks = [];
+    let total = 0;
+    for await (const chunk of body) {
+      const end = total + chunk.length;
+      if (end > limit || (target && end > target.length)) {
+        body.destroy?.();
+        return { data: null, bytes: end };
+      }
+      if (target) target.set(chunk, total);
+      else chunks.push(chunk);
+      total = end;
+      if (total >= stopAt) {
+        body.destroy?.();
+        break;
+      }
     }
-    chunks.push(chunk);
+    if (target) return { data: target.subarray(0, total), bytes: total };
+    return { data: chunks.length === 1 ? chunks[0] : Buffer.concat(chunks, total), bytes: total };
+  };
+  if (!deadlineMs) return consume();
+  let timer;
+  const deadline = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      const error = timeoutError(`The response body did not arrive within ${deadlineMs} ms`);
+      body.destroy?.(error);
+      reject(error);
+    }, deadlineMs);
+  });
+  const reading = consume();
+  // Destroying the body makes the read reject too; the deadline already answered.
+  reading.catch(() => {});
+  try {
+    return await Promise.race([reading, deadline]);
+  } finally {
+    clearTimeout(timer);
   }
-  return Buffer.concat(chunks, total);
 }
 
 /**
@@ -103,6 +198,12 @@ export class S3BlobStore extends BlobStore {
    * @param {number} [options.maxObjectBytes] - Largest stored object `get`
    *   reads and `put` sends. Unlimited when unset.
    * @param {string} [options.endpointHost] - For log lines.
+   * @param {number} [options.requestTimeoutMs] - The client's request timeout.
+   *   The store derives its own deadlines from it (one command with its
+   *   retries, one body read, the wait for the delete lock). Without it the
+   *   store sets none, and only the client's timeouts apply.
+   * @param {number} [options.connectTimeoutMs] - The client's connect timeout.
+   * @param {number} [options.maxAttempts] - The client's attempts per command.
    */
   constructor({
     bucket,
@@ -111,7 +212,10 @@ export class S3BlobStore extends BlobStore {
     connect,
     locks,
     maxObjectBytes,
-    endpointHost
+    endpointHost,
+    requestTimeoutMs,
+    connectTimeoutMs,
+    maxAttempts
   }) {
     super();
     if (typeof bucket !== 'string' || !bucket) {
@@ -130,6 +234,10 @@ export class S3BlobStore extends BlobStore {
     this._maxObjectBytes =
       Number.isSafeInteger(maxObjectBytes) && maxObjectBytes > 0 ? maxObjectBytes : Infinity;
     this._endpointHost = endpointHost || null;
+    /** Longest one command may take with its retries; null for no deadline. */
+    this._sendBudgetMs = sendBudgetMs({ requestTimeoutMs, connectTimeoutMs, maxAttempts });
+    /** Longest one body read may take; null for no deadline. */
+    this._bodyDeadlineMs = this._sendBudgetMs === null ? null : requestTimeoutMs;
     /** @type {Promise<Object>|null} */
     this._connection = null;
     this._destroyed = false;
@@ -200,7 +308,9 @@ export class S3BlobStore extends BlobStore {
   async _send(command, input, where) {
     const { client, commands } = await this._s3();
     try {
-      return await client.send(new commands[command]({ Bucket: this._bucket, ...input }));
+      return await this._bounded(where.op, options =>
+        client.send(new commands[command]({ Bucket: this._bucket, ...input }), options)
+      );
     } catch (error) {
       if ('notFound' in where && isNotFound(error)) return where.notFound;
       const mapped = mapS3Error(error, where);
@@ -215,6 +325,40 @@ export class S3BlobStore extends BlobStore {
         ...describeS3Error(error)
       });
       throw mapped;
+    }
+  }
+
+  /**
+   * Run one command under the store's deadline: when the command, with its
+   * retries, has not settled by then, its request is aborted and the call
+   * rejects. The client's own timeouts normally end it earlier.
+   *
+   * @param {string} op - The blob call, for the error.
+   * @param {(options?: {abortSignal: AbortSignal}) => Promise<T>} run - Sends
+   *   the command with the options it is given.
+   * @returns {Promise<T>}
+   * @template T
+   * @private
+   */
+  async _bounded(op, run) {
+    const budget = this._sendBudgetMs;
+    if (budget === null) return run();
+    const controller = new AbortController();
+    let timer;
+    const deadline = new Promise((_, reject) => {
+      timer = setTimeout(() => {
+        const error = timeoutError(`S3 ${op} did not finish within ${budget} ms`);
+        controller.abort(error);
+        reject(error);
+      }, budget);
+    });
+    const sending = run({ abortSignal: controller.signal });
+    // The abort makes the command reject too; the deadline already answered.
+    sending.catch(() => {});
+    try {
+      return await Promise.race([sending, deadline]);
+    } finally {
+      clearTimeout(timer);
     }
   }
 
@@ -249,9 +393,13 @@ export class S3BlobStore extends BlobStore {
    * @inheritdoc
    *
    * The object's length is checked against the limit before its body is read,
-   * and the read stops at the limit when the server sent no length.
+   * and the read stops at the limit when the server sent no length. The body
+   * read has a deadline of its own (the request timeout): a server that sends
+   * the headers and then stalls does not hold the call.
    *
-   * @throws {StorageError} Code `BLOB_TOO_LARGE` for an object over the limit.
+   * @throws {StorageError} Code `BLOB_TOO_LARGE` for an object over the limit;
+   *   `STORAGE_UNAVAILABLE` for a body that is cut, stalls or has another
+   *   length than declared.
    */
   async get(ns, key) {
     const name = this.objectKey(ns, key);
@@ -272,19 +420,24 @@ export class S3BlobStore extends BlobStore {
       response.Body?.destroy?.();
       throw tooLarge();
     }
-    let data;
+    let read;
     try {
-      data = await readBody(response.Body, this._maxObjectBytes);
-    } catch (error) {
-      throw mapS3Error(error, where);
-    }
-    if (data === null) throw tooLarge();
-    if (declared !== null && data.length !== declared) {
-      throw new StorageError(`Blob ${ns}/${key} arrived with ${data.length} of ${declared} bytes`, {
-        code: 'STORAGE_UNAVAILABLE'
+      read = await readBody(response.Body, {
+        limit: this._maxObjectBytes,
+        expected: declared,
+        deadlineMs: this._bodyDeadlineMs
       });
+    } catch (error) {
+      throw this._bodyFailure(error, where);
     }
-    return { key, bytes: data.length, data };
+    if (read.bytes > this._maxObjectBytes) throw tooLarge();
+    if (declared !== null && read.bytes !== declared) {
+      throw new StorageError(
+        `Blob ${ns}/${key} arrived with ${read.bytes > declared ? 'more than ' : `${read.bytes} of `}${declared} bytes`,
+        { code: 'STORAGE_UNAVAILABLE' }
+      );
+    }
+    return { key, bytes: read.bytes, data: read.data };
   }
 
   /**
@@ -309,27 +462,51 @@ export class S3BlobStore extends BlobStore {
     if (!response) return null;
     try {
       // A server that ignores the range sends the whole object; stop at `length`.
-      const chunks = [];
-      let total = 0;
-      for await (const chunk of response.Body) {
-        chunks.push(chunk);
-        total += chunk.length;
-        if (total >= length) {
-          response.Body.destroy?.();
-          break;
-        }
-      }
-      return Buffer.concat(chunks, total).subarray(0, length);
+      const { data } = await readBody(response.Body, {
+        limit: Infinity,
+        stopAt: length,
+        deadlineMs: this._bodyDeadlineMs
+      });
+      return data.subarray(0, length);
     } catch (error) {
-      throw mapS3Error(error, where);
+      throw this._bodyFailure(error, where);
     }
+  }
+
+  /**
+   * The storage error for a body read that failed, logged like a failed request.
+   *
+   * @param {unknown} error - What the body stream threw.
+   * @param {{op: string, ns?: string, key?: string}} where - The blob call.
+   * @returns {StorageError}
+   * @private
+   */
+  _bodyFailure(error, where) {
+    const mapped = mapS3Error(error, where);
+    logger.warn('Reading an S3 response body failed', {
+      component: COMPONENT,
+      op: where.op,
+      ns: where.ns,
+      key: where.key,
+      bucket: this._bucket,
+      endpointHost: this._endpointHost,
+      probeCode: mapped.probeCode,
+      ...describeS3Error(error)
+    });
+    return mapped;
   }
 
   /**
    * @inheritdoc
    *
    * Lock, `HeadObject`, `DeleteObject`: the delete that found the object is
-   * the one that reports true.
+   * the one that reports true. A `HeadObject` 404 is confirmed with
+   * `HeadBucket` before it is read as "no such object", because a HEAD answer
+   * for a missing bucket looks the same.
+   *
+   * @throws {StorageError} `STORAGE_UNAVAILABLE` with `probeCode`
+   *   `S3_BUCKET_NOT_FOUND` when the bucket is gone, and when the lock for the
+   *   key could not be taken in the time a delete in front may need.
    */
   async delete(ns, key) {
     const name = this.objectKey(ns, key);
@@ -340,15 +517,46 @@ export class S3BlobStore extends BlobStore {
         { Key: name },
         { ...where, notFound: false }
       );
-      if (found === false) return false;
+      if (found === false) {
+        // Rejects with S3_BUCKET_NOT_FOUND when it is the bucket that is missing.
+        await this.headBucket();
+        return false;
+      }
       await this._send('DeleteObjectCommand', { Key: name }, where);
       return true;
     };
-    if (this._locks) {
-      const digest = crypto.createHash('sha256').update(name).digest('hex').slice(0, 32);
-      return this._locks.withLock(`blob-delete:${digest}`, claim);
+    if (!this._locks) return this._exclusive(name, claim);
+    const digest = crypto.createHash('sha256').update(name).digest('hex').slice(0, 32);
+    let holding = false;
+    try {
+      return await this._locks.withLock(
+        `blob-delete:${digest}`,
+        () => {
+          holding = true;
+          return claim();
+        },
+        this._sendBudgetMs === null
+          ? {}
+          : // What the delete in front may take at most: HeadObject, then
+            // DeleteObject or HeadBucket, each with its retries.
+            { waitMs: 2 * this._sendBudgetMs + DEADLINE_SLACK_MS }
+      );
+    } catch (error) {
+      if (holding || !(error instanceof LockTimeoutError)) throw error;
+      const mapped = new StorageError(
+        `S3 delete of blob ${ns}/${key} failed: another delete of the same blob did not finish in time`,
+        { code: 'STORAGE_UNAVAILABLE', cause: error }
+      );
+      logger.warn('The lock for an S3 delete could not be taken', {
+        component: COMPONENT,
+        op: 'delete',
+        ns,
+        key,
+        bucket: this._bucket,
+        endpointHost: this._endpointHost
+      });
+      throw mapped;
     }
-    return this._exclusive(name, claim);
   }
 
   /**
@@ -486,7 +694,9 @@ export class S3BlobStore extends BlobStore {
   async headBucket() {
     const { client, commands } = await this._s3();
     try {
-      await client.send(new commands.HeadBucketCommand({ Bucket: this._bucket }));
+      await this._bounded('headBucket', options =>
+        client.send(new commands.HeadBucketCommand({ Bucket: this._bucket }), options)
+      );
     } catch (error) {
       // A HEAD has no error body: a 404 here can only be the bucket.
       const mapped = mapS3Error(

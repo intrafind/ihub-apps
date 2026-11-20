@@ -1088,7 +1088,7 @@ export const platformConfigSchema = z
                   .int()
                   .positive()
                   .optional()
-                  .describe('Largest blob accepted, in bytes before encryption. Default 64 MiB.'),
+                  .describe('Largest blob accepted, in bytes before encryption. Default 128 MiB.'),
                 connectTimeoutMs: z.number().int().positive().optional().describe('Default 5000.'),
                 requestTimeoutMs: z.number().int().positive().optional().describe('Default 60000.'),
                 maxAttempts: z
