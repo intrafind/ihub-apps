@@ -17,6 +17,7 @@ import { scheduledTaskCases } from './surfaces/scheduledTask.js';
 import { completionsCases, inferenceAppCases } from './surfaces/inference.js';
 import { appAsToolCases } from './surfaces/appAsTool.js';
 import { a2aCases, mcpCases } from './surfaces/gateway.js';
+import { legacyWorkflowCases } from './surfaces/legacyWorkflow.js';
 
 /** @type {ReadonlyArray<ReturnType<typeof import('./harness.js').defineCase>>} */
 export const CASES = Object.freeze([
@@ -27,7 +28,8 @@ export const CASES = Object.freeze([
   ...inferenceAppCases,
   ...appAsToolCases,
   ...mcpCases,
-  ...a2aCases
+  ...a2aCases,
+  ...legacyWorkflowCases
 ]);
 
 {

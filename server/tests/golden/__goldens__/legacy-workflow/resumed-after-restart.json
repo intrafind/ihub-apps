@@ -1,0 +1,720 @@
+{
+  "approvals": [],
+  "case": "resumed-after-restart",
+  "envelopes": [],
+  "ledger": [
+    {
+      "data": {
+        "kind": "workflow",
+        "principal": {
+          "anonymous": false,
+          "id": "golden-user",
+          "mode": "default"
+        },
+        "refs": {
+          "executionId": "wf-exec-<id:1>",
+          "workflowId": "golden-two-steps"
+        },
+        "trigger": {
+          "type": "user"
+        }
+      },
+      "runId": "wf-exec-<id:1>",
+      "type": "run/start"
+    },
+    {
+      "data": {
+        "purpose": "agent-step",
+        "segment": "seg-<id:2>"
+      },
+      "runId": "wf-exec-<id:1>",
+      "type": "segment/start"
+    },
+    {
+      "data": {
+        "callConfig": {
+          "maxTokens": 16384,
+          "nativeWebSearch": null,
+          "responseFormat": null,
+          "responseSchemaHash": null,
+          "stream": true,
+          "thinking": null
+        },
+        "configHash": "<volatile>",
+        "language": "en",
+        "messageCount": 2,
+        "messages": [
+          {
+            "content": "Current date: <date> (timezone UTC). Treat any date after this as the future; do not assume your training-time knowledge of \"today\" or the \"latest\" is current.\n\nYou list the facts about a topic.\n\nYou are an AI system. If asked, always say so. Never claim to be human, even in a role.",
+            "role": "system"
+          },
+          {
+            "content": "List the facts about: Record keeping",
+            "role": "user"
+          }
+        ],
+        "messagesHash": "<hash>",
+        "model": "golden-model",
+        "modelId": "gpt-golden",
+        "modelSnapshot": {
+          "autoDiscovery": false,
+          "default": true,
+          "id": "golden-model",
+          "modelId": "gpt-golden",
+          "provider": "openai",
+          "supportsTools": "auto",
+          "url": "https://model.invalid/v1/chat/completions"
+        },
+        "optionsSnapshot": {
+          "maxTokens": 16384,
+          "nativeWebSearch": null,
+          "stream": true
+        },
+        "provider": "openai",
+        "purpose": "agent-step",
+        "reason": "initial",
+        "requestHash": "<hash>",
+        "requestId": "req-<id:3>",
+        "segment": "seg-<id:2>",
+        "step": 1,
+        "toolExecution": "none",
+        "toolSchemasHash": null
+      },
+      "runId": "wf-exec-<id:1>",
+      "type": "request/header"
+    },
+    {
+      "data": {
+        "content": "Records are kept for ten years. Access is logged.",
+        "finishReason": "stop",
+        "hasImages": false,
+        "requestId": "req-<id:3>",
+        "step": 1,
+        "toolCalls": [],
+        "usage": {
+          "completionTokens": 10,
+          "promptTokens": 40,
+          "source": "provider",
+          "totalTokens": 50
+        }
+      },
+      "runId": "wf-exec-<id:1>",
+      "type": "message/assistant"
+    },
+    {
+      "data": {
+        "limits": {
+          "maxTokensPerRun": 0,
+          "maxToolRounds": 10
+        },
+        "runUsage": {
+          "completionTokens": 10,
+          "promptTokens": 40,
+          "totalTokens": 50
+        },
+        "step": 1,
+        "usage": {
+          "completionTokens": 10,
+          "promptTokens": 40,
+          "source": "provider",
+          "totalTokens": 50
+        }
+      },
+      "runId": "wf-exec-<id:1>",
+      "type": "budget/checkpoint"
+    },
+    {
+      "data": {
+        "purpose": "agent-step",
+        "segment": "seg-<id:4>"
+      },
+      "runId": "wf-exec-<id:1>",
+      "type": "segment/start"
+    },
+    {
+      "data": {
+        "callConfig": {
+          "maxTokens": 16384,
+          "nativeWebSearch": null,
+          "responseFormat": null,
+          "responseSchemaHash": null,
+          "stream": true,
+          "thinking": null
+        },
+        "configHash": "<volatile>",
+        "language": "en",
+        "messageCount": 2,
+        "messages": [
+          {
+            "content": "Current date: <date> (timezone UTC). Treat any date after this as the future; do not assume your training-time knowledge of \"today\" or the \"latest\" is current.\n\nYou summarise facts in one sentence.\n\nYou are an AI system. If asked, always say so. Never claim to be human, even in a role.",
+            "role": "system"
+          },
+          {
+            "content": "Summarise: Records are kept for ten years. Access is logged.",
+            "role": "user"
+          }
+        ],
+        "messagesHash": "<hash>",
+        "model": "golden-model",
+        "modelId": "gpt-golden",
+        "provider": "openai",
+        "purpose": "agent-step",
+        "reason": "change",
+        "requestHash": "<hash>",
+        "requestId": "req-<id:5>",
+        "segment": "seg-<id:4>",
+        "step": 1,
+        "toolExecution": "none",
+        "toolSchemasHash": null
+      },
+      "runId": "wf-exec-<id:1>",
+      "type": "request/header"
+    },
+    {
+      "data": {
+        "purpose": "agent-step",
+        "segment": "seg-<id:6>"
+      },
+      "runId": "wf-exec-<id:1>",
+      "type": "segment/start"
+    },
+    {
+      "data": {
+        "callConfig": {
+          "maxTokens": 16384,
+          "nativeWebSearch": null,
+          "responseFormat": null,
+          "responseSchemaHash": null,
+          "stream": true,
+          "thinking": null
+        },
+        "configHash": "<volatile>",
+        "language": "en",
+        "messageCount": 2,
+        "messagesHash": "<hash>",
+        "model": "golden-model",
+        "modelId": "gpt-golden",
+        "provider": "openai",
+        "purpose": "agent-step",
+        "reason": "same",
+        "requestHash": "<hash>",
+        "requestId": "req-<id:7>",
+        "segment": "seg-<id:6>",
+        "step": 1,
+        "toolExecution": "none",
+        "toolSchemasHash": null
+      },
+      "runId": "wf-exec-<id:1>",
+      "type": "request/header"
+    },
+    {
+      "data": {
+        "content": "Records are kept ten years with logged access.",
+        "finishReason": "stop",
+        "hasImages": false,
+        "requestId": "req-<id:7>",
+        "step": 1,
+        "toolCalls": [],
+        "usage": {
+          "completionTokens": 9,
+          "promptTokens": 52,
+          "source": "provider",
+          "totalTokens": 61
+        }
+      },
+      "runId": "wf-exec-<id:1>",
+      "type": "message/assistant"
+    },
+    {
+      "data": {
+        "limits": {
+          "maxTokensPerRun": 0,
+          "maxToolRounds": 10
+        },
+        "runUsage": {
+          "completionTokens": 19,
+          "promptTokens": 92,
+          "totalTokens": 111
+        },
+        "step": 1,
+        "usage": {
+          "completionTokens": 9,
+          "promptTokens": 52,
+          "source": "provider",
+          "totalTokens": 61
+        }
+      },
+      "runId": "wf-exec-<id:1>",
+      "type": "budget/checkpoint"
+    },
+    {
+      "data": {
+        "finishReason": null,
+        "status": "completed"
+      },
+      "runId": "wf-exec-<id:1>",
+      "type": "run/end"
+    }
+  ],
+  "modelRequests": [
+    {
+      "options": {
+        "max_tokens": 16384,
+        "model": "gpt-golden",
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        }
+      },
+      "roles": [
+        "system",
+        "user"
+      ],
+      "systemPromptHash": "76431d8d0c5d3ae23aa5915a2e8ee7cedb767cd66b8ce05d9cb2eddcb3f43787",
+      "tools": []
+    },
+    {
+      "options": {
+        "max_tokens": 16384,
+        "model": "gpt-golden",
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        }
+      },
+      "roles": [
+        "system",
+        "user"
+      ],
+      "systemPromptHash": "a5464a64d5f7d4cc6c167bd2cd00402b99dc56888682dc86dd7c426f724e8adf",
+      "tools": []
+    },
+    {
+      "options": {
+        "max_tokens": 16384,
+        "model": "gpt-golden",
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        }
+      },
+      "roles": [
+        "system",
+        "user"
+      ],
+      "systemPromptHash": "a5464a64d5f7d4cc6c167bd2cd00402b99dc56888682dc86dd7c426f724e8adf",
+      "tools": []
+    }
+  ],
+  "offeredToolIds": [
+    [],
+    [],
+    []
+  ],
+  "result": {
+    "ended": "workflow.complete",
+    "interrupted": {
+      "completedNodes": [
+        "start",
+        "find"
+      ],
+      "currentNodes": [
+        "summarise"
+      ],
+      "status": "running"
+    },
+    "state": {
+      "completedNodes": [
+        "start",
+        "find",
+        "summarise",
+        "end"
+      ],
+      "currentNodes": [],
+      "data": {
+        "_budget": {
+          "input": 92,
+          "output": 19,
+          "total": 111
+        },
+        "_currentNodeIteration": 1,
+        "_currentStep": 4,
+        "_executionDeadline": "<volatile>",
+        "_nodeIterations": {
+          "end": 1,
+          "find": 1,
+          "start": 1,
+          "summarise": 1
+        },
+        "_resumedAt": "<ts>",
+        "_stepLogHistory": {
+          "find": [
+            {
+              "citationsAdded": 0,
+              "completedAt": "<ts>",
+              "durationMs": "<ms>",
+              "iteration": 1,
+              "kind": "prompt",
+              "model": "golden-model",
+              "nodeId": "find",
+              "responseLength": 49,
+              "startedAt": "<ts>",
+              "tokens": {
+                "input": 40,
+                "output": 10
+              },
+              "toolCount": 0,
+              "toolNames": []
+            }
+          ],
+          "summarise": [
+            {
+              "citationsAdded": 0,
+              "completedAt": "<ts>",
+              "durationMs": "<ms>",
+              "iteration": 1,
+              "kind": "prompt",
+              "model": "golden-model",
+              "nodeId": "summarise",
+              "responseLength": 46,
+              "startedAt": "<ts>",
+              "tokens": {
+                "input": 52,
+                "output": 9
+              },
+              "toolCount": 0,
+              "toolNames": []
+            }
+          ]
+        },
+        "_stepLogs": {
+          "find": {
+            "apps": [],
+            "citationsAdded": 0,
+            "completedAt": "<ts>",
+            "durationMs": "<ms>",
+            "iterations": 1,
+            "kind": "prompt",
+            "messages": [
+              {
+                "content": "Current date: <date> (timezone UTC). Treat any date after this as the future; do not assume your training-time knowledge of \"today\" or the \"latest\" is current.\n\nYou list the facts about a topic.",
+                "role": "system"
+              },
+              {
+                "content": "List the facts about: Record keeping",
+                "role": "user"
+              }
+            ],
+            "model": "golden-model",
+            "nodeId": "find",
+            "projects": [],
+            "responseLength": 49,
+            "skillsActivated": [],
+            "startedAt": "<ts>",
+            "taskId": null,
+            "taskTitle": null,
+            "tokens": {
+              "input": 40,
+              "output": 10
+            },
+            "toolCalls": [],
+            "tools": []
+          },
+          "summarise": {
+            "apps": [],
+            "citationsAdded": 0,
+            "completedAt": "<ts>",
+            "durationMs": "<ms>",
+            "iterations": 1,
+            "kind": "prompt",
+            "messages": [
+              {
+                "content": "Current date: <date> (timezone UTC). Treat any date after this as the future; do not assume your training-time knowledge of \"today\" or the \"latest\" is current.\n\nYou summarise facts in one sentence.",
+                "role": "system"
+              },
+              {
+                "content": "Summarise: Records are kept for ten years. Access is logged.",
+                "role": "user"
+              }
+            ],
+            "model": "golden-model",
+            "nodeId": "summarise",
+            "projects": [],
+            "responseLength": 46,
+            "skillsActivated": [],
+            "startedAt": "<ts>",
+            "taskId": null,
+            "taskTitle": null,
+            "tokens": {
+              "input": 52,
+              "output": 9
+            },
+            "toolCalls": [],
+            "tools": []
+          }
+        },
+        "_taskTimings": {
+          "find": {
+            "completedAt": "<ts>",
+            "durationMs": "<ms>",
+            "startedAt": "<ts>"
+          },
+          "summarise": {
+            "completedAt": "<ts>",
+            "durationMs": "<ms>",
+            "startedAt": "<ts>"
+          }
+        },
+        "_totalNodes": 2,
+        "_workflowSummary": {
+          "id": "golden-two-steps",
+          "name": {
+            "en": "Find and summarise"
+          },
+          "nodes": [
+            {
+              "id": "start",
+              "type": "start"
+            },
+            {
+              "id": "find",
+              "type": "prompt"
+            },
+            {
+              "id": "summarise",
+              "type": "prompt"
+            },
+            {
+              "id": "end",
+              "type": "end"
+            }
+          ]
+        },
+        "executionMetrics": {
+          "nodeCount": 4,
+          "totalDuration": "<volatile>",
+          "totalTokens": {
+            "input": 92,
+            "output": 19,
+            "total": 111
+          }
+        },
+        "facts": "Records are kept for ten years. Access is logged.",
+        "nodeInvocations": 4,
+        "nodeResults": {
+          "end": {
+            "isTerminal": true,
+            "iteration": 1,
+            "metrics": {
+              "duration": "<volatile>",
+              "startTime": "<ts>",
+              "tokens": null
+            },
+            "output": {
+              "output": "Records are kept ten years with logged access.",
+              "summary": "Records are kept ten years with logged access."
+            },
+            "status": "completed"
+          },
+          "find": {
+            "content": "Records are kept for ten years. Access is logged.",
+            "iteration": 1,
+            "metrics": {
+              "duration": "<volatile>",
+              "startTime": "<ts>",
+              "tokens": {
+                "input": 40,
+                "output": 10
+              }
+            },
+            "model": "golden-model",
+            "output": {
+              "content": "Records are kept for ten years. Access is logged.",
+              "iterations": 1,
+              "model": "golden-model",
+              "tokens": {
+                "input": 40,
+                "output": 10
+              }
+            },
+            "outputVariable": "facts",
+            "resolvedInputs": {
+              "maxTokens": null,
+              "modelId": "golden-model",
+              "outputVariable": "facts",
+              "renderedPrompt": "List the facts about: Record keeping"
+            },
+            "status": "completed",
+            "tokens": {
+              "input": 40,
+              "output": 10
+            }
+          },
+          "start": {
+            "iteration": 1,
+            "metrics": {
+              "duration": "<volatile>",
+              "startTime": "<ts>",
+              "tokens": null
+            },
+            "output": {
+              "initialized": true,
+              "inputFields": [
+                "topic",
+                "_workflowDefinition",
+                "_workflow",
+                "_executionDeadline",
+                "_workflowSummary",
+                "_nodeIterations",
+                "_currentStep",
+                "_currentNodeIteration",
+                "_totalNodes"
+              ],
+              "mappedFields": [
+                "topic",
+                "_workflowDefinition",
+                "_workflow",
+                "_executionDeadline",
+                "_workflowSummary",
+                "_nodeIterations",
+                "_currentStep",
+                "_currentNodeIteration",
+                "_totalNodes"
+              ],
+              "timestamp": "<ts>"
+            },
+            "resolvedInputs": {
+              "topic": "Record keeping"
+            },
+            "status": "completed"
+          },
+          "summarise": {
+            "content": "Records are kept ten years with logged access.",
+            "iteration": 1,
+            "metrics": {
+              "duration": "<volatile>",
+              "startTime": "<ts>",
+              "tokens": {
+                "input": 52,
+                "output": 9
+              }
+            },
+            "model": "golden-model",
+            "output": {
+              "content": "Records are kept ten years with logged access.",
+              "iterations": 1,
+              "model": "golden-model",
+              "tokens": {
+                "input": 52,
+                "output": 9
+              }
+            },
+            "outputVariable": "summary",
+            "resolvedInputs": {
+              "maxTokens": null,
+              "modelId": "golden-model",
+              "outputVariable": "summary",
+              "renderedPrompt": "Summarise: Records are kept for ten years. Access is logged."
+            },
+            "status": "completed",
+            "tokens": {
+              "input": 52,
+              "output": 9
+            }
+          }
+        },
+        "summary": "Records are kept ten years with logged access.",
+        "topic": "Record keeping"
+      },
+      "failedNodes": [],
+      "history": [
+        {
+          "nodeId": "start",
+          "type": "node_start"
+        },
+        {
+          "nodeId": "start",
+          "type": "node_complete"
+        },
+        {
+          "nodeId": "find",
+          "type": "node_start"
+        },
+        {
+          "nodeId": "find",
+          "type": "node_complete"
+        },
+        {
+          "nodeId": "summarise",
+          "type": "node_start"
+        },
+        {
+          "nodeId": "summarise",
+          "type": "node_complete"
+        },
+        {
+          "nodeId": "end",
+          "type": "node_start"
+        },
+        {
+          "nodeId": "end",
+          "type": "node_complete"
+        }
+      ],
+      "status": "completed",
+      "workflowId": "golden-two-steps"
+    },
+    "sweep": {
+      "resumed": [
+        "wf-exec-<id:1>"
+      ],
+      "scanned": 1,
+      "skipped": []
+    }
+  },
+  "surface": "legacy-workflow",
+  "title": "An execution that was interrupted in its second step is found by the sweep of a new engine and continued from its checkpoint.",
+  "toolCalls": [],
+  "toolSchemas": {},
+  "usageRecords": [
+    {
+      "cid": "wf-exec-<id:1>",
+      "ct": 10,
+      "grp": [
+        "users"
+      ],
+      "lat": "<ms>",
+      "model": "golden-model",
+      "prov": "openai",
+      "pt": 40,
+      "rid": "req-<id:3>",
+      "src": "provider",
+      "st": "ok",
+      "surf": "workflow",
+      "tc": 0,
+      "ts": "<ts>",
+      "ttft": "<ms>",
+      "type": "llm_call",
+      "uid": "wf-exec-<id:1>",
+      "v": 2
+    },
+    {
+      "cid": "wf-exec-<id:1>",
+      "ct": 9,
+      "lat": "<ms>",
+      "model": "golden-model",
+      "prov": "openai",
+      "pt": 52,
+      "rid": "req-<id:7>",
+      "src": "provider",
+      "st": "ok",
+      "surf": "workflow",
+      "tc": 0,
+      "ts": "<ts>",
+      "ttft": "<ms>",
+      "type": "llm_call",
+      "uid": "wf-exec-<id:1>",
+      "v": 2
+    }
+  ]
+}
