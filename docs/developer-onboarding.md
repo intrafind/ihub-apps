@@ -797,12 +797,30 @@ Tests run in tiers, so a pull request gets a fast answer and slow tests still ru
 | Pull request gate | `unit-tests.yml` | `npm run test:quick`: the client unit tests and every server test of the `pr` tier | every pull request |
 | Integration | `integration-tests.yml` | the integration suite and a boot check of the real server | every pull request |
 | End-to-end gate | `e2e.yml`, jobs **Agents and chat (gate)** and **Golden difference list** | the `@gate` browser tests and the checks of the golden difference list | every pull request |
-| Full end-to-end | `e2e.yml`, job **Agents (full suite and transport matrix)** | every browser test of the agents suite | started by hand |
-| Nightly | none yet | the server tests of the `nightly` tier: `server/tests/faults/` and `*.nightly.test.js` | by hand with `npm run test:nightly` (`npm run test:faults` runs only the files under `server/tests/faults/`) |
+| Fault smoke | `e2e.yml`, job **Fault tests (smoke)** | the fault tests whose file name carries the tag `smoke` (`npm run test:faults:smoke`); none yet | every pull request |
+| Full end-to-end | `e2e.yml`, job **Agents (full suite and transport matrix)** | every browser test of the agents suite | every night, called by `nightly.yml`; also started by hand |
+| Nightly | `nightly.yml` | the fault tier (`npm run test:faults`), the quarantine check, the end-to-end suite on Chromium, Firefox and WebKit, the full end-to-end job above, and a load smoke on the fake LLM (`npm run loadtest:smoke`) | every night at 02:17 UTC; by hand; the fault tier alone on a pull request with the label `run-faults` |
 
-A server test is in the `pr` tier unless its path puts it into the `nightly` tier. `node scripts/run-server-tests.js --list` shows how many files each tier has. The nightly tier holds no test yet and no workflow runs it; put a test there only when it starts real server processes or runs for minutes.
+A server test is in the `pr` tier unless its path puts it into the `nightly` tier. `node scripts/run-server-tests.js --list` shows how many files each tier has. Put a test into the nightly tier only when it starts real server processes or runs for minutes.
 
-The runner tiers, the quarantine list and the test tools for runs (scripted model, fake clock, golden tests, difference list) are described in [Testing Runs](run-testing.md).
+The runner tiers, the quarantine list and the test tools for runs (scripted model, fake clock, golden tests, difference list, fault harness) are described in [Testing Runs](run-testing.md).
+
+#### The nightly run
+
+GitHub starts a schedule only from the workflow file on the default branch, and "Run workflow" also takes the file from there. A branch that is not merged gets its evidence from the fault tier another way: put the label `run-faults` on its pull request. The job **Fault tier** then runs on the head of the pull request, and again on every push while the label is there. Take the label off when you have what you need. The other jobs of the nightly do not run on a pull request.
+
+No job of the nightly continues on error. Do not make one do so.
+
+#### When the nightly is red
+
+A failed nightly opens an issue with the label `nightly-red` and the title "The nightly run is red". There is at most one: while it is open, every further red night adds a comment to it. The issue lists the failed jobs and links the run.
+
+- **Who acts.** The person the product owner names. Their GitHub login is the repository variable `NIGHTLY_OWNER` (Settings, Secrets and variables, Actions, Variables), and the issue is assigned to that login. While the variable is empty, the issue is assigned to the author of the pull request that was merged last, because the newest change is the first suspect.
+- **What to do.** Open the run, read the log of each failed job, and run the failed tier on your machine (`npm run test:faults`, `npm run loadtest:smoke`, `npm run test:e2e:agents`). Fix the cause. Do not skip the test, do not add it to the quarantine, do not set the job to continue on error.
+- **When it is done.** Close the issue when a later nightly is green.
+- **Release candidates.** No release candidate is tagged while an issue with the label `nightly-red` is open. Nothing enforces this yet: whoever cuts the release candidate checks for the issue.
+
+A pull request run with the label `run-faults` never opens the issue; its result is the check on the pull request.
 
 ### Agents End-to-End Suite
 
@@ -837,7 +855,30 @@ A marker in the user message scripts the stub (`tests/config/e2e-llm-stub.mjs`).
 | `e2e-script:<name>` | follows the named script in `tests/config/e2e-scripts.mjs`, one turn per model call |
 | `e2e-fail` | fails with HTTP 400 |
 
-Two models are seeded: `e2e-stub` (the default, without tools) and `e2e-stub-tools`, which is offered the tools of the app. The app `e2e-tools` prefers the second and offers iHub's own tools (`ask_user`, the scheduled-task tools).
+Two models are seeded: `e2e-stub` (the default, without tools) and `e2e-stub-tools`, which is offered the tools of the app. The app `e2e-tools` prefers the second and offers iHub's own tools (`ask_user`, the scheduled-task tools) and the two counter tools below.
+
+#### A write that can be counted, and content from outside
+
+The suite starts its server as a test server (`NODE_ENV=test` and `IHUB_TEST_TOOLS=1`). Such a server has two more tools, which no installation has:
+
+| Tool | Does | Use it for |
+|---|---|---|
+| `e2e_counter_write` | adds one to a counter, by `key`; an optional `value` is stored with the write | a write whose effect you can count: "this ran once", "this did not run after the refusal" |
+| `e2e_counter_read` | returns the count and the stored values of a `key`; a read | content that comes from outside iHub, without a network |
+
+The counter lives in the helper process of the suite, not in the server, so a restarted server cannot lose or hide a write. A spec reads it with `counter.read()`, `counter.count(key)` and `counter.reset()` from `helpers.mjs` (`GET /__counter` and `POST /__counter/reset` on the helper's port):
+
+```js
+await sendMessage(page, `e2e-tool:e2e_counter_write:{"key":"${key}"}`);
+await expect(shown(page, /E2E tool result seen/)).toBeVisible();
+expect(await counter.count(key)).toBe(1);
+```
+
+For content from outside, write it into the counter and let the model read it: `e2e-tool:e2e_counter_read:{"key":"…"}`. A page reader pointed at the test machine does not work: iHub refuses to fetch from a private address. Use these tools, not a fixture of your own.
+
+The two tools are all that `NODE_ENV=test` switches on in the suite's server. No other server file reads that value, and `server/tests/killPoint-inventory.test.js` fails when one starts to.
+
+The suite's server is never started with a kill point. A test that kills a server at a chosen place is a fault test and starts its own server; see [Testing Runs](run-testing.md#the-fault-tier).
 
 A spec reads what reached the model with `stub.requests('<text of its message>')` and how many calls the server cancelled with `stub.stats()`; both are in `tests/e2e-agents/helpers.mjs`, next to `signedIn`, `chatTurn` and `restartServer`.
 
@@ -859,7 +900,7 @@ Every test carries a tag: `test('…', { tag: '@gate' }, async ({ page }) => { �
 
 The pull request job (`.github/workflows/e2e.yml`, 10 minutes) runs the `@gate` tests, every test of a spec that `agents-spec-map.json` maps to a path the pull request touches, and `tests/e2e/chat.spec.js`. When you add a spec for a feature, add a row that maps the feature's directories to it. A test in the gate should finish in well under a minute.
 
-The full run is the `full` job of the same workflow: every test of the suite, then the `@matrix` tests once per overlay. Nothing starts it on a schedule yet. Start it by hand (Actions, **End-to-end**, **Run workflow**) before a slice of the agents epic is merged, and whenever you add or change a `@slow` test or a test that depends on an overlay: the pull request job runs no `@slow` test and starts no server with an overlay.
+The full run is the `full` job of the same workflow: every test of the suite, then the `@matrix` tests once per overlay. The nightly workflow runs it every night. Start it by hand as well (Actions, **End-to-end**, **Run workflow**) before a slice of the agents epic is merged, and whenever you add or change a `@slow` test or a test that depends on an overlay: the pull request job runs no `@slow` test and starts no server with an overlay.
 
 An overlay of the matrix may set only features that `server/featureRegistry.js` knows; `agents-run.mjs` stops on any other key. A `@matrix` test should also show that its overlay is in effect, as `smoke.spec.js` does for the chat connection with `watchChatRequests` (`helpers.mjs`): otherwise the run repeats the seeded one.
 
