@@ -1,0 +1,30 @@
+{
+  "sub-task": ["docs:agents.md#Memory pipeline (memory-compose → memory-finalize)"],
+  "lease": ["en:abortCauses.lease_lost"],
+  "worker": [
+    "de:abortCauses.lease_lost",
+    "de:admin.projects.caches.hint",
+    "de:admin.security.rateLimits.perAddress",
+    "de:admin.systemResources.knowledge.capacity",
+    "de:admin.systemResources.knowledge.description",
+    "de:admin.systemResources.knowledge.exceedsCache",
+    "de:admin.systemResources.processes.clusterDescription",
+    "de:admin.systemResources.processes.missing",
+    "de:admin.systemResources.processes.missingAlert",
+    "de:admin.systemResources.processes.worker",
+    "en:abortCauses.lease_lost",
+    "en:admin.projects.caches.hint",
+    "en:admin.security.rateLimits.perAddress",
+    "en:admin.systemResources.knowledge.capacity",
+    "en:admin.systemResources.knowledge.description",
+    "en:admin.systemResources.knowledge.exceedsCache",
+    "en:admin.systemResources.processes.clusterDescription",
+    "en:admin.systemResources.processes.missing",
+    "en:admin.systemResources.processes.missingAlert",
+    "en:admin.systemResources.processes.worker",
+    "features:chatPostStream.description.de",
+    "features:chatPostStream.description.en"
+  ],
+  "automation": ["features:workflows.description.en"],
+  "Automatisierung": ["features:workflows.description.de"]
+}

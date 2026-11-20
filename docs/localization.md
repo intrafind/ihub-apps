@@ -69,6 +69,10 @@ it can be overridden. A unit test (`tests/unit/client/translation-keys-exist.tes
 a `t('some.key', …)` call uses a key that is not there. The admin area, the login gate (its own
 table) and keys built at run time are not covered.
 
+The built-in texts follow the [Glossary](glossary.md). A second test
+(`tests/unit/client/retired-words.test.jsx`) fails when a built-in English or German text uses one
+of the words iHub does not use. Your overrides are not checked.
+
 ## Merge Behaviour
 
 1. The server loads the built-in file from `shared/i18n/{lang}.json`.
