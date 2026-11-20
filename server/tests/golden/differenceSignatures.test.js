@@ -74,12 +74,15 @@ test('the owner of the difference list is read from CODEOWNERS; the last matchin
   );
 });
 
-test('the CODEOWNERS file of this repository names the product owner for the difference list', () => {
+test('the CODEOWNERS file of this repository names both owners of the difference list', () => {
   const text = fs.readFileSync(path.join(REPO_ROOT, CODEOWNERS_PATH), 'utf8');
-  assert.deepEqual(ownersOf(text, DIFFERENCES_PATH), ['intradmin']);
+  assert.deepEqual(ownersOf(text, DIFFERENCES_PATH), ['manzked', 'intradmin']);
   // Whoever could edit the check or this file could appoint another signer.
-  assert.deepEqual(ownersOf(text, 'scripts/check-difference-signatures.js'), ['intradmin']);
-  assert.deepEqual(ownersOf(text, CODEOWNERS_PATH), ['intradmin']);
+  assert.deepEqual(ownersOf(text, 'scripts/check-difference-signatures.js'), [
+    'manzked',
+    'intradmin'
+  ]);
+  assert.deepEqual(ownersOf(text, CODEOWNERS_PATH), ['manzked', 'intradmin']);
   // The job runs the pull request's own copy of the workflow and of the difference list test:
   // whoever could edit those could switch the gate off, so they have the same owner.
   for (const file of [
@@ -87,7 +90,7 @@ test('the CODEOWNERS file of this repository names the product owner for the dif
     'server/tests/golden/differenceList.js',
     'server/tests/golden/differenceList.test.js'
   ]) {
-    assert.deepEqual(ownersOf(text, file), ['intradmin'], `${file} has the owner`);
+    assert.deepEqual(ownersOf(text, file), ['manzked', 'intradmin'], `${file} has the owner`);
     assert.ok(fs.existsSync(path.join(REPO_ROOT, file)), `${file} exists`);
   }
   // The goldens themselves have no owner: a row, not a review of every file, accepts a change.
