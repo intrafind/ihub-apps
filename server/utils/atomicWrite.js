@@ -126,6 +126,61 @@ export async function atomicWriteFile(filePath, data, options = 'utf8') {
 }
 
 /**
+ * Atomically write a stream to a file: {@link atomicWriteFile} for content
+ * that is not in memory. The stream goes to a temp file beside the target,
+ * which is fsynced and renamed over the target once the stream ended, so a
+ * reader sees the old file or the new one and a failed or aborted stream
+ * leaves the target as it was.
+ *
+ * `filePath` is trusted, as in {@link atomicWriteFile}.
+ *
+ * @param {string} filePath - The target file path (must be caller-validated)
+ * @param {AsyncIterable<Buffer>} stream - The content. Consumed to its end, or
+ *   destroyed when writing fails.
+ * @param {Object} [options]
+ * @param {(chunk: Buffer) => void} [options.onChunk] - Called with every
+ *   chunk before it is written (a hash, a length check). What it throws
+ *   aborts the write.
+ * @param {() => void} [options.onEnd] - Called when the stream ended, before
+ *   the rename. What it throws aborts the write.
+ * @param {number} [options.mode] - Permission bits; the target's by default.
+ * @returns {Promise<void>}
+ */
+export async function atomicWriteStream(filePath, stream, { onChunk, onEnd, mode } = {}) {
+  const dir = dirname(filePath);
+  const tempPath = join(dir, `.tmp_${randomBytes(8).toString('hex')}`);
+  const targetMode = await resolveMode(filePath, mode);
+  try {
+    // lgtm[js/path-injection] -- caller-validated path; see atomicWriteFile.
+    const handle = await fs.open(tempPath, 'wx', targetMode ?? 0o666);
+    try {
+      // Leaving the loop by a throw destroys the stream.
+      for await (const chunk of stream) {
+        onChunk?.(chunk);
+        await handle.write(chunk);
+      }
+      onEnd?.();
+      if (targetMode !== undefined) await handle.chmod(targetMode);
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+    // lgtm[js/path-injection] -- caller-validated path; see atomicWriteFile.
+    await fs.rename(tempPath, filePath);
+  } catch (error) {
+    stream.destroy?.();
+    try {
+      // lgtm[js/path-injection] -- caller-validated path; see atomicWriteFile.
+      await fs.unlink(tempPath);
+    } catch {
+      // Ignore cleanup errors
+    }
+    throw error;
+  }
+  await syncDirectory(dir);
+}
+
+/**
  * Atomically write JSON data to a file with pretty formatting
  *
  * @param {string} filePath - The target file path

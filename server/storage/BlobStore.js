@@ -19,6 +19,8 @@
  * | --------- | ----------------- | --------------- | ------------------- |
  * | `put`     | atomic file write | `PutObject`     | large object/`bytea`|
  * | `get`     | read file         | `GetObject`     | read                |
+ * | `openRead`| file read stream  | `GetObject` body| read in pieces      |
+ * | `putStream`| temp file, rename| one `PutObject` | write in pieces     |
  * | `delete`  | unlink            | `DeleteObject`  | delete              |
  * | `list`    | readdir + filter  | `ListObjectsV2` | `LIKE` on key       |
  * | `scan`    | one readdir, lazy | paged `list`    | cursor over a query |
@@ -36,6 +38,42 @@
  * presigned URL serves correctly); the document remains authoritative, and a
  * provider that cannot store it simply ignores it.
  *
+ * ## Whole or as a stream
+ *
+ * `get` and `put` hold the payload in memory, which is right for what ends up
+ * in memory anyway (extracted text for a prompt, a JSON pack). Bytes that go
+ * straight to an HTTP response, a file or another store use
+ * {@link BlobStore#openRead} and {@link BlobStore#putStream}: the same
+ * objects, the same stored format, a bounded amount of memory whatever the
+ * object's size. A blob written with one is read with either.
+ *
+ * **A consumer of `openRead` must handle a failure after data arrived.** The
+ * stream hands out bytes before the object is read to its end. A store that
+ * authenticates what it reads (the encrypting blob store) hands out a piece
+ * only after that piece verified, but only the end of the stream says that
+ * nothing is missing: an object that was cut, extended or changed in a later
+ * part makes the stream fail with `'error'` (the error `get` would have
+ * thrown: `CORRUPT_BLOB`, `KEY_UNAVAILABLE`, `STORAGE_UNAVAILABLE`) after
+ * earlier, genuine bytes were delivered. It never ends cleanly instead. So:
+ *
+ * - Treat the content as received only on `'end'`. On `'error'`, discard what
+ *   was collected or mark the copy as failed.
+ * - An HTTP handler that pipes the stream **destroys the response**
+ *   (`res.destroy(error)`) when the stream fails after the first byte, so the
+ *   client sees an aborted transfer (a `Content-Length` that was not met).
+ *   It never calls `res.end()` on a failed stream: that would present a
+ *   truncated body as the whole file. `utils/streamResponse.js` does this.
+ * - Always consume the stream to its end or `destroy()` it. An abandoned
+ *   stream holds a file handle or a connection until the backend's idle
+ *   timeout ends it.
+ * - Learn of a failure through `for await`, `stream.pipeline`,
+ *   `stream.finished` or `sendStream`, not through an `'error'` listener
+ *   alone. The stream may have failed before the code that awaited
+ *   `openRead` ran again, and an `'error'` event is emitted once. Every store
+ *   keeps such an early failure from becoming an uncaught exception
+ *   (`guardStream` in `blobSupport.js`); it stays readable as
+ *   `stream.errored`.
+ *
  * A provider that implements this declares `blobStore: true` in
  * {@link StorageProvider#getCapabilities}. That is a different capability from
  * `blobs`, which says the *append log* can park payloads beside a stream — the
@@ -43,6 +81,8 @@
  *
  * @module storage/BlobStore
  */
+import { Readable } from 'node:stream';
+import { assertStreamLength, collectStream } from './blobSupport.js';
 import { InvalidKeyError, NotSupportedError } from './errors.js';
 
 /** Page size the base {@link BlobStore#scan} walks `list` with (its maximum). */
@@ -66,6 +106,18 @@ const SCAN_PAGE_SIZE = 1000;
  * @property {string} key - Key it was read from.
  * @property {number} bytes - Size of the payload.
  * @property {Buffer} data - The payload itself.
+ */
+
+/**
+ * A blob opened for reading.
+ *
+ * @typedef {Object} BlobReadStream
+ * @property {string} key - Key it is read from.
+ * @property {number} bytes - Size of the payload, known before the first
+ *   byte is read (what a `Content-Length` is set from). The stream delivers
+ *   exactly this many bytes or fails.
+ * @property {import('node:stream').Readable} stream - The payload. Not
+ *   flowing yet; see the module note for what its consumer owes.
  */
 
 /**
@@ -102,6 +154,68 @@ export class BlobStore {
    */
   async get(_ns, _key) {
     throw new NotSupportedError('BlobStore.get is not implemented');
+  }
+
+  /**
+   * Open one blob for reading as a stream, without holding it in memory.
+   *
+   * Resolves once the store knows that the blob is there, how long its
+   * payload is and that it can be read: a missing blob is `null`, and a blob
+   * this store cannot open at all (plaintext where ciphertext is expected, a
+   * key that is not here, a first part that does not verify) rejects here,
+   * with the error {@link BlobStore#get} throws, before the caller has
+   * promised anything. A failure further in arrives as the stream's
+   * `'error'`; **read the module note** for what the consumer must do then.
+   *
+   * This base implementation reads the blob whole with `get` and wraps it, so
+   * every store has the method; a store overrides it to actually stream.
+   *
+   * @param {string} ns - Namespace.
+   * @param {string} key - Key within the namespace.
+   * @returns {Promise<BlobReadStream|null>} The open blob, or null when there is none.
+   *
+   * @example
+   * const blob = await blobs.openRead('artifacts', key);
+   * if (!blob) throw notFound();
+   * res.setHeader('Content-Length', String(blob.bytes));
+   * await pipeToResponse(req, res, blob.stream); // destroys `res` on a late failure
+   */
+  async openRead(ns, key) {
+    const blob = await this.get(ns, key);
+    if (!blob) return null;
+    return { key, bytes: blob.bytes, stream: Readable.from([blob.data], { objectMode: false }) };
+  }
+
+  /**
+   * Store a blob from a stream, replacing whatever was at that key: `put` for
+   * a payload that is not in memory.
+   *
+   * The length is declared up front (`opts.bytes`): an object store needs it
+   * before the first byte, and it is what the size limit is checked against.
+   * A stream that delivers more or fewer bytes, or fails, rejects the call
+   * and leaves the key as it was (the previous blob, or none). The stream is
+   * consumed or destroyed either way.
+   *
+   * One attempt: a stream cannot be read twice, so a backend does not retry a
+   * failed transfer as it does for `put`. A caller that can open its source
+   * again retries the call.
+   *
+   * This base implementation collects the stream and calls `put`.
+   *
+   * @param {string} ns - Namespace.
+   * @param {string} key - Key within the namespace.
+   * @param {import('node:stream').Readable} stream - The payload, as bytes.
+   * @param {Object} opts
+   * @param {number} opts.bytes - Length of the payload.
+   * @param {string} [opts.contentType] - Media-type hint; see the module note.
+   * @returns {Promise<BlobRef>} Length and SHA-256 of the payload, as `put` reports them.
+   * @throws {StorageError} Code `INVALID_DATA` when `opts.bytes` is missing or
+   *   the stream has another length.
+   */
+  async putStream(ns, key, stream, opts = {}) {
+    const bytes = assertStreamLength(opts?.bytes, stream);
+    const data = await collectStream(stream, bytes, `${ns}/${key}`);
+    return this.put(ns, key, data, opts?.contentType ? { contentType: opts.contentType } : {});
   }
 
   /**

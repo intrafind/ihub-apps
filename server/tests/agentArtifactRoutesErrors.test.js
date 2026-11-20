@@ -262,6 +262,59 @@ describe('agent artifact routes: errors', () => {
     });
   });
 
+  describe('a sealed artifact as a stream', () => {
+    // Three 1 MiB segments, so that a change can sit behind bytes that were already sent.
+    const BIG = `# Big report\n${'0123456789abcdef'.repeat(160_000)}\n`;
+    const bigFile = () => path.join(tmpRoot, 'data', 'agent-artifacts', 'run1', 'big.md');
+
+    beforeAll(async () => {
+      sealedFiles.configureSealedFiles({ enabled: true, keyProvider: testKeys.provider });
+      await writeArtifactDirect({ runId: 'run1', name: 'big.md', content: BIG });
+    });
+
+    afterAll(() => {
+      sealedFiles.resetSealedFiles();
+      fs.rmSync(bigFile(), { force: true });
+    });
+
+    it('serves it with the length of its content, not of the stored file', async () => {
+      const stored = fs.statSync(bigFile()).size;
+      const res = await request(app)
+        .get('/api/agents/runs/run1/artifacts/big.md?download=1')
+        .expect(200);
+      expect(res.text).toBe(BIG);
+      expect(res.headers['content-length']).toBe(String(Buffer.byteLength(BIG)));
+      expect(Number(res.headers['content-length'])).toBeLessThan(stored);
+      expect(res.headers['content-type']).toMatch(/text\/markdown/);
+      expect(res.headers['content-disposition']).toMatch(/big\.md/);
+    });
+
+    it('cuts the download, instead of ending it, when a later part of the file was changed', async () => {
+      const original = fs.readFileSync(bigFile());
+      const changed = Buffer.from(original);
+      changed[512 + 2 * 1024 * 1024 + 99] ^= 0x01;
+      fs.writeFileSync(bigFile(), changed);
+      try {
+        // The client's own view of a broken transfer: the request fails.
+        await expect(
+          request(app).get('/api/agents/runs/run1/artifacts/big.md').buffer(true)
+        ).rejects.toThrow(/aborted|socket hang up|ECONNRESET/i);
+        // Changed in its first segment, it is refused before anything is sent.
+        const early = Buffer.from(original);
+        early[512 + 99] ^= 0x01;
+        fs.writeFileSync(bigFile(), early);
+        const refused = await request(app).get('/api/agents/runs/run1/artifacts/big.md?download=1');
+        expect(refused.status).toBe(500);
+        expect(refused.headers['content-type']).toMatch(/application\/problem\+json/);
+        expect(refused.headers['content-disposition']).toBeUndefined();
+        expect(refused.text).not.toContain('0123456789abcdef');
+      } finally {
+        fs.writeFileSync(bigFile(), original);
+      }
+      await request(app).get('/api/agents/runs/run1/artifacts/big.md').expect(200);
+    });
+  });
+
   // Keep this the last test of the file: it spends the rest of the route's rate-limit window.
   it('rate-limits listing and reading artifacts', async () => {
     let status = null;

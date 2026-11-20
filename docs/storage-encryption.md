@@ -466,9 +466,25 @@ Measured on a development machine, one core:
 | Write a 1 MB document       | about 2.2 ms  |
 | Write one run-ledger record | 9 to 63 µs    |
 
-Disk use grows by about 33 % for documents and logs. An encrypted blob or file is read into memory
-whole, also where the unencrypted one was streamed: the download of an agent artifact and the
-download of a tool-job result from another worker process.
+Disk use grows by about 33 % for documents and logs.
+
+**Memory.** Encrypted blobs and files are stored in 1 MiB segments, each with its own
+authentication tag, so they are decrypted and encrypted a segment at a time where the bytes only
+pass through: the download of an artifact, of the original of an uploaded file, of an artifact
+ZIP, of an agent artifact and of a tool-job result from another worker process, and the blobs in
+`storage:encrypt` and `storage:copy-blobs`. Such a transfer holds a few MiB whatever the size of
+the file. Content that is parsed or handed to a model (extracted text, evidence, project texts)
+and every upload is still held in memory whole, about two to three times its size while it is
+encrypted or decrypted. The list of paths is in
+[Storage](storage.md#blobs-whole-or-as-a-stream).
+
+**A damaged file and a download.** A streamed download sends a segment only after that segment
+verified, and the first segment is verified before the response starts. A file that cannot be
+opened at all is answered with an error status. A file that was changed or cut further in makes
+the download break off: the connection is closed before the announced length is reached, which
+browsers and HTTP clients report as a failed download. The server never ends such a response as
+if the file were complete, and it logs `A stored blob could not be opened` with the code
+`CORRUPT_BLOB`.
 
 ## Not built yet
 

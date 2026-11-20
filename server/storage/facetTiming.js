@@ -9,7 +9,16 @@
 import { timeAsync } from '../telemetry/waitDiagnostics.js';
 
 /** The blob facet methods worth timing. `scan` pages `list` and counts there. */
-export const BLOB_OPS = Object.freeze(['get', 'put', 'delete', 'list', 'deletePrefix']);
+export const BLOB_OPS = Object.freeze([
+  'get',
+  'put',
+  'delete',
+  'list',
+  'deletePrefix',
+  // Until the stream is open (first part read and verified), not until its end.
+  'openRead',
+  'putStream'
+]);
 
 /**
  * Time a facet's async methods into the `storage` diagnostics

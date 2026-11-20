@@ -43,6 +43,11 @@
  *   hold a request for minutes. A delete shares one deadline between its
  *   requests, and the wait for the delete lock covers exactly that: the
  *   longest a delete in front of it may take.
+ * - A streamed read (`openRead`) has no whole-body deadline, because its
+ *   consumer sets the pace. It is bounded by the time spent waiting for the
+ *   bucket instead (`./s3BodyStream.js`). A streamed write (`putStream`) is
+ *   one `PutObject` with the stream as its body, sent once: the SDK does not
+ *   retry a body it cannot rewind.
  * - "No such blob" is only what S3 says it is: a `GetObject` answered with
  *   the error code `NoSuchKey`. Any other 404 is a failure, never `null`.
  * - `list` pages with its own cursor and `StartAfter`, not with the backend's
@@ -57,6 +62,7 @@
  * @module storage/providers/s3/S3BlobStore
  */
 import crypto from 'node:crypto';
+import { Readable, Transform, pipeline } from 'node:stream';
 import logger from '../../../utils/logger.js';
 import { BlobStore } from '../../BlobStore.js';
 import {
@@ -64,12 +70,16 @@ import {
   clampBlobLimit,
   compareBlobKeys,
   decodeBlobCursor,
+  assertStreamLength,
   encodeBlobCursor,
+  guardStream,
+  streamLengthError,
   toBlobBuffer
 } from '../../blobSupport.js';
 import { InvalidKeyError, LockTimeoutError, StorageError } from '../../errors.js';
 import { assertValidBlobKey, assertValidNamespace, isReservedBlobKey } from '../../keys.js';
 import { isValidId } from '../../../utils/pathSecurity.js';
+import { boundedBodyStream } from './s3BodyStream.js';
 import { describeS3Error, isNoSuchKey, isNotFound, mapS3Error } from './s3Errors.js';
 
 const COMPONENT = 'S3BlobStore';
@@ -345,12 +355,13 @@ export class S3BlobStore extends BlobStore {
    * @param {string} command - Name of a class in `commands`.
    * @param {Object} input - Command input.
    * @param {{op: string, ns?: string, key?: string, notFound?: *, bytes?: number,
-   *   deadlineAt?: number}} where - The blob call, for the error. `notFound`,
+   *   deadlineAt?: number, signal?: AbortSignal}} where - The blob call, for the error. `notFound`,
    *   when given, is returned for a missing object instead of throwing: for a
    *   `GetObject` only on the S3 answer `NoSuchKey`, for a `HeadObject` (which
    *   has no error body) on a 404 the caller then confirms. `bytes` is the
    *   payload the request uploads, which extends its deadline. `deadlineAt`
-   *   (epoch ms) is a deadline several requests of one call share.
+   *   (epoch ms) is a deadline several requests of one call share. `signal`
+   *   aborts the request.
    * @returns {Promise<Object>} The command output.
    * @private
    */
@@ -376,7 +387,8 @@ export class S3BlobStore extends BlobStore {
             ...options,
             ...perRequest
           }),
-        budget
+        budget,
+        where.signal || null
       );
     } catch (error) {
       if ('notFound' in where && absent(error)) return where.notFound;
@@ -405,20 +417,32 @@ export class S3BlobStore extends BlobStore {
    *   the command with the options it is given.
    * @param {number|null} [budget] - The deadline in milliseconds; the store's
    *   deadline of a call without payload by default, null for none.
+   * @param {AbortSignal|null} [signal] - Aborts the request when the caller
+   *   gives up on it (the stream it uploads failed); the call rejects with
+   *   the signal's reason.
    * @returns {Promise<T>}
    * @template T
    * @private
    */
-  async _bounded(op, run, budget = this._sendBudgetMs) {
-    if (budget === null) return run();
+  async _bounded(op, run, budget = this._sendBudgetMs, signal = null) {
+    if (budget === null && !signal) return run();
     const controller = new AbortController();
     let timer;
+    let onAbort;
     const deadline = new Promise((_, reject) => {
-      timer = setTimeout(() => {
-        const error = timeoutError(`S3 ${op} did not finish within ${budget} ms`);
-        controller.abort(error);
-        reject(error);
-      }, budget);
+      if (budget !== null) {
+        timer = setTimeout(() => {
+          const error = timeoutError(`S3 ${op} did not finish within ${budget} ms`);
+          controller.abort(error);
+          reject(error);
+        }, budget);
+      }
+      onAbort = () => {
+        controller.abort(signal.reason);
+        reject(signal.reason);
+      };
+      if (signal?.aborted) onAbort();
+      else signal?.addEventListener('abort', onAbort, { once: true });
     });
     const sending = run({ abortSignal: controller.signal });
     // The abort makes the command reject too; the deadline already answered.
@@ -427,6 +451,7 @@ export class S3BlobStore extends BlobStore {
       return await Promise.race([sending, deadline]);
     } finally {
       clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
     }
   }
 
@@ -483,11 +508,37 @@ export class S3BlobStore extends BlobStore {
       { ...where, notFound: null }
     );
     if (!response) return null;
-    const tooLarge = () =>
-      new StorageError(
-        `Blob ${ns}/${key} is larger than the limit of ${this._maxObjectBytes} stored bytes and was not read`,
-        { code: 'BLOB_TOO_LARGE' }
-      );
+    return this._readWhole(response, where, startedAt);
+  }
+
+  /**
+   * The error for a stored object over the limit.
+   *
+   * @param {string} ns
+   * @param {string} key
+   * @returns {StorageError} Code `BLOB_TOO_LARGE`.
+   * @private
+   */
+  _tooLarge(ns, key) {
+    return new StorageError(
+      `Blob ${ns}/${key} is larger than the limit of ${this._maxObjectBytes} stored bytes and was not read`,
+      { code: 'BLOB_TOO_LARGE' }
+    );
+  }
+
+  /**
+   * Read the body of a `GetObject` response into one Buffer, under the limit
+   * and the body deadline.
+   *
+   * @param {Object} response - The command output.
+   * @param {{op: string, ns: string, key: string}} where - The blob call.
+   * @param {number} startedAt - When the call started (epoch ms).
+   * @returns {Promise<{key: string, bytes: number, data: Buffer}>}
+   * @private
+   */
+  async _readWhole(response, where, startedAt) {
+    const { ns, key } = where;
+    const tooLarge = () => this._tooLarge(ns, key);
     const declared = Number.isSafeInteger(response.ContentLength) ? response.ContentLength : null;
     if (declared !== null && declared > this._maxObjectBytes) {
       response.Body?.destroy?.();
@@ -514,6 +565,150 @@ export class S3BlobStore extends BlobStore {
       );
     }
     return { key, bytes: read.bytes, data: read.data };
+  }
+
+  /**
+   * @inheritdoc
+   *
+   * The body of one `GetObject`, handed on as it arrives. The call resolves
+   * when the response headers are there; the object's length is checked
+   * against the limit before a byte of the body is read.
+   *
+   * The whole-body deadline of `get` does not fit a stream that is read at
+   * its consumer's pace, so the body has two bounds that count only the time
+   * spent waiting for the bucket (`./s3BodyStream.js`): no byte for the
+   * call's deadline (`operationTimeoutMs`, capped by `requestTimeoutMs`), and
+   * a total wait of that deadline plus the time the object needs at
+   * `minThroughputBytesPerSecond`. Either ends the stream with
+   * `STORAGE_UNAVAILABLE`, as does a body that is cut or has another length
+   * than declared. Destroying the stream aborts the request.
+   *
+   * A consumer that reads nothing for `requestTimeoutMs` loses the
+   * connection to the client's socket timeout.
+   *
+   * @throws {StorageError} Code `BLOB_TOO_LARGE` for an object over the limit.
+   */
+  async openRead(ns, key) {
+    const name = this.objectKey(ns, key);
+    const where = { op: 'openRead', ns, key };
+    const startedAt = Date.now();
+    const response = await this._send(
+      'GetObjectCommand',
+      { Key: name },
+      { ...where, notFound: null }
+    );
+    if (!response) return null;
+    const declared = Number.isSafeInteger(response.ContentLength) ? response.ContentLength : null;
+    if (declared === null) {
+      // No length, no promise of one: read under the rules of `get`.
+      const blob = await this._readWhole(response, where, startedAt);
+      return {
+        key,
+        bytes: blob.bytes,
+        stream: Readable.from([blob.data], { objectMode: false })
+      };
+    }
+    if (declared > this._maxObjectBytes) {
+      response.Body?.destroy?.();
+      throw this._tooLarge(ns, key);
+    }
+    const unavailable = message =>
+      new StorageError(`Blob ${ns}/${key}: ${message}`, { code: 'STORAGE_UNAVAILABLE' });
+    const stream = boundedBodyStream(response.Body, {
+      bytes: declared,
+      idleMs:
+        this._sendBudgetMs === null
+          ? null
+          : Math.min(this._sendBudgetMs, this._requestTimeoutMs ?? Infinity),
+      budgetMs: this._bodyDeadlineMs(startedAt, declared),
+      mapError: error => (error instanceof StorageError ? error : this._bodyFailure(error, where)),
+      timeoutError,
+      lengthError: unavailable
+    });
+    return { key, bytes: declared, stream: guardStream(stream) };
+  }
+
+  /**
+   * @inheritdoc
+   *
+   * One `PutObject` whose body is the stream, with the declared length as its
+   * `Content-Length`; no multipart upload. A request with a stream body is
+   * sent once: the SDK cannot rewind it, so the retries `put` gets
+   * (`maxAttempts`) do not apply and a transient failure rejects the call. An
+   * object is visible only when its `PutObject` succeeded, so a failed or
+   * short stream leaves the key as it was.
+   *
+   * `bytes` and `sha256` describe what was sent. The `contentType` hint is
+   * not stored.
+   *
+   * @throws {StorageError} Code `BLOB_TOO_LARGE` above the limit, before
+   *   anything is sent.
+   */
+  async putStream(ns, key, stream, opts = {}) {
+    const bytes = assertStreamLength(opts?.bytes, stream);
+    let name;
+    try {
+      name = this.objectKey(ns, key);
+      if (bytes > this._maxObjectBytes) {
+        throw new StorageError(
+          `Blob ${ns}/${key} has ${bytes} stored bytes; the limit is ${this._maxObjectBytes}`,
+          { code: 'BLOB_TOO_LARGE' }
+        );
+      }
+    } catch (error) {
+      stream.destroy();
+      throw error;
+    }
+    const hash = crypto.createHash('sha256');
+    let count = 0;
+    /** What the payload itself failed with, as opposed to the request. */
+    let payloadError = null;
+    // A stream that fails does not end its request by itself: the upload
+    // would wait for bytes that never come. The request is aborted instead.
+    const gaveUp = new AbortController();
+    const payloadFailed = error => {
+      if (payloadError) return;
+      payloadError = error;
+      gaveUp.abort(error);
+    };
+    const body = new Transform({
+      transform(chunk, _encoding, callback) {
+        count += chunk.length;
+        if (count > bytes) {
+          payloadFailed(streamLengthError(`${ns}/${key}`, count, bytes));
+          return void callback(payloadError);
+        }
+        hash.update(chunk);
+        return void callback(null, chunk);
+      },
+      flush(callback) {
+        if (count !== bytes) payloadFailed(streamLengthError(`${ns}/${key}`, count, bytes));
+        callback(payloadError);
+      }
+    });
+    let requestSettled = false;
+    pipeline(stream, body, error => {
+      // Only a failure of the payload itself, not the teardown after the request ended.
+      if (error && !requestSettled) payloadFailed(error);
+    });
+    try {
+      await this._send(
+        'PutObjectCommand',
+        { Key: name, Body: body, ContentLength: bytes, ContentType: CONTENT_TYPE },
+        { op: 'putStream', ns, key, bytes, signal: gaveUp.signal }
+      );
+    } catch (error) {
+      requestSettled = true;
+      body.destroy();
+      stream.destroy();
+      throw payloadError || error;
+    } finally {
+      requestSettled = true;
+    }
+    if (payloadError || count !== bytes) {
+      throw payloadError || streamLengthError(`${ns}/${key}`, count, bytes);
+    }
+    return { key, bytes, sha256: hash.digest('hex') };
   }
 
   /**

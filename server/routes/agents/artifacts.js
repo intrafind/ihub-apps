@@ -8,7 +8,7 @@
  */
 
 import rateLimit from 'express-rate-limit';
-import fs, { promises as fsp } from 'node:fs';
+import { promises as fsp } from 'node:fs';
 import path from 'node:path';
 import { authRequired, authenticatedOnly } from '../../middleware/authRequired.js';
 import { isAdmin } from '../../utils/authorization.js';
@@ -19,13 +19,8 @@ import { getContentsPath } from '../../utils/contentsPath.js';
 import { getWorkflowEngine } from '../../services/workflow/index.js';
 import { buildContentDisposition } from '../../utils/safeContentDisposition.js';
 import { ARTIFACT_STORE } from '../../agents/runtime/artifactStore.js';
-import {
-  assertPlaintextReadable,
-  contentSize,
-  isSealedOnDisk,
-  openFromDisk,
-  sealedFileName
-} from '../../storage/atRest/sealedFiles.js';
+import { contentSize, openSealedStream, sealedFileName } from '../../storage/atRest/sealedFiles.js';
+import { sendStream } from '../../utils/streamResponse.js';
 
 function getEngine() {
   return getWorkflowEngine();
@@ -59,25 +54,6 @@ function safeName(name) {
   const base = path.basename(name);
   if (base !== name) return null;
   return base;
-}
-
-/**
- * The content of an artifact file that is sealed on disk.
- *
- * @param {string} file - Validated absolute path of the artifact.
- * @param {string} name - Its name inside the store, `<runId>/<name>`.
- * @returns {Promise<Buffer|null>} Null for a plaintext file that may be
- *   served as it is: the caller streams it.
- * @throws {import('../../storage/errors.js').StorageError} A sealed file that
- *   does not open, or a plaintext file while encryption is enforced.
- */
-async function readIfSealed(file, name) {
-  if (!(await isSealedOnDisk(file))) {
-    await assertPlaintextReadable(ARTIFACT_STORE, name);
-    return null;
-  }
-  // lgtm[js/path-injection] -- file path canonicalized within artifacts root.
-  return openFromDisk(ARTIFACT_STORE, name, await fsp.readFile(file));
 }
 
 /**
@@ -179,46 +155,38 @@ export default function registerAgentArtifactRoutes(app) {
       } catch {
         throw new ServiceError('NOT_FOUND', 'artifact not found');
       }
-      res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
+      // A sealed artifact (storage encryption) is decrypted segment by segment while it is sent;
+      // a plaintext one is streamed as it is. Which one it is, is decided by the file's own
+      // format. Opened before any header is set: a file that vanished after the stat or does
+      // not open is an ordinary failure answered by the error middleware.
+      let artifact;
+      try {
+        artifact = await openSealedStream(
+          ARTIFACT_STORE,
+          sealedFileName(String(runId), safe),
+          file
+        );
+      } catch (error) {
+        if (error?.code === 'ENOENT') throw new ServiceError('NOT_FOUND', 'artifact not found');
+        throw error;
+      }
       // Honor ?download=1 to set Content-Disposition: attachment so the
       // browser saves the file instead of rendering it inline. Use the
       // shared helper that escapes RFC 2183 unsafe chars and emits the
       // RFC 5987 UTF-8 form alongside the ASCII fallback.
-      if (req.query?.download === '1') {
-        res.setHeader('Content-Disposition', buildContentDisposition(safe));
-      }
-      // A sealed artifact (storage encryption) is opened as a whole and sent; a plaintext one
-      // is streamed as before. Which one it is, is decided by the file's own format.
-      const sealed = await readIfSealed(file, sealedFileName(String(runId), safe));
-      if (sealed) {
-        res.setHeader('Content-Length', sealed.length);
-        res.end(sealed);
-        return;
-      }
-      // A read error (the file vanished after the stat, a disk fault) used to be an unhandled
-      // 'error' event on the stream. Before the first byte it is an ordinary failure answered by
-      // the error middleware; after it, or when the client hung up, the connection is cut.
-      // `pipeline` is not used: it would destroy the response before it can be answered.
-      // lgtm[js/path-injection] -- file path canonicalized within artifacts root.
-      const stream = fs.createReadStream(file);
-      const failure = await new Promise(resolve => {
-        stream.once('error', resolve);
-        res.once('close', () => {
-          stream.destroy();
-          resolve(null);
-        });
-        res.once('finish', () => resolve(null));
-        stream.pipe(res);
-      });
-      if (failure) {
-        stream.unpipe(res);
-        if (res.headersSent) {
-          res.destroy(failure);
-          return;
+      //
+      // A read error before the first byte is answered by the error middleware, without these
+      // headers; after it, or when the client hung up, the connection is cut and never ended
+      // cleanly, so a damaged file is not taken for a complete one (`sendStream`).
+      await sendStream(req, res, artifact.stream, {
+        headers: {
+          'Content-Type': 'text/markdown; charset=utf-8',
+          'Content-Length': String(artifact.bytes),
+          ...(req.query?.download === '1'
+            ? { 'Content-Disposition': buildContentDisposition(safe) }
+            : {})
         }
-        res.removeHeader('Content-Disposition');
-        throw failure;
-      }
+      });
     }
   );
 }

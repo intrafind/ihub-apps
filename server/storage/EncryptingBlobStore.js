@@ -44,7 +44,9 @@
  *
  * - `put` returns the length and the SHA-256 of the **payload**, computed
  *   before encryption. The hash is never sent to the inner store.
- * - `get` returns the payload.
+ * - `get` returns the payload; `openRead` streams it, decrypted segment by
+ *   segment, and `putStream` seals a stream the same way. Both read and
+ *   write the objects `get` and `put` do.
  * - `list` and `scan` report the payload length; `scan` walks the inner
  *   store's own `scan`. In the strict mode it is
  *   computed from the stored length and no object is read. A stored length
@@ -66,12 +68,14 @@
  *   installation does not hold.
  *
  * Memory: a payload is held about three times during an encrypted `put`
- * (payload, ciphertext, the stored object) and twice during `get`.
- * `maxBlobBytes` bounds what is accepted.
+ * (payload, ciphertext, the stored object) and twice during `get`;
+ * `maxBlobBytes` bounds what is accepted. `openRead` and `putStream` hold a
+ * few 1 MiB segments whatever the size of the object.
  *
  * @module storage/EncryptingBlobStore
  */
 import crypto from 'node:crypto';
+import { pipeline } from 'node:stream';
 import logger from '../utils/logger.js';
 import {
   BlobEnvelopeError,
@@ -84,9 +88,10 @@ import {
   plainLength,
   storedLength
 } from '../crypto/blobEnvelope.js';
+import { createOpeningStream, createSealingStream } from '../crypto/envelopeStreams.js';
 import { StreamingAeadError, decrypt, encrypt, newDataKey } from '../crypto/streamingAead.js';
 import { BlobStore } from './BlobStore.js';
-import { toBlobBuffer } from './blobSupport.js';
+import { assertStreamLength, guardStream, streamLengthError, toBlobBuffer } from './blobSupport.js';
 import { CorruptBlobError, KeyUnavailableError, StorageError } from './errors.js';
 import { assertValidBlobKey, assertValidNamespace } from './keys.js';
 import { INTERNAL_BLOB_NAMESPACE } from './namespaces.js';
@@ -376,12 +381,39 @@ export class EncryptingBlobStore extends BlobStore {
    * @private
    */
   async _open(ns, key, stored, aad) {
+    const dataKey = await this._dataKeyOf(ns, key, stored, stored?.length, aad);
+    try {
+      return decrypt(stored.subarray(ENVELOPE_HEADER_BYTES), dataKey, aad, {
+        segmentBytes: ENVELOPE_SEGMENT_BYTES
+      });
+    } catch (error) {
+      if (!(error instanceof StreamingAeadError)) throw error;
+      throw new CorruptBlobError(`Blob ${ns}/${key} does not verify`, { cause: error });
+    } finally {
+      dataKey.fill(0);
+    }
+  }
+
+  /**
+   * The data key of one stored object, unwrapped from its header.
+   *
+   * @param {string} ns
+   * @param {string} key
+   * @param {Buffer} head - The object, or at least its first 512 bytes.
+   * @param {number} storedBytes - The object's full length.
+   * @param {string} aad
+   * @returns {Promise<Buffer>} The data key; the caller wipes it.
+   * @throws {CorruptBlobError} When the object is no envelope of this store.
+   * @throws {KeyUnavailableError} When the key it names is not here.
+   * @private
+   */
+  async _dataKeyOf(ns, key, head, storedBytes, aad) {
     let header;
     try {
-      if (!Buffer.isBuffer(stored) || stored.length < ENVELOPE_MIN_BYTES) {
+      if (!Buffer.isBuffer(head) || !(storedBytes >= ENVELOPE_MIN_BYTES)) {
         throw new BlobEnvelopeError('The object is too short to be an envelope', 'NOT_AN_ENVELOPE');
       }
-      header = decodeHeader(stored);
+      header = decodeHeader(head);
     } catch (error) {
       if (!(error instanceof BlobEnvelopeError)) throw error;
       throw new CorruptBlobError(
@@ -399,22 +431,32 @@ export class EncryptingBlobStore extends BlobStore {
         { keyId: header.keyId, keyProviderId: header.providerId }
       );
     }
-    let dataKey;
     try {
-      dataKey = await provider.unwrap(header.wrapped, header.keyId, aad);
+      return await provider.unwrap(header.wrapped, header.keyId, aad);
     } catch (error) {
       throw this._keyError(error, where);
     }
-    try {
-      return decrypt(stored.subarray(ENVELOPE_HEADER_BYTES), dataKey, aad, {
-        segmentBytes: ENVELOPE_SEGMENT_BYTES
-      });
-    } catch (error) {
-      if (!(error instanceof StreamingAeadError)) throw error;
-      throw new CorruptBlobError(`Blob ${ns}/${key} does not verify`, { cause: error });
-    } finally {
-      dataKey.fill(0);
-    }
+  }
+
+  /**
+   * Log a stored blob that could not be opened, as `get` and `openRead` do.
+   *
+   * @param {string} ns
+   * @param {string} key
+   * @param {Error} error
+   * @returns {void}
+   * @private
+   */
+  _reportUnreadable(ns, key, error) {
+    if (!(error instanceof CorruptBlobError) && !(error instanceof KeyUnavailableError)) return;
+    logger.error('A stored blob could not be opened', {
+      component: COMPONENT,
+      ns,
+      key,
+      code: error.code,
+      keyId: error.keyId ?? undefined,
+      reason: error.cause?.code || error.cause?.reason || error.cause?.message
+    });
   }
 
   /**
@@ -465,17 +507,128 @@ export class EncryptingBlobStore extends BlobStore {
       const data = await this._open(ns, key, stored.data, aad);
       return { key, bytes: data.length, data };
     } catch (error) {
-      if (error instanceof CorruptBlobError || error instanceof KeyUnavailableError) {
-        logger.error('A stored blob could not be opened', {
-          component: COMPONENT,
-          ns,
-          key,
-          code: error.code,
-          keyId: error.keyId ?? undefined,
-          reason: error.cause?.code || error.cause?.reason || error.cause?.message
-        });
-      }
+      this._reportUnreadable(ns, key, error);
       throw error;
+    }
+  }
+
+  /**
+   * @inheritdoc
+   *
+   * The stored object is read as a stream from the inner store, its header
+   * read and its data key unwrapped once, and the content decrypted and
+   * handed on one 1 MiB segment at a time, each only after its tag verified.
+   * About two segments are in memory, whatever the object's size.
+   *
+   * Which objects are decrypted and which are handed on as stored follows the
+   * store's mode exactly as in {@link EncryptingBlobStore#get}.
+   *
+   * The call resolves after the first segment verified, so everything that
+   * makes an object unreadable as a whole rejects here, before the caller
+   * has sent anything: no envelope in the strict mode, a key that is not
+   * here, a wrong address, a changed header or first segment. An object that
+   * is damaged or cut further in makes the stream fail later, with the same
+   * error, after the segments before it were delivered; see the note on
+   * streams in `BlobStore.js` for what a consumer must do.
+   *
+   * @throws {CorruptBlobError} As `get`, for the header and the first segment.
+   * @throws {KeyUnavailableError} When the key the object needs is not here.
+   */
+  async openRead(ns, key) {
+    const aad = this._aad(ns, key);
+    const stored = await this._inner.openRead(ns, key);
+    if (!stored) return null;
+    if (this._acceptPlaintext && !this._holdsEnvelopes) {
+      return { key, bytes: stored.bytes, stream: guardStream(stored.stream) };
+    }
+    let bytes = stored.bytes;
+    const opening = createOpeningStream({
+      headBytes: ENVELOPE_HEADER_BYTES,
+      begin: async head => {
+        if (this._acceptPlaintext && !isBlobEnvelope(head, stored.bytes)) {
+          return { passthrough: true };
+        }
+        const dataKey = await this._dataKeyOf(ns, key, head, stored.bytes, aad);
+        try {
+          bytes = plainLength(stored.bytes);
+        } catch (error) {
+          dataKey.fill(0);
+          if (!(error instanceof BlobEnvelopeError)) throw error;
+          throw new CorruptBlobError(`Blob ${ns}/${key} does not verify`, { cause: error });
+        }
+        return { dataKey, aad, expectedBytes: bytes };
+      },
+      mapError: error =>
+        error instanceof StreamingAeadError
+          ? new CorruptBlobError(`Blob ${ns}/${key} does not verify`, { cause: error })
+          : error
+    });
+    // A failure of either side ends both: a consumer that leaves ends the
+    // read of the inner store, a failed read ends the consumer's stream.
+    pipeline(stored.stream, opening, error => {
+      if (error) this._reportUnreadable(ns, key, error);
+    });
+    await opening.ready;
+    return { key, bytes, stream: guardStream(opening) };
+  }
+
+  /**
+   * @inheritdoc
+   *
+   * The payload is sealed one segment at a time while it is handed to the
+   * inner store, whose `putStream` gets the stored length up front
+   * (`storedLength(bytes)`): the object is the same as the one `put` writes
+   * for the same payload. `bytes` and `sha256` describe the payload. With
+   * `encryptWrites` off the stream is stored as it is.
+   *
+   * @throws {StorageError} Code `BLOB_TOO_LARGE` above `maxBlobBytes`, before
+   *   anything is read; `INVALID_DATA` for a stream of another length.
+   * @throws {KeyUnavailableError} When the data key cannot be wrapped. Nothing
+   *   is written in that case.
+   */
+  async putStream(ns, key, stream, opts = {}) {
+    const bytes = assertStreamLength(opts?.bytes, stream);
+    let aad;
+    let provider;
+    try {
+      aad = this._aad(ns, key);
+      if (bytes > this._maxBlobBytes) {
+        throw new StorageError(
+          `Blob ${ns}/${key} has ${bytes} bytes; the limit is ${this._maxBlobBytes}`,
+          { code: 'BLOB_TOO_LARGE' }
+        );
+      }
+      if (this._encryptWrites) provider = this._provider();
+    } catch (error) {
+      stream.destroy();
+      throw error;
+    }
+    if (!this._encryptWrites) return this._inner.putStream(ns, key, stream, { bytes });
+    const dataKey = newDataKey();
+    try {
+      let wrap;
+      try {
+        wrap = await provider.wrap(dataKey, aad);
+      } catch (error) {
+        stream.destroy();
+        throw this._keyError(error, { ns, key, keyProviderId: provider.id });
+      }
+      const sealing = createSealingStream({
+        header: encodeHeader({
+          providerId: provider.id,
+          keyId: wrap.keyId,
+          wrapped: wrap.wrapped
+        }),
+        dataKey,
+        aad,
+        bytes,
+        lengthError: arrived => streamLengthError(`${ns}/${key}`, arrived, bytes)
+      });
+      pipeline(stream, sealing, () => {});
+      await this._inner.putStream(ns, key, sealing, { bytes: storedLength(bytes) });
+      return { key, ...sealing.result() };
+    } finally {
+      dataKey.fill(0);
     }
   }
 

@@ -19,6 +19,10 @@
  * Decryption fails on a wrong key or associated data, a reordered,
  * truncated or extended stream, and on any flipped byte.
  *
+ * Two ways in and out, one format: {@link encrypt} and {@link decrypt} work on
+ * a whole buffer, {@link createEncryptor} and {@link createDecryptor} on a
+ * stream, a segment at a time, with one segment in memory.
+ *
  * The associated data is mandatory: a missing or empty value throws. An
  * object encrypted with none is bound to nothing and can be swapped with any
  * other object under the same data key, and no test would notice.
@@ -226,6 +230,273 @@ export function decrypt(
     if (last) break;
   }
   return output.subarray(0, written);
+}
+
+/**
+ * Bytes that arrived in pieces, taken out again in the sizes a segment needs.
+ */
+class ByteQueue {
+  constructor() {
+    /** @type {Buffer[]} */
+    this.chunks = [];
+    this.length = 0;
+  }
+
+  /** @param {Buffer} chunk */
+  push(chunk) {
+    if (chunk.length === 0) return;
+    this.chunks.push(chunk);
+    this.length += chunk.length;
+  }
+
+  /**
+   * The first `size` bytes, removed from the queue.
+   *
+   * @param {number} size - At most `length`.
+   * @returns {Buffer} A view of a queued piece when one holds all of it, else a copy.
+   */
+  take(size) {
+    if (size === 0) return Buffer.alloc(0);
+    const first = this.chunks[0];
+    this.length -= size;
+    if (first.length === size) {
+      this.chunks.shift();
+      return first;
+    }
+    if (first.length > size) {
+      this.chunks[0] = first.subarray(size);
+      return first.subarray(0, size);
+    }
+    const out = Buffer.allocUnsafe(size);
+    let filled = 0;
+    let used = 0;
+    while (filled < size) {
+      const chunk = this.chunks[used];
+      const wanted = size - filled;
+      if (chunk.length <= wanted) {
+        filled += chunk.copy(out, filled);
+        used += 1;
+      } else {
+        chunk.copy(out, filled, 0, wanted);
+        this.chunks[used] = chunk.subarray(wanted);
+        filled = size;
+      }
+    }
+    // One removal for all the pieces used, not one per piece.
+    this.chunks.splice(0, used);
+    return out;
+  }
+}
+
+function toChunk(chunk) {
+  if (Buffer.isBuffer(chunk)) return chunk;
+  if (chunk instanceof Uint8Array) {
+    return Buffer.from(chunk.buffer, chunk.byteOffset, chunk.byteLength);
+  }
+  throw new StreamingAeadError('A stream chunk must be a Buffer');
+}
+
+/**
+ * Encrypt a plaintext that arrives in pieces. The output is the byte sequence
+ * {@link encrypt} produces for the same plaintext (with its own random salt
+ * and nonce prefix), handed out segment by segment.
+ *
+ * Whether a segment is the last one is part of its nonce, so a full segment
+ * is held back until either more plaintext arrives or `final()` is called.
+ * At most one segment of plaintext is kept.
+ *
+ * @param {Buffer} dataKey - 32 random bytes.
+ * @param {Buffer|string} associatedData
+ * @param {{segmentBytes?: number}} [options]
+ * @returns {{update: (chunk: Buffer) => Buffer[], final: () => Buffer[], destroy: () => void}}
+ *   `update` and `final` return the ciphertext pieces that are ready, in
+ *   order. `destroy` wipes the derived key.
+ * @throws {StreamingAeadError} For a key, associated data or segment size that is not usable.
+ *
+ * @example
+ * const encryptor = createEncryptor(dataKey, aad);
+ * const pieces = [...encryptor.update(part1), ...encryptor.update(part2), ...encryptor.final()];
+ * // Buffer.concat(pieces) decrypts with decrypt(…, dataKey, aad)
+ */
+export function createEncryptor(
+  dataKey,
+  associatedData,
+  { segmentBytes = DEFAULT_SEGMENT_BYTES } = {}
+) {
+  checkSegmentSize(segmentBytes);
+  const salt = crypto.randomBytes(SALT_BYTES);
+  const noncePrefix = crypto.randomBytes(NONCE_PREFIX_BYTES);
+  const key = deriveKey(dataKey, salt, associatedData);
+  const queue = new ByteQueue();
+  let index = 0;
+  let finished = false;
+
+  const plainSize = () => (index === 0 ? segmentBytes - HEADER_BYTES : segmentBytes) - TAG_BYTES;
+  const seal = (piece, last, out) => {
+    if (index === 0) out.push(Buffer.concat([Buffer.from([HEADER_BYTES]), salt, noncePrefix]));
+    if (index > 0xffffffff) throw new StreamingAeadError('Too many segments');
+    const cipher = crypto.createCipheriv('aes-256-gcm', key, nonceOf(noncePrefix, index, last), {
+      authTagLength: TAG_BYTES
+    });
+    const body = cipher.update(piece);
+    cipher.final();
+    if (body.length > 0) out.push(body);
+    out.push(cipher.getAuthTag());
+    index += 1;
+  };
+
+  return {
+    update(chunk) {
+      if (finished) throw new StreamingAeadError('The stream is already finished');
+      queue.push(toChunk(chunk));
+      const out = [];
+      // Strictly more than a segment: this one is not the last.
+      while (queue.length > plainSize()) seal(queue.take(plainSize()), false, out);
+      return out;
+    },
+    final() {
+      if (finished) throw new StreamingAeadError('The stream is already finished');
+      finished = true;
+      const out = [];
+      // What is left is the last segment; an empty plaintext is one empty segment.
+      seal(queue.take(queue.length), true, out);
+      key.fill(0);
+      return out;
+    },
+    destroy() {
+      finished = true;
+      key.fill(0);
+    }
+  };
+}
+
+/**
+ * Decrypt a ciphertext that arrives in pieces, segment by segment.
+ *
+ * **A segment's plaintext is returned only after its tag was checked.** The
+ * result of every call is authentic for its position in the stream; what is
+ * not yet known is whether more follows. Only `final()` proves that the
+ * stream is complete: a stream cut at a segment boundary fails there, because
+ * its last segment was not written as the last one. A caller that passes
+ * plaintext on before `final()` returned must be able to tell its own
+ * consumer that the transfer failed.
+ *
+ * At most one segment of ciphertext is kept: a full segment is held back
+ * until more ciphertext arrives or `final()` is called, which is what tells
+ * a last segment from any other.
+ *
+ * @param {Buffer} dataKey
+ * @param {Buffer|string} associatedData
+ * @param {{segmentBytes?: number}} [options]
+ * @returns {{update: (chunk: Buffer) => Buffer[], final: () => Buffer[], destroy: () => void}}
+ *   `update` and `final` return the verified plaintext pieces, in order.
+ *   `destroy` wipes the derived key.
+ * @throws {StreamingAeadError} From `update` and `final` when the stream does
+ *   not verify, is cut or is too short. Nothing of the failing segment is returned.
+ *
+ * @example
+ * const decryptor = createDecryptor(dataKey, aad);
+ * for await (const chunk of ciphertext) for (const plain of decryptor.update(chunk)) emit(plain);
+ * for (const plain of decryptor.final()) emit(plain); // throws for a cut stream
+ */
+export function createDecryptor(
+  dataKey,
+  associatedData,
+  { segmentBytes = DEFAULT_SEGMENT_BYTES } = {}
+) {
+  checkSegmentSize(segmentBytes);
+  if (!Buffer.isBuffer(dataKey) || dataKey.length !== KEY_BYTES) {
+    throw new StreamingAeadError(`A data key has ${KEY_BYTES} bytes`);
+  }
+  associatedDataBytes(associatedData);
+  const queue = new ByteQueue();
+  let key = null;
+  let noncePrefix = null;
+  let index = 0;
+  let finished = false;
+
+  const readHeader = () => {
+    const header = queue.take(HEADER_BYTES);
+    if (header[0] !== HEADER_BYTES) throw new StreamingAeadError('Unknown header');
+    key = deriveKey(dataKey, header.subarray(1, 1 + SALT_BYTES), associatedData);
+    noncePrefix = Buffer.from(header.subarray(1 + SALT_BYTES));
+  };
+  const cipherSize = () => (index === 0 ? segmentBytes - HEADER_BYTES : segmentBytes);
+  const open = (segment, last) => {
+    if (segment.length < TAG_BYTES) throw new StreamingAeadError('Truncated segment');
+    const body = segment.subarray(0, segment.length - TAG_BYTES);
+    const decipher = crypto.createDecipheriv(
+      'aes-256-gcm',
+      key,
+      nonceOf(noncePrefix, index, last),
+      { authTagLength: TAG_BYTES }
+    );
+    decipher.setAuthTag(segment.subarray(segment.length - TAG_BYTES));
+    let plain;
+    try {
+      plain = decipher.update(body);
+      decipher.final();
+    } catch {
+      throw new StreamingAeadError('Ciphertext does not verify');
+    }
+    index += 1;
+    return plain;
+  };
+  /** A failure that is reported by the next call, see `update`. */
+  let deferred = null;
+  const fail = error => {
+    finished = true;
+    key?.fill(0);
+    throw error;
+  };
+
+  return {
+    update(chunk) {
+      if (deferred) throw deferred;
+      if (finished) throw new StreamingAeadError('The stream is already finished');
+      const out = [];
+      try {
+        queue.push(toChunk(chunk));
+        if (!key) {
+          if (queue.length < HEADER_BYTES) return out;
+          readHeader();
+        }
+        // Strictly more than a segment: this one is not the last.
+        while (queue.length > cipherSize()) out.push(open(queue.take(cipherSize()), false));
+      } catch (error) {
+        // Segments that verified before the failing one in the same chunk are
+        // still handed out, so what a reader got does not depend on how the
+        // ciphertext was cut into chunks. The failure follows on the next call.
+        if (out.length === 0) fail(error);
+        finished = true;
+        key?.fill(0);
+        deferred = error;
+      }
+      return out;
+    },
+    final() {
+      if (deferred) throw deferred;
+      if (finished) throw new StreamingAeadError('The stream is already finished');
+      try {
+        if (!key) {
+          if (queue.length < HEADER_BYTES + TAG_BYTES) {
+            throw new StreamingAeadError('Ciphertext is too short');
+          }
+          readHeader();
+        }
+        const plain = open(queue.take(queue.length), true);
+        finished = true;
+        key.fill(0);
+        return [plain];
+      } catch (error) {
+        return fail(error);
+      }
+    },
+    destroy() {
+      finished = true;
+      key?.fill(0);
+    }
+  };
 }
 
 /**

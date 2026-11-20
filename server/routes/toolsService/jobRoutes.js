@@ -4,7 +4,7 @@
 import rateLimit from 'express-rate-limit';
 import express from 'express';
 import { ServiceError } from '../../utils/ServiceError.js';
-import { createReadStream } from 'node:fs';
+import { sendStream } from '../../utils/streamResponse.js';
 import { authRequired } from '../../middleware/authRequired.js';
 import {
   canAccessJob,
@@ -13,7 +13,7 @@ import {
   isJobOwnedElsewhere,
   isTerminal,
   listJobsEverywhere,
-  readSealedResult
+  openSealedResult
 } from './jobStore.js';
 
 /** How often a progress stream for a job on another worker asks for news. */
@@ -152,7 +152,7 @@ const downloadLimiter = rateLimit({
  * GET /jobs/:jobId/download
  * Download the result of a completed job (shared across all tools).
  */
-router.get('/jobs/:jobId/download', authRequired, downloadLimiter, async (req, res, next) => {
+router.get('/jobs/:jobId/download', authRequired, downloadLimiter, async (req, res) => {
   const found = await findJob(req.params.jobId);
   const job = found?.job;
   if (!job || !canAccessJob(job, req.user)) {
@@ -165,33 +165,33 @@ router.get('/jobs/:jobId/download', authRequired, downloadLimiter, async (req, r
     throw new ServiceError('BAD_REQUEST', 'Job is not completed yet');
   }
 
-  res.setHeader('Content-Type', job.resultContentType || 'application/octet-stream');
-  res.setHeader('Content-Disposition', `attachment; filename="${job.resultFilename || 'result'}"`);
+  const type = job.resultContentType || 'application/octet-stream';
+  const disposition = `attachment; filename="${job.resultFilename || 'result'}"`;
   if (found.local) {
+    res.setHeader('Content-Type', type);
+    res.setHeader('Content-Disposition', disposition);
     res.setHeader('Content-Length', job.result.length);
     res.send(job.result);
     return;
   }
-  // A sealed result (storage encryption) is opened as a whole; a plaintext one is streamed.
-  let sealed;
+  // The result another worker wrote. A sealed file (storage encryption) is decrypted segment
+  // by segment while it is sent, a plaintext one is streamed as it is. A result that is gone
+  // or does not open is answered with a status; a failure after the first byte cuts the
+  // connection and never ends the response cleanly, so a damaged result is not taken for a
+  // complete one (`sendStream`).
   try {
-    sealed = await readSealedResult(job);
+    const result = await openSealedResult(job);
+    await sendStream(req, res, result.stream, {
+      headers: {
+        'Content-Type': type,
+        'Content-Disposition': disposition,
+        'Content-Length': String(result.bytes)
+      }
+    });
   } catch (error) {
     if (error?.code === 'ENOENT') throw new ServiceError('NOT_FOUND', 'Job result not found');
     throw error;
   }
-  if (sealed) {
-    res.setHeader('Content-Length', sealed.length);
-    res.send(sealed);
-    return;
-  }
-  const stream = createReadStream(job.resultFile);
-  stream.on('error', () => {
-    // An event listener cannot throw into Express: hand the error to `next`.
-    if (!res.headersSent) next(new ServiceError('NOT_FOUND', 'Job result not found'));
-    else res.destroy();
-  });
-  stream.pipe(res);
 });
 
 /**

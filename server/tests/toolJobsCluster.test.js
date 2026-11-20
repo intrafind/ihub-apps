@@ -129,13 +129,15 @@ async function runPrimary(initPrimaryBus, contentsDir) {
   });
 
   await check('another worker opens the sealed result for the download', async () => {
-    const { text } = await ask(other, { step: 'read', jobId: sealed });
+    const { text, sealed: wasSealed } = await ask(other, { step: 'read', jobId: sealed });
+    assert.strictEqual(wasSealed, true);
     assert.strictEqual(text, 'confidential ocr text');
   });
 
   await check('a plaintext result from before is still served as it is', async () => {
-    const { text } = await ask(other, { step: 'read', jobId: done });
-    assert.strictEqual(text, null, 'not sealed: the route streams the file');
+    const { text, sealed: wasSealed } = await ask(other, { step: 'read', jobId: done });
+    assert.strictEqual(wasSealed, false, 'not sealed: the file is streamed as it is');
+    assert.strictEqual(text, 'ocr result bytes');
   });
 
   for (const worker of workers) worker.kill();
@@ -192,8 +194,12 @@ async function runWorker() {
       }
       case 'read': {
         const found = await store.findJob(msg.jobId);
-        const opened = await store.readSealedResult(found.job);
-        return reply({ text: opened ? opened.toString('utf8') : null });
+        const opened = await store.openSealedResult(found.job);
+        const chunks = [];
+        for await (const chunk of opened.stream) chunks.push(chunk);
+        const content = Buffer.concat(chunks);
+        assert.strictEqual(content.length, opened.bytes, 'the announced length is the content');
+        return reply({ sealed: opened.sealed, text: content.toString('utf8') });
       }
       default:
         return reply({});

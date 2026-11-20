@@ -54,6 +54,7 @@ import logger from '../../utils/logger.js';
 import { isValidId } from '../../utils/pathSecurity.js';
 import { getStorage, readFacet } from '../../storage/bootstrap.js';
 import { RUNTIME_NAMESPACES } from '../../storage/namespaces.js';
+import { openBlobRead } from '../../storage/blobSupport.js';
 import { walkBlobs, walkDocuments } from '../../storage/walk.js';
 
 let lastCreatedAtMs = 0;
@@ -324,7 +325,73 @@ export class ArtifactRepository {
    * @returns {Promise<Object|null>} The artifact with its `data`, or null.
    */
   async get(scope, artifactId) {
-    const target = this._scope(scope, 'get');
+    const found = await this._locate(scope, artifactId, 'get');
+    if (!found) return null;
+    const blob = await this.blobs.get(ARTIFACTS_NAMESPACE, found.key);
+    if (!blob) return this._payloadMissing(found.target, artifactId);
+    return { ...found.descriptor, data: blob.data };
+  }
+
+  /**
+   * One stored artifact with its payload as a stream, for bytes that go
+   * straight to a response or an archive and need not be in memory.
+   *
+   * `bytes` is the payload's length, known before the first byte is read.
+   * **The stream can fail after it delivered data** (the store went away, a
+   * later part of an encrypted payload does not verify); the content counts
+   * as read only when the stream ended. A route answers with
+   * `sendStream` (`utils/streamResponse.js`), which aborts the response in
+   * that case. Whoever opens the stream reads it to its end or destroys it.
+   *
+   * @param {{type: string, id: string}} scope - Scope the caller is authorized for.
+   * @param {string} artifactId - Artifact id from a descriptor.
+   * @returns {Promise<Object|null>} The descriptor with `bytes` and `stream`
+   *   (a Node `Readable`), or null when there is no such artifact.
+   * @throws {import('../../storage/errors.js').StorageError} When the payload
+   *   is there and cannot be opened (`CORRUPT_BLOB`, `KEY_UNAVAILABLE`,
+   *   `STORAGE_UNAVAILABLE`).
+   */
+  async openRead(scope, artifactId) {
+    const found = await this._locate(scope, artifactId, 'openRead');
+    if (!found) return null;
+    const blob = await openBlobRead(this.blobs, ARTIFACTS_NAMESPACE, found.key);
+    if (!blob) return this._payloadMissing(found.target, artifactId);
+    return { ...found.descriptor, bytes: blob.bytes, stream: blob.stream };
+  }
+
+  /**
+   * The ids of a scope's artifacts whose payload is stored, from one listing
+   * of the blob store. What lets a caller that will stream several payloads
+   * (a ZIP) say "not found" for a missing one before it sends anything.
+   *
+   * @param {{type: string, id: string}} scope - Scope the caller is authorized for.
+   * @returns {Promise<Set<string>>} Artifact ids; empty when the scope cannot
+   *   hold artifacts.
+   * @throws What the blob store throws when it cannot be listed.
+   */
+  async storedPayloadIds(scope) {
+    const target = this._scope(scope, 'storedPayloadIds');
+    const ids = new Set();
+    if (!target) return ids;
+    const prefix = scopePrefix(target);
+    for await (const item of walkBlobs(this.blobs, ARTIFACTS_NAMESPACE, { prefix })) {
+      const id = item.key.slice(prefix.length);
+      if (!id.includes(KEY_SEPARATOR)) ids.add(id);
+    }
+    return ids;
+  }
+
+  /**
+   * The metadata of one artifact the scope may read.
+   *
+   * @param {{type: string, id: string}} scope
+   * @param {string} artifactId
+   * @param {string} operation - Method name, for the log line.
+   * @returns {Promise<{key: string, target: {type: string, id: string}, descriptor: Object}|null>}
+   * @private
+   */
+  async _locate(scope, artifactId, operation) {
+    const target = this._scope(scope, operation);
     if (!target) return null;
     if (!isValidId(artifactId)) return null;
     const key = artifactKey(target, artifactId);
@@ -336,19 +403,26 @@ export class ArtifactRepository {
     // one that does not depend on the separator being unambiguous. Checked
     // before the payload is read, so a mismatch costs nothing.
     if (data.scope && !sameScope(data.scope, target)) return null;
-    const blob = await this.blobs.get(ARTIFACTS_NAMESPACE, key);
-    if (!blob) {
-      // Metadata without a payload: the blob store lost it, or a half-finished
-      // delete. Reported rather than returned as an empty artifact.
-      this.logger.warn('Artifact metadata has no payload', {
-        component: COMPONENT,
-        scopeType: target.type,
-        scopeId: target.id,
-        artifactId
-      });
-      return null;
-    }
-    return { ...toDescriptor(artifactId, data), data: blob.data };
+    return { key, target, descriptor: toDescriptor(artifactId, data) };
+  }
+
+  /**
+   * Metadata without a payload: the blob store lost it, or a half-finished
+   * delete. Reported rather than returned as an empty artifact.
+   *
+   * @param {{type: string, id: string}} target
+   * @param {string} artifactId
+   * @returns {null}
+   * @private
+   */
+  _payloadMissing(target, artifactId) {
+    this.logger.warn('Artifact metadata has no payload', {
+      component: COMPONENT,
+      scopeType: target.type,
+      scopeId: target.id,
+      artifactId
+    });
+    return null;
   }
 
   /**

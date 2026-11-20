@@ -12,6 +12,10 @@
 import { jest } from '@jest/globals';
 import request from 'supertest';
 import express from 'express';
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import * as realAuthRequired from '../middleware/authRequired.js';
 import * as realJobStore from '../routes/toolsService/jobStore.js';
 
@@ -44,6 +48,17 @@ jest.unstable_mockModule('../utils/logger.js', () => ({
 const { registerOcrRoutes } = await import('../routes/toolsService/ocrRoutes.js');
 const { registerJobRoutes } = await import('../routes/toolsService/jobRoutes.js');
 const { default: errorHandler } = await import('../middleware/errorHandler.js');
+const sealedFiles = await import('../storage/atRest/sealedFiles.js');
+// A key provider of the test's own, so that the installation's key module (and with it the
+// contents directory) is not loaded here. It "wraps" a data key by handing it back.
+const keys = {
+  provider: {
+    id: 'test-keys',
+    currentKeyId: async () => 'k1',
+    wrap: async dataKey => ({ keyId: 'k1', wrapped: Buffer.from(dataKey) }),
+    unwrap: async wrapped => Buffer.from(wrapped)
+  }
+};
 
 let user = { id: 'u1', groups: ['users'] };
 const router = express.Router();
@@ -208,6 +223,86 @@ describe('tool job routes: errors', () => {
     problem(res);
     expect(res.body.code).toBe('NOT_FOUND');
     expect(res.body.detail).toBe('Job result not found');
+  });
+
+  describe('the result another worker wrote, as a stream', () => {
+    // Three 1 MiB segments, so that a change can sit behind bytes that were already sent.
+    const RESULT = crypto.randomBytes(2 * 1024 * 1024 + 4096);
+    let dir;
+    let file;
+
+    beforeAll(async () => {
+      dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tool-job-stream-'));
+      file = path.join(dir, 'remote.result');
+      sealedFiles.configureSealedFiles({ enabled: true, keyProvider: keys.provider });
+      fs.writeFileSync(file, await sealedFiles.sealForDisk('tool-jobs', 'remote.result', RESULT));
+    });
+
+    afterAll(() => {
+      sealedFiles.resetSealedFiles();
+      fs.rmSync(dir, { recursive: true, force: true });
+    });
+
+    const remoteJob = () => ({
+      local: false,
+      job: {
+        id: 'remote',
+        userId: 'u1',
+        status: 'completed',
+        resultFile: file,
+        resultContentType: 'application/pdf',
+        resultFilename: 'out.pdf'
+      }
+    });
+
+    it('serves a sealed result opened, with the length of the result', async () => {
+      state.remote = remoteJob();
+      const res = await request(app)
+        .get('/api/jobs/remote/download')
+        .buffer(true)
+        .parse((response, done) => {
+          const chunks = [];
+          response.on('data', chunk => chunks.push(chunk));
+          response.on('end', () => done(null, Buffer.concat(chunks)));
+        })
+        .expect(200);
+      expect(res.body.equals(RESULT)).toBe(true);
+      expect(res.headers['content-length']).toBe(String(RESULT.length));
+      expect(res.headers['content-type']).toBe('application/pdf');
+      expect(res.headers['content-disposition']).toBe('attachment; filename="out.pdf"');
+    });
+
+    it('cuts the download, instead of ending it, when a later part of the file was changed', async () => {
+      state.remote = remoteJob();
+      const original = fs.readFileSync(file);
+      const changed = Buffer.from(original);
+      changed[changed.length - 50] ^= 0x01;
+      fs.writeFileSync(file, changed);
+      try {
+        await expect(request(app).get('/api/jobs/remote/download').buffer(true)).rejects.toThrow(
+          /aborted|socket hang up|ECONNRESET/i
+        );
+        // Changed in its first segment, it is refused before anything is sent.
+        const early = Buffer.from(original);
+        early[512 + 99] ^= 0x01;
+        fs.writeFileSync(file, early);
+        const refused = await request(app).get('/api/jobs/remote/download');
+        expect(refused.status).toBe(500);
+        problem(refused);
+        expect(refused.headers['content-disposition']).toBeUndefined();
+      } finally {
+        fs.writeFileSync(file, original);
+      }
+    });
+
+    it('serves a plaintext result from before as it is', async () => {
+      const plain = path.join(dir, 'plain.result');
+      fs.writeFileSync(plain, 'PLAIN RESULT');
+      state.remote = remoteJob();
+      state.remote.job.resultFile = plain;
+      const res = await request(app).get('/api/jobs/remote/download').buffer(true).expect(200);
+      expect(res.headers['content-length']).toBe('12');
+    });
   });
 
   it.each(['completed', 'cancelled', 'error'])(

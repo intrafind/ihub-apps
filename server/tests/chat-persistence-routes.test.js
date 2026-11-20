@@ -35,6 +35,7 @@ import { buildMediaRecord, hashBytes } from '../services/provenance/mediaMarking
 import registerChatRoutes from '../routes/chats.js';
 import errorHandler from '../middleware/errorHandler.js';
 import { guestOwnerId, setGuestId } from '../services/chat/chatOwner.js';
+import { makeStreamable } from './support/streamableResponse.js';
 
 const ADA = { id: 'user-ada', name: 'Ada' };
 const GRACE = { id: 'user-grace', name: 'Grace' };
@@ -107,6 +108,8 @@ function makeResponse() {
     res.body = value;
     return res;
   };
+  // A route that streams its body pipes into the response.
+  makeStreamable(res);
   return res;
 }
 

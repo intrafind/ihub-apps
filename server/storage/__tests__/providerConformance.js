@@ -30,6 +30,7 @@
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
+import { Readable } from 'node:stream';
 import { canonicalJson } from '../canonicalJson.js';
 import {
   EtagMismatchError,
@@ -72,6 +73,22 @@ function nextId(prefix) {
 }
 
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+/** Read a byte stream to its end. */
+async function collectStream(stream) {
+  const chunks = [];
+  for await (const chunk of stream) chunks.push(chunk);
+  return Buffer.concat(chunks);
+}
+
+/** A byte stream of a buffer, in pieces that do not line up with anything. */
+function streamOf(buffer, pieceBytes = 70_001) {
+  const pieces = [];
+  for (let offset = 0; offset < buffer.length; offset += pieceBytes) {
+    pieces.push(buffer.subarray(offset, offset + pieceBytes));
+  }
+  return Readable.from(pieces, { objectMode: false });
+}
 
 /**
  * Namespaces the key-prefix listing cases write to, with the number of `__`
@@ -1992,6 +2009,158 @@ export function runProviderConformance({
       it('refuses a key that could address a path', async () => {
         await assert.rejects(() => shared.blobs.put(NS, '../escape', Buffer.from('x')));
         await assert.rejects(() => shared.blobs.get(NS, '../escape'));
+      });
+
+      // Streams read and write the same objects as `get` and `put`. The sizes
+      // sit on the edges of a store that works in 1 MiB segments (the
+      // encrypting blob store): a first segment holds 1 048 520 payload
+      // bytes, every further one 1 048 560.
+      const FIRST_SEGMENT = 1024 * 1024 - 40 - 16;
+      const NEXT_SEGMENT = 1024 * 1024 - 16;
+      const STREAM_SIZES = [
+        ['empty', 0],
+        ['one byte', 1],
+        ['one byte short of a segment', FIRST_SEGMENT - 1],
+        ['exactly one segment', FIRST_SEGMENT],
+        ['one byte over a segment', FIRST_SEGMENT + 1],
+        ['exactly two segments', FIRST_SEGMENT + NEXT_SEGMENT],
+        ['several segments', FIRST_SEGMENT + 2 * NEXT_SEGMENT + 12345]
+      ];
+
+      it('openRead streams exactly what get returns, with the size up front', async () => {
+        for (const [label, size] of STREAM_SIZES) {
+          const key = nextId('stream');
+          const payload = crypto.randomBytes(size);
+          await shared.blobs.put(NS, key, payload);
+
+          const opened = await shared.blobs.openRead(NS, key);
+
+          assert.equal(opened.key, key, label);
+          assert.equal(opened.bytes, size, `${label}: bytes is the payload size`);
+          const streamed = await collectStream(opened.stream);
+          assert.equal(streamed.length, size, `${label}: the stream delivers bytes bytes`);
+          assert.ok(streamed.equals(payload), `${label}: the stream is the payload`);
+          assert.ok(
+            streamed.equals((await shared.blobs.get(NS, key)).data),
+            `${label}: the stream equals get`
+          );
+        }
+      });
+
+      it('openRead answers null for a key it does not have', async () => {
+        assert.equal(await shared.blobs.openRead(NS, nextId('missing')), null);
+      });
+
+      it('openRead refuses a key that could address a path', async () => {
+        await assert.rejects(() => shared.blobs.openRead(NS, '../escape'));
+      });
+
+      it('a reader that leaves early leaves the blob readable', async () => {
+        const key = nextId('stream');
+        const payload = crypto.randomBytes(FIRST_SEGMENT + NEXT_SEGMENT + 5);
+        await shared.blobs.put(NS, key, payload);
+
+        const opened = await shared.blobs.openRead(NS, key);
+        const first = await new Promise((resolve, reject) => {
+          opened.stream.once('data', resolve);
+          opened.stream.once('error', reject);
+        });
+        opened.stream.destroy();
+        await new Promise(resolve => opened.stream.once('close', resolve));
+
+        assert.ok(first.equals(payload.subarray(0, first.length)), 'what arrived is a prefix');
+        assert.ok((await shared.blobs.get(NS, key)).data.equals(payload));
+        const again = await shared.blobs.openRead(NS, key);
+        assert.ok((await collectStream(again.stream)).equals(payload));
+      });
+
+      it('putStream stores what put stores, and reports the payload', async () => {
+        for (const [label, size] of STREAM_SIZES) {
+          const key = nextId('stream');
+          const payload = crypto.randomBytes(size);
+
+          const ref = await shared.blobs.putStream(NS, key, streamOf(payload), { bytes: size });
+
+          assert.equal(ref.key, key, label);
+          assert.equal(ref.bytes, size, `${label}: bytes is the payload size`);
+          assert.equal(
+            ref.sha256,
+            crypto.createHash('sha256').update(payload).digest('hex'),
+            `${label}: sha256 is the payload's`
+          );
+          assert.ok((await shared.blobs.get(NS, key)).data.equals(payload), `${label}: get`);
+          const opened = await shared.blobs.openRead(NS, key);
+          assert.equal(opened.bytes, size, label);
+          assert.ok((await collectStream(opened.stream)).equals(payload), `${label}: openRead`);
+          const listed = await shared.blobs.list(NS, { prefix: key });
+          assert.deepEqual(
+            listed.items.find(item => item.key === key),
+            { key, bytes: size },
+            `${label}: listed size`
+          );
+        }
+      });
+
+      it('putStream replaces on a second write to the same key', async () => {
+        const key = nextId('stream');
+        await shared.blobs.put(NS, key, Buffer.from('first'));
+        await shared.blobs.putStream(NS, key, streamOf(Buffer.from('second')), { bytes: 6 });
+        assert.deepEqual((await shared.blobs.get(NS, key)).data, Buffer.from('second'));
+      });
+
+      it('putStream refuses a stream of another length and keeps what was there', async () => {
+        const key = nextId('stream');
+        const before = Buffer.from('the blob that was there');
+        await shared.blobs.put(NS, key, before);
+        const payload = crypto.randomBytes(200_000);
+
+        for (const declared of [payload.length - 1, payload.length + 1, 0]) {
+          const source = streamOf(payload);
+          await assert.rejects(
+            () => shared.blobs.putStream(NS, key, source, { bytes: declared }),
+            error => error instanceof StorageError && error.code === 'INVALID_DATA',
+            `declared ${declared} for ${payload.length} bytes`
+          );
+          assert.equal(source.destroyed, true, 'the source is released');
+          assert.deepEqual((await shared.blobs.get(NS, key)).data, before, 'nothing was replaced');
+        }
+        const fresh = nextId('stream');
+        await assert.rejects(() =>
+          shared.blobs.putStream(NS, fresh, streamOf(payload), { bytes: payload.length + 1 })
+        );
+        assert.equal(await shared.blobs.get(NS, fresh), null, 'nothing was created');
+      });
+
+      it('putStream needs the length, and a source that fails stores nothing', async () => {
+        const key = nextId('stream');
+        const unsized = streamOf(Buffer.from('x'));
+        await assert.rejects(
+          () => shared.blobs.putStream(NS, key, unsized, {}),
+          error => error instanceof StorageError && error.code === 'INVALID_DATA'
+        );
+        assert.equal(unsized.destroyed, true);
+
+        const broken = new Error('the source broke');
+        await assert.rejects(
+          () =>
+            shared.blobs.putStream(
+              NS,
+              key,
+              Readable.from(
+                (async function* failing() {
+                  yield crypto.randomBytes(70_000);
+                  throw broken;
+                })(),
+                { objectMode: false }
+              ),
+              { bytes: 140_000 }
+            ),
+          error => error === broken
+        );
+        assert.equal(await shared.blobs.get(NS, key), null);
+        await assert.rejects(() =>
+          shared.blobs.putStream(NS, '../escape', streamOf(Buffer.from('x')), { bytes: 1 })
+        );
       });
     });
 

@@ -68,6 +68,7 @@ import {
 } from '../services/scheduler/tasks/taskPolicy.js';
 import * as tasks from '../services/scheduler/tasks/taskService.js';
 import { sendCreated, segment } from '../utils/created.js';
+import { etagOfSha256, isFreshFor, sendStream } from '../utils/streamResponse.js';
 
 const checkFeature = requireFeature(SCHEDULED_TASKS_FEATURE);
 
@@ -540,7 +541,8 @@ export default function registerScheduledTaskRoutes(app) {
       if (!text) throw new ServiceError('NOT_FOUND', 'File not found');
       return res.json(text);
     }
-    const original = await store.getOriginal(scope, fileId);
+    // Streamed from the store: the original is never held whole in memory.
+    const original = await store.openOriginal(scope, fileId);
     if (!original) throw new ServiceError('NOT_FOUND', 'File not found');
     if (original.discarded) {
       throw new ServiceError(
@@ -549,15 +551,20 @@ export default function registerScheduledTaskRoutes(app) {
       );
     }
     const download = req.query.download === '1' || req.query.download === 'true';
-    res.setHeader('Content-Type', servedMediaType(original.mimeType));
-    res.setHeader('Content-Length', String(original.data.length));
     res.setHeader('Cache-Control', 'private, no-store');
-    res.setHeader(
-      'Content-Disposition',
-      download ? buildContentDisposition(original.name) : 'inline'
-    );
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.send(original.data);
+    if (isFreshFor(req, res, etagOfSha256(original.sha256))) {
+      original.stream.destroy();
+      return res.status(304).end();
+    }
+    // A failure after the first byte aborts the response (`sendStream`).
+    return await sendStream(req, res, original.stream, {
+      headers: {
+        'Content-Type': servedMediaType(original.mimeType),
+        'Content-Length': String(original.originalBytes),
+        'Content-Disposition': download ? buildContentDisposition(original.name) : 'inline',
+        'X-Content-Type-Options': 'nosniff'
+      }
+    });
   });
 
   app.delete(`${base}/:taskId/files/:fileId`, ...guard, async (req, res) => {

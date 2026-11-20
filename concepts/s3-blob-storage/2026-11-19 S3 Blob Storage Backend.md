@@ -878,7 +878,7 @@ are silent and precedence keeps it. "Overruled" names the decision that replaced
 | Object keys keep the `(namespace, key)` shape under `default/`. | Random opaque keys with a mapping document. | Stands (D4). |
 | `bytes` is the plaintext size everywhere. | Report the stored size. | Stands (D3). |
 | Two local backends: an npm endpoint for tests, versitygw for the requester. | Only one of them. | **Overruled in part by D10**: the test server is in-repo, not from npm. |
-| One single put, whole object in memory, a stated limit. | Streaming and multipart now. | Stands (D19). |
+| One single put, whole object in memory, a stated limit. | Streaming and multipart now. | **Changed after delivery (section 11.5)**: streamed reads and writes exist; one `PutObject` per object, no multipart. |
 | `artifacts` and `website-corpora` are in scope. | Follow the brief's list. | Stands (D17). |
 | A config migration is part of "Must". | (none stated) | **Overruled by D14**: no migration. |
 
@@ -1006,7 +1006,9 @@ Out of scope for v1 (D19 and the role plans):
 - Transit key provider (OpenBao, Vault, KMS). Per-tenant keys. A tenant prefix beyond `default`.
 - Rewrap job.
 - Multipart upload, range reads, presigned URLs, S3 versioning APIs, batch `DeleteObjects`,
-  server-side encryption settings, lifecycle rules.
+  server-side encryption settings, lifecycle rules. (Streamed reads and writes were out of scope
+  in the plan and were built afterwards: section 11.5. Multipart and range reads are still not
+  built.)
 - HMAC or otherwise hidden object names. Padding of sizes.
 - Instance roles, web identity and the SDK default credential chain.
 - Copy from S3 back to the filesystem. Reading through to the filesystem.
@@ -1025,7 +1027,7 @@ Proposed follow-ups. None is created as a ticket without the requester's yes.
 | Rewrap job over bucket objects after a master key rotation. Until then one previous key is the limit, and a leaked master key cannot be retired. | PM, ARCH, SEC |
 | Decision for the requester: encrypt blobs on the filesystem backend too. Done: R1, section 11. | PM, D2 |
 | Backend matrix: versitygw, AWS S3, one customer backend (SP-2 of #2906). | PM, QE, SEC |
-| Large objects: a streaming path and multipart above the single-put limit. | PM, ARCH, ENG |
+| Large objects: multipart above the single-put limit, and range reads. The streaming path is built (section 11.5); what still holds a whole object in memory is listed there. | PM, ARCH, ENG |
 | Backup: the admin export and the bucket; a flag in `backup-metadata.json`; a notice on the backup page; an orphan reconciler for objects without a document. | PM, ENG, UX |
 | Remaining file stores onto the blob facet (#2389) and the ledger spill blobs. | PM |
 | Per-tenant prefix and key context (#2392). | PM |
@@ -1156,3 +1158,70 @@ Known limits that were accepted:
 Test side of the same review: no test works on the real `contents/` any more
 (`server/tests/support/scratchContents.js`, the guard in `scripts/run-server-tests.js`); see
 `2026-11-20 S3 Blob Storage Test Suites.md`, section "Test isolation".
+
+
+### 11.5 Streamed reads and writes (added 2026-11-20)
+
+The requester decided that streaming is done now and not as a follow-up. The stored format did
+not change: an object is still the 512-byte header followed by the `tink-aes-gcm-hkdf-v1` stream
+in 1 MiB segments, and the recorded vectors open unchanged. Because each segment carries its own
+tag, a reader decrypts and hands on one segment at a time.
+
+**Contract** (`server/storage/BlobStore.js`):
+
+```text
+openRead(ns, key)                                   -> { key, bytes, stream } | null
+putStream(ns, key, stream, { bytes, contentType? }) -> { key, bytes, sha256 }
+```
+
+`bytes` is the payload size and is known before the first byte. Both have a base implementation
+over `get` and `put`, so every store has them. `get` and `put` are unchanged.
+
+**Integrity rule.** A segment is handed out only after its tag verified. `openRead` resolves
+after the first segment verified, so an object that cannot be opened at all (strict mode and no
+envelope, key not here, wrong address, changed header) rejects before a caller has sent anything.
+A change, a cut or an extension further in makes the stream fail with `CORRUPT_BLOB` after the
+genuine segments before it; a stream never ends cleanly on such an object. Whether a segment is
+the last one is part of its nonce, so the reader holds a full segment back until it sees more
+data or the end; a stream cut at a segment boundary fails there. A consumer treats the content
+as read only at the end of the stream. A route destroys its response on a late failure
+(`server/utils/streamResponse.js`) and never ends it.
+
+**Per store.**
+
+| Store | `openRead` | `putStream` |
+| --- | --- | --- |
+| Filesystem | file read stream over the open file | temp file beside the blob, fsync, rename (as `put`) |
+| S3 | the `GetObject` body. No whole-body deadline: an idle bound and a bound on the total time spent waiting for the bucket (`s3BodyStream.js`), neither of which counts time the consumer takes. Destroying the stream destroys the connection. | one `PutObject` with the stream as its body and the stored length (`storedLength(bytes)`) as `Content-Length`. Sent once: the SDK does not retry a stream body. A failing source aborts the request. |
+| Encrypting store | header read, key unwrapped once, segments decrypted in a transform | segments sealed in a transform, plaintext SHA-256 computed on the way |
+
+**Where it is used.** Artifact and uploaded-file downloads (chat, share, scheduled task,
+inference API), the artifact ZIP (payloads appended one after the other), agent artifact and
+cross-worker tool-job downloads (`openSealedStream` in `storage/atRest/sealedFiles.js`),
+`storage:copy-blobs` and the blob step of `storage:encrypt`.
+
+**What still holds a whole object in memory, and why.**
+
+| Path | Reason |
+| --- | --- |
+| Uploads (`multer` memory storage, chat files, inference files, OCR) | The upload is parsed into memory and its text is extracted from that buffer before anything is stored. Streaming the write would need disk storage for uploads first. |
+| Extracted text, page maps, evidence packs, corpus pages, project texts, crawl hand-overs | The content is parsed or put into a prompt. |
+| File tools, `create_zip`, document templates, A2A and inference file parts, image provenance, the embed page | The bytes go to a model, a parser, a page or an archive built in memory. |
+| HTML artifacts in a ZIP or a share download | The library-kit references are rewritten, which needs the whole file. |
+| The ledger spill blobs (`putBlob`/`getBlob` of the append log) | Another facet; payloads are small. |
+
+**Not built.** Multipart upload (one `PutObject` is limited by `maxObjectBytes`, 128 MiB by
+default, and by the service's single-request limit of 5 GiB). Range requests: no blob route
+answered them before, and none does now; a range of a sealed object would be served by decrypting
+only the segments it covers, which the format allows.
+
+**Measured** (`npm run test:s3:perf -- --mib 100`, in-repo S3 server in its own process, 4 CPUs):
+
+| Call, 100 MiB | Time | Held in ArrayBuffers | Longest event-loop stall |
+| --- | --- | --- | --- |
+| S3 `put` | 798 ms | 100 MiB above the payload | 102 ms |
+| S3 `putStream` | 672 ms | under 8 MiB | 8 ms |
+| S3 `get` | 360 ms | 200 MiB | 133 ms |
+| S3 `openRead` | 270 ms | 5 MiB | 10 ms |
+| Filesystem `get` | 215 ms | 202 MiB | 134 ms |
+| Filesystem `openRead` | 182 ms | 6 MiB | 14 ms |

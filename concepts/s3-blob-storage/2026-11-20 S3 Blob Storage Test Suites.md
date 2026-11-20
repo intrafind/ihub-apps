@@ -39,11 +39,22 @@ failure instead of a skip. Each run works under its own `test-<hex>` prefix and 
 | `storage-s3-proxy.test.js` | requests really pass a proxy / bypass it (`support/recordingProxy.js`) | fake |
 | `storage-s3-fake-fidelity.test.js` | the fake itself, over plain HTTP | fake |
 | `scripts/s3-e2e.js` | real server process: login, upload, read, bucket scan, restart, delete, admin status | fake, or external when configured |
-| `scripts/s3-perf.js` | 25 MiB put/get: time, peak memory, event-loop stall; not in any default run | fake (own process), or external |
+| `storage-stream-s3.test.js` | streamed read and write on S3: the request is aborted when the reader leaves, nothing is downloaded ahead of a reader, a stalled or cut body fails within its bound, a changed object fails as `CORRUPT_BLOB`, one `PutObject` per streamed write and no retry, the copy command's own retry, and the memory held for a 100 MiB object (measured in a child process, `support/streamMemoryProbe.js`, against the fake in a process of its own, `support/fakeS3Process.js`) | fake |
+| `storage-stream-blobs.test.js` | streamed encrypted blobs over a store with `get` only and over the filesystem store: every way of changing, cutting, swapping and extending an object, modes, key errors, `putStream`, the one-time encryption as a stream; sealed files as a stream | none |
+| `storage-stream-routes.test.js` | the streamed downloads over real HTTP with encryption on: artifact, uploaded file, ZIP, owner and share; a blob changed on disk cuts the transfer | none |
+| `crypto-envelope-streams.test.js` | the streaming encryptor and decryptor against the buffered ones and the recorded vectors | none |
+| `scripts/s3-perf.js` | 25 MiB (or `--mib N`) `put`/`get` and `putStream`/`openRead`: time, peak memory, memory held, event-loop stall; not in any default run | fake (own process), or external |
 
 Support: `support/scratchContents.js` (the scratch contents directory, see "Test isolation"
 below), `support/serverProcess.js` (seed a contents directory, start/stop `server/server.js`),
-`support/s3DeleteRaceWorker.js`, `support/readableScanner.js`.
+`support/s3DeleteRaceWorker.js`, `support/readableScanner.js`, `support/httpRoute.js` (a handler
+chain over a real HTTP connection, for what a client sees of a broken download),
+`support/streamableResponse.js` (lets a response double take a streamed body).
+
+The shared blob contract (`server/storage/__tests__/providerConformance.js`, section "the blob
+facet") has the streamed read and write since 2026-11-20: content equal to `get`, size up front,
+missing key, empty object, one byte short of, exactly at and one byte over a segment, several
+segments, a reader that leaves early, a stream of another length.
 
 ## Commands
 

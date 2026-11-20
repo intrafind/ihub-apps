@@ -16,12 +16,7 @@ import {
 import config from '../../config.js';
 import { getContentsPath } from '../../utils/contentsPath.js';
 import logger from '../../utils/logger.js';
-import {
-  assertPlaintextReadable,
-  isSealedOnDisk,
-  openFromDisk,
-  sealForDisk
-} from '../../storage/atRest/sealedFiles.js';
+import { openSealedStream, sealForDisk } from '../../storage/atRest/sealedFiles.js';
 
 /**
  * Jobs live in the memory of the worker that runs them — the uploaded file,
@@ -249,22 +244,23 @@ export async function completeJob(job, { result, contentType, filename }) {
 }
 
 /**
- * The result of a job another worker wrote, when its file is sealed.
+ * The result of a job another worker wrote, as a stream of its content: a
+ * sealed file is decrypted segment by segment, a plaintext file is read as it
+ * is while plaintext may still be read.
+ *
+ * The stream can fail after it delivered data (a damaged file); the caller
+ * sends it with `sendStream` (`utils/streamResponse.js`), which then cuts
+ * the response instead of ending it.
  *
  * @param {{resultFile: string}} job - The owner's snapshot of the job.
- * @returns {Promise<Buffer|null>} The result; null when the file is plaintext
- *   and may be served as it is (the caller streams it).
+ * @returns {Promise<{bytes: number, sealed: boolean, stream: import('node:stream').Readable}>}
+ *   `bytes` is the length of the result.
  * @throws What `fs` throws when the file is gone (`ENOENT`), and a
  *   `StorageError` for a sealed file that does not open or a plaintext file
  *   while encryption is enforced.
  */
-export async function readSealedResult(job) {
-  const name = path.basename(job.resultFile);
-  if (!(await isSealedOnDisk(job.resultFile))) {
-    await assertPlaintextReadable(RESULT_STORE, name);
-    return null;
-  }
-  return openFromDisk(RESULT_STORE, name, await fs.readFile(job.resultFile));
+export async function openSealedResult(job) {
+  return openSealedStream(RESULT_STORE, path.basename(job.resultFile), job.resultFile);
 }
 
 /**

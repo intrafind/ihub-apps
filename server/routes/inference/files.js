@@ -36,6 +36,7 @@ import {
   requireFileStore
 } from '../../services/inference/files.js';
 import { apiUser, numberField } from './shared.js';
+import { etagOfSha256, isFreshFor, sendStream } from '../../utils/streamResponse.js';
 
 const COMPONENT = 'FilesApi';
 
@@ -414,7 +415,8 @@ export default function registerFilesRoutes(app) {
           param: 'format'
         });
       }
-      const original = await store.getOriginal(scope, descriptor.id);
+      // Streamed from the store: the original is never held whole in memory.
+      const original = await store.openOriginal(scope, descriptor.id);
       if (!original) {
         throw new InferenceApiError(404, 'file_not_found', `No such file: ${descriptor.id}`, {
           param: 'file_id'
@@ -430,10 +432,19 @@ export default function registerFilesRoutes(app) {
           { param: 'file_id', details: { originalDeletedAt: original.originalDeletedAt || null } }
         );
       }
-      res.setHeader('Content-Type', servedMediaType(original.mimeType));
-      res.setHeader('Content-Length', String(original.data.length));
-      res.setHeader('Content-Disposition', buildContentDisposition(original.name));
-      return res.send(original.data);
+      if (isFreshFor(req, res, etagOfSha256(original.sha256))) {
+        original.stream.destroy();
+        return res.status(304).end();
+      }
+      // A failure after the first byte aborts the response; one before it is
+      // answered below like any other.
+      return await sendStream(req, res, original.stream, {
+        headers: {
+          'Content-Type': servedMediaType(original.mimeType),
+          'Content-Length': String(original.originalBytes),
+          'Content-Disposition': buildContentDisposition(original.name)
+        }
+      });
     } catch (error) {
       return fail(res, error);
     }

@@ -7,7 +7,8 @@
  *
  * It walks the declared blob namespaces of an encrypting store's inner store,
  * leaves every object that already is an envelope alone, and writes every
- * other object back through the encrypting store, at the same key. A blob is
+ * other object back through the encrypting store, at the same key, as a
+ * stream: no blob is held in memory, whatever its size. A blob is
  * replaced in one step by the inner store (a rename on the filesystem, one
  * `PutObject` on S3), so a reader sees the plaintext or the ciphertext, never
  * a mix; the store must accept plaintext reads while this runs.
@@ -30,6 +31,7 @@
  *
  * @module storage/encryptExistingBlobs
  */
+import { Readable } from 'node:stream';
 import logger from '../utils/logger.js';
 import { ENVELOPE_HEADER_BYTES, decodeHeader } from '../crypto/blobEnvelope.js';
 import { isBlobEnvelope } from './EncryptingBlobStore.js';
@@ -37,6 +39,36 @@ import { StorageError } from './errors.js';
 import { BLOB_NAMESPACES } from './namespaces.js';
 
 const COMPONENT = 'BlobEncryption';
+
+/** A blob that was replaced between the look at it and its conversion; the next run sees it again. */
+const changedMeanwhile = () =>
+  new StorageError('The blob changed while it was being encrypted', { code: 'IO_ERROR' });
+
+/**
+ * A blob's stream that fails unless it starts with the bytes the blob was
+ * judged by: what is encrypted is the object that was found in plaintext,
+ * not one that replaced it since (which may be an envelope already).
+ *
+ * @param {import('node:stream').Readable} stream - The stored blob.
+ * @param {Buffer} head - Its first bytes, as read before.
+ * @returns {import('node:stream').Readable}
+ */
+function sameHead(stream, head) {
+  async function* checked() {
+    let seen = 0;
+    for await (const chunk of stream) {
+      if (seen < head.length) {
+        const overlap = Math.min(chunk.length, head.length - seen);
+        if (!chunk.subarray(0, overlap).equals(head.subarray(seen, seen + overlap))) {
+          throw changedMeanwhile();
+        }
+        seen += overlap;
+      }
+      yield chunk;
+    }
+  }
+  return Readable.from(checked(), { objectMode: false });
+}
 
 /**
  * Encrypt the plaintext blobs of a store in place.
@@ -115,10 +147,18 @@ export async function encryptExistingBlobs(
           if (known && !known.has(decodeHeader(head).keyId)) foreign += 1;
         } else {
           if (!dryRun) {
-            const plain = await inner.get(namespace, item.key);
+            // As a stream, so the largest blob needs no more memory than the
+            // smallest. The stream reads the object as it was when it was
+            // opened, also while its replacement is written to the same key.
+            const plain = await inner.openRead(namespace, item.key);
             if (!plain) continue;
-            // Read again in full: decide on the bytes that are written back.
-            if (!isBlobEnvelope(plain.data)) await store.put(namespace, item.key, plain.data);
+            if (plain.bytes !== item.bytes) {
+              plain.stream.destroy();
+              throw changedMeanwhile();
+            }
+            await store.putStream(namespace, item.key, sameHead(plain.stream, head), {
+              bytes: plain.bytes
+            });
           }
           counts.encrypted += 1;
           plaintextBytes += item.bytes || 0;

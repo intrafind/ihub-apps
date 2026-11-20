@@ -39,7 +39,8 @@
 import { promises as fs } from 'node:fs';
 import crypto from 'node:crypto';
 import path from 'node:path';
-import { atomicWriteFile } from '../../../utils/atomicWrite.js';
+import { Readable } from 'node:stream';
+import { atomicWriteFile, atomicWriteStream } from '../../../utils/atomicWrite.js';
 import logger from '../../../utils/logger.js';
 import { BlobStore } from '../../BlobStore.js';
 import {
@@ -47,6 +48,10 @@ import {
   compareBlobKeys as compareKeys,
   decodeBlobCursor as decodeCursor,
   encodeBlobCursor as encodeCursor,
+  assertStreamLength,
+  guardStream,
+  mapStreamError,
+  streamLengthError,
   toBlobBuffer as toBuffer
 } from '../../blobSupport.js';
 import { StorageError } from '../../errors.js';
@@ -68,6 +73,13 @@ export const BLOB_DIR = 'blobs';
  * `..`, which no key may contain (`isValidId`), so it never hides a real blob.
  */
 export const DELETING_PREFIX = '..deleting_';
+
+/**
+ * Bytes a streamed read asks the file system for at a time. Larger than
+ * Node's default of 64 KiB, which costs sixteen round trips to the thread
+ * pool per MiB.
+ */
+const READ_CHUNK_BYTES = 1024 * 1024;
 
 /** Keys a blob walk stats at once. */
 const SCAN_CONCURRENCY = 16;
@@ -187,6 +199,87 @@ export class FilesystemBlobStore extends BlobStore {
         cause: error
       });
     }
+  }
+
+  /**
+   * @inheritdoc
+   *
+   * A read stream over the open file. The file is opened before the call
+   * resolves, so a blob replaced or deleted afterwards is still read to its
+   * end as it was (a `put` renames a new file into place and never changes
+   * one). A read error arrives on the stream as a `StorageError`, code
+   * `IO_ERROR`.
+   */
+  async openRead(ns, key) {
+    const file = this._path(ns, key);
+    let handle;
+    try {
+      handle = await fs.open(file, 'r');
+      const stat = await handle.stat();
+      if (!stat.isFile()) throw Object.assign(new Error('not a file'), { code: 'EISDIR' });
+      if (stat.size === 0) {
+        await handle.close();
+        return { key, bytes: 0, stream: Readable.from([], { objectMode: false }) };
+      }
+      // Closes the handle when it ends or is destroyed. `end` pins the read
+      // to the size that is reported.
+      const stream = handle.createReadStream({
+        start: 0,
+        end: stat.size - 1,
+        highWaterMark: READ_CHUNK_BYTES
+      });
+      // A failed read reaches the consumer as a storage error, like `get`.
+      mapStreamError(
+        stream,
+        error =>
+          new StorageError(`Failed to read blob ${ns}/${key}`, { code: 'IO_ERROR', cause: error })
+      );
+      return { key, bytes: stat.size, stream: guardStream(stream) };
+    } catch (error) {
+      await handle?.close().catch(() => {});
+      if (error.code === 'ENOENT') return null;
+      throw new StorageError(`Failed to read blob ${ns}/${key}`, {
+        code: 'IO_ERROR',
+        cause: error
+      });
+    }
+  }
+
+  /**
+   * @inheritdoc
+   *
+   * The stream is written to a scratch file beside the blob and renamed into
+   * place when it ended with the declared length, exactly as `put` replaces a
+   * blob: a reader sees the previous payload or the new one. A stream that
+   * fails or has another length leaves nothing behind.
+   */
+  async putStream(ns, key, stream, opts = {}) {
+    const bytes = assertStreamLength(opts?.bytes, stream);
+    let file;
+    try {
+      file = this._path(ns, key);
+      await fs.mkdir(path.dirname(file), { recursive: true });
+      // Marker first: a marker may outlive its blob, never the reverse.
+      await this._prefixIndex.writeMarker(this._dir(ns), ns, key);
+    } catch (error) {
+      stream.destroy();
+      throw error;
+    }
+    const previous = this.keepModificationTime ? await fs.stat(file).catch(() => null) : null;
+    const hash = crypto.createHash('sha256');
+    let count = 0;
+    await atomicWriteStream(file, stream, {
+      onChunk: chunk => {
+        count += chunk.length;
+        if (count > bytes) throw streamLengthError(`${ns}/${key}`, count, bytes);
+        hash.update(chunk);
+      },
+      onEnd: () => {
+        if (count !== bytes) throw streamLengthError(`${ns}/${key}`, count, bytes);
+      }
+    });
+    if (previous) await fs.utimes(file, previous.atime, previous.mtime);
+    return { key, bytes, sha256: hash.digest('hex') };
   }
 
   /**

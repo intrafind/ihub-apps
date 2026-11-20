@@ -20,6 +20,10 @@
  *   is counted as a conflict and left alone.
  * - **It is idempotent.** A second run copies only what is missing, so an
  *   interrupted run is simply run again.
+ * - **It holds no blob in memory.** A blob is read, sent and read back as a
+ *   stream, a segment at a time, so the largest blob needs no more memory
+ *   than the smallest. A transfer that fails for a moment is sent again
+ *   (three attempts per blob).
  * - **Every copy is verified**: the object is read back through the same path
  *   the server reads it (decrypted when encryption is on) and its SHA-256 is
  *   compared with that of the source content. A copy that does not verify is
@@ -78,7 +82,52 @@ is overwritten. Exit code 0: every blob is in the bucket. Exit code 1: not.
 /** Failures listed by name in the result; the rest are only counted. */
 const MAX_LISTED_FAILURES = 20;
 
-const sha256 = data => crypto.createHash('sha256').update(data).digest('hex');
+/** Times one blob is sent before it counts as failed. */
+const COPY_ATTEMPTS = 3;
+
+/**
+ * The SHA-256 of a stream's content, read to its end.
+ *
+ * @param {import('node:stream').Readable} stream
+ * @returns {Promise<string>} Hex digest.
+ * @throws What the stream fails with (a blob that does not verify, a store
+ *   that went away).
+ */
+async function sha256OfStream(stream) {
+  const hash = crypto.createHash('sha256');
+  for await (const chunk of stream) hash.update(chunk);
+  return hash.digest('hex');
+}
+
+/**
+ * Send one blob to the target as a stream and return the SHA-256 of what was
+ * read from the source.
+ *
+ * A streamed upload is sent once by the backend (it cannot rewind a stream),
+ * so the retries a buffered `put` gets are made here, by opening the source
+ * again.
+ *
+ * @param {import('../BlobStore.js').BlobStore} source
+ * @param {import('../BlobStore.js').BlobStore} target
+ * @param {string} namespace
+ * @param {string} key
+ * @param {{bytes: number, stream: import('node:stream').Readable}} opened -
+ *   The source blob, open; used for the first attempt.
+ * @returns {Promise<string>} Hex digest of the source content.
+ */
+async function sendBlob(source, target, namespace, key, opened) {
+  let blob = opened;
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      const ref = await target.putStream(namespace, key, blob.stream, { bytes: blob.bytes });
+      return ref.sha256;
+    } catch (error) {
+      if (attempt >= COPY_ATTEMPTS || error?.code !== 'STORAGE_UNAVAILABLE') throw error;
+      blob = await source.openRead(namespace, key);
+      if (!blob) throw error;
+    }
+  }
+}
 
 /**
  * A reader for the blobs on local disk that returns their content whether
@@ -167,21 +216,41 @@ export async function copyBlobs({
       counts.scanned += 1;
       let action;
       try {
-        const blob = await source.get(namespace, item.key);
+        // Streams on both sides: a blob is never held whole, whatever its size.
+        const blob = await source.openRead(namespace, item.key);
         if (!blob) {
           // Deleted since it was listed: not a blob of this run.
           counts.scanned -= 1;
           continue;
         }
-        const hash = sha256(blob.data);
-        const existing = await target.get(namespace, item.key);
+        let existing;
+        try {
+          existing = await target.openRead(namespace, item.key);
+        } catch (error) {
+          blob.stream.destroy();
+          throw error;
+        }
         if (existing) {
-          action = sha256(existing.data) === hash ? 'present' : 'conflict';
+          const [mine, theirs] = await Promise.allSettled([
+            sha256OfStream(blob.stream),
+            sha256OfStream(existing.stream)
+          ]);
+          if (mine.status === 'rejected') throw mine.reason;
+          if (theirs.status === 'rejected') throw theirs.reason;
+          action = mine.value === theirs.value ? 'present' : 'conflict';
         } else {
-          if (!dryRun) {
-            await target.put(namespace, item.key, blob.data);
-            const stored = await target.get(namespace, item.key);
-            if (!stored || sha256(stored.data) !== hash) {
+          if (dryRun) {
+            blob.stream.destroy();
+          } else {
+            const hash = await sendBlob(source, target, namespace, item.key, blob);
+            const stored = await target.openRead(namespace, item.key);
+            let verified = false;
+            try {
+              verified = Boolean(stored) && (await sha256OfStream(stored.stream)) === hash;
+            } catch {
+              // Counted below as a copy that does not read back.
+            }
+            if (!verified) {
               // Do not leave a copy behind that is not the source's content.
               await target.delete(namespace, item.key).catch(() => {});
               const mismatch = new StorageError(
@@ -192,7 +261,7 @@ export async function copyBlobs({
               throw mismatch;
             }
           }
-          counts.bytes += blob.data.length;
+          counts.bytes += blob.bytes;
           action = 'copied';
         }
       } catch (error) {

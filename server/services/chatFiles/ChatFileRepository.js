@@ -30,6 +30,7 @@ import { isValidId } from '../../utils/pathSecurity.js';
 import { sniffRasterImage } from './rasterImage.js';
 import { getStorage, readFacet } from '../../storage/bootstrap.js';
 import { BLOB_NAMESPACES, RUNTIME_NAMESPACES } from '../../storage/namespaces.js';
+import { openBlobRead } from '../../storage/blobSupport.js';
 import { walkBlobs, walkDocuments } from '../../storage/walk.js';
 import { ChatEvidenceRepository } from '../chat/ChatEvidenceRepository.js';
 import { estimateTokens, tokenizerInfo } from '../../../shared/tokenEstimator.js';
@@ -1102,7 +1103,63 @@ export class ChatFileRepository {
    * @returns {Promise<Object|null>}
    */
   async getOriginal(scope, fileId) {
-    const target = this._scope(scope, 'getOriginal');
+    const found = await this._locateOriginal(scope, fileId, 'getOriginal');
+    if (!found || found.discarded) return found;
+    const blob = await this.blobs.get(CHAT_FILE_BLOBS_NAMESPACE, found.blobKey);
+    if (!blob?.data) {
+      return { ...found.descriptor, hasOriginal: false, discarded: true, data: null };
+    }
+    return { ...found.descriptor, discarded: false, data: blob.data };
+  }
+
+  /**
+   * Open the original binary payload of a stored file as a stream, for a
+   * download: {@link ChatFileRepository#getOriginal} without the payload in
+   * memory.
+   *
+   * A file whose original was never stored or was discarded answers as
+   * `getOriginal` does (`discarded: true`, no stream). Otherwise the result
+   * carries `bytes`, the length of the original known before the first byte,
+   * and `stream`. **The stream can fail after it delivered data**; the file
+   * counts as read only when the stream ended, and a route answers with
+   * `sendStream` (`utils/streamResponse.js`). Whoever opens the stream reads
+   * it to its end or destroys it.
+   *
+   * @param {{type: 'chat'|'task'|'user', id: string}} scope
+   * @param {string} fileId
+   * @returns {Promise<Object|null>} The descriptor with `discarded`, and for
+   *   a stored original `originalBytes` (as read from the store) and `stream`.
+   * @throws {import('../../storage/errors.js').StorageError} When the original
+   *   is there and cannot be opened.
+   */
+  async openOriginal(scope, fileId) {
+    const found = await this._locateOriginal(scope, fileId, 'openOriginal');
+    if (!found || found.discarded) return found;
+    const blob = await openBlobRead(this.blobs, CHAT_FILE_BLOBS_NAMESPACE, found.blobKey);
+    if (!blob) {
+      return { ...found.descriptor, hasOriginal: false, discarded: true, data: null };
+    }
+    return {
+      ...found.descriptor,
+      discarded: false,
+      originalBytes: blob.bytes,
+      stream: blob.stream
+    };
+  }
+
+  /**
+   * The metadata of a file whose original is asked for.
+   *
+   * @param {{type: 'chat'|'task'|'user', id: string}} scope
+   * @param {string} fileId
+   * @param {string} operation - Method name, for the log line.
+   * @returns {Promise<Object|null>} Null for no such file; the answer of
+   *   `getOriginal` for a file without an original (`discarded: true`); else
+   *   `{ descriptor, blobKey }`.
+   * @private
+   */
+  async _locateOriginal(scope, fileId, operation) {
+    const target = this._scope(scope, operation);
     if (!target || !isValidId(fileId)) return null;
     const key = chatFileKey(target, fileId);
     if (!isValidId(key)) return null;
@@ -1118,22 +1175,7 @@ export class ChatFileRepository {
         data: null
       };
     }
-
-    const blob = await this.blobs.get(CHAT_FILE_BLOBS_NAMESPACE, originalBlobKey(key));
-    if (!blob?.data) {
-      return {
-        ...descriptor,
-        hasOriginal: false,
-        discarded: true,
-        data: null
-      };
-    }
-
-    return {
-      ...descriptor,
-      discarded: false,
-      data: blob.data
-    };
+    return { descriptor, blobKey: originalBlobKey(key) };
   }
 
   /**

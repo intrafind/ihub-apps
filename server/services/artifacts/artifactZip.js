@@ -13,7 +13,7 @@
  *
  * @module services/artifacts/artifactZip
  */
-import { PassThrough } from 'node:stream';
+import { PassThrough, finished } from 'node:stream';
 import { ZipArchive } from 'archiver';
 import { safeArchivePath } from '../documents/generatedFiles.js';
 import { artifactPolicy } from './artifactPolicy.js';
@@ -122,9 +122,22 @@ function formatMegabytes(bytes) {
 /**
  * Write a ZIP archive to a stream.
  *
- * @param {Array<{ path: string, data: Buffer, date?: string|Date }>} entries
+ * An entry is either in memory (`data`) or opened when its turn comes
+ * (`open`), so that an archive of large files holds one open payload stream
+ * and no payload in memory. Entries with `open` are appended one after the
+ * other: the next one is opened only when the one before is in the archive.
+ *
+ * A stream entry that fails part-way (its store went away, a later part of
+ * an encrypted payload does not verify) rejects the call; the archive is
+ * aborted and never finalized, so the caller can make the failure visible
+ * (destroy the response) instead of handing out an archive that looks whole.
+ *
+ * @param {Array<{ path: string, data?: Buffer,
+ *   open?: () => Promise<import('node:stream').Readable>, date?: string|Date }>} entries
  * @param {import('node:stream').Writable} output
  * @returns {Promise<void>} Resolves once the archive is finalized.
+ * @throws {ZipLimitError} Code `closed` when `output` closed first. What an
+ *   entry's `open` or stream failed with, as it is.
  */
 export async function writeZip(entries, output) {
   const archive = new ZipArchive({ zlib: { level: 6 } });
@@ -142,19 +155,66 @@ export async function writeZip(entries, output) {
       reject(new ZipLimitError('The download was closed before it finished.', 'closed'));
     });
   });
-  archive.pipe(output);
-  for (const entry of entries) {
-    const date = entry.date ? new Date(entry.date) : new Date();
-    archive.append(entry.data, {
-      name: entry.path,
-      date: Number.isNaN(date.getTime()) ? new Date() : date
-    });
-  }
   // Settled once the race is decided; a late event must not surface as an
   // unhandled rejection.
   failed.catch(() => {});
   closed.catch(() => {});
-  await Promise.race([archive.finalize(), failed, closed]);
+  archive.pipe(output);
+
+  let appended = 0;
+  let processed = 0;
+  let wake = null;
+  archive.on('entry', () => {
+    processed += 1;
+    wake?.();
+  });
+  /** Resolves when everything appended so far is in the archive. */
+  const drained = async () => {
+    while (processed < appended) {
+      await new Promise(resolve => {
+        wake = resolve;
+      });
+    }
+    wake = null;
+  };
+  const dated = entry => {
+    const date = entry.date ? new Date(entry.date) : new Date();
+    return { name: entry.path, date: Number.isNaN(date.getTime()) ? new Date() : date };
+  };
+
+  /** The stream entry being read, so that it is released however this ends. */
+  let current = null;
+  try {
+    for (const entry of entries) {
+      if (typeof entry.open !== 'function') {
+        archive.append(entry.data, dated(entry));
+        appended += 1;
+        continue;
+      }
+      await Promise.race([drained(), failed, closed]);
+      current = await entry.open();
+      // The archiver pipes a source and does not hear it fail: without this
+      // a failed payload would leave the archive waiting for ever.
+      const stream = current;
+      // `finished` also reports a stream that failed before it got here.
+      const broke = new Promise((_, reject) => {
+        finished(stream, { writable: false }, error => {
+          if (error) reject(error);
+        });
+      });
+      broke.catch(() => {});
+      archive.append(stream, dated(entry));
+      appended += 1;
+      await Promise.race([drained(), failed, closed, broke]);
+      current = null;
+    }
+    await Promise.race([archive.finalize(), failed, closed]);
+  } catch (error) {
+    archive.abort();
+    throw error;
+  } finally {
+    current?.destroy();
+  }
 }
 
 /**
@@ -215,6 +275,9 @@ export function downloadName(artifact) {
   return `${artifact.kind || 'artifact'}-${String(artifact.id).slice(0, 8)}.${ext}`;
 }
 
+/** An archive path whose file is rewritten on the way out (library kit). */
+const HTML_PATH = /\.html?$/i;
+
 /** Most ids one ZIP request may name. */
 export const MAX_ZIP_REQUEST_IDS = 1000;
 
@@ -240,7 +303,9 @@ export const MAX_ZIP_REQUEST_IDS = 1000;
  * @param {(res: import('express').Response) => void} [params.beforeSend] - Extra headers.
  * @returns {Promise<void>}
  * @throws {ServiceError} 400, 404 or 413 before the first byte is written; the caller lets the
- *   error middleware answer.
+ *   error middleware answer. A payload that fails once the archive has started ends the
+ *   response without finishing it (the connection is cut), which a client reports as a failed
+ *   download.
  */
 export async function sendArtifactsZip(
   res,
@@ -279,17 +344,40 @@ export async function sendArtifactsZip(
       : new ServiceError('PAYLOAD_TOO_LARGE', error.message, { details: { reason: error.code } });
   }
 
-  // Read before the first byte goes out: a payload missing now can still be
-  // answered with a status, which a half-written archive cannot.
+  // Decided before the first byte goes out: a payload missing now can still
+  // be answered with a status, which a half-written archive cannot.
+  //
+  // Payloads are streamed into the archive one after the other, so none is
+  // held in memory. The exception is an HTML file: its library-kit markers
+  // become the libraries' source when it leaves iHub, so the file works
+  // opened from disk, and for that rewrite it is read whole.
   const entries = [];
   let contentBytes = 0;
+  let stored = null;
   for (const item of planned) {
-    const artifact = await repository.get(scope, item.id);
-    if (!artifact) throw new ServiceError('NOT_FOUND', 'Artifact not found');
-    // An HTML file leaves iHub here: its library-kit markers become the
-    // libraries' source, so the file works opened from disk.
-    const data = withKitLibraries(artifact.data, item.path, libraryKit);
-    contentBytes += data.length;
+    let entry;
+    if (HTML_PATH.test(item.path)) {
+      const artifact = await repository.get(scope, item.id);
+      if (!artifact) throw new ServiceError('NOT_FOUND', 'Artifact not found');
+      const data = withKitLibraries(artifact.data, item.path, libraryKit);
+      contentBytes += data.length;
+      entry = { path: item.path, data, date: artifact.createdAt };
+    } else {
+      // One listing of the scope's payloads says which are there.
+      stored ??= await repository.storedPayloadIds(scope);
+      if (!stored.has(item.id)) throw new ServiceError('NOT_FOUND', 'Artifact not found');
+      contentBytes += Number(item.bytes) || 0;
+      entry = {
+        path: item.path,
+        date: item.createdAt,
+        open: async () => {
+          const artifact = await repository.openRead(scope, item.id);
+          // Deleted since the listing: the archive is aborted, not cut short.
+          if (!artifact) throw new ServiceError('NOT_FOUND', 'Artifact not found');
+          return artifact.stream;
+        }
+      };
+    }
     // The plan counted the stored sizes; the inlined libraries count too.
     if (maxZipBytes > 0 && contentBytes > maxZipBytes) {
       throw new ServiceError(
@@ -298,7 +386,7 @@ export async function sendArtifactsZip(
         { details: { reason: 'too-large' } }
       );
     }
-    entries.push({ path: item.path, data, date: artifact.createdAt });
+    entries.push(entry);
   }
 
   res.setHeader('Content-Type', 'application/zip');
@@ -315,6 +403,14 @@ export async function sendArtifactsZip(
       scopeType: scope?.type,
       error: error.message
     });
+    // Nothing sent yet (the first payload could not be opened): answered
+    // with a status like any failure before the archive started.
+    if (!res.headersSent) {
+      for (const name of ['Content-Type', 'Content-Disposition']) res.removeHeader(name);
+      throw error;
+    }
+    // Part of the archive is out: the response is cut, never ended, so the
+    // client does not take a broken archive for a complete one.
     res.destroy(error);
   }
 }

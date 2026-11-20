@@ -123,6 +123,8 @@ list(ns, opts?)                    -> Promise<{ items: Document[], nextCursor: s
 // BlobStore — payloads too large for a document, addressed by key
 put(ns, key, data, opts?)          -> Promise<{ key, bytes, sha256 }>
 get(ns, key)                       -> Promise<{ key, bytes, data: Buffer }|null>
+openRead(ns, key)                  -> Promise<{ key, bytes, stream: Readable }|null>
+putStream(ns, key, stream, { bytes, contentType? }) -> Promise<{ key, bytes, sha256 }>
 delete(ns, key)                    -> Promise<boolean>
 list(ns, opts?)                    -> Promise<{ items: [{ key, bytes }], nextCursor }>
 
@@ -152,7 +154,7 @@ extends them and every method it does not implement throws
 
 **Documents and blobs are split for a reason.** A document is small,
 structured and listable — the thing you filter and compare. A blob is
-megabytes written once and read whole. Putting a payload in a document forces
+megabytes written once and never changed in place. Putting a payload in a document forces
 base64 (a 33% tax), puts megabytes in a JSONB column, and makes an object store
 impossible to slot in, because S3 stores objects rather than rows. So the blob
 facet takes bytes under a key and nothing else, which is deliberately the
@@ -168,6 +170,54 @@ filesystem blob store and of the S3 store alike. With
 passes payloads through and still decrypts what was encrypted earlier. `put`,
 `get` and `list` report the length and the SHA-256 of the payload, never of the
 stored bytes.
+
+### Blobs: whole or as a stream
+
+A blob can be read and written in two ways, and both address the same stored
+object:
+
+| Call | Holds in memory | Use it for |
+| --- | --- | --- |
+| `get`, `put` | the whole payload, two to three times while it is encrypted or decrypted | payloads that end up in memory anyway: extracted text for a prompt, a JSON pack |
+| `openRead`, `putStream` | a few 1 MiB segments, whatever the size of the blob | bytes that go to an HTTP response, a ZIP archive, a file or another store |
+
+`openRead` resolves with the size of the payload (`bytes`, what a
+`Content-Length` is set from) and a Node `Readable`. `putStream` takes a
+stream and its length, which an object store needs before the first byte; a
+stream of another length is refused and leaves the key as it was.
+
+A stream hands out data before the object was read to its end. The encrypting
+store hands out a 1 MiB segment only after that segment verified, and it
+verifies the first segment before `openRead` resolves, so a blob that cannot be
+opened at all (another key, another address, no ciphertext where ciphertext is
+expected) is an ordinary error with a status. A blob that was changed, cut or
+extended further in makes the stream fail later, with the same error `get`
+throws (`CORRUPT_BLOB`), after genuine earlier bytes were delivered. It never
+ends as if it were complete. Whoever consumes a stream therefore has two
+duties, stated on the contract in `server/storage/BlobStore.js`:
+
+- Treat the content as received only when the stream ended. An HTTP handler
+  destroys the response when the stream fails after the first byte, so the
+  client sees a transfer that broke off short of its `Content-Length`. It
+  never ends the response cleanly. `sendStream` in
+  `server/utils/streamResponse.js` does this, and answers a failure before the
+  first byte through the error middleware.
+- Read the stream to its end or destroy it. An abandoned stream holds a file
+  handle or a connection to the bucket.
+
+Which paths stream and which read whole:
+
+| Path | Read |
+| --- | --- |
+| Artifact download (`/api/chats/…/artifacts/…`, `/api/shares/…/artifacts/…`) | stream |
+| Download of the original of an uploaded file (chat, share, scheduled task, `/api/inference/v1/files/…/content`) | stream |
+| Artifact ZIP (`…/artifacts/zip`) | one payload after the other as a stream; an HTML file is read whole, because its library references are rewritten for the download |
+| Download of a shared HTML artifact with `?download=1` | whole, for the same rewrite |
+| Agent artifact download, tool-job result written by another worker | stream (sealed files, `openSealedStream`) |
+| `storage:copy-blobs`, `storage:encrypt` (blobs) | stream in both directions |
+| Extracted text and page maps, evidence packs, website corpus pages, project texts, crawl hand-overs | whole: the content is parsed or put into a prompt |
+| File tools and `create_zip` in a chat, document templates, A2A and inference file parts, image provenance, the embedded page of a shared HTML artifact, copies of task files into a run | whole: the bytes are handed to a model, a parser, a page or an archive built in memory |
+| Uploads | whole: an upload is parsed into memory before it is stored, and its text is extracted from that buffer |
 
 ## Documents
 
@@ -878,6 +928,9 @@ What the command guarantees:
   they are, the server serves the one in the bucket, and the command exits with 1.
 - Every copy is read back and its SHA-256 is compared. A copy that does not verify is removed from
   the bucket and counted as failed.
+- It holds no blob in memory. A blob is read, sent and read back as a stream, so the largest blob
+  needs no more memory than the smallest. A transfer that fails for a moment is sent again, three
+  attempts per blob.
 - A second run copies only what is missing. An interrupted run (Ctrl+C stops after the blob in
   flight) is run again.
 - With encryption on it writes the key-check object when it is the first to write into an empty
@@ -895,10 +948,26 @@ missed. Run the command again afterwards.
 - **Object size.** `maxObjectBytes` (128 MiB by default) is the largest blob. The default is above
   the default size limit of an artifact (100 MB). Blobs on local disk have no such limit, so
   `storage:copy-blobs` reports a larger local blob as failed.
-- **Whole-object reads and writes.** A blob is read and written in one piece. There is no multipart
-  upload, no range read and no streaming. A 25 MiB blob needs about three times its size in memory
-  while it is read or written, and encrypting it blocks the server process for a short time. Size
-  the memory for the largest files you allow times the number of parallel uploads.
+- **Memory.** Downloads are streamed: an artifact, the original of an uploaded file, an artifact
+  ZIP and the two copy and encryption commands hold a few MiB per transfer, whatever the size of
+  the file (measured with `npm run test:s3:perf -- --mib 100`: 5 to 8 MiB held for a 100 MiB
+  object, against 200 MiB when it is read whole). Uploads and everything that is parsed or handed to a model are still held whole: a
+  25 MiB upload needs about three times its size in memory while it is stored, and encrypting it
+  blocks the server process for a short time. Size the memory for the largest uploads you allow
+  times the number of parallel uploads.
+  [Blobs: whole or as a stream](#blobs-whole-or-as-a-stream) lists the paths.
+- **One request per object.** A streamed write is one `PutObject` with the object's length known
+  up front. There is no multipart upload and no range read, and none of the routes that serve
+  blobs answers a `Range` request.
+- **A streamed upload is sent once.** The retries of `maxAttempts` apply to requests whose body
+  can be sent again. `storage:copy-blobs` and `storage:encrypt` send a blob as a stream and repeat
+  a failed transfer themselves (three attempts per blob in `storage:copy-blobs`; `storage:encrypt`
+  counts the blob as failed and converts it in the next run).
+- **Slow downloads.** A streamed read is paced by the client that downloads it. The store's time
+  limits count only the time it waits for the bucket: no byte for `operationTimeoutMs` (at most
+  `requestTimeoutMs`), or a total wait of `operationTimeoutMs` plus the object's size divided by
+  `minThroughputBytesPerSecond`, ends the download with `STORAGE_UNAVAILABLE`. A client that
+  takes nothing for `requestTimeoutMs` loses its download as well.
 - **Deletes.** A delete of one object costs two or three requests, because S3 does not say whether
   the object existed.
 - **Missing objects.** A read counts an object as missing only when the service answers with the

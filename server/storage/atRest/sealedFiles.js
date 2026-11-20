@@ -17,7 +17,8 @@
  * A sealed file is the envelope of `crypto/fileSeal.js`, bound to its store
  * and its name. The services keep their paths, their locks and their atomic
  * writes; they pass what they write through {@link sealForDisk} and what they
- * read through {@link openFromDisk}:
+ * read through {@link openFromDisk}, or through {@link openSealedStream} when
+ * the content goes straight to a response:
  *
  * | Mode | Switch, state record | Writes | Reading plaintext | Reading sealed |
  * | --- | --- | --- | --- | --- |
@@ -41,10 +42,10 @@
  *
  * @module storage/atRest/sealedFiles
  */
-import { promises as fs } from 'node:fs';
+import nodeFs, { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { ENVELOPE_HEADER_BYTES, plainLength } from '../../crypto/blobEnvelope.js';
-import { isSealedFile, openFile, sealFile } from '../../crypto/fileSeal.js';
+import { isSealedFile, openFile, openFileStream, sealFile } from '../../crypto/fileSeal.js';
 import { atomicWriteFile } from '../../utils/atomicWrite.js';
 import { CorruptDocumentError, KeyUnavailableError, StorageError } from '../errors.js';
 import { isFacetComplete, readAtRestState } from './state.js';
@@ -399,6 +400,69 @@ export async function isSealedOnDisk(filePath) {
 export async function readSealedText(store, name, filePath) {
   // lgtm[js/path-injection] -- the caller validated the path.
   return (await openFromDisk(store, name, await fs.readFile(filePath))).toString('utf8');
+}
+
+/**
+ * Open a file of a sealed store as a stream of its content, for a reader
+ * that sends it on (a download) and need not hold it in memory:
+ * {@link openFromDisk} for a stream. The rules are the same. A sealed file is
+ * decrypted segment by segment, a plaintext file is read as it is while
+ * plaintext may still be read, and refused once the mode is `enforced`.
+ *
+ * `bytes` is the length of the content, known before the first byte.
+ *
+ * **The stream can fail after it delivered data.** A sealed file that does
+ * not open at all rejects this call; one that is damaged or cut further in
+ * makes the stream fail later (`CORRUPT_DOCUMENT`), after genuine earlier
+ * segments, and never ends cleanly. A consumer treats the content as read
+ * only when the stream ended; an HTTP handler destroys its response on a late
+ * failure (`utils/streamResponse.js` does). Read the stream to its end or
+ * destroy it: it holds the file open. Learn of a failure through `for await`,
+ * `pipeline`, `finished` or `sendStream`: the stream may have failed before
+ * the caller listens, and it does not throw then.
+ *
+ * @param {string} store - Store id.
+ * @param {string} name - The file's name inside the store.
+ * @param {string} filePath - Absolute, validated path of the file.
+ * @returns {Promise<{bytes: number, sealed: boolean, stream: import('node:stream').Readable}>}
+ * @throws What `fs` throws when the file cannot be opened (`ENOENT`).
+ * @throws {PlaintextFileError} A plaintext file while the mode is `enforced`.
+ * @throws {CorruptDocumentError} A sealed file that does not open here.
+ * @throws {KeyUnavailableError} When the key it names is not available.
+ *
+ * @example
+ * const file = await openSealedStream('tool-jobs', 'job1.result', resultFile);
+ * await sendStream(req, res, file.stream, { headers: { 'Content-Length': String(file.bytes) } });
+ */
+export async function openSealedStream(store, name, filePath) {
+  const what = `${store}/${name}`;
+  try {
+    const [head, stat] = await Promise.all([readHead(filePath), fs.stat(filePath)]);
+    if (!isSealedFile(head, stat.size)) {
+      await assertPlaintextReadable(store, name);
+      // lgtm[js/path-injection] -- the caller validated the path.
+      const stream = nodeFs.createReadStream(filePath);
+      // An early failure must not become an uncaught exception; see `guardStream`.
+      stream.on('error', () => {});
+      return { bytes: stat.size, sealed: false, stream };
+    }
+    const provider = await keyProvider();
+    const opened = await openFileStream({
+      keyProvider: provider,
+      tenant: TENANT,
+      store,
+      name,
+      head,
+      storedBytes: stat.size,
+      // lgtm[js/path-injection] -- the caller validated the path.
+      source: nodeFs.createReadStream(filePath, { start: ENVELOPE_HEADER_BYTES }),
+      mapError: error => sealFailure(error, what)
+    });
+    opened.stream.on('error', () => {});
+    return { bytes: opened.bytes, sealed: true, stream: opened.stream };
+  } catch (error) {
+    throw sealFailure(error, what);
+  }
 }
 
 /**
