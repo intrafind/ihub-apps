@@ -18,7 +18,7 @@ import {
   LocalFileKeyProvider,
   _resetKeyProvider,
   registerKeyProvider
-} from '../services/projects/crypto/KeyProvider.js';
+} from '../crypto/KeyProvider.js';
 import {
   bootstrapProjects,
   getIngestService,

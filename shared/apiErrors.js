@@ -54,6 +54,14 @@ export const STORAGE_ERROR_CODES = Object.freeze({
   UNKNOWN_PROVIDER: 500,
   UNKNOWN_NAMESPACE: 400,
   CORRUPT_DOCUMENT: 500,
+  /** Unencrypted data where storage encryption expects encrypted data (document; agent or short-link file). */
+  PLAINTEXT_DOCUMENT: 500,
+  PLAINTEXT_FILE: 500,
+  CORRUPT_LOG: 500,
+  CORRUPT_BLOB: 500,
+  KEY_UNAVAILABLE: 503,
+  BLOB_TOO_LARGE: 413,
+  INVALID_STORAGE_CONFIG: 500,
   STORAGE_ERROR: 500
 });
 
@@ -308,6 +316,8 @@ export const CHAT_ERROR_CODES = Object.freeze({
   NO_TEXT: 400,
   EXTRACTION_FAILED: 400,
   EXTRACTION_TIMEOUT: 400,
+  /** Too many uploads wait to be read (`uploads.extraction`); retryable, with `Retry-After`. */
+  UPLOAD_BUSY: 503,
   SOURCE_FORBIDDEN: 403,
   SOURCE_GONE: 404,
   SOURCE_UNAVAILABLE: 400,

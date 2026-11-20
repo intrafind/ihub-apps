@@ -117,3 +117,15 @@ export const STORAGE_STATUS_STYLES = {
     badge: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
   }
 };
+
+/**
+ * Tailwind classes of the status pill on the "Blob storage" card, by the
+ * status the server sends (`GET /api/admin/storage`). Same colour pairs as the
+ * disk status, plus a neutral one for "not checked yet".
+ */
+export const BLOB_STATUS_STYLES = {
+  ok: STORAGE_STATUS_STYLES.ok.badge,
+  degraded: STORAGE_STATUS_STYLES.warning.badge,
+  error: STORAGE_STATUS_STYLES.critical.badge,
+  unknown: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
+};

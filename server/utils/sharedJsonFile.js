@@ -3,7 +3,7 @@
 
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { atomicWriteJSON } from './atomicWrite.js';
+import { atomicWriteFile, atomicWriteJSON } from './atomicWrite.js';
 import { withFileLock } from './fileLock.js';
 
 /**
@@ -25,9 +25,21 @@ import { withFileLock } from './fileLock.js';
  * @param {string} options.filePath - Absolute path to the JSON file
  * @param {() => any} options.createDefault - Contents when the file is missing or unreadable
  * @param {string} [options.component] - Logger component for lock warnings
+ * @param {(json: string) => Promise<string|Buffer>} [options.encode] - Turns the
+ *   JSON text into what is written (a store that seals its file at rest).
+ *   Default: the text as it is.
+ * @param {(stored: Buffer) => Promise<Buffer|string>} [options.decode] - Turns
+ *   the stored bytes back into the JSON text; a throw is a failed read.
+ *   Default: the bytes as they are.
  * @returns {{read: () => Promise<any>, update: (mutate: (data: any) => any) => Promise<any>}}
  */
-export function createSharedJsonFile({ filePath, createDefault, component = 'SharedJsonFile' }) {
+export function createSharedJsonFile({
+  filePath,
+  createDefault,
+  component = 'SharedJsonFile',
+  encode = null,
+  decode = null
+}) {
   const lockPath = `${filePath}.lock`;
   let cached = null;
   let cachedStamp = null;
@@ -49,11 +61,12 @@ export function createSharedJsonFile({ filePath, createDefault, component = 'Sha
   async function readFromDisk() {
     let text;
     try {
-      text = await fs.readFile(filePath, 'utf8');
+      text = await fs.readFile(filePath, decode ? undefined : 'utf8');
     } catch (error) {
       if (error.code === 'ENOENT') return createDefault();
       throw error;
     }
+    if (decode) text = (await decode(text)).toString('utf8');
     return JSON.parse(text);
   }
 
@@ -87,7 +100,11 @@ export function createSharedJsonFile({ filePath, createDefault, component = 'Sha
       async () => {
         const data = await readFromDisk();
         const result = await mutate(data);
-        await atomicWriteJSON(filePath, data);
+        if (encode) {
+          await atomicWriteFile(filePath, await encode(JSON.stringify(data, null, 2)));
+        } else {
+          await atomicWriteJSON(filePath, data);
+        }
         cached = data;
         cachedStamp = await stampOf();
         return result;

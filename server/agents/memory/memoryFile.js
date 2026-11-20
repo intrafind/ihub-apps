@@ -10,6 +10,10 @@
  *
  * Writers use optimistic concurrency: each write must specify the expected
  * version (if `expectedVersion` is omitted, last-write-wins).
+ *
+ * With `storage.encryption.enabled` the file is sealed on disk (store
+ * `agent-memory` of `storage/atRest/sealedFiles.js`) and is no longer
+ * readable or editable with a text editor.
  */
 
 import fs from 'node:fs/promises';
@@ -21,6 +25,10 @@ import { ServiceError } from '../../utils/ServiceError.js';
 import { resolveAndValidatePath } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
 import { AGENT_PROFILE_ID_PATTERN } from '../../validators/agentProfileSchema.js';
+import { readSealedText, sealForDisk } from '../../storage/atRest/sealedFiles.js';
+
+/** Store id the memory files are sealed under. */
+const MEMORY_STORE = 'agent-memory';
 
 const MEMORY_DIR = 'agents/memory';
 
@@ -74,7 +82,7 @@ export async function readMemory(profileId) {
   const file = await memoryPath(profileId);
   try {
     // lgtm[js/path-injection] -- profileId validated by AGENT_PROFILE_ID_PATTERN; path canonicalized by resolveAndValidatePath.
-    const raw = await fs.readFile(file, 'utf8');
+    const raw = await readSealedText(MEMORY_STORE, `${profileId}.md`, file);
     const { frontmatter, body } = parseFrontmatter(raw);
     return {
       profileId,
@@ -148,7 +156,10 @@ async function writeMemoryLocked(
   });
 
   // lgtm[js/path-injection] -- profileId validated by AGENT_PROFILE_ID_PATTERN; path canonicalized by resolveAndValidatePath.
-  await atomicWriteFile(file, `${frontmatter}${nextBody}`);
+  await atomicWriteFile(
+    file,
+    await sealForDisk(MEMORY_STORE, `${profileId}.md`, `${frontmatter}${nextBody}`)
+  );
   logger.info('Memory written', {
     component: 'MemoryFile',
     profileId,

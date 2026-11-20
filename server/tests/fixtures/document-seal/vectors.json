@@ -1,0 +1,96 @@
+{
+  "format": "ihub-doc-v1",
+  "note": "Sealed documents written once by server/crypto/documentSeal.js with the local-file key provider and the test master key below; never regenerate them. A change that stops one of these from opening makes stored documents unreadable and needs a new format id instead.",
+  "masterKey": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+  "keyProvider": "local-file",
+  "documents": [
+    {
+      "address": {
+        "tenant": "default",
+        "ns": "chats",
+        "key": "chat-1",
+        "ownerId": "anna@example.org",
+        "contentType": "application/json"
+      },
+      "json": "{\"title\":\"Quarterly numbers\",\"settings\":{\"temperature\":0.2}}",
+      "etag": "5dcc6bb300e2ee51de9b72bb1e5436e7289a3a4a97ab9928a6b131924ac59323",
+      "size": 60,
+      "bodyAssociatedData": "[\"ihub/doc/v1\",\"default\",\"chats\",\"chat-1\",\"anna@example.org\",\"application/json\",1048576]",
+      "etagAssociatedData": "[\"ihub/doc-etag/v1\",\"default\",\"chats\",\"chat-1\",\"anna@example.org\",\"application/json\",1048576]",
+      "sealed": {
+        "enc": "ihub-doc-v1",
+        "kp": "local-file",
+        "kid": "3490f804",
+        "wk": "AcpgaCaCmZu3JFY++YKgaSb5sIAdBdiEdlb9XOhjyL0aH//AQGj4muRXa/jYIr/FN4OyHB/+YojEu3jXOg==",
+        "tag": "KDo5svwL3Z4raQVh5lRxzLXvxjkHUUBn821lHCnWjoHVublrAK/H+YuVjCiM3KC5VlRLPutX1v2mFRn/Nb6Ptae1tpgkTWaBnzxzowkup/u4ESv+JBKflDR+IU6pRXymolVQ/xAoC9Sa5Q/6EGwW5XP3KUf3HT0N",
+        "data": "KC8TM9ZMj7MQ2mLf58KaZwdlmLZHI5IQyNQYo3F0P/WoInTMeoP/Eicy/DuUgESRq00+nUgDucSWvbwNZexFpTUcJo/QNBKXfGlrVAIiSWIXAbvDyXmStZCXobXE645CRQ2L0ygRCgbYTA91qJoE4AormQ4="
+      }
+    },
+    {
+      "address": {
+        "tenant": "default",
+        "ns": "chat-messages",
+        "key": "chat-1",
+        "ownerId": null,
+        "contentType": "application/json"
+      },
+      "json": "{\"messages\":[{\"role\":\"user\",\"content\":\"Grüße, 世界 \\\"quoted\\\"\"}]}",
+      "etag": "6e1c9c63dc2b6a89a70d9ef0f0b63ee9677b9bc66a69cf93d1efcb50d037d159",
+      "size": 69,
+      "bodyAssociatedData": "[\"ihub/doc/v1\",\"default\",\"chat-messages\",\"chat-1\",null,\"application/json\",1048576]",
+      "etagAssociatedData": "[\"ihub/doc-etag/v1\",\"default\",\"chat-messages\",\"chat-1\",null,\"application/json\",1048576]",
+      "sealed": {
+        "enc": "ihub-doc-v1",
+        "kp": "local-file",
+        "kid": "3490f804",
+        "wk": "AaS+BlHOT9trtdCLItR41LCCNtnFVAAMtQELaZs8fM4SpByD+6cpnmyneJ07os9Y7ISDpMLSF7Ei5FPaCg==",
+        "tag": "KC6cHEGb/txpklLUcqutnb+q+Q8YS9qkL5p4Bp6i55V2937C8KJqxv3kAv6MnCv775xAZVQ1B64k7Cu0GmrvCLFakaZK0/KMkv5/btq4xrl7Gn3YYXVs1kDfDZu2GkvTus1uk7OLju2k4+olzdjU0DknIS76xZ/1",
+        "data": "KNYQk5h0bjTXk/LQLujvJgzsf2HM2rGX3+KVxWS+GushWCnkIDrgJKiNcg8W/gzrbXa9YQ37/0oMHyC/2QFoQvaIDrI4dN4EH5T0DuaMMISbZLf2vE1RNqp3yKehwFMoOsgwQvnR9EaOHIVA6HpzcdPIbsgcEcJ9FCySNYc="
+      }
+    },
+    {
+      "address": {
+        "tenant": "default",
+        "ns": "user-prompts",
+        "key": "p__1",
+        "ownerId": "oidc|sub/with:odd\nchars",
+        "contentType": "text/plain"
+      },
+      "json": "\"a bare string body\"",
+      "etag": "6cf34daa15c26ec3851c8a757f162e12ba73d57568e4075169a475f8d5a1a823",
+      "size": 20,
+      "bodyAssociatedData": "[\"ihub/doc/v1\",\"default\",\"user-prompts\",\"p__1\",\"oidc|sub/with:odd\\nchars\",\"text/plain\",1048576]",
+      "etagAssociatedData": "[\"ihub/doc-etag/v1\",\"default\",\"user-prompts\",\"p__1\",\"oidc|sub/with:odd\\nchars\",\"text/plain\",1048576]",
+      "sealed": {
+        "enc": "ihub-doc-v1",
+        "kp": "local-file",
+        "kid": "3490f804",
+        "wk": "AduMbZ+X548xHmSc+EzF0oneHlEKYmq6MhR7sJ5oG2HKGH0mcsjM6GEtRzBQp2+TZma/9UYIX1mNXVCd1Q==",
+        "tag": "KAhTVmzK300B0BK7qMe23zfugV9KPaVP4dmDQn+69kWgYWqm4KuA3EXh+BghzxiIWsomF5zpU0ko3m2z1GbBB9+ctPALtyWS7iVT3uBmSxhBELnEGtzHdvKZuR2JtkLNCqwrtCpQykParywrbDs7EBRPZstpSuxv",
+        "data": "KOeiptnfgXqeTJMoK5HIk9ib6NuYCWdAamDw+vPvkNXzHktYATcyDiigCIAWX/tK5Ura+252w+8LiW9HJoKEkTiyDIll2K/HQksdRA=="
+      }
+    },
+    {
+      "address": {
+        "tenant": "default",
+        "ns": "runs",
+        "key": "r1",
+        "ownerId": "u",
+        "contentType": "application/json"
+      },
+      "json": "null",
+      "etag": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "size": 4,
+      "bodyAssociatedData": "[\"ihub/doc/v1\",\"default\",\"runs\",\"r1\",\"u\",\"application/json\",1048576]",
+      "etagAssociatedData": "[\"ihub/doc-etag/v1\",\"default\",\"runs\",\"r1\",\"u\",\"application/json\",1048576]",
+      "sealed": {
+        "enc": "ihub-doc-v1",
+        "kp": "local-file",
+        "kid": "3490f804",
+        "wk": "AbiEIVzDkpjy8h3DwhYXO5zhRBqIVJ1KXrs2rJWIkJl6uE0D4DYQStSkNv+DWI3nlvDVqZHA3akJnv8D/Q==",
+        "tag": "KC5p7rbiSrNHBpiEB6RyR7/PJhziwsHf5qyvE3n6bGKnipH5KEQ7LHihRMivfoHKVhtPd4sOWJ2PYy6MmyePSxoVvILxsPNesu9T//rmjBG+TlsaCMRKYuex5JyLaspDzn0xM7BOLikojwMGKwLiZwi2vHzKUQjw",
+        "data": "KE6jnbtXajqj3XkfmrFGaJLubSFF9jN6g32i69M2r3dKZiDSKVr/ZQRwc+pSseYByZ9GX/g8++Q1aA4R"
+      }
+    }
+  ]
+}

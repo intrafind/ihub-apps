@@ -103,3 +103,6 @@ server/defaults/sources/ihub-documentation.md
 
 # OpenAPI documents written by scripts/build-api-docs.js
 server/generated/
+
+# Objects of the local development S3 server (npm run s3:dev)
+.s3-dev-data/

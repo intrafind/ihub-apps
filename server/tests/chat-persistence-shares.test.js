@@ -47,6 +47,7 @@ import { downloadName } from '../services/artifacts/artifactZip.js';
 import registerChatRoutes from '../routes/chats.js';
 import { PassThrough } from 'node:stream';
 import JSZip from 'jszip';
+import { makeStreamable } from './support/streamableResponse.js';
 
 const ADA = { id: 'user-ada', name: 'Ada Lovelace', email: 'ada@example.com' };
 const GRACE = { id: 'user-grace', name: 'Grace Hopper', email: 'grace@example.com' };
@@ -111,6 +112,8 @@ function makeResponse() {
     delete res.headers[String(name).toLowerCase()];
     return res;
   };
+  // A route that streams its body pipes into the response.
+  makeStreamable(res);
   return res;
 }
 

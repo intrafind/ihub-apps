@@ -13,6 +13,8 @@
  *
  * Run: node --test server/tests/inference-files.test.js
  */
+// First: `create_zip` and the upload routes spool below the contents directory.
+import './support/scratchContents.js';
 import { after, afterEach, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
@@ -31,6 +33,9 @@ import { getChatFileRepository, userFileScope } from '../services/chatFiles/Chat
 import { makeClient, sseResponse, openaiText, captureRunLog } from './loop/helpers/llmFixtures.js';
 import { buildPdfBytes } from './helpers/structuredPdf.js';
 import { buildDocx, p } from './helpers/docxFile.js';
+import { CorruptBlobError } from '../storage/errors.js';
+import { failNextOpenRead } from './support/httpRoute.js';
+import { ExtractionLimiter, setExtractionLimiter } from '../services/uploads/extractionLimiter.js';
 
 const MODELS = [
   {
@@ -267,6 +272,48 @@ describe('/v1/files', () => {
         response.on('end', () => done(null, Buffer.concat(chunks)));
       });
     assert.ok(Buffer.from(docx).equals(original.body));
+    // Streamed: the length is announced, and it is the original's.
+    assert.equal(original.headers['content-length'], String(docx.length));
+    assert.match(original.headers['content-disposition'], /vertrag\.docx/);
+  });
+
+  it('cuts the download of an original whose stored blob fails part-way, and never ends it cleanly', async () => {
+    const { app } = setup();
+    const docx = await buildDocx({ body: p('Mietvertrag') + p('Laufzeit: zwei Jahre') });
+    const res = await upload(app, docx, {
+      filename: 'vertrag.docx',
+      type: 'application/octet-stream'
+    });
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    // What an encrypted blob does when a later segment does not verify.
+    const restore = failNextOpenRead(getChatFileRepository().blobs, {
+      after: 100,
+      error: new CorruptBlobError('Blob chat-files/x does not verify')
+    });
+    try {
+      await assert.rejects(
+        request(app).get(`${FILES}/${res.body.id}/content`).buffer(true),
+        /aborted|socket hang up|ECONNRESET/i,
+        'the client sees a broken transfer'
+      );
+    } finally {
+      restore();
+    }
+    // A blob that does not open at all is answered with a status, in the API's own error format.
+    const blobs = getChatFileRepository().blobs;
+    const openRead = blobs.openRead;
+    blobs.openRead = async () => {
+      throw new CorruptBlobError('Blob chat-files/x does not verify');
+    };
+    try {
+      const refused = await request(app).get(`${FILES}/${res.body.id}/content`);
+      assert.equal(refused.status, 500);
+      assert.ok(refused.body.error, JSON.stringify(refused.body));
+      assert.equal(refused.headers['content-disposition'], undefined);
+    } finally {
+      blobs.openRead = openRead;
+    }
+    assert.equal((await request(app).get(`${FILES}/${res.body.id}/content`)).status, 200);
   });
 
   it('accepts JSON uploads (text content, base64, data URL) and defaults the purpose', async () => {
@@ -966,5 +1013,31 @@ describe('files on conversation items', () => {
     ]);
     assert.equal(url.status, 400);
     assert.equal((await getChatRepository().getMessages(conv.id)).messages.length, 0);
+  });
+});
+
+describe('POST /files when too many uploads wait to be read', () => {
+  afterEach(() => setExtractionLimiter(null));
+
+  it('answers 503 upload_busy with Retry-After, and stores the same request afterwards', async () => {
+    const { app } = setup();
+    const limiter = new ExtractionLimiter({ limits: () => ({ concurrency: 1, maxQueue: 0 }) });
+    setExtractionLimiter(limiter);
+    let release;
+    const blocked = limiter.run(() => new Promise(resolve => (release = resolve)));
+
+    const refused = await upload(app, 'Quarterly numbers');
+    assert.equal(refused.status, 503);
+    assert.equal(refused.body.error.code, 'upload_busy');
+    assert.equal(refused.body.error.type, 'server_error');
+    assert.ok(Number(refused.headers['retry-after']) >= 1);
+    const listed = await request(app).get(FILES);
+    assert.deepEqual(listed.body.data, [], 'nothing was stored');
+
+    release();
+    await blocked;
+    const stored = await upload(app, 'Quarterly numbers');
+    assert.equal(stored.status, 200);
+    assert.equal(stored.body.bytes, 'Quarterly numbers'.length);
   });
 });

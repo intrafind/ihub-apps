@@ -16,8 +16,15 @@ import { confirmUpdateOnStartup, isUpdateAwaitingConfirmation } from '../service
 import { initSystemResources } from '../services/systemResources.js';
 import { shutdownStorageBootstrap } from '../storage/bootstrap.js';
 import config from '../config.js';
-import { prepareContents, bootstrapStorageOrExit } from './bootstrap.js';
+import {
+  prepareContents,
+  bootstrapStorageOrExit,
+  ensureEncryptionKey,
+  prepareStorageEncryptionOrExit
+} from './bootstrap.js';
 import { describeWorkerSizing, workerExecArgv } from '../utils/workerSizing.js';
+import { encryptionDecisionEnv } from '../storage/index.js';
+import { createRespawnBackoff } from './respawnBackoff.js';
 
 /**
  * Start the cluster primary: seed and migrate `contents/`, check the storage
@@ -58,6 +65,12 @@ export async function startPrimary({ workerCount, stickyRouting }) {
   // Check the storage provider once here, before forking: a worker that cannot
   // start it exits, and the primary would respawn it in a loop. The primary
   // keeps no provider of its own, so it is shut down again straight away.
+  // Whether storage encryption is on is decided here, once per start, and
+  // handed to every worker through its fork environment. A worker never
+  // reads the switch from platform.json itself: an edit that waits for a
+  // restart would otherwise put a replacement worker into another mode than
+  // its siblings.
+  let storageDecision = {};
   {
     let primaryPlatformConfig = {};
     try {
@@ -65,8 +78,16 @@ export async function startPrimary({ workerCount, stickyRouting }) {
     } catch {
       // Same tolerance as the worker: a missing platform.json means defaults.
     }
+    // The master key first, as in the worker. With an empty contents directory
+    // the primary is also the one process that creates the key file, and with
+    // an S3 blob backend the one that writes its key check object.
+    await ensureEncryptionKey();
+    // Encrypt data stored before `storage.encryption.enabled` was switched on,
+    // here and nowhere else: the workers read strictly and never convert.
+    await prepareStorageEncryptionOrExit(primaryPlatformConfig);
     await bootstrapStorageOrExit(primaryPlatformConfig);
     await shutdownStorageBootstrap();
+    storageDecision = encryptionDecisionEnv(primaryPlatformConfig || {});
   }
 
   // Start the repeater before forking so a worker's first presence
@@ -81,8 +102,18 @@ export async function startPrimary({ workerCount, stickyRouting }) {
   // before the container is killed. The count goes along as `WORKERS`: a worker
   // reads it to know how many peers to wait for.
   cluster.setupPrimary({ execArgv: workerExecArgv(config.WORKER_SIZING) });
-  const forkWorker = workerIndex =>
-    cluster.fork({ WORKER_INDEX: String(workerIndex), WORKERS: String(workerCount) });
+  /** When each live worker was forked, to tell a worker that cannot start. */
+  const forkedAt = new WeakMap();
+  const respawnBackoff = createRespawnBackoff();
+  const forkWorker = workerIndex => {
+    const worker = cluster.fork({
+      WORKER_INDEX: String(workerIndex),
+      WORKERS: String(workerCount),
+      ...storageDecision
+    });
+    forkedAt.set(worker, Date.now());
+    return worker;
+  };
 
   for (let workerIndex = 0; workerIndex < workerCount; workerIndex++) {
     workers[workerIndex] = forkWorker(workerIndex);
@@ -139,20 +170,32 @@ export async function startPrimary({ workerCount, stickyRouting }) {
         process.exit(1);
       }
     }
+    // A worker that died right after its fork most likely cannot start; its
+    // replacement is forked after a growing pause instead of in a tight loop.
+    const delayMs = respawnBackoff.next(Date.now() - (forkedAt.get(worker) ?? 0));
     logger.warn({
       component: 'Server',
-      message: `Worker ${worker.process.pid} exited (${code || signal}), respawning`,
+      message:
+        delayMs > 0
+          ? `Worker ${worker.process.pid} exited (${code || signal}) shortly after it started, respawning in ${delayMs} ms`
+          : `Worker ${worker.process.pid} exited (${code || signal}), respawning`,
       workerPid: worker.process.pid,
       code,
       signal,
-      slot
+      slot,
+      delayMs
     });
-    const replacement = forkWorker(slot >= 0 ? slot : workers.length);
-    if (slot >= 0) {
-      workers[slot] = replacement;
-    } else {
-      workers.push(replacement);
-    }
+    const respawn = () => {
+      if (shuttingDown) return;
+      const replacement = forkWorker(slot >= 0 ? slot : workers.length);
+      if (slot >= 0) {
+        workers[slot] = replacement;
+      } else {
+        workers.push(replacement);
+      }
+    };
+    if (delayMs > 0) setTimeout(respawn, delayMs);
+    else respawn();
   });
 
   const logAccessUrls = () => {

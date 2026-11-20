@@ -18,6 +18,9 @@ import crypto from 'node:crypto';
 import { isValidId } from '../../../utils/pathSecurity.js';
 import { InvalidKeyError, StorageError } from '../../errors.js';
 
+// Namespace and key validation is the same for every provider and lives in
+// `storage/keys.js`; the facets of this provider import it from there.
+
 /** File extension every document envelope is stored under. */
 export const DOC_EXT = '.json';
 
@@ -40,34 +43,6 @@ const PARTITION_SEPARATOR = '__';
 /** Truncate an offending value for an error message so logs stay bounded. */
 function describe(value) {
   return String(value).slice(0, 64);
-}
-
-/**
- * Assert that `ns` is usable as a namespace directory name.
- *
- * @param {string} ns - Namespace supplied by the caller
- * @returns {string} The namespace, unchanged, so it can be used inline
- * @throws {InvalidKeyError} When `ns` is not a safe id
- */
-export function assertValidNamespace(ns) {
-  if (!isValidId(ns)) {
-    throw new InvalidKeyError(`Invalid storage namespace: ${describe(ns)}`);
-  }
-  return ns;
-}
-
-/**
- * Assert that `key` is usable as a document file name.
- *
- * @param {string} key - Document key supplied by the caller
- * @returns {string} The key, unchanged, so it can be used inline
- * @throws {InvalidKeyError} When `key` is not a safe id
- */
-export function assertValidKey(key) {
-  if (!isValidId(key)) {
-    throw new InvalidKeyError(`Invalid storage key: ${describe(key)}`);
-  }
-  return key;
 }
 
 /**

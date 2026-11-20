@@ -21,7 +21,7 @@ import {
   LocalFileKeyProvider,
   _resetKeyProvider,
   registerKeyProvider
-} from '../services/projects/crypto/KeyProvider.js';
+} from '../crypto/KeyProvider.js';
 import { bootstrapProjects, shutdownProjects } from '../services/projects/bootstrap.js';
 import {
   PROJECT_FILES_NAMESPACE,

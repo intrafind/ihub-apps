@@ -78,7 +78,8 @@ const FILESYSTEM_CAPABILITIES = {
   multiInstance: false,
   blobs: true,
   blobStore: true,
-  conditionalWrites: true
+  conditionalWrites: true,
+  encryptionAtRest: 'off'
 };
 
 runProviderConformance({

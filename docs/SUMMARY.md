@@ -113,6 +113,7 @@
 - [Compliance Overview](compliance-overview.md)
 - [Security](security.md)
 - [Encryption Key Management](encryption-key-management.md)
+- [Storage Encryption](storage-encryption.md)
 - [Value Encryption Tool](value-encryption-tool.md)
 - [PII Data Handling](pii-data-handling.md)
 - [EU AI Act (Article 50)](ai-act.md)

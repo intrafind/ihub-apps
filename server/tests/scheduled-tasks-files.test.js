@@ -15,6 +15,7 @@ import path from 'node:path';
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { runHandler } from './helpers/runHandler.js';
+import { makeStreamable } from './support/streamableResponse.js';
 
 const ROOT = fsSync.realpathSync(fsSync.mkdtempSync(path.join(os.tmpdir(), 'ihub-task-files-')));
 fsSync.mkdirSync(path.join(ROOT, 'contents', 'config'), { recursive: true });
@@ -29,6 +30,7 @@ const { getChatFileRepository } = await import('../services/chatFiles/ChatFileRe
 const { loadTaskPromptFiles, withTaskFiles, copyTaskFiles } =
   await import('../services/chatFiles/taskFiles.js');
 const { openaiText } = await import('./loop/helpers/llmFixtures.js');
+const { callRoute, failNextOpenRead } = await import('./support/httpRoute.js');
 
 const { principal, taskInput, cleanup, setupHarness, teardownHarness, scriptedChatService } =
   harness;
@@ -73,6 +75,8 @@ function makeResponse() {
     res.headers[name] = value;
     return res;
   };
+  // A route that streams its body pipes into the response.
+  makeStreamable(res);
   return res;
 }
 
@@ -200,6 +204,50 @@ describe('task file routes', () => {
     });
     assert.equal(download.statusCode, 200);
     assert.ok(Buffer.from(download.body).equals(buffer));
+    await cleanup(user);
+  });
+
+  it('streams the original with its length, and cuts the download when the stored blob fails part-way', async () => {
+    const user = ada();
+    const task = await tasks.createTask(user, taskInput());
+    const { buildDocx } = await import('../services/documents/docx/buildDocx.js');
+    const { buffer } = await buildDocx({ title: 'T', markdown: 'Corporate letter body' });
+    const created = await attach(user, task.id, {
+      name: 'letter.docx',
+      mimeType: DOCX,
+      data: buffer.toString('base64')
+    });
+    assert.equal(created.statusCode, 201, JSON.stringify(created.body));
+    const found = routes.find(
+      r => r.method === 'get' && r.routePath.endsWith('/:taskId/files/:fileId')
+    );
+    const handler = [found.handlers[found.handlers.length - 1]];
+    const params = { taskId: task.id, fileId: created.body.id };
+
+    const whole = await callRoute(handler, { params, query: { download: '1' }, user });
+    assert.equal(whole.status, 200, whole.body.toString('utf8', 0, 300));
+    assert.equal(whole.complete, true);
+    assert.equal(whole.headers['content-length'], String(buffer.length));
+    assert.ok(whole.body.equals(buffer));
+    assert.match(whole.headers['content-disposition'], /attachment/);
+    assert.equal(whole.headers['cache-control'], 'private, no-store');
+    assert.equal(whole.headers['x-content-type-options'], 'nosniff');
+
+    // What an encrypted blob does when a later segment does not verify.
+    const { CorruptBlobError } = await import('../storage/errors.js');
+    const restore = failNextOpenRead(getChatFileRepository().blobs, {
+      after: 200,
+      error: new CorruptBlobError('Blob chat-files/x does not verify')
+    });
+    let cut;
+    try {
+      cut = await callRoute(handler, { params, user });
+    } finally {
+      restore();
+    }
+    assert.equal(cut.complete, false, 'the transfer must not end cleanly');
+    assert.ok(cut.body.length < buffer.length);
+    assert.ok(cut.body.equals(buffer.subarray(0, cut.body.length)));
     await cleanup(user);
   });
 });

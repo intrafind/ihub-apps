@@ -39,6 +39,7 @@ import { isValidId } from '../../utils/pathSecurity.js';
 import { getStorage, readFacet } from '../../storage/bootstrap.js';
 import { BLOB_NAMESPACES, RUNTIME_NAMESPACES } from '../../storage/namespaces.js';
 import { canonicalJson } from '../../storage/canonicalJson.js';
+import { CorruptDocumentError } from '../../storage/errors.js';
 import { walkBlobs, walkDocuments } from '../../storage/walk.js';
 
 /** Namespaces per kind of record. */
@@ -385,10 +386,25 @@ export class ChatEvidenceRepository {
   async _sweepChatPacks(chatId) {
     const prefix = `${evidenceScope(chatId)}__`;
     const referenced = new Set();
-    for await (const doc of walkDocuments(this.documents, NAMESPACES.chat.doc, { prefix })) {
-      for (const packId of Object.values(doc.data?.content || {})) {
-        if (typeof packId === 'string') referenced.add(this._packKey(chatId, packId));
+    try {
+      // `throw`: a record that is present but does not open still refers to
+      // its packs. Walked leniently it would count as absent and its content
+      // would be deleted for good.
+      for await (const doc of walkDocuments(this.documents, NAMESPACES.chat.doc, {
+        prefix,
+        unreadable: 'throw'
+      })) {
+        for (const packId of Object.values(doc.data?.content || {})) {
+          if (typeof packId === 'string') referenced.add(this._packKey(chatId, packId));
+        }
       }
+    } catch (error) {
+      if (!(error instanceof CorruptDocumentError)) throw error;
+      this.logger.warn(
+        'An evidence record of this chat cannot be read; its content packs are kept this time',
+        { component: 'ChatEvidenceRepository', chatId, code: error.code }
+      );
+      return 0;
     }
     const unreferenced = [];
     for await (const item of walkBlobs(this.blobs, NAMESPACES.chat.content, { prefix })) {

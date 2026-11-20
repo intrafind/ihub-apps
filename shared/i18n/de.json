@@ -33,6 +33,7 @@
       "unsupportedType": "Dieser Dateityp kann nicht im Chat gespeichert werden; die Datei wird nur mit der Nachricht gesendet",
       "unreadable": "Der Server konnte diese Datei nicht lesen und hat sie daher nicht im Chat gespeichert; die Datei wird nur mit der Nachricht gesendet",
       "scanRejected": "Vom Sicherheitsscan abgelehnt und daher nicht im Chat gespeichert; die Datei wird nur mit der Nachricht gesendet",
+      "busy": "Der Server liest gerade andere Dateien und hat diese daher nicht im Chat gespeichert; die Datei wird nur mit der Nachricht gesendet",
       "notSaved": "Konnte nicht im Chat gespeichert werden; die Datei wird nur mit der Nachricht gesendet"
     },
     "stored": "Im Chat gespeichert",
@@ -3274,6 +3275,109 @@
       "resource": "Telemetrie-Einstellungen"
     },
     "systemResources": {
+      "blobStorage": {
+        "title": "Blob-Speicher",
+        "description": "Wo hochgeladene Dateien, extrahierte Texte und Nachweisinhalte abgelegt werden.",
+        "statusLabel": "Status",
+        "backendLabel": "Backend",
+        "backend": {
+          "filesystem": "Lokale Festplatte",
+          "s3": "S3-kompatibler Objektspeicher"
+        },
+        "status": {
+          "ok": "Verbunden",
+          "available": "Verfügbar",
+          "degraded": "Langsam oder teilweise gestört",
+          "unknown": "Noch nicht geprüft",
+          "unreachable": "Nicht erreichbar",
+          "refused": "Zugriff verweigert",
+          "failed": "Prüfung fehlgeschlagen"
+        },
+        "checked": "Geprüft {{when}}, {{ms}} ms",
+        "endpoint": "Endpunkt",
+        "bucket": "Bucket",
+        "region": "Region",
+        "prefix": "Präfix",
+        "path": "Pfad",
+        "encryptionLabel": "Verschlüsselung",
+        "encryption": {
+          "storage": "Alles, was iHub speichert, wird vor dem Schreiben verschlüsselt: Dateien, Chats und Protokolle.",
+          "blobs": "Jede Datei wird von iHub verschlüsselt, bevor sie gespeichert wird.",
+          "none": "Die Verschlüsselung ist ausgeschaltet. Dateien werden unverändert gespeichert: Wer den Speicher lesen kann, kann sie lesen.",
+          "converting": "Daten, die vor dem Einschalten der Verschlüsselung gespeichert wurden, werden noch verschlüsselt."
+        },
+        "encryptionDetail": "Format {{format}}, Schlüssel aus {{keySource}}",
+        "configuredIn": "Konfiguriert in",
+        "source": {
+          "environment": "Umgebungsvariable IHUB_STORAGE_BLOBS_PROVIDER",
+          "default": "Standard (in platform.json nicht gesetzt)"
+        },
+        "otherData": "Andere Daten",
+        "otherDataValue": "Chats, Protokolle und Sperren bleiben auf: {{provider}}",
+        "readOnly": "Diese Einstellungen stammen aus platform.json. Änderungen erfordern einen Neustart.",
+        "restartRequired": "Die gespeicherten Einstellungen für den Blob-Speicher weichen von denen ab, mit denen der Server läuft. Starten Sie den Server neu, um sie anzuwenden.",
+        "restartDetail": "Gespeichert: {{configured}}. Aktiv: {{running}}.",
+        "restartSameBackend": "Das Backend bleibt dasselbe; eine seiner gespeicherten Einstellungen weicht ab: Endpunkt, Bucket, Präfix, Region, Größenlimit oder Verschlüsselung.",
+        "leftovers_one": "{{count}} Datei aus der Zeit vor der Umstellung liegt noch auf der lokalen Festplatte. Benutzer können sie erst öffnen, wenn sie in den Bucket kopiert wurde.",
+        "leftovers_other": "{{count}} Dateien aus der Zeit vor der Umstellung liegen noch auf der lokalen Festplatte. Benutzer können sie erst öffnen, wenn sie in den Bucket kopiert wurden.",
+        "leftoversAtLeast_one": "Mindestens {{count}} Datei aus der Zeit vor der Umstellung liegt noch auf der lokalen Festplatte. Benutzer können sie erst öffnen, wenn sie in den Bucket kopiert wurde.",
+        "leftoversAtLeast_other": "Mindestens {{count}} Dateien aus der Zeit vor der Umstellung liegen noch auf der lokalen Festplatte. Benutzer können sie erst öffnen, wenn sie in den Bucket kopiert wurden.",
+        "leftoversHint": "Kopieren Sie sie bei gestopptem Server:",
+        "leftoversHintContainer": "Im Container-Image, in dem npm nicht installiert ist:",
+        "checkAgain": "Erneut prüfen",
+        "checking": "Wird geprüft…",
+        "testPassed": "Prüfung bestanden: Ein Testobjekt wurde in {{ms}} ms geschrieben, zurückgelesen und entfernt.",
+        "testFailed": "Prüfung fehlgeschlagen:",
+        "testNotRun": "Die Prüfung konnte nicht ausgeführt werden:",
+        "testTimedOut": "Der Speicher hat innerhalb von {{seconds}} Sekunden nicht geantwortet. Der Server setzt die Prüfung fort; diese Karte zeigt das Ergebnis, sobald es vorliegt.",
+        "details": "Details",
+        "loadFailed": "Der Status des Blob-Speichers konnte nicht geladen werden.",
+        "retry": "Erneut versuchen",
+        "unreachableAlert": "Der Blob-Speicher funktioniert nicht. Uploads und Anhänge funktionieren gerade nicht.",
+        "stepStatus": {
+          "ok": "bestanden",
+          "failed": "fehlgeschlagen",
+          "skipped": "übersprungen"
+        },
+        "errors": {
+          "S3_CONFIG_INCOMPLETE": "Die S3-Einstellungen sind unvollständig oder ungültig.",
+          "S3_ENDPOINT_UNREACHABLE": "Der S3-Endpunkt ist nicht erreichbar.",
+          "S3_TLS_UNTRUSTED": "Dem Zertifikat des S3-Endpunkts wird nicht vertraut.",
+          "S3_CREDENTIALS_REJECTED": "Der S3-Dienst hat den Zugangsschlüssel abgelehnt.",
+          "S3_CLOCK_SKEW": "Die Uhrzeit des iHub-Servers und die des S3-Dienstes weichen zu stark voneinander ab.",
+          "S3_BUCKET_NOT_FOUND": "Der Bucket existiert nicht.",
+          "S3_ACCESS_DENIED": "Der S3-Dienst hat den Zugriff auf den Bucket verweigert.",
+          "S3_REGION_MISMATCH": "Der Bucket liegt in einer anderen Region als der konfigurierten.",
+          "S3_SERVICE_ERROR": "Der S3-Dienst hat mit einem Fehler geantwortet.",
+          "S3_PROBE_MISMATCH": "Das zurückgelesene Testobjekt weicht vom geschriebenen ab.",
+          "S3_ERROR": "Die Anfrage an den S3-Dienst ist fehlgeschlagen.",
+          "BLOB_KEY_MISSING": "Der Hauptschlüssel fehlt.",
+          "BLOB_KEY_MISMATCH": "Der Hauptschlüssel passt nicht zu den gespeicherten Dateien.",
+          "BLOB_KEY_CHECK_MISSING": "Der Bucket enthält Objekte, aber nicht das Schlüsselprüfobjekt dieser Installation.",
+          "BLOB_CORRUPT": "Ein gespeichertes Objekt lässt sich nicht entschlüsseln: Es wurde verändert oder gehört zu einer anderen Installation.",
+          "BLOB_PROVIDER_UNKNOWN": "Das konfigurierte Backend für den Blob-Speicher ist nicht bekannt.",
+          "BLOB_STORAGE_ERROR": "Die Prüfung des Blob-Speichers ist fehlgeschlagen."
+        },
+        "hints": {
+          "S3_CONFIG_INCOMPLETE": "Korrigieren Sie die Einstellung unter storage.blobs.s3 in platform.json oder setzen Sie die Umgebungsvariable, auf die sie verweist.",
+          "S3_ENDPOINT_UNREACHABLE": "Prüfen Sie die Endpunkt-URL, den Netzwerkweg und die Proxy-Einstellungen.",
+          "S3_TLS_UNTRUSTED": "Fügen Sie die ausstellende CA dem Vertrauensspeicher des Servers hinzu (NODE_EXTRA_CA_CERTS) oder tragen Sie den Host unter Admin → Sicherheit → SSL → Domain-Whitelist ein.",
+          "S3_CREDENTIALS_REJECTED": "Prüfen Sie Access Key ID und Secret Key. Auch ein Leerzeichen oder Zeilenumbruch am Ende des Secrets führt dazu.",
+          "S3_CLOCK_SKEW": "Synchronisieren Sie die Uhrzeit des iHub-Servers.",
+          "S3_BUCKET_NOT_FOUND": "iHub legt keine Buckets an. Legen Sie den Bucket an oder korrigieren Sie storage.blobs.s3.bucket.",
+          "S3_ACCESS_DENIED": "Der Zugangsschlüssel braucht die Rechte zum Auflisten, Lesen, Schreiben und Löschen von Objekten in diesem Bucket.",
+          "S3_REGION_MISMATCH": "Setzen Sie storage.blobs.s3.region auf die Region des Buckets.",
+          "S3_SERVICE_ERROR": "Der S3-Dienst hat mit einem Fehler geantwortet oder um langsamere Anfragen gebeten. Prüfen Sie den S3-Dienst und versuchen Sie es erneut.",
+          "S3_PROBE_MISMATCH": "Der S3-Dienst oder eine Komponente dazwischen verändert die Daten. So kann der Blob-Speicher nicht verwendet werden.",
+          "S3_ERROR": "Die Ursache steht im Server-Protokoll.",
+          "BLOB_KEY_MISSING": "Stellen Sie contents/.encryption-key aus einer Sicherung wieder her oder setzen Sie TOKEN_ENCRYPTION_KEY. Ohne den Schlüssel können die gespeicherten Dateien nicht gelesen werden.",
+          "BLOB_KEY_MISMATCH": "Stellen Sie den ursprünglichen Schlüssel wieder her, setzen Sie ihn als TOKEN_ENCRYPTION_KEY_PREVIOUS oder verwenden Sie für eine neue Installation einen leeren Bucket oder ein leeres Präfix.",
+          "BLOB_KEY_CHECK_MISSING": "Wurden die Objekte gespeichert, während die Speicherverschlüsselung ausgeschaltet war, stoppen Sie den Server und führen Sie \"npm run storage:encrypt\" aus: Das verschlüsselt sie und schreibt das Schlüsselprüfobjekt. Verwenden Sie sonst einen leeren Bucket oder ein leeres Präfix. Nur für einen Bucket, dessen Objekte alle bereits mit dem Hauptschlüssel dieser Installation verschlüsselt sind: Setzen Sie für einen Start IHUB_S3_ADOPT_BUCKET=true.",
+          "BLOB_CORRUPT": "Verwenden Sie je Installation einen eigenen Bucket oder ein eigenes Präfix. Wurde das Objekt verändert, stellen Sie es aus einer Sicherung des Buckets wieder her.",
+          "BLOB_PROVIDER_UNKNOWN": "Setzen Sie storage.blobs.provider auf „default“ oder „s3“.",
+          "BLOB_STORAGE_ERROR": "Die Ursache steht im Server-Protokoll."
+        }
+      },
       "title": "Systemressourcen",
       "description": "CPU, Arbeitsspeicher und Speicherplatz, wie sie jeder Serverprozess auf diesem Host meldet.",
       "updatedAt": "Aktualisiert {{time}}",
@@ -7589,7 +7693,8 @@
     "backup": {
       "sensitivity": {
         "title": "Bewahren Sie den Export wie einen Schlüssel auf",
-        "body": "Der Export ist nicht verschlüsselt. Er enthält den Schlüssel für gespeicherte Geheimnisse, die JWT-Signaturschlüssel und die Passwort-Hashes der Benutzer. Wer die Datei hat, kann jedes gespeicherte Geheimnis entschlüsseln und gültige Anmelde-Token erzeugen. Bewahren Sie sie so auf, dass nur Administratoren sie lesen können, und löschen Sie Kopien, die Sie nicht mehr brauchen."
+        "body": "Der Export ist nicht verschlüsselt. Er enthält den Schlüssel für gespeicherte Geheimnisse, die JWT-Signaturschlüssel und die Passwort-Hashes der Benutzer. Wer die Datei hat, kann jedes gespeicherte Geheimnis entschlüsseln und gültige Anmelde-Token erzeugen. Bewahren Sie sie so auf, dass nur Administratoren sie lesen können, und löschen Sie Kopien, die Sie nicht mehr brauchen.",
+        "blobStorage": "Wenn der Blob-Speicher ein S3-Bucket ist, liegen hochgeladene Dateien in diesem Bucket und sind nicht Teil dieses Exports. Der Export enthält den Schlüssel, der sie entschlüsselt. Sichern Sie den Bucket getrennt und bewahren Sie diesen Export sicher auf."
       },
       "importConfirm": {
         "title": "Gesamten Inhalt durch „{{name}}“ ersetzen?",
@@ -10069,6 +10174,7 @@
         "unsupported": "Dieser Dateityp wird nicht unterstützt.",
         "noText": "Die Datei enthält keinen lesbaren Text.",
         "rejected": "Die Datei wurde von der Sicherheitsprüfung abgelehnt.",
+        "busy": "Der Server liest gerade andere Dateien. Versuchen Sie es gleich noch einmal.",
         "disabled": "Datei-Uploads sind ausgeschaltet.",
         "textOnly": "Diese Installation speichert nur Text: Dateien werden zuerst im Browser gelesen.",
         "failed": "Die Datei konnte nicht angehängt werden."
@@ -10956,6 +11062,13 @@
     "UNKNOWN_PROVIDER": "Der konfigurierte Speicheranbieter ist unbekannt.",
     "UNKNOWN_NAMESPACE": "Der Datenbereich ist unbekannt.",
     "CORRUPT_DOCUMENT": "Die gespeicherten Daten sind beschädigt.",
+    "PLAINTEXT_DOCUMENT": "Die gespeicherten Daten sind nicht verschlüsselt, obwohl die Speicherverschlüsselung eingeschaltet ist, und wurden nicht gelesen.",
+    "PLAINTEXT_FILE": "Die gespeicherte Datei ist nicht verschlüsselt, obwohl die Speicherverschlüsselung eingeschaltet ist, und wurde nicht gelesen.",
+    "CORRUPT_LOG": "Der gespeicherte Verlauf ist beschädigt und kann nicht gelesen werden.",
+    "CORRUPT_BLOB": "Die gespeicherte Datei ist beschädigt und kann nicht gelesen werden.",
+    "KEY_UNAVAILABLE": "Die gespeicherte Datei kann gerade nicht entschlüsselt werden. Bitte wenden Sie sich an Ihre Administration.",
+    "BLOB_TOO_LARGE": "Die Datei ist zu groß, um gespeichert zu werden.",
+    "INVALID_STORAGE_CONFIG": "Der Speicher ist nicht richtig konfiguriert.",
     "STORAGE_ERROR": "Der Speicher ist fehlgeschlagen. Bitte versuchen Sie es später erneut.",
     "CONTEXT_WINDOW_EXCEEDED": "Die Unterhaltung ist für dieses Modell zu lang.",
     "CONTENT_POLICY": "Das Modell hat die Anfrage wegen seiner Inhaltsrichtlinie abgelehnt.",
@@ -11148,6 +11261,7 @@
     "NO_TEXT": "Die Datei enthält keinen Text.",
     "EXTRACTION_FAILED": "Der Text konnte nicht aus der Datei extrahiert werden.",
     "EXTRACTION_TIMEOUT": "Das Lesen der Datei hat zu lange gedauert und wurde abgebrochen. Teilen Sie die Datei auf oder entfernen Sie unnötige Inhalte.",
+    "UPLOAD_BUSY": "Der Server liest gerade andere hochgeladene Dateien. Versuchen Sie es gleich noch einmal.",
     "SOURCE_FORBIDDEN": "Sie dürfen keine Dateien aus diesem angebundenen System anhängen.",
     "SOURCE_GONE": "Die Datei existiert im angebundenen System nicht mehr.",
     "SOURCE_UNAVAILABLE": "Das angebundene System ist nicht verfügbar.",

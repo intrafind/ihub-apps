@@ -38,6 +38,7 @@ import { hashBytes, publicImageProvenance } from '../services/provenance/mediaMa
 import registerChatRoutes from '../routes/chats.js';
 import errorHandler from '../middleware/errorHandler.js';
 import { flipByte, readSignedJpeg } from './helpers/mediaFixtures.js';
+import { makeStreamable } from './support/streamableResponse.js';
 
 const OWNER = { id: 'user-ada', name: 'Ada' };
 const MODEL = {
@@ -80,6 +81,8 @@ async function getArtifact(chatId, artifactId) {
   res.setHeader = (name, value) => ((res.headers[name.toLowerCase()] = value), res);
   res.send = value => ((res.body = value), res);
   res.json = value => ((res.body = value), res);
+  // A route that streams its body pipes into the response.
+  makeStreamable(res);
   for (let i = 1; i < handlers.length; i += 1) {
     try {
       await handlers[i](req, res, () => {});

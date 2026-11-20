@@ -23,7 +23,7 @@ import {
   LocalFileKeyProvider,
   _resetKeyProvider,
   registerKeyProvider
-} from '../services/projects/crypto/KeyProvider.js';
+} from '../crypto/KeyProvider.js';
 import { evictItemKeys } from '../services/projects/ItemTextStore.js';
 import { getProjectService } from '../services/projects/ProjectService.js';
 import { getProjectRepository } from '../services/projects/ProjectRepository.js';

@@ -7,6 +7,11 @@ import { shortLinkTargetRefusal } from './utils/shortLinkTarget.js';
 import { getContentsPath } from './utils/contentsPath.js';
 import { ServiceError } from './utils/ServiceError.js';
 import { buildShortLinkTarget } from '../shared/shortLinkTargetPath.js';
+import { openFromDisk, sealForDisk } from './storage/atRest/sealedFiles.js';
+
+/** Store id and file name the short-link file is sealed under. */
+const LINK_STORE = 'short-links';
+const LINK_FILE = 'shortlinks.json';
 
 const dataFile = getContentsPath('data', 'shortlinks.json');
 
@@ -17,11 +22,15 @@ function createDefault() {
 }
 
 // Shared by every cluster worker: each change is made to the file on disk
-// under a lock, and reads see changes another worker made.
+// under a lock, and reads see changes another worker made. Link parameters can
+// hold prefilled prompt variables, so with `storage.encryption.enabled` the
+// file is sealed on disk (`storage/atRest/sealedFiles.js`).
 const store = createSharedJsonFile({
   filePath: dataFile,
   createDefault,
-  component: 'ShortLinkManager'
+  component: 'ShortLinkManager',
+  encode: json => sealForDisk(LINK_STORE, LINK_FILE, json),
+  decode: stored => openFromDisk(LINK_STORE, LINK_FILE, stored)
 });
 
 /** Apply `mutate` to the links on disk and save, stamping lastUpdated. */

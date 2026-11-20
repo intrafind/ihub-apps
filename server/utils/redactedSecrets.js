@@ -111,6 +111,7 @@ export const PLATFORM_SECRET_PATHS = Object.freeze([
   Object.freeze({ path: 'auth.jwtSecret' }),
   Object.freeze({ path: 'localAuth.jwtSecret' }),
   Object.freeze({ path: 'speech.azure.subscriptionKey' }),
+  Object.freeze({ path: 'storage.blobs.s3.secretAccessKey' }),
   Object.freeze({ path: 'proxyAuth.jwtProviders[].jwkUrl', kind: 'url' })
 ]);
 

@@ -1,0 +1,68 @@
+# SPDX-FileCopyrightText: IntraFind Software AG
+# SPDX-License-Identifier: LicenseRef-iHub-Apps
+#
+# A real S3-compatible server for the S3 storage tests: Versity S3 Gateway
+# (versitygw, Apache-2.0) with its POSIX backend. FOR TESTS ONLY. It is not
+# part of docker-compose.yml or docker-compose.prod.yml and must not be.
+#
+# NOT EXECUTED YET. This file has never been started (there was no Docker
+# daemon where it was written and reviewed); `docker compose config` parses
+# it, and that is all that is known. Not verified: that the image exists under
+# this tag and digest, that it has /bin/sh, mkdir and wget (the entrypoint and
+# the health check need them), that a directory made with mkdir is accepted as
+# a bucket, and that the health endpoint answers. Remove this paragraph after
+# the first successful `npm run s3:up` with the S3 suites green against it.
+#
+#   npm run s3:up      # start, wait until it answers
+#   export IHUB_TEST_S3_ENDPOINT=http://127.0.0.1:7070 IHUB_TEST_S3_BUCKET=ihub-test \
+#          IHUB_TEST_S3_ACCESS_KEY=ihub-test-not-a-secret \
+#          IHUB_TEST_S3_SECRET_KEY=ihub-test-not-a-secret IHUB_TEST_S3_REQUIRED=1
+#   npm run test:s3    # the storage-s3-* suites, now also against this server
+#   npm run s3:down    # stop and delete the data volume
+#
+# Why a second server beside the in-repo one (server/tests/support/fakeS3Server.js):
+# the in-repo server is written by the people who wrote the adapter and does
+# not verify request signatures. versitygw checks SigV4 and lists and pages on
+# its own terms. .github/workflows/s3-storage-tests.yml runs the suites against
+# this file on every pull request that touches the storage code.
+#
+# Variables (all optional; the defaults are obviously not secrets and are only
+# valid for this container):
+#   IHUB_TEST_S3_ACCESS_KEY, IHUB_TEST_S3_SECRET_KEY  root account of the gateway
+#   IHUB_TEST_S3_BUCKET                               bucket created at start (name must contain "test")
+#   IHUB_TEST_S3_PORT                                 host port, bound to 127.0.0.1 only
+#
+# The image is pinned by tag and digest. To update: pick a release from
+# https://hub.docker.com/r/versity/versitygw/tags, replace both, run the suites.
+#
+# With the POSIX backend a bucket is a directory below the gateway's root, so
+# the bucket is created with mkdir before the gateway starts. The backend keeps
+# object metadata in extended attributes: the volume must be on a filesystem
+# that has them (a named Docker volume does; tmpfs may not).
+
+name: ihub-s3-test
+
+services:
+  versitygw:
+    image: versity/versitygw:v1.11.0@sha256:8319a530d08d537426e2f855bae5280709795dc73a3f0c347973ef915d6343c5
+    environment:
+      ROOT_ACCESS_KEY: ${IHUB_TEST_S3_ACCESS_KEY:-ihub-test-not-a-secret}
+      ROOT_SECRET_KEY: ${IHUB_TEST_S3_SECRET_KEY:-ihub-test-not-a-secret}
+      IHUB_S3_BUCKET: ${IHUB_TEST_S3_BUCKET:-ihub-test}
+    entrypoint: ['/bin/sh', '-c']
+    command:
+      - mkdir -p "/data/$$IHUB_S3_BUCKET" && exec /usr/local/bin/versitygw --port :7070 --health /health posix /data
+    ports:
+      - '127.0.0.1:${IHUB_TEST_S3_PORT:-7070}:7070'
+    volumes:
+      - s3-test-data:/data
+    healthcheck:
+      test: ['CMD', 'wget', '-q', '-O', '/dev/null', 'http://127.0.0.1:7070/health']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 2s
+    restart: 'no'
+
+volumes:
+  s3-test-data:

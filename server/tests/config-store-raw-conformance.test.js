@@ -151,6 +151,8 @@ runProviderConformance({
     blobs: true,
     blobStore: true,
     conditionalWrites: true,
+    // No `encryption` option is passed: the provider writes plaintext.
+    encryptionAtRest: 'off',
     rawNamespaces: [...RAW_NAMESPACE_NAMES]
   },
   rawFiles

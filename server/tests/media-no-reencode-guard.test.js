@@ -53,9 +53,31 @@ describe('no image or audio codec on the generated-media path', () => {
   });
 
   it('the generated-image serve routes send the stored bytes as they are', () => {
+    // The routes stream the payload from the store to the response: the stream
+    // the repository opened is the one `sendStream` is given, with nothing in
+    // between that could decode or re-encode it.
+    const untouched =
+      /getArtifactRepository\(\)\.openRead\(([\s\S]{0,4000}?)sendStream\(req, res, artifact\.stream,/;
+    const between = source => {
+      const match = untouched.exec(source);
+      assert.ok(match, 'the artifact route hands the stored stream to sendStream');
+      return match[1];
+    };
+    const reshaped = /\.pipe\(|pipeline\(|Transform|compose\(|artifact\.stream\s*=/;
     const chats = readFileSync(path.join(serverRoot, 'routes/chats.js'), 'utf8');
-    assert.match(chats, /const body = artifact\.data;[\s\S]{0,900}res\.send\(body\)/);
+    assert.doesNotMatch(between(chats), reshaped);
     const shares = readFileSync(path.join(serverRoot, 'routes/chatShares.js'), 'utf8');
-    assert.match(shares, /const body = artifact\.data;[\s\S]{0,1200}res\.send\(body\)/);
+    assert.doesNotMatch(between(shares), reshaped);
+    // The one payload a share rewrites is a downloaded HTML file (its library
+    // kit), read whole for that; a picture never takes that branch.
+    assert.match(
+      shares,
+      /rewritten = download && \/\\\.html\?\$\/i\.test\(downloadName\(found\)\)/
+    );
+    assert.match(shares, /if \(rewritten\) \{[\s\S]{0,300}withKitLibraries\(artifact\.data/);
+    // And `sendStream` pipes what it is given into the response, unchanged.
+    const sender = readFileSync(path.join(serverRoot, 'utils/streamResponse.js'), 'utf8');
+    assert.match(sender, /stream\.pipe\(res\)/);
+    assert.doesNotMatch(sender, /Transform|PassThrough|pipeline\(|zlib/);
   });
 });

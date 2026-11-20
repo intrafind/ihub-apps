@@ -17,9 +17,18 @@
  *
  * @module storage/StorageRegistry
  */
+import cluster from 'node:cluster';
 import logger from '../utils/logger.js';
 import { StorageError, UnknownProviderError } from './errors.js';
 import { resolveEnvVarsInObject } from '../utils/envVars.js';
+import { DEFAULT_BLOB_BACKEND, createBlobBackend } from './blobBackends.js';
+import { failedBlobProbe, runBlobProbe } from './blobProbe.js';
+import { ComposedStorageProvider } from './ComposedStorageProvider.js';
+import { createLocalBlobBackend } from './localBlobBackend.js';
+import { blobPlaintextReads, describeEncryption } from './atRest/policy.js';
+import { configureSealedFiles, resetSealedFiles } from './atRest/sealedFiles.js';
+import { readAtRestState } from './atRest/state.js';
+import { createLocalKeyCheckStore } from './atRest/localKeyCheck.js';
 
 const COMPONENT = 'StorageRegistry';
 
@@ -28,6 +37,22 @@ const DEFAULT_PROVIDER = 'filesystem';
 
 /** Environment variable that overrides the configured provider. */
 const PROVIDER_ENV_VAR = 'IHUB_STORAGE_PROVIDER';
+
+/** Environment variable that overrides the configured blob backend. */
+const BLOB_PROVIDER_ENV_VAR = 'IHUB_STORAGE_BLOBS_PROVIDER';
+
+/**
+ * Carries the encryption switch from the cluster primary to its workers
+ * (`on` or `off`). The primary reads `platform.json` once per start, brings
+ * the data directory in line with it and forks every worker, also a
+ * replacement months later, with that decision. A worker that read the file
+ * itself would pick up an edit that waits for a restart and run in another
+ * mode than its siblings.
+ *
+ * Internal: it is only honoured in a cluster worker, so it is not a way to
+ * override `storage.encryption.enabled` from the environment.
+ */
+export const ENCRYPTION_DECISION_ENV_VAR = 'IHUB_STORAGE_ENCRYPTION_DECIDED';
 
 /** @type {Map<string, (config: Object) => StorageProvider>} */
 const factories = new Map();
@@ -127,8 +152,10 @@ export function hasProvider(name) {
  *
  * @param {Object} [platformConfig={}] - Platform configuration.
  * @param {Object} [env=process.env] - Environment to read the override from.
- * @returns {{provider: string, config: Object}} Resolved provider name and its
- *   configuration block — always an object, `{}` when the provider has none.
+ * @returns {{provider: string, config: Object, encryption: {enabled: boolean}}}
+ *   Resolved provider name and its configuration block — always an object,
+ *   `{}` when the provider has none — and the encryption switch
+ *   (`storage.encryption.enabled`, off unless the file says `true`).
  */
 export function resolveStorageConfig(platformConfig = {}, env = process.env) {
   const storage = isPlainObject(platformConfig?.storage) ? platformConfig.storage : {};
@@ -137,7 +164,315 @@ export function resolveStorageConfig(platformConfig = {}, env = process.env) {
   // Own-property lookup only: the name may come from the environment, and
   // `storage['__proto__']` would otherwise hand back Object.prototype as config.
   const raw = Object.hasOwn(storage, provider) ? storage[provider] : null;
-  return { provider, config: isPlainObject(raw) ? resolveEnvVarsInObject(raw) : {} };
+  return {
+    provider,
+    config: isPlainObject(raw) ? resolveEnvVarsInObject(raw) : {},
+    encryption: { enabled: encryptionEnabled(storage) }
+  };
+}
+
+/**
+ * The fork environment that hands the primary's decision to a worker.
+ *
+ * @param {Object} platformConfig - The platform configuration the primary started with.
+ * @param {Object} [env=process.env]
+ * @returns {Record<string, string>} `{ IHUB_STORAGE_ENCRYPTION_DECIDED: 'on' | 'off' }`
+ *
+ * @example
+ * cluster.fork({ WORKER_INDEX: '0', ...encryptionDecisionEnv(platformConfig) });
+ */
+export function encryptionDecisionEnv(platformConfig, env = process.env) {
+  const { encryption } = resolveStorageConfig(platformConfig, env);
+  return { [ENCRYPTION_DECISION_ENV_VAR]: encryption.enabled ? 'on' : 'off' };
+}
+
+/**
+ * The platform configuration a process starts its storage with: in a cluster
+ * worker the switch is the one the primary decided, whatever the file says
+ * by now. Everywhere else the configuration is returned as it is.
+ *
+ * @param {Object} platformConfig - As read from `platform.json`.
+ * @param {Object} [env=process.env]
+ * @param {Object} [options]
+ * @param {boolean} [options.isWorker] - Defaults to `cluster.isWorker` (tests).
+ * @returns {Object} `platformConfig`, or a copy with `storage.encryption.enabled` set.
+ */
+export function withStartDecision(
+  platformConfig,
+  env = process.env,
+  { isWorker = cluster.isWorker } = {}
+) {
+  const decided = env?.[ENCRYPTION_DECISION_ENV_VAR];
+  if (!isWorker || (decided !== 'on' && decided !== 'off')) return platformConfig;
+  const storage = isPlainObject(platformConfig?.storage) ? platformConfig.storage : {};
+  return {
+    ...(platformConfig || {}),
+    storage: {
+      ...storage,
+      encryption: {
+        ...(isPlainObject(storage.encryption) ? storage.encryption : {}),
+        enabled: decided === 'on'
+      }
+    }
+  };
+}
+
+/**
+ * The data directory of the configured storage provider, without leaving a
+ * provider (and its timers) behind.
+ *
+ * @param {Object} platformConfig - Platform configuration (raw file).
+ * @param {Object} [env=process.env]
+ * @returns {Promise<string|null>} Null for a provider without a data directory.
+ */
+export async function resolveStorageBaseDir(platformConfig, env = process.env) {
+  const { provider, config } = resolveStorageConfig(platformConfig, env);
+  const base = createProvider(provider, config);
+  try {
+    return typeof base.baseDir === 'string' && base.baseDir ? base.baseDir : null;
+  } finally {
+    await base.shutdown?.().catch(() => {});
+  }
+}
+
+/** Whether `storage.encryption.enabled` is on. */
+function encryptionEnabled(storage) {
+  return isPlainObject(storage.encryption) && storage.encryption.enabled === true;
+}
+
+/**
+ * The configuration a provider is built with: its own block plus how its
+ * documents and append logs are encrypted. With the switch on the provider
+ * decides the mode itself when it initializes, from the state record of the
+ * one-time conversion (`storage/atRest/state.js`).
+ *
+ * @param {Object} config - The provider's block.
+ * @param {{enabled: boolean}} encryption - The switch.
+ * @returns {Object}
+ */
+export function providerConfigWithEncryption(config, encryption) {
+  return {
+    ...config,
+    encryption: { mode: encryption?.enabled ? 'auto' : 'off', loadKeys }
+  };
+}
+
+/**
+ * The state record of the one-time conversion in a provider's data directory.
+ *
+ * @param {StorageProvider} base - A provider, initialized or not.
+ * @returns {Promise<Object|null>} Null for a provider without a data
+ *   directory, and when there is no record.
+ */
+async function atRestStateOf(base) {
+  let baseDir = null;
+  try {
+    baseDir = base.baseDir;
+  } catch {
+    baseDir = null;
+  }
+  return typeof baseDir === 'string' && baseDir ? readAtRestState(baseDir) : null;
+}
+
+/**
+ * Work out where the blobs go and hand back that backend's configuration.
+ *
+ * Precedence: `IHUB_STORAGE_BLOBS_PROVIDER` beats
+ * `platform.json → storage.blobs.provider`, which beats `'default'` (the blob
+ * facet of the storage provider itself). The block is optional and absent on
+ * an installation that never set it.
+ *
+ * `${VAR}` placeholders are resolved in the backend's block and in the `ssl`
+ * and `proxy` sections handed back with it. A remote backend connects at
+ * bootstrap, before the configuration cache exists, so the SSL whitelist and
+ * the proxy settings have to come from the raw file; read from the cache they
+ * would be empty and a private-CA endpoint could never be reached.
+ *
+ * The backend's block is returned as stored otherwise: a secret in it may
+ * still be `ENC[...]`. The backend opens it when it connects.
+ *
+ * @param {Object} [platformConfig={}] - Platform configuration (the raw file).
+ * @param {Object} [env=process.env] - Environment to read the override from.
+ * `encryption` is `storage.encryption`: one switch, off unless the file says
+ * `enabled: true` (a fresh installation's default file does). On, every blob
+ * write is encrypted; off, blobs are written as they are and blobs encrypted
+ * earlier are still decrypted.
+ *
+ * `encryption.plaintextReads` says what a read does with a stored object that
+ * is not encrypted while encryption is on. The S3 backend answers `reject`
+ * (strict), because it starts from an empty bucket. The default backend
+ * answers `accept` until the state record of the one-time conversion
+ * (`options.atRestState`, see `storage/atRest/state.js`) lists the blob facet
+ * as complete, and `reject` from then on; without a record it is `accept`.
+ *
+ * @param {Object} [options]
+ * @param {Object|null} [options.atRestState] - The state record of the
+ *   storage provider's data directory.
+ * @returns {{provider: string, source: 'environment'|'platform.json'|'default',
+ *   config: Object, platformConfig: {ssl: Object, proxy: Object},
+ *   encryption: {enabled: boolean, plaintextReads: 'reject'|'accept'}}}
+ *
+ * @example
+ * resolveBlobStorageConfig({ storage: { blobs: { provider: 's3', s3: { bucket: 'ihub' } } } }, {});
+ * // { provider: 's3', source: 'platform.json', config: { bucket: 'ihub' },
+ * //   platformConfig: { ssl: {}, proxy: {} }, encryption: { enabled: false, plaintextReads: 'accept' } }
+ */
+export function resolveBlobStorageConfig(
+  platformConfig = {},
+  env = process.env,
+  { atRestState = null } = {}
+) {
+  const storage = isPlainObject(platformConfig?.storage) ? platformConfig.storage : {};
+  const blobs = isPlainObject(storage.blobs) ? storage.blobs : {};
+  const fromEnv = readName(env?.[BLOB_PROVIDER_ENV_VAR]);
+  const fromFile = readName(blobs.provider);
+  const provider = fromEnv || fromFile || DEFAULT_BLOB_BACKEND;
+  const raw = Object.hasOwn(blobs, provider) ? blobs[provider] : null;
+  const section = name =>
+    isPlainObject(platformConfig?.[name]) ? resolveEnvVarsInObject(platformConfig[name]) : {};
+  return {
+    provider,
+    source: fromEnv ? 'environment' : fromFile ? 'platform.json' : 'default',
+    config: isPlainObject(raw) ? resolveEnvVarsInObject(raw) : {},
+    platformConfig: { ssl: section('ssl'), proxy: section('proxy') },
+    encryption: resolveBlobEncryption(storage, provider, atRestState)
+  };
+}
+
+/**
+ * `storage.encryption` as the blob backends use it.
+ *
+ * @param {Object} storage - The `storage` block.
+ * @param {string} provider - Blob backend name.
+ * @param {Object|null} [atRestState] - State record of the one-time conversion.
+ * @returns {{enabled: boolean, plaintextReads: 'reject'|'accept'}}
+ */
+function resolveBlobEncryption(storage, provider, atRestState = null) {
+  const enabled = encryptionEnabled(storage);
+  return {
+    enabled,
+    plaintextReads: blobPlaintextReads({
+      enabled,
+      remote: provider !== DEFAULT_BLOB_BACKEND,
+      state: atRestState
+    })
+  };
+}
+
+/** The key module, loaded when a blob backend first needs a key. */
+const loadKeys = () => import('../crypto/KeyProvider.js');
+
+/**
+ * Put the configured blob backend, and with it the encrypting blob store, in
+ * front of a provider's blob facet.
+ *
+ * @param {StorageProvider} base - The provider `storage.provider` names.
+ * @param {ReturnType<typeof resolveBlobStorageConfig>} blobs - Where the blobs
+ *   go and whether they are encrypted.
+ * @param {Object} [env=process.env] - Environment for one-start switches.
+ * @returns {StorageProvider} A {@link ComposedStorageProvider}; `base` itself
+ *   only when it has no blob facet to put anything in front of.
+ * @throws {UnknownProviderError} When the blob backend is not registered.
+ * @throws {StorageError} When its configuration is wrong. Neither case falls
+ *   back to the base provider's blob facet.
+ */
+export function composeBlobBackend(base, blobs, env = process.env) {
+  const facet = name => {
+    try {
+      return base[name] || null;
+    } catch {
+      return null;
+    }
+  };
+  let backend;
+  if (!blobs || blobs.provider === DEFAULT_BLOB_BACKEND) {
+    const local = facet('blobs');
+    // A provider without a blob facet (a test double) has nothing to wrap.
+    if (!local) return base;
+    const baseDir = facet('baseDir');
+    backend = createLocalBlobBackend(local, {
+      encryption: blobs?.encryption || { enabled: false, plaintextReads: 'accept' },
+      loadKeys,
+      // Beside the state record, not in the blob tree: see `atRest/localKeyCheck.js`.
+      keyCheckStore:
+        typeof baseDir === 'string' ? createLocalKeyCheckStore({ baseDir, legacy: local }) : null
+    });
+  } else {
+    backend = createBlobBackend(blobs.provider, blobs.config, {
+      platformConfig: blobs.platformConfig,
+      // Without a lock facet, deletes are exclusive per process only.
+      locks: facet('locks'),
+      encryption: blobs.encryption,
+      loadKeys,
+      env
+    });
+  }
+  return new ComposedStorageProvider({ base, backend });
+}
+
+/**
+ * Check the configured blob storage without starting the storage provider:
+ * build the blob backend from the configuration, run its check, close it.
+ *
+ * This is what a check command runs before the server is started, and what
+ * tells an operator why a start failed. It runs the same steps and the same
+ * classification as the start itself (`blobBackend.initialize()`), with one
+ * difference: unless `createKeyCheck` is set it writes nothing lasting, so on
+ * an empty bucket the key check object is reported as not yet written.
+ *
+ * For the backend of the **running** server, call
+ * `getStorageProvider().blobBackendHandle?.probe()` instead; that reuses its
+ * connections.
+ *
+ * Import this from `storage/index.js`, which registers the backends.
+ *
+ * @param {Object} [options]
+ * @param {Object} [options.platformConfig] - Platform configuration (raw file).
+ * @param {Object} [options.env=process.env]
+ * @param {boolean} [options.createKeyCheck=false] - Write the key check object
+ *   into an empty store, as a start would.
+ * @returns {Promise<import('./blobProbe.js').BlobProbeResult & {source: string, encryption: Object}>}
+ *   Never rejects; a wrong configuration is a failed `config` step.
+ *
+ * @example
+ * const result = await probeBlobStorage({ platformConfig });
+ * if (result.status !== 'ok') console.error(result.error.code, result.error.detail);
+ */
+export async function probeBlobStorage({
+  platformConfig,
+  env = process.env,
+  createKeyCheck = false
+} = {}) {
+  const blobs = resolveBlobStorageConfig(platformConfig, env);
+  if (blobs.provider === DEFAULT_BLOB_BACKEND) {
+    // The provider's own blob facet needs the provider; its check is the start itself.
+    const result = await runBlobProbe({ provider: DEFAULT_BLOB_BACKEND, steps: [] });
+    return { ...result, source: blobs.source, encryption: blobs.encryption };
+  }
+  let backend;
+  try {
+    backend = createBlobBackend(blobs.provider, blobs.config, {
+      platformConfig: blobs.platformConfig,
+      locks: null,
+      encryption: blobs.encryption,
+      loadKeys,
+      // A check that writes no key check object creates no key file either.
+      createMasterKey: createKeyCheck,
+      env
+    });
+  } catch (error) {
+    return {
+      ...failedBlobProbe(blobs.provider, error),
+      source: blobs.source,
+      encryption: blobs.encryption
+    };
+  }
+  try {
+    const result = await backend.probe({ createKeyCheck });
+    return { ...result, source: blobs.source, encryption: blobs.encryption };
+  } finally {
+    await backend.shutdown().catch(() => {});
+  }
 }
 
 /**
@@ -186,11 +521,20 @@ export function createProvider(name, config = {}) {
  * @param {Object} [options={}]
  * @param {Object} [options.platformConfig] - Platform configuration.
  * @param {Object} [options.env] - Environment to read the override from.
+ * The provider returned is a {@link ComposedStorageProvider}: its blob facet is
+ * the encrypting blob store, in front of the provider's own blob facet or of
+ * the backend `storage.blobs.provider` names (see
+ * {@link resolveBlobStorageConfig}). A blob backend that cannot start fails
+ * the initialization like any other storage failure.
+ *
  * @returns {Promise<StorageProvider>} The initialized provider.
- * @throws {UnknownProviderError} When the configured provider is not registered.
+ * @throws {UnknownProviderError} When the configured provider or blob backend
+ *   is not registered.
  */
-export async function initializeStorage({ platformConfig, env } = {}) {
-  const { provider: name, config } = resolveStorageConfig(platformConfig, env);
+export async function initializeStorage({ platformConfig: savedConfig, env } = {}) {
+  // A cluster worker runs with the switch its primary decided at the start.
+  const platformConfig = withStartDecision(savedConfig, env);
+  const { provider: name, config, encryption } = resolveStorageConfig(platformConfig, env);
 
   if (activeProvider) {
     warnProviderChange(name, activeProviderName);
@@ -203,7 +547,15 @@ export async function initializeStorage({ platformConfig, env } = {}) {
 
   pendingProviderName = name;
   pendingInit = (async () => {
-    const provider = createProvider(name, config);
+    // A blob backend that is unknown or misconfigured throws here, before
+    // anything is initialized: the same outcome as an unknown provider.
+    const base = createProvider(name, providerConfigWithEncryption(config, encryption));
+    // Filesystem blobs are read strictly once the conversion of the blob
+    // facet is recorded complete; until then blobs from before are plaintext.
+    const blobs = resolveBlobStorageConfig(platformConfig, env, {
+      atRestState: await atRestStateOf(base)
+    });
+    const provider = composeBlobBackend(base, blobs, env);
     try {
       await provider.initialize?.();
     } catch (error) {
@@ -226,7 +578,20 @@ export async function initializeStorage({ platformConfig, env } = {}) {
     }
     activeProvider = provider;
     activeProviderName = name;
-    logger.info('Storage provider initialized', { component: COMPONENT, provider: name });
+    // The stores outside the storage layer follow the same switch and the
+    // state record this start found (`storage/atRest/sealedFiles.js`).
+    configureSealedFiles({
+      enabled: encryption.enabled,
+      state: provider.atRest?.state ?? null,
+      loadKeys
+    });
+    logger.info('Storage provider initialized', {
+      component: COMPONENT,
+      provider: name,
+      blobs: blobs.provider,
+      blobEncryption: blobs.encryption.enabled
+    });
+    logEncryptionStatus(provider, encryption, blobs);
     return provider;
   })();
 
@@ -236,6 +601,69 @@ export async function initializeStorage({ platformConfig, env } = {}) {
     pendingInit = null;
     pendingProviderName = null;
   }
+}
+
+/**
+ * What a provider says about encryption at rest, for a status page and the
+ * start-up log.
+ *
+ * @param {StorageProvider|null} provider - The composed provider, or null.
+ * @param {{enabled: boolean}} [encryption] - The switch, for a provider that
+ *   does not describe itself.
+ * @returns {ReturnType<typeof describeEncryption>}
+ */
+export function describeProviderEncryption(provider, encryption = { enabled: false }) {
+  try {
+    const own = provider?.describeEncryption?.();
+    if (own) return own;
+  } catch {
+    // Fall through to what the switch says.
+  }
+  return describeEncryption({ enabled: encryption.enabled === true, mode: null, state: null });
+}
+
+/**
+ * One line per start that says whether storage encryption is on, and what it
+ * covers. A warning when blobs go to a remote store unencrypted.
+ *
+ * @param {StorageProvider} provider - The initialized provider.
+ * @param {{enabled: boolean}} encryption - The switch.
+ * @param {{provider: string}} blobs - The resolved blob storage.
+ * @returns {void}
+ */
+function logEncryptionStatus(provider, encryption, blobs) {
+  const described = describeProviderEncryption(provider, encryption);
+  const meta = {
+    component: COMPONENT,
+    enabled: described.enabled,
+    scope: described.scope,
+    conversion: described.conversion.state,
+    blobs: blobs.provider
+  };
+  if (described.enabled) {
+    logger.info(
+      described.scope === 'storage'
+        ? 'Storage encryption at rest is ON: documents, append logs and blobs are encrypted before they are written'
+        : 'Storage encryption at rest is ON for blobs only: this storage provider does not encrypt documents and append logs',
+      { ...meta, keyId: described.conversion.keyId }
+    );
+    return;
+  }
+  const sealed = described.sealedDataExists
+    ? ' Data encrypted earlier stays encrypted and needs the master key to be read.'
+    : '';
+  if (blobs.provider !== DEFAULT_BLOB_BACKEND) {
+    logger.warn(
+      `Storage encryption at rest is OFF (storage.encryption.enabled) while blobs are stored on "${blobs.provider}": ` +
+        `files are uploaded as they are, and documents and append logs are written in plaintext.${sealed}`,
+      { ...meta, code: 'STORAGE_ENCRYPTION_OFF' }
+    );
+    return;
+  }
+  logger.info(
+    `Storage encryption at rest is OFF (storage.encryption.enabled): documents, append logs and blobs are written in plaintext.${sealed}`,
+    meta
+  );
 }
 
 /**
@@ -275,6 +703,12 @@ export async function shutdownStorage() {
   activeProvider = null;
   activeProviderName = null;
   if (!provider) return;
-  await provider.shutdown?.();
+  try {
+    await provider.shutdown?.();
+  } finally {
+    // After the provider: a write that was still running during the shutdown
+    // is sealed in the mode the provider ran in.
+    resetSealedFiles();
+  }
   logger.info('Storage provider shut down', { component: COMPONENT, provider: name });
 }

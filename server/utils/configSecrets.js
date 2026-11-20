@@ -80,34 +80,83 @@ export function decryptPlatformSecrets(platformData) {
 }
 
 /**
+ * The secrets `platform.json` stores encrypted at rest, as paths through
+ * plain objects. Each is encrypted by {@link encryptPlatformSecrets} on every
+ * save of the file.
+ *
+ * `storage.blobs.s3.secretAccessKey` is not decrypted into the runtime cache
+ * (see {@link decryptPlatformSecrets}): the storage bootstrap reads the raw
+ * file and opens the secret itself, and nothing else needs it, so the cache
+ * keeps the ciphertext.
+ */
+const ENCRYPTED_PLATFORM_SECRETS = Object.freeze([
+  Object.freeze(['speech', 'azure', 'subscriptionKey']),
+  Object.freeze(['storage', 'blobs', 's3', 'secretAccessKey'])
+]);
+
+/** @param {unknown} value */
+function isPlainObject(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+/**
+ * The value at a path of plain objects, or undefined.
+ *
+ * @param {Object} data
+ * @param {ReadonlyArray<string>} path
+ * @returns {unknown}
+ */
+function valueAt(data, path) {
+  let current = data;
+  for (const segment of path) {
+    if (!isPlainObject(current) || !Object.hasOwn(current, segment)) return undefined;
+    current = current[segment];
+  }
+  return current;
+}
+
+/**
+ * A copy of `data` with the value at `path` replaced; only the objects on the
+ * path are copied.
+ *
+ * @param {Object} data
+ * @param {ReadonlyArray<string>} path
+ * @param {unknown} value
+ * @returns {Object}
+ */
+function withValueAt(data, [segment, ...rest], value) {
+  return {
+    ...data,
+    [segment]: rest.length === 0 ? value : withValueAt(data[segment], rest, value)
+  };
+}
+
+/**
  * The inverse of {@link decryptPlatformSecrets}, for the way back to disk.
  *
  * The runtime cache holds the Azure Speech subscription key decrypted, so a
  * route that builds the file it saves from the cache would store the key in
- * plain text. This encrypts it again; an environment variable placeholder
- * (`${NAME}`) and a value that is already encrypted stay as they are, so
- * calling it twice is harmless.
+ * plain text. This encrypts it again, and with it every other secret of
+ * {@link ENCRYPTED_PLATFORM_SECRETS} that is still plain text (the S3 secret
+ * access key of the blob storage, which an operator writes into the file by
+ * hand); an environment variable placeholder (`${NAME}`) and a value that is
+ * already encrypted stay as they are, so calling it twice is harmless.
  *
  * @param {Object} platformData - The platform configuration about to be saved
  * @returns {Promise<Object>} `platformData` itself when it holds no plain-text secret,
- *   otherwise a copy with the secret encrypted (the argument is not modified)
+ *   otherwise a copy with the secrets encrypted (the argument is not modified)
  */
 export async function encryptPlatformSecrets(platformData) {
-  const key = platformData?.speech?.azure?.subscriptionKey;
-  if (!key || typeof key !== 'string') return platformData;
-  if (/^\$\{[A-Z_][A-Z0-9_]*\}$/i.test(key)) return platformData;
-  if (tokenStorageService.isEncrypted(key)) return platformData;
-  // The file is also saved early in startup (migrations), before the server
-  // has set the key up.
-  if (!tokenStorageService.encryptionKey) await tokenStorageService.initializeEncryptionKey();
-  return {
-    ...platformData,
-    speech: {
-      ...platformData.speech,
-      azure: {
-        ...platformData.speech.azure,
-        subscriptionKey: tokenStorageService.encryptString(key)
-      }
-    }
-  };
+  let result = platformData;
+  for (const path of ENCRYPTED_PLATFORM_SECRETS) {
+    const secret = valueAt(result, path);
+    if (!secret || typeof secret !== 'string') continue;
+    if (/^\$\{[A-Z_][A-Z0-9_]*\}$/i.test(secret)) continue;
+    if (tokenStorageService.isEncrypted(secret)) continue;
+    // The file is also saved early in startup (migrations), before the server
+    // has set the key up.
+    if (!tokenStorageService.encryptionKey) await tokenStorageService.initializeEncryptionKey();
+    result = withValueAt(result, path, tokenStorageService.encryptString(secret));
+  }
+  return result;
 }

@@ -36,11 +36,12 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import cluster from 'node:cluster';
 import serverConfig from '../../../config.js';
 import logger from '../../../utils/logger.js';
 import { StorageProvider } from '../../StorageProvider.js';
 import { DocumentStore } from '../../DocumentStore.js';
-import { LockTimeoutError, StorageError } from '../../errors.js';
+import { KeyUnavailableError, LockTimeoutError, StorageError } from '../../errors.js';
 import { CONFIG_LOCK_DIR, RAW_NAMESPACE_NAMES } from '../../namespaces.js';
 import { FilesystemChangeNotifier } from './FilesystemChangeNotifier.js';
 import { FilesystemDocumentStore } from './FilesystemDocumentStore.js';
@@ -49,7 +50,11 @@ import { FilesystemAppendLog } from './FilesystemAppendLog.js';
 import { FilesystemBlobStore } from './FilesystemBlobStore.js';
 import { FilesystemLockManager } from './FilesystemLockManager.js';
 import { getContentsPath } from '../../../utils/contentsPath.js';
-import { timeAsync } from '../../../telemetry/waitDiagnostics.js';
+import { BLOB_OPS, timeFacetMethods } from '../../facetTiming.js';
+import { decideAtRestMode, describeEncryption } from '../../atRest/policy.js';
+import { sealedStoresHoldNothing } from '../../atRest/sealedFiles.js';
+import { CURRENT_FACETS, readAtRestState, writeAtRestState } from '../../atRest/state.js';
+import { AT_REST_MODES, AtRestContext } from './atRestContext.js';
 
 /** Lock name that lets one process at a time sweep idle fencing counters. */
 const FENCE_SWEEP_LOCK = 'storage:fence-sweep';
@@ -153,29 +158,9 @@ export function resolveFilesystemContentsDir(config = {}) {
  * @augments DocumentStore
  */
 const DOCUMENT_OPS = ['get', 'put', 'delete', 'list', 'listMetadata', 'deletePrefix'];
-const BLOB_OPS = ['get', 'put', 'delete', 'list', 'deletePrefix'];
 // `append`/`appendBatch` only queue in memory (and run per run event); the
 // flush that writes them is timed in `utils/jsonlAppender.js`.
 const LOG_OPS = ['read', 'lastSeq', 'lastRecord', 'deleteStream', 'putBlob', 'getBlob'];
-
-/**
- * Time a facet's async methods into the `storage` diagnostics
- * (`GET /api/admin/system/resources`), as `<facet>.<op>` or, per namespace,
- * `<facet>.<op>:<ns>`. Latency here includes the wait for a libuv thread
- * (`UV_THREADPOOL_SIZE`, default 4), which is what makes it worth watching.
- * A method that calls another timed method through `this` counts under both.
- */
-function timeFacetMethods(facet, name, methods, perNamespace) {
-  for (const method of methods) {
-    const original = facet[method];
-    if (typeof original !== 'function') continue;
-    const key = `${name}.${method}`;
-    facet[method] = function timedStorageOp(...args) {
-      const label = perNamespace && typeof args[0] === 'string' ? `${key}:${args[0]}` : key;
-      return timeAsync('storage', label, () => original.apply(this, args));
-    };
-  }
-}
 
 class NamespaceRoutingDocumentStore extends DocumentStore {
   /**
@@ -313,6 +298,21 @@ export class FilesystemStorageProvider extends StorageProvider {
    *   fencing counters are swept; 0 disables the sweep (tests)
    * @param {number} [config.fenceSweepHour=3] - Local hour (0–23) of the first
    *   sweep after start; later sweeps follow every `fenceSweepIntervalMs`
+   * @param {Object} [config.encryption] - Encryption at rest of documents and
+   *   append logs. Not an operator setting: the storage registry builds it
+   *   from `storage.encryption.enabled`.
+   * @param {'off'|'auto'|'converting'|'enforced'} [config.encryption.mode='off'] -
+   *   `auto` is what a server start passes when the switch is on: the mode is
+   *   decided in `initialize()` from the state record (`enforced` when the
+   *   conversion is complete, a refusal to start otherwise). `converting` is
+   *   for the conversion itself, `enforced` for tests.
+   * @param {Object|(() => Object)} [config.encryption.keyProvider] - Key provider (tests)
+   * @param {() => Promise<Object>} [config.encryption.loadKeys] - Resolves with
+   *   the key module (`crypto/KeyProvider.js`)
+   * @param {boolean} [config.encryption.writeState] - Whether this process may
+   *   write the state record when it starts. False in a cluster worker (the
+   *   default there): the primary brought the record in line with the switch
+   *   before it forked, and a worker only reads it.
    */
   constructor(config = {}) {
     super(config);
@@ -328,10 +328,35 @@ export class FilesystemStorageProvider extends StorageProvider {
     // same subscribers.
     this._notifier = new FilesystemChangeNotifier();
     const { keyPrefixSegments } = config;
+    const encryption =
+      config.encryption && typeof config.encryption === 'object' ? config.encryption : {};
+    const requestedMode = encryption.mode === undefined ? 'off' : encryption.mode;
+    if (requestedMode !== 'auto' && !AT_REST_MODES.includes(requestedMode)) {
+      throw new StorageError(
+        `Unknown storage encryption mode '${String(requestedMode).slice(0, 32)}'`,
+        {
+          code: 'INVALID_CONFIG'
+        }
+      );
+    }
+    /** `auto` until `initialize()` has read the state record. */
+    this._requestedAtRestMode = requestedMode;
+    this._mayWriteAtRestState =
+      typeof encryption.writeState === 'boolean' ? encryption.writeState : !cluster.isWorker;
+    // One context for both facets. With `auto` nothing is sealed or read
+    // before `initialize()` has decided, so the placeholder is never used.
+    this._atRest = new AtRestContext({
+      mode: requestedMode === 'auto' ? 'enforced' : requestedMode,
+      keyProvider: encryption.keyProvider || null,
+      loadKeys: encryption.loadKeys || null
+    });
+    /** The state record as read at `initialize()`. */
+    this._atRestState = null;
     this._envelopeDocuments = new FilesystemDocumentStore({
       baseDir: this._baseDir,
       notifier: this._notifier,
-      keyPrefixSegments
+      keyPrefixSegments,
+      atRest: this._atRest
     });
     // Config locks sit in the provider's own base directory, never inside a
     // namespace directory: a `.locks` sidecar in `contents/apps` would be
@@ -345,7 +370,11 @@ export class FilesystemStorageProvider extends StorageProvider {
       envelope: this._envelopeDocuments,
       raw: this._rawDocuments
     });
-    this._logs = new FilesystemAppendLog({ baseDir: this._baseDir, flushIntervalMs });
+    this._logs = new FilesystemAppendLog({
+      baseDir: this._baseDir,
+      flushIntervalMs,
+      atRest: this._atRest
+    });
     this._blobs = new FilesystemBlobStore(this._baseDir, { keyPrefixSegments });
     this._locks = new FilesystemLockManager({ baseDir: this._baseDir });
     timeFacetMethods(this._documents, 'documents', DOCUMENT_OPS, true);
@@ -400,6 +429,30 @@ export class FilesystemStorageProvider extends StorageProvider {
    */
   get documents() {
     return this._documents;
+  }
+
+  /**
+   * The enveloped document store on its own, without the routing to the raw
+   * config namespaces: what the one-time conversion walks.
+   * @returns {FilesystemDocumentStore}
+   */
+  get envelopeDocuments() {
+    return this._envelopeDocuments;
+  }
+
+  /**
+   * Encryption at rest of this provider's documents and append logs: the
+   * switch as this provider was started, the mode in effect and the state
+   * record as read at start.
+   *
+   * @returns {{enabled: boolean, mode: 'off'|'converting'|'enforced', state: Object|null}}
+   */
+  get atRest() {
+    return {
+      enabled: this._requestedAtRestMode !== 'off',
+      mode: this._atRest.mode,
+      state: this._atRestState ? { ...this._atRestState } : null
+    };
   }
 
   /**
@@ -458,6 +511,7 @@ export class FilesystemStorageProvider extends StorageProvider {
   async initialize() {
     if (this._initialized) return;
     await fs.mkdir(this._baseDir, { recursive: true });
+    await this._decideAtRestMode();
     try {
       const removed = await this._blobs.removeDeletionLeftovers();
       if (removed > 0) {
@@ -494,6 +548,142 @@ export class FilesystemStorageProvider extends StorageProvider {
       component: COMPONENT,
       baseDir: this._baseDir
     });
+  }
+
+  /**
+   * Decide the encryption mode of documents and append logs from the state
+   * record (`<base>/.at-rest.json`), before anything is read or written.
+   *
+   * - Switch off: plaintext is written. A record that still says `complete`
+   *   or `converting` is set to `off` first, so a later start with the switch
+   *   on converts what is written from now on.
+   * - Switch on (`auto`) and the conversion complete: `enforced`.
+   * - Switch on and no record in a data directory that holds nothing: the
+   *   record is written as `complete`. There is nothing to convert.
+   * - Switch on and anything else: `converting` in the process that prepares
+   *   the data directory (see `storage/atRest/policy.js`), a refusal anywhere
+   *   else. A worker never converts.
+   *
+   * A cluster worker never writes the record (`encryption.writeState`): the
+   * primary decides the switch once per start, brings the record in line and
+   * hands the decision to every worker it forks, also to a replacement.
+   *
+   * @returns {Promise<void>}
+   * @throws {StorageError} Code `ENCRYPTION_NOT_CONVERTED`, or
+   *   `KEY_UNAVAILABLE` when the master key is not the one the record names.
+   * @private
+   */
+  async _decideAtRestMode() {
+    const requested = this._requestedAtRestMode;
+    let state = await readAtRestState(this._baseDir);
+    this._atRestState = state;
+    if (requested === 'off') {
+      // A worker never writes the record: its primary did before forking.
+      if (state && state.state !== 'off' && this._mayWriteAtRestState) {
+        this._atRestState = await writeAtRestState(this._baseDir, {
+          ...state,
+          state: 'off',
+          facets: {},
+          disabledAt: new Date().toISOString()
+        });
+        logger.info(
+          'Storage encryption at rest is switched off: new data is written in plaintext, data encrypted before stays readable with the master key',
+          { component: COMPONENT, keyId: state.keyId }
+        );
+      }
+      return;
+    }
+    if (requested !== 'auto') return;
+
+    let mode = decideAtRestMode({ enabled: true, state });
+    if (mode === null && !state && this._mayWriteAtRestState && (await this._holdsNothing())) {
+      const keyId = await (await this._atRest.keyProvider()).currentKeyId();
+      const now = new Date().toISOString();
+      state = await writeAtRestState(this._baseDir, {
+        state: 'complete',
+        facets: { ...CURRENT_FACETS },
+        keyId,
+        startedAt: now,
+        completedAt: now,
+        converted: { documents: 0, streams: 0, spillBlobs: 0, blobs: 0, files: 0 },
+        skipped: 0
+      });
+      this._atRestState = state;
+      mode = 'enforced';
+    }
+    if (mode === null) {
+      throw new StorageError(
+        'Storage encryption is switched on (storage.encryption.enabled), but the data in ' +
+          `${this._baseDir} has not been converted yet (state: ${state?.state || 'none'}). The ` +
+          'conversion runs when the server starts, before its workers; it can also be run ahead ' +
+          'with "npm run storage:encrypt" while the server is stopped.',
+        { code: 'ENCRYPTION_NOT_CONVERTED' }
+      );
+    }
+    if (mode === 'converting' && !state && this._mayWriteAtRestState) {
+      // The preparing process is about to seal its first object (a
+      // configuration migration that starts storage does, before the
+      // conversion runs). Say so in the record first: sealed data without a
+      // record reads as "converted, record lost", and the plaintext of an
+      // installation that is only being converted would then be refused.
+      state = await writeAtRestState(this._baseDir, {
+        state: 'converting',
+        facets: {},
+        startedAt: new Date().toISOString()
+      });
+      this._atRestState = state;
+    }
+    if (mode === 'enforced') {
+      // Every process must hold the key the record names (the primary updates
+      // the record after a key change, before it forks).
+      const provider = await this._atRest.keyProvider();
+      let keyId;
+      try {
+        keyId = await provider.currentKeyId();
+      } catch (error) {
+        throw this._atRest.keyFailure(error, 'the storage') || error;
+      }
+      if (state.keyId && state.keyId !== keyId) {
+        throw new KeyUnavailableError(
+          `The stored data was encrypted with master key ${state.keyId}; this process holds key ` +
+            `${keyId}. Every worker must read the same contents/.encryption-key or TOKEN_ENCRYPTION_KEY.`,
+          { keyId: state.keyId }
+        );
+      }
+    }
+    this._atRest.setMode(mode);
+  }
+
+  /**
+   * Whether the data directory holds no document, no stream and no blob, and
+   * the stores outside the storage layer hold no file: a new installation, or
+   * a test's scratch directory.
+   *
+   * @returns {Promise<boolean>}
+   * @private
+   */
+  async _holdsNothing() {
+    for (const ns of await this._envelopeDocuments.atRestNamespaces()) {
+      if ((await this._envelopeDocuments.atRestKeys(ns)).length > 0) return false;
+    }
+    const targets = await this._logs.atRestTargets();
+    if (targets.streams.length > 0 || targets.blobDirs.length > 0) return false;
+    for (const ns of await this._blobs.namespaces()) {
+      // Only whether the namespace holds a blob at all: ask for the first one.
+      const first = await this._blobs.scan(ns)[Symbol.asyncIterator]().next();
+      if (!first.done) return false;
+    }
+    return sealedStoresHoldNothing(this._contentsDir);
+  }
+
+  /**
+   * What an administrator is told about encryption at rest here.
+   *
+   * @returns {ReturnType<typeof describeEncryption>}
+   */
+  describeEncryption() {
+    const { enabled, mode, state } = this.atRest;
+    return describeEncryption({ enabled, mode, state });
   }
 
   /**
@@ -666,6 +856,9 @@ export class FilesystemStorageProvider extends StorageProvider {
       blobs: true,
       blobStore: true,
       conditionalWrites: true,
+      // Whether documents and append logs are sealed before they are written:
+      // `off`, `converting` (the one-time conversion is running) or `enforced`.
+      encryptionAtRest: this._atRest.mode,
       // A copy: the declaration is frozen, but a caller must not be able to
       // reach it through a capability object at all.
       rawNamespaces: [...RAW_NAMESPACE_NAMES]

@@ -19,7 +19,6 @@
  *
  * @module routes/inference/files
  */
-import multer from 'multer';
 import { buildServerPath } from '../../utils/basePath.js';
 import { buildContentDisposition } from '../../utils/safeContentDisposition.js';
 import { servedMediaType } from '../../services/artifacts/artifactPolicy.js';
@@ -27,6 +26,11 @@ import { chatFilePolicy } from '../../services/chatFiles/chatFilePolicy.js';
 import { withUserFileLimit } from '../../services/quota/quotaService.js';
 import { userFileScope } from '../../services/chatFiles/ChatFileRepository.js';
 import { ingestChatFile } from '../../services/chatFiles/ChatFileService.js';
+import {
+  receiveSpooledUpload,
+  uploadAbortSignal,
+  withUploadSpool
+} from '../../services/chatFiles/fileUploadRequest.js';
 import { InferenceApiError, sendOpenAiError } from '../../services/inference/errors.js';
 import {
   fileObject,
@@ -36,6 +40,7 @@ import {
   requireFileStore
 } from '../../services/inference/files.js';
 import { apiUser, numberField } from './shared.js';
+import { etagOfSha256, isFreshFor, sendStream } from '../../utils/streamResponse.js';
 
 const COMPONENT = 'FilesApi';
 
@@ -43,7 +48,8 @@ const COMPONENT = 'FilesApi';
 const DEFAULT_LIST_LIMIT = 10_000;
 
 /**
- * The file of a multipart upload (field `file`) and its text fields.
+ * The file of a multipart upload (field `file`), received into a spool file
+ * (`req.file.path`; see `fileUploadRequest.js`), and its text fields.
  *
  * @param {import('express').Request} req
  * @param {import('express').Response} res
@@ -51,37 +57,34 @@ const DEFAULT_LIST_LIMIT = 10_000;
  * @returns {Promise<void>}
  * @throws {InferenceApiError}
  */
-function parseMultipart(req, res, maxFileBytes) {
-  const upload = multer({
-    storage: multer.memoryStorage(),
-    defParamCharset: 'utf8',
-    limits: { fileSize: maxFileBytes > 0 ? maxFileBytes : 25 * 1024 * 1024, files: 1, fields: 10 }
-  }).single('file');
-  return new Promise((resolve, reject) => {
-    upload(req, res, error => {
-      if (!error) return resolve();
-      if (error.code === 'LIMIT_FILE_SIZE') {
-        return reject(
-          new InferenceApiError(
-            413,
-            'quota_file_bytes',
-            `A file may be at most ${Math.floor(maxFileBytes / (1024 * 1024)) || 1} MB`,
-            { param: 'file', details: { limit: maxFileBytes } }
-          )
-        );
-      }
-      if (error.code === 'LIMIT_FILE_COUNT' || error.code === 'LIMIT_UNEXPECTED_FILE') {
-        return reject(
-          new InferenceApiError(400, 'invalid_file', 'Send exactly one file in the "file" field', {
-            param: 'file'
-          })
-        );
-      }
-      return reject(
-        new InferenceApiError(400, 'invalid_request', error.message || 'Invalid multipart upload')
+async function parseMultipart(req, res, maxFileBytes) {
+  try {
+    await receiveSpooledUpload(req, res, { maxFileBytes });
+  } catch (error) {
+    if (error?.code === 'LIMIT_FILE_SIZE') {
+      throw new InferenceApiError(
+        413,
+        'quota_file_bytes',
+        `A file may be at most ${Math.floor(maxFileBytes / (1024 * 1024)) || 1} MB`,
+        { param: 'file', details: { limit: maxFileBytes } }
       );
-    });
-  });
+    }
+    if (error?.code === 'LIMIT_FILE_COUNT' || error?.code === 'LIMIT_UNEXPECTED_FILE') {
+      throw new InferenceApiError(
+        400,
+        'invalid_file',
+        'Send exactly one file in the "file" field',
+        {
+          param: 'file'
+        }
+      );
+    }
+    throw new InferenceApiError(
+      400,
+      'invalid_request',
+      error?.message || 'Invalid multipart upload'
+    );
+  }
 }
 
 /** A JSON body's base64 (or `data:` URL) payload as bytes. */
@@ -107,7 +110,14 @@ export default function registerFilesRoutes(app) {
     return { owner, scope: userFileScope(owner.id) };
   }
 
-  const fail = (res, error) => sendOpenAiError(res, inferenceFileError(error), COMPONENT);
+  const fail = (res, error) => {
+    const mapped = inferenceFileError(error);
+    // A full extraction queue (`upload_busy`): the SDKs wait this long and repeat the request.
+    if (mapped?.details?.retryAfterMs > 0) {
+      res.setHeader('Retry-After', String(Math.ceil(mapped.details.retryAfterMs / 1000)));
+    }
+    return sendOpenAiError(res, mapped, COMPONENT);
+  };
 
   /**
    * @swagger
@@ -167,7 +177,7 @@ export default function registerFilesRoutes(app) {
    *       413:
    *         description: A file or storage quota is exceeded
    *       503:
-   *         description: File storage is unavailable or switched off
+   *         description: File storage is unavailable or switched off, or too many uploads wait to be read (`upload_busy`, with `Retry-After`; repeat the request)
    *       507:
    *         description: The server-wide file storage is full
    */
@@ -187,6 +197,8 @@ export default function registerFilesRoutes(app) {
       let name;
       let mimeType;
       let bytes = null;
+      let filePath = null;
+      let size = 0;
       let text = null;
       if (multipart || req.file) {
         if (!req.file) {
@@ -194,7 +206,10 @@ export default function registerFilesRoutes(app) {
         }
         name = req.file.originalname || 'document';
         mimeType = req.file.mimetype || 'application/octet-stream';
-        bytes = req.file.buffer;
+        // A spooled upload has a path; the size is the spool file's.
+        filePath = req.file.path || null;
+        bytes = filePath ? null : req.file.buffer;
+        size = filePath ? req.file.size : bytes?.length || 0;
       } else {
         const inline = bytesOfJsonBody(body);
         const rawText = typeof body.content === 'string' ? body.content : null;
@@ -216,21 +231,30 @@ export default function registerFilesRoutes(app) {
           inline?.mimeType ||
           (inline ? 'application/octet-stream' : 'text/plain');
         bytes = inline ? inline.bytes : null;
+        size = bytes ? bytes.length : 0;
         text = inline ? null : rawText;
+        // The decoded bytes replace the base64 text instead of being held beside it.
+        if (inline) {
+          if (body.base64 !== undefined) body.base64 = undefined;
+          else body.data = undefined;
+        }
       }
 
-      const descriptor = await ingestChatFile({
-        scope,
-        ownerId: owner.id,
-        name,
-        mimeType,
-        buffer: bytes,
-        text,
-        origin: 'api',
-        meta: { purpose, size: bytes ? bytes.length : Buffer.byteLength(text || '', 'utf8') },
-        policy,
-        store
-      });
+      const descriptor = await withUploadSpool(req, () =>
+        ingestChatFile({
+          scope,
+          ownerId: owner.id,
+          name,
+          mimeType,
+          ...(filePath ? { filePath } : { buffer: bytes }),
+          signal: uploadAbortSignal(req),
+          text,
+          origin: 'api',
+          meta: { purpose, size: size > 0 ? size : Buffer.byteLength(text || '', 'utf8') },
+          policy,
+          store
+        })
+      );
       return res.json(fileObject(descriptor));
     } catch (error) {
       return fail(res, error);
@@ -414,7 +438,12 @@ export default function registerFilesRoutes(app) {
           param: 'format'
         });
       }
-      const original = await store.getOriginal(scope, descriptor.id);
+      // Streamed from the store: the original is never held whole in memory.
+      // A conditional request is answered from the recorded hash, before the
+      // original is opened.
+      const original = await store.openOriginal(scope, descriptor.id, {
+        unless: found => isFreshFor(req, res, etagOfSha256(found.sha256))
+      });
       if (!original) {
         throw new InferenceApiError(404, 'file_not_found', `No such file: ${descriptor.id}`, {
           param: 'file_id'
@@ -430,10 +459,17 @@ export default function registerFilesRoutes(app) {
           { param: 'file_id', details: { originalDeletedAt: original.originalDeletedAt || null } }
         );
       }
-      res.setHeader('Content-Type', servedMediaType(original.mimeType));
-      res.setHeader('Content-Length', String(original.data.length));
-      res.setHeader('Content-Disposition', buildContentDisposition(original.name));
-      return res.send(original.data);
+      if (original.unopened) return res.status(304).end();
+      // A failure after the first byte aborts the response; one before it is
+      // answered below like any other, without these headers.
+      return await sendStream(req, res, original.stream, {
+        headers: {
+          ETag: etagOfSha256(original.sha256),
+          'Content-Type': servedMediaType(original.mimeType),
+          'Content-Length': String(original.originalBytes),
+          'Content-Disposition': buildContentDisposition(original.name)
+        }
+      });
     } catch (error) {
       return fail(res, error);
     }

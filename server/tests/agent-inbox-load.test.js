@@ -14,6 +14,7 @@
  * Run directly: `node server/tests/agent-inbox-load.test.js`.
  */
 
+import './support/scratchContents.js';
 import { InboxLoadNodeExecutor } from '../services/workflow/executors/InboxLoadNodeExecutor.js';
 import inboxStore from '../agents/inbox/inboxStore.js';
 import { buildAgentPrincipal } from '../utils/authorization.js';

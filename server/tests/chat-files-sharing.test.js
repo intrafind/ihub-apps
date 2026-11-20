@@ -22,6 +22,7 @@ import { getChatRepository } from '../services/chat/ChatRepository.js';
 import { getChatShareRepository } from '../services/chat/ChatShareRepository.js';
 import registerChatShareRoutes from '../routes/chatShares.js';
 import errorHandler from '../middleware/errorHandler.js';
+import { makeStreamable } from './support/streamableResponse.js';
 
 const ADA = { id: 'user-ada', name: 'Ada Lovelace', email: 'ada@example.com' };
 const DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
@@ -74,6 +75,8 @@ function makeResponse() {
     return res;
   };
   res.set = res.setHeader;
+  // A route that streams its body pipes into the response.
+  makeStreamable(res);
   return res;
 }
 

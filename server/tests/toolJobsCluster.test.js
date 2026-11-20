@@ -20,6 +20,8 @@ if (cluster.isPrimary) {
   const contentsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tool-jobs-'));
   process.env.CONTENTS_DIR = contentsDir;
   process.env.WORKERS = '2';
+  // Both workers seal and open result files with the same master key.
+  process.env.TOKEN_ENCRYPTION_KEY = 'a1'.repeat(32);
   const { initPrimaryBus } = await import('../clusterBus.js');
   await runPrimary(initPrimaryBus, contentsDir);
 } else {
@@ -108,6 +110,36 @@ async function runPrimary(initPrimaryBus, contentsDir) {
     assert.strictEqual(found, null);
   });
 
+  // Storage encryption on (`storage.encryption.enabled`): the result file is sealed.
+  await Promise.all(workers.map(w => ask(w, { step: 'seal' })));
+  const { jobId: sealed } = await ask(owner, { step: 'create', status: 'processing' });
+  await ask(owner, { step: 'complete', jobId: sealed, text: 'confidential ocr text' });
+  await settle();
+
+  await check('with storage encryption on, the result file is sealed on disk', async () => {
+    const { found } = await ask(other, { step: 'find', jobId: sealed });
+    const stored = fs.readFileSync(found.job.resultFile);
+    assert.strictEqual(stored.toString('ascii', 0, 4), 'IHB1');
+    assert.strictEqual(stored.includes(Buffer.from('confidential')), false);
+    const leftovers = fs.readdirSync(path.dirname(found.job.resultFile));
+    assert.deepStrictEqual(
+      leftovers.filter(name => name.endsWith('.tmp')),
+      []
+    );
+  });
+
+  await check('another worker opens the sealed result for the download', async () => {
+    const { text, sealed: wasSealed } = await ask(other, { step: 'read', jobId: sealed });
+    assert.strictEqual(wasSealed, true);
+    assert.strictEqual(text, 'confidential ocr text');
+  });
+
+  await check('a plaintext result from before is still served as it is', async () => {
+    const { text, sealed: wasSealed } = await ask(other, { step: 'read', jobId: done });
+    assert.strictEqual(wasSealed, false, 'not sealed: the file is streamed as it is');
+    assert.strictEqual(text, 'ocr result bytes');
+  });
+
   for (const worker of workers) worker.kill();
   fs.rmSync(contentsDir, { recursive: true, force: true });
   if (failed) {
@@ -155,6 +187,20 @@ async function runWorker() {
         return reply({ outcome: await store.cancelJobAnywhere(msg.jobId) });
       case 'status':
         return reply({ status: store.getJob(msg.jobId)?.status });
+      case 'seal': {
+        const { configureSealedFiles } = await import('../storage/atRest/sealedFiles.js');
+        configureSealedFiles({ enabled: true });
+        return reply({});
+      }
+      case 'read': {
+        const found = await store.findJob(msg.jobId);
+        const opened = await store.openSealedResult(found.job);
+        const chunks = [];
+        for await (const chunk of opened.stream) chunks.push(chunk);
+        const content = Buffer.concat(chunks);
+        assert.strictEqual(content.length, opened.bytes, 'the announced length is the content');
+        return reply({ sealed: opened.sealed, text: content.toString('utf8') });
+      }
       default:
         return reply({});
     }

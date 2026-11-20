@@ -28,8 +28,8 @@ import logger from '../../utils/logger.js';
 import { PROJECT_FILES_NAMESPACE, getProjectRepository } from './ProjectRepository.js';
 import { projectSettings } from './projectSettings.js';
 import { mintVersionId } from './ItemTextStore.js';
-import { getKeyProvider } from './crypto/KeyProvider.js';
-import { DEFAULT_SEGMENT_BYTES, decrypt, encrypt, newDataKey } from './crypto/streamingAead.js';
+import { getKeyProvider } from '../../crypto/KeyProvider.js';
+import { DEFAULT_SEGMENT_BYTES, decrypt, encrypt, newDataKey } from '../../crypto/streamingAead.js';
 
 const COMPONENT = 'crawlHandover';
 

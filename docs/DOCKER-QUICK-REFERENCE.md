@@ -77,6 +77,36 @@ npm run docker:down
 npm run docker:clean
 ```
 
+## Storage Commands in a Container
+
+The production image has no `npm` and no `scripts/` directory. Run the storage commands through
+their entry point, in the container so that they see the same `contents/` volume and the same
+environment (`TOKEN_ENCRYPTION_KEY`, S3 credentials) as the server:
+
+```bash
+docker exec <container> node server/storage/commands/run.js check
+docker exec <container> node server/storage/commands/run.js show --doc chats <chatId>
+```
+
+`copy-blobs` and `encrypt` need the server stopped. Run them in a one-off container with the same
+image, volume and environment:
+
+```bash
+docker run --rm -v ihub-contents:/app/contents --env-file ihub.env <image> \
+  node server/storage/commands/run.js encrypt --dry-run
+docker run --rm -v ihub-contents:/app/contents --env-file ihub.env <image> \
+  node server/storage/commands/run.js copy-blobs --dry-run
+```
+
+| Command      | What it does                                                           | Details                                                                  |
+| ------------ | ---------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `check`      | Checks the configured blob storage (S3 bucket, key) without the server | [Storage Providers](storage.md#checking-the-configuration-storagecheck)  |
+| `copy-blobs` | Copies blobs from local disk into the configured S3 bucket             | [Storage Providers](storage.md#moving-existing-blobs-storagecopy-blobs)  |
+| `encrypt`    | Encrypts the stored data in place                                      | [Storage Encryption](storage-encryption.md#turning-it-on)                |
+| `show`       | Prints one stored object decrypted, for support                        | [Storage Encryption](storage-encryption.md#reading-stored-data-for-support-storageshow) |
+
+Exit code 0 means success, 1 a failed check or an incomplete run, 2 a wrong argument.
+
 ## GitHub CI/CD Triggers
 
 Docker images are built and published when:

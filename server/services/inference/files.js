@@ -115,6 +115,12 @@ export function inferenceFileError(error, param = null) {
         return new InferenceApiError(403, 'uploads_disabled', error.message, extra);
       case 'BINARY_UPLOAD_NOT_ALLOWED':
         return new InferenceApiError(400, 'binary_upload_not_allowed', error.message, extra);
+      case 'UPLOAD_BUSY':
+        // Retryable: too many uploads wait to be read (`uploads.extraction`).
+        return new InferenceApiError(503, 'upload_busy', error.message, {
+          ...extra,
+          details: error.details
+        });
       case 'SCAN_REJECTED':
         return new InferenceApiError(400, 'file_rejected', error.message, extra);
       default:

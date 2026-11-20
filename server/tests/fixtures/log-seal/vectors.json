@@ -1,0 +1,109 @@
+{
+  "format": "ihub-log-v1",
+  "note": "Sealed append-log lines and one spill blob, written once by server/crypto/logSeal.js with the local-file key provider and the test master key below; never regenerate them. A change that stops one of these from opening makes stored run ledgers unreadable and needs a new format instead.",
+  "masterKey": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+  "keyProvider": "local-file",
+  "streams": [
+    {
+      "stream": "run:run-1",
+      "keyLine": {
+        "$key": 1,
+        "id": "00b7d58e0959fc11",
+        "kp": "local-file",
+        "kid": "3490f804",
+        "wk": "AWLtIo2t6g311+TRH6vbuZxKx47ulG7XScO3ru6XvfKgUmfzMydnIL9giC2ZNTnQ49i2c53TiPqOY9cNFA=="
+      },
+      "keyAssociatedData": "[\"ihub/log-key/v1\",\"default\",\"run:run-1\",\"00b7d58e0959fc11\"]",
+      "records": [
+        {
+          "record": {
+            "ts": "2026-11-19T10:00:00.000Z",
+            "runId": "run-1",
+            "type": "message/user",
+            "data": {
+              "content": "Hallo, 世界"
+            },
+            "seq": 1
+          },
+          "line": {
+            "$enc": 1,
+            "seq": 1,
+            "k": "00b7d58e0959fc11",
+            "c": "KMJ4djY9FCbRfCM1bcAmTrRfR3gC+2fh/plyHeBDM7JAwLm72hCNVKjeKh2ThM2ZqWUnmuLi3cdaBDq/m153bM8EjOyDKrsy+tt9yS9j/nkiCgRHhnUBeXY3Uy66TibZam/wKtiUZC7cqrZLUtwucPWF0zNSkSymq2PLGgwK3xQ7SMN4NCeRHpsV0sW2YldOEugzgSPWX/fbTUGYEPSDpkQgGXmU4EyPjY8="
+          },
+          "associatedData": "[\"ihub/log/v1\",\"default\",\"run:run-1\",\"00b7d58e0959fc11\",1]"
+        },
+        {
+          "record": {
+            "type": "tool/result",
+            "data": {
+              "ok": true
+            },
+            "seq": 7
+          },
+          "line": {
+            "$enc": 1,
+            "seq": 7,
+            "k": "00b7d58e0959fc11",
+            "c": "KG0QQbqWiABa3e3pr0Ltju7nIk/Cg2742lxV20oK70MaaOt0yfXmLeIeVr1A8yCCIs4ND8I8Fm0DBVSzf8Ntb3zuLYJpR+IKAdUNzG4O6tCeLrGZ5iHp/JrG/2xR1NfwbWr+lR28MNZo"
+          },
+          "associatedData": "[\"ihub/log/v1\",\"default\",\"run:run-1\",\"00b7d58e0959fc11\",7]"
+        }
+      ]
+    },
+    {
+      "stream": "_:plain-stream",
+      "keyLine": {
+        "$key": 1,
+        "id": "8d689405812bebf2",
+        "kp": "local-file",
+        "kid": "3490f804",
+        "wk": "AQAuro6xMy0udEBIAeLAWECM2J9sPe9bQ55GTQsng+ipFWSIk0KkbwPPwhirseThA/OOUHth5/HNtBPDDw=="
+      },
+      "keyAssociatedData": "[\"ihub/log-key/v1\",\"default\",\"_:plain-stream\",\"8d689405812bebf2\"]",
+      "records": [
+        {
+          "record": {
+            "ts": "2026-11-19T10:00:00.000Z",
+            "runId": "run-1",
+            "type": "message/user",
+            "data": {
+              "content": "Hallo, 世界"
+            },
+            "seq": 1
+          },
+          "line": {
+            "$enc": 1,
+            "seq": 1,
+            "k": "8d689405812bebf2",
+            "c": "KOE/3bzN6k+ujnr35JkRQ3l8nGzy1baeDK/FY4Yp6A7GqLx846LqTGoPZP0UCoJvSMHPuNkUdPIf7lSkeWafKdKCpaWPrUMFywVwBqe5vUcpQXz9hLLrP9KzdE3rF0u7baHuIWN5ul344ouNQb9gstfd1SLb7nbmKZTvPtIN9WWaM8kkJ8FugizVAQOzEdXPkRTPeFIjoI9YAm6V2YOMAcF95WhVl4FLf3w="
+          },
+          "associatedData": "[\"ihub/log/v1\",\"default\",\"_:plain-stream\",\"8d689405812bebf2\",1]"
+        },
+        {
+          "record": {
+            "type": "tool/result",
+            "data": {
+              "ok": true
+            },
+            "seq": 7
+          },
+          "line": {
+            "$enc": 1,
+            "seq": 7,
+            "k": "8d689405812bebf2",
+            "c": "KGrQ5urdCp8XnuEq/23am38326uup3zDcXDu3HLuX5Abn4qm/MN86OTb1wjPreNydehFAv5ZoXnfoeBObQtro+Z2MVLRSI4LA2v1B7++wyKWG9NTGOWe72beoaumTMjzglDAdRok8lAz"
+          },
+          "associatedData": "[\"ihub/log/v1\",\"default\",\"_:plain-stream\",\"8d689405812bebf2\",7]"
+        }
+      ]
+    }
+  ],
+  "spillBlob": {
+    "stream": "run:run-1",
+    "name": "tool-1.json",
+    "associatedData": "ihub/logblob/v1\ndefault\nrun:run-1\ntool-1.json\n1048576",
+    "plainBase64": "YSBzcGlsbGVkIHRvb2wgcmVzdWx0OiDkuJbnlYw=",
+    "storedBase64": "SUhCMQEKCAA9bG9jYWwtZmlsZTM0OTBmODA0Ad7SjiFtVHCRWbGP+5hT6ZVPGFurU1PTMYdtzWcA+Ry7VUpNpLres3+S46mYV57I6O9fZV8NM5LOWln7TgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAobDIa0hWmLPrqPtgNIfWl8cLEl1oU6YeeveVQ6BSA9NZx41Lh+SQ60PcFImG9CfoshjxwWs4ty4PrqkTxBAjsu6Ym9u1BaglA00Qyea0RzXUHv+kE"
+  }
+}

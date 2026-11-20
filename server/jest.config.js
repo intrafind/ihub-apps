@@ -51,5 +51,13 @@ export default {
   verbose: true,
 
   // Timeout for tests
-  testTimeout: 10000
+  testTimeout: 10000,
+
+  // A worker is replaced once its heap passes this after a test file. Under
+  // `--experimental-vm-modules` jest keeps the module graph of every test file
+  // a worker ran (each loads most of the server), so a worker's heap grows with
+  // every file: about 2 GB by the end of a full run, which is the heap limit of
+  // a process on a machine with 8 GB and crashed whichever file came last
+  // ("Jest worker ran out of memory and crashed").
+  workerIdleMemoryLimit: '1GB'
 };

@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
+import fs from 'node:fs/promises';
 import logger from '../../../utils/logger.js';
 import {
   TEXT_FILE_MEDIA_TYPES,
@@ -19,7 +20,14 @@ import {
 import { artifactPolicy } from '../../artifacts/artifactPolicy.js';
 import { withKitLibraries } from '../../artifacts/artifactLibraryKit.js';
 import { getArtifactRepository } from '../../artifacts/ArtifactRepository.js';
-import { ZipLimitError, planZipEntries, zipToBuffer } from '../../artifacts/artifactZip.js';
+import { ZipLimitError, planZipEntries, zipToFile } from '../../artifacts/artifactZip.js';
+import {
+  ZIP_SPOOL_AREA,
+  createSpoolFile,
+  newSpoolDir,
+  removeSpoolDir,
+  spoolRoot
+} from '../../uploads/uploadSpool.js';
 
 /**
  * The tools the `files` system skill brings (see `server/systemSkills/files`):
@@ -30,6 +38,9 @@ import { ZipLimitError, planZipEntries, zipToBuffer } from '../../artifacts/arti
 
 /** Most new files one `create_zip` call may carry. */
 export const MAX_ZIP_TOOL_FILES = 500;
+
+/** An archive path whose file is rewritten on the way in (library kit). */
+const HTML_PATH = /\.html?$/i;
 
 /** Artifact kinds `includeAll` packs: what a tool wrote, not pictures or archives. */
 const INCLUDE_ALL_KINDS = new Set(['document', 'code']);
@@ -102,7 +113,9 @@ const keyOf = path => path.toLowerCase();
  * @param {'read'|'write'} [params.intent='write']
  * @returns {Promise<Array<{ id: string, name: string, kind: string, mimeType?: string,
  *   bytes: number, createdAt?: string, runId?: string, held?: boolean,
- *   load: () => Promise<Buffer|null> }>>}
+ *   load: () => Promise<Buffer|null>,
+ *   open?: () => Promise<import('node:stream').Readable|null> }>>} `open` (stored artifacts
+ *   only) reads the payload as a stream instead of whole.
  */
 export async function chatArtifactCandidates({ user, chatId, intent = 'write' }) {
   const candidates = heldGeneratedFilesFor(user, { chatId }).map(file => ({
@@ -136,7 +149,8 @@ export async function chatArtifactCandidates({ user, chatId, intent = 'write' })
             bytes: artifact.bytes,
             createdAt: artifact.createdAt,
             ...(artifact.runId ? { runId: artifact.runId } : {}),
-            load: async () => (await repository.get(scope, artifact.id))?.data || null
+            load: async () => (await repository.get(scope, artifact.id))?.data || null,
+            open: async () => (await repository.openRead(scope, artifact.id))?.stream || null
           });
         }
       }
@@ -261,25 +275,71 @@ export async function runCreateZip(params) {
     const maxBytes =
       maxZipBytes > 0 ? Math.min(maxZipBytes, MAX_GENERATED_FILE_BYTES) : MAX_GENERATED_FILE_BYTES;
     const planned = planZipEntries(items, { maxFiles: maxZipFiles, maxBytes });
+    const gone = path => new GeneratedFileError(`"${path}" is no longer available.`, 'not-found');
     const entries = [];
+    // What the library kit adds to HTML files: content the plan did not count.
+    let kitBytes = 0;
     for (const item of planned) {
+      // A stored artifact is read as a stream when its turn in the archive
+      // comes, so no member from the store is held in memory. The exception is
+      // an HTML file: it carries its library-kit libraries, like every other
+      // way an HTML file leaves iHub, and is read whole for that rewrite.
+      if (typeof item.open === 'function' && !HTML_PATH.test(item.path)) {
+        entries.push({
+          path: item.path,
+          date: item.createdAt,
+          open: async () => {
+            const stream = await item.open();
+            if (!stream) throw gone(item.path);
+            return stream;
+          }
+        });
+        continue;
+      }
       const loaded = await item.load();
-      if (!loaded)
-        throw new GeneratedFileError(`"${item.path}" is no longer available.`, 'not-found');
-      // An HTML file in the archive carries its library-kit libraries, like
-      // every other way an HTML file leaves iHub.
+      if (!loaded) throw gone(item.path);
       const data = withKitLibraries(loaded, item.path, libraryKit);
+      kitBytes += Math.max(0, data.length - loaded.length);
       entries.push({ path: item.path, data, date: item.createdAt });
     }
-    const archive = await zipToBuffer(entries);
-    // The answer stores the archive as an artifact, and the store refuses one
-    // over `artifacts.maxBytes` (decoded bytes). Refused there, the card works
-    // only until the page reloads; refused here, the model can split it.
-    if (enabled && maxStoredBytes > 0 && archive.length > maxStoredBytes) {
-      throw new GeneratedFileError(
-        `The archive is ${(archive.length / 1024 / 1024).toFixed(1)} MB, over the ${(maxStoredBytes / 1024 / 1024).toFixed(1)} MB a chat keeps per file. Pack fewer files, or split them into several archives.`,
-        'too-large'
-      );
+    // The archive is built into a spool file (`uploadSpool.js`), not in memory,
+    // and both limits hold while it is written: the content that goes in, and
+    // the size a generated file may have. The spool goes on every path.
+    const spoolDir = await newSpoolDir(spoolRoot(ZIP_SPOOL_AREA));
+    let archive;
+    try {
+      const spoolFile = await createSpoolFile(spoolDir);
+      let built;
+      try {
+        built = await zipToFile(entries, spoolFile, {
+          maxArchiveBytes: MAX_GENERATED_FILE_BYTES,
+          // As planned, plus the libraries HTML files carry (never limited before).
+          maxContentBytes: maxBytes + kitBytes
+        });
+      } catch (error) {
+        if (error instanceof ZipLimitError && error.limit === 'archive') {
+          // What holding an archive of that size answered before.
+          throw new GeneratedFileError(
+            `The generated file is larger than ${MAX_GENERATED_FILE_BYTES / 1024 / 1024} MB.`,
+            'too-large'
+          );
+        }
+        throw error;
+      }
+      // The answer stores the archive as an artifact, and the store refuses one
+      // over `artifacts.maxBytes` (decoded bytes). Refused there, the card works
+      // only until the page reloads; refused here, the model can split it.
+      if (enabled && maxStoredBytes > 0 && built.bytes > maxStoredBytes) {
+        throw new GeneratedFileError(
+          `The archive is ${(built.bytes / 1024 / 1024).toFixed(1)} MB, over the ${(maxStoredBytes / 1024 / 1024).toFixed(1)} MB a chat keeps per file. Pack fewer files, or split them into several archives.`,
+          'too-large'
+        );
+      }
+      // A generated file is handed to the chat from memory (it is at most
+      // `MAX_GENERATED_FILE_BYTES`): the one copy of the archive that is held.
+      archive = await fs.readFile(spoolFile);
+    } finally {
+      await removeSpoolDir(spoolDir);
     }
     const file = holdGeneratedFile({
       user: params.user,

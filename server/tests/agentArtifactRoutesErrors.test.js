@@ -10,14 +10,18 @@
  *
  * Run with `NODE_OPTIONS=--experimental-vm-modules`.
  */
+import './support/scratchContents.js';
 import { jest } from '@jest/globals';
 import request from 'supertest';
 import express from 'express';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { Readable } from 'node:stream';
-import * as realAuthRequired from '../middleware/authRequired.js';
+
+// Not a static import: under jest's ESM loader a static import of server code is
+// evaluated before `scratchContents.js` has finished (it awaits the server
+// configuration), and would load that configuration with the real contents directory.
+const realAuthRequired = await import('../middleware/authRequired.js');
 
 const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-artifacts-'));
 const state = { runs: {}, getStateFails: false };
@@ -43,6 +47,11 @@ jest.unstable_mockModule('../utils/logger.js', () => ({
 
 const { default: registerAgentArtifactRoutes } = await import('../routes/agents/artifacts.js');
 const { default: errorHandler } = await import('../middleware/errorHandler.js');
+const { writeArtifactDirect } = await import('../agents/runtime/artifactStore.js');
+const sealedFiles = await import('../storage/atRest/sealedFiles.js');
+const keyModule = await import('../crypto/KeyProvider.js');
+const { fixedKeys } = await import('./support/blobTestSupport.js');
+const testKeys = fixedKeys(keyModule);
 
 let user = { id: 'owner', groups: ['users'] };
 const app = express();
@@ -179,14 +188,20 @@ describe('agent artifact routes: errors', () => {
     expect(res.text).toBe('# Report');
   });
   it('answers a read error before the first byte as an ordinary 500, not an unhandled stream error', async () => {
-    const spy = jest.spyOn(fs, 'createReadStream').mockImplementation(
-      () =>
-        new Readable({
-          read() {
-            this.destroy(new Error('EIO: disk fault at /secret/path'));
-          }
-        })
-    );
+    // The file opens and its head is read; the read of the content fails.
+    const open = fs.promises.open;
+    const spy = jest.spyOn(fs.promises, 'open').mockImplementation(async (file, ...rest) => {
+      const handle = await open(file, ...rest);
+      if (!String(file).endsWith('report.md')) return handle;
+      const read = handle.read.bind(handle);
+      let reads = 0;
+      handle.read = (...args) => {
+        reads += 1;
+        if (reads === 1) return read(...args);
+        return Promise.reject(new Error('EIO: disk fault at /secret/path'));
+      };
+      return handle;
+    });
     try {
       const res = await request(app).get('/api/agents/runs/run1/artifacts/report.md?download=1');
       expect(res.status).toBe(500);
@@ -197,6 +212,116 @@ describe('agent artifact routes: errors', () => {
     } finally {
       spy.mockRestore();
     }
+  });
+
+  describe('with storage encryption on', () => {
+    const CONTENT = '# Sealed report\n\nÜbersicht: vertraulich.\n';
+    const sealedFile = () => path.join(tmpRoot, 'data', 'agent-artifacts', 'run1', 'sealed.md');
+
+    beforeAll(async () => {
+      sealedFiles.configureSealedFiles({ enabled: true, keyProvider: testKeys.provider });
+      await writeArtifactDirect({ runId: 'run1', name: 'sealed.md', content: CONTENT });
+    });
+
+    afterAll(() => {
+      sealedFiles.resetSealedFiles();
+      fs.rmSync(sealedFile(), { force: true });
+      fs.rmSync(path.join(tmpRoot, 'data', 'agent-artifacts', 'run1', 'planted.md'), {
+        force: true
+      });
+    });
+
+    it('stores the artifact sealed and lists it with the size of its content', async () => {
+      const stored = fs.readFileSync(sealedFile());
+      expect(stored.toString('ascii', 0, 4)).toBe('IHB1');
+      expect(stored.includes(Buffer.from('vertraulich'))).toBe(false);
+      const res = await request(app).get('/api/agents/runs/run1/artifacts').expect(200);
+      const listed = res.body.find(artifact => artifact.name === 'sealed.md');
+      expect(listed.bytes).toBe(Buffer.byteLength(CONTENT));
+      expect(res.body.find(artifact => artifact.name === 'report.md').bytes).toBe(8);
+    });
+
+    it('serves a sealed artifact opened, and a plaintext one from before as it is', async () => {
+      const res = await request(app)
+        .get('/api/agents/runs/run1/artifacts/sealed.md?download=1')
+        .expect(200);
+      expect(res.text).toBe(CONTENT);
+      expect(res.headers['content-type']).toMatch(/text\/markdown/);
+      expect(res.headers['content-disposition']).toMatch(/sealed\.md/);
+      const plain = await request(app).get('/api/agents/runs/run1/artifacts/report.md').expect(200);
+      expect(plain.text).toBe('# Report');
+    });
+
+    it('does not serve a sealed artifact under another name, nor plaintext once the conversion is recorded', async () => {
+      const dir = path.join(tmpRoot, 'data', 'agent-artifacts', 'run1');
+      fs.copyFileSync(sealedFile(), path.join(dir, 'planted.md'));
+      const moved = await request(app).get('/api/agents/runs/run1/artifacts/planted.md');
+      expect(moved.status).toBe(500);
+      expect(moved.text).not.toContain('vertraulich');
+
+      sealedFiles.configureSealedFiles({
+        enabled: true,
+        keyProvider: testKeys.provider,
+        state: { state: 'complete', facets: { files: 1 } }
+      });
+      const res = await request(app).get('/api/agents/runs/run1/artifacts/report.md');
+      expect(res.status).toBe(500);
+      expect(res.text).not.toContain('# Report');
+      await request(app).get('/api/agents/runs/run1/artifacts/sealed.md').expect(200);
+    });
+  });
+
+  describe('a sealed artifact as a stream', () => {
+    // Three 1 MiB segments, so that a change can sit behind bytes that were already sent.
+    const BIG = `# Big report\n${'0123456789abcdef'.repeat(160_000)}\n`;
+    const bigFile = () => path.join(tmpRoot, 'data', 'agent-artifacts', 'run1', 'big.md');
+
+    beforeAll(async () => {
+      sealedFiles.configureSealedFiles({ enabled: true, keyProvider: testKeys.provider });
+      await writeArtifactDirect({ runId: 'run1', name: 'big.md', content: BIG });
+    });
+
+    afterAll(() => {
+      sealedFiles.resetSealedFiles();
+      fs.rmSync(bigFile(), { force: true });
+    });
+
+    it('serves it with the length of its content, not of the stored file', async () => {
+      const stored = fs.statSync(bigFile()).size;
+      const res = await request(app)
+        .get('/api/agents/runs/run1/artifacts/big.md?download=1')
+        .expect(200);
+      expect(res.text).toBe(BIG);
+      expect(res.headers['content-length']).toBe(String(Buffer.byteLength(BIG)));
+      expect(Number(res.headers['content-length'])).toBeLessThan(stored);
+      expect(res.headers['content-type']).toMatch(/text\/markdown/);
+      expect(res.headers['content-disposition']).toMatch(/big\.md/);
+    });
+
+    it('cuts the download, instead of ending it, when a later part of the file was changed', async () => {
+      const original = fs.readFileSync(bigFile());
+      const changed = Buffer.from(original);
+      changed[512 + 2 * 1024 * 1024 + 99] ^= 0x01;
+      fs.writeFileSync(bigFile(), changed);
+      try {
+        // The client's own view of a broken transfer: the request fails.
+        await expect(
+          request(app).get('/api/agents/runs/run1/artifacts/big.md').buffer(true)
+        ).rejects.toThrow(/aborted|socket hang up|ECONNRESET/i);
+        // Changed in its first segment, it is refused before anything is sent.
+        const early = Buffer.from(original);
+        early[512 + 99] ^= 0x01;
+        fs.writeFileSync(bigFile(), early);
+        const refused = await request(app).get('/api/agents/runs/run1/artifacts/big.md?download=1');
+        expect(refused.status).toBe(500);
+        expect(refused.headers['content-type']).toMatch(/application\/problem\+json/);
+        expect(refused.headers['content-disposition']).toBeUndefined();
+        expect(refused.text).not.toContain('0123456789abcdef');
+      } finally {
+        fs.writeFileSync(bigFile(), original);
+      }
+      await request(app).get('/api/agents/runs/run1/artifacts/big.md').expect(200);
+    });
   });
 
   // Keep this the last test of the file: it spends the rest of the route's rate-limit window.

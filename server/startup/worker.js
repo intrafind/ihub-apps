@@ -38,7 +38,12 @@ import config from '../config.js';
 import { describeWorkerSizing } from '../utils/workerSizing.js';
 import { registerAllRoutes } from './routes.js';
 import { shutdown } from './shutdown.js';
-import { prepareContents, bootstrapStorageOrExit } from './bootstrap.js';
+import {
+  prepareContents,
+  bootstrapStorageOrExit,
+  ensureEncryptionKey,
+  prepareStorageEncryptionOrExit
+} from './bootstrap.js';
 
 // Enable port reuse to avoid EADDRINUSE errors on quick restarts.
 // This allows the server to use a port that is in TIME_WAIT state (which can
@@ -75,6 +80,12 @@ async function initFoundations() {
   // the default): a broken `storage` block or a provider that cannot start is a
   // configuration error like an invalid platform.json, and the worker refuses
   // to start instead of serving with state that is lost on restart.
+  // The master key first: an encrypting blob backend checks it against the
+  // bucket while storage starts, and never falls back to local disk.
+  await ensureEncryptionKey();
+  // The single process converts existing data to its encrypted form itself;
+  // a cluster worker never does, its primary did before forking.
+  if (!cluster.isWorker) await prepareStorageEncryptionOrExit(platformConfig);
   await bootstrapStorageOrExit(platformConfig);
 
   // Initialize OpenTelemetry SDK. We do this in its own try/catch because a
@@ -121,7 +132,9 @@ async function initFoundations() {
   // Initialize encryption key and JWT secret for secure storage and token signing
   try {
     const tokenStorageService = (await import('../services/TokenStorageService.js')).default;
-    await tokenStorageService.initializeEncryptionKey();
+    // Loaded before storage already (`ensureEncryptionKey`); only a load that
+    // failed there is tried again, so its error is reported here as before.
+    if (!tokenStorageService.encryptionKey) await tokenStorageService.initializeEncryptionKey();
     await tokenStorageService.initializeJwtSecret();
     await tokenStorageService.initializeRSAKeyPair();
     // Project text (uploads, picked documents) is encrypted under that key;
@@ -135,6 +148,17 @@ async function initFoundations() {
     });
     logger.warn('Encrypted API keys, tokens, or JWT authentication may not work properly', {
       component: 'Server'
+    });
+  }
+  // Upload and ZIP spool files a crash left behind (plaintext, also with storage
+  // encryption on) go now, and whatever is abandoned later goes on a timer.
+  try {
+    const { startSpoolSweeper } = await import('../services/uploads/uploadSpool.js');
+    await startSpoolSweeper();
+  } catch (error) {
+    logger.warn('Could not sweep the upload spool directories', {
+      component: 'Server',
+      error: error.message
     });
   }
   return platformConfig;

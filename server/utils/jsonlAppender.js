@@ -22,12 +22,19 @@ import { lockStats, recordTiming } from '../telemetry/waitDiagnostics.js';
  * @param {number} [options.flushIntervalMs=10000] - Debounce/periodic-safety-net interval
  * @param {number|null} [options.maxQueueSize=null] - Drop-oldest cap; null disables the cap
  * @param {string} [options.component] - Logger component name for error messages
+ * @param {(filePath: string, entries: any[]) => string|Promise<string>} [options.serializeBatch] -
+ *   Turns the entries of one flush that go to one file into the text appended
+ *   to it, final newline included. Default: one `JSON.stringify` line per
+ *   entry. A rejection is handled like a failed write: the entries are
+ *   buffered again and the next flush retries them. Used by the storage
+ *   append log to encrypt a batch as it is written.
  */
 export function createJsonlAppender({
   getFilePath,
   flushIntervalMs = 10000,
   maxQueueSize = null,
-  component = 'JsonlAppender'
+  component = 'JsonlAppender',
+  serializeBatch = null
 }) {
   let queue = [];
   let flushTimer = null;
@@ -147,7 +154,9 @@ export function createJsonlAppender({
       try {
         await fs.mkdir(path.dirname(filePath), { recursive: true });
         await ensureTerminated(filePath);
-        const lines = entries.map(e => JSON.stringify(e)).join('\n') + '\n';
+        const lines = serializeBatch
+          ? await serializeBatch(filePath, entries)
+          : entries.map(e => JSON.stringify(e)).join('\n') + '\n';
         await fs.appendFile(filePath, lines, 'utf8');
         count += entries.length;
       } catch (error) {

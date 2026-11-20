@@ -12,7 +12,7 @@ import { buildServerPath, getRelativeRequestPath } from '../utils/basePath.js';
 import { ServiceError } from '../utils/ServiceError.js';
 import { responseEtag } from '../utils/etag.js';
 import { findByIdCaseInsensitive } from '../utils/resourceLookup.js';
-import { getStorage, isStorageReady } from '../storage/bootstrap.js';
+import { describeBlobStorage, getStorage, isStorageReady } from '../storage/bootstrap.js';
 import { describeWebSearchAvailability } from '../services/tools/webSearchResolver.js';
 import { withoutUsageGuideContent } from '../utils/appUsageGuide.js';
 
@@ -327,7 +327,12 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
       // `chats.persistence` reports false, which is indistinguishable from
       // the feature being switched off. The probe stays green and, once the
       // boot log has rotated, there is nothing left to query.
-      storage: { ready: isStorageReady(), provider: getStorage()?.name ?? null }
+      storage: {
+        ready: isStorageReady(),
+        provider: getStorage()?.name ?? null,
+        // Where blobs are stored (`default` or `s3`) and the last check of it.
+        blobs: describeBlobStorage()
+      }
     });
   });
 

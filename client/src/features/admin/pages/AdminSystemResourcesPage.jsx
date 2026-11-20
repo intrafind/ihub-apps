@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
+  ArchiveBoxIcon,
   ArrowPathIcon,
   CircleStackIcon,
   CpuChipIcon,
@@ -11,7 +12,8 @@ import {
   FolderOpenIcon,
   ServerStackIcon
 } from '@heroicons/react/24/outline';
-import { makeAdminApiCall } from '../../../api/adminApi';
+import { fetchStorageStatus, makeAdminApiCall } from '../../../api/adminApi';
+import BlobStorageStatus from '../components/BlobStorageStatus';
 import {
   STORAGE_STATUS_STYLES,
   estimateIndexBytes,
@@ -538,11 +540,26 @@ function AdminSystemResourcesPage() {
   // The timer fires every 15 s whether or not the last load has answered; a
   // slow answer overtaken by a newer one would otherwise overwrite it.
   const inFlightRef = useRef(false);
+  // `GET /api/admin/storage`, and whether the last attempt to load it failed.
+  const [blobStorage, setBlobStorage] = useState(null);
+  const [blobStorageFailed, setBlobStorageFailed] = useState(false);
+
+  // The blob storage status is its own request: the server holds that check
+  // result, and a failure to load it must not hide the rest of the page.
+  const loadBlobStorage = useCallback(async () => {
+    try {
+      setBlobStorage(await fetchStorageStatus());
+      setBlobStorageFailed(false);
+    } catch {
+      setBlobStorageFailed(true);
+    }
+  }, []);
 
   const load = useCallback(async () => {
     if (inFlightRef.current) return;
     inFlightRef.current = true;
     setRefreshing(true);
+    const blobStorageLoad = loadBlobStorage();
     try {
       const response = await makeAdminApiCall('/admin/system/resources');
       setData(response.data);
@@ -553,11 +570,12 @@ function AdminSystemResourcesPage() {
           t('admin.systemResources.loadError', 'Failed to load system resource information')
       );
     } finally {
+      await blobStorageLoad;
       inFlightRef.current = false;
       setLoading(false);
       setRefreshing(false);
     }
-  }, [t]);
+  }, [loadBlobStorage, t]);
 
   useEffect(() => {
     load();
@@ -568,6 +586,7 @@ function AdminSystemResourcesPage() {
   }, [load]);
 
   const storageStatus = data?.storage?.status;
+  const blobStorageDown = blobStorage?.blobs?.status === 'error';
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -617,7 +636,7 @@ function AdminSystemResourcesPage() {
 
       {loading && !data && (
         <div className="animate-pulse space-y-6">
-          {['storage', 'host', 'processes'].map(section => (
+          {['storage', 'blobStorage', 'host', 'processes'].map(section => (
             <div key={section} className="h-40 bg-gray-200 dark:bg-gray-700 rounded-lg" />
           ))}
         </div>
@@ -649,6 +668,22 @@ function AdminSystemResourcesPage() {
             </div>
           )}
 
+          {blobStorageDown && (
+            <div
+              role="alert"
+              data-testid="blob-storage-alert"
+              className="flex items-start gap-3 p-4 rounded-md border bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800 text-red-800 dark:text-red-200"
+            >
+              <ExclamationTriangleIcon className="w-5 h-5 shrink-0 mt-0.5" aria-hidden="true" />
+              <p className="text-sm">
+                {t(
+                  'admin.systemResources.blobStorage.unreachableAlert',
+                  'Blob storage is not working. Uploads and attachments do not work right now.'
+                )}
+              </p>
+            </div>
+          )}
+
           {data.cluster?.missingWorkers?.length > 0 && (
             <div
               role="alert"
@@ -669,6 +704,23 @@ function AdminSystemResourcesPage() {
           )}
 
           <StorageSection storage={data.storage} />
+          {(blobStorage?.blobs || blobStorageFailed) && (
+            <Section
+              icon={ArchiveBoxIcon}
+              title={t('admin.systemResources.blobStorage.title', 'Blob storage')}
+              description={t(
+                'admin.systemResources.blobStorage.description',
+                'Where uploaded files, extracted text and evidence content are kept.'
+              )}
+            >
+              <BlobStorageStatus
+                status={blobStorage}
+                loadFailed={blobStorageFailed}
+                onRetry={loadBlobStorage}
+                onStatus={setBlobStorage}
+              />
+            </Section>
+          )}
           <HostSection host={data.host} />
           <ProcessesSection processes={data.processes} cluster={data.cluster} />
           {data.workingSet && (

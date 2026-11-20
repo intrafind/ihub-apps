@@ -37,7 +37,14 @@ export const STORAGE_CODE_STATUS = Object.freeze({
   STORAGE_UNAVAILABLE: 503,
   UNKNOWN_PROVIDER: 500,
   UNKNOWN_NAMESPACE: 400,
-  CORRUPT_DOCUMENT: 500
+  CORRUPT_DOCUMENT: 500,
+  PLAINTEXT_DOCUMENT: 500,
+  PLAINTEXT_FILE: 500,
+  CORRUPT_LOG: 500,
+  CORRUPT_BLOB: 500,
+  KEY_UNAVAILABLE: 503,
+  BLOB_TOO_LARGE: 413,
+  INVALID_STORAGE_CONFIG: 500
 });
 
 /**
@@ -205,6 +212,96 @@ export class CorruptDocumentError extends StorageError {
   constructor(message, options = {}) {
     super(message, { ...options, code: 'CORRUPT_DOCUMENT' });
     this.name = 'CorruptDocumentError';
+  }
+}
+
+/**
+ * A stored document is plaintext while encryption at rest is enforced: the
+ * one-time conversion has completed, so nothing legitimate writes plaintext
+ * any more. Never returned and never repaired by a read; whoever can write
+ * the data directory could otherwise plant content.
+ *
+ * A subclass of {@link CorruptDocumentError}, so every caller that already
+ * treats a present-but-unreadable document correctly treats this one the same.
+ */
+export class PlaintextDocumentError extends CorruptDocumentError {
+  /**
+   * @param {string} message - Human-readable description.
+   * @param {Object} [options]
+   * @param {unknown} [options.cause] - Underlying error, kept for logging.
+   */
+  constructor(message, options = {}) {
+    super(message, options);
+    this.name = 'PlaintextDocumentError';
+    this.code = 'PLAINTEXT_DOCUMENT';
+  }
+}
+
+/**
+ * A record of an append-log stream exists but cannot be returned: a sealed
+ * record that does not open (changed bytes, moved to another stream or
+ * sequence number), one that names a key line the file does not hold, or a
+ * plaintext record while encryption at rest is enforced. Never skipped
+ * silently; an unparseable line (the torn tail of a crashed write) still is.
+ */
+export class CorruptLogError extends StorageError {
+  /**
+   * @param {string} message - Human-readable description; never record content.
+   * @param {Object} [options]
+   * @param {unknown} [options.cause] - Underlying error, kept for logging.
+   */
+  constructor(message, options = {}) {
+    super(message, { ...options, code: 'CORRUPT_LOG' });
+    this.name = 'CorruptLogError';
+  }
+}
+
+/**
+ * A stored blob exists but is not what the encrypting blob store wrote: no
+ * envelope (plaintext where ciphertext is expected), an unknown envelope
+ * version, a malformed header, a ciphertext that does not verify, or an
+ * object that was moved to another key.
+ *
+ * Never answered with `null` and never with the raw bytes. `null` means
+ * "gone" to every caller, and several of them clean up metadata on it; the
+ * raw bytes would let whoever can write the bucket inject content.
+ */
+export class CorruptBlobError extends StorageError {
+  /**
+   * @param {string} message - Human-readable description; never key material.
+   * @param {Object} [options]
+   * @param {unknown} [options.cause] - Underlying error, kept for logging.
+   */
+  constructor(message, options = {}) {
+    super(message, { ...options, code: 'CORRUPT_BLOB' });
+    this.name = 'CorruptBlobError';
+  }
+}
+
+/**
+ * A blob cannot be opened or written because the key it needs is not here:
+ * the master key is not initialized, the object names a master key id (or a
+ * key provider) this installation does not hold, typically after a key change
+ * without `TOKEN_ENCRYPTION_KEY_PREVIOUS`, or a restore with another key.
+ *
+ * @property {number} httpStatus - 503 Service Unavailable.
+ * @property {string|null} keyId - The master key id the object names.
+ * @property {string|null} keyProviderId - The key provider the object names.
+ */
+export class KeyUnavailableError extends StorageError {
+  /**
+   * @param {string} message - Human-readable description; never key material.
+   * @param {Object} [options]
+   * @param {string|null} [options.keyId] - Master key id the object names.
+   * @param {string|null} [options.keyProviderId] - Key provider the object names.
+   * @param {unknown} [options.cause] - Underlying error, kept for logging.
+   */
+  constructor(message, { keyId = null, keyProviderId = null, ...options } = {}) {
+    super(message, { ...options, code: 'KEY_UNAVAILABLE' });
+    this.name = 'KeyUnavailableError';
+    this.httpStatus = 503;
+    this.keyId = keyId;
+    this.keyProviderId = keyProviderId;
   }
 }
 

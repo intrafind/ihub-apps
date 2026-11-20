@@ -13,6 +13,7 @@
  *
  * @module storage/walk
  */
+import { CorruptDocumentError } from './errors.js';
 
 /** Page size of the fallback walk: the largest page `list` hands out. */
 const PAGE_SIZE = 1000;
@@ -30,7 +31,14 @@ const PAGE_SIZE = 1000;
  *   documents `ownerId` and `includeData`.
  * @param {number} [opts.limit=1000] - Page size of the fallback walk only, for
  *   a caller that must not hold a thousand large documents at once.
+ * @param {'skip'|'throw'} [opts.unreadable='skip'] - Documents only. `throw`
+ *   ends the walk with `CorruptDocumentError` when a document is present but
+ *   cannot be read (it does not open, or it is plaintext while encryption is
+ *   enforced). **A caller that deletes what the walk did not name must ask
+ *   for `throw`**: otherwise an unreadable document counts as absent and
+ *   what it refers to is deleted.
  * @yields {Object} What the store's listing yields, one entry at a time.
+ * @throws {CorruptDocumentError} With `unreadable: 'throw'`.
  *
  * @example
  * for await (const doc of walkDocuments(documents, 'chat-files', { prefix: 'chat__abc__' })) {
@@ -50,6 +58,11 @@ export async function* walkDocuments(store, ns, opts = {}) {
       limit,
       ...(cursor ? { cursor } : {})
     });
+    if (filter.unreadable === 'throw' && page.skipped > 0) {
+      throw new CorruptDocumentError(
+        `${page.skipped} documents of ${ns} are present but unreadable; the walk is not complete`
+      );
+    }
     yield* page.items || [];
     cursor = page.nextCursor || null;
   } while (cursor);

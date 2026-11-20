@@ -1202,6 +1202,9 @@
         "allowedHosts": []
       },
       "storage": {
+        "encryption": {
+          "enabled": "boolean"
+        },
         "filesystem": {
           "dataDir": "string",
           "flushIntervalMs": "number"
@@ -3512,6 +3515,45 @@
       "allowedHosts": []
     }
   },
+  "GET /api/admin/storage": {
+    "status": 200,
+    "shape": {
+      "blobs": {
+        "checkedAt": "string",
+        "encryption": {
+          "format": "string",
+          "keySource": "string",
+          "scope": "string"
+        },
+        "latencyMs": "number",
+        "location": {
+          "path": "string"
+        },
+        "provider": "string",
+        "source": "string",
+        "status": "string",
+        "steps": ["object"]
+      },
+      "configuredBlobProvider": "string",
+      "documents": {
+        "provider": "string"
+      },
+      "encryption": {
+        "conversion": {
+          "completedAt": "string",
+          "facets": "object",
+          "keyId": "string",
+          "skipped": "number",
+          "state": "string"
+        },
+        "enabled": "boolean",
+        "scope": "string",
+        "sealedDataExists": "boolean"
+      },
+      "localLeftovers": [],
+      "restartRequired": "boolean"
+    }
+  },
   "GET /api/admin/system/resources": {
     "status": 200,
     "shape": {
@@ -5390,6 +5432,10 @@
       "requestUrl": "string",
       "status": "string",
       "storage": {
+        "blobs": {
+          "provider": "string",
+          "status": "string"
+        },
         "provider": "string",
         "ready": "boolean"
       },

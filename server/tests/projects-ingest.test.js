@@ -8,6 +8,7 @@
  * storage provider (upload, text, pick, refresh, quotas, scan, reconciler)
  * and the multipart route.
  */
+import './support/scratchContents.js';
 import fs from 'node:fs/promises';
 import http from 'node:http';
 import os from 'node:os';
@@ -27,19 +28,23 @@ import {
   DEFAULT_SEGMENT_BYTES,
   FORMAT_ID,
   StreamingAeadError,
-  associatedDataOf,
   decrypt,
   encrypt,
   newDataKey
-} from '../services/projects/crypto/streamingAead.js';
+} from '../crypto/streamingAead.js';
 import {
   KeyAccessDenied,
   LocalFileKeyProvider,
   _resetKeyProvider,
   getKeyProvider,
   registerKeyProvider
-} from '../services/projects/crypto/KeyProvider.js';
-import { evictItemKeys, readText, storeText } from '../services/projects/ItemTextStore.js';
+} from '../crypto/KeyProvider.js';
+import {
+  associatedDataOf,
+  evictItemKeys,
+  readText,
+  storeText
+} from '../services/projects/ItemTextStore.js';
 import {
   ACCEPTED_TYPES,
   ExtractionError,
@@ -474,9 +479,35 @@ describe('LocalFileKeyProvider', () => {
     await assert.rejects(empty.wrap(dataKey, 'x'), KeyAccessDenied);
   });
 
-  it('falls back to local-file for an unknown provider id', () => {
+  it('refuses an unknown provider id instead of falling back to local-file', () => {
+    // Was a silent fallback: a configuration naming a provider that is not
+    // registered encrypted under the local key and reported nothing.
     _resetKeyProvider();
-    assert.equal(getKeyProvider('vault-transit').id, 'local-file');
+    assert.throws(() => getKeyProvider('vault-transit'), {
+      name: 'UnknownKeyProviderError',
+      code: 'UNKNOWN_KEY_PROVIDER'
+    });
+    assert.throws(() => getKeyProvider('vault-transit'), KeyAccessDenied);
+    assert.equal(getKeyProvider().id, 'local-file');
+    assert.equal(getKeyProvider('local-file').id, 'local-file');
+  });
+
+  it('refuses to wrap, unwrap, encrypt or decrypt without associated data', async () => {
+    const provider = new LocalFileKeyProvider({
+      readMasterKey: () => MASTER,
+      readPreviousKey: () => null
+    });
+    const dataKey = newDataKey();
+    const { keyId, wrapped } = await provider.wrap(dataKey, 'aad-1');
+    for (const missing of [undefined, null, '']) {
+      await assert.rejects(provider.wrap(dataKey, missing), /associated data/);
+      await assert.rejects(provider.unwrap(wrapped, keyId, missing), /associated data/);
+      assert.throws(() => encrypt(Buffer.from('x'), dataKey, missing), StreamingAeadError);
+    }
+    const cipher = encrypt(Buffer.from('x'), dataKey, 'aad-1');
+    assert.throws(() => decrypt(cipher, dataKey, ''), StreamingAeadError);
+    assert.throws(() => decrypt(cipher, dataKey, Buffer.alloc(0)), StreamingAeadError);
+    assert.throws(() => encrypt(Buffer.from('x'), dataKey, { ns: 'a' }), StreamingAeadError);
   });
 });
 

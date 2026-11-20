@@ -15,6 +15,7 @@
  * - another user, an expired record, a missing connection and any other
  *   message are handled before anything runs.
  */
+import '../support/scratchContents.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';

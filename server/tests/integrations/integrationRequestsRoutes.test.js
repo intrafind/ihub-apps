@@ -20,6 +20,7 @@
  *
  * Run: node --test server/tests/integrations/integrationRequestsRoutes.test.js
  */
+import '../support/scratchContents.js';
 import { after, before, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import express from 'express';
@@ -33,7 +34,6 @@ const scratch = await scratchDocuments();
 
 // The audit log lands in a contents directory of its own; config reads it on import.
 const tmpDir = mkdtempSync(path.join(os.tmpdir(), 'integration-requests-'));
-process.env.CONTENTS_DIR = path.join(tmpDir, 'contents');
 
 const { default: configCache } = await import('../../configCache.js');
 const { default: integrationRegistry } =

@@ -788,6 +788,13 @@ npm run test:adapters
 node scripts/run-server-tests.js toolCalling
 ```
 
+Server tests never work on the real `contents/` directory. A test file that loads server code has
+`server/tests/support/scratchContents.js` as its **first** import: it points `CONTENTS_DIR` at a
+temporary directory before the configuration is read. `scripts/run-server-tests.js` compares the
+real `contents/` before and after the run and fails when the master key file
+(`contents/.encryption-key`) or anything below `contents/data` was created or changed
+(`CONTENTS_GUARD=off` turns this off while a development server is writing there).
+
 ### Manual Testing Checklist
 
 #### Basic Functionality

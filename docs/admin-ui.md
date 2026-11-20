@@ -465,6 +465,29 @@ The page is hidden, together with the other system pages, when `admin.pages.syst
 
 The response also carries what the knowledge search-index cache has to hold, so operators can size it from data and load tests can report the hit rate: `workingSet.windows` (per 5, 15 and 60 minutes: `projects` used by a chat turn or knowledge tool, and their text `chars`, as a union over all workers), `knowledge.indexCache` (entries, characters, hits, misses, evictions, builds and `hitRate`, added up over the processes) and `processes[].indexCache` (the same for one process, with build time average and maximum and the cache limits). These fields are additive; the metrics are also exported as `ihub.projects.active*` and `ihub.knowledge.index.*` (see [Telemetry](telemetry.md#metrics)).
 
+### Blob storage
+
+The card **Blob storage** shows where uploaded files, extracted text, artifacts and evidence content are kept, and whether that place works. It is read-only: the settings are in `contents/config/platform.json` and a change needs a restart.
+
+| Row | Shows |
+|-----|-------|
+| **Status** | Result of the last check: *Available* (local disk), *Connected* (bucket), *Not reachable*, *Access refused*, *Check failed* or *Not checked yet*, with the time of the check |
+| **Backend** | *Local disk* or *S3-compatible object storage* |
+| **Endpoint, Bucket, Region, Prefix** | For S3. The endpoint is shown as host and port only. Credentials are never shown |
+| **Path** | For local disk |
+| **Encryption** | Whether iHub encrypts what it stores: everything (files, chats and logs), files only, or nothing. Says so while existing data is still being encrypted |
+| **Configured in** | `platform.json`, the environment variable `IHUB_STORAGE_BLOBS_PROVIDER`, or the default |
+| **Other data** | Where chats, logs and locks are kept. They stay on the storage provider, also with S3 |
+
+**Check again** runs the check now: the key, the connection and a test object that is written, read back and removed. When a check fails, the card shows the error code, a sentence and what to do; the codes are listed under [Storage Providers → Troubleshooting](storage.md#troubleshooting). A red alert above the page says that uploads and attachments do not work.
+
+Two notices can appear:
+
+- **The saved settings differ from the running ones.** `platform.json` was changed and the server was not restarted. Changed credentials and timeouts are not detected.
+- **Files from before the switch are still on local disk.** Blob storage was switched to S3 and the earlier files were not copied. Users cannot open them until `npm run storage:copy-blobs` has run with the server stopped. See [Moving existing blobs](storage.md#moving-existing-blobs-storagecopy-blobs).
+
+The status is the result of the last check. The server checks at start and when this page is opened (at most once a minute); it does not check in the background. In cluster mode each worker holds its own result. The data comes from `GET /api/admin/storage`, the button calls `POST /api/admin/storage/_test` (both admin only). More: [Storage Providers → Blob storage backends](storage.md#blob-storage-backends) and [Storage Encryption](storage-encryption.md).
+
 ### Low-disk warnings
 
 Nobody may open the admin UI for weeks on a small installation, so a full disk is reported in two more places:
@@ -653,6 +676,8 @@ Where you have to type a value to confirm, it is shown next to the field with a 
 Go to **Platform → Backup & Restore** to export and import the full platform configuration.
 
 **Export:** Downloads a ZIP file of everything in `contents/` except `.backups`: configuration, users, chats and uploaded data. The filename includes the current timestamp.
+
+> **With blobs in an S3 bucket the export is not a full backup.** Uploaded files are in the bucket and are not part of the ZIP, while the key that decrypts them is. Back up the bucket separately and restore both from the same point in time. The page shows this notice. See [Encryption Key Management → Backup and restore](encryption-key-management.md#backup-and-restore).
 
 > **Store the export like a key.** The ZIP is not encrypted. It contains the encryption key for stored secrets (`.encryption-key`), the JWT signing keys (`.jwt-private-key.pem`, `.jwt-secret`) and the users' password hashes (`config/users.json`). Anyone who has the file can decrypt every stored secret and create valid sign-in tokens. Keep it where only administrators can read it and delete copies you no longer need. The page shows the same warning.
 

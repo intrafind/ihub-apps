@@ -1,6 +1,6 @@
 {
   "format": "tink-aes-gcm-hkdf-v1",
-  "note": "Tink AesGcmHkdfStreaming (HKDF-SHA256, AES-256-GCM, 1 MiB default segments). Produced by server/services/projects/crypto/streamingAead.js; a Java reader with Tink must open every vector.",
+  "note": "Tink AesGcmHkdfStreaming (HKDF-SHA256, AES-256-GCM, 1 MiB default segments). Produced by server/crypto/streamingAead.js; a Java reader with Tink must open every vector.",
   "vectors": [
     {
       "name": "empty",

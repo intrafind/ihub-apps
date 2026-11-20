@@ -39,11 +39,30 @@
 import { promises as fs } from 'node:fs';
 import crypto from 'node:crypto';
 import path from 'node:path';
-import { atomicWriteFile } from '../../../utils/atomicWrite.js';
+import { Readable } from 'node:stream';
+import { atomicWriteFile, atomicWriteStream } from '../../../utils/atomicWrite.js';
+import { fileRangeStream } from '../../../utils/fileRangeStream.js';
 import logger from '../../../utils/logger.js';
 import { BlobStore } from '../../BlobStore.js';
-import { InvalidKeyError, StorageError } from '../../errors.js';
-import { assertValidKey, assertValidNamespace, containedPath } from './paths.js';
+import {
+  clampBlobLimit as clampLimit,
+  compareBlobKeys as compareKeys,
+  decodeBlobCursor as decodeCursor,
+  encodeBlobCursor as encodeCursor,
+  assertStreamLength,
+  guardStream,
+  streamLengthError,
+  toBlobBuffer as toBuffer
+} from '../../blobSupport.js';
+import { StorageError } from '../../errors.js';
+import {
+  RESERVED_BLOB_KEY_PREFIX as TEMP_PREFIX,
+  assertValidBlobKey,
+  assertValidNamespace
+} from '../../keys.js';
+import { INTERNAL_BLOB_NAMESPACE } from '../../namespaces.js';
+import { isValidId } from '../../../utils/pathSecurity.js';
+import { containedPath } from './paths.js';
 import { PREFIXES_DIR, PrefixIndex } from './prefixIndex.js';
 
 /** Directory holding every blob namespace, relative to the provider's base. */
@@ -55,8 +74,12 @@ export const BLOB_DIR = 'blobs';
  */
 export const DELETING_PREFIX = '..deleting_';
 
-/** Prefix `atomicWriteFile` gives its scratch file while a `put` is in flight. */
-const TEMP_PREFIX = '.tmp_';
+/**
+ * Bytes a streamed read asks the file system for at a time. Larger than
+ * Node's default of 64 KiB, which costs sixteen round trips to the thread
+ * pool per MiB.
+ */
+const READ_CHUNK_BYTES = 1024 * 1024;
 
 /** Keys a blob walk stats at once. */
 const SCAN_CONCURRENCY = 16;
@@ -64,55 +87,6 @@ const SCAN_CONCURRENCY = 16;
 /** Whether a namespace directory entry is bookkeeping rather than a blob. */
 function isReservedEntry(name) {
   return name === PREFIXES_DIR || name.startsWith(DELETING_PREFIX) || name.startsWith(TEMP_PREFIX);
-}
-
-const DEFAULT_LIMIT = 100;
-const MIN_LIMIT = 1;
-const MAX_LIMIT = 1000;
-
-/** Clamp a caller's page size into the supported range instead of throwing. */
-function clampLimit(limit) {
-  if (limit === undefined || limit === null) return DEFAULT_LIMIT;
-  const value = Number(limit);
-  if (!Number.isFinite(value)) return DEFAULT_LIMIT;
-  return Math.min(MAX_LIMIT, Math.max(MIN_LIMIT, Math.floor(value)));
-}
-
-/** Key ordering: plain string comparison, so every provider pages identically. */
-function compareKeys(a, b) {
-  if (a < b) return -1;
-  if (a > b) return 1;
-  return 0;
-}
-
-function encodeCursor(key) {
-  return Buffer.from(JSON.stringify({ k: key })).toString('base64url');
-}
-
-function decodeCursor(cursor) {
-  try {
-    const parsed = JSON.parse(Buffer.from(String(cursor), 'base64url').toString('utf8'));
-    if (!parsed || typeof parsed.k !== 'string') throw new Error('cursor carries no key');
-    return parsed.k;
-  } catch (cause) {
-    throw new StorageError('Invalid blob list cursor', { code: 'INVALID_CURSOR', cause });
-  }
-}
-
-/**
- * Coerce accepted payload input into a Buffer without copying when possible.
- *
- * @param {Buffer|Uint8Array|string} data - Payload as the caller passed it.
- * @returns {Buffer}
- * @throws {StorageError} Code `INVALID_DATA` for anything else.
- */
-function toBuffer(data) {
-  if (Buffer.isBuffer(data)) return data;
-  if (data instanceof Uint8Array) return Buffer.from(data.buffer, data.byteOffset, data.byteLength);
-  if (typeof data === 'string') return Buffer.from(data, 'utf8');
-  throw new StorageError('Blob data must be a Buffer, Uint8Array or string', {
-    code: 'INVALID_DATA'
-  });
 }
 
 /**
@@ -129,6 +103,38 @@ export class FilesystemBlobStore extends BlobStore {
     super();
     this.baseDir = baseDir;
     this._prefixIndex = new PrefixIndex(keyPrefixSegments);
+    /**
+     * Set by the one-time conversion while it replaces plaintext blobs with
+     * their encrypted form: an overwrite then keeps the modification time of
+     * the blob it replaces, because orphan sweeps judge a blob by its age.
+     * @type {boolean}
+     */
+    this.keepModificationTime = false;
+  }
+
+  /**
+   * The namespaces that have a directory on disk, for the one-time
+   * conversion: a namespace of a removed feature is found here although no
+   * declaration names it any more. The internal namespace is left out.
+   *
+   * @returns {Promise<string[]>} Sorted namespace names.
+   */
+  async namespaces() {
+    let entries;
+    try {
+      entries = await fs.readdir(containedPath(this.baseDir, BLOB_DIR), { withFileTypes: true });
+    } catch (error) {
+      if (error.code === 'ENOENT') return [];
+      throw new StorageError('Failed to list the blob namespaces', {
+        code: 'IO_ERROR',
+        cause: error
+      });
+    }
+    return entries
+      .filter(entry => entry.isDirectory() && !entry.name.startsWith('.'))
+      .map(entry => entry.name)
+      .filter(name => name !== INTERNAL_BLOB_NAMESPACE && isValidId(name))
+      .sort();
   }
 
   /**
@@ -141,12 +147,10 @@ export class FilesystemBlobStore extends BlobStore {
    */
   _path(ns, key) {
     assertValidNamespace(ns);
-    assertValidKey(key);
-    // The index directory's name, and the prefix of a write in flight: both
-    // are left out of namespace listings, so neither may be a key.
-    if (key === PREFIXES_DIR || key.startsWith(TEMP_PREFIX)) {
-      throw new InvalidKeyError(`Reserved blob key: ${key}`);
-    }
+    // Also refuses the index directory's name and the prefix `atomicWriteFile`
+    // gives its scratch file while a `put` is in flight: both are left out of
+    // namespace listings, so neither may be a key.
+    assertValidBlobKey(key);
     return containedPath(this.baseDir, BLOB_DIR, ns, key);
   }
 
@@ -172,7 +176,9 @@ export class FilesystemBlobStore extends BlobStore {
     // Atomic (temp file + rename), so a reader never sees half a payload and
     // a crash mid-write leaves the previous bytes rather than a truncated
     // file. `fs.writeFile` ignores the encoding argument for a Buffer.
+    const previous = this.keepModificationTime ? await fs.stat(file).catch(() => null) : null;
     await atomicWriteFile(file, buffer, 'binary');
+    if (previous) await fs.utimes(file, previous.atime, previous.mtime);
     return {
       key,
       bytes: buffer.length,
@@ -192,6 +198,118 @@ export class FilesystemBlobStore extends BlobStore {
         code: 'IO_ERROR',
         cause: error
       });
+    }
+  }
+
+  /**
+   * @inheritdoc
+   *
+   * A read stream over the open file. The file is opened before the call
+   * resolves, so a blob replaced or deleted afterwards is still read to its
+   * end as it was (a `put` renames a new file into place and never changes
+   * one). A read error arrives on the stream as a `StorageError`, code
+   * `IO_ERROR`, and so does a file that ends before the reported `bytes`.
+   */
+  async openRead(ns, key) {
+    const file = this._path(ns, key);
+    let handle;
+    try {
+      handle = await fs.open(file, 'r');
+      const stat = await handle.stat();
+      if (!stat.isFile()) throw Object.assign(new Error('not a file'), { code: 'EISDIR' });
+      if (stat.size === 0) {
+        await handle.close();
+        return { key, bytes: 0, stream: Readable.from([], { objectMode: false }) };
+      }
+      // Reads the open file, closes the handle when it ends or is destroyed,
+      // and delivers exactly the size that is reported: a file that turns out
+      // shorter (truncated from outside) fails the stream instead of ending
+      // it. A failed read reaches the consumer as a storage error, like `get`.
+      const stream = fileRangeStream(handle, {
+        end: stat.size,
+        chunkBytes: READ_CHUNK_BYTES,
+        mapError: error =>
+          error instanceof StorageError
+            ? error
+            : new StorageError(`Failed to read blob ${ns}/${key}`, {
+                code: 'IO_ERROR',
+                cause: error
+              })
+      });
+      return { key, bytes: stat.size, stream: guardStream(stream) };
+    } catch (error) {
+      await handle?.close().catch(() => {});
+      if (error.code === 'ENOENT') return null;
+      throw new StorageError(`Failed to read blob ${ns}/${key}`, {
+        code: 'IO_ERROR',
+        cause: error
+      });
+    }
+  }
+
+  /**
+   * @inheritdoc
+   *
+   * The stream is written to a scratch file beside the blob and renamed into
+   * place when it ended with the declared length, exactly as `put` replaces a
+   * blob: a reader sees the previous payload or the new one. A stream that
+   * fails or has another length leaves nothing behind.
+   */
+  async putStream(ns, key, stream, opts = {}) {
+    const bytes = assertStreamLength(opts?.bytes, stream);
+    let file;
+    try {
+      file = this._path(ns, key);
+      await fs.mkdir(path.dirname(file), { recursive: true });
+      // Marker first: a marker may outlive its blob, never the reverse.
+      await this._prefixIndex.writeMarker(this._dir(ns), ns, key);
+    } catch (error) {
+      stream.destroy();
+      throw error;
+    }
+    const previous = this.keepModificationTime ? await fs.stat(file).catch(() => null) : null;
+    const hash = crypto.createHash('sha256');
+    let count = 0;
+    await atomicWriteStream(file, stream, {
+      onChunk: chunk => {
+        count += chunk.length;
+        if (count > bytes) throw streamLengthError(`${ns}/${key}`, count, bytes);
+        hash.update(chunk);
+      },
+      onEnd: () => {
+        if (count !== bytes) throw streamLengthError(`${ns}/${key}`, count, bytes);
+      }
+    });
+    if (previous) await fs.utimes(file, previous.atime, previous.mtime);
+    return { key, bytes, sha256: hash.digest('hex') };
+  }
+
+  /**
+   * The first bytes of one blob, without reading the rest. What the
+   * encrypting blob store looks at to tell an encrypted blob from a plaintext
+   * one while a store holds both.
+   *
+   * @param {string} ns - Namespace.
+   * @param {string} key - Key within the namespace.
+   * @param {number} length - How many bytes to read at most.
+   * @returns {Promise<Buffer|null>} Up to `length` bytes, or null when there is no blob.
+   */
+  async readHead(ns, key, length) {
+    const file = this._path(ns, key);
+    let handle;
+    try {
+      handle = await fs.open(file, 'r');
+      const buffer = Buffer.alloc(length);
+      const { bytesRead } = await handle.read(buffer, 0, length, 0);
+      return buffer.subarray(0, bytesRead);
+    } catch (error) {
+      if (error.code === 'ENOENT') return null;
+      throw new StorageError(`Failed to read blob ${ns}/${key}`, {
+        code: 'IO_ERROR',
+        cause: error
+      });
+    } finally {
+      await handle?.close();
     }
   }
 

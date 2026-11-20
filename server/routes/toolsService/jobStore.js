@@ -16,6 +16,7 @@ import {
 import config from '../../config.js';
 import { getContentsPath } from '../../utils/contentsPath.js';
 import logger from '../../utils/logger.js';
+import { openSealedStream, sealForDisk } from '../../storage/atRest/sealedFiles.js';
 
 /**
  * Jobs live in the memory of the worker that runs them — the uploaded file,
@@ -24,7 +25,9 @@ import logger from '../../utils/logger.js';
  * so ownership is announced over the cluster bus and other workers ask the
  * owner: a snapshot, a cancellation, its share of the list. The result is
  * written to the shared data directory when clustered, so any worker can
- * serve the download without shipping megabytes over IPC.
+ * serve the download without shipping megabytes over IPC. With
+ * `storage.encryption.enabled` that file is sealed (store `tool-jobs` of
+ * `storage/atRest/sealedFiles.js`).
  */
 const JOB_PRESENCE = 'tool-job';
 const BUS_GET = 'tool-job:get';
@@ -41,6 +44,9 @@ const TERMINAL_STATUSES = new Set(['completed', 'error', 'cancelled']);
 
 /** Where results are written for other workers to serve. */
 const RESULTS_DIR = getContentsPath('data', 'tool-jobs');
+
+/** Store id the result files are sealed under. */
+const RESULT_STORE = 'tool-jobs';
 
 async function removeResultFile(file) {
   if (!file) return;
@@ -222,7 +228,7 @@ export async function completeJob(job, { result, contentType, filename }) {
     const temp = `${file}.${process.pid}.tmp`;
     try {
       await fs.mkdir(RESULTS_DIR, { recursive: true });
-      await fs.writeFile(temp, result);
+      await fs.writeFile(temp, await sealForDisk(RESULT_STORE, path.basename(file), result));
       await fs.rename(temp, file);
       job.resultFile = file;
     } catch (error) {
@@ -235,6 +241,26 @@ export async function completeJob(job, { result, contentType, filename }) {
     }
   }
   job.status = 'completed';
+}
+
+/**
+ * The result of a job another worker wrote, as a stream of its content: a
+ * sealed file is decrypted segment by segment, a plaintext file is read as it
+ * is while plaintext may still be read.
+ *
+ * The stream can fail after it delivered data (a damaged file); the caller
+ * sends it with `sendStream` (`utils/streamResponse.js`), which then cuts
+ * the response instead of ending it.
+ *
+ * @param {{resultFile: string}} job - The owner's snapshot of the job.
+ * @returns {Promise<{bytes: number, sealed: boolean, stream: import('node:stream').Readable}>}
+ *   `bytes` is the length of the result.
+ * @throws What `fs` throws when the file is gone (`ENOENT`), and a
+ *   `StorageError` for a sealed file that does not open or a plaintext file
+ *   while encryption is enforced.
+ */
+export async function openSealedResult(job) {
+  return openSealedStream(RESULT_STORE, path.basename(job.resultFile), job.resultFile);
 }
 
 /**

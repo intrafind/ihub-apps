@@ -28,7 +28,11 @@ jest.mock('react-i18next', () => {
 });
 
 jest.mock('../../../client/src/api/adminApi', () => ({
-  makeAdminApiCall: jest.fn()
+  makeAdminApiCall: jest.fn(),
+  // The page also loads the blob storage status; that card has its own test.
+  fetchStorageStatus: () => Promise.resolve(null),
+  testStorage: () => Promise.resolve(null),
+  getAdminApiErrorMessage: err => err?.message || ''
 }));
 
 const workerProcess = (overrides = {}) => ({

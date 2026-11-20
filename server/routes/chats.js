@@ -92,6 +92,7 @@ import { getLocalizedError } from '../serverHelpers.js';
 import { markRunChatSeen } from '../services/scheduler/tasks/taskService.js';
 import { publicChatView } from '../services/chat/chatToolApproval.js';
 import { sendCreated, segment } from '../utils/created.js';
+import { etagOfSha256, isFreshFor, sendStream } from '../utils/streamResponse.js';
 import { clientMessages } from '../services/loop/clientProjection.js';
 
 const COMPONENT = 'ChatRoutes';
@@ -428,27 +429,40 @@ export default function registerChatRoutes(app) {
       // server-side and is never a capability on its own.
       const access = await loadOwnedChat(chatId, req.user, repository, 'read');
       if (!access) throw notFound('Chat');
-      const artifact = await getArtifactRepository().get(
+      // Streamed from the store: the payload is never held whole in memory.
+      // A conditional request is answered from the recorded hash, before the
+      // payload is opened.
+      const artifact = await getArtifactRepository().openRead(
         repository.artifactScope(chatId),
-        artifactId
+        artifactId,
+        { unless: found => isFreshFor(req, res, etagOfSha256(found.sha256)) }
       );
       if (!artifact) throw notFound('Artifact');
-      // Already the bytes: the store keeps payloads raw, so serving one is a
-      // read and a write, with no decode in between.
-      const body = artifact.data;
       // An artifact document is written once and never modified, and its id
       // is a fresh uuid, so the bytes behind this URL cannot change.
       // `private` because the response is owner-scoped and a shared cache
       // holding it would serve one user's content to another.
-      // A source file goes out as `text/plain` (see `servedMediaType`).
-      res.setHeader('Content-Type', servedMediaType(artifact.mimeType));
-      res.setHeader('Content-Length', String(body.length));
-      res.setHeader('Cache-Control', 'private, max-age=31536000, immutable');
-      // Nothing here is a document to open in the browser's context; the
-      // client renders it from a blob it fetched itself.
-      res.setHeader('Content-Disposition', 'inline');
-      res.setHeader('X-Content-Type-Options', 'nosniff');
-      return res.send(body);
+      const cacheControl = 'private, max-age=31536000, immutable';
+      if (artifact.unopened) {
+        res.setHeader('Cache-Control', cacheControl);
+        return res.status(304).end();
+      }
+      // A failure after the first byte aborts the response (`sendStream`);
+      // one before it is answered without these headers, so that no error
+      // is cached as the artifact.
+      return await sendStream(req, res, artifact.stream, {
+        headers: {
+          'Cache-Control': cacheControl,
+          ETag: etagOfSha256(artifact.sha256),
+          // A source file goes out as `text/plain` (see `servedMediaType`).
+          'Content-Type': servedMediaType(artifact.mimeType),
+          'Content-Length': String(artifact.bytes),
+          // Nothing here is a document to open in the browser's context; the
+          // client renders it from a blob it fetched itself.
+          'Content-Disposition': 'inline',
+          'X-Content-Type-Options': 'nosniff'
+        }
+      });
     }
   );
 
@@ -699,7 +713,12 @@ export default function registerChatRoutes(app) {
       return res.json(textFile);
     }
 
-    const original = await fileStore.getOriginal(scope, fileId);
+    // Streamed from the store: the original is never held whole in memory.
+    // A conditional request is answered from the recorded hash, before the
+    // original is opened.
+    const original = await fileStore.openOriginal(scope, fileId, {
+      unless: found => isFreshFor(req, res, etagOfSha256(found.sha256))
+    });
     if (!original) throw notFound('File');
     if (original.discarded) {
       throw new ServiceError(
@@ -713,17 +732,24 @@ export default function registerChatRoutes(app) {
       );
     }
 
-    const body = original.data;
     const download = req.query.download === '1' || req.query.download === 'true';
-    res.setHeader('Content-Type', servedMediaType(original.mimeType));
-    res.setHeader('Content-Length', String(body.length));
-    res.setHeader('Cache-Control', 'private, max-age=31536000, immutable');
-    res.setHeader(
-      'Content-Disposition',
-      download ? buildContentDisposition(original.name) : 'inline'
-    );
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    return res.send(body);
+    const cacheControl = 'private, max-age=31536000, immutable';
+    if (original.unopened) {
+      res.setHeader('Cache-Control', cacheControl);
+      return res.status(304).end();
+    }
+    // A failure after the first byte aborts the response (`sendStream`); one
+    // before it is answered without these headers.
+    return await sendStream(req, res, original.stream, {
+      headers: {
+        'Cache-Control': cacheControl,
+        ETag: etagOfSha256(original.sha256),
+        'Content-Type': servedMediaType(original.mimeType),
+        'Content-Length': String(original.originalBytes),
+        'Content-Disposition': download ? buildContentDisposition(original.name) : 'inline',
+        'X-Content-Type-Options': 'nosniff'
+      }
+    });
   });
 
   app.delete(

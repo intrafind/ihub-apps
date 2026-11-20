@@ -138,6 +138,8 @@ Edited in **Admin → Chat history → Uploaded files**.
 | `quotas.maxUserBytes`         | 1 GB           | One user (chats, tasks, API files)                                                       |
 | `quotas.maxServerBytes`       | 50 GB          | The whole server                                                                         |
 | `quotas.maxApiFiles` / `maxApiBytes` | 200 / 1 GB | One Inference API user's files (`/v1/files`, scope `user`); they do not use the per-chat limits |
+| `extraction.concurrency`      | `2`            | Uploaded files one server process reads (malware scan, text extraction) at the same time. See [Parallel uploads](#parallel-uploads) |
+| `extraction.maxQueue`         | `50`           | Uploads that may wait for their turn. One more is refused with `503 UPLOAD_BUSY`         |
 
 The server-wide total is a counter document in the `chat-files` storage namespace, adjusted with a
 compare-and-set on every put, delete and original discard, so several server instances sharing one
@@ -146,6 +148,35 @@ older than five minutes, or when an upload comes within 10 % of the limit.
 
 Zero or less switches a limit off. A refused upload answers `413` (`QUOTA_FILE_BYTES`,
 `QUOTA_CHAT_FILES`, `QUOTA_CHAT_BYTES`, `QUOTA_API_FILES`, `QUOTA_API_BYTES`, `QUOTA_USER_BYTES`) or `507` (`QUOTA_SERVER_BYTES`).
+
+### Parallel uploads
+
+An uploaded file is written to disk while it is received (`contents/data/tmp/chat-uploads/`, one
+private directory per request, removed when the request ends) and is stored from there. It is in
+memory only while it is scanned and its text is extracted and stored. `extraction.concurrency`
+says how many files one server process handles in that step at the same time; the others wait on
+disk. With several server processes, each has its own cap.
+
+- **Memory.** Plan about three times `quotas.maxFileBytes` per slot. Measured with 20 parallel
+  uploads of 25 MiB text files: about 125 MiB held with the default of 2, about 90 MiB with 1,
+  about 250 MiB with 8. Before this setting existed, the same uploads held about 740 MiB. A
+  server process has one extraction thread, so a higher value shortens the run only a little (20
+  uploads: 9.5 s with 1, 8.0 s with 2, 6.9 s with 8).
+- **A full queue.** When `extraction.maxQueue` uploads wait already, the next one is refused:
+  `503` with the code `UPLOAD_BUSY` and a `Retry-After` header (seconds). Nothing of it is
+  stored, and the same request can be sent again. The Inference API answers `503` with the code
+  `upload_busy` and the same header, which the OpenAI SDKs follow on their own. In the chat, the
+  file's chip says that the server is busy and the file is sent with the message only; in a
+  scheduled task the user is asked to try again in a moment.
+- Uploads to a project wait in the same queue and are never refused for it: a project answers
+  the upload at once and extracts afterwards.
+- Changing either value needs no restart.
+
+```json
+"uploads": {
+  "extraction": { "concurrency": 2, "maxQueue": 50 }
+}
+```
 
 ## HTTP API
 

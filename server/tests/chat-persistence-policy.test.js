@@ -19,6 +19,7 @@
  *
  * Contract: `CHAT_PERSISTENCE_CONTRACT.md` §3, §5, §7, §8, §11 and §12.
  */
+import './support/scratchContents.js';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
