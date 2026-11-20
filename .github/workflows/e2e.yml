@@ -11,11 +11,17 @@
 #   worker, no retries: a retry would hide the flakiness the gate is there to
 #   surface. The budget is 10 minutes; a test that needs longer is tagged @slow and
 #   runs in the full job.
-# - full (started by hand with "Run workflow", before a slice of the agents epic is
-#   merged, or called from another workflow; no workflow runs it on a schedule
-#   yet): every test of the suite, then the tests tagged @matrix once per overlay
-#   of the spec map, each on a server started with that overlay (platform settings
-#   are read once at startup).
+# - full (every night, called by nightly.yml; also started by hand with "Run
+#   workflow" and before a slice of the agents epic is merged): every test of the
+#   suite, then the tests tagged @matrix once per overlay of the spec map, each on
+#   a server started with that overlay (platform settings are read once at
+#   startup).
+# - faults-smoke (every pull request): the fault tests that are tagged smoke by
+#   their file name, `*.smoke.fault.test.js` under server/tests/faults
+#   (`npm run test:faults:smoke`). They kill and restart a real server, so only
+#   the few that guard a pull request against the worst regressions carry the
+#   tag; the whole fault tier runs in nightly.yml. No file carries the tag yet:
+#   the job then says so and passes.
 # - difference-list (every pull request): the two checks of the golden tests that
 #   need the history of the target branch and the reviews of the pull request,
 #   which the unit test workflow has not (docs/run-testing.md). Every golden file
@@ -113,6 +119,36 @@ jobs:
             tests/e2e-agents/test-results/
             playwright-report/
           retention-days: 14
+
+  faults-smoke:
+    name: Fault tests (smoke)
+    if: github.event_name == 'pull_request' && inputs.suite != 'full'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      CI: 'true'
+      # Required by the server to boot in CI.
+      JWT_SECRET: ci-e2e-faults-smoke-test-secret
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm run install:all
+
+      - name: Fault tests tagged smoke
+        # Each starts its own server. The whole tier is `npm run test:faults` (nightly.yml).
+        run: npm run test:faults:smoke
 
   difference-list:
     name: Golden difference list

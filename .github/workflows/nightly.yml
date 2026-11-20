@@ -1,0 +1,284 @@
+# Nightly
+#
+# Everything that is too slow or too heavy for a pull request, once a night on
+# the default branch (docs/run-testing.md, docs/developer-onboarding.md):
+#
+# - faults: the fault tier (`npm run test:faults`). Real server processes are
+#   killed at named places and started again (server/tests/faults/).
+# - quarantine: fails when a quarantined server test passes or names a file that
+#   is gone (`scripts/run-server-tests.js --check-quarantine`).
+# - browsers: the end-to-end suite of tests/e2e on Chromium, Firefox and WebKit,
+#   one job per browser.
+# - agents: the `full` job of e2e.yml, called from here: every test of the agents
+#   suite and the transport matrix.
+# - load: a load smoke on the fake LLM, the profiles `smoke` and `agentic`
+#   (tests/load/local-smoke.mjs).
+# - report: when a job failed, opens the issue with the label `nightly-red`, or
+#   adds a comment to the open one (scripts/nightly-red-issue.js). An open issue
+#   with that label blocks a release candidate.
+#
+# No job continues on error and no step is allowed to fail: a red night is a
+# finding. Fix the cause, or take the test out with its reason in the pull
+# request that does it.
+#
+# Three ways to start it:
+#
+# - the schedule, 02:17 UTC. GitHub runs a schedule only from the workflow file
+#   on the default branch.
+# - by hand ("Run workflow"), also only from the default branch.
+# - on a pull request that carries the label `run-faults`: the fault tier alone,
+#   on the head of that pull request, when the label is put on and again on
+#   every push while it is there. This is how a branch that is not merged yet
+#   gets its evidence from the fault tier. Without the label every job is
+#   skipped, and another label that is put on starts nothing. A pull request
+#   run never opens the issue.
+
+name: Nightly
+
+on:
+  schedule:
+    - cron: '17 2 * * *'
+  workflow_dispatch:
+  pull_request:
+    types: [labeled, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  # Another label that is put on a pull request starts a run in which every job
+  # is skipped. It gets a group of its own, so that it does not cancel the fault
+  # tier that runs for the same pull request.
+  group: >-
+    nightly-${{ github.event.pull_request.number || github.ref }}${{
+    github.event.action == 'labeled' && github.event.label.name != 'run-faults' && '-other-label' || '' }}
+  # A new push replaces the run of a pull request. A night is never cancelled by
+  # the next one: a cancelled job counts as red (a job that runs into its
+  # timeout is cancelled by GitHub), so a cancelled night would open the issue.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  faults:
+    name: Fault tier
+    # On a pull request: with the label, and not because another label was put on.
+    if: >-
+      github.event_name != 'pull_request' ||
+      (contains(github.event.pull_request.labels.*.name, 'run-faults') &&
+      (github.event.action != 'labeled' || github.event.label.name == 'run-faults'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      CI: 'true'
+      # Required by the server to boot in CI.
+      JWT_SECRET: ci-nightly-faults-test-secret
+      # The log of each server is kept in its contents directory for the upload below.
+      KEEP_FAULT_CONTENTS: '1'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm run install:all
+
+      - name: Fault tier
+        # Starts its own servers, one test file at a time.
+        run: npm run test:faults
+
+      - name: Upload the server logs
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: nightly-fault-server-logs
+          path: contents-e2e-faults-*/faults-server.log
+          if-no-files-found: ignore
+          retention-days: 14
+
+  quarantine:
+    name: Quarantine check
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      CI: 'true'
+      NODE_ENV: test
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm run install:all
+
+      - name: No quarantined test passes, and every line names a file
+        run: node scripts/run-server-tests.js --check-quarantine
+
+  browsers:
+    name: End-to-end (${{ matrix.browser }})
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    strategy:
+      # One job per browser, side by side: the suite runs on one worker, and three
+      # browsers in a row would not fit into the night's hour. A browser that
+      # fails does not stop the others; each is a finding of its own.
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+
+    env:
+      CI: 'true'
+      # Required by the server to boot in CI.
+      JWT_SECRET: ci-nightly-browsers-test-secret
+      NODE_ENV: development
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm run install:all
+
+      - name: Install the browser
+        # --no-install: use the Playwright version pinned by the lockfile, never fetch one on demand.
+        run: npx --no-install playwright install --with-deps ${{ matrix.browser }}
+
+      - name: End-to-end suite
+        run: npm run test:e2e -- --project=${{ matrix.browser }}
+
+      - name: Upload Playwright reports
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: nightly-playwright-report-${{ matrix.browser }}
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 14
+
+  agents:
+    name: Agents suite and transport matrix
+    if: github.event_name != 'pull_request'
+    # The `full` job of the end-to-end workflow (also started by hand there).
+    uses: ./.github/workflows/e2e.yml
+    with:
+      suite: full
+    # What the called workflow asks for in its jobs; it gets no more than this.
+    permissions:
+      contents: read
+      pull-requests: read
+
+  load:
+    name: Load smoke on the fake LLM
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      CI: 'true'
+      # Required by the server to boot in CI.
+      JWT_SECRET: ci-nightly-load-test-secret
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm run install:all
+
+      - name: Tests of the load harness
+        run: node --test "tests/load/**/*.test.mjs"
+
+      - name: Load smoke (profiles smoke and agentic)
+        # Starts the fake LLM and a server of its own, and fails when a profile
+        # did not do its work.
+        run: npm run loadtest:smoke
+
+      - name: Upload the load reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: nightly-load-reports
+          path: tests/load/results/local-smoke-*/report.md
+          if-no-files-found: ignore
+          retention-days: 14
+
+  report:
+    name: Report
+    # Also when a job failed or was cancelled; never for a pull request.
+    if: always() && github.event_name != 'pull_request'
+    needs: [faults, quarantine, browsers, agents, load]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    permissions:
+      contents: read
+      # Opens the issue `nightly-red`, or comments on the open one.
+      issues: write
+      # The author of the pull request that was merged last, when no owner is named.
+      pull-requests: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+
+      # The script uses only what Node ships with: no install step.
+      - name: Open or update the issue when the night is red
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NIGHTLY_RESULTS: >-
+            {"faults": "${{ needs.faults.result }}",
+            "quarantine": "${{ needs.quarantine.result }}",
+            "browsers": "${{ needs.browsers.result }}",
+            "agents": "${{ needs.agents.result }}",
+            "load": "${{ needs.load.result }}"}
+          NIGHTLY_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          NIGHTLY_SHA: ${{ github.sha }}
+          NIGHTLY_EVENT: ${{ github.event_name }}
+          # The person who acts on a red night; a repository variable (docs/developer-onboarding.md).
+          NIGHTLY_OWNER: ${{ vars.NIGHTLY_OWNER }}
+          # While nobody is named: the author of the pull request merged last into this branch.
+          NIGHTLY_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: node scripts/nightly-red-issue.js
