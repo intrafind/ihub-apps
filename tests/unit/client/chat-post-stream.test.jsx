@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
+import fs from 'node:fs';
+import path from 'node:path';
 import '@testing-library/jest-dom';
 import { renderHook, act } from '@testing-library/react';
 
@@ -715,6 +717,25 @@ describe('flag on: the POST streams the turn', () => {
     } finally {
       jest.useRealTimers();
     }
+  });
+
+  // `tests/e2e-agents/long-turn.spec.js` proves in a browser that an answer
+  // longer than this limit arrives on one connection. It cannot import the
+  // limit, so its numbers are checked here: a raised limit must not leave that
+  // proof running short of it.
+  test('the end-to-end proof of a long answer runs past the idle limit', () => {
+    const spec = fs.readFileSync(
+      path.resolve(__dirname, '../../e2e-agents/long-turn.spec.js'),
+      'utf8'
+    );
+    const slow = /const SLOW = \{ everyMs: (\d+), words: (\d+) \};/.exec(spec);
+    expect(slow).not.toBeNull();
+    const [everyMs, words] = [Number(slow[1]), Number(slow[2])];
+    expect(everyMs * words).toBeGreaterThan(TURN_IDLE_TIMEOUT_MS);
+    // Each word arrives well inside the limit: the answer is slow, not silent.
+    expect(everyMs).toBeLessThan(TURN_IDLE_TIMEOUT_MS / 2);
+    // The spec says "60 seconds" in its own checks.
+    expect(TURN_IDLE_TIMEOUT_MS).toBe(60000);
   });
 
   test('a POST that closes while Stop is on its way is not re-attached', async () => {
