@@ -1,0 +1,15 @@
+# Code owners
+#
+# GitHub asks the owner of a path for a review when a pull request changes it.
+# With the branch protection rule "Require review from Code Owners" the pull
+# request cannot be merged without that review.
+#
+# The difference list of the golden tests (docs/run-testing.md): a row is an
+# accepted difference between the recorded behaviour and today's. The product
+# owner signs a row by approving the pull request that adds the signature;
+# scripts/check-difference-signatures.js fails a signature without that review.
+# The check reads the owner from this file on the target branch, so this file
+# and the check are owned by the same person.
+/server/tests/golden/differences.json @Intradmin
+/scripts/check-difference-signatures.js @Intradmin
+/.github/CODEOWNERS @Intradmin
