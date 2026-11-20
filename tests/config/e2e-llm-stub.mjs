@@ -504,8 +504,10 @@ export function startLlmStub(
       res.write('data: [DONE]\n\n');
       res.end();
     };
-    // A write to a socket the server already closed must not end the process.
-    run().catch(() => res.destroy());
+    // The caller awaits this, so a failure ends this one request in the
+    // handler's catch and never the process. A request the caller closed while
+    // it hung or waited stays pending for good: nothing else waits for it.
+    return run();
   };
 
   const handle = async (req, res) => {
@@ -595,7 +597,7 @@ export function startLlmStub(
 
     const plan = planFor(body, scripts);
     if (plan) {
-      if (plan.hangKey || Number.isFinite(plan.slowMs)) sendOverTime(res, body, plan);
+      if (plan.hangKey || Number.isFinite(plan.slowMs)) await sendOverTime(res, body, plan);
       else sendScripted(res, body, plan);
       return;
     }

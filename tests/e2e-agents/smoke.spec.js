@@ -69,19 +69,23 @@ test.describe('Agents suite smoke', () => {
       shown(page, 'slow-1 slow-2 slow-3 slow-4 slow-5 slow-6 slow-7 slow-8')
     ).toBeVisible({ timeout: 30_000 });
 
-    expect(
-      chatRequests(),
-      `the connections of a chat turn with the settings "${OVERLAY_NAME}"`
-    ).toEqual(
-      overlay.features?.chatPostStream === true
-        ? // One connection: the request that sends the message carries the answer.
-          [{ method: 'POST', type: 'text/event-stream' }]
-        : // Two: the stream is opened first, the message is sent once it is connected.
-          [
-            { method: 'GET', type: 'text/event-stream' },
-            { method: 'POST', type: 'application/json' }
-          ]
-    );
+    // The answer can be complete on the stream before the request that sent the
+    // message has its response, so the list is read until it is what is expected.
+    await expect
+      .poll(chatRequests, {
+        message: `the connections of a chat turn with the settings "${OVERLAY_NAME}"`,
+        timeout: 10_000
+      })
+      .toEqual(
+        overlay.features?.chatPostStream === true
+          ? // One connection: the request that sends the message carries the answer.
+            [{ method: 'POST', type: 'text/event-stream' }]
+          : // Two: the stream is opened first, the message is sent once it is connected.
+            [
+              { method: 'GET', type: 'text/event-stream' },
+              { method: 'POST', type: 'application/json' }
+            ]
+      );
   });
 
   test('a tool call shows as a row of the answer', { tag: '@gate' }, async ({ page }) => {

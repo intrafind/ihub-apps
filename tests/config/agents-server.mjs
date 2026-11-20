@@ -138,12 +138,18 @@ async function waitUntilHealthy() {
 }
 
 /** One restart at a time: a second request waits for the first. */
+const SHUTTING_DOWN = 'The helper is shutting down; no server is started.';
 let restarting = Promise.resolve();
 function restart({ signal = 'SIGTERM', overlay: nextOverlay } = {}) {
   const run = async () => {
+    // A restart that was waiting when the shutdown began starts nothing: the
+    // shutdown has signalled its children already and would miss a new one.
+    if (shuttingDown) throw new Error(SHUTTING_DOWN);
     stopping = true;
     try {
       await stopServer(signal);
+      // The shutdown may have begun while the old server was going down.
+      if (shuttingDown) throw new Error(SHUTTING_DOWN);
       if (nextOverlay !== undefined) {
         overlay = nextOverlay;
         writeOverlay(contentsPath, baseline, overlay);
