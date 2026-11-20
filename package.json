@@ -83,6 +83,7 @@
     "test:server": "node scripts/run-server-tests.js",
     "test:nightly": "node scripts/run-server-tests.js --tier=nightly",
     "test:faults": "node scripts/run-server-tests.js --tier=nightly faults",
+    "test:faults:smoke": "node scripts/run-server-tests.js --tier=nightly faults .smoke.fault.test.js",
     "test:unit": "jest --config tests/config/jest.config.js tests/unit",
     "test:integration": "jest --config tests/config/jest.config.js tests/integration",
     "test:integration:ci": "jest --config tests/config/jest.config.js tests/integration --testPathIgnorePatterns=tests/integration/api/chat.test.js --testPathIgnorePatterns=tests/integration/models/model-integration.test.js",
