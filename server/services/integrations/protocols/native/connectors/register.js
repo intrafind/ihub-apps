@@ -25,6 +25,8 @@ import {
   nextcloudConnector,
   office365Connector
 } from './cloudStorage/index.js';
+import { registerTestTools } from './testTools.js';
+import logger from '../../../../../utils/logger.js';
 
 registerConnector(ifinder);
 registerConnector(iassistant);
@@ -40,3 +42,7 @@ registerConnector(websiteCorpus);
 registerConnector(office365Connector);
 registerConnector(googleDriveConnector);
 registerConnector(nextcloudConnector);
+// The counter tools of the fault tests and the browser suite. Registered only
+// in a server that was started for a test (the two conditions are in
+// testTools.js); a warning in the log says when they are.
+registerTestTools(registerConnector, { warn: (message, meta) => logger.warn(message, meta) });
