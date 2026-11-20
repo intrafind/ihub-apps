@@ -18,10 +18,15 @@
  * request of a bot (a dependency update) is passed over, because a bot cannot
  * act on an issue.
  *
+ * The issue is about the default branch. A run that somebody started by hand
+ * on another branch reports nothing, whatever failed in it: the workflow skips
+ * the job for it, and this script refuses it as well.
+ *
  * Environment:
  * - `NIGHTLY_RESULTS`: JSON `{ "<job>": "success|failure|cancelled|skipped", … }`
  * - `NIGHTLY_RUN_URL`, `NIGHTLY_SHA`, `NIGHTLY_EVENT`: the run, its commit and
  *   what started it
+ * - `NIGHTLY_REF_NAME`: the branch of the run
  * - `NIGHTLY_OWNER`: a GitHub login, or empty
  * - `NIGHTLY_DEFAULT_BRANCH`: the default branch (`main` when empty)
  * - `GITHUB_REPOSITORY`, `GH_TOKEN`: for the GitHub CLI
@@ -40,6 +45,19 @@ import { systemBinary } from '../server/tests/golden/differenceList.js';
 
 export const LABEL = 'nightly-red';
 export const TITLE = 'The nightly run is red';
+
+/**
+ * How each job of the nightly workflow is run on a developer's machine, as a
+ * cell of the table in the issue. `server/tests/nightly-red-issue.test.js`
+ * fails when the workflow gets a job that has no entry here.
+ */
+export const LOCAL_COMMANDS = Object.freeze({
+  faults: '`npm run test:faults`',
+  quarantine: '`node scripts/run-server-tests.js --check-quarantine`',
+  browsers: '`npm run test:e2e -- --project=chromium` (or `firefox`, `webkit`)',
+  agents: '`npm run test:e2e:agents`, then `npm run test:e2e:agents:matrix`',
+  load: '`npm run loadtest:smoke`'
+});
 
 /** Results that make a night red. A skipped job did not run and proves nothing either way. */
 const RED = ['failure', 'cancelled', 'timed_out'];
@@ -68,7 +86,11 @@ export function redJobs(results) {
  * @returns {string}
  */
 export function issueBody({ results, runUrl, sha, event, first = true }) {
-  const rows = Object.entries(results).map(([job, result]) => `| ${job} | ${result} |`);
+  // The command is named for the jobs that failed: those are the ones to run.
+  const rows = Object.entries(results).map(
+    ([job, result]) =>
+      `| ${job} | ${result} | ${RED.includes(result) ? (LOCAL_COMMANDS[job] ?? '') : ''} |`
+  );
   const lines = [
     first
       ? 'The nightly run failed. This issue stays open until the cause is found and fixed, and it blocks a release candidate while it is open.'
@@ -78,8 +100,8 @@ export function issueBody({ results, runUrl, sha, event, first = true }) {
     `- Commit: \`${sha}\``,
     `- Started by: ${event === 'schedule' ? 'the schedule' : event}`,
     '',
-    '| Job | Result |',
-    '|---|---|',
+    '| Job | Result | On your machine |',
+    '|---|---|---|',
     ...rows
   ];
   if (first) {
@@ -88,7 +110,7 @@ export function issueBody({ results, runUrl, sha, event, first = true }) {
       'What to do:',
       '',
       '1. Open the run and read the log of each failed job.',
-      '2. Run the failed tier on your machine (`npm run test:faults`, see docs/run-testing.md).',
+      '2. Run each failed job on your machine, with the command in the table. Who acts, and what the jobs are, is in docs/developer-onboarding.md, "When the nightly is red".',
       '3. Fix the cause. Do not skip a test, add it to the quarantine or set the job to continue on error.',
       '4. Close this issue when a later nightly run is green.'
     );
@@ -96,7 +118,14 @@ export function issueBody({ results, runUrl, sha, event, first = true }) {
   return lines.join('\n');
 }
 
-function gh(args, { input } = {}) {
+/**
+ * Run the GitHub CLI and return what it printed.
+ *
+ * @param {string[]} args
+ * @param {{input?: string}} [options] - `input` is given to the command on stdin
+ * @returns {string}
+ */
+function ghCli(args, { input } = {}) {
   return execFileSync(systemBinary('gh'), args, {
     encoding: 'utf8',
     input,
@@ -122,9 +151,10 @@ const BRANCH = /^[A-Za-z0-9][A-Za-z0-9._/-]*$/;
  *
  * @param {string} repo - `<owner>/<name>`
  * @param {string} branch - The default branch
+ * @param {typeof ghCli} gh
  * @returns {string}
  */
-function lastMergedAuthor(repo, branch) {
+function lastMergedAuthor(repo, branch, gh) {
   try {
     return gh([
       ...['pr', 'list', '--repo', repo, '--state', 'merged'],
@@ -136,33 +166,73 @@ function lastMergedAuthor(repo, branch) {
   }
 }
 
-function main(argv) {
+/**
+ * The branch a run is on when it is not the default branch, or ''. A schedule
+ * runs on the default branch always; a run by hand can be started on any
+ * branch that holds the workflow file.
+ *
+ * @param {Record<string, string|undefined>} env
+ * @returns {string}
+ */
+export function otherBranch(env) {
+  const branch = env.NIGHTLY_REF_NAME || '';
+  const defaultBranch = env.NIGHTLY_DEFAULT_BRANCH || '';
+  if ((env.NIGHTLY_EVENT || 'schedule') === 'schedule') return '';
+  return branch && defaultBranch && branch !== defaultBranch ? branch : '';
+}
+
+/**
+ * Open the issue for a red run, or comment on the open one.
+ *
+ * @param {string[]} argv - The arguments of the command line
+ * @param {Object} [io] - The parameters exist for the unit test
+ * @param {Record<string, string|undefined>} [io.env=process.env]
+ * @param {typeof ghCli} [io.gh] - Runs the GitHub CLI
+ * @param {(line: string) => void} [io.log]
+ * @param {(line: string) => void} [io.error]
+ * @returns {number} The exit code
+ */
+export function main(
+  argv,
+  { env = process.env, gh = ghCli, log = console.log, error: complain = console.error } = {}
+) {
   const dryRun = argv.includes('--dry-run');
-  let results;
+  let results = null;
   try {
-    results = JSON.parse(process.env.NIGHTLY_RESULTS || '');
+    results = JSON.parse(env.NIGHTLY_RESULTS || '');
   } catch {
-    console.error('NIGHTLY_RESULTS must be JSON: { "<job>": "<result>", … }');
+    // Reported below, as a value that is no object.
+  }
+  if (!results || typeof results !== 'object' || Array.isArray(results)) {
+    complain('NIGHTLY_RESULTS must be JSON: { "<job>": "<result>", … }');
     return 2;
   }
   const failed = redJobs(results);
   if (failed.length === 0) {
-    console.log('No job of the nightly run failed; no issue.');
+    log('No job of the nightly run failed; no issue.');
     return 0;
   }
-  const repo = process.env.GITHUB_REPOSITORY || '';
+  const elsewhere = otherBranch(env);
+  if (elsewhere) {
+    log(
+      `Red: ${failed.join(', ')}. This run is on "${elsewhere}", not on the default branch ` +
+        `"${env.NIGHTLY_DEFAULT_BRANCH}"; no issue.`
+    );
+    return 0;
+  }
+  const repo = env.GITHUB_REPOSITORY || '';
   if (!dryRun && !/^[\w.-]+\/[\w.-]+$/.test(repo)) {
-    console.error(`GITHUB_REPOSITORY is not a repository: "${repo}"`);
+    complain(`GITHUB_REPOSITORY is not a repository: "${repo}"`);
     return 2;
   }
   const run = {
     results,
-    runUrl: process.env.NIGHTLY_RUN_URL || '(unknown run)',
-    sha: process.env.NIGHTLY_SHA || '(unknown commit)',
-    event: process.env.NIGHTLY_EVENT || 'schedule'
+    runUrl: env.NIGHTLY_RUN_URL || '(unknown run)',
+    sha: env.NIGHTLY_SHA || '(unknown commit)',
+    event: env.NIGHTLY_EVENT || 'schedule'
   };
   if (dryRun) {
-    console.log(`Red: ${failed.join(', ')}\n\n${issueBody(run)}`);
+    log(`Red: ${failed.join(', ')}\n\n${issueBody(run)}`);
     return 0;
   }
 
@@ -187,7 +257,7 @@ function main(argv) {
       gh(['issue', 'comment', open, '--repo', repo, '--body-file', '-'], {
         input: issueBody({ ...run, first: false })
       });
-      console.log(`Red: ${failed.join(', ')}. Commented on #${open}.`);
+      log(`Red: ${failed.join(', ')}. Commented on #${open}.`);
       return 0;
     }
     // The label may not exist yet. With `--force` an existing one is no error:
@@ -208,22 +278,22 @@ function main(argv) {
       ['issue', 'create', '--repo', repo, '--title', TITLE, '--label', LABEL, '--body-file', '-'],
       { input: issueBody(run) }
     );
-    console.log(`Red: ${failed.join(', ')}. Opened ${url}.`);
+    log(`Red: ${failed.join(', ')}. Opened ${url}.`);
     // Best effort: a login that cannot be assigned must not lose the issue.
     const owner =
-      (process.env.NIGHTLY_OWNER || '').trim() ||
-      lastMergedAuthor(repo, process.env.NIGHTLY_DEFAULT_BRANCH || 'main');
+      (env.NIGHTLY_OWNER || '').trim() ||
+      lastMergedAuthor(repo, env.NIGHTLY_DEFAULT_BRANCH || 'main', gh);
     if (/^[A-Za-z0-9][A-Za-z0-9-]*$/.test(owner)) {
       try {
         gh(['issue', 'edit', url, '--repo', repo, '--add-assignee', owner]);
-        console.log(`Assigned to ${owner}.`);
+        log(`Assigned to ${owner}.`);
       } catch (error) {
-        console.log(`Not assigned to ${owner}: ${String(error.stderr || error.message).trim()}`);
+        log(`Not assigned to ${owner}: ${String(error.stderr || error.message).trim()}`);
       }
     }
     return 0;
   } catch (error) {
-    console.error(`GitHub refused: ${String(error.stderr || error.message).trim()}`);
+    complain(`GitHub refused: ${String(error.stderr || error.message).trim()}`);
     return 1;
   }
 }

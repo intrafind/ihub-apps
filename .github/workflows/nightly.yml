@@ -15,7 +15,8 @@
 #   (tests/load/local-smoke.mjs).
 # - report: when a job failed, opens the issue with the label `nightly-red`, or
 #   adds a comment to the open one (scripts/nightly-red-issue.js). An open issue
-#   with that label blocks a release candidate.
+#   with that label blocks a release candidate. Only a run on the default branch
+#   reports.
 #
 # No job continues on error and no step is allowed to fail: a red night is a
 # finding. Fix the cause, or take the test out with its reason in the pull
@@ -25,7 +26,10 @@
 #
 # - the schedule, 02:17 UTC. GitHub runs a schedule only from the workflow file
 #   on the default branch.
-# - by hand ("Run workflow"), also only from the default branch.
+# - by hand ("Run workflow"). GitHub offers every branch that holds this file,
+#   not only the default one. A run on another branch runs every job and
+#   reports nothing: the issue is about the default branch, so the job "Report"
+#   is skipped there, and the script refuses another branch as well.
 # - on a pull request that carries the label `run-faults`: the fault tier alone,
 #   on the head of that pull request, when the label is put on and again on
 #   every push while it is there. This is how a branch that is not merged yet
@@ -72,7 +76,10 @@ jobs:
       CI: 'true'
       # Required by the server to boot in CI.
       JWT_SECRET: ci-nightly-faults-test-secret
-      # The log of each server is kept in its contents directory for the upload below.
+      # The output of each server is kept in its contents directory for the upload
+      # below. The fault tests hold in both settings, and they are run with this
+      # one before a change to the harness is merged (docs/run-testing.md). The
+      # variables of this job are pinned by server/tests/fault-harness-settings.test.js.
       KEEP_FAULT_CONTENTS: '1'
 
     steps:
@@ -240,8 +247,13 @@ jobs:
 
   report:
     name: Report
-    # Also when a job failed or was cancelled; never for a pull request.
-    if: always() && github.event_name != 'pull_request'
+    # Also when a job failed or was cancelled; never for a pull request, and
+    # never for a run that was started by hand on another branch than the
+    # default one: its failure is not a failure of the default branch. A
+    # schedule always runs on the default branch.
+    if: >-
+      always() && github.event_name != 'pull_request' &&
+      (github.event_name == 'schedule' || github.ref_name == github.event.repository.default_branch)
     needs: [faults, quarantine, browsers, agents, load]
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -277,6 +289,8 @@ jobs:
           NIGHTLY_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           NIGHTLY_SHA: ${{ github.sha }}
           NIGHTLY_EVENT: ${{ github.event_name }}
+          # The branch of this run: the script reports the default branch only.
+          NIGHTLY_REF_NAME: ${{ github.ref_name }}
           # The person who acts on a red night; a repository variable (docs/developer-onboarding.md).
           NIGHTLY_OWNER: ${{ vars.NIGHTLY_OWNER }}
           # While nobody is named: the author of the pull request merged last into this branch.

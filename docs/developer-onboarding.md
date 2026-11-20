@@ -807,7 +807,7 @@ The runner tiers, the quarantine list and the test tools for runs (scripted mode
 
 #### The nightly run
 
-GitHub starts a schedule only from the workflow file on the default branch, and "Run workflow" also takes the file from there. A branch that is not merged gets its evidence from the fault tier another way: put the label `run-faults` on its pull request. The job **Fault tier** then runs on the head of the pull request, and again on every push while the label is there. Take the label off when you have what you need. The other jobs of the nightly do not run on a pull request.
+GitHub starts a schedule only from the workflow file on the default branch. "Run workflow" offers every branch that holds the workflow file; a run that is started by hand on another branch than the default one runs every job and reports nothing, because the issue below is about the default branch. A branch that is not merged gets its evidence from the fault tier this way: put the label `run-faults` on its pull request. The job **Fault tier** then runs on the head of the pull request, and again on every push while the label is there. Take the label off when you have what you need. The other jobs of the nightly do not run on a pull request.
 
 No job of the nightly continues on error. Do not make one do so.
 
@@ -816,11 +816,21 @@ No job of the nightly continues on error. Do not make one do so.
 A failed nightly opens an issue with the label `nightly-red` and the title "The nightly run is red". There is at most one: while it is open, every further red night adds a comment to it. The issue lists the failed jobs and links the run.
 
 - **Who acts.** The person the product owner names. Their GitHub login is the repository variable `NIGHTLY_OWNER` (Settings, Secrets and variables, Actions, Variables), and the issue is assigned to that login. While the variable is empty, the issue is assigned to the author of the pull request that was merged last, because the newest change is the first suspect.
-- **What to do.** Open the run, read the log of each failed job, and run the failed tier on your machine (`npm run test:faults`, `npm run loadtest:smoke`, `npm run test:e2e:agents`). Fix the cause. Do not skip the test, do not add it to the quarantine, do not set the job to continue on error.
+- **What to do.** Open the run, read the log of each failed job, and run the failed job on your machine with the command of the table below; the issue names it next to each failed job. Fix the cause. Do not skip the test, do not add it to the quarantine, do not set the job to continue on error.
 - **When it is done.** Close the issue when a later nightly is green.
 - **Release candidates.** No release candidate is tagged while an issue with the label `nightly-red` is open. Nothing enforces this yet: whoever cuts the release candidate checks for the issue.
 
-A pull request run with the label `run-faults` never opens the issue; its result is the check on the pull request.
+| Job of the nightly | On your machine |
+|---|---|
+| Fault tier | `npm run test:faults` |
+| Quarantine check | `node scripts/run-server-tests.js --check-quarantine` |
+| End-to-end (chromium, firefox, webkit) | `npm run test:e2e -- --project=chromium`, or `firefox`, `webkit` |
+| Agents suite and transport matrix | `npm run test:e2e:agents`, then `npm run test:e2e:agents:matrix` |
+| Load smoke on the fake LLM | `npm run loadtest:smoke` |
+
+Run one at a time: each starts servers of its own.
+
+A pull request run with the label `run-faults` never opens the issue; its result is the check on the pull request. A run started by hand on another branch than the default one opens none either.
 
 ### Agents End-to-End Suite
 
@@ -876,7 +886,7 @@ expect(await counter.count(key)).toBe(1);
 
 For content from outside, write it into the counter and let the model read it: `e2e-tool:e2e_counter_read:{"key":"…"}`. A page reader pointed at the test machine does not work: iHub refuses to fetch from a private address. Use these tools, not a fixture of your own.
 
-The two tools are all that `NODE_ENV=test` switches on in the suite's server. No other server file reads that value, and `server/tests/killPoint-inventory.test.js` fails when one starts to.
+The two tools are all that `NODE_ENV=test` switches on in the suite's server. Only two server files read that value: the module of the test tools, and `server/utils/killPoint.js`, which stays inert because the suite never sets `IHUB_TEST_KILLPOINT`. `server/tests/killPoint-inventory.test.js` fails when a third file starts to.
 
 The suite's server is never started with a kill point. A test that kills a server at a chosen place is a fault test and starts its own server; see [Testing Runs](run-testing.md#the-fault-tier).
 
