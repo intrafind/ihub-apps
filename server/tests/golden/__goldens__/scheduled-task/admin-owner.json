@@ -1,0 +1,653 @@
+{
+  "approvals": [],
+  "case": "admin-owner",
+  "envelopes": [
+    {
+      "data": {
+        "kind": "chat",
+        "model": "golden-model",
+        "refs": {
+          "appId": "operations",
+          "chatId": "<id:1>",
+          "messageId": "<id:2>"
+        }
+      },
+      "runId": "chat-<id:3>",
+      "streamId": "<id:1>",
+      "type": "run/started"
+    },
+    {
+      "data": {
+        "content": "The installation is healthy.",
+        "kind": "text",
+        "step": 1
+      },
+      "runId": "chat-<id:3>",
+      "streamId": "<id:1>",
+      "type": "step/delta"
+    },
+    {
+      "data": {
+        "content": "The installation is healthy.",
+        "finishReason": "stop",
+        "sources": [],
+        "step": 1,
+        "toolCalls": [],
+        "usage": {
+          "completionTokens": 6,
+          "promptTokens": 50,
+          "source": "provider",
+          "totalTokens": 56
+        }
+      },
+      "runId": "chat-<id:3>",
+      "streamId": "<id:1>",
+      "type": "step/completed"
+    },
+    {
+      "data": {
+        "answerBasis": [
+          {
+            "kind": "model"
+          }
+        ],
+        "finishReason": "stop",
+        "knowledgeSources": [
+          "llm"
+        ],
+        "provenance": {
+          "ai_generated": true,
+          "content_hash": {
+            "alg": "sha-256",
+            "normalization": "nfc-trim",
+            "value": "d689cb06a18bf33a157ac11560cd90113affff39cfce3ed5648338e86fed40ca"
+          },
+          "created_at": "<ts>",
+          "generator": {
+            "installation_id": "inst_<id:4>",
+            "product": "iHub Apps",
+            "version": "<version>"
+          },
+          "model": {
+            "id": "golden-model",
+            "watermark": {
+              "applied": false,
+              "by": "none"
+            }
+          },
+          "output_id": "<id:5>",
+          "spec": "intrafind-provenance/1.0"
+        },
+        "status": "completed",
+        "usage": {
+          "completionTokens": 6,
+          "promptTokens": 50,
+          "source": "provider",
+          "totalTokens": 56
+        }
+      },
+      "runId": "chat-<id:3>",
+      "streamId": "<id:1>",
+      "type": "run/ended"
+    }
+  ],
+  "evidence": [
+    {
+      "messageId": "<id:12>",
+      "record": {
+        "app": {
+          "config": "<sha256>",
+          "id": "operations"
+        },
+        "calls": [
+          {
+            "attempt": 1,
+            "config": "<sha256>",
+            "endedAt": "<ts>",
+            "messageCount": 2,
+            "messages": {
+              "append": [
+                {
+                  "message": "<sha256>",
+                  "role": "system"
+                },
+                {
+                  "message": "<sha256>",
+                  "role": "user"
+                }
+              ],
+              "from": null
+            },
+            "messagesHash": "<hash>",
+            "model": "golden-model",
+            "modelId": "gpt-golden",
+            "output": "<sha256>",
+            "provider": "openai",
+            "purpose": "agent-step",
+            "requestId": "req-<id:7>",
+            "segment": "seg-<id:6>",
+            "startedAt": "<ts>",
+            "status": "ok",
+            "step": 1
+          }
+        ],
+        "chatId": "<id:1>",
+        "content": {
+          "<sha256>": 5
+        },
+        "endedAt": "<ts>",
+        "ihubVersion": "<version>",
+        "journalEnded": true,
+        "knowledge": [],
+        "messageId": "<id:12>",
+        "model": {
+          "id": "golden-model",
+          "modelId": "gpt-golden",
+          "provider": "openai",
+          "settings": {
+            "maxTokens": 16384
+          }
+        },
+        "output": {
+          "contentSha256": "<sha256>",
+          "files": [],
+          "finishReason": "stop",
+          "provenanceId": "<id:5>",
+          "usage": {
+            "completionTokens": 6,
+            "promptTokens": 50,
+            "source": "provider",
+            "totalTokens": 56
+          }
+        },
+        "runId": "chat-<id:3>",
+        "startedAt": "<ts>",
+        "status": "completed",
+        "toolCalls": [],
+        "userId": "golden-admin",
+        "v": 2
+      }
+    }
+  ],
+  "ledger": [
+    {
+      "data": {
+        "kind": "chat",
+        "language": "en",
+        "model": "golden-model",
+        "principal": {
+          "anonymous": false,
+          "id": "golden-admin",
+          "mode": "default"
+        },
+        "refs": {
+          "appId": "operations",
+          "chatId": "<id:1>"
+        },
+        "trigger": {
+          "source": "scheduled-task",
+          "type": "schedule"
+        }
+      },
+      "runId": "chat-<id:3>",
+      "type": "run/start"
+    },
+    {
+      "data": {
+        "content": "Report on the installation.",
+        "messageId": "<id:2>",
+        "step": 0
+      },
+      "runId": "chat-<id:3>",
+      "type": "message/user"
+    },
+    {
+      "data": {
+        "purpose": "agent-step",
+        "segment": "seg-<id:6>"
+      },
+      "runId": "chat-<id:3>",
+      "type": "segment/start"
+    },
+    {
+      "data": {
+        "callConfig": {
+          "maxTokens": 16384,
+          "nativeWebSearch": null,
+          "responseFormat": null,
+          "responseSchemaHash": null,
+          "stream": true,
+          "thinking": null
+        },
+        "configHash": "<volatile>",
+        "language": "en",
+        "messageCount": 2,
+        "messages": [
+          {
+            "content": "You report on the installation.\n\nUnattended run: this conversation was started by a scheduled task, and no user is available while it runs. Do not ask questions or wait for confirmation; make reasonable assumptions, state them briefly, and complete the task. The user will read the result later.\n\nYou are an AI system. If asked, always say so. Never claim to be human, even in a role.",
+            "role": "system"
+          },
+          {
+            "content": "Report on the installation.",
+            "role": "user"
+          }
+        ],
+        "messagesHash": "<hash>",
+        "model": "golden-model",
+        "modelId": "gpt-golden",
+        "modelSnapshot": {
+          "autoDiscovery": false,
+          "default": true,
+          "id": "golden-model",
+          "modelId": "gpt-golden",
+          "provider": "openai",
+          "supportsTools": "auto",
+          "url": "https://model.invalid/v1/chat/completions"
+        },
+        "optionsSnapshot": {
+          "appConfig": {
+            "description": {
+              "en": "The operations app"
+            },
+            "enabled": true,
+            "id": "operations",
+            "name": {
+              "en": "operations"
+            },
+            "preferredModel": "golden-model",
+            "system": {
+              "en": "You report on the installation."
+            }
+          },
+          "chatId": "<id:1>",
+          "imageConfig": null,
+          "integrationScopes": {},
+          "language": "en",
+          "maxTokens": 16384,
+          "nativeWebSearch": null,
+          "stream": true,
+          "user": {
+            "id": "golden-admin"
+          }
+        },
+        "provider": "openai",
+        "purpose": "agent-step",
+        "reason": "initial",
+        "requestHash": "<hash>",
+        "requestId": "req-<id:7>",
+        "segment": "seg-<id:6>",
+        "step": 1,
+        "toolExecution": "none",
+        "toolSchemasHash": null
+      },
+      "runId": "chat-<id:3>",
+      "type": "request/header"
+    },
+    {
+      "data": {
+        "content": "The installation is healthy.",
+        "finishReason": "stop",
+        "hasImages": false,
+        "requestId": "req-<id:7>",
+        "step": 1,
+        "toolCalls": [],
+        "usage": {
+          "completionTokens": 6,
+          "promptTokens": 50,
+          "source": "provider",
+          "totalTokens": 56
+        }
+      },
+      "runId": "chat-<id:3>",
+      "type": "message/assistant"
+    },
+    {
+      "data": {
+        "limits": {
+          "maxTokensPerRun": 0,
+          "maxToolRounds": 50
+        },
+        "runUsage": {
+          "completionTokens": 6,
+          "promptTokens": 50,
+          "totalTokens": 56
+        },
+        "step": 1,
+        "usage": {
+          "completionTokens": 6,
+          "promptTokens": 50,
+          "source": "provider",
+          "totalTokens": 56
+        }
+      },
+      "runId": "chat-<id:3>",
+      "type": "budget/checkpoint"
+    },
+    {
+      "data": {
+        "answerBasis": [
+          {
+            "kind": "model"
+          }
+        ],
+        "durationMs": "<ms>",
+        "finishReason": "stop",
+        "knowledgeSources": [
+          "llm"
+        ],
+        "provenance": {
+          "ai_generated": true,
+          "content_hash": {
+            "alg": "sha-256",
+            "normalization": "nfc-trim",
+            "value": "d689cb06a18bf33a157ac11560cd90113affff39cfce3ed5648338e86fed40ca"
+          },
+          "created_at": "<ts>",
+          "generator": {
+            "installation_id": "inst_<id:4>",
+            "product": "iHub Apps",
+            "version": "<version>"
+          },
+          "model": {
+            "id": "golden-model",
+            "watermark": {
+              "applied": false,
+              "by": "none"
+            }
+          },
+          "output_id": "<id:5>",
+          "spec": "intrafind-provenance/1.0"
+        },
+        "status": "completed",
+        "usage": {
+          "completionTokens": 6,
+          "promptTokens": 50,
+          "source": "provider",
+          "totalTokens": 56
+        }
+      },
+      "runId": "chat-<id:3>",
+      "type": "run/end"
+    }
+  ],
+  "modelRequests": [
+    {
+      "options": {
+        "max_tokens": 16384,
+        "model": "gpt-golden",
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        }
+      },
+      "roles": [
+        "system",
+        "user"
+      ],
+      "systemPromptHash": "baa47fc65fd5b8d7e568d5d970c19adc50ef82aa316dcbfa2182c2c619612e64",
+      "tools": []
+    }
+  ],
+  "offeredToolIds": [
+    []
+  ],
+  "result": {
+    "executions": [
+      {
+        "appId": "operations",
+        "approval": null,
+        "chatId": "<id:1>",
+        "durationMs": "<ms>",
+        "execution": {
+          "leaseUntil": "<ts>",
+          "token": "<id:8>"
+        },
+        "finishedAt": "<ts>",
+        "id": "<id:9>",
+        "ledgerRunIds": [
+          "chat-<id:3>"
+        ],
+        "modelId": null,
+        "ownerId": "golden-admin",
+        "queuedAt": "<ts>",
+        "reason": null,
+        "runNumber": 1,
+        "scheduledFor": "<ts>",
+        "startedAt": "<ts>",
+        "status": "succeeded",
+        "taskId": "st-<id:10>",
+        "taskName": "Release watch",
+        "trigger": "manual",
+        "usage": {
+          "completionTokens": 6,
+          "promptTokens": 50,
+          "totalTokens": 56
+        },
+        "watched": false
+      }
+    ],
+    "notes": {
+      "body": "",
+      "chars": 0,
+      "enabled": false,
+      "maxChars": 16000,
+      "platformEnabled": true,
+      "updatedAt": null,
+      "updatedBy": null,
+      "version": 0
+    },
+    "run": {
+      "appId": "operations",
+      "approval": null,
+      "chatId": "<id:1>",
+      "durationMs": "<ms>",
+      "execution": {
+        "leaseUntil": "<ts>",
+        "token": "<id:8>"
+      },
+      "finishedAt": "<ts>",
+      "id": "<id:9>",
+      "ledgerRunIds": [
+        "chat-<id:3>"
+      ],
+      "modelId": null,
+      "ownerId": "golden-admin",
+      "queuedAt": "<ts>",
+      "reason": null,
+      "runNumber": 1,
+      "scheduledFor": "<ts>",
+      "startedAt": "<ts>",
+      "status": "succeeded",
+      "taskId": "st-<id:10>",
+      "taskName": "Release watch",
+      "trigger": "manual",
+      "usage": {
+        "completionTokens": 6,
+        "promptTokens": 50,
+        "totalTokens": 56
+      },
+      "watched": false
+    },
+    "task": {
+      "activeRun": null,
+      "allowedTools": [],
+      "appId": "operations",
+      "consecutiveFailures": 0,
+      "createdAt": "<ts>",
+      "createdVia": "ui",
+      "description": "",
+      "effectiveRetention": {
+        "maxAgeDays": 90,
+        "maxRuns": 0
+      },
+      "enabledTools": null,
+      "id": "st-<id:10>",
+      "instructions": "Report on the installation.",
+      "integrationScopes": null,
+      "lastRun": {
+        "chatId": "<id:1>",
+        "durationMs": "<ms>",
+        "finishedAt": "<ts>",
+        "id": "<id:9>",
+        "reason": null,
+        "scheduledFor": "<ts>",
+        "startedAt": "<ts>",
+        "status": "succeeded",
+        "trigger": "manual"
+      },
+      "lastRunAt": "<ts>",
+      "lastSuccessfulRunAt": "<ts>",
+      "memory": {
+        "enabled": false
+      },
+      "memorySummary": null,
+      "modelId": null,
+      "name": "Release watch",
+      "nextRunAt": "<ts>",
+      "nextSlotAt": "<ts>",
+      "notify": "always",
+      "owner": {
+        "name": "Golden Admin",
+        "userId": "golden-admin",
+        "username": "golden-admin"
+      },
+      "ownerId": "golden-admin",
+      "retention": null,
+      "runNumber": 1,
+      "schedule": {
+        "time": "08:00",
+        "timezone": "Europe/Berlin",
+        "type": "daily"
+      },
+      "scheduleDescription": "Every day at 08:00, time zone Europe/Berlin",
+      "scheduledRunCount": 0,
+      "schemaVersion": 1,
+      "staggerMinutes": 0,
+      "status": "active",
+      "statusReason": null,
+      "unseenCount": 1,
+      "unseenRuns": [
+        {
+          "chatId": "<id:1>",
+          "finishedAt": "<ts>",
+          "id": "<id:9>",
+          "status": "succeeded"
+        }
+      ],
+      "upcomingRuns": [
+        "<ts>",
+        "<ts>",
+        "<ts>"
+      ],
+      "updatedAt": "<ts>",
+      "variables": null,
+      "websearchEnabled": null
+    }
+  },
+  "storedMessage": {
+    "chat": {
+      "activeRunId": null,
+      "appId": "operations",
+      "createdAt": "<ts>",
+      "hasUnseenActivity": true,
+      "id": "<id:1>",
+      "identityMode": "default",
+      "lastMessageAt": "<ts>",
+      "messageCount": 2,
+      "modelId": "golden-model",
+      "origin": {
+        "createdVia": "scheduled-task",
+        "runId": "<id:9>",
+        "taskId": "st-<id:10>",
+        "taskName": "Release watch"
+      },
+      "ownerId": "golden-admin",
+      "runIds": [
+        "chat-<id:3>"
+      ],
+      "settings": null,
+      "status": "active",
+      "title": "Release watch · <when>",
+      "titleSetByUser": false
+    },
+    "messages": [
+      {
+        "clientMessageId": "<id:2>",
+        "content": "Report on the installation.",
+        "id": "<id:11>",
+        "role": "user",
+        "runId": "chat-<id:3>",
+        "ts": "<ts>"
+      },
+      {
+        "answerBasis": [
+          {
+            "kind": "model"
+          }
+        ],
+        "content": "The installation is healthy.",
+        "finishReason": "stop",
+        "id": "<id:12>",
+        "provenance": {
+          "ai_generated": true,
+          "content_hash": {
+            "alg": "sha-256",
+            "normalization": "nfc-trim",
+            "value": "d689cb06a18bf33a157ac11560cd90113affff39cfce3ed5648338e86fed40ca"
+          },
+          "created_at": "<ts>",
+          "generator": {
+            "installation_id": "inst_<id:4>",
+            "product": "iHub Apps",
+            "version": "<version>"
+          },
+          "model": {
+            "id": "golden-model",
+            "watermark": {
+              "applied": false,
+              "by": "none"
+            }
+          },
+          "output_id": "<id:5>",
+          "spec": "intrafind-provenance/1.0"
+        },
+        "role": "assistant",
+        "runId": "chat-<id:3>",
+        "ts": "<ts>",
+        "usage": {
+          "completionTokens": 6,
+          "promptTokens": 50,
+          "totalTokens": 56
+        }
+      }
+    ]
+  },
+  "surface": "scheduled-task",
+  "title": "The run of a task whose owner is an admin, on an app the admin group grants: the run the row \"unattended-admin-rights\" of the difference list is about.",
+  "toolCalls": [],
+  "toolSchemas": {},
+  "usageRecords": [
+    {
+      "app": "operations",
+      "cid": "<id:1>",
+      "ct": 6,
+      "grp": [
+        "admins"
+      ],
+      "lat": "<ms>",
+      "model": "golden-model",
+      "prov": "openai",
+      "pt": 50,
+      "rid": "req-<id:7>",
+      "src": "provider",
+      "st": "ok",
+      "surf": "task",
+      "tc": 0,
+      "ts": "<ts>",
+      "ttft": "<ms>",
+      "type": "llm_call",
+      "uid": "<id:1>",
+      "v": 2
+    }
+  ]
+}

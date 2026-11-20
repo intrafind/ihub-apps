@@ -1,0 +1,743 @@
+{
+  "approvals": [],
+  "case": "three-minute-clock",
+  "envelopes": [],
+  "ledger": [
+    {
+      "data": {
+        "kind": "subagent",
+        "language": "en",
+        "model": "golden-model",
+        "parentRunId": "chat-of-the-caller",
+        "principal": {
+          "anonymous": false,
+          "id": "golden-user",
+          "mode": "default"
+        },
+        "refs": {
+          "appId": "specialist",
+          "chatId": "agent:chat-of-the-caller:<id:1>",
+          "executionId": "chat-of-the-caller"
+        },
+        "trigger": {
+          "type": "user"
+        }
+      },
+      "runId": "subagent-<id:2>",
+      "type": "run/start"
+    },
+    {
+      "data": {
+        "purpose": "agent-step",
+        "segment": "seg-<id:3>"
+      },
+      "runId": "subagent-<id:2>",
+      "type": "segment/start"
+    },
+    {
+      "data": {
+        "callConfig": {
+          "maxTokens": 16384,
+          "nativeWebSearch": null,
+          "responseFormat": null,
+          "responseSchemaHash": null,
+          "stream": true,
+          "thinking": null
+        },
+        "configHash": "<volatile>",
+        "language": "en",
+        "messageCount": 2,
+        "messages": [
+          {
+            "content": "You are the specialist.\n\nHow to use the connected integrations:\n<integration-guidance integration=\"iHub\" id=\"ihub\">\n- Ask the user (tool `ask_user`): Ask only when the answer depends on something only the user knows; ask one short question and offer choices when there are few.\n</integration-guidance>\n\nYou are an AI system. If asked, always say so. Never claim to be human, even in a role.",
+            "role": "system"
+          },
+          {
+            "content": "How do I file a claim?",
+            "role": "user"
+          }
+        ],
+        "messagesHash": "<hash>",
+        "model": "golden-model",
+        "modelId": "gpt-golden",
+        "modelSnapshot": {
+          "autoDiscovery": false,
+          "default": true,
+          "id": "golden-model",
+          "modelId": "gpt-golden",
+          "provider": "openai",
+          "supportsTools": "auto",
+          "url": "https://model.invalid/v1/chat/completions"
+        },
+        "optionsSnapshot": {
+          "appConfig": {
+            "apps": [
+              "helper"
+            ],
+            "description": {
+              "en": "The specialist app"
+            },
+            "enabled": true,
+            "id": "specialist",
+            "integrations": {
+              "dangerous": {},
+              "ihub": {
+                "actions": [
+                  "ask_user"
+                ]
+              },
+              "lookup": {}
+            },
+            "name": {
+              "en": "specialist"
+            },
+            "preferredModel": "golden-model",
+            "system": {
+              "en": "You are the specialist."
+            }
+          },
+          "chatId": "agent:chat-of-the-caller:<id:1>",
+          "imageConfig": null,
+          "integrationScopes": {},
+          "language": "en",
+          "maxTokens": 16384,
+          "nativeWebSearch": null,
+          "stream": true,
+          "user": {
+            "id": "golden-user"
+          }
+        },
+        "provider": "openai",
+        "purpose": "agent-step",
+        "reason": "initial",
+        "requestHash": "<hash>",
+        "requestId": "req-<id:4>",
+        "segment": "seg-<id:3>",
+        "step": 1,
+        "toolExecution": "server",
+        "toolSchemas": [
+          {
+            "_integration": {
+              "action": "lookup",
+              "actionTitle": "lookup",
+              "definition": "test.fixture/lookup",
+              "fingerprint": "sha256:bc7875865e9da481dc2ab49f6f962f5f4431b52f241441cb0e3ebcc8859832ba",
+              "fixedToolId": true,
+              "instanceId": "lookup",
+              "instanceLabel": "lookup"
+            },
+            "approval": "never",
+            "approvalSource": "default",
+            "dataFlow": "external",
+            "description": "Look up a record",
+            "examples": [],
+            "id": "lookup",
+            "name": "lookup: lookup",
+            "parameters": {
+              "properties": {
+                "key": {
+                  "description": "The key of the record",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key"
+              ],
+              "type": "object"
+            },
+            "readOnly": true,
+            "sideEffect": "read",
+            "sideEffectSource": "definition",
+            "type": "integration"
+          },
+          {
+            "_integration": {
+              "action": "dangerous",
+              "actionTitle": "dangerous",
+              "definition": "test.fixture/dangerous",
+              "fingerprint": "sha256:dfd1e2fcf928e6e343368b935321e5bc105cc592a5c7d726bbc1b20c39ae8cd1",
+              "fixedToolId": true,
+              "instanceId": "dangerous",
+              "instanceLabel": "dangerous"
+            },
+            "approval": "always",
+            "approvalSource": "tool",
+            "dataFlow": "external",
+            "description": "Close a record for good",
+            "examples": [],
+            "id": "dangerous",
+            "name": "dangerous: dangerous",
+            "parameters": {
+              "properties": {
+                "key": {
+                  "description": "The key of the record",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key"
+              ],
+              "type": "object"
+            },
+            "readOnly": false,
+            "requiresApproval": true,
+            "sideEffect": "write",
+            "sideEffectSource": "definition",
+            "type": "integration"
+          },
+          {
+            "_integration": {
+              "action": "ask_user",
+              "actionTitle": "Ask the user",
+              "definition": "com.intrafind/ihub",
+              "fingerprint": "sha256:cb354e6336086e7afe1bd7667c0211d9dc843c5a9f567c168dfc8ba68b6354a6",
+              "fixedToolId": true,
+              "guidance": "Ask only when the answer depends on something only the user knows; ask one short question and offer choices when there are few.",
+              "instanceId": "ihub",
+              "instanceLabel": "iHub"
+            },
+            "approval": "never",
+            "approvalSource": "default",
+            "dataFlow": "internal",
+            "description": "Ask the user a clarifying question when you need more information. IMPORTANT: Always use 'select' or 'multiselect' with options when there are common choices - this is faster for users than typing. Keep questions SHORT (e.g., 'Which language?' not 'Into which language would you like me to translate your text?'). Do NOT repeat the user's input in your question.",
+            "enabled": true,
+            "examples": [],
+            "id": "ask_user",
+            "interactive": true,
+            "name": "iHub: Ask the user",
+            "parameters": {
+              "properties": {
+                "allow_other": {
+                  "default": false,
+                  "description": "For select/multiselect: allow user to enter a custom 'Other' value not in the options list.",
+                  "type": "boolean"
+                },
+                "allow_skip": {
+                  "default": false,
+                  "description": "Allow the user to skip this question without providing an answer.",
+                  "type": "boolean"
+                },
+                "context": {
+                  "description": "Brief explanation of why you need this information, shown to the user to help them understand the question's purpose.",
+                  "maxLength": 500,
+                  "type": "string"
+                },
+                "input_type": {
+                  "default": "select",
+                  "description": "PREFER 'select' or 'multiselect' over 'text' when there are common choices! Use 'select' for single choice from options (RECOMMENDED), 'multiselect' for multiple choices, 'text' ONLY for truly open-ended answers, 'confirm' for yes/no, 'number' for numeric input, 'date' for dates.",
+                  "enum": [
+                    "text",
+                    "select",
+                    "multiselect",
+                    "confirm",
+                    "number",
+                    "date"
+                  ],
+                  "type": "string"
+                },
+                "options": {
+                  "description": "REQUIRED for select/multiselect! Provide 2-10 common options. Example: [{\"label\": \"English\", \"value\": \"en\"}, {\"label\": \"French\", \"value\": \"fr\"}]. Set allow_other=true if user might need an unlisted option.",
+                  "items": {
+                    "properties": {
+                      "label": {
+                        "description": "Display text for the option (max 100 chars)",
+                        "maxLength": 100,
+                        "type": "string"
+                      },
+                      "value": {
+                        "description": "Value returned when selected (defaults to label if not provided, max 100 chars)",
+                        "maxLength": 100,
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "label"
+                    ],
+                    "type": "object"
+                  },
+                  "maxItems": 20,
+                  "type": "array"
+                },
+                "placeholder": {
+                  "description": "Placeholder text shown in the input field before user types.",
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                "question": {
+                  "description": "A SHORT clarifying question (e.g., 'Which language?' or 'What format?'). Do NOT include the user's input text in the question. Maximum 500 characters.",
+                  "maxLength": 500,
+                  "type": "string"
+                },
+                "validation": {
+                  "description": "Validation rules for the user's input.",
+                  "properties": {
+                    "max": {
+                      "description": "Maximum value for number input or maximum length for text.",
+                      "type": "number"
+                    },
+                    "message": {
+                      "description": "Custom error message to show when validation fails.",
+                      "maxLength": 200,
+                      "type": "string"
+                    },
+                    "min": {
+                      "description": "Minimum value for number input or minimum length for text.",
+                      "type": "number"
+                    },
+                    "pattern": {
+                      "description": "Regular expression pattern for text validation (max 200 chars). Use simple patterns to avoid ReDoS.",
+                      "maxLength": 200,
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "question"
+              ],
+              "type": "object"
+            },
+            "readOnly": true,
+            "requiresUserInput": true,
+            "sideEffect": "read",
+            "sideEffectSource": "definition",
+            "type": "integration"
+          }
+        ],
+        "toolSchemasHash": "78a41e85ef85bacfeeea9401b26820c9a05597640761b142c2cb52b2dc2fb143"
+      },
+      "runId": "subagent-<id:2>",
+      "type": "request/header"
+    },
+    {
+      "data": {
+        "content": "",
+        "finishReason": "tool_calls",
+        "hasImages": false,
+        "requestId": "req-<id:4>",
+        "step": 1,
+        "toolCalls": [
+          {
+            "arguments": "{\"key\":\"claim\"}",
+            "id": "call_1",
+            "index": 0,
+            "metadata": {
+              "originalFormat": "openai",
+              "type": "function"
+            },
+            "name": "lookup",
+            "type": "function"
+          }
+        ]
+      },
+      "runId": "subagent-<id:2>",
+      "type": "message/assistant"
+    },
+    {
+      "data": {
+        "limits": {
+          "maxTokensPerRun": 0,
+          "maxToolRounds": 50
+        },
+        "runUsage": {
+          "completionTokens": 0,
+          "promptTokens": 74,
+          "totalTokens": 74
+        },
+        "step": 1,
+        "usage": {
+          "completionTokens": 0,
+          "promptTokens": 74,
+          "source": "estimate",
+          "totalTokens": 74
+        }
+      },
+      "runId": "subagent-<id:2>",
+      "type": "budget/checkpoint"
+    },
+    {
+      "data": {
+        "activityKind": "tool",
+        "activityOrigin": "integration",
+        "args": {
+          "key": "claim"
+        },
+        "argsRepaired": false,
+        "callId": "call_1",
+        "execution": "server",
+        "integration": "lookup",
+        "name": "lookup",
+        "parallelGroup": 0,
+        "step": 1,
+        "title": "lookup",
+        "toolId": "lookup"
+      },
+      "runId": "subagent-<id:2>",
+      "type": "tool/call"
+    },
+    {
+      "data": {
+        "callId": "call_1",
+        "durationMs": "<ms>",
+        "hasImage": false,
+        "name": "lookup",
+        "resultBytes": 38,
+        "resultPreview": "{\"key\":\"claim\",\"value\":\"record claim\"}",
+        "step": 1,
+        "toolId": "lookup"
+      },
+      "runId": "subagent-<id:2>",
+      "type": "tool/result"
+    },
+    {
+      "data": {
+        "callConfig": {
+          "maxTokens": 16384,
+          "nativeWebSearch": null,
+          "responseFormat": null,
+          "responseSchemaHash": null,
+          "stream": true,
+          "thinking": null
+        },
+        "configHash": "<volatile>",
+        "language": "en",
+        "messageCount": 4,
+        "messagesDelta": [
+          {
+            "content": null,
+            "role": "assistant",
+            "tool_calls": [
+              {
+                "function": {
+                  "arguments": "{\"key\":\"claim\"}",
+                  "name": "lookup"
+                },
+                "id": "call_1",
+                "index": 0,
+                "metadata": {
+                  "originalFormat": "openai",
+                  "type": "function"
+                },
+                "type": "function"
+              }
+            ]
+          },
+          {
+            "content": "{\"key\":\"claim\",\"value\":\"record claim\"}",
+            "name": "lookup",
+            "role": "tool",
+            "tool_call_id": "call_1"
+          }
+        ],
+        "messagesHash": "<hash>",
+        "model": "golden-model",
+        "modelId": "gpt-golden",
+        "provider": "openai",
+        "purpose": "agent-step",
+        "reason": "append",
+        "requestHash": "<hash>",
+        "requestId": "req-<id:5>",
+        "segment": "seg-<id:3>",
+        "step": 2,
+        "toolExecution": "server",
+        "toolSchemasHash": "78a41e85ef85bacfeeea9401b26820c9a05597640761b142c2cb52b2dc2fb143"
+      },
+      "runId": "subagent-<id:2>",
+      "type": "request/header"
+    },
+    {
+      "data": {
+        "code": "ABORTED",
+        "message": "The operation was aborted",
+        "providerCode": "ABORTED",
+        "recoverable": false,
+        "status": null,
+        "step": 2
+      },
+      "runId": "subagent-<id:2>",
+      "type": "error"
+    },
+    {
+      "data": {
+        "code": "TIMEOUT",
+        "message": "Agent loop wall-clock budget exceeded",
+        "providerCode": "WALL_CLOCK",
+        "recoverable": false,
+        "status": null,
+        "step": 2
+      },
+      "runId": "subagent-<id:2>",
+      "type": "error"
+    },
+    {
+      "data": {
+        "durationMs": "<ms>",
+        "error": {
+          "code": "TIMEOUT",
+          "message": "Agent loop wall-clock budget exceeded"
+        },
+        "finishReason": "error",
+        "status": "error",
+        "usage": {
+          "completionTokens": 0,
+          "promptTokens": 74,
+          "source": "estimate",
+          "totalTokens": 74
+        }
+      },
+      "runId": "subagent-<id:2>",
+      "type": "run/end"
+    }
+  ],
+  "modelRequests": [
+    {
+      "options": {
+        "max_tokens": 16384,
+        "model": "gpt-golden",
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        }
+      },
+      "roles": [
+        "system",
+        "user"
+      ],
+      "systemPromptHash": "b5eebd7ebb8d2db9f7df9ac822470837eb546a9a99e59f8a905d0e7a57594f3d",
+      "tools": [
+        {
+          "name": "lookup",
+          "schema": "c7a040393456"
+        },
+        {
+          "name": "dangerous",
+          "schema": "c7a040393456"
+        },
+        {
+          "name": "ask_user",
+          "schema": "62fd0a80cb71"
+        }
+      ]
+    },
+    {
+      "options": {
+        "max_tokens": 16384,
+        "model": "gpt-golden",
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        }
+      },
+      "roles": [
+        "system",
+        "user",
+        "assistant",
+        "tool"
+      ],
+      "systemPromptHash": "b5eebd7ebb8d2db9f7df9ac822470837eb546a9a99e59f8a905d0e7a57594f3d",
+      "tools": [
+        {
+          "name": "lookup",
+          "schema": "c7a040393456"
+        },
+        {
+          "name": "dangerous",
+          "schema": "c7a040393456"
+        },
+        {
+          "name": "ask_user",
+          "schema": "62fd0a80cb71"
+        }
+      ]
+    }
+  ],
+  "offeredToolIds": [
+    [
+      "lookup",
+      "dangerous",
+      "ask_user"
+    ],
+    [
+      "lookup",
+      "dangerous",
+      "ask_user"
+    ]
+  ],
+  "result": {
+    "answer": {
+      "error": true,
+      "message": "Agent loop wall-clock budget exceeded"
+    },
+    "endedAfterMs": 180000,
+    "stillRunningAfterMs": 100000
+  },
+  "surface": "app-as-tool",
+  "title": "An app call that takes longer than 180 s is stopped and reported as an error.",
+  "toolCalls": [
+    {
+      "args": {
+        "key": "claim"
+      },
+      "execution": "server",
+      "outcome": {
+        "result": "{\"key\":\"claim\",\"value\":\"record claim\"}"
+      },
+      "runId": "subagent-<id:2>",
+      "toolId": "lookup"
+    }
+  ],
+  "toolSchemas": {
+    "62fd0a80cb71": {
+      "properties": {
+        "allow_other": {
+          "default": false,
+          "description": "For select/multiselect: allow user to enter a custom 'Other' value not in the options list.",
+          "type": "boolean"
+        },
+        "allow_skip": {
+          "default": false,
+          "description": "Allow the user to skip this question without providing an answer.",
+          "type": "boolean"
+        },
+        "context": {
+          "description": "Brief explanation of why you need this information, shown to the user to help them understand the question's purpose.",
+          "maxLength": 500,
+          "type": "string"
+        },
+        "input_type": {
+          "default": "select",
+          "description": "PREFER 'select' or 'multiselect' over 'text' when there are common choices! Use 'select' for single choice from options (RECOMMENDED), 'multiselect' for multiple choices, 'text' ONLY for truly open-ended answers, 'confirm' for yes/no, 'number' for numeric input, 'date' for dates.",
+          "enum": [
+            "text",
+            "select",
+            "multiselect",
+            "confirm",
+            "number",
+            "date"
+          ],
+          "type": "string"
+        },
+        "options": {
+          "description": "REQUIRED for select/multiselect! Provide 2-10 common options. Example: [{\"label\": \"English\", \"value\": \"en\"}, {\"label\": \"French\", \"value\": \"fr\"}]. Set allow_other=true if user might need an unlisted option.",
+          "items": {
+            "properties": {
+              "label": {
+                "description": "Display text for the option (max 100 chars)",
+                "maxLength": 100,
+                "type": "string"
+              },
+              "value": {
+                "description": "Value returned when selected (defaults to label if not provided, max 100 chars)",
+                "maxLength": 100,
+                "type": "string"
+              }
+            },
+            "required": [
+              "label"
+            ],
+            "type": "object"
+          },
+          "maxItems": 20,
+          "type": "array"
+        },
+        "placeholder": {
+          "description": "Placeholder text shown in the input field before user types.",
+          "maxLength": 200,
+          "type": "string"
+        },
+        "question": {
+          "description": "A SHORT clarifying question (e.g., 'Which language?' or 'What format?'). Do NOT include the user's input text in the question. Maximum 500 characters.",
+          "maxLength": 500,
+          "type": "string"
+        },
+        "validation": {
+          "description": "Validation rules for the user's input.",
+          "properties": {
+            "max": {
+              "description": "Maximum value for number input or maximum length for text.",
+              "type": "number"
+            },
+            "message": {
+              "description": "Custom error message to show when validation fails.",
+              "maxLength": 200,
+              "type": "string"
+            },
+            "min": {
+              "description": "Minimum value for number input or minimum length for text.",
+              "type": "number"
+            },
+            "pattern": {
+              "description": "Regular expression pattern for text validation (max 200 chars). Use simple patterns to avoid ReDoS.",
+              "maxLength": 200,
+              "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "required": [
+        "question"
+      ],
+      "type": "object"
+    },
+    "c7a040393456": {
+      "properties": {
+        "key": {
+          "description": "The key of the record",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key"
+      ],
+      "type": "object"
+    }
+  },
+  "usageRecords": [
+    {
+      "app": "specialist",
+      "cid": "agent:chat-of-the-caller:<id:1>",
+      "ct": 0,
+      "grp": [
+        "users"
+      ],
+      "lat": "<ms>",
+      "model": "golden-model",
+      "prov": "openai",
+      "pt": 103,
+      "rid": "req-<id:4>",
+      "src": "estimate",
+      "st": "ok",
+      "surf": "chat",
+      "tc": 1,
+      "ts": "<ts>",
+      "ttft": "<ms>",
+      "type": "llm_call",
+      "uid": "agent:chat-of-the-caller:<id:1>",
+      "v": 2
+    },
+    {
+      "app": "specialist",
+      "cid": "agent:chat-of-the-caller:<id:1>",
+      "ct": 0,
+      "err": "ABORTED",
+      "grp": [
+        "users"
+      ],
+      "lat": "<ms>",
+      "model": "golden-model",
+      "prov": "openai",
+      "pt": 0,
+      "rid": "req-<id:5>",
+      "src": "estimate",
+      "st": "aborted",
+      "surf": "chat",
+      "tc": 0,
+      "ts": "<ts>",
+      "type": "llm_call",
+      "uid": "agent:chat-of-the-caller:<id:1>",
+      "v": 2
+    }
+  ]
+}

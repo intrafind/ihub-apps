@@ -1,0 +1,63 @@
+{
+  "approvals": [],
+  "case": "completions-tools-refused",
+  "envelopes": [],
+  "httpResponse": {
+    "exchanges": [
+      {
+        "request": {
+          "body": {
+            "messages": [
+              {
+                "content": "Hello",
+                "role": "user"
+              }
+            ],
+            "model": "app:desk",
+            "tools": [
+              {
+                "function": {
+                  "description": "The weather in a city",
+                  "name": "get_weather",
+                  "parameters": {
+                    "properties": {
+                      "city": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "city"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "type": "function"
+              }
+            ]
+          },
+          "method": "POST",
+          "path": "/api/inference/v1/chat/completions"
+        },
+        "response": {
+          "body": {
+            "code": "tools_not_allowed",
+            "error": "App desk runs its own tools; remove tools",
+            "param": "tools"
+          },
+          "headers": {
+            "content-type": "application/json; charset=utf-8"
+          },
+          "status": 400
+        }
+      }
+    ]
+  },
+  "ledger": [],
+  "modelRequests": [],
+  "offeredToolIds": [],
+  "surface": "inference-app",
+  "title": "An app runs its own tools: a request that brings tools is refused with the OpenAI error body.",
+  "toolCalls": [],
+  "toolSchemas": {},
+  "usageRecords": []
+}

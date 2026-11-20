@@ -1,0 +1,41 @@
+{
+  "approvals": [],
+  "case": "responses-error-unknown-app",
+  "envelopes": [],
+  "httpResponse": {
+    "exchanges": [
+      {
+        "request": {
+          "body": {
+            "input": "Hello",
+            "model": "app:no-such-app"
+          },
+          "method": "POST",
+          "path": "/api/inference/v1/responses"
+        },
+        "response": {
+          "body": {
+            "error": {
+              "code": "app_not_found",
+              "message": "App not found: no-such-app",
+              "param": "model",
+              "type": "not_found_error"
+            }
+          },
+          "headers": {
+            "content-type": "application/json; charset=utf-8"
+          },
+          "status": 404
+        }
+      }
+    ]
+  },
+  "ledger": [],
+  "modelRequests": [],
+  "offeredToolIds": [],
+  "surface": "inference-app",
+  "title": "An app that does not exist: the OpenAI error body and no model call.",
+  "toolCalls": [],
+  "toolSchemas": {},
+  "usageRecords": []
+}

@@ -1,0 +1,521 @@
+{
+  "approvals": [],
+  "case": "message-stream",
+  "envelopes": [],
+  "ledger": [
+    {
+      "data": {
+        "kind": "subagent",
+        "language": "en",
+        "model": "golden-model",
+        "parentRunId": "a2a-<id:1>",
+        "principal": {
+          "anonymous": false,
+          "id": "golden-user",
+          "mode": "default"
+        },
+        "refs": {
+          "appId": "desk",
+          "chatId": "agent:a2a-<id:1>:<id:2>",
+          "executionId": "a2a-<id:1>"
+        },
+        "trigger": {
+          "type": "user"
+        }
+      },
+      "runId": "subagent-<id:3>",
+      "type": "run/start"
+    },
+    {
+      "data": {
+        "purpose": "agent-step",
+        "segment": "seg-<id:4>"
+      },
+      "runId": "subagent-<id:3>",
+      "type": "segment/start"
+    },
+    {
+      "data": {
+        "callConfig": {
+          "maxTokens": 16384,
+          "nativeWebSearch": null,
+          "responseFormat": null,
+          "responseSchemaHash": null,
+          "stream": true,
+          "thinking": null
+        },
+        "configHash": "<volatile>",
+        "language": "en",
+        "messageCount": 2,
+        "messages": [
+          {
+            "content": "You are the desk.\n\nYou are an AI system. If asked, always say so. Never claim to be human, even in a role.",
+            "role": "system"
+          },
+          {
+            "content": "What about record A-1?",
+            "role": "user"
+          }
+        ],
+        "messagesHash": "<hash>",
+        "model": "golden-model",
+        "modelId": "gpt-golden",
+        "modelSnapshot": {
+          "autoDiscovery": false,
+          "default": true,
+          "id": "golden-model",
+          "modelId": "gpt-golden",
+          "provider": "openai",
+          "supportsTools": "auto",
+          "url": "https://model.invalid/v1/chat/completions"
+        },
+        "optionsSnapshot": {
+          "appConfig": {
+            "description": {
+              "en": "The desk app"
+            },
+            "enabled": true,
+            "id": "desk",
+            "integrations": {
+              "dangerous": {},
+              "lookup": {}
+            },
+            "name": {
+              "en": "desk"
+            },
+            "preferredModel": "golden-model",
+            "system": {
+              "en": "You are the desk."
+            }
+          },
+          "chatId": "agent:a2a-<id:1>:<id:2>",
+          "imageConfig": null,
+          "integrationScopes": {},
+          "language": "en",
+          "maxTokens": 16384,
+          "nativeWebSearch": null,
+          "stream": true,
+          "user": {
+            "id": "golden-user"
+          }
+        },
+        "provider": "openai",
+        "purpose": "agent-step",
+        "reason": "initial",
+        "requestHash": "<hash>",
+        "requestId": "req-<id:5>",
+        "segment": "seg-<id:4>",
+        "step": 1,
+        "toolExecution": "server",
+        "toolSchemas": [
+          {
+            "_integration": {
+              "action": "lookup",
+              "actionTitle": "lookup",
+              "definition": "test.fixture/lookup",
+              "fingerprint": "sha256:bc7875865e9da481dc2ab49f6f962f5f4431b52f241441cb0e3ebcc8859832ba",
+              "fixedToolId": true,
+              "instanceId": "lookup",
+              "instanceLabel": "lookup"
+            },
+            "approval": "never",
+            "approvalSource": "default",
+            "dataFlow": "external",
+            "description": "Look up a record",
+            "examples": [],
+            "id": "lookup",
+            "name": "lookup: lookup",
+            "parameters": {
+              "properties": {
+                "key": {
+                  "description": "The key of the record",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key"
+              ],
+              "type": "object"
+            },
+            "readOnly": true,
+            "sideEffect": "read",
+            "sideEffectSource": "definition",
+            "type": "integration"
+          },
+          {
+            "_integration": {
+              "action": "dangerous",
+              "actionTitle": "dangerous",
+              "definition": "test.fixture/dangerous",
+              "fingerprint": "sha256:dfd1e2fcf928e6e343368b935321e5bc105cc592a5c7d726bbc1b20c39ae8cd1",
+              "fixedToolId": true,
+              "instanceId": "dangerous",
+              "instanceLabel": "dangerous"
+            },
+            "approval": "always",
+            "approvalSource": "tool",
+            "dataFlow": "external",
+            "description": "Close a record for good",
+            "examples": [],
+            "id": "dangerous",
+            "name": "dangerous: dangerous",
+            "parameters": {
+              "properties": {
+                "key": {
+                  "description": "The key of the record",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key"
+              ],
+              "type": "object"
+            },
+            "readOnly": false,
+            "requiresApproval": true,
+            "sideEffect": "write",
+            "sideEffectSource": "definition",
+            "type": "integration"
+          }
+        ],
+        "toolSchemasHash": "eada8b50ef6dee94444d7561562823e424bda24577b843d5640d6329213e425e"
+      },
+      "runId": "subagent-<id:3>",
+      "type": "request/header"
+    },
+    {
+      "data": {
+        "content": "Record A-1 is open.",
+        "finishReason": "stop",
+        "hasImages": false,
+        "requestId": "req-<id:5>",
+        "step": 1,
+        "toolCalls": [],
+        "usage": {
+          "completionTokens": 6,
+          "promptTokens": 40,
+          "source": "provider",
+          "totalTokens": 46
+        }
+      },
+      "runId": "subagent-<id:3>",
+      "type": "message/assistant"
+    },
+    {
+      "data": {
+        "limits": {
+          "maxTokensPerRun": 0,
+          "maxToolRounds": 50
+        },
+        "runUsage": {
+          "completionTokens": 6,
+          "promptTokens": 40,
+          "totalTokens": 46
+        },
+        "step": 1,
+        "usage": {
+          "completionTokens": 6,
+          "promptTokens": 40,
+          "source": "provider",
+          "totalTokens": 46
+        }
+      },
+      "runId": "subagent-<id:3>",
+      "type": "budget/checkpoint"
+    },
+    {
+      "data": {
+        "durationMs": "<ms>",
+        "finishReason": "stop",
+        "provenance": {
+          "ai_generated": true,
+          "content_hash": {
+            "alg": "sha-256",
+            "normalization": "nfc-trim",
+            "value": "0ccdd28a4e10ce410ddc3014c22b5cd8530ead620a2363d1d6e488da8a3d1b9a"
+          },
+          "created_at": "<ts>",
+          "generator": {
+            "installation_id": "inst_<id:6>",
+            "product": "iHub Apps",
+            "version": "<version>"
+          },
+          "model": {
+            "id": "golden-model",
+            "watermark": {
+              "applied": false,
+              "by": "none"
+            }
+          },
+          "output_id": "<id:7>",
+          "spec": "intrafind-provenance/1.0"
+        },
+        "status": "completed",
+        "usage": {
+          "completionTokens": 6,
+          "promptTokens": 40,
+          "source": "provider",
+          "totalTokens": 46
+        }
+      },
+      "runId": "subagent-<id:3>",
+      "type": "run/end"
+    }
+  ],
+  "modelRequests": [
+    {
+      "options": {
+        "max_tokens": 16384,
+        "model": "gpt-golden",
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        }
+      },
+      "roles": [
+        "system",
+        "user"
+      ],
+      "systemPromptHash": "7e2ecb9b544818ea637c14103ae9456cde94522463b809261e14d8afaac66f97",
+      "tools": [
+        {
+          "name": "lookup",
+          "schema": "c7a040393456"
+        },
+        {
+          "name": "dangerous",
+          "schema": "c7a040393456"
+        }
+      ]
+    }
+  ],
+  "offeredToolIds": [
+    [
+      "lookup",
+      "dangerous"
+    ]
+  ],
+  "result": {
+    "events": [
+      {
+        "id": 2,
+        "jsonrpc": "2.0",
+        "result": {
+          "artifacts": [],
+          "contextId": "<id:8>",
+          "history": [
+            {
+              "contextId": "<id:8>",
+              "kind": "message",
+              "messageId": "a2a-msg-1",
+              "parts": [
+                {
+                  "kind": "text",
+                  "text": "What about record A-1?"
+                }
+              ],
+              "role": "user",
+              "taskId": "<id:1>"
+            }
+          ],
+          "id": "<id:1>",
+          "kind": "task",
+          "metadata": {
+            "skillId": "app__desk"
+          },
+          "status": {
+            "state": "submitted",
+            "timestamp": "<ts>"
+          }
+        }
+      },
+      {
+        "id": 2,
+        "jsonrpc": "2.0",
+        "result": {
+          "contextId": "<id:8>",
+          "final": false,
+          "kind": "status-update",
+          "status": {
+            "state": "working",
+            "timestamp": "<ts>"
+          },
+          "taskId": "<id:1>"
+        }
+      },
+      {
+        "id": 2,
+        "jsonrpc": "2.0",
+        "result": {
+          "append": false,
+          "artifact": {
+            "artifactId": "<id:9>",
+            "name": "response",
+            "parts": [
+              {
+                "kind": "text",
+                "text": "Record A-1 "
+              }
+            ]
+          },
+          "contextId": "<id:8>",
+          "kind": "artifact-update",
+          "lastChunk": false,
+          "taskId": "<id:1>"
+        }
+      },
+      {
+        "id": 2,
+        "jsonrpc": "2.0",
+        "result": {
+          "append": true,
+          "artifact": {
+            "artifactId": "<id:9>",
+            "name": "response",
+            "parts": [
+              {
+                "kind": "text",
+                "text": "is open."
+              }
+            ]
+          },
+          "contextId": "<id:8>",
+          "kind": "artifact-update",
+          "lastChunk": false,
+          "taskId": "<id:1>"
+        }
+      },
+      {
+        "id": 2,
+        "jsonrpc": "2.0",
+        "result": {
+          "append": true,
+          "artifact": {
+            "artifactId": "<id:9>",
+            "metadata": {
+              "provenance": {
+                "ai_generated": true,
+                "content_hash": {
+                  "alg": "sha-256",
+                  "normalization": "nfc-trim",
+                  "value": "0ccdd28a4e10ce410ddc3014c22b5cd8530ead620a2363d1d6e488da8a3d1b9a"
+                },
+                "created_at": "<ts>",
+                "generator": {
+                  "installation_id": "inst_<id:6>",
+                  "product": "iHub Apps",
+                  "version": "<version>"
+                },
+                "model": {
+                  "id": "golden-model",
+                  "watermark": {
+                    "applied": false,
+                    "by": "none"
+                  }
+                },
+                "output_id": "<id:7>",
+                "spec": "intrafind-provenance/1.0"
+              }
+            },
+            "name": "response",
+            "parts": []
+          },
+          "contextId": "<id:8>",
+          "kind": "artifact-update",
+          "lastChunk": true,
+          "taskId": "<id:1>"
+        }
+      },
+      {
+        "id": 2,
+        "jsonrpc": "2.0",
+        "result": {
+          "contextId": "<id:8>",
+          "final": true,
+          "kind": "status-update",
+          "status": {
+            "message": {
+              "contextId": "<id:8>",
+              "kind": "message",
+              "messageId": "<id:10>",
+              "parts": [
+                {
+                  "kind": "text",
+                  "text": "Record A-1 is open."
+                }
+              ],
+              "role": "agent",
+              "taskId": "<id:1>"
+            },
+            "state": "completed",
+            "timestamp": "<ts>"
+          },
+          "taskId": "<id:1>"
+        }
+      }
+    ],
+    "request": {
+      "id": 2,
+      "jsonrpc": "2.0",
+      "method": "message/stream",
+      "params": {
+        "message": {
+          "kind": "message",
+          "messageId": "a2a-msg-1",
+          "parts": [
+            {
+              "kind": "text",
+              "text": "What about record A-1?"
+            }
+          ],
+          "role": "user"
+        },
+        "metadata": {
+          "skillId": "app__desk"
+        }
+      }
+    },
+    "response": null
+  },
+  "surface": "a2a",
+  "title": "message/stream to an app skill: the task, its status updates and the answer as events.",
+  "toolCalls": [],
+  "toolSchemas": {
+    "c7a040393456": {
+      "properties": {
+        "key": {
+          "description": "The key of the record",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key"
+      ],
+      "type": "object"
+    }
+  },
+  "usageRecords": [
+    {
+      "app": "desk",
+      "cid": "agent:a2a-<id:1>:<id:2>",
+      "ct": 6,
+      "grp": [
+        "users"
+      ],
+      "lat": "<ms>",
+      "model": "golden-model",
+      "prov": "openai",
+      "pt": 40,
+      "rid": "req-<id:5>",
+      "src": "provider",
+      "st": "ok",
+      "surf": "chat",
+      "tc": 0,
+      "ts": "<ts>",
+      "ttft": "<ms>",
+      "type": "llm_call",
+      "uid": "agent:a2a-<id:1>:<id:2>",
+      "v": 2
+    }
+  ]
+}
