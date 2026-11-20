@@ -25,15 +25,22 @@ const token = process.env.IHUB_TOKEN || '';
 /** The model start-target.mjs installs and points the seeded apps at. */
 const MODEL_ID = 'redteam-model';
 
-/** The apps the tests call: every `app: <id>` var of the config. */
+/**
+ * The apps the tests call: every `app: <id>` var of the config, bare or quoted, with an
+ * optional trailing comment.
+ */
 export function appsOfConfig(configText) {
-  const ids = [...configText.matchAll(/^\s+app:\s*([a-z0-9._-]+)\s*$/gim)].map(m => m[1]);
+  const ids = [...configText.matchAll(/^\s+app:\s*(['"]?)([\w.-]+)\1\s*(?:#.*)?$/gm)].map(
+    m => m[2]
+  );
   return [...new Set(ids)];
 }
 
 async function getJson(url) {
   const response = await fetch(url, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {}
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    // A server that accepts the connection and never answers must not hold the job.
+    signal: AbortSignal.timeout(30000)
   });
   const body = await response.json().catch(() => ({}));
   return { status: response.status, body };
