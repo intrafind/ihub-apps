@@ -26,6 +26,7 @@ import {
   flushStream
 } from './services/loop/RunStream.js';
 import { SSE_V2_EVENTS } from '../shared/runEvents.js';
+import { clientEnvelope } from './services/loop/clientProjection.js';
 import { createSseChannel } from './utils/sseChannel.js';
 import logger from './utils/logger.js';
 import {
@@ -364,9 +365,11 @@ export function writeStreamStart(streamId, entry, { frames = [], runId = null, u
 /**
  * Deliver locally or relay to the worker holding the stream. Installed as the
  * RunStream delivery function, so every producer in the process goes through
- * here without knowing about the cluster.
+ * here without knowing about the cluster. Every frame here is bound for a
+ * browser, so it is cut to what the chat renders (`clientProjection`).
  */
-export function routeEnvelope(streamId, envelope) {
+export function routeEnvelope(streamId, frame) {
+  const envelope = clientEnvelope(frame);
   // The chat's current POST stream gets the frames of its own turn
   // (`deliverToPostStream`); a GET stream on the same chat gets every frame: a
   // second tab, or a client that re-attached on the GET while its old POST

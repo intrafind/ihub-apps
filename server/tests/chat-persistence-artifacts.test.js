@@ -27,7 +27,8 @@ import { ChatRepository } from '../services/chat/ChatRepository.js';
 import { ArtifactRepository } from '../services/artifacts/ArtifactRepository.js';
 import {
   materializeAssistantTurn,
-  storeGeneratedArtifacts
+  storeGeneratedArtifacts,
+  storeGeneratedFilesNow
 } from '../services/chat/chatMaterializer.js';
 
 const OWNER = 'user-1';
@@ -357,6 +358,147 @@ describe('the materializer records what the turn drew', () => {
       const answer = messages.at(-1);
       assert.equal(answer.content, 'here you go', 'losing a picture never costs the answer');
       assert.equal(answer.artifacts[0].unavailable, 'not-stored');
+    });
+  });
+});
+
+describe('a generated file is stored when its tool finishes, and sent as its card', () => {
+  const pdf = (name = 'cv.pdf', size = 256) => ({
+    id: 'a'.repeat(32),
+    name,
+    mimeType: 'application/pdf',
+    bytes: size,
+    pages: 6,
+    data: payload(size)
+  });
+
+  async function startTurn(repository) {
+    await repository.ensureChat({ chatId: CHAT_ID, ownerId: OWNER, appId: 'chat' });
+    await repository.appendMessage(CHAT_ID, { role: 'user', content: 'a CV', runId: 'run-1' });
+  }
+
+  async function storedIds(artifacts) {
+    return (await artifacts.list({ type: 'chat', id: CHAT_ID })).map(item => item.id).sort();
+  }
+
+  it('stores the file and hands back its card, without the bytes', async () => {
+    await withRepository(async ({ artifacts }) => {
+      const { files, stored } = await storeGeneratedFilesNow({
+        chatId: CHAT_ID,
+        runId: 'run-1',
+        files: [pdf()],
+        store: artifacts,
+        policy: policy()
+      });
+      assert.equal(stored, 1);
+      const [card] = files;
+      assert.equal(card.data, undefined, 'the bytes stay on the server');
+      assert.equal(card.stored, true);
+      assert.equal(card.name, 'cv.pdf');
+      assert.equal(card.pages, 6);
+      assert.equal(card.bytes, 256);
+      assert.equal(card.id, card.artifact.id, 'the card opens the artifact');
+      const artifact = await artifacts.get({ type: 'chat', id: CHAT_ID }, card.id);
+      assert.ok(artifact.data.equals(rawPayload(256)));
+    });
+  });
+
+  it('keeps the bytes on the card when the file cannot be stored', async () => {
+    await withRepository(async ({ artifacts }) => {
+      const off = await storeGeneratedFilesNow({
+        chatId: CHAT_ID,
+        runId: 'run-1',
+        files: [pdf()],
+        store: artifacts,
+        policy: policy({ enabled: false })
+      });
+      assert.equal(off.stored, 0);
+      assert.equal(off.files[0].data, payload(256), 'the live card is the only copy');
+      const past = await storeGeneratedFilesNow({
+        chatId: CHAT_ID,
+        runId: 'run-1',
+        files: [pdf()],
+        store: artifacts,
+        policy: policy({ maxPerBatch: 2 }),
+        alreadyStored: 2
+      });
+      assert.equal(past.stored, 0, 'the files stored earlier in the turn count');
+      const none = await storeGeneratedFilesNow({ chatId: CHAT_ID, files: [pdf()], store: null });
+      assert.equal(none.files[0].data, payload(256));
+    });
+  });
+
+  it('the answer names the stored file, which is not stored a second time', async () => {
+    await withRepository(async ({ repository, artifacts }) => {
+      await startTurn(repository);
+      const { files } = await storeGeneratedFilesNow({
+        chatId: CHAT_ID,
+        runId: 'run-1',
+        files: [pdf()],
+        store: artifacts,
+        policy: policy()
+      });
+      await materializeAssistantTurn({
+        repository,
+        chatId: CHAT_ID,
+        runId: 'run-1',
+        summary: {
+          status: 'completed',
+          content: 'Here is the CV.',
+          finishReason: 'stop',
+          images: [{ mimeType: 'image/png', data: payload(32) }],
+          generatedFiles: files
+        },
+        clientConnected: true
+      });
+      const answer = (await repository.getMessages(CHAT_ID)).messages.at(-1);
+      assert.deepEqual(
+        answer.artifacts.map(item => item.kind),
+        ['image', 'document']
+      );
+      assert.equal(answer.artifacts[1].id, files[0].id);
+      assert.equal(answer.artifacts[1].pages, 6, 'the stored card still says how long it is');
+      assert.equal((await storedIds(artifacts)).length, 2, 'one image, one file');
+    });
+  });
+
+  it('a file a later version replaced is deleted once the answer is stored', async () => {
+    await withRepository(async ({ repository, artifacts }) => {
+      await startTurn(repository);
+      const store = (file, alreadyStored) =>
+        storeGeneratedFilesNow({
+          chatId: CHAT_ID,
+          runId: 'run-1',
+          files: [file],
+          store: artifacts,
+          policy: policy(),
+          alreadyStored
+        });
+      const first = await store(pdf('cv.pdf', 100), 0);
+      const second = await store(pdf('cv.pdf', 200), 1);
+      await materializeAssistantTurn({
+        repository,
+        chatId: CHAT_ID,
+        runId: 'run-1',
+        summary: {
+          status: 'completed',
+          content: 'Fixed it.',
+          finishReason: 'stop',
+          generatedFiles: [...first.files, ...second.files]
+        },
+        clientConnected: true
+      });
+      const answer = (await repository.getMessages(CHAT_ID)).messages.at(-1);
+      assert.deepEqual(
+        answer.artifacts.map(item => item.id),
+        [second.files[0].id]
+      );
+      let ids = await storedIds(artifacts);
+      for (let i = 0; i < 50 && ids.length > 1; i++) {
+        await new Promise(resolve => setTimeout(resolve, 20));
+        ids = await storedIds(artifacts);
+      }
+      assert.deepEqual(ids, [second.files[0].id]);
     });
   });
 });

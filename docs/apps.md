@@ -1323,7 +1323,7 @@ The `thinking` property enables extended thinking for models that support it (e.
 | Property            | Type    | Default  | Description                                                                                         |
 | ------------------- | ------- | -------- | --------------------------------------------------------------------------------------------------- |
 | `thinking.enabled`  | Boolean | `false`  | Enable extended thinking mode                                                                       |
-| `thinking.level`    | String  | `medium` | Reasoning effort: `minimal`, `low`, `medium` or `high`. More effort is slower and costs more tokens |
+| `thinking.level`    | String  | `medium` | Reasoning effort: `minimal`, `low`, `medium`, `high` or `xhigh`. More effort is slower and costs more tokens |
 | `thinking.thoughts` | Boolean | `false`  | When `true`, the model's internal thinking steps are included and displayed in the response         |
 
 An app's `thinking` block overrides the model's for that app. `thinking.budget`

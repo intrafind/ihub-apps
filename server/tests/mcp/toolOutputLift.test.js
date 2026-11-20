@@ -7,6 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { FilesystemStorageProvider } from '../../storage/index.js';
 import { ChatFileRepository } from '../../services/chatFiles/ChatFileRepository.js';
+import { ArtifactRepository } from '../../services/artifacts/ArtifactRepository.js';
 import { chatToolSeam } from '../../services/chat/chatSeams.js';
 import {
   MAX_LIFTED_BLOCKS,
@@ -125,6 +126,36 @@ describe('MCP binary content in a chat tool result', () => {
     expect(Buffer.from(completed.files[0].data, 'base64').equals(CSV)).toBe(true);
     expect(JSON.stringify(completed.resultPreview)).not.toContain(CSV.toString('base64'));
     expect(files).toHaveLength(1);
+  });
+
+  it('in a stored chat, keeps the file as an artifact and sends only its card', async () => {
+    const artifacts = new ArtifactRepository({
+      documents: provider.documents,
+      blobs: provider.blobs
+    });
+    const raw = [
+      {
+        type: 'resource',
+        resource: {
+          uri: 'file:///exports/stock.csv',
+          mimeType: 'text/csv',
+          blob: CSV.toString('base64')
+        }
+      }
+    ];
+    const { frames, files } = await run(raw, { extra: { artifactStore: artifacts } });
+
+    const completed = frames.find(f => f.type === 'tool/completed').data;
+    expect(completed.files).toHaveLength(1);
+    const [card] = completed.files;
+    expect(card).toMatchObject({ name: 'stock.csv', mimeType: 'text/csv', stored: true });
+    expect(card.data).toBeUndefined();
+    expect(JSON.stringify(completed)).not.toContain(CSV.toString('base64'));
+    // The card opens the artifact the chat now holds.
+    const artifact = await artifacts.get({ type: 'chat', id: 'chat-1' }, card.id);
+    expect(artifact.data.equals(CSV)).toBe(true);
+    // The stored answer takes the artifact as it is.
+    expect(files[0].artifact.id).toBe(card.id);
   });
 
   it('turns an image block into a picture delta and a stored-answer image', async () => {

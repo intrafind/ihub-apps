@@ -25,6 +25,7 @@ import { isSchedulingToolDef, proposalOf } from '../scheduler/tasks/proposals.js
 import { liftMcpResultEarly, settleToolOutputs } from './toolOutputFiles.js';
 import { generatedFilesOf } from '../../../shared/generatedFiles.js';
 import { heldGeneratedFileData } from '../documents/generatedFiles.js';
+import { storeGeneratedFilesNow } from './turnArtifacts.js';
 import crypto from 'node:crypto';
 import { APPROVAL_ERROR_CODES } from '../../../shared/toolApproval.js';
 import { redactApprovalArgs, resolveToolApproval } from '../../utils/toolApproval.js';
@@ -358,8 +359,12 @@ export function chatToolSeam({
   generatedFiles = null,
   generatedImages = null,
   fileStore = null,
+  artifactStore = null,
   streamProgress = true
 }) {
+  // Generated files stored as artifacts so far this turn: they count against
+  // the same per-answer cap as the pictures stored with the answer.
+  let filesStored = 0;
   const recordView = view => {
     if (Array.isArray(mcpAppViews)) mcpAppViews.push(view);
     return view;
@@ -576,7 +581,22 @@ export function chatToolSeam({
         ownerId: ctx?.refs?.userId || null,
         store: fileStore
       });
-      const files = lifted.files;
+      // A stored chat keeps each file as an artifact right away, so the client
+      // is sent its card and fetches the bytes when the user opens it. Without
+      // a store (or when the policy refuses the file) the card carries them.
+      // Calls run in parallel: the slots are taken before the write and the
+      // unused ones handed back, so together they never pass the cap.
+      const before = filesStored;
+      filesStored += lifted.files.length;
+      const kept = await storeGeneratedFilesNow({
+        chatId,
+        runId: ctx?.runId || chatId,
+        files: lifted.files,
+        store: artifactStore,
+        alreadyStored: before
+      });
+      filesStored -= lifted.files.length - kept.stored;
+      const files = kept.files;
       if (files.length && Array.isArray(generatedFiles)) generatedFiles.push(...files);
       for (const image of lifted.images) {
         if (Array.isArray(generatedImages)) generatedImages.push(image);

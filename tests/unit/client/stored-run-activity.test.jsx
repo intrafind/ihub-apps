@@ -192,6 +192,40 @@ describe('a stored answer shows what its run did', () => {
     expect(message.workflowSteps).toBeUndefined();
     expect(message.answerBasis).toBeUndefined();
   });
+
+  test('a call’s source the server sent by reference is filled from the answer’s sources', () => {
+    const page = {
+      id: 'url:example.com',
+      provider: 'web',
+      kind: 'page',
+      url: 'https://example.com/',
+      title: 'Example',
+      read: { ok: true },
+      private: false
+    };
+    const message = transformStoredMessage({
+      id: 'a1',
+      role: 'assistant',
+      content: 'Answer',
+      sources: { items: [{ ...page, favicon: 'https://favicon/e', snippet: 'Ex…' }] },
+      activity: {
+        toolActivity: {
+          reading: null,
+          items: [
+            {
+              id: 'c1',
+              kind: 'search',
+              name: 'braveSearch',
+              status: 'completed',
+              details: [],
+              sources: [{ id: 'url:example.com' }, { id: 'url:unknown' }]
+            }
+          ]
+        }
+      }
+    });
+    expect(message.toolActivity.items[0].sources).toEqual([page, { id: 'url:unknown' }]);
+  });
 });
 
 describe('a finished workflow in the chat', () => {

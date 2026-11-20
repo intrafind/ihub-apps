@@ -1,6 +1,6 @@
 {
   "name": "ihub-apps-server",
-  "version": "5.7.2",
+  "version": "5.7.3",
   "license": "SEE LICENSE IN LICENSE",
   "description": "iHub Apps Applications Server",
   "type": "module",

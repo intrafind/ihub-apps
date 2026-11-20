@@ -5,6 +5,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { debugLog } from '../../../utils/debugLog';
 import { generatedFilesFromArtifacts } from '../../../../../shared/generatedFiles.js';
 import { storedSourceSet } from '../../../../../shared/sources/index.js';
+import { resolveRowSources } from '../../../../../shared/run/activitySourceRefs.js';
 import { toAttachmentViews } from '../messageAttachments/attachmentViews';
 
 /**
@@ -108,9 +109,11 @@ export function transformStoredMessage(msg) {
   // from its stream (`shared/run/runActivity.js` builds both), so the reopened
   // answer shows how it came about the way it did while it streamed.
   if (msg.activity && typeof msg.activity === 'object') {
+    // The server sends a call's source that the answer's sources hold as `{ id }`.
+    const activity = resolveRowSources(msg.activity, msg.sources);
     for (const field of STORED_ACTIVITY_FIELDS) {
-      if (msg.activity[field] !== undefined && msg.activity[field] !== null) {
-        message[field] = msg.activity[field];
+      if (activity[field] !== undefined && activity[field] !== null) {
+        message[field] = activity[field];
       }
     }
   }

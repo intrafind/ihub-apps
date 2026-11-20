@@ -35,6 +35,7 @@
 import { hasRemote, request, respond } from '../../clusterBus.js';
 import runLog from '../loop/RunLog.js';
 import { currentRseq, flushStream, projectLedgerEvent } from '../loop/RunStream.js';
+import { clientEnvelope } from '../loop/clientProjection.js';
 import { snapshotRun, trackedStream } from '../loop/partialRunState.js';
 import { SSE_V2_EVENTS } from '../../../shared/runEvents.js';
 import logger from '../../utils/logger.js';
@@ -71,7 +72,7 @@ export async function buildChatResume({ chatId, runId, afterLedgerSeq = 0 }) {
       afterSeq: Number(afterLedgerSeq) || 0,
       limit: LEDGER_LIMIT
     });
-    ledger = events.flatMap(projectLedgerEvent);
+    ledger = events.flatMap(projectLedgerEvent).map(clientEnvelope);
   } catch (error) {
     logger.warn('Chat resume could not read the ledger', {
       component: 'chatResume',

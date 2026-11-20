@@ -77,6 +77,7 @@ import { localUsersFile } from '../utils/contentsPath.js';
 import { isAdmin } from '../utils/authorization.js';
 import { sendCreated, segment } from '../utils/created.js';
 import { etagOfSha256, isFreshFor, sendStream } from '../utils/streamResponse.js';
+import { clientMessages } from '../services/loop/clientProjection.js';
 
 const COMPONENT = 'ChatShareRoutes';
 
@@ -565,7 +566,7 @@ export default function registerChatShareRoutes(app) {
     setViewerHeaders(res, share);
     res.json({
       share: viewerView(share),
-      messages: viewerMessages(snapshot.messages, share),
+      messages: clientMessages(viewerMessages(snapshot.messages, share)),
       version: snapshot.version
     });
   });

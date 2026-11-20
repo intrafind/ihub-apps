@@ -376,7 +376,18 @@ const thinkingSchema = z
   .object({
     enabled: z.boolean().optional().prefault(false),
     level: z
-      .enum(['minimal', 'low', 'medium', 'high', 'MINIMAL', 'LOW', 'MEDIUM', 'HIGH'])
+      .enum([
+        'minimal',
+        'low',
+        'medium',
+        'high',
+        'xhigh',
+        'MINIMAL',
+        'LOW',
+        'MEDIUM',
+        'HIGH',
+        'XHIGH'
+      ])
       .optional(),
     thoughts: z.boolean().optional().prefault(false)
   })

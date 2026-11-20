@@ -759,6 +759,9 @@ class ChatService {
     // the history UI reads back. Both happen before the first client frame so
     // the chat document exists by the time anything can ask for it.
     const persist = persistence?.repository ? persistence : null;
+    // Whether the chat is in the store: only then does a generated file go
+    // there as soon as its tool finishes (the card links to it).
+    let chatStored = false;
     if (persist) {
       // What the turn does — its searches, tool calls, workflow steps — is
       // stored with the answer; folding starts before the first frame.
@@ -768,7 +771,7 @@ class ChatService {
       if (!persist.silent) {
         this._appendUserMessageEvent({ runId, messageId, content: persist.content, attachments });
       }
-      const { refusal } = await settleUserTurn({
+      const settled = await settleUserTurn({
         silent: persist.silent === true,
         repository: persist.repository,
         chatId,
@@ -792,6 +795,8 @@ class ChatService {
         origin: persist.origin,
         temporary: persist.temporary === true
       });
+      const { refusal } = settled;
+      chatStored = settled.chatStored === true;
       // The chat's container changed under this turn (a first turn that
       // raced it opened the chat in another project): nothing of it was
       // stored, and it ends here, before the model is called.
@@ -942,7 +947,11 @@ class ChatService {
         connectCalls,
         scheduledTaskProposals,
         generatedFiles,
-        generatedImages
+        generatedImages,
+        // A stored chat keeps a generated file as an artifact when the tool
+        // finishes: the client is sent the card, never the bytes.
+        // A chat that could not be stored keeps the bytes on the card instead.
+        artifactStore: chatStored ? (persist.repository.artifactStore?.() ?? null) : null
       }),
       ...(Array.isArray(extraSeams) ? extraSeams.filter(Boolean) : []),
       questionSeam(

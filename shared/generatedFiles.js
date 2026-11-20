@@ -9,8 +9,11 @@
  *
  * A file takes the path a generated picture takes:
  *
- * - **Live** — `{ id, name, mimeType, bytes, pages?, slides?, data }` on the
- *   `tool/completed` event, the bytes base64 in `data`.
+ * - **Live** — `{ id, name, mimeType, bytes, pages?, slides?, stored: true }`
+ *   on the `tool/completed` event: in a stored chat the file is an artifact of
+ *   the chat as soon as its tool finishes, and the card fetches it by `id`
+ *   when it is opened. Only a file that could not be stored carries its bytes,
+ *   base64, in `data`.
  * - **Stored** — with the answer, as an artifact of the chat
  *   (`message.artifacts`, kind {@link generatedFileKind}); {@link generatedFilesFromArtifacts} turns those
  *   into cards that fetch the bytes from the chat's (or the share's) artifact

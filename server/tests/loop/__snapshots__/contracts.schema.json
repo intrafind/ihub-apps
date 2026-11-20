@@ -3395,7 +3395,18 @@
           },
           "thinkingLevel": {
             "type": "string",
-            "enum": ["minimal", "low", "medium", "high", "MINIMAL", "LOW", "MEDIUM", "HIGH"]
+            "enum": [
+              "minimal",
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "MINIMAL",
+              "LOW",
+              "MEDIUM",
+              "HIGH",
+              "XHIGH"
+            ]
           },
           "thinkingThoughts": {
             "type": "boolean"
@@ -4330,7 +4341,18 @@
           },
           "thinkingLevel": {
             "type": "string",
-            "enum": ["minimal", "low", "medium", "high", "MINIMAL", "LOW", "MEDIUM", "HIGH"]
+            "enum": [
+              "minimal",
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "MINIMAL",
+              "LOW",
+              "MEDIUM",
+              "HIGH",
+              "XHIGH"
+            ]
           },
           "thinkingThoughts": {
             "type": "boolean"
@@ -5510,11 +5532,20 @@
                       "exclusiveMinimum": 0,
                       "maximum": 9007199254740991
                     },
+                    "sheets": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "stored": {
+                      "type": "boolean",
+                      "const": true
+                    },
                     "data": {
                       "type": "string"
                     }
                   },
-                  "required": ["id", "name", "mimeType", "bytes", "data"],
+                  "required": ["id", "name", "mimeType", "bytes"],
                   "additionalProperties": false
                 }
               }

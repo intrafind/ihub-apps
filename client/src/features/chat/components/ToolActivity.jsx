@@ -920,8 +920,8 @@ function ItemDetails({ item, show, words = 0 }) {
         <div key={detail.name} className="inline-flex flex-wrap items-baseline gap-1 min-w-0">
           <dt className="text-gray-500 dark:text-gray-400">{detail.name}</dt>
           {detail.values.map(value => (
-            <dd key={value.full ?? value.text} className={chip}>
-              {value.full ?? value.text}
+            <dd key={value.text} className={chip}>
+              {value.text}
             </dd>
           ))}
           {detail.more > 0 && (
