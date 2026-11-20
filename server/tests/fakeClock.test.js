@@ -116,6 +116,49 @@ test('advanceAsync lets awaiting code set its next timer between two timers', as
   assert.deepEqual(steps, [180_000, 240_000, 300_000]);
 });
 
+test('advanceAsync does not wait for an async callback that waits on a later timer', async () => {
+  const clock = createFakeClock();
+  const onClock = ms => new Promise(resolve => clock.setTimer(resolve, ms));
+  const steps = [];
+  // A tick that renews a lease: it fires on a timer and then waits on the clock twice more.
+  clock.setTimer(async () => {
+    steps.push(`tick@${clock.now() - FAKE_CLOCK_START}`);
+    await onClock(100);
+    steps.push(`first wait over@${clock.now() - FAKE_CLOCK_START}`);
+    await onClock(250);
+    steps.push(`second wait over@${clock.now() - FAKE_CLOCK_START}`);
+    await onClock(5000);
+    steps.push('outside this advance');
+  }, 100);
+  // The callback's own timers are among the ones this call fires: tick, 100 and 250.
+  assert.equal(await clock.advanceAsync(1000), 3);
+  assert.deepEqual(steps, ['tick@100', 'first wait over@200', 'second wait over@450']);
+  assert.equal(clock.now(), FAKE_CLOCK_START + 1000);
+  assert.equal(clock.pending(), 1, 'the wait that is due after the advance is still pending');
+  assert.equal(await clock.advanceAsync(5000), 1);
+  assert.deepEqual(steps.at(-1), 'outside this advance');
+});
+
+test('advanceAsync rejects with the error of an async callback, after every due timer fired', async () => {
+  const clock = createFakeClock();
+  const onClock = ms => new Promise(resolve => clock.setTimer(resolve, ms));
+  const fired = [];
+  clock.setTimer(async () => {
+    fired.push('failing');
+    await onClock(10);
+    throw new Error('the tick failed');
+  }, 100);
+  clock.setTimer(() => fired.push('later'), 500);
+  await assert.rejects(clock.advanceAsync(1000), /the tick failed/);
+  assert.deepEqual(fired, ['failing', 'later']);
+  assert.equal(clock.now(), FAKE_CLOCK_START + 1000);
+  // A callback that throws synchronously fails the call at once, as in `advance`.
+  clock.setTimer(() => {
+    throw new Error('thrown at once');
+  }, 1);
+  await assert.rejects(clock.advanceAsync(1), /thrown at once/);
+});
+
 test('the methods are bound, so they can be handed over one by one', () => {
   const { now, setTimer, clearTimer, advance } = createFakeClock();
   let fired = false;

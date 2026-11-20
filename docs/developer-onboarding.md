@@ -798,7 +798,7 @@ Tests run in tiers, so a pull request gets a fast answer and slow tests still ru
 | Integration | `integration-tests.yml` | the integration suite and a boot check of the real server | every pull request |
 | End-to-end gate | `e2e.yml`, jobs **Agents and chat (gate)** and **Golden difference list** | the `@gate` browser tests and the checks of the golden difference list | every pull request |
 | Full end-to-end | `e2e.yml`, job **Agents (full suite and transport matrix)** | every browser test of the agents suite | started by hand |
-| Nightly | none yet | the server tests of the `nightly` tier: `server/tests/faults/` and `*.nightly.test.js` | by hand with `npm run test:faults` |
+| Nightly | none yet | the server tests of the `nightly` tier: `server/tests/faults/` and `*.nightly.test.js` | by hand with `npm run test:nightly` (`npm run test:faults` runs only the files under `server/tests/faults/`) |
 
 A server test is in the `pr` tier unless its path puts it into the `nightly` tier. `node scripts/run-server-tests.js --list` shows how many files each tier has. The nightly tier holds no test yet and no workflow runs it; put a test there only when it starts real server processes or runs for minutes.
 

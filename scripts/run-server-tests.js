@@ -19,14 +19,17 @@
  * Tiers. A file belongs to exactly one tier:
  *   - `nightly`: everything under `server/tests/faults/` and every
  *     `*.nightly.test.js`. These start real server processes or run for
- *     minutes, so they run in the nightly workflow and never on a pull request.
+ *     minutes, so they never run on a pull request: they run only with
+ *     `--tier=nightly` (`npm run test:nightly`). No workflow runs this tier
+ *     yet (docs/run-testing.md).
  *   - `pr`: every other file. This is the default and what `npm run test:quick`
  *     runs.
  *
  * Usage:
  *   node scripts/run-server-tests.js                     # the pr tier
- *   node scripts/run-server-tests.js <substr>            # only files whose path contains <substr>
- *   node scripts/run-server-tests.js --tier=nightly      # the nightly tier (`npm run test:faults`)
+ *   node scripts/run-server-tests.js <substr> [...]      # only files whose path contains every <substr>
+ *   node scripts/run-server-tests.js --tier=nightly      # the whole nightly tier (`npm run test:nightly`)
+ *   node scripts/run-server-tests.js --tier=nightly faults   # only its fault tests (`npm run test:faults`)
  *   node scripts/run-server-tests.js --tier=all          # both tiers
  *   node scripts/run-server-tests.js --list              # print the classification and exit
  *   node scripts/run-server-tests.js --check-quarantine  # fail when a quarantined file passes
@@ -56,7 +59,10 @@ export const JEST_WORKER_IDLE_MEMORY_LIMIT = '1GB';
 // Tests that fail today. They are listed here (not silently skipped) so the
 // failures stay visible and a fixed test is removed from the list. Do not add
 // to this list to get a red build green; fix the test or the code instead.
-// `--check-quarantine` fails when a file listed here passes.
+// `--check-quarantine` fails when a file listed here passes. "Passes" means
+// what it means for every run of this script: the file's process exits with
+// code 0. A plain script that logs a failed check and exits 0 passes, so such
+// a file is made to exit non-zero before it is listed here.
 export const QUARANTINED = {
   'adminGroupPermissions.test.js': 'permission list drifted from authorization layer',
   'adminRescue.test.js': 'expects groups.json that the test environment does not provide',
@@ -71,17 +77,24 @@ export const QUARANTINED = {
   'native-web-search.test.js': 'citation text assertion fails',
   'openaiResponsesAdapter.test.js': 'max_output_tokens assertion fails (16384 vs 1024)',
   'openai-reasoning.test.js': 'budget fallback assertion fails',
-  // Legacy workflow path, which the agents epic (#3771) does not move. No
-  // issue is filed for it yet.
+  // Legacy workflow path, which the agents epic (#3771) does not move.
+  // TODO(#3786): no issue is filed for it yet; file one and name it here.
   'planner-maxtokens.test.js': 'exits non-zero',
   'nda-risk-analyzer.test.js': 'NDA app config not found in the test environment',
   'pageReader-ssrf.test.js': 'redirect SSRF assertions fail: redirects are not rejected',
   // Points at a possible defect in `verifyRawSignature` of the legacy webhook
   // trigger (it accepts a signature over a re-serialised body): a bug of its
-  // own, outside the agents epic (#3771). No issue is filed for it yet.
+  // own, outside the agents epic (#3771).
+  // TODO(#3786): no issue is filed for it yet; file one and name it here.
   'WebhookTrigger.test.js': 'raw signature assertion fails',
   'teamsAuth.test.js': 'imports `getClearAuthCookieOptions`, no longer exported by cookieSettings',
-  'telemetry-providerMap.test.js': 'provider mapping assertions fail'
+  'telemetry-providerMap.test.js': 'provider mapping assertions fail',
+  // A plain script. Until the agents epic (#3771) it logged its failed checks
+  // and exited 0; it now exits 1 when a check fails.
+  // TODO(#3786): no issue is filed for it yet; file one and name it here.
+  'toolCallingIntegration.test.js':
+    '10 checks fail: no tools in the request of four adapters (and their parameters), ' +
+    'the anthropic multi-round request, no fallback for an unknown provider'
 };
 
 /**
@@ -102,10 +115,10 @@ export function tierOf(file) {
  * Parse the command line.
  *
  * @param {string[]} argv
- * @returns {{list: boolean, checkQuarantine: boolean, tier: string, filter: string|undefined}}
+ * @returns {{list: boolean, checkQuarantine: boolean, tier: string, filters: string[]}}
  */
 export function parseArgs(argv) {
-  const options = { list: false, checkQuarantine: false, tier: 'pr', filter: undefined };
+  const options = { list: false, checkQuarantine: false, tier: 'pr', filters: [] };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === '--list') options.list = true;
@@ -113,8 +126,8 @@ export function parseArgs(argv) {
     else if (arg === '--tier') options.tier = argv[++i];
     else if (arg.startsWith('--tier=')) options.tier = arg.slice('--tier='.length);
     else if (arg.startsWith('--')) throw new Error(`Unknown option: ${arg}`);
-    else if (options.filter === undefined) options.filter = arg;
-    else throw new Error(`Only one path filter is supported, got "${options.filter}" and "${arg}"`);
+    // More than one filter narrows further: `npm run test:faults -- resume` is "faults" and "resume".
+    else options.filters.push(arg);
   }
   if (!TIERS.includes(options.tier)) {
     throw new Error(`Unknown tier "${options.tier}". Known tiers: ${TIERS.join(', ')}`);
@@ -128,14 +141,17 @@ export function parseArgs(argv) {
  * @param {string[]} allFiles - Paths relative to the repository root.
  * @param {Object} [options]
  * @param {string} [options.tier='pr']
- * @param {string} [options.filter] - Substring of the path.
+ * @param {string[]} [options.filters=[]] - Substrings of the path; a file must contain every one.
  * @param {Object} [options.quarantined=QUARANTINED]
  * @returns {{selected: string[], quarantined: string[], otherTier: string[]}}
  */
-export function selectFiles(allFiles, { tier = 'pr', filter, quarantined = QUARANTINED } = {}) {
+export function selectFiles(
+  allFiles,
+  { tier = 'pr', filters = [], quarantined = QUARANTINED } = {}
+) {
   const sorted = [...allFiles].sort((a, b) => a.localeCompare(b));
   const inTier = f => tier === 'all' || tierOf(f) === tier;
-  const matches = f => !filter || f.includes(filter);
+  const matches = f => filters.every(filter => f.includes(filter));
   const isQuarantined = f => Boolean(quarantined[path.basename(f)]);
   return {
     selected: sorted.filter(f => inTier(f) && matches(f) && !isQuarantined(f)),
@@ -152,16 +168,17 @@ export function selectFiles(allFiles, { tier = 'pr', filter, quarantined = QUARA
  * @param {string[]} params.files - The quarantined files found on disk.
  * @param {Object} params.quarantined - The list (`basename → reason`).
  * @param {(file: string) => boolean} params.passes - Runs one file; true when it passes.
- * @param {string} [params.filter] - Substring of the path; entries outside it are not checked.
+ * @param {string[]} [params.filters=[]] - Substrings of the path; entries outside them are not
+ *   checked.
  * @returns {{passing: string[], missing: string[], stillFailing: string[]}}
  */
-export function checkQuarantine({ files, quarantined, passes, filter }) {
+export function checkQuarantine({ files, quarantined, passes, filters = [] }) {
   const passing = [];
   const stillFailing = [];
   for (const file of files) (passes(file) ? passing : stillFailing).push(file);
   const found = new Set(files.map(f => path.basename(f)));
   const missing = Object.keys(quarantined).filter(
-    name => !found.has(name) && (!filter || name.includes(filter))
+    name => !found.has(name) && filters.every(filter => name.includes(filter))
   );
   return { passing, missing, stillFailing };
 }
@@ -223,27 +240,45 @@ function assertSupportedNode() {
   }
 }
 
-function main() {
+/**
+ * Run the script. The parameters exist for the self-test, which runs the
+ * quarantine check on fixture files with a list of its own
+ * (`server/tests/run-server-tests-runner.test.js`); the command line cannot
+ * set them. Ends the process.
+ *
+ * @param {Object} [params]
+ * @param {string[]} [params.argv] - The command line without `node` and the script.
+ * @param {Object} [params.quarantined=QUARANTINED] - The quarantine list (`basename → reason`).
+ * @param {string} [params.testsDir] - The directory searched for `*.test.js`.
+ */
+export function main({
+  argv = process.argv.slice(2),
+  quarantined: quarantineList = QUARANTINED,
+  testsDir = path.join(root, 'server', 'tests')
+} = {}) {
   let options;
   try {
-    options = parseArgs(process.argv.slice(2));
+    options = parseArgs(argv);
   } catch (error) {
     console.error(`[server tests] ${error.message}`);
     process.exit(2);
   }
   assertSupportedNode();
 
-  const allFiles = walk(path.join(root, 'server', 'tests'));
-  const { selected, quarantined, otherTier } = selectFiles(allFiles, options);
+  const allFiles = walk(testsDir);
+  const { selected, quarantined, otherTier } = selectFiles(allFiles, {
+    ...options,
+    quarantined: quarantineList
+  });
   const jestFiles = selected.filter(isJest);
   const nodeFiles = selected.filter(f => !jestFiles.includes(f));
 
   if (options.list) {
-    const unquarantined = allFiles.filter(f => !QUARANTINED[path.basename(f)]);
+    const unquarantined = allFiles.filter(f => !quarantineList[path.basename(f)]);
     const count = tier => unquarantined.filter(f => tierOf(f) === tier).length;
     console.log(`tier: ${options.tier}`);
     console.log(`node:test/plain: ${nodeFiles.length}\njest: ${jestFiles.length}`);
-    console.log(`quarantined: ${Object.keys(QUARANTINED).length}`);
+    console.log(`quarantined: ${Object.keys(quarantineList).length}`);
     console.log(`tier pr: ${count('pr')} files`);
     console.log(`tier nightly: ${count('nightly')} files`);
     console.log(`not in this run (other tier): ${otherTier.length}`);
@@ -263,10 +298,11 @@ function main() {
     console.log(
       '[server tests] each file runs with an empty contents directory, as on a fresh checkout'
     );
+    console.log('[server tests] a file passes when its run exits with code 0, whatever it printed');
     const result = checkQuarantine({
       files: quarantined,
-      quarantined: QUARANTINED,
-      filter: options.filter,
+      quarantined: quarantineList,
+      filters: options.filters,
       passes: file => {
         const run = isJest(file) ? runJestGroup : runNodeGroup;
         const passed = run([file], { env, stdio: 'ignore' }).status === 0;
@@ -276,8 +312,9 @@ function main() {
     });
     for (const file of result.passing) {
       console.error(
-        `[server tests] ${file} is quarantined but passes. ` +
-          'Remove it from QUARANTINED in scripts/run-server-tests.js.'
+        `[server tests] ${file} is quarantined but passes (exit code 0). ` +
+          'Remove it from QUARANTINED in scripts/run-server-tests.js. If its output shows ' +
+          'failed checks, the file swallows them: make it exit non-zero instead.'
       );
     }
     for (const name of result.missing) {
@@ -297,7 +334,7 @@ function main() {
   if (selected.length === 0) {
     console.log(
       `[server tests] no test file in tier "${options.tier}"` +
-        (options.filter ? ` matches "${options.filter}"` : '')
+        (options.filters.length > 0 ? ` matches "${options.filters.join('" and "')}"` : '')
     );
   }
 

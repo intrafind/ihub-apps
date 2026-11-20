@@ -412,75 +412,105 @@ test('question refused: ask_user is answered with NO_USER_AVAILABLE and the run 
   assert.equal(result.content, 'I assumed the latest claim.');
 });
 
-test('3-minute clock: an app call that takes longer than 180 s is stopped and reported as an error', async t => {
-  // Fake timers: the limit is a `setTimeout` of the agent loop. Only `setTimeout` is faked, so the
-  // storage, which waits on I/O and `setImmediate`, keeps working.
-  mock.timers.enable({ apis: ['setTimeout'] });
-  t.after(() => mock.timers.reset());
+// The time limit is for a broken order of events only: when the clock is moved before a timer
+// the test counts on exists, the call never ends, and without a limit the file would hang until
+// the job is killed, with no test named. Nothing here waits for the limit.
+const CLOCK_TEST_LIMIT_MS = 30_000;
 
-  const MODEL_ANSWERS_AFTER_MS = 100_000;
-  /** A model that answers after 100 s: inside the limit of one model call (120 s). */
-  const slowly = inner => (request, ctx) =>
-    new Promise((resolve, reject) => {
-      // The connection is there at once; the answer is what takes long.
-      ctx.onConnected?.();
-      const timer = setTimeout(() => resolve(inner.respond(request, ctx)), MODEL_ANSWERS_AFTER_MS);
-      ctx.signal?.addEventListener(
-        'abort',
-        () => {
-          clearTimeout(timer);
-          reject(ctx.signal.reason);
-        },
-        { once: true }
-      );
+test(
+  '3-minute clock: an app call that takes longer than 180 s is stopped and reported as an error',
+  {
+    timeout: CLOCK_TEST_LIMIT_MS
+  },
+  async t => {
+    // Fake timers: the limit is a `setTimeout` of the agent loop. Only `setTimeout` is faked, so the
+    // storage, which waits on I/O and `setImmediate`, keeps working.
+    mock.timers.enable({ apis: ['setTimeout'] });
+    t.after(() => mock.timers.reset());
+
+    const MODEL_ANSWERS_AFTER_MS = 100_000;
+    /**
+     * A model that answers after 100 s: inside the limit of one model call (120 s).
+     *
+     * `waiting` resolves once the call has arrived AND its timer is set. The test moves the clock
+     * only after that: a timer that is set after the clock moved would be due later than the test
+     * counts on, and the answer would never come. `model.waitForCall` is too early for this, it
+     * resolves before the turn is asked to respond.
+     */
+    const slowly = inner => {
+      let timerIsSet;
+      const waiting = new Promise(resolve => {
+        timerIsSet = resolve;
+      });
+      const respond = (request, ctx) =>
+        new Promise((resolve, reject) => {
+          // The connection is there at once; the answer is what takes long.
+          ctx.onConnected?.();
+          const timer = setTimeout(
+            () => resolve(inner.respond(request, ctx)),
+            MODEL_ANSWERS_AFTER_MS
+          );
+          ctx.signal?.addEventListener(
+            'abort',
+            () => {
+              clearTimeout(timer);
+              reject(ctx.signal.reason);
+            },
+            { once: true }
+          );
+          timerIsSet();
+        });
+      return Object.assign(respond, { waiting });
+    };
+    const firstCall = slowly(turn.toolCalls([{ name: 'lookup', args: { key: 'claim' } }]));
+    const secondCall = slowly(turn.text('too late'));
+    const model = script(t, [firstCall, secondCall]);
+
+    let settled = null;
+    const pending = call().then(result => {
+      settled = result;
     });
-  const model = script(t, [
-    slowly(turn.toolCalls([{ name: 'lookup', args: { key: 'claim' } }])),
-    slowly(turn.text('too late'))
-  ]);
+    /** Let everything that is ready run, without moving the clock. */
+    const idle = async () => {
+      for (let i = 0; i < 20; i++) await new Promise(resolve => setImmediate(resolve));
+    };
+    /** Move the fake clock in steps, so timers set on the way (short ones of the pipeline) fire too. */
+    let elapsed = 0;
+    const advanceTo = async ms => {
+      while (elapsed < ms) {
+        const step = Math.min(1000, ms - elapsed);
+        mock.timers.tick(step);
+        elapsed += step;
+        await idle();
+      }
+    };
 
-  let settled = null;
-  const pending = call().then(result => {
-    settled = result;
-  });
-  /** Let everything that is ready run, without moving the clock. */
-  const idle = async () => {
-    for (let i = 0; i < 20; i++) await new Promise(resolve => setImmediate(resolve));
-  };
-  /** Move the fake clock in steps, so timers set on the way (short ones of the pipeline) fire too. */
-  let elapsed = 0;
-  const advanceTo = async ms => {
-    while (elapsed < ms) {
-      const step = Math.min(1000, ms - elapsed);
-      mock.timers.tick(step);
-      elapsed += step;
-      await idle();
-    }
-  };
+    // However long the pipeline takes to reach the model (a store write, a ledger flush): the clock
+    // stands still until the first call waits on its timer.
+    await firstCall.waiting;
+    assert.equal(model.calls, 1);
+    await advanceTo(MODEL_ANSWERS_AFTER_MS);
+    await secondCall.waiting;
+    assert.equal(model.calls, 2);
+    assert.equal(
+      settled,
+      null,
+      'after 100 s the call is still running: the second model call has started'
+    );
 
-  await idle();
-  await model.waitForCall(1);
-  await advanceTo(MODEL_ANSWERS_AFTER_MS);
-  await idle();
-  await model.waitForCall(2);
-  assert.equal(
-    settled,
-    null,
-    'after 100 s the call is still running: the second model call has started'
-  );
+    await advanceTo(179_000);
+    assert.equal(settled, null, 'after 179 s the call is still running');
 
-  await advanceTo(179_000);
-  assert.equal(settled, null, 'after 179 s the call is still running');
+    await advanceTo(180_000);
+    await idle();
+    await pending;
+    assert.deepEqual(settled, { error: true, message: 'Agent loop wall-clock budget exceeded' });
 
-  await advanceTo(180_000);
-  await idle();
-  await pending;
-  assert.deepEqual(settled, { error: true, message: 'Agent loop wall-clock budget exceeded' });
-
-  const [end] = eventsOf(RUN_LOG_EVENTS.RUN_END);
-  assert.equal(end.data.status, 'error');
-  assert.equal(end.data.error.code, 'TIMEOUT');
-});
+    const [end] = eventsOf(RUN_LOG_EVENTS.RUN_END);
+    assert.equal(end.data.status, 'error');
+    assert.equal(end.data.error.code, 'TIMEOUT');
+  }
+);
 
 test('a user with resolved permissions cannot call an app the user may not open', async t => {
   script(t, []);

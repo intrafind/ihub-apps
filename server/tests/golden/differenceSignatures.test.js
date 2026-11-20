@@ -19,9 +19,11 @@ import { fileURLToPath } from 'node:url';
 import {
   CODEOWNERS_PATH,
   DIFFERENCES_PATH,
+  GOLDENS_PATH,
   evaluate,
   latestReviews,
   ownersOf,
+  rowsOf,
   signatureChanges
 } from '../../../scripts/check-difference-signatures.js';
 
@@ -78,6 +80,45 @@ test('the CODEOWNERS file of this repository names the product owner for the dif
   // Whoever could edit the check or this file could appoint another signer.
   assert.deepEqual(ownersOf(text, 'scripts/check-difference-signatures.js'), ['intradmin']);
   assert.deepEqual(ownersOf(text, CODEOWNERS_PATH), ['intradmin']);
+  // The job runs the pull request's own copy of the workflow and of the difference list test:
+  // whoever could edit those could switch the gate off, so they have the same owner.
+  for (const file of [
+    '.github/workflows/e2e.yml',
+    'server/tests/golden/differenceList.js',
+    'server/tests/golden/differenceList.test.js'
+  ]) {
+    assert.deepEqual(ownersOf(text, file), ['intradmin'], `${file} has the owner`);
+    assert.ok(fs.existsSync(path.join(REPO_ROOT, file)), `${file} exists`);
+  }
+  // The goldens themselves have no owner: a row, not a review of every file, accepts a change.
+  assert.deepEqual(ownersOf(text, `${GOLDENS_PATH}/harness/chat-turn-plain.json`), []);
+});
+
+test('the job that runs the check is in the workflow the owner owns', () => {
+  const workflow = fs.readFileSync(path.join(REPO_ROOT, '.github/workflows/e2e.yml'), 'utf8');
+  assert.match(workflow, /run: node scripts\/check-difference-signatures\.js\n/);
+  assert.match(workflow, /run: node --test server\/tests\/golden\/differenceList\.test\.js\n/);
+  assert.match(workflow, /GOLDEN_REQUIRE_BASE: '1'/);
+});
+
+test('rowsOf refuses a list whose rows cannot be told apart', () => {
+  const list = rows => JSON.stringify({ rows });
+  assert.deepEqual(rowsOf(null), []);
+  assert.deepEqual(rowsOf(''), []);
+  assert.equal(rowsOf(list([proposed('a'), signed('b')])).length, 2);
+  // A signed row and an unsigned one with the same id: the map by id would keep only the last.
+  assert.throws(
+    () => rowsOf(list([signed('x'), proposed('x')])),
+    /differences\.json of the pull request: the id "x" is used twice \(row 2\)/
+  );
+  const { id: _id, ...withoutId } = signed('x');
+  assert.throws(() => rowsOf(list([withoutId, proposed('y')])), /row 1 has no id/);
+  assert.throws(() => rowsOf(list([proposed('y'), { ...withoutId, id: ' ' }])), /row 2 has no id/);
+  assert.throws(() => rowsOf(list([proposed('y'), { ...withoutId, id: 7 }])), /row 2 has no id/);
+  assert.throws(() => rowsOf(list([null])), /row 1 is not an object/);
+  assert.throws(() => rowsOf(list([['x']])), /row 1 is not an object/);
+  assert.throws(() => rowsOf('{"rows": {}}', 'the target branch'), /of the target branch must be/);
+  assert.throws(() => rowsOf('{'), /is not JSON/);
 });
 
 test('signatureChanges: added, changed, removed; an unsigned row can change freely', () => {
@@ -121,9 +162,9 @@ test('latestReviews keeps the last deciding review of each person', () => {
 test('evaluate: the rules of a valid signature', () => {
   const owners = ['intradmin'];
   const added = [{ id: 'a', change: 'added', signedBy: 'Intradmin' }];
-  const sameList = () => true;
+  const unchanged = () => null;
   const verdict = (overrides = {}) =>
-    evaluate({ changes: added, owners, reviews: [], listUnchangedSince: sameList, ...overrides });
+    evaluate({ changes: added, owners, reviews: [], changedSince: unchanged, ...overrides });
 
   assert.equal(verdict({ changes: [] }).ok, true, 'nothing to sign needs no review');
   assert.match(verdict().problems.join('\n'), /intradmin: no review/);
@@ -138,10 +179,13 @@ test('evaluate: the rules of a valid signature', () => {
     problems: [],
     approvedBy: 'intradmin'
   });
-  assert.match(
-    verdict({ reviews: approved, listUnchangedSince: () => false }).problems.join('\n'),
-    /before the difference list took its current form/
-  );
+  const stale = verdict({
+    reviews: approved,
+    changedSince: commit => `something changed after ${commit}`
+  });
+  assert.equal(stale.ok, false);
+  assert.equal(stale.approvedBy, null);
+  assert.match(stale.problems.join('\n'), /intradmin: approved c1, but something changed after c1/);
   assert.match(
     verdict({
       reviews: [...approved, review('Intradmin', 'CHANGES_REQUESTED', 'c2', '2')]
@@ -252,7 +296,10 @@ test('scratch branch: an approval does not cover a signature pushed after it', t
 
   const early = repo.run(approval);
   assert.equal(early.status, 1, early.output);
-  assert.match(early.output, /before the difference list took its current form/);
+  assert.match(
+    early.output,
+    /approved [0-9a-f]{12}, but the difference list changed after that commit/
+  );
 
   // A later commit that leaves the list alone keeps the approval valid.
   const again = [review('Intradmin', 'APPROVED', head, '2026-11-20T11:00:00Z')];
@@ -260,8 +307,85 @@ test('scratch branch: an approval does not cover a signature pushed after it', t
   repo.commit('something else again');
   assert.equal(repo.run(again).status, 0);
   // An id that is no commit of this repository approves nothing.
-  assert.equal(repo.run([review('Intradmin', 'APPROVED', 'f'.repeat(40), '1')]).status, 1);
+  const unknown = repo.run([review('Intradmin', 'APPROVED', 'f'.repeat(40), '1')]);
+  assert.equal(unknown.status, 1);
+  assert.match(unknown.output, /that commit is not part of this pull request any more/);
   assert.equal(repo.run([review('Intradmin', 'APPROVED', '--all', '1')]).status, 1);
+});
+
+test('scratch branch: an approval does not cover a golden recorded again after it', t => {
+  const repo = scratchRepository(t);
+  const golden = `${GOLDENS_PATH}/chat/one-tool.json`;
+  const record = (systemPromptHash, toolSchema = 'v2') => ({
+    case: 'one-tool',
+    modelRequests: [{ roles: ['system', 'user'], systemPromptHash, tools: [toolSchema] }],
+    envelopes: []
+  });
+  // The golden exists on the target branch.
+  repo.git('checkout', '--quiet', 'main');
+  repo.write(golden, record('hash-1', 'v1'));
+  repo.commit('the golden');
+  repo.git('checkout', '--quiet', '-b', 'refactor');
+
+  // C1: a harmless change of the tool schema, with its row, signed. The owner approves C1.
+  repo.write(golden, record('hash-1'));
+  repo.write(DIFFERENCES_PATH, {
+    rows: [signed('tool-error-text', { goldens: ['chat/one-tool.json'], parts: ['modelRequests'] })]
+  });
+  const reviewed = repo.commit('change the tool schema, sign the row');
+  const approval = [review('Intradmin', 'APPROVED', reviewed, '2026-11-20T10:00:00Z')];
+  const atReview = repo.run(approval);
+  assert.equal(atReview.status, 0, atReview.output);
+
+  // C2: the same golden is recorded again with another system prompt, under the same part.
+  // The difference list is untouched, so the row still names the golden and the part.
+  repo.write(golden, record('hash-2'));
+  const head = repo.commit('record the golden again');
+  assert.equal(
+    repo.git('diff', '--name-only', reviewed, head),
+    golden,
+    'only the golden changed after the approval'
+  );
+  const after = repo.run(approval);
+  assert.equal(after.status, 1, after.output);
+  assert.match(after.output, /row "tool-error-text": signature added/);
+  assert.match(
+    after.output,
+    /approved [0-9a-f]{12}, but the goldens \(server\/tests\/golden\/__goldens__\) changed after that commit/
+  );
+
+  // A golden that is added or deleted after the approval is not what the owner saw either.
+  repo.write(golden, record('hash-1'));
+  repo.write(`${GOLDENS_PATH}/chat/renamed.json`, record('hash-2'));
+  repo.commit('restore the golden, record the change under a new name');
+  assert.equal(repo.run(approval).status, 1);
+
+  // The owner approves the head commit: the signature stands again, and keeps standing while
+  // neither the list nor a golden changes.
+  const headNow = repo.git('rev-parse', 'HEAD');
+  const again = [...approval, review('Intradmin', 'APPROVED', headNow, '2026-11-20T12:00:00Z')];
+  assert.equal(repo.run(again).status, 0);
+  repo.write('README.md', 'unrelated\n');
+  repo.commit('something else');
+  assert.equal(repo.run(again).status, 0);
+});
+
+test('scratch branch: a signed row hidden behind a second row with its id stops the check', t => {
+  const repo = scratchRepository(t);
+  repo.write(DIFFERENCES_PATH, { rows: [signed('tool-schema'), proposed('tool-schema')] });
+  repo.commit('a signed and a proposed row with one id');
+  const twice = repo.run([]);
+  assert.equal(twice.status, 2, twice.output);
+  assert.match(twice.output, /the id "tool-schema" is used twice \(row 2\)/);
+  assert.doesNotMatch(twice.output, /touches no signature/);
+
+  const { id: _id, ...withoutId } = signed('x');
+  repo.write(DIFFERENCES_PATH, { rows: [withoutId, { ...proposed('y'), id: undefined }] });
+  repo.commit('two rows without an id');
+  const noId = repo.run([]);
+  assert.equal(noId.status, 2, noId.output);
+  assert.match(noId.output, /of the pull request: row 1 has no id/);
+  assert.doesNotMatch(noId.output, /touches no signature/);
 });
 
 test('scratch branch: a pull request cannot appoint its own signer', t => {

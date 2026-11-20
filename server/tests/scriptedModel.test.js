@@ -249,3 +249,52 @@ test('an unscripted call fails the test that made it, under jest', () => {
   assert.match(output, /script exhausted after 2 calls/);
   assert.match(output, /Tests:\s+1 failed, 1 passed, 2 total/);
 });
+
+// The helper imported late: inside a `before` hook, where both runners accept a hook after each
+// test and never run it. The unscripted call must not end in a green file.
+test('an unscripted call fails the file when the helper is imported late, under node:test', () => {
+  const fixture = path.join(here, 'fixtures/scriptedModel/late-import.node-fixture.js');
+  const run = spawnSync(process.execPath, ['--test', fixture], {
+    cwd: serverDir,
+    encoding: 'utf8',
+    env: childEnv()
+  });
+  const output = run.stdout + run.stderr;
+  assert.equal(run.status, 1, output);
+  assert.match(output, /1 model call\(s\) without a turn were reported by no test/);
+  assert.match(output, /The first: script exhausted after 2 calls/);
+  assert.match(output, /Import helpers\/scriptedModel\.js at the top of the test file/);
+  // node:test cannot fail a running test from outside it: the two tests pass, the file fails.
+  assert.match(output, /✖ .*late-import\.node-fixture\.js/);
+  assert.match(output, /ℹ fail 1\b/);
+});
+
+test('an unscripted call fails the test that made it when the helper is imported late, under jest', () => {
+  const run = spawnSync(
+    process.execPath,
+    [
+      '--experimental-vm-modules',
+      'node_modules/jest/bin/jest.js',
+      '--testMatch',
+      '**/fixtures/scriptedModel/*.late-jest-fixture.js'
+    ],
+    { cwd: serverDir, encoding: 'utf8', env: childEnv() }
+  );
+  const output = run.stdout + run.stderr;
+  assert.equal(run.status, 1, output);
+  assert.match(output, /Tests:\s+2 failed, 2 passed, 4 total/);
+  // jest lists the failed tests with a bullet.
+  assert.match(output, /● code that swallows the error of an unscripted call/);
+  assert.doesNotMatch(output, /● a test after it is not blamed/);
+  assert.doesNotMatch(output, /● a script that is used exactly passes/);
+  // jest refuses a hook that is added now; the helper must not try to add one.
+  assert.doesNotMatch(output, /Cannot add a hook after tests have started running/);
+  assert.doesNotMatch(output, /Test suite failed to run/);
+  // A call that `assertDone()` reported is not reported a second time by the runner.
+  assert.match(output, /● assertDone reports the call once, not twice/);
+  assert.equal(
+    output.match(/UnscriptedModelCallError: script exhausted after 2 calls/g)?.length,
+    1
+  );
+  assert.equal(output.match(/reported by assertDone: script exhausted after 2 calls/g)?.length, 1);
+});

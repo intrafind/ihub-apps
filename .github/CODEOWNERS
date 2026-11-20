@@ -8,8 +8,17 @@
 # accepted difference between the recorded behaviour and today's. The product
 # owner signs a row by approving the pull request that adds the signature;
 # scripts/check-difference-signatures.js fails a signature without that review.
-# The check reads the owner from this file on the target branch, so this file
-# and the check are owned by the same person.
+# The check reads the owner from this file on the target branch.
 /server/tests/golden/differences.json @Intradmin
-/scripts/check-difference-signatures.js @Intradmin
 /.github/CODEOWNERS @Intradmin
+
+# The gate runs on `pull_request`, so it runs the pull request's own copy of
+# the workflow and of the two checks. Whoever can change one of them can switch
+# the gate off, so each has the same owner as the list: the signature check, the
+# workflow with the job "Golden difference list", and the check that every
+# changed golden is named by a row. This only holds with the branch protection
+# rule "Require review from Code Owners" on the target branch.
+/scripts/check-difference-signatures.js @Intradmin
+/.github/workflows/e2e.yml @Intradmin
+/server/tests/golden/differenceList.js @Intradmin
+/server/tests/golden/differenceList.test.js @Intradmin

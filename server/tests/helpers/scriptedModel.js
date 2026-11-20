@@ -17,8 +17,12 @@
  *
  * A call the script has no turn for is an error of the test, not of the model:
  * the transport throws, and the test fails after it ran even when the code
- * under test caught that throw and carried on (the hook at the end of this
- * file). `assertDone()` also fails on turns that were never asked for.
+ * under test caught that throw and carried on (see the end of this file).
+ * `assertDone()` also fails on turns that were never asked for.
+ *
+ * Import this helper at the top of the test file. Under `node --test` a lazy
+ * `await import()` inside a test or a `before` hook leaves no way to fail the
+ * single test: the test file then fails as a whole when its process ends.
  *
  * Turns speak the OpenAI streaming wire format, the one the test client and the
  * `openai` adapter read. See docs/run-testing.md.
@@ -273,6 +277,54 @@ function snapshot(request) {
 
 /** Unscripted calls of strict models that no `assertDone()` has reported yet. */
 const unreported = new Set();
+/** The ones of them handed to jest, which fails the running test with them when it ends. */
+const handedToJest = new Set();
+
+/**
+ * The state of jest's `expect` when this is jest and it takes errors for the
+ * running test, else null.
+ *
+ * jest adds the errors in `suppressedErrors` to the test that ends next. That
+ * does not depend on a hook, so it also works when this helper was first
+ * imported inside a test or a `beforeAll`: there jest refuses a new hook
+ * ("Cannot add a hook after tests have started running").
+ */
+function jestState() {
+  const state = globalThis.expect?.getState?.();
+  return Array.isArray(state?.suppressedErrors) ? state : null;
+}
+
+/** Make sure an unscripted call of a strict model fails something, whatever the code under test does. */
+function reportLater(error) {
+  const state = jestState();
+  if (!state) {
+    unreported.add(error);
+    return;
+  }
+  // What jest no longer holds belongs to a test that has ended.
+  for (const earlier of handedToJest) {
+    if (!state.suppressedErrors.includes(earlier)) handedToJest.delete(earlier);
+  }
+  handedToJest.add(error);
+  globalThis.expect.setState({ suppressedErrors: [...state.suppressedErrors, error] });
+}
+
+/** Take errors back that are reported another way (`assertDone()` throws them itself). */
+function reported(errors) {
+  const taken = [];
+  const fromJest = [];
+  for (const error of errors) {
+    if (unreported.delete(error)) taken.push(error);
+    else if (handedToJest.delete(error)) fromJest.push(error);
+  }
+  const state = fromJest.length > 0 ? jestState() : null;
+  if (state) {
+    globalThis.expect.setState({
+      suppressedErrors: state.suppressedErrors.filter(error => !fromJest.includes(error))
+    });
+  }
+  return [...taken, ...fromJest];
+}
 
 /**
  * Build a scripted model.
@@ -304,7 +356,7 @@ export function scriptedModel(
 
   const fail = error => {
     unscripted.push(error);
-    if (strict) unreported.add(error);
+    if (strict) reportLater(error);
     return error;
   };
 
@@ -377,7 +429,7 @@ export function scriptedModel(
      * request a `turn.when` rejected, no turn left over.
      */
     assertDone() {
-      for (const error of unscripted) unreported.delete(error);
+      reported(unscripted);
       if (unscripted.length > 0) throw unscripted[0];
       if (queue.length > 0) {
         throw new Error(
@@ -399,33 +451,56 @@ export function scriptedModel(
  * @returns {Error[]}
  */
 export function takeUnreportedModelCalls() {
-  const errors = [...unreported];
-  unreported.clear();
-  return errors;
+  return reported([...unreported, ...handedToJest]);
 }
 
 // A call without a turn must fail the test that made it, also when the code
 // under test turned the throw into an error answer and the test asserted on
-// something else. So every test file that loads this helper checks after each
-// of its tests. jest provides `afterEach` as a global; under `node --test` it
-// comes from `node:test`. A plain script (no test runner) gets no hook: there
-// `node:test` would start a runner of its own and print its summary.
+// something else. How that is done depends on the runner:
+//
+// - jest: the error is handed to jest (`reportLater`), which fails the running
+//   test with it when the test ends. This works wherever the helper was
+//   imported.
+// - `node --test`: a hook after each test throws the error. The hook needs
+//   this helper to be imported at the top of the test file: registered while a
+//   test or a `before` hook is running (a lazy `await import()`), it is
+//   accepted and never run.
+// - `node --test` with such a late import, and a plain script: what is still
+//   unreported when the process ends fails the process. The test file is red
+//   and the message names the call. `node:test` has no way to fail a running
+//   test from outside it, so here the file fails, not the single test.
 const failOnUnreported = () => {
-  const [first] = takeUnreportedModelCalls();
+  const [first] = reported([...unreported]);
   if (first) throw first;
 };
+const underJest = typeof globalThis.expect?.getState === 'function';
 const underNodeTest =
-  Boolean(process.env.NODE_TEST_CONTEXT) ||
-  process.execArgv.includes('--test') ||
-  /\.test\.[cm]?js$/.test(process.argv[1] || '');
-try {
-  if (typeof globalThis.afterEach === 'function') {
+  !underJest &&
+  (Boolean(process.env.NODE_TEST_CONTEXT) ||
+    process.execArgv.includes('--test') ||
+    /\.test\.[cm]?js$/.test(process.argv[1] || ''));
+if (underJest) {
+  // A jest that does not take errors this way gets the hook instead, as far as it still can.
+  if (!jestState() && typeof globalThis.afterEach === 'function') {
     globalThis.afterEach(failOnUnreported);
-  } else if (underNodeTest) {
+  }
+} else {
+  // A plain script (no test runner) gets no hook: there `node:test` would start
+  // a runner of its own and print its summary.
+  if (underNodeTest) {
     const { afterEach } = await import('node:test');
     afterEach(failOnUnreported);
   }
-} catch {
-  // Loaded from inside a running test, where no hook can be added any more:
-  // that test reports through `assertDone()`.
+  process.once('exit', () => {
+    if (unreported.size === 0) return;
+    const [first] = unreported;
+    console.error(
+      `[scriptedModel] ${unreported.size} model call(s) without a turn were reported by no test. ` +
+        `The first: ${first.message}\n` +
+        'The hook that fails the test that made such a call did not run. Import ' +
+        'helpers/scriptedModel.js at the top of the test file, not inside a test or a before ' +
+        'hook, or call model.assertDone() in the test.'
+    );
+    if (!process.exitCode) process.exitCode = 1;
+  });
 }

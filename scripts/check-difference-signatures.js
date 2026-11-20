@@ -17,9 +17,28 @@
  *      appoint its own signer), and
  *   2. that owner's latest review of the pull request is an approval, given for
  *      a commit whose difference list is byte for byte the one of the head
- *      commit (an approval does not cover rows pushed after it).
+ *      commit, and whose goldens (`server/tests/golden/__goldens__`) are the
+ *      ones of the head commit. An approval covers neither a row nor a golden
+ *      pushed after it: a row names a golden file and its parts, not the
+ *      content, so the content the owner saw is part of what was approved.
+ *
+ * The one exception to 1: the pull request that introduces the difference list
+ * on a target branch that has neither the list nor an owner for it. There the
+ * owner that pull request adds to CODEOWNERS is used, and the check prints that
+ * it did. As soon as the target branch has the list or an owner line for it,
+ * only the target branch counts.
  *
  * A pull request that touches no signature passes without a review.
+ *
+ * The check reads the list by itself and does not rely on another test having
+ * validated it: a row that is no object, has no `id`, or repeats an id stops
+ * the check (exit code 2), because two rows with one id cannot be told apart.
+ *
+ * The check is run from the pull request's own checkout, like every step of a
+ * `pull_request` workflow. `.github/CODEOWNERS` therefore names the owner for
+ * this script, for the workflow that runs it and for the difference list test,
+ * and the branch protection rule "Require review from Code Owners" is a
+ * precondition of the gate (docs/run-testing.md).
  *
  * Usage:
  *   node scripts/check-difference-signatures.js --base origin/main --head <sha> --pr 123
@@ -35,7 +54,7 @@
  *
  * The reviews are read with the GitHub CLI (`gh`, token in GH_TOKEN). Exit code 0:
  * nothing to sign, or signed and approved. 1: a signature without the owner's
- * approval. 2: the check could not run.
+ * approval. 2: the check could not run, or the difference list cannot be read.
  *
  * See docs/run-testing.md.
  */
@@ -45,6 +64,7 @@ import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 
 export const DIFFERENCES_PATH = 'server/tests/golden/differences.json';
+export const GOLDENS_PATH = 'server/tests/golden/__goldens__';
 export const CODEOWNERS_PATH = '.github/CODEOWNERS';
 
 /** Review states that say something about approval; a comment does not replace an approval. */
@@ -76,12 +96,45 @@ export function ownersOf(text, file) {
   return owners;
 }
 
-function rowsOf(text) {
+/**
+ * The rows of a difference list. A missing or empty file is an empty list.
+ *
+ * Rows are told apart by their id, so a list this check cannot tell apart is
+ * refused here and not left to `validateRows` of the difference list test: a
+ * signed row hidden behind a second row with the same id, or behind a row
+ * without an id, would otherwise read as "no signature touched".
+ *
+ * @param {string|null} text - The content of `differences.json`.
+ * @param {string} [where='the pull request'] - Whose list it is, for the message.
+ * @returns {Object[]}
+ * @throws {Error} When the list is not `{ rows: [...] }`, a row is no object, a row has no text
+ *   `id`, or an id is used twice.
+ */
+export function rowsOf(text, where = 'the pull request') {
   if (text === null || text === undefined || text.trim() === '') return [];
-  const parsed = JSON.parse(text);
-  if (!parsed || !Array.isArray(parsed.rows)) {
-    throw new Error(`${DIFFERENCES_PATH} must be an object with a "rows" array`);
+  const name = `${DIFFERENCES_PATH} of ${where}`;
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch (error) {
+    throw new Error(`${name} is not JSON: ${error.message}`);
   }
+  if (!parsed || !Array.isArray(parsed.rows)) {
+    throw new Error(`${name} must be an object with a "rows" array`);
+  }
+  const seen = new Set();
+  parsed.rows.forEach((row, index) => {
+    if (!row || typeof row !== 'object' || Array.isArray(row)) {
+      throw new Error(`${name}: row ${index + 1} is not an object`);
+    }
+    if (typeof row.id !== 'string' || row.id.trim() === '') {
+      throw new Error(`${name}: row ${index + 1} has no id`);
+    }
+    if (seen.has(row.id)) {
+      throw new Error(`${name}: the id "${row.id}" is used twice (row ${index + 1})`);
+    }
+    seen.add(row.id);
+  });
   return parsed.rows;
 }
 
@@ -90,8 +143,9 @@ const isSigned = row => Boolean(row && (row.signedBy || row.signedOn || row.stat
 /**
  * The rows whose signature this pull request touches.
  *
- * @param {Object[]} baseRows - The rows on the target branch.
- * @param {Object[]} headRows - The rows of the pull request.
+ * @param {Object[]} baseRows - The rows on the target branch, as `rowsOf` returns them (every row
+ *   has an id of its own).
+ * @param {Object[]} headRows - The rows of the pull request, likewise.
  * @returns {Array<{id: string, change: 'added'|'changed'|'removed', signedBy: string|null}>}
  */
 export function signatureChanges(baseRows, headRows) {
@@ -140,11 +194,12 @@ export function latestReviews(reviews) {
  * @param {ReturnType<typeof signatureChanges>} params.changes
  * @param {string[]} params.owners - Owners of the difference list on the target branch.
  * @param {Object[]} params.reviews - The reviews of the pull request.
- * @param {(commit: string) => boolean} params.listUnchangedSince - Whether the difference list at
- *   that commit equals the one at the head commit.
+ * @param {(commit: string) => string|null} params.changedSince - What of the approved content
+ *   (the difference list, the goldens) differs between that commit and the head commit, as a
+ *   phrase for the message; null when nothing does.
  * @returns {{ok: boolean, problems: string[], approvedBy: string|null}}
  */
-export function evaluate({ changes, owners, reviews, listUnchangedSince }) {
+export function evaluate({ changes, owners, reviews, changedSince }) {
   if (changes.length === 0) return { ok: true, problems: [], approvedBy: null };
   const problems = [];
   const people = owners.filter(owner => !owner.includes('/'));
@@ -169,7 +224,7 @@ export function evaluate({ changes, owners, reviews, listUnchangedSince }) {
   const latest = latestReviews(reviews);
   const approving = people.find(owner => {
     const review = latest.get(owner);
-    return review?.state === 'APPROVED' && listUnchangedSince(review.commit_id);
+    return review?.state === 'APPROVED' && changedSince(review.commit_id) === null;
   });
   if (!approving) {
     const list = changes.map(change => `"${change.id}" (signature ${change.change})`).join(', ');
@@ -178,13 +233,14 @@ export function evaluate({ changes, owners, reviews, listUnchangedSince }) {
         const review = latest.get(owner);
         if (!review) return `${owner}: no review`;
         if (review.state !== 'APPROVED') return `${owner}: latest review is ${review.state}`;
-        return `${owner}: approved ${String(review.commit_id).slice(0, 12)}, before the difference list took its current form`;
+        return `${owner}: approved ${String(review.commit_id).slice(0, 12)}, but ${changedSince(review.commit_id)}`;
       })
       .join('; ');
     problems.push(
       `This pull request touches the signature of ${list}, and no owner of the difference list ` +
         `has approved it in its current form (${seen}). A signature is valid only with the approving ` +
-        'review of an owner; the author of a pull request cannot approve it.'
+        'review of an owner, given for the difference list and the goldens as they are now; the ' +
+        'author of a pull request cannot approve it.'
     );
   }
   return { ok: problems.length === 0, problems, approvedBy: approving ?? null };
@@ -204,6 +260,11 @@ function git(args, { allowFailure = false } = {}) {
 }
 
 const show = (commit, file) => git(['show', `${commit}:${file}`], { allowFailure: true });
+
+/** The id of the tree (or blob) at a path of a commit; null when the commit has no such path. */
+const objectAt = (commit, file) =>
+  git(['rev-parse', '--verify', '--quiet', `${commit}:${file}`], { allowFailure: true })?.trim() ||
+  null;
 
 function parseArgs(argv) {
   const options = {};
@@ -272,7 +333,10 @@ function main() {
   }
 
   const headList = show(head, DIFFERENCES_PATH);
-  const changes = signatureChanges(rowsOf(show(base, DIFFERENCES_PATH)), rowsOf(headList));
+  const changes = signatureChanges(
+    rowsOf(show(base, DIFFERENCES_PATH), 'the target branch'),
+    rowsOf(headList)
+  );
   if (changes.length === 0) {
     console.log('[difference signatures] this pull request touches no signature');
     return 0;
@@ -280,7 +344,7 @@ function main() {
 
   // The owner is read from the target branch: a pull request cannot appoint its own signer.
   // The one exception is the pull request that introduces the difference list itself, when
-  // the target branch has neither the list nor an owner for it.
+  // the target branch has neither the list nor an owner for it (see the header).
   const baseList = show(base, DIFFERENCES_PATH);
   let owners = ownersOf(show(base, CODEOWNERS_PATH), DIFFERENCES_PATH);
   if (owners.length === 0 && baseList === null) {
@@ -307,17 +371,27 @@ function main() {
     reviews = fetchReviews({ repo, pr });
   }
 
-  const listUnchangedSince = commit => {
+  const headGoldens = objectAt(head, GOLDENS_PATH);
+  const changedSince = commit => {
     // The id comes from the API: only a commit id is handed to git, and only one this checkout has
     // (a commit that was force-pushed away approves nothing).
-    if (!/^[0-9a-f]{7,64}$/i.test(String(commit || ''))) return false;
-    const known = git(['rev-parse', '--verify', '--quiet', `${commit}^{commit}`], {
-      allowFailure: true
-    });
-    return known !== null && show(commit, DIFFERENCES_PATH) === headList;
+    const known =
+      /^[0-9a-f]{7,64}$/i.test(String(commit || '')) &&
+      git(['rev-parse', '--verify', '--quiet', `${commit}^{commit}`], { allowFailure: true });
+    if (!known) return 'that commit is not part of this pull request any more';
+    if (show(commit, DIFFERENCES_PATH) !== headList) {
+      return 'the difference list changed after that commit';
+    }
+    // A row names a golden and its parts, not the content: the goldens the owner saw are part of
+    // what was approved. The whole directory is compared, so a golden that was added, renamed or
+    // deleted after the approval counts as well.
+    if (objectAt(commit, GOLDENS_PATH) !== headGoldens) {
+      return `the goldens (${GOLDENS_PATH}) changed after that commit`;
+    }
+    return null;
   };
 
-  const verdict = evaluate({ changes, owners, reviews, listUnchangedSince });
+  const verdict = evaluate({ changes, owners, reviews, changedSince });
   for (const change of changes) {
     console.log(`[difference signatures] row "${change.id}": signature ${change.change}`);
   }

@@ -17,7 +17,7 @@
  *
  * | Part | From |
  * |---|---|
- * | `envelopes` | every SSE v2 envelope the run sent |
+ * | `envelopes` | every SSE v2 envelope the run sent, with the stream it went to |
  * | `offeredToolIds` | the iHub tool ids offered to each model call (run ledger) |
  * | `modelRequests`, `toolSchemas` | the asserted projection of each model request |
  * | `toolCalls` | each tool call with arguments and outcome (run ledger) |
@@ -120,12 +120,30 @@ export function defineCase(definition) {
  *   after the fixture tools are registered.
  * @param {Object[]} [config.tools] - Fixture tools (`fixtureTool` of `helpers/integrationToolFixture.js`).
  * @param {Object} [config.env] - Environment variables for the time of the recording.
- * @returns {Promise<Object>} The environment handed to a case's `script` and `run`.
+ * @returns {Promise<Object>} The environment handed to a case's `script` and `run`. When the set-up
+ *   fails, what was already set up is undone before the error is thrown.
  */
 export async function startGoldenEnv(config = {}) {
   const restores = [];
-  const restore = fn => restores.push(fn);
+  /** Undo everything that was set up, last first. A second call does nothing. */
+  const stop = async () => {
+    for (const fn of restores.splice(0).reverse()) await fn();
+  };
+  try {
+    return await setUp(config, fn => restores.push(fn), stop);
+  } catch (error) {
+    // Nobody gets an environment to stop, so this is the only place that can undo what was
+    // already set up. A recording that follows in the same process must not start on it.
+    await stop().catch(() => {});
+    throw error;
+  }
+}
 
+/**
+ * The set-up of {@link startGoldenEnv}. Every step registers its undo with `restore` right after
+ * it took effect.
+ */
+async function setUp(config, restore, stop) {
   // A model without a stored key takes it from the environment. The value is never sent anywhere.
   const processEnv = { OPENAI_API_KEY: 'sk-golden', ...config.env };
   for (const [key, value] of Object.entries(processEnv)) {
@@ -240,9 +258,7 @@ export async function startGoldenEnv(config = {}) {
         .map(({ id: _id, ...record }) => record);
     },
 
-    async stop() {
-      for (const fn of restores.reverse()) await fn();
-    }
+    stop
   });
   return env;
 }
@@ -325,10 +341,7 @@ export async function recordCase(goldenCase) {
     // The order of these steps is part of the format: ids are numbered in the
     // order the normaliser meets them.
     const record = { surface: goldenCase.surface, case: goldenCase.name, title: goldenCase.title };
-    record.envelopes = normaliseEnvelopes(
-      env.envelopes.map(entry => entry.envelope),
-      normaliser
-    );
+    record.envelopes = normaliseEnvelopes(env.envelopes, normaliser);
     record.ledger = normaliseLedger(env.ledger, normaliser);
     record.offeredToolIds = normaliser.normalise(offeredToolIds(env.ledger));
     const toolSchemas = {};

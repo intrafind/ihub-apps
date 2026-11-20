@@ -195,6 +195,9 @@ test('a surface can name more volatile keys', () => {
   );
 });
 
+/** What the harness captures: an envelope and the stream it was delivered to. */
+const onStream = (streamId, envelopes) => envelopes.map(envelope => ({ streamId, envelope }));
+
 test('seq and rseq are dropped, after a check that they increase', () => {
   const normaliser = createNormaliser();
   const envelopes = [
@@ -217,14 +220,14 @@ test('seq and rseq are dropped, after a check that they increase', () => {
       data: { status: 'completed' }
     }
   ];
-  assert.deepEqual(normaliseEnvelopes(envelopes, normaliser), [
-    { data: { kind: 'chat' }, runId: 'chat-1', type: 'run/started' },
-    { data: { status: 'completed' }, runId: 'chat-1', type: 'run/ended' }
+  assert.deepEqual(normaliseEnvelopes(onStream('stream-a', envelopes), normaliser), [
+    { data: { kind: 'chat' }, runId: 'chat-1', streamId: 'stream-a', type: 'run/started' },
+    { data: { status: 'completed' }, runId: 'chat-1', streamId: 'stream-a', type: 'run/ended' }
   ]);
 
-  const repeated = [envelopes[0], { ...envelopes[1], seq: 4 }];
+  const repeated = onStream('stream-a', [envelopes[0], { ...envelopes[1], seq: 4 }]);
   assert.throws(() => normaliseEnvelopes(repeated, normaliser), /seq does not increase at event 1/);
-  const backwards = [envelopes[0], { ...envelopes[1], rseq: 1 }];
+  const backwards = onStream('stream-a', [envelopes[0], { ...envelopes[1], rseq: 1 }]);
   assert.throws(() => normaliseEnvelopes(backwards, normaliser), /rseq does not increase/);
 
   // rseq counts per run: a second run on the same stream starts again at 1.
@@ -250,6 +253,52 @@ test('seq and rseq are dropped, after a check that they increase', () => {
     () => normaliseLedger([ledger[1], ledger[0]], normaliser),
     /seq does not increase at event 1 \(run\/start\): 2 then 1/
   );
+});
+
+test('seq counts per stream: a second stream starts again at 1, and the record names the stream', () => {
+  const envelope = (seq, rseq, runId, type) => ({ v: 2, seq, rseq, runId, type, data: {} });
+  // Two chats in one recording, as the server sends them: each stream counts its own seq.
+  const deliveries = [
+    { streamId: 'chat-a', envelope: envelope(1, 1, 'run-a', 'run/started') },
+    { streamId: 'chat-a', envelope: envelope(2, 2, 'run-a', 'run/ended') },
+    { streamId: 'chat-b', envelope: envelope(1, 1, 'run-b', 'run/started') },
+    { streamId: 'chat-a', envelope: envelope(3, 1, 'run-c', 'run/started') },
+    { streamId: 'chat-b', envelope: envelope(2, 2, 'run-b', 'run/ended') }
+  ];
+  const record = normaliseEnvelopes(deliveries, createNormaliser());
+  assert.deepEqual(
+    record.map(e => [e.streamId, e.runId, e.type]),
+    [
+      ['chat-a', 'run-a', 'run/started'],
+      ['chat-a', 'run-a', 'run/ended'],
+      ['chat-b', 'run-b', 'run/started'],
+      ['chat-a', 'run-c', 'run/started'],
+      ['chat-b', 'run-b', 'run/ended']
+    ]
+  );
+
+  // Within one stream the check still holds.
+  const repeatedOnB = deliveries.map((delivery, index) =>
+    index === 4 ? { ...delivery, envelope: { ...delivery.envelope, seq: 1 } } : delivery
+  );
+  assert.throws(
+    () => normaliseEnvelopes(repeatedOnB, createNormaliser()),
+    /seq does not increase at event 4 \(run\/ended\): 1 then 1/
+  );
+
+  // The same envelopes on another stream are another record: a delivery to the wrong stream shows.
+  const misdelivered = deliveries.map((delivery, index) =>
+    index === 4 ? { streamId: 'chat-a', envelope: { ...delivery.envelope, seq: 4 } } : delivery
+  );
+  assert.notDeepEqual(normaliseEnvelopes(misdelivered, createNormaliser()), record);
+
+  // A stream id is an id like any other: numbered by first appearance.
+  const generated = 'a3bb189e-8bf9-4888-9912-ace4e6543002';
+  const [first] = normaliseEnvelopes(
+    [{ streamId: generated, envelope: envelope(1, 1, 'run-a', 'run/started') }],
+    createNormaliser()
+  );
+  assert.equal(first.streamId, '<id:1>');
 });
 
 test('consecutive step/delta events of one step and kind are merged into one', () => {
@@ -287,12 +336,27 @@ test('consecutive step/delta events of one step and kind are merged into one', (
     ]
   );
   // However the text was cut, the record is the same.
-  const once = normaliseEnvelopes([delta('The answer.')], createNormaliser());
+  const once = normaliseEnvelopes(onStream('s', [delta('The answer.')]), createNormaliser());
   const cut = normaliseEnvelopes(
-    ['T', 'he an', 'swer', '.'].map(c => delta(c)),
+    onStream(
+      's',
+      ['T', 'he an', 'swer', '.'].map(c => delta(c))
+    ),
     createNormaliser()
   );
   assert.deepEqual(cut, once);
+  // Pieces that went to two streams are two texts.
+  const split = normaliseEnvelopes(
+    [...onStream('s', [delta('The ')]), ...onStream('t', [delta('answer.')])],
+    createNormaliser()
+  );
+  assert.deepEqual(
+    split.map(e => [e.streamId, e.data.content]),
+    [
+      ['s', 'The '],
+      ['t', 'answer.']
+    ]
+  );
 });
 
 test('events of one parallelGroup are ordered by call id, whatever order the tools finished in', () => {
@@ -339,12 +403,12 @@ test('events of one parallelGroup are ordered by call id, whatever order the too
 
 test('heartbeat and stream/connected frames are dropped', () => {
   const kept = normaliseEnvelopes(
-    [
+    onStream('s', [
       { seq: 1, type: 'stream/connected', data: {} },
       { seq: 2, type: 'run/started', runId: 'chat-1', data: {} },
       { seq: 3, type: 'heartbeat', data: {} },
       { seq: 4, type: 'run/ended', runId: 'chat-1', data: {} }
-    ],
+    ]),
     createNormaliser()
   );
   assert.deepEqual(

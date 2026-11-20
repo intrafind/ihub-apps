@@ -23,7 +23,13 @@ import { fileURLToPath } from 'node:url';
 
 const testsDir = path.dirname(fileURLToPath(import.meta.url));
 
-/** Directories and files under `server/tests/`, searched with everything below them. */
+/**
+ * Directories and files under `server/tests/`, searched with everything below them. A test file
+ * for runs at the top level of `server/tests/` is added here by name.
+ *
+ * This file is not in the list: its samples for the detector are sleeps written as text, and the
+ * detector reads text.
+ */
 const SEARCHED = [
   'golden',
   'faults',
@@ -32,8 +38,11 @@ const SEARCHED = [
   'followups',
   'helpers/scriptedModel.js',
   'helpers/fakeClock.js',
+  'helpers/scheduledTaskHarness.js',
   'scriptedModel.test.js',
   'fakeClock.test.js',
+  'appToolsGateway.characterization.test.js',
+  'run-server-tests-runner.test.js',
   'fixtures/scriptedModel',
   'fixtures/sideBySide'
 ];

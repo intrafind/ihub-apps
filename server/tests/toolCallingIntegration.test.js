@@ -81,6 +81,15 @@ const testScenarios = {
 
 logger.info('🔧 Testing High-Level Adapter Tool Calling Integration\n');
 
+// A check that fails is logged AND counted: the script exits non-zero at the end
+// when any check failed. It used to log the failure and exit 0, which the test
+// runner reads as a passing file.
+const failedChecks = [];
+function checkFailed(message) {
+  failedChecks.push(message);
+  logger.info(`❌ ${message}`);
+}
+
 // Test 1: Adapter Registry Functionality
 logger.info('📋 Test 1: Adapter Registry Functionality');
 
@@ -92,7 +101,7 @@ for (const provider of providers) {
     adapters[provider] = getAdapter(provider);
     logger.info(`✅ ${provider} adapter loaded successfully`);
   } catch (error) {
-    logger.info(`❌ ${provider} adapter failed to load: ${error.message}`);
+    checkFailed(`${provider} adapter failed to load: ${error.message}`);
   }
 }
 
@@ -116,7 +125,7 @@ try {
   const toolNames = configuredTools.slice(0, 5).map(t => t.id || t.name);
   logger.info('Sample tools:', toolNames.join(', '));
 } catch (error) {
-  logger.info(`❌ Tool loading failed: ${error.message}`);
+  checkFailed(`Tool loading failed: ${error.message}`);
 }
 
 assert.ok(configuredTools.length > 0, 'Should load configured tools');
@@ -165,7 +174,7 @@ for (const provider of providers) {
       assert.ok(request.body.tools, `${provider} should have tools`);
     }
   } catch (error) {
-    logger.info(`❌ ${provider} request creation failed: ${error.message}`);
+    checkFailed(`${provider} request creation failed: ${error.message}`);
   }
 }
 
@@ -215,7 +224,7 @@ for (const provider of providers) {
 
     assert.ok(messageCount > 0, `${provider} should have messages/contents`);
   } catch (error) {
-    logger.info(`❌ ${provider} multi-round handling failed: ${error.message}`);
+    checkFailed(`${provider} multi-round handling failed: ${error.message}`);
   }
 }
 
@@ -278,7 +287,7 @@ for (const provider of providers) {
     logger.info(`   - Tool found in request: ${toolFound}`);
     assert.ok(toolFound, `${provider} should include tool with correct parameters`);
   } catch (error) {
-    logger.info(`❌ ${provider} tool parameter validation failed: ${error.message}`);
+    checkFailed(`${provider} tool parameter validation failed: ${error.message}`);
   }
 }
 
@@ -304,7 +313,7 @@ try {
   logger.info('✅ Fallback request created successfully');
   logger.info(`   - Fallback URL: ${request.url}`);
 } catch (error) {
-  logger.info(`❌ Error handling test failed: ${error.message}`);
+  checkFailed(`Error handling test failed: ${error.message}`);
 }
 
 logger.info('✅ Error handling and fallback test passed\n');
@@ -326,7 +335,13 @@ logger.info('2. Tool Format: Each provider has different tool definition format'
 logger.info('3. Tool Call Representation: Different field names and structures');
 logger.info('4. Tool Response Handling: Different ways to represent tool results');
 logger.info('');
-logger.info('✅ All integration tests completed successfully!');
+if (failedChecks.length === 0) {
+  logger.info('✅ All integration tests completed successfully!');
+} else {
+  logger.info(`❌ ${failedChecks.length} checks failed:`);
+  for (const message of failedChecks) logger.info(`   - ${message}`);
+  process.exitCode = 1;
+}
 logger.info('');
 logger.info('🔧 Recommendations:');
 logger.info('1. Create a unified message abstraction layer');

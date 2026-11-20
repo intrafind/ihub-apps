@@ -66,6 +66,40 @@ export function goldenFile(record, dir = GOLDEN_DIR) {
   return path.join(dir, record.surface, `${record.case}.json`);
 }
 
+/**
+ * The golden files that belong to no case, and the cases that have no golden
+ * file.
+ *
+ * A golden without a case is never compared again. Nothing else would notice
+ * it: a case that is dropped or renamed leaves its golden in place, unchanged,
+ * so the difference list (which looks at changed and deleted goldens) asks for
+ * no row. With this check a dropped case forces a deleted golden, and a deleted
+ * golden needs a row.
+ *
+ * @param {Array<{surface: string, name: string}>} cases
+ * @param {string} [dir] - Where the goldens are (default: `__goldens__` next to this file).
+ * @returns {{withoutCase: string[], withoutGolden: string[]}} Paths relative to `dir`, sorted.
+ */
+export function unmatchedGoldens(cases, dir = GOLDEN_DIR) {
+  const expected = new Set(
+    cases.map(goldenCase => `${goldenCase.surface}/${goldenCase.name}.json`)
+  );
+  const present = new Set(
+    fs.existsSync(dir)
+      ? fs
+          .readdirSync(dir, { recursive: true, withFileTypes: true })
+          .filter(entry => entry.isFile())
+          .map(entry =>
+            path.relative(dir, path.join(entry.parentPath, entry.name)).split(path.sep).join('/')
+          )
+      : []
+  );
+  return {
+    withoutCase: [...present].filter(file => !expected.has(file)).sort(),
+    withoutGolden: [...expected].filter(file => !present.has(file)).sort()
+  };
+}
+
 /** The part of a record that is compared: everything but `report`. */
 export function comparable(record) {
   const { report: _report, ...compared } = record;

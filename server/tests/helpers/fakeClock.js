@@ -130,19 +130,41 @@ export function createFakeClock({ start = FAKE_CLOCK_START } = {}) {
      * timer, so a chain of "timer fires, code awaits, code sets the next timer"
      * plays out inside one call.
      *
+     * A callback is called and not awaited, as with real timers: an async
+     * callback that itself waits on a later timer of this clock continues when
+     * that timer fires, in the same call when it is due inside it. When an
+     * async callback rejects before this call returns, the call rejects with
+     * that error once every due timer has fired. A rejection after that is an
+     * unhandled rejection, as it is with `setTimeout`.
+     *
      * @param {number} ms
      * @returns {Promise<number>} How many timers fired.
      */
     advanceAsync: async ms => {
       const target = current + Math.max(0, Number(ms) || 0);
       let fired = 0;
-      await settle();
-      for (let timer = nextDue(target); timer; timer = nextDue(target)) {
-        await fire(timer);
-        fired++;
+      let advancing = true;
+      const rejections = [];
+      const watch = result => {
+        if (typeof result?.then !== 'function') return;
+        result.then(undefined, error => {
+          if (advancing) rejections.push(error);
+          // Nobody waits for this call any more: do not swallow the error.
+          else throw error;
+        });
+      };
+      try {
         await settle();
+        for (let timer = nextDue(target); timer; timer = nextDue(target)) {
+          watch(fire(timer));
+          fired++;
+          await settle();
+        }
+        current = target;
+      } finally {
+        advancing = false;
       }
-      current = target;
+      if (rejections.length > 0) throw rejections[0];
       return fired;
     },
 

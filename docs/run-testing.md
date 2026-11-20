@@ -18,7 +18,8 @@ Use the Node version of `.nvmrc`. All commands run from the repository root.
 node scripts/run-server-tests.js                     # every server test of the pr tier (npm run test:server)
 node scripts/run-server-tests.js golden              # only files whose path contains "golden"
 node scripts/run-server-tests.js --list              # how many files each runner and each tier has
-node scripts/run-server-tests.js --tier=nightly      # the nightly tier (npm run test:faults runs its fault tests)
+node scripts/run-server-tests.js --tier=nightly      # the whole nightly tier (npm run test:nightly)
+node scripts/run-server-tests.js --tier=nightly faults   # only its fault tests (npm run test:faults)
 node scripts/run-server-tests.js --check-quarantine  # fails when a quarantined test passes
 UPDATE_GOLDENS=1 node --test server/tests/golden/golden.test.js   # record the goldens again
 ```
@@ -32,9 +33,13 @@ Do not run the server tests at the same time as an end-to-end suite. Together th
 | Tier | Files | Runs |
 |---|---|---|
 | `pr` | every file that is not in the nightly tier | on every pull request, as part of `npm run test:quick` |
-| `nightly` | everything under `server/tests/faults/`, and every `*.nightly.test.js` | only with `--tier=nightly` |
+| `nightly` | everything under `server/tests/faults/`, and every `*.nightly.test.js` | only with `--tier=nightly` (`npm run test:nightly`) |
 
 Put a test into the nightly tier when it starts real server processes or runs for minutes. Name it `*.nightly.test.js`, or put it under `server/tests/faults/`. `--tier=all` runs both tiers.
+
+No workflow runs the nightly tier yet, so a test in it is run only by hand. `npm run test:nightly` runs the whole tier. `npm run test:faults` runs only the files whose path contains `faults`; it does not run a `*.nightly.test.js` outside `server/tests/faults/`.
+
+A word after the options filters by path. Several words narrow further: `npm run test:faults -- resume` runs the fault tests whose path also contains `resume`.
 
 The runner starts jest with `--workerIdleMemoryLimit=1GB`. A jest process that holds more than that after a test file is replaced before the next file. Without the limit one heavy file can make a later, unrelated file fail with "Jest worker ran out of memory".
 
@@ -43,6 +48,7 @@ The runner starts jest with `--workerIdleMemoryLimit=1GB`. A jest process that h
 - Do not add a file to the list to get a build green. Fix the test or the code.
 - When you fix a quarantined test, remove its line in the same pull request.
 - `--check-quarantine` runs every quarantined file on its own. It fails when one passes, and when a line names a file that no longer exists. A stale line would keep a working test out of the build. Each file gets an empty contents directory, as on a fresh checkout: some listed tests read `contents/` and pass on a machine where the server has run.
+- A file passes when its process exits with code 0, in the quarantine check as in every run. A plain script that logs a failed check and exits 0 passes. When `--check-quarantine` reports such a file, do not remove its line: make the script exit non-zero when a check fails. `toolCallingIntegration.test.js` was such a script.
 
 ## The scripted model
 
@@ -73,7 +79,9 @@ model.assertDone();
 
 The turns speak the OpenAI streaming format. `model.requests` holds a frozen copy of every request, `model.calls` and `model.remaining` count, and `model.waitForCall(n)` resolves when the n-th call has arrived, so a test of `turn.hang()` needs no sleep.
 
-A model call that the script has no turn for fails the test. The transport throws, and a hook that the helper registers with the test runner fails the test afterwards. So the test also fails when the code under test caught the error and answered with an error message. `model.assertDone()` fails in addition when turns are left over.
+A model call that the script has no turn for fails the test. The transport throws, and the helper reports the call to the test runner, which fails the test afterwards. So the test also fails when the code under test caught the error and answered with an error message. `model.assertDone()` fails in addition when turns are left over.
+
+Import the helper at the top of the test file. Under `node --test` the helper fails the test through a hook, and a hook that is registered while a test or a `before` hook runs is never run. With a lazy `await import()` of the helper the unscripted call therefore fails the test file as a whole when its process ends, not the single test. Under jest the test that made the call fails wherever the helper was imported.
 
 `scriptedChatService` of `helpers/scheduledTaskHarness.js` is built on the same helper with `strict: false`: there the transport throws and the test decides. Use the strict default in new tests.
 
@@ -90,11 +98,11 @@ clock.advance(15_000);   // fires every timer that is due, in order
 clock.now();             // milliseconds since the epoch, like Date.now()
 ```
 
-`advance(ms)` fires timers by due time; timers due at the same time fire in the order they were set. `advanceAsync(ms)` also lets awaiting code continue between two timers. `setRepeatingTimer`, `clearTimer`, `runDue`, `jumpTo` and `pending` complete the set.
+`advance(ms)` fires timers by due time; timers due at the same time fire in the order they were set. `advanceAsync(ms)` also lets awaiting code continue between two timers. It calls a timer's function and does not wait for what the function returns, as real timers do. So an async function that waits on a later timer of the same clock, such as a tick that renews a lease and then waits for its backoff, continues inside the same call when that timer is due in it. When such a function rejects, `advanceAsync` rejects with its error after every due timer has fired. `setRepeatingTimer`, `clearTimer`, `runDue`, `jumpTo` and `pending` complete the set.
 
 The clock only helps code that takes its time source as a parameter. Write new code that reads time that way: `{ now = Date.now, setTimer = setTimeout, clearTimer = clearTimeout }`, or one `clock` object. For existing code that calls `setTimeout` or `Date.now` itself, use the fake timers of the test runner (`mock.timers` of `node:test`, `jest.useFakeTimers()`). `server/tests/appToolsGateway.characterization.test.js` shows this for the 3-minute limit of an app call.
 
-No test of these tools waits on real time. `server/tests/no-real-time-waits.test.js` searches `server/tests/golden/` and the directories of the test tools for sleeps and for timers with a literal delay of one second or more, and fails on a hit.
+No test of these tools waits on real time. `server/tests/no-real-time-waits.test.js` searches `server/tests/golden/`, the directories of the test tools and the test files that came with them for sleeps and for timers with a literal delay of one second or more, and fails on a hit. When you add a test file for runs at the top level of `server/tests/`, add it to the list `SEARCHED` in that test.
 
 ## The golden harness
 
@@ -106,7 +114,7 @@ Nothing of the server is replaced. The harness starts real storage in a temporar
 
 | Part | Content |
 |---|---|
-| `envelopes` | every event the run sent to a client |
+| `envelopes` | every event the run sent to a client, with the stream it was sent to (`streamId`) |
 | `ledger` | every event of the [run ledger](run-ledger.md) |
 | `offeredToolIds` | the tool ids offered to each model call |
 | `modelRequests`, `toolSchemas` | a projection of each model request: the sequence of roles, a hash of the system prompt, the tool names with their parameter schemas, and the model options |
@@ -126,7 +134,7 @@ Some values differ between two runs and say nothing about behaviour. `normalise.
 | Ids are numbered by first appearance, so the same id in two places stays the same id | `chat-<id:1>` |
 | Timestamps and durations are replaced | `<ts>`, `<ms>` |
 | The date in the date sentence of the system prompt is replaced | `The current date is <date>.` |
-| `seq` and `rseq` are dropped, after a check that they increase | |
+| `seq` and `rseq` are dropped, after a check that they increase: `seq` within one stream, `rseq` within one run | |
 | Consecutive `step/delta` events of one step are merged, because the cut of a text into deltas depends on timing | |
 | Events of one `parallelGroup` are ordered by call id, because tools that run side by side finish in any order | |
 | Temporary paths, the product version and hashes over dated content are replaced | `<tmp>`, `<version>`, `<hash>` |
@@ -138,11 +146,12 @@ A case can name more id patterns and volatile keys in its config (`idPatterns`, 
 
 | File | Checks |
 |---|---|
-| `golden.test.js` | every case equals its golden |
+| `golden.test.js` | every case equals its golden, and every file under `__goldens__/` belongs to a case |
 | `determinism.test.js` | every case gives the same bytes twice in one process and once in a second process that runs 400 days later |
 | `goldenChange.test.js` | a changed prompt order and a changed tool schema fail the golden |
 | `differenceList.test.js` | every changed golden is named by a row of the difference list |
 | `differenceSignatures.test.js` | the signature check, on a scratch repository |
+| `harness.test.js` | a recording that cannot start leaves nothing behind for the next one |
 | `normalise.test.js`, `sideBySide.test.js` | the rules and the comparison tool |
 
 When you add cases, run the determinism test several times before you commit the goldens:
@@ -163,6 +172,8 @@ git add server/tests/golden/__goldens__
 ```
 
 `UPDATE_GOLDENS` is refused in CI. A new golden needs no row in the difference list; a changed one does.
+
+A golden file without a case fails `golden.test.js`. When you remove or rename a case, delete its golden file in the same pull request. A deleted golden is a changed one: it needs a row with the part `(deleted)`. This keeps a case from being dropped quietly while its golden stays in the directory and is never compared again.
 
 ## The difference list
 
@@ -214,10 +225,11 @@ The author of a change writes the row with `state: "proposed"`. The product owne
 
 The signature is valid only with the owner's approving review of the pull request that adds it. `scripts/check-difference-signatures.js` checks this:
 
-- The owner is the one `.github/CODEOWNERS` names for `differences.json` on the target branch. A pull request cannot name its own signer.
-- The owner's latest review must be an approval, given for a commit whose difference list equals the one of the head commit. An approval does not cover a row pushed after it.
+- The owner is the one `.github/CODEOWNERS` names for `differences.json` on the target branch. A pull request cannot name its own signer. There is one exception: the pull request that introduces the difference list on a target branch that has neither the list nor an owner for it. There the check uses the owner that the pull request adds to `CODEOWNERS`, and prints that it did.
+- The owner's latest review must be an approval, given for a commit whose difference list and whose goldens (`server/tests/golden/__goldens__/`) equal those of the head commit. An approval covers neither a row nor a golden pushed after it. A row names a golden file and its parts, not the content, so the content that the owner saw is part of the approval. When a golden is recorded again after the approval, the owner approves again.
 - Editing or removing a signed row needs the same approval.
 - A pull request that touches no signature passes without a review.
+- Every row needs an `id` of its own. The check stops with exit code 2 when a row has no `id` or two rows share one, because it could not tell which row a signature belongs to.
 
 The check and the difference list test run in the job **Golden difference list** of the end-to-end workflow (`.github/workflows/e2e.yml`), because they need the history of the target branch. In `npm run test:quick` on a shallow checkout the repository part of `differenceList.test.js` is skipped and says so.
 
@@ -232,7 +244,21 @@ gh api repos/<owner>/<repo>/pulls/<number>/reviews > reviews.json
 node scripts/check-difference-signatures.js --base origin/main --reviews reviews.json
 ```
 
-For the review requirement to be enforced by GitHub as well, turn on **Require review from Code Owners** in the branch protection of the target branch.
+### What the gate needs from the repository settings
+
+The job runs on `pull_request`. GitHub then runs the pull request's own copy of the workflow, of `scripts/check-difference-signatures.js` and of `differenceList.test.js`. A pull request could change one of them and switch the gate off for itself. `.github/CODEOWNERS` therefore names the product owner for these files:
+
+- `server/tests/golden/differences.json` and `.github/CODEOWNERS`
+- `scripts/check-difference-signatures.js`
+- `.github/workflows/e2e.yml`
+- `server/tests/golden/differenceList.js` and `server/tests/golden/differenceList.test.js`
+
+`CODEOWNERS` alone only asks the owner for a review. The gate holds only with these two settings in the branch protection of the target branch:
+
+- **Require review from Code Owners**. This is a precondition of the gate, not an addition to it. Without it a pull request can change the workflow or a check and merge without the owner.
+- The job **Golden difference list** as a required status check.
+
+Without these settings the check still catches the honest mistake, a signature that nobody approved. It does not stop a pull request that edits the check.
 
 ## Side by side
 

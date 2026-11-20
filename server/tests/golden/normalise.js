@@ -10,7 +10,8 @@
  * - ids are numbered by first appearance (`<id:1>`), so the same id in two
  *   places still reads as the same id;
  * - timestamps become `<ts>`, durations `<ms>`;
- * - `seq` and `rseq` are dropped after a check that they increase;
+ * - `seq` and `rseq` are dropped after a check that they increase, `seq` within
+ *   one stream and `rseq` within one run; the stream an envelope went to stays;
  * - consecutive `step/delta` events of one step and kind are merged, because
  *   how a text is cut into deltas depends on timing;
  * - events of one `parallelGroup` are put in the order of their call id,
@@ -218,6 +219,7 @@ export function assertIncreasing(events, key, streamOf = () => '') {
 /** Whether two `step/delta` envelopes are pieces of the same text. */
 function sameDelta(a, b) {
   return (
+    a.streamId === b.streamId &&
     a.runId === b.runId &&
     a.data?.step === b.data?.step &&
     a.data?.kind === b.data?.kind &&
@@ -229,7 +231,7 @@ function sameDelta(a, b) {
 }
 
 /**
- * Merge consecutive `step/delta` envelopes of one run, step and kind into one.
+ * Merge consecutive `step/delta` envelopes of one stream, run, step and kind into one.
  * The server sends text in pieces whose size depends on a 50 ms window
  * (`RunStream.js`), so the pieces differ between runs and their sum does not.
  *
@@ -262,13 +264,14 @@ const callIdOf = event => String(event?.data?.callId ?? event?.data?.toolCallId 
 /**
  * Put the events of one parallel group into a fixed order. Tool calls of one
  * group run side by side, so their events arrive in the order the tools
- * finish. A run of consecutive events of the same run, step and
+ * finish. A run of consecutive events of the same stream, run, step and
  * `parallelGroup` is sorted by call id and, for one call, by the order the
  * events arrived in.
  *
  * Events without `parallelGroup` keep their place and end a run.
  *
- * @param {Object[]} events - Envelopes or ledger events (`{ type, runId, data }`).
+ * @param {Object[]} events - Envelopes (`{ type, streamId, runId, data }`) or ledger events
+ *   (`{ type, runId, data }`).
  * @returns {Object[]}
  */
 export function orderParallelGroups(events) {
@@ -293,6 +296,7 @@ export function orderParallelGroups(events) {
       first &&
       group !== undefined &&
       groupOf(first) === group &&
+      first.streamId === event.streamId &&
       first.runId === event.runId &&
       first.data?.step === event.data?.step;
     if (group === undefined || !sameRun) flush();
@@ -304,21 +308,29 @@ export function orderParallelGroups(events) {
 }
 
 /**
- * Normalise the envelopes of a stream (SSE v2): drop keep-alive frames, check
- * and drop `seq` and `rseq`, merge deltas, order parallel groups, then apply
- * the value rules.
+ * Normalise the envelopes a recording delivered (SSE v2): drop keep-alive
+ * frames, check and drop `seq` and `rseq`, merge deltas, order parallel groups,
+ * then apply the value rules.
  *
- * @param {Object[]} envelopes - As delivered, in order.
+ * `seq` counts per stream and `rseq` per run (`RunStream.js`), so each is
+ * checked within its own. The stream id stays in the record: an envelope that
+ * went to another stream than before is a difference.
+ *
+ * @param {Array<{streamId: string, envelope: Object}>} deliveries - What was delivered to which
+ *   stream, in order.
  * @param {ReturnType<typeof createNormaliser>} normaliser
- * @returns {Array<{type: string, runId?: string, data: any}>}
+ * @returns {Array<{type: string, streamId: string, runId?: string, data: any}>}
  */
-export function normaliseEnvelopes(envelopes, normaliser) {
-  const kept = envelopes.filter(envelope => !DROPPED_EVENT_TYPES.has(envelope.type));
-  assertIncreasing(kept, 'seq');
+export function normaliseEnvelopes(deliveries, normaliser) {
+  const kept = deliveries
+    .filter(({ envelope }) => !DROPPED_EVENT_TYPES.has(envelope.type))
+    .map(({ streamId, envelope }) => ({ ...envelope, streamId: String(streamId ?? '') }));
+  assertIncreasing(kept, 'seq', envelope => envelope.streamId);
   assertIncreasing(kept, 'rseq', envelope => envelope.runId || '');
   return orderParallelGroups(mergeStepDeltas(kept)).map(envelope =>
     normaliser.normalise({
       type: envelope.type,
+      streamId: envelope.streamId,
       ...(envelope.runId ? { runId: envelope.runId } : {}),
       data: envelope.data ?? null
     })
