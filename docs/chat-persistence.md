@@ -57,6 +57,14 @@ temporary to kept (there is none back). The storage provider is mandatory, so
 every chat is stored; if the provider fails at runtime the chat POST answers
 `503 CHAT_STORAGE_UNAVAILABLE` rather than a conversation nobody could continue.
 
+Chats and transcripts are documents and stay on the `contents/` volume, also
+when blobs are kept in an S3 bucket; only the files uploaded to a chat go to the
+bucket. With `storage.encryption.enabled` the chat document (with its title),
+the transcript and the run ledger are encrypted on disk. The chat id, the owner
+id, sizes and times stay readable. To read a stored chat on the server shell,
+use `npm run storage:show -- --doc chats <chatId>` and
+`--doc chat-messages <chatId>`. See [Storage Encryption](storage-encryption.md).
+
 ## Enabling
 
 1. **Turn on the feature flag.** Admin → Platform → Features → **Chat

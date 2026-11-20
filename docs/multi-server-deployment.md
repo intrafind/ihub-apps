@@ -165,7 +165,7 @@ following are written at runtime and must therefore be on shared storage:
 | `contents/data/workflow-state/`   | Workflow `StateManager`                   | Optional persistence for in-flight workflow runs     |
 | `contents/uploads/assets/`        | Admin UI asset upload                     | Logos, icons referenced from the UI                  |
 | `chat-files` storage namespace (under `contents/data/` on the filesystem provider) | Chat, task and API file uploads | Stored files; the server-wide quota counter lives there too, so all hosts count against one total (see [Chat files](chat-files.md)) |
-| `contents/.encryption-key`        | First-time setup                          | AES key for `ENC[...]` secrets — must be identical   |
+| `contents/.encryption-key`        | First-time setup                          | AES key for `ENC[...]` secrets and, with [storage encryption](storage-encryption.md), for all stored content — must be identical |
 | `contents/.migration-history.json`| Migration runner on startup               | Tracks applied versions                              |
 | `contents/.migration-lock`        | Migration runner on startup               | Filesystem advisory lock so only one host migrates   |
 
@@ -376,6 +376,17 @@ On first boot the server generates `contents/.encryption-key` if missing.
 **For multi-host setups, generate the key once and provision it before the
 first host starts** — either by writing the file to the shared volume in
 advance, or by setting `TOKEN_ENCRYPTION_KEY` in the environment.
+
+With [storage encryption](storage-encryption.md) on, a host that has another
+key than the one the data was written with refuses to start, and a host
+without a key does not generate one over encrypted data.
+
+**An S3 bucket for blobs does not change this page.** `storage.blobs.provider:
+"s3"` moves uploaded files and other blobs into a bucket
+([Storage Providers](storage.md#blob-storage-backends)). Chats, logs, locks
+and configuration stay in `contents/`, so every host still needs the shared
+volume and every rule above still holds. Use one bucket prefix for the whole
+deployment, not one per host.
 
 If you let two hosts race to generate the key, one of them silently wins
 and the other sees its `ENC[...]` reads fail — depending on filesystem

@@ -1,6 +1,13 @@
 # S3 Blob Storage Backend
 
-Date: 2026-11-19. Status: planned, not implemented. Tickets: #2318 (implementation), #2906, #2302, #2312.
+Date: 2026-11-19, updated 2026-11-20. Status: built on branch `claude/epic-lamport-5wjqa7`, not
+released. Tickets: #2318 (implementation), #2906, #2302, #2312, #2316.
+
+Sections 1 to 10 are the plan. They were updated on 2026-11-20 where the plan had left a point open:
+each such point now names the decision (A1 to A15, section 3.1) and what was built. Section 11
+records what the requester changed after the plan (R1 to R3) and where the code differs from the
+plan. Where this document and the code disagree, the code is right. Operator documentation:
+`docs/storage.md` (section "Blob storage backends") and `docs/storage-encryption.md`.
 
 This document consolidates the planning of seven roles and the lead's decisions. The roles are
 abbreviated as follows: PM (product manager), UX (UX designer), UI (UI designer), ARCH (architect),
@@ -11,13 +18,18 @@ then the security plan.
 ## 1. Summary
 
 - Built: an S3-compatible backend for the blob facet only, selected with `storage.blobs.provider: "s3"`.
-- Built: client-side encryption of every object in every blob namespace, always on for S3, no off switch.
+- Built: client-side encryption of every object in every blob namespace. The plan had it always on
+  for S3 with no off switch. The requester changed that: encryption is one optional switch,
+  `storage.encryption.enabled`, and it also covers filesystem blobs, documents, logs and several
+  file stores (section 11).
 - Built: a fail-closed start with a key check, an offline copy command for existing blobs, a check
   command, a read-only admin status endpoint and card, a local S3 server for development and CI.
 - Not built: S3 for documents, logs and locks. They stay on the configured provider (filesystem).
-- Not built: an admin form (#2312), encryption of filesystem blobs, multi-instance support, a rewrap
-  job, a Transit key provider, multipart, range reads, hidden object names.
-- Not verified: nothing was run against a real S3 server during planning.
+- Not built: an admin form (#2312), multi-instance support, a rewrap job, a Transit key provider,
+  multipart, range reads, hidden object names.
+- Not verified: the implementation was run against the in-repository S3 server only
+  (`npm run s3:dev`), which does not verify request signatures. The versitygw compose file and the
+  CI workflow were never executed. AWS S3 was not tested.
 
 ## 2. Context
 
@@ -129,6 +141,29 @@ implementation.
 | D18 | Read failures | An integrity failure, plaintext where ciphertext is expected, or an unknown key id throws a distinct storage error (`CORRUPT_BLOB`, `KEY_UNAVAILABLE`). `get` never returns `null` for these and never returns raw bytes. | Return `null`. | Callers treat `null` as "gone" and may clean up metadata. Returning raw bytes would let a bucket writer inject plaintext. |
 | D19 | Not in v1 | Admin form and wizard (#2312), Transit key provider, rewrap job, multipart and range reads, HMAC object names, multi-instance claims, a tenant prefix beyond `default`, backup export of the bucket, S3 for documents. Each is a follow-up. No ticket is created without the requester's yes. | (none) | See section 10. |
 
+### 3.1 Addendum: points the plan had left open
+
+The lead decided these after the design document had listed its open points. The last column says
+what the code does.
+
+| # | Topic | Decision | As built |
+| --- | --- | --- | --- |
+| A1 | Associated data | The exact string `ihub/blob/v1\n<tenant>\n<ns>\n<key>\n<segmentBytes>`, newline separated, segment size included. Fixed before the test vectors were recorded. | As decided (`server/crypto/blobEnvelope.js`, vectors in `server/tests/fixtures/blob-envelope/`). |
+| A2 | Key-check marker | Object `_ihub/keycheck` under the prefix, encrypted like any blob. Payload `{ format: 1, naming: "plain", installationId, createdAt }`. Whoever first writes into an empty prefix writes it: the server at start or the copy command. Objects present and no marker: refuse, unless `IHUB_S3_ADOPT_BUCKET=true` is set for that one start (logged as a warning). | As decided. `storage:check` never writes it. With storage encryption the same object also exists on local disk (`data/blobs/_ihub/keycheck`). |
+| A3 | Object size cap | `storage.blobs.s3.maxObjectBytes`, default 64 MiB of plaintext, checked before buffering on `put` and against `ContentLength` on `get`. | The default is **128 MiB**, so that it is above the default size limit of an artifact (100 MB). Range 1 byte to 4 GiB. A larger `put` is `BLOB_TOO_LARGE` (413). |
+| A4 | Configuration fields | Besides D1's list: `maxObjectBytes`, `connectTimeoutMs` (5000), `requestTimeoutMs` (60000), `maxAttempts` (3). `maxSockets` is a constant. The key provider is the platform's, with no setting of its own. | As decided. `maxSockets` is 32. |
+| A5 | Copy command | Never deletes a source file. No `--delete-source`. | As decided. |
+| A6 | Boot warning | Names the namespaces with counts. | As decided. Counting stops at 1000 per namespace ("1000+"). |
+| A7 | CI | A new workflow `s3-storage-tests.yml` that uses the compose file with `IHUB_TEST_S3_REQUIRED=1` and fails on skipped tests. No nightly run, no count floor. | The file exists. It has never run. |
+| A8 | `GET /api/admin/storage` | Shape per the UI plan, plus `localLeftovers` (namespaces with counts, from the boot check). Probe result cached, refreshed at most once a minute. No `pendingDeletes`. | As decided. See 4.11 for the shape. |
+| A9 | Wording | "Blob storage" / "Blob-Speicher" for admins. | As decided. |
+| A10 | Public `/api/health` | Additive `storage.blobs: { provider, status }`, nothing else. | As decided. The status is the last check result; nothing refreshes it in the background (section 11.2). |
+| A11 | Error codes | One classifier with the UX code table for operator and admin output. User-facing codes and the UX-only behaviours (blocked turn, delete retry queue, backend-changed memory) are not in v1. A notice on the backup page is, if it is a text change only. | The classifier is `server/storage/blobProbe.js`, the hints are `server/storage/blobOperatorGuide.js`. The backup page has the notice. |
+| A12 | Smithy handler | No direct `@smithy/node-http-handler` dependency; handler options are passed as a plain object. | As decided. |
+| A13 | Runtime SSL or proxy change | The client is built once; a change needs a restart. | As decided, and documented. |
+| A14 | Docs | Extend `docs/storage.md`; add the key-loss and backup text to `docs/encryption-key-management.md`. | Done. Storage encryption has its own page, `docs/storage-encryption.md`. |
+| A15 | Failed bootstrap | Whatever the code does for an unknown provider is what S3 failures do. The invariant: never serve blobs from local disk when S3 is configured. | The process logs the failing step and code and ends with exit code 1. In a cluster the primary checks before it forks. |
+
 ## 4. Design
 
 Details below come from the decisions, then from the architect's plan, then from the security plan.
@@ -165,13 +200,16 @@ Where a detail has no source, the text says "not specified".
   must deliver and resolve the `blobs` block; today it returns only `storage[<provider name>]`.
 - `endpoint` is optional (AWS). `region` defaults to `us-east-1`. `forcePathStyle` defaults to
   `true`. `allowInsecureHttp` defaults to `false`.
-- There is no `encryption.enabled` setting. The tenant is the constant `default` and is not configurable.
+- The plan had no `encryption.enabled` setting. Built (R3, section 11): `storage.encryption.enabled`,
+  one switch beside `storage.blobs`. The tenant is the constant `default` and is not configurable.
 - The architect's plan also lists `connectTimeoutMs` (5000), `requestTimeoutMs` (60000),
   `maxAttempts` (3), `maxSockets` (32) and `encryption.keyProvider` (`local-file`). D1 does not name
-  them. Whether they are configuration fields or constants is not decided.
+  them. Decided (A4): `maxObjectBytes`, `connectTimeoutMs`, `requestTimeoutMs` and `maxAttempts` are
+  configuration fields; `maxSockets` (32) is a constant; there is no key provider setting.
 - Endpoint validation (SEC): scheme `http` or `https` only; no user info, query or fragment; no
   redirect to another host. Bucket name and prefix match a strict pattern. Link-local targets
-  (`169.254.0.0/16`, `fe80::/10`, `fd00:ec2::254`) are refused unless the host is on `ssrf.allowedHosts`.
+  (`169.254.0.0/16`, `fe80::/10`, `fd00:ec2::254`) are refused. Built without the `ssrf.allowedHosts`
+  exception: a link-local endpoint is always refused.
 - An unresolved `${VAR}` placeholder is an error at start, not an empty string (SEC).
 - Schema: `server/validators/platformConfigSchema.js` gets the optional block. No migration (D14).
 - Secret (D15): add `storage.blobs.s3.secretAccessKey` to `PLATFORM_SECRET_PATHS`
@@ -232,8 +270,8 @@ Dependencies: `@aws-sdk/client-s3` (Apache-2.0, needs Node 20 or later) in `serv
 loaded with `await import()` inside the client factory. Pin an exact version that is at least seven
 days old (`.npmrc` has `min-release-age=7`). The architect's plan also adds
 `@smithy/node-http-handler` as a direct dependency. ENG measured that the SDK accepts the handler
-options as a plain object, so the direct dependency may not be needed. Not decided; the architect's
-plan stands by precedence.
+options as a plain object, so the direct dependency may not be needed. Decided (A12): no direct
+dependency; the handler options are a plain object.
 
 ### 4.3 Object format and associated data
 
@@ -373,18 +411,19 @@ Key check rules (D7, with the security plan's rule set):
 Open points of the key check:
 
 - The security plan proposes an override `IHUB_S3_ADOPT_BUCKET=true` for one start in the fourth
-  case. D7 does not mention it. Not decided.
-- The copy command (4.9) writes objects before the first start with S3. No source says who writes
-  the marker in that case. Without it, the first start would find objects and no marker and refuse.
-  Not specified.
-- The security plan gives the marker a payload (format version, `naming: plain`, a random bucket id,
-  creation time) and a different name (`<prefix>/<tenant>/.ihub-bucket`). D7 fixes the name
-  `_ihub/keycheck`. The payload is not decided.
+  case. Decided (A2): built as proposed, with a warning in the log.
+- The copy command (4.9) writes objects before the first start with S3. Decided (A2): whoever
+  first writes into an empty prefix writes the marker, so the copy command does. A dry run and
+  `storage:check` do not.
+- The marker's name is `_ihub/keycheck` (D7). Decided (A2): its payload is
+  `{ format: 1, naming: "plain", installationId, createdAt }`.
+- The marker is used only when encryption is enabled (R3).
 - A cloned installation with the same master key is not caught. The rule is: one prefix per
   installation.
 
-Bucket versioning (SEC): at start the adapter calls `GetBucketVersioning`. `Enabled` gives a warning
-in the log. `AccessDenied` or "not implemented" is tolerated in silence. Object lock is not supported.
+Bucket versioning (SEC): the plan had the adapter call `GetBucketVersioning` at start and warn when
+versioning is enabled. **Not built.** The adapter never asks for the versioning state. The
+documentation tells operators what versioning and object lock mean for deleted objects.
 
 ### 4.7 Transport and credentials
 
@@ -395,8 +434,8 @@ in the log. `AccessDenied` or "not implemented" is tolerated in silence. Object 
 - `getSSLConfig` and `getProxyProvenance` / `getProxyConfig` get an optional `platformConfig`
   argument. The storage bootstrap passes the raw `platform.json`.
 - `ssl` is editable at runtime (`/api/admin/ssl/config`). ENG proposes to rebuild the client when
-  the SSL or proxy settings change. The architect's plan builds the client once. Not decided; by
-  precedence a change of these settings reaches the S3 client after a restart.
+  the SSL or proxy settings change. The architect's plan builds the client once. Decided (A13): the
+  client is built once and a change of these settings reaches it after a restart.
 - The bypass is decided per host. With virtual-hosted addressing the host is `<bucket>.<endpoint>`,
   which may not match the whitelist entry. Path-style addressing is the default.
 - Plain `http://` is refused at start unless the host is loopback (`localhost`, `127.0.0.0/8`,
@@ -406,11 +445,13 @@ in the log. `AccessDenied` or "not implemented" is tolerated in silence. Object 
   `followRegionRedirects` off.
 - Requests: `PutObject` with a `Buffer` body and explicit `ContentLength`. `GetObject` body via
   `transformToByteArray()`. Operations used: `PutObject`, `GetObject`, `HeadObject`, `DeleteObject`,
-  `ListObjectsV2`, and `GetBucketVersioning` at start.
+  `ListObjectsV2`, and `HeadBucket` (at start, in the check, and in `delete` to tell a missing key
+  from a missing bucket). `GetBucketVersioning` was planned and is not sent.
 - Size check (D16, SEC finding F11): reject a `put` above a maximum. On `get`, compare
   `Content-Length` with the maximum before reading the body, and stop reading at the limit when the
-  header is missing. The value of the maximum is not decided. The plans name 20 MB (PM, project
-  limit), 25 MiB (QE, ENG, default upload limit) and "a configured maximum" (SEC).
+  header is missing. The plans name 20 MB (PM, project limit), 25 MiB (QE, ENG, default upload
+  limit) and "a configured maximum" (SEC). Decided (A3): a setting, `maxObjectBytes`, default 64 MiB.
+  Built with a default of 128 MiB.
 - Credentials (D5): static only. The default credential chain, session tokens, instance roles and
   web identity are not used.
 - Logging (SEC): never log the secret key, the `Authorization` header, keys of any kind, plaintext,
@@ -419,8 +460,8 @@ in the log. `AccessDenied` or "not implemented" is tolerated in silence. Object 
 - One module owns the SDK import. SEC proposes a lint rule that forbids `@aws-sdk/client-s3` elsewhere.
 
 Least-privilege bucket policy for the docs (SEC): `s3:GetObject`, `s3:PutObject`, `s3:DeleteObject`
-on `BUCKET/PREFIX/*`; `s3:ListBucket` on the bucket with a prefix condition; `s3:GetBucketVersioning`
-on the bucket. Bucket side: block public access, deny requests without TLS, one bucket or one prefix
+on `BUCKET/PREFIX/*`; `s3:ListBucket` on the bucket with a prefix condition. The plan also listed
+`s3:GetBucketVersioning`; it is not needed, because that request is not sent. Bucket side: block public access, deny requests without TLS, one bucket or one prefix
 per installation.
 
 ### 4.8 Error mapping
@@ -443,13 +484,16 @@ per installation.
 - API responses for storage failures carry a registry code and a generic detail. They carry no
   endpoint, bucket, object name or remote message (SEC).
 - The UX plan proposes two user-facing registry codes, `FILE_STORAGE_UNAVAILABLE` (503, temporary)
-  and `FILE_UNREADABLE` (500, permanent), with English and German texts. Not decided.
+  and `FILE_UNREADABLE` (500, permanent), with English and German texts. Decided (A11): not in v1.
+  Built: the registry codes `CORRUPT_BLOB`, `KEY_UNAVAILABLE`, `BLOB_TOO_LARGE` and
+  `INVALID_STORAGE_CONFIG` have English and German texts.
 
 ### 4.9 Existing blobs and the copy command
 
 - After the switch the server reads blobs only from the bucket. Blobs written before the switch
   stay on disk and are not read. Nothing is deleted on disk.
-- `npm run storage:copy-blobs` (`server/scripts/copyBlobs.js`) copies from the filesystem to S3.
+- `npm run storage:copy-blobs` (built as `server/storage/commands/copyBlobs.js`, also reachable as
+  `node server/storage/commands/run.js copy-blobs`) copies from the filesystem to S3.
   For each known blob namespace it scans the source, reads each blob, writes it to the target
   through the encrypting store, reads it back and compares the SHA-256.
 - It has `--dry-run`. It is idempotent: a second run copies nothing.
@@ -457,8 +501,8 @@ per installation.
 - It needs the complete namespace list (D17).
 - Procedure: stop the server, run the copy, set `storage.blobs.provider`, start.
 - Boot warning (D9): while S3 is active and local blobs exist, one warning names the namespaces and
-  the copy command. PM and UX also want the count per namespace in the warning. D9 names only the
-  namespaces.
+  the copy command. PM and UX also want the count per namespace in the warning. Decided (A6): the
+  warning carries the counts.
 - Switching back to the filesystem is not supported in v1. The docs must say that objects written
   to the bucket in the meantime are not visible on disk.
 - After a successful copy, a plaintext copy of every file is still on the server until the operator
@@ -466,8 +510,10 @@ per installation.
 
 Differences between the plans that D9 narrows or leaves open: the architect's plan has the command
 work in both directions and has a `--delete-source` flag. D9 limits the direction to filesystem to
-S3. PM requires that the command never deletes a source file. Whether `--delete-source` exists is
-not decided.
+S3. PM requires that the command never deletes a source file. Decided (A5): there is no
+`--delete-source`; the command never deletes. Built in addition: a blob that is in the bucket with
+other content is a conflict, is left alone on both sides and makes the command exit with 1;
+`--namespace=<name>` limits the run; exit codes are 0, 1 and 2 (wrong usage).
 
 ### 4.10 Local backend and CI
 
@@ -491,11 +537,11 @@ not decided.
 - Suites on the in-repo server run in the existing unit test job. They are not proof of S3
   compatibility. Only the versitygw run exercises SigV4, path-style and checksum settings.
 
-Not decided: which workflow file carries the versitygw job. The architect's plan adds a job to
-`.github/workflows/integration-tests.yml` with `docker run`. The QE plan adds a new workflow
-`.github/workflows/s3-storage-tests.yml` that starts the compose file, with a nightly run, a
-skipped-test count and a test-count floor. Also not decided: whether the in-repo server may be used
-by tests as a helper under `server/tests/helpers/` (QE) in addition to the path D10 names.
+Decided (A7): a new workflow `.github/workflows/s3-storage-tests.yml` starts the compose file, sets
+`IHUB_TEST_S3_REQUIRED=1` and fails on skipped tests; no nightly run and no test-count floor. The
+in-repo server stays at the path D10 names, with its helpers under `server/tests/support/`. Neither
+the compose file nor the workflow has been executed yet. The test files and how to run them are in
+`2026-11-20 S3 Blob Storage Test Suites.md`.
 
 Rejected backends: `s3rver` (unmaintained, fails paging on Node 22), `fauxqs` (wrong list order,
 lost keys), `s3-test-server` (one month old, one maintainer), MinIO (AGPL), `aws-sdk-client-mock`
@@ -521,16 +567,20 @@ lost keys), `s3-test-server` (one month old, one maintainer), MinIO (AGPL), `aws
   a live region, polling does not announce, and the axe baseline stays unchanged.
 - The admin-wide banner is cut (D11).
 
-Not decided:
+Decided (A8 to A10) and built:
 
-- The exact response shape. The UX and UI plans propose different shapes. D11 lists only the content.
-- The card title. UX proposes "Blob storage" / "Blob-Speicher". UI proposes "File storage" /
-  "Dateispeicher" and states that the UX designer owns the wording.
-- How often the cached status is refreshed. UX proposes 60 s while in error and 5 min while ok. UI
-  proposes at most once a minute.
-- Whether the response carries `localLeftovers` and `pendingDeletes` (UX).
-- Whether the public `/api/health` gains `storage.blobs: { provider, status }` (UX, ENG). It must
-  show no endpoint, bucket or error text, because the route is unauthenticated.
+- The response shape follows the UI plan: `blobs` (`provider`, `status`, `latencyMs`, `checkedAt`,
+  `location`, `encryption`, `source`, `error`, `steps`), `documents`, `restartRequired`,
+  `configuredBlobProvider`, `localLeftovers`, and a top-level `encryption` for the whole
+  installation (`enabled`, `scope`, `conversion`, `sealedDataExists`). No `pendingDeletes`.
+- `blobs.encryption.scope` is `all` or `none`. The top-level `encryption.scope` is `none`, `blobs`
+  or `storage`. The planned value `project-files` does not exist.
+- The card title is "Blob storage" / "Blob-Speicher".
+- The held check result is refreshed when it is older than a minute, on a read of the endpoint. A
+  read waits at most two seconds for the refresh. Each cluster worker holds its own result.
+- `/api/health` has `storage.blobs: { provider, status }`.
+- `restartRequired` compares backend, bucket, prefix, region, endpoint, size limit and the
+  encryption switch. It does not see changed credentials or timeouts.
 
 ### 4.12 Check command
 
@@ -547,8 +597,11 @@ Not decided:
   `S3_REGION_MISMATCH`, `S3_ADDRESSING`, `S3_PROBE_MISMATCH`, `BLOB_KEY_MISSING`,
   `BLOB_KEY_MISMATCH`). D12 requires one classifier but does not fix the code list.
 - Logs and command output are English. German goes into the docs and the UI.
-- Not specified: the script path, a `--json` flag, and how the command is called in the binary and
-  Docker distributions, where `npm` is not always present (UX).
+- Built: `server/storage/commands/storageCheck.js`, with `--json` and `--verbose`. Where `npm` is
+  not present: `node server/storage/commands/run.js check`. Exit codes 0 (usable), 1 (not usable),
+  2 (wrong usage). The built code list is the table in `docs/storage.md`; `S3_ADDRESSING` was not
+  built, and `S3_SERVICE_ERROR`, `S3_ERROR`, `BLOB_KEY_CHECK_MISSING`, `BLOB_CORRUPT`,
+  `BLOB_PROVIDER_UNKNOWN` and `BLOB_STORAGE_ERROR` were added. It never writes the key-check marker.
 
 ## 5. Requirements and acceptance criteria
 
@@ -718,14 +771,14 @@ Different likelihoods from different roles are kept.
 | 12 | `S3Client.destroy()` destroys a shared agent, or an import cycle `storage → httpConfig → configCache → storage` appears. | ARCH | Medium | All outbound calls fail after a storage shutdown, or the server does not boot. | Dedicated agent only. Dynamic import of `httpConfig` in the client factory. Boot check. | Yes for the agent (D16). The import cycle needs a check during implementation. |
 | 13 | No keep-alive agent. Every blob call opens a TLS connection. | ENG | Medium | Slow chats with many evidence packs. | Own keep-alive agent. | Yes (D16). |
 | 14 | S3 is down at boot. | ARCH, UX, QE | Medium | iHub does not start although chats without files would work. | Accepted and documented. Timeouts 5 s and 60 s, 3 attempts, clear errors. | Accepted. UX wanted a degraded start and was overruled (D6). QE's concern that the server comes up on a plaintext local store is covered by D6. |
-| 15 | S3 fails at runtime and nobody notices: credentials rotated on the S3 side, health looks green, the card is not opened. | UX, UI, ENG | Medium | Uploads fail for days. | Status in the admin endpoint, error log on state change, a field in `/api/health` for monitoring, a round-trip test instead of a passive check. | Partly. Cached status and `_test` (D11). The `/api/health` field is not decided. The admin-wide banner is cut. |
+| 15 | S3 fails at runtime and nobody notices: credentials rotated on the S3 side, health looks green, the card is not opened. | UX, UI, ENG | Medium | Uploads fail for days. | Status in the admin endpoint, error log on state change, a field in `/api/health` for monitoring, a round-trip test instead of a passive check. | Partly. Cached status and `_test` (D11). `/api/health` has the field (A10), but it holds the last check result and nothing checks in the background, so this risk is still open for monitoring. The admin-wide banner is cut. |
 | 16 | Deleted content stays in the bucket: versioning or object lock is on, a delete fails during an outage and is never retried, or a crash leaves an orphan. | SEC, PM, UX, ENG | Medium | A deletion request is not met. Compliance or privacy finding. | `GetBucketVersioning` warning at start. Docs and lifecycle rule. Log delete failures in the adapter. Orphan sweeps. UX proposes a retry queue with a visible count. PM proposes a reconciler. | Partly. Warning, docs, logging. No retry queue and no reconciler. |
 | 17 | The delete race is not excluded: two crawl hand-overs both claim a page, or neither does. | ENG, QE | High without the lock (ENG). Medium in a two-instance deployment (QE). | Duplicate or lost project items, hard to reproduce. | Lock, `HeadObject`, `DeleteObject`. Conformance race test. Two-process test. | Yes on one machine (D8). Not across instances. QE warns that a green single-process suite is not proof. |
 | 18 | The delete lock creates thousands of lock files. | ARCH | Low | Slower deletes, more files until the nightly sweep. | `deletePrefix` takes no lock. Measure. | Yes, with a measurement during implementation. |
 | 19 | Plaintext reaches the bucket: a namespace missed by a hard-coded list, a new write path that skips the adapter, a retry path, a content type, a file name in a key. The card still says "encrypted". | PM, QE, SEC, UI | Medium | The central promise is broken. A false security statement in the product. | Encryption in the decorator with no skip list. Nothing-readable test with namespaces from code and a guard on `blobs.put`. One module owns the SDK import. The server computes the encryption scope. | Yes (D2, D17, D11). The lint rule and the guard test are in the role plans only. |
 | 20 | A developer adds "if it does not start with the magic, return it" to ease a migration. | SEC | Medium | Plaintext injection. False encryption claim. | Reads fail closed. Tamper test with the plaintext case. Review rule. | Yes (D18). |
 | 21 | Two installations share one prefix (staging cloned from production). The sweeps of each delete the other's files. | SEC | Medium | Silent loss of production files. | Key check marker. One prefix and different credentials per installation. | Partly. A clone with the same master key is not caught. |
-| 22 | Large uploads exhaust memory or block the event loop, several at once, or a hostile large object does. | ARCH, PM, ENG, QE, SEC | Medium (ARCH, PM, QE, SEC). Low at 25 MB (ENG). | Worker out of memory. Latency spikes. | Size check before buffering. Existing upload limits. Document the memory factor. Nightly memory and event-loop checks. Streaming as a follow-up. | Partly. Size check (D16). No streaming path. The maximum is not decided. |
+| 22 | Large uploads exhaust memory or block the event loop, several at once, or a hostile large object does. | ARCH, PM, ENG, QE, SEC | Medium (ARCH, PM, QE, SEC). Low at 25 MB (ENG). | Worker out of memory. Latency spikes. | Size check before buffering. Existing upload limits. Document the memory factor. Nightly memory and event-loop checks. Streaming as a follow-up. | Partly. Size check (D16). No streaming path. The maximum is `maxObjectBytes`, 128 MiB by default (A3). |
 | 23 | The envelope format or its constants change in a refactor. Old objects stop opening, or `list` sizes are wrong. | ARCH, QE | Low (ARCH). Medium (QE). | Existing installations lose files after an upgrade. Wrong quotas. | Recorded vectors that must keep passing. Version byte. A new magic for a new version. | Yes (D3). |
 | 24 | The header becomes variable, or someone "fixes" `list` with a `HeadObject` per key. | ENG | Medium | Listings far slower. Evidence size wrong. | Fixed header. Unit test for the size formula at segment borders. Request count test. | Yes (D3). |
 | 25 | The secret key or a request body appears in a log or an admin read. An unrelated admin save writes `***REDACTED***` back as the secret. An endpoint URL with credentials is rendered. | SEC, QE, UX, UI | Medium (SEC, UX). Low to medium (QE). Low (UI). | Credential leak, or an outage after an unrelated save. | No logger on the client. Logger spy test. Redaction and encryption wiring. Endpoint host only in the status. | Yes (D5, D11, D15). |
@@ -735,10 +788,10 @@ Different likelihoods from different roles are kept.
 | 29 | The master key leaks (support bundle, backup). No rewrap exists, so the key cannot be retired. | SEC | Low to medium | Every past and present object is readable by whoever holds a bucket copy. | Rewrap job as a follow-up. Key in a secret store. | No. |
 | 30 | The default credential chain is on, and an admin redirects storage to another bucket of the same cloud account. | SEC | Low | Data loss in an unrelated bucket. | Do not offer the chain. | Yes. The chain is not used (D5). |
 | 31 | A customer's privacy officer judges object names to be personal data. | SEC | Low to medium | Rollout blocked at that customer. | Make the decision visible. Reject ids that look like e-mail addresses. Keep the format open for a later naming mode. | Partly. The exposure is accepted and flagged to the requester (D4). |
-| 32 | The backup export is taken for a full backup. `contents/` is restored without the bucket, the bucket without the key, or from an export with an older key. | PM, ENG, UX | Medium (PM, ENG). Low to medium (UX). | Restore gives missing or unreadable files. | Backup section in the docs. A flag in `backup-metadata.json`. A notice on the backup page. | Docs only. The flag and the notice are not decided. Bucket export is out of scope (D19). |
+| 32 | The backup export is taken for a full backup. `contents/` is restored without the bucket, the bucket without the key, or from an export with an older key. | PM, ENG, UX | Medium (PM, ENG). Low to medium (UX). | Restore gives missing or unreadable files. | Backup section in the docs. A flag in `backup-metadata.json`. A notice on the backup page. | Docs, and a notice on the backup page (A11). No flag in `backup-metadata.json`. Bucket export is out of scope (D19). |
 | 33 | Nobody uses the feature: configuration only in JSON, no page, no test button. | PM | Medium | Low. Effort without adoption. | Good startup errors. #2312 next. | Partly. Check command and status card (D11, D12). |
-| 34 | A file cannot be loaded during a chat turn. The turn goes to the model without it. | UX | Medium | Confident answers that ignore the document. Nobody can tell afterwards. | A file that cannot be loaded blocks the chat turn. | Not decided. |
-| 35 | Admins confuse "Blob storage" with "Storage providers" (Office 365, Google Drive). | UX | Medium | Wasted time, wrong tickets. | One naming table used in UI, docs and release note. | Not decided; the card title is open (4.11). |
+| 34 | A file cannot be loaded during a chat turn. The turn goes to the model without it. | UX | Medium | Confident answers that ignore the document. Nobody can tell afterwards. | A file that cannot be loaded blocks the chat turn. | Not in v1 (A11). |
+| 35 | Admins confuse "Blob storage" with "Storage providers" (Office 365, Google Drive). | UX | Medium | Wasted time, wrong tickets. | One naming table used in UI, docs and release note. | "Blob storage" for admins (A9), used in the card, the docs and the release note. |
 | 36 | The status is green although writes fail, or polling hits the bucket from every open admin tab. | UI | Medium | Admins trust a wrong status. Cost and noisy bucket logs. | The test does a write, read and delete. `GET` serves a cached result. | Yes (D11). |
 | 37 | Screen reader users hear the status on every poll, or never hear the test result. | UI | Medium | Accessibility audit fails. | Live region rules of the UI plan. Unit test on roles. | Yes, if the card follows the UI plan. |
 | 38 | The scope grows into the full #2312 page and the adapter slips. | UI | Medium | Late release, half-built form. | No form in v1. | Yes (D11). |
@@ -778,7 +831,7 @@ different things, both assumptions are shown.
 | 21 | Is it acceptable that the UI says plainly that chat files and evidence are unencrypted on the filesystem backend? | Yes. It is true. | UI |
 | 22 | Who sees the status card? May bucket name and endpoint host be shown to admins? | Everyone who passes `adminAuth` and has the `system` admin page enabled. Yes; the access key id is not shown. | UI |
 | 23 | Should a failing bucket alert every admin on every page? Should the Overview page show the backend too? | UI assumed yes for `error` and no for the Overview page. D11 cut the banner. | UI |
-| 24 | Is "File storage" the right term for admins, or "Blob storage" or "Object storage"? | UI: "File storage". UX: "Blob storage" for admins, "file storage" for users. Open (4.11). | UI, UX |
+| 24 | Is "File storage" the right term for admins, or "Blob storage" or "Object storage"? | UI: "File storage". UX: "Blob storage" for admins, "file storage" for users. Decided (A9): "Blob storage". | UI, UX |
 | 25 | Will tenant prefixes other than `default/` exist soon? | No. | UI |
 | 26 | May the boot order change (key before storage)? Should the bucket be created by iHub? | Yes; it is internal. No. | ARCH |
 | 27 | Is the double encryption of project texts acceptable? | Yes. Simpler and cheap. | ENG |
@@ -824,12 +877,12 @@ are silent and precedence keeps it. "Overruled" names the decision that replaced
 | A read-only status card on System Resources. | Nothing in the UI; or the Overview page. | Stands (D11). |
 | Remote failures at start do not stop the server; local config errors and a key mismatch do. | Always refuse. | **Overruled by D6**: every failure stops the start. |
 | No reading fallback to local disk after the switch. | Read from the bucket, then from disk. | Stands (D9). |
-| "Blob storage" for admins, "file storage" for users. | "Storage provider", "Cloud storage", "Object storage". | Not decided. The UI plan uses "File storage" as the card title. |
+| "Blob storage" for admins, "file storage" for users. | "Storage provider", "Cloud storage", "Object storage". | Accepted (A9). |
 | Logs and command output in English only. | Localised logs. | Stands; repository convention. |
-| The public health endpoint shows provider and status only. | Endpoint and bucket in `/api/health`. | Not decided whether the field is added. |
-| User messages never name the cause beyond "file storage not reachable" and never show codes. | Show the error code to users. | Not decided. |
-| A file that cannot be loaded blocks the chat turn. | Continue without the file and add a note. | Not decided. |
-| Two file errors for users: temporary with "Try again", permanent with "contact your administrator". | One message. | Not decided. |
+| The public health endpoint shows provider and status only. | Endpoint and bucket in `/api/health`. | Accepted (A10). |
+| User messages never name the cause beyond "file storage not reachable" and never show codes. | Show the error code to users. | Not in v1 (A11). |
+| A file that cannot be loaded blocks the chat turn. | Continue without the file and add a note. | Not in v1 (A11). |
+| Two file errors for users: temporary with "Try again", permanent with "contact your administrator". | One message. | Not in v1 (A11). |
 | The re-check action is `POST /api/admin/storage/_check`. | #2312's `_test`. | **Overruled by D11**: the action is `_test`. |
 
 ### UI designer
@@ -893,7 +946,7 @@ are silent and precedence keeps it. "Overruled" names the decision that replaced
 | Decision | Rejected alternative | Status |
 | --- | --- | --- |
 | Two tiers: in-repo server plus versitygw from a compose file. | `s3rver` as an npm dev dependency. | Stands (D10). |
-| The same compose file for developers and CI, started in a step. | A GitHub `services:` container. | Not decided. The architect's plan starts versitygw with `docker run` in an existing workflow. |
+| The same compose file for developers and CI, started in a step. | A GitHub `services:` container. | Accepted (A7). |
 | Fail instead of skip when `IHUB_TEST_S3_REQUIRED=1`, plus a skipped-count check. | `describe.skip` when the backend is missing. | The variable stands (D10). The count check is not in the decisions. |
 | `node:test` for all new server tests. | jest. | Stands; repository convention for storage tests. |
 | The conformance suite must pass unchanged. | Relax the racing-delete or listing-size cases for S3. | Stands (D3, D8). |
@@ -935,7 +988,8 @@ Out of scope for v1 (D19 and the role plans):
   holds a short form specification for it.
 - Multi-instance. With documents on the filesystem a second instance is still not supported. S3
   blobs remove one of the blockers of #2313. The shared `contents/` volume is still required.
-- Encrypting blobs on the filesystem backend. Encrypting chat documents and logs (#2316).
+- Encrypting blobs on the filesystem backend, and encrypting chat documents and logs (#2316), were
+  out of scope in the plan. Both were built after the requester's change (section 11).
 - Transit key provider (OpenBao, Vault, KMS). Per-tenant keys. A tenant prefix beyond `default`.
 - Rewrap job.
 - Multipart upload, range reads, presigned URLs, S3 versioning APIs, batch `DeleteObjects`,
@@ -944,7 +998,8 @@ Out of scope for v1 (D19 and the role plans):
 - Instance roles, web identity and the SDK default credential chain.
 - Copy from S3 back to the filesystem. Reading through to the filesystem.
 - Backup export of the bucket.
-- Run-ledger spill blobs (`AppendLog.putBlob`). They belong to the log facet and stay on disk in plaintext.
+- Run-ledger spill blobs (`AppendLog.putBlob`). They belong to the log facet and stay on disk. With
+  storage encryption they are encrypted there (section 11).
 - The iFinder sidecar scheme and direct interop with iFinder.
 - S3 Express directory buckets and buckets with object lock.
 
@@ -955,7 +1010,7 @@ Proposed follow-ups. None is created as a ticket without the requester's yes.
 | Admin UI for the blob backend, folded into #2312. | PM, UX, UI |
 | Transit key provider behind `KeyProvider` (phase 3 in #2906). | PM, SEC |
 | Rewrap job over bucket objects after a master key rotation. Until then one previous key is the limit, and a leaked master key cannot be retired. | PM, ARCH, SEC |
-| Decision for the requester: encrypt blobs on the filesystem backend too. | PM, D2 |
+| Decision for the requester: encrypt blobs on the filesystem backend too. Done: R1, section 11. | PM, D2 |
 | Backend matrix: versitygw, AWS S3, one customer backend (SP-2 of #2906). | PM, QE, SEC |
 | Large objects: a streaming path and multipart above the single-put limit. | PM, ARCH, ENG |
 | Backup: the admin export and the bucket; a flag in `backup-metadata.json`; a notice on the backup page; an orphan reconciler for objects without a document. | PM, ENG, UX |
@@ -967,23 +1022,90 @@ Proposed follow-ups. None is created as a ticket without the requester's yes.
 | Domain separation of the master key (a derived wrap key). | SEC |
 | Bucket usage in the disk and storage monitoring. Today only `contents/data` is measured. | ENG |
 
-Open points that need a decision before or during implementation (collected from sections 4 and 9):
+The open points of the plan and how each was closed (details in section 3.1 and in section 4):
 
-- The exact encoding of the associated data (4.3).
-- The key check marker: payload, the adoption override, and who writes it when the copy command
-  runs before the first start (4.6).
-- The value of the object size maximum (4.7).
-- Whether the timeouts, retry count and socket limit are configuration fields (4.1).
-- `--delete-source` on the copy command (4.9).
-- The workflow file for the versitygw run and the skipped-test checks (4.10).
-- The response shape of `GET /api/admin/storage`, the card title, the refresh interval, and the
-  `/api/health` field (4.11).
-- The classifier code list and the two user-facing error codes (4.8, 4.12).
-- Whether a file that cannot be loaded blocks the chat turn (section 7, row 34).
-- Whether the S3 client is rebuilt when SSL or proxy settings change at runtime (4.7).
-- What a failed storage bootstrap does today (2.3).
+| Open point | Closed by |
+| --- | --- |
+| The exact encoding of the associated data (4.3). | A1. |
+| The key-check marker: payload, the adoption override, and who writes it when the copy command runs before the first start (4.6). | A2. |
+| The value of the object size maximum (4.7). | A3: a setting. Built with a default of 128 MiB, not 64 MiB. |
+| Whether the timeouts, retry count and socket limit are configuration fields (4.1). | A4. |
+| `--delete-source` on the copy command (4.9). | A5: no. |
+| The workflow file for the versitygw run and the skipped-test checks (4.10). | A7. |
+| The response shape of `GET /api/admin/storage`, the card title, the refresh interval, and the `/api/health` field (4.11). | A8, A9, A10. |
+| The classifier code list and the two user-facing error codes (4.8, 4.12). | A11: one classifier; no user-facing codes in v1. |
+| Whether a file that cannot be loaded blocks the chat turn (section 7, row 34). | A11: not in v1. |
+| Whether the S3 client is rebuilt when SSL or proxy settings change at runtime (4.7). | A13: no, a restart. |
+| What a failed storage bootstrap does today (2.3). | A15: the process ends with exit code 1. |
+| The binary build and the dynamically imported SDK (section 7, row 41). | Still open. Not checked in a binary build. |
 
 Ticket updates proposed by the product manager, not posted: #2318 gets a new body and becomes the
 implementation ticket; #2906 gets a comment that records the deviations (encryption for all
 namespaces, wrapped key inside the object, readable keys, SP-2 done for one local backend only) and
 stays open; #2302 gets a note on decision 4; #2312, #2313, #2316 and #2905 get one comment each.
+
+## 11. Changes after the plan
+
+### 11.1 Requester changes R1 to R3
+
+After the plan was reported, the requester wrote: "Chats and artifacts should be encrypted in the
+filesystem too. Everything that is user generated and can have confidential data." And later: "we
+should make the encryption optional".
+
+| # | Topic | Decision | What it overrules |
+| --- | --- | --- | --- |
+| R1 | Filesystem blobs | The `EncryptingBlobStore` decorator wraps the filesystem blob store as well, every namespace, same format. Blobs already on disk in plaintext are encrypted in place by a one-time, idempotent, resumable step. After it has completed, a plaintext blob is an error (D18). | D2: "Filesystem blobs stay as they are." |
+| R2 | Documents and append logs | User-generated content in documents and append logs is encrypted at rest on the filesystem provider with the same key provider (#2316). | Section 10: "Encrypting chat documents and logs" out of scope. |
+| R3 | Encryption is optional | One switch, `storage.encryption.enabled`, for blobs (filesystem and S3), documents and append logs. Schema default `false`; `server/defaults/config/platform.json` sets `true`. Enabled: every write is encrypted and plaintext is an error once the conversion has completed. Disabled: writes are plaintext and an encrypted object is still decrypted. S3 with encryption off is allowed, logs a warning at every start, and the status reports `scope: "none"`. The key-check marker is used only when encryption is enabled. | D2: "always on for S3 … no off switch". 4.1: "There is no `encryption.enabled` setting." |
+
+The requester also accepted that there is no rollback after enabling other than restoring a backup.
+
+During implementation the scope grew by one more step: five file stores outside the storage layer
+(agent artifacts, agent memory, agent inboxes, tool-job results, short links) are encrypted by the
+same switch.
+
+The design of R1 to R3 as built, with the inventory of what is and is not encrypted, the formats,
+the conversion and the follow-ups, is in **`2026-11-20 Storage Encryption at Rest.md`**.
+
+What this changes in the sections above:
+
+- D2 and the summary: encryption is the switch, not a property of the S3 backend. With the switch
+  off the S3 store receives plaintext, and the start-up check has a step `detect` in place of the
+  key and key-check steps.
+- 4.3: the envelope format is unchanged and is now also the format of filesystem blobs, of spill
+  blobs and of the sealed file stores (each with its own associated-data label).
+- 4.6: the master key is loaded before storage in every start, and the conversion step runs
+  between the key and the storage bootstrap.
+- 4.9: the copy command reads a local blob as it is or decrypts it first, and writes it encrypted
+  for the bucket or plain, following the switch.
+- 4.11: the status has a top-level `encryption` object for the whole installation.
+- New commands: `npm run storage:encrypt` and `npm run storage:show`.
+
+### 11.2 Where the code differs from the plan
+
+| Plan | Built |
+| --- | --- |
+| A3: `maxObjectBytes` defaults to 64 MiB. | 128 MiB. |
+| 4.6, 4.7: `GetBucketVersioning` at start, with a warning. | Not sent. No warning. Documented instead. |
+| 4.1: link-local endpoints are refused unless on `ssrf.allowedHosts`. | Always refused. |
+| 4.11: `encryption.scope` is `all`, `project-files` or `none`. | `blobs.encryption.scope` is `all` or `none`; the top-level `encryption.scope` is `none`, `blobs` or `storage`. |
+| Pre-mortem row 15 and the UX plan: an error is logged on a state change and `/api/health` shows the state for monitoring. | The health field holds the last check result. A check runs at start, on a read of `GET /api/admin/storage` (at most once a minute) and on `_test`. Nothing checks in the background. |
+| 4.5: delete is lock, `HeadObject`, `DeleteObject`. | A delete of a key that does not exist sends one more request, `HeadBucket`, to tell a missing key from a missing bucket. |
+| 4.9: `server/scripts/copyBlobs.js`. | `server/storage/commands/copyBlobs.js`, with the entry point `server/storage/commands/run.js` for installations without `npm`. |
+| 4.12: codes of the UX table. | `S3_ADDRESSING` dropped; six codes added (see 4.12). |
+| D2: objects in a bucket are always ciphertext. | With the switch off they are plaintext. Objects uploaded in plaintext are not converted when the switch is turned on later: the start refuses (`BLOB_KEY_CHECK_MISSING`), and after an adoption they are refused on read. There is no command for this case. |
+| 4.1: `IHUB_PLATFORM__...` overrides do not reach the storage bootstrap ("document it"). | Unchanged, and documented. |
+
+### 11.3 What was verified, and what was not
+
+- Verified: the unit, conformance, failure, proxy and TLS-whitelist suites and the end-to-end
+  script, against the in-repository S3 server. That server checks that a signature header is
+  present and does not verify the signature.
+- Not verified: the versitygw compose file (`docker/docker-compose.s3.yml`) and the workflow
+  `.github/workflows/s3-storage-tests.yml` were never executed, because no Docker was available
+  where they were written. Nothing was run against AWS S3, MinIO, Ceph or a customer service. SigV4
+  signing, path-style addressing and the checksum settings are therefore unproven against a real
+  server.
+- Not verified: the least-privilege bucket policy in `docs/storage.md` is written from the list of
+  requests the store sends and was not tried on a real service.
+- Not verified: the binary distribution with the dynamically imported SDK (section 7, row 41).

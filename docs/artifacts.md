@@ -89,18 +89,29 @@ deliberately the smallest surface every candidate backend already has:
 | `list`    | readdir + filter  | `ListObjectsV2` | `LIKE` on key        |
 
 No transactions, no locking, no streaming semantics, no filesystem
-assumptions. An S3 adapter implements those four calls, declares
-`blobStore: true`, and **nothing in `ArtifactRepository` or above it changes** —
-which is what takes uploads and artifacts off the shared-volume requirement
-that pins a deployment to one machine today.
+assumptions. An S3 adapter implements those four calls, and **nothing in
+`ArtifactRepository` or above it changes**.
+
+The S3-compatible backend exists: `storage.blobs.provider: "s3"` keeps artifact
+payloads, with every other blob, in a bucket. See
+[Storage Providers → Blob storage backends](storage.md#blob-storage-backends).
+It moves the payloads only. The metadata documents, chats and logs stay on the
+`contents/` volume, so it does not lift the shared-volume requirement and does
+not make a deployment multi-instance. The PostgreSQL column is a plan.
+
+With [storage encryption](storage-encryption.md) on, artifact payloads and
+metadata documents are encrypted before they are written, on disk and in the
+bucket. The largest payload a bucket accepts is
+`storage.blobs.s3.maxObjectBytes` (128 MiB by default).
 
 Two rules keep it that way, and the conformance suite enforces both:
 
 - **The blob facet stores bytes, not meaning.** Media type, display name,
   producer and timestamps live in the metadata document. `put` accepts a
-  `contentType` hint so an object store can set it on the object (an S3
-  presigned URL needs it to serve correctly), but the document stays
-  authoritative and a backend that cannot persist it simply ignores it.
+  `contentType` hint, but the document stays authoritative and a backend
+  may ignore it. The S3 backend does: it stores every object as
+  `application/octet-stream`, and payloads are always served by iHub, never
+  through a presigned URL.
 - **Prefix listing is part of the contract.** It is how a scope is swept, and
   the only way to reach a payload whose metadata document never landed.
 
@@ -570,6 +581,11 @@ still runs on its own. It is not a drop-in swap:
 - it has **no retention at all**, and the workflow-state sweep deletes the
   state its authorization check depends on — leaving files that are unreadable
   by their owner and never collected.
+
+It stays on local disk when blobs are kept in S3. With
+[storage encryption](storage-encryption.md) on, its files are encrypted like
+the rest (`npm run storage:show -- --file agent-artifacts <runId>/<name>` prints
+one), and a download reads the file into memory whole.
 
 Moving it is a data migration plus changes to the admin UI, the SSE projection
 and the `write_artifact` tool, and is worth doing on its own rather than inside

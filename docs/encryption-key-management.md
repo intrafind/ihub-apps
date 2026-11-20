@@ -1,5 +1,5 @@
 ---
-description: "How iHub's encryption key protects stored secrets, and how to keep it safe in production."
+description: "How iHub's encryption key protects stored secrets and stored content, and how to keep it safe in production."
 audience: admin
 type: how-to
 ---
@@ -11,6 +11,11 @@ iHub Apps uses encryption to securely store sensitive data like provider API key
 ## Overview
 
 All sensitive data (API keys, OAuth tokens) is encrypted using **AES-256-GCM** encryption before being stored on disk. To ensure this encrypted data can be decrypted across server restarts, the encryption key must be persistent.
+
+The same key is the master key of [storage encryption](storage-encryption.md). When
+`storage.encryption.enabled` is on, it also protects chats, uploaded files, artifacts and run
+history. Losing the key then means losing that content. See
+[Storage Encryption and the Key](#storage-encryption-and-the-key).
 
 ## Encryption Key Storage
 
@@ -31,6 +36,9 @@ The system uses a 3-tier priority system for the encryption key:
 3. **Generated Key** (Fallback)
    - If neither above exists, a new key is generated
    - The new key is automatically persisted to `contents/.encryption-key`
+   - Exception: no key is generated while the installation holds data that was encrypted with a
+     master key. The server refuses to start instead. See
+     [The server does not create a new key over encrypted data](#the-server-does-not-create-a-new-key-over-encrypted-data).
 
 ### First Server Start
 
@@ -105,6 +113,85 @@ If using an environment variable:
 
 4. Ensure the key is stored securely in your secrets management system
 
+## Storage Encryption and the Key
+
+With [storage encryption](storage-encryption.md) turned on (`storage.encryption.enabled`, the
+default of a fresh installation), the same master key also protects the stored content: chats,
+uploaded files, artifacts, run history, agent memory and, when blobs are kept in S3, every object
+in the bucket. The key is no longer only about saved API keys.
+
+### Losing the key means losing the content
+
+- Without the master key, encrypted chats, files and run history cannot be read. There is no
+  recovery, no reset and no second key.
+- Nothing can be re-entered. An API key can be typed in again; a chat or an uploaded file cannot.
+- An S3 bucket without the key is unreadable data.
+
+### The server does not create a new key over encrypted data
+
+When no key is found, the server normally generates one (see [First Server Start](#first-server-start)).
+It does not do that when the installation holds encrypted data. A missing or unreadable key then
+usually means that the key volume is not mounted or the key file was not restored, and a new key
+would start the server on data it cannot read.
+
+In that case the server logs `MASTER_KEY_REQUIRED`, names the key id the data was written with and
+ends with exit code 1. This also happens with the switch turned off again, as long as encrypted
+data exists. The server decides this from `contents/data/.at-rest.json` and
+`contents/data/blobs/_ihub/keycheck`.
+
+What to do: restore `contents/.encryption-key` from a backup, or set `TOKEN_ENCRYPTION_KEY` to the
+key the data was written with. Do not delete the two files named above to get past the check; the
+data stays unreadable.
+
+A key that is present but is not the one the data was written with also stops the start. The
+message names the key id the data expects and the key id that was found.
+
+### Where to keep the key
+
+By default the key is the file `contents/.encryption-key`, in the same folder as the data it
+protects. **A copy of `contents/` then reads everything**: a backup, a volume snapshot or a copied
+folder contains the data and the key.
+
+Storage encryption protects against someone who reads the disk or the bucket only when the key is
+kept apart from them:
+
+- set `TOKEN_ENCRYPTION_KEY` from a secret store, to the same value as the key file (the variable
+  has priority over the file; remove the file from the volume once the variable is in place and
+  you have a copy of the key), or
+- keep the key file on another volume than the data.
+
+For S3 this matters most: the bucket is only as protected as the key is separate from the people
+and systems that can read the bucket.
+
+### Backup and restore
+
+Back up three things, and restore them from the same point in time:
+
+| What                                     | Why                                                                                                                  |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| The master key                           | Without it nothing else can be read. Include every earlier key that is still set as `TOKEN_ENCRYPTION_KEY_PREVIOUS`. |
+| `contents/`                              | Configuration, chats, metadata, the state record `data/.at-rest.json` and the key-check object.                      |
+| The S3 bucket, when blobs are kept there | The files. The documents in `contents/data/` refer to them.                                                          |
+
+- **Keep the key apart from the data and the bucket.** A backup that holds the data and the key
+  together is as sensitive as unencrypted data. A backup of the bucket without the key is useless.
+- **Restore them together.** A bucket that is newer than `contents/` holds objects no document
+  refers to, and the server removes such objects. A bucket that is older lacks files that chats
+  refer to.
+- Restore `contents/` as a whole. Single unencrypted files copied into an encrypted installation
+  are refused (see [Storage Encryption](storage-encryption.md#what-a-read-does-with-unencrypted-data)).
+
+**The admin backup export** (Admin → Backup & Restore):
+
+- It contains `contents/.encryption-key` when the key is a file. The ZIP is then as sensitive as
+  unencrypted data, although the chats inside it are encrypted. Store it like a key.
+- When the key comes from `TOKEN_ENCRYPTION_KEY`, the ZIP holds no key. It is then useless without
+  the key, and an import needs the same key in the environment.
+- **It does not contain the S3 bucket.** With blobs in S3, the export is not a full backup. Back up
+  the bucket with the tools of your S3 service.
+- `contents/.backups/` keeps what an import replaced, in the form it had then. Copies from before
+  the switch was turned on are unencrypted. Remove them when you no longer need them.
+
 ## Security Best Practices
 
 ### Key Storage
@@ -128,6 +215,20 @@ If using an environment variable:
 - Monitor access to the key file/environment variable
 
 ## Key Rotation
+
+With storage encryption on, the master key also wraps the keys of every stored chat, file and log.
+There is no job yet that re-encrypts old data under a new key. After a key change:
+
+- Old data stays encrypted under the old key and needs `TOKEN_ENCRYPTION_KEY_PREVIOUS` to be read.
+  Data that is written again (a chat that continues) moves to the new key by itself. Finished
+  chats, run history and files do not.
+- **Keep `TOKEN_ENCRYPTION_KEY_PREVIOUS` set.** Removing it makes the old data unreadable.
+- **Do not change the key a second time.** Only one previous key is read. A second change makes
+  everything written under the first key unreadable.
+- The server logs a warning at the first start with the new key and records the earlier key id in
+  `contents/data/.at-rest.json` (`previousKeyId`).
+
+Change the key only when you must, for example after the key was exposed.
 
 The same master key wraps the per-document keys of project files (the extracted text of
 uploaded and picked documents, see `docs/projects.md`). Those files are **not** re-entered by
@@ -160,7 +261,8 @@ anyone: a key that is dropped takes every project document with it. Rotate as fo
 1. Check if `TOKEN_ENCRYPTION_KEY` environment variable was recently changed
 2. Verify `contents/.encryption-key` file exists and hasn't been corrupted
 3. If key is lost, you'll need to re-enter encrypted data (API keys, OAuth tokens); project
-   documents encrypted under it are lost and have to be uploaded again
+   documents encrypted under it are lost and have to be uploaded again. With storage encryption
+   on, all chats, uploaded files and run history encrypted under it are lost as well
 
 ### Key File Missing After Deployment
 
@@ -170,6 +272,11 @@ anyone: a key that is dropped takes every project document with it. Rotate as fo
 1. If you have a backup, restore the key file
 2. If no backup exists, use `TOKEN_ENCRYPTION_KEY` environment variable instead
 3. Re-enter all encrypted API keys via admin panel
+
+If the installation holds data encrypted by [storage encryption](storage-encryption.md), the server
+does not start without the original key and does not create a new one (`MASTER_KEY_REQUIRED` in the
+log). Steps 2 and 3 do not help then: only the original key, from a backup or as
+`TOKEN_ENCRYPTION_KEY`, makes the data readable again.
 
 ### Multiple Server Instances Using Different Keys
 

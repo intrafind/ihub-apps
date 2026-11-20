@@ -1,5 +1,5 @@
 ---
-description: "The storage abstraction between runtime data and where it is kept."
+description: "The storage abstraction between runtime data and where it is kept, and how to keep blobs in an S3-compatible bucket."
 audience: developer
 type: reference
 ---
@@ -19,6 +19,11 @@ one go. Forcing both through a single key-value interface was the flaw in the
 earlier persistence design; the provider therefore exposes an **AppendLog** and
 a **DocumentStore** as separate facets, plus the two primitives a multi-instance
 deployment needs later (**ChangeNotifier**, **LockManager**).
+
+Administrators find what they need in two places: [Blob storage backends](#blob-storage-backends)
+(keeping uploaded files in an S3-compatible bucket, the commands `storage:check` and
+`storage:copy-blobs`, troubleshooting) and [Storage Encryption](storage-encryption.md) (encrypting
+what is stored, on disk and in the bucket). The rest of this page is a developer reference.
 
 ## Who uses it
 
@@ -74,7 +79,10 @@ provider that fails to initialize, stops the server from starting with a
 `StorageBootstrapError` (`server/storage/bootstrap.js`) that says which setting
 to check; in a cluster the primary checks once before it forks workers, so a
 bad block ends the process instead of a respawn loop. Nothing falls back to an
-in-memory or earlier on-disk layout.
+in-memory or earlier on-disk layout. The same holds for the blob backend
+(`storage.blobs.provider`) and for storage encryption: a bucket that cannot be
+reached, a wrong master key or an unfinished conversion ends the process with
+exit code 1, and blobs are never served from local disk instead.
 
 Installations that last ran a release before the storage provider (5.5.2) keep
 their old runtime files under `contents/data/`. Migration `V219` carries them
@@ -150,7 +158,16 @@ impossible to slot in, because S3 stores objects rather than rows. So the blob
 facet takes bytes under a key and nothing else, which is deliberately the
 smallest surface the filesystem, an S3-compatible store and PostgreSQL all
 have natively — see [Artifacts](artifacts.md#swapping-the-payload-backend)
-and issue #2318.
+and issue #2318. An S3-compatible backend for this facet exists:
+[Blob storage backends](#blob-storage-backends).
+
+The blob facet a caller gets is never the bare store. `StorageRegistry` puts an
+encrypting store (`server/storage/EncryptingBlobStore.js`) in front of the
+filesystem blob store and of the S3 store alike. With
+`storage.encryption.enabled` it encrypts every payload; with the switch off it
+passes payloads through and still decrypts what was encrypted earlier. `put`,
+`get` and `list` report the length and the SHA-256 of the payload, never of the
+stored bytes.
 
 ## Documents
 
@@ -473,6 +490,8 @@ until `waitMs` expires and then throws.
 | `storage.provider`             | `filesystem`   | Which registered provider backs runtime data               |
 | `storage.filesystem.dataDir`   | `data`         | Directory under `contents/` holding storage data           |
 | `storage.filesystem.flushIntervalMs` | `2000`   | Debounce for buffered append-log writes                    |
+| `storage.blobs.provider`       | `default`      | Where blobs are kept: `default` (the provider itself) or `s3`. See [Blob storage backends](#blob-storage-backends) |
+| `storage.encryption.enabled`   | `false`        | Encrypts stored content. `true` in the `platform.json` of a fresh installation. See [Storage Encryption](storage-encryption.md) |
 
 `IHUB_STORAGE_PROVIDER` overrides `storage.provider` for one environment.
 Precedence is environment variable → `platform.json` → `filesystem`, and the
@@ -498,9 +517,507 @@ await shutdownStorage(); // idempotent
 
 `server/storage/index.js` is the public surface. It re-exports the interfaces,
 the errors and the registry, and it is the one place that calls
-`registerProvider('filesystem', …)` — provider modules themselves have no
-registry side effects, so importing one from a test or a tool cannot change
-which backend the process resolves.
+`registerProvider('filesystem', …)` and `registerBlobBackend('s3', …)` —
+provider modules themselves have no registry side effects, so importing one
+from a test or a tool cannot change which backend the process resolves.
+
+The provider `initializeStorage()` returns is a `ComposedStorageProvider`
+(`server/storage/ComposedStorageProvider.js`): documents, logs, notifier and
+locks of the configured provider, and the blob facet of the configured blob
+backend. `provider.blobBackend` names the backend (`default` or `s3`).
+
+## Blob storage backends
+
+This section is for administrators. It describes where blobs are kept and how to keep them in an
+S3-compatible bucket.
+
+Blobs are the large payloads: uploaded chat and task files (original, extracted text, page texts),
+the extracted text of project documents, artifact payloads, the content of evidence records and
+crawled website pages. By default the storage provider keeps them itself, on the filesystem under
+`contents/data/blobs/`. `storage.blobs.provider` can move them to an S3-compatible service.
+
+Only blobs move. Documents (chats, transcripts, metadata), append logs (the run ledger), locks and
+the configuration stay on `storage.provider`, which means on the local `contents/` directory.
+
+**S3 for blobs does not make iHub stateless and does not make it multi-instance.** The server still
+needs its `contents/` volume, and the rules of
+[Multi-Server Deployment](multi-server-deployment.md) still apply. Do not remove the volume because
+the files are in a bucket.
+
+What was tested: the S3 backend was run against the S3 server that ships in this repository
+(`npm run s3:dev`, see [Local development backend](#local-development-backend)), which does not
+verify request signatures. It has not been run against AWS S3 or another S3 product. The compose
+file with versitygw and the CI workflow that uses it have not been executed yet. Test your own S3
+service with `npm run storage:check` and a trial installation before you rely on it.
+
+### Settings
+
+```json
+{
+  "storage": {
+    "provider": "filesystem",
+    "encryption": { "enabled": true },
+    "blobs": {
+      "provider": "s3",
+      "s3": {
+        "endpoint": "https://s3.example.internal:7070",
+        "region": "us-east-1",
+        "bucket": "ihub",
+        "prefix": "production",
+        "accessKeyId": "${IHUB_S3_ACCESS_KEY_ID}",
+        "secretAccessKey": "${IHUB_S3_SECRET_ACCESS_KEY}"
+      }
+    }
+  }
+}
+```
+
+The `storage.blobs` block is optional and absent by default. No migration writes it.
+
+| Setting                              | Default     | What it does, and what happens if it is wrong                                                                                                                                                                    |
+| ------------------------------------ | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `storage.blobs.provider`             | `default`   | `default` keeps blobs on the storage provider (local disk). `s3` keeps them in the bucket. Any other value stops the start (`BLOB_PROVIDER_UNKNOWN`).                                                            |
+| `storage.blobs.s3.endpoint`          | AWS S3      | URL of the S3 service: scheme, host and port only. Empty means `https://s3.<region>.amazonaws.com`. A path, a query, credentials in the URL or a link-local address (`169.254.x.x`, `fe80::/10`) stop the start. |
+| `storage.blobs.s3.region`            | `us-east-1` | Region used to sign requests. A wrong region gives `S3_REGION_MISMATCH` on AWS. Most other S3 services accept any value.                                                                                         |
+| `storage.blobs.s3.bucket`            | none        | Required. The bucket must exist. iHub never creates one (`S3_BUCKET_NOT_FOUND`). Lower case letters, digits, `.` and `-`, 3 to 63 characters.                                                                    |
+| `storage.blobs.s3.prefix`            | empty       | Key prefix inside the bucket. Letters, digits, `.`, `_`, `-`, and `/` between segments. No leading `/`.                                                                                                          |
+| `storage.blobs.s3.accessKeyId`       | none        | Required. Text or `${VAR}`.                                                                                                                                                                                      |
+| `storage.blobs.s3.secretAccessKey`   | none        | Required. `${VAR}`, an `ENC[...]` value or text. See [Credentials](#credentials).                                                                                                                                |
+| `storage.blobs.s3.forcePathStyle`    | `true`      | `true` addresses the bucket in the path (`https://host/bucket/key`), which most S3-compatible services need. `false` puts the bucket into the host name (`https://bucket.host/key`).                             |
+| `storage.blobs.s3.allowInsecureHttp` | `false`     | Accepts a plain `http://` endpoint on another host. See [TLS, proxy and plain http](#tls-proxy-and-plain-http).                                                                                                  |
+| `storage.blobs.s3.maxObjectBytes`    | `134217728` | Largest blob accepted, in bytes before encryption (128 MiB). 1 to 4 GiB. A larger write is refused with `BLOB_TOO_LARGE` (HTTP 413), and a larger object in the bucket is not read.                              |
+| `storage.blobs.s3.connectTimeoutMs`  | `5000`      | Time allowed to open a connection. 1 to 600000.                                                                                                                                                                  |
+| `storage.blobs.s3.requestTimeoutMs`  | `60000`     | Time allowed for the response headers of one request, and idle time on the connection. 1 to 3600000. Too low a value makes large uploads fail with `S3_ENDPOINT_UNREACHABLE`.                                    |
+| `storage.blobs.s3.maxAttempts`       | `3`         | Attempts per request, retries included. 1 to 10.                                                                                                                                                                 |
+| `storage.encryption.enabled`         | `false`     | Encrypts what is stored, in the bucket and on disk. A fresh installation has `true` in its `platform.json`. See [Storage Encryption](storage-encryption.md).                                                     |
+
+Environment:
+
+| Variable                      | What it does                                                                                                                                                                                           |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `IHUB_STORAGE_BLOBS_PROVIDER` | Overrides `storage.blobs.provider`. Precedence: this variable, then `platform.json`, then `default`.                                                                                                   |
+| `IHUB_S3_ADOPT_BUCKET`        | `true` for one start accepts a bucket or prefix that holds objects but no key-check object. See [The key-check object](#the-key-check-object). Remove it after that start.                             |
+| any `${VAR}` you name         | Every string under `storage.blobs.s3` may be a `${VAR}` placeholder. A placeholder whose variable is not set stops the start (`S3_CONFIG_INCOMPLETE`, the message names the setting and the variable). |
+
+The storage settings are read from the file `contents/config/platform.json` at start, before the
+rest of the configuration is loaded. `IHUB_PLATFORM__...` overrides do not reach them. A change of
+any setting in this section needs a restart. A wrong value stops the start, and the message names
+the setting.
+
+### Credentials
+
+iHub signs requests with one static access key and secret. It does not use instance roles, web
+identity, session tokens or the shared AWS configuration files, even when the host has them.
+
+Three ways to store the secret, safest first:
+
+1. `"secretAccessKey": "${IHUB_S3_SECRET_ACCESS_KEY}"` and the value in the environment, from your
+   secret store.
+2. An encrypted value, `ENC[...]`. The secret is encrypted with the master key when the platform
+   configuration is saved in the admin interface. An `ENC[...]` value that does not decrypt with
+   the master key of this installation stops the start.
+3. Plain text in `platform.json`. It works. Anyone who can read the file has the secret.
+
+The admin interface and the API never return the secret, and the status endpoint returns neither
+the secret nor the access key ID. A secret with a trailing space or a line break is rejected by the
+S3 service (`S3_CREDENTIALS_REJECTED`).
+
+### TLS, proxy and plain http
+
+- **Certificates.** The connection to the endpoint is verified like every other outbound
+  connection. For a private CA, add the CA to the server's trust store (`NODE_EXTRA_CA_CERTS`, see
+  [SSL Certificates](ssl-certificates.md)). Verification is skipped only when
+  `ssl.ignoreInvalidCertificates` is `true` and the endpoint host is on `ssl.domainWhitelist`. With
+  `forcePathStyle: false` the host is `<bucket>.<endpoint host>`, which a whitelist entry for the
+  endpoint host may not match.
+- **Proxy.** The platform proxy settings (`proxy` in `platform.json`, see
+  [Proxy Configuration](proxy-configuration.md)) apply, including the no-proxy list.
+- **Restart.** The S3 connection is built once at start. A change of the SSL whitelist or of the
+  proxy settings reaches it after a restart, although other connections pick it up at once.
+- **Plain http.** An `http://` endpoint is accepted when the host is this machine (`localhost`,
+  `127.0.0.0/8`, `::1`). For any other host the start is refused unless `allowInsecureHttp` is
+  `true`. With plain http the object names travel in clear text and a signed request can be
+  replayed. The server logs a warning at every start.
+
+### What is in the bucket
+
+One object per blob:
+
+```text
+[<prefix>/]default/<namespace>/<key>
+[<prefix>/]default/_ihub/keycheck          the key-check object (encryption on)
+[<prefix>/]default/_ihub/probe-<uuid>      test objects, removed right after they are written
+```
+
+`default` is a fixed segment. The namespaces are `project-files`, `chat-files`,
+`chat-evidence-content`, `run-evidence-content`, `artifacts` and `website-corpora`.
+
+- **Object names are readable.** A key holds ids, for example
+  `<scopeType>__<scopeId>__<fileId>.txt`. It never holds a file name, a user name or a URL. Anyone
+  who can list the bucket sees chat and project ids, the number of files per chat, object sizes and
+  times.
+- **Content.** With `storage.encryption.enabled` every object is encrypted by iHub before upload: a
+  512-byte header followed by the ciphertext. With the switch off the objects are the files as they
+  are, and whoever can read the bucket can read them. The server logs a warning at every start in
+  that case.
+- iHub sets no ACL, no object metadata and no server-side encryption header. Every object has the
+  type `application/octet-stream`. Server-side encryption of the bucket can be used in addition; it
+  does not replace the switch.
+
+**One bucket or prefix per installation.** Two installations on the same prefix delete each other's
+objects, because each removes objects it has no record of.
+
+### Bucket policy
+
+iHub sends `PutObject`, `GetObject`, `HeadObject`, `DeleteObject`, `ListObjectsV2` and `HeadBucket`.
+A policy for the access key that allows this and nothing else:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
+      "Resource": "arn:aws:s3:::ihub/production/*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": "s3:ListBucket",
+      "Resource": "arn:aws:s3:::ihub",
+      "Condition": { "StringLike": { "s3:prefix": ["production/*"] } }
+    }
+  ]
+}
+```
+
+Replace `ihub` and `production` with your bucket and prefix. Without a prefix use
+`arn:aws:s3:::ihub/*` and leave the condition out. On the bucket itself: block public access and
+deny requests without TLS. This policy is written from the requests iHub sends; it has not been
+tried on AWS S3. Some services answer `HeadBucket` only without a prefix condition; if
+`npm run storage:check` fails at the step "Endpoint reachable, credentials accepted, bucket found"
+with `S3_ACCESS_DENIED`, remove the condition.
+
+**Versioning and object lock.** iHub deletes objects when a chat, a file or a project is deleted
+and when a retention period ends. A bucket with versioning or object lock keeps those objects, with
+the keys that open them. Deleted content then stays recoverable for anyone who has the bucket and
+the master key. Add a lifecycle rule that expires noncurrent versions, or leave versioning off.
+iHub does not check the versioning state of the bucket.
+
+### What happens at start
+
+1. The master key is loaded (`TOKEN_ENCRYPTION_KEY` or `contents/.encryption-key`).
+2. The storage provider for documents and logs starts.
+3. The blob backend is checked: the settings, the master key, the connection (endpoint, TLS,
+   credentials, bucket), the key-check object, and one test object that is written, read back,
+   compared and removed.
+4. If blobs are still on local disk, a warning names the namespaces and counts
+   (`BLOB_LOCAL_LEFTOVERS`).
+
+If step 3 fails, the server logs the step and the code and ends with exit code 1. In a cluster the
+primary process checks before it starts workers. **The server never falls back to local disk** and
+never serves blobs from `contents/data/blobs` while S3 is configured. Causes that stop a start:
+
+- a missing or malformed setting, or an unset `${VAR}`;
+- the endpoint cannot be reached, or its certificate cannot be verified;
+- the credentials are rejected, the bucket does not exist, or the access key may not list, read,
+  write or delete;
+- with encryption on: no master key, a master key that could not be saved to disk, a master key
+  other than the one the bucket was written with, or objects in the prefix without a key-check
+  object.
+
+While the server runs, an S3 failure does not stop it. Requests that need a blob fail with
+`STORAGE_UNAVAILABLE`, and the server log holds the error.
+
+`GET /api/health` reports `storage.blobs: { provider, status }` and nothing else about the bucket,
+so it can be read without a login. **The status is the result of the last check, not a live
+value.** A check runs at start, when an administrator opens the System Resources page (at most once
+a minute) and when "Check again" is used. Nothing checks in the background. To monitor the bucket,
+call `GET /api/admin/storage` with an administrator's credentials once a minute or more, or alert
+on `STORAGE_UNAVAILABLE` in the server log.
+
+### The key-check object
+
+With encryption on, iHub keeps one small encrypted object, `_ihub/keycheck`, under the prefix. It
+ties the bucket to the master key.
+
+| At start                                                                  | Result                                                  |
+| ------------------------------------------------------------------------- | ------------------------------------------------------- |
+| The object opens with the master key (or `TOKEN_ENCRYPTION_KEY_PREVIOUS`) | The start continues.                                    |
+| The object exists and does not open                                       | The start stops: `BLOB_KEY_MISMATCH` or `BLOB_CORRUPT`. |
+| No object, and the prefix is empty                                        | The object is written. This is the first start.         |
+| No object, and the prefix holds other objects                             | The start stops: `BLOB_KEY_CHECK_MISSING`.              |
+
+The last case protects against writing under a second key into a bucket that belongs to another
+key. If you know the objects belong to this installation and this key, set
+`IHUB_S3_ADOPT_BUCKET=true` for one start. The server writes the object, logs a warning and
+continues. Objects that were written with another key stay unreadable. Remove the variable after
+that start.
+
+The check does not notice a copy of an installation that uses the same master key and the same
+prefix. Keep to one prefix per installation.
+
+With encryption off the key-check object is not used.
+
+**Decide the encryption switch before the first upload to a bucket.** `npm run storage:encrypt`
+converts what is on local disk. It does not convert objects in a bucket. If blobs were uploaded
+with the switch off and it is turned on later, the start stops with `BLOB_KEY_CHECK_MISSING`, and
+after an adoption the unencrypted objects are refused on read (`CORRUPT_BLOB`). To encrypt blobs
+that are in a bucket unencrypted, there is no command yet.
+
+### Checking the configuration: `storage:check`
+
+```bash
+npm run storage:check                 # add: -- --json   or   -- --verbose
+```
+
+It runs without the server. It reads `contents/config/platform.json` and the environment as a
+start would, runs the same check and prints one line per step:
+
+```text
+Blob storage check (configuration on disk, not the running server)
+  provider    s3, set by platform.json
+  endpoint    127.0.0.1:9000
+  bucket      ihub-dev   prefix inst1/default/   region us-east-1
+  encryption  on: every blob is encrypted before it is stored
+
+  [ok]    1/6 Configuration complete
+  [ok]    2/6 Master key available  6 ms
+              key 1113f34d (file)
+  [ok]    3/6 Endpoint reachable, credentials accepted, bucket found  234 ms
+  [ok]    4/6 Encryption key matches the stored blobs  13 ms
+              no key check object yet; the first start writes it
+  [ok]    5/6 Write, read back and delete a test object  17 ms
+  [warn]  6/6 No blobs left on local disk
+              BLOB_LOCAL_LEFTOVERS: Blobs are still on local disk (chat-files: 1). They are not served while blob storage is "s3".
+              Copy them while the server is stopped: npm run storage:copy-blobs
+```
+
+| Exit code | Meaning                                                               |
+| --------- | --------------------------------------------------------------------- |
+| 0         | Usable. A start with this configuration works. Warnings do not count. |
+| 1         | Not usable. A start with this configuration fails.                    |
+| 2         | Unknown argument.                                                     |
+
+It writes one test object and removes it. It never writes the key-check object and never touches a
+stored blob. With encryption on and no master key present it creates `contents/.encryption-key`,
+as a start would. Run it as the user the server runs as, with the same environment.
+
+Where `npm` or the `scripts/` directory is not present (the container image), call the commands
+through their entry point:
+
+```bash
+node server/storage/commands/run.js check [--json]
+node server/storage/commands/run.js copy-blobs [--dry-run] [--namespace=<name>]
+node server/storage/commands/run.js encrypt [--dry-run]
+node server/storage/commands/run.js show --doc <namespace> <key>
+```
+
+The report goes to standard output and the server's own log lines go to standard error.
+
+### Moving existing blobs: `storage:copy-blobs`
+
+After `storage.blobs.provider` is set to `s3`, the server reads blobs only from the bucket. **There
+is no read fallback.** Files uploaded before the switch stay on local disk and users cannot open
+them until they are copied. The start, `storage:check` and the System Resources page all report
+them.
+
+Procedure:
+
+1. Configure `storage.blobs` and run `npm run storage:check` until it exits with 0.
+2. Stop the server.
+3. Run `npm run storage:copy-blobs -- --dry-run`. It lists per namespace what would be copied.
+4. Run `npm run storage:copy-blobs`.
+5. Start the server. Check that old attachments open.
+6. Remove `contents/data/blobs` by hand when you are sure. Until then a copy of every file is still
+   on the server, unencrypted if encryption was off when it was written.
+
+| Option               | What it does                                                                        |
+| -------------------- | ----------------------------------------------------------------------------------- |
+| `--dry-run`          | Compares and reports. Copies nothing. One test object is written and removed.       |
+| `--namespace=<name>` | Copies one namespace, or several separated by commas. An unknown name exits with 2. |
+| `--json`             | Prints the result as one JSON object.                                               |
+| `--verbose`          | Also prints the server's own log lines.                                             |
+
+| Exit code | Meaning                                                                                                                |
+| --------- | ---------------------------------------------------------------------------------------------------------------------- |
+| 0         | Every blob is in the bucket. In a dry run: the target is usable and nothing would fail.                                |
+| 1         | Not complete: the target is not usable, a blob failed, a conflict was found, or the run was interrupted. Run it again. |
+| 2         | Unknown argument or namespace.                                                                                         |
+
+What the command guarantees:
+
+- It never deletes or changes a file on local disk. There is no option for that.
+- It never overwrites an object in the bucket. A blob that is there with the same content counts
+  as present. A blob that is there with other content is a **conflict**: both sides are left as
+  they are, the server serves the one in the bucket, and the command exits with 1.
+- Every copy is read back and its SHA-256 is compared. A copy that does not verify is removed from
+  the bucket and counted as failed.
+- A second run copies only what is missing. An interrupted run (Ctrl+C stops after the blob in
+  flight) is run again.
+- With encryption on it writes the key-check object when it is the first to write into an empty
+  prefix, and `IHUB_S3_ADOPT_BUCKET` applies as at a start.
+
+It copies in one direction, from local disk to the bucket. Going back from S3 to local disk is not
+supported: objects written to the bucket in the meantime would not be on disk, and there is no
+command that copies them back.
+
+If the server runs during the copy, nothing is damaged, but a blob it stores during the run can be
+missed. Run the command again afterwards.
+
+### Limits
+
+- **Object size.** `maxObjectBytes` (128 MiB by default) is the largest blob. The default is above
+  the default size limit of an artifact (100 MB). Blobs on local disk have no such limit, so
+  `storage:copy-blobs` reports a larger local blob as failed.
+- **Whole-object reads and writes.** A blob is read and written in one piece. There is no multipart
+  upload, no range read and no streaming. A 25 MiB blob needs about three times its size in memory
+  while it is read or written, and encrypting it blocks the server process for a short time. Size
+  the memory for the largest files you allow times the number of parallel uploads.
+- **Deletes.** A delete of one object costs two or three requests, because S3 does not say whether
+  the object existed.
+- **Consistency.** The service must return an object right after it was written and list it right
+  after. A service that lists keys out of order is detected and refused.
+- **Backup.** The admin backup export does not contain the bucket. See
+  [Encryption Key Management](encryption-key-management.md#backup-and-restore).
+- **Multi-instance.** Not provided by this change, see the start of this section.
+
+### Status in the admin interface and the API
+
+**Admin → System Resources** shows a read-only card "Blob storage": backend, endpoint host, bucket,
+region, prefix, status of the last check, encryption, where the setting comes from, a notice when
+the saved settings differ from the running ones, and a notice when files are left on local disk.
+"Check again" runs the check now. See [Admin interface](admin-ui.md#blob-storage).
+
+| Endpoint                        | What it does                                                                                                                                                                                                   |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/admin/storage`        | The status the server holds. The check result is refreshed when it is older than a minute; the call does not contact the bucket every time. In a cluster each worker holds its own result.                     |
+| `POST /api/admin/storage/_test` | Runs the check now (key, connection, key-check object, test object) and answers with the same body. No request body. It answers 200 whether the check passed or failed; read `blobs.status` and `blobs.error`. |
+
+Both need an administrator. They answer `503 STORAGE_UNAVAILABLE` when the storage provider is not
+running. The response holds no credential and the endpoint only as host and port.
+
+```json
+{
+  "blobs": {
+    "provider": "s3",
+    "status": "ok",
+    "latencyMs": 41,
+    "checkedAt": "2026-11-20T09:12:44.120Z",
+    "location": {
+      "endpointHost": "s3.example.internal:7070",
+      "bucket": "ihub",
+      "region": "us-east-1",
+      "prefix": "production/default/"
+    },
+    "encryption": {
+      "scope": "all",
+      "format": "tink-aes-gcm-hkdf-v1",
+      "keySource": "local-file"
+    },
+    "source": "platform.json",
+    "steps": [{ "name": "connect", "status": "ok", "latencyMs": 20 }]
+  },
+  "documents": { "provider": "filesystem" },
+  "restartRequired": false,
+  "configuredBlobProvider": "s3",
+  "localLeftovers": [
+    { "namespace": "chat-files", "count": 12, "capped": false }
+  ],
+  "encryption": {
+    "enabled": true,
+    "scope": "storage",
+    "conversion": {
+      "state": "complete",
+      "facets": { "blobs": 1, "documents": 1, "logs": 1, "files": 1 }
+    },
+    "sealedDataExists": true
+  }
+}
+```
+
+- `blobs.status` is `ok`, `error` or `unknown` (not checked yet). It is the result of the last
+  check. When the check failed,
+  `blobs.error` holds `code`, `detail`, `step` and `hint`.
+- `restartRequired` is `true` when a restart would bring up another backend, bucket, prefix, region,
+  endpoint, size limit or encryption setting. It does not notice changed credentials or timeouts.
+- `localLeftovers` lists blobs that are still on local disk, as found at start. `capped` means "at
+  least this many"; counting stops at 1000 per namespace.
+- `encryption.scope` is `storage` (documents, logs and blobs are encrypted), `blobs` or `none`.
+
+### Local development backend
+
+For development and tests, the repository holds a small S3 server:
+
+```bash
+npm run s3:dev
+```
+
+It serves one bucket from a directory, so data survives a restart, and prints the block to merge
+into `platform.json`. It binds to `127.0.0.1`. Settings: `IHUB_S3_DEV_PORT` (9000),
+`IHUB_S3_DEV_BUCKET` (`ihub-dev`), `IHUB_S3_DEV_DIR` (`.s3-dev-data` in the repository). Its access
+key and secret are both `ihub-dev-not-a-secret`.
+
+**Development only.** It checks that a request carries a signature header and does not verify the
+signature. Never expose it to a network. A server that uses its access key against another host
+logs a warning.
+
+A second option is a real S3-compatible server in a container, Versity S3 Gateway:
+
+```bash
+npm run s3:up      # docker compose -f docker/docker-compose.s3.yml up -d --wait
+npm run s3:down    # stops it and deletes its data volume
+```
+
+It listens on `127.0.0.1:7070` with the bucket `ihub-test`. It is for tests, is not part of the
+production compose files and must not be. This compose file has not been executed yet; expect to
+adjust it on first use.
+
+| Command               | What it runs                                                                                                                                             |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run test:s3`     | The `storage-s3-*` suites against the in-repository server, and also against an external server when `IHUB_TEST_S3_ENDPOINT` and its companions are set. |
+| `npm run test:s3:e2e` | Starts a real server process on S3, uploads a file, looks into the bucket, restarts, deletes.                                                            |
+
+The variables for an external server are listed at the top of `docker/docker-compose.s3.yml`.
+
+### Troubleshooting
+
+`storage:check`, the start-up log, `storage:copy-blobs` and the System Resources page report the
+same codes.
+
+| Code                      | Meaning                                                                  | What to do                                                                                                                               |
+| ------------------------- | ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `S3_CONFIG_INCOMPLETE`    | A `storage.blobs.s3` setting is missing or malformed                     | Correct the setting in `contents/config/platform.json`, or set the environment variable it refers to.                                    |
+| `S3_ENDPOINT_UNREACHABLE` | DNS failure, connection refused, timeout or proxy error                  | Check the endpoint URL, the network path and the proxy settings.                                                                         |
+| `S3_TLS_UNTRUSTED`        | The certificate cannot be verified, or the host name does not match      | Add the issuing CA to the server's trust store (`NODE_EXTRA_CA_CERTS`), or add the host under Admin → Security → SSL → Domain Whitelist. |
+| `S3_CREDENTIALS_REJECTED` | The access key or its signature was rejected                             | Check the access key ID and the secret. A secret with a trailing space or line break also causes this.                                   |
+| `S3_CLOCK_SKEW`           | The clocks of iHub and the S3 service differ too much                    | Synchronize the time on the iHub server.                                                                                                 |
+| `S3_BUCKET_NOT_FOUND`     | The bucket does not exist                                                | Create the bucket, or correct `storage.blobs.s3.bucket`. iHub does not create buckets.                                                   |
+| `S3_ACCESS_DENIED`        | The access key may not list, read, write or delete                       | Give the access key permission to list, read, write and delete objects in this bucket.                                                   |
+| `S3_REGION_MISMATCH`      | The bucket is in another region                                          | Set `storage.blobs.s3.region` to the bucket's region.                                                                                    |
+| `S3_SERVICE_ERROR`        | The S3 service answered with a 5xx error or asked to slow down           | Check the S3 service and try again.                                                                                                      |
+| `S3_PROBE_MISMATCH`       | A test object did not read back as written                               | The S3 service or something between it and iHub changes the data. Blob storage cannot be used like this.                                 |
+| `S3_ERROR`                | Any other S3 failure                                                     | See the server log for the cause.                                                                                                        |
+| `BLOB_KEY_MISSING`        | No master key is available, or a new one could not be saved              | Restore `contents/.encryption-key` from a backup or set `TOKEN_ENCRYPTION_KEY`. Without the key the stored files cannot be read.         |
+| `BLOB_KEY_MISMATCH`       | The store was written with another master key                            | Restore the original key, or set it as `TOKEN_ENCRYPTION_KEY_PREVIOUS`. For a new installation use an empty bucket or prefix.            |
+| `BLOB_KEY_CHECK_MISSING`  | The store holds objects but no key-check object                          | Use an empty bucket or prefix, or set `IHUB_S3_ADOPT_BUCKET=true` for one start to adopt the objects as they are.                        |
+| `BLOB_CORRUPT`            | A stored object is not an encrypted blob of this store                   | Use one bucket or prefix per installation. If the object was changed, restore it from a backup of the bucket.                            |
+| `BLOB_PROVIDER_UNKNOWN`   | `storage.blobs.provider` names no known backend                          | Set it to `default` or `s3`.                                                                                                             |
+| `BLOB_STORAGE_ERROR`      | Anything else                                                            | See the server log for the cause.                                                                                                        |
+| `BLOB_LOCAL_LEFTOVERS`    | Warning: blobs are on local disk while S3 is active                      | Copy them with `npm run storage:copy-blobs` while the server is stopped.                                                                 |
+| `BLOB_COPY_NO_TARGET`     | `storage:copy-blobs` was run while `storage.blobs.provider` is `default` | Set `storage.blobs.provider` to `s3` and fill in `storage.blobs.s3` first.                                                               |
+
+Errors a request can meet while the server runs:
+
+| Code                  | HTTP | Meaning                                                                                                           |
+| --------------------- | ---- | ----------------------------------------------------------------------------------------------------------------- |
+| `STORAGE_UNAVAILABLE` | 503  | The bucket cannot be reached or refuses the request. Temporary.                                                   |
+| `KEY_UNAVAILABLE`     | 503  | An object names a master key this installation does not hold.                                                     |
+| `CORRUPT_BLOB`        | 500  | An object was changed, cut short or moved to another key, or it is not encrypted although encryption is enforced. |
+| `BLOB_TOO_LARGE`      | 413  | The blob is larger than `maxObjectBytes`.                                                                         |
+
+A blob that cannot be read is never reported as "not found" and its stored bytes are never
+returned as they are.
 
 ## Errors
 
@@ -513,8 +1030,23 @@ which backend the process resolves.
 | `NotSupportedError`    | `NOT_SUPPORTED`         | 501          |
 | `UnknownProviderError` | `UNKNOWN_PROVIDER`      | –            |
 
+| `CorruptBlobError`     | `CORRUPT_BLOB`          | 500          |
+| `KeyUnavailableError`  | `KEY_UNAVAILABLE`       | 503          |
+| `CorruptDocumentError` | `CORRUPT_DOCUMENT`      | 500          |
+| `PlaintextDocumentError` | `PLAINTEXT_DOCUMENT`  | 500          |
+| `CorruptLogError`      | `CORRUPT_LOG`           | 500          |
+
 `StorageError` is also thrown directly for `INVALID_DATA`, `INVALID_SEQ`,
-`INVALID_CURSOR`, `PATH_ESCAPE` and `STORAGE_NOT_INITIALIZED`.
+`INVALID_CURSOR`, `PATH_ESCAPE`, `STORAGE_NOT_INITIALIZED`,
+`STORAGE_UNAVAILABLE` (503), `BLOB_TOO_LARGE` (413), `INVALID_STORAGE_CONFIG`
+and `PLAINTEXT_FILE`.
+
+A blob, a document or a log record that does not decrypt or verify is never
+reported as absent: callers treat "absent" as "gone" and may clean up what
+refers to it. `CORRUPT_*` and `KEY_UNAVAILABLE` are thrown instead, and stored
+bytes are never handed out as they are. The `PLAINTEXT_*` codes mean that
+unencrypted data was found where encryption is enforced; see
+[Storage Encryption](storage-encryption.md#what-a-read-does-with-unencrypted-data).
 
 ## The filesystem provider
 
@@ -528,14 +1060,24 @@ contents/data/
   <ns>/.owners/<ownerSegment>/<key>   empty marker file — the per-owner index
   <ns>/.locks/<key>.lock              transient compare-and-set lock
   <ns>/.prefixes/<partition>/<key>    empty marker file — the key-prefix index
-  blobs/<ns>/<key>                    a blob, byte for byte
+  blobs/<ns>/<key>                    a blob: byte for byte, or encrypted (see below)
+  blobs/_ihub/keycheck                the key-check object of storage encryption
   blobs/<ns>/.prefixes/<partition>/<key>  the key-prefix index of blobs
   logs/<stream segments>.jsonl        one append-log stream, one JSON per line
   logs/<stream segments>.blobs/       that stream's blobs
   locks/<sha256(name)[0..40]>.lock    LockManager leases
   locks/<sha256(name)[0..40]>.fence   LockManager fencing counter
   .config-locks/<ns>/<key>.lock       compare-and-set locks for the raw namespaces
+  .at-rest.json                       state record of storage encryption
 ```
+
+With `storage.encryption.enabled` the paths and file names stay as shown and
+the content changes: a document is an envelope with `"v": 3` whose `data` is
+ciphertext, a log line is a sealed record with a readable `seq`, and a blob is
+a 512-byte header followed by ciphertext. With `storage.blobs.provider: "s3"`
+the `blobs/<ns>/` directories are not used; only `blobs/_ihub/keycheck` is.
+[Storage Encryption](storage-encryption.md) has the formats and the list of
+what stays readable.
 
 ### The key-prefix index
 
@@ -618,6 +1160,10 @@ The envelope is written with `atomicWriteJSON`:
   "data": {}
 }
 ```
+
+That is the unencrypted envelope. A sealed envelope has `"v": 3`, the members
+`enc`, `kp`, `kid`, `wk` and `tag` in place of `etag`, and base64 ciphertext in
+`data`; the etag a read reports is the same in both forms.
 
 `etag` and `size` are minted by `put` over the canonical serialization of
 `data` (the value the contract defines) and stored before `data`. Every read
@@ -727,7 +1273,10 @@ The planned lineup, from the design:
 | Multi-instance           | ❌                           | ❌                            | ✅ first-class      | ⚠️ supported, polling caveats             |
 | Best for                 | default, dev, single instance | small installs, one-file backup | production HA    | search-centric orgs                       |
 
-Only the filesystem provider ships today.
+Only the filesystem provider ships today. Its blob facet can be replaced by an
+S3-compatible bucket ([Blob storage backends](#blob-storage-backends)); that
+moves the blobs and changes none of the rows above. Documents, logs and locks
+stay on the filesystem, so the installation is still single-instance.
 
 **"Multi-instance" is a property of the provider, not of what runs on it.** A
 consumer whose correctness needs one writer at a time has to hold that itself,

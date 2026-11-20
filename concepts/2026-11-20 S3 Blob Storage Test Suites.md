@@ -3,6 +3,13 @@
 Hand-over notes for whoever continues the testing of the S3 blob backend
 (design: `2026-11-19 S3 Blob Storage Backend.md`). Written 2026-11-20.
 
+This file is kept beside the design because it holds what the design does not: the map of test
+files, how a suite selects its S3 server, and the rules for adding tests. The suites of storage
+encryption (`storage-*-encryption*.test.js`, `storage-sealed-files.test.js`,
+`storage-nothing-readable.test.js`, `storage-commands.test.js`, `crypto-*.test.js`) run in
+`npm run test:server` and need no S3 server; their design is `2026-11-20 Storage Encryption at
+Rest.md`.
+
 ## Two S3 servers
 
 | Server | What it is for | Start |
@@ -54,8 +61,8 @@ skipped (the conformance sections reported as `# SKIP not selected` are the only
 
 ## Rules
 
-- A test marked `[PRODUCT DEFECT]` fails on purpose. Fix the product, not the test; the comment
-  above each one names the file and the cause.
+- A failing test in these suites points at the product. Fix the product, not the test. (During
+  development such tests carried the mark `[PRODUCT DEFECT]`; none is left.)
 - Never register a test with `skip` for the external server; leave it out for that target instead
   (see the control case in `storage-s3-contract-edges.test.js`). A skip hides in a green run.
 - Do not add S3 files to `QUARANTINED` in `scripts/run-server-tests.js`.

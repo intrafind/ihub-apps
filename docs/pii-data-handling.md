@@ -46,6 +46,15 @@ without reverse-engineering the codebase.
 > the chats users keep. Files users upload to a chat are stored by default too:
 > their text for as long as the chat, the originals for 14 days.
 
+> [!NOTE]
+> **Encryption on disk.** With `storage.encryption.enabled` (on for a fresh
+> installation, off after an upgrade until an administrator turns it on) chats,
+> uploaded files, run history, agent memory and short links are encrypted
+> before they are written, on disk and in an S3 bucket. File names, owner ids
+> (often an e-mail address), sizes and times stay readable, and so do
+> `feedback.jsonl`, the audit log, the usage counters and `config/users.json`.
+> See [Storage Encryption](storage-encryption.md).
+
 ## What is captured, in detail
 
 ### 1. User identity

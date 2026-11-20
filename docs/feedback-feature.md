@@ -113,6 +113,12 @@ contents/data/feedback.jsonl
 
 Each line is a complete JSON object representing one feedback entry.
 
+[Storage encryption](storage-encryption.md) does not cover this file. It stays
+readable on disk with `storage.encryption.enabled` on, so that the `jq` and
+`grep` workflow keeps working. An entry holds the user's comment and a snippet
+of the rated answer; protect the file with file permissions and keep the
+retention short if that content is confidential.
+
 #### Storage Format
 
 ```json
