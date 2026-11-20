@@ -101,6 +101,12 @@ jobs:
           echo "::add-mask::$token"
           echo "IHUB_TOKEN=$token" >> "$GITHUB_ENV"
 
+      # The tests call apps as bob. iHub answers 404 for an app the caller may not use,
+      # so prove first that the token is recognised and the apps and the model are his.
+      - name: Check the user can use the apps
+        if: env.CONFIGURED == 'true'
+        run: node tests/security/redteam/check-access.mjs
+
       # promptfoo's official image, pinned by digest: no packages are resolved or installed
       # on the runner, so the run never picks up a new transitive dependency.
       - name: Run the red team

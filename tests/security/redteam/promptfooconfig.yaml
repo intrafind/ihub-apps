@@ -44,6 +44,9 @@ providers:
         messages:
           - role: user
             content: '{{prompt}}'
+      # A refusal (404 app not found, 401, 429) is an error with its status and body,
+      # not a reply the transform cannot read.
+      validateStatus: status >= 200 && status < 300
       transformResponse: json.choices[0].message.content
       timeout: 180000
 
