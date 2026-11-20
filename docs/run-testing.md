@@ -221,7 +221,7 @@ A row counts for a changed golden when it names the golden, lists every part tha
 
 ### How a row is signed
 
-The author of a change writes the row with `state: "proposed"`. The product owner signs it: `state: "signed"`, `signedBy` with the owner's GitHub login, `signedOn` with the day.
+The author of a change writes the row with `state: "proposed"`. An owner of the difference list signs it: `state: "signed"`, `signedBy` with that owner's GitHub login, `signedOn` with the day. `.github/CODEOWNERS` names two owners, `manzked` and `Intradmin`.
 
 The signature is valid only with the owner's approving review of the pull request that adds it. `scripts/check-difference-signatures.js` checks this:
 
@@ -235,7 +235,7 @@ The check and the difference list test run in the job **Golden difference list**
 
 After the owner approved, re-run the job **Golden difference list**. A review does not start the workflow by itself.
 
-GitHub does not let the author of a pull request approve it. A pull request that adds a signature must therefore be opened by someone other than the owner.
+GitHub does not let the author of a pull request approve it. This is why there are two owners: a pull request that one owner opened is approved, and with that signed, by the other. The approval of either owner satisfies the check; `signedBy` names an owner, and the approving review is the proof.
 
 To run the check by hand, save the reviews of the pull request and pass them:
 

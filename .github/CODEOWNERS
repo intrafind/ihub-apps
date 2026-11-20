@@ -5,12 +5,14 @@
 # request cannot be merged without that review.
 #
 # The difference list of the golden tests (docs/run-testing.md): a row is an
-# accepted difference between the recorded behaviour and today's. The product
-# owner signs a row by approving the pull request that adds the signature;
+# accepted difference between the recorded behaviour and today's. An owner
+# signs a row by approving the pull request that adds the signature;
 # scripts/check-difference-signatures.js fails a signature without that review.
+# Two owners are named because GitHub does not let the author of a pull request
+# approve it: a pull request opened by one owner is signed by the other.
 # The check reads the owner from this file on the target branch.
-/server/tests/golden/differences.json @Intradmin
-/.github/CODEOWNERS @Intradmin
+/server/tests/golden/differences.json @manzked @Intradmin
+/.github/CODEOWNERS @manzked @Intradmin
 
 # The gate runs on `pull_request`, so it runs the pull request's own copy of
 # the workflow and of the two checks. Whoever can change one of them can switch
@@ -18,7 +20,7 @@
 # workflow with the job "Golden difference list", and the check that every
 # changed golden is named by a row. This only holds with the branch protection
 # rule "Require review from Code Owners" on the target branch.
-/scripts/check-difference-signatures.js @Intradmin
-/.github/workflows/e2e.yml @Intradmin
-/server/tests/golden/differenceList.js @Intradmin
-/server/tests/golden/differenceList.test.js @Intradmin
+/scripts/check-difference-signatures.js @manzked @Intradmin
+/.github/workflows/e2e.yml @manzked @Intradmin
+/server/tests/golden/differenceList.js @manzked @Intradmin
+/server/tests/golden/differenceList.test.js @manzked @Intradmin
