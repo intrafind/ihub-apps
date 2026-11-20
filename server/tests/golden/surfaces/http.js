@@ -16,6 +16,7 @@
 import http from 'node:http';
 import express from 'express';
 import errorHandler from '../../../middleware/errorHandler.js';
+import { byCodeUnit } from '../byCodeUnit.js';
 
 /**
  * Start a server on a free port of the loopback interface.
@@ -90,14 +91,6 @@ const UNRECORDED_HEADERS = new Set([
   'transfer-encoding',
   'x-powered-by'
 ]);
-
-/** The order `sort()` has without a comparator, said out loud: by UTF-16 code unit. */
-const byCodeUnit = (a, b) => {
-  const x = String(a);
-  const y = String(b);
-  if (x < y) return -1;
-  return x > y ? 1 : 0;
-};
 
 function recordedHeaders(headers) {
   const out = {};
