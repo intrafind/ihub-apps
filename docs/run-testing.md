@@ -443,14 +443,16 @@ Name the file `<what>.fault.test.js` and put it under `server/tests/faults/`. Gi
 
 | The stack | |
 |---|---|
-| `startStack({ workers, killPoint, seed, stub, env, contents })` | seeds a contents directory and starts a server on it; `workers: 2` starts a primary with two workers. `contents` names a directory another stack left: the stack starts on it as it is and does not remove it |
+| `startStack({ workers, killPoint, seed, stub, env, contents })` | seeds a contents directory and starts a server on it; `workers: 2` starts a primary with two workers. `contents` names a directory another stack left: the stack starts on it as it is and does not remove it. The seed and the start share one limit of two minutes; a start that runs into it stops what it started |
 | `stack.restart({ killPoint, signal, env, clockAheadMs })` | stops the server if it runs (`SIGKILL` unless told otherwise) and starts one on the same contents directory |
 | `stack.kill(signal)` | `SIGKILL` or `SIGTERM` and waits until the server is gone; `SIGSTOP` and `SIGCONT` freeze and thaw it |
 | `stack.waitKilledAt(name)` | waits until the server reached its kill point |
-| `stack.api(credentials)` | an HTTP client that is signed in (the default admin unless told otherwise): `get`, `post`, `put`, `delete`, `stream`, `chatTurn` |
+| `stack.killPointHits()` | the kill points that fired since this start, one name for each time |
+| `stack.healthy()` | waits until the server answers again, after a worker was replaced or the server was thawed |
+| `stack.api(credentials)` | an HTTP client that is signed in (the default admin unless told otherwise): `get`, `post`, `put`, `delete`, `stream`, `chatTurn`. `chatTurn(app, message, { ownConnection: true })` sends the turn on a connection of its own |
 | `stack.readChat(chatId)`, `stack.readLedger(runId)`, `stack.evidence(runId)` | what the server answers for a chat, the events of a run and its evidence record |
 | `stack.stored(namespace, key)`, `stack.journal(runId)` | what is on disk right now: a stored document, the events of a run. A running server can know more than its disk |
-| `stack.counter` | the counter of the write tool: `count(key)`, `read(key)`, `snapshot()`, `reset()` |
+| `stack.counter` | the counter of the write tool: `count(key)`, `read(key)`, `snapshot()`, `reset()`, and `writers(key)`: the process id of the server process behind each write |
 | `stack.stub` | the model stub: `requests(marker)`, `stats()`, `hanging(key)`, `release(key)` |
 | `stack.stop()` | stops everything and removes the contents directory the stack made |
 
@@ -459,12 +461,20 @@ Name the file `<what>.fault.test.js` and put it under `server/tests/faults/`. Gi
 Three rules keep the tier from becoming flaky:
 
 - **Never read a log line to find out where the server is.** Use a kill point and `waitKilledAt`, or wait for something the server stored (`stack.stored`, `stack.journal`) or sent (a frame of a stream).
-- **Never sleep.** Every wait of the harness is for a condition, with a limit. `server/tests/no-real-time-waits.test.js` searches the directory for sleeps and for timers of a second or more.
+- **Never sleep.** Every wait of the harness is for a condition, with a limit. The limit also holds when a server takes a connection and never answers. `server/tests/no-real-time-waits.test.js` searches the directory for sleeps and for timers of a second or more.
 - **Kill only once the disk says what you rely on.** A server writes its records a moment after it sends an event. `legacy-workflow-restart.fault.test.js` waits until the stored execution says `paused` before it kills. A test that kills earlier tests a different thing: what happens to a write that was still on its way.
 
-The harness signals only the process groups it started. It never looks a process up by name or port.
+Start the stack in a `before` hook with `{ timeout: SETUP_TIMEOUT_MS }`. That limit is longer than a start can take, so a start that fails has stopped its server before the hook gives up.
 
-Set `KEEP_FAULT_CONTENTS=1` to keep the contents directories with the log of each server (`faults-server.log`) after a run. Without it nothing is left behind, also when you interrupt the run.
+With two workers, a connection stays with the worker that took it, and `fetch` uses its connections again. A test that has to reach both workers sends its turns with `ownConnection: true` and reads from `stack.counter.writers(key)` which worker wrote, as `two-workers.fault.test.js` does. A replaced worker takes connections only once it has started; `stack.healthy()` returns as soon as the other one answers.
+
+The harness signals only the process groups it started, and none of them after its first process ended. It never looks a process up by name or port.
+
+Set `KEEP_FAULT_CONTENTS=1` to keep the contents directories with the output of their servers (`faults-server.log`) after a run. Without it nothing is left behind, also when you interrupt the run. The nightly workflow sets the variable, to upload the logs of a failed run, so every fault test has to hold in both settings: assert on `stack.keepsContents`, never on the directory being gone. Before you merge a change to the harness or to a fault test, run the tier once as the workflow does:
+
+```bash
+CI=true KEEP_FAULT_CONTENTS=1 npm run test:faults   # then remove the contents-e2e-faults-* directories
+```
 
 ### Kill points
 
@@ -486,10 +496,10 @@ When an armed process reaches its kill point, it appends the name to the file in
 
 To add a kill point:
 
-1. Call `killPoint('<name>')` at the place, with the name as a plain string: lower-case words joined by hyphens.
+1. Import it as above, `import { killPoint } from`, and call `killPoint('<name>')` at the place, with the name as a plain string: lower-case words joined by hyphens.
 2. Add a row to `server/tests/faults/KILLPOINTS.md`.
 
-`server/tests/killPoint-inventory.test.js` fails when the code and the list differ. It also fails when a name is not a plain string, when a file other than `server/utils/killPoint.js` names the variable, and when a kill point is placed in a file of the [frozen legacy workflow path](#the-legacy-workflow-path).
+`server/tests/killPoint-inventory.test.js` fails when the code and the list differ. It also fails when a name is not a plain string, when a file other than `server/utils/killPoint.js` names the variable, and when a kill point is placed in a file of the [frozen legacy workflow path](#the-legacy-workflow-path). The test finds a call by its name, so it also fails when a file gets at the module in a way it cannot follow (a default import, a namespace, a dynamic import, a re-export), and when a file imports the module and has no row in the list.
 
 The first two kill points are in the test tool `e2e_counter_write`, before and after its write. They give a test a write that is in flight when the server dies, without a kill point in the code that runs tools. The kill points of a feature come with the feature.
 
@@ -502,7 +512,7 @@ A test of "this write ran exactly once" needs a write whose effect a killed serv
 | `e2e_counter_write` | adds one to the counter of a `key`; a write, never read-only |
 | `e2e_counter_read` | returns the count and the values written for a `key`; a read, marked as content from outside iHub (`untrustedInput`) |
 
-The counter itself (`tests/config/test-counter.mjs`) lives in the process of the test. The tools reach it through `httpFetch`, at the address in `IHUB_TEST_COUNTER_URL`. Every write counts, so two writes for one tool call show as 2.
+The counter itself (`tests/config/test-counter.mjs`) lives in the process of the test. The tools reach it through `httpFetch`, at the address in `IHUB_TEST_COUNTER_URL`. Every write counts, so two writes for one tool call show as 2. A write also names the server process it came from (its process id, in the header `x-ihub-test-writer`); `counter.writers(key)` returns them, for a test of a server with two workers.
 
 No installation has these tools. The connector is registered only with both variables set, and it logs one warning line when it is. iHub ships no definition that names the connector: the definition and the installation are written into the contents directory of the test (`tests/config/test-tools-contents.mjs`). The agents browser suite uses the same tools on the same counter.
 
@@ -519,7 +529,9 @@ No installation has these tools. The connector is registered only with both vari
 
 The switch is in the fixture, so the server of the product has no switch that turns a protection off.
 
-**Does it work on the real server?** A real server is killed at a kill point with a write in flight, killed with a model call open, stopped with SIGTERM, and each time started again on the same contents directory. A second stack is started on the contents directory the first one left. `two-workers.fault.test.js` kills one worker of a primary with two workers, and then all of them.
+**Does it work on the real server?** A real server is killed at a kill point with a write in flight, killed with a model call open, stopped with SIGTERM, and each time started again on the same contents directory. A second stack is started on the contents directory the first one left. `two-workers.fault.test.js` kills one worker of a primary with two workers, shows that the worker beside it and its replacement both reach the kill point afterwards and live, and then kills all of them.
+
+**Does it clean up, and does every wait end?** A frozen server (`SIGSTOP`) takes a connection and does not answer, and the wait for it ends at its limit. A start that runs into its limit leaves no process and no directory. A server that ended by itself is not signalled again. A contents directory is removed, or kept with the output of its servers, as the stack was told.
 
 These tests say nothing about what a run should do after a kill. A killed turn leaves its chat as it was, and the cases that pin "needs attention" and "run again" come with the features that build them.
 
