@@ -135,7 +135,7 @@ export function openRequest({ port, method, path, body, headers = {} }) {
     exchange.frames.push(...parseSse(exchange.text.slice(parsedUpTo, end)));
     parsedUpTo = end;
     for (const waiter of waiters.splice(0)) {
-      const found = exchange.frames.find(waiter.predicate);
+      const found = exchange.frames.find(frame => waiter.predicate(frame));
       if (found) waiter.resolve(found);
       else waiters.push(waiter);
     }
@@ -196,7 +196,7 @@ export function openRequest({ port, method, path, body, headers = {} }) {
   });
 
   exchange.until = (predicate, what = 'a frame') => {
-    const found = exchange.frames.find(predicate);
+    const found = exchange.frames.find(frame => predicate(frame));
     if (found) return Promise.resolve(found);
     if (ended)
       return Promise.reject(new Error(`the response ended before the awaited frame (${what})`));

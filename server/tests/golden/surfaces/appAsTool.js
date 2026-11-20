@@ -152,9 +152,10 @@ function slowly(inner) {
 async function runPastTheLimit(env, turns) {
   mock.timers.enable({ apis: ['setTimeout'] });
   try {
-    let settled = false;
+    // Held on an object: the flag is set from the callback of the call, not in the loop below.
+    const state = { settled: false };
     const pending = call(env).finally(() => {
-      settled = true;
+      state.settled = true;
     });
     /** Let everything that is ready run, without moving the clock. */
     const idle = async () => {
@@ -163,7 +164,7 @@ async function runPastTheLimit(env, turns) {
     let elapsed = 0;
     /** Move the clock in steps, so that short timers set on the way fire too. */
     const advanceTo = async ms => {
-      while (elapsed < ms && !settled) {
+      while (elapsed < ms && !state.settled) {
         const step = Math.min(1000, ms - elapsed);
         mock.timers.tick(step);
         elapsed += step;
@@ -173,7 +174,7 @@ async function runPastTheLimit(env, turns) {
     await turns[0].waiting;
     await advanceTo(MODEL_ANSWERS_AFTER_MS);
     await turns[1].waiting;
-    const stillRunningAfterMs = settled ? null : elapsed;
+    const stillRunningAfterMs = state.settled ? null : elapsed;
     await advanceTo(WALL_CLOCK_LIMIT_MS);
     const result = await pending;
     return { result: { stillRunningAfterMs, endedAfterMs: elapsed, answer: result } };
