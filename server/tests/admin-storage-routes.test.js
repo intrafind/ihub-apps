@@ -108,14 +108,22 @@ function assertNoSecrets(text) {
 
 before(async () => {
   s3 = await startFakeS3Server({ buckets: ['ihub-test'], accessKeyId: ACCESS_KEY_ID });
-  const composed = await composeS3Provider({
-    s3,
-    keys: fixedKeys(keyModule),
-    config: CREDENTIALS
+  const keys = fixedKeys(keyModule);
+  // A blob from before the blobs moved to S3, still on local disk: written by
+  // the installation while it kept its blobs there, with encryption on (the
+  // base provider follows the switch, and a start refuses a data directory
+  // with plaintext it has not converted).
+  const baseDir = await fs.mkdtemp(path.join(scratch, 'storage-'));
+  const earlier = new FilesystemStorageProvider({
+    baseDir,
+    fenceSweepIntervalMs: 0,
+    encryption: { mode: 'auto', loadKeys: async () => keys }
   });
+  await earlier.initialize();
+  await earlier.blobs.put('chat-files', 'chat__a__f1.txt', 'left behind');
+  await earlier.shutdown();
+  const composed = await composeS3Provider({ s3, keys, baseDir, config: CREDENTIALS });
   provider = composed.provider;
-  // A blob from before the switch, still on local disk.
-  await provider.base.blobs.put('chat-files', 'chat__a__f1.txt', 'left behind');
   await provider.initialize();
   clock = { now: Date.now() };
 });
@@ -174,8 +182,11 @@ describe('GET /api/admin/storage', () => {
       { namespace: 'chat-files', count: 1, capped: false }
     ]);
     assert.equal(response.body.encryption.enabled, true);
-    assert.equal(response.body.encryption.scope, 'blobs');
-    assert.equal(response.body.encryption.conversion.state, 'none');
+    // The base provider is composed with the switch on, as the registry does
+    // it: documents and logs are encrypted too, and its directory, empty
+    // at the first start, counts as converted.
+    assert.equal(response.body.encryption.scope, 'storage');
+    assert.equal(response.body.encryption.conversion.state, 'complete');
     assertNoSecrets(response.text);
   });
 

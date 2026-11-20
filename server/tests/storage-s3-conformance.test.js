@@ -35,7 +35,19 @@ const scratchContents = fsSync.mkdtempSync(path.join(os.tmpdir(), 'ihub-s3-conf-
 process.env.CONTENTS_DIR = scratchContents;
 const keyModule = await import('../crypto/KeyProvider.js');
 
-/** What the composed provider reports: the filesystem set, with the blob facet declared. */
+/**
+ * What the composed provider reports: the filesystem set, with the blob facet
+ * declared. `encryptionAtRest` is the base provider's and follows the switch,
+ * which `composeS3Provider` hands to it as the registry does.
+ *
+ * @param {{enabled: boolean}} encryption
+ * @returns {Object}
+ */
+const capabilitiesFor = encryption => ({
+  ...CAPABILITIES,
+  encryptionAtRest: encryption.enabled ? 'enforced' : 'off'
+});
+
 const CAPABILITIES = {
   transactions: false,
   notifications: 'in-process',
@@ -106,7 +118,7 @@ describe('S3 blob backend, encryption on', () => {
     // The registry name the composed provider reports: its base provider's.
     name: 'filesystem',
     createProvider: factoryFor({ enabled: true, plaintextReads: 'reject' }),
-    capabilities: CAPABILITIES,
+    capabilities: capabilitiesFor({ enabled: true }),
     sections: SECTIONS
   });
 });
@@ -115,7 +127,7 @@ describe('S3 blob backend, encryption off', () => {
   runProviderConformance({
     name: 'filesystem',
     createProvider: factoryFor({ enabled: false, plaintextReads: 'accept' }),
-    capabilities: CAPABILITIES,
+    capabilities: capabilitiesFor({ enabled: false }),
     sections: SECTIONS
   });
 });

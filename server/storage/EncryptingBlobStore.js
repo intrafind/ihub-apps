@@ -330,8 +330,14 @@ export class EncryptingBlobStore extends BlobStore {
         keyId: wrap.keyId,
         wrapped: wrap.wrapped
       });
-      const body = encrypt(plain, dataKey, aad, { segmentBytes: ENVELOPE_SEGMENT_BYTES });
-      return Buffer.concat([header, body]);
+      // The ciphertext is written behind room for the header, so the stored
+      // object is built once and not joined from two buffers.
+      const sealed = encrypt(plain, dataKey, aad, {
+        segmentBytes: ENVELOPE_SEGMENT_BYTES,
+        leadingBytes: header.length
+      });
+      header.copy(sealed, 0);
+      return sealed;
     } finally {
       dataKey.fill(0);
     }

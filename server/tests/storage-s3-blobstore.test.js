@@ -615,7 +615,14 @@ describe('S3 blob backend: composed provider', () => {
   it('warns about blobs still on the base provider, with counts', async () => {
     const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-s3-leftovers-'));
     const { FilesystemStorageProvider } = await import('../storage/providers/filesystem/index.js');
-    const before = new FilesystemStorageProvider({ baseDir, fenceSweepIntervalMs: 0 });
+    // With the switch on, as the provider composed below has it: a start
+    // refuses a data directory with plaintext that was not converted.
+    const keys = fixedKeys(keyModule);
+    const before = new FilesystemStorageProvider({
+      baseDir,
+      fenceSweepIntervalMs: 0,
+      encryption: { mode: 'auto', loadKeys: async () => keys }
+    });
     await before.initialize();
     await before.blobs.put('chat-files', 'chat__a__1.txt', 'x');
     await before.blobs.put('chat-files', 'chat__a__2.txt', 'x');

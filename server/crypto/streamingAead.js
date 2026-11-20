@@ -99,16 +99,29 @@ function checkSegmentSize(segmentBytes) {
  * @param {Buffer} plaintext
  * @param {Buffer} dataKey - 32 random bytes.
  * @param {Buffer|string} associatedData
- * @param {{segmentBytes?: number}} [options]
- * @returns {Buffer} header followed by the segments.
+ * @param {{segmentBytes?: number, leadingBytes?: number}} [options] -
+ *   `leadingBytes` reserves that many bytes in front of the ciphertext, in the
+ *   same buffer, for a caller that stores its own header there (the blob
+ *   envelope) and would otherwise copy the whole ciphertext to join the two.
+ *   The reserved bytes are zero; the ciphertext itself is the same either way.
+ * @returns {Buffer} `leadingBytes` zero bytes (none by default), then the
+ *   header followed by the segments.
+ * @throws {StreamingAeadError} For a segment size or `leadingBytes` out of range.
+ *
+ * @example
+ * const stored = encrypt(plain, dataKey, aad, { leadingBytes: 512 });
+ * myHeader.copy(stored, 0); // stored.subarray(512) is the ciphertext
  */
 export function encrypt(
   plaintext,
   dataKey,
   associatedData,
-  { segmentBytes = DEFAULT_SEGMENT_BYTES } = {}
+  { segmentBytes = DEFAULT_SEGMENT_BYTES, leadingBytes = 0 } = {}
 ) {
   checkSegmentSize(segmentBytes);
+  if (!Number.isSafeInteger(leadingBytes) || leadingBytes < 0) {
+    throw new StreamingAeadError('The reserved leading length is not usable');
+  }
   const input = Buffer.isBuffer(plaintext)
     ? plaintext
     : Buffer.from(String(plaintext ?? ''), 'utf8');
@@ -120,11 +133,12 @@ export function encrypt(
   const otherPlain = segmentBytes - TAG_BYTES;
   // One buffer of the final length, filled segment by segment: the ciphertext
   // is held once, not once as pieces and once joined.
-  const output = Buffer.allocUnsafe(ciphertextLength(input.length, segmentBytes));
-  output[0] = HEADER_BYTES;
-  salt.copy(output, 1);
-  noncePrefix.copy(output, 1 + SALT_BYTES);
-  let written = HEADER_BYTES;
+  const output = Buffer.allocUnsafe(leadingBytes + ciphertextLength(input.length, segmentBytes));
+  output.fill(0, 0, leadingBytes);
+  output[leadingBytes] = HEADER_BYTES;
+  salt.copy(output, leadingBytes + 1);
+  noncePrefix.copy(output, leadingBytes + 1 + SALT_BYTES);
+  let written = leadingBytes + HEADER_BYTES;
   let offset = 0;
   let index = 0;
   // An empty plaintext is one empty last segment, as Tink writes it.

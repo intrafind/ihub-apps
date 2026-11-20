@@ -29,6 +29,7 @@ import {
 import {
   StreamingAeadError,
   ciphertextLength,
+  decrypt,
   encrypt,
   newDataKey,
   plaintextLength
@@ -182,6 +183,28 @@ describe('blob envelope: length arithmetic', () => {
       const cipher = encrypt(Buffer.alloc(size), key, 'aad', { segmentBytes: 128 });
       assert.equal(ciphertextLength(size, 128), cipher.length, `size ${size}`);
       assert.equal(plaintextLength(cipher.length, 128), size, `size ${size}`);
+    }
+  });
+
+  it('reserves leading bytes in front of an unchanged ciphertext', () => {
+    const key = newDataKey();
+    const plain = Buffer.from('a'.repeat(300));
+    for (const size of [0, 1, 300]) {
+      const stored = encrypt(plain.subarray(0, size), key, 'aad', {
+        segmentBytes: 128,
+        leadingBytes: 512
+      });
+      assert.equal(stored.length, 512 + ciphertextLength(size, 128), `size ${size}`);
+      assert.ok(stored.subarray(0, 512).equals(Buffer.alloc(512)), 'the reserved bytes are zero');
+      assert.ok(
+        decrypt(stored.subarray(512), key, 'aad', { segmentBytes: 128 }).equals(
+          plain.subarray(0, size)
+        ),
+        `size ${size}`
+      );
+    }
+    for (const bad of [-1, 1.5, Number.NaN, '512']) {
+      assert.throws(() => encrypt(plain, key, 'aad', { leadingBytes: bad }), StreamingAeadError);
     }
   });
 
