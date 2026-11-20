@@ -24,3 +24,5 @@
 /.github/workflows/e2e.yml @manzked @Intradmin
 /server/tests/golden/differenceList.js @manzked @Intradmin
 /server/tests/golden/differenceList.test.js @manzked @Intradmin
+# What the two checks import is part of them.
+/server/tests/golden/byCodeUnit.js @manzked @Intradmin

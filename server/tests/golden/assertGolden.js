@@ -17,6 +17,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import { byCodeUnit } from './byCodeUnit.js';
 import { canonicalJson } from './normalise.js';
 import { GOLDEN_DIR } from './harness.js';
 
@@ -49,7 +50,9 @@ export function diffPaths(expected, actual, at = '') {
     }
     return differences;
   }
-  for (const key of [...new Set([...Object.keys(expected), ...Object.keys(actual)])].sort()) {
+  for (const key of [...new Set([...Object.keys(expected), ...Object.keys(actual)])].sort(
+    byCodeUnit
+  )) {
     differences.push(...diffPaths(expected[key], actual[key], at ? `${at}.${key}` : key));
   }
   return differences;
@@ -95,8 +98,8 @@ export function unmatchedGoldens(cases, dir = GOLDEN_DIR) {
       : []
   );
   return {
-    withoutCase: [...present].filter(file => !expected.has(file)).sort(),
-    withoutGolden: [...expected].filter(file => !present.has(file)).sort()
+    withoutCase: [...present].filter(file => !expected.has(file)).sort(byCodeUnit),
+    withoutGolden: [...expected].filter(file => !present.has(file)).sort(byCodeUnit)
   };
 }
 

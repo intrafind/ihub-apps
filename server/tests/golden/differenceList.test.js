@@ -46,6 +46,7 @@ const row = (overrides = {}) => ({
 
 test('a missing or empty difference list has no rows; a list is an object with rows', () => {
   assert.deepEqual(parseDifferenceList(null), []);
+  assert.deepEqual(parseDifferenceList(undefined), []);
   assert.deepEqual(parseDifferenceList('  '), []);
   assert.deepEqual(parseDifferenceList(JSON.stringify({ rows: [row()] })), [row()]);
   assert.throws(() => parseDifferenceList('[]'), /must be an object with a "rows" array/);

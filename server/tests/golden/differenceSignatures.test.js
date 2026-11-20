@@ -88,6 +88,7 @@ test('the CODEOWNERS file of this repository names both owners of the difference
   for (const file of [
     '.github/workflows/e2e.yml',
     'server/tests/golden/differenceList.js',
+    'server/tests/golden/byCodeUnit.js',
     'server/tests/golden/differenceList.test.js'
   ]) {
     assert.deepEqual(ownersOf(text, file), ['manzked', 'intradmin'], `${file} has the owner`);
@@ -107,6 +108,7 @@ test('the job that runs the check is in the workflow the owner owns', () => {
 test('rowsOf refuses a list whose rows cannot be told apart', () => {
   const list = rows => JSON.stringify({ rows });
   assert.deepEqual(rowsOf(null), []);
+  assert.deepEqual(rowsOf(undefined), []);
   assert.deepEqual(rowsOf(''), []);
   assert.equal(rowsOf(list([proposed('a'), signed('b')])).length, 2);
   // A signed row and an unsigned one with the same id: the map by id would keep only the last.

@@ -20,6 +20,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { byCodeUnit } from './byCodeUnit.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -51,7 +52,8 @@ const ROW_KEYS = new Set([
 /**
  * Parse the difference list. A missing file is an empty list.
  *
- * @param {string|null} text - The content of `differences.json`.
+ * @param {string|null} [text] - The content of `differences.json`; null or left out when there
+ *   is no file.
  * @returns {Object[]} The rows.
  */
 export function parseDifferenceList(text) {
@@ -139,7 +141,9 @@ export function changedParts(before, after) {
   if (after === null) return ['(deleted)'];
   if (before === null) return [];
   const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
-  return [...keys].filter(key => JSON.stringify(before[key]) !== JSON.stringify(after[key])).sort();
+  return [...keys]
+    .filter(key => JSON.stringify(before[key]) !== JSON.stringify(after[key]))
+    .sort(byCodeUnit);
 }
 
 const sameRow = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -186,9 +190,33 @@ export function checkChangedGoldens({ changes, rows, baseRows = [] }) {
   return problems;
 }
 
+const SYSTEM_BINARIES = {
+  git: ['/usr/bin/git', '/usr/local/bin/git', '/bin/git', '/opt/homebrew/bin/git'],
+  gh: ['/usr/bin/gh', '/usr/local/bin/gh', '/opt/homebrew/bin/gh']
+};
+
+/**
+ * `git` or `gh` by its full path in a system directory, never through PATH,
+ * which a checkout could lead with a directory of its own.
+ *
+ * The checks that use it run on Linux (CI) and macOS. Where the program lives
+ * elsewhere (Windows), this throws like a program that is not installed: the
+ * difference list test then finds no base and is skipped, and
+ * `scripts/check-difference-signatures.js` ends with exit code 2.
+ *
+ * @param {'git'|'gh'} name
+ * @returns {string} The full path.
+ * @throws {Error} When the program is in none of the system directories.
+ */
+export function systemBinary(name) {
+  const found = SYSTEM_BINARIES[name].find(candidate => fs.existsSync(candidate));
+  if (!found) throw new Error(`${name} is in none of ${SYSTEM_BINARIES[name].join(', ')}`);
+  return found;
+}
+
 function git(args, { cwd = REPO_ROOT, allowFailure = false } = {}) {
   try {
-    return execFileSync('git', args, {
+    return execFileSync(systemBinary('git'), args, {
       cwd,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],

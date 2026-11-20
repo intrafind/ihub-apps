@@ -36,6 +36,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { byCodeUnit } from './byCodeUnit.js';
 
 const canonical = value => `${JSON.stringify(sortKeys(value), null, 2)}\n`;
 
@@ -44,7 +45,7 @@ function sortKeys(value) {
   if (value && typeof value === 'object') {
     return Object.fromEntries(
       Object.keys(value)
-        .sort()
+        .sort(byCodeUnit)
         .filter(key => value[key] !== undefined)
         .map(key => [key, sortKeys(value[key])])
     );
@@ -139,7 +140,7 @@ export async function runSideBySide({
       part =>
         JSON.stringify(sortKeys(a.record?.[part])) !== JSON.stringify(sortKeys(b.record?.[part]))
     )
-    .sort();
+    .sort(byCodeUnit);
   const failed = sides.filter(side => side.error).map(side => side.label);
 
   const lines = text => (text ? text.trimEnd().split('\n').length : 0);

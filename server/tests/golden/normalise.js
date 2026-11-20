@@ -27,6 +27,7 @@
  */
 import crypto from 'node:crypto';
 import os from 'node:os';
+import { byCodeUnit } from './byCodeUnit.js';
 
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
 
@@ -105,7 +106,7 @@ function sortKeys(value) {
   if (Array.isArray(value)) return value.map(sortKeys);
   if (value && typeof value === 'object') {
     const sorted = {};
-    for (const key of Object.keys(value).sort()) {
+    for (const key of Object.keys(value).sort(byCodeUnit)) {
       if (value[key] !== undefined) sorted[key] = sortKeys(value[key]);
     }
     return sorted;
@@ -179,7 +180,7 @@ export function createNormaliser({
       if (volatile.has(key)) return '<volatile>';
       const out = {};
       // Sorted, so the numbering of ids does not depend on the order a producer filled the object in.
-      for (const name of Object.keys(value).sort()) {
+      for (const name of Object.keys(value).sort(byCodeUnit)) {
         if (value[name] === undefined) continue;
         out[name] = walk(value[name], name);
       }
@@ -435,7 +436,7 @@ export function projectModelRequest(request, normaliser) {
   });
 
   const options = {};
-  for (const key of Object.keys(body).sort()) {
+  for (const key of Object.keys(body).sort(byCodeUnit)) {
     if (!NOT_AN_OPTION.has(key)) options[key] = normaliser.normalise(body[key]);
   }
 

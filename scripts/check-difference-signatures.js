@@ -62,6 +62,8 @@
 import fs from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
+// Owned like this script (.github/CODEOWNERS), and needs nothing but what Node ships with.
+import { systemBinary } from '../server/tests/golden/differenceList.js';
 
 export const DIFFERENCES_PATH = 'server/tests/golden/differences.json';
 export const GOLDENS_PATH = 'server/tests/golden/__goldens__';
@@ -104,7 +106,8 @@ export function ownersOf(text, file) {
  * signed row hidden behind a second row with the same id, or behind a row
  * without an id, would otherwise read as "no signature touched".
  *
- * @param {string|null} text - The content of `differences.json`.
+ * @param {string|null} [text] - The content of `differences.json`; null or left out when the
+ *   commit has no list.
  * @param {string} [where='the pull request'] - Whose list it is, for the message.
  * @returns {Object[]}
  * @throws {Error} When the list is not `{ rows: [...] }`, a row is no object, a row has no text
@@ -248,7 +251,7 @@ export function evaluate({ changes, owners, reviews, changedSince }) {
 
 function git(args, { allowFailure = false } = {}) {
   try {
-    return execFileSync('git', args, {
+    return execFileSync(systemBinary('git'), args, {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
       maxBuffer: 64 * 1024 * 1024
@@ -289,7 +292,7 @@ function fetchReviews({ repo, pr }) {
   let output;
   try {
     output = execFileSync(
-      'gh',
+      systemBinary('gh'),
       [
         'api',
         '--paginate',
