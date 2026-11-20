@@ -292,6 +292,33 @@ function afterTheAnswerIsStored(env, inner) {
   };
 }
 
+/**
+ * Keep the answer of a person from being stored before the continued execution has asked the
+ * model again.
+ *
+ * An answer continues its execution first and is stored after that
+ * (`InteractionService.onAnswer`), so the first steps of the continued run and the storing of
+ * the answer run side by side. With a real model the run is long at its model call when the
+ * answer lands in the ledger. This handler makes that the order of every recording: it runs
+ * after the handler that continues the execution, and returns when the model call has arrived
+ * (or the execution ended without one, so that a failure does not wait forever). Together with
+ * {@link afterTheAnswerIsStored} the ledger of a continued run has one order.
+ *
+ * Register it after `registerCheckpointResume()`.
+ *
+ * @param {Object} env - The environment of the recording.
+ * @param {number} call - The number of the model call the continued execution makes.
+ * @returns {() => void} unregister
+ */
+function storeTheAnswerAfterModelCall(env, call) {
+  return interactionService.onAnswer(interaction =>
+    Promise.race([
+      env.model.waitForCall(call),
+      executionEnded(interaction.source?.executionId || interaction.runId)
+    ])
+  );
+}
+
 /** The keys of the execution's data a golden holds: what the steps wrote, not the definition. */
 const UNRECORDED_DATA = new Set(['_workflowDefinition', '_workflow', '_document', '_fileData']);
 
@@ -801,6 +828,7 @@ export const legacyWorkflowCases = [
       const user = goldenUser(env);
       // The server registers this when it starts (`startup/routes.js`).
       const unregister = registerCheckpointResume();
+      const unregisterOrder = storeTheAnswerAfterModelCall(env, 2);
       try {
         const raised = pausedOnInteraction(env);
         const running = workflowRunner({
@@ -827,6 +855,7 @@ export const legacyWorkflowCases = [
           }
         };
       } finally {
+        unregisterOrder();
         if (typeof unregister === 'function') unregister();
       }
     }
@@ -913,6 +942,7 @@ export const legacyWorkflowCases = [
       const listenersBefore = new Set(actionTracker.listeners('fire-sse'));
       // The server registers this when it starts (`startup/routes.js`).
       let unregister = registerCheckpointResume();
+      let unregisterOrder = () => {};
       let server = await startServer();
       try {
         // The server that dies. The browser holds the stream of the chat and posts the mention.
@@ -952,6 +982,7 @@ export const legacyWorkflowCases = [
         // The server that starts. Its sweep continues executions that were interrupted in a
         // step; one that waits for a person is not among them.
         unregister = registerCheckpointResume();
+        unregisterOrder = storeTheAnswerAfterModelCall(env, 2);
         server = await startServer();
         const sweep = await startupSweep(env);
         // A turn that claimed its chat a moment ago is presumed alive, so the person comes back
@@ -1016,6 +1047,7 @@ export const legacyWorkflowCases = [
           ...(await readStoredChat(chatId))
         };
       } finally {
+        unregisterOrder();
         unregister();
         await server.close();
         activeWorkflowExecutions.delete(chatId);
