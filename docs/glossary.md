@@ -68,6 +68,6 @@ Several of these words keep their ordinary meaning on the pages for developers a
 
 The table above is a copy of `shared/retired-words.json`. A test, `tests/unit/client/retired-words.test.jsx`, reads every text in `shared/i18n/en.json` and `shared/i18n/de.json`, the names and descriptions of the features under **Admin → Features**, and the documentation, and fails when one of the words appears. It also fails when the table and the file differ, and when a row under [Terms](#terms) names a word the UI does not show or a page that does not exist.
 
-Texts that are older than the list are recorded in `tests/unit/client/retired-words-baseline.json`. That record can only get shorter: a new text is reworded, not added to it. A text in which a word has another meaning, such as "Job title", is exempted by its key in the list (`allowKeys`).
+Texts that are older than the list are recorded in `tests/unit/client/retired-words-baseline.json`. That record can only get shorter: a new text is reworded, not added to it. The test pins the number of recorded places, so the number goes down with every reworded text and a freed place is not filled again. A text in which a word has another meaning, such as "Job title", is exempted by its key in the list (`allowKeys`).
 
 Your own texts under **Admin → Localization** are not checked.

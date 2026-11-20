@@ -29,17 +29,22 @@
  *
  * - a hit that is not listed fails;
  * - a listed place that no longer has the word fails, so it cannot come back unnoticed;
- * - the number of listed places may not pass `BASELINE_CEILING`. Never raise that number; when
- *   you remove entries, lower it to the new size.
+ * - the number of listed places must equal `BASELINE_SIZE`. Removing an entry therefore means
+ *   lowering that number in the same commit, and the freed place cannot be filled again later.
+ *   Never raise the number.
  *
- * After rewording a listed text, write the file again and lower the ceiling:
+ * After rewording a listed text, write the file again and lower `BASELINE_SIZE` to the number the
+ * failing size test names:
  *
  *   UPDATE_RETIRED_WORDS_BASELINE=1 npx jest --config tests/config/jest.config.js \
  *     tests/unit/client/retired-words.test.jsx
  *
- * (the run refuses to write a larger file). The glossary shows the same list; the last tests keep
- * page and file identical and check that every term the glossary defines is on a page of the
- * product.
+ * The run only removes places: it writes nothing while a text holds a word in a place the file
+ * does not list. What no test can see is a hand edit that removes one place and adds another in
+ * the same commit; that shows in the diff of the file, where a new line is never right.
+ *
+ * The glossary shows the same list; the last tests keep page and file identical and check that
+ * every term the glossary defines is on a page of the product.
  */
 import { readFileSync, writeFileSync } from 'fs';
 import path from 'path';
@@ -51,8 +56,8 @@ import { listDocPages } from '../../../server/utils/docsLibrary.js';
 import { appRoutes, matchRoute } from '../../utils/appRoutes.js';
 import baselineOnDisk from './retired-words-baseline.json';
 
-/** The most places the baseline may list. It only goes down. */
-const BASELINE_CEILING = 26;
+/** The number of places the baseline lists. It only goes down, together with the file. */
+const BASELINE_SIZE = 26;
 
 const repoRoot = path.resolve(__dirname, '../../..');
 const docsDir = path.join(repoRoot, 'docs');
@@ -194,6 +199,34 @@ function baselineText(record) {
 
 const placeCount = record => Object.values(record).reduce((sum, places) => sum + places.length, 0);
 
+/**
+ * What is wrong with the size of a baseline, or null. The size is pinned, not capped: a cap that
+ * stays behind when the file shrinks leaves room for new places.
+ */
+function sizeProblem(record, size) {
+  const count = placeCount(record);
+  if (count === size) return null;
+  return count < size
+    ? `The baseline lists ${count} places, BASELINE_SIZE is ${size}. Lower BASELINE_SIZE to ${count}.`
+    : `The baseline lists ${count} places, BASELINE_SIZE is ${size}. The baseline does not grow: ` +
+        'reword the new texts and take their places out of retired-words-baseline.json.';
+}
+
+/**
+ * The baseline an update run may write: today's hits, which is the file on disk without the
+ * places that were reworded. Throws when a hit is not in the file, so the run cannot add a place.
+ */
+function shrunkBaseline(hits, listed, words) {
+  const added = unlistedHits(hits, listed, words);
+  if (added.length > 0) {
+    throw new Error(
+      'Not written: the baseline only loses places. Reword these texts instead of listing them:\n' +
+        added.map(line => `  ${line}`).join('\n')
+    );
+  }
+  return hits;
+}
+
 /** The rows of the first table under a `## heading` of a Markdown page, without the header. */
 function tableUnder(markdown, heading) {
   const lines = markdown.split(/\r?\n/);
@@ -234,14 +267,8 @@ describe('retired words', () => {
     glossary = readFileSync(path.join(docsDir, 'glossary.md'), 'utf8');
 
     if (process.env.UPDATE_RETIRED_WORDS_BASELINE) {
-      if (placeCount(hits) > BASELINE_CEILING) {
-        throw new Error(
-          `Not written: ${placeCount(hits)} places, the ceiling is ${BASELINE_CEILING}. ` +
-            'Reword the new texts instead of listing them.'
-        );
-      }
-      writeFileSync(baselinePath, baselineText(hits));
-      baseline = hits;
+      baseline = shrunkBaseline(hits, baselineOnDisk, words);
+      writeFileSync(baselinePath, baselineText(baseline));
     }
   });
 
@@ -303,8 +330,9 @@ describe('retired words', () => {
     }
   });
 
-  test('have a baseline that does not grow', () => {
-    expect(placeCount(baseline)).toBeLessThanOrEqual(BASELINE_CEILING);
+  // After an update run this fails until BASELINE_SIZE is lowered to the new size.
+  test('have a baseline of exactly BASELINE_SIZE places, so it cannot grow back', () => {
+    expect(sizeProblem(baseline, BASELINE_SIZE)).toBeNull();
   });
 
   test('are the same list as "Words iHub does not use" in docs/glossary.md', () => {
@@ -466,6 +494,43 @@ describe('the wording lint itself', () => {
     expect(staleEntries({}, listed)).toEqual([
       'lease: remove en:abortCauses.lease_lost from retired-words-baseline.json'
     ]);
+  });
+
+  test('the size of the baseline is pinned: a shrink lowers the number, growth fails', () => {
+    const listed = { lease: ['en:a', 'en:b'], job: ['de:c'] };
+    expect(sizeProblem(listed, 3)).toBeNull();
+    expect(sizeProblem({}, 0)).toBeNull();
+    // One place was reworded and removed: the number has to follow, or it would be slack.
+    expect(sizeProblem({ lease: ['en:a'], job: ['de:c'] }, 3)).toBe(
+      'The baseline lists 2 places, BASELINE_SIZE is 3. Lower BASELINE_SIZE to 2.'
+    );
+    expect(sizeProblem({ ...listed, job: ['de:c', 'en:runs.title'] }, 3)).toMatch(
+      /^The baseline lists 4 places, BASELINE_SIZE is 3\. The baseline does not grow/
+    );
+  });
+
+  test('an update run only removes places from the baseline', () => {
+    const lease = [entry('lease', { use: 'plain words' }), entry('job', { use: 'run' })];
+    const listed = { lease: ['en:abortCauses.lease_lost', 'en:runs.takenOver'], job: ['en:a'] };
+
+    // Nothing changed, one place reworded, a whole word reworded: the rest is written.
+    expect(shrunkBaseline(listed, listed, lease)).toEqual(listed);
+    const reworded = { lease: ['en:abortCauses.lease_lost'], job: ['en:a'] };
+    expect(shrunkBaseline(reworded, listed, lease)).toEqual(reworded);
+    expect(shrunkBaseline({ job: ['en:a'] }, listed, lease)).toEqual({ job: ['en:a'] });
+    expect(shrunkBaseline({}, listed, lease)).toEqual({});
+
+    // A new place is refused, also when a reworded one makes room for it under the old size.
+    const traded = { lease: ['en:abortCauses.lease_lost'], job: ['en:a', 'en:runs.title'] };
+    expect(placeCount(traded)).toBe(placeCount(listed));
+    expect(() => shrunkBaseline(traded, listed, lease)).toThrow(
+      'Not written: the baseline only loses places. Reword these texts instead of listing them:\n' +
+        '  "job" in en:runs.title. Write instead: run'
+    );
+    // A word the file does not list at all.
+    expect(() => shrunkBaseline({ job: ['en:a'] }, { lease: ['en:b'] }, lease)).toThrow(
+      '"job" in en:a. Write instead: run'
+    );
   });
 
   test('reads a glossary table, also with an escaped pipe in a cell', () => {
