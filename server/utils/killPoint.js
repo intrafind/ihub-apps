@@ -38,6 +38,9 @@
  * Every call site is listed in `server/tests/faults/KILLPOINTS.md`;
  * `server/tests/killPoint-inventory.test.js` fails when the list and the code
  * differ, and when the name of the variable appears in any other server file.
+ * The module has one way in, the named export `killPoint`, so that the test
+ * can find every file that uses it: no default export, and a file that
+ * imports it is a file with a row in the list.
  *
  * @module utils/killPoint
  */
@@ -139,5 +142,3 @@ export function createKillPoint({
  * killPoint('e2e-counter-after-write');
  */
 export const killPoint = createKillPoint();
-
-export default killPoint;
