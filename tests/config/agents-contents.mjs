@@ -4,12 +4,14 @@
 /**
  * What the agents end-to-end suite adds to the standard e2e contents
  * (`e2e-contents.mjs`): its two users, its app with tools, and the config overlay
- * a run or a restart asks for. No side effects on import; `agents-server.mjs` calls it.
+ * a run or a restart asks for. The fault harness seeds the same users and app
+ * (`server/tests/faults/seed.mjs`). No side effects on import; `agents-server.mjs` calls it.
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { MODELS, OTHER, TOOLS_APP, USER } from './agents-scenario.mjs';
+import { TEST_TOOLS_INSTALLATION } from './test-tools-contents.mjs';
 
 /** The config files an overlay may change: `config/<name>.json`. */
 export const OVERLAY_FILES = ['platform', 'features'];
@@ -86,6 +88,43 @@ export function writeOverlay(contentsDir, baseline, overlay) {
 }
 
 /**
+ * The environment the suite's iHub server is started with: the one of the helper
+ * process, as a test server with the test tools, and never with a kill point.
+ *
+ * `NODE_ENV=test` and `IHUB_TEST_TOOLS=1` register the tools `e2e_counter_write`
+ * and `e2e_counter_read`. A kill point (`IHUB_TEST_KILLPOINT`,
+ * `server/utils/killPoint.js`) would let the server end itself in the middle of a
+ * spec, so every variable of that name is taken out, whatever the caller's
+ * environment holds, and the kill point itself is set to the empty text: the
+ * server is started with `--env-file-if-exists`, and a value that is set, even
+ * an empty one, wins over the file. A server that dies at a chosen place
+ * belongs to the fault tests (`server/tests/faults/`).
+ *
+ * @param {Record<string, string|undefined>} env - Usually `process.env`
+ * @param {Object} settings
+ * @param {string} settings.contentsDir - Relative to the repository root
+ * @param {number} settings.serverPort
+ * @param {string} settings.counterUrl - Where the test tools reach the counter
+ * @returns {Record<string, string|undefined>}
+ */
+export function serverEnvironment(env, { contentsDir, serverPort, counterUrl }) {
+  const inherited = Object.fromEntries(
+    Object.entries(env).filter(([key]) => !key.startsWith('IHUB_TEST_KILLPOINT'))
+  );
+  return {
+    ...inherited,
+    NODE_ENV: 'test',
+    IHUB_TEST_TOOLS: '1',
+    IHUB_TEST_COUNTER_URL: counterUrl,
+    IHUB_TEST_KILLPOINT: '',
+    WORKERS: '1',
+    CONTENTS_DIR: contentsDir,
+    HOST: '127.0.0.1',
+    PORT: String(serverPort)
+  };
+}
+
+/**
  * Add the suite's two regular users to `config/users.json`.
  *
  * @param {string} contentsDir - Absolute path
@@ -136,7 +175,9 @@ export function seedAgentsApps(contentsDir) {
     preferredModel: MODELS.tools,
     preferredOutputFormat: 'markdown',
     sendChatHistory: true,
-    integrations: { ihub: {} },
+    // iHub's own tools, and the counter tools of the test suite (`e2e_counter_write`,
+    // `e2e_counter_read`), which exist only in a server started with the test tools.
+    integrations: { ihub: {}, [TEST_TOOLS_INSTALLATION]: {} },
     enabled: true
   });
 }
