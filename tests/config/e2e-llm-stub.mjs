@@ -51,6 +51,11 @@
  *   and the keys of the hangs that wait for a release.
  * - `POST /__release/<key>` and `POST /__release-all` answer `{ released: <count> }`.
  *
+ * A request the stub cannot read (a request target that is no URL, a `<key>` with a
+ * broken `%` escape) is answered with HTTP 400, and one it fails on with HTTP 500:
+ * the stub runs inside the process that also starts the server under test, so it
+ * never lets a request end that process.
+ *
  * ## For suites that bring their own model
  *
  * `startLlmStub(port, { script })` (the prompt-injection suite in
@@ -101,6 +106,24 @@ function readBody(req) {
       }
     });
   });
+}
+
+/** The request target as a URL, or `null` when it is none (`//`). */
+function parseTarget(target) {
+  try {
+    return new URL(target || '/', 'http://stub.invalid');
+  } catch {
+    return null;
+  }
+}
+
+/** `decodeURIComponent`, or `null` for a broken `%` escape. */
+function safeDecode(text) {
+  try {
+    return decodeURIComponent(text);
+  } catch {
+    return null;
+  }
 }
 
 /** Most request bodies kept for `GET /__requests`. */
@@ -482,8 +505,12 @@ export function startLlmStub(
     run();
   };
 
-  const server = http.createServer(async (req, res) => {
-    const url = new URL(req.url || '/', 'http://stub.invalid');
+  const handle = async (req, res) => {
+    const url = parseTarget(req.url);
+    if (!url) {
+      sendJson(res, 400, { error: { message: 'The request target is not a URL.' } });
+      return;
+    }
     if (url.pathname === '/__requests') {
       if (req.method === 'POST') requests.length = 0;
       const marker = url.searchParams.get('marker');
@@ -511,7 +538,11 @@ export function startLlmStub(
       return;
     }
     if (req.method === 'POST' && url.pathname.startsWith('/__release/')) {
-      const key = decodeURIComponent(url.pathname.slice('/__release/'.length));
+      const key = safeDecode(url.pathname.slice('/__release/'.length));
+      if (key === null) {
+        sendJson(res, 400, { error: { message: 'The key is not URL-encoded text.' } });
+        return;
+      }
       sendJson(res, 200, { released: release(key) });
       return;
     }
@@ -597,6 +628,18 @@ export function startLlmStub(
     send({}, 'stop', { usage: { prompt_tokens: 5, completion_tokens: 5, total_tokens: 10 } });
     res.write('data: [DONE]\n\n');
     res.end();
+  };
+
+  const server = http.createServer((req, res) => {
+    // Whatever goes wrong with one request (a script that throws, a body the
+    // stub does not expect) ends that request, never the process.
+    handle(req, res).catch(error => {
+      if (res.headersSent) {
+        res.destroy();
+        return;
+      }
+      sendJson(res, 500, { error: { message: `The stub model failed: ${error.message}` } });
+    });
   });
 
   return new Promise((resolve, reject) => {

@@ -86,7 +86,12 @@ describe('e2e model stub', () => {
       body => say(`third turn, ${body.messages.length} messages`)
     ],
     paced: [say('a b', { slowMs: 50 })],
-    held: [say('after the hold', { hangKey: 'script-key' })]
+    held: [say('after the hold', { hangKey: 'script-key' })],
+    broken: [
+      () => {
+        throw new Error('a bug in the script');
+      }
+    ]
   };
 
   before(async () => {
@@ -518,6 +523,64 @@ describe('e2e model stub', () => {
       const reset = await fetch(`${base}/__reset`, { method: 'POST' });
       assert.equal(reset.status, 204);
       assert.deepEqual((await get('/__requests')).items, []);
+    });
+  });
+
+  // The stub runs inside the process that starts the server under test
+  // (`agents-server.mjs`): a request that ended the stub would end the whole stack.
+  describe('a request the stub cannot serve', () => {
+    /** A request with the target exactly as given: `fetch` would normalise it. */
+    const raw = (method, target) =>
+      new Promise((resolve, reject) => {
+        const { port } = server.address();
+        const req = http.request({ host: '127.0.0.1', port, method, path: target }, res => {
+          let text = '';
+          res.setEncoding('utf8');
+          res.on('data', data => (text += data));
+          res.on('end', () => resolve({ status: res.statusCode, body: JSON.parse(text) }));
+        });
+        req.on('error', reject);
+        req.end();
+      });
+
+    test('a key with a broken escape is refused, and the stub keeps answering', async () => {
+      const hung = open({ stream: true, messages: [user('e2e-hang:still-held')] });
+      await until(async () => (await get('/__stats')).hanging.length === 1, 'the hang');
+
+      for (const target of ['/__release/%E0', '/__release/50%', '/__release/%']) {
+        const refused = await raw('POST', target);
+        assert.equal(refused.status, 400, target);
+        assert.match(refused.body.error.message, /key/, target);
+      }
+      // The refused calls released nothing, and the stub still answers.
+      assert.deepEqual((await get('/__stats')).hanging, ['still-held']);
+      assert.deepEqual(await raw('POST', '/__release/still-held'), {
+        status: 200,
+        body: { released: 1 }
+      });
+      await until(() => hung.ended, 'the end of the released answer');
+    });
+
+    test('a request target that is no URL is refused', async () => {
+      for (const method of ['GET', 'POST']) {
+        const refused = await raw(method, '//');
+        assert.equal(refused.status, 400, method);
+        assert.match(refused.body.error.message, /request target/, method);
+      }
+      assert.deepEqual(await get('/__stats'), { aborted: 0, hanging: [] });
+    });
+
+    test('a script that throws fails its own request only', async () => {
+      const failed = await post({ messages: [user('e2e-script:broken')] });
+      assert.equal(failed.status, 500);
+      assert.equal(
+        JSON.parse(failed.text).error.message,
+        'The stub model failed: a bug in the script'
+      );
+      assert.equal(
+        (await answerOf([user('still there?')])).message.content,
+        'E2E reply to: still there? (turn 1)'
+      );
     });
   });
 });

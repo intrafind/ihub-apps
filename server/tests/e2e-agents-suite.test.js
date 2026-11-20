@@ -9,20 +9,23 @@
  *   the suite exists to run the real server, and a mocked response would report a
  *   feature as working that nobody ran;
  * - every test carries `@gate`, `@matrix` or `@slow`, so the pull request job and
- *   the nightly run know what to pick;
- * - the spec map names only specs and paths that exist, and the pull request
- *   selection built from it is what `.github/workflows/e2e.yml` relies on;
+ *   the full run know what to pick;
+ * - the spec map names only specs, paths and features that exist, and the pull
+ *   request selection built from it is what `.github/workflows/e2e.yml` relies on;
  * - the overlay a run or a restart applies is laid over the seeded settings.
  */
 
-import { test, describe } from 'node:test';
+import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import {
+  FEATURE_IDS,
   TAGS,
+  changedPaths,
   gateArgs,
   listSpecs,
   mappedSpecs,
@@ -110,9 +113,14 @@ function literalText(argument) {
   return match[2];
 }
 
+/** The host of a route pattern that starts with a scheme: up to the next `/`. */
+const hostOf = pattern => pattern.replace(/^https?:\/\//, '').split('/')[0];
+
 /**
  * Where a source mocks the API: a route that is fulfilled must name another
- * origin, as a string, so the rule can be read off the call.
+ * origin, as a string and with its host spelled out, so the rule can be read off
+ * the call. A wildcard in the host (`http://**\/*`, `http://*:5591/**`) also
+ * matches the suite's own origin.
  *
  * @param {string} source
  * @returns {string[]} Problems; empty when the source mocks nothing of iHub
@@ -130,7 +138,11 @@ function apiMockProblems(source) {
     const pattern = literalText(args[0]);
     if (pattern === null) {
       problems.push(`a fulfilled route needs its URL as a plain string, not ${args[0]}`);
-    } else if (!/^https?:\/\//.test(pattern) || /\/api|localhost|127\.0\.0\.1/i.test(pattern)) {
+    } else if (
+      !/^https?:\/\//.test(pattern) ||
+      /\/api|localhost|127\.0\.0\.1/i.test(pattern) ||
+      /[*?{[]/.test(hostOf(pattern))
+    ) {
       problems.push(`the route ${pattern} answers iHub's own requests`);
     }
   }
@@ -187,6 +199,13 @@ describe('agents e2e suite: no mocked API', () => {
       `await page.route(url, route => route.fulfill({ json: {} }));`,
       'await page.route(`${BASE_URL}/api/models`, route => route.fulfill({ json: {} }));',
       `await page.route('http://127.0.0.1:5591/**', route => route.fulfill({ json: {} }));`,
+      // A wildcard host is every host, the suite's own too.
+      `await page.route('http://**/*', route => route.fulfill({ json: {} }));`,
+      `await page.route('http://*:5591/**', route => route.fulfill({ json: {} }));`,
+      `await page.route('http://**/chats/*', route => route.fulfill({ json: {} }));`,
+      `await page.route('https://*.invalid/**', route => route.fulfill({ status: 204 }));`,
+      `await page.route('http://{canary.invalid,127.0.0.2}:5591/**', route => route.fulfill({}));`,
+      `await page.route('http://[::1]:5591/**', route => route.fulfill({ json: {} }));`,
       `await page.route('https://example.org/api/x', route => route.fulfill({ json: {} }));`,
       `const handler = route => route.fulfill({ json: {} });\nawait page.route('https://example.org/**', handler);`,
       `await page.routeFromHAR('chat.har');`
@@ -201,6 +220,7 @@ describe('agents e2e suite: no mocked API', () => {
       `await page.route('**/api/**', async route => { await wait(); await route.continue(); });`,
       // Another origin, which the suite must never reach for real.
       `await page.route('https://canary.invalid/**', route => route.fulfill({ status: 204 }));`,
+      `await page.route('http://canary.invalid:8080/*/hook?*', route => route.fulfill({}));`,
       `// await page.route('**/api/x', route => route.fulfill({}))\nawait page.unroute('**/api/x');`,
       `/* page.route(url, r => r.fulfill()) */ const text = "route.fulfill is not allowed";`
     ];
@@ -266,9 +286,16 @@ describe('agents e2e suite: the spec map and the pull request selection', () => 
     assert.deepEqual(
       specMapProblems(shipped, {
         specs: listSpecs(root),
-        pathExists: mapped => fs.existsSync(path.join(root, mapped))
+        pathExists: mapped => fs.existsSync(path.join(root, mapped)),
+        featureIds: FEATURE_IDS
       }),
       []
+    );
+    // The matrix exists for the transport the seeded settings do not use.
+    assert.ok(FEATURE_IDS.includes('chatPostStream'), 'the feature registry was read');
+    assert.ok(
+      Object.values(shipped.overlays).some(overlay => overlay.features?.chatPostStream === true),
+      'an overlay turns chatPostStream on'
     );
     // The tooling of the suite itself always runs every spec.
     for (const file of ['tests/config/e2e-llm-stub.mjs', 'tests/config/agents-server.mjs']) {
@@ -285,10 +312,38 @@ describe('agents e2e suite: the spec map and the pull request selection', () => 
         ],
         overlays: { 'Bad Name': { users: {} } }
       },
-      { specs, pathExists: mapped => mapped !== 'gone/' }
+      { specs, pathExists: mapped => mapped !== 'gone/', featureIds: [] }
     );
     assert.equal(problems.length, 6, problems.join('\n'));
-    assert.deepEqual(specMapProblems({}, { specs, pathExists: () => true }).length, 1);
+    assert.deepEqual(
+      specMapProblems({}, { specs, pathExists: () => true, featureIds: [] }).length,
+      1
+    );
+  });
+
+  test('an overlay that sets a feature the server does not have is reported', () => {
+    const problemsOf = overlays =>
+      specMapProblems(
+        { specs: [], overlays },
+        { specs, pathExists: () => true, featureIds: ['chatPostStream', 'workflows'] }
+      );
+    assert.deepEqual(
+      problemsOf({
+        'chat-post-stream': { features: { chatPostStream: true } },
+        both: { features: { chatPostStream: false, workflows: true }, platform: { runs: {} } },
+        'platform-only': { platform: { anything: { goes: 1 } } }
+      }),
+      []
+    );
+    // A misspelled id would start the server with the seeded transport.
+    assert.deepEqual(problemsOf({ misspelled: { features: { chatPoststream: true } } }), [
+      'overlays.misspelled: "chatPoststream" is not a feature id of server/featureRegistry.js'
+    ]);
+    assert.equal(
+      problemsOf({ mixed: { features: { chatPostStream: true, gone: true, other: false } } })
+        .length,
+      2
+    );
   });
 
   test('a change maps to its specs', () => {
@@ -310,6 +365,80 @@ describe('agents e2e suite: the spec map and the pull request selection', () => 
     assert.deepEqual(mappedSpecs(null, map, specs), specs);
   });
 
+  describe('the change read from git', () => {
+    let repo;
+    const git = (...args) =>
+      execFileSync(
+        'git',
+        [
+          '-c',
+          'user.name=E2E',
+          '-c',
+          'user.email=e2e@example.com',
+          '-c',
+          'commit.gpgsign=false',
+          // The default, pinned: a moved file is then listed under its new path only.
+          '-c',
+          'diff.renames=true',
+          ...args
+        ],
+        { cwd: repo, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }
+      );
+    const write = (file, text) => {
+      fs.mkdirSync(path.dirname(path.join(repo, file)), { recursive: true });
+      fs.writeFileSync(path.join(repo, file), text);
+    };
+    const source = Array.from({ length: 40 }, (_, line) => `export const v${line} = ${line};`);
+
+    before(() => {
+      repo = fs.mkdtempSync(path.join(os.tmpdir(), 'ihub-e2e-agents-git-'));
+      git('init', '--quiet', '--initial-branch=main');
+      write('server/services/loop/AgentLoop.js', `${source.join('\n')}\n`);
+      write('server/services/loop/Budget.js', `${source.join('\n')}\n// budget\n`);
+      write('docs/README.md', '# Docs\n');
+      git('add', '.');
+      git('commit', '--quiet', '-m', 'base');
+      git('checkout', '--quiet', '-b', 'change');
+    });
+    after(() => fs.rmSync(repo, { recursive: true, force: true }));
+
+    test('a file moved out of a mapped directory counts as a change to it', () => {
+      fs.mkdirSync(path.join(repo, 'server/services/other'));
+      git('mv', 'server/services/loop/AgentLoop.js', 'server/services/other/AgentLoop.js');
+      fs.appendFileSync(path.join(repo, 'server/services/other/AgentLoop.js'), '// moved\n');
+      git('commit', '--quiet', '-am', 'move');
+      // Git itself reports the move as the new path only.
+      assert.equal(
+        git('diff', '--name-only', 'main', 'HEAD').trim(),
+        'server/services/other/AgentLoop.js'
+      );
+
+      const changed = changedPaths('main', repo);
+      assert.deepEqual([...changed].sort(), [
+        'server/services/loop/AgentLoop.js',
+        'server/services/other/AgentLoop.js'
+      ]);
+      assert.deepEqual(mappedSpecs(changed, map, specs), ['chat.spec.js']);
+    });
+
+    test('so does a move that is not committed yet, next to new files', () => {
+      git('mv', 'server/services/loop/Budget.js', 'docs/Budget.js');
+      write('server/new.js', 'export {};\n');
+      const changed = changedPaths('HEAD', repo);
+      assert.deepEqual([...changed].sort(), [
+        'docs/Budget.js',
+        'server/new.js',
+        'server/services/loop/Budget.js'
+      ]);
+      assert.deepEqual(mappedSpecs(changed, map, specs), ['chat.spec.js']);
+    });
+
+    test('a revision git does not know makes the change unreadable', t => {
+      t.mock.method(console, 'error', () => {});
+      assert.equal(changedPaths('no-such-branch', repo), null);
+    });
+  });
+
   test('the gate selects @gate and the mapped files, never @slow', () => {
     assert.deepEqual(gateArgs([]), ['--grep', '@gate', '--grep-invert', '@slow']);
     const [, grep, , invert] = gateArgs(['chat.spec.js']);
@@ -317,7 +446,7 @@ describe('agents e2e suite: the spec map and the pull request selection', () => 
     // Playwright matches against "<project> <file> <titles> <tags>".
     assert.equal(selects(' chromium chat.spec.js Chat sends a message @matrix'), true);
     assert.equal(selects(' chromium other.spec.js Other is quick @gate'), true);
-    assert.equal(selects(' chromium other.spec.js Other is nightly only @matrix'), false);
+    assert.equal(selects(' chromium other.spec.js Other is matrix only @matrix'), false);
     assert.equal(selects(' chromium agent-chat.spec.js Agent chat opens @matrix'), false);
     assert.equal(selects(' chromium chat.spec.js Chat survives an hour @slow'), false);
     assert.equal(selects(' chromium other.spec.js Other takes long @gate @slow'), false);

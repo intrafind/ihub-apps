@@ -3,8 +3,8 @@
 
 /**
  * Helpers of the agents end-to-end specs: signing in, sending a message in the
- * chat page or through the chat API, driving the model stub (what it was sent,
- * releasing a hang) and restarting the server.
+ * chat page or through the chat API, watching the page's chat requests, driving
+ * the model stub (what it was sent, releasing a hang) and restarting the server.
  *
  * The specs run against the real server. They never answer an `/api` request
  * themselves (`page.route(…)` with `route.fulfill(…)`): what a spec needs from the
@@ -82,6 +82,32 @@ export async function openApp(page, appId) {
 export async function sendMessage(page, text) {
   await composer(page).fill(text);
   await sendButton(page).click();
+}
+
+/**
+ * Record what the page sends to an app's chat URL (`/api/apps/<appId>/chat/<chatId>`),
+ * to tell on which connection an answer came: the chat `POST` itself
+ * (`text/event-stream`), or a stream `GET` opened before a `POST` that answers JSON.
+ * Call it before the message is sent. Nothing is intercepted.
+ *
+ * @param {import('@playwright/test').Page} page
+ * @param {string} appId
+ * @returns {() => Array<{method: string, type: string|null}>} The requests so far,
+ *   oldest first, with the content type of the response (`null` while there is none)
+ */
+export function watchChatRequests(page, appId) {
+  const seen = [];
+  const chatPath = new RegExp(`/api/apps/${appId}/chat/[^/]+$`);
+  page.on('request', request => {
+    if (chatPath.test(new URL(request.url()).pathname)) {
+      seen.push({ request, method: request.method(), type: null });
+    }
+  });
+  page.on('response', response => {
+    const entry = seen.find(item => item.request === response.request());
+    if (entry) entry.type = (response.headers()['content-type'] || '').split(';')[0].trim();
+  });
+  return () => seen.map(({ method, type }) => ({ method, type }));
 }
 
 /**
@@ -185,6 +211,18 @@ export const stub = {
   /** End every hang, for an `afterEach` that must leave nothing waiting. */
   releaseAll: () => stubJson('/__release-all', { method: 'POST' })
 };
+
+/**
+ * What the suite's server runs with: how often it was started, and the overlay
+ * laid over the seeded settings (`{}` for the seeded ones; see `agents-server.mjs`).
+ *
+ * @returns {Promise<{starts: number, overlay: {platform?: Object, features?: Object}, running: boolean}>}
+ */
+export async function serverStatus() {
+  const res = await fetch(`${CONTROL}/__status`);
+  if (!res.ok) throw new Error(`status of the iHub server: ${res.status}`);
+  return res.json();
+}
 
 /**
  * Stop the iHub server and start it again on the same contents directory; resolves

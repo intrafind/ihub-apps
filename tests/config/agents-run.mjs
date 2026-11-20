@@ -20,8 +20,10 @@
  *   `agents-server.mjs`). The seeded settings are not an overlay: the full run
  *   (`npm run test:e2e:agents`) covers them.
  *
- * The full suite and the matrix run nightly and before a slice of the stack is
- * merged; the gate runs on every pull request (`.github/workflows/e2e.yml`).
+ * The gate runs on every pull request (`.github/workflows/e2e.yml`). The full suite
+ * and the matrix are the workflow's `full` job, which is started by hand (Actions,
+ * "End-to-end", "Run workflow") and before a slice of the stack is merged; nothing
+ * runs it on a schedule yet.
  */
 
 import fs from 'node:fs';
@@ -29,6 +31,7 @@ import path from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseOverlay } from './agents-contents.mjs';
+import { featureRegistry } from '../../server/featureRegistry.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SPEC_DIR = 'tests/e2e-agents';
@@ -37,6 +40,13 @@ const CONFIG = 'tests/config/playwright.agents.config.js';
 
 /** The tags of the suite: every test carries at least one (`e2e-agents-suite.test.js`). */
 export const TAGS = ['@gate', '@matrix', '@slow'];
+
+/**
+ * The ids an overlay's `features` may set: the features of `server/featureRegistry.js`.
+ * A key the server does not know changes nothing, so a matrix run with it would
+ * be a second copy of the seeded run.
+ */
+export const FEATURE_IDS = featureRegistry.map(feature => feature.id);
 
 /** @returns {string[]} The spec files of the suite, by file name */
 export function listSpecs(repoRoot = root) {
@@ -54,13 +64,15 @@ export function readSpecMap(repoRoot = root) {
 /**
  * What is wrong with a spec map: a spec that does not exist, a path that does
  * not exist (a renamed directory would silently stop mapping), an overlay the
- * server would refuse.
+ * server would refuse, an overlay that sets a feature the server does not have (a
+ * misspelled or renamed id: the run would test the seeded settings once more).
  *
  * @param {Object} map
- * @param {{specs: string[], pathExists: (path: string) => boolean}} repo
+ * @param {{specs: string[], pathExists: (path: string) => boolean, featureIds: string[]}} repo -
+ *   `featureIds`: see {@link FEATURE_IDS}
  * @returns {string[]} Problems; empty when the map is fine
  */
-export function specMapProblems(map, { specs, pathExists }) {
+export function specMapProblems(map, { specs, pathExists, featureIds }) {
   const problems = [];
   if (!Array.isArray(map?.specs)) return ['"specs" must be a list of { paths, specs } rows'];
   map.specs.forEach((row, index) => {
@@ -86,7 +98,13 @@ export function specMapProblems(map, { specs, pathExists }) {
       problems.push(`overlays: "${name}" must be lower case letters, digits and hyphens`);
     }
     try {
-      parseOverlay(overlay);
+      for (const id of Object.keys(parseOverlay(overlay).features || {})) {
+        if (!featureIds.includes(id)) {
+          problems.push(
+            `overlays.${name}: "${id}" is not a feature id of server/featureRegistry.js`
+          );
+        }
+      }
     } catch (error) {
       problems.push(`overlays.${name}: ${error.message}`);
     }
@@ -144,6 +162,10 @@ export function gateArgs(specs) {
  * The paths a change touches: the commits since the merge base with `base`, and
  * what is not committed. `null` when git cannot tell.
  *
+ * A moved file counts under both paths (`--no-renames`): with git's rename
+ * detection only the new one is listed, and a file moved out of a mapped
+ * directory would not count as a change to it.
+ *
  * @param {string} base - A git revision
  * @param {string} [repoRoot]
  * @returns {string[]|null}
@@ -162,8 +184,8 @@ export function changedPaths(base, repoRoot = root) {
     const [mergeBase] = git('merge-base', base, 'HEAD');
     return [
       ...new Set([
-        ...git('diff', '--name-only', mergeBase, 'HEAD'),
-        ...git('diff', '--name-only', 'HEAD'),
+        ...git('diff', '--name-only', '--no-renames', mergeBase, 'HEAD'),
+        ...git('diff', '--name-only', '--no-renames', 'HEAD'),
         ...git('ls-files', '--others', '--exclude-standard')
       ])
     ];
@@ -191,7 +213,8 @@ function main(argv) {
   const specs = listSpecs();
   const problems = specMapProblems(map, {
     specs,
-    pathExists: mapped => fs.existsSync(path.join(root, mapped))
+    pathExists: mapped => fs.existsSync(path.join(root, mapped)),
+    featureIds: FEATURE_IDS
   });
   if (problems.length > 0) {
     console.error(`[agents-run] ${MAP_FILE}:\n  ${problems.join('\n  ')}`);

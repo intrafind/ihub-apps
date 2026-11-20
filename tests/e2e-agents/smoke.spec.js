@@ -8,14 +8,16 @@ import {
   openApp,
   restartServer,
   sendMessage,
+  serverStatus,
   shown,
   signedIn,
   signInPage,
   stub,
   transcript,
-  unique
+  unique,
+  watchChatRequests
 } from './helpers.mjs';
-import { ADMIN, MODELS, OTHER, TOOLS_APP, USER } from '../config/agents-scenario.mjs';
+import { ADMIN, MODELS, OTHER, OVERLAY_NAME, TOOLS_APP, USER } from '../config/agents-scenario.mjs';
 
 /**
  * The smoke test of the agents suite: the stack is up, a person can sign in, an
@@ -49,10 +51,14 @@ test.describe('Agents suite smoke', () => {
   });
 
   // Also in the transport matrix: the answer must stream the same way on every
-  // way the browser can receive it.
+  // way the browser can receive it. Which way that is, the test reads off the
+  // page's own requests: a matrix run whose overlay changed nothing would
+  // otherwise pass as a second copy of the seeded run.
   test('a slow answer appears word by word', { tag: ['@gate', '@matrix'] }, async ({ page }) => {
+    const { overlay } = await serverStatus();
     await signInPage(page, ADMIN);
     await openApp(page, 'chat');
+    const chatRequests = watchChatRequests(page, 'chat');
 
     // Eight words, one every 500 ms: the last one is 3.5 s behind the first.
     await sendMessage(page, 'e2e-slow:500:8');
@@ -62,6 +68,20 @@ test.describe('Agents suite smoke', () => {
     await expect(
       shown(page, 'slow-1 slow-2 slow-3 slow-4 slow-5 slow-6 slow-7 slow-8')
     ).toBeVisible({ timeout: 30_000 });
+
+    expect(
+      chatRequests(),
+      `the connections of a chat turn with the settings "${OVERLAY_NAME}"`
+    ).toEqual(
+      overlay.features?.chatPostStream === true
+        ? // One connection: the request that sends the message carries the answer.
+          [{ method: 'POST', type: 'text/event-stream' }]
+        : // Two: the stream is opened first, the message is sent once it is connected.
+          [
+            { method: 'GET', type: 'text/event-stream' },
+            { method: 'POST', type: 'application/json' }
+          ]
+    );
   });
 
   test('a tool call shows as a row of the answer', { tag: '@gate' }, async ({ page }) => {

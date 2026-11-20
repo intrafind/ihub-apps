@@ -838,10 +838,14 @@ Every test carries a tag: `test('â€¦', { tag: '@gate' }, async ({ page }) => { â
 | Tag | Runs |
 |---|---|
 | `@gate` | on every pull request |
-| `@matrix` | nightly and before a slice of the agents epic is merged, once per overlay in `tests/config/agents-spec-map.json` |
-| `@slow` | nightly and before a slice is merged; never in the pull request job |
+| `@matrix` | in the full run, once per overlay in `tests/config/agents-spec-map.json` |
+| `@slow` | in the full run; never in the pull request job |
 
 The pull request job (`.github/workflows/e2e.yml`, 10 minutes) runs the `@gate` tests, every test of a spec that `agents-spec-map.json` maps to a path the pull request touches, and `tests/e2e/chat.spec.js`. When you add a spec for a feature, add a row that maps the feature's directories to it. A test in the gate should finish in well under a minute.
+
+The full run is the `full` job of the same workflow: every test of the suite, then the `@matrix` tests once per overlay. Nothing starts it on a schedule yet. Start it by hand (Actions, **End-to-end**, **Run workflow**) before a slice of the agents epic is merged, and whenever you add or change a `@slow` test or a test that depends on an overlay: the pull request job runs no `@slow` test and starts no server with an overlay.
+
+An overlay of the matrix may set only features that `server/featureRegistry.js` knows; `agents-run.mjs` stops on any other key. A `@matrix` test should also show that its overlay is in effect, as `smoke.spec.js` does for the chat connection with `watchChatRequests` (`helpers.mjs`): otherwise the run repeats the seeded one.
 
 Two rules are checked by `server/tests/e2e-agents-suite.test.js`: every test has a tag, and no spec answers an `/api` request itself (`page.route` with `route.fulfill`). `route.abort()` and `route.continue()` are fine: they lose or delay a real response, they do not invent one.
 

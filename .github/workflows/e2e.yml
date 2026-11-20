@@ -11,10 +11,11 @@
 #   worker, no retries: a retry would hide the flakiness the gate is there to
 #   surface. The budget is 10 minutes; a test that needs longer is tagged @slow and
 #   runs in the full job.
-# - full (on demand and from other workflows, for the nightly run and before a
-#   slice of the agents epic is merged): every test of the suite, then the tests
-#   tagged @matrix once per overlay of the spec map, each on a server started with
-#   that overlay (platform settings are read once at startup).
+# - full (started by hand with "Run workflow", before a slice of the agents epic is
+#   merged, or called from another workflow; no workflow runs it on a schedule
+#   yet): every test of the suite, then the tests tagged @matrix once per overlay
+#   of the spec map, each on a server started with that overlay (platform settings
+#   are read once at startup).
 #
 # There is deliberately no `paths:` filter, for the reason given in
 # api-guidelines-check.yml: a required check that a PR never triggers would block it.
