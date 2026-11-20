@@ -1017,8 +1017,8 @@ export const platformConfigSchema = z
           .passthrough()
           .prefault({}),
         // Encryption at rest of what the storage provider keeps. Today it
-        // covers the blob facet (uploads, extracted text, artifacts, evidence
-        // content, corpus pages), on the filesystem and on S3 alike. Off by
+        // covers documents, append logs, blobs (on the filesystem and on S3
+        // alike) and the files of the stores outside the storage layer. Off by
         // default here, so an existing installation behaves as before and
         // nothing is converted without the administrator's decision;
         // `server/defaults/config/platform.json` switches it on for a fresh
@@ -1029,7 +1029,7 @@ export const platformConfigSchema = z
               .boolean()
               .prefault(false)
               .describe(
-                'Encrypt stored blobs with the master key (contents/.encryption-key or TOKEN_ENCRYPTION_KEY). On: every blob write is encrypted. Off: blobs are written as they are; blobs encrypted earlier are still decrypted. Changing it requires a restart. Back up the master key: without it encrypted blobs cannot be read.'
+                'Encrypt stored user content at rest with the master key (contents/.encryption-key or TOKEN_ENCRYPTION_KEY): documents (chats, run and evidence records, file and artifact metadata, workflow state), append logs with their spill payloads, blobs on the filesystem and in an S3 bucket (uploads, extracted text, artifacts, evidence content, corpus pages), and the files of agent artifacts, agent memory, agent inboxes, tool-job results and short links. Not covered: configuration, the application log, usage and audit files, feedback.jsonl, iFinder downloads, upload spools, LLM debug dumps, backups. On: every write is encrypted, and data stored before is converted at the next start (blobs already in an S3 bucket: with "npm run storage:encrypt", server stopped). Off: writes are plaintext; data encrypted earlier is still decrypted. Changing it requires a restart. Back up the master key separately from the data: without it encrypted data cannot be read.'
               )
           })
           .passthrough()
@@ -1090,7 +1090,28 @@ export const platformConfigSchema = z
                   .optional()
                   .describe('Largest blob accepted, in bytes before encryption. Default 128 MiB.'),
                 connectTimeoutMs: z.number().int().positive().optional().describe('Default 5000.'),
-                requestTimeoutMs: z.number().int().positive().optional().describe('Default 60000.'),
+                requestTimeoutMs: z
+                  .number()
+                  .int()
+                  .positive()
+                  .optional()
+                  .describe('Time one attempt may wait for the response. Default 60000.'),
+                operationTimeoutMs: z
+                  .number()
+                  .int()
+                  .positive()
+                  .optional()
+                  .describe(
+                    'Longest one blob call may take with all its attempts, before the allowance for its size (minThroughputBytesPerSecond). Default 30000.'
+                  ),
+                minThroughputBytesPerSecond: z
+                  .number()
+                  .int()
+                  .positive()
+                  .optional()
+                  .describe(
+                    'Slowest transfer that is still accepted, in bytes per second: an upload or download is given its size divided by this on top of the timeouts. Default 1048576 (1 MiB/s); lower it for a slow link.'
+                  ),
                 maxAttempts: z
                   .number()
                   .int()

@@ -33,6 +33,7 @@ const platformConfig = encryption => ({
 
 const baseDir = path.join(scratch, 'data');
 const blobFile = (ns, key) => path.join(baseDir, 'blobs', ns, key);
+const keyCheckFile = path.join(baseDir, '.at-rest-keycheck');
 const LONG = Buffer.from('an upload from before encryption was switched on. '.repeat(30));
 
 const start = encryption =>
@@ -72,6 +73,7 @@ describe('filesystem blob store and storage.encryption.enabled', () => {
       { key: 'chat__a__old.txt', bytes: LONG.length }
     ]);
     assert.equal(fsSync.existsSync(blobFile('_ihub', 'keycheck')), false);
+    assert.equal(fsSync.existsSync(keyCheckFile), false);
     assert.equal((await provider.healthCheck()).status, 'ok');
     assert.equal(typeof provider.baseDir, 'string');
   });
@@ -85,7 +87,9 @@ describe('filesystem blob store and storage.encryption.enabled', () => {
     beginAtRestPreparation();
     const provider = await start({ enabled: true });
     assert.equal(provider.blobBackendHandle.describe().encryption.scope, 'all');
-    assert.equal(fsSync.existsSync(blobFile('_ihub', 'keycheck')), true);
+    // The key check object lives beside the state record, not in the blob tree.
+    assert.equal(fsSync.existsSync(keyCheckFile), true);
+    assert.equal(fsSync.existsSync(blobFile('_ihub', 'keycheck')), false);
 
     await provider.blobs.put('chat-files', 'chat__a__new.txt', LONG);
     const stored = await fs.readFile(blobFile('chat-files', 'chat__a__new.txt'));

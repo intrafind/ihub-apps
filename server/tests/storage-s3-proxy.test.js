@@ -20,6 +20,8 @@ for (const name of ['HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY', 'ALL_PROXY']) {
   delete process.env[name.toLowerCase()];
 }
 
+// First server-related import: it points CONTENTS_DIR at a scratch directory.
+await import('./support/scratchContents.js');
 const { spawnSync } = await import('node:child_process');
 const fs = await import('node:fs');
 const os = await import('node:os');
@@ -32,7 +34,6 @@ const { startRecordingProxy } = await import('./support/recordingProxy.js');
 const { fixedKeys, s3ConfigFor } = await import('./support/blobTestSupport.js');
 
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'ihub-s3-proxy-'));
-process.env.CONTENTS_DIR = path.join(scratch, 'contents');
 const keyModule = await import('../crypto/KeyProvider.js');
 const { createS3BlobBackend } = await import('../storage/providers/s3/index.js');
 

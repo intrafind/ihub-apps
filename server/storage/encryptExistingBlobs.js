@@ -31,7 +31,7 @@
  * @module storage/encryptExistingBlobs
  */
 import logger from '../utils/logger.js';
-import { ENVELOPE_HEADER_BYTES } from '../crypto/blobEnvelope.js';
+import { ENVELOPE_HEADER_BYTES, decodeHeader } from '../crypto/blobEnvelope.js';
 import { isBlobEnvelope } from './EncryptingBlobStore.js';
 import { StorageError } from './errors.js';
 import { BLOB_NAMESPACES } from './namespaces.js';
@@ -49,12 +49,18 @@ const COMPONENT = 'BlobEncryption';
  *   so one that is not named is not converted.
  * @param {boolean} [options.dryRun=false] - Count only, write nothing.
  * @param {AbortSignal} [options.signal] - Stop before the next blob.
+ * @param {Iterable<string>} [options.knownKeyIds] - The ids of the master keys
+ *   this installation holds. An encrypted blob that names another one is
+ *   counted in `foreign`: it was written by another installation or under a
+ *   key that is gone, and this installation cannot read it.
  * @param {(progress: {namespace: string, key: string, action: 'encrypted'|'skipped'|'failed'}) => void} [options.onProgress]
  * @returns {Promise<{scanned: number, encrypted: number, alreadyEncrypted: number,
- *   failed: number, remaining: number, aborted: boolean,
+ *   failed: number, remaining: number, aborted: boolean, foreign: number,
+ *   plaintextBytes: number, largestBytes: number,
  *   namespaces: Record<string, {scanned: number, encrypted: number, alreadyEncrypted: number, failed: number}>}>}
  *   `remaining` is the number of plaintext blobs still there: the failed ones,
- *   or in a dry run all that would be encrypted.
+ *   or in a dry run all that would be encrypted. `plaintextBytes` and
+ *   `largestBytes` are the stored sizes of the blobs found in plaintext.
  * @throws {StorageError} Code `NOT_SUPPORTED` when the store does not encrypt writes.
  *
  * @example
@@ -65,7 +71,13 @@ const COMPONENT = 'BlobEncryption';
  */
 export async function encryptExistingBlobs(
   store,
-  { namespaces = Object.values(BLOB_NAMESPACES), dryRun = false, signal, onProgress } = {}
+  {
+    namespaces = Object.values(BLOB_NAMESPACES),
+    dryRun = false,
+    signal,
+    onProgress,
+    knownKeyIds = null
+  } = {}
 ) {
   if (!store?.encryptsWrites || !store.inner) {
     throw new StorageError('encryptExistingBlobs needs a blob store that encrypts its writes', {
@@ -75,7 +87,11 @@ export async function encryptExistingBlobs(
   const inner = store.inner;
   const totals = { scanned: 0, encrypted: 0, alreadyEncrypted: 0, failed: 0 };
   const perNamespace = {};
+  const known = knownKeyIds ? new Set(knownKeyIds) : null;
   let aborted = false;
+  let foreign = 0;
+  let plaintextBytes = 0;
+  let largestBytes = 0;
 
   for (const namespace of namespaces) {
     const counts = { scanned: 0, encrypted: 0, alreadyEncrypted: 0, failed: 0 };
@@ -96,6 +112,7 @@ export async function encryptExistingBlobs(
         if (isBlobEnvelope(head, item.bytes)) {
           counts.alreadyEncrypted += 1;
           action = 'skipped';
+          if (known && !known.has(decodeHeader(head).keyId)) foreign += 1;
         } else {
           if (!dryRun) {
             const plain = await inner.get(namespace, item.key);
@@ -104,6 +121,8 @@ export async function encryptExistingBlobs(
             if (!isBlobEnvelope(plain.data)) await store.put(namespace, item.key, plain.data);
           }
           counts.encrypted += 1;
+          plaintextBytes += item.bytes || 0;
+          largestBytes = Math.max(largestBytes, item.bytes || 0);
           action = 'encrypted';
         }
       } catch (error) {
@@ -126,6 +145,9 @@ export async function encryptExistingBlobs(
     ...totals,
     remaining: totals.failed + (dryRun ? totals.encrypted : 0),
     aborted,
+    foreign,
+    plaintextBytes,
+    largestBytes,
     namespaces: perNamespace
   };
 }

@@ -20,6 +20,7 @@
  *    does not;
  *  - a chat moves into a project and the project lists it.
  */
+import './support/scratchContents.js';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';

@@ -17,7 +17,6 @@
  * used with, and off, where blobs are uploaded as they are.
  */
 import fs from 'node:fs/promises';
-import fsSync from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -30,9 +29,8 @@ import { KEY_PREFIX_SEGMENTS } from '../storage/namespaces.js';
 import { startFakeS3Server } from './support/fakeS3Server.js';
 import { composeS3Provider, fixedKeys } from './support/blobTestSupport.js';
 
-// The key module reads the contents directory when it is imported.
-const scratchContents = fsSync.mkdtempSync(path.join(os.tmpdir(), 'ihub-s3-conf-contents-'));
-process.env.CONTENTS_DIR = scratchContents;
+// The key module reads the contents directory when it is imported; the first
+// import above (`scratchContents.js`) has pointed it at a scratch directory.
 const keyModule = await import('../crypto/KeyProvider.js');
 
 /**
@@ -71,7 +69,6 @@ before(async () => {
 
 after(async () => {
   await s3?.close();
-  await fs.rm(scratchContents, { recursive: true, force: true });
 });
 
 /**

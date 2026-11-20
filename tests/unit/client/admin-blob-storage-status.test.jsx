@@ -10,7 +10,11 @@
  * the "Check again" action with its announcements, and that no credential
  * reaches the page.
  *
- * Only the admin API and the translation hook are stubbed.
+ * Only the admin API and the translation hook are stubbed. The translation
+ * stub answers with the inline defaults of the JSX, as a missing catalogue
+ * would; the tests under "with the catalogue" switch it to `en.json` or
+ * `de.json` (`useCatalogue`), so the shipped texts, their plural forms and the
+ * translation of server codes are tested too.
  */
 import '@testing-library/jest-dom';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
@@ -18,20 +22,44 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react';
 const mockTestStorage = jest.fn();
 jest.mock('../../../client/src/api/adminApi', () => ({
   __esModule: true,
+  STORAGE_TEST_TIMEOUT_MS: 240000,
   testStorage: (...args) => mockTestStorage(...args),
   getAdminApiErrorMessage: err => err?.response?.data?.detail || err?.message || ''
 }));
 
-const t = (key, fallback, options) => {
-  const template = typeof fallback === 'string' ? fallback : key;
+/** The catalogue the stub reads; null for "inline defaults only". */
+let mockCatalogue = null;
+
+const mockFill = (template, vars) =>
+  template.replace(/\{\{(\w+)\}\}/g, (match, name) => (name in vars ? String(vars[name]) : match));
+
+/**
+ * `t` as the component calls it: `t(key, fallback, options)` or
+ * `t(key, { count, defaultValue_one, defaultValue_other })`. With a catalogue
+ * the key is looked up there first (with the plural suffix when `count` is
+ * given); a key the catalogue does not have falls back like i18next does.
+ */
+const mockT = (key, fallback, options) => {
   const vars = (typeof fallback === 'object' ? fallback : options) || {};
-  return template.replace(/\{\{(\w+)\}\}/g, (match, name) =>
-    name in vars ? String(vars[name]) : match
-  );
+  const plural = typeof vars.count === 'number' ? (vars.count === 1 ? '_one' : '_other') : '';
+  if (mockCatalogue) {
+    const found = `${key}${plural}`
+      .split('.')
+      .reduce((node, part) => (node && typeof node === 'object' ? node[part] : undefined), {
+        ...mockCatalogue
+      });
+    if (typeof found === 'string') return mockFill(found, vars);
+  }
+  let template = key;
+  if (typeof fallback === 'string') template = fallback;
+  else if (plural && typeof vars[`defaultValue${plural}`] === 'string') {
+    template = vars[`defaultValue${plural}`];
+  }
+  return mockFill(template, vars);
 };
 jest.mock('react-i18next', () => ({
   __esModule: true,
-  useTranslation: () => ({ t, i18n: { language: 'en' } })
+  useTranslation: () => ({ t: mockT, i18n: { language: 'en' } })
 }));
 
 import BlobStorageStatus from '../../../client/src/features/admin/components/BlobStorageStatus';
@@ -85,8 +113,14 @@ function localStatus(overrides = {}) {
   });
 }
 
+/** Read the texts from a shipped catalogue for the rest of the test. */
+function useCatalogue(catalogue) {
+  mockCatalogue = catalogue;
+}
+
 beforeEach(() => {
   mockTestStorage.mockReset();
+  mockCatalogue = null;
 });
 
 test('local disk: shows the path and says plainly that encryption is off', () => {
@@ -209,6 +243,19 @@ test('shows the restart notice with the saved and the running backend', () => {
   expect(notice).toHaveTextContent('Saved: S3-compatible object storage. Running: Local disk.');
 });
 
+test('a restart for a changed setting of the same backend does not name the backend twice', () => {
+  // The server also sets restartRequired when only the bucket, prefix, region,
+  // size limit or encryption switch differ.
+  render(<BlobStorageStatus status={s3Status({ restartRequired: true })} />);
+  const notice = screen.getByTestId('blob-storage-restart');
+  expect(notice).toHaveTextContent('Restart the server to apply them.');
+  expect(notice).not.toHaveTextContent('Saved:');
+  expect(notice).not.toHaveTextContent('Running:');
+  expect(screen.getByTestId('blob-storage-restart-detail')).toHaveTextContent(
+    'The backend stays the same; one of its saved settings differs'
+  );
+});
+
 test('names the files left on local disk, per namespace, and the command that copies them', () => {
   render(
     <BlobStorageStatus
@@ -222,7 +269,9 @@ test('names the files left on local disk, per namespace, and the command that co
   );
   const notice = screen.getByTestId('blob-storage-leftovers');
   expect(notice).toHaveTextContent('15 files from before the switch are still on local disk.');
+  // Both documented forms: the container image has no npm.
   expect(notice).toHaveTextContent('npm run storage:copy-blobs');
+  expect(notice).toHaveTextContent('node server/storage/commands/run.js copy-blobs');
   expect(within(notice).getByText('chat-files')).toBeInTheDocument();
   expect(notice).toHaveTextContent('artifacts: 3');
 });
@@ -237,6 +286,41 @@ test('says "at least" when a count was capped', () => {
   );
   expect(screen.getByTestId('blob-storage-leftovers')).toHaveTextContent(
     'At least 1000 files from before the switch'
+  );
+});
+
+test.each([
+  [en, false, '1 file from before the switch is still on local disk.'],
+  [en, true, 'At least 1 file from before the switch is still on local disk.'],
+  [de, false, '1 Datei aus der Zeit vor der Umstellung liegt noch'],
+  [de, true, 'Mindestens 1 Datei aus der Zeit vor der Umstellung liegt noch'],
+  [null, false, '1 file from before the switch is still on local disk.']
+])('one file left reads in the singular (catalogue %#)', (catalogue, capped, text) => {
+  useCatalogue(catalogue);
+  render(
+    <BlobStorageStatus
+      status={s3Status({ localLeftovers: [{ namespace: 'chat-files', count: 1, capped }] })}
+    />
+  );
+  const notice = screen.getByTestId('blob-storage-leftovers');
+  expect(notice).toHaveTextContent(text);
+  expect(notice).not.toHaveTextContent(/1 files|1 Dateien/);
+});
+
+test('several files left read in the plural, in English and German', () => {
+  const status = s3Status({
+    localLeftovers: [{ namespace: 'chat-files', count: 4, capped: false }]
+  });
+  useCatalogue(en);
+  const { unmount } = render(<BlobStorageStatus status={status} />);
+  expect(screen.getByTestId('blob-storage-leftovers')).toHaveTextContent(
+    '4 files from before the switch are still on local disk.'
+  );
+  unmount();
+  useCatalogue(de);
+  render(<BlobStorageStatus status={status} />);
+  expect(screen.getByTestId('blob-storage-leftovers')).toHaveTextContent(
+    '4 Dateien aus der Zeit vor der Umstellung liegen noch'
   );
 });
 
@@ -351,6 +435,120 @@ test('a check that could not run shows the problem detail', async () => {
   expect(screen.getByRole('alert')).toHaveTextContent(
     'The check could not run: The storage provider is not running'
   );
+});
+
+test('a check the browser stopped waiting for says that the server continues, and reloads', async () => {
+  mockTestStorage.mockRejectedValue(
+    Object.assign(new Error('timeout of 240000ms exceeded'), { code: 'ECONNABORTED' })
+  );
+  const onRetry = jest.fn();
+  render(<BlobStorageStatus status={s3Status()} onRetry={onRetry} />);
+
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Check again' })));
+
+  const alert = screen.getByRole('alert');
+  expect(alert).toHaveTextContent('The storage has not answered within 240 seconds.');
+  expect(alert).toHaveTextContent('The server continues the check');
+  expect(alert).not.toHaveTextContent('timeout of');
+  expect(onRetry).toHaveBeenCalledTimes(1);
+});
+
+describe('with the German catalogue', () => {
+  const failedStatus = s3Status({
+    blobs: {
+      status: 'error',
+      error: {
+        code: 'S3_BUCKET_NOT_FOUND',
+        detail: 'The bucket ihub-blobs does not exist',
+        step: 'connect',
+        hint: 'iHub does not create buckets.'
+      },
+      steps: [
+        { name: 'key', status: 'ok', latencyMs: 1 },
+        { name: 'connect', status: 'failed', latencyMs: 9, code: 'S3_BUCKET_NOT_FOUND' },
+        { name: 'roundtrip', status: 'skipped' },
+        { name: 'leftovers', status: 'deferred' }
+      ]
+    }
+  });
+
+  test('the error sentence, the hint and the step states are German', () => {
+    useCatalogue(de);
+    render(<BlobStorageStatus status={failedStatus} />);
+
+    const error = screen.getByTestId('blob-storage-error');
+    expect(error).toHaveTextContent('Der Bucket existiert nicht.');
+    expect(error).toHaveTextContent('iHub legt keine Buckets an.');
+    expect(error).toHaveTextContent('key: bestanden');
+    expect(error).toHaveTextContent('connect: fehlgeschlagen');
+    expect(error).toHaveTextContent('roundtrip: übersprungen');
+    // The server's own sentence stays available, marked as English.
+    const detail = screen.getByTestId('blob-storage-error-detail');
+    expect(detail).toHaveTextContent('The bucket ihub-blobs does not exist');
+    expect(detail.querySelector('[lang="en"]')).not.toBeNull();
+    // A step state without a translation is shown as sent, marked as English.
+    expect(within(error).getByText('deferred')).toHaveAttribute('lang', 'en');
+  });
+
+  test('a failed check is announced in German', async () => {
+    useCatalogue(de);
+    mockTestStorage.mockResolvedValue(failedStatus);
+    render(<BlobStorageStatus status={s3Status()} />);
+
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Erneut prüfen' })));
+
+    const alert = screen.getByTestId('blob-storage-result-error');
+    expect(alert).toHaveTextContent('Prüfung fehlgeschlagen: Der Bucket existiert nicht.');
+    expect(alert.querySelector('[lang="en"]')).toBeNull();
+  });
+
+  test('a code without a translation shows the server sentence, marked as English', async () => {
+    useCatalogue(de);
+    const unknown = s3Status({
+      blobs: {
+        status: 'error',
+        error: { code: 'S3_SOMETHING_NEW', detail: 'A new kind of failure', hint: 'Do this.' }
+      }
+    });
+    mockTestStorage.mockResolvedValue(unknown);
+    render(<BlobStorageStatus status={unknown} />);
+
+    const error = screen.getByTestId('blob-storage-error');
+    expect(within(error).getByText('A new kind of failure')).toHaveAttribute('lang', 'en');
+    expect(within(error).getByText('Do this.')).toHaveAttribute('lang', 'en');
+    expect(screen.queryByTestId('blob-storage-error-detail')).not.toBeInTheDocument();
+
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Erneut prüfen' })));
+    const alert = screen.getByTestId('blob-storage-result-error');
+    expect(alert).toHaveTextContent('Prüfung fehlgeschlagen: A new kind of failure');
+    expect(within(alert).getByText('A new kind of failure')).toHaveAttribute('lang', 'en');
+  });
+
+  test('a check that could not run marks the server detail as English', async () => {
+    useCatalogue(de);
+    mockTestStorage.mockRejectedValue({
+      response: { data: { detail: 'The storage provider is not running' } }
+    });
+    render(<BlobStorageStatus status={s3Status()} />);
+
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Erneut prüfen' })));
+
+    const alert = screen.getByTestId('blob-storage-result-error');
+    expect(alert).toHaveTextContent(
+      'Die Prüfung konnte nicht ausgeführt werden: The storage provider is not running'
+    );
+    expect(within(alert).getByText('The storage provider is not running')).toHaveAttribute(
+      'lang',
+      'en'
+    );
+  });
+});
+
+test('every failure code with a hint has a sentence, in both languages', () => {
+  for (const catalogue of [en, de]) {
+    const { hints, errors } = catalogue.admin.systemResources.blobStorage;
+    expect(Object.keys(errors).sort()).toEqual(Object.keys(hints).sort());
+  }
 });
 
 test('a status that could not be loaded offers "Try again"', () => {

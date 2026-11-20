@@ -18,6 +18,7 @@
  *
  * Run: node --test server/tests/website-corpus-domains-routes.test.js
  */
+import './support/scratchContents.js';
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import express from 'express';
@@ -29,7 +30,6 @@ import { startTestStorage } from './helpers/testStorage.js';
 
 // The audit log lands in a contents directory of its own; config reads it on import.
 const tmpDir = mkdtempSync(path.join(os.tmpdir(), 'website-corpus-domains-'));
-process.env.CONTENTS_DIR = path.join(tmpDir, 'contents');
 
 const { default: configCache } = await import('../configCache.js');
 const { default: registerRoutes } = await import('../routes/admin/websiteCorpusDomains.js');

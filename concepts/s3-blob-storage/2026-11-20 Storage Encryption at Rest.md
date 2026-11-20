@@ -187,7 +187,8 @@ What step 3 does:
 | on     | anything else              | Preconditions, record `converting`, conversion per facet, verification, record `complete`. |
 
 Preconditions: the master key is loaded and persisted (a key generated in this run that could not
-be saved is refused); the key-check object `data/blobs/_ihub/keycheck` opens or does not exist yet;
+be saved is refused); the key-check object `data/.at-rest-keycheck` (until the review of 2026-11-20:
+`data/blobs/_ihub/keycheck`) opens or does not exist yet;
 free space of at least 1.35 times the largest object plus 35 % of the plaintext document and log
 bytes.
 
@@ -246,8 +247,8 @@ SSD, 30 to 90 minutes on a network volume. No installation of that size was conv
 | The admin card says in one sentence that a key in `contents/` protects little.            | The card does not say it. The documentation and the release note do.                                                                                                                       |
 | `storage:check` exits 1 while `skipped > 0`.                                              | Not built. `skipped` is in the log and in the admin status.                                                                                                                                |
 | Not in the plan.                                                                          | Sealed artifact downloads and cross-worker tool-job downloads are read into memory whole.                                                                                                  |
-| Not in the plan.                                                                          | Objects that are in an S3 bucket in plaintext (uploaded with the switch off) are not converted. With the switch on they are refused on read.                                               |
-| Not in the plan.                                                                          | `storage:encrypt --dry-run` creates `contents/.encryption-key` when the installation has no key at all.                                                                                    |
+| Not in the plan.                                                                          | Objects that are in an S3 bucket in plaintext (uploaded with the switch off) stop a start with the switch on (`REMOTE_BLOBS_PLAINTEXT`); `storage:encrypt` converts them in the bucket. Changed after the review of 2026-11-20; before, they were not converted and refused on read. |
+| Not in the plan.                                                                          | `storage:encrypt --dry-run`, `storage:check` and `storage:show` create no key. Changed after the review of 2026-11-20; before, the dry run created `contents/.encryption-key` on an installation without one. |
 | The plan file was to be copied to `concepts/at-rest-encryption/`.                         | This file, beside the S3 design.                                                                                                                                                           |
 
 ## 10. Accepted limits
@@ -278,3 +279,15 @@ None is a ticket yet.
 | A command that encrypts plaintext objects in a bucket, and a `storage:decrypt` command.                              | No way today to convert a bucket or to leave encryption.                          |
 | An option to leave the key out of the admin backup export.                                                           | The export with a key file is as sensitive as plaintext.                          |
 | A lint rule or test against new stores that write user content with `fs` beside the storage layer.                   | Otherwise plaintext stores appear again over time.                                |
+
+## 12. Changes after the review of 2026-11-20
+
+The review of the built change led to changes in the start-up, the conversion and the key
+handling. The table is in `2026-11-19 S3 Blob Storage Backend.md`, section 11.4; it is the current
+statement where sections 5 to 7 above differ. In short: an invalid key file stops the start
+(`MASTER_KEY_INVALID`); the conversion is exclusive (`CONVERSION_IN_PROGRESS`); a bucket with
+plaintext objects stops the start (`REMOTE_BLOBS_PLAINTEXT`) and is converted by
+`storage:encrypt`; a missing state record does not bring plaintext back
+(`ENCRYPTION_STATE_MISSING`, `IHUB_ENCRYPTION_ACCEPT_PLAINTEXT`); the local key-check object moved
+to `data/.at-rest-keycheck`; the state record gained `remoteBlobs`, `remoteBlobStore`,
+`plaintextLeftovers` and `recreatedAt`; the primary process decides the switch once per start.

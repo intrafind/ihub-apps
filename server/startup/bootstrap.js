@@ -36,15 +36,14 @@ async function exitWith(message, error) {
  */
 async function registerSealedDataLocation() {
   try {
-    const [{ loadJson }, { createProvider, resolveStorageConfig }, { default: tokenStorage }] =
-      await Promise.all([
-        import('../configLoader.js'),
-        import('../storage/index.js'),
-        import('../services/TokenStorageService.js')
-      ]);
+    const [{ loadJson }, { resolveStorageBaseDir }, { default: tokenStorage }] = await Promise.all([
+      import('../configLoader.js'),
+      import('../storage/index.js'),
+      import('../services/TokenStorageService.js')
+    ]);
     const platformConfig = (await loadJson('config/platform.json')) || {};
-    const { provider, config } = resolveStorageConfig(platformConfig);
-    const baseDir = createProvider(provider, config).baseDir;
+    // Not a provider left behind: it would keep a timer running in the primary.
+    const baseDir = await resolveStorageBaseDir(platformConfig);
     if (typeof baseDir === 'string') tokenStorage.addSealedDataLocation(baseDir);
   } catch {
     // The default location is looked at in any case.
@@ -71,6 +70,15 @@ export async function prepareContents() {
   // configuration migration that starts storage runs before the conversion.
   beginAtRestPreparation();
   await registerSealedDataLocation();
+  // A key file that exists and holds no key ends the start here, before a
+  // migration or the storage start would need the key. It is never replaced.
+  try {
+    const { default: tokenStorage } = await import('../services/TokenStorageService.js');
+    await tokenStorage.assertKeyFileUsable();
+  } catch (error) {
+    if (error?.code === 'MASTER_KEY_INVALID')
+      await exitWith(`Cannot start: ${error.message}`, error);
+  }
   try {
     await performInitialSetup();
   } catch (error) {
@@ -161,7 +169,9 @@ export async function prepareContents() {
  * One case ends the process: the key is missing or unreadable while the data
  * directory holds data that was encrypted with it (`MASTER_KEY_REQUIRED`).
  * The key service generates no new key then, and starting without one would
- * serve an installation whose chats and files cannot be read.
+ * serve an installation whose chats and files cannot be read. So does a key
+ * file that exists and holds no key (`MASTER_KEY_INVALID`): it is never
+ * replaced by a new key.
  *
  * @returns {Promise<void>}
  */
@@ -170,7 +180,7 @@ export async function ensureEncryptionKey() {
     const { default: tokenStorageService } = await import('../services/TokenStorageService.js');
     if (!tokenStorageService.encryptionKey) await tokenStorageService.initializeEncryptionKey();
   } catch (error) {
-    if (error?.code === 'MASTER_KEY_REQUIRED') {
+    if (error?.code === 'MASTER_KEY_REQUIRED' || error?.code === 'MASTER_KEY_INVALID') {
       await exitWith(`Cannot start: ${error.message}`, error);
     }
     logger.error('Failed to load the encryption key before storage', {

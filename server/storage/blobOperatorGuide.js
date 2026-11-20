@@ -51,7 +51,7 @@ export const BLOB_ERROR_HINTS = Object.freeze({
   BLOB_KEY_MISMATCH:
     'Restore the original key, set it as TOKEN_ENCRYPTION_KEY_PREVIOUS, or use an empty bucket or prefix for a new installation.',
   BLOB_KEY_CHECK_MISSING:
-    'Use an empty bucket or prefix, or set IHUB_S3_ADOPT_BUCKET=true for one start to adopt the objects as they are.',
+    'If the objects were stored while storage encryption was off, stop the server and run "npm run storage:encrypt": it encrypts them and writes the key check object. Otherwise use an empty bucket or prefix. Only for a bucket whose objects are all already encrypted with this installation\'s master key: set IHUB_S3_ADOPT_BUCKET=true for one start.',
   BLOB_CORRUPT:
     'Use one bucket or prefix per installation. If the object was changed, restore it from a backup of the bucket.',
   BLOB_PROVIDER_UNKNOWN: 'Set storage.blobs.provider to "default" or "s3".',

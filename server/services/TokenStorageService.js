@@ -121,14 +121,37 @@ class TokenStorageService {
   }
 
   /**
-   * Initialize the encryption key
-   * This MUST be called before any encryption/decryption operations
+   * Initialize the encryption key (the master key).
+   * This MUST be called before any encryption/decryption operations.
+   *
    * Priority:
-   * 1. Use TOKEN_ENCRYPTION_KEY from environment if set
-   * 2. Use persisted key from disk if exists
-   * 3. Generate new key and persist it
+   * 1. `TOKEN_ENCRYPTION_KEY` from the environment, if set.
+   * 2. The key file (`contents/.encryption-key`), if it exists.
+   * 3. A new key, generated and saved to the key file.
+   *
+   * A key file that exists is never replaced and never ignored. When it does
+   * not hold a key (it is empty, truncated, quoted, a directory, unreadable),
+   * the call fails with `MASTER_KEY_INVALID` and the file is left as it is:
+   * a new key in its place would seal data under a key that is gone at the
+   * next start, and the file is usually a failed secret mount or a bad
+   * restore that the operator can correct.
+   *
+   * `this.encryptionKey` is assigned only once the key is known to be the one
+   * a restart finds again (environment, key file, or just saved). The one
+   * exception is a contents directory that cannot be written: the generated
+   * key is kept for this run with `keySource: 'generated-unpersisted'`, which
+   * storage encryption refuses to seal with (`checkMasterKey`).
+   *
+   * @param {Object} [options]
+   * @param {boolean} [options.create=true] - Generate and save a key when
+   *   there is none. False for a command that must change nothing: the key
+   *   then stays uninitialized.
+   * @returns {Promise<void>}
+   * @throws {Error} `TOKEN_ENCRYPTION_KEY` is malformed; code
+   *   `MASTER_KEY_INVALID` for an unusable key file; code
+   *   `MASTER_KEY_REQUIRED` when the key is missing while sealed data exists.
    */
-  async initializeEncryptionKey() {
+  async initializeEncryptionKey({ create = true } = {}) {
     // Priority 1: Environment variable (allows override)
     if (process.env.TOKEN_ENCRYPTION_KEY) {
       // Hex is case-insensitive; normalize so the same key always compares equal.
@@ -150,43 +173,27 @@ class TokenStorageService {
       return;
     }
 
-    // Priority 2: Try to load persisted key
-    try {
-      // Trimmed first: a key file that ends in a newline is still the key.
-      const persistedKey = (await fs.readFile(this.keyFilePath, 'utf8')).trim();
-      if (persistedKey && persistedKey.length === 64) {
-        // Validate it's a valid hex string
-        if (/^[0-9a-f]{64}$/i.test(persistedKey.trim())) {
-          this.encryptionKey = persistedKey.trim().toLowerCase();
-          this.keySource = 'file';
-          logger.info('Using persisted encryption key from disk', {
-            component: 'TokenStorage',
-            keySource: this.keySource,
-            keyFilePath: this.keyFilePath,
-            keyFingerprint: this.getKeyFingerprint()
-          });
-          return;
-        } else {
-          logger.warn('Persisted encryption key has invalid format, generating new key', {
-            component: 'TokenStorage'
-          });
-        }
-      }
-    } catch (error) {
-      if (error.code !== 'ENOENT') {
-        logger.error('Error reading encryption key file', {
-          component: 'TokenStorage',
-          error
-        });
-      }
-      // File doesn't exist or error reading, will generate new key
+    // Priority 2: the key file. Missing is the only state that leads on.
+    const persisted = await this._readKeyFileStrict();
+    if (persisted) {
+      this.encryptionKey = persisted;
+      this.keySource = 'file';
+      logger.info('Using persisted encryption key from disk', {
+        component: 'TokenStorage',
+        keySource: this.keySource,
+        keyFilePath: this.keyFilePath,
+        keyFingerprint: this.getKeyFingerprint()
+      });
+      return;
     }
 
     // Never replace a key that stored data depends on.
     await this._assertNoSealedData();
+    if (!create) return;
 
-    // Priority 3: Generate new key and persist it
-    this.encryptionKey = crypto.randomBytes(32).toString('hex');
+    // Priority 3: Generate a new key and persist it. Held in a local until
+    // it is saved: nothing may use a key that only this process knows.
+    const generated = crypto.randomBytes(32).toString('hex');
     logger.warn(
       'Generated new encryption key, will be persisted to maintain API key compatibility across restarts',
       { component: 'TokenStorage' }
@@ -203,7 +210,8 @@ class TokenStorageService {
       // each worker using its own while the file holds whichever wrote last.
       // Anything one worker encrypted would then be undecryptable everywhere
       // else. The loser of the race adopts the winner's key below.
-      await createFileExclusively(this.keyFilePath, this.encryptionKey, 0o600);
+      await createFileExclusively(this.keyFilePath, generated, 0o600);
+      this.encryptionKey = generated;
       this.keySource = 'generated';
       logger.info('Encryption key persisted to disk', {
         component: 'TokenStorage',
@@ -219,9 +227,10 @@ class TokenStorageService {
       if (error.code === 'EEXIST') {
         // Another process created the file between our read and our write. Its
         // key is the one on disk, so use that rather than the one we generated.
-        const winner = (await fs.readFile(this.keyFilePath, 'utf8')).trim();
-        if (/^[0-9a-f]{64}$/i.test(winner)) {
-          this.encryptionKey = winner.toLowerCase();
+        // A file that holds no key ends the start (`MASTER_KEY_INVALID`).
+        const winner = await this._readKeyFileStrict({ concurrent: true });
+        if (winner) {
+          this.encryptionKey = winner;
           this.keySource = 'file';
           logger.info('Adopted encryption key created concurrently by another process', {
             component: 'TokenStorage',
@@ -231,16 +240,13 @@ class TokenStorageService {
           });
           return;
         }
-        logger.error('Concurrently created encryption key file is invalid', {
-          component: 'TokenStorage',
-          keyFilePath: this.keyFilePath
-        });
-        return;
+        throw this._invalidKeyFile('it was removed again while this process started');
       }
       logger.error('Failed to persist encryption key', {
         component: 'TokenStorage',
         error
       });
+      this.encryptionKey = generated;
       this.keySource = 'generated-unpersisted';
       logger.warn('Encryption key is not persisted. API keys will be lost on server restart.', {
         component: 'TokenStorage',
@@ -249,6 +255,77 @@ class TokenStorageService {
         keyFingerprint: this.getKeyFingerprint()
       });
     }
+  }
+
+  /**
+   * Fail when the key file exists and holds no key, without loading or
+   * creating anything. The start-up calls it before the first step that
+   * would need the key, so the reason is the first thing in the log.
+   *
+   * @returns {Promise<void>}
+   * @throws {Error} Code `MASTER_KEY_INVALID`.
+   */
+  async assertKeyFileUsable() {
+    if (process.env.TOKEN_ENCRYPTION_KEY) return;
+    await this._readKeyFileStrict();
+  }
+
+  /**
+   * The key in the key file.
+   *
+   * @param {Object} [options]
+   * @param {boolean} [options.concurrent=false] - The file was just created by
+   *   another process: an empty file is then read once more after a moment,
+   *   because the writer creates it and writes it in two steps.
+   * @returns {Promise<string|null>} The key in lower case; null when there is
+   *   no key file.
+   * @throws {Error} Code `MASTER_KEY_INVALID` when the file exists and holds
+   *   no key or cannot be read.
+   * @private
+   */
+  async _readKeyFileStrict({ concurrent = false } = {}) {
+    for (let attempt = 0; ; attempt += 1) {
+      let content;
+      try {
+        // Trimmed first: a key file that ends in a newline is still the key.
+        content = (await fs.readFile(this.keyFilePath, 'utf8')).trim();
+      } catch (error) {
+        if (error.code === 'ENOENT') return null;
+        throw this._invalidKeyFile(`it cannot be read (${error.code || error.message})`, error);
+      }
+      if (/^[0-9a-f]{64}$/i.test(content)) return content.toLowerCase();
+      if (concurrent && content === '' && attempt < 20) {
+        await new Promise(resolve => setTimeout(resolve, 25));
+        continue;
+      }
+      throw this._invalidKeyFile(
+        content === ''
+          ? 'it is empty'
+          : `it holds ${content.length} characters that are not a 64-character hex key`
+      );
+    }
+  }
+
+  /**
+   * The error for a key file that exists and is no key.
+   *
+   * @param {string} why - What is wrong with it, without its content.
+   * @param {unknown} [cause]
+   * @returns {Error} Code `MASTER_KEY_INVALID`. The start-up ends the process.
+   * @private
+   */
+  _invalidKeyFile(why, cause) {
+    const error = new Error(
+      `The master key file ${this.keyFilePath} exists but is not usable: ${why}. It is not ` +
+        'overwritten and no new key is generated. Put the 64-character hex key into it (no ' +
+        'quotes, no other text), restore it from a backup, or set TOKEN_ENCRYPTION_KEY. Remove ' +
+        'the file only on an installation that has no encrypted data and no saved credentials: ' +
+        'a new key is then generated at the next start.',
+      cause ? { cause } : undefined
+    );
+    error.code = 'MASTER_KEY_INVALID';
+    logger.error(error.message, { component: 'TokenStorage', code: error.code });
+    return error;
   }
 
   /**

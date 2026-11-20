@@ -36,6 +36,7 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import cluster from 'node:cluster';
 import serverConfig from '../../../config.js';
 import logger from '../../../utils/logger.js';
 import { StorageProvider } from '../../StorageProvider.js';
@@ -308,6 +309,10 @@ export class FilesystemStorageProvider extends StorageProvider {
    * @param {Object|(() => Object)} [config.encryption.keyProvider] - Key provider (tests)
    * @param {() => Promise<Object>} [config.encryption.loadKeys] - Resolves with
    *   the key module (`crypto/KeyProvider.js`)
+   * @param {boolean} [config.encryption.writeState] - Whether this process may
+   *   write the state record when it starts. False in a cluster worker (the
+   *   default there): the primary brought the record in line with the switch
+   *   before it forked, and a worker only reads it.
    */
   constructor(config = {}) {
     super(config);
@@ -336,6 +341,8 @@ export class FilesystemStorageProvider extends StorageProvider {
     }
     /** `auto` until `initialize()` has read the state record. */
     this._requestedAtRestMode = requestedMode;
+    this._mayWriteAtRestState =
+      typeof encryption.writeState === 'boolean' ? encryption.writeState : !cluster.isWorker;
     // One context for both facets. With `auto` nothing is sealed or read
     // before `initialize()` has decided, so the placeholder is never used.
     this._atRest = new AtRestContext({
@@ -557,6 +564,10 @@ export class FilesystemStorageProvider extends StorageProvider {
    *   the data directory (see `storage/atRest/policy.js`), a refusal anywhere
    *   else. A worker never converts.
    *
+   * A cluster worker never writes the record (`encryption.writeState`): the
+   * primary decides the switch once per start, brings the record in line and
+   * hands the decision to every worker it forks, also to a replacement.
+   *
    * @returns {Promise<void>}
    * @throws {StorageError} Code `ENCRYPTION_NOT_CONVERTED`, or
    *   `KEY_UNAVAILABLE` when the master key is not the one the record names.
@@ -567,7 +578,8 @@ export class FilesystemStorageProvider extends StorageProvider {
     let state = await readAtRestState(this._baseDir);
     this._atRestState = state;
     if (requested === 'off') {
-      if (state && state.state !== 'off') {
+      // A worker never writes the record: its primary did before forking.
+      if (state && state.state !== 'off' && this._mayWriteAtRestState) {
         this._atRestState = await writeAtRestState(this._baseDir, {
           ...state,
           state: 'off',
@@ -584,7 +596,7 @@ export class FilesystemStorageProvider extends StorageProvider {
     if (requested !== 'auto') return;
 
     let mode = decideAtRestMode({ enabled: true, state });
-    if (mode === null && !state && (await this._holdsNothing())) {
+    if (mode === null && !state && this._mayWriteAtRestState && (await this._holdsNothing())) {
       const keyId = await (await this._atRest.keyProvider()).currentKeyId();
       const now = new Date().toISOString();
       state = await writeAtRestState(this._baseDir, {
@@ -607,6 +619,19 @@ export class FilesystemStorageProvider extends StorageProvider {
           'with "npm run storage:encrypt" while the server is stopped.',
         { code: 'ENCRYPTION_NOT_CONVERTED' }
       );
+    }
+    if (mode === 'converting' && !state && this._mayWriteAtRestState) {
+      // The preparing process is about to seal its first object (a
+      // configuration migration that starts storage does, before the
+      // conversion runs). Say so in the record first: sealed data without a
+      // record reads as "converted, record lost", and the plaintext of an
+      // installation that is only being converted would then be refused.
+      state = await writeAtRestState(this._baseDir, {
+        state: 'converting',
+        facets: {},
+        startedAt: new Date().toISOString()
+      });
+      this._atRestState = state;
     }
     if (mode === 'enforced') {
       // Every process must hold the key the record names (the primary updates

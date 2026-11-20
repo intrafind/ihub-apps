@@ -118,7 +118,8 @@ export async function runStorageCheck({
     // itself. What can be checked without it is the key they are encrypted with.
     const keyCheck = await runBlobProbe({
       provider: DEFAULT_BLOB_BACKEND,
-      steps: [{ name: 'key', run: async () => checkMasterKey(await keys()) }]
+      // A check changes nothing: it creates no key file.
+      steps: [{ name: 'key', run: async () => checkMasterKey(await keys(), { create: false }) }]
     });
     result = { ...result, ...keyCheck };
   }

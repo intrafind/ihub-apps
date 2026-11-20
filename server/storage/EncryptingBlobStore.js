@@ -164,6 +164,11 @@ export class EncryptingBlobStore extends BlobStore {
    *   does with a stored object that is not an envelope: `reject` (strict)
    *   throws `CORRUPT_BLOB`, `accept` returns it. Always `accept` when
    *   `encryptWrites` is false.
+   * @param {{read: (options?: {migrate?: boolean}) => Promise<Buffer|null>,
+   *   write: (data: Buffer) => Promise<void>}} [options.keyCheckStore] - Where
+   *   the key check object is kept when that is not the inner store itself
+   *   (`atRest/localKeyCheck.js` for a data directory). The object is the
+   *   same encrypted blob either way.
    */
   constructor({
     inner,
@@ -171,7 +176,8 @@ export class EncryptingBlobStore extends BlobStore {
     tenant = 'default',
     maxBlobBytes,
     encryptWrites = true,
-    plaintextReads = 'reject'
+    plaintextReads = 'reject',
+    keyCheckStore = null
   } = {}) {
     super();
     if (!inner || typeof inner.put !== 'function' || typeof inner.get !== 'function') {
@@ -202,6 +208,7 @@ export class EncryptingBlobStore extends BlobStore {
     // writes them; a store with encryption off learns it from
     // `detectEnvelopes()` and stays on the safe side until then.
     this._holdsEnvelopes = true;
+    this._keyCheckStore = keyCheckStore || null;
     this._reportedKeys = new Set();
     // Fails here, not on the first write, when the tenant is not usable.
     blobAssociatedData({ tenant, ns: 'ns', key: 'key' });
@@ -240,8 +247,22 @@ export class EncryptingBlobStore extends BlobStore {
    */
   async detectEnvelopes() {
     if (this._encryptWrites) return true;
-    this._holdsEnvelopes = (await this._inner.get(INTERNAL_BLOB_NAMESPACE, KEY_CHECK_KEY)) !== null;
+    this._holdsEnvelopes = (await this._readKeyCheck({ migrate: true })) !== null;
     return this._holdsEnvelopes;
+  }
+
+  /**
+   * The stored key check object, as stored.
+   *
+   * @param {Object} [options]
+   * @param {boolean} [options.migrate=false] - Let a key check store move an
+   *   object it finds at a former place.
+   * @returns {Promise<Buffer|null>}
+   * @private
+   */
+  async _readKeyCheck({ migrate = false } = {}) {
+    if (this._keyCheckStore) return this._keyCheckStore.read({ migrate });
+    return (await this._inner.get(INTERNAL_BLOB_NAMESPACE, KEY_CHECK_KEY))?.data ?? null;
   }
 
   /**
@@ -599,14 +620,18 @@ export class EncryptingBlobStore extends BlobStore {
    * @param {boolean} [options.create=true] - Write the object under rule 3.
    *   False for a check that must not change anything.
    * @param {boolean} [options.adopt=false] - Under rule 4, write the object
-   *   instead of refusing (`IHUB_S3_ADOPT_BUCKET=true` for one start).
+   *   instead of refusing (`IHUB_S3_ADOPT_BUCKET=true` for one start). For a
+   *   store whose objects are all encrypted with this key already; it does
+   *   not make plaintext objects readable.
+   * @param {boolean} [options.migrate=create] - Let a key check store move an
+   *   object it finds at a former place.
    * @returns {Promise<{status: 'verified'|'created'|'adopted'|'absent', installationId: string|null}>}
    *   `installationId` is the random id the key check object carries.
    * @throws {KeyUnavailableError} Rule 2, when the object names another key.
    * @throws {CorruptBlobError} Rule 2, when the object does not verify.
    * @throws {StorageError} Code `KEY_CHECK_MISSING` for rule 4.
    */
-  async verifyKey({ hasOtherObjects = null, create = true, adopt = false } = {}) {
+  async verifyKey({ hasOtherObjects = null, create = true, adopt = false, migrate = create } = {}) {
     const provider = this._provider();
     let currentKeyId = null;
     try {
@@ -624,13 +649,13 @@ export class EncryptingBlobStore extends BlobStore {
     try {
       // Read strictly whatever the mode: a key check object that is not an
       // envelope proves nothing about the key.
-      const stored = await this._inner.get(INTERNAL_BLOB_NAMESPACE, KEY_CHECK_KEY);
+      const stored = await this._readKeyCheck({ migrate });
       marker = stored
         ? {
             data: await this._open(
               INTERNAL_BLOB_NAMESPACE,
               KEY_CHECK_KEY,
-              stored.data,
+              stored,
               this._aad(INTERNAL_BLOB_NAMESPACE, KEY_CHECK_KEY)
             )
           }
@@ -683,25 +708,37 @@ export class EncryptingBlobStore extends BlobStore {
     } else if (foreign) {
       throw new StorageError(
         'The blob store holds objects but no key check object, so it cannot be told whether ' +
-          'they were written with this master key. Use an empty bucket or prefix, restore the ' +
-          'key check object together with the data, or set IHUB_S3_ADOPT_BUCKET=true for one ' +
-          'start to adopt the objects as they are.',
+          'they are encrypted with this master key. If the objects were stored while storage ' +
+          'encryption was off, stop every server and run "npm run storage:encrypt": it encrypts ' +
+          'them and writes the key check object. Otherwise use an empty bucket or prefix, or ' +
+          'restore the key check object together with the data. Only for a bucket whose objects ' +
+          'are all already encrypted with this master key: IHUB_S3_ADOPT_BUCKET=true for one ' +
+          'start writes a new key check object; it does not make plaintext objects readable.',
         { code: 'KEY_CHECK_MISSING' }
       );
     }
     if (!create) return { status: 'absent', installationId: null };
 
     const installationId = crypto.randomUUID();
-    await this.put(
-      INTERNAL_BLOB_NAMESPACE,
-      KEY_CHECK_KEY,
-      JSON.stringify({
-        format: KEY_CHECK_FORMAT,
-        naming: 'plain',
-        installationId,
-        createdAt: new Date().toISOString()
-      })
-    );
+    const content = JSON.stringify({
+      format: KEY_CHECK_FORMAT,
+      naming: 'plain',
+      installationId,
+      createdAt: new Date().toISOString()
+    });
+    if (this._keyCheckStore) {
+      const plain = Buffer.from(content, 'utf8');
+      await this._keyCheckStore.write(
+        await this._seal(
+          INTERNAL_BLOB_NAMESPACE,
+          KEY_CHECK_KEY,
+          plain,
+          this._aad(INTERNAL_BLOB_NAMESPACE, KEY_CHECK_KEY)
+        )
+      );
+    } else {
+      await this.put(INTERNAL_BLOB_NAMESPACE, KEY_CHECK_KEY, content);
+    }
     logger.info('Wrote the key check object of the blob store', {
       component: COMPONENT,
       keyId: currentKeyId

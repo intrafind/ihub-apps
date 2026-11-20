@@ -48,8 +48,9 @@ export function quietServerLog(verbose = false) {
  *
  * @param {Object} platformConfig - Platform configuration (raw file).
  * @param {Object} [env=process.env]
- * @returns {{provider: string, blobs: import('../BlobStore.js').BlobStore|null}}
- *   `blobs` is null for a provider without a blob facet.
+ * @returns {{provider: string, blobs: import('../BlobStore.js').BlobStore|null, baseDir: string|null}}
+ *   `blobs` is null for a provider without a blob facet, `baseDir` for one
+ *   without a data directory.
  * @throws {import('../errors.js').UnknownProviderError} For an unknown provider.
  */
 export function openLocalBlobs(platformConfig, env = process.env) {
@@ -61,7 +62,8 @@ export function openLocalBlobs(platformConfig, env = process.env) {
   } catch {
     blobs = null;
   }
-  return { provider, blobs };
+  const baseDir = typeof base.baseDir === 'string' ? base.baseDir : null;
+  return { provider, blobs, baseDir };
 }
 
 /**

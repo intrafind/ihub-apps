@@ -25,7 +25,13 @@ export const S3_DEFAULTS = Object.freeze({
   maxObjectBytes: 128 * 1024 * 1024,
   connectTimeoutMs: 5000,
   requestTimeoutMs: 60000,
-  maxAttempts: 3
+  maxAttempts: 3,
+  // How long one blob call may take with all its attempts, before the time
+  // its payload needs is added: what a waiting HTTP request can live with.
+  operationTimeoutMs: 30000,
+  // The slowest transfer that is still accepted: 1 MiB per second. A call is
+  // given `bytes / this` on top, so a large object on a slow link is not cut.
+  minThroughputBytesPerSecond: 1024 * 1024
 });
 
 /** Connections kept to the endpoint. A constant, not a setting. */
@@ -108,25 +114,52 @@ function bool(raw, field) {
 }
 
 /**
- * Whether a host name is this machine: `localhost`, `*.localhost`, 127.0.0.0/8 or `::1`.
+ * A host as an address check needs it: lower case, without IPv6 brackets,
+ * and an IPv4-mapped IPv6 address (`::ffff:169.254.169.254`, which a URL
+ * spells `::ffff:a9fe:a9fe`) as the IPv4 address it stands for.
+ *
+ * @param {string} hostname - As `URL.hostname` gives it, or an address.
+ * @returns {string}
+ */
+function plainHost(hostname) {
+  const host = String(hostname)
+    .toLowerCase()
+    .replace(/^\[|\]$/g, '');
+  if (!net.isIPv6(host)) return host;
+  const dotted = /^(?:0{0,4}:){2,5}ffff:(\d{1,3}(?:\.\d{1,3}){3})$/.exec(host);
+  if (dotted && net.isIPv4(dotted[1])) return dotted[1];
+  const hex = /^(?:0{0,4}:){2,5}ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(host);
+  if (!hex) return host;
+  const high = parseInt(hex[1], 16);
+  const low = parseInt(hex[2], 16);
+  return [high >> 8, high & 0xff, low >> 8, low & 0xff].join('.');
+}
+
+/**
+ * Whether a host is this machine: the name `localhost`, 127.0.0.0/8 or `::1`.
+ * Not `anything.localhost`: that is a name DNS answers, and it may answer
+ * with another machine.
  *
  * @param {string} hostname - As `URL.hostname` gives it (IPv6 in brackets).
  * @returns {boolean}
  */
 export function isLoopbackHost(hostname) {
-  const host = String(hostname)
-    .toLowerCase()
-    .replace(/^\[|\]$/g, '');
-  if (host === 'localhost' || host.endsWith('.localhost')) return true;
+  const host = plainHost(hostname);
+  if (host === 'localhost') return true;
   if (net.isIPv4(host)) return host.startsWith('127.');
   return host === '::1';
 }
 
-/** Whether a host is a link-local address (cloud metadata services live there). */
-function isLinkLocalHost(hostname) {
-  const host = String(hostname)
-    .toLowerCase()
-    .replace(/^\[|\]$/g, '');
+/**
+ * Whether a host or a resolved address is link-local (cloud metadata
+ * services live there): 169.254.0.0/16, also IPv4-mapped, `fe80::/10` and
+ * the EC2 IPv6 metadata address.
+ *
+ * @param {string} hostname - A host name or an IP address.
+ * @returns {boolean}
+ */
+export function isLinkLocalHost(hostname) {
+  const host = plainHost(hostname);
   if (net.isIPv4(host)) return host.startsWith('169.254.');
   return net.isIPv6(host) && (/^fe[89ab]/.test(host) || host === 'fd00:ec2::254');
 }
@@ -210,7 +243,8 @@ function resolvePrefix(raw) {
  * @returns {{endpoint: string, endpointHost: string, region: string, bucket: string,
  *   prefix: string, accessKeyId: string, secretAccessKey: string, forcePathStyle: boolean,
  *   allowInsecureHttp: boolean, insecureHttp: boolean, maxObjectBytes: number,
- *   connectTimeoutMs: number, requestTimeoutMs: number, maxAttempts: number}}
+ *   connectTimeoutMs: number, requestTimeoutMs: number, maxAttempts: number,
+ *   operationTimeoutMs: number, minThroughputBytesPerSecond: number}}
  * @throws {StorageError} Code `INVALID_STORAGE_CONFIG`; `error.field` names the setting.
  *
  * @example
@@ -260,6 +294,8 @@ export function resolveS3BlobConfig(raw, { openSecret = value => value } = {}) {
     maxObjectBytes: positiveInt(raw, 'maxObjectBytes', 4 * 1024 * 1024 * 1024),
     connectTimeoutMs: positiveInt(raw, 'connectTimeoutMs', 600000),
     requestTimeoutMs: positiveInt(raw, 'requestTimeoutMs', 3600000),
-    maxAttempts: positiveInt(raw, 'maxAttempts', 10)
+    maxAttempts: positiveInt(raw, 'maxAttempts', 10),
+    operationTimeoutMs: positiveInt(raw, 'operationTimeoutMs', 3600000),
+    minThroughputBytesPerSecond: positiveInt(raw, 'minThroughputBytesPerSecond', 1024 ** 3)
   };
 }

@@ -778,11 +778,19 @@ export class FilesystemDocumentStore extends DocumentStore {
    * @param {string} [opts.ownerId] - Restrict to one owner
    * @param {string} [opts.prefix] - Keep only keys starting with this prefix
    * @param {boolean} [opts.includeData=true] - False omits `data`
+   * @param {'skip'|'throw'} [opts.unreadable='skip'] - What happens with a
+   *   document that is present but cannot be read: a torn file, a sealed
+   *   document that does not open, a plaintext document while encryption is
+   *   enforced. `skip` leaves it out of the walk (and logs it). `throw` ends
+   *   the walk with {@link CorruptDocumentError}: for a caller that deletes
+   *   what the walk did not name, where "unreadable" must never mean "absent".
    * @yields {Object} Documents in ascending key order
+   * @throws {CorruptDocumentError} With `unreadable: 'throw'`.
    */
   async *scan(ns, opts = {}) {
     assertValidNamespace(ns);
-    const { ownerId, prefix, includeData = true } = opts || {};
+    const { ownerId, prefix, includeData = true, unreadable = 'skip' } = opts || {};
+    const lenient = unreadable !== 'throw';
     let keys = await this._listingKeys(ns, ownerId, prefix);
     keys.sort(compareKeys);
     if (typeof prefix === 'string' && prefix.length > 0) {
@@ -798,8 +806,8 @@ export class FilesystemDocumentStore extends DocumentStore {
         const envelopes = await Promise.all(
           batch.map(key =>
             includeData !== false
-              ? this._readEnvelope(ns, key, { lenient: true })
-              : this._readEnvelopeHead(ns, key, { lenient: true })
+              ? this._readEnvelope(ns, key, { lenient })
+              : this._readEnvelopeHead(ns, key, { lenient })
           )
         );
         for (let offset = 0; offset < batch.length; offset += 1) {

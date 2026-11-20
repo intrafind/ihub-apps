@@ -39,6 +39,12 @@ The system uses a 3-tier priority system for the encryption key:
    - Exception: no key is generated while the installation holds data that was encrypted with a
      master key. The server refuses to start instead. See
      [The server does not create a new key over encrypted data](#the-server-does-not-create-a-new-key-over-encrypted-data).
+   - Exception: no key is generated when `contents/.encryption-key` exists but does not hold a
+     64-character hex key (an empty file, a file cut short, other text). The server refuses to
+     start (`MASTER_KEY_INVALID`) and leaves the file as it is. See
+     [Key File Is Not Usable](#key-file-is-not-usable).
+   - Only a server start generates a key. `npm run storage:check`, `npm run storage:show` and
+     `npm run storage:encrypt -- --dry-run` never create one.
 
 ### First Server Start
 
@@ -137,7 +143,7 @@ would start the server on data it cannot read.
 In that case the server logs `MASTER_KEY_REQUIRED`, names the key id the data was written with and
 ends with exit code 1. This also happens with the switch turned off again, as long as encrypted
 data exists. The server decides this from `contents/data/.at-rest.json` and
-`contents/data/blobs/_ihub/keycheck`.
+`contents/data/.at-rest-keycheck`.
 
 What to do: restore `contents/.encryption-key` from a backup, or set `TOKEN_ENCRYPTION_KEY` to the
 key the data was written with. Do not delete the two files named above to get past the check; the
@@ -277,6 +283,23 @@ If the installation holds data encrypted by [storage encryption](storage-encrypt
 does not start without the original key and does not create a new one (`MASTER_KEY_REQUIRED` in the
 log). Steps 2 and 3 do not help then: only the original key, from a backup or as
 `TOKEN_ENCRYPTION_KEY`, makes the data readable again.
+
+### Key File Is Not Usable
+
+**Cause:** `contents/.encryption-key` exists but does not hold a 64-character hex key: it is empty,
+was cut short by a full disk or an interrupted copy, or holds other text (quotes, a comment, a
+second line of text). The log shows `MASTER_KEY_INVALID` and the server ends with exit code 1.
+
+The server never overwrites this file and never generates a new key in its place. A file that is
+there is taken as a sign that a key existed; replacing it would make everything encrypted with the
+lost key unreadable for good.
+
+**Solutions:**
+1. Restore the file from a backup, or put the 64 hex characters into it (no quotes, nothing else;
+   a final line break is accepted)
+2. Or set `TOKEN_ENCRYPTION_KEY` to the key
+3. Remove the file only on an installation that has no encrypted data and no saved credentials.
+   A new key is then generated at the next start
 
 ### Multiple Server Instances Using Different Keys
 

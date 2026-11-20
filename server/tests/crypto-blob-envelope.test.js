@@ -10,6 +10,7 @@
  * stored blob unreadable, so they are asserted literally here and through the
  * recorded vectors in `fixtures/blob-envelope/vectors.json`.
  */
+import './support/scratchContents.js';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';

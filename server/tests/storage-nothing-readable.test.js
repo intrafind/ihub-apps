@@ -15,6 +15,7 @@
  * What stays visible by design, and is asserted as such: file names (ids,
  * never content), owner ids, timestamps, sizes and sequence numbers.
  */
+import './support/scratchContents.js';
 import fs from 'node:fs/promises';
 import fsSync from 'node:fs';
 import os from 'node:os';
@@ -25,8 +26,6 @@ import assert from 'node:assert/strict';
 import { filesUnder, findReadable } from './support/atRestTestSupport.js';
 
 const scratch = fsSync.mkdtempSync(path.join(os.tmpdir(), 'ihub-fs-readable-'));
-process.env.CONTENTS_DIR = path.join(scratch, 'contents');
-delete process.env.TOKEN_ENCRYPTION_KEY;
 const storage = await import('../storage/index.js');
 const { BLOB_NAMESPACES, RUNTIME_NAMESPACES } = await import('../storage/namespaces.js');
 const { ChatRepository } = await import('../services/chat/ChatRepository.js');

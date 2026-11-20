@@ -27,29 +27,42 @@ import { INTERNAL_BLOB_NAMESPACE } from './namespaces.js';
 
 const COMPONENT = 'BlobStorage';
 
+/** Sources of a master key that is still there after a restart (`TokenStorageService.keySource`). */
+const PERSISTENT_KEY_SOURCES = new Set(['env', 'file', 'generated']);
+
 /**
  * The key step of a blob storage check: a master key that exists and will
  * still exist after a restart.
  *
  * @param {Object} keys - The key module (`crypto/KeyProvider.js`).
+ * @param {Object} [options]
+ * @param {boolean} [options.create=true] - Let the key service generate and
+ *   save a key when there is none. False for a check that must change nothing.
  * @returns {Promise<string>} A sentence naming the key id and its source.
  * @throws {KeyUnavailableError} With `keyMissing: true`.
  */
-export async function checkMasterKey(keys) {
-  const master = await keys.ensureMasterKey();
+export async function checkMasterKey(keys, { create = true } = {}) {
+  const master = await keys.ensureMasterKey({ create });
   if (!master.initialized) {
     const error = new KeyUnavailableError(
-      'No master key is available. Restore contents/.encryption-key from a backup or set ' +
-        'TOKEN_ENCRYPTION_KEY; without it no encrypted blob can be read or written.'
+      create
+        ? 'No master key is available. Restore contents/.encryption-key from a backup or set ' +
+            'TOKEN_ENCRYPTION_KEY; without it no encrypted blob can be read or written.'
+        : 'No master key exists yet (contents/.encryption-key or TOKEN_ENCRYPTION_KEY). This ' +
+            'check creates none; the first server start does.'
     );
     error.keyMissing = true;
     throw error;
   }
-  if (master.source === 'generated-unpersisted') {
+  // Only a key that is still there after a restart may seal anything: one
+  // from the environment, read from the key file, or just saved to it. Any
+  // other source (also none at all) is a key that lives in this process only.
+  if (!PERSISTENT_KEY_SOURCES.has(master.source)) {
     const error = new KeyUnavailableError(
-      'The master key was generated for this run and could not be saved to ' +
-        'contents/.encryption-key. Blobs written now would be unreadable after a restart. ' +
-        'Make the contents directory writable or set TOKEN_ENCRYPTION_KEY.'
+      'The master key exists in this process only: it is not the content of ' +
+        'contents/.encryption-key and does not come from TOKEN_ENCRYPTION_KEY ' +
+        `(source: ${master.source || 'unknown'}). Data encrypted now would be unreadable after ` +
+        'a restart. Make the contents directory writable or set TOKEN_ENCRYPTION_KEY.'
     );
     error.keyMissing = true;
     throw error;
@@ -93,9 +106,11 @@ export async function blobRoundTrip(blobs, inner) {
  * @param {{enabled: boolean, plaintextReads: 'reject'|'accept'}} context.encryption
  * @param {() => Promise<Object>} context.loadKeys - Resolves with the key
  *   module (`crypto/KeyProvider.js`).
+ * @param {Object} [context.keyCheckStore] - Where the key check object is
+ *   kept (`atRest/localKeyCheck.js`); in the blob store itself without it.
  * @returns {import('./blobBackends.js').BlobBackend}
  */
-export function createLocalBlobBackend(inner, { encryption, loadKeys }) {
+export function createLocalBlobBackend(inner, { encryption, loadKeys, keyCheckStore = null }) {
   const enabled = encryption?.enabled === true;
   /** @type {Object|null} */
   let keys = null;
@@ -108,6 +123,7 @@ export function createLocalBlobBackend(inner, { encryption, loadKeys }) {
     plaintextReads: encryption?.plaintextReads || 'reject',
     // The filesystem store has no size limit of its own; none is added here.
     maxBlobBytes: Number.MAX_SAFE_INTEGER,
+    keyCheckStore,
     keyProvider: () => {
       if (!keys) throw new Error('the blob storage has not been initialized');
       return keys.getKeyProvider();

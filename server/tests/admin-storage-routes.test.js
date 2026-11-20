@@ -12,6 +12,7 @@
  * that says so; a saved configuration that differs from the running one is
  * reported.
  */
+import { contentsDir } from './support/scratchContents.js';
 import fs from 'node:fs/promises';
 import fsSync from 'node:fs';
 import os from 'node:os';
@@ -21,8 +22,7 @@ import assert from 'node:assert/strict';
 import express from 'express';
 
 const scratch = fsSync.mkdtempSync(path.join(os.tmpdir(), 'ihub-admin-storage-'));
-process.env.CONTENTS_DIR = path.join(scratch, 'contents');
-fsSync.mkdirSync(path.join(scratch, 'contents', 'config'), { recursive: true });
+fsSync.mkdirSync(path.join(contentsDir, 'config'), { recursive: true });
 
 const keyModule = await import('../crypto/KeyProvider.js');
 const { default: errorHandler } = await import('../middleware/errorHandler.js');

@@ -9,6 +9,7 @@
  * switch turned off after it was on, and the refusals (a start that did not
  * convert, a wrong or missing master key).
  */
+import './support/scratchContents.js';
 import fs from 'node:fs/promises';
 import fsSync from 'node:fs';
 import os from 'node:os';
@@ -19,8 +20,6 @@ import assert from 'node:assert/strict';
 import { filesUnder, findReadable } from './support/atRestTestSupport.js';
 
 const scratch = fsSync.mkdtempSync(path.join(os.tmpdir(), 'ihub-conversion-'));
-process.env.CONTENTS_DIR = path.join(scratch, 'contents');
-delete process.env.TOKEN_ENCRYPTION_KEY;
 const storage = await import('../storage/index.js');
 const {
   describeBlobStorage,
@@ -536,7 +535,7 @@ describe('storage encryption: the master key', () => {
     const site = installation();
     await seedPlaintext(site, { documents: 1 });
     await site.prepare(true);
-    await fs.rm(path.join(site.baseDir, 'blobs', '_ihub', 'keycheck'));
+    await fs.rm(path.join(site.baseDir, '.at-rest-keycheck'));
     await assert.rejects(site.prepare(true), { code: 'KEY_CHECK_MISSING' });
     const adopted = await prepareStorageEncryption({
       env: { IHUB_S3_ADOPT_BUCKET: 'true' },
@@ -565,17 +564,23 @@ describe('storage encryption: the master key', () => {
         assert.equal(tokenStorageService.encryptionKey, null);
         assert.equal(fsSync.existsSync(keyFile), false, 'no key file was created');
 
+        // A key file that is there but holds no key is its own refusal.
         await fs.writeFile(keyFile, 'not a key');
         await assert.rejects(tokenStorageService.initializeEncryptionKey(), {
-          code: 'MASTER_KEY_REQUIRED'
+          code: 'MASTER_KEY_INVALID'
         });
         assert.equal(await fs.readFile(keyFile, 'utf8'), 'not a key', 'the file was not replaced');
 
         // Also after the switch was turned off again: the sealed data is still there.
         await site.prepare(false);
         await assert.rejects(tokenStorageService.initializeEncryptionKey(), {
+          code: 'MASTER_KEY_INVALID'
+        });
+        await fs.rm(keyFile);
+        await assert.rejects(tokenStorageService.initializeEncryptionKey(), {
           code: 'MASTER_KEY_REQUIRED'
         });
+        assert.equal(fsSync.existsSync(keyFile), false, 'no key file was created');
 
         // The right key, with a final newline, is read.
         await fs.writeFile(keyFile, `${'e5'.repeat(32)}\n`);

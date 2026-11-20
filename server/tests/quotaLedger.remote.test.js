@@ -6,6 +6,7 @@
  * against the primary's ledger over a fake bus, and the fallback to the file
  * when the primary does not answer.
  */
+import './support/scratchContents.js';
 import { describe, it, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';

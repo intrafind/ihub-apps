@@ -12,6 +12,9 @@
  * What it guarantees:
  * - **It never deletes or changes a source file.** There is no option for it.
  *   Remove `contents/data/blobs` yourself once the result has been checked.
+ *   That is safe: nothing the server needs lives there any more. The key
+ *   check object of the data directory, which an earlier build kept under
+ *   `blobs/_ihub/`, is moved beside the state record by this command.
  * - **It never overwrites an object in the bucket.** A blob that is already
  *   there with the same content is counted as present; one with other content
  *   is counted as a conflict and left alone.
@@ -47,6 +50,7 @@ import {
   StorageError
 } from '../index.js';
 import { BLOB_NAMESPACES } from '../namespaces.js';
+import { createLocalKeyCheckStore } from '../atRest/localKeyCheck.js';
 import { ADOPT_BUCKET_ENV_VAR } from '../providers/s3/index.js';
 import {
   formatByteSize,
@@ -325,6 +329,14 @@ export async function runCopyBlobs({
       };
     }
 
+    // The key check object of the data directory used to be a blob. Move it
+    // out of the blob tree before the operator is told that tree can go.
+    if (!dryRun && local.baseDir) {
+      await createLocalKeyCheckStore({ baseDir: local.baseDir, legacy: local.blobs })
+        .read({ migrate: true })
+        .catch(() => {});
+    }
+
     let keyModule = null;
     try {
       keyModule = await keys();
@@ -454,7 +466,10 @@ export function formatCopyBlobs(report) {
     lines.push(
       `Result: complete. ${formatNumber(report.totals.copied)} copied, ` +
         `${formatNumber(report.totals.alreadyPresent)} already present. The files on local disk ` +
-        'are still there; remove contents/data/blobs yourself once you have checked the result.'
+        'are still there, in the form they had (plaintext stays plaintext). Check the result ' +
+        '(npm run storage:check), then remove contents/data/blobs yourself. ' +
+        'Remove nothing else in contents/data: .at-rest.json and .at-rest-keycheck there are ' +
+        'needed to start with storage encryption on.'
     );
   } else {
     lines.push('Result: not complete. Correct the cause and run the command again.');

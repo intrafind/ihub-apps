@@ -6,6 +6,7 @@
  * objects, how failures are classified, the start-up check with its key check
  * object, and the configuration rules. All on the in-repo fake S3 server.
  */
+import './support/scratchContents.js';
 import fs from 'node:fs/promises';
 import fsSync from 'node:fs';
 import os from 'node:os';
@@ -23,7 +24,6 @@ import {
 } from './support/blobTestSupport.js';
 
 const scratch = fsSync.mkdtempSync(path.join(os.tmpdir(), 'ihub-s3-blobstore-'));
-process.env.CONTENTS_DIR = path.join(scratch, 'contents');
 const keyModule = await import('../crypto/KeyProvider.js');
 const storage = await import('../storage/index.js');
 const { resolveS3BlobConfig, createS3BlobBackend, S3BlobStore, classifyS3Error, isLoopbackHost } =
@@ -686,6 +686,8 @@ describe('S3 blob backend: configuration', () => {
       maxObjectBytes: 128 * 1024 * 1024,
       connectTimeoutMs: 5000,
       requestTimeoutMs: 60000,
+      operationTimeoutMs: 30000,
+      minThroughputBytesPerSecond: 1048576,
       maxAttempts: 3
     });
     const aws = resolveS3BlobConfig({ ...valid, endpoint: undefined, region: 'eu-central-1' });

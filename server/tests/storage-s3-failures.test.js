@@ -22,6 +22,7 @@
  * Every call that could hang runs under {@link within}: a hang fails the test
  * with a clear message instead of timing out the job.
  */
+import './support/scratchContents.js';
 import fs from 'node:fs/promises';
 import fsSync from 'node:fs';
 import os from 'node:os';
@@ -40,7 +41,6 @@ import {
 } from './support/serverProcess.js';
 
 const scratch = fsSync.mkdtempSync(path.join(os.tmpdir(), 'ihub-s3-failures-'));
-process.env.CONTENTS_DIR = path.join(scratch, 'contents');
 const keyModule = await import('../crypto/KeyProvider.js');
 const { ENVELOPE_HEADER_BYTES: HEADER_BYTES } = await import('../crypto/blobEnvelope.js');
 const { S3BlobStore, sendBudgetMs } = await import('../storage/providers/s3/S3BlobStore.js');
@@ -449,8 +449,8 @@ describe('S3 blob store: its own deadlines, with a client that never settles', (
       assert.equal(error.cause.code, 'LOCK_TIMEOUT');
       return unavailable(error);
     });
-    // HeadObject and DeleteObject (or HeadBucket), each 50 + 150 ms and the slack.
-    assert.deepEqual(waits, [2 * 1200 + 1000]);
+    // The budget of one command (50 + 150 ms and the slack) plus the slack once more.
+    assert.deepEqual(waits, [1200 + 1000]);
   });
 });
 
@@ -681,12 +681,45 @@ describe('the server process and its blob storage at start', () => {
     assert.equal((await boot(dir)).ready, true);
   });
 
+  it('refuses a prefix that holds a plaintext object, also with IHUB_S3_ADOPT_BUCKET=true', async () => {
+    const prefix = newPrefix();
+    const dir = await contentsFor({ endpoint: s3.endpoint, prefix, ...credentials() });
+    const stray = `${prefix}/default/chat-files/from-somewhere`;
+    s3.rawPut(BUCKET, stray, 'stored while encryption was off');
+    const marker = `${prefix}/default/_ihub/keycheck`;
+
+    for (const env of [{}, { IHUB_S3_ADOPT_BUCKET: 'true' }]) {
+      const refused = await boot(dir, env);
+      assert.equal(refused.ready, false, `started with ${JSON.stringify(env)}`);
+      assert.ok(
+        Number.isInteger(refused.exitCode) && refused.exitCode !== 0,
+        `exit ${refused.exitCode}`
+      );
+      assert.match(refused.output, /REMOTE_BLOBS_PLAINTEXT/);
+      assert.equal(s3.rawGet(BUCKET, marker), null, 'the key check object was written anyway');
+    }
+    assert.equal(
+      s3.rawGet(BUCKET, stray).toString(),
+      'stored while encryption was off',
+      'a refused start changes no object'
+    );
+    assert.deepEqual(await localBlobs(dir), []);
+  });
+
   it('refuses a prefix that holds objects but no key check object, unless IHUB_S3_ADOPT_BUCKET=true is set for that start', async () => {
     const prefix = newPrefix();
     const dir = await contentsFor({ endpoint: s3.endpoint, prefix, ...credentials() });
-    const foreign = `${prefix}/default/chat-files/from-somewhere`;
-    s3.rawPut(BUCKET, foreign, 'not written by this installation');
     const marker = `${prefix}/default/_ihub/keycheck`;
+    // An object sealed with this installation's key and no key check object:
+    // the first start writes the key check object (an envelope under this
+    // key); its bytes are kept under another name and the object is removed.
+    // Adopting is only for such buckets: a plaintext object refuses (above).
+    assert.equal((await boot(dir)).ready, true);
+    const sealed = s3.rawGet(BUCKET, marker);
+    assert.ok(sealed, 'the first start wrote the key check object');
+    const foreign = `${prefix}/default/chat-files/from-somewhere`;
+    s3.rawPut(BUCKET, foreign, sealed);
+    s3.rawDelete(BUCKET, marker);
 
     const refused = await boot(dir);
     assert.equal(refused.ready, false);
@@ -707,11 +740,7 @@ describe('the server process and its blob storage at start', () => {
     const adopted = await boot(dir, { IHUB_S3_ADOPT_BUCKET: 'true' });
     assert.equal(adopted.ready, true, adopted.output.slice(-1500));
     assert.ok(s3.rawGet(BUCKET, marker), 'adopting writes the key check object');
-    assert.equal(
-      s3.rawGet(BUCKET, foreign).toString(),
-      'not written by this installation',
-      'adopting changes no object'
-    );
+    assert.ok(s3.rawGet(BUCKET, foreign).equals(sealed), 'adopting changes no object');
     const warning = adopted.output
       .split('\n')
       .find(line => /adopt/i.test(line) && /"level":"warn"/.test(line));

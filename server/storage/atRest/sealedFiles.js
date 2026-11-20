@@ -27,9 +27,11 @@
  *
  * Whether a file is sealed is decided by its own format (the envelope
  * header), never by the mode. The mode comes from the storage start
- * ({@link configureSealedFiles}, called by `initializeStorage`); a process in
- * which storage was never started writes plaintext and still opens sealed
- * files.
+ * ({@link configureSealedFiles}, called by `initializeStorage`). A process in
+ * which storage is not started (before the start, after the shutdown, a
+ * command) does not fall back to plaintext: it works the mode out the way the
+ * start does, from the switch in `platform.json` and the state record, the
+ * first time a file is written or read.
  *
  * The one-time conversion of files written before (`./convert.js`, facet
  * `files`) uses {@link createSealedFilesTarget}.
@@ -45,7 +47,7 @@ import { ENVELOPE_HEADER_BYTES, plainLength } from '../../crypto/blobEnvelope.js
 import { isSealedFile, openFile, sealFile } from '../../crypto/fileSeal.js';
 import { atomicWriteFile } from '../../utils/atomicWrite.js';
 import { CorruptDocumentError, KeyUnavailableError, StorageError } from '../errors.js';
-import { isFacetComplete } from './state.js';
+import { isFacetComplete, readAtRestState } from './state.js';
 
 /** Name of the facet in the state record. */
 export const FILES_FACET = 'files';
@@ -107,8 +109,61 @@ const loadKeyModule = () => import('../../crypto/KeyProvider.js');
 
 /** @type {{enabled: boolean, state: Object|null, loadKeys: Function|null, keyProvider: Object|null}|null} */
 let context = null;
+/** What {@link resolveUnconfigured} found, while storage is not started. */
+let fallback = null;
 /** @type {Promise<Object>|null} */
 let loadedKeys = null;
+
+/**
+ * The switch and the state record as a storage start would find them, for a
+ * process in which storage is not started.
+ *
+ * @returns {Promise<{enabled: boolean, state: Object|null, loadKeys: null, keyProvider: null}>}
+ * @throws What reading the state record throws: an unreadable record is never
+ *   read as "encryption off".
+ */
+async function resolveUnconfigured() {
+  // One after the other: both pull in `config.js`, and a test runner that
+  // links modules itself cannot link one module from two imports at once.
+  const { loadJson } = await import('../../configLoader.js');
+  const storage = await import('../index.js');
+  const platformConfig = storage.withStartDecision((await loadJson('config/platform.json')) || {});
+  const { encryption } = storage.resolveStorageConfig(platformConfig);
+  if (!encryption.enabled)
+    return { enabled: false, state: null, loadKeys: null, keyProvider: null };
+  const baseDir = await storage.resolveStorageBaseDir(platformConfig);
+  return {
+    enabled: true,
+    state: baseDir ? await readAtRestState(baseDir) : null,
+    loadKeys: null,
+    keyProvider: null
+  };
+}
+
+/**
+ * The context in effect: what the storage start set, or what the
+ * configuration says while storage is not started.
+ *
+ * @returns {Promise<Object>}
+ */
+async function activeContext() {
+  if (context) return context;
+  if (!fallback) {
+    const pending = resolveUnconfigured();
+    fallback = pending;
+    // A failure is not remembered: the next call reads again.
+    pending.catch(() => {
+      if (fallback === pending) fallback = null;
+    });
+  }
+  return fallback;
+}
+
+/** The mode a context stands for. */
+function modeOf(active) {
+  if (!active?.enabled) return 'off';
+  return isFacetComplete(active.state, FILES_FACET) ? 'enforced' : 'converting';
+}
 
 /**
  * Tell this process how files are sealed. Called once storage has started,
@@ -129,27 +184,44 @@ export function configureSealedFiles({
   keyProvider = null
 } = {}) {
   context = { enabled: enabled === true, state, loadKeys, keyProvider };
+  fallback = null;
   loadedKeys = null;
 }
 
 /**
- * Forget what {@link configureSealedFiles} was told (storage shut down).
+ * Forget what {@link configureSealedFiles} was told (storage shut down). The
+ * next write or read works the mode out from the configuration again.
  *
  * @returns {void}
  */
 export function resetSealedFiles() {
   context = null;
+  fallback = null;
   loadedKeys = null;
 }
 
 /**
- * The mode of the sealed stores in this process.
+ * The mode the storage start set for the sealed stores of this process.
+ *
+ * Only what {@link configureSealedFiles} was told: `off` while storage is not
+ * started. Code that decides whether to seal or to accept plaintext uses
+ * {@link resolveSealedFilesMode}, which does not default to plaintext.
  *
  * @returns {'off'|'converting'|'enforced'}
  */
 export function sealedFilesMode() {
-  if (!context?.enabled) return 'off';
-  return isFacetComplete(context.state, FILES_FACET) ? 'enforced' : 'converting';
+  return modeOf(context);
+}
+
+/**
+ * The mode of the sealed stores, also while storage is not started: then it
+ * is worked out from `storage.encryption.enabled` and the state record.
+ *
+ * @returns {Promise<'off'|'converting'|'enforced'>}
+ * @throws When the state record exists and cannot be read.
+ */
+export async function resolveSealedFilesMode() {
+  return modeOf(await activeContext());
 }
 
 /**
@@ -162,8 +234,9 @@ async function keyProvider() {
   if (context?.keyProvider) return context.keyProvider;
   try {
     if (!loadedKeys) {
+      const loadKeys = context?.loadKeys || loadKeyModule;
       const pending = (async () => {
-        const keys = await (context?.loadKeys || loadKeyModule)();
+        const keys = await loadKeys();
         await keys.ensureMasterKey();
         return keys;
       })();
@@ -237,7 +310,7 @@ export function sealedFileName(...segments) {
  * await atomicWriteFile(file, await sealForDisk('agent-memory', 'research.md', text));
  */
 export async function sealForDisk(store, name, content) {
-  if (sealedFilesMode() === 'off') return content;
+  if ((await resolveSealedFilesMode()) === 'off') return content;
   try {
     return await sealFile({
       keyProvider: await keyProvider(),
@@ -269,7 +342,7 @@ export async function sealForDisk(store, name, content) {
 export async function openFromDisk(store, name, stored) {
   const bytes = Buffer.isBuffer(stored) ? stored : Buffer.from(String(stored ?? ''), 'utf8');
   if (!isSealedFile(bytes)) {
-    assertPlaintextReadable(store, name);
+    await assertPlaintextReadable(store, name);
     return bytes;
   }
   try {
@@ -292,11 +365,11 @@ export async function openFromDisk(store, name, stored) {
  *
  * @param {string} store - Store id.
  * @param {string} name - The file's name inside the store.
- * @returns {void}
+ * @returns {Promise<void>} Await it: the mode may have to be read first.
  * @throws {PlaintextFileError} While the mode is `enforced`.
  */
-export function assertPlaintextReadable(store, name) {
-  if (sealedFilesMode() !== 'enforced') return;
+export async function assertPlaintextReadable(store, name) {
+  if ((await resolveSealedFilesMode()) !== 'enforced') return;
   throw new PlaintextFileError(
     `${store}/${name} is stored in plaintext although encryption at rest is enforced`
   );
@@ -354,9 +427,26 @@ async function readHead(filePath) {
   }
 }
 
-/** Whether a directory entry is a file a store's service reads. */
-function isStoreFile(store, name) {
-  if (name.startsWith('.') || name.endsWith('.lock') || name.endsWith('.tmp')) return false;
+/**
+ * The scratch file of `atomicWriteFile` (`utils/atomicWrite.js`), which every
+ * sealed store writes through or beside: `.tmp_` and 16 hex digits. No file a
+ * service stores has that name.
+ */
+const ATOMIC_WRITE_SCRATCH = /^\.tmp_[0-9a-f]{16}$/;
+
+/**
+ * Whether a directory entry is a file a store's service reads.
+ *
+ * Only the store's own scratch files are left out, and they are recognised by
+ * their exact name. Nothing is left out by a pattern a stored file could
+ * match: an agent artifact may be called `yarn.lock` or `notes.tmp`.
+ *
+ * @param {Object} store - One of {@link SEALED_FILE_STORES}.
+ * @param {string} name - File name.
+ * @returns {boolean}
+ */
+export function isStoreFile(store, name) {
+  if (ATOMIC_WRITE_SCRATCH.test(name)) return false;
   return !store.suffix || name.endsWith(store.suffix);
 }
 

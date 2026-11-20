@@ -8,6 +8,7 @@
  *
  * @module tests/support/atRestTestSupport
  */
+import './scratchContents.js';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { FilesystemStorageProvider } from '../../storage/providers/filesystem/index.js';

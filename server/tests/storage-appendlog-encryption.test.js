@@ -7,6 +7,7 @@
  * envelope. Covers what is on disk, the three modes, mixed files, the
  * reserved properties and what a writer of the data directory cannot do.
  */
+import './support/scratchContents.js';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';

@@ -41,7 +41,8 @@ failure instead of a skip. Each run works under its own `test-<hex>` prefix and 
 | `scripts/s3-e2e.js` | real server process: login, upload, read, bucket scan, restart, delete, admin status | fake, or external when configured |
 | `scripts/s3-perf.js` | 25 MiB put/get: time, peak memory, event-loop stall; not in any default run | fake (own process), or external |
 
-Support: `support/serverProcess.js` (seed a contents directory, start/stop `server/server.js`),
+Support: `support/scratchContents.js` (the scratch contents directory, see "Test isolation"
+below), `support/serverProcess.js` (seed a contents directory, start/stop `server/server.js`),
 `support/s3DeleteRaceWorker.js`, `support/readableScanner.js`.
 
 ## Commands
@@ -58,6 +59,66 @@ npm run s3:up && export IHUB_TEST_S3_ENDPOINT=http://127.0.0.1:7070 IHUB_TEST_S3
 
 CI: `.github/workflows/s3-storage-tests.yml` does the last block and fails when anything was
 skipped (the conformance sections reported as `# SKIP not selected` are the only exception).
+
+## Test isolation: no test writes into the real `contents/`
+
+Added 2026-11-20 after a review found that nine storage tests used the real `contents/` of the
+checkout and three created `contents/.encryption-key` there.
+
+The cause: `server/config.js` reads `CONTENTS_DIR` once, when it is first loaded. Static `import`
+statements run before the body of a test file, so `process.env.CONTENTS_DIR = scratch` in the body
+came too late whenever a static import had already loaded server code (the support modules did).
+
+How it is solved, in three layers:
+
+1. **`server/tests/support/scratchContents.js`**: importing it creates a temporary directory, sets
+   `CONTENTS_DIR`, removes `TOKEN_ENCRYPTION_KEY` and `TOKEN_ENCRYPTION_KEY_PREVIOUS` from the
+   environment, loads `server/config.js` and fails when the server does not use the scratch
+   directory. It exports `contentsDir`, `dataDir` and `scratchRoot`. It must be the **first**
+   import of a test file. `blobTestSupport.js`, `atRestTestSupport.js` and `s3DeleteRaceWorker.js`
+   import it first themselves, so a test that forgets it is still safe when it starts with one of
+   them. A test that must set other variables before the configuration loads (`JWT_SECRET`,
+   proxy variables) sets them and then writes `await import('./support/scratchContents.js')`;
+   see `consentTicket.test.js` and `storage-s3-proxy.test.js`.
+2. **`seedContents()` in `support/serverProcess.js`** runs the migrations with `APP_ROOT_DIR`
+   pointing at a temporary root whose `contents` is a link to the scratch directory. Migration
+   V042 (applied, must not be edited) builds its paths from the installation root and ignores
+   `CONTENTS_DIR`; without the link it created four directories in the real `contents/`.
+3. **`scripts/lib/realContentsGuard.js`**, called by `scripts/run-server-tests.js`: it records the
+   real `contents/` before the tests and compares afterwards. A created, changed or removed
+   `contents/.encryption-key*`, or any change below `contents/data`, fails the run and lists the
+   paths. Other changes are printed as a notice. `CONTENTS_GUARD=off` turns it off (for a run
+   while a development server writes into the same `contents/`). The S3 workflow has its own
+   step that fails when `contents/` exists after the run.
+
+To find the test behind a guard failure, run the suspects one at a time
+(`node scripts/run-server-tests.js <file name>`); the guard runs for every invocation.
+
+Rules for a new test: import `scratchContents.js` first; never set `CONTENTS_DIR` yourself; never
+build a path from the repository root plus `contents`.
+
+Still open (older tests, not part of the S3 work, found with a write-recording hook on a full run):
+
+- `chatAuthRequired-anonymous.test.js` and `ntlmAuth-domain.test.js` write and delete
+  `contents/config/groups.json` of the checkout on purpose (the code under test reads that path).
+- Fifteen jest files of the admin routes (`admin-chat-history`, `admin-delete-user`,
+  `admin-proxy-config`, `admin-users-concurrent-writes`, `admin*RoutesErrors`, `aiAcknowledgement`,
+  `llm-timeouts-admin-route`, `rate-limits-admin-route`, `setupRoutesErrors`) create and remove
+  `contents/config/.admin-invariants.lock`.
+- A full run also creates `contents/.usage-pepper` and `contents/config/integrations.json`.
+- A full run appends to `contents/data/audit-log/<date>.jsonl` (chat shares, OAuth client
+  registration, login and logout) and writes one line to
+  `contents/data/integration-action-usage/<date>.jsonl`. The test files behind this were not
+  found: no file does it when it runs alone or in a group of 30 (searched with a script that ran
+  every file and looked at `contents/data` after each group). Both paths are listed in
+  `KNOWN_DATA_LEAKS` in `scripts/lib/realContentsGuard.js`, so the guard prints them as notices.
+  Remove the entries when the tests are found and fixed. A way to find them: run the full suite
+  with a preload (`NODE_OPTIONS=--import=...`) that wraps `fs.promises.open` and the `FileHandle`
+  write methods as well as `appendFile`, and logs the stack; a first attempt that wrapped only the
+  `fs` functions saw 4 of the 45 lines.
+
+The first three are below `contents/config` or beside it, so the guard reports them as notices. They should
+move to the scratch directory too; then the guard can fail on any change below `contents/`.
 
 ## Rules
 

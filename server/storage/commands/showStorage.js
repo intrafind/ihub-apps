@@ -127,7 +127,8 @@ export async function main(
     }
     if (kind === '--file') {
       const keys = await loadKeys();
-      await keys.ensureMasterKey();
+      // Reading never creates a key.
+      await keys.ensureMasterKey({ create: false });
       const file =
         typeof provider.contentsDir === 'string'
           ? await readStoreFile({

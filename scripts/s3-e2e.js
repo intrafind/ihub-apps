@@ -336,30 +336,16 @@ async function main() {
       return `left in the bucket: ${rest.join(', ') || 'nothing'}`;
     });
 
-    {
+    // The route ships with the S3 backend: a 404 here is a failure like any
+    // other status (a removed route or a lost registration must not pass).
+    await step('GET /api/admin/storage reports the S3 blob store and no credentials', async () => {
       const answer = await client.request('GET', '/api/admin/storage');
-      if (answer.status === 404) {
-        record(
-          'NOTE',
-          'GET /api/admin/storage',
-          'SKIPPED: the route answers 404 (not in this build); nothing was checked'
-        );
-      } else {
-        await step(
-          'GET /api/admin/storage reports the S3 blob store and no credentials',
-          async () => {
-            expect(answer.status === 200, `answered ${answer.status}`);
-            const text = answer.bytes.toString('utf8');
-            expect(
-              !text.includes(s3Block.secretAccessKey),
-              'the secret access key is in the answer'
-            );
-            expect(/s3/.test(text), 'the answer does not mention s3');
-            return text.slice(0, 400);
-          }
-        );
-      }
-    }
+      expect(answer.status === 200, `answered ${answer.status}`);
+      const text = answer.bytes.toString('utf8');
+      expect(!text.includes(s3Block.secretAccessKey), 'the secret access key is in the answer');
+      expect(/s3/.test(text), 'the answer does not mention s3');
+      return text.slice(0, 400);
+    });
 
     await step(
       'stop the server; the log holds neither the marker nor the secret access key',

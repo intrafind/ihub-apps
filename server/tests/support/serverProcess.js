@@ -21,6 +21,7 @@
 import { spawn } from 'node:child_process';
 import fs from 'node:fs/promises';
 import { createServer } from 'node:net';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -77,10 +78,46 @@ function run(args, env) {
 }
 
 /**
+ * A temporary installation root for the seed child: every top-level entry of
+ * the repository as a symbolic link, and `contents` as a link to the scratch
+ * contents directory.
+ *
+ * Why: a few applied migrations build their paths as
+ * `<installation root>/contents/...` and ignore `CONTENTS_DIR` (V042 creates
+ * `agents/profiles`, `agents/memory`, `data/agent-inboxes` and
+ * `data/agent-artifacts` that way). An applied migration must not be edited,
+ * so without this the seed child creates those directories in the real
+ * `contents/` of the checkout. With `APP_ROOT_DIR` set to this root they land
+ * in the scratch directory, where an installation has them too.
+ *
+ * Limitation: this covers code that asks `getRootDir()` (`server/pathUtils.js`).
+ * Code that derived the root from its own file location would still reach the
+ * checkout; `scripts/lib/realContentsGuard.js` reports that after a test run.
+ *
+ * @param {string} contentsDir - Absolute path of the scratch contents directory.
+ * @returns {Promise<string>} Absolute path of the temporary root. Remove it
+ *   with `fs.rm(root, { recursive: true })`: that unlinks the links and does
+ *   not follow them.
+ */
+async function linkInstallationRoot(contentsDir) {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-seed-root-'));
+  for (const entry of await fs.readdir(REPO_ROOT)) {
+    if (entry === 'contents') continue;
+    await fs.symlink(path.join(REPO_ROOT, entry), path.join(root, entry));
+  }
+  await fs.symlink(contentsDir, path.join(root, 'contents'), 'dir');
+  return root;
+}
+
+/**
  * Turn an empty directory into a fresh installation: default configuration
  * copied and every migration applied, exactly as the server's own first start
  * does it (`startup/bootstrap.js`, `prepareContents`), without starting the
  * server. The storage settings can then be written before the first boot.
+ *
+ * The child runs with `APP_ROOT_DIR` pointing at a temporary root whose
+ * `contents` is `contentsDir` (see {@link linkInstallationRoot}), so nothing is
+ * created in the real `contents/` of the checkout.
  *
  * @param {string} contentsDir - Absolute path of an empty directory.
  * @returns {Promise<string>} `contentsDir`.
@@ -90,7 +127,17 @@ export async function seedContents(contentsDir) {
   await fs.mkdir(contentsDir, { recursive: true });
   const script =
     "const m = await import('./server/startup/bootstrap.js'); await m.prepareContents(); process.exit(0);";
-  const { code, output } = await run(['--input-type=module', '-e', script], childEnv(contentsDir));
+  const root = await linkInstallationRoot(contentsDir);
+  let result;
+  try {
+    result = await run(
+      ['--input-type=module', '-e', script],
+      childEnv(contentsDir, { APP_ROOT_DIR: root })
+    );
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+  const { code, output } = result;
   const platform = path.join(contentsDir, 'config', 'platform.json');
   if (code !== 0 || !(await fs.stat(platform).catch(() => null))) {
     throw new Error(`Seeding ${contentsDir} failed (exit ${code}): ${output.slice(-1500)}`);

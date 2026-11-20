@@ -25,6 +25,8 @@ import path from 'node:path';
 import { getRootDir } from '../pathUtils.js';
 import logger from './logger.js';
 import { getContentsPath } from './contentsPath.js';
+import { atomicWriteJSON } from './atomicWrite.js';
+import config from '../config.js';
 
 /**
  * The tool files of iHub's own features, retired from `contents/tools/` by
@@ -386,6 +388,76 @@ export function wasContentsFreshlySeeded() {
   return freshlySeeded;
 }
 
+/** Where an installation keeps runtime data, relative to the contents directory. */
+const STORAGE_DATA_DIRS = Object.freeze([config.DATA_DIR || 'data', path.join('agents', 'memory')]);
+
+/**
+ * Whether a contents directory already holds storage data: at least one
+ * regular file, at any depth, under `data/` (the configured `DATA_DIR`) or
+ * under `agents/memory/`, not counting files named `.gitkeep`.
+ *
+ * That is what tells an installation that lost its `platform.json` (deleted,
+ * or the config directory is not on the persistent volume) from a new one.
+ * Symbolic links are not followed. A data directory configured elsewhere
+ * (`storage.filesystem.baseDir`) cannot be seen here: the setting was in the
+ * file that is missing.
+ *
+ * @param {string} [contentsPath] - Absolute contents directory.
+ * @returns {Promise<boolean>}
+ */
+export async function contentsHoldStorageData(contentsPath = getContentsPath()) {
+  const holdsFile = async dir => {
+    let entries;
+    try {
+      entries = await fs.readdir(dir, { withFileTypes: true });
+    } catch {
+      return false;
+    }
+    for (const entry of entries) {
+      if (entry.isFile() && entry.name !== '.gitkeep') return true;
+      if (entry.isDirectory() && (await holdsFile(path.join(dir, entry.name)))) return true;
+    }
+    return false;
+  };
+  for (const relative of STORAGE_DATA_DIRS) {
+    if (await holdsFile(path.join(contentsPath, relative))) return true;
+  }
+  return false;
+}
+
+/**
+ * Switch storage encryption off in a `platform.json` that was just copied
+ * from the defaults into a contents directory that already holds data.
+ *
+ * The default file switches encryption on, which is right for a new
+ * installation. Here it would convert all existing data although nobody
+ * decided that, possibly under a key that is not on a persistent volume.
+ *
+ * @param {string} [contentsPath] - Absolute contents directory.
+ * @returns {Promise<boolean>} Whether the file was changed.
+ */
+export async function disableEncryptionInSeededConfig(contentsPath = getContentsPath()) {
+  const file = path.join(contentsPath, 'config', 'platform.json');
+  let platform;
+  try {
+    platform = JSON.parse(await fs.readFile(file, 'utf8'));
+  } catch {
+    return false;
+  }
+  if (platform?.storage?.encryption?.enabled !== true) return false;
+  platform.storage.encryption.enabled = false;
+  await atomicWriteJSON(file, platform);
+  logger.warn(
+    'contents/config/platform.json was missing and has been created from the defaults, but this ' +
+      'contents directory already holds data. Storage encryption (storage.encryption.enabled) ' +
+      'was therefore written as false: existing data is not converted without a decision. ' +
+      'Restore your platform.json if it was lost; to encrypt the stored data, set ' +
+      'storage.encryption.enabled to true and restart.',
+    { component: 'Setup', code: 'STORAGE_ENCRYPTION_NOT_DEFAULTED' }
+  );
+  return true;
+}
+
 /**
  * Performs initial setup by copying any missing default configuration files
  * This function should be called during server startup
@@ -397,9 +469,15 @@ export async function performInitialSetup() {
     // migration runner records such an install at its baseline instead of
     // treating an old contents directory as fresh.
     freshlySeeded = !(await pathExists(path.join(getContentsPath(), 'config', 'platform.json')));
+    // Looked at before anything is copied: the defaults themselves must not
+    // count as data.
+    const holdsData = freshlySeeded && (await contentsHoldStorageData());
     logger.info('Checking for missing default configuration files', { component: 'Setup' });
 
     const filesCopied = await copyDefaultConfiguration();
+    // The default platform.json switches storage encryption on. That is for
+    // a new installation, not for one that lost its platform.json.
+    if (holdsData) await disableEncryptionInSeededConfig();
 
     if (filesCopied) {
       logger.info('Initial setup completed - missing default files have been copied', {

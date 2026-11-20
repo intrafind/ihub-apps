@@ -128,8 +128,17 @@ const WRAP_VERSION = 1;
 const IV_BYTES = 12;
 const TAG_BYTES = 16;
 
+/**
+ * The id of a master key: the first 8 hex digits of the SHA-256 of its hex
+ * form in lower case, without surrounding whitespace. Normalised here, so the
+ * current and a previous key get the same id however a reader spells them.
+ */
 function fingerprintOf(hexKey) {
-  return crypto.createHash('sha256').update(String(hexKey)).digest('hex').slice(0, 8);
+  return crypto
+    .createHash('sha256')
+    .update(String(hexKey).trim().toLowerCase())
+    .digest('hex')
+    .slice(0, 8);
 }
 
 /**
@@ -155,7 +164,8 @@ export class LocalFileKeyProvider extends KeyProvider {
 
   _keys() {
     const keys = [];
-    const current = this._readMasterKey();
+    const rawCurrent = this._readMasterKey();
+    const current = typeof rawCurrent === 'string' ? rawCurrent.trim().toLowerCase() : '';
     if (current) keys.push({ keyId: fingerprintOf(current), key: Buffer.from(current, 'hex') });
     // Trimmed like the current key (`TokenStorageService`): a trailing newline
     // from a secret store must not make every older object unreadable.
@@ -174,6 +184,16 @@ export class LocalFileKeyProvider extends KeyProvider {
       );
     }
     return keys;
+  }
+
+  /**
+   * The ids of every master key held here: the current one and, when set, the
+   * previous one.
+   *
+   * @returns {Promise<string[]>} Empty when no key is initialized.
+   */
+  async knownKeyIds() {
+    return this._keys().map(entry => entry.keyId);
   }
 
   async currentKeyId() {
@@ -307,10 +327,16 @@ export function describeMasterKey() {
  * the rest of the server (and inside migrations), so it cannot rely on the
  * key having been set up by then.
  *
+ * @param {Object} [options]
+ * @param {boolean} [options.create=true] - Generate and save a key when there
+ *   is none. False for a check that must change nothing (`storage:check`,
+ *   `storage:encrypt --dry-run`): the answer then says `initialized: false`.
  * @returns {Promise<{initialized: boolean, source: string|null, fingerprint: string|null, keyId: string|null}>}
  */
-export async function ensureMasterKey() {
-  if (!tokenStorageService.encryptionKey) await tokenStorageService.initializeEncryptionKey();
+export async function ensureMasterKey({ create = true } = {}) {
+  if (!tokenStorageService.encryptionKey) {
+    await tokenStorageService.initializeEncryptionKey({ create });
+  }
   return describeMasterKey();
 }
 

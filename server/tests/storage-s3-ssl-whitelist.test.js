@@ -11,6 +11,7 @@
  * One fake S3 server with a self-signed certificate is reached under two host
  * names. `localhost` is on the whitelist, `127.0.0.1` is not.
  */
+import './support/scratchContents.js';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import http from 'node:http';
@@ -23,7 +24,6 @@ import { startFakeS3Server } from './support/fakeS3Server.js';
 import { fixedKeys, s3ConfigFor } from './support/blobTestSupport.js';
 
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'ihub-s3-tls-'));
-process.env.CONTENTS_DIR = path.join(scratch, 'contents');
 const keyModule = await import('../crypto/KeyProvider.js');
 const { createS3BlobBackend } = await import('../storage/providers/s3/index.js');
 const { createDedicatedAgent, shouldIgnoreSSLForURL, readSSLConfig, TlsForwardingHttpsProxyAgent } =

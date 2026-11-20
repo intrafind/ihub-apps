@@ -56,6 +56,7 @@ const MAX_NAMED = 20;
  * @property {FacetCount} blobs
  * @property {FacetCount} files - Files of the stores outside the storage layer.
  * @property {number} records - Plaintext log records, over all streams.
+ * @property {number} sealedRecords - Sealed log records, over all streams.
  * @property {number} tornLines - Log lines that are no record (dropped when
  *   their stream is rewritten).
  * @property {string[]} unreadable - The first unreadable objects, by name.
@@ -154,6 +155,14 @@ export function isEmptyStorage(report) {
  * @param {(event: {facet: string, name: string}) => void} [options.onProgress] -
  *   Called once per object.
  * @param {number} [options.concurrency=16]
+ * @param {boolean} [options.verify=false] - With `dryRun`: open records of
+ *   every append-log stream instead of only counting its lines (see
+ *   `inspectStreamFile`); what does not open is counted in `streams.failed`.
+ *   The pass that decides whether a facet is recorded complete asks for it.
+ * @param {boolean} [options.removeScratch=false] - Remove scratch files an
+ *   interrupted conversion left in the log tree. Only under the conversion lease.
+ * @param {Iterable<string>} [options.knownKeyIds] - Master key ids held here;
+ *   encrypted blobs naming another are counted in `blobs.foreign`.
  * @returns {Promise<ConversionReport>}
  * @throws {import('../errors.js').KeyUnavailableError} When a data key cannot
  *   be wrapped. What was sealed until then stays sealed.
@@ -169,7 +178,10 @@ export async function convertStorage(
     facets = ['blobs', 'documents', 'logs', 'files'],
     signal,
     onProgress,
-    concurrency = CONVERT_CONCURRENCY
+    concurrency = CONVERT_CONCURRENCY,
+    verify = false,
+    removeScratch = false,
+    knownKeyIds = null
   } = {}
 ) {
   /** @type {ConversionReport} */
@@ -182,6 +194,7 @@ export async function convertStorage(
     blobs: emptyCount(),
     files: emptyCount(),
     records: 0,
+    sealedRecords: 0,
     tornLines: 0,
     unreadable: []
   };
@@ -205,6 +218,7 @@ export async function convertStorage(
         namespaces,
         dryRun,
         signal,
+        knownKeyIds,
         onProgress: ({ namespace, key }) =>
           onProgress?.({ facet: 'blobs', name: `${namespace}/${key}` })
       });
@@ -212,6 +226,9 @@ export async function convertStorage(
       report.blobs.plaintext = result.encrypted;
       report.blobs.sealed = result.alreadyEncrypted;
       report.blobs.failed = result.failed;
+      report.blobs.plaintextBytes = result.plaintextBytes;
+      report.blobs.largestBytes = result.largestBytes;
+      report.blobs.foreign = result.foreign;
       if (result.aborted) report.aborted = true;
     } finally {
       if (!dryRun && inner && 'keepModificationTime' in inner) inner.keepModificationTime = false;
@@ -246,13 +263,20 @@ export async function convertStorage(
   }
 
   if (logs && facets.includes('logs') && !report.aborted) {
-    const targets = await logs.atRestTargets();
+    const targets = await logs.atRestTargets({ removeScratch: removeScratch && !dryRun });
     const streamsDone = await eachLimited(targets.streams, concurrency, signal, async file => {
       const count = report.streams;
       count.scanned += 1;
-      const found = dryRun ? await logs.inspectStreamFile(file) : await logs.sealStreamFile(file);
+      const found = dryRun
+        ? await logs.inspectStreamFile(file, { verify })
+        : await logs.sealStreamFile(file);
       report.records += found.plain;
+      report.sealedRecords += found.sealed;
       report.tornLines += found.torn;
+      if (found.damaged > 0) {
+        count.failed += 1;
+        name(`stream ${file} (${found.damaged} records or key lines do not open)`);
+      }
       if (found.plain > 0) plain(count, found.bytes ?? 0);
       else count.sealed += 1;
       onProgress?.({ facet: 'logs', name: file });

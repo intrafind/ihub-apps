@@ -73,7 +73,7 @@ function safeName(name) {
  */
 async function readIfSealed(file, name) {
   if (!(await isSealedOnDisk(file))) {
-    assertPlaintextReadable(ARTIFACT_STORE, name);
+    await assertPlaintextReadable(ARTIFACT_STORE, name);
     return null;
   }
   // lgtm[js/path-injection] -- file path canonicalized within artifacts root.

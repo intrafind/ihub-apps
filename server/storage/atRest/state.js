@@ -9,7 +9,8 @@
  *
  *   { "format": 1,
  *     "state": "off" | "converting" | "complete",
- *     "facets": { "blobs": 1, "documents": 1, "logs": 1, "files": 1 },
+ *     "facets": { "blobs": 1, "documents": 1, "logs": 1, "files": 1, "remoteBlobs": 1 },
+ *     "remoteBlobStore": "s3:host/bucket/prefix/",
  *     "keyId": "1a2b3c4d",
  *     "startedAt": "…", "completedAt": "…", "disabledAt": "…",
  *     "converted": { "documents": 0, "streams": 0, "spillBlobs": 0, "blobs": 0, "files": 0 },
@@ -50,6 +51,13 @@ export const AT_REST_STATE_FORMAT = 1;
  * are the stores outside the storage layer (`./sealedFiles.js`).
  */
 export const CURRENT_FACETS = Object.freeze({ blobs: 1, documents: 1, logs: 1, files: 1 });
+
+/**
+ * Facet of the record for the blobs of a remote blob backend (a bucket). Not
+ * part of {@link CURRENT_FACETS}: it only exists on an installation whose
+ * blobs are remote, and it is bound to one bucket (`remoteBlobStore`).
+ */
+export const REMOTE_BLOBS_FACET = 'remoteBlobs';
 
 /** The states a record can be in. */
 export const AT_REST_STATES = Object.freeze(['off', 'converting', 'complete']);
@@ -182,4 +190,17 @@ export function isConversionComplete(state) {
  */
 export function recordsSealedData(state) {
   return typeof state?.keyId === 'string' && state.keyId.length > 0;
+}
+
+/**
+ * Whether the record says that one bucket holds only encrypted blobs.
+ *
+ * @param {Object|null} state
+ * @param {string} targetId - Backend, endpoint host, bucket and prefix, as the
+ *   conversion names them. Another bucket than the recorded one is not covered.
+ * @returns {boolean}
+ */
+export function isRemoteBlobFacetComplete(state, targetId) {
+  if (!state || state.state === 'off') return false;
+  return (state.facets?.[REMOTE_BLOBS_FACET] ?? 0) >= 1 && state.remoteBlobStore === targetId;
 }

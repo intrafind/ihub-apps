@@ -8,6 +8,7 @@
  *
  * @module tests/support/blobTestSupport
  */
+import './scratchContents.js';
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import os from 'node:os';

@@ -6,6 +6,7 @@
  * vectors still open, and a record opens only in its stream, under its key
  * line and at its sequence number; a spill blob only at its stream and name.
  */
+import './support/scratchContents.js';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -13,7 +14,6 @@ import { after, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'ihub-log-seal-'));
-process.env.CONTENTS_DIR = path.join(scratch, 'contents');
 const keyModule = await import('../crypto/KeyProvider.js');
 const seal = await import('../crypto/logSeal.js');
 const { blobAssociatedData } = await import('../crypto/blobEnvelope.js');

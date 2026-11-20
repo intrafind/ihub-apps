@@ -24,7 +24,7 @@
  *
  * @module storage/providers/s3/s3Client
  */
-import { S3_MAX_SOCKETS } from './s3Config.js';
+import { S3_MAX_SOCKETS, isLinkLocalHost } from './s3Config.js';
 
 /**
  * Build the client.
@@ -50,7 +50,11 @@ export async function createS3Client(config, { platformConfig = null } = {}) {
   const { agent, routing, tlsBypass } = createDedicatedAgent(config.endpoint, {
     keepAlive: true,
     maxSockets: S3_MAX_SOCKETS,
-    platformConfig: platformConfig || {}
+    platformConfig: platformConfig || {},
+    // The endpoint rules refuse a link-local address in the configuration; a
+    // name that resolves to one (a cloud metadata service) is refused here.
+    refuseAddress: address =>
+      isLinkLocalHost(address) ? 'the S3 endpoint resolves to a link-local address' : null
   });
   const client = new sdk.S3Client({
     endpoint: config.endpoint,

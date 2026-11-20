@@ -16,7 +16,6 @@
  * `IHUB_TEST_S3_REQUIRED=1` a missing or unreachable server fails them.
  */
 import fs from 'node:fs/promises';
-import fsSync from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -29,9 +28,8 @@ import { KEY_PREFIX_SEGMENTS } from '../storage/namespaces.js';
 import { composeS3Provider, fixedKeys } from './support/blobTestSupport.js';
 import { describeS3Targets } from './support/s3TestBackend.js';
 
-// The key module reads the contents directory when it is imported.
-const scratchContents = fsSync.mkdtempSync(path.join(os.tmpdir(), 'ihub-s3-ext-conf-'));
-process.env.CONTENTS_DIR = scratchContents;
+// The key module reads the contents directory when it is imported; the first
+// import above (`scratchContents.js`) has pointed it at a scratch directory.
 const keyModule = await import('../crypto/KeyProvider.js');
 
 /**
@@ -61,8 +59,6 @@ const CAPABILITIES = {
 };
 
 const SECTIONS = ['lifecycle', 'the blob facet', 'key-prefix listings', 'prefix deletes'];
-
-after(() => fs.rm(scratchContents, { recursive: true, force: true }));
 
 for (const [title, encryption] of [
   ['encryption on', { enabled: true, plaintextReads: 'reject' }],

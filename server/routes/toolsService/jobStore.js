@@ -261,7 +261,7 @@ export async function completeJob(job, { result, contentType, filename }) {
 export async function readSealedResult(job) {
   const name = path.basename(job.resultFile);
   if (!(await isSealedOnDisk(job.resultFile))) {
-    assertPlaintextReadable(RESULT_STORE, name);
+    await assertPlaintextReadable(RESULT_STORE, name);
     return null;
   }
   return openFromDisk(RESULT_STORE, name, await fs.readFile(job.resultFile));

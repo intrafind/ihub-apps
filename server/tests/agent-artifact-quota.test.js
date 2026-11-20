@@ -15,9 +15,9 @@
  * Run directly: `node server/tests/agent-artifact-quota.test.js`.
  */
 
+import { contentsDir } from './support/scratchContents.js';
 import fs from 'fs/promises';
 import path from 'path';
-import { getRootDir } from '../pathUtils.js';
 import { writeArtifactDirect } from '../agents/runtime/artifactStore.js';
 
 let failures = 0;
@@ -28,10 +28,11 @@ function check(label, cond, details) {
 }
 
 async function run() {
-  // Use a unique run id under the real artifacts root. The store creates
+  // Use a unique run id under the artifacts root of the scratch contents
+  // directory (`support/scratchContents.js`). The store creates
   // the directory itself; we clean it up at the end.
   const runId = `quota-test-${Date.now()}`;
-  const root = path.join(getRootDir(), 'contents', 'data', 'agent-artifacts');
+  const root = path.join(contentsDir, 'data', 'agent-artifacts');
   const runDir = path.join(root, runId);
 
   try {

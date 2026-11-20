@@ -16,6 +16,13 @@
  * Each group is run with one invocation. The process exits non-zero when either
  * group fails.
  *
+ * The run also fails when it wrote into the real `contents/` directory of the
+ * checkout: the master key file, or storage data below `contents/data`
+ * (`scripts/lib/realContentsGuard.js`). Tests use a scratch directory
+ * (`server/tests/support/scratchContents.js`); this check catches the one that
+ * does not. `CONTENTS_GUARD=off` turns the check off, for a run while a
+ * development server is writing into the same `contents/`.
+ *
  * Usage:
  *   node scripts/run-server-tests.js            # all tests
  *   node scripts/run-server-tests.js <substr>   # only files whose path contains <substr>
@@ -26,6 +33,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import {
+  compareContents,
+  formatContentsReport,
+  snapshotContents
+} from './lib/realContentsGuard.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -119,6 +131,11 @@ if (listOnly) {
 const env = { ...process.env, NODE_ENV: process.env.NODE_ENV || 'test' };
 let failed = false;
 
+// The real contents directory of this checkout, as it is before the tests run.
+const realContentsDir = path.join(root, 'contents');
+const guardContents = process.env.CONTENTS_GUARD !== 'off';
+const contentsBefore = guardContents ? snapshotContents(realContentsDir) : null;
+
 if (nodeFiles.length > 0) {
   console.log(`\n[server tests] node:test group: ${nodeFiles.length} files`);
   const r = spawnSync(process.execPath, ['--test', ...nodeFiles], {
@@ -141,6 +158,12 @@ if (jestFiles.length > 0) {
     { cwd: path.join(root, 'server'), env, stdio: 'inherit' }
   );
   if (r.status !== 0) failed = true;
+}
+
+if (guardContents) {
+  const report = compareContents(contentsBefore, snapshotContents(realContentsDir));
+  for (const line of formatContentsReport(report, realContentsDir)) console.error(line);
+  if (report.violations.length > 0) failed = true;
 }
 
 process.exit(failed ? 1 : 0);

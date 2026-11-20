@@ -12,12 +12,20 @@ agent inboxes, agent artifacts, tool-job results and short links.
 - Turning it on converts the stored data once, at the next start, before the server accepts
   requests. Run `npm run storage:encrypt -- --dry-run` first: it counts the data, checks the free
   disk space and estimates the duration. For large installations and network volumes, run
-  `npm run storage:encrypt` with the server stopped, then start.
+  `npm run storage:encrypt` with the server stopped, then start. Stop every server that uses the
+  volume first: a second run of the command is refused, a server that starts meanwhile waits, but
+  a server that is already running is not detected.
 - **The encryption key now protects the content.** If `contents/.encryption-key` (or
   `TOKEN_ENCRYPTION_KEY`) is lost, the encrypted chats and files are lost. The server refuses to
-  start without the key instead of creating a new one. Back the key up apart from the data.
+  start without the key instead of creating a new one. A key file that exists but holds no usable
+  key (empty, cut short) also stops the start and is never replaced. Back the key up apart from
+  the data.
+- If `platform.json` is missing on a `contents/` folder that already holds data, it is created
+  with the switch off, so existing data is never converted without a decision.
 - **There is no way back to an older release** once data is encrypted, except from a backup taken
-  before. Turning the switch off stops encrypting new data and decrypts nothing.
+  before. A release before this one cannot read encrypted data: it treats an encrypted chat, file
+  or log as damaged. Turning the switch off stops encrypting new data and decrypts nothing.
+  This also holds for a new installation, where the switch is on from the first start.
 - With the key file in `contents/` (the default), a copy of that folder still reads everything.
   Keep the key apart, for example in `TOKEN_ENCRYPTION_KEY` from a secret store.
 - Not encrypted: file names, user ids, sizes and times, `feedback.jsonl`, temporary upload files,
@@ -51,12 +59,15 @@ can now be kept in an S3-compatible bucket instead of the local disk.
 - Chats, logs and the configuration stay in `contents/`. The server still needs its volume, and S3
   does not make iHub multi-instance.
 - With storage encryption on, every object is encrypted by iHub before upload. With it off, files
-  are uploaded as they are and the server warns at every start. Decide this before the first
-  upload: objects already in a bucket are not converted.
+  are uploaded as they are and the server warns at every start. When the switch is turned on for a
+  bucket that already holds unencrypted files, the server does not start
+  (`REMOTE_BLOBS_PLAINTEXT`) until `npm run storage:encrypt` has encrypted them in the bucket,
+  with every server stopped.
 - The bucket must exist. If the bucket cannot be reached, the credentials are wrong or the
   encryption key does not match the bucket, the server does not start. It never falls back to the
   local disk.
 - `npm run storage:check` tests the configuration without the server and names the failing step.
+  It creates no encryption key; on a new installation, start the server once before the check.
 - Files uploaded before the switch stay on local disk and cannot be opened until
   `npm run storage:copy-blobs` has copied them, with the server stopped. The command deletes
   nothing.
@@ -65,6 +76,9 @@ can now be kept in an S3-compatible bucket instead of the local disk.
   the status of the last check).
 - The admin backup export does not contain the bucket. Back up the bucket separately; the backup
   page says so.
+- iHub does not check the bucket's versioning, object lock or lifecycle rules, and does not warn
+  about them. With versioning or object lock on, deleted files stay in the bucket. Check these
+  settings yourself (`docs/storage.md`, "Versioning and object lock").
 - The settings need a restart. There is no admin form yet.
 - Tested against the S3 server that ships with iHub for development (`npm run s3:dev`). AWS S3 and
   other S3 products have not been tested yet; try your service with `npm run storage:check` and a

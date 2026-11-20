@@ -8,6 +8,7 @@
  * storage provider (upload, text, pick, refresh, quotas, scan, reconciler)
  * and the multipart route.
  */
+import './support/scratchContents.js';
 import fs from 'node:fs/promises';
 import http from 'node:http';
 import os from 'node:os';

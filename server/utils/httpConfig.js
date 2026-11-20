@@ -903,6 +903,35 @@ export function createAgentWithTls(url = '', tlsOptions = {}) {
 }
 
 /**
+ * A `dns.lookup`-compatible function that fails when a resolved address is
+ * one the caller refuses.
+ *
+ * @param {Function} inner - The lookup to wrap.
+ * @param {(address: string, family: number) => string|null} refuseAddress -
+ *   Answers a reason to refuse an address, or null.
+ * @returns {Function}
+ */
+export function refusingLookup(inner, refuseAddress) {
+  return (hostname, options, callback) => {
+    const done = typeof options === 'function' ? options : callback;
+    const lookupOptions = typeof options === 'function' ? {} : options;
+    return inner(hostname, lookupOptions, (error, address, family) => {
+      if (error) return done(error);
+      const found = Array.isArray(address) ? address : [{ address, family }];
+      for (const entry of found) {
+        const reason = refuseAddress(entry.address, entry.family);
+        if (reason) {
+          return done(
+            Object.assign(new Error(`${reason} (${hostname})`), { code: 'ERR_ADDRESS_REFUSED' })
+          );
+        }
+      }
+      return done(null, address, family);
+    });
+  };
+}
+
+/**
  * A keep-alive agent for one endpoint that the caller owns and may destroy,
  * built with the routing and TLS rules of `createAgent`: the proxy
  * configuration (`describeProxyRouting`), the SSL whitelist bypass
@@ -924,6 +953,10 @@ export function createAgentWithTls(url = '', tlsOptions = {}) {
  * @param {number} [options.maxSockets] - Connections kept to the endpoint.
  * @param {Object} [options.platformConfig] - Read `ssl` and `proxy` from this
  *   platform configuration (placeholders resolved) instead of the cache.
+ * @param {(address: string, family: number) => string|null} [options.refuseAddress] -
+ *   Called with every address the endpoint's name resolves to; a returned
+ *   reason fails the connection with `ERR_ADDRESS_REFUSED`. Applies to a
+ *   direct connection; through a proxy the proxy resolves the name.
  * @returns {{agent: http.Agent|https.Agent, routing: {decision: string, reason: string}, tlsBypass: boolean}}
  *   The agent, how the endpoint is reached, and whether certificate
  *   verification is skipped for it. `routing` never holds the proxy URL.
@@ -936,7 +969,7 @@ export function createAgentWithTls(url = '', tlsOptions = {}) {
  */
 export function createDedicatedAgent(
   url,
-  { keepAlive = true, maxSockets, platformConfig = null } = {}
+  { keepAlive = true, maxSockets, platformConfig = null, refuseAddress = null } = {}
 ) {
   const isHttps = String(url).startsWith('https://');
   const sslConfig = platformConfig ? readSSLConfig(platformConfig) : getSSLConfig();
@@ -966,7 +999,11 @@ export function createDedicatedAgent(
       ? new TlsForwardingHttpsProxyAgent(routing.proxyUrl, { ...pool, ...bypass })
       : new HttpProxyAgent(routing.proxyUrl, pool);
   } else {
-    const options = { ...pool, ...bypass, lookup: guardedLookup };
+    const lookup =
+      typeof refuseAddress === 'function'
+        ? refusingLookup(guardedLookup, refuseAddress)
+        : guardedLookup;
+    const options = { ...pool, ...bypass, lookup };
     agent = isHttps ? new https.Agent(options) : new http.Agent(options);
   }
   return {

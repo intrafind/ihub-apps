@@ -33,11 +33,18 @@
  *   to delete": the status of that request is the one signal every
  *   S3-compatible server gives; error names and headers of a HEAD differ.
  * - Every call ends. The client's request timeout stops at the response
- *   headers, so the store bounds the rest itself: each request (with its
- *   retries) and each body read has a deadline derived from the configured
- *   timeouts, after which the request is aborted and the call rejects with
- *   `STORAGE_UNAVAILABLE`. The wait for the delete lock covers the longest a
- *   delete in front of it may take.
+ *   headers, so the store bounds the rest itself: each call has one deadline
+ *   for its request (with its retries) and its body read, after which the
+ *   request is aborted and the call rejects with `STORAGE_UNAVAILABLE`. The
+ *   deadline is `operationTimeoutMs` (30 s by default) plus the time the
+ *   payload needs at the slowest accepted transfer rate
+ *   (`minThroughputBytesPerSecond`, 1 MiB/s by default), so a large object on
+ *   a slow link is not cut off and a bucket that does not answer does not
+ *   hold a request for minutes. A delete shares one deadline between its
+ *   requests, and the wait for the delete lock covers exactly that: the
+ *   longest a delete in front of it may take.
+ * - "No such blob" is only what S3 says it is: a `GetObject` answered with
+ *   the error code `NoSuchKey`. Any other 404 is a failure, never `null`.
  * - `list` pages with its own cursor and `StartAfter`, not with the backend's
  *   continuation token, which is opaque and differs per server.
  * - S3 lists in UTF-8 byte order, which equals the contract's code-unit order
@@ -63,7 +70,7 @@ import {
 import { InvalidKeyError, LockTimeoutError, StorageError } from '../../errors.js';
 import { assertValidBlobKey, assertValidNamespace, isReservedBlobKey } from '../../keys.js';
 import { isValidId } from '../../../utils/pathSecurity.js';
-import { describeS3Error, isNotFound, mapS3Error } from './s3Errors.js';
+import { describeS3Error, isNoSuchKey, isNotFound, mapS3Error } from './s3Errors.js';
 
 const COMPONENT = 'S3BlobStore';
 
@@ -116,6 +123,22 @@ export function sendBudgetMs({ requestTimeoutMs, connectTimeoutMs = 0, maxAttemp
     pauses += Math.min(RETRY_DELAY_CAP_MS, RETRY_DELAY_BASE_MS * 2 ** retry);
   }
   return attempts * (connect + requestTimeoutMs) + pauses + DEADLINE_SLACK_MS;
+}
+
+/**
+ * The time a payload needs at the slowest transfer rate that is accepted.
+ *
+ * @param {number} bytes - Payload size.
+ * @param {number|null} bytesPerSecond - `minThroughputBytesPerSecond`.
+ * @returns {number} Milliseconds; 0 without a rate or a size.
+ *
+ * @example
+ * transferAllowanceMs(64 * 1024 * 1024, 1024 * 1024); // 64000
+ */
+export function transferAllowanceMs(bytes, bytesPerSecond) {
+  if (!Number.isFinite(bytes) || bytes <= 0) return 0;
+  if (!Number.isFinite(bytesPerSecond) || bytesPerSecond <= 0) return 0;
+  return Math.ceil((bytes / bytesPerSecond) * 1000);
 }
 
 /**
@@ -204,6 +227,12 @@ export class S3BlobStore extends BlobStore {
    *   store sets none, and only the client's timeouts apply.
    * @param {number} [options.connectTimeoutMs] - The client's connect timeout.
    * @param {number} [options.maxAttempts] - The client's attempts per command.
+   * @param {number} [options.operationTimeoutMs] - Longest one blob call may
+   *   take with all its attempts, before the allowance for its payload. When
+   *   unset, what the attempts add up to (`sendBudgetMs`).
+   * @param {number} [options.minThroughputBytesPerSecond] - Slowest transfer
+   *   that is accepted; every call gets `bytes / rate` on top of its deadline.
+   *   No allowance when unset.
    */
   constructor({
     bucket,
@@ -215,7 +244,9 @@ export class S3BlobStore extends BlobStore {
     endpointHost,
     requestTimeoutMs,
     connectTimeoutMs,
-    maxAttempts
+    maxAttempts,
+    operationTimeoutMs,
+    minThroughputBytesPerSecond
   }) {
     super();
     if (typeof bucket !== 'string' || !bucket) {
@@ -234,10 +265,24 @@ export class S3BlobStore extends BlobStore {
     this._maxObjectBytes =
       Number.isSafeInteger(maxObjectBytes) && maxObjectBytes > 0 ? maxObjectBytes : Infinity;
     this._endpointHost = endpointHost || null;
-    /** Longest one command may take with its retries; null for no deadline. */
-    this._sendBudgetMs = sendBudgetMs({ requestTimeoutMs, connectTimeoutMs, maxAttempts });
-    /** Longest one body read may take; null for no deadline. */
-    this._bodyDeadlineMs = this._sendBudgetMs === null ? null : requestTimeoutMs;
+    /** What the attempts of one command add up to; null for no deadline. */
+    const attemptsBudget = sendBudgetMs({ requestTimeoutMs, connectTimeoutMs, maxAttempts });
+    /**
+     * Longest one blob call may take without the allowance for its payload;
+     * null for no deadline.
+     */
+    this._sendBudgetMs =
+      attemptsBudget === null
+        ? null
+        : Number.isFinite(operationTimeoutMs) && operationTimeoutMs > 0
+          ? Math.min(attemptsBudget, operationTimeoutMs + DEADLINE_SLACK_MS)
+          : attemptsBudget;
+    /** The client's request timeout of one attempt, which a large upload extends. */
+    this._requestTimeoutMs = attemptsBudget === null ? null : requestTimeoutMs;
+    this._minThroughput =
+      Number.isFinite(minThroughputBytesPerSecond) && minThroughputBytesPerSecond > 0
+        ? minThroughputBytesPerSecond
+        : null;
     /** @type {Promise<Object>|null} */
     this._connection = null;
     this._destroyed = false;
@@ -299,20 +344,42 @@ export class S3BlobStore extends BlobStore {
    *
    * @param {string} command - Name of a class in `commands`.
    * @param {Object} input - Command input.
-   * @param {{op: string, ns?: string, key?: string, notFound?: *}} where - The
-   *   blob call, for the error; `notFound`, when given, is returned for a
-   *   missing object instead of throwing.
+   * @param {{op: string, ns?: string, key?: string, notFound?: *, bytes?: number,
+   *   deadlineAt?: number}} where - The blob call, for the error. `notFound`,
+   *   when given, is returned for a missing object instead of throwing: for a
+   *   `GetObject` only on the S3 answer `NoSuchKey`, for a `HeadObject` (which
+   *   has no error body) on a 404 the caller then confirms. `bytes` is the
+   *   payload the request uploads, which extends its deadline. `deadlineAt`
+   *   (epoch ms) is a deadline several requests of one call share.
    * @returns {Promise<Object>} The command output.
    * @private
    */
   async _send(command, input, where) {
     const { client, commands } = await this._s3();
+    const allowance = transferAllowanceMs(where.bytes, this._minThroughput);
+    let budget = this._sendBudgetMs === null ? null : this._sendBudgetMs + allowance;
+    if (budget !== null && Number.isFinite(where.deadlineAt)) {
+      budget = Math.max(1, Math.min(budget, where.deadlineAt - Date.now()));
+    }
+    // An upload happens before the response headers, so the client's request
+    // timeout of each attempt has to cover it.
+    const perRequest =
+      allowance > 0 && this._requestTimeoutMs !== null
+        ? { requestTimeout: this._requestTimeoutMs + allowance }
+        : {};
+    const absent = command === 'HeadObjectCommand' ? isNotFound : isNoSuchKey;
     try {
-      return await this._bounded(where.op, options =>
-        client.send(new commands[command]({ Bucket: this._bucket, ...input }), options)
+      return await this._bounded(
+        where.op,
+        options =>
+          client.send(new commands[command]({ Bucket: this._bucket, ...input }), {
+            ...options,
+            ...perRequest
+          }),
+        budget
       );
     } catch (error) {
-      if ('notFound' in where && isNotFound(error)) return where.notFound;
+      if ('notFound' in where && absent(error)) return where.notFound;
       const mapped = mapS3Error(error, where);
       logger.warn('An S3 request failed', {
         component: COMPONENT,
@@ -336,12 +403,13 @@ export class S3BlobStore extends BlobStore {
    * @param {string} op - The blob call, for the error.
    * @param {(options?: {abortSignal: AbortSignal}) => Promise<T>} run - Sends
    *   the command with the options it is given.
+   * @param {number|null} [budget] - The deadline in milliseconds; the store's
+   *   deadline of a call without payload by default, null for none.
    * @returns {Promise<T>}
    * @template T
    * @private
    */
-  async _bounded(op, run) {
-    const budget = this._sendBudgetMs;
+  async _bounded(op, run, budget = this._sendBudgetMs) {
     if (budget === null) return run();
     const controller = new AbortController();
     let timer;
@@ -380,7 +448,7 @@ export class S3BlobStore extends BlobStore {
     await this._send(
       'PutObjectCommand',
       { Key: name, Body: body, ContentLength: body.length, ContentType: CONTENT_TYPE },
-      { op: 'put', ns, key }
+      { op: 'put', ns, key, bytes: body.length }
     );
     return {
       key,
@@ -394,8 +462,12 @@ export class S3BlobStore extends BlobStore {
    *
    * The object's length is checked against the limit before its body is read,
    * and the read stops at the limit when the server sent no length. The body
-   * read has a deadline of its own (the request timeout): a server that sends
-   * the headers and then stalls does not hold the call.
+   * read has a deadline: what is left of the call's time, plus the time the
+   * declared length needs at the slowest accepted transfer rate. A server
+   * that sends the headers and then stalls does not hold the call.
+   *
+   * @returns {Promise<{key: string, bytes: number, data: Buffer}|null>} Null
+   *   only when S3 answered `NoSuchKey`.
    *
    * @throws {StorageError} Code `BLOB_TOO_LARGE` for an object over the limit;
    *   `STORAGE_UNAVAILABLE` for a body that is cut, stalls or has another
@@ -404,6 +476,7 @@ export class S3BlobStore extends BlobStore {
   async get(ns, key) {
     const name = this.objectKey(ns, key);
     const where = { op: 'get', ns, key };
+    const startedAt = Date.now();
     const response = await this._send(
       'GetObjectCommand',
       { Key: name },
@@ -425,7 +498,10 @@ export class S3BlobStore extends BlobStore {
       read = await readBody(response.Body, {
         limit: this._maxObjectBytes,
         expected: declared,
-        deadlineMs: this._bodyDeadlineMs
+        deadlineMs: this._bodyDeadlineMs(
+          startedAt,
+          declared ?? (Number.isFinite(this._maxObjectBytes) ? this._maxObjectBytes : 0)
+        )
       });
     } catch (error) {
       throw this._bodyFailure(error, where);
@@ -454,6 +530,7 @@ export class S3BlobStore extends BlobStore {
   async readHead(ns, key, length) {
     const name = this.objectKey(ns, key);
     const where = { op: 'readHead', ns, key };
+    const startedAt = Date.now();
     const response = await this._send(
       'GetObjectCommand',
       { Key: name, Range: `bytes=0-${length - 1}` },
@@ -465,12 +542,27 @@ export class S3BlobStore extends BlobStore {
       const { data } = await readBody(response.Body, {
         limit: Infinity,
         stopAt: length,
-        deadlineMs: this._bodyDeadlineMs
+        deadlineMs: this._bodyDeadlineMs(startedAt, length)
       });
       return data.subarray(0, length);
     } catch (error) {
       throw this._bodyFailure(error, where);
     }
+  }
+
+  /**
+   * The deadline of a body read: what is left of the call's time since it
+   * started, at least a second, plus the allowance for the payload.
+   *
+   * @param {number} startedAt - When the call started (epoch ms).
+   * @param {number} bytes - How many bytes the body is expected to hold.
+   * @returns {number|null} Milliseconds; null for no deadline.
+   * @private
+   */
+  _bodyDeadlineMs(startedAt, bytes) {
+    if (this._sendBudgetMs === null) return null;
+    const left = this._sendBudgetMs - (Date.now() - startedAt);
+    return Math.max(1000, left) + transferAllowanceMs(bytes, this._minThroughput);
   }
 
   /**
@@ -510,8 +602,15 @@ export class S3BlobStore extends BlobStore {
    */
   async delete(ns, key) {
     const name = this.objectKey(ns, key);
-    const where = { op: 'delete', ns, key };
+    const base = { op: 'delete', ns, key };
     const claim = async () => {
+      // One deadline for the two requests of a delete, so that it takes no
+      // longer than any other call, and a delete waiting behind it knows how
+      // long that is.
+      const where =
+        this._sendBudgetMs === null
+          ? base
+          : { ...base, deadlineAt: Date.now() + this._sendBudgetMs };
       const found = await this._send(
         'HeadObjectCommand',
         { Key: name },
@@ -519,7 +618,7 @@ export class S3BlobStore extends BlobStore {
       );
       if (found === false) {
         // Rejects with S3_BUCKET_NOT_FOUND when it is the bucket that is missing.
-        await this.headBucket();
+        await this.headBucket(where.deadlineAt);
         return false;
       }
       await this._send('DeleteObjectCommand', { Key: name }, where);
@@ -537,9 +636,9 @@ export class S3BlobStore extends BlobStore {
         },
         this._sendBudgetMs === null
           ? {}
-          : // What the delete in front may take at most: HeadObject, then
-            // DeleteObject or HeadBucket, each with its retries.
-            { waitMs: 2 * this._sendBudgetMs + DEADLINE_SLACK_MS }
+          : // What the delete in front may take at most: its HeadObject and
+            // its DeleteObject or HeadBucket share one deadline.
+            { waitMs: this._sendBudgetMs + DEADLINE_SLACK_MS }
       );
     } catch (error) {
       if (holding || !(error instanceof LockTimeoutError)) throw error;
@@ -688,14 +787,22 @@ export class S3BlobStore extends BlobStore {
    * Ask the server for the bucket: proves the endpoint, the certificate, the
    * credentials and the bucket name with one request that changes nothing.
    *
+   * @param {number} [deadlineAt] - A deadline (epoch ms) shared with the
+   *   call this check belongs to.
    * @returns {Promise<void>}
    * @throws {StorageError} With a `probeCode` saying which of them failed.
    */
-  async headBucket() {
+  async headBucket(deadlineAt) {
     const { client, commands } = await this._s3();
+    const budget =
+      this._sendBudgetMs !== null && Number.isFinite(deadlineAt)
+        ? Math.max(1, Math.min(this._sendBudgetMs, deadlineAt - Date.now()))
+        : this._sendBudgetMs;
     try {
-      await this._bounded('headBucket', options =>
-        client.send(new commands.HeadBucketCommand({ Bucket: this._bucket }), options)
+      await this._bounded(
+        'headBucket',
+        options => client.send(new commands.HeadBucketCommand({ Bucket: this._bucket }), options),
+        budget
       );
     } catch (error) {
       // A HEAD has no error body: a 404 here can only be the bucket.

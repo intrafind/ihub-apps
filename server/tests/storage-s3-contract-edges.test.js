@@ -12,6 +12,7 @@
  * key encoding are where real servers differ from the fake, so the external
  * run is the one that counts for those.
  */
+import './support/scratchContents.js';
 import { fork } from 'node:child_process';
 import fs from 'node:fs/promises';
 import fsSync from 'node:fs';
@@ -25,7 +26,6 @@ import { composeS3Provider, fixedKeys } from './support/blobTestSupport.js';
 import { describeS3Targets } from './support/s3TestBackend.js';
 
 const scratch = fsSync.mkdtempSync(path.join(os.tmpdir(), 'ihub-s3-edges-'));
-process.env.CONTENTS_DIR = path.join(scratch, 'contents');
 const keyModule = await import('../crypto/KeyProvider.js');
 const { compareBlobKeys, encodeBlobCursor } = await import('../storage/blobSupport.js');
 

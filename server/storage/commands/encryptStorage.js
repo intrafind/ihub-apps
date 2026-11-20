@@ -47,8 +47,12 @@ import {
 const USAGE = `Usage: npm run storage:encrypt -- [--dry-run] [--json] [--verbose]
 
 Encrypts the stored data (documents, append logs, blobs, agent and
-short-link files) in place.
-Stop the server first. Safe to interrupt and to run again.
+short-link files) in place. With the blobs in an S3 bucket
+(storage.blobs.provider) it also encrypts the blobs in that bucket and
+writes its key check object.
+Stop every server that uses this data directory or bucket first: a server
+that keeps running writes plaintext that the conversion does not see.
+Safe to interrupt and to run again. A second run at the same time refuses.
 
   --dry-run   count what is still plaintext, check key and free space, change nothing
   --json      print the result as JSON
@@ -102,11 +106,34 @@ export function formatEncryptResult(result) {
     lines.push(
       `Estimate        about ${formatNumber(result.estimateSeconds)} s on a local disk; 10 to 20 times that on a network volume`
     );
-    lines.push('Master key      present and usable');
+    if (report.blobs.plaintextBytes > 0) {
+      lines.push(`  blob bytes    ${formatByteSize(report.blobs.plaintextBytes)}`);
+    }
+    if (result.remoteBlobs && result.remoteBlobs.status !== 'recorded') {
+      lines.push(
+        `  bucket blobs  ${formatNumber(result.remoteBlobs.plaintext || 0)} of ${formatNumber(result.remoteBlobs.scanned || 0)} (${formatByteSize(result.remoteBlobs.plaintextBytes || 0)}) in ${result.remoteBlobs.target}`
+      );
+    }
+    if (result.localPlaintextBlobs > 0) {
+      lines.push(
+        `  local blobs   ${formatNumber(result.localPlaintextBlobs)} plaintext blob files left in the data directory are not used any more and are not encrypted`
+      );
+    }
+    lines.push(
+      result.masterKey === 'absent'
+        ? 'Master key      none yet; nothing was created. The first start, or this command without --dry-run, creates contents/.encryption-key'
+        : 'Master key      present and usable'
+    );
+    if (result.stateRecordMissing) {
+      lines.push(
+        'State record    missing although encrypted data exists; it is written again when no plaintext is found'
+      );
+    }
     if (result.plaintextStores?.length > 0) {
       lines.push(`Not covered     ${result.plaintextStores.join(', ')} (stay in plaintext)`);
     }
-    const total = left.blobs + left.documents + left.logs + left.files;
+    const total =
+      left.blobs + left.documents + left.logs + left.files + (result.remoteBlobs?.plaintext || 0);
     lines.push(
       total === 0
         ? 'Nothing is left to encrypt. Nothing was changed.'
@@ -127,6 +154,16 @@ export function formatEncryptResult(result) {
   lines.push(`  spill blobs   ${formatNumber(converted.spillBlobs || 0)}`);
   lines.push(`  blobs         ${formatNumber(converted.blobs || 0)}`);
   lines.push(`  files         ${formatNumber(converted.files || 0)}`);
+  if (result.remoteBlobs) {
+    lines.push(
+      `  bucket blobs  ${formatNumber(result.remoteBlobs.converted || 0)} (${result.remoteBlobs.target}; key check object ${result.remoteBlobs.keyCheck || 'checked before'})`
+    );
+  }
+  if (result.localPlaintextBlobs > 0) {
+    lines.push(
+      `  local blobs   ${formatNumber(result.localPlaintextBlobs)} plaintext blob files left in the data directory were NOT encrypted: they are not used any more; remove contents/data/blobs once the copy in the bucket is checked`
+    );
+  }
   if (result.state?.skipped > 0) {
     lines.push(
       `  unreadable    ${formatNumber(result.state.skipped)} objects were left as they are (see the log)`
@@ -178,6 +215,10 @@ export async function main(
       env,
       dryRun: flags['dry-run'] === true,
       force: true,
+      // The command, not a server start, is what encrypts blobs in a bucket,
+      // and it does not wait for another process that is converting.
+      convertRemoteBlobs: true,
+      leaseWaitMs: 0,
       signal,
       ...(loadKeys ? { loadKeys } : {}),
       onLog: flags.json ? undefined : line => out(`${line}\n`)

@@ -15,6 +15,7 @@
  * Messages in: `{ round, ns, key }`. Messages out: `{ ready: true }` once,
  * then `{ round, removed }` or `{ round, error }` per delete.
  */
+import './scratchContents.js';
 import { ComposedStorageProvider } from '../../storage/ComposedStorageProvider.js';
 import { FilesystemStorageProvider } from '../../storage/providers/filesystem/index.js';
 import { createS3BlobBackend } from '../../storage/providers/s3/index.js';

@@ -10,6 +10,7 @@
  * Native ESM, so `jest.unstable_mockModule` + dynamic imports. Run with
  * `NODE_OPTIONS=--experimental-vm-modules`.
  */
+import './support/scratchContents.js';
 import { jest } from '@jest/globals';
 import request from 'supertest';
 import express from 'express';

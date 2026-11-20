@@ -7,6 +7,7 @@
  * a document opens only where it was sealed: same tenant, namespace, key,
  * owner and content type.
  */
+import './support/scratchContents.js';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -14,7 +15,6 @@ import { after, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'ihub-doc-seal-'));
-process.env.CONTENTS_DIR = path.join(scratch, 'contents');
 const keyModule = await import('../crypto/KeyProvider.js');
 const {
   DOCUMENT_SEAL_FORMAT,

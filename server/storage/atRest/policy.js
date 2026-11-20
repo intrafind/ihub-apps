@@ -75,7 +75,10 @@ export function decideAtRestMode({ enabled, state, preparing: inPreparation = pr
  * @param {Object} options
  * @param {boolean} options.enabled - The switch.
  * @param {boolean} options.remote - Whether the blobs are on a remote backend
- *   (S3), which starts empty and is strict from the first write.
+ *   (S3). Strict whenever the switch is on: a start only gets this far when
+ *   the preparation step found no plaintext blob in the bucket, and a bucket
+ *   that holds some is converted by `npm run storage:encrypt`, which is the
+ *   one place that reads them (`storage/atRest/prepare.js`).
  * @param {Object|null} options.state - The state record.
  * @returns {'reject'|'accept'}
  */

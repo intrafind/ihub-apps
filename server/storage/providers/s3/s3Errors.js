@@ -39,7 +39,9 @@ const NETWORK_CODES = new Set([
   'ENETUNREACH',
   'EPIPE',
   'ECONNABORTED',
-  'UND_ERR_SOCKET'
+  'UND_ERR_SOCKET',
+  // The endpoint's name resolved to an address the transport refuses.
+  'ERR_ADDRESS_REFUSED'
 ]);
 
 const TIMEOUT_NAMES = new Set(['TimeoutError', 'RequestTimeout', 'AbortError']);
@@ -61,11 +63,32 @@ function systemCodeOf(error) {
 }
 
 /**
- * Whether an error means "there is no object at that key".
+ * Whether a failed `GetObject` is the S3 answer "there is no object at that
+ * key": an error body whose code is `NoSuchKey`.
+ *
+ * Only that. A 404 without that body comes from something else in front of
+ * the bucket (a reverse proxy, an ingress, a wrong virtual host) and says
+ * nothing about the object; read as "no blob" it would make an outage look
+ * like an empty file. What is relied on: an S3-compatible server answers a
+ * `GetObject` of a missing key with `<Error><Code>NoSuchKey</Code>…`, as AWS
+ * S3, MinIO, Ceph RGW, Garage, SeaweedFS and versitygw do.
+ *
+ * @param {unknown} error
+ * @returns {boolean}
+ */
+export function isNoSuchKey(error) {
+  if (!error || typeof error !== 'object') return false;
+  return error.name === 'NoSuchKey' || error.Code === 'NoSuchKey' || error.code === 'NoSuchKey';
+}
+
+/**
+ * Whether a failed `HeadObject` means "there is no object at that key".
  *
  * @param {unknown} error
  * @returns {boolean} True for `NoSuchKey`, and for `NotFound` (a HEAD carries
  *   no error body, so the SDK only has the status). False for `NoSuchBucket`.
+ *   The caller confirms it with `HeadBucket`; a `GetObject` uses
+ *   {@link isNoSuchKey} instead.
  */
 export function isNotFound(error) {
   if (!error || typeof error !== 'object') return false;

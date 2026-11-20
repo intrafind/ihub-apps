@@ -171,6 +171,21 @@ export const fetchStorageStatus = async () => {
 };
 
 /**
+ * How long the browser waits for `POST /api/admin/storage/_test`.
+ *
+ * The shared client gives up after 30 s. The check is the request an admin
+ * sends when the storage does not answer, and the server only reports the
+ * classified cause once its own bound has passed: with the default S3 settings
+ * one command may take 197.5 s with its retries (`requestTimeoutMs` 60 s and
+ * `connectTimeoutMs` 5 s, three attempts; `sendBudgetMs` in
+ * `server/storage/providers/s3/S3BlobStore.js`). This value lies above that.
+ * An installation with longer timeouts can still exceed it; the card then
+ * says that the server continues the check and shows the result when the
+ * status is next loaded.
+ */
+export const STORAGE_TEST_TIMEOUT_MS = 240000;
+
+/**
  * Check the running blob storage now (`POST /api/admin/storage/_test`). It
  * resolves with the same object as {@link fetchStorageStatus} whether the
  * check passed or failed (`blobs.status`); it rejects only when the check
@@ -179,7 +194,11 @@ export const fetchStorageStatus = async () => {
  * @returns {Promise<Object>}
  */
 export const testStorage = async () => {
-  const response = await makeAdminApiCall('/admin/storage/_test', { method: 'POST' });
+  const response = await makeAdminApiCall('/admin/storage/_test', {
+    method: 'POST',
+    // Past the server's own bound for the check; see `STORAGE_TEST_TIMEOUT_MS`.
+    timeout: STORAGE_TEST_TIMEOUT_MS
+  });
   return response.data;
 };
 

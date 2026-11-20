@@ -11,6 +11,7 @@
  * never returns `null` for an object that is there, and never returns stored
  * bytes as they are.
  */
+import './support/scratchContents.js';
 import crypto from 'node:crypto';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';

@@ -1,5 +1,13 @@
 # S3 Storage Tests
 #
+# NOT EXECUTED YET. This workflow has never run, neither on GitHub nor locally
+# (there was no Docker daemon where it was written and reviewed). Nothing below
+# is verified: that the versitygw image starts, that its health check passes,
+# that a directory is accepted as a bucket, that the skip check matches the
+# report of a real run. Run it once with "Run workflow" (workflow_dispatch) on
+# the branch and read the result before it is trusted or made a required
+# check. Remove this paragraph when that has happened.
+#
 # Runs the S3 blob storage suites (server/tests/storage-s3-*.test.js) and the
 # S3 end-to-end script against a real S3-compatible server: versitygw, started
 # from docker/docker-compose.s3.yml, the same file developers use
@@ -32,9 +40,18 @@ on:
       - 'server/crypto/**'
       - 'server/startup/**'
       - 'server/utils/httpConfig.js'
+      # Code outside server/storage that decides what the S3 backend does: the
+      # master key, the secrets of the S3 block, its schema, the admin status.
+      - 'server/services/TokenStorageService.js'
+      - 'server/utils/configSecrets.js'
+      - 'server/validators/platformConfigSchema.js'
+      - 'server/routes/admin/storage.js'
       - 'server/tests/storage-s3-*.test.js'
       - 'server/tests/support/**'
       - 'scripts/s3-e2e.js'
+      - 'scripts/run-server-tests.js'
+      # Holds the s3:up / s3:down scripts this job calls.
+      - 'package.json'
       - 'docker/docker-compose.s3.yml'
       - '.github/workflows/s3-storage-tests.yml'
       - 'server/package.json'
@@ -130,6 +147,18 @@ jobs:
         # Also when a suite above failed: its result is independent evidence.
         if: ${{ !cancelled() }}
         run: node scripts/s3-e2e.js
+
+      - name: Fail when the run wrote into the real contents directory
+        # The suites and the script work on scratch directories
+        # (server/tests/support/scratchContents.js). A fresh checkout has no
+        # contents/ directory, so its existence means a test wrote there.
+        if: ${{ !cancelled() }}
+        run: |
+          if [ -e contents ]; then
+            echo "::error::The run created files in contents/ (master key or storage data)"
+            find contents -maxdepth 3 | head -50
+            exit 1
+          fi
 
       - name: Show the S3 server log
         if: failure()

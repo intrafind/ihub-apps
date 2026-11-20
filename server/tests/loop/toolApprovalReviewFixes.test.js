@@ -14,6 +14,7 @@
  *  8. calls outside the loop (direct tool API for programs, MCP App views) are gated
  *  9. secret-looking arguments are redacted for anyone but the requester
  */
+import '../support/scratchContents.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { InstalledIntegrationService } from '../../services/integrations/InstalledIntegrationService.js';

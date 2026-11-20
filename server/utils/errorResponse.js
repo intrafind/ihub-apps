@@ -165,7 +165,11 @@ function hasShowableMessage(error) {
 function classifyStorage(error) {
   const status = storageHttpStatus(error) ?? API_ERROR_CODES[error.code] ?? 500;
   const code = Object.hasOwn(API_ERROR_CODES, error.code) ? error.code : 'STORAGE_ERROR';
-  return { status, code, message: error.message };
+  // A 5xx of the storage layer gets the fixed text of its code, never the
+  // thrown message: that names the stored object, the bucket call or the id
+  // of a master key ("Blob chat-files/… does not verify"), which is for the
+  // log and not for whoever sent the request.
+  return { status, code, message: status >= 500 ? fallbackText(code) : error.message };
 }
 
 function classifyLlm(error) {

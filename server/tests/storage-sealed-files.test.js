@@ -16,6 +16,7 @@
  * `feedback.jsonl` is written too and is expected to stay readable: it is
  * left in plaintext on purpose (read with `jq` and rotated by hand).
  */
+import { contentsDir } from './support/scratchContents.js';
 import fs from 'node:fs/promises';
 import fsSync from 'node:fs';
 import os from 'node:os';
@@ -27,10 +28,7 @@ import { after, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
 const scratch = fsSync.mkdtempSync(path.join(os.tmpdir(), 'ihub-sealed-files-'));
-const contentsDir = path.join(scratch, 'contents');
 const baseDir = path.join(contentsDir, 'data');
-process.env.CONTENTS_DIR = contentsDir;
-delete process.env.TOKEN_ENCRYPTION_KEY;
 
 // Everything that loads the server configuration is imported after
 // CONTENTS_DIR is set: the services write below it.

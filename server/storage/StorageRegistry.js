@@ -17,6 +17,7 @@
  *
  * @module storage/StorageRegistry
  */
+import cluster from 'node:cluster';
 import logger from '../utils/logger.js';
 import { StorageError, UnknownProviderError } from './errors.js';
 import { resolveEnvVarsInObject } from '../utils/envVars.js';
@@ -27,6 +28,7 @@ import { createLocalBlobBackend } from './localBlobBackend.js';
 import { blobPlaintextReads, describeEncryption } from './atRest/policy.js';
 import { configureSealedFiles, resetSealedFiles } from './atRest/sealedFiles.js';
 import { readAtRestState } from './atRest/state.js';
+import { createLocalKeyCheckStore } from './atRest/localKeyCheck.js';
 
 const COMPONENT = 'StorageRegistry';
 
@@ -38,6 +40,19 @@ const PROVIDER_ENV_VAR = 'IHUB_STORAGE_PROVIDER';
 
 /** Environment variable that overrides the configured blob backend. */
 const BLOB_PROVIDER_ENV_VAR = 'IHUB_STORAGE_BLOBS_PROVIDER';
+
+/**
+ * Carries the encryption switch from the cluster primary to its workers
+ * (`on` or `off`). The primary reads `platform.json` once per start, brings
+ * the data directory in line with it and forks every worker, also a
+ * replacement months later, with that decision. A worker that read the file
+ * itself would pick up an edit that waits for a restart and run in another
+ * mode than its siblings.
+ *
+ * Internal: it is only honoured in a cluster worker, so it is not a way to
+ * override `storage.encryption.enabled` from the environment.
+ */
+export const ENCRYPTION_DECISION_ENV_VAR = 'IHUB_STORAGE_ENCRYPTION_DECIDED';
 
 /** @type {Map<string, (config: Object) => StorageProvider>} */
 const factories = new Map();
@@ -154,6 +169,70 @@ export function resolveStorageConfig(platformConfig = {}, env = process.env) {
     config: isPlainObject(raw) ? resolveEnvVarsInObject(raw) : {},
     encryption: { enabled: encryptionEnabled(storage) }
   };
+}
+
+/**
+ * The fork environment that hands the primary's decision to a worker.
+ *
+ * @param {Object} platformConfig - The platform configuration the primary started with.
+ * @param {Object} [env=process.env]
+ * @returns {Record<string, string>} `{ IHUB_STORAGE_ENCRYPTION_DECIDED: 'on' | 'off' }`
+ *
+ * @example
+ * cluster.fork({ WORKER_INDEX: '0', ...encryptionDecisionEnv(platformConfig) });
+ */
+export function encryptionDecisionEnv(platformConfig, env = process.env) {
+  const { encryption } = resolveStorageConfig(platformConfig, env);
+  return { [ENCRYPTION_DECISION_ENV_VAR]: encryption.enabled ? 'on' : 'off' };
+}
+
+/**
+ * The platform configuration a process starts its storage with: in a cluster
+ * worker the switch is the one the primary decided, whatever the file says
+ * by now. Everywhere else the configuration is returned as it is.
+ *
+ * @param {Object} platformConfig - As read from `platform.json`.
+ * @param {Object} [env=process.env]
+ * @param {Object} [options]
+ * @param {boolean} [options.isWorker] - Defaults to `cluster.isWorker` (tests).
+ * @returns {Object} `platformConfig`, or a copy with `storage.encryption.enabled` set.
+ */
+export function withStartDecision(
+  platformConfig,
+  env = process.env,
+  { isWorker = cluster.isWorker } = {}
+) {
+  const decided = env?.[ENCRYPTION_DECISION_ENV_VAR];
+  if (!isWorker || (decided !== 'on' && decided !== 'off')) return platformConfig;
+  const storage = isPlainObject(platformConfig?.storage) ? platformConfig.storage : {};
+  return {
+    ...(platformConfig || {}),
+    storage: {
+      ...storage,
+      encryption: {
+        ...(isPlainObject(storage.encryption) ? storage.encryption : {}),
+        enabled: decided === 'on'
+      }
+    }
+  };
+}
+
+/**
+ * The data directory of the configured storage provider, without leaving a
+ * provider (and its timers) behind.
+ *
+ * @param {Object} platformConfig - Platform configuration (raw file).
+ * @param {Object} [env=process.env]
+ * @returns {Promise<string|null>} Null for a provider without a data directory.
+ */
+export async function resolveStorageBaseDir(platformConfig, env = process.env) {
+  const { provider, config } = resolveStorageConfig(platformConfig, env);
+  const base = createProvider(provider, config);
+  try {
+    return typeof base.baseDir === 'string' && base.baseDir ? base.baseDir : null;
+  } finally {
+    await base.shutdown?.().catch(() => {});
+  }
 }
 
 /** Whether `storage.encryption.enabled` is on. */
@@ -310,9 +389,13 @@ export function composeBlobBackend(base, blobs, env = process.env) {
     const local = facet('blobs');
     // A provider without a blob facet (a test double) has nothing to wrap.
     if (!local) return base;
+    const baseDir = facet('baseDir');
     backend = createLocalBlobBackend(local, {
       encryption: blobs?.encryption || { enabled: false, plaintextReads: 'accept' },
-      loadKeys
+      loadKeys,
+      // Beside the state record, not in the blob tree: see `atRest/localKeyCheck.js`.
+      keyCheckStore:
+        typeof baseDir === 'string' ? createLocalKeyCheckStore({ baseDir, legacy: local }) : null
     });
   } else {
     backend = createBlobBackend(blobs.provider, blobs.config, {
@@ -373,6 +456,8 @@ export async function probeBlobStorage({
       locks: null,
       encryption: blobs.encryption,
       loadKeys,
+      // A check that writes no key check object creates no key file either.
+      createMasterKey: createKeyCheck,
       env
     });
   } catch (error) {
@@ -446,7 +531,9 @@ export function createProvider(name, config = {}) {
  * @throws {UnknownProviderError} When the configured provider or blob backend
  *   is not registered.
  */
-export async function initializeStorage({ platformConfig, env } = {}) {
+export async function initializeStorage({ platformConfig: savedConfig, env } = {}) {
+  // A cluster worker runs with the switch its primary decided at the start.
+  const platformConfig = withStartDecision(savedConfig, env);
   const { provider: name, config, encryption } = resolveStorageConfig(platformConfig, env);
 
   if (activeProvider) {
@@ -616,7 +703,12 @@ export async function shutdownStorage() {
   activeProvider = null;
   activeProviderName = null;
   if (!provider) return;
-  resetSealedFiles();
-  await provider.shutdown?.();
+  try {
+    await provider.shutdown?.();
+  } finally {
+    // After the provider: a write that was still running during the shutdown
+    // is sealed in the mode the provider ran in.
+    resetSealedFiles();
+  }
   logger.info('Storage provider shut down', { component: COMPONENT, provider: name });
 }

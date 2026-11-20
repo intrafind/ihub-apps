@@ -11,6 +11,7 @@
  * blob hashes): sealing documents and log records must not change one of
  * them. A second run covers the mode the one-time conversion runs in.
  */
+import './support/scratchContents.js';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';

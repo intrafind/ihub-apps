@@ -5,6 +5,14 @@
 # (versitygw, Apache-2.0) with its POSIX backend. FOR TESTS ONLY. It is not
 # part of docker-compose.yml or docker-compose.prod.yml and must not be.
 #
+# NOT EXECUTED YET. This file has never been started (there was no Docker
+# daemon where it was written and reviewed); `docker compose config` parses
+# it, and that is all that is known. Not verified: that the image exists under
+# this tag and digest, that it has /bin/sh, mkdir and wget (the entrypoint and
+# the health check need them), that a directory made with mkdir is accepted as
+# a bucket, and that the health endpoint answers. Remove this paragraph after
+# the first successful `npm run s3:up` with the S3 suites green against it.
+#
 #   npm run s3:up      # start, wait until it answers
 #   export IHUB_TEST_S3_ENDPOINT=http://127.0.0.1:7070 IHUB_TEST_S3_BUCKET=ihub-test \
 #          IHUB_TEST_S3_ACCESS_KEY=ihub-test-not-a-secret \

@@ -50,6 +50,9 @@ export const ADOPT_BUCKET_ENV_VAR = 'IHUB_S3_ADOPT_BUCKET';
  * @param {() => Promise<Object>} context.loadKeys - Resolves with the key
  *   module (`crypto/KeyProvider.js`): `ensureMasterKey`, `getKeyProvider`,
  *   `openConfigSecret`. Loaded lazily because it reads the contents directory.
+ * @param {boolean} [context.createMasterKey=true] - Let the key service
+ *   generate and save a master key when there is none. False for a check that
+ *   must change nothing (`npm run storage:check`).
  * @param {(config: Object, options: Object) => Promise<Object>} [context.createClient] -
  *   Client factory (tests); `createS3Client` by default.
  * @returns {import('../../blobBackends.js').BlobBackend}
@@ -62,7 +65,8 @@ export function createS3BlobBackend(rawConfig, context = {}) {
     env = process.env,
     encryption = { enabled: true, plaintextReads: 'reject' },
     loadKeys,
-    createClient = createS3Client
+    createClient = createS3Client,
+    createMasterKey = true
   } = context;
   const enabled = encryption?.enabled !== false;
   if (typeof loadKeys !== 'function') {
@@ -90,9 +94,11 @@ export function createS3BlobBackend(rawConfig, context = {}) {
     requestTimeoutMs: config.requestTimeoutMs,
     connectTimeoutMs: config.connectTimeoutMs,
     maxAttempts: config.maxAttempts,
+    operationTimeoutMs: config.operationTimeoutMs,
+    minThroughputBytesPerSecond: config.minThroughputBytesPerSecond,
     connect: async () => {
       keys = keys || (await loadKeys());
-      await keys.ensureMasterKey();
+      await keys.ensureMasterKey({ create: createMasterKey });
       const opened = resolveS3BlobConfig(rawConfig, { openSecret: keys.openConfigSecret });
       const connection = await createClient(opened, { platformConfig });
       transport = connection.transport || null;
@@ -123,7 +129,7 @@ export function createS3BlobBackend(rawConfig, context = {}) {
   /** Verify or write the key check object. */
   async function ensureKeyCheck({ adopt = false, create = true } = {}) {
     keys = keys || (await loadKeys());
-    await keys.ensureMasterKey();
+    await keys.ensureMasterKey({ create: createMasterKey });
     return blobs.verifyKey({
       hasOtherObjects: () => store.hasObjectsOutside(INTERNAL_BLOB_NAMESPACE),
       create,
@@ -143,7 +149,7 @@ export function createS3BlobBackend(rawConfig, context = {}) {
               name: 'key',
               run: async () => {
                 keys = keys || (await loadKeys());
-                return checkMasterKey(keys);
+                return checkMasterKey(keys, { create: createMasterKey });
               }
             },
             connect,

@@ -49,9 +49,10 @@ const ROUNDS = option('rounds', 3);
 const asJson = args.includes('--json');
 
 const scratch = fsSync.mkdtempSync(path.join(os.tmpdir(), 'ihub-s3-perf-'));
-process.env.CONTENTS_DIR = path.join(scratch, 'contents');
 // Quiet: the logger writes every blob call at warn/info to stdout otherwise.
 process.env.LOG_LEVEL = process.env.LOG_LEVEL || 'error';
+// Before any server module: points CONTENTS_DIR at a scratch directory.
+await import('../server/tests/support/scratchContents.js');
 
 const keyModule = await import('../server/crypto/KeyProvider.js');
 const { composeS3Provider, fixedKeys } = await import('../server/tests/support/blobTestSupport.js');

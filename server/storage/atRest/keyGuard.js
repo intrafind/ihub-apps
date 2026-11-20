@@ -16,18 +16,15 @@
  * - the state record (`.at-rest.json`) names a master key, in any state: the
  *   switch may be off again while sealed data is still there;
  * - the state record exists and cannot be read;
- * - the key check object of the blob store exists (`blobs/_ihub/keycheck`).
+ * - the key check object exists (`.at-rest-keycheck`, or `blobs/_ihub/keycheck`
+ *   where an earlier build kept it).
  *
  * Reads with plain `fs`: it runs before storage exists.
  *
  * @module storage/atRest/keyGuard
  */
-import { promises as fs } from 'node:fs';
-import path from 'node:path';
+import { localKeyCheckExists } from './localKeyCheck.js';
 import { AtRestStateError, readAtRestState, recordsSealedData } from './state.js';
-
-/** The key check object of the filesystem blob store, relative to the data directory. */
-const KEY_CHECK_PATH = path.join('blobs', '_ihub', 'keycheck');
 
 /**
  * Look for sealed data in data directories.
@@ -50,12 +47,8 @@ export async function findSealedData(dataDirs) {
       if (!(error instanceof AtRestStateError)) throw error;
       return { dataDir, reason: 'state-record-unreadable', keyId: null };
     }
-    try {
-      await fs.stat(path.join(dataDir, KEY_CHECK_PATH));
-      return { dataDir, reason: 'key-check', keyId: null };
-    } catch {
-      // No key check object: nothing was ever encrypted here.
-    }
+    // No key check object: nothing was ever encrypted here.
+    if (await localKeyCheckExists(dataDir)) return { dataDir, reason: 'key-check', keyId: null };
   }
   return null;
 }

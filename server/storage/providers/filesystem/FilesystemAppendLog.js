@@ -54,6 +54,7 @@ import { AppendLog } from '../../AppendLog.js';
 import {
   CorruptBlobError,
   CorruptLogError,
+  KeyUnavailableError,
   StorageError,
   StorageShutDownError
 } from '../../errors.js';
@@ -112,6 +113,14 @@ const STREAM_NAME = Symbol('streamName');
 
 /** Suffix of the scratch file a stream is rewritten into by the conversion. */
 const SEALING_EXT = '.sealing';
+
+/**
+ * A scratch file of {@link FilesystemAppendLog#sealStreamFile}:
+ * `<stream>.jsonl.<16 hex>.sealing`, and `<stream>.jsonl.sealing` as an
+ * earlier build named it. The random part keeps two processes from ever
+ * writing into one scratch file.
+ */
+const SCRATCH_NAME = /\.jsonl(?:\.[0-9a-f]{16})?\.sealing$/;
 
 /** Prefix `atomicWrite` gives its scratch files. */
 const TEMP_PREFIX = '.tmp_';
@@ -910,12 +919,16 @@ export class FilesystemAppendLog extends AppendLog {
 
   /**
    * Every stream file and every blob directory on disk, for the one-time
-   * conversion (`storage/atRest/convert.js`). Removes scratch files an
-   * interrupted conversion left behind.
+   * conversion (`storage/atRest/convert.js`).
    *
+   * @param {Object} [options]
+   * @param {boolean} [options.removeScratch=false] - Remove the scratch files
+   *   an interrupted conversion left behind. Only the process that holds the
+   *   conversion lease may ask for it (`storage/atRest/prepare.js`): a scratch
+   *   file can also belong to a conversion that is running in another process.
    * @returns {Promise<{streams: string[], blobDirs: string[]}>} Absolute paths
    */
-  async atRestTargets() {
+  async atRestTargets({ removeScratch = false } = {}) {
     const found = { streams: [], blobDirs: [] };
     const walk = async dir => {
       let entries;
@@ -930,8 +943,8 @@ export class FilesystemAppendLog extends AppendLog {
         if (entry.isDirectory()) {
           if (entry.name.endsWith(BLOBS_EXT)) found.blobDirs.push(abs);
           else await walk(abs);
-        } else if (entry.isFile() && entry.name.endsWith(STREAM_EXT + SEALING_EXT)) {
-          await fs.rm(abs, { force: true });
+        } else if (entry.isFile() && SCRATCH_NAME.test(entry.name)) {
+          if (removeScratch) await fs.rm(abs, { force: true });
         } else if (entry.isFile() && entry.name.endsWith(STREAM_EXT)) {
           found.streams.push(abs);
         }
@@ -957,27 +970,70 @@ export class FilesystemAppendLog extends AppendLog {
   }
 
   /**
-   * Count the lines of a stream file by kind, without opening anything.
+   * Count the lines of a stream file by kind.
+   *
+   * Without `verify` nothing is opened. With it the file is checked the way a
+   * read would find it: every key line must unwrap with the master key, every
+   * sealed record must name a key line of this file, and the first record
+   * under each key line must open. That is what tells a stream that two
+   * writers mixed up from one that merely has the right kinds of lines.
    *
    * @param {string} file - Absolute path from {@link FilesystemAppendLog#atRestTargets}
-   * @returns {Promise<{plain: number, sealed: number, torn: number, bytes: number}>}
+   * @param {Object} [options]
+   * @param {boolean} [options.verify=false] - Open records as described above.
+   * @returns {Promise<{plain: number, sealed: number, torn: number, bytes: number, damaged: number}>}
    *   `plain` plaintext records, `sealed` sealed records, `torn` lines that
-   *   are no record at all (an unfinished write), `bytes` the file size
+   *   are no record at all (an unfinished write), `bytes` the file size,
+   *   `damaged` sealed records and key lines that do not open (always 0
+   *   without `verify`)
+   * @throws {KeyUnavailableError} With `verify`, when the master key a key
+   *   line names is not available
    */
-  async inspectStreamFile(file) {
-    const counts = { plain: 0, sealed: 0, torn: 0, bytes: 0 };
+  async inspectStreamFile(file, { verify = false } = {}) {
+    const counts = { plain: 0, sealed: 0, torn: 0, bytes: 0, damaged: 0 };
     try {
       counts.bytes = (await fs.stat(file)).size;
     } catch (err) {
       if (err.code === 'ENOENT') return counts;
       throw err;
     }
-    for await (const { line } of this._rawLines(file)) {
-      if (!line) counts.torn += 1;
-      else if (isKeyLine(line)) continue;
-      else if (isSealedLine(line)) counts.sealed += 1;
-      else if (Number.isInteger(line.seq) && line.seq > 0) counts.plain += 1;
-      else counts.torn += 1;
+    const stream = verify ? this._canonicalOfPath(file) : null;
+    const tenant = this._atRest.tenant;
+    /** Key line id -> whether a record under it has been opened. */
+    const keyLines = new Map();
+    const dataKeys = new Map();
+    try {
+      for await (const { line } of this._rawLines(file)) {
+        if (!line) counts.torn += 1;
+        else if (isKeyLine(line)) {
+          if (!verify) continue;
+          try {
+            const keyProvider = await this._atRest.keyProvider();
+            dataKeys.set(line.id, await openBatchKey({ keyProvider, tenant, stream, line }));
+            keyLines.set(line.id, false);
+          } catch (error) {
+            const failure = this._atRest.keyFailure(error, `stream ${stream}`);
+            if (failure instanceof KeyUnavailableError) throw failure;
+            counts.damaged += 1;
+          }
+        } else if (isSealedLine(line)) {
+          counts.sealed += 1;
+          if (!verify) continue;
+          if (!keyLines.has(line.k)) {
+            counts.damaged += 1;
+          } else if (!keyLines.get(line.k)) {
+            keyLines.set(line.k, true);
+            try {
+              openRecord({ dataKey: dataKeys.get(line.k), tenant, stream, line });
+            } catch {
+              counts.damaged += 1;
+            }
+          }
+        } else if (Number.isInteger(line.seq) && line.seq > 0) counts.plain += 1;
+        else counts.torn += 1;
+      }
+    } finally {
+      for (const dataKey of dataKeys.values()) dataKey.fill(0);
     }
     return counts;
   }
@@ -1011,8 +1067,11 @@ export class FilesystemAppendLog extends AppendLog {
         if (err.code === 'ENOENT') return counts;
         throw err;
       }
-      const scratch = `${file}${SEALING_EXT}`;
-      const out = await fs.open(scratch, 'w');
+      // A name of its own, created exclusively: a second process converting
+      // the same stream (which the conversion lease prevents) could then at
+      // worst rename a complete file over a complete file.
+      const scratch = `${file}.${crypto.randomBytes(8).toString('hex')}${SEALING_EXT}`;
+      const out = await fs.open(scratch, 'wx');
       let batch = null;
       try {
         let pending = [];

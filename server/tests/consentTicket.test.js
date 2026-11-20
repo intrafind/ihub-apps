@@ -18,6 +18,10 @@ import process from 'node:process';
 const SECRET = 'test-secret-for-consent-tickets';
 process.env.JWT_SECRET = SECRET;
 
+// Before any server module: points CONTENTS_DIR at a scratch directory, so the
+// key initialised below is not the installation's contents/.encryption-key.
+await import('./support/scratchContents.js');
+
 const { default: tokenStorageService } = await import('../services/TokenStorageService.js');
 await tokenStorageService.initializeEncryptionKey();
 await tokenStorageService.initializeJwtSecret();

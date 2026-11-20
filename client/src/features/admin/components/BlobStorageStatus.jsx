@@ -12,7 +12,11 @@ import {
   QuestionMarkCircleIcon,
   XCircleIcon
 } from '@heroicons/react/24/outline';
-import { getAdminApiErrorMessage, testStorage } from '../../../api/adminApi';
+import {
+  STORAGE_TEST_TIMEOUT_MS,
+  getAdminApiErrorMessage,
+  testStorage
+} from '../../../api/adminApi';
 import { BLOB_STATUS_STYLES } from '../utils/systemResourcesFormat';
 import { CALLOUT_CLASS, SECONDARY_BUTTON_CLASS } from './formStyles';
 
@@ -27,6 +31,12 @@ import { CALLOUT_CLASS, SECONDARY_BUTTON_CLASS } from './formStyles';
  *
  * One action: "Check again" (`POST /api/admin/storage/_test`). Its result is
  * announced in a live region and handed to the page through `onStatus`.
+ *
+ * Language: the server writes its sentences in English. The card translates
+ * what it can by the code the server sends (`errors.<code>`, `hints.<code>`,
+ * `stepStatus.<status>`); whatever is still shown as sent is marked
+ * `lang="en"`, so a screen reader pronounces it correctly on a German page
+ * (WCAG 3.1.2).
  *
  * @param {Object} props
  * @param {Object|null} props.status - The response of `GET /api/admin/storage`.
@@ -58,6 +68,35 @@ const MONO_CLASS = 'font-mono break-all';
 const NOTICE_CLASS =
   'mb-4 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg flex';
 
+/** The two documented ways to start the copy command; see docs/storage.md. */
+const COPY_COMMAND_NPM = 'npm run storage:copy-blobs';
+const COPY_COMMAND_NODE = 'node server/storage/commands/run.js copy-blobs';
+
+/** Text the server sent in English, marked as such for assistive technology. */
+function ServerText({ children }) {
+  return <span lang="en">{children}</span>;
+}
+
+/**
+ * The sentence for a failure: translated by its code when the client has a
+ * translation, otherwise the server's own sentence, marked as English.
+ *
+ * @param {Object} props
+ * @param {(key: string, fallback?: string, options?: Object) => string} props.t
+ * @param {string} [props.code] - A code of the server's check.
+ * @param {string} [props.detail] - The server's sentence.
+ */
+function ErrorSentence({ t, code, detail }) {
+  const translated = code ? t(`admin.systemResources.blobStorage.errors.${code}`, '') : '';
+  if (translated) return translated;
+  return detail ? <ServerText>{detail}</ServerText> : null;
+}
+
+/** Whether the client has its own sentence for a failure code. */
+function hasErrorSentence(t, code) {
+  return Boolean(code && t(`admin.systemResources.blobStorage.errors.${code}`, ''));
+}
+
 function Row({ label, children }) {
   return (
     <>
@@ -82,7 +121,8 @@ function Notice({ testId, children }) {
 function BlobStorageStatus({ status, loadFailed = false, onRetry, onStatus }) {
   const { t } = useTranslation();
   const [testing, setTesting] = useState(false);
-  // { type: 'success' | 'error', text } of the last manual check.
+  // The last manual check: { type: 'success', ms }, { type: 'failed', code,
+  // detail }, { type: 'timeout' } or { type: 'notRun', detail }.
   const [result, setResult] = useState(null);
 
   const runTest = useCallback(async () => {
@@ -94,35 +134,27 @@ function BlobStorageStatus({ status, loadFailed = false, onRetry, onStatus }) {
       onStatus?.(next);
       const blobs = next?.blobs || {};
       if (blobs.status === 'ok') {
-        setResult({
-          type: 'success',
-          text: t(
-            'admin.systemResources.blobStorage.testPassed',
-            'Check passed: a test object was written, read back and removed in {{ms}} ms.',
-            { ms: blobs.latencyMs ?? 0 }
-          )
-        });
+        setResult({ type: 'success', ms: blobs.latencyMs ?? 0 });
       } else {
         setResult({
-          type: 'error',
-          text: t('admin.systemResources.blobStorage.testFailed', 'Check failed: {{detail}}', {
-            detail: blobs.error?.detail || blobs.status || ''
-          })
+          type: 'failed',
+          code: blobs.error?.code,
+          detail: blobs.error?.detail || blobs.status || ''
         });
       }
     } catch (err) {
-      setResult({
-        type: 'error',
-        text: t(
-          'admin.systemResources.blobStorage.testNotRun',
-          'The check could not run: {{detail}}',
-          { detail: getAdminApiErrorMessage(err) }
-        )
-      });
+      // The browser gave up waiting (axios: ECONNABORTED). The server goes on
+      // with the check and holds its result; the page's next poll shows it.
+      if (err?.code === 'ECONNABORTED' && !err?.response) {
+        setResult({ type: 'timeout' });
+        onRetry?.();
+      } else {
+        setResult({ type: 'notRun', detail: getAdminApiErrorMessage(err) });
+      }
     } finally {
       setTesting(false);
     }
-  }, [onStatus, t, testing]);
+  }, [onRetry, onStatus, testing]);
 
   if (!status?.blobs) {
     if (!loadFailed) return null;
@@ -222,6 +254,21 @@ function BlobStorageStatus({ status, loadFailed = false, onRetry, onStatus }) {
   const leftoverCount = leftovers.reduce((sum, entry) => sum + (entry.count || 0), 0);
   const leftoverCapped = leftovers.some(entry => entry.capped);
 
+  // The saved and the running backend are only worth naming when they differ.
+  // The server also asks for a restart when the backend stays the same and one
+  // of its settings changed; "Saved: X. Running: X." would explain nothing.
+  const backendChanged =
+    typeof configuredBlobProvider === 'string' && configuredBlobProvider !== blobs.provider;
+
+  const stepStatusLabels = {
+    ok: t('admin.systemResources.blobStorage.stepStatus.ok', 'passed'),
+    failed: t('admin.systemResources.blobStorage.stepStatus.failed', 'failed'),
+    skipped: t('admin.systemResources.blobStorage.stepStatus.skipped', 'skipped')
+  };
+  const translatedHint = errorCode
+    ? t(`admin.systemResources.blobStorage.hints.${errorCode}`, '')
+    : '';
+
   const checkedTime = blobs.checkedAt ? new Date(blobs.checkedAt) : null;
 
   return (
@@ -234,15 +281,20 @@ function BlobStorageStatus({ status, loadFailed = false, onRetry, onStatus }) {
               'The saved blob storage settings differ from the ones the server is running with. Restart the server to apply them.'
             )}
           </p>
-          <p className="mt-1">
-            {t(
-              'admin.systemResources.blobStorage.restartDetail',
-              'Saved: {{configured}}. Running: {{running}}.',
-              {
-                configured: backendLabel(configuredBlobProvider),
-                running: backendLabel(blobs.provider)
-              }
-            )}
+          <p className="mt-1" data-testid="blob-storage-restart-detail">
+            {backendChanged
+              ? t(
+                  'admin.systemResources.blobStorage.restartDetail',
+                  'Saved: {{configured}}. Running: {{running}}.',
+                  {
+                    configured: backendLabel(configuredBlobProvider),
+                    running: backendLabel(blobs.provider)
+                  }
+                )
+              : t(
+                  'admin.systemResources.blobStorage.restartSameBackend',
+                  'The backend stays the same; one of its saved settings differs: endpoint, bucket, prefix, region, size limit or encryption.'
+                )}
           </p>
         </Notice>
       )}
@@ -251,23 +303,35 @@ function BlobStorageStatus({ status, loadFailed = false, onRetry, onStatus }) {
         <Notice testId="blob-storage-leftovers">
           <p>
             {leftoverCapped
-              ? t(
-                  'admin.systemResources.blobStorage.leftoversAtLeast',
-                  'At least {{count}} files from before the switch are still on local disk. Users cannot open them until they are copied to the bucket.',
-                  { count: leftoverCount }
-                )
-              : t(
-                  'admin.systemResources.blobStorage.leftovers',
-                  '{{count}} files from before the switch are still on local disk. Users cannot open them until they are copied to the bucket.',
-                  { count: leftoverCount }
-                )}
+              ? t('admin.systemResources.blobStorage.leftoversAtLeast', {
+                  count: leftoverCount,
+                  defaultValue_one:
+                    'At least {{count}} file from before the switch is still on local disk. Users cannot open it until it is copied to the bucket.',
+                  defaultValue_other:
+                    'At least {{count}} files from before the switch are still on local disk. Users cannot open them until they are copied to the bucket.'
+                })
+              : t('admin.systemResources.blobStorage.leftovers', {
+                  count: leftoverCount,
+                  defaultValue_one:
+                    '{{count}} file from before the switch is still on local disk. Users cannot open it until it is copied to the bucket.',
+                  defaultValue_other:
+                    '{{count}} files from before the switch are still on local disk. Users cannot open them until they are copied to the bucket.'
+                })}
           </p>
+          {/* Both documented forms: the card cannot know how iHub was installed. */}
           <p className="mt-1">
             {t(
               'admin.systemResources.blobStorage.leftoversHint',
               'Copy them while the server is stopped:'
             )}{' '}
-            <code className={MONO_CLASS}>npm run storage:copy-blobs</code>
+            <code className={MONO_CLASS}>{COPY_COMMAND_NPM}</code>
+          </p>
+          <p className="mt-1">
+            {t(
+              'admin.systemResources.blobStorage.leftoversHintContainer',
+              'In the container image, where npm is not installed:'
+            )}{' '}
+            <code className={MONO_CLASS}>{COPY_COMMAND_NODE}</code>
           </p>
           <ul className="mt-1 list-disc list-inside">
             {leftovers.map(entry => (
@@ -373,12 +437,12 @@ function BlobStorageStatus({ status, loadFailed = false, onRetry, onStatus }) {
 
       {blobs.error && (
         <div className={`${CALLOUT_CLASS.danger} mt-4`} data-testid="blob-storage-error">
-          <p>{blobs.error.detail}</p>
+          <p>
+            <ErrorSentence t={t} code={errorCode} detail={blobs.error.detail} />
+          </p>
           <p className="mt-1">
-            {t(
-              `admin.systemResources.blobStorage.hints.${blobs.error.code}`,
-              blobs.error.hint || ''
-            )}
+            {translatedHint ||
+              (blobs.error.hint ? <ServerText>{blobs.error.hint}</ServerText> : null)}
           </p>
           <details className="mt-2">
             <summary className="cursor-pointer">
@@ -387,11 +451,22 @@ function BlobStorageStatus({ status, loadFailed = false, onRetry, onStatus }) {
             <p className="mt-1">
               <span className={MONO_CLASS}>{blobs.error.code}</span>
             </p>
+            {/* The server's own sentence, when the line above shows a translation. */}
+            {hasErrorSentence(t, errorCode) && blobs.error.detail && (
+              <p className="mt-1" data-testid="blob-storage-error-detail">
+                <ServerText>{blobs.error.detail}</ServerText>
+              </p>
+            )}
             {Array.isArray(blobs.steps) && blobs.steps.length > 0 && (
               <ul className="mt-1 list-disc list-inside">
                 {blobs.steps.map(step => (
                   <li key={step.name}>
-                    <span className={MONO_CLASS}>{step.name}</span>: {step.status}
+                    <span className={MONO_CLASS}>{step.name}</span>:{' '}
+                    {Object.hasOwn(stepStatusLabels, step.status) ? (
+                      stepStatusLabels[step.status]
+                    ) : (
+                      <ServerText>{step.status}</ServerText>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -429,16 +504,39 @@ function BlobStorageStatus({ status, loadFailed = false, onRetry, onStatus }) {
         data-testid="blob-storage-result"
         className="mt-2 text-sm text-green-700 dark:text-green-400"
       >
-        {result?.type === 'success' ? result.text : ''}
+        {result?.type === 'success'
+          ? t(
+              'admin.systemResources.blobStorage.testPassed',
+              'Check passed: a test object was written, read back and removed in {{ms}} ms.',
+              { ms: result.ms }
+            )
+          : ''}
       </div>
       {/* An alert is announced when it is added, so it only exists with a failure. */}
-      {result?.type === 'error' && (
+      {result && result.type !== 'success' && (
         <div
           role="alert"
           data-testid="blob-storage-result-error"
           className="text-sm text-red-700 dark:text-red-300"
         >
-          {result.text}
+          {result.type === 'failed' && (
+            <>
+              {t('admin.systemResources.blobStorage.testFailed', 'Check failed:')}{' '}
+              <ErrorSentence t={t} code={result.code} detail={result.detail} />
+            </>
+          )}
+          {result.type === 'timeout' &&
+            t(
+              'admin.systemResources.blobStorage.testTimedOut',
+              'The storage has not answered within {{seconds}} seconds. The server continues the check; this card shows the result as soon as there is one.',
+              { seconds: Math.round(STORAGE_TEST_TIMEOUT_MS / 1000) }
+            )}
+          {result.type === 'notRun' && (
+            <>
+              {t('admin.systemResources.blobStorage.testNotRun', 'The check could not run:')}{' '}
+              <ServerText>{result.detail}</ServerText>
+            </>
+          )}
         </div>
       )}
     </div>
