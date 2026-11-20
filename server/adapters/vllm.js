@@ -21,16 +21,26 @@ import logger from '../utils/logger.js';
  * vLLM ends the reasoning when the budget is spent and the model goes on to the
  * answer, so this is what makes the level do something on models whose chat
  * template ignores `reasoning_effort` (Qwen3).
+ *
+ * One table for every model. Qwen3.6 almost always thinks until the budget is
+ * spent, so each level is in effect a latency setting. Measured on Qwen3.6 and
+ * Gemma 4 on vLLM: structured steps (classification, extraction) gained
+ * nothing beyond about 256 tokens, answers with source citations needed about
+ * 2,000, and the longest reasoning seen was about 4,700 tokens (99th
+ * percentile), which `high` stays above.
  */
 export const THINKING_LEVEL_BUDGETS = Object.freeze({
-  minimal: 512,
-  low: 2048,
-  medium: 8192,
-  high: 16384
+  minimal: 256,
+  low: 1024,
+  medium: 2048,
+  high: 8192
 });
 
+/** Level whose budget applies when none is set; matches `resolveReasoningEffort`'s default. */
+export const DEFAULT_THINKING_LEVEL = 'medium';
+
 /** Share of `max_tokens` the reasoning may use at most; the rest is the answer's. */
-export const THINKING_MAX_SHARE = 0.75;
+export const THINKING_MAX_SHARE = 0.5;
 
 /**
  * Whether the model config asks for `thinking_token_budget`.
@@ -51,9 +61,11 @@ export function usesThinkingTokenBudget(model) {
 /**
  * The reasoning budget for one request.
  *
- * `thinking.budgetTokens` wins over the level; with neither, the reasoning
- * may take {@link THINKING_MAX_SHARE} of `max_tokens`. Whatever the source,
- * the budget never exceeds that share, so an answer always has room.
+ * `thinking.budgetTokens` wins over the level; with neither, the
+ * {@link DEFAULT_THINKING_LEVEL}'s budget applies, the same level
+ * `reasoning_effort` falls back to. Whatever the source, the budget never
+ * exceeds {@link THINKING_MAX_SHARE} of `max_tokens`, so an answer always has
+ * at least the other half.
  *
  * @param {Object} model - Model config (`thinking.budgetTokens`)
  * @param {string|undefined} level - Resolved reasoning level (request or model)
@@ -65,8 +77,9 @@ export function resolveThinkingTokenBudget(model, level, maxTokens) {
   const configured = model.thinking?.budgetTokens;
   const wanted = Number.isInteger(configured)
     ? configured
-    : THINKING_LEVEL_BUDGETS[String(level || '').toLowerCase()];
-  return wanted ? Math.min(wanted, ceiling) : ceiling;
+    : (THINKING_LEVEL_BUDGETS[String(level || '').toLowerCase()] ??
+      THINKING_LEVEL_BUDGETS[DEFAULT_THINKING_LEVEL]);
+  return Math.min(wanted, ceiling);
 }
 
 class VLLMAdapterClass extends BaseAdapter {

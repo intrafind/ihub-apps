@@ -1990,7 +1990,7 @@ function ModelFormEditor({
                                   <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                                     {t(
                                       'admin.models.hints.thinkingBudgetTokens',
-                                      'Empty uses the reasoning effort: minimal 512, low 2,048, medium 8,192, high 16,384 tokens (none set: 75% of the output limit). Never more than 75% of the output limit.'
+                                      'Empty uses the reasoning effort: minimal 256, low 1,024, medium 2,048, high 8,192 tokens (none set: medium). Never more than half of the output limit.'
                                     )}
                                   </p>
                                 </div>

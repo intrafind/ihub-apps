@@ -427,11 +427,21 @@ support reasoning — iHub reads `reasoning` (current vLLM) or `reasoning_conten
   e.g. gpt-oss). Qwen3's chat template ignores it; to limit Qwen3's thinking, turn on the
   token budget below.
 - `"tokenBudget": true` sends a reasoning token cap, `thinking_token_budget`, taken from the
-  level: `minimal` 512, `low` 2,048, `medium` 8,192, `high` 16,384 (no level: 75% of the
-  output limit). When the budget is spent, vLLM ends the reasoning and the model writes the
-  answer. `"budgetTokens": 4000` sets the number directly and turns the budget on by itself.
-  Either way the budget is capped at 75% of the output limit, so the answer always has room.
+  level: `minimal` 256, `low` 1,024, `medium` 2,048, `high` 8,192 (no level: `medium`'s). When
+  the budget is spent, vLLM ends the reasoning and the model writes the answer.
+  `"budgetTokens": 4000` sets the number directly and turns the budget on by itself. Either way
+  the budget is capped at half of the output limit, so the answer always keeps the other half.
   Only the dedicated `"provider": "local"` sends it.
+- The levels are the same for every model. Some models, such as Qwen3.6, almost always think
+  until the budget is spent, so the level mostly decides how long the user waits for the first
+  word of the answer. In measurements on Qwen3.6 and Gemma 4, short structured tasks gained
+  nothing beyond about 256 reasoning tokens, answers that cite sources needed about 2,000, and
+  the longest reasoning seen was about 4,700 tokens. Set `budgetTokens` where a model or app
+  needs something else.
+- Give vLLM a **transition phrase** in `--reasoning-config` together with the budget. Without
+  one, a model whose reasoning is cut off tends to go on reasoning in its visible answer; in the
+  same measurements this happened in up to 17% of answers without the phrase and in 1 of 576
+  with it.
 - The budget is **off by default** because vLLM refuses it with HTTP 400 ("thinking_token_budget
   is set but reasoning_config is not configured") unless the server has a reasoning config: a
   `--reasoning-parser` with start and end markers (such as `qwen3` or `deepseek_r1`) or
@@ -445,7 +455,7 @@ support reasoning — iHub reads `reasoning` (current vLLM) or `reasoning_conten
   not send it, because the OpenAI API rejects unknown fields.
 
 - **Reasoning uses the output limit.** vLLM counts reasoning tokens against `max_tokens`
-  (`maxOutputTokens`). The reasoning budget above keeps a quarter of it for the answer. If a
+  (`maxOutputTokens`). The reasoning budget above keeps at least half of it for the answer. If a
   model still runs out while thinking (without the budget), the answer
   is empty and the message says the model used its whole output limit for thinking, with a
   **Retry** button. Turn on `tokenBudget`, lower `level` or `budgetTokens`, or raise `maxOutputTokens` (keep prompt +
