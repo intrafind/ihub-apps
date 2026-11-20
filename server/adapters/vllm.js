@@ -32,7 +32,7 @@ import logger from '../utils/logger.js';
  * that (see {@link THINKING_MAX_SHARE}).
  */
 export const THINKING_LEVEL_BUDGETS = Object.freeze({
-  minimal: 256,
+  minimal: 512,
   low: 1024,
   medium: 2048,
   high: 8192,

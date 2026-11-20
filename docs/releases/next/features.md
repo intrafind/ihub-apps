@@ -27,8 +27,8 @@ With **Limit reasoning in tokens** turned on, vLLM models now get much smaller r
 so answers start sooner. Models such as Qwen3.6 almost always think until the budget is spent, and
 the old budgets were far above what the answers needed.
 
-- Reasoning effort now sets: Minimal 256, Low 1,024, Medium 2,048, High 8,192 tokens (before: 512,
-  2,048, 8,192 and 16,384). The levels are the same for every model.
+- Reasoning effort now sets: Minimal 512 (unchanged), Low 1,024, Medium 2,048, High 8,192 tokens
+  (before: 2,048, 8,192 and 16,384). The levels are the same for every model.
 - Without a reasoning effort, the Medium budget applies, the same level the request already used.
   Before, the reasoning could take 75% of the output limit.
 - The budget never takes more than half of the output limit, so the answer always keeps the other
