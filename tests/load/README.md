@@ -17,9 +17,10 @@ The harness is plain Node 20+ with no dependencies. It runs the same way on a la
 | `run.mjs`                   | The load generator: one shard per process                                                                                                                                      |
 | `report.mjs`                | Merges shard results and writes `report.md`, `summary.json` and `timeline.csv`                                                                                                 |
 | `teardown.mjs`              | Deletes test chats and projects (with `--delete-users`, also the users)                                                                                                        |
-| `stub/server.mjs`           | Paced fake LLM (OpenAI-compatible, with vLLM-style `/metrics`) and a synthetic website for crawls                                                                              |
+| `stub/server.mjs`           | Paced fake LLM (OpenAI-compatible, with vLLM-style `/metrics`) and a synthetic website for crawls. Calls a tool when a message asks for it (`lib/stubTools.mjs`)               |
+| `local-smoke.mjs`           | A load smoke on one machine with a verdict: starts the fake LLM and an iHub server, runs `smoke` and `agentic`, fails when a scenario did not work (`npm run loadtest:smoke`)  |
 | `tools/generate-corpus.mjs` | Generates 42 realistic Word, PowerPoint, Excel and PDF files (`npm run loadtest:corpus`)                                                                                       |
-| `profiles/*.json`           | One per experiment: `smoke`, `capacity-stub`, `company`, `capacity-gpu`, `ingest`, `ratelimits`, `soak`, `spike`                                                               |
+| `profiles/*.json`           | One per experiment: `smoke`, `agentic`, `capacity-stub`, `company`, `capacity-gpu`, `ingest`, `ratelimits`, `soak`, `spike`                                                    |
 | `docker-compose.yml`        | Local sizing lab: iHub with a fixed CPU/RAM budget, plus the stubs                                                                                                             |
 | `k8s/`                      | Stubs, optional iHub under test and snapshot pod, setup Job, Indexed runner Job, `run.sh` (one run end to end), `collect.sh`                                                   |
 
@@ -27,15 +28,16 @@ The harness is plain Node 20+ with no dependencies. It runs the same way on a la
 
 A VU is one **concurrently active** user. It loops over sessions, picked by the profile's `mix`. It waits `thinkTimeSec` between turns and `sessionPauseSec` between sessions.
 
-| Scenario       | Flow                                                                                                                        | Main load                                                               |
-| -------------- | --------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| `chat`         | SSE `GET /api/apps/{app}/chat/{id}` held open, then 2–5 × `POST` one message                                                | LLM, SSE relay, chat persistence                                        |
-| `chatFile`     | `POST /api/chats/{id}/files` (multipart), then a turn with `fileIds`, then follow-ups                                       | text extraction, file store, larger prompts                             |
-| `projectChat`  | 3–6 turns with `projectId` in an own or shared LT-chat project                                                              | project text injection (BM25/whole corpus), knowledge tools, decryption |
-| `projectBuild` | create a project → upload 3–8 files → poll until `ready` → crawl a site → add 10 pages as URL items → 2 chat turns → delete | ingestion queue, CPU-bound extraction, outbound fetches                 |
-| `browse`       | app list, chat history, project list                                                                                        | non-LLM API latency                                                     |
-| page load      | before 30% of sessions: auth status, configs, translations, styles, apps, models, prompts, AI notice                        | the per-user request rate a browser produces (rate limits)              |
-| `inference`    | `/api/inference/v1/chat/completions`, streamed                                                                              | pure LLM path (off by default)                                          |
+| Scenario       | Flow                                                                                                                                             | Main load                                                                          |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------- |
+| `chat`         | SSE `GET /api/apps/{app}/chat/{id}` held open, then 2–5 × `POST` one message                                                                     | LLM, SSE relay, chat persistence                                                   |
+| `chatFile`     | `POST /api/chats/{id}/files` (multipart), then a turn with `fileIds`, then follow-ups                                                            | text extraction, file store, larger prompts                                        |
+| `projectChat`  | 3–6 turns with `projectId` in an own or shared LT-chat project                                                                                   | project text injection (BM25/whole corpus), knowledge tools, decryption            |
+| `projectBuild` | create a project → upload 3–8 files → poll until `ready` → crawl a site → add 10 pages as URL items → 2 chat turns → delete                      | ingestion queue, CPU-bound extraction, outbound fetches                            |
+| `browse`       | app list, chat history, project list                                                                                                             | non-LLM API latency                                                                |
+| page load      | before 30% of sessions: auth status, configs, translations, styles, apps, models, prompts, AI notice                                             | the per-user request rate a browser produces (rate limits)                         |
+| `inference`    | `/api/inference/v1/chat/completions`, streamed                                                                                                   | pure LLM path (off by default)                                                     |
+| `agentTurn`    | 2–4 turns in the app `loadtest-agent`, each with 1–3 tool rounds: the model calls `list_scheduled_tasks`, iHub runs it and calls the model again | several model calls and tool calls per message (off by default; profile `agentic`) |
 
 ### Workload mixes
 
@@ -60,6 +62,35 @@ Measured per turn:
 Resource samples come from `GET /api/admin/system/resources` every 5 s. They cover CPU %, RSS, heap and event-loop delay for every worker and for the primary, plus host CPU/RAM and the data volume.
 
 Every request is also classified by the rate limiter it counts against, and counted per user and per runner IP per minute. That feeds the report's rate-limit section.
+
+### Turns with tool rounds
+
+A message to an agent is not one model call. The model asks for a tool, iHub runs it and calls the model again with the result, and this repeats until the model answers. The `agentTurn` scenario produces that load, and the profile `agentic` runs nothing else:
+
+```bash
+LT_BASE_URL=http://localhost:3000 LT_STUB_MODEL_URL=http://loadtest-stubs:8979 \
+node tests/load/setup.mjs --profile agentic
+LT_BASE_URL=http://localhost:3000 node tests/load/run.mjs --profile agentic
+```
+
+- Setup registers what the scenario needs, and only when `agentTurn` is in the mix: the fake LLM a second time as the model `loadtest-stub-agent`, which is offered tools, and the app `loadtest-agent`, which binds iHub's own tools. `loadtest-stub` stays a model without tools, so every other scenario remains one model call per turn.
+- The tool is `list_scheduled_tasks`: it only reads and needs no network.
+- The message carries a marker, `lt-tool:<name>:<rounds>`. The fake LLM answers with a call of that tool until it got that many results, and then with text. It calls a tool only when the request offers it.
+- A turn that ran fewer tool calls than its message asked for fails (`TOOL_ROUNDS_SHORT`): the app does not offer the tool, or the model was registered without tools. With a real model set `scenarios.agentTurn.requireToolRounds` to `false` in the profile; a real model decides for itself whether to call a tool.
+- The report gets a section "Turns with tool rounds": turns, the duration of a whole turn, and tool calls per turn. An agent turn does not count for the TTFT numbers and their SLO: its first answer token comes after several model calls.
+
+### A smoke run with a verdict
+
+`run.mjs` always ends with exit code 0 once it wrote its results; people read a capacity report. To check that the harness and the server still fit together, use:
+
+```bash
+npm run loadtest:smoke                                     # smoke, then agentic
+node tests/load/local-smoke.mjs --profiles agentic         # one profile
+```
+
+It starts the fake LLM and an iHub server on a contents directory of its own (`contents-e2e-load`, removed afterwards), prepares the server, runs the profiles and ends with exit code 1 when a chat scenario of a profile ended no turn, when a turn failed (`--max-error-pct`, default 0), or when an agent turn was short of its tool rounds. It takes about five minutes and measures nothing. The nightly workflow runs it.
+
+The tests of the harness itself run with `node --test "tests/load/**/*.test.mjs"`.
 
 ## Documents
 

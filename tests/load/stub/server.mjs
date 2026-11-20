@@ -11,7 +11,12 @@
  *    connections and relays busy like a real model, without GPU cost — the runs
  *    then measure iHub, not the LLM.
  *    GET /v1/models, GET /__stats (in-flight, prompt sizes — shows how much
- *    project context iHub injected).
+ *    project context iHub injected, and how many tool calls it sent).
+ *    A last user message with `lt-tool:<name>:<rounds>` makes it act as an
+ *    agent: it answers with a call of the tool <name> until it got <rounds>
+ *    results, then with text (lib/stubTools.mjs). The `agentTurn` scenario
+ *    uses it; without the marker, or without the tool in the request, nothing
+ *    changes.
  *
  * 2. Synthetic website on STUB_SITE_PORT (8980): /docs/ with STUB_SITE_PAGES
  *    interlinked HTML pages and robots.txt, STUB_SITE_LATENCY_MS per page. Use it
@@ -22,6 +27,7 @@
 
 import http from 'node:http';
 import { TOPICS, topicText } from '../lib/fixtures.mjs';
+import { toolCallFor } from '../lib/stubTools.mjs';
 
 const env = (k, d) => (process.env[k] !== undefined ? Number(process.env[k]) : d);
 const HOST = process.env.STUB_HOST || '0.0.0.0';
@@ -47,7 +53,8 @@ const stats = {
   errors: 0,
   promptChars: [],
   promptTokens: 0,
-  genTokens: 0
+  genTokens: 0,
+  toolCalls: 0
 };
 const jitter = v => Math.max(0, v * (1 + (Math.random() * 2 - 1) * JITTER));
 
@@ -98,6 +105,7 @@ const llm = http.createServer((req, res) => {
         inflight: stats.inflight,
         maxInflight: stats.maxInflight,
         errors: stats.errors,
+        toolCalls: stats.toolCalls,
         promptChars: {
           p50: percentile(stats.promptChars, 50),
           p95: percentile(stats.promptChars, 95),
@@ -146,6 +154,62 @@ const llm = http.createServer((req, res) => {
       }
     };
     res.on('close', finish);
+
+    // An agent round: the model asks for a tool instead of answering (lib/stubTools.mjs).
+    const toolCall = toolCallFor(body);
+    if (toolCall) {
+      stats.toolCalls += 1;
+      const call = {
+        id: toolCall.id,
+        type: 'function',
+        function: { name: toolCall.name, arguments: '{}' }
+      };
+      const callUsage = { ...usage, completion_tokens: 8, total_tokens: usage.prompt_tokens + 8 };
+      setTimeout(() => {
+        if (res.destroyed) return finish();
+        if (!body.stream) {
+          res.writeHead(200, { 'content-type': 'application/json' });
+          res.end(
+            JSON.stringify({
+              id,
+              object: 'chat.completion',
+              model,
+              choices: [
+                {
+                  index: 0,
+                  message: { role: 'assistant', content: null, tool_calls: [call] },
+                  finish_reason: 'tool_calls'
+                }
+              ],
+              usage: callUsage
+            })
+          );
+          return finish();
+        }
+        res.writeHead(200, {
+          'content-type': 'text/event-stream',
+          'cache-control': 'no-cache',
+          connection: 'keep-alive'
+        });
+        const chunk = (delta, finishReason) =>
+          res.write(
+            `data: ${JSON.stringify({
+              id,
+              object: 'chat.completion.chunk',
+              model,
+              choices: [{ index: 0, delta, finish_reason: finishReason }]
+            })}\n\n`
+          );
+        chunk({ role: 'assistant', content: null, tool_calls: [{ index: 0, ...call }] }, null);
+        chunk({}, 'tool_calls');
+        res.write(
+          `data: ${JSON.stringify({ id, object: 'chat.completion.chunk', model, choices: [], usage: callUsage })}\n\n`
+        );
+        res.end('data: [DONE]\n\n');
+        return finish();
+      }, jitter(TTFT_MS));
+      return;
+    }
 
     if (!body.stream) {
       setTimeout(

@@ -44,8 +44,10 @@ import projectChat from './scenarios/projectChat.mjs';
 import projectBuild from './scenarios/projectBuild.mjs';
 import browse from './scenarios/browse.mjs';
 import inference from './scenarios/inference.mjs';
+import agentTurn from './scenarios/agentTurn.mjs';
+import { CHAT_LABELS } from './lib/report.mjs';
 
-const SCENARIOS = { chat, chatFile, projectChat, projectBuild, browse, inference };
+const SCENARIOS = { chat, chatFile, projectChat, projectBuild, browse, inference, agentTurn };
 
 const cfg = loadConfig();
 const { index: shardIndex, count: shardCount } = cfg.shard;
@@ -266,14 +268,8 @@ const result = await runSchedule({
     lastLog = elapsed;
     const c = metrics.counts;
     const total = name => Object.values(c[name] || {}).reduce((a, b) => a + b, 0);
-    const ok = ['chat', 'chatFile', 'projectChat', 'projectBuildChat', 'inference'].reduce(
-      (a, l) => a + total(`${l}.turn.ok`),
-      0
-    );
-    const err = ['chat', 'chatFile', 'projectChat', 'projectBuildChat', 'inference'].reduce(
-      (a, l) => a + total(`${l}.turn.error`),
-      0
-    );
+    const ok = CHAT_LABELS.reduce((a, l) => a + total(`${l}.turn.ok`), 0);
+    const err = CHAT_LABELS.reduce((a, l) => a + total(`${l}.turn.error`), 0);
     log(
       `t=${Math.round(elapsed / 1000)}s/${totalSec}s stage ${stage} · target ${target} VUs (this shard ${active}) · turns ok ${ok} err ${err}`
     );

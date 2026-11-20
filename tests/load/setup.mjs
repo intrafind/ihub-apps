@@ -204,6 +204,60 @@ if (cfg.setup.stub?.url && !flags['skip-models']) {
   });
 }
 
+// --- 3b. the agent app and its model (only when `agentTurn` is in the mix) -----
+// A turn with tool rounds needs a model that is offered tools and an app that
+// binds some: the same stub as a second model (the first keeps `supportsTools:
+// 'none'`, so every other scenario stays one model call per turn), and an app
+// with iHub's own tools, of which `list_scheduled_tasks` only reads.
+if (cfg.mix.agentTurn > 0 && !flags['skip-models']) {
+  const agent = cfg.setup.agent;
+  if (!cfg.setup.stub?.url) {
+    console.error(
+      'agentTurn is in the mix but no stub model URL is set. Set LT_STUB_MODEL_URL (the fake LLM as iHub reaches it).'
+    );
+    process.exit(2);
+  }
+  await upsertModel({
+    id: agent.modelId,
+    modelId: 'loadtest-stub-model',
+    name: { en: 'Load test stub with tools (fake LLM)' },
+    description: { en: 'Paced fake LLM that calls tools, for turns with tool rounds' },
+    url: `${v1(cfg.setup.stub.url)}/chat/completions`,
+    provider: 'local',
+    contextWindow: cfg.setup.stub.contextWindow,
+    maxOutputTokens: cfg.setup.stub.maxOutputTokens,
+    supportsTools: 'auto',
+    concurrency: 100,
+    enabled: true
+  });
+  const app = {
+    id: agent.appId,
+    order: 900,
+    name: { en: 'Load test agent', de: 'Lasttest-Agent' },
+    description: {
+      en: 'Chat with iHub tools, for load tests of turns with tool rounds.',
+      de: 'Chat mit iHub-Werkzeugen, für Lasttests von Antworten mit Werkzeugaufrufen.'
+    },
+    color: '#0F766E',
+    icon: 'chat-bubbles',
+    system: { en: 'You are a helpful assistant.', de: 'Sie sind ein hilfreicher Assistent.' },
+    preferredModel: agent.modelId,
+    preferredOutputFormat: 'markdown',
+    sendChatHistory: true,
+    integrations: { ihub: {} },
+    enabled: true
+  };
+  const created = await admin.request('POST', '/api/admin/apps', { json: app });
+  if (created.status === 409) {
+    await admin.request('PUT', `/api/admin/apps/${app.id}`, { json: app, expect: [200] });
+    log(`updated app ${app.id}`);
+  } else if (created.status >= 300) {
+    throw new HttpError(`create app ${app.id}`, created.status, created.body);
+  } else {
+    log(`created app ${app.id}`);
+  }
+}
+
 // --- 4. users -----------------------------------------------------------------
 if (!flags['skip-users']) {
   let created = 0;

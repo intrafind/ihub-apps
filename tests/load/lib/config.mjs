@@ -41,7 +41,15 @@ export const DEFAULTS = {
   turnTimeoutSec: 300,
   streamIdleTimeoutSec: 120,
   loginConcurrency: 4,
-  mix: { chat: 45, chatFile: 15, projectChat: 30, projectBuild: 5, browse: 5, inference: 0 },
+  mix: {
+    chat: 45,
+    chatFile: 15,
+    projectChat: 30,
+    projectBuild: 5,
+    browse: 5,
+    inference: 0,
+    agentTurn: 0
+  },
   scenarios: {
     chat: { turns: [2, 5], ephemeral: false },
     chatFile: { turns: [2, 4], maxFileBytes: 10_000_000, ephemeral: false },
@@ -62,7 +70,19 @@ export const DEFAULTS = {
         maxConcurrent: 2
       }
     },
-    inference: { requests: [3, 10], pauseSec: [2, 10], model: null }
+    inference: { requests: [3, 10], pauseSec: [2, 10], model: null },
+    // A turn with tool rounds (scenarios/agentTurn.mjs), in the app and on the model
+    // that setup.mjs registers for it (`setup.agent`). `tool` is one that only reads
+    // and needs no network. `requireToolRounds`: a turn that ran fewer tool calls
+    // than asked for counts as failed; switch it off for a real model, which decides
+    // for itself whether to call a tool.
+    agentTurn: {
+      turns: [2, 4],
+      toolRounds: [1, 3],
+      tool: 'list_scheduled_tasks',
+      requireToolRounds: true,
+      ephemeral: false
+    }
   },
   setup: {
     enableFeatures: true,
@@ -96,7 +116,10 @@ export const DEFAULTS = {
     },
     // Paced fake LLM (stub/server.mjs) for measuring iHub itself: model `loadtest-stub`.
     // Same context window as the GPU model, so project chats inject as much text.
-    stub: { id: 'loadtest-stub', url: null, contextWindow: 173184, maxOutputTokens: 4096 }
+    stub: { id: 'loadtest-stub', url: null, contextWindow: 173184, maxOutputTokens: 4096 },
+    // For the `agentTurn` scenario, registered when it is in the mix: the same stub
+    // as a model that is offered tools, and an app that binds iHub's own tools.
+    agent: { appId: 'loadtest-agent', modelId: 'loadtest-stub-agent' }
   },
   llm: { expectedTtftMs: null },
   server: { workers: null, vcpus: null },
