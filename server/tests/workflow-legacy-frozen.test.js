@@ -133,6 +133,14 @@ export function frozenHash(text) {
   return crypto.createHash('sha256').update(text.replaceAll('\r\n', '\n'), 'utf8').digest('hex');
 }
 
+/** The order `sort()` has without a comparator, said out loud: by UTF-16 code unit. */
+const byCodeUnit = (a, b) => {
+  const x = String(a);
+  const y = String(b);
+  if (x < y) return -1;
+  return x > y ? 1 : 0;
+};
+
 const read = file => fs.readFileSync(path.join(REPO_ROOT, file), 'utf8');
 
 /** Every file below the frozen directories, relative to the repository root, sorted. */
@@ -144,7 +152,7 @@ function filesInFrozenDirectories() {
       .map(entry =>
         path.relative(REPO_ROOT, path.join(entry.parentPath, entry.name)).split(path.sep).join('/')
       )
-  ).sort();
+  ).sort(byCodeUnit);
 }
 
 if (process.argv.includes('--print')) {
@@ -153,7 +161,7 @@ if (process.argv.includes('--print')) {
       ...Object.keys(FROZEN).filter(file => fs.existsSync(path.join(REPO_ROOT, file))),
       ...filesInFrozenDirectories()
     ])
-  ].sort();
+  ].sort(byCodeUnit);
   for (const file of files) console.log(`  '${file}':\n    '${frozenHash(read(file))}',`);
   process.exit(0);
 }
@@ -180,7 +188,7 @@ test('the frozen directories hold exactly the files of the table', () => {
   );
   assert.deepEqual(
     filesInFrozenDirectories(),
-    [...listed].sort(),
+    [...listed].sort(byCodeUnit),
     `A file was added to or removed from a frozen directory. ${HOW_TO}`
   );
 });

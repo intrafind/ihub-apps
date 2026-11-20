@@ -14,6 +14,7 @@ import path from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { isTestOnlyTitle, productionPaths, titleType } from '../../scripts/check-test-only-diff.js';
+import { gitExecutable } from '../../scripts/git-executable.js';
 
 const SCRIPT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -76,7 +77,7 @@ test('a path outside tests, docs, scripts and workflows is a production path', (
 function scratchRepository(t, files) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ihub-test-only-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
-  const git = (...args) => execFileSync('git', args, { cwd: dir, stdio: 'pipe' });
+  const git = (...args) => execFileSync(gitExecutable(), args, { cwd: dir, stdio: 'pipe' });
   const write = (file, text) => {
     fs.mkdirSync(path.dirname(path.join(dir, file)), { recursive: true });
     fs.writeFileSync(path.join(dir, file), text);
@@ -86,7 +87,10 @@ function scratchRepository(t, files) {
   git('config', 'user.name', 'Test');
   git('config', 'commit.gpgsign', 'false');
   write('server/services/chat/ChatService.js', 'export const a = 1;\n');
-  write('scripts/check-test-only-diff.js', fs.readFileSync(SCRIPT, 'utf8'));
+  // The script and the one module it imports.
+  for (const name of ['check-test-only-diff.js', 'git-executable.js']) {
+    write(`scripts/${name}`, fs.readFileSync(path.join(path.dirname(SCRIPT), name), 'utf8'));
+  }
   git('add', '.');
   git('commit', '--quiet', '-m', 'base');
   git('checkout', '--quiet', '-b', 'work');

@@ -57,6 +57,14 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(here, '../../../..');
 const STATEMENTS_DIR = path.join(REPO_ROOT, 'tests/fixtures/stellungnahmen');
 
+/** The order `sort()` has without a comparator, said out loud: by UTF-16 code unit. */
+const byCodeUnit = (a, b) => {
+  const x = String(a);
+  const y = String(b);
+  if (x < y) return -1;
+  return x > y ? 1 : 0;
+};
+
 /** A workflow as it ships (`server/defaults/workflows/<id>.json`). */
 const shipped = id =>
   JSON.parse(
@@ -248,7 +256,7 @@ async function ingestStatements(user) {
   const chatId = inboundChatId('golden-statements');
   const documents = [];
   const refused = [];
-  for (const name of fs.readdirSync(STATEMENTS_DIR).sort()) {
+  for (const name of fs.readdirSync(STATEMENTS_DIR).sort(byCodeUnit)) {
     const mimeType = MIME_TYPES[path.extname(name)];
     if (!mimeType) continue;
     const bytes = fs.readFileSync(path.join(STATEMENTS_DIR, name));

@@ -26,6 +26,15 @@
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { gitExecutable } from './git-executable.js';
+
+/** The order `sort()` has without a comparator, said out loud: by UTF-16 code unit. */
+const byCodeUnit = (a, b) => {
+  const x = String(a);
+  const y = String(b);
+  if (x < y) return -1;
+  return x > y ? 1 : 0;
+};
 
 /** The types of a title that claim "no production code". */
 export const TEST_ONLY_TYPES = Object.freeze(['test', 'docs', 'ci']);
@@ -64,11 +73,16 @@ export function isTestOnlyTitle(title) {
 export function productionPaths(paths) {
   return paths
     .filter(file => file && !ALLOWED_PREFIXES.some(prefix => file.startsWith(prefix)))
-    .sort();
+    .sort(byCodeUnit);
 }
 
 function git(args, cwd) {
-  return execFileSync('git', args, { cwd, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  // By its full path, never through PATH (scripts/git-executable.js).
+  return execFileSync(gitExecutable(), args, {
+    cwd,
+    encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024
+  });
 }
 
 /**

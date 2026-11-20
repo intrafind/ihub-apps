@@ -91,9 +91,17 @@ const UNRECORDED_HEADERS = new Set([
   'x-powered-by'
 ]);
 
+/** The order `sort()` has without a comparator, said out loud: by UTF-16 code unit. */
+const byCodeUnit = (a, b) => {
+  const x = String(a);
+  const y = String(b);
+  if (x < y) return -1;
+  return x > y ? 1 : 0;
+};
+
 function recordedHeaders(headers) {
   const out = {};
-  for (const name of Object.keys(headers).sort()) {
+  for (const name of Object.keys(headers).sort(byCodeUnit)) {
     if (!UNRECORDED_HEADERS.has(name)) out[name] = headers[name];
   }
   return out;
