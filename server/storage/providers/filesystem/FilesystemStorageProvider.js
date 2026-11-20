@@ -669,7 +669,9 @@ export class FilesystemStorageProvider extends StorageProvider {
     const targets = await this._logs.atRestTargets();
     if (targets.streams.length > 0 || targets.blobDirs.length > 0) return false;
     for (const ns of await this._blobs.namespaces()) {
-      for await (const _item of this._blobs.scan(ns)) return false;
+      // Only whether the namespace holds a blob at all: ask for the first one.
+      const first = await this._blobs.scan(ns)[Symbol.asyncIterator]().next();
+      if (!first.done) return false;
     }
     return sealedStoresHoldNothing(this._contentsDir);
   }

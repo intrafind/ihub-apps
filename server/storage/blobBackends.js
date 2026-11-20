@@ -12,6 +12,7 @@
  * @module storage/blobBackends
  */
 import { StorageError, UnknownProviderError } from './errors.js';
+import { compareCodeUnits } from '../../shared/toolApproval.js';
 
 /** The value of `storage.blobs.provider` that means "the provider's own blob facet". */
 export const DEFAULT_BLOB_BACKEND = 'default';
@@ -74,7 +75,7 @@ export function registerBlobBackend(name, factory) {
  * @returns {string[]}
  */
 export function getRegisteredBlobBackends() {
-  return [...factories.keys()].sort();
+  return [...factories.keys()].sort(compareCodeUnits);
 }
 
 /**

@@ -11,6 +11,7 @@
 import './scratchContents.js';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { compareCodeUnits } from '../../../shared/toolApproval.js';
 import { FilesystemStorageProvider } from '../../storage/providers/filesystem/index.js';
 import * as keyModule from '../../crypto/KeyProvider.js';
 import { MASTER_KEY_A, fixedKeys } from './blobTestSupport.js';
@@ -68,7 +69,7 @@ export async function filesUnder(dir) {
     }
   };
   await walk(dir);
-  return found.sort();
+  return found.sort(compareCodeUnits);
 }
 
 /**

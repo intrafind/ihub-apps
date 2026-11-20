@@ -24,6 +24,7 @@ import { createServer } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { compareCodeUnits } from '../../../shared/toolApproval.js';
 
 export const REPO_ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -183,7 +184,7 @@ export async function filesBelow(dir) {
     }
   };
   await walk(dir);
-  return found.sort();
+  return found.sort(compareCodeUnits);
 }
 
 /**

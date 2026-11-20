@@ -162,16 +162,16 @@ export async function writeZip(entries, output) {
   closed.catch(() => {});
   archive.pipe(output);
 
-  let appended = 0;
-  let processed = 0;
+  // One object, changed from the archiver's event handler and from the loop below.
+  const progress = { appended: 0, processed: 0 };
   let wake = null;
   archive.on('entry', () => {
-    processed += 1;
+    progress.processed += 1;
     wake?.();
   });
   /** Resolves when everything appended so far is in the archive. */
   const drained = async () => {
-    while (processed < appended) {
+    while (progress.processed < progress.appended) {
       await new Promise(resolve => {
         wake = resolve;
       });
@@ -189,7 +189,7 @@ export async function writeZip(entries, output) {
     for (const entry of entries) {
       if (typeof entry.open !== 'function') {
         archive.append(entry.data, dated(entry));
-        appended += 1;
+        progress.appended += 1;
         continue;
       }
       await Promise.race([drained(), failed, closed]);
@@ -205,7 +205,7 @@ export async function writeZip(entries, output) {
       });
       broke.catch(() => {});
       archive.append(stream, dated(entry));
-      appended += 1;
+      progress.appended += 1;
       await Promise.race([drained(), failed, closed, broke]);
       current = null;
     }

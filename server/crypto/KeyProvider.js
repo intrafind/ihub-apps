@@ -26,6 +26,7 @@
 import crypto from 'node:crypto';
 import tokenStorageService from '../services/TokenStorageService.js';
 import logger from '../utils/logger.js';
+import { compareCodeUnits } from '../../shared/toolApproval.js';
 import { KEY_BYTES } from './streamingAead.js';
 
 /**
@@ -68,7 +69,7 @@ export class UnknownKeyProviderError extends KeyAccessDenied {
   /** @param {string} id - The id that was asked for. */
   constructor(id) {
     super(
-      `Unknown key provider '${String(id).slice(0, 64)}'. Registered: ${[...providers.keys()].sort().join(', ')}`,
+      `Unknown key provider '${String(id).slice(0, 64)}'. Registered: ${[...providers.keys()].sort(compareCodeUnits).join(', ')}`,
       null,
       'unknown-provider'
     );

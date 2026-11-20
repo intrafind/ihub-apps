@@ -47,6 +47,7 @@
  */
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
+import { compareCodeUnits } from '../../../shared/toolApproval.js';
 import logger from '../../utils/logger.js';
 import { EncryptingBlobStore } from '../EncryptingBlobStore.js';
 import { encryptExistingBlobs } from '../encryptExistingBlobs.js';
@@ -509,7 +510,9 @@ function remoteBlobStep({
       // Connects (and so loads the key module); an unreachable bucket fails here.
       await store.inner.headBucket?.();
       if (typeof store.inner.namespaces === 'function') {
-        namespaces = [...new Set([...namespaces, ...(await store.inner.namespaces())])].sort();
+        namespaces = [...new Set([...namespaces, ...(await store.inner.namespaces())])].sort(
+          compareCodeUnits
+        );
       }
       keyCheck = await store.verifyKey({ create: false });
       found = await scan();

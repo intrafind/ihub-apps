@@ -25,6 +25,7 @@
  */
 import { encryptExistingBlobs } from '../encryptExistingBlobs.js';
 import { BLOB_NAMESPACES } from '../namespaces.js';
+import { compareCodeUnits } from '../../../shared/toolApproval.js';
 
 /** Objects in flight at once, like the document store's read concurrency. */
 export const CONVERT_CONCURRENCY = 16;
@@ -210,7 +211,9 @@ export async function convertStorage(
   if (blobs && facets.includes('blobs')) {
     const inner = blobs.inner;
     const found = typeof inner?.namespaces === 'function' ? await inner.namespaces() : [];
-    const namespaces = [...new Set([...Object.values(BLOB_NAMESPACES), ...found])].sort();
+    const namespaces = [...new Set([...Object.values(BLOB_NAMESPACES), ...found])].sort(
+      compareCodeUnits
+    );
     // An overwrite by the conversion is not a new blob: keep its age.
     if (!dryRun && inner && 'keepModificationTime' in inner) inner.keepModificationTime = true;
     try {

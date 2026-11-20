@@ -136,7 +136,9 @@ class BucketStore {
    * @returns {string} The ETag.
    */
   put(key, data, contentType = 'application/octet-stream') {
-    const etag = `"${crypto.createHash('md5').update(data).digest('hex')}"`;
+    // S3 defines the ETag of a single-part object as the MD5 of its bytes; it
+    // identifies the content and protects nothing.
+    const etag = `"${crypto.createHash('md5').update(data).digest('hex')}"`; // NOSONAR
     const entry = { size: data.length, etag, lastModified: new Date().toISOString(), contentType };
     if (this.dir) {
       const file = path.join(
@@ -354,7 +356,8 @@ export async function startFakeS3Server({
   };
 
   const handle = async (req, res, body) => {
-    const url = new URL(req.url, 'http://fake');
+    // The base only serves to parse the request path; nothing is fetched from it.
+    const url = new URL(req.url, 'https://fake.invalid');
     const [, bucket = '', ...rest] = url.pathname.split('/');
     let key = '';
     try {

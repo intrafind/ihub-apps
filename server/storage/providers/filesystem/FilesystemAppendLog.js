@@ -47,6 +47,7 @@ import { promises as fs, createReadStream } from 'node:fs';
 import { createInterface } from 'node:readline';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { compareCodeUnits } from '../../../../shared/toolApproval.js';
 import logger from '../../../utils/logger.js';
 import { createJsonlAppender } from '../../../utils/jsonlAppender.js';
 import { atomicWriteFile, writeFully } from '../../../utils/atomicWrite.js';
@@ -857,7 +858,7 @@ export class FilesystemAppendLog extends AppendLog {
    * @private
    */
   async _openLines(stream, lines, keyLines) {
-    if (!lines.some(isSealedLine)) return lines;
+    if (!lines.some(line => isSealedLine(line))) return lines;
     const tenant = this._atRest.tenant;
     const canonical = this._canonical(stream);
     const keyProvider = await this._atRest.keyProvider();
@@ -951,8 +952,8 @@ export class FilesystemAppendLog extends AppendLog {
       }
     };
     await walk(this._logsDir);
-    found.streams.sort();
-    found.blobDirs.sort();
+    found.streams.sort(compareCodeUnits);
+    found.blobDirs.sort(compareCodeUnits);
     return found;
   }
 

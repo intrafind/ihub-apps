@@ -93,7 +93,7 @@ export async function sendStream(req, res, stream, { headers = {} } = {}) {
   }
   const names = [];
   for (const [name, value] of Object.entries(headers)) {
-    if (value === undefined || value === null) continue;
+    if (value == null) continue;
     res.setHeader(name, value);
     names.push(name);
   }
