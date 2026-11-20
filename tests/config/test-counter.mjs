@@ -12,7 +12,9 @@
  *
  * - `POST /count/<key>` (the tool `e2e_counter_write`) adds one to the counter of
  *   `<key>` and answers `{ key, count }`. A JSON body `{ "value": "<text>" }`
- *   stores the text with the write.
+ *   stores the text with the write. The header `x-ihub-test-writer` names the
+ *   process that wrote (the tool sends its process id), for a test that has to
+ *   know which worker of a server did.
  * - `GET /count/<key>` (the tool `e2e_counter_read`) answers
  *   `{ key, count, values }`.
  *
@@ -27,6 +29,11 @@
 
 import http from 'node:http';
 
+/** The request header in which a write names the process it comes from. */
+export const WRITER_HEADER = 'x-ihub-test-writer';
+
+/** What names a writer: a process id, or a plain word a test chose. */
+const WRITER = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 /** A key as the test tools accept it. */
 const KEY = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 /** A body larger than this is refused: nothing a test stores is that long. */
@@ -54,21 +61,30 @@ function readBody(req) {
  * A counter and its HTTP handler.
  *
  * @returns {{
- *   write: (key: string, value?: string) => number,
+ *   write: (key: string, value?: string, writer?: string) => number,
  *   read: (key: string) => {key: string, count: number, values: string[]},
  *   count: (key: string) => number,
+ *   writers: (key: string) => string[],
  *   snapshot: () => {total: number, counters: Record<string, {count: number, values: string[]}>},
  *   reset: () => void,
  *   handle: (req: http.IncomingMessage, res: http.ServerResponse) => Promise<boolean>
  * }} `handle` answers the request when it is one of the counter's and resolves to
  *   whether it did, so another server can serve the counter next to its own paths.
+ *   `writers` lists who wrote a key, one entry for each write that named its
+ *   writer, in the order of the writes; it is not part of what `read` and
+ *   `snapshot` answer.
  */
 export function createCounter() {
   /** @type {Map<string, {count: number, values: string[]}>} */
   const counters = new Map();
+  /** @type {Map<string, string[]>} */
+  const writersOf = new Map();
 
   const entry = key => counters.get(key) || { count: 0, values: [] };
-  const write = (key, value) => {
+  const write = (key, value, writer) => {
+    if (typeof writer === 'string' && WRITER.test(writer)) {
+      writersOf.set(key, [...(writersOf.get(key) || []), writer]);
+    }
     const next = entry(key);
     const updated = {
       count: next.count + 1,
@@ -90,7 +106,10 @@ export function createCounter() {
     }
     return { total, counters: all };
   };
-  const reset = () => counters.clear();
+  const reset = () => {
+    counters.clear();
+    writersOf.clear();
+  };
 
   const answer = (res, status, payload) => {
     res.writeHead(status, { 'content-type': 'application/json' });
@@ -135,14 +154,22 @@ export function createCounter() {
         answer(res, 400, { error: 'the body must be JSON of at most 64 KB' });
         return true;
       }
-      answer(res, 200, { key, count: write(key, value) });
+      answer(res, 200, { key, count: write(key, value, req.headers[WRITER_HEADER]) });
       return true;
     }
     answer(res, 405, { error: 'GET or POST' });
     return true;
   };
 
-  return { write, read, count: key => entry(key).count, snapshot, reset, handle };
+  return {
+    write,
+    read,
+    count: key => entry(key).count,
+    writers: key => [...(writersOf.get(key) || [])],
+    snapshot,
+    reset,
+    handle
+  };
 }
 
 /**

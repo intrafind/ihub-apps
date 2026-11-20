@@ -118,6 +118,8 @@ test('the write tool posts to the counter and the read tool reads it, through th
     total: 2,
     counters: { 'order-1': { count: 2, values: ['second'] } }
   });
+  // Each write names the process it came from: with two workers a test can tell them apart.
+  assert.deepEqual(counter.counter.writers('order-1'), [String(process.pid), String(process.pid)]);
 });
 
 test('without a fetch of its own the connector uses the HTTP client of the server', async t => {

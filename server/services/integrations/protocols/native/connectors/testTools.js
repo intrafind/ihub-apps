@@ -11,7 +11,9 @@
  * hosts (`tests/config/test-counter.mjs`):
  *
  * - `e2e_counter_write` adds one to the counter of a key. It is a write: it
- *   is not read-only and never runs side by side with another call.
+ *   is not read-only and never runs side by side with another call. The write
+ *   carries the id of this process, so that a test of a server with two
+ *   workers can tell which of them wrote.
  * - `e2e_counter_read` returns the count and the values written for a key. It
  *   is a read, and what it returns is content from outside iHub
  *   (`untrustedInput`): the offline stand-in for a page or a document, because
@@ -39,6 +41,9 @@ export const TEST_TOOLS_CONNECTOR_ID = 'ihub_test_tools';
 
 /** The tool ids, which are also the names of the actions. */
 export const TEST_TOOL_IDS = Object.freeze(['e2e_counter_write', 'e2e_counter_read']);
+
+/** The request header in which a write names its process (`tests/config/test-counter.mjs`). */
+const WRITER_HEADER = 'x-ihub-test-writer';
 
 /** A counter key: what a test may put into a URL path without escaping surprises. */
 const KEY = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
@@ -125,7 +130,7 @@ export function createTestToolsConnector({
           killPoint('e2e-counter-before-write');
           const result = await call(key, {
             method: 'POST',
-            headers: { 'content-type': 'application/json' },
+            headers: { 'content-type': 'application/json', [WRITER_HEADER]: String(process.pid) },
             body: JSON.stringify({ value })
           });
           // The write happened and its result is not stored anywhere in iHub yet.

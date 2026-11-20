@@ -8,7 +8,7 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createCounter, startCounter } from '../../tests/config/test-counter.mjs';
+import { WRITER_HEADER, createCounter, startCounter } from '../../tests/config/test-counter.mjs';
 
 test('every write counts: two writes for one key are 2, never 1', () => {
   const counter = createCounter();
@@ -66,6 +66,37 @@ test('over HTTP: write, read, the overview for the test, and reset', async t => 
     200,
     { key: 'order-1', count: 0, values: [] }
   ]);
+});
+
+test('a write can name the process it comes from; the answers of the counter do not change', async t => {
+  const started = await startCounter();
+  t.after(() => started.close());
+  const write = async (key, writer) => {
+    const response = await fetch(`${started.url}/count/${key}`, {
+      method: 'POST',
+      headers: writer === undefined ? {} : { [WRITER_HEADER]: writer }
+    });
+    return response.json();
+  };
+
+  assert.deepEqual(await write('k', '4711'), { key: 'k', count: 1 });
+  assert.deepEqual(await write('k'), { key: 'k', count: 2 });
+  assert.deepEqual(await write('k', '4712'), { key: 'k', count: 3 });
+  // Not a plain name: the write counts, and nobody is put down as its writer.
+  assert.deepEqual(await write('k', 'a b/c'), { key: 'k', count: 4 });
+  assert.deepEqual(await write('other', '4711'), { key: 'other', count: 1 });
+
+  assert.deepEqual(started.counter.writers('k'), ['4711', '4712']);
+  assert.deepEqual(started.counter.writers('other'), ['4711']);
+  assert.deepEqual(started.counter.writers('never-written'), []);
+  started.counter.writers('k').push('forged');
+  assert.deepEqual(started.counter.writers('k'), ['4711', '4712'], 'a copy, as the rest');
+  // What a tool and a browser spec read stays as it was.
+  assert.deepEqual(started.counter.read('k'), { key: 'k', count: 4, values: [] });
+  assert.deepEqual(started.counter.snapshot().counters.other, { count: 1, values: [] });
+
+  started.counter.reset();
+  assert.deepEqual(started.counter.writers('k'), []);
 });
 
 test('over HTTP: a bad key, a bad body, another method and another path are refused', async t => {
