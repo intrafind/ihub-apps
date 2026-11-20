@@ -107,22 +107,6 @@ jobs:
         if: env.CONFIGURED == 'true'
         run: node tests/security/redteam/check-access.mjs
 
-      # Informational: the eval's calls, made on the runner and from promptfoo's own
-      # container with the same flags, to show where a lost token or a refused app is lost.
-      - name: Diagnose the access from the container
-        if: env.CONFIGURED == 'true'
-        continue-on-error: true
-        env:
-          # ghcr.io/promptfoo/promptfoo:0.126.0 (linux/amd64)
-          PROMPTFOO_IMAGE: ghcr.io/promptfoo/promptfoo@sha256:26def11a11832e9c22c64a792d0668a73f35dbad1568cd3c5a1b7cda5501b376
-        run: |
-          node tests/security/redteam/diagnose-container.mjs runner
-          docker run --rm --network host --user "$(id -u):$(id -g)" \
-            -v "$GITHUB_WORKSPACE:/work" -w /work -e HOME=/tmp \
-            -e IHUB_TOKEN -e PROMPTFOO_DISABLE_TELEMETRY -e PROMPTFOO_DISABLE_SHARING \
-            -e PROMPTFOO_DISABLE_REMOTE_GENERATION -e PROMPTFOO_DISABLE_UPDATE \
-            --entrypoint node "$PROMPTFOO_IMAGE" tests/security/redteam/diagnose-container.mjs container
-
       # promptfoo's official image, pinned by digest: no packages are resolved or installed
       # on the runner, so the run never picks up a new transitive dependency.
       - name: Run the red team
