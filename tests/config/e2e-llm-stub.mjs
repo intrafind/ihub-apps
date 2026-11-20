@@ -285,9 +285,11 @@ export function planFor(body, scripts = E2E_SCRIPTS) {
     };
   }
 
-  const script = Object.hasOwn(scripts, marker.name) ? scripts[marker.name] : null;
+  // Looked up through a Map and by own index only: the script name and the turn
+  // number come from the request, and neither may reach an inherited property.
+  const script = new Map(Object.entries(scripts)).get(marker.name);
   if (!Array.isArray(script)) return null;
-  const entry = script[assistantCount];
+  const entry = Object.hasOwn(script, assistantCount) ? script[assistantCount] : undefined;
   const turn = typeof entry === 'function' ? entry(body) : entry;
   if (!turn) {
     return { content: `E2E script ${marker.name}: no turn ${assistantCount + 1}` };
