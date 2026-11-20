@@ -427,7 +427,8 @@ support reasoning — iHub reads `reasoning` (current vLLM) or `reasoning_conten
   e.g. gpt-oss). Qwen3's chat template ignores it; to limit Qwen3's thinking, turn on the
   token budget below.
 - `"tokenBudget": true` sends a reasoning token cap, `thinking_token_budget`, taken from the
-  level: `minimal` 256, `low` 1,024, `medium` 2,048, `high` 8,192 (no level: `medium`'s). When
+  level: `minimal` 256, `low` 1,024, `medium` 2,048, `high` 8,192, `xhigh` 16,384 (no level:
+  `medium`'s). `xhigh` reaches its full budget only with `maxOutputTokens` of 32,768 or more. When
   the budget is spent, vLLM ends the reasoning and the model writes the answer.
   `"budgetTokens": 4000` sets the number directly and turns the budget on by itself. Either way
   the budget is capped at half of the output limit, so the answer always keeps the other half.

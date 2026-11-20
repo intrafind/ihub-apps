@@ -27,13 +27,16 @@ import logger from '../utils/logger.js';
  * Gemma 4 on vLLM: structured steps (classification, extraction) gained
  * nothing beyond about 256 tokens, answers with source citations needed about
  * 2,000, and the longest reasoning seen was about 4,700 tokens (99th
- * percentile), which `high` stays above.
+ * percentile), which `high` stays above. `xhigh` is for the rare task that
+ * needs more; it only reaches its budget when `max_tokens` is at least twice
+ * that (see {@link THINKING_MAX_SHARE}).
  */
 export const THINKING_LEVEL_BUDGETS = Object.freeze({
   minimal: 256,
   low: 1024,
   medium: 2048,
-  high: 8192
+  high: 8192,
+  xhigh: 16384
 });
 
 /** Level whose budget applies when none is set; matches `resolveReasoningEffort`'s default. */

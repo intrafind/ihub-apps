@@ -33,7 +33,10 @@ the old budgets were far above what the answers needed.
   Before, the reasoning could take 75% of the output limit.
 - The budget never takes more than half of the output limit, so the answer always keeps the other
   half (before: a quarter).
-- A model that needs more reasoning keeps working with an exact **Reasoning budget**
+- A new reasoning effort, **Extra high** (`xhigh`), allows 16,384 tokens for tasks that need
+  more. It reaches that budget only with an output limit of 32,768 or more. Every provider other
+  than the vLLM budget treats it as High.
+- A model that needs an exact amount keeps working with **Reasoning budget**
   (`thinking.budgetTokens`).
 - Give the vLLM server a transition phrase in `--reasoning-config`. Without one, a model whose
   reasoning is cut off tends to continue it in the visible answer.
