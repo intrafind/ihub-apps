@@ -39,4 +39,6 @@ the old budgets were far above what the answers needed.
 - A model that needs an exact amount keeps working with **Reasoning budget**
   (`thinking.budgetTokens`).
 - Give the vLLM server a transition phrase in `--reasoning-config`. Without one, a model whose
-  reasoning is cut off tends to continue it in the visible answer.
+  reasoning is cut off tends to continue it in the visible answer. The guide _Limiting Reasoning on
+  Your Own vLLM Server_ in the local LLM provider documentation shows the server options, the iHub
+  setting and how to check the result.

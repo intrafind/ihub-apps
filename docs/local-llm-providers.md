@@ -439,14 +439,11 @@ support reasoning — iHub reads `reasoning` (current vLLM) or `reasoning_conten
   nothing beyond about 256 reasoning tokens, answers that cite sources needed about 2,000, and
   the longest reasoning seen was about 4,700 tokens. Set `budgetTokens` where a model or app
   needs something else.
-- Give vLLM a **transition phrase** in `--reasoning-config` together with the budget. Without
-  one, a model whose reasoning is cut off tends to go on reasoning in its visible answer; in the
-  same measurements this happened in up to 17% of answers without the phrase and in 1 of 576
-  with it.
 - The budget is **off by default** because vLLM refuses it with HTTP 400 ("thinking_token_budget
-  is set but reasoning_config is not configured") unless the server has a reasoning config: a
-  `--reasoning-parser` with start and end markers (such as `qwen3` or `deepseek_r1`) or
-  `--reasoning-config`. Turn it on only for such servers.
+  is set but reasoning_config is not configured") unless the server is set up for it. Before you
+  turn it on, set up the server as described in
+  [Limiting Reasoning on Your Own vLLM Server](#limiting-reasoning-on-your-own-vllm-server),
+  including the transition phrase.
 - To let the model reason without showing the reasoning, set `"thoughts": false`. iHub then
   sends `include_reasoning: false`: vLLM still generates the reasoning tokens (answer quality
   is unchanged, and they still take time and count against `maxOutputTokens`) but leaves them
@@ -467,6 +464,116 @@ support reasoning — iHub reads `reasoning` (current vLLM) or `reasoning_conten
 > The `reasoning` field only appears when vLLM was started with a matching
 > `--reasoning-parser`. Without it, vLLM inlines the chain-of-thought into the normal
 > content and no separate thinking stream is shown.
+
+### Limiting Reasoning on Your Own vLLM Server
+
+Reasoning models such as Qwen3 can think for thousands of tokens before they answer, which can
+take 20–35 seconds on typical GPUs. iHub can cap that thinking per request, but only if the vLLM
+server is started for it. This section is for anyone who runs vLLM themselves: it covers the two
+server options, the iHub setting and how to check the result.
+
+**How it works.** iHub sends a reasoning budget with every request (`thinking_token_budget`).
+vLLM counts the model's reasoning tokens, and when the budget is spent it inserts a fixed text
+that ends the reasoning. The model then writes its answer.
+
+**Why the transition phrase matters.** The budget can run out in the middle of a sentence. If vLLM
+inserts only the end-of-reasoning marker (`</think>` for Qwen3), the model often carries on with
+the interrupted thought, now in the answer the user sees. A short **transition phrase** in front
+of the marker, such as "I have to give the solution based on the reasoning directly now.", reads
+to the model as its own last thought and makes it switch cleanly to the answer. In IntraFind's
+measurements on Qwen3.6 and Gemma 4, reasoning leaked into up to 17% of answers without the
+phrase and into 1 of 576 with it.
+
+#### Step 1: Start vLLM with a Reasoning Parser and a Reasoning Config
+
+Add two options to the command that starts vLLM:
+
+```bash
+vllm serve Qwen/Qwen3-8B \
+    --host 0.0.0.0 --port 8000 \
+    --enable-auto-tool-choice \
+    --reasoning-parser qwen3 \
+    --reasoning-config '{"reasoning_start_str": "<think>", "reasoning_end_str": "I have to give the solution based on the reasoning directly now.</think>"}'
+```
+
+- `--reasoning-parser` separates the reasoning from the answer, so iHub can show it as the thinking
+  process. Use the parser for your model family, such as `qwen3` or `deepseek_r1`; the
+  [vLLM reasoning outputs page](https://docs.vllm.ai/en/latest/features/reasoning_outputs.html)
+  lists them.
+- `--reasoning-config` is a JSON object with two keys:
+  - `reasoning_start_str`: the marker the model writes when it starts reasoning. vLLM counts the
+    budget from here.
+  - `reasoning_end_str`: the text vLLM inserts when the budget is spent: the transition phrase,
+    followed directly by the model's own end-of-reasoning marker. It must **end with that exact
+    marker**, or the reasoning and the answer are not separated.
+- **Markers per model.** Qwen3 and DeepSeek-R1 models use `<think>` and `</think>`. For other
+  models, take the markers from the model's chat template (`chat_template` in its
+  `tokenizer_config.json`) or from the vLLM reasoning parser for that model.
+- Without `--reasoning-config`, vLLM takes the markers from the reasoning parser. The budget then
+  works too, but the reasoning ends without a transition phrase and is more likely to leak into
+  the answer.
+
+In Docker Compose or Kubernetes, pass the same options as separate entries of the container's
+command, with the JSON as one entry:
+
+```yaml
+command:
+  - --model
+  - Qwen/Qwen3-8B
+  - --reasoning-parser
+  - qwen3
+  - --reasoning-config
+  - '{"reasoning_start_str": "<think>", "reasoning_end_str": "I have to give the solution based on the reasoning directly now.</think>"}'
+```
+
+#### Step 2: Turn On the Budget in iHub
+
+In **Admin → Models → Edit → Reasoning**, turn on **Limit reasoning in tokens** and pick a
+**Reasoning effort**. In the model's JSON this is:
+
+```json
+{
+  "provider": "local",
+  "thinking": {
+    "enabled": true,
+    "tokenBudget": true,
+    "level": "medium"
+  }
+}
+```
+
+The effort sets the budget: `minimal` 512, `low` 1,024, `medium` 2,048, `high` 8,192, `xhigh`
+16,384 tokens, at most half of the model's output limit (`maxOutputTokens`). Only the dedicated
+vLLM provider (`"provider": "local"`) sends the budget.
+
+#### Step 3: Check the Result
+
+Send a request with a very small budget straight to the vLLM server:
+
+```bash
+curl http://localhost:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "Qwen/Qwen3-8B",
+    "messages": [{"role": "user", "content": "9.11 and 9.8, which is greater?"}],
+    "thinking_token_budget": 20
+  }'
+```
+
+In the response, the message's `reasoning` field ends after about 20 tokens, with the transition
+phrase, and `content` holds the answer without leftover reasoning. Then ask a question in iHub
+with the model: the thinking process appears separately above the answer.
+
+#### Troubleshooting
+
+| What you see                                                    | Cause and fix                                                                                                                                                                                           |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The request fails with HTTP 400 that mentions `reasoning_config` | The server has no reasoning setup. Add the options from Step 1, or turn **Limit reasoning in tokens** off.                                                                                              |
+| The answer starts with text that reads like reasoning           | `reasoning_end_str` has no transition phrase, or does not end with the model's exact end marker.                                                                                                        |
+| The reasoning appears in the answer and no thinking is shown     | `--reasoning-parser` is missing or does not match the model.                                                                                                                                            |
+| vLLM does not start and reports empty token IDs                  | `reasoning_start_str` or `reasoning_end_str` is empty or does not match anything in the model's vocabulary. Check the markers.                                                                          |
+| `--reasoning-config` or `thinking_token_budget` is not accepted   | The vLLM version is too old for the reasoning budget. Update vLLM, or leave **Limit reasoning in tokens** off.                                                                                         |
+| Answers are cut off                                             | Reasoning and answer share `maxOutputTokens`. Raise it, keeping prompt plus `maxOutputTokens` within the server's `max_model_len`.                                                                       |
 
 ---
 
