@@ -38,7 +38,16 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] }
+      use: {
+        ...devices['Desktop Chrome'],
+        // An environment whose Chromium is not the one this Playwright expects
+        // (PW_CHROMIUM_PATH names the executable). The ffmpeg this Playwright
+        // records videos with is missing there too, so no video.
+        ...(process.env.PW_CHROMIUM_PATH && {
+          launchOptions: { executablePath: process.env.PW_CHROMIUM_PATH },
+          video: 'off'
+        })
+      }
     },
 
     {
