@@ -38,6 +38,10 @@ async function call(method, path, body) {
   }
 }
 
+console.log(
+  `[${label}] PROMPTFOO_SELF_HOSTED=${process.env.PROMPTFOO_SELF_HOSTED ?? '(unset)'}, ` +
+    `PROMPTFOO_DISABLE_TEMPLATE_ENV_VARS=${process.env.PROMPTFOO_DISABLE_TEMPLATE_ENV_VARS ?? '(unset)'}`
+);
 const fingerprint = crypto.createHash('sha256').update(token).digest('hex').slice(0, 8);
 console.log(`[${label}] IHUB_TOKEN length ${token.length}, sha256 ${fingerprint}`);
 
