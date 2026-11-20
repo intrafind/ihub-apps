@@ -77,21 +77,20 @@ export const QUARANTINED = {
   'native-web-search.test.js': 'citation text assertion fails',
   'openaiResponsesAdapter.test.js': 'max_output_tokens assertion fails (16384 vs 1024)',
   'openai-reasoning.test.js': 'budget fallback assertion fails',
-  // Legacy workflow path, which the agents epic (#3771) does not move.
-  // TODO(#3786): no issue is filed for it yet; file one and name it here.
-  'planner-maxtokens.test.js': 'exits non-zero',
+  // Legacy workflow path, which the agents epic (#3771) does not move. The test
+  // expects an 8192 fallback; the planner falls back to 16384 (#3861).
+  'planner-maxtokens.test.js': 'exits non-zero (#3861)',
   'nda-risk-analyzer.test.js': 'NDA app config not found in the test environment',
   'pageReader-ssrf.test.js': 'redirect SSRF assertions fail: redirects are not rejected',
-  // Points at a possible defect in `verifyRawSignature` of the legacy webhook
-  // trigger (it accepts a signature over a re-serialised body): a bug of its
-  // own, outside the agents epic (#3771).
-  // TODO(#3786): no issue is filed for it yet; file one and name it here.
-  'WebhookTrigger.test.js': 'raw signature assertion fails',
+  // The test is wrong, not `verifyRawSignature`: its fixture is byte-identical
+  // after a JSON round trip, so the signature it calls bad is the valid one
+  // (#3862).
+  'WebhookTrigger.test.js': 'raw signature assertion fails on its own fixture (#3862)',
   'teamsAuth.test.js': 'imports `getClearAuthCookieOptions`, no longer exported by cookieSettings',
   'telemetry-providerMap.test.js': 'provider mapping assertions fail',
   // A plain script. Until the agents epic (#3771) it logged its failed checks
-  // and exited 0; it now exits 1 when a check fails.
-  // TODO(#3786): no issue is filed for it yet; file one and name it here.
+  // and exited 0; it now exits 1 when a check fails. It passes its arguments to
+  // `createCompletionRequest` in the wrong positions (#3863).
   'toolCallingIntegration.test.js':
     '10 checks fail: no tools in the request of four adapters (and their parameters), ' +
     'the anthropic multi-round request, no fallback for an unknown provider'
