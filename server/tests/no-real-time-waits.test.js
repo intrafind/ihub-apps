@@ -48,6 +48,7 @@ const SEARCHED = [
   'testTools.test.js',
   'test-counter.test.js',
   'nightly-red-issue.test.js',
+  'fault-harness-settings.test.js',
   'fixtures/scriptedModel',
   'fixtures/sideBySide'
 ];

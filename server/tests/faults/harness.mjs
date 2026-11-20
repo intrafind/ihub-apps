@@ -28,15 +28,16 @@
  *   write ran are still there afterwards.
  * - The **contents directory** is `contents-e2e-faults-<random>` in the
  *   repository, seeded by `seed.mjs` in a process of its own and removed by
- *   `stack.stop()` (kept with `KEEP_FAULT_CONTENTS=1`, with the log of the
- *   server in `faults-server.log`). `startStack({ contents })` starts on a
+ *   `stack.stop()` (kept with `KEEP_FAULT_CONTENTS=1`, with the output of its
+ *   servers in `faults-server.log`). `startStack({ contents })` starts on a
  *   directory another stack left, and does not remove it.
  *
  * A kill point is named when a server is started (`startStack({ killPoint })`,
  * `stack.restart({ killPoint })`). The server writes the name to a file before
  * it dies; `stack.waitKilledAt(name)` waits for that line and, with one worker,
  * for the process to be gone. Nothing here reads a log line to find out where a
- * server was, and nothing sleeps: every wait is for a condition, with a limit.
+ * server was, and nothing sleeps: every wait is for a condition, with a limit
+ * that also holds when a server takes a connection and never answers.
  *
  * The harness imports no server module: the server code reads its settings once
  * per process, and one test file may start several stacks.
@@ -44,6 +45,7 @@
 
 import crypto from 'node:crypto';
 import fs from 'node:fs';
+import http from 'node:http';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
@@ -58,8 +60,19 @@ import {
 } from '../../../tests/config/e2e-fresh-contents.mjs';
 import { ADMIN, MODELS } from '../../../tests/config/agents-scenario.mjs';
 import { documentedKillPointNames } from './killpoints.mjs';
+import {
+  EXIT_TIMEOUT_MS,
+  KILL_POINT_TIMEOUT_MS,
+  LOOK_TIMEOUT_MS,
+  POLL_MS,
+  SERVER_LOG,
+  START_TIMEOUT_MS,
+  afterStop,
+  keepsContents
+} from './settings.mjs';
 
 export { ADMIN, MODELS, OTHER, TOOLS_APP, USER } from '../../../tests/config/agents-scenario.mjs';
+export { CASE_TIMEOUT_MS, SETUP_TIMEOUT_MS } from './settings.mjs';
 export {
   COUNTER_READ,
   COUNTER_WRITE,
@@ -69,18 +82,6 @@ export {
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '..', '..', '..');
 
-/** The limit of one fault case. Pass it as the `timeout` of the test. */
-export const CASE_TIMEOUT_MS = 90_000;
-/** The limit of a `before` hook that seeds a contents directory and starts a server. */
-export const SETUP_TIMEOUT_MS = 180_000;
-/** How long a started server may take to answer, and a seed to finish. */
-const START_TIMEOUT_MS = 120_000;
-/** How long a signalled process may take to be gone. */
-const EXIT_TIMEOUT_MS = 15_000;
-/** How long a kill point may take to be reached, unless the test says otherwise. */
-const KILL_POINT_TIMEOUT_MS = 60_000;
-/** How often a condition is looked at while it is waited for. */
-const POLL_MS = 25;
 /** How much of a server log a failure message quotes. */
 const LOG_TAIL_BYTES = 4000;
 
@@ -91,14 +92,13 @@ const loopback = port => `http://127.0.0.1:${port}`;
 
 /** Every server of this process that may still run: stopped when the process ends. */
 const live = new Set();
-/** The contents directories this process seeded and has not removed yet. */
+/** The contents directories this process seeded, does not keep and has not removed yet. */
 const seeded = new Set();
 /** The temporary directories (logs, reached-files) of stacks that were not stopped. */
 const scratches = new Set();
 process.once('exit', () => {
   for (const target of live) target.signal('SIGKILL');
   for (const scratch of scratches) fs.rmSync(scratch, { recursive: true, force: true });
-  if (process.env.KEEP_FAULT_CONTENTS === '1') return;
   for (const contentsDir of seeded) {
     try {
       removeDisposableContents(root, contentsDir);
@@ -116,8 +116,31 @@ for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
 }
 
 /**
+ * Remove a contents directory that a stack kept. Refuses anything but a
+ * `contents-e2e*` directory of the repository.
+ *
+ * @param {string} contentsDir - `stack.contentsDir`
+ */
+export function removeContents(contentsDir) {
+  removeDisposableContents(root, contentsDir);
+}
+
+/**
+ * What this process would still clean up if it ended now: for the self-test of
+ * the harness.
+ *
+ * @returns {{servers: number, contents: string[], scratch: number}} The servers
+ *   that run, the contents directories that would be removed, and the number of
+ *   temporary directories
+ */
+export function leftBehind() {
+  return { servers: live.size, contents: [...seeded], scratch: scratches.size };
+}
+
+/**
  * Wait for a condition, not for time: `check` is called until it returns
- * something truthy, which is the result. Fails after `timeoutMs`.
+ * something truthy, which is the result. Fails after `timeoutMs`, also while a
+ * look is still on its way: a check that never returns does not hold the limit up.
  *
  * @template T
  * @param {() => T|Promise<T>} check
@@ -129,31 +152,33 @@ for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
  */
 export function until(check, { what, timeoutMs = START_TIMEOUT_MS, detail = () => '' }) {
   return new Promise((resolve, reject) => {
-    const deadline = Date.now() + timeoutMs;
-    // Held on an object: the callbacks of a look set it, the timer reads it.
-    const state = { busy: false };
+    // Held on an object: the callbacks of a look set it, the timers read it.
+    const state = { busy: false, over: false };
+    const finish = (settle, value) => {
+      if (state.over) return;
+      state.over = true;
+      clearInterval(timer);
+      clearTimeout(limit);
+      settle(value);
+    };
+    // The limit has a timer of its own. Looked at only after a check returned,
+    // it would never apply to a check that hangs.
+    const limit = setTimeout(() => {
+      finish(reject, new Error(`Timed out after ${timeoutMs} ms waiting for ${what}${detail()}`));
+    }, timeoutMs);
     const look = async () => {
       const value = await check();
-      if (value) {
-        clearInterval(timer);
-        resolve(value);
-      } else if (Date.now() > deadline) {
-        clearInterval(timer);
-        reject(new Error(`Timed out after ${timeoutMs} ms waiting for ${what}${detail()}`));
-      }
+      if (value) finish(resolve, value);
     };
     const timer = setInterval(() => {
       // One look at a time: a slow check is not started again while it runs.
       if (state.busy) return;
       state.busy = true;
       look()
-        .catch(error => {
-          clearInterval(timer);
-          reject(error);
-        })
         .finally(() => {
           state.busy = false;
-        });
+        })
+        .catch(error => finish(reject, error));
     }, POLL_MS);
   });
 }
@@ -168,6 +193,21 @@ export function freePort() {
       probe.close(() => resolve(port));
     });
   });
+}
+
+/**
+ * Whether an address answers with a success. One look has a limit of its own:
+ * a server that takes the connection and never answers counts as "not yet".
+ *
+ * @param {string} address
+ * @returns {Promise<boolean>}
+ */
+async function answers(address) {
+  try {
+    return (await fetch(address, { signal: AbortSignal.timeout(LOOK_TIMEOUT_MS) })).ok;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -218,6 +258,15 @@ function arm(spec, dir) {
   };
 }
 
+/** Signal a process group by the id of its first process. A group that is not there is no error. */
+function signalGroup(pid, signal) {
+  try {
+    process.kill(-pid, signal);
+  } catch (error) {
+    if (error.code !== 'ESRCH') throw error;
+  }
+}
+
 /**
  * Start a Node process in a process group of its own, with its output in a file.
  *
@@ -247,13 +296,14 @@ function launch({ script, cwd, env, logFile, nodeArgs = [] }) {
     pid: child.pid,
     exited: exit.promise,
     running: () => !state.gone,
-    /** Signal the group this harness started. A group that is gone is left alone. */
+    /**
+     * Signal the group this harness started. Once its first process is gone,
+     * nothing is sent: the id of an empty group is free, and the system may
+     * have given it to a process this harness never started.
+     */
     signal(signal) {
-      try {
-        process.kill(-child.pid, signal);
-      } catch (error) {
-        if (error.code !== 'ESRCH') throw error;
-      }
+      if (state.gone) return;
+      signalGroup(child.pid, signal);
     },
     logTail() {
       try {
@@ -266,18 +316,30 @@ function launch({ script, cwd, env, logFile, nodeArgs = [] }) {
   };
   live.add(target);
   child.once('exit', (code, signal) => {
-    state.gone = true;
-    // Workers of a primary that died may still be there for a moment.
-    target.signal('SIGKILL');
-    live.delete(target);
-    exit.resolve({ code, signal });
+    try {
+      // Workers of a primary that died may still be there for a moment. This is
+      // the one signal after the first process ended, sent the moment it did:
+      // while a worker lives, the id of the group is still the group's.
+      signalGroup(child.pid, 'SIGKILL');
+    } finally {
+      state.gone = true;
+      live.delete(target);
+      exit.resolve({ code, signal });
+    }
   });
   return target;
 }
 
-/** Signal a process group and wait until its first process is gone. */
+/**
+ * Signal a process group and wait until its first process is gone. A process
+ * that ended by itself is not signalled.
+ */
 async function end(target, signal) {
   if (!target) return;
+  if (!target.running()) {
+    await target.exited;
+    return;
+  }
   target.signal(signal);
   const hard = setTimeout(() => target.signal('SIGKILL'), EXIT_TIMEOUT_MS);
   await target.exited;
@@ -341,6 +403,27 @@ function takeFrames(buffer) {
 }
 
 /**
+ * A request on a connection of its own, which is closed after the answer.
+ * `fetch` keeps its connections and uses them again, and a connection stays
+ * with the worker that took it: with two workers, requests that share one
+ * never reach the other worker. Each of these is handed out anew.
+ *
+ * @param {string} address
+ * @param {{method: string, headers: Object, body?: string, signal?: AbortSignal}} init
+ * @returns {Promise<{status: number, body: AsyncIterable<Uint8Array>}>} As much
+ *   of a `fetch` response as a stream of the client below reads
+ */
+function requestOnOwnConnection(address, { method, headers, body, signal }) {
+  return new Promise((resolve, reject) => {
+    const request = http.request(address, { method, headers, signal, agent: false }, response =>
+      resolve({ status: response.statusCode, body: response })
+    );
+    request.once('error', reject);
+    request.end(body);
+  });
+}
+
+/**
  * An HTTP client for one signed-in user.
  *
  * @param {string} baseUrl
@@ -371,11 +454,13 @@ function client(baseUrl, cookie) {
    * A request whose response is an event stream. Resolves once the response has
    * started. `frames` grows while the stream is read; `until` waits for a frame;
    * `done` resolves (it never rejects) when the stream ended, with the error
-   * that ended it when the server went away.
+   * that ended it when the server went away. `ownConnection` sends it on a
+   * connection of its own (see `requestOnOwnConnection`).
    */
-  const stream = async (method, pathname, { body, headers = {} } = {}) => {
+  const stream = async (method, pathname, { body, headers = {}, ownConnection = false } = {}) => {
     const controller = new AbortController();
-    const response = await fetch(`${baseUrl}${pathname}`, {
+    const send = ownConnection ? requestOnOwnConnection : fetch;
+    const response = await send(`${baseUrl}${pathname}`, {
       method,
       headers: {
         cookie,
@@ -454,13 +539,20 @@ function client(baseUrl, cookie) {
   /**
    * One chat turn through `POST /api/apps/{appId}/chat/{chatId}` with the answer
    * on the same connection. Resolves when the stream ended, also when the
-   * server died in the middle: `error` then holds what ended it.
+   * server died in the middle: `error` then holds what ended it. With
+   * `ownConnection` the turn does not share a connection with an earlier one,
+   * so with two workers it is not bound to the worker of an earlier turn.
    */
-  const chatTurn = async (appId, message, { chatId, modelId = MODELS.tools, extra = {} } = {}) => {
+  const chatTurn = async (
+    appId,
+    message,
+    { chatId, modelId = MODELS.tools, extra = {}, ownConnection = false } = {}
+  ) => {
     const id = chatId || `fault-${crypto.randomUUID()}`;
     let opened;
     try {
       opened = await stream('POST', `/api/apps/${appId}/chat/${id}`, {
+        ownConnection,
         body: {
           messages: [{ role: 'user', content: message, messageId: `msg-${crypto.randomUUID()}` }],
           modelId,
@@ -544,8 +636,8 @@ async function startStub(options) {
   };
 }
 
-/** Run `seed.mjs` on a contents directory and wait for it. */
-async function seedContents({ contentsDir, seed, logFile }) {
+/** Run `seed.mjs` on a contents directory and wait for it, at most `timeoutMs`. */
+async function seedContents({ contentsDir, seed, logFile, timeoutMs }) {
   const target = launch({
     script: path.join(here, 'seed.mjs'),
     cwd: root,
@@ -556,9 +648,19 @@ async function seedContents({ contentsDir, seed, logFile }) {
     }),
     logFile
   });
-  const timer = setTimeout(() => target.signal('SIGKILL'), START_TIMEOUT_MS);
+  // Held on an object: the timer sets it, the lines after the wait read it.
+  const state = { late: false };
+  const timer = setTimeout(() => {
+    state.late = true;
+    target.signal('SIGKILL');
+  }, timeoutMs);
   const exit = await target.exited;
   clearTimeout(timer);
+  if (state.late) {
+    throw new Error(
+      `Seeding ${contentsDir} did not finish within ${timeoutMs} ms${target.logTail()}`
+    );
+  }
   if (exit.code !== 0) {
     throw new Error(
       `Seeding ${contentsDir} failed (${exit.signal ?? `code ${exit.code}`})${target.logTail()}`
@@ -582,6 +684,12 @@ async function seedContents({ contentsDir, seed, logFile }) {
  * @param {Object} [options.env] - More environment for the server
  * @param {{features?: Object, platform?: Object, apps?: Object[], workflows?: Object}} [options.seed] -
  *   What the contents directory gets beyond the standard (see `seed.mjs`)
+ * @param {boolean} [options.keepContents] - Keep the contents directory when the
+ *   stack stops, with the output of its servers in `faults-server.log`. The
+ *   default is what `KEEP_FAULT_CONTENTS=1` says.
+ * @param {number} [options.startTimeoutMs] - The limit of the whole start, seed
+ *   and server together. A start that runs into it stops what it started and
+ *   rejects.
  * @returns {Promise<Object>} The stack (see the module comment and the returned object)
  */
 export async function startStack({
@@ -590,9 +698,14 @@ export async function startStack({
   stub: stubOptions,
   killPoint,
   env: extraEnv = {},
-  seed = {}
+  seed = {},
+  keepContents = keepsContents(),
+  startTimeoutMs = START_TIMEOUT_MS
 } = {}) {
   if (workers !== 1 && workers !== 2) throw new Error('workers must be 1 or 2');
+  // One limit for the seed and the first start together: see SETUP_TIMEOUT_MS.
+  const deadline = Date.now() + startTimeoutMs;
+  const remaining = () => Math.max(deadline - Date.now(), 1);
   const ownsContents = !contents;
   const contentsDir = contents || `contents-e2e-faults-${crypto.randomBytes(4).toString('hex')}`;
   // Refuses anything but a `contents-e2e*` directory inside the repository.
@@ -608,7 +721,7 @@ export async function startStack({
   }
   const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'ihub-faults-'));
   scratches.add(scratch);
-  const logFile = path.join(scratch, 'faults-server.log');
+  const logFile = path.join(scratch, SERVER_LOG);
 
   const stub = await startStub(stubOptions);
   const counterServer = await startCounter();
@@ -618,7 +731,12 @@ export async function startStack({
   let reachedFile = null;
   let starts = 0;
 
-  const start = async ({ killPoint: spec, env: startEnv = {}, clockAheadMs = 0 } = {}) => {
+  const start = async ({
+    killPoint: spec,
+    env: startEnv = {},
+    clockAheadMs = 0,
+    timeoutMs = START_TIMEOUT_MS
+  } = {}) => {
     const armed = arm(spec, scratch);
     reachedFile = armed.reachedFile;
     starts += 1;
@@ -648,13 +766,9 @@ export async function startStack({
         if (!started.running()) {
           throw new Error(`The server exited while it was starting.${started.logTail()}`);
         }
-        try {
-          return (await fetch(`${url}/api/health`)).ok;
-        } catch {
-          return false;
-        }
+        return answers(`${url}/api/health`);
       },
-      { what: 'the server to answer /api/health', detail: () => started.logTail() }
+      { what: 'the server to answer /api/health', timeoutMs, detail: () => started.logTail() }
     );
   };
 
@@ -665,7 +779,9 @@ export async function startStack({
     contentsPath,
     logFile,
     stub,
-    /** The counter: `count(key)`, `read(key)`, `snapshot()`, `reset()`. */
+    /** Whether `stop()` keeps the contents directory, with the output of the servers in it. */
+    keepsContents: keepContents,
+    /** The counter: `count(key)`, `read(key)`, `writers(key)`, `snapshot()`, `reset()`. */
     counter: counterServer.counter,
     /** How often a server was started on this contents directory. */
     get starts() {
@@ -720,18 +836,32 @@ export async function startStack({
       if (workers === 1) server = null;
       return exit;
     },
-    /** Wait until the server answers again (a worker was replaced). */
-    healthy: () =>
-      until(
-        async () => {
-          try {
-            return (await fetch(`${url}/api/health`)).ok;
-          } catch {
-            return false;
-          }
-        },
-        { what: 'the server to answer /api/health', detail: () => server?.logTail() ?? '' }
-      ),
+    /**
+     * The names the server of this start wrote before it died there: one line
+     * for each time a kill point fired. Empty for a start without a kill point.
+     *
+     * @returns {string[]}
+     */
+    killPointHits() {
+      if (!reachedFile) return [];
+      try {
+        return fs.readFileSync(reachedFile, 'utf8').split('\n').filter(Boolean);
+      } catch {
+        return [];
+      }
+    },
+    /**
+     * Wait until the server answers again (a worker was replaced).
+     *
+     * @param {Object} [options]
+     * @param {number} [options.timeoutMs]
+     */
+    healthy: ({ timeoutMs = START_TIMEOUT_MS } = {}) =>
+      until(() => answers(`${url}/api/health`), {
+        what: 'the server to answer /api/health',
+        timeoutMs,
+        detail: () => server?.logTail() ?? ''
+      }),
     /**
      * An HTTP client signed in as a user: the default admin unless told otherwise.
      *
@@ -797,23 +927,26 @@ export async function startStack({
     logTail: () => server?.logTail() ?? '',
     /**
      * Stop everything, and remove the contents directory when this stack made
-     * it. A directory that was handed in (`contents`) stays.
+     * it. A directory that was handed in (`contents`) stays. A stack that
+     * keeps its contents removes nothing and adds the output of its servers to
+     * `faults-server.log` in the directory.
      */
     async stop() {
       await stack.kill('SIGKILL');
       await stub.releaseAll().catch(() => {});
       await stub.close();
       await counterServer.close();
+      const { log, remove } = afterStop({ keep: keepContents, ownsContents });
       try {
-        if (process.env.KEEP_FAULT_CONTENTS === '1') {
-          // A stack whose seed failed has no directory to put the log into.
-          if (fs.existsSync(contentsPath)) {
-            fs.copyFileSync(logFile, path.join(contentsPath, 'faults-server.log'));
-          }
-        } else if (ownsContents) {
-          removeDisposableContents(root, contentsDir);
+        // A stack whose seed failed has no directory to put the log into. Added,
+        // not copied: a second stack on the directory has a log of its own.
+        if (log && fs.existsSync(contentsPath) && fs.existsSync(logFile)) {
+          fs.appendFileSync(path.join(contentsPath, SERVER_LOG), fs.readFileSync(logFile));
         }
-        seeded.delete(contentsDir);
+        if (remove) removeDisposableContents(root, contentsDir);
+        // The entry is the one of the stack that made the directory: a stack
+        // that was started on it leaves the entry, as it leaves the directory.
+        if (ownsContents) seeded.delete(contentsDir);
       } finally {
         fs.rmSync(scratch, { recursive: true, force: true });
         scratches.delete(scratch);
@@ -823,13 +956,19 @@ export async function startStack({
 
   try {
     if (ownsContents) {
-      seeded.add(contentsDir);
-      await seedContents({ contentsDir, seed: { ...seed, llmPort: stub.port }, logFile });
+      // What is kept is not removed when the process ends either.
+      if (!keepContents) seeded.add(contentsDir);
+      await seedContents({
+        contentsDir,
+        seed: { ...seed, llmPort: stub.port },
+        logFile,
+        timeoutMs: remaining()
+      });
     } else {
       // The models of the directory name the stub of the stack that seeded it.
       writeStubModels({ root, contentsDir, llmPort: stub.port });
     }
-    await start({ killPoint });
+    await start({ killPoint, timeoutMs: remaining() });
   } catch (error) {
     await stack.stop().catch(() => {});
     throw error;
@@ -845,7 +984,7 @@ export async function startStack({
  * @param {boolean} [options.guard=true] - false starts it with the protection
  *   against a repeated write switched off
  * @param {string} [options.killPoint]
- * @returns {Promise<Object>} `{ url, counter, runJob, job, waitKilledAt, restart, stop }`
+ * @returns {Promise<Object>} `{ url, counter, running, runJob, job, waitKilledAt, restart, stop }`
  */
 export async function startFixture({ guard = true, killPoint } = {}) {
   const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'ihub-faults-fixture-'));
@@ -880,11 +1019,7 @@ export async function startFixture({ guard = true, killPoint } = {}) {
         if (!started.running()) {
           throw new Error(`The fixture server exited while it was starting.${started.logTail()}`);
         }
-        try {
-          return (await fetch(`${url}/health`)).ok;
-        } catch {
-          return false;
-        }
+        return answers(`${url}/health`);
       },
       { what: 'the fixture server to answer /health', detail: () => started.logTail() }
     );
@@ -893,6 +1028,10 @@ export async function startFixture({ guard = true, killPoint } = {}) {
   const fixture = {
     url,
     counter: counterServer.counter,
+    /** Whether the process of the fixture server is there. */
+    get running() {
+      return Boolean(server?.running());
+    },
     /**
      * Run a job. Resolves with the answer, or with `{ error }` when the server
      * died before it answered.
