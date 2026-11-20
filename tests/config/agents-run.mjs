@@ -53,7 +53,7 @@ export function listSpecs(repoRoot = root) {
   return fs
     .readdirSync(path.join(repoRoot, SPEC_DIR))
     .filter(name => name.endsWith('.spec.js'))
-    .sort();
+    .sort(byCodeUnit);
 }
 
 /** @returns {{specs: Array<{paths: string[], specs: string[]|'*'}>, overlays: Object}} */
@@ -116,6 +116,9 @@ export function specMapProblems(map, { specs, pathExists, featureIds }) {
 const touches = (file, mapped) =>
   file === mapped || (mapped.endsWith('/') && file.startsWith(mapped));
 
+/** Sorts like `sort()` without arguments, but says so: by code unit, not by locale. */
+const byCodeUnit = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+
 /**
  * The specs the gate runs in full for a change.
  *
@@ -128,7 +131,7 @@ const touches = (file, mapped) =>
  * mappedSpecs(['tests/e2e-agents/smoke.spec.js'], map, specs); // ['smoke.spec.js']
  */
 export function mappedSpecs(changed, map, specs) {
-  if (changed === null) return [...specs].sort();
+  if (changed === null) return [...specs].sort(byCodeUnit);
   const picked = new Set();
   for (const file of changed) {
     if (file.startsWith(`${SPEC_DIR}/`) && specs.includes(file.slice(SPEC_DIR.length + 1))) {
@@ -139,7 +142,7 @@ export function mappedSpecs(changed, map, specs) {
       for (const spec of row.specs === '*' ? specs : row.specs) picked.add(spec);
     }
   }
-  return [...picked].sort();
+  return [...picked].sort(byCodeUnit);
 }
 
 const escapeRegExp = text => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -158,6 +161,8 @@ export function gateArgs(specs) {
   return ['--grep', ['@gate', ...files].join('|'), '--grep-invert', '@slow'];
 }
 
+const GIT_PATH = '/usr/local/bin:/usr/bin:/bin';
+
 /**
  * The paths a change touches: the commits since the merge base with `base`, and
  * what is not committed. `null` when git cannot tell.
@@ -174,6 +179,10 @@ export function changedPaths(base, repoRoot = root) {
   const git = (...args) =>
     execFileSync('git', args, {
       cwd: repoRoot,
+      // git is looked up in the system directories only, never in a directory a
+      // checkout could put first on PATH. Where git lives elsewhere (Windows), the
+      // call fails and every spec is selected.
+      env: { ...process.env, PATH: GIT_PATH },
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe']
     })

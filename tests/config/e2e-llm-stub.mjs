@@ -111,7 +111,7 @@ function readBody(req) {
 /** The request target as a URL, or `null` when it is none (`//`). */
 function parseTarget(target) {
   try {
-    return new URL(target || '/', 'http://stub.invalid');
+    return new URL(target || '/', 'https://stub.invalid');
   } catch {
     return null;
   }
@@ -504,7 +504,8 @@ export function startLlmStub(
       res.write('data: [DONE]\n\n');
       res.end();
     };
-    run();
+    // A write to a socket the server already closed must not end the process.
+    run().catch(() => res.destroy());
   };
 
   const handle = async (req, res) => {
