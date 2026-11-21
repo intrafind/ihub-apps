@@ -14,6 +14,11 @@
  * test does — the executor imports the same instance, so reassigning the method
  * intercepts its calls.
  */
+// The executor registry (`executors/index.js`) and the executors import each
+// other in a cycle. Loading the registry first resolves it the way the server
+// does; loading one executor first ends in a TDZ error. The legacy workflow
+// code is frozen, so the order is fixed here and not in the registry.
+import '../services/workflow/executors/index.js';
 import { CorpusSearchNodeExecutor } from '../services/workflow/executors/CorpusSearchNodeExecutor.js';
 import iFinderService from '../services/integrations/iFinderService.js';
 

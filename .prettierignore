@@ -38,3 +38,8 @@ nextcloud-app/js/
 # Compact on purpose: the model reads these artifacts and copies their style, and
 # the edit example quotes them exactly (server/tests/web-artifact-examples.test.js).
 server/systemSkills/web-artifacts/references/examples.md
+
+# Golden records (docs/run-testing.md): written by the golden harness as canonical
+# JSON and compared byte for byte. Prettier folds short arrays onto one line, and
+# the reformatted file would no longer equal what the harness records.
+server/tests/golden/__goldens__/

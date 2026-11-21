@@ -16,6 +16,22 @@
 #   yet): every test of the suite, then the tests tagged @matrix once per overlay
 #   of the spec map, each on a server started with that overlay (platform settings
 #   are read once at startup).
+# - difference-list (every pull request): the two checks of the golden tests that
+#   need the history of the target branch and the reviews of the pull request,
+#   which the unit test workflow has not (docs/run-testing.md). Every golden file
+#   that changed is named by a row of server/tests/golden/differences.json, and a
+#   signature in that list has the approving review of the list's owner
+#   (scripts/check-difference-signatures.js). No review event starts this
+#   workflow: a run started by a review would report the gate job as skipped, and
+#   a skipped job counts as passed. After the owner approved, re-run this job.
+#   For the same reason the workflow does not start on `edited` (a new target
+#   branch, a new title, a new description): the gate job would have to be
+#   skipped on such a run, and with the concurrency group below the run would
+#   first cancel a gate that is still running. So after a pull request was
+#   given another target branch, this job still shows the result against the
+#   old one, and a re-run does too (it repeats the event it was started by).
+#   The next push compares with the new target branch; without one, close and
+#   reopen the pull request.
 #
 # There is deliberately no `paths:` filter, for the reason given in
 # api-guidelines-check.yml: a required check that a PR never triggers would block it.
@@ -97,6 +113,52 @@ jobs:
             tests/e2e-agents/test-results/
             playwright-report/
           retention-days: 14
+
+  difference-list:
+    name: Golden difference list
+    if: github.event_name == 'pull_request' && inputs.suite != 'full'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    permissions:
+      contents: read
+      # The reviews of the pull request.
+      pull-requests: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The head of the pull request, not the merge commit GitHub offers: for a pull
+          # request in a stack that commit is the merge into the bottom of the stack, and
+          # what main gained since would count as a change of this pull request.
+          ref: ${{ github.event.pull_request.head.sha }}
+          # The target branch and the commits the reviews were given for.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+
+      # Both checks use only what Node ships with: no install step.
+      - name: Every changed golden is named by a row
+        env:
+          # The branch this pull request is opened against, not github.base_ref: for a pull
+          # request in a stack GitHub starts the workflow as if it targeted the bottom of the
+          # stack, and the changes of the pull requests below would count as its own.
+          GOLDEN_BASE_REF: origin/${{ github.event.pull_request.base.ref }}
+          GOLDEN_REQUIRE_BASE: '1'
+        run: node --test server/tests/golden/differenceList.test.js
+
+      - name: A signature has the approving review of the owner
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DIFFERENCES_BASE_REF: origin/${{ github.event.pull_request.base.ref }}
+          DIFFERENCES_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: node scripts/check-difference-signatures.js
 
   full:
     name: Agents (full suite and transport matrix)

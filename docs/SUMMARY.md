@@ -151,6 +151,7 @@
 - [Agent Loop](agent-loop.md)
 - [Streaming Events](streaming-events.md)
 - [Run Ledger](run-ledger.md)
+- [Testing Runs](run-testing.md)
 - [Storage Providers](storage.md)
 - [Chat Persistence](chat-persistence.md)
 - [Artifacts](artifacts.md)

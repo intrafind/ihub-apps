@@ -81,6 +81,8 @@
     "test:all": "npm run test:quick && npm run test:integration && npm run test:e2e",
     "test:quick": "npm run lint:config-access && npm run test:unit && npm run test:server && npm run test:token-stats && npm run test:export-formats && npm run test:feature-flags",
     "test:server": "node scripts/run-server-tests.js",
+    "test:nightly": "node scripts/run-server-tests.js --tier=nightly",
+    "test:faults": "node scripts/run-server-tests.js --tier=nightly faults",
     "test:unit": "jest --config tests/config/jest.config.js tests/unit",
     "test:integration": "jest --config tests/config/jest.config.js tests/integration",
     "test:integration:ci": "jest --config tests/config/jest.config.js tests/integration --testPathIgnorePatterns=tests/integration/api/chat.test.js --testPathIgnorePatterns=tests/integration/models/model-integration.test.js",
