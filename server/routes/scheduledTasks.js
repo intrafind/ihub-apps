@@ -50,6 +50,7 @@ import { assertValidId } from '../utils/pathSecurity.js';
 import { ServiceError } from '../utils/ServiceError.js';
 import { buildContentDisposition } from '../utils/safeContentDisposition.js';
 import { servedMediaType } from '../services/artifacts/artifactPolicy.js';
+import { setUserFileContentType } from '../utils/activeContentHeaders.js';
 import { chatFilePolicy } from '../services/chatFiles/chatFilePolicy.js';
 import { withUserFileLimit } from '../services/quota/quotaService.js';
 import { getChatFileRepository } from '../services/chatFiles/ChatFileRepository.js';
@@ -549,14 +550,15 @@ export default function registerScheduledTaskRoutes(app) {
       );
     }
     const download = req.query.download === '1' || req.query.download === 'true';
-    res.setHeader('Content-Type', servedMediaType(original.mimeType));
+    // The original is what the user uploaded, under the type they declared: an
+    // HTML or SVG file must not run when this URL is opened on its own.
+    setUserFileContentType(res, servedMediaType(original.mimeType));
     res.setHeader('Content-Length', String(original.data.length));
     res.setHeader('Cache-Control', 'private, no-store');
     res.setHeader(
       'Content-Disposition',
       download ? buildContentDisposition(original.name) : 'inline'
     );
-    res.setHeader('X-Content-Type-Options', 'nosniff');
     res.send(original.data);
   });
 

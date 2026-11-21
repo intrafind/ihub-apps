@@ -117,10 +117,10 @@ export function allRedirectUrisAreLoopback(allowedUris) {
  * Render a minimal "access denied — group restriction" HTML page for users who
  * are signed in but not in any of the client's allowed groups.
  */
-function renderGroupDeniedPage({ client, lang = 'en' }) {
+export function renderGroupDeniedPage({ client, lang = 'en' }) {
   const name = escapeHtml(client?.name || 'application');
   return `<!DOCTYPE html>
-<html lang="${lang}">
+<html lang="${escapeHtml(lang)}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -149,10 +149,10 @@ function renderGroupDeniedPage({ client, lang = 'en' }) {
  * their administrator has not trusted. Naming the hostname is what makes that
  * actionable — for the user, and for the administrator they forward it to.
  */
-function renderClientNotAllowedPage({ host, reason, lang = 'en' }) {
+export function renderClientNotAllowedPage({ host, reason, lang = 'en' }) {
   const safeHost = escapeHtml(host || 'this application');
   return `<!DOCTYPE html>
-<html lang="${lang}">
+<html lang="${escapeHtml(lang)}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -214,11 +214,11 @@ function stampCimdDiscovery(client, user, platform) {
  * was taken about this exact software. Naming the client is what makes the
  * difference visible.
  */
-function renderClientBlockedPage({ name, host, lang = 'en' }) {
+export function renderClientBlockedPage({ name, host, lang = 'en' }) {
   const safeName = escapeHtml(name || host || 'this application');
   const safeHost = escapeHtml(host || '');
   return `<!DOCTYPE html>
-<html lang="${lang}">
+<html lang="${escapeHtml(lang)}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -248,12 +248,12 @@ function renderClientBlockedPage({ name, host, lang = 'en' }) {
  * exactly what to ask for, and the administrator gets a named, pending row to
  * approve rather than discovering the client later in a connections list.
  */
-function renderApprovalPendingPage({ name, host, clientId, lang = 'en' }) {
+export function renderApprovalPendingPage({ name, host, clientId, lang = 'en' }) {
   const safeName = escapeHtml(name || host || 'This application');
   const safeHost = escapeHtml(host || '');
   const safeClientId = escapeHtml(clientId || '');
   return `<!DOCTYPE html>
-<html lang="${lang}">
+<html lang="${escapeHtml(lang)}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -292,7 +292,7 @@ function renderApprovalPendingPage({ name, host, clientId, lang = 'en' }) {
  * @param {string} params.lang - BCP-47 primary language subtag for the HTML lang attribute (e.g. "en", "de").
  * @returns {string} Complete HTML string ready to send as a response.
  */
-function renderConsentScreen({ client, scopes, consentTicket, baseUrl, lang = 'en' }) {
+export function renderConsentScreen({ client, scopes, consentTicket, baseUrl, lang = 'en' }) {
   const scopeDescriptions = {
     openid: 'Verify your identity',
     profile: 'Access your name and profile information',
@@ -315,7 +315,7 @@ function renderConsentScreen({ client, scopes, consentTicket, baseUrl, lang = 'e
       </svg>
       <div>
         <strong>${escapedScope}</strong>
-        ${scopeDescriptions[scope] ? `<br><small>${scopeDescriptions[scope]}</small>` : ''}
+        ${Object.hasOwn(scopeDescriptions, scope) ? `<br><small>${escapeHtml(scopeDescriptions[scope])}</small>` : ''}
       </div>
     </li>`;
     })
@@ -334,7 +334,7 @@ function renderConsentScreen({ client, scopes, consentTicket, baseUrl, lang = 'e
     : '';
 
   return `<!DOCTYPE html>
-<html lang="${lang}">
+<html lang="${escapeHtml(lang)}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -392,20 +392,24 @@ function renderConsentScreen({ client, scopes, consentTicket, baseUrl, lang = 'e
 </html>`;
 }
 
+const HTML_ESCAPES = Object.freeze({
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#x27;'
+});
+
 /**
  * Escape HTML special characters to prevent XSS in rendered HTML output.
+ * Safe in element content and in quoted attribute values.
  *
  * @param {*} str - Value to escape; non-strings are coerced via String().
  * @returns {string} HTML-safe string, or empty string for null/undefined.
  */
-function escapeHtml(str) {
+export function escapeHtml(str) {
   if (str === null || str === undefined) return '';
-  return String(str)
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#x27;');
+  return String(str).replace(/[&<>"']/g, character => HTML_ESCAPES[character]);
 }
 
 /**
