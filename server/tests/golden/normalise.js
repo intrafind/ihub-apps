@@ -14,8 +14,9 @@
  *   one stream and `rseq` within one run; the stream an envelope went to stays;
  * - consecutive `step/delta` events of one step and kind are merged, because
  *   how a text is cut into deltas depends on timing;
- * - events of one `parallelGroup` are put in the order of their call id,
- *   because tool calls that run side by side finish in any order;
+ * - the events of tool calls that ran side by side (one `parallelGroup`) are
+ *   put in the order the model asked for the calls, because they arrive in the
+ *   order the tools finish;
  * - the date sentence of the system prompt is replaced;
  * - temporary paths, hashes over content that holds a date, and the product
  *   version are replaced;
@@ -259,50 +260,108 @@ export function mergeStepDeltas(envelopes) {
   return merged;
 }
 
-const groupOf = event => event?.data?.parallelGroup;
-const callIdOf = event => String(event?.data?.callId ?? event?.data?.toolCallId ?? '');
+const callIdOf = event => {
+  const id = event?.data?.callId ?? event?.data?.toolCallId;
+  return id === undefined || id === null ? '' : String(id);
+};
+const callKey = (runId, step, callId) => `${runId}\u0000${step}\u0000${callId}`;
 
 /**
- * Put the events of one parallel group into a fixed order. Tool calls of one
- * group run side by side, so their events arrive in the order the tools
- * finish. A run of consecutive events of the same stream, run, step and
- * `parallelGroup` is sorted by call id and, for one call, by the order the
+ * Which tool calls ran side by side, read from the run ledger.
+ *
+ * The server names the group in one place only: `parallelGroup` on the ledger
+ * event `tool/call` (`AgentLoop.js`). The `tool/result` of the same call and
+ * the envelopes `tool/started` and `tool/completed` carry the call id and the
+ * step, not the group. So the group of every other event is looked up here, by
+ * run, step and call id.
+ *
+ * The position of a call is the place the model gave it in its answer
+ * (`message/assistant`, `toolCalls`). It is the one order of a group that does
+ * not depend on timing, and it also holds when a provider's call ids are
+ * random.
+ *
+ * @param {Object[]} ledger - Run ledger events (`{ type, runId, data }`), in any order.
+ * @returns {Map<string, {group: number, position: number|null}>} By run, step and call id.
+ */
+export function parallelGroupsOf(ledger) {
+  const positions = new Map();
+  for (const event of ledger) {
+    if (event?.type !== 'message/assistant' || !Array.isArray(event.data?.toolCalls)) continue;
+    for (const [position, call] of event.data.toolCalls.entries()) {
+      const callId = call?.id || call?.index;
+      if (callId === undefined || callId === null) continue;
+      positions.set(callKey(event.runId, event.data.step, callId), position);
+    }
+  }
+  const groups = new Map();
+  for (const event of ledger) {
+    const group = event?.data?.parallelGroup;
+    const callId = callIdOf(event);
+    if (event?.type !== 'tool/call' || group === undefined || group === null || !callId) continue;
+    const key = callKey(event.runId, event.data.step, callId);
+    groups.set(key, { group, position: positions.get(key) ?? null });
+  }
+  return groups;
+}
+
+/** The order of two calls of one group: as the model asked for them, else by call id. */
+function byCall(a, b) {
+  if (a.position !== null && b.position !== null && a.position !== b.position) {
+    return a.position - b.position;
+  }
+  return byCodeUnit(a.callId, b.callId) || a.index - b.index;
+}
+
+/**
+ * Put the events of tool calls that ran side by side into a fixed order. The
+ * calls of one group run under one `Promise.all`, so their events arrive in
+ * the order the tools finish. A run of consecutive events of the same stream,
+ * run, step and group is put in the order the model asked for the calls (by
+ * call id where the ledger does not say) and, for one call, in the order its
  * events arrived in.
  *
- * Events without `parallelGroup` keep their place and end a run.
+ * An event belongs to a group when `groups` knows its run, step and call id.
+ * That holds for the ledger events `tool/call` and `tool/result` and for
+ * every envelope of the call that carries `callId` (`tool/started`,
+ * `tool/completed`). Every other event keeps its place and ends a run: an
+ * event without a call id that a tool emits while its group runs is not moved.
  *
  * @param {Object[]} events - Envelopes (`{ type, streamId, runId, data }`) or ledger events
  *   (`{ type, runId, data }`).
+ * @param {ReturnType<typeof parallelGroupsOf>} [groups] - From the ledger of the same recording.
+ *   Without it the events are taken to be that ledger.
  * @returns {Object[]}
  */
-export function orderParallelGroups(events) {
+export function orderParallelGroups(events, groups = parallelGroupsOf(events)) {
+  const memberOf = event => {
+    const callId = callIdOf(event);
+    if (!callId) return null;
+    const found = groups.get(callKey(event.runId, event.data?.step, callId));
+    return found ? { ...found, callId } : null;
+  };
   const out = [];
   let run = [];
   const flush = () => {
-    if (run.length > 1) {
-      run = run
-        .map((event, index) => ({ event, index }))
-        .sort(
-          (a, b) => callIdOf(a.event).localeCompare(callIdOf(b.event), 'en') || a.index - b.index
-        )
-        .map(entry => entry.event);
-    }
-    out.push(...run);
+    if (run.length > 1) run.sort(byCall);
+    for (const entry of run) out.push(entry.event);
     run = [];
   };
   for (const event of events) {
-    const group = groupOf(event);
+    const member = memberOf(event);
+    if (!member) {
+      flush();
+      out.push(event);
+      continue;
+    }
     const first = run[0];
     const sameRun =
       first &&
-      group !== undefined &&
-      groupOf(first) === group &&
-      first.streamId === event.streamId &&
-      first.runId === event.runId &&
-      first.data?.step === event.data?.step;
-    if (group === undefined || !sameRun) flush();
-    if (group === undefined) out.push(event);
-    else run.push(event);
+      first.group === member.group &&
+      first.event.streamId === event.streamId &&
+      first.event.runId === event.runId &&
+      first.event.data?.step === event.data?.step;
+    if (!sameRun) flush();
+    run.push({ ...member, event, index: run.length });
   }
   flush();
   return out;
@@ -320,15 +379,18 @@ export function orderParallelGroups(events) {
  * @param {Array<{streamId: string, envelope: Object}>} deliveries - What was delivered to which
  *   stream, in order.
  * @param {ReturnType<typeof createNormaliser>} normaliser
+ * @param {ReturnType<typeof parallelGroupsOf>} [groups] - The parallel groups of the recording, from
+ *   its ledger. An envelope does not say which group its call ran in, so without this no envelope
+ *   is moved.
  * @returns {Array<{type: string, streamId: string, runId?: string, data: any}>}
  */
-export function normaliseEnvelopes(deliveries, normaliser) {
+export function normaliseEnvelopes(deliveries, normaliser, groups = new Map()) {
   const kept = deliveries
     .filter(({ envelope }) => !DROPPED_EVENT_TYPES.has(envelope.type))
     .map(({ streamId, envelope }) => ({ ...envelope, streamId: String(streamId ?? '') }));
   assertIncreasing(kept, 'seq', envelope => envelope.streamId);
   assertIncreasing(kept, 'rseq', envelope => envelope.runId || '');
-  return orderParallelGroups(mergeStepDeltas(kept)).map(envelope =>
+  return orderParallelGroups(mergeStepDeltas(kept), groups).map(envelope =>
     normaliser.normalise({
       type: envelope.type,
       streamId: envelope.streamId,

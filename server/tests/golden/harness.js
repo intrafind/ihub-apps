@@ -59,6 +59,8 @@ import {
   createNormaliser,
   normaliseEnvelopes,
   normaliseLedger,
+  orderParallelGroups,
+  parallelGroupsOf,
   projectModelRequest
 } from './normalise.js';
 
@@ -341,7 +343,10 @@ export async function recordCase(goldenCase) {
     // The order of these steps is part of the format: ids are numbered in the
     // order the normaliser meets them.
     const record = { surface: goldenCase.surface, case: goldenCase.name, title: goldenCase.title };
-    record.envelopes = normaliseEnvelopes(env.envelopes, normaliser);
+    // Only the ledger says which tool calls ran side by side; the envelopes are ordered by it too.
+    const groups = parallelGroupsOf(env.ledger);
+    const ledger = orderParallelGroups(env.ledger, groups);
+    record.envelopes = normaliseEnvelopes(env.envelopes, normaliser, groups);
     record.ledger = normaliseLedger(env.ledger, normaliser);
     record.offeredToolIds = normaliser.normalise(offeredToolIds(env.ledger));
     const toolSchemas = {};
@@ -351,7 +356,7 @@ export async function recordCase(goldenCase) {
       return projection;
     });
     record.toolSchemas = toolSchemas;
-    record.toolCalls = normaliser.normalise(toolCallsOf(env.ledger));
+    record.toolCalls = normaliser.normalise(toolCallsOf(ledger));
     record.approvals = normaliser.normalise(
       env.ledger
         .filter(event => INTERACTION_EVENTS.has(event.type))
