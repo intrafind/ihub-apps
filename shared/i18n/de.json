@@ -7713,6 +7713,9 @@
       "conflict": "Jemand anderes hat die Artefakt-Einstellungen geändert, nachdem Sie diese Seite geöffnet haben, daher wurde nichts gespeichert. Ihre Änderungen sind noch da: Laden Sie die aktuellen Einstellungen und nehmen Sie Ihre Änderung erneut vor.",
       "reload": "Aktuelle Einstellungen laden",
       "reloadError": "Die aktuellen Einstellungen konnten nicht geladen werden."
+    },
+    "interactions": {
+      "whoAnswers": "Sie können jeden Eintrag lesen. Sie beantworten einen Eintrag, der eine Gruppe für Freigaben nennt, und einen Eintrag eines Agentenlaufs oder eines Workflows, den ein Auslöser gestartet hat. Jeden anderen Eintrag beantwortet die Person, die den Lauf gestartet hat."
     }
   },
   "cloudStorage": {
@@ -11154,7 +11157,7 @@
     "SOURCE_FAILED": "Die Datei konnte nicht aus dem angebundenen System abgerufen werden.",
     "EVIDENCE_NOT_RECORDED": "Für diese Antwort wurde kein Nachweis gespeichert.",
     "JOURNAL_NOT_KEPT": "Die Ereignisse dieses Laufs werden nicht mehr aufbewahrt. Lesen Sie stattdessen seinen Nachweis.",
-    "RUN_STEER_FORBIDDEN": "Nur der Eigentümer dieses Chats kann eine Nachricht senden, während iHub antwortet.",
+    "RUN_STEER_FORBIDDEN": "Nur die Person, für die diese Antwort geschrieben wird, kann währenddessen eine Nachricht senden.",
     "MCP_AUTH_REFRESH_FAILED": "Die Anmeldung beim MCP-Server konnte nicht erneuert werden. Versuchen Sie es gleich noch einmal.",
     "APPROVAL_REQUIRED_NO_USER": "Dieser Aufruf benötigt die Freigabe einer Person, und dieser Client kann sie nicht einholen.",
     "APPROVAL_ALREADY_ANSWERED": "Diese Freigabe wurde bereits beantwortet.",

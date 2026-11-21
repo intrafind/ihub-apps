@@ -543,7 +543,9 @@ An **Ask a Person** (`human`) step pauses the run until someone picks one of its
 
 A step needs at least one option: without one nobody could answer it, so the panel flags it and saving is refused with the step's name. A new step from the palette starts with one **Continue** option. A step with no options list at all (in the JSON) offers a single **Continue** too.
 
-When the run is cancelled, its open questions and approvals are cancelled with it and leave **Admin → Agents → Pending Approvals**.
+Who answers: the person who started the workflow, on the run's page. An admin sees the step under **Admin → Agents → Pending Approvals & Questions** and can read it, and answers it only when the run belongs to no person (a workflow that a trigger started, an agent run) or when the step names approver groups (the workflow of an agent profile with approver groups); then the members of those groups answer too. An admin who answers a step of a workflow another user started gets `403 FORBIDDEN`: the run continues with the rights of the person who started it, so nobody else gives the answer. See [Run Ledger → Who may do what with a run](run-ledger.md#who-may-do-what-with-a-run).
+
+When the run is cancelled, its open questions and approvals are cancelled with it and leave **Admin → Agents → Pending Approvals & Questions**.
 
 ## Who a run acts as after an answer
 

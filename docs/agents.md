@@ -254,8 +254,10 @@ and the checkpoint is raised as an **interaction** of the run (kind `approval`,
 `policy.approverGroups` = `profile.hitl.approverGroups`): the stream carries
 `interaction/raised` + `run/paused`, the ledger records `interaction/raised`
 and the interaction shows up in the queue (`GET /api/interactions/pending?kind=approval`,
-Admin → Agents → Pending Approvals). An operator answers it through the one
-answer endpoint:
+Admin → Agents → Pending Approvals & Questions). A member of the approver groups
+or an admin answers it through the one answer endpoint; when the profile names
+no approver group, an admin and the person who triggered the run answer it
+(see [Run Ledger](run-ledger.md#who-may-do-what-with-a-run)):
 
 ```http
 POST /api/runs/:runId/interactions/:checkpointId/answer

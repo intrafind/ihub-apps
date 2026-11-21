@@ -8,11 +8,20 @@ anyone who held the id of an anonymous visitor's run could do it there. An appro
 with the owner's rights, so nobody else gives the approval.
 
 - **Admins** still read every run and can stop or delete it; a stop or a delete of somebody
-  else's run is now written to the audit log (Admin → Audit Log, resource `run`). An admin can no
+  else's run through `/api/runs` is now written to the audit log (Admin → Audit Log, resource
+  `run`), and the entry of a stop says whether anything was still running. An admin can no
   longer answer an approval or a question of another user's run, rate its answers or send a
   message into it. Unchanged: approvals that name an approver group (the group's members and
   admins answer them), and the approvals and questions of agent runs and of workflow runs a
   trigger started, which run under an identity of their own and are answered by admins as before.
+- **Admin → Agents → Pending Approvals & Questions** still lists every pending approval and
+  question. An entry of a run a user started that names no approver group can now only be read
+  there: the user who started the run answers it, and an admin who tries gets
+  `403 FORBIDDEN`. The page says so above the list; it does not mark the single entries yet.
+- **Not changed, and not audited:** cancelling, restarting or deleting a workflow run from the
+  workflow run pages (`/api/workflows/executions/...`) and cancelling or resuming an agent run
+  from the agent run pages (`/api/agents/runs/...`). These routes keep their own check: an admin
+  can still do this to another user's run, and no audit entry is written.
 - **Anonymous visitors**: a run started without sign-in is stopped, deleted, rated and answered
   only from the browser session that started its chat (the guest cookie). The run id alone
   still reads the run and nothing more.

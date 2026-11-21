@@ -240,11 +240,14 @@ window, not the history.
 | `GET /api/runs/:runId/interactions`                       | owner or admin            | Interactions of a run                                          |
 | `POST /api/runs/:runId/interactions/:interactionId/answer`| owner, or approver group  | Answer a question / approval / review                          |
 | `POST /api/runs/:runId/human-events`                      | owner; `stop` also admin (audited) | Deliver a `steer`, `stop` or `feedback` event into the run |
-| `GET /api/interactions/pending`                           | authenticated             | Queue of interactions the caller may answer                    |
+| `GET /api/interactions/pending`                           | authenticated             | Queue of interactions the caller may see: their own, those of their approver groups, and for an admin all of them. An admin sees more than an admin may answer |
 
 ### Who may do what with a run
 
-Every route names what it is about to do, and the answer depends on it:
+Every route in the table above names what it is about to do, and the answer depends on it. The
+same check decides for the chat routes that answer an approval or a question, for
+`POST /api/feedback` and for the approval of an MCP app view's call. Two older groups of routes
+are not covered; see [Routes with their own check](#routes-with-their-own-check).
 
 | The caller wants to                              | Owner | Admin who is not the owner | Holds only the id of an anonymous run |
 | ------------------------------------------------ | ----- | -------------------------- | ------------------------------------- |
@@ -268,13 +271,34 @@ is `404 NOT_FOUND` for every caller.
   nothing more. A run of an anonymous caller that has no stored chat has no owner; only an admin
   stops or deletes it.
 - **An admin** reads every run, and stops or deletes it; both are written to the audit log
-  (Admin → Audit Log, resource `run`) when the run is somebody else's. An admin does not answer
+  (Admin → Audit Log, resource `run`) when the run is not the admin's own. The entry of a stop
+  says whether anything was stopped: a stop sent to a run that had already ended is recorded as
+  "Admin sent a stop to a run that is not their own; nothing was running", and
+  `details.effect` names what was stopped (`null` for nothing). An admin does not answer
   an approval or a question of another user's run, because the approved call would run with that
   user's rights, and does not send a message into it. Two kinds of interaction an admin still
   answers: those that name an approver group (the group's members and admins answer them), and
   those of a run that belongs to no person, which is an agent run under the agent's own identity
   or a workflow run started by a trigger. Nobody else could answer the latter, and the answer
   continues the run with that identity's rights, not with a user's.
+  `GET /api/interactions/pending` and Admin → Agents → Pending Approvals & Questions still list
+  every pending interaction for an admin, also those only their owner answers; the answer to
+  such a one is `403 FORBIDDEN`. The list carries no marker yet for which entries the caller
+  may answer.
+
+#### Routes with their own check
+
+These rules hold where the routes ask the run access check. Two groups of routes were there
+before it, decide on their own and are **not** covered:
+
+| Routes | What an admin can still do there | Audit log |
+| ------ | -------------------------------- | --------- |
+| `POST /api/workflows/executions/:executionId/_cancel`, `POST .../_restart`, `DELETE /api/workflows/executions/:executionId` | cancel, restart (run again) and delete another user's workflow run | no entry |
+| `POST /api/agents/runs/:runId/_cancel`, `POST /api/agents/runs/:runId/_resume` | cancel and resume an agent run they did not trigger | no entry |
+
+The admin pages for workflow runs and agent runs use these routes. So a statement such as "an
+admin stop is written to the audit log" is true for `POST /api/runs/:runId/human-events` and
+`DELETE /api/runs/:runId`, and not for a cancel from those pages.
 
 A run that is
 known only to the worker that started it (persistence off) is described by

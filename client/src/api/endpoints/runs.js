@@ -53,11 +53,13 @@ export const fetchRunInteractions = async runId => {
 };
 
 /**
- * The interactions queue: every pending interaction the caller may answer
- * (admins see all, approvers see their groups', owners see their own).
+ * The interactions queue: every pending interaction the caller may see
+ * (admins see all, approvers see their groups', owners see their own). An
+ * admin sees more than an admin may answer: an interaction of a run a user
+ * started that names no approver group is answered by that user only.
  * @param {Object} [options]
  * @param {string} [options.kind] - `question` | `approval` | `review` | `notify`
- * @returns {Promise<{ interactions: Object[] }>} the response body
+ * @returns {Promise<{ items: Object[] }>} the response body
  */
 export const fetchPendingInteractions = async (options = {}) => {
   const { kind } = options;
