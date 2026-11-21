@@ -41,7 +41,7 @@ import {
   serverEnvironment,
   writeOverlay
 } from '../../tests/config/agents-contents.mjs';
-import { OTHER, TOOLS_APP, USER } from '../../tests/config/agents-scenario.mjs';
+import { APPROVAL_APP, OTHER, TOOLS_APP, USER } from '../../tests/config/agents-scenario.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SUITE_DIR = path.join(root, 'tests', 'e2e-agents');
@@ -530,6 +530,16 @@ describe('agents e2e suite: contents', () => {
       assert.equal(app.preferredModel, 'e2e-stub-tools');
       // iHub's own tools and the counter tools of the suite.
       assert.deepEqual(app.integrations, { ihub: {}, 'e2e-counter': {} });
+      assert.equal(app.toolApproval, undefined, 'its tools run without asking');
+      // The same app once more, with an approval before every tool call.
+      const asking = JSON.parse(
+        fs.readFileSync(path.join(dir, 'apps', `${APPROVAL_APP}.json`), 'utf8')
+      );
+      assert.deepEqual(asking.toolApproval, { default: 'always' });
+      assert.deepEqual(
+        { ...asking, id: app.id, order: app.order, name: app.name, description: app.description },
+        { ...app, toolApproval: { default: 'always' } }
+      );
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }

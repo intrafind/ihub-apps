@@ -865,7 +865,7 @@ A marker in the user message scripts the stub (`tests/config/e2e-llm-stub.mjs`).
 | `e2e-script:<name>` | follows the named script in `tests/config/e2e-scripts.mjs`, one turn per model call |
 | `e2e-fail` | fails with HTTP 400 |
 
-Two models are seeded: `e2e-stub` (the default, without tools) and `e2e-stub-tools`, which is offered the tools of the app. The app `e2e-tools` prefers the second and offers iHub's own tools (`ask_user`, the scheduled-task tools) and the two counter tools below.
+Two models are seeded: `e2e-stub` (the default, without tools) and `e2e-stub-tools`, which is offered the tools of the app. The app `e2e-tools` prefers the second and offers iHub's own tools (`ask_user`, the scheduled-task tools) and the two counter tools below. The app `e2e-approval` is the same app with an approval before every tool call (`toolApproval.default: "always"`): send a tool call there with `toolApprovalCapable: true` in the request body, and the turn ends on a pending approval (`interaction/raised`).
 
 #### A write that can be counted, and content from outside
 
