@@ -74,9 +74,16 @@ function formatViolationSummary(violations) {
  * @param {Record<string, number>} [known] - axe rule → number of elements this
  *   page is known to fail it on. Up to that many are logged but not failed;
  *   one more element, or any other rule, fails the test.
+ * @param {Object} [options]
+ * @param {string[]} [options.exclude] - Selectors of parts axe does not look at.
+ *   For a part that an open layer covers; the caller says why at the call.
  */
-async function expectNoBlockingViolations(page, label, known = {}) {
-  const results = await createAxeScanner(page).analyze();
+async function expectNoBlockingViolations(page, label, known = {}, { exclude = [] } = {}) {
+  const scanner = exclude.reduce(
+    (builder, selector) => builder.exclude(selector),
+    createAxeScanner(page)
+  );
+  const results = await scanner.analyze();
   const blocking = getBlockingViolations(results.violations).filter(
     v => v.nodes.length > (known[v.id] ?? 0)
   );
@@ -322,9 +329,15 @@ const KNOWN_VIOLATIONS = {
   '/admin/telemetry': { label: 4 },
   '/admin/backup': { label: 1 },
   '/admin/tools/ocr-ai': { label: 1 },
-  '/admin/tools/jobs': { label: 1 },
-  '/admin/apps/new': { 'label-title-only': 1, label: 19, 'select-name': 8 }
+  '/admin/tools/jobs': { label: 1 }
 };
+
+// The app editor with every group of its form expanded (see the test
+// "Accessibility — the app editor" below). A plain load of the editor shows two
+// of its eight groups, and axe does not look into a collapsed one, so the
+// editor is not in the lists above: its counts are measured with everything
+// open. They may only shrink.
+const KNOWN_APP_EDITOR_VIOLATIONS = { label: 7, 'select-name': 4 };
 
 // Pages that currently have no critical or serious violation. They are held at
 // zero, so a regression anywhere in this list fails the pull request. Together
@@ -380,7 +393,9 @@ const CLEAN_PAGES = [
   '/admin/eu-ai-act',
   '/admin/updates',
   '/admin/advanced',
-  '/admin/models/new'
+  '/admin/models/new',
+  // "New app" opens on its Start screen; its other states are scanned below.
+  '/admin/apps/new'
 ];
 
 // Most of the product sits behind a login: the chat UI, the prompt library and
@@ -480,6 +495,192 @@ test.describe('Accessibility — the integration action detail', () => {
     await expect(drawer).toBeVisible();
     await expect(drawer.getByTestId('action-test-panel')).toBeVisible();
     await expectNoBlockingViolations(page, 'Integration action detail');
+  });
+});
+
+// "New app" (concepts/app-builder-rework-2026-11): one page with two screens,
+// Start and Essentials, and several states a plain load does not show. Each is
+// opened the way an author opens it and held at zero.
+test.describe('Accessibility — the New app page', () => {
+  test.beforeEach(async ({ page }) => {
+    await signInAsAdmin(page);
+    // The first-run disclaimer would cover the page and take every click.
+    await page.addInitScript(() => {
+      window.localStorage.setItem('ihub-disclaimer-acknowledged', 'true');
+    });
+  });
+
+  /** The Start screen, loaded and settled. */
+  async function openStart(page) {
+    await gotoSettled(page, '/admin/apps/new');
+    await expect(page.getByRole('heading', { level: 1, name: 'New app' })).toBeVisible();
+  }
+
+  /** The Essentials screen of an empty start. */
+  async function openEssentials(page) {
+    await openStart(page);
+    await page.getByRole('button', { name: 'Start empty' }).click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Describe your app' })).toBeVisible();
+  }
+
+  test('Start: the other ways to start and the app picker', async ({ page }) => {
+    test.setTimeout(150_000);
+    await openStart(page);
+    await page.getByRole('button', { name: 'Other ways to start' }).click();
+    await expect(page.getByRole('button', { name: 'Create a link app' })).toBeVisible();
+    await expectNoBlockingViolations(page, 'New app — other ways to start');
+
+    await page.getByRole('button', { name: 'Copy an existing app' }).click();
+    const picker = page.getByRole('dialog');
+    await expect(
+      picker.getByRole('heading', { name: 'Which app do you want to copy?' })
+    ).toBeVisible();
+    await expect(picker.getByRole('button').nth(1)).toBeVisible();
+    await expectNoBlockingViolations(page, 'New app — app picker');
+  });
+
+  test('Essentials: empty, with details and tips open, the icon list, after a failed submit', async ({
+    page
+  }) => {
+    test.setTimeout(150_000);
+    await openEssentials(page);
+    await expectNoBlockingViolations(page, 'New app — Essentials');
+
+    await page.getByRole('button', { name: 'More details' }).click();
+    await expect(page.getByRole('textbox', { name: 'App ID' })).toBeVisible();
+    await page.getByRole('button', { name: 'Tips for good instructions' }).click();
+    await expectNoBlockingViolations(page, 'New app — Essentials, details and tips open');
+
+    // The icon list opens over the page and covers two colour swatches except
+    // for a strip at their upper edge. While the list is open, a layer above
+    // the page takes every click beside it, so that strip is no target: a
+    // click on it closes the list and changes no colour. axe compares a
+    // control only with neighbours of the same positioning and does not see
+    // that layer (it is fixed), so it would report the strip as too small a
+    // target. The colour group is therefore left out of this one scan; every
+    // other scan of the screen includes it.
+    const iconButton = page.getByRole('button', { name: /^Icon/ });
+    const iconSearch = page.getByPlaceholder('Search icons…');
+    const colours = page.getByRole('group', { name: 'Color' });
+    await iconButton.click();
+    await expect(iconSearch).toBeVisible();
+    const orange = await colours.getByRole('button', { name: 'Orange' }).boundingBox();
+    await page.mouse.click(orange.x + orange.width / 2, orange.y + 1);
+    await expect(iconSearch).toBeHidden();
+    await expect(colours.getByRole('button', { name: 'Indigo' })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+    await iconButton.click();
+    await expect(iconSearch).toBeVisible();
+    await expectNoBlockingViolations(
+      page,
+      'New app — icon list',
+      {},
+      {
+        exclude: ['[role="group"]:has(button[aria-label="Orange"])']
+      }
+    );
+    await page.keyboard.press('Escape');
+    await expect(iconSearch).toBeHidden();
+
+    // Nothing typed: every required field is marked and named in the summary.
+    await page.getByRole('button', { name: 'Create and test' }).click();
+    await expect(page.getByText('3 fields need your attention.')).toBeVisible();
+    await expectNoBlockingViolations(page, 'New app — Essentials with errors');
+  });
+
+  test('Essentials: a template, a link app, and the question before input is lost', async ({
+    page
+  }) => {
+    test.setTimeout(150_000);
+    await openStart(page);
+    await page.getByRole('button', { name: /^Translator/ }).click();
+    await expect(
+      page.getByRole('heading', { level: 1, name: 'Adjust the template' })
+    ).toBeVisible();
+    await expectNoBlockingViolations(page, 'New app — Essentials from a template');
+
+    await page.getByRole('textbox', { name: 'Name' }).fill('Accessibility check');
+    await page.getByRole('button', { name: 'Back', exact: true }).click();
+    const dialog = page.getByRole('alertdialog');
+    await expect(dialog).toContainText('Discard this app?');
+    await expectNoBlockingViolations(page, 'New app — discard dialog');
+    await dialog.getByRole('button', { name: 'Discard', exact: true }).click();
+
+    await page.getByRole('button', { name: 'Other ways to start' }).click();
+    await page.getByRole('button', { name: 'Create a link app' }).click();
+    await expect(
+      page.getByRole('heading', { level: 1, name: 'Set up your link app' })
+    ).toBeVisible();
+    await expectNoBlockingViolations(page, 'New app — Essentials for a link app');
+  });
+
+  test('a draft from a description: the failure message and the draft notice', async ({ page }) => {
+    test.setTimeout(150_000);
+    await openStart(page);
+    const description = page.getByRole('textbox', { name: 'Your description' });
+    // The box is there when a model is: the suite's own server has the stub
+    // model (tests/config/e2e-llm-stub.mjs), a reused dev server may have none.
+    test.skip(
+      !(await description.isVisible()),
+      'No AI model on this server, so the page offers no draft'
+    );
+    const prepare = page.getByRole('button', { name: 'Prepare draft' });
+
+    // The stub answers a plain description with a sentence, which is no draft.
+    await description.fill('An app that summarizes a text.');
+    await prepare.click();
+    await expect(page.getByText("The AI's draft could not be used. Try again.")).toBeVisible();
+    await expectNoBlockingViolations(page, 'New app — draft failed');
+
+    // The marker makes the stub answer with the draft of an app.
+    await description.fill('Rewrite a text in a chosen tone. e2e-app-json');
+    await prepare.click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Check your draft' })).toBeVisible();
+    await expect(page.getByRole('checkbox', { name: /^Web search/ })).toBeVisible();
+    await expectNoBlockingViolations(page, 'New app — draft notice');
+  });
+});
+
+// The app editor (concepts/app-builder-rework-2026-11, section 3.5): its form
+// has eight groups, of which two are open on a plain load. axe does not look
+// into a collapsed group, so a scan of the plain page would miss most of the
+// form. "Expand all" opens every group; that state is what is measured.
+test.describe('Accessibility — the app editor', () => {
+  test.beforeEach(async ({ page }) => {
+    await signInAsAdmin(page);
+    await page.addInitScript(() => {
+      window.localStorage.setItem('ihub-disclaimer-acknowledged', 'true');
+    });
+  });
+
+  test('has no new critical or serious violations with every group expanded', async ({ page }) => {
+    test.setTimeout(150_000);
+    await gotoSettled(page, '/admin/apps/chat');
+    const headers = page.locator('[id^="app-group-"][id$="-header"]');
+    await expect(headers).toHaveCount(8);
+    await page.getByRole('button', { name: 'Expand all' }).click();
+    await expect(
+      page.locator('[id^="app-group-"][id$="-header"][aria-expanded="true"]')
+    ).toHaveCount(8);
+    // The access group loads its groups after it opens.
+    await expect(page.getByTestId('content-access-section')).toBeVisible();
+    await page.waitForLoadState('networkidle');
+    await expectNoBlockingViolations(
+      page,
+      'App editor — every group expanded',
+      KNOWN_APP_EDITOR_VIOLATIONS
+    );
+  });
+
+  test('has no critical or serious violations with the test panel open', async ({ page }) => {
+    test.setTimeout(150_000);
+    await gotoSettled(page, '/admin/apps/chat');
+    await page.getByRole('button', { name: 'Test', exact: true }).click();
+    await expect(page.getByRole('complementary', { name: 'Test app' })).toBeVisible();
+    await page.waitForLoadState('networkidle');
+    await expectNoBlockingViolations(page, 'App editor — test panel open');
   });
 });
 

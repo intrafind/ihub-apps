@@ -1,0 +1,81 @@
+# App builder (end to end)
+#
+# Creates apps the way an author does, in a real browser on a fresh install:
+# from the app list to the first answer in the test chat, a draft from a
+# description, a template, a copy, a link app, publishing, and the same as a
+# content admin who is not an administrator (tests/e2e/app-builder.spec.js, the
+# cases of concepts/app-builder-rework-2026-11, section 7.3).
+#
+# The suite runs on its own server, ports and contents directory
+# (tests/config/playwright.app-builder.config.js) with a local model stub, so it
+# needs no model key and no network. It has one worker and no retries: two cases
+# change the only model and the groups of that server, and a retry would hide the
+# flakiness the run is there to surface.
+#
+# The main Playwright suite runs in no workflow. Without this one, a change to
+# the create page, the editor or the draft endpoint would be checked by unit
+# tests only, which replace either the server or the browser.
+#
+# There is deliberately no `paths:` filter, for the reason given in
+# api-guidelines-check.yml: a required check that a PR never triggers would block it.
+
+name: App builder (e2e)
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: app-builder-e2e-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  app-builder-e2e:
+    name: App builder (e2e)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      CI: 'true'
+      # Required by the server to boot in CI.
+      JWT_SECRET: ci-app-builder-e2e-test-secret
+      NODE_ENV: development
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm run install:all
+
+      - name: Install Playwright browsers
+        # --no-install: use the Playwright version pinned by the lockfile, never fetch one on demand.
+        run: npx --no-install playwright install --with-deps chromium
+
+      - name: Run the app builder suite
+        # The Playwright config starts the app on its own contents directory with the
+        # model stub (tests/config/e2e-server.mjs) and seeds a content admin
+        # (tests/config/app-builder-seed.mjs).
+        run: npm run test:e2e:app-builder -- --project=chromium --retries=0
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: app-builder-e2e-playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 14

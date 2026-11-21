@@ -90,6 +90,7 @@
     "test:e2e:crawl": "playwright test --config tests/config/playwright.config.js tests/e2e/route-crawl.spec.js",
     "test:e2e:subpath": "playwright test --config tests/config/playwright.subpath.config.js",
     "test:e2e:admin-safety": "playwright test --config tests/config/playwright.admin-safety.config.js",
+    "test:e2e:app-builder": "playwright test --config tests/config/playwright.app-builder.config.js",
     "test:e2e:authz": "playwright test --config tests/config/playwright.authz.config.js",
     "test:e2e:injection": "playwright test --config tests/config/playwright.injection.config.js",
     "check:artifact-libraries": "node scripts/check-artifact-libraries.js",

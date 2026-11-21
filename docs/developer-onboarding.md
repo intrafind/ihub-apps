@@ -483,6 +483,14 @@ For detailed architecture information, see [docs/architecture.md](architecture.m
 
 ### Adding a New AI Application
 
+The usual way is the admin UI: **Admin → Apps → New app** creates the app, opens its editor and
+lets you test it in a chat beside the form (see [Build your first app](app-quickstart.md)). The
+code of that page is in `client/src/features/admin/pages/AdminAppCreatePage.jsx` and
+`client/src/features/admin/components/app-create/`; the draft endpoint is
+`POST /api/admin/apps/_generate` (`server/routes/admin/appBuilder.js`).
+
+To add an app as a file instead:
+
 1. **Create App Configuration** (e.g., `contents/apps/my-new-app.json`):
 ```json
 {
@@ -499,13 +507,16 @@ For detailed architecture information, see [docs/architecture.md](architecture.m
     "en": "You are a helpful assistant that...",
     "de": "Du bist ein hilfreicher Assistent, der..."
   },
-  "color": "blue",
+  "color": "#4F46E5",
   "icon": "lightbulb"
 }
 ```
 
+   The `id` allows lowercase letters, digits, dots, hyphens and underscores, at most 50
+   characters. A file without `enabled` is a published app.
+
 2. **Test the App**:
-   - Restart development server: `npm run dev`
+   - Apps reload by themselves; a restart is not needed
    - Navigate to http://localhost:5173
    - Find your new app in the list
    - Test chat functionality

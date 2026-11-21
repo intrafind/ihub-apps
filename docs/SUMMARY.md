@@ -18,6 +18,7 @@
 
 # Build apps and agents
 
+- [Build your first app](app-quickstart.md)
 - [Apps](apps.md)
   - [Custom Response Renderers](custom-renderers.md)
   - [Structured Output](structured-output.md)

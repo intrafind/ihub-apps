@@ -4,7 +4,8 @@
 import { defineConfig, devices } from '@playwright/test';
 
 /**
- * The route crawl, the short-link checks (admin-subpath-links.spec.js) and the
+ * The route crawl, the short-link checks (admin-subpath-links.spec.js), the
+ * "New app" page and the app editor (app-builder-subpath.spec.js) and the
  * opt-in connect flow (`CONNECT_E2E=1`, #3752), against a
  * deployment on a path prefix (`/ihub`): the production
  * build behind a proxy that adds `X-Forwarded-Prefix`, see subpath-server.mjs.
@@ -20,7 +21,12 @@ process.env.CONNECT_E2E_BASE ??= PREFIX;
 
 export default defineConfig({
   testDir: '../e2e',
-  testMatch: ['route-crawl.spec.js', 'admin-subpath-links.spec.js', 'integration-connect.spec.js'],
+  testMatch: [
+    'route-crawl.spec.js',
+    'admin-subpath-links.spec.js',
+    'app-builder-subpath.spec.js',
+    'integration-connect.spec.js'
+  ],
   forbidOnly: !!process.env.CI,
   retries: 0,
   workers: 1,

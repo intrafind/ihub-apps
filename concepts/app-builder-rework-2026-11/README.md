@@ -2539,7 +2539,128 @@ Nothing here contradicts an owner decision of 2026-11-17.
 
 ## 14. What was verified, and what was not
 
-Verified in code for this plan:
+### 14.1 The merge gate, run on 2026-11-21
+
+The gate of section 7.4 ran once on the finished working tree. The increment caused no failure.
+The following commands ended red, and each of them fails in the same way on the commit the branch
+started from (`f7714f8`, release v5.7.3):
+
+- `npm run test:quick`: the server test "replaces a thread that crashed"
+  (`server/tests/extraction-pool.test.js:247`) fails.
+- `npm run check:response-shapes`: two routes differ, but only because this sandbox sets
+  `STAAN_API_KEY`. Without the variable the check is green.
+- The four admin specs: "a choice made in the sidebar survives an OS theme change"
+  (`tests/e2e/admin-controls-visible.spec.js:361`) fails.
+- `npm run test:e2e:subpath`: the route crawl fails on `/apps/embedded-website-wikipedia`.
+
+Not done at all: the run of the ten descriptions against a real model (7.5, D33) and the manual
+walk of 7.5.
+
+**Environment.** Node 24.22.3. Chromium build 1243 (157.0.8103.78) and ffmpeg build 1011, which
+the sandbox ships; Playwright 1.65 expects builds 1254 and 1013, so the runs used aliases in a
+private `PLAYWRIGHT_BROWSERS_PATH` outside the repository.
+`npx --no-install playwright install --with-deps chromium` was therefore not run. Every Playwright
+run started its own server. The runs on the default config, the app builder run and the authz run
+started from a fresh contents directory (`contents-e2e`, `contents-e2e-app-builder`,
+`contents-e2e-authz`). The subpath run used `contents-subpath` as earlier runs had left it. Only
+the chromium project ran; Firefox, WebKit and the mobile projects did not.
+
+**The base of the comparison.** The local ref `origin/main` of this checkout is stale: it points
+at `9882782`, 61 commits before the commit the branch started from. A diff against it contains
+the work of those 61 commits. The two diff-based checks therefore ran against `f7714f8`, and once
+more against `origin/main` as section 7.4 writes them. "Fails on the base" below means: the same
+command, run in a separate worktree at `f7714f8` in the same sandbox, failed with the same
+message.
+
+| Command | Result |
+|---|---|
+| `npm run lint:fix` | Passed: 0 errors, 541 warnings (the base has 552). It changed no file. |
+| `npm run format:fix` | Passed. It changed no file. |
+| `npm run test:quick` | **Red, fails on the base.** Config-access check passed. Jest, `tests/unit`: 559 suites and 8661 tests passed. Server tests, `node:test` group (676 files): 8523 of 8526 tests passed, 2 skipped, 1 failed. Server tests, Jest group: 315 suites and 4440 tests passed. The script stops at the first failure, so its last three parts ran separately: `test:token-stats`, `test:export-formats` and `test:feature-flags` passed. |
+| `npm run test:integration:ci` | Passed: 4 suites, 91 tests passed, 6 skipped. |
+| `npm run test:boot` | Passed: the server booted in all 3 scenarios. |
+| `timeout 10s node server/server.js` | The server started, listened, and shut down at the timeout. The log has no entry of level error. |
+| `npm run build:api-docs` | Passed: 104, 150 and 10 paths in the three documents. |
+| `node scripts/check-response-shapes.js --update` | With `STAAN_API_KEY` unset, and after Prettier, the snapshot is identical to the committed one. The route changes of the increment were already in it (`GET /api/admin/app-templates`). |
+| `npm run check:response-shapes` | **Red in this sandbox, fails on the base.** Passed with `STAAN_API_KEY` unset: 352 routes, all answers match. |
+| `git diff … \| node scripts/check-api-guidelines.js` | Passed: 0 violations in the 21 server files the increment changes. |
+| `npm run security:audit` | Passed: 355 admin endpoints, 354 guarded, 1 documented exception. |
+| `npm run test:e2e:authz` | Passed: 21 tests. |
+| `npm run test:e2e:app-builder -- --project=chromium --retries=0` | Passed: 22 tests in 3.5 minutes, one worker, with `STAAN_API_KEY` unset as in CI. The slice ran it twice before with the variable set, also green. |
+| `npm run test:a11y -- --project=chromium` | Passed: 90 tests. |
+| `npm run test:e2e:crawl -- --project=chromium --retries=0` | Passed: 115 pages. |
+| The four admin specs (`admin-unsaved-guards`, `admin-controls-visible`, `admin-load-gating`, `admin-confirmations`) | **Red, fails on the base.** 41 passed, 1 failed. The two changed entries for `/admin/apps/new` pass in all three themes. |
+| `(cd client && npm run build) && npm run test:e2e:subpath` | **Red, fails on the base.** The build passed. 2 tests passed (among them the new `app-builder-subpath.spec.js`), 1 failed, 6 skipped (the connect flow, which needs `CONNECT_E2E=1`). |
+| `node scripts/check-a11y-diff.js` | Passed: 0 findings in the 83 client files the increment changes. |
+| `reuse lint` | Passed with reuse 6.3.0 from a private virtual environment (CI pins 6.2.0): 5857 of 5857 files have copyright and licence information. A script also confirmed the two SPDX lines in each of the 93 new source files. |
+
+**The four red results.**
+
+- *`extraction-pool.test.js`, "replaces a thread that crashed".* The test gives a worker thread
+  a heap of 8 MB and expects the extraction to end with `EXTRACTION_FAILED`. In this sandbox the
+  assertion on the error type fails, in three of three runs of the file alone and in two of two
+  runs on the base. The increment does not touch the extraction code. Whether the test also fails
+  in CI was not checked.
+- *Response shapes.* The sandbox has the environment variable `STAAN_API_KEY`. With it, the
+  server installs a web search integration, and `GET /api/integrations` and
+  `GET /api/admin/apps/integration-status` answer with additional entries. The snapshot was
+  not changed for this.
+- *"A choice made in the sidebar survives an OS theme change".* The test looks for a button named
+  "Theme:" in the admin sidebar. Neither the base nor the branch renders one. Someone has to
+  decide whether the test or the sidebar is wrong; the increment changes neither.
+- *The subpath crawl.* The shipped app `embedded-website-wikipedia` frames Wikipedia, and the
+  browser logs an error about Wikipedia's report-only Content Security Policy. The crawl counts
+  every console error. It needs the network: the same crawl on the default config passed in this
+  run.
+
+**Also checked.**
+
+- `tests/unit/client/known-routes-sync.test.jsx` passes. The increment adds the route
+  `admin/apps/new` below the known route `admin`, so both lists stay as they are.
+- No file outside the increment changed. `git status` and the checksum of every modified and
+  untracked file were the same after the gate as before it; `lint:fix` and `format:fix`
+  rewrote nothing. The diff against `f7714f8` holds 122 added, 86 modified and 6 deleted
+  tracked files plus 12 untracked ones, all of them files of a slice or of this concept folder.
+- `contents/` is git-ignored and holds no app, group or user of this increment. The twelve
+  server test files of the increment leave it untouched. Older server tests do write into it
+  when `npm run test:server` runs (group and integration settings, audit entries, change
+  history), for example `server/tests/loop/toolApprovalReviewFixes.test.js`, which installs an
+  integration named `jira`. That is the state of the base and was not changed.
+- No server was left running. The ports 3000, 5173, 5174, 3085, 5185, 8979 and 8985 answer
+  nothing. The git-ignored directories of the runs remain: `contents-e2e*`, `contents-subpath`,
+  `test-results/`, `playwright-report/`, `client/dist`.
+
+**Not verified by the gate.**
+
+- A draft from a real model (7.5, D33). The release entry and the quickstart say that the
+  quality of drafts was not yet measured; the ticket under #3741 stays open.
+- The manual walk of 7.5: `/ihub/`, German, dark mode, 390 px, keyboard only, screen reader.
+  The automated suites cover parts of it (the German walk, the keyboard walk and the 390 px
+  check of the app builder spec; the subpath spec), but nobody looked at the screens.
+- Any browser other than Chromium, and Chromium only in a build older than the one Playwright
+  expects.
+- The workflow `.github/workflows/app-builder-e2e.yml` itself. It never ran; the gate ran the
+  command it calls.
+- The no-model state of the create page, the copy start and the restored-draft notice were not
+  scanned with axe. The scan of the open icon list leaves out the colour group.
+
+**Open points the gate found or passes on.** None of them is a red test.
+
+- Focus after "Create and test": the heading of the next-steps card gets the focus (3.3), and
+  about 140 ms later the message box of the test chat takes it. The Jest test of the arrival
+  replaces the chat and does not see this. The owner of the editor decides whether the message
+  box may keep the focus.
+- The icon picker is still a dropdown and not the shared Modal that 3.7 names. S9 added a layer
+  that catches clicks beside the open list; the change applies to every page that uses the
+  picker.
+- The editor with every group expanded has 11 known axe findings on `/admin/apps/chat`
+  (7 checkboxes without a label, 4 selects without a name). The accessibility spec records them
+  as a count that may only shrink. Before the increment the count was 27.
+- `tests/e2e/app-builder.spec.js` is also collected by the default Playwright config and skips
+  itself there (22 skipped tests in a full run of the default config).
+
+### 14.2 Verified in code while planning
+
 
 - `getApps()` filters `enabled !== false` (`server/configCache.js:887-906`), and the lookups of
   5.4 exist at the lines named. The engineer counted 45 calls of `getApps(` and `getAppsForUser(`
@@ -2606,27 +2727,33 @@ Verified in code for this plan:
   (`client/src/api/adminApi.js:762`).
 - The npm scripts of 7.4 exist, except `test:e2e:app-builder`, which S9 adds.
 
-Not verified:
+### 14.3 Not verified while planning, and what became of it
 
-- A successful draft from a real model. No panelist saw one.
+- A successful draft from a real model. **Still open.** No panelist and no engineer saw one.
 - Whether `timeoutMs` and `signal` of the model client stop the upstream request for every
-  provider adapter. S2 checks it with the stub's `e2e-slow` marker.
-- What `PUT /api/admin/apps/{id}` does today when the body carries another ID (Q22).
-- Earlier released versions of the shipped generator prompt. The history of this checkout shows
-  one commit for the file, so `SHIPPED_BRIEF_HASHES` may start with one hash. An installation with
-  an older unchanged copy would then count as "customised"; S2 adds the hashes of the release
-  tags it can reach.
-- Whether `ContentAccessSection` saves at once or with the form. S7 needs it for the `onSaved`
-  callback.
-- Whether the subpath test server has an admin sign-in that the new subpath spec can use. The
-  existing `admin-subpath-links.spec.js` suggests it has.
-- Whether customers override relabelled keys in their own locale files.
-- How answers render when `preferredOutputFormat` is `html`. The generator cannot set that field.
-- The exact route for disabling the stub model in case 8 of the spec.
-- Whether the sandbox can install the chromium build that the repo's Playwright expects.
-- Which further client requests the embedded chat sends for an app beyond the routes in 5.4. S5
-  checks this with the unpublished app open in the test panel and extends the list if a request
-  answers 404.
+  provider adapter. **Shown for one adapter.** Case 9b of the app builder spec runs against the
+  stub, which speaks the OpenAI protocol: the server ends a draft after 80 seconds with 504, and
+  after Cancel the stub reports that the caller hung up. The other adapters were not checked.
+- What `PUT /api/admin/apps/{id}` does today when the body carries another ID (Q22). **Not
+  checked by the gate.**
+- Earlier released versions of the shipped generator prompt. **Done as far as the history
+  reaches:** `SHIPPED_BRIEF_HASHES` lists 12 hashes. An installation with an unchanged copy of
+  a version that is not among them still counts as "customised".
+- Whether `ContentAccessSection` saves at once or with the form. **It saves at once** and calls
+  `onSaved` with the answer.
+- Whether the subpath test server has an admin sign-in. **It has;** the subpath spec signs in and
+  passes.
+- Whether customers override relabelled keys in their own locale files. **Still open.**
+- How answers render when `preferredOutputFormat` is `html`. **Still open.**
+- The exact route for disabling the stub model in case 8.
+  **`POST /api/admin/models/{id}/_toggle`;** the case passes.
+- Whether the sandbox can install the chromium build that the repo's Playwright expects. **It
+  cannot.** The runs used the installed build 1243 under the name of build 1254.
+- Which further client requests the embedded chat sends for an app beyond the routes in 5.4.
+  **Recorded as a ratchet:** `server/tests/app-unpublished-access.baseline.json` lists every
+  lookup that still reads only published apps, with the reason. Two of them limit the test chat
+  of an unpublished app: an `@workflow` mention is refused, and the view of an MCP App does not
+  open. `docs/admin-ui.md` names both.
 
 ## 15. Critique and resolution
 

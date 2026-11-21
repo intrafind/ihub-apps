@@ -181,6 +181,12 @@ function IconPicker({ value, onChange, className = '', error, id, labelledBy }) 
       {/* Error Message */}
       {error && <p className="mt-1 text-sm text-red-600 dark:text-red-400">{error}</p>}
 
+      {/* While the list is open it is the only thing to click. Without the
+          layer below, the list half covers the controls beside the picker, and
+          what is left of them is too small a target (WCAG 2.5.8); a click
+          beside the list closes it instead. */}
+      {isOpen && <div className="fixed inset-0 z-40" aria-hidden="true" onMouseDown={close} />}
+
       {/* Dropdown */}
       {isOpen && (
         <div
