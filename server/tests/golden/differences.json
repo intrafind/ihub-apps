@@ -177,6 +177,7 @@
         "chat/plain.json",
         "chat/plain-post-stream.json",
         "scheduled-task/plain.json",
+        "completions/non-stream.json",
         "inference-app/completions-non-stream.json",
         "inference-app/responses-non-stream.json",
         "app-as-tool/ok.json",

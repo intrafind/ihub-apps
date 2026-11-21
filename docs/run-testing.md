@@ -161,7 +161,7 @@ Two things are left out of a golden because they cannot be equal on two runs, an
 | `determinism.test.js` | every case gives the same bytes twice in one process and once in a second process that runs 400 days later |
 | `goldenChange.test.js` | a changed prompt order and a changed tool schema fail the golden |
 | `differenceList.test.js` | every changed golden is named by a row of the difference list |
-| `differenceRows.test.js` | every row names a golden that exists and parts a record has; a signed row names an owner |
+| `differenceRows.test.js` | every row names a golden that exists (or that a row accepts as deleted) and parts a record has; a signed row names an owner |
 | `differenceSignatures.test.js` | the signature check, on a scratch repository |
 | `harness.test.js` | a recording that cannot start leaves nothing behind for the next one |
 | `normalise.test.js`, `sideBySide.test.js` | the rules and the comparison tool |

@@ -51,22 +51,49 @@ test('the difference list exists and its rows are well-formed', () => {
   assert.deepEqual(validateRows(rows), []);
 });
 
-test('every golden a row names exists, unless the row accepts that it is deleted', () => {
+/**
+ * The rows that name a golden which is neither a file nor accepted as deleted.
+ *
+ * A row with the part "(deleted)" accepts the removal of its goldens for the whole list: the
+ * rows written before it that named the same file stay as they were signed, and are not the
+ * mistake this looks for.
+ *
+ * @param {Array<{id: string, goldens: string[], parts: string[]}>} list
+ * @param {(golden: string) => boolean} exists
+ * @returns {string[]} `<row id>: <golden>`
+ */
+export function missingGoldens(list, exists) {
+  const deleted = new Set(
+    list.filter(row => row.parts.includes('(deleted)')).flatMap(row => row.goldens)
+  );
   const missing = [];
-  for (const row of rows) {
-    if (row.parts.includes('(deleted)')) continue;
+  for (const row of list) {
     for (const golden of row.goldens) {
-      if (!fs.existsSync(path.join(REPO_ROOT, GOLDENS_PATH, golden))) {
-        missing.push(`${row.id}: ${golden}`);
-      }
+      if (!deleted.has(golden) && !exists(golden)) missing.push(`${row.id}: ${golden}`);
     }
   }
+  return missing;
+}
+
+test('every golden a row names exists, unless a row accepts that it is deleted', () => {
   assert.deepEqual(
-    missing,
+    missingGoldens(rows, golden => fs.existsSync(path.join(REPO_ROOT, GOLDENS_PATH, golden))),
     [],
-    `These rows name a golden that is not under ${GOLDENS_PATH}. Correct the name, or list the ` +
-      'part "(deleted)" when the row accepts that the golden is removed.'
+    `These rows name a golden that is not under ${GOLDENS_PATH}. Correct the name, or add a row ` +
+      'with the part "(deleted)" when the list accepts that the golden is removed.'
   );
+});
+
+test('a row that accepts a deleted golden also answers for the earlier rows that name it', () => {
+  const exists = golden => golden === 'chat/plain.json';
+  const earlier = { id: 'tool-error-text', goldens: ['app/depth-1.json'], parts: ['ledger'] };
+  const other = { id: 'usage', goldens: ['chat/plain.json'], parts: ['usageRecords'] };
+  assert.deepEqual(missingGoldens([earlier, other], exists), ['tool-error-text: app/depth-1.json']);
+  const removal = { id: 'depth-1-removed', goldens: ['app/depth-1.json'], parts: ['(deleted)'] };
+  assert.deepEqual(missingGoldens([earlier, other, removal], exists), []);
+  // A mistyped name in another row is still found.
+  const mistyped = { id: 'typo', goldens: ['chat/plian.json'], parts: ['ledger'] };
+  assert.deepEqual(missingGoldens([earlier, removal, mistyped], exists), ['typo: chat/plian.json']);
 });
 
 test('every part a row names is a part of a record', () => {
