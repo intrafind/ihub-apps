@@ -11,7 +11,13 @@ RUN apk add --no-cache \
     musl-dev \
     python3
 
-COPY . /src
+# Build and tests run as the image's unprivileged `node` user (uid 1000); only the
+# package installation above needs root.
+RUN mkdir /src && chown node:node /src
+USER node
+# The whole checkout is copied on purpose: the tests read tests/, .git, .github and docs
+# (see Dockerfile.dockerignore, which is what keeps unrelated and secret files out).
+COPY --chown=node:node . /src
 WORKDIR /src
 
 # npm ci (not install:all's plain `npm install`) so the scanner tests exactly
