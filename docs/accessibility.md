@@ -252,6 +252,8 @@ Signed-in pages log in as the default local admin a fresh `contents/` ships (`ad
 
 **Baseline (ratchet):** Pages in `CLEAN_PAGES` have no critical or serious violation and are held at zero. `KNOWN_VIOLATIONS` records, per remaining page, how many elements fail each rule on a fresh `contents/` (the highest count over repeated scans, because list-backed pages render slightly differently per load). Up to that many are logged but do not fail the run; one more failing element, or any other rule, fails it. When a fix lowers a count, the log says so: lower the number, or delete the entry at zero and add the page to `CLEAN_PAGES`, so the fixed elements cannot regress unnoticed. The remaining entries are unlabelled form controls in admin forms (`label`, `select-name`, `button-name`) and the OAuth tab panels.
 
+A page that is removed, renamed or turned into a redirect has to leave `CLEAN_PAGES` in the same commit. The browser check would only notice later, and a path without a route renders the "not found" page under the same URL, which the check would scan without complaint. A unit test, `tests/unit/client/clean-pages-routes.test.jsx`, therefore fails as soon as a path in `CLEAN_PAGES` has no page of its own in `client/src/App.jsx`.
+
 The suite signs in once per worker: the auth API allows 50 requests per 15 minutes, which one login per test would exceed.
 
 **Continuous integration:** The `.github/workflows/accessibility.yml` workflow installs dependencies, boots the application, and runs `npm run test:a11y` against Chromium on every pull request targeting `main` or `develop`. The Playwright HTML report is uploaded as a build artifact.
