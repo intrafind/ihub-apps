@@ -17,8 +17,10 @@
  * with a broken harness.
  *
  * A profile passes when
+ * - at least one session of every scenario in its mix ended, and no more than
+ *   `--max-error-pct` (default 0) of the sessions of a scenario failed, and
  * - at least one turn of every chat scenario in its mix ended, and
- * - no more than `--max-error-pct` (default 0) of its turns failed, and
+ * - no more than `--max-error-pct` of its turns failed, and
  * - for `agentTurn`, no turn was short of its tool rounds.
  *
  * `run.mjs` itself always exits with 0 after writing its results, as a
