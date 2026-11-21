@@ -305,8 +305,7 @@ export default function registerMcpServerRoutes(app) {
   // reach it. This is the public API budget (`rateLimit.publicApi`), mounted after `mcpAuth`:
   // it counts per signed-in caller or OAuth client, so many users behind one proxy or one
   // hosted MCP client do not share a bucket.
-  const rateLimiters = createRateLimiters(configCache.getPlatform() || {});
-  const gatewayLimiter = rateLimiters.publicApiLimiter;
+  const gatewayLimiter = createRateLimiters(configCache.getPlatform() || {}).publicApiLimiter;
 
   const enabledCheck = (req, res, next) => {
     if (!gatewayEnabled()) {
