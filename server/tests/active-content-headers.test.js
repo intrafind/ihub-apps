@@ -27,7 +27,9 @@ describe('isActiveDocumentType', () => {
       'text/html',
       'TEXT/HTML; charset=utf-8',
       'application/xhtml+xml',
-      'image/svg+xml'
+      'image/svg+xml',
+      'text/xml',
+      'Application/XML; charset=utf-8'
     ]) {
       assert.equal(isActiveDocumentType(type), true, type);
     }
@@ -53,6 +55,12 @@ describe('setUserFileContentType', () => {
   it('sandboxes an uploaded SVG file', () => {
     const res = fakeResponse();
     setUserFileContentType(res, 'image/svg+xml');
+    assert.match(res.headers['content-security-policy'], /\bsandbox\b/);
+  });
+
+  it('sandboxes an uploaded XML file, which runs as XHTML when it uses that namespace', () => {
+    const res = fakeResponse();
+    setUserFileContentType(res, 'text/xml');
     assert.match(res.headers['content-security-policy'], /\bsandbox\b/);
   });
 

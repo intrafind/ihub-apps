@@ -5,7 +5,8 @@
  * Headers for serving a user-supplied file from the application's own origin.
  *
  * A file a user uploaded is served under the media type it was stored with. For
- * an HTML, XHTML or SVG file that type makes a browser run the document, with
+ * an HTML, XHTML, SVG or generic XML file (an XML document in the XHTML namespace
+ * runs its script too) that type makes a browser run the document, with
  * script, on the origin of the application: whoever follows the link (a shared
  * chat's viewer, say) would run the uploader's code as themselves. `nosniff`
  * does not help, as the type is honest.
@@ -17,7 +18,13 @@
  */
 
 /** Media types a browser opens as a document that can run script. */
-const ACTIVE_DOCUMENT_TYPES = new Set(['text/html', 'application/xhtml+xml', 'image/svg+xml']);
+const ACTIVE_DOCUMENT_TYPES = new Set([
+  'text/html',
+  'application/xhtml+xml',
+  'image/svg+xml',
+  'text/xml',
+  'application/xml'
+]);
 
 /**
  * Whether a browser would run a document served under this `Content-Type`.

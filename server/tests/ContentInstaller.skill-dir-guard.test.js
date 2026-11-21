@@ -17,6 +17,10 @@ import { existsSync } from 'fs';
 import os from 'os';
 import path from 'path';
 
+// A `.env` or runner value for CONTENTS_DIR could be absolute, which would move every write
+// of the installer out of the fixture root: keep it relative.
+process.env.CONTENTS_DIR = 'contents';
+
 const state = { rootDir: os.tmpdir() };
 
 jest.unstable_mockModule('../pathUtils.js', () => ({
