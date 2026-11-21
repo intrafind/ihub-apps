@@ -194,7 +194,7 @@ jobs:
     name: Agents suite and transport matrix
     if: github.event_name != 'pull_request'
     # The `full` job of the end-to-end workflow (also started by hand there).
-    uses: ./.github/workflows/e2e.yml
+    uses: $/.github/workflows/e2e.yml
     with:
       suite: full
     # What the called workflow asks for in its jobs; it gets no more than this.
