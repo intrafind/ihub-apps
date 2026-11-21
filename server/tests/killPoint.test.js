@@ -16,7 +16,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createKillPoint, killPoint, parseKillPointSpec } from '../utils/killPoint.js';
 
@@ -25,8 +25,10 @@ const MODULE = pathToFileURL(
 ).href;
 
 /** A kill point for an environment, with the kill and the file writes recorded. */
-function build(env, { existing = null } = {}) {
+function build(env, { existing = null, claimError = null } = {}) {
   const calls = { kills: 0, appended: [], warned: [] };
+  // Not in `calls`: most tests compare that with what an inert process does.
+  const claims = [];
   const point = createKillPoint({
     env,
     kill: () => {
@@ -37,9 +39,13 @@ function build(env, { existing = null } = {}) {
       if (existing === null) throw Object.assign(new Error('no file'), { code: 'ENOENT' });
       return existing;
     },
+    createFile: file => {
+      claims.push(file);
+      if (claimError) throw claimError;
+    },
     warn: line => calls.warned.push(line)
   });
-  return { point, calls };
+  return { point, calls, claims };
 }
 
 test('the kill point of this test process is not armed', () => {
@@ -73,7 +79,7 @@ test('an inert environment does not even read a malformed kill point', () => {
 });
 
 test('armed: the name goes to the file, then the process is killed, at that name only', () => {
-  const { point, calls } = build({
+  const { point, calls, claims } = build({
     NODE_ENV: 'test',
     IHUB_TEST_KILLPOINT: 'after-write',
     IHUB_TEST_KILLPOINT_FILE: 'reached-file'
@@ -87,13 +93,39 @@ test('armed: the name goes to the file, then the process is killed, at that name
   point('after-write');
   assert.equal(calls.kills, 1);
   assert.deepEqual(calls.appended, [['reached-file', 'after-write\n']]);
+  assert.deepEqual(
+    claims,
+    ['reached-file.after-write.claim'],
+    'claimed before the name was written'
+  );
 });
 
 test('armed without a file: the process is killed and nothing is written', () => {
-  const { point, calls } = build({ NODE_ENV: 'test', IHUB_TEST_KILLPOINT: 'after-write' });
+  const { point, calls, claims } = build({ NODE_ENV: 'test', IHUB_TEST_KILLPOINT: 'after-write' });
   point('after-write');
   assert.equal(calls.kills, 1);
   assert.deepEqual(calls.appended, []);
+  assert.deepEqual(claims, []);
+});
+
+test('a process that loses the claim to another lives and writes nothing', () => {
+  const env = {
+    NODE_ENV: 'test',
+    IHUB_TEST_KILLPOINT: 'after-write',
+    IHUB_TEST_KILLPOINT_FILE: 'reached-file'
+  };
+  // The other process holds the claim and has not written the name yet.
+  const taken = Object.assign(new Error('file exists'), { code: 'EEXIST' });
+  const loser = build(env, { claimError: taken });
+  loser.point('after-write');
+  assert.equal(loser.calls.kills, 0);
+  assert.deepEqual(loser.calls.appended, []);
+
+  // Any other failure is not a lost claim: it is shown, not swallowed.
+  const denied = Object.assign(new Error('permission denied'), { code: 'EACCES' });
+  const broken = build(env, { claimError: denied });
+  assert.throws(() => broken.point('after-write'), /permission denied/);
+  assert.equal(broken.calls.kills, 0);
 });
 
 test('"<name>@<n>" kills at the n-th time the place is reached, and only then', () => {
@@ -170,14 +202,19 @@ test('the spec is "<name>" or "<name>@<n>"; anything else stops an armed process
 
 /** Run a script that imports the module, with an environment of its own. */
 function run(script, env) {
+  return spawnSync(process.execPath, ['--input-type=module', '--eval', script], {
+    env: cleanEnv(env),
+    encoding: 'utf8'
+  });
+}
+
+/** The environment of this process without a kill point of its own, and `env` on top. */
+function cleanEnv(env) {
   const clean = { ...process.env };
   for (const key of Object.keys(clean)) {
     if (key.startsWith('IHUB_TEST_KILLPOINT') || key === 'NODE_TEST_CONTEXT') delete clean[key];
   }
-  return spawnSync(process.execPath, ['--input-type=module', '--eval', script], {
-    env: { ...clean, ...env },
-    encoding: 'utf8'
-  });
+  return { ...clean, ...env };
 }
 
 const REACH = `
@@ -226,6 +263,53 @@ test('a process with NODE_ENV=test and the variable is killed with SIGKILL after
   });
   assert.equal(next.status, 0, next.stderr);
   assert.equal(next.stdout.trim(), 'alive');
+});
+
+/**
+ * Start a process that reaches the kill point at a given time of the clock.
+ * Resolves when it is gone.
+ */
+function reachAt(time, env) {
+  const script = `
+    const { killPoint } = await import(${JSON.stringify(MODULE)});
+    while (Date.now() < ${time}) {}
+    killPoint('after-write');
+    console.log('alive');
+  `;
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, ['--input-type=module', '--eval', script], {
+      env: cleanEnv(env),
+      stdio: ['ignore', 'pipe', 'ignore']
+    });
+    let stdout = '';
+    child.stdout.on('data', chunk => {
+      stdout += chunk;
+    });
+    child.on('error', reject);
+    child.on('close', (status, signal) => resolve({ status, signal, stdout }));
+  });
+}
+
+test('two processes that reach a kill point in the same instant: exactly one dies', async t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ihub-killpoint-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  // Both import the module, then spin until the same millisecond and call. One
+  // round can be decided by the scheduler; ten in a row are not.
+  for (let round = 0; round < 10; round += 1) {
+    const file = path.join(dir, `reached-${round}`);
+    const env = {
+      NODE_ENV: 'test',
+      IHUB_TEST_KILLPOINT: 'after-write',
+      IHUB_TEST_KILLPOINT_FILE: file
+    };
+    const time = Date.now() + 400;
+    const ends = await Promise.all([reachAt(time, env), reachAt(time, env)]);
+    const killed = ends.filter(end => end.signal === 'SIGKILL');
+    const alive = ends.filter(end => end.status === 0 && end.stdout.trim() === 'alive');
+    assert.equal(killed.length, 1, `round ${round}: ${JSON.stringify(ends)}`);
+    assert.equal(alive.length, 1, `round ${round}: ${JSON.stringify(ends)}`);
+    assert.equal(fs.readFileSync(file, 'utf8'), 'after-write\n', 'the name is in the file once');
+  }
 });
 
 test('the conditions are read at import: setting them in a running process arms nothing', () => {

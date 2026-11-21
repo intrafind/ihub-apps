@@ -32,8 +32,11 @@
  *   the name in the file, when it starts or when it reaches the place, does
  *   not die. A cluster primary replaces a worker that died, and the
  *   replacement and the other workers inherit the environment; without this
- *   rule each of them would die at the same place in turn. (Two workers that
- *   reach the place in the same instant can both die.)
+ *   rule each of them would die at the same place in turn. Two workers that
+ *   reach the place in the same instant do not both die either: before it
+ *   writes the name, a process creates the file `<file>.<name>.claim` with an
+ *   exclusive create, which only one process can win. The one that loses
+ *   goes on.
  *
  * Every call site is listed in `server/tests/faults/KILLPOINTS.md`;
  * `server/tests/killPoint-inventory.test.js` fails when the list and the code
@@ -87,6 +90,24 @@ function firedBefore(file, name, readFile) {
 }
 
 /**
+ * Take the one claim there is for a name and a file: an exclusive create, which
+ * the file system grants to one process however many ask at the same instant.
+ *
+ * @param {string} file - The claim file
+ * @param {(file: string) => void} createFile - Creates the file; fails with `EEXIST` when it is there
+ * @returns {boolean} false when another process holds the claim
+ */
+function claimed(file, createFile) {
+  try {
+    createFile(file);
+    return true;
+  } catch (error) {
+    if (error?.code === 'EEXIST') return false;
+    throw error;
+  }
+}
+
+/**
  * Build the `killPoint` function for an environment. The server uses the one
  * built at import ({@link killPoint}); the parameters exist for the unit test.
  *
@@ -95,6 +116,7 @@ function firedBefore(file, name, readFile) {
  * @param {() => void} [options.kill] - Ends the process; SIGKILL to itself by default
  * @param {(file: string, text: string) => void} [options.appendFile]
  * @param {(file: string, encoding: string) => string} [options.readFile]
+ * @param {(file: string) => void} [options.createFile] - Creates a file that must not exist yet
  * @param {(line: string) => void} [options.warn] - Gets one line when the point is armed
  * @returns {((name: string) => void) & {armed: boolean}}
  * @throws {Error} When armed with a malformed `IHUB_TEST_KILLPOINT`
@@ -104,6 +126,7 @@ export function createKillPoint({
   kill = () => process.kill(process.pid, 'SIGKILL'),
   appendFile = fs.appendFileSync,
   readFile = fs.readFileSync,
+  createFile = file => fs.closeSync(fs.openSync(file, 'wx')),
   warn = line => process.stderr.write(`${line}\n`)
 } = {}) {
   const spec = env.IHUB_TEST_KILLPOINT;
@@ -124,6 +147,8 @@ export function createKillPoint({
     if (hits !== target.hit) return;
     // Another process of this stack fired the point in the meantime: once is enough.
     if (firedBefore(file, target.name, readFile)) return;
+    // Two processes can both get this far in the same instant. Only one dies.
+    if (file && !claimed(`${file}.${target.name}.claim`, createFile)) return;
     // Synchronous, so the line is written before the process is gone.
     if (file) appendFile(file, `${target.name}\n`);
     kill();
