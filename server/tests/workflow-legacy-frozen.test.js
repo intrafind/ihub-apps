@@ -220,5 +220,9 @@ test('one changed byte changes the hash; a Windows line end does not', () => {
   assert.notEqual(frozenHash(oneByteOff), expected);
   // One byte more.
   assert.notEqual(frozenHash(`${text} `), expected);
-  assert.equal(frozenHash(text.replaceAll('\n', '\r\n')), expected);
+  // Written out for both checkouts: a file that came with Windows line ends already must not
+  // get a second carriage return here.
+  const withUnixLineEnds = text.replaceAll('\r\n', '\n');
+  assert.equal(frozenHash(withUnixLineEnds), expected);
+  assert.equal(frozenHash(withUnixLineEnds.replaceAll('\n', '\r\n')), expected);
 });

@@ -144,9 +144,11 @@ Some values differ between two runs and say nothing about behaviour. `normalise.
 | The date in the date sentence of the system prompt is replaced | `The current date is <date>.` |
 | `seq` and `rseq` are dropped, after a check that they increase: `seq` within one stream, `rseq` within one run | |
 | Consecutive `step/delta` events of one step are merged, because the cut of a text into deltas depends on timing | |
-| Events of one `parallelGroup` are ordered by call id, because tools that run side by side finish in any order | |
+| The events of tool calls that ran side by side are put in the order the model asked for the calls, because they arrive in the order the tools finish. The group comes from `parallelGroup` on the ledger event `tool/call`; `tool/result` and the envelopes `tool/started` and `tool/completed` are matched to it by run, step and call id. An event without a call id that arrives between them (`tool/disabled`, a `tool/progress` with a phase only) is placed behind the group; the `tool/progress` frames of the model writing its calls are not moved. The order of two such events from different calls, and whether the circuit breaker trips, still follow the timing: a case that needs them is not stable | |
 | Temporary paths, the product version and hashes over dated content are replaced | `<tmp>`, `<version>`, `<hash>` |
 | `heartbeat` and `stream/connected` frames are dropped | |
+
+For a case that is recorded through the chat route, the check of `seq` and `rseq` runs on the frames of each response in `httpResponse`: these are the numbers the server put on the wire, `seq` once per response and `rseq` per run (`recordedFrames` in `surfaces/chat.js`). A number that is missing fails like one that is out of order: every frame carries a `seq`, and every frame but `stream/connected` an `rseq`. The `seq` of the part `envelopes` of such a case is a count the recording keeps itself, because the route numbers a frame only when it writes it to a connection.
 
 A case can name more id patterns, volatile keys and text rules in its config (`idPatterns`, `volatileKeys`, `textRules`). A text rule replaces a date that is written in a form of its own, such as the title of the chat of a scheduled run. Write such a rule in `surfaces/textRules.js` and test it there against the function of the product that writes the text, over every month and in both languages: the short name of a month is not three letters long in every month (`Sept` in en-GB). `surfaces/fixtures.js` holds the patterns the surfaces share. Add a rule only for a value that cannot matter. A value that could matter belongs in the golden.
 
@@ -161,9 +163,10 @@ Two things are left out of a golden because they cannot be equal on two runs, an
 |---|---|
 | `golden.test.js` | every case equals its golden, and every file under `__goldens__/` belongs to a case |
 | `determinism.test.js` | every case gives the same bytes twice in one process and once in a second process that runs 400 days later |
+| `parallelTools.test.js` | a turn with two tool calls that run side by side gives the same record whichever tool finishes first |
 | `goldenChange.test.js` | a changed prompt order and a changed tool schema fail the golden |
 | `differenceList.test.js` | every changed golden is named by a row of the difference list |
-| `differenceRows.test.js` | every row names a golden that exists and parts a record has; a signed row names an owner |
+| `differenceRows.test.js` | every row names a golden that exists (or that a row accepts as deleted) and parts a record has; a signed row names an owner |
 | `differenceSignatures.test.js` | the signature check, on a scratch repository |
 | `harness.test.js` | a recording that cannot start leaves nothing behind for the next one |
 | `normalise.test.js`, `sideBySide.test.js` | the rules and the comparison tool |
@@ -210,7 +213,7 @@ Every chat case is recorded twice, once for each position of the feature **Chat 
 
 The routes are mounted in an Express app with the error handler of the product. One thing stands in front of them that the product does not have: a middleware that signs the request in as the user of the case. For `mcp` and `a2a` the bearer token check (`mcpAuth`) is not part of the recording for the same reason; the caller is built with the scopes of a token.
 
-Two cases are named after a known weakness and pin it: `app-as-tool/user-without-permissions` (a caller without a permissions object may call any app) and `scheduled-task/admin-owner` (the run of a task whose owner is an admin). A row of the difference list names each.
+Two cases are named after a known weakness and pin it: `app-as-tool/user-without-permissions` (a caller without a permissions object may call any app) and `scheduled-task/admin-owner` (the run of a task whose owner is an admin: its model is offered a workflow that no group of the owner grants, because an administrator may run every workflow). A row of the difference list names each.
 
 ## The legacy workflow path
 
@@ -243,10 +246,11 @@ The statements are files under `tests/fixtures/stellungnahmen/`: a PDF, a DOCX, 
 
 `surfaces/ifinderStandIn.js` serves the result set from a real HTTP server on the loopback interface. Nothing of iHub is replaced: the iFinder installation points at the stand-in, and `iFinderService` builds, signs and sends its requests as it does to a real installation. The stand-in writes down every request with the claims of its token and whether the token was signed with the key of the installation, and the golden holds that list under `result.ifinder.requests`. The key pair is made when the recording starts; no key is in the repository. Use the stand-in and the result set for any test that needs an iFinder.
 
-**What the restart cases are.** A restart is played inside the recording process. The engine is replaced by a new one, and for `delivered-after-restart` the state a dead process takes with it is dropped by hand: the bridge between the workflow and its chat, the run the ledger held open, and the engine with its executions (`processDied` in `surfaces/legacyWorkflow.js`). No process is killed there. The same story with a real server that is killed and started again is the fault test `server/tests/faults/legacy-workflow-restart.fault.test.js` (see [The fault tier](#the-fault-tier)). Two limits of the goldens follow:
+**What the restart cases are.** A restart is played inside the recording process. The engine is replaced by a new one, and for `delivered-after-restart` the state a dead process takes with it is dropped by hand: the bridge between the workflow and its chat, the run the ledger held open, and the engine with its executions (`processDied` in `surfaces/legacyWorkflow.js`). No process is killed there. The same story with a real server that is killed and started again is the fault test `server/tests/faults/legacy-workflow-restart.fault.test.js` (see [The fault tier](#the-fault-tier)). Three limits of the goldens follow:
 
 - The sweep of a starting server is called with the options `server/startup/worker.js` gives it for a plain workflow, written again in the test, because that file does not export them. A change to the options there does not show in these goldens.
 - A case that lets its server die calls `env.processRestarted()`. The check that `seq` increases within a run then runs on each side of the restart on its own.
+- The engine of the server that died in the middle of a step is still in the process, waiting on a model call that never answers. `engineDied` in `surfaces/legacyWorkflow.js` cuts it off before the new engine continues (it stores nothing and says nothing any more) and aborts its step when the recording is over (`env.afterRecording`), so that it does not fail the continued execution 30 seconds later, in the middle of another case. What the model client writes about the aborted call is in no golden: a dead process writes nothing.
 
 `delivered-after-restart` pins one behaviour that is a defect: when an answer continues an execution that the answering process did not start, the engine does not take up the sequence of the run ledger, and the run counts its events again from 1 (`result.ledgerSequence` in the golden: last before the restart 7, first after it 1). The ledger of such a run holds two events for each of these numbers. The file that decides this, `WorkflowEngine.js`, is frozen. Whoever fixes it changes the golden and adds a row.
 
@@ -341,6 +345,8 @@ The signature is valid only with the owner's approving review of the pull reques
 The check and the difference list test run in the job **Golden difference list** of the end-to-end workflow (`.github/workflows/e2e.yml`), because they need the history of the target branch. In `npm run test:quick` on a shallow checkout the repository part of `differenceList.test.js` is skipped and says so.
 
 After the owner approved, re-run the job **Golden difference list**. A review does not start the workflow by itself.
+
+A new target branch does not start the workflow either (a stacked pull request that is pointed at `main` after its base was merged). The job then still shows the result against the old target branch, and a re-run repeats it, because a re-run uses the event the run was started by. The next push compares with the new target branch. Without a push, close and reopen the pull request. The workflow does not run on `edited` because that event also fires for every change of the title or the description, and the browser gate in the same workflow would be cancelled and started again each time, or be reported as skipped, which counts as passed.
 
 GitHub does not let the author of a pull request approve it. This is why there are two owners: a pull request that one owner opened is approved, and with that signed, by the other. The approval of either owner satisfies the check; `signedBy` names an owner, and the approving review is the proof.
 
@@ -444,7 +450,7 @@ Name the file `<what>.fault.test.js` and put it under `server/tests/faults/`. Gi
 | The stack | |
 |---|---|
 | `startStack({ workers, killPoint, seed, stub, env, contents })` | seeds a contents directory and starts a server on it; `workers: 2` starts a primary with two workers. `contents` names a directory another stack left: the stack starts on it as it is and does not remove it. The seed and the start share one limit of two minutes; a start that runs into it stops what it started |
-| `stack.restart({ killPoint, signal, env, clockAheadMs })` | stops the server if it runs (`SIGKILL` unless told otherwise) and starts one on the same contents directory |
+| `stack.restart({ killPoint, signal, env, clockAheadMs })` | stops the server if it runs (`SIGKILL` unless told otherwise) and starts one on the same contents directory. The new server has 70 seconds to answer (`RESTART_TIMEOUT_MS`). With the stop before it, that is less than a case has, so a restart that hangs at the beginning of a case fails with the log of the server before the case is cancelled. The limit is fixed; it is not the time the case has left. A case that waited for a kill point first, or that restarts twice, can still be cancelled by node:test with a bare timeout |
 | `stack.kill(signal)` | `SIGKILL` or `SIGTERM` and waits until the server is gone; `SIGSTOP` and `SIGCONT` freeze and thaw it |
 | `stack.waitKilledAt(name)` | waits until the server reached its kill point |
 | `stack.killPointHits()` | the kill points that fired since this start, one name for each time |
@@ -488,11 +494,11 @@ killPoint('after-tool-start');
 
 In every installation this call does nothing. A kill point is armed only in a process that was started with **both** `NODE_ENV=test` and `IHUB_TEST_KILLPOINT=<name>`. The two are read once, when the module is imported; setting them in a running server arms nothing. With `NODE_ENV=production` the module is inert whatever else is set. `server/tests/killPoint.test.js` proves each of these with real processes.
 
-When an armed process reaches its kill point, it appends the name to the file in `IHUB_TEST_KILLPOINT_FILE` and kills itself with SIGKILL: no handler runs, no buffer is flushed, as when a machine loses power. The harness reads the file. That is how `waitKilledAt` knows that the place was reached.
+When an armed process reaches its kill point, it claims the kill point, appends the name to the file in `IHUB_TEST_KILLPOINT_FILE` and kills itself with SIGKILL: no handler runs, no buffer is flushed, as when a machine loses power. The harness reads the file. That is how `waitKilledAt` knows that the place was reached. The claim is a file beside it, `<file>.<name>.claim`, made with an exclusive create that only one process can win. The claim belongs to its file: a process that is given a file without the name but finds the claim beside it is not armed, and prints one line that says so (`"<name>" is NOT armed`). The harness makes a new file for every start, so it never meets this; whoever removes a file by hand removes the claim with it.
 
 - `IHUB_TEST_KILLPOINT=<name>@<n>` kills at the n-th time the place is reached, counted per process.
-- A kill point fires once per start of a stack. With two workers the worker that reaches it dies, the primary starts another, and neither the new worker nor the one beside it dies at the same place again.
-- `startStack` and `restart` set the variables. Never set them yourself, and never in an installation.
+- A kill point fires once per start of a stack. With two workers the worker that reaches it dies, the primary starts another, and neither the new worker nor the one beside it dies at the same place again. This also holds when two workers reach the place in the same instant: one wins the claim and dies, the other goes on, and `killPointHits()` holds the name once.
+- `startStack` and `restart` set the variables. Never set them yourself, and never in an installation. A server that is started without a kill point gets both variables as empty text, so a `.env` file in `server/` that names a kill point does not arm it (dotenv leaves a variable alone that is set, even to nothing).
 
 To add a kill point:
 

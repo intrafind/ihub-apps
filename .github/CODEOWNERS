@@ -28,3 +28,4 @@
 /server/tests/golden/differenceList.test.js @manzked @Intradmin
 # What the two checks import is part of them.
 /server/tests/golden/byCodeUnit.js @manzked @Intradmin
+/scripts/git-executable.js @manzked @Intradmin

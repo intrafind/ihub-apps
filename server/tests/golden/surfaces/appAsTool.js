@@ -19,7 +19,15 @@ import { mock } from 'node:test';
 import { defineCase } from '../harness.js';
 import { turn } from '../../helpers/scriptedModel.js';
 import { invokeAppTool } from '../../../services/chat/appToolsGateway.js';
-import { app, goldenUser, MODEL, surfaceConfig, usage, usersGroup } from './fixtures.js';
+import {
+  app,
+  goldenUser,
+  MODEL,
+  surfaceConfig,
+  unlessOver,
+  usage,
+  usersGroup
+} from './fixtures.js';
 
 const CALLER_CHAT = 'chat-of-the-caller';
 
@@ -171,9 +179,12 @@ async function runPastTheLimit(env, turns) {
         await idle();
       }
     };
-    await turns[0].waiting;
+    // A call that ended on another path would never set the timer these wait for.
+    const arrived = (turn, which) =>
+      unlessOver(turn.waiting, pending, `the app call ended before its ${which} model call`);
+    await arrived(turns[0], 'first');
     await advanceTo(MODEL_ANSWERS_AFTER_MS);
-    await turns[1].waiting;
+    await arrived(turns[1], 'second');
     const stillRunningAfterMs = state.settled ? null : elapsed;
     await advanceTo(WALL_CLOCK_LIMIT_MS);
     const result = await pending;

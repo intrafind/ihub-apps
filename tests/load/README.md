@@ -88,7 +88,7 @@ npm run loadtest:smoke                                     # smoke, then agentic
 node tests/load/local-smoke.mjs --profiles agentic         # one profile
 ```
 
-It starts the fake LLM and an iHub server on a contents directory of its own (`contents-e2e-load`, removed afterwards), prepares the server, runs the profiles and ends with exit code 1 when a chat scenario of a profile ended no turn, when a turn failed (`--max-error-pct`, default 0), or when an agent turn was short of its tool rounds. It takes about five minutes and measures nothing. The nightly workflow runs it.
+It starts the fake LLM and an iHub server on a contents directory of its own (`contents-e2e-load`, removed afterwards), prepares the server, runs the profiles and ends with exit code 1 when a scenario of a profile ended no session or a session of it failed, when a chat scenario ended no turn, when a turn failed (`--max-error-pct`, default 0, for sessions and for turns), or when an agent turn was short of its tool rounds. A `--max-error-pct` that is not a number from 0 to 100 ends it with exit code 2 before anything is started. It takes about five minutes and measures nothing. The nightly workflow runs it.
 
 The tests of the harness itself run with `node --test "tests/load/**/*.test.mjs"`.
 

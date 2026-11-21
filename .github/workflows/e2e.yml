@@ -38,6 +38,14 @@
 #   is changed. The script reads the title from GitHub when it runs, because a
 #   job that is run again replays its event with the title of then. A changed
 #   title does not start the workflow; re-run the job after changing it.
+#   For the same reason the workflow does not start on `edited` (a new target
+#   branch, a new title, a new description): the gate job would have to be
+#   skipped on such a run, and with the concurrency group below the run would
+#   first cancel a gate that is still running. So after a pull request was
+#   given another target branch, this job still shows the result against the
+#   old one, and a re-run does too (it repeats the event it was started by).
+#   The next push compares with the new target branch; without one, close and
+#   reopen the pull request.
 #
 # There is deliberately no `paths:` filter, for the reason given in
 # api-guidelines-check.yml: a required check that a PR never triggers would block it.
@@ -165,6 +173,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          # The head of the pull request, not the merge commit GitHub offers: for a pull
+          # request in a stack that commit is the merge into the bottom of the stack, and
+          # what main gained since would count as a change of this pull request.
+          ref: ${{ github.event.pull_request.head.sha }}
           # The target branch and the commits the reviews were given for.
           fetch-depth: 0
           persist-credentials: false
@@ -181,19 +193,23 @@ jobs:
           # event is the one of the time the workflow started, also when the job is run again.
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
-          TEST_ONLY_BASE_REF: origin/${{ github.base_ref }}
+          # The branch this pull request is opened against (see the next step).
+          TEST_ONLY_BASE_REF: origin/${{ github.event.pull_request.base.ref }}
         run: node scripts/check-test-only-diff.js
 
       - name: Every changed golden is named by a row
         env:
-          GOLDEN_BASE_REF: origin/${{ github.base_ref }}
+          # The branch this pull request is opened against, not github.base_ref: for a pull
+          # request in a stack GitHub starts the workflow as if it targeted the bottom of the
+          # stack, and the changes of the pull requests below would count as its own.
+          GOLDEN_BASE_REF: origin/${{ github.event.pull_request.base.ref }}
           GOLDEN_REQUIRE_BASE: '1'
         run: node --test server/tests/golden/differenceList.test.js
 
       - name: A signature has the approving review of the owner
         env:
           GH_TOKEN: ${{ github.token }}
-          DIFFERENCES_BASE_REF: origin/${{ github.base_ref }}
+          DIFFERENCES_BASE_REF: origin/${{ github.event.pull_request.base.ref }}
           DIFFERENCES_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: node scripts/check-difference-signatures.js
