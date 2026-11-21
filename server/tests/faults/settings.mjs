@@ -21,10 +21,15 @@ export const START_TIMEOUT_MS = 120_000;
 /** How long a signalled process may take to be gone. */
 export const EXIT_TIMEOUT_MS = 15_000;
 /**
- * How long the start of a `restart` may take. A restart happens inside a case,
- * so it gives up before the case does (`CASE_TIMEOUT_MS`), with room for the
- * stop of the server that ran before it: the error then names the wait and
- * shows the log of the server. A case that node:test cancels shows neither.
+ * How long the start of a `restart` may take. A restart happens inside a case.
+ * One that begins within the first five seconds of its case gives up before
+ * the case does (`CASE_TIMEOUT_MS`), with room for the stop of the server that
+ * ran before it: the error then names the wait and shows the log of the
+ * server. A case that node:test cancels shows neither.
+ *
+ * The limit is fixed. It is not the time the case has left: a case that waited
+ * for a kill point first (`KILL_POINT_TIMEOUT_MS`), or that restarts twice, can
+ * still be cancelled before a hanging restart gives up.
  */
 export const RESTART_TIMEOUT_MS = CASE_TIMEOUT_MS - EXIT_TIMEOUT_MS - 5_000;
 /**

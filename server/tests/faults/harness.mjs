@@ -800,7 +800,9 @@ export async function startStack({
     /**
      * Stop the server when it still runs, and start one on the same contents
      * directory. Resolves when it answers, or rejects after `RESTART_TIMEOUT_MS`
-     * with the log of the server: before the case that restarts is cancelled.
+     * with the log of the server. For a restart at the beginning of a case that
+     * is before the case is cancelled; the limit is fixed, not the time the case
+     * has left (`settings.mjs`).
      *
      * @param {Object} [options]
      * @param {string} [options.killPoint] - The kill point of the new server; none when absent

@@ -132,10 +132,12 @@ test('a setup hook outlasts the longest start and the stop of a start that faile
   assert.ok(LOOK_TIMEOUT_MS * 10 <= CASE_TIMEOUT_MS);
 });
 
-test('a restart gives up before the case that restarts is cancelled, with room for the stop before it', () => {
+test('a restart at the beginning of a case gives up before the case is cancelled, with room for the stop before it', () => {
   // node:test cancels a case at CASE_TIMEOUT_MS with a bare timeout. The error
   // of the harness, with the log of the server, has to come first: a restart
   // stops the old server (at most EXIT_TIMEOUT_MS) and then waits for the new one.
+  // This holds for a restart that is the first thing a case does. The limit is
+  // fixed: a case that used its time before the restart is not covered.
   assert.ok(
     EXIT_TIMEOUT_MS + RESTART_TIMEOUT_MS < CASE_TIMEOUT_MS,
     `${EXIT_TIMEOUT_MS} + ${RESTART_TIMEOUT_MS} ms for a restart, ${CASE_TIMEOUT_MS} ms for the case`
