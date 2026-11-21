@@ -58,6 +58,7 @@ import iFinderService from '../../../services/integrations/iFinderService.js';
 import { getContentsPath } from '../../../utils/contentsPath.js';
 import { registerCheckpointResume } from '../../../services/workflow/checkpointResume.js';
 import { resumeInterruptedRuns } from '../../../services/workflow/resumeManager.js';
+import { WorkflowStatus } from '../../../services/workflow/StateManager.js';
 import {
   getWorkflowEngine,
   resetWorkflowEngine
@@ -80,6 +81,7 @@ import {
   goldenUser,
   readStoredChat,
   surfaceConfig,
+  unlessOver,
   usage,
   usersGroup
 } from './fixtures.js';
@@ -236,11 +238,21 @@ const legacyConfig =
       }
     });
 
-/** Resolves with the event that ends an execution, whichever way it ends. */
+/**
+ * Resolves with the event that ends an execution, whichever way it ends.
+ *
+ * The promise has a `dispose()` that stops listening. A wait that lost a race calls it: the
+ * action tracker is one for the process, and a listener left on it would still be there in the
+ * next case.
+ *
+ * @param {string} [executionId] - Default: the first execution that ends.
+ * @returns {Promise<Object> & {dispose: () => void}}
+ */
 function executionEnded(executionId) {
   const ENDS = new Set(['workflow.complete', 'workflow.failed', 'workflow.cancelled']);
-  return new Promise(resolve => {
-    const handler = event => {
+  let handler;
+  const ended = new Promise(resolve => {
+    handler = event => {
       if (!ENDS.has(event.event)) return;
       if (executionId && event.chatId !== executionId) return;
       actionTracker.off('fire-sse', handler);
@@ -248,22 +260,27 @@ function executionEnded(executionId) {
     };
     actionTracker.on('fire-sse', handler);
   });
+  return Object.assign(ended, { dispose: () => actionTracker.off('fire-sse', handler) });
 }
 
 /**
  * Resolves with the interaction a run raised, once the run ledger says the run is paused: the
- * question is raised a moment before the pause is stored.
+ * question is raised a moment before the pause is stored. `dispose()` stops listening.
+ *
+ * @returns {Promise<Object> & {dispose: () => void}}
  */
 function pausedOnInteraction(env) {
-  return new Promise(resolve => {
+  let unsubscribe;
+  const paused = new Promise(resolve => {
     let interaction = null;
-    const unsubscribe = env.runLog.subscribeAll(event => {
+    unsubscribe = env.runLog.subscribeAll(event => {
       if (event.type === RUN_LOG_EVENTS.INTERACTION_RAISED) interaction = event.data.interaction;
       if (event.type !== RUN_LOG_EVENTS.RUN_PAUSED || !interaction) return;
       unsubscribe();
       resolve(interaction);
     });
   });
+  return Object.assign(paused, { dispose: () => unsubscribe() });
 }
 
 /**
@@ -311,12 +328,15 @@ function afterTheAnswerIsStored(env, inner) {
  * @returns {() => void} unregister
  */
 function storeTheAnswerAfterModelCall(env, call) {
-  return interactionService.onAnswer(interaction =>
-    Promise.race([
-      env.model.waitForCall(call),
-      executionEnded(interaction.source?.executionId || interaction.runId)
-    ])
-  );
+  return interactionService.onAnswer(async interaction => {
+    const ended = executionEnded(interaction.source?.executionId || interaction.runId);
+    try {
+      await Promise.race([env.model.waitForCall(call), ended]);
+    } finally {
+      // The model call came first: the execution is still running, and its end is not waited for.
+      ended.dispose();
+    }
+  });
 }
 
 /** The keys of the execution's data a golden holds: what the steps wrote, not the definition. */
@@ -669,6 +689,55 @@ const sameMessages = (a, b) =>
   a.response.status === b.response.status &&
   JSON.stringify(a.response.body?.messages) === JSON.stringify(b.response.body?.messages);
 
+/** What a dead engine reads when it asks for the state of its execution: nothing to go on with. */
+const NO_STATE_LEFT = Object.freeze({ status: WorkflowStatus.FAILED });
+
+/**
+ * The engine of a process that died in the middle of a step: replace it by a new one, and make
+ * sure the old one does nothing any more.
+ *
+ * `resetWorkflowEngine()` only forgets the engine. Its execution loop is still there, waiting on
+ * a model call that never answers. Left alone, that wait ends after the 30 s the model client
+ * gives a connection, and then the old engine does what no dead process does: it fails the
+ * execution a new engine has long continued, in the stored state, in the run ledger and on the
+ * action tracker, in the middle of whatever case is being recorded by then.
+ *
+ * Two steps, because a call that ends writes (the model client puts an `error` event into the
+ * ledger and a usage record of an aborted call), and a dead process writes neither:
+ *
+ * 1. Now, before the new engine continues: the old engine is cut off. It stores nothing and
+ *    says nothing any more, so whenever its step ends, the execution is not touched.
+ * 2. When the recording is over (`env.afterRecording`): its step is aborted, and the wait ends
+ *    when its loop has let go of the execution. What the model client writes about the aborted
+ *    call goes to the storage of this recording, after the record was taken, and nowhere else.
+ *
+ * @param {Object} env - The environment of the recording.
+ * @param {string} executionId - The execution the old engine was running.
+ */
+function engineDied(env, executionId) {
+  const dead = getWorkflowEngine();
+  resetWorkflowEngine();
+  const step = dead.abortControllers.get(executionId);
+  if (!step) return;
+  dead.stateManager = new Proxy({}, { get: () => async () => NO_STATE_LEFT });
+  dead._emitEvent = () => {};
+  dead._handleNodeError = async () => {};
+  const letGo = new Promise(resolve => {
+    const forget = dead.abortControllers.delete.bind(dead.abortControllers);
+    // The last thing the loop of an execution does (`_runExecutionLoop`, `finally`).
+    dead.abortControllers.delete = id => {
+      const had = forget(id);
+      if (id === executionId) resolve();
+      return had;
+    };
+  });
+  env.afterRecording(async () => {
+    step.abort();
+    await letGo;
+    await env.runLog.flush();
+  });
+}
+
 /**
  * Leave of a process what its death leaves: what it stored, and nothing it only knew.
  *
@@ -838,7 +907,16 @@ export const legacyWorkflowCases = [
           input: 'Record keeping',
           language: 'en'
         });
-        const interaction = await raised;
+        let interaction;
+        try {
+          interaction = await unlessOver(
+            raised,
+            running,
+            'the workflow ended without asking a person; the runner answered'
+          );
+        } finally {
+          raised.dispose();
+        }
         const paused = await executionState(interaction.runId);
         const answered = await interactionService.answer(
           interaction.id,
@@ -875,21 +953,39 @@ export const legacyWorkflowCases = [
     run: async env => {
       resetWorkflowEngine();
       const user = goldenUser(env);
-      const started = await getWorkflowEngine().start(
-        TWO_STEP_WORKFLOW,
-        { topic: 'Record keeping', _workflowDefinition: TWO_STEP_WORKFLOW },
-        { user, checkpointOnNode: true }
-      );
-      const executionId = started.executionId;
-      await env.model.waitForCall(2);
+      // The one execution of this case: listened for before it starts, so that no end is missed.
+      const endedEarly = executionEnded();
+      let executionId;
+      try {
+        const started = await getWorkflowEngine().start(
+          TWO_STEP_WORKFLOW,
+          { topic: 'Record keeping', _workflowDefinition: TWO_STEP_WORKFLOW },
+          { user, checkpointOnNode: true }
+        );
+        executionId = started.executionId;
+        await unlessOver(
+          env.model.waitForCall(2),
+          endedEarly,
+          'the execution ended before its second step asked the model'
+        );
+      } finally {
+        endedEarly.dispose();
+      }
       const interrupted = await executionState(executionId);
 
       // The restart: the engine of the old process is gone, with whatever it was waiting for.
       // Only the stored state is left. A new engine sweeps for interrupted executions, as the
       // server does when it starts (`startup/worker.js`).
-      resetWorkflowEngine();
+      engineDied(env, executionId);
       const ended = executionEnded(executionId);
       const sweep = await startupSweep(env);
+      if (!sweep.resumed?.includes(executionId)) {
+        // The sweep reports an execution it left alone and does not fail: nothing would end it.
+        ended.dispose();
+        throw new Error(
+          `the sweep did not continue execution ${executionId}: ${JSON.stringify(sweep)}`
+        );
+      }
       const end = await ended;
       return {
         result: {
@@ -943,8 +1039,9 @@ export const legacyWorkflowCases = [
       // The server registers this when it starts (`startup/routes.js`).
       let unregister = registerCheckpointResume();
       let unregisterOrder = () => {};
-      let server = await startServer();
+      let server = null;
       try {
+        server = await startServer();
         // The server that dies. The browser holds the stream of the chat and posts the mention.
         const stream = openRequest({
           port: server.port,
@@ -954,18 +1051,31 @@ export const legacyWorkflowCases = [
         });
         await stream.until(frame => frame.data?.type === 'stream/connected', 'stream/connected');
         const raised = pausedOnInteraction(env);
-        const posted = await exchange(server.port, {
-          method: 'POST',
-          path: chatPath,
-          body: {
-            messages: [
-              { role: 'user', messageId: 'msg-1', content: '@approval-workflow Record keeping' }
-            ],
-            modelId: 'golden-model',
-            language: 'en'
-          }
-        });
-        const interaction = await raised;
+        // The one execution of this case, should it end where it is expected to ask.
+        const endedEarly = executionEnded();
+        let posted;
+        let interaction;
+        try {
+          posted = await exchange(server.port, {
+            method: 'POST',
+            path: chatPath,
+            body: {
+              messages: [
+                { role: 'user', messageId: 'msg-1', content: '@approval-workflow Record keeping' }
+              ],
+              modelId: 'golden-model',
+              language: 'en'
+            }
+          });
+          interaction = await unlessOver(
+            raised,
+            endedEarly,
+            'the workflow ended without asking a person'
+          );
+        } finally {
+          raised.dispose();
+          endedEarly.dispose();
+        }
         await stream.until(frame => frame.data?.type === 'run/paused', 'run/paused');
         await env.settle();
         const runId = interaction.runId;
@@ -974,6 +1084,7 @@ export const legacyWorkflowCases = [
         stream.abort();
         const streamed = await stream.done;
         await server.close();
+        server = null;
         unregister();
         await processDied(env, { chatId, runId, listenersBefore });
         const lastSeqBeforeRestart = env.ledger.findLast(event => event.runId === runId)?.seq;
@@ -1049,7 +1160,7 @@ export const legacyWorkflowCases = [
       } finally {
         unregisterOrder();
         unregister();
-        await server.close();
+        await server?.close();
         activeWorkflowExecutions.delete(chatId);
       }
     }

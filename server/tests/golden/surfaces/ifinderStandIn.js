@@ -28,6 +28,7 @@ import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { byCodeUnit } from '../byCodeUnit.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -78,6 +79,8 @@ function readBearer(header, publicKey) {
   } catch {
     return { unreadable: true };
   }
+  // JSON, but no set of claims (`null`, a number, a list).
+  if (!claims || typeof claims !== 'object' || Array.isArray(claims)) return { unreadable: true };
   // When it was issued and when it ends say nothing about what was asked.
   const { iat: _iat, exp: _exp, ...kept } = claims;
   const signedWithInstallationKey = crypto.verify(
@@ -89,12 +92,32 @@ function readBearer(header, publicKey) {
   return { claims: kept, expires: typeof claims.exp === 'number', signedWithInstallationKey };
 }
 
-/** The parameters of a request that say what was asked; the long field lists only by their length. */
+/**
+ * A long list of names as a record holds it: how many, and a short hash over the names in one
+ * order. Another field in the place of one leaves the number and changes the hash; the order in
+ * which they were asked for changes neither, because it does not matter to iFinder.
+ *
+ * @param {string[]} names
+ * @returns {{count: number, names: string}}
+ */
+export function recordedNames(names) {
+  const sorted = [...names].sort(byCodeUnit);
+  return {
+    count: names.length,
+    names: crypto.createHash('sha256').update(sorted.join('\n')).digest('hex').slice(0, 12)
+  };
+}
+
+/**
+ * The parameters of a request that say what was asked; the long field lists by their length and
+ * a hash of their names ({@link recordedNames}). Which fields iHub asks for is the list in
+ * `iFinderService.js`.
+ */
 function recordedQuery(searchParams) {
   const out = {};
   for (const name of new Set(searchParams.keys())) {
     const values = searchParams.getAll(name);
-    if (name === 'return_fields' || name === 'return_facets') out[name] = values.length;
+    if (name === 'return_fields' || name === 'return_facets') out[name] = recordedNames(values);
     else out[name] = values.length === 1 ? values[0] : values;
   }
   return out;
@@ -137,7 +160,12 @@ export function answer(resultSet, { method, pathname, searchParams, body }) {
     if (decodeURIComponent(search[1]) !== resultSet.searchProfile) {
       return { status: 404, body: { error: 'unknown search profile' } };
     }
-    const ids = resultSet.queries[body?.query?.query] ?? [];
+    // Only a query the result set names: `constructor` is a key of every object, and no query.
+    const query = body?.query?.query;
+    const ids =
+      typeof query === 'string' && Object.hasOwn(resultSet.queries, query)
+        ? resultSet.queries[query]
+        : [];
     const from = Number(searchParams.get('from') ?? 0);
     const size = Number(searchParams.get('size') ?? 10);
     return {

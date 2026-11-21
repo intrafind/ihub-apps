@@ -11,7 +11,13 @@ import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import http from 'node:http';
 import { byCodeUnit } from '../byCodeUnit.js';
-import { answer, contentOf, readResultSet, startIFinderStandIn } from './ifinderStandIn.js';
+import {
+  answer,
+  contentOf,
+  readResultSet,
+  recordedNames,
+  startIFinderStandIn
+} from './ifinderStandIn.js';
 
 const SEARCH = '/public-api/retrieval/api/v1/search-profiles/searchprofile-standard/_search';
 const DOCS = '/public-api/retrieval/api/v1/search-profiles/searchprofile-standard/docs';
@@ -64,6 +70,26 @@ test('a search answers with the hits of the query as iFinder writes them, in pag
   // A query the result set does not know finds nothing; it is not an error.
   const none = searchFor(resultSet, 'Kurzarbeit');
   assert.deepEqual([none.status, none.body.metadata.total_hits, none.body.results], [200, 0, []]);
+  // Nor does a word that every object has as a key, or a query that is no text.
+  for (const text of ['constructor', 'toString', '__proto__', undefined, 7]) {
+    const inherited = searchFor(resultSet, text);
+    assert.deepEqual(
+      [inherited.status, inherited.body.metadata.total_hits, inherited.body.results],
+      [200, 0, []],
+      String(text)
+    );
+  }
+});
+
+test('a list of field names is recorded by its length and a hash that does not depend on the order', () => {
+  const asked = recordedNames(['id', 'title', 'file.name']);
+  assert.equal(asked.count, 3);
+  assert.match(asked.names, /^[0-9a-f]{12}$/);
+  assert.deepEqual(recordedNames(['file.name', 'id', 'title']), asked);
+  // Another field in the place of one: the same number, another hash.
+  const substituted = recordedNames(['id', 'title', 'file.size']);
+  assert.equal(substituted.count, 3);
+  assert.notEqual(substituted.names, asked.names);
 });
 
 test('a document answers with its content; one that is gone and an unknown one with 404', () => {
@@ -128,7 +154,14 @@ function send(baseUrl, { method, path, headers = {}, body }) {
         let text = '';
         res.setEncoding('utf8');
         res.on('data', chunk => (text += chunk));
-        res.on('end', () => resolve({ status: res.statusCode, body: JSON.parse(text) }));
+        res.on('error', reject);
+        res.on('end', () => {
+          try {
+            resolve({ status: res.statusCode, body: JSON.parse(text) });
+          } catch (error) {
+            reject(new Error(`${method} ${path}: the answer is not JSON (${error.message})`));
+          }
+        });
       }
     );
     req.on('error', reject);
@@ -158,12 +191,25 @@ test('over HTTP the stand-in writes down each request, the claims of its token a
     headers: { authorization: `Bearer ${signedToken(stranger.privateKey, claims)}` }
   });
   await send(standIn.baseUrl, { method: 'GET', path: `${DOCS}/bmg-st-0001` });
+  // A token whose middle part is JSON but no set of claims is answered like any other request.
+  const noClaims = `x.${Buffer.from('null').toString('base64url')}.y`;
+  const answered = await send(standIn.baseUrl, {
+    method: 'GET',
+    path: `${DOCS}/bmg-st-0001`,
+    headers: { authorization: `Bearer ${noClaims}` }
+  });
+  assert.equal(answered.status, 200);
+  assert.deepEqual(standIn.requests.pop().bearer, { unreadable: true });
 
   assert.deepEqual(standIn.requests, [
     {
       method: 'POST',
       path: SEARCH,
-      query: { size: '2', return_fields: 2, query_logging: 'enable' },
+      query: {
+        size: '2',
+        return_fields: recordedNames(['id', 'title']),
+        query_logging: 'enable'
+      },
       body: { query: { query: 'Härtefallregelung', query_type: 'QueryStringQuery' } },
       // When the token was issued and when it ends is not written down.
       bearer: {

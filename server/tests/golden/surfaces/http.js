@@ -124,13 +124,23 @@ export function openRequest({ port, method, path, body, headers = {} }) {
   let ended = false;
   let parsedUpTo = 0;
   let resolveHeaders;
-  exchange.headersReceived = new Promise(resolve => (resolveHeaders = resolve));
+  let rejectHeaders;
+  exchange.headersReceived = new Promise((resolve, reject) => {
+    resolveHeaders = resolve;
+    rejectHeaders = reject;
+  });
+  // A caller that does not wait for the headers is not told about a request that failed
+  // before them here: `done` tells it.
+  exchange.headersReceived.catch(() => {});
 
   const isStream = () => String(exchange.headers['content-type'] || '').includes('event-stream');
   const drain = final => {
     if (!isStream()) return;
-    // Only whole frames: a frame ends with an empty line.
-    const end = final ? exchange.text.length : exchange.text.lastIndexOf('\n\n') + 2;
+    // Only whole frames: a frame ends with an empty line. Text without one is the start of a
+    // frame (the route writes `event:`, `id:` and `data:` one by one) and waits for its end.
+    const lastEnd = exchange.text.lastIndexOf('\n\n');
+    if (!final && lastEnd < 0) return;
+    const end = final ? exchange.text.length : lastEnd + 2;
     if (end <= parsedUpTo) return;
     exchange.frames.push(...parseSse(exchange.text.slice(parsedUpTo, end)));
     parsedUpTo = end;
@@ -152,10 +162,31 @@ export function openRequest({ port, method, path, body, headers = {} }) {
       const record = { status: exchange.status, headers: recordedHeaders(exchange.headers) };
       if (isStream()) record.stream = exchange.frames;
       else if (String(exchange.headers['content-type'] || '').includes('json')) {
-        record.body = exchange.text ? JSON.parse(exchange.text) : null;
+        try {
+          record.body = exchange.text ? JSON.parse(exchange.text) : null;
+        } catch (error) {
+          // Thrown from here it would be an uncaught exception of the process, not a failure
+          // of the request the caller waits for.
+          reject(
+            new Error(
+              `${method} ${path} answered ${exchange.status} with a body that is not JSON ` +
+                `(${error.message}): ${exchange.text.slice(0, 200)}`
+            )
+          );
+          return;
+        }
       } else record.body = exchange.text;
       if (cut) record.cutByClient = true;
       resolve(record);
+    };
+    /** The request failed, before the headers or after: every wait on this exchange ends. */
+    const fail = error => {
+      if (ended) return;
+      ended = true;
+      exchange.failure = error;
+      rejectHeaders(error);
+      for (const waiter of waiters.splice(0)) waiter.reject(error);
+      reject(error);
     };
     const req = http.request(
       {
@@ -186,7 +217,7 @@ export function openRequest({ port, method, path, body, headers = {} }) {
     );
     req.on('error', error => {
       if (exchange.aborted) finish(true);
-      else reject(error);
+      else fail(error);
     });
     exchange.abort = () => {
       exchange.aborted = true;
@@ -198,8 +229,11 @@ export function openRequest({ port, method, path, body, headers = {} }) {
   exchange.until = (predicate, what = 'a frame') => {
     const found = exchange.frames.find(frame => predicate(frame));
     if (found) return Promise.resolve(found);
-    if (ended)
-      return Promise.reject(new Error(`the response ended before the awaited frame (${what})`));
+    if (ended) {
+      return Promise.reject(
+        exchange.failure ?? new Error(`the response ended before the awaited frame (${what})`)
+      );
+    }
     return new Promise((resolve, reject) => waiters.push({ predicate, resolve, reject, what }));
   };
   return exchange;

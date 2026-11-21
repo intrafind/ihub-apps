@@ -22,7 +22,7 @@
  * @module tests/golden/surfaces/chat
  */
 import { defineCase } from '../harness.js';
-import { mergeStepDeltas, orderParallelGroups } from '../normalise.js';
+import { assertIncreasing, mergeStepDeltas, orderParallelGroups } from '../normalise.js';
 import { turn } from '../../helpers/scriptedModel.js';
 import registerSessionRoutes from '../../../routes/chat/sessionRoutes.js';
 import { getLocalizedError } from '../../../serverHelpers.js';
@@ -74,11 +74,44 @@ const APPS = [
 
 const chatConfig = (extra = {}) => surfaceConfig({ apps: APPS, extra });
 
-/** Frames of a response as a golden holds them: no counters, deltas merged, parallel groups ordered. */
+/** Fail unless the envelope carries the counter `key`: a whole number from 1 on. */
+function assertCounted(envelope, key, index) {
+  const value = envelope[key];
+  if (!Number.isInteger(value) || value < 1) {
+    throw new Error(
+      `the frame at ${index} (${envelope.type}) carries no ${key} on the wire: ` +
+        JSON.stringify(value)
+    );
+  }
+}
+
+/**
+ * Frames of a response as a golden holds them: no counters, deltas merged, parallel groups ordered.
+ *
+ * The counters are checked before they go, and these are the numbers the server put on the wire:
+ * `seq` as the route stamped it for this response (`deliverEnvelope` and `writePostEntry` in
+ * `server/sse.js`), `rseq` as the producer numbered the frames of a run. A browser re-attaches
+ * by them, and the `seq` in the part `envelopes` of a chat golden is a count of this recording
+ * (`recordAndRoute`), so nothing else would see the server number its frames out of order.
+ *
+ * A counter that is not there fails as well: every envelope carries a `seq`, and every envelope
+ * but `stream/connected` an `rseq`. The route writes `stream/connected` itself, for the
+ * connection and not for a run, so no producer numbered it.
+ *
+ * @param {Array<{data?: any}>} frames - The parsed SSE frames of one response (`parseSse`).
+ * @returns {Object[]}
+ */
 export function recordedFrames(frames) {
-  const envelopes = frames
+  const onTheWire = frames
     .map(frame => frame.data)
-    .filter(envelope => envelope && typeof envelope === 'object')
+    .filter(envelope => envelope && typeof envelope === 'object');
+  for (const [index, envelope] of onTheWire.entries()) {
+    assertCounted(envelope, 'seq', index);
+    if (envelope.type !== 'stream/connected') assertCounted(envelope, 'rseq', index);
+  }
+  assertIncreasing(onTheWire, 'seq');
+  assertIncreasing(onTheWire, 'rseq', envelope => envelope.runId || '');
+  const envelopes = onTheWire
     // `stream/connected` stays: it is the first thing the route says to a browser.
     .filter(envelope => envelope.type !== 'heartbeat')
     .map(envelope => {
@@ -197,6 +230,12 @@ class ChatSession {
       await this.allFramesRead();
       return this.get.frames.slice(from);
     });
+    // A scenario with two turns in flight waits for one of them first. When the other fails
+    // meanwhile, nobody holds its promise yet, and the test runner takes a rejection nobody
+    // handles as the end of the test: it starts the next case while this one is still running,
+    // and this one then stops the storage under it. This handler is the one that is always
+    // there; whoever awaits `ended` still gets the failure.
+    ended.catch(() => {});
     return { exchange, ended };
   }
 

@@ -66,7 +66,8 @@ async function mcpToolsCall(env, { name, args }) {
   const server = await buildMcpServer({ user: gatewayUser(env), platform });
   const client = new Client({ name: 'golden-client', version: '1.0.0' });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-  try {
+  /** One call through the pair; the two ends are closed after it, however it went. */
+  const exchange = async () => {
     await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
     const listed = await client.listTools();
     const request = { name, arguments: args };
@@ -78,10 +79,17 @@ async function mcpToolsCall(env, { name, args }) {
         response
       }
     };
-  } finally {
-    await client.close().catch(() => {});
-    await server.close().catch(() => {});
+  };
+  const [called] = await Promise.allSettled([exchange()]);
+  // Both ends are closed, whatever the first close does.
+  const closed = await Promise.allSettled([client.close(), server.close()]);
+  // A call that failed is the failure to report, not what closing did after it.
+  if (called.status === 'rejected') throw called.reason;
+  const notClosed = closed.find(outcome => outcome.status === 'rejected');
+  if (notClosed) {
+    throw new Error('a transport of the MCP exchange did not close', { cause: notClosed.reason });
   }
+  return called.value;
 }
 
 const base64 = text => Buffer.from(text, 'utf8').toString('base64');

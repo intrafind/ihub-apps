@@ -47,7 +47,7 @@ test('a set-up that fails undoes what it had already set up', async () => {
   assert.ok(!integrationRegistry.get(fixtureDefinitionId('lookup')), 'the fixture tool is gone');
 
   // The recording after the failed one starts clean: it equals its golden.
-  assertGolden(await recordCase(toolCase), { update: false });
+  assertGolden(await recordCase(toolCase), { update: false, reportDir: null });
 });
 
 test('stopping an environment twice is harmless', async () => {
@@ -65,4 +65,19 @@ test('stopping an environment twice is harmless', async () => {
     if (keyBefore === undefined) delete process.env.OPENAI_API_KEY;
     else process.env.OPENAI_API_KEY = keyBefore;
   }
+});
+
+test('what a case registers for the end of its recording runs when the environment stops, last first', async () => {
+  const env = await startGoldenEnv(harnessConfig());
+  const order = [];
+  env.afterRecording(() => order.push('first registered'));
+  env.afterRecording(async () => {
+    // The storage of the recording is still there: what is ended here can still write.
+    assert.ok(env.storage, 'the environment is gone already');
+    await env.settle();
+    order.push('last registered');
+  });
+  assert.deepEqual(order, []);
+  await env.stop();
+  assert.deepEqual(order, ['last registered', 'first registered']);
 });
