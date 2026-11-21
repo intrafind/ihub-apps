@@ -34,14 +34,39 @@ const APPS = [
   })
 ];
 
+/**
+ * A workflow an app offers to its model as a tool. No group of this fixture grants it
+ * (`permissions.workflows`), so it is offered to one kind of owner only: an administrator, by
+ * the rule "an admin sees every workflow" (`filterByPermissions` in
+ * `services/workflow/workflowAccess.js`, asked by `getToolsForApp` for every `app.workflows`).
+ */
+const INSTALLATION_CHECK = Object.freeze({
+  id: 'installation-check',
+  name: { en: 'Installation check' },
+  description: { en: 'Checks the installation and reports what it found' },
+  version: '1.0.0',
+  enabled: true,
+  chatIntegration: { enabled: true },
+  config: { allowCycles: false, maxIterations: 5 },
+  nodes: [
+    { id: 'start', type: 'start', name: { en: 'Start' }, position: { x: 0, y: 0 }, config: {} },
+    { id: 'end', type: 'end', name: { en: 'End' }, position: { x: 0, y: 100 }, config: {} }
+  ],
+  edges: [{ id: 'e1', source: 'start', target: 'end' }]
+});
+
 const taskConfig = () =>
   surfaceConfig({
     apps: [
       ...APPS,
       // The group of a plain user does not list it; the group of the admins lists every app.
-      app('operations', { system: { en: 'You report on the installation.' } })
+      // It lists a workflow that no group grants: see `admin-owner`.
+      app('operations', {
+        system: { en: 'You report on the installation.' },
+        workflows: [INSTALLATION_CHECK.id]
+      })
     ],
-    features: { scheduledTasks: true },
+    features: { scheduledTasks: true, workflows: true },
     platform: {
       scheduledTasks: { staggerMinutes: 0, minIntervalMinutes: 15, maxTasksPerUser: 10 }
     },
@@ -60,6 +85,7 @@ const taskConfig = () =>
       }
     },
     extra: {
+      workflows: [INSTALLATION_CHECK],
       // A run: `r<epoch ms>-<random>`.
       idPatterns: [/\b(r\d{10,}-[0-9a-f]{8})\b/g],
       // The prompt of a run holds the time of the run, so a hash over the request does too.
@@ -180,7 +206,7 @@ export const scheduledTaskCases = [
     surface: 'scheduled-task',
     name: 'admin-owner',
     title:
-      'The run of a task whose owner is an admin, on an app the admin group grants: the run the row "unattended-admin-rights" of the difference list is about.',
+      'The run of a task whose owner is an admin: the model is offered a workflow of the app that no group of the owner grants, because the owner is an administrator. The run the row "unattended-admin-rights" of the difference list is about.',
     config: taskConfig,
     script: () => [turn.text('The installation is healthy.', { usage: usage(50, 6) })],
     run: env =>

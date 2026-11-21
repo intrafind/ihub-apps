@@ -208,7 +208,7 @@ Every chat case is recorded twice, once for each position of the feature **Chat 
 
 The routes are mounted in an Express app with the error handler of the product. One thing stands in front of them that the product does not have: a middleware that signs the request in as the user of the case. For `mcp` and `a2a` the bearer token check (`mcpAuth`) is not part of the recording for the same reason; the caller is built with the scopes of a token.
 
-Two cases are named after a known weakness and pin it: `app-as-tool/user-without-permissions` (a caller without a permissions object may call any app) and `scheduled-task/admin-owner` (the run of a task whose owner is an admin). A row of the difference list names each.
+Two cases are named after a known weakness and pin it: `app-as-tool/user-without-permissions` (a caller without a permissions object may call any app) and `scheduled-task/admin-owner` (the run of a task whose owner is an admin: its model is offered a workflow that no group of the owner grants, because an administrator may run every workflow). A row of the difference list names each.
 
 ## The legacy workflow path
 
