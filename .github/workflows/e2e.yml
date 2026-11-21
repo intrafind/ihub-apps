@@ -129,6 +129,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          # The head of the pull request, not the merge commit GitHub offers: for a pull
+          # request in a stack that commit is the merge into the bottom of the stack, and
+          # what main gained since would count as a change of this pull request.
+          ref: ${{ github.event.pull_request.head.sha }}
           # The target branch and the commits the reviews were given for.
           fetch-depth: 0
           persist-credentials: false
