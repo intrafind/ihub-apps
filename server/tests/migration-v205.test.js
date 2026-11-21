@@ -42,7 +42,7 @@ function makeCtx(files) {
       files[rel] = structuredClone(data);
     },
     listFiles: async (dir, pattern) => {
-      const suffix = pattern.replace('*', '');
+      const suffix = pattern.replaceAll('*', '');
       return Object.keys(files)
         .filter(rel => rel.startsWith(`${dir}/`) && rel.endsWith(suffix))
         .map(rel => rel.slice(dir.length + 1));
