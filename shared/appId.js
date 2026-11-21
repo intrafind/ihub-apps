@@ -11,7 +11,7 @@
  * @module shared/appId
  */
 
-import { APP_ID_MAX_LENGTH, APP_ID_PATTERN } from './validationPatterns.js';
+import { APP_ID_MAX_LENGTH, APP_ID_PATTERN, UNSAFE_ID_NAMES } from './validationPatterns.js';
 
 /**
  * IDs the admin API cannot address, because a route of the same name sits
@@ -19,6 +19,15 @@ import { APP_ID_MAX_LENGTH, APP_ID_PATTERN } from './validationPatterns.js';
  * `/admin/apps/new`.
  */
 export const RESERVED_APP_IDS = ['new', 'templates', 'integration-status'];
+
+/**
+ * Whether an ID has the right characters but can never be an app: a
+ * {@link RESERVED_APP_IDS reserved} name, or a name the server refuses for
+ * every ID (`constructor`, `prototype`; `__proto__` also starts with `_`).
+ */
+function isReservedName(id) {
+  return RESERVED_APP_IDS.includes(id) || UNSAFE_ID_NAMES.includes(id);
+}
 
 /** The ID of an app whose name yields no usable character. */
 const FALLBACK_APP_ID = 'app';
@@ -104,9 +113,14 @@ export function slugifyAppId(text) {
  *
  * - `required`: empty.
  * - `tooLong`: more than 50 characters.
- * - `format`: a character outside lowercase letters, digits, `.`, `_`, `-`.
- * - `reserved`: one of {@link RESERVED_APP_IDS}, or a leading `_`, which is
- *   the prefix of the action routes (`_generate`, `_reorder`, `_toggle`).
+ * - `format`: a character outside lowercase letters, digits, `.`, `_`, `-`;
+ *   two dots in a row (`a..b`); or a lone `.`.
+ * - `reserved`: one of {@link RESERVED_APP_IDS}; `constructor` or `prototype`;
+ *   or a leading `_`, which is the prefix of the action routes (`_generate`,
+ *   `_reorder`, `_toggle`).
+ *
+ * An ID without a problem also passes the server's `assertValidId`, so the
+ * create route does not answer 400 for an ID this check accepted.
  *
  * @param {unknown} id
  * @returns {'required'|'tooLong'|'format'|'reserved'|null}
@@ -114,19 +128,24 @@ export function slugifyAppId(text) {
  * @example
  * appIdProblem('new'); // → 'reserved'
  * appIdProblem('My App'); // → 'format'
+ * appIdProblem('a..b'); // → 'format'
+ * appIdProblem('prototype'); // → 'reserved'
  * appIdProblem('my-app'); // → null
  */
 export function appIdProblem(id) {
   if (typeof id !== 'string' || id === '') return 'required';
   if (id.length > APP_ID_MAX_LENGTH) return 'tooLong';
   if (!APP_ID_PATTERN.test(id)) return 'format';
-  if (id.startsWith('_') || RESERVED_APP_IDS.includes(id)) return 'reserved';
+  // The server reads `..` as path traversal and `.` as the directory itself.
+  if (id.includes('..') || id === '.') return 'format';
+  if (id.startsWith('_') || isReservedName(id)) return 'reserved';
   return null;
 }
 
 /**
  * Whether a string can be the ID of a new app: it matches `APP_ID_PATTERN`,
- * has at most 50 characters, is not reserved and does not start with `_`.
+ * has at most 50 characters, has no `..`, is not reserved and does not start
+ * with `_`.
  *
  * @param {unknown} id
  * @returns {boolean}
@@ -163,6 +182,7 @@ function takenPredicate(isTaken) {
  * uniqueAppId('summary', id => id === 'summary'); // → 'summary-2'
  * uniqueAppId('', () => false); // → 'app'
  * uniqueAppId('new', () => false); // → 'new-2'
+ * uniqueAppId('prototype', () => false); // → 'prototype-2'
  */
 export function uniqueAppId(base, isTaken) {
   const taken = takenPredicate(isTaken);
@@ -172,7 +192,7 @@ export function uniqueAppId(base, isTaken) {
 
   // A base that is an ID already (only taken or reserved) keeps its spelling.
   const problem = appIdProblem(base);
-  const isId = (problem === null || RESERVED_APP_IDS.includes(base)) && trimSeparators(base) !== '';
+  const isId = (problem === null || isReservedName(base)) && trimSeparators(base) !== '';
   const root = isId ? base : slugifyAppId(base) || FALLBACK_APP_ID;
   if (root !== base && free(root)) return root;
 

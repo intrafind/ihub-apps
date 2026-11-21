@@ -15,6 +15,7 @@ import {
 } from '../../../shared/appId.js';
 import { APP_ID_MAX_LENGTH, APP_ID_PATTERN } from '../../../shared/validationPatterns.js';
 import { appConfigSchema } from '../../../server/validators/appConfigSchema.js';
+import { isValidId } from '../../../server/utils/pathSecurity.js';
 
 const SIXTY_CHARACTERS = 'Zusammenfassung langer Vertragsdokumente für die Rechtsabteilung';
 
@@ -108,6 +109,12 @@ describe('isValidAppId', () => {
     ['Chat', 'format'],
     ['a/b', 'format'],
     ['../../x', 'format'],
+    ['a..b', 'format'],
+    ['..', 'format'],
+    ['.', 'format'],
+    ['constructor', 'reserved'],
+    ['prototype', 'reserved'],
+    ['__proto__', 'reserved'],
     ['_generate', 'reserved'],
     ['_x', 'reserved']
   ])('%p is refused as %p', (id, problem) => {
@@ -120,6 +127,39 @@ describe('isValidAppId', () => {
     expect(id).toMatch(APP_ID_PATTERN);
     expect(isValidAppId(id)).toBe(false);
     expect(appIdProblem(id)).toBe('reserved');
+  });
+
+  test('an ID this check accepts is one the create route accepts', () => {
+    // `POST /api/admin/apps` runs `assertValidId`; an ID the page calls valid must pass it.
+    const samples = [
+      'chat',
+      'my-app',
+      'my_app.v2',
+      'a.b',
+      'a..b',
+      'a...b',
+      '.',
+      '..',
+      '.a',
+      'a.',
+      '-',
+      'constructor',
+      'prototype',
+      '__proto__',
+      'constructor-2',
+      'new',
+      '_x',
+      'a/b',
+      'a'.repeat(APP_ID_MAX_LENGTH),
+      'a'.repeat(APP_ID_MAX_LENGTH + 1)
+    ];
+    for (const id of samples) {
+      if (isValidAppId(id)) expect([id, isValidId(id)]).toEqual([id, true]);
+    }
+    for (const name of ['Constructor', 'Prototype', '__proto__', 'a..b', '.', '..']) {
+      const id = uniqueAppId(slugifyAppId(name), () => false);
+      expect([name, isValidAppId(id), isValidId(id)]).toEqual([name, true, true]);
+    }
   });
 
   test('the routes that shadow an app ID are on the list', () => {
@@ -154,6 +194,19 @@ describe('uniqueAppId', () => {
 
     expect(result).toBe(`${id}-2`);
     expect(isValidAppId(result)).toBe(true);
+  });
+
+  test.each(['constructor', 'prototype'])(
+    '%p, which the server refuses for every ID, gets a suffix',
+    id => {
+      expect(uniqueAppId(id, () => false)).toBe(`${id}-2`);
+      expect(uniqueAppId(slugifyAppId(id.toUpperCase()), id2 => id2 === `${id}-2`)).toBe(`${id}-3`);
+    }
+  );
+
+  test('a base of dots only starts from "app"', () => {
+    expect(uniqueAppId('.', () => false)).toBe('app');
+    expect(uniqueAppId('a..b', () => false)).toBe('a-b');
   });
 
   test('a name that slugs to a reserved ID still ends in a usable one', () => {

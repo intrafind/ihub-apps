@@ -19,6 +19,14 @@ export const APP_ID_ERROR_MESSAGE =
   'App ID can only contain lowercase letters, numbers, dots (.), underscores (_), and hyphens (-)';
 
 /**
+ * Names no ID may have, whatever its kind: used as a key they reach the
+ * prototype chain of an object instead of an entry. The server's
+ * `isValidId` (`server/utils/pathSecurity.js`) and the app ID rule
+ * (`shared/appId.js`) both read this list.
+ */
+export const UNSAFE_ID_NAMES = Object.freeze(['__proto__', 'constructor', 'prototype']);
+
+/**
  * Model ID validation
  * Must contain only alphanumeric characters, underscores, dots, and hyphens
  * Length: 1-100 characters

@@ -176,6 +176,31 @@ export function addVariableToTemplate(app, variable, language) {
 }
 
 /**
+ * A text without the lines that use one of the given placeholders. Other
+ * lines stay as they are. Only a text that lost a line is tidied: no blank
+ * lines at its ends, and no gap where the line stood.
+ *
+ * @param {string} text
+ * @param {Iterable<string>} names - Placeholder names, without the braces.
+ * @returns {string} Empty when no line is left.
+ *
+ * @example
+ * removePlaceholderLines('Tone: {{tone}}\n{{content}}', ['tone']); // → '{{content}}'
+ */
+export function removePlaceholderLines(text, names) {
+  if (typeof text !== 'string') return '';
+  const dropped = [...(names || [])].filter(Boolean);
+  if (dropped.length === 0) return text;
+  const lines = text.split('\n');
+  const kept = lines.filter(line => !dropped.some(name => usesName(line, name)));
+  if (kept.length === lines.length) return text;
+  return kept
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+/**
  * Remove every input field, and from every language of the message template
  * the lines that use one of them. Other lines stay as they are. A language
  * that is left without text is dropped, and so is a template without a
@@ -199,16 +224,7 @@ export function removeVariables(app) {
   const template = {};
   for (const [language, text] of Object.entries(app.prompt)) {
     if (typeof text !== 'string') continue;
-    const lines = text.split('\n');
-    const kept = lines.filter(line => !names.some(name => usesName(line, name)));
-    // Only a text that lost a line is tidied: no blank lines at its ends, no gap left behind.
-    const next =
-      kept.length === lines.length
-        ? text
-        : kept
-            .join('\n')
-            .replace(/\n{3,}/g, '\n\n')
-            .trim();
+    const next = removePlaceholderLines(text, names);
     if (next) template[language] = next;
   }
 

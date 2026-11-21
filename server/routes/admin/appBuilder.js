@@ -198,7 +198,7 @@ export default function registerAdminAppBuilderRoutes(app, { llmClient } = {}) {
    *                     properties:
    *                       code:
    *                         type: string
-   *                         enum: [FIELD_DROPPED, STARTER_DROPPED, TEXT_SHORTENED, CATEGORY_REPLACED, COLOR_REPLACED, ICON_REPLACED, FIELD_TYPE_REPLACED, DESCRIPTION_ADDED, FIELD_ADDED_TO_TEMPLATE, KEY_IGNORED]
+   *                         enum: [FIELD_DROPPED, FIELD_DEFAULT_DROPPED, PLACEHOLDER_WITHOUT_FIELD, STARTER_DROPPED, TEXT_SHORTENED, CATEGORY_REPLACED, COLOR_REPLACED, ICON_REPLACED, FIELD_TYPE_REPLACED, DESCRIPTION_ADDED, FIELD_ADDED_TO_TEMPLATE, KEY_IGNORED]
    *                       field:
    *                         type: string
    *                 model:
@@ -264,6 +264,9 @@ export default function registerAdminAppBuilderRoutes(app, { llmClient } = {}) {
         if (!res.writableEnded) controller.abort();
       };
       res.on('close', onClose);
+      // 'close' is emitted once. A client that went away while the middleware before this
+      // handler ran (the draft limiter can wait for the cluster primary) is only seen here.
+      if (res.destroyed || req.socket?.destroyed) controller.abort();
 
       try {
         const draft = await generateAppDraft({

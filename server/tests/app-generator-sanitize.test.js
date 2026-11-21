@@ -417,7 +417,8 @@ describe('sanitizeGeneratedApp: input fields', () => {
         label: { en: 'Tone' },
         type: 'string',
         required: true,
-        defaultValue: { en: 'kind' },
+        // The chat finds the option of a default by its label.
+        defaultValue: { en: 'Kind' },
         predefinedValues: [{ value: 'kind', label: { en: 'Kind' } }]
       }
     ]);
@@ -557,6 +558,82 @@ describe('sanitizeGeneratedApp: input fields', () => {
     assertValidApp(app);
   });
 
+  it('keeps the default of a dropdown only when it is one of the options', () => {
+    const options = ['short', { value: 'medium', label: 'Medium length' }, 'long'];
+    const { app, warnings } = withFields([
+      field({ type: 'select', defaultValue: 'normal', predefinedValues: options }),
+      field({ name: 'a', type: 'select', defaultValue: 'medium', predefinedValues: options }),
+      field({
+        name: 'b',
+        type: 'select',
+        defaultValue: 'Medium length',
+        predefinedValues: options
+      }),
+      field({ name: 'c', type: 'select', defaultValue: 'LONG', predefinedValues: options })
+    ]);
+    assert.deepEqual(
+      app.variables.map(variable => variable.defaultValue),
+      [undefined, { en: 'Medium length' }, { en: 'Medium length' }, { en: 'long' }]
+    );
+    assert.deepEqual(
+      warnings.filter(warning => warning.code === 'FIELD_DEFAULT_DROPPED'),
+      [{ code: 'FIELD_DEFAULT_DROPPED', field: 'variables[0].defaultValue' }]
+    );
+    assert.equal(APP_GENERATOR_WARNINGS.FIELD_DEFAULT_DROPPED, 'dropped');
+    assertValidApp(app);
+  });
+
+  it('keeps the default of a number, a date and a yes/no field only when it has that type', () => {
+    const cases = [
+      ['number', 'abc', undefined],
+      ['number', '12.5', '12.5'],
+      ['number', 7, '7'],
+      ['date', 'tomorrow', undefined],
+      ['date', '2026-02-30', undefined],
+      ['date', '2026-02-28', '2026-02-28'],
+      ['boolean', 'yes', undefined],
+      ['boolean', true, 'true'],
+      ['boolean', 'false', 'false'],
+      ['string', 'anything', 'anything'],
+      ['text', 'anything', 'anything']
+    ];
+    const { app, warnings } = sanitize(
+      minimal({
+        variables: cases.slice(0, 8).map(([type, defaultValue], index) => ({
+          name: `f${index}`,
+          type,
+          defaultValue
+        }))
+      })
+    );
+    const rest = sanitize(
+      minimal({
+        variables: cases.slice(8).map(([type, defaultValue], index) => ({
+          name: `f${index + 8}`,
+          type,
+          defaultValue
+        }))
+      })
+    );
+    assert.deepEqual(
+      [...app.variables, ...rest.app.variables].map(variable => variable.defaultValue?.en),
+      cases.map(([, , expected]) => expected)
+    );
+    assert.deepEqual(
+      [...warnings, ...rest.warnings]
+        .filter(warning => warning.code === 'FIELD_DEFAULT_DROPPED')
+        .map(warning => warning.field),
+      [
+        'variables[0].defaultValue',
+        'variables[3].defaultValue',
+        'variables[4].defaultValue',
+        'variables[6].defaultValue'
+      ]
+    );
+    assertValidApp(app);
+    assertValidApp(rest.app);
+  });
+
   it('ignores variables that are no list', () => {
     for (const variables of [{ name: 'tone' }, 'tone', 7, null]) {
       const { app } = sanitize(minimal({ variables }));
@@ -637,6 +714,71 @@ describe('sanitizeGeneratedApp: a field no text uses', () => {
     assert.deepEqual(sanitize(minimal({ prompt: 'Summarize: {{content}}' })).app.prompt, {
       en: 'Summarize: {{content}}'
     });
+  });
+});
+
+describe('sanitizeGeneratedApp: the placeholder of a dropped field', () => {
+  const nine = Array.from({ length: 9 }, (_, index) => ({ name: `f${index + 1}` }));
+  const lines = nine.map(variable => `${variable.name}: {{${variable.name}}}`);
+
+  it('loses its lines in the message template', () => {
+    const { app, warnings } = sanitize(
+      minimal({
+        prompt: ['{{content}}', '', ...lines, 'Today: {{date}}'].join('\n'),
+        variables: nine
+      })
+    );
+    assert.equal(app.variables.length, 8);
+    assert.equal(
+      app.prompt.en,
+      ['{{content}}', '', ...lines.slice(0, 8), 'Today: {{date}}'].join('\n')
+    );
+    assert.deepEqual(
+      warnings.map(warning => warning.code),
+      ['FIELD_DROPPED']
+    );
+    assertValidApp(app);
+  });
+
+  it('is reported when the instructions use it, and the instructions stay as written', () => {
+    const system = 'Write for {{f9}} in the tone {{f1}}. Today is {{date}}.';
+    const { app, warnings } = sanitize(minimal({ system, variables: nine }));
+    assert.equal(app.system.en, system);
+    assert.deepEqual(
+      warnings.filter(warning => warning.code === 'PLACEHOLDER_WITHOUT_FIELD'),
+      [{ code: 'PLACEHOLDER_WITHOUT_FIELD', field: 'system' }]
+    );
+    assert.equal(APP_GENERATOR_WARNINGS.PLACEHOLDER_WITHOUT_FIELD, 'dropped');
+    assertValidApp(app);
+  });
+
+  it('drops a template that held nothing else', () => {
+    const { app } = sanitize(
+      minimal({
+        system: 'Use {{f1}} {{f2}} {{f3}} {{f4}} {{f5}} {{f6}} {{f7}} {{f8}}.',
+        prompt: '{{content}}\nf9: {{f9}}',
+        variables: nine
+      })
+    );
+    assert.equal(app.prompt, undefined);
+    assert.equal(app.allowEmptyContent, false);
+    assertValidApp(app);
+  });
+
+  it('leaves the message, a repeated name and an unknown placeholder alone', () => {
+    const prompt = '{{content}}\nTone: {{tone}}\nUser: {{user_name}}';
+    const { app, warnings } = sanitize(
+      minimal({
+        system: 'Answer {{content}} in the tone {{tone}}.',
+        prompt,
+        variables: [{ name: 'tone' }, { name: 'tone' }, { name: 'content' }]
+      })
+    );
+    assert.equal(app.prompt.en, prompt);
+    assert.equal(
+      warnings.some(warning => warning.code === 'PLACEHOLDER_WITHOUT_FIELD'),
+      false
+    );
   });
 });
 
@@ -985,7 +1127,8 @@ describe('the recorded answers in fixtures/app-generator', () => {
     assert.equal(app.id, 'e-mail-verfasser');
     assert.deepEqual(app.name, { de: 'E-Mail-Verfasser' });
     assert.deepEqual(app.variables[0].label, { de: 'E-Mail-Typ' });
-    assert.deepEqual(app.variables[0].defaultValue, { de: 'professionell' });
+    // The default names the option "Professionell" and is stored as that option's label.
+    assert.deepEqual(app.variables[0].defaultValue, { de: 'Professionell' });
     assert.equal(app.category, 'business');
     assert.equal(app.allowEmptyContent, true);
     assert.equal(app.sendChatHistory, true);

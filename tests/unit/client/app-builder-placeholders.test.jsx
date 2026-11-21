@@ -10,6 +10,7 @@ import {
   addVariableToTemplate,
   placeholderFromLabel,
   placeholdersIn,
+  removePlaceholderLines,
   removeVariables,
   unusedVariables,
   variablesUsedInInstructions
@@ -230,6 +231,27 @@ describe('addVariableToTemplate', () => {
 
     expect(app.prompt.de).toBe('{{content}}\nTon: {{tone}}\nLänge: {{length}}');
     expect(unusedVariables(app)).toEqual([]);
+  });
+});
+
+describe('removePlaceholderLines', () => {
+  test('removes the lines that use a name and tidies the gap', () => {
+    expect(
+      removePlaceholderLines('Tone: {{tone}}\n\nAudience: {{audience}}\n\n{{content}}', [
+        'audience'
+      ])
+    ).toBe('Tone: {{tone}}\n\n{{content}}');
+  });
+
+  test('leaves a text that uses none of the names exactly as it is', () => {
+    const text = '\n{{content}}\n\n\n\nToday: {{date}}\n';
+    expect(removePlaceholderLines(text, ['audience'])).toBe(text);
+    expect(removePlaceholderLines(text, [])).toBe(text);
+  });
+
+  test('is empty when no line is left, and for a value that is no text', () => {
+    expect(removePlaceholderLines('Audience: {{audience}}', new Set(['audience']))).toBe('');
+    expect(removePlaceholderLines(undefined, ['audience'])).toBe('');
   });
 });
 

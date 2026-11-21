@@ -51,6 +51,10 @@ export const APP_GENERATOR_INVALID_REASONS = Object.freeze(['not-json', 'truncat
 export const APP_GENERATOR_WARNINGS = Object.freeze({
   /** An input field with an unusable or repeated name, or one beyond the eighth. */
   FIELD_DROPPED: 'dropped',
+  /** The default of an input field that does not fit its type or its options. */
+  FIELD_DEFAULT_DROPPED: 'dropped',
+  /** The instructions name the placeholder of an input field that was dropped. */
+  PLACEHOLDER_WITHOUT_FIELD: 'dropped',
   /** A conversation starter without title or message, or one beyond the fourth. */
   STARTER_DROPPED: 'dropped',
   /** A text longer than its limit. */

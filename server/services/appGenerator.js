@@ -45,6 +45,7 @@ import { slugifyAppId, uniqueAppId } from '../../shared/appId.js';
 import {
   addVariableToTemplate,
   placeholdersIn,
+  removePlaceholderLines,
   unusedVariables
 } from '../../shared/appPlaceholders.js';
 import { CONTENT_VARIABLE } from '../../shared/promptVariables.js';
@@ -392,7 +393,10 @@ function firstSentence(text) {
  * - `id` is derived from the name and is free; the model's is not read.
  * - `category`, `color`, `icon`: kept when valid, else the default.
  * - `variables`: at most 8, with a valid and unique name; only `name`,
- *   `label`, `type`, `required`, `defaultValue`, `predefinedValues`.
+ *   `label`, `type`, `required`, `defaultValue`, `predefinedValues`. A default
+ *   that does not fit the type or the options is left out.
+ * - The lines of the message template that use a dropped field are removed;
+ *   instructions that still name one get the warning `PLACEHOLDER_WITHOUT_FIELD`.
  * - An input field no text uses gets its line in the message template.
  * - `allowEmptyContent` is `true` only when the message template uses a field.
  * - `starterPrompts`: at most 4, `title` and `message` only.
@@ -495,7 +499,28 @@ export function sanitizeGeneratedApp(
   );
   if (placeholder) app.messagePlaceholder = { [lang]: placeholder };
 
-  app.variables = sanitizeVariables(raw.variables, { language, lang, warn, limited });
+  const { variables, dropped } = sanitizeVariables(raw.variables, {
+    language,
+    lang,
+    warn,
+    limited
+  });
+  app.variables = variables;
+
+  // The placeholder of a dropped field is never filled: the prompt service leaves it as
+  // written, and the model would read `{{name}}` on every turn. The template loses the
+  // lines that use one. A sentence of the instructions cannot be cut safely: the author
+  // is told instead. Only dropped names count; `{{date}}` and other global ones stay.
+  if (dropped.length > 0) {
+    if (app.prompt) {
+      const rest = removePlaceholderLines(app.prompt[lang], dropped);
+      if (rest && rest !== `{{${CONTENT_VARIABLE}}}`) app.prompt = { [lang]: rest };
+      else delete app.prompt;
+    }
+    if (placeholdersIn(system).some(used => dropped.includes(used))) {
+      warn('PLACEHOLDER_WITHOUT_FIELD', 'system');
+    }
+  }
   app.starterPrompts = sanitizeStarterPrompts(raw.starterPrompts, { warn, limited, lang });
 
   // A field no text uses is asked for and then ignored: give it a line in the message template.
@@ -528,11 +553,55 @@ export function sanitizeGeneratedApp(
   return { app, suggestions: { websearch, integrations }, warnings };
 }
 
-/** The input fields of a draft: at most eight, each with a valid and unique name. */
+/** `YYYY-MM-DD`, the value of a date field. */
+const ISO_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+/** Whether a text is a calendar date written as `YYYY-MM-DD`. */
+function isIsoDate(text) {
+  const match = ISO_DATE_PATTERN.exec(text);
+  if (!match) return false;
+  const [year, month, day] = match.slice(1).map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return (
+    date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
+  );
+}
+
+/**
+ * The default of an input field as the chat can use it, or `''` when the
+ * model's text does not fit the field.
+ *
+ * A dropdown takes one of its options, named by value or by label; the default is stored as that option's
+ * label, because the chat finds the option of a localized default by its
+ * label. A number, a date and a yes/no field take a value of their type.
+ */
+function fittingDefault(text, { type, options, lang }) {
+  if (options.length > 0) {
+    // Exact first; then without regard to case, as models write "professional" for "Professional".
+    const folded = text.toLowerCase();
+    const option =
+      options.find(candidate => candidate.value === text) ||
+      options.find(candidate => candidate.label[lang] === text) ||
+      options.find(candidate => candidate.value.toLowerCase() === folded) ||
+      options.find(candidate => candidate.label[lang].toLowerCase() === folded);
+    return option ? option.label[lang] : '';
+  }
+  if (type === 'number') return Number.isFinite(Number(text)) ? text : '';
+  if (type === 'date') return isIsoDate(text) ? text : '';
+  if (type === 'boolean') return text === 'true' || text === 'false' ? text : '';
+  return text;
+}
+
+/**
+ * The input fields of a draft: at most eight, each with a valid and unique
+ * name. `dropped` holds the names of the fields that were left out and whose
+ * placeholder therefore has no field: a usable name that is not kept.
+ */
 function sanitizeVariables(value, { language, lang, warn, limited }) {
-  if (!Array.isArray(value)) return [];
+  if (!Array.isArray(value)) return { variables: [], dropped: [] };
   const variables = [];
   const names = new Set();
+  const refused = new Set();
   value.forEach((entry, index) => {
     const field = `variables[${index}]`;
     const name = isPlainObject(entry) && typeof entry.name === 'string' ? entry.name : '';
@@ -544,6 +613,8 @@ function sanitizeVariables(value, { language, lang, warn, limited }) {
       names.has(name)
     ) {
       warn('FIELD_DROPPED', field);
+      // `{{content}}` stays the user's message, and an unusable name is no placeholder.
+      if (VARIABLE_NAME_PATTERN.test(name) && name !== CONTENT_VARIABLE) refused.add(name);
       return;
     }
     names.add(name);
@@ -565,12 +636,17 @@ function sanitizeVariables(value, { language, lang, warn, limited }) {
     };
     const fallback =
       typeof entry.defaultValue === 'boolean' ? String(entry.defaultValue) : entry.defaultValue;
-    const defaultValue = textOf(fallback, language).slice(0, DRAFT_LIMITS.variableDefault);
-    if (defaultValue) variable.defaultValue = { [lang]: defaultValue };
+    const proposed = textOf(fallback, language).slice(0, DRAFT_LIMITS.variableDefault);
+    if (proposed) {
+      const defaultValue = fittingDefault(proposed, { type, options, lang });
+      if (defaultValue) variable.defaultValue = { [lang]: defaultValue };
+      else warn('FIELD_DEFAULT_DROPPED', `${field}.defaultValue`);
+    }
     if (options.length > 0) variable.predefinedValues = options;
     variables.push(variable);
   });
-  return variables;
+  // A repeated name keeps its first field, so its placeholder still has one.
+  return { variables, dropped: [...refused].filter(name => !names.has(name)) };
 }
 
 /** The options of a dropdown: `{ value, label }`, each value once. */
@@ -667,7 +743,8 @@ async function installationsFor(user, language) {
  *   got: `modelId`, `brief` and, after the model answered, `usage`. The route
  *   writes it into the audit entry, also when the draft fails.
  * @returns {Promise<{ app: object, suggestions: object, warnings: object[], model: { id: string, name: string }, brief: 'standard'|'customised' }>}
- * @throws {ServiceError} `APP_GENERATOR_NO_MODEL` (503) without a usable
+ * @throws {ServiceError} `ABORTED` (499) when the signal is aborted before
+ *   the model is called; `APP_GENERATOR_NO_MODEL` (503) without a usable
  *   model; `APP_GENERATOR_INVALID_ANSWER` (502) for an answer that cannot
  *   become a draft. A failed model call throws the client's `LLMError`.
  */
@@ -708,11 +785,18 @@ export async function generateAppDraft({
   });
   record.brief = brief;
 
+  // A request that was closed before this point must not start a paid call.
+  if (signal?.aborted) {
+    throw new ServiceError('ABORTED', 'The request was closed before the model was called');
+  }
+
   // `retries: 0`: an interactive request must not stall on a provider's Retry-After.
+  // `thinkingEnabled: false`: reasoning tokens count against the same output limit, and an
+  // adapter reads a missing value as "on"; a reasoning model would return a cut-off draft.
   const result = await llmClient.complete({
     model,
     messages,
-    options: { maxTokens: GENERATOR_MAX_TOKENS, responseFormat: 'json' },
+    options: { maxTokens: GENERATOR_MAX_TOKENS, responseFormat: 'json', thinkingEnabled: false },
     retries: 0,
     timeoutMs: GENERATOR_TIMEOUT_MS,
     signal,

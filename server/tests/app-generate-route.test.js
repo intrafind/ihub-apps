@@ -218,8 +218,12 @@ const answerWith = (value, extra = {}) => ({
   ...extra
 });
 
-/** A new server: its draft limiter starts at zero. */
-function buildServer() {
+/**
+ * A new server: its draft limiter starts at zero.
+ *
+ * @param {Function} [before] - A middleware that runs after the body is read and before the routes.
+ */
+function buildServer(before) {
   const api = express();
   api.use(express.json());
   // The principal comes from a header the test sets, never from the body.
@@ -227,6 +231,7 @@ function buildServer() {
     req.user = PRINCIPALS[req.headers['x-test-principal'] || 'anonymous']();
     next();
   });
+  if (before) api.use(before);
   registerAdminAppBuilderRoutes(api, {
     llmClient: {
       complete: async params => {
@@ -360,7 +365,13 @@ describe('the body of a draft request', () => {
     // The model object the server picked: the standard chat model the caller may use.
     assert.deepEqual(call.model, MODELS[1]);
     assert.equal(call.modelId, undefined);
-    assert.deepEqual(call.options, { maxTokens: 4096, responseFormat: 'json' });
+    // Reasoning is off: its tokens would come out of the same 4,096.
+    assert.deepEqual(call.options, {
+      maxTokens: 4096,
+      responseFormat: 'json',
+      thinkingEnabled: false
+    });
+    assert.equal(call.options.thinkingEnabled, false);
     assert.equal(call.options.maxTokens, GENERATOR_MAX_TOKENS);
     assert.equal(call.retries, 0);
     assert.equal(call.timeoutMs, GENERATOR_TIMEOUT_MS);
@@ -529,6 +540,55 @@ describe('closing the request before the answer', () => {
     assert.equal(entries.length, 1);
     assert.equal(entries[0].result, 'failure');
     assert.equal(entries[0].details.code, 'ABORTED');
+  });
+
+  it('does not call the model for a request that was closed before the handler ran', async () => {
+    // 'close' is emitted once: a client that leaves while a middleware before the handler
+    // is waiting (the draft limiter asks the cluster primary) is not announced again.
+    let release;
+    const waiting = new Promise(resolve => (release = resolve));
+    let entered;
+    const inMiddleware = new Promise(resolve => (entered = resolve));
+    const slow = buildServer((req, res, next) => {
+      res.on('close', () => setImmediate(release));
+      entered();
+      waiting.then(() => next());
+    });
+
+    const server = http.createServer(slow);
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    try {
+      const body = JSON.stringify({ description: 'An app nobody waits for.' });
+      const client = http.request({
+        host: '127.0.0.1',
+        port: server.address().port,
+        path: URL_GENERATE,
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'content-length': Buffer.byteLength(body),
+          'x-test-principal': 'admin'
+        }
+      });
+      client.on('error', () => {});
+      client.end(body);
+      await inMiddleware;
+      client.destroy();
+      await waiting;
+
+      // The request goes on to the handler; its failure entry marks the end.
+      let entries = [];
+      for (let attempt = 0; attempt < 60 && entries.length === 0; attempt += 1) {
+        await new Promise(resolve => setTimeout(resolve, 50));
+        entries = await drainAudit();
+      }
+      assert.equal(entries.length, 1);
+      assert.equal(entries[0].result, 'failure');
+      assert.equal(entries[0].details.code, 'ABORTED');
+      assert.equal(llm.calls.length, 0);
+    } finally {
+      await new Promise(resolve => server.close(resolve));
+    }
   });
 
   it('does not abort a call that was answered', async () => {

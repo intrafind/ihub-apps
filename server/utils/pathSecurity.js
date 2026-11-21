@@ -12,6 +12,7 @@
 import path from 'node:path';
 import { promises as fs } from 'node:fs';
 import { ServiceError } from './ServiceError.js';
+import { UNSAFE_ID_NAMES } from '../../shared/validationPatterns.js';
 
 /**
  * Regular expression that allows only safe characters for IDs:
@@ -27,7 +28,7 @@ export const SAFE_ID_PATTERN = /^[a-zA-Z0-9._-]+$/;
  * Property names that must be rejected to prevent prototype pollution.
  * These names have special meaning in JavaScript's prototype chain.
  */
-const DANGEROUS_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+const DANGEROUS_KEYS = new Set(UNSAFE_ID_NAMES);
 
 /**
  * Language code pattern: "en", "de", "en-US", "pt-BR", etc.
