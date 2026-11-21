@@ -159,7 +159,10 @@
     "dompurify": "^3.4.11",
     "argparse": "^2.0.1",
     "eslint-plugin-jsx-a11y": {
-      "eslint": "$eslint",
+      "eslint": {
+        ".": "$eslint",
+        "minimatch": "^11.0.1"
+      },
       "minimatch": "^3.1.5"
     }
   },
