@@ -17,6 +17,7 @@ import {
   normaliseEnvelopes,
   normaliseLedger,
   orderParallelGroups,
+  parallelGroupsOf,
   projectModelRequest,
   sha256
 } from './normalise.js';
@@ -415,46 +416,356 @@ test('consecutive step/delta events of one step and kind are merged into one', (
   );
 });
 
-test('events of one parallelGroup are ordered by call id, whatever order the tools finished in', () => {
-  const event = (type, callId, parallelGroup, extra = {}) => ({
-    type,
-    runId: 'chat-1',
-    data: { step: 1, callId, ...(parallelGroup === undefined ? {} : { parallelGroup }), ...extra }
-  });
-  const before = { type: 'message/assistant', runId: 'chat-1', data: { step: 1 } };
-  const after = { type: 'budget/checkpoint', runId: 'chat-1', data: { step: 1 } };
-  const expected = [
-    before,
-    event('tool/call', 'call_1', 0),
-    event('tool/result', 'call_1', 0),
-    event('tool/call', 'call_2', 0),
-    event('tool/result', 'call_2', 0),
-    event('tool/call', 'call_3', 1),
-    after
-  ];
-  // The same events as the tools happened to finish: call_2 first.
-  const arrived = [
-    before,
-    event('tool/call', 'call_2', 0),
-    event('tool/call', 'call_1', 0),
-    event('tool/result', 'call_2', 0),
-    event('tool/result', 'call_1', 0),
-    event('tool/call', 'call_3', 1),
-    after
-  ];
-  assert.deepEqual(orderParallelGroups(arrived), expected);
-  assert.deepEqual(orderParallelGroups(expected), expected);
+/**
+ * The events of one step in which the model asked for two tools, with the
+ * fields the server sends (taken from a recorded chat turn with parallel tool
+ * calls, see `parallelTools.test.js`). Only the ledger event `tool/call`
+ * carries `parallelGroup`; `tool/result` and the envelopes carry the call id
+ * and the step.
+ */
+const RUN = `chat-${UUID_A}`;
+const KEYS = { call_1: 'A-1', call_2: 'B-2' };
+const parallel = {
+  assistant: (step = 1, ids = ['call_1', 'call_2']) => ({
+    type: 'message/assistant',
+    runId: RUN,
+    data: {
+      step,
+      requestId: `req-${UUID_B}`,
+      content: '',
+      toolCalls: ids.map((id, index) => ({
+        id,
+        index,
+        type: 'function',
+        name: 'lookup',
+        arguments: JSON.stringify({ key: KEYS[id] }),
+        metadata: { originalFormat: 'openai', type: 'function' }
+      })),
+      finishReason: 'tool_calls',
+      hasImages: false
+    }
+  }),
+  checkpoint: (step = 1) => ({
+    type: 'budget/checkpoint',
+    runId: RUN,
+    data: { step, limits: { maxTokensPerRun: 0, maxToolRounds: 50 } }
+  }),
+  call: (callId, parallelGroup = 0, step = 1) => ({
+    type: 'tool/call',
+    runId: RUN,
+    data: {
+      step,
+      callId,
+      toolId: 'lookup',
+      name: 'lookup',
+      title: 'lookup',
+      integration: 'lookup',
+      activityKind: 'tool',
+      activityOrigin: 'integration',
+      args: { key: KEYS[callId] },
+      argsRepaired: false,
+      execution: 'server',
+      parallelGroup
+    }
+  }),
+  result: (callId, durationMs = 10, step = 1) => ({
+    type: 'tool/result',
+    runId: RUN,
+    data: {
+      step,
+      callId,
+      toolId: 'lookup',
+      name: 'lookup',
+      resultPreview: JSON.stringify({ key: KEYS[callId], value: `record ${KEYS[callId]}` }),
+      resultBytes: 34,
+      durationMs,
+      hasImage: false,
+      knowledgeSource: 'integration'
+    }
+  }),
+  started: callId => ({
+    v: 2,
+    runId: RUN,
+    ts: '2026-11-21T16:33:11.332Z',
+    type: 'tool/started',
+    data: {
+      step: 1,
+      callId,
+      toolId: 'lookup',
+      name: 'lookup',
+      title: 'lookup',
+      integration: 'lookup',
+      activityKind: 'tool',
+      activityOrigin: 'integration',
+      args: { key: KEYS[callId] },
+      execution: 'server'
+    }
+  }),
+  completed: (callId, durationMs = 10) => ({
+    v: 2,
+    runId: RUN,
+    ts: '2026-11-21T16:33:11.346Z',
+    type: 'tool/completed',
+    data: {
+      step: 1,
+      callId,
+      toolId: 'lookup',
+      name: 'lookup',
+      resultPreview: { key: KEYS[callId], value: `record ${KEYS[callId]}` },
+      durationMs,
+      knowledgeSource: 'integration'
+    }
+  })
+};
+const numbered = (events, key = 'seq') =>
+  events.map((event, index) => ({ ...event, [key]: index + 1 }));
+const typesAndCalls = events =>
+  events.map(event => `${event.type} ${event.data.callId ?? ''}`.trim());
 
-  // Events without a group keep their place and end a group.
-  const split = [
-    event('tool/call', 'call_9', 0),
-    event('tool/result', 'call_9', undefined),
-    event('tool/call', 'call_1', 0)
+test('the events of tool calls that ran side by side are ordered as the model asked for the calls, whatever order the tools finished in', () => {
+  const { assistant, checkpoint, call, result, started, completed } = parallel;
+  // The ledger as the server appends it: both calls start, then the results in the order the tools finish.
+  const ledgerOf = finished => [
+    assistant(),
+    checkpoint(),
+    call('call_1'),
+    call('call_2'),
+    ...finished.map((callId, index) => result(callId, index === 0 ? 10 : 36)),
+    checkpoint(2)
   ];
-  assert.deepEqual(orderParallelGroups(split), split);
-  // Another step or another run is another group, even with the same number.
-  const steps = [event('tool/call', 'call_9', 0), event('tool/call', 'call_1', 0, { step: 2 })];
-  assert.deepEqual(orderParallelGroups(steps), steps);
+  const oneFirst = ledgerOf(['call_1', 'call_2']);
+  const twoFirst = ledgerOf(['call_2', 'call_1']);
+  const ordered = [
+    'message/assistant',
+    'budget/checkpoint',
+    'tool/call call_1',
+    'tool/result call_1',
+    'tool/call call_2',
+    'tool/result call_2',
+    'budget/checkpoint'
+  ];
+  assert.deepEqual(typesAndCalls(orderParallelGroups(oneFirst)), ordered);
+  assert.deepEqual(typesAndCalls(orderParallelGroups(twoFirst)), ordered);
+  assert.deepEqual(
+    orderParallelGroups(orderParallelGroups(twoFirst)),
+    orderParallelGroups(twoFirst)
+  );
+  assert.deepEqual(
+    normaliseLedger(numbered(twoFirst), createNormaliser()),
+    normaliseLedger(numbered(oneFirst), createNormaliser())
+  );
+
+  // The envelopes do not name the group: it comes from the ledger of the same recording.
+  const envelopesOf = finished =>
+    onStream(
+      'golden-chat',
+      numbered([
+        started('call_1'),
+        started('call_2'),
+        ...finished.map((callId, index) => completed(callId, index === 0 ? 10 : 36))
+      ])
+    );
+  const groups = parallelGroupsOf(twoFirst);
+  assert.deepEqual(
+    [...groups.values()],
+    [
+      { group: 0, position: 0 },
+      { group: 0, position: 1 }
+    ]
+  );
+  const streamOrdered = [
+    'tool/started call_1',
+    'tool/completed call_1',
+    'tool/started call_2',
+    'tool/completed call_2'
+  ];
+  const fromTwoFirst = normaliseEnvelopes(
+    envelopesOf(['call_2', 'call_1']),
+    createNormaliser(),
+    groups
+  );
+  assert.deepEqual(typesAndCalls(fromTwoFirst), streamOrdered);
+  assert.deepEqual(
+    fromTwoFirst,
+    normaliseEnvelopes(envelopesOf(['call_1', 'call_2']), createNormaliser(), groups)
+  );
+  // Without the ledger nothing says the calls ran side by side, so no envelope is moved.
+  assert.deepEqual(
+    typesAndCalls(normaliseEnvelopes(envelopesOf(['call_2', 'call_1']), createNormaliser())),
+    ['tool/started call_1', 'tool/started call_2', 'tool/completed call_2', 'tool/completed call_1']
+  );
+});
+
+test('only the calls of one group, step, run and stream are ordered among themselves', () => {
+  const { assistant, call, result, checkpoint } = parallel;
+  const same = events => assert.deepEqual(orderParallelGroups(events), events);
+  // Calls that ran one after the other (a chat turn: one group per call) keep the order they ran in.
+  same([assistant(), call('call_1', 0), result('call_1'), call('call_2', 1), result('call_2')]);
+  same([assistant(), call('call_2', 0), result('call_2'), call('call_1', 1), result('call_1')]);
+  // Another step is another group, even with the same number and the same call ids.
+  same([
+    assistant(1, ['call_2']),
+    call('call_2', 0, 1),
+    result('call_2', 10, 1),
+    assistant(2, ['call_1']),
+    call('call_1', 0, 2),
+    result('call_1', 10, 2)
+  ]);
+  // An event of another step keeps its place and ends the run of events around it.
+  same([assistant(), call('call_2'), checkpoint(2), call('call_1'), result('call_1')]);
+  // The same call ids in another run are other calls.
+  const other = event => ({ ...event, runId: `chat-${UUID_B}` });
+  same([assistant(), call('call_1'), call('call_2'), other(result('call_2')), result('call_1')]);
+  // Without the model's order (no `message/assistant` in the events) the call id decides.
+  assert.deepEqual(
+    typesAndCalls(
+      orderParallelGroups([call('call_2'), call('call_1'), result('call_2'), result('call_1')])
+    ),
+    ['tool/call call_1', 'tool/result call_1', 'tool/call call_2', 'tool/result call_2']
+  );
+  // With it, the model's order decides, whatever the ids are.
+  assert.deepEqual(
+    typesAndCalls(
+      orderParallelGroups([
+        assistant(1, ['call_2', 'call_1']),
+        call('call_1'),
+        call('call_2'),
+        result('call_1'),
+        result('call_2')
+      ])
+    ),
+    [
+      'message/assistant',
+      'tool/call call_2',
+      'tool/result call_2',
+      'tool/call call_1',
+      'tool/result call_1'
+    ]
+  );
+});
+
+test('an event without a call id that arrives between the events of a group is placed behind the group', () => {
+  const { assistant, call, result, started, completed } = parallel;
+  const ids = ['call_1', 'call_2', 'call_3', 'call_4'];
+  // The circuit breaker: three calls fail, the fourth succeeds first or last (`AgentLoop.js`).
+  const disabled = {
+    type: 'tool/disabled',
+    runId: RUN,
+    data: { step: 1, toolId: 'lookup', reason: 'repeated_failures', failures: 3 }
+  };
+  const head = [assistant(1, ids), ...ids.map(id => call(id))];
+  const failures = ['call_1', 'call_2', 'call_3'].map(id => result(id));
+  const lastOrdered = orderParallelGroups([...head, ...failures, disabled, result('call_4')]);
+  assert.deepEqual(typesAndCalls(lastOrdered), [
+    'message/assistant',
+    ...ids.flatMap(id => [`tool/call ${id}`, `tool/result ${id}`]),
+    'tool/disabled'
+  ]);
+  assert.deepEqual(
+    orderParallelGroups([...head, result('call_4'), ...failures, disabled]),
+    lastOrdered
+  );
+  assert.deepEqual(orderParallelGroups(lastOrdered), lastOrdered);
+
+  // A tool that reports progress with its phase only (`emitToolProgress(chatId, { phase })`).
+  const progress = {
+    v: 2,
+    runId: RUN,
+    type: 'tool/progress',
+    data: { phase: 'search.started', toolId: 'lookup' }
+  };
+  const groups = parallelGroupsOf(head);
+  const stream = events =>
+    orderParallelGroups(
+      events.map(event => ({ ...event, streamId: 'golden-chat' })),
+      groups
+    );
+  const startedBoth = [started('call_1'), started('call_2')];
+  const before = stream([...startedBoth, progress, completed('call_1'), completed('call_2')]);
+  assert.deepEqual(typesAndCalls(before), [
+    'tool/started call_1',
+    'tool/completed call_1',
+    'tool/started call_2',
+    'tool/completed call_2',
+    'tool/progress'
+  ]);
+  assert.deepEqual(
+    stream([...startedBoth, completed('call_2'), progress, completed('call_1')]),
+    before
+  );
+  // Of another run or stream it keeps its place and ends the run.
+  const elsewhere = [
+    call('call_2'),
+    { ...disabled, runId: `chat-${UUID_B}` },
+    call('call_1'),
+    result('call_1')
+  ];
+  assert.deepEqual(orderParallelGroups(elsewhere), elsewhere);
+});
+
+test('a call that ran alone is no group: what arrives between its events keeps its place', () => {
+  const { assistant, call, started, completed } = parallel;
+  // A tool that asks the person a question raises it before the call is completed.
+  const raised = { v: 2, runId: RUN, type: 'interaction/raised', data: { kind: 'question' } };
+  const ledger = [assistant(1, ['call_1']), call('call_1')];
+  const groups = parallelGroupsOf(ledger);
+  assert.equal(groups.size, 0);
+  const envelopes = [started('call_1'), raised, completed('call_1')].map(event => ({
+    ...event,
+    streamId: 'golden-chat'
+  }));
+  assert.deepEqual(typesAndCalls(orderParallelGroups(envelopes, groups)), [
+    'tool/started call_1',
+    'interaction/raised',
+    'tool/completed call_1'
+  ]);
+});
+
+test('the progress frames of the model writing its calls are not moved, and a call known by index 0 has its place', () => {
+  const { assistant, call, started, completed } = parallel;
+  const groups = parallelGroupsOf([assistant(), call('call_1'), call('call_2')]);
+  const args = (callId, n, phase = 'args') => ({
+    v: 2,
+    runId: RUN,
+    streamId: 'golden-chat',
+    type: 'tool/progress',
+    data: { step: 1, callId, toolId: 'lookup', phase, data: { n } }
+  });
+  const onChat = event => ({ ...event, streamId: 'golden-chat' });
+  // As the model streams them: interleaved, and directly before the calls start.
+  const frames = [args('call_2', 1), args('call_1', 1), args('call_2', 2, 'args.ended')];
+  const ordered = orderParallelGroups(
+    [
+      ...frames,
+      ...[started('call_1'), started('call_2'), completed('call_2'), completed('call_1')].map(
+        onChat
+      )
+    ],
+    groups
+  );
+  assert.deepEqual(ordered.slice(0, 3), frames);
+  assert.deepEqual(typesAndCalls(ordered.slice(3)), [
+    'tool/started call_1',
+    'tool/completed call_1',
+    'tool/started call_2',
+    'tool/completed call_2'
+  ]);
+
+  // A provider that sends no call ids: the server uses the index, "0" for the first call.
+  const noIds = {
+    type: 'message/assistant',
+    runId: RUN,
+    data: { step: 1, toolCalls: [{ index: 1 }, { index: 0 }, { id: '', index: 2 }, {}] }
+  };
+  const byIndex = parallelGroupsOf([noIds, call('1'), call('0'), call('2')]);
+  assert.deepEqual(
+    [...byIndex.values()],
+    [
+      { group: 0, position: 0 },
+      { group: 0, position: 1 },
+      { group: 0, position: 2 }
+    ]
+  );
 });
 
 test('heartbeat and stream/connected frames are dropped', () => {

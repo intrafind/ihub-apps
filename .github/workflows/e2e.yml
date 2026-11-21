@@ -32,6 +32,14 @@
 #   is changed. The script reads the title from GitHub when it runs, because a
 #   job that is run again replays its event with the title of then. A changed
 #   title does not start the workflow; re-run the job after changing it.
+#   For the same reason the workflow does not start on `edited` (a new target
+#   branch, a new title, a new description): the gate job would have to be
+#   skipped on such a run, and with the concurrency group below the run would
+#   first cancel a gate that is still running. So after a pull request was
+#   given another target branch, this job still shows the result against the
+#   old one, and a re-run does too (it repeats the event it was started by).
+#   The next push compares with the new target branch; without one, close and
+#   reopen the pull request.
 #
 # There is deliberately no `paths:` filter, for the reason given in
 # api-guidelines-check.yml: a required check that a PR never triggers would block it.
