@@ -1,0 +1,148 @@
+# End-to-end gate
+#
+# Runs the agents end-to-end suite (tests/e2e-agents/) and the chat spec in a real
+# browser against the real server. The model is a local stub that follows markers
+# in the message (tests/config/e2e-llm-stub.mjs), so the run needs no model key and
+# no network.
+#
+# - gate (every pull request): the tests tagged @gate, plus every test of a spec
+#   that tests/config/agents-spec-map.json maps to a path the pull request touches
+#   (tests/config/agents-run.mjs), and tests/e2e/chat.spec.js. Chromium only, one
+#   worker, no retries: a retry would hide the flakiness the gate is there to
+#   surface. The budget is 10 minutes; a test that needs longer is tagged @slow and
+#   runs in the full job.
+# - full (started by hand with "Run workflow", before a slice of the agents epic is
+#   merged, or called from another workflow; no workflow runs it on a schedule
+#   yet): every test of the suite, then the tests tagged @matrix once per overlay
+#   of the spec map, each on a server started with that overlay (platform settings
+#   are read once at startup).
+#
+# There is deliberately no `paths:` filter, for the reason given in
+# api-guidelines-check.yml: a required check that a PR never triggers would block it.
+
+name: End-to-end
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      suite:
+        description: 'What to run: "full" (every test and the transport matrix).'
+        type: string
+        default: full
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    name: Agents and chat (gate)
+    # Not when another workflow calls this one for the full suite from a pull request.
+    if: github.event_name == 'pull_request' && inputs.suite != 'full'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      CI: 'true'
+      # Required by the server to boot in CI.
+      JWT_SECRET: ci-e2e-gate-test-secret
+      NODE_ENV: development
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The merge base with the target branch is needed to map the changed paths.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm run install:all
+
+      - name: Install Playwright browsers
+        # --no-install: use the Playwright version pinned by the lockfile, never fetch one on demand.
+        run: npx --no-install playwright install --with-deps chromium
+
+      - name: Agents suite (@gate and the specs mapped to the changed paths)
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        # The Playwright config starts the stack on its own contents directory first
+        # (tests/config/agents-server.mjs).
+        run: E2E_AGENTS_BASE="origin/$BASE_REF" npm run test:e2e:agents:gate
+
+      - name: Chat spec
+        # The default suite's chat turn, on the same stub: its default reply must
+        # not change when the stub learns a new marker.
+        run: npx --no-install playwright test --config tests/config/playwright.config.js tests/e2e/chat.spec.js --project=chromium --retries=0
+
+      - name: Upload Playwright reports
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: e2e-gate-playwright-report
+          path: |
+            tests/e2e-agents/playwright-report/
+            tests/e2e-agents/test-results/
+            playwright-report/
+          retention-days: 14
+
+  full:
+    name: Agents (full suite and transport matrix)
+    if: github.event_name != 'pull_request' || inputs.suite == 'full'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    env:
+      CI: 'true'
+      # Required by the server to boot in CI.
+      JWT_SECRET: ci-e2e-full-test-secret
+      NODE_ENV: development
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm run install:all
+
+      - name: Install Playwright browsers
+        # --no-install: use the Playwright version pinned by the lockfile, never fetch one on demand.
+        run: npx --no-install playwright install --with-deps chromium
+
+      - name: Agents suite (every test, seeded settings)
+        run: npm run test:e2e:agents
+
+      - name: Transport matrix (@matrix, one server start per overlay)
+        # Also when the full run failed: the matrix result is its own evidence.
+        if: success() || failure()
+        run: npm run test:e2e:agents:matrix
+
+      - name: Upload Playwright reports
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: e2e-full-playwright-report
+          path: |
+            tests/e2e-agents/playwright-report/
+            tests/e2e-agents/test-results/
+          retention-days: 14

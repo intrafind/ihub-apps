@@ -1,0 +1,24 @@
+{
+  "description": "Read by tests/config/agents-run.mjs. 'specs': when a pull request touches one of 'paths' (a file, or a directory ending with '/'), its gate runs every test of the listed spec files of tests/e2e-agents ('*' for all of them), next to the tests tagged @gate. A spec file that changed always runs. 'overlays': the settings the transport matrix starts one server each with, for the tests tagged @matrix ({ platform, features }, laid over config/platform.json and config/features.json).",
+  "specs": [
+    {
+      "paths": [
+        "tests/config/e2e-llm-stub.mjs",
+        "tests/config/e2e-scripts.mjs",
+        "tests/config/e2e-contents.mjs",
+        "tests/config/e2e-fresh-contents.mjs",
+        "tests/config/agents-server.mjs",
+        "tests/config/agents-contents.mjs",
+        "tests/config/agents-scenario.mjs",
+        "tests/config/agents-run.mjs",
+        "tests/config/agents-spec-map.json",
+        "tests/config/playwright.agents.config.js",
+        "tests/e2e-agents/helpers.mjs"
+      ],
+      "specs": "*"
+    }
+  ],
+  "overlays": {
+    "chat-post-stream": { "features": { "chatPostStream": true } }
+  }
+}
