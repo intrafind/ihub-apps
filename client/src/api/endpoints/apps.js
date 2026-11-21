@@ -93,9 +93,24 @@ export const stopAppChatStream = async (appId, chatId, { source } = {}) => {
   );
 };
 
-export const checkAppChatStatus = async (appId, chatId) => {
+/**
+ * Whether the server is working on a chat: `{ active, processing }`.
+ *
+ * @param {string} appId
+ * @param {string} chatId
+ * @param {Object} [options]
+ * @param {number} [options.timeout] - How long to wait for the answer, in
+ *   milliseconds, instead of the API client's own limit of 30 seconds. A check
+ *   that passes it fails like any request that timed out (`isTimeout`).
+ * @returns {Promise<Object>}
+ */
+export const checkAppChatStatus = async (appId, chatId, { timeout } = {}) => {
   return handleApiResponse(
-    () => apiClient.get(`/apps/${appId}/chat/${chatId}/status`),
+    () =>
+      apiClient.get(
+        `/apps/${appId}/chat/${chatId}/status`,
+        Number.isFinite(timeout) && timeout > 0 ? { timeout } : undefined
+      ),
     null, // Don't cache status checks
     null,
     false // Don't deduplicate status checks

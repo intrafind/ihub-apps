@@ -16,7 +16,8 @@ import de from '../../../shared/i18n/de.json';
  *
  * - The client asks whether the turn is running and keeps listening. A status
  *   check that fails is repeated after 1 s, 2 s and 4 s before the lost reply is
- *   reported as a failure.
+ *   reported as a failure. Each check has 5 s to answer, so the search ends
+ *   after 27 s at the latest.
  * - The stream is the second witness: once it has shown the turn's run, the
  *   lost reply is never reported.
  * - A request that really failed still shows the error, in English and German.
@@ -82,7 +83,8 @@ const { enhanceApiError } = require('../../../client/src/api/utils/apiErrors');
 const { shortenedTimeout } = require('../../../client/src/api/utils/devTimeout');
 const {
   default: useAppChat,
-  LOST_REPLY_STATUS_RETRY_MS
+  LOST_REPLY_STATUS_RETRY_MS,
+  LOST_REPLY_STATUS_TIMEOUT_MS
 } = require('../../../client/src/features/chat/hooks/useAppChat');
 
 const repoRoot = path.resolve(__dirname, '..', '..', '..');
@@ -97,6 +99,27 @@ const timedOut = () =>
 /** A proxy that gave up on the POST while the server went on. */
 const gatewayTimeout = () =>
   enhanceApiError({ message: 'Request failed with status code 504', response: { status: 504 } });
+/** A proxy that lost its connection to the server while the server went on. */
+const badGateway = () =>
+  enhanceApiError({ message: 'Request failed with status code 502', response: { status: 502 } });
+/** What the lost-turn search hands the status check besides the two ids. */
+const CHECK_OPTIONS = { timeout: LOST_REPLY_STATUS_TIMEOUT_MS };
+/**
+ * A status check that gets no answer: like the API client, it fails when the
+ * timeout it was given has passed (30 s when it was given none).
+ */
+const hangingCheck = (_appId, _chatId, { timeout = 30000 } = {}) =>
+  new Promise((_resolve, reject) => {
+    setTimeout(() => reject(timedOut()), timeout);
+  });
+/** A promise the test settles itself. */
+function held() {
+  const handle = {};
+  handle.promise = new Promise(resolve => {
+    handle.resolve = resolve;
+  });
+  return handle;
+}
 /** A status check that got no answer: the API client reports it with status 500. */
 const noAnswer = () => enhanceApiError({ code: 'ERR_NETWORK', message: 'Network Error' });
 const refused = status =>
@@ -272,19 +295,30 @@ describe('the test override of the chat POST timeout', () => {
 });
 
 describe('a lost reply: the turn is looked for before an error is shown', () => {
-  test('a turn the server is running is followed at once', async () => {
+  test.each([
+    ['the timeout of the browser', timedOut],
+    ['a 504 of a proxy', gatewayTimeout],
+    ['a 502 of a proxy', badGateway]
+  ])('after %s, a turn the server is running is followed at once', async (_name, lostReply) => {
     const onMessageAccepted = jest.fn();
-    mockApi.sendAppChatMessage.mockRejectedValueOnce(timedOut());
+    mockApi.sendAppChatMessage.mockRejectedValueOnce(lostReply());
     const { result } = render({ onMessageAccepted });
     const assistant = send(result);
     await connect();
 
     expect(mockApi.checkAppChatStatus).toHaveBeenCalledTimes(1);
-    expect(mockApi.checkAppChatStatus).toHaveBeenCalledWith('app1', CHAT_ID);
+    expect(mockApi.checkAppChatStatus).toHaveBeenCalledWith('app1', CHAT_ID, CHECK_OPTIONS);
     expect(onMessageAccepted).toHaveBeenCalledWith(CHAT_ID);
-    expect(messageOf(result, assistant.id).content).not.toContain(TIMEOUT_EN);
+    expect(messageOf(result, assistant.id).content).toBe('');
+    expect(messageOf(result, assistant.id).loading).toBe(true);
     expect(result.current.processing).toBe(true);
     expect(mockStream.detachEventSource).not.toHaveBeenCalled();
+
+    // The stream connects once more (it was reopened): the message the server
+    // already has is not sent a second time.
+    await connect();
+    expect(mockApi.sendAppChatMessage).toHaveBeenCalledTimes(1);
+    expect(mockApi.checkAppChatStatus).toHaveBeenCalledTimes(1);
   });
 
   test('a failed status check is repeated after 1 s, and the turn is followed', async () => {
@@ -367,6 +401,72 @@ describe('a lost reply: the turn is looked for before an error is shown', () => 
     expect(mockApi.checkAppChatStatus).toHaveBeenCalledTimes(4);
   });
 
+  test('a check that gets no answer is given up after 5 s and repeated', async () => {
+    expect(LOST_REPLY_STATUS_TIMEOUT_MS).toBe(5000);
+    const onMessageAccepted = jest.fn();
+    mockApi.sendAppChatMessage.mockRejectedValueOnce(timedOut());
+    mockApi.checkAppChatStatus.mockImplementationOnce(hangingCheck);
+    const { result } = render({ onMessageAccepted });
+    const assistant = send(result);
+    await connect();
+
+    // The first check hangs for its 5 s, the second is due 1 s later.
+    await advance(5999);
+    expect(mockApi.checkAppChatStatus).toHaveBeenCalledTimes(1);
+    expect(onMessageAccepted).not.toHaveBeenCalled();
+    await advance(1);
+    expect(mockApi.checkAppChatStatus).toHaveBeenCalledTimes(2);
+    expect(mockApi.checkAppChatStatus).toHaveBeenLastCalledWith('app1', CHAT_ID, CHECK_OPTIONS);
+    expect(onMessageAccepted).toHaveBeenCalledWith(CHAT_ID);
+    expect(messageOf(result, assistant.id).content).toBe('');
+    expect(result.current.processing).toBe(true);
+  });
+
+  test('when no check gets an answer, the error shows after 27 s, not after two minutes', async () => {
+    mockApi.sendAppChatMessage.mockRejectedValueOnce(timedOut());
+    mockApi.checkAppChatStatus.mockImplementation(hangingCheck);
+    const { result } = render();
+    const assistant = send(result);
+    await connect();
+
+    // Four checks of 5 s each, and the waits of 1 s, 2 s and 4 s between them.
+    const checks = LOST_REPLY_STATUS_RETRY_MS.length + 1;
+    const longest =
+      checks * LOST_REPLY_STATUS_TIMEOUT_MS +
+      LOST_REPLY_STATUS_RETRY_MS.reduce((sum, ms) => sum + ms, 0);
+    expect(longest).toBe(27000);
+
+    await advance(longest - 1);
+    expect(mockApi.checkAppChatStatus).toHaveBeenCalledTimes(checks);
+    for (const call of mockApi.checkAppChatStatus.mock.calls) {
+      expect(call).toEqual(['app1', CHAT_ID, CHECK_OPTIONS]);
+    }
+    expect(messageOf(result, assistant.id).content).not.toContain(TIMEOUT_EN);
+    expect(result.current.processing).toBe(true);
+
+    await advance(1);
+    expect(messageOf(result, assistant.id).content).toContain(TIMEOUT_EN);
+    expect(messageOf(result, assistant.id).loading).toBe(false);
+    expect(result.current.processing).toBe(false);
+    expect(mockStream.detachEventSource).toHaveBeenCalledTimes(1);
+
+    await advance(120000);
+    expect(mockApi.checkAppChatStatus).toHaveBeenCalledTimes(checks);
+  });
+
+  test('the status request is made with the timeout it is given', () => {
+    // `api/endpoints/apps.js` reads `import.meta.env`, which jest cannot load:
+    // its source is read instead.
+    const source = fs.readFileSync(path.join(repoRoot, 'client/src/api/endpoints/apps.js'), 'utf8');
+    const fn = source.slice(source.indexOf('export const checkAppChatStatus = '));
+    const body = fn.slice(0, fn.indexOf('\n};')).replace(/\s+/g, ' ');
+    expect(body).toContain('async (appId, chatId, { timeout } = {}) =>');
+    expect(body).toContain(
+      'apiClient.get( `/apps/${appId}/chat/${chatId}/status`, ' +
+        'Number.isFinite(timeout) && timeout > 0 ? { timeout } : undefined )'
+    );
+  });
+
   test('an answer that nothing is running is final: the error shows at once', async () => {
     mockApi.sendAppChatMessage.mockRejectedValueOnce(timedOut());
     mockApi.checkAppChatStatus.mockResolvedValue({ active: false });
@@ -408,6 +508,29 @@ describe('a lost reply: the turn is looked for before an error is shown', () => 
     expect(messageOf(result, assistant.id).content).not.toContain(TIMEOUT_EN);
     expect(result.current.processing).toBe(false);
   });
+
+  // docs/troubleshooting.md names this text for a reply a proxy lost: the error
+  // shown is the one of the POST, and a 502 or 504 is not a timeout.
+  test.each([
+    ['502', badGateway],
+    ['504', gatewayTimeout]
+  ])(
+    'a %s of a proxy with nothing running ends with the server error text',
+    async (_status, lostReply) => {
+      mockApi.sendAppChatMessage.mockRejectedValueOnce(lostReply());
+      mockApi.checkAppChatStatus.mockResolvedValue({ active: false });
+      const { result } = render();
+      const assistant = send(result);
+      await connect();
+
+      expect(mockApi.checkAppChatStatus).toHaveBeenCalledTimes(1);
+      expect(messageOf(result, assistant.id).content).toContain(
+        'A server error occurred. Please try again later.'
+      );
+      expect(messageOf(result, assistant.id).content).not.toContain(TIMEOUT_EN);
+      expect(result.current.processing).toBe(false);
+    }
+  );
 
   test('a refusal is not a lost reply: no status check, the error shows', async () => {
     mockApi.sendAppChatMessage.mockRejectedValueOnce(
@@ -552,6 +675,51 @@ describe('a lost reply: what it never does', () => {
     expect(messageOf(result, other.id).loading).toBe(true);
     expect(result.current.processing).toBe(true);
   });
+
+  test.each([
+    ['that nothing is running', { active: false }],
+    ['that the turn is running', { active: true, processing: true }]
+  ])(
+    'a check that answers %s after the user moved on changes nothing in the chat now open',
+    async (_name, answer) => {
+      const onMessageAccepted = jest.fn();
+      const check = held();
+      mockApi.sendAppChatMessage.mockRejectedValueOnce(timedOut());
+      mockApi.checkAppChatStatus.mockReturnValueOnce(check.promise);
+      const { result, rerender } = render({ onMessageAccepted });
+      send(result);
+      await connect();
+      expect(mockApi.checkAppChatStatus).toHaveBeenCalledTimes(1);
+
+      // The user opens another chat and sends there while the check is on its
+      // way; the stream of that chat is not connected yet.
+      rerender({ chatId: 'chat-other', onMessageAccepted });
+      mockApi.sendAppChatMessage.mockReturnValueOnce(new Promise(() => {}));
+      const other = send(result, 'in the other chat');
+
+      await act(async () => {
+        check.resolve(answer);
+        await jest.advanceTimersByTimeAsync(0);
+      });
+      await advance(60000);
+
+      // The answer is about the chat that was left: no error text under the
+      // answer of the chat now open, and its stream is kept…
+      expect(mockApi.checkAppChatStatus).toHaveBeenCalledTimes(1);
+      expect(onMessageAccepted).not.toHaveBeenCalled();
+      expect(mockStream.detachEventSource).not.toHaveBeenCalled();
+      expect(messageOf(result, other.id).content).toBe('');
+      expect(messageOf(result, other.id).loading).toBe(true);
+      expect(result.current.processing).toBe(true);
+
+      // …and its message still goes out when its stream connects.
+      await connect('chat-other');
+      expect(mockApi.sendAppChatMessage).toHaveBeenCalledTimes(2);
+      expect(mockApi.sendAppChatMessage.mock.calls[1].slice(0, 2)).toEqual(['app1', 'chat-other']);
+      expect(messageOf(result, other.id).content).toBe('');
+      expect(messageOf(result, other.id).loading).toBe(true);
+    }
+  );
 
   test('Stop while the turn is looked for ends the search without an error text', async () => {
     mockApi.sendAppChatMessage.mockRejectedValueOnce(timedOut());

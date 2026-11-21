@@ -218,7 +218,7 @@ describe('flag off: GET first, then the POST', () => {
       await play(stream, frames[0]);
       await flush();
 
-      expect(mockApi.checkAppChatStatus).toHaveBeenCalledWith('acme', CHAT_ID);
+      expect(mockApi.checkAppChatStatus).toHaveBeenCalledWith('acme', CHAT_ID, { timeout: 5000 });
       expect(onMessageAccepted).toHaveBeenCalledWith(CHAT_ID);
       expect(stream.opts.signal.aborted).toBe(false);
       expect(result.current.processing).toBe(true);

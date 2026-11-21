@@ -18,11 +18,15 @@ Google sends no response until then.
 
 When the browser gets no reply to a chat message, because the answer takes longer than five minutes
 or a reverse proxy answers 502 or 504 first, it asks the server whether the answer is still being
-worked on. If that one check failed too, the answer ended in the browser with "Request timed out.
-The operation may have taken longer than expected.", although the server went on and finished it.
+worked on. If that one check failed too, the answer ended in the browser with an error, although
+the server went on and finished it: "Request timed out. The operation may have taken longer than
+expected." after five minutes, "A server error occurred. Please try again later." after a 502 or
+504.
 
-- The check is now repeated after 1, 2 and 4 seconds before an error is shown.
+- The check is now repeated after 1, 2 and 4 seconds before an error is shown. A check that gets no
+  answer within 5 seconds counts as failed, so the error appears after 27 seconds at the latest.
 - An answer whose start the browser has already received is kept on screen whatever the check says.
-- The error text follows the language of the user interface; it was English in every language.
+- The text "Request timed out. …" follows the language of the user interface; it was English in
+  every language.
 
 No action is needed after the upgrade.

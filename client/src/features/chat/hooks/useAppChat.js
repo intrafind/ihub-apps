@@ -63,9 +63,17 @@ function sendErrorOf(error) {
 
 /**
  * How long to wait before asking again whether a turn is running, after the
- * check itself failed: three more attempts, seven seconds in all.
+ * check itself failed: three more attempts, seven seconds of waiting in all.
  */
 export const LOST_REPLY_STATUS_RETRY_MS = [1000, 2000, 4000];
+
+/**
+ * How long one such check may take before it counts as failed. The API
+ * client's own limit is 30 seconds: four checks that all hang would keep the
+ * answer waiting for two minutes. With this limit the search for a lost turn
+ * ends after 27 seconds at the latest (four checks, and the waits between them).
+ */
+export const LOST_REPLY_STATUS_TIMEOUT_MS = 5000;
 
 /**
  * Whether a failed status check is worth repeating: it got no answer (the
@@ -547,7 +555,9 @@ function useAppChat({
    * The server is asked whether the chat is producing. Its answer decides; a
    * check that fails for a reason that may pass (`isPassingStatusFailure`) is
    * repeated after {@link LOST_REPLY_STATUS_RETRY_MS}, because one lost status
-   * request says nothing about the turn. The stream is the second witness: once
+   * request says nothing about the turn. A check that gets no answer within
+   * {@link LOST_REPLY_STATUS_TIMEOUT_MS} is such a failure, so the search has an
+   * end when requests hang instead of failing. The stream is the second witness: once
    * it has shown the run of this send (`runStarted`, set by `handleEvent`), the
    * server has the turn, whatever the check says or however often it fails
    * (the turn may have ended while the check was on its way).
@@ -566,7 +576,9 @@ function useAppChat({
       let failure = null;
       let status = null;
       try {
-        status = await checkAppChatStatus(pending.appId, pending.chatId);
+        status = await checkAppChatStatus(pending.appId, pending.chatId, {
+          timeout: LOST_REPLY_STATUS_TIMEOUT_MS
+        });
       } catch (error) {
         failure = error;
       }

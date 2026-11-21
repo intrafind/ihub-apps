@@ -181,7 +181,8 @@ test('a turn that outlives the POST timeout keeps streaming instead of failing',
 
   await deliver('stream/connected', { runId: 'chat-long', lastSeq: 0, protocol: 2 }, 'chat-long');
 
-  expect(checkAppChatStatus).toHaveBeenCalledWith('app1', 'chat-long');
+  // The check has its own, short timeout (`LOST_REPLY_STATUS_TIMEOUT_MS`).
+  expect(checkAppChatStatus).toHaveBeenCalledWith('app1', 'chat-long', { timeout: 5000 });
   const msg = result.current.messages.find(m => m.id === assistant.id);
   expect(msg.content).not.toMatch(/timed out/i);
   expect(result.current.processing).toBe(true);
