@@ -22,7 +22,7 @@
  * @module tests/golden/surfaces/chat
  */
 import { defineCase } from '../harness.js';
-import { mergeStepDeltas, orderParallelGroups } from '../normalise.js';
+import { assertIncreasing, mergeStepDeltas, orderParallelGroups } from '../normalise.js';
 import { turn } from '../../helpers/scriptedModel.js';
 import registerSessionRoutes from '../../../routes/chat/sessionRoutes.js';
 import { getLocalizedError } from '../../../serverHelpers.js';
@@ -74,11 +74,25 @@ const APPS = [
 
 const chatConfig = (extra = {}) => surfaceConfig({ apps: APPS, extra });
 
-/** Frames of a response as a golden holds them: no counters, deltas merged, parallel groups ordered. */
+/**
+ * Frames of a response as a golden holds them: no counters, deltas merged, parallel groups ordered.
+ *
+ * The counters are checked before they go, and these are the numbers the server put on the wire:
+ * `seq` as the route stamped it for this response (`deliverEnvelope` and `writePostEntry` in
+ * `server/sse.js`), `rseq` as the producer numbered the frames of a run. A browser re-attaches
+ * by them, and the `seq` in the part `envelopes` of a chat golden is a count of this recording
+ * (`recordAndRoute`), so nothing else would see the server number its frames out of order.
+ *
+ * @param {Array<{data?: any}>} frames - The parsed SSE frames of one response (`parseSse`).
+ * @returns {Object[]}
+ */
 export function recordedFrames(frames) {
-  const envelopes = frames
+  const onTheWire = frames
     .map(frame => frame.data)
-    .filter(envelope => envelope && typeof envelope === 'object')
+    .filter(envelope => envelope && typeof envelope === 'object');
+  assertIncreasing(onTheWire, 'seq');
+  assertIncreasing(onTheWire, 'rseq', envelope => envelope.runId || '');
+  const envelopes = onTheWire
     // `stream/connected` stays: it is the first thing the route says to a browser.
     .filter(envelope => envelope.type !== 'heartbeat')
     .map(envelope => {

@@ -9,7 +9,7 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { deliveredFrames } from './chat.js';
+import { deliveredFrames, recordedFrames } from './chat.js';
 import { parseSse } from './http.js';
 
 const CHAT = '0c0ffee0-0000-4000-8000-00000000c4a7';
@@ -44,5 +44,39 @@ test('the count reads frames as the stream writes them', () => {
   assert.deepEqual(
     deliveredFrames(parseSse(text)).map(f => f.data.type),
     ['run/started', 'run/ended']
+  );
+});
+
+test('the counters the server put on the wire are checked before a record drops them', () => {
+  const wire = (type, seq, rseq, runId = 'run-1') => ({
+    event: type,
+    data: { type, runId, seq, ...(rseq ? { rseq } : {}), data: {} }
+  });
+  const connected = wire('stream/connected', 1, 0, CHAT);
+  const turn = [wire('run/started', 2, 1), wire('run/ended', 3, 2)];
+  assert.deepEqual(
+    recordedFrames([connected, ...turn]).map(f => Object.keys(f)),
+    [
+      ['type', 'runId', 'data'],
+      ['type', 'runId', 'data'],
+      ['type', 'runId', 'data']
+    ]
+  );
+  // A second run on the same response counts its own frames from 1; the stream counts on.
+  assert.doesNotThrow(() =>
+    recordedFrames([connected, ...turn, wire('run/started', 4, 1, 'run-2')])
+  );
+  assert.throws(
+    () => recordedFrames([connected, wire('run/started', 3, 1), wire('run/ended', 2, 2)]),
+    /seq does not increase/
+  );
+  assert.throws(
+    () => recordedFrames([connected, wire('run/started', 2, 2), wire('run/ended', 3, 1)]),
+    /rseq does not increase/
+  );
+  // A count that starts again in the middle of a turn.
+  assert.throws(
+    () => recordedFrames([connected, ...turn, wire('step/delta', 1, 3)]),
+    /seq does not increase/
   );
 });
