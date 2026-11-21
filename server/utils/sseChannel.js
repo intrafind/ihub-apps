@@ -125,7 +125,13 @@ export function sweepInactiveClients(map, { timeoutMs = 5 * 60 * 1000, component
  * Start a periodic sweep of `map` for inactive clients. Returns the interval
  * handle (currently unused by callers — the process lives as long as the
  * server does — but returned for symmetry/testability).
+ *
+ * The interval does not keep the process alive: the server lives by its
+ * listening socket, and a process that only registered the routes (a route
+ * dump, a test) ends when its work is done.
  */
 export function startInactiveClientSweep(map, { intervalMs = 60 * 1000, ...sweepOptions } = {}) {
-  return setInterval(() => sweepInactiveClients(map, sweepOptions), intervalMs);
+  const timer = setInterval(() => sweepInactiveClients(map, sweepOptions), intervalMs);
+  timer.unref();
+  return timer;
 }

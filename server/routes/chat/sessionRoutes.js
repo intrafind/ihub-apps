@@ -226,6 +226,70 @@ export function messageAttachments(message) {
     .filter(entry => entry && typeof entry === 'object');
 }
 
+/**
+ * Settle the chat's pending clarifications for an incoming message: the
+ * message that carries `clarificationResponse` answers its interaction
+ * (channel `chat`); any other message cancels clarifications the user
+ * skipped past. Never blocks the turn.
+ *
+ * Both are the owner's own: an answer continues the run with the owner's
+ * rights, and a question the message skips past is superseded by its owner's
+ * message. So both ask run access with the intent `answer`; an admin whose
+ * message reaches somebody else's chat settles nothing.
+ *
+ * @param {Object} params
+ * @param {string} params.chatId
+ * @param {Object} params.user - req.user
+ * @param {Object|null} params.lastMessage - the message of this POST
+ * @returns {Promise<{runId: string, interactionId: string}|null>} the run this
+ *   message answered a clarification of — the turn continues it — or null
+ */
+export async function settleChatClarifications({ chatId, user, lastMessage }) {
+  let answered = null;
+  const response = lastMessage?.clarificationResponse;
+  const answeredId =
+    response && typeof response === 'object'
+      ? String(response.interactionId || response.questionId || '')
+      : '';
+  try {
+    const pending = await interactionService.listPending({ chatId, kind: 'question' });
+    for (const interaction of pending) {
+      // `chatAuthRequired` authorizes the app, not the chat: only the
+      // principal who owns the interaction's run may answer it (a chat id
+      // alone must not let someone answer another user's question). A
+      // question the message skips past is superseded by its owner's own
+      // message, so it takes the same right: the `cancel` intent would let
+      // an admin's message into somebody else's chat settle it unaudited.
+      if (!(await authorizeInteraction(interaction, user, { intent: 'answer' }))) {
+        logger.warn('Chat clarification belongs to another principal; not settled', {
+          component: 'sessionRoutes',
+          chatId,
+          interactionId: interaction.id
+        });
+        continue;
+      }
+      if (interaction.id === answeredId) {
+        await interactionService.answer(
+          interaction.id,
+          response.skipped ? { skipped: true } : { value: response.value },
+          { user, channel: 'chat' }
+        );
+        answered = { runId: interaction.runId, interactionId: interaction.id };
+      } else {
+        await interactionService.cancel(interaction.id, 'superseded');
+      }
+    }
+  } catch (err) {
+    logger.warn('Chat clarification not settled', {
+      component: 'sessionRoutes',
+      chatId,
+      interactionId: answeredId || null,
+      error: err.message
+    });
+  }
+  return answered;
+}
+
 export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_TIMEOUT }) {
   const chatService = new ChatService();
 
@@ -740,61 +804,6 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
       }
     }
   );
-
-  /**
-   * Settle the chat's pending clarifications for an incoming message: the
-   * message that carries `clarificationResponse` answers its interaction
-   * (channel `chat`); any other message cancels clarifications the user
-   * skipped past. Never blocks the turn.
-   *
-   * @returns {Promise<{runId: string, interactionId: string}|null>} the run this
-   *   message answered a clarification of — the turn continues it — or null
-   */
-  async function settleChatClarifications({ chatId, user, lastMessage }) {
-    let answered = null;
-    const response = lastMessage?.clarificationResponse;
-    const answeredId =
-      response && typeof response === 'object'
-        ? String(response.interactionId || response.questionId || '')
-        : '';
-    try {
-      const pending = await interactionService.listPending({ chatId, kind: 'question' });
-      for (const interaction of pending) {
-        // `chatAuthRequired` authorizes the app, not the chat: only the
-        // principal who owns the interaction's run may answer it (a chat id
-        // alone must not let someone answer another user's question). A
-        // question the message skips past is superseded by its owner's own
-        // message, so it takes the same right: the `cancel` intent would let
-        // an admin's message into somebody else's chat settle it unaudited.
-        if (!(await authorizeInteraction(interaction, user, { intent: 'answer' }))) {
-          logger.warn('Chat clarification belongs to another principal; not settled', {
-            component: 'sessionRoutes',
-            chatId,
-            interactionId: interaction.id
-          });
-          continue;
-        }
-        if (interaction.id === answeredId) {
-          await interactionService.answer(
-            interaction.id,
-            response.skipped ? { skipped: true } : { value: response.value },
-            { user, channel: 'chat' }
-          );
-          answered = { runId: interaction.runId, interactionId: interaction.id };
-        } else {
-          await interactionService.cancel(interaction.id, 'superseded');
-        }
-      }
-    } catch (err) {
-      logger.warn('Chat clarification not settled', {
-        component: 'sessionRoutes',
-        chatId,
-        interactionId: answeredId || null,
-        error: err.message
-      });
-    }
-    return answered;
-  }
 
   /**
    * Run one chat turn through the shared chat service. The turn streams over

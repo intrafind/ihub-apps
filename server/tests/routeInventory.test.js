@@ -15,10 +15,13 @@
  *    the status the row gives.
  * 3. The check itself: a scratch route added below `/api/runs` without a row
  *    is reported.
+ * 4. A module that decides through run access has a row for every route it
+ *    registers, also outside the prefixes (`/api/mcp-apps`, `/api/feedback`):
+ *    each module is registered alone and its routes are compared with the table.
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { dumpRoutes, listRoutes } from '../../scripts/dump-routes.js';
@@ -67,16 +70,52 @@ function compareInventory(routes, table) {
   };
 }
 
+/**
+ * The routes that have no row, whatever their path.
+ *
+ * @param {Array<{method: string, path: string}>} routes
+ * @param {ReadonlyArray<{route: string}>} table - the inventory rows
+ * @returns {string[]} `METHOD /path`, sorted
+ */
+function routesWithoutRow(routes, table) {
+  const known = new Set(table.map(row => row.route));
+  return routes
+    .map(route => `${route.method} ${route.path}`)
+    .filter(route => !known.has(route))
+    .sort(byCodeUnit);
+}
+
+/**
+ * The routes one route module registers, read from a bare Express app that
+ * holds nothing else.
+ *
+ * @param {string} file - the module, relative to the repository root
+ * @returns {Promise<Array<{method: string, path: string}>>}
+ */
+async function routesOfModule(file) {
+  const { default: express } = await import('express');
+  const module = await import(pathToFileURL(path.join(REPO_ROOT, file)).href);
+  assert.equal(
+    typeof module.default,
+    'function',
+    `${file}: a route module registers its routes with its default export`
+  );
+  const app = express();
+  module.default(app, { getLocalizedError: async key => key, DEFAULT_TIMEOUT: 30000 });
+  return listRoutes(app);
+}
+
 let h;
 before(async () => {
   // First: the harness points the server's contents directory at a scratch
   // directory before any server module loads.
   h = await startRunAccessHarness();
 });
-// Registering every route of the server starts a few timers; do not wait for them.
+// No `process.exit` here: it would end the process before the test runner has
+// set the exit code, so a failing test run as a plain script would exit 0. The
+// timers that registering every route starts do not keep the process alive.
 after(async () => {
   await h.stop();
-  setImmediate(() => process.exit(process.exitCode ?? 0));
 });
 
 describe('route inventory: the table and the router list the same routes', () => {
@@ -152,6 +191,18 @@ describe('route inventory: the table and the router list the same routes', () =>
       [...RUN_ACCESS_ROUTE_FILES],
       'a route module that starts to use run access is listed in RUN_ACCESS_ROUTE_FILES, and its routes get rows'
     );
+  });
+
+  it('has a row for every route such a module registers, whatever its path', async () => {
+    for (const file of RUN_ACCESS_ROUTE_FILES) {
+      const routes = await routesOfModule(file);
+      assert.ok(routes.length > 0, `${file} registered no route`);
+      assert.deepEqual(
+        routesWithoutRow(routes, ROUTE_INVENTORY),
+        [],
+        `routes of ${file} without a row in server/tests/routeInventory.table.js: the module decides through run access, so say for each of its routes which check it makes and with which intent`
+      );
+    }
   });
 });
 
@@ -233,6 +284,26 @@ describe('route inventory: a route without a row is found', () => {
     );
     assert.deepEqual(missingRows, []);
     assert.deepEqual(staleRows, ['GET /api/runs/:runId/gone']);
+  });
+
+  it('fails for a route of a run access module outside the prefixes', async () => {
+    // What the prefixes do not see: a steer route added to the MCP app module.
+    const routes = [
+      ...(await routesOfModule('server/routes/mcpAppRoutes.js')),
+      { method: 'POST', path: '/api/mcp-apps/runs/:runId/steer' }
+    ];
+    assert.deepEqual(compareInventory(routes, ROUTE_INVENTORY).missingRows, []);
+    assert.deepEqual(routesWithoutRow(routes, ROUTE_INVENTORY), [
+      'POST /api/mcp-apps/runs/:runId/steer'
+    ]);
+    // And a row that is taken out is missed.
+    const withoutApproval = ROUTE_INVENTORY.filter(
+      row => row.route !== 'POST /api/mcp-apps/tools/call/approval'
+    );
+    assert.deepEqual(
+      routesWithoutRow(await routesOfModule('server/routes/mcpAppRoutes.js'), withoutApproval),
+      ['POST /api/mcp-apps/tools/call/approval']
+    );
   });
 
   it('finds a second row for one route', () => {

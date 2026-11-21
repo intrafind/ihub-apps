@@ -7,9 +7,16 @@
  * each of five callers gets.
  *
  * `routeInventory.test.js` reads the routes the server registers and fails
- * when one below {@link INVENTORY_PREFIXES} has no row here, so a new route
- * cannot go in without somebody deciding who may call it. Add the row in the
- * pull request that adds the route.
+ * when one below {@link INVENTORY_PREFIXES} has no row here, and when a route
+ * of a module in {@link RUN_ACCESS_ROUTE_FILES} has none, whatever its path.
+ * So a new route cannot go in without somebody deciding who may call it. Add
+ * the row in the pull request that adds the route.
+ *
+ * Not in the inventory, and not decided through `services/loop/runAccess.js`:
+ * the workflow execution routes (`/api/workflows/executions/...`, a frozen
+ * legacy file) and the agent run routes (`/api/agents/runs/...`). They keep
+ * their own owner-or-admin checks; see docs/run-ledger.md, "Routes with their
+ * own check".
  *
  * The five callers (the columns of `expect`):
  *
@@ -47,7 +54,10 @@ export const INVENTORY_PREFIXES = Object.freeze([
 
 /**
  * The route modules that decide through `services/loop/runAccess.js`. A module
- * that starts to import it is listed here, and its routes get rows.
+ * that starts to import it is listed here, and every route it registers gets a
+ * row, also one that reaches no run: the test registers each module alone and
+ * compares. A row is then the place where somebody wrote down that the new
+ * route of such a module was looked at.
  */
 export const RUN_ACCESS_ROUTE_FILES = Object.freeze([
   'server/routes/chat/feedbackRoutes.js',
@@ -79,6 +89,13 @@ const RUN_OWNER_ONLY = statuses(200, 403, 403, 200, 403);
 // Chat intents (`authorizeChat`): 404 for a chat that is not the caller's.
 const CHAT_READ = statuses(200, 404, 200, 200, 404);
 const CHAT_OWNER_READ = statuses(200, 404, 404, 404, 404);
+
+// A route of a run access module that reaches no run, no interaction and no
+// chat: what it answers depends on the app, the tool or the model, and never
+// on who owns a run. The status is the one of a caller who may use those.
+const NOT_BY_RUN = 'none: no run, interaction or chat is reached';
+const MCP_APP_SUITE =
+  'the caller needs the app and its tool (resolveMcpApp, server/tests/mcp/mcpAppRoutes.test.js)';
 
 const CHAT_SUITES =
   'authorizeChat decides (server/tests/chat-persistence-routes.test.js, chatSessionRoutesErrors.test.js)';
@@ -227,7 +244,7 @@ export const ROUTE_INVENTORY = Object.freeze([
         intent: 'answer',
         expect: statuses(200, 403, 403, 403, 403),
         declared:
-          'an approval of a view’s call records no owner for an anonymous visitor, so no anonymous caller answers it (server/tests/mcp/mcpAppRoutes.test.js)'
+          'the real check with the route’s intent, for the owner, another user and an admin (server/tests/mcp/mcpAppRoutes.test.js); an approval of a view’s call records no owner for an anonymous visitor, so no anonymous caller answers it'
       }
     ]
   },
@@ -240,7 +257,79 @@ export const ROUTE_INVENTORY = Object.freeze([
         // The rating is stored for whoever may use the app. Run access decides
         // only whether it is also written to the run's ledger: for the owner.
         expect: statuses(204, 204, 204, 204, 204),
-        declared: 'the status does not depend on run access (server/tests/feedback*.test.js)'
+        declared:
+          'the status does not depend on run access; who writes into the run’s ledger does (server/tests/feedbackRunIntent.test.js)'
+      }
+    ]
+  },
+
+  // ── the other routes of the modules that decide through run access ───────
+  {
+    route: 'GET /api/mcp-apps/sandbox',
+    cases: [
+      {
+        check: 'none: a static page without data',
+        intent: NOT_BY_RUN,
+        expect: statuses(200, 200, 200, 200, 200),
+        declared: 'server/tests/mcp/mcpAppRoutes.test.js'
+      }
+    ]
+  },
+  {
+    route: 'GET /api/mcp-apps/resource',
+    cases: [
+      {
+        check: 'resolveMcpApp',
+        intent: NOT_BY_RUN,
+        expect: statuses(200, 200, 200, 200, 200),
+        declared: MCP_APP_SUITE
+      }
+    ]
+  },
+  {
+    route: 'POST /api/mcp-apps/tools/call',
+    cases: [
+      {
+        check: 'resolveMcpApp',
+        intent: NOT_BY_RUN,
+        // A call that needs approval answers 202 and raises the approval for
+        // the caller; it reads and answers none.
+        expect: statuses(200, 200, 200, 200, 200),
+        declared: MCP_APP_SUITE
+      }
+    ]
+  },
+  {
+    route: 'POST /api/mcp-apps/handshake',
+    cases: [
+      {
+        check: 'resolveMcpApp',
+        intent: NOT_BY_RUN,
+        expect: statuses(204, 204, 204, 204, 204),
+        declared: MCP_APP_SUITE
+      }
+    ]
+  },
+  {
+    route: 'POST /api/mcp-apps/resources/read',
+    cases: [
+      {
+        check: 'resolveMcpApp',
+        intent: NOT_BY_RUN,
+        expect: statuses(200, 200, 200, 200, 200),
+        declared: MCP_APP_SUITE
+      }
+    ]
+  },
+  {
+    route: 'GET /api/models/:modelId/chat/test',
+    cases: [
+      {
+        check: 'modelAccessRequired',
+        intent: NOT_BY_RUN,
+        expect: statuses(200, 200, 200, 200, 200),
+        declared:
+          'the caller needs the model (server/tests/chatSessionRoutesErrors.test.js, anonymous-principal.test.js)'
       }
     ]
   },
@@ -270,7 +359,8 @@ export const ROUTE_INVENTORY = Object.freeze([
         // The turn itself is not refused: a question that is not the sender's
         // stays as it was, and an approval answers 403 APPROVAL_FORBIDDEN.
         expect: statuses(200, 404, 404, 200, 404),
-        declared: 'server/tests/loop/chatToolApproval.test.js, server/tests/loop/runAccess.test.js'
+        declared:
+          'the three call sites with the real check, as an admin and as another user (server/tests/chatAnswerIntent.test.js)'
       }
     ]
   },
