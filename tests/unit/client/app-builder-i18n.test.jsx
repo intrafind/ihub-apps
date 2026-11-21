@@ -20,10 +20,6 @@
  *
  * It does not repeat that test: literal keys of the rest of the client, German completeness for
  * `admin.*` and the formal address are checked there.
- *
- * TODO (S0 pass 2): the three PENDING lists below name what other slices of the app builder
- * rework still have to deliver. An entry only tolerates something that is absent: a map or a file
- * that exists is always checked. Pass 2 empties the lists, and from then on a missing map fails.
  */
 import fs from 'fs';
 import path from 'path';
@@ -54,6 +50,15 @@ const KEY_MAPS = [
     name: 'EDITOR_GROUPS',
     file: path.join(APP_FORM, 'editorGroups.js'),
     keys: groups => groups.map(group => group.labelKey)
+  },
+  { name: 'GENERATE_CLIENT_ERROR_KEYS', file: path.join(APP_CREATE, 'generateErrors.js') },
+  { name: 'FIELD_LABEL_KEYS', file: path.join(APP_CREATE, 'createKeys.js') },
+  { name: 'COPY_NAME_KEY', file: path.join(APP_CREATE, 'copyLanguages.js') },
+  { name: 'AUDIENCE_KEYS', file: path.join(APP_EDITOR, 'audienceText.js') },
+  {
+    name: 'NEXT_STEPS',
+    file: path.join(APP_EDITOR, 'nextSteps.js'),
+    keys: steps => steps.map(step => step.labelKey)
   }
 ];
 
@@ -70,30 +75,6 @@ const KEY_SOURCES = [
   CREATE_PAGE,
   path.join(ADMIN, 'pages/AdminAppEditPage.jsx'),
   path.join(ADMIN, 'pages/AdminAppsPage.jsx')
-];
-
-// TODO (S0 pass 2): empty. Maps that do not exist yet, or exist without a key (a contract file
-// with an empty body). Owners: S4 generateErrors.js, S3 createErrors.js and createKeys.js,
-// S8 editorGroups.js.
-const PENDING_MAPS = [
-  'GENERATE_ERROR_KEYS',
-  'CREATE_ERROR_KEYS',
-  'STEP_KEYS',
-  'HEADING_KEYS',
-  'NOTE_KEYS',
-  'EDITOR_GROUPS'
-];
-
-// TODO (S0 pass 2): empty. Sources that do not exist yet. Owners: S3 and S4 (app-create/ and
-// the create page), S7 (app-editor/).
-const PENDING_SOURCES = [APP_CREATE, APP_EDITOR, CREATE_PAGE];
-
-// TODO (S0 pass 2): empty. `admin.apps.edit.skills` and `.workflows` are groups of keys now (the
-// selectors read `.noResults` and `.noSkills` / `.noWorkflows`), and the two section files still
-// read them as a text until S8 switches them to `skillsTitle` and `workflowsTitle`.
-const PENDING_KEYS = [
-  'features/admin/components/app-form/SkillsConfigSection.jsx: admin.apps.edit.skills',
-  'features/admin/components/app-form/WorkflowsConfigSection.jsx: admin.apps.edit.workflows'
 ];
 
 const relative = file => path.relative(SRC, file).split(path.sep).join('/');
@@ -272,11 +253,6 @@ describe('translation keys the app builder picks from a map', () => {
     const loaded = loadKeyMap(map);
     const title = `${map.name}: every key is a text in English and German`;
 
-    if (loaded.missing && PENDING_MAPS.includes(map.name)) {
-      it.todo(`${title} (pending: ${loaded.missing})`);
-      continue;
-    }
-
     it(title, () => {
       expect(loaded.missing).toBeUndefined();
       const problems = loaded.keys
@@ -293,11 +269,6 @@ describe('translation keys named in the files of the app builder', () => {
     const files = sourceFiles(source);
     const title = `${relative(source)}: every key is a text, not a group of keys`;
 
-    if (files.length === 0 && PENDING_SOURCES.includes(source)) {
-      it.todo(`${title} (pending: it does not exist)`);
-      continue;
-    }
-
     const problems = files.flatMap(file =>
       keysInFile(file)
         .filter(key => languagesWithoutText(key).length > 0)
@@ -306,12 +277,8 @@ describe('translation keys named in the files of the app builder', () => {
 
     it(title, () => {
       expect(files.length).toBeGreaterThan(0);
-      expect(problems.filter(problem => !PENDING_KEYS.includes(problem))).toEqual([]);
+      expect(problems).toEqual([]);
     });
-
-    for (const pending of problems.filter(problem => PENDING_KEYS.includes(problem))) {
-      it.todo(`${pending} is a text (pending)`);
-    }
   }
 
   it('finds the keys of the app form', () => {

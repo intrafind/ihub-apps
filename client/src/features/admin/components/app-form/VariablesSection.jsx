@@ -1,163 +1,202 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
+import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import DynamicLanguageEditor from '../../../../shared/components/DynamicLanguageEditor';
 import Icon from '../../../../shared/components/Icon';
-import { CHECKBOX_CLASS, INPUT_CLASS } from '../formStyles';
+import {
+  addVariableToTemplate,
+  placeholderFromLabel,
+  unusedVariables
+} from '../../../../../../shared/appPlaceholders.js';
+import { CHECKBOX_CLASS, HELP_CLASS, SECONDARY_BUTTON_CLASS } from '../formStyles';
+import AppLanguageField, { useAppFormLanguage } from './AppLanguageField';
+import InputFieldCard from './InputFieldCard';
+
+/** The text of a localized value in a language, else in any language it has. */
+function textIn(value, language) {
+  if (!value || typeof value !== 'object') return '';
+  const texts = [value[language], ...Object.values(value)];
+  return texts.find(text => typeof text === 'string' && text.trim()) || '';
+}
 
 /**
- * VariablesSection - Input variable list editor for the App form.
- * Extracted from AppFormEditor.jsx (see #1781) as a self-contained slice:
- * owns its own immutable-update handlers since they only ever touch
- * `app.variables`, `app.startForm`, the form those variables can be
- * asked in when a chat starts (issue #2581), and `app.variablesPanel`, the
- * panel they sit in beside the chat otherwise (issue #3053).
+ * VariablesSection - the input fields of an app (`app.variables`), the form
+ * they can be asked in when a chat starts (`app.startForm`, issue #2581) and
+ * the panel they sit in beside the chat otherwise (`app.variablesPanel`,
+ * issue #3053).
+ *
+ * A field reaches the AI only where its placeholder stands in the
+ * instructions or in the message template. A field that no text uses says so
+ * and offers to add its line to the message template. A field added here gets
+ * its placeholder from its field name until the author edits the placeholder
+ * or a text uses it.
+ *
+ * @param {object} props
+ * @param {object} props.app - The app as the editor holds it.
+ * @param {function(object): void} props.onChange - Receives the changed app.
+ * @returns {JSX.Element}
  */
 function VariablesSection({ app, onChange }) {
   const { t } = useTranslation();
+  const formLanguage = useAppFormLanguage();
+  const newTextLanguage = formLanguage || 'en';
+  const variables = app.variables || [];
+  const unused = unusedVariables(app);
+  // Fields added here whose placeholder still follows the field name:
+  // index → the placeholder derived last. An entry counts only while the
+  // field still carries that placeholder, so it never applies to a field
+  // that was loaded, renamed or replaced.
+  const derivedNamesRef = useRef(new Map());
 
-  const handleStartFormChange = (field, value) => {
-    onChange({
-      ...app,
-      startForm: { ...app.startForm, [field]: value }
-    });
+  const setVariables = next => onChange({ ...app, variables: next });
+
+  const updateVariable = (index, patch) =>
+    setVariables(
+      variables.map((variable, i) => (i === index ? { ...variable, ...patch } : variable))
+    );
+
+  const followsFieldName = (variable, index) =>
+    derivedNamesRef.current.has(index) &&
+    derivedNamesRef.current.get(index) === (variable.name || '') &&
+    // A placeholder that a text uses stays: renaming it would break the text.
+    (!variable.name || unused.includes(variable));
+
+  const handleLabelChange = (index, label) => {
+    const variable = variables[index];
+    if (!followsFieldName(variable, index)) {
+      updateVariable(index, { label });
+      return;
+    }
+    const text = textIn(label, newTextLanguage);
+    const taken = variables.filter((_, i) => i !== index).map(other => other.name);
+    const name = text ? placeholderFromLabel(text, taken) : '';
+    derivedNamesRef.current.set(index, name);
+    updateVariable(index, { label, name });
   };
 
-  const handleVariableChange = (index, field, value) => {
-    onChange({
-      ...app,
-      variables: app.variables.map((variable, i) =>
-        i === index ? { ...variable, [field]: value } : variable
-      )
-    });
-  };
-
-  const handleVariablePredefinedValueChange = (variableIndex, valueIndex, field, value) => {
-    onChange({
-      ...app,
-      variables: app.variables.map((variable, i) =>
-        i === variableIndex
-          ? {
-              ...variable,
-              predefinedValues: variable.predefinedValues.map((predefinedValue, j) =>
-                j === valueIndex ? { ...predefinedValue, [field]: value } : predefinedValue
-              )
-            }
-          : variable
-      )
-    });
-  };
-
-  const addPredefinedValue = variableIndex => {
-    onChange({
-      ...app,
-      variables: app.variables.map((variable, i) =>
-        i === variableIndex
-          ? {
-              ...variable,
-              predefinedValues: [
-                ...(variable.predefinedValues || []),
-                {
-                  label: { en: '' },
-                  value: ''
-                }
-              ]
-            }
-          : variable
-      )
-    });
-  };
-
-  const removePredefinedValue = (variableIndex, valueIndex) => {
-    onChange({
-      ...app,
-      variables: app.variables.map((variable, i) =>
-        i === variableIndex
-          ? {
-              ...variable,
-              predefinedValues: variable.predefinedValues.filter((_, j) => j !== valueIndex)
-            }
-          : variable
-      )
-    });
+  const handleNameChange = (index, name) => {
+    derivedNamesRef.current.delete(index);
+    updateVariable(index, { name });
   };
 
   const addVariable = () => {
-    onChange({
-      ...app,
-      variables: [
-        ...(app.variables || []),
-        {
-          name: '',
-          label: { en: '' },
-          type: 'string',
-          required: false
-          // Don't initialize defaultValue and predefinedValues - they'll be added only when needed
-        }
-      ]
-    });
+    derivedNamesRef.current.set(variables.length, '');
+    setVariables([
+      ...variables,
+      {
+        name: '',
+        label: { [newTextLanguage]: '' },
+        type: 'string',
+        required: false
+        // No defaultValue and no predefinedValues: they are added when needed.
+      }
+    ]);
   };
 
   const removeVariable = index => {
-    onChange({
-      ...app,
-      variables: app.variables.filter((_, i) => i !== index)
-    });
+    derivedNamesRef.current = new Map(
+      [...derivedNamesRef.current]
+        .filter(([i]) => i !== index)
+        .map(([i, name]) => [i > index ? i - 1 : i, name])
+    );
+    setVariables(variables.filter((_, i) => i !== index));
   };
+
+  /** The line `<Field name>: {{placeholder}}` at the end of the message template. */
+  const addToTemplate = variable => {
+    const templateLanguages =
+      app.prompt && typeof app.prompt === 'object' ? Object.keys(app.prompt) : [];
+    // A template the app has is extended in each of its languages. A new one
+    // is written in the language of the field name.
+    const labelLanguages =
+      variable.label && typeof variable.label === 'object' ? Object.keys(variable.label) : [];
+    const language =
+      templateLanguages.length > 0
+        ? undefined
+        : labelLanguages.includes(newTextLanguage) || labelLanguages.length === 0
+          ? newTextLanguage
+          : labelLanguages[0];
+    onChange(addVariableToTemplate(app, variable, language));
+  };
+
+  const handleStartFormChange = (field, value) =>
+    onChange({ ...app, startForm: { ...app.startForm, [field]: value } });
 
   return (
     <div className="bg-white dark:bg-gray-800 shadow-sm px-4 py-5 sm:rounded-lg sm:p-6">
       <div className="md:grid md:grid-cols-3 md:gap-6">
         <div className="md:col-span-1">
           <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
-            {t('admin.apps.edit.variables', 'Variables')}
+            {t('admin.apps.edit.variables')}
           </h3>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            {t('admin.apps.edit.variablesDesc', 'Configure input variables for dynamic prompts')}
+            {t('admin.apps.edit.variablesDesc')}
           </p>
         </div>
         <div className="mt-5 md:col-span-2 md:mt-0">
           <div className="space-y-4">
-            <div className="border-b border-gray-200 dark:border-gray-600 pb-4">
+            {variables.length === 0 && (
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                {t('admin.apps.edit.variablesEmpty')}
+              </p>
+            )}
+
+            {variables.map((variable, index) => (
+              <InputFieldCard
+                key={index}
+                variable={variable}
+                index={index}
+                unused={unused.includes(variable)}
+                newTextLanguage={newTextLanguage}
+                onChange={patch => updateVariable(index, patch)}
+                onLabelChange={label => handleLabelChange(index, label)}
+                onNameChange={name => handleNameChange(index, name)}
+                onRemove={() => removeVariable(index)}
+                onAddToTemplate={() => addToTemplate(variable)}
+              />
+            ))}
+
+            <button type="button" onClick={addVariable} className={SECONDARY_BUTTON_CLASS}>
+              <Icon name="plus" className="h-4 w-4" />
+              {t('admin.apps.edit.addVariable')}
+            </button>
+
+            <div className="border-t border-gray-200 dark:border-gray-600 pt-4">
               <div className="flex items-center">
                 <input
                   id="app-start-form-enabled"
                   type="checkbox"
                   checked={app.startForm?.enabled === true}
                   onChange={e => handleStartFormChange('enabled', e.target.checked)}
+                  aria-describedby="app-start-form-help"
                   className={CHECKBOX_CLASS}
                 />
                 <label
                   htmlFor="app-start-form-enabled"
                   className="ml-2 block text-sm text-gray-900 dark:text-gray-100"
                 >
-                  {t('admin.apps.edit.startForm', 'Start chats with a form')}
+                  {t('admin.apps.edit.startForm')}
                 </label>
               </div>
-              <p className="mt-1 ml-6 text-xs text-gray-500 dark:text-gray-400">
-                {t(
-                  'admin.apps.edit.startFormHelp',
-                  'A new chat opens with these variables as a form instead of the chat input, with a drop zone for files when uploads are enabled. Sending the form fills the prompt template once and sends it as the first message; the conversation then continues without the template.'
-                )}
+              <p id="app-start-form-help" className={`${HELP_CLASS} ml-6`}>
+                {t('admin.apps.edit.startFormHelp')}
               </p>
               {app.startForm?.enabled === true && (
                 <div className="mt-3 ml-6">
-                  <DynamicLanguageEditor
-                    label={t('admin.apps.edit.startFormSubmitLabel', 'Send button label')}
+                  <AppLanguageField
+                    label={t('admin.apps.edit.startFormSubmitLabel')}
                     value={app.startForm?.submitLabel || {}}
                     onChange={value => handleStartFormChange('submitLabel', value)}
-                    placeholder={{
-                      en: 'Start',
-                      de: 'Starten'
-                    }}
+                    placeholder={{ en: 'Start', de: 'Starten' }}
+                    name="startForm.submitLabel"
                   />
                 </div>
               )}
             </div>
 
             {app.startForm?.enabled !== true && (
-              <div className="border-b border-gray-200 dark:border-gray-600 pb-4">
+              <div className="border-t border-gray-200 dark:border-gray-600 pt-4">
                 <div className="flex items-center">
                   <input
                     id="app-variables-panel-pinned"
@@ -169,196 +208,21 @@ function VariablesSection({ app, onChange }) {
                         variablesPanel: { ...app.variablesPanel, pinned: e.target.checked }
                       })
                     }
+                    aria-describedby="app-variables-panel-help"
                     className={CHECKBOX_CLASS}
                   />
                   <label
                     htmlFor="app-variables-panel-pinned"
                     className="ml-2 block text-sm text-gray-900 dark:text-gray-100"
                   >
-                    {t(
-                      'admin.apps.edit.variablesPanelPinned',
-                      'Pin the input parameters by default'
-                    )}
+                    {t('admin.apps.edit.variablesPanelPinned')}
                   </label>
                 </div>
-                <p className="mt-1 ml-6 text-xs text-gray-500 dark:text-gray-400">
-                  {t(
-                    'admin.apps.edit.variablesPanelPinnedHelp',
-                    'Pinned, the input parameters stay open beside the chat. Unpinned, they collapse each time a message is sent and can be expanded again. Users can collapse, expand and pin the panel themselves; this sets where it starts.'
-                  )}
+                <p id="app-variables-panel-help" className={`${HELP_CLASS} ml-6`}>
+                  {t('admin.apps.edit.variablesPanelPinnedHelp')}
                 </p>
               </div>
             )}
-
-            {(app.variables || []).map((variable, index) => (
-              <div
-                key={index}
-                className="border border-gray-200 dark:border-gray-600 rounded-lg p-4"
-              >
-                <div className="flex justify-between items-start mb-4">
-                  <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                    {t('admin.apps.edit.variable', 'Variable')} {index + 1}
-                  </h4>
-                  <button
-                    type="button"
-                    onClick={() => removeVariable(index)}
-                    className="text-red-600 hover:text-red-800"
-                  >
-                    <Icon name="trash" className="h-4 w-4" />
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-6 gap-4">
-                  <div className="col-span-6 sm:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      {t('admin.apps.edit.variableName', 'Name')}
-                    </label>
-                    <input
-                      type="text"
-                      value={variable.name || ''}
-                      onChange={e => handleVariableChange(index, 'name', e.target.value)}
-                      className={`${INPUT_CLASS} mt-1 block`}
-                    />
-                  </div>
-
-                  <div className="col-span-6 sm:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      {t('admin.apps.edit.variableType', 'Type')}
-                    </label>
-                    <select
-                      value={variable.type || 'string'}
-                      onChange={e => handleVariableChange(index, 'type', e.target.value)}
-                      className={`${INPUT_CLASS} mt-1 block`}
-                    >
-                      <option value="string">{t('admin.apps.edit.typeString', 'String')}</option>
-                      <option value="text">{t('admin.apps.edit.typeText', 'Text')}</option>
-                      <option value="select">{t('admin.apps.edit.typeSelect', 'Select')}</option>
-                      <option value="date">{t('admin.apps.edit.typeDate', 'Date')}</option>
-                      <option value="number">{t('admin.apps.edit.typeNumber', 'Number')}</option>
-                    </select>
-                  </div>
-
-                  <div className="col-span-6 sm:col-span-2 flex items-end">
-                    <div className="flex items-center h-5">
-                      <input
-                        type="checkbox"
-                        checked={variable.required || false}
-                        onChange={e => handleVariableChange(index, 'required', e.target.checked)}
-                        className={CHECKBOX_CLASS}
-                      />
-                      <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
-                        {t('admin.apps.edit.required', 'Required')}
-                      </label>
-                    </div>
-                  </div>
-
-                  <div className="col-span-6">
-                    <DynamicLanguageEditor
-                      label={t('admin.apps.edit.variableLabel', 'Label')}
-                      value={variable.label || {}}
-                      onChange={value => handleVariableChange(index, 'label', value)}
-                      placeholder={{
-                        en: 'Enter variable label in English',
-                        de: 'Variablenbeschriftung auf Deutsch eingeben'
-                      }}
-                    />
-                  </div>
-
-                  <div className="col-span-6">
-                    <DynamicLanguageEditor
-                      label={t('admin.apps.edit.defaultValue', 'Default Value')}
-                      value={variable.defaultValue || {}}
-                      onChange={value => handleVariableChange(index, 'defaultValue', value)}
-                      placeholder={{
-                        en: 'Enter default value in English',
-                        de: 'Standardwert auf Deutsch eingeben'
-                      }}
-                    />
-                  </div>
-
-                  <div className="col-span-6">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      {t('admin.apps.edit.predefinedValues', 'Predefined Values')}
-                    </label>
-                    <p className="text-xs text-gray-500 mb-2">
-                      {variable.type === 'select'
-                        ? t(
-                            'admin.apps.edit.predefinedValuesHintSelect',
-                            'Options that will be available in the dropdown menu.'
-                          )
-                        : t(
-                            'admin.apps.edit.predefinedValuesHint',
-                            'Optional suggested values that can be used as autocomplete options.'
-                          )}
-                    </p>
-                    <div className="space-y-2">
-                      {(variable.predefinedValues || []).map((predefinedValue, valueIndex) => (
-                        <div key={valueIndex} className="flex items-center space-x-2">
-                          <div className="flex-1">
-                            <DynamicLanguageEditor
-                              label={`${t('admin.apps.edit.option', 'Option')} ${valueIndex + 1}`}
-                              value={predefinedValue.label || {}}
-                              onChange={value =>
-                                handleVariablePredefinedValueChange(
-                                  index,
-                                  valueIndex,
-                                  'label',
-                                  value
-                                )
-                              }
-                              placeholder={{
-                                en: 'Option label',
-                                de: 'Options-Beschriftung'
-                              }}
-                            />
-                          </div>
-                          <div className="w-32">
-                            <input
-                              type="text"
-                              value={predefinedValue.value || ''}
-                              onChange={e =>
-                                handleVariablePredefinedValueChange(
-                                  index,
-                                  valueIndex,
-                                  'value',
-                                  e.target.value
-                                )
-                              }
-                              placeholder={t('admin.apps.edit.value', 'Value')}
-                              className={`${INPUT_CLASS} block`}
-                            />
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => removePredefinedValue(index, valueIndex)}
-                            className="text-red-600 hover:text-red-800"
-                          >
-                            <Icon name="trash" className="h-4 w-4" />
-                          </button>
-                        </div>
-                      ))}
-                      <button
-                        type="button"
-                        onClick={() => addPredefinedValue(index)}
-                        className="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 shadow-xs text-sm leading-4 font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                      >
-                        <Icon name="plus" className="h-4 w-4 mr-2" />
-                        {t('admin.apps.edit.addOption', 'Add Option')}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-
-            <button
-              type="button"
-              onClick={addVariable}
-              className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-xs text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-            >
-              <Icon name="plus" className="h-4 w-4 mr-2" />
-              {t('admin.apps.edit.addVariable', 'Add Variable')}
-            </button>
           </div>
         </div>
       </div>

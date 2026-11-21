@@ -26,8 +26,7 @@ function Audience({ access }) {
   }
   return (
     <p className="mt-1" data-testid="publish-audience" data-audience={text.kind}>
-      {t(text.key, text.values)}
-      {text.noteKey && <> {t(text.noteKey)}</>}
+      {text.sentences.map(sentence => t(sentence.key, sentence.values)).join(' ')}
     </p>
   );
 }
@@ -116,6 +115,41 @@ export function UnpublishDialog({ isOpen, name, busy = false, error = null, onCo
       onConfirm={onConfirm}
       onDeny={onCancel}
     />
+  );
+}
+
+/**
+ * The two questions of the editor's header, "Publish?" and "Unpublish?", for
+ * the state that `useAppPublishing` holds. At most one is open.
+ *
+ * @param {object} props
+ * @param {{dialog: 'publish'|'unpublish'|null, busy: boolean, error: string|null,
+ *   confirm: () => void, cancel: () => void}} props.publishing - From `useAppPublishing`.
+ * @param {string} props.name - The app's name, as the author reads it.
+ * @param {{loading?: boolean, failed?: boolean, view?: object|null}} props.access
+ * @param {boolean} [props.savesFirst=false] - The editor has unsaved changes.
+ * @param {boolean} [props.noModel=false] - No AI model is available.
+ * @returns {JSX.Element}
+ */
+export function PublishDialogs({ publishing, name, access, savesFirst = false, noModel = false }) {
+  const shared = {
+    name,
+    busy: publishing.busy,
+    error: publishing.error,
+    onConfirm: publishing.confirm,
+    onCancel: publishing.cancel
+  };
+  return (
+    <>
+      <PublishDialog
+        isOpen={publishing.dialog === 'publish'}
+        access={access}
+        savesFirst={savesFirst}
+        noModel={noModel}
+        {...shared}
+      />
+      <UnpublishDialog isOpen={publishing.dialog === 'unpublish'} {...shared} />
+    </>
   );
 }
 

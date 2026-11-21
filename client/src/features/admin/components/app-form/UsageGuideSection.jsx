@@ -3,7 +3,7 @@
 
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import DynamicLanguageEditor from '../../../../shared/components/DynamicLanguageEditor';
+import AppLanguageField from './AppLanguageField';
 import ConfirmDialog from '../../../../shared/components/ConfirmDialog';
 import Icon from '../../../../shared/components/Icon';
 import { generateAppUsageGuide, getAdminApiErrorMessage } from '../../../../api/adminApi';
@@ -179,13 +179,13 @@ function UsageGuideSection({ app, onChange }) {
 
           {guide && (
             <>
-              <DynamicLanguageEditor
+              <AppLanguageField
                 label={t('admin.apps.edit.usageGuide.question', 'Dialog heading')}
                 value={guide.question || {}}
                 onChange={value => updateGuide({ question: value })}
                 placeholder={{ en: 'How do I use this app?', de: 'Wie nutze ich diese App?' }}
               />
-              <DynamicLanguageEditor
+              <AppLanguageField
                 label={t('admin.apps.edit.usageGuide.content', 'Guide (Markdown)')}
                 value={guide.content || {}}
                 onChange={value => updateGuide({ content: value })}

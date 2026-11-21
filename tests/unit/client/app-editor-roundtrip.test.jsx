@@ -11,11 +11,52 @@
  * into an app that was saved once. Those are the entries of `NORMALISATIONS`
  * below, one per line with its reason. Anything else that differs is a field
  * the editor lost or changed, and fails here.
+ *
+ * The second half checks the same at the rendered level: the real form
+ * (`AppFormEditor`) is mounted with the loaded app, and what it hands back is
+ * what a save would send. The form must change nothing on its own, whatever
+ * groups are open, and an edit must change the edited field only.
  */
+import '@testing-library/jest-dom';
 import fs from 'fs';
 import path from 'path';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { cleanAppForSave, newAppDefaults, padLoadedApp } from '../../../shared/appDefaults.js';
 import { appConfigSchema, knownAppKeys } from '../../../server/validators/appConfigSchema.js';
+
+jest.mock('react-i18next', () => require('./helpers/appFormHarness').i18nMock());
+jest.mock('../../../client/src/api/adminApi', () =>
+  require('./helpers/appFormHarness').adminApiMock()
+);
+jest.mock('../../../client/src/api/integrationsAdminApi', () =>
+  require('./helpers/appFormHarness').adminApiMock()
+);
+jest.mock('../../../client/src/api/documentTemplatesAdminApi', () =>
+  require('./helpers/appFormHarness').adminApiMock()
+);
+jest.mock('../../../client/src/api/endpoints/skills', () =>
+  require('./helpers/appFormHarness').adminApiMock()
+);
+jest.mock('../../../client/src/api/endpoints/config', () =>
+  require('./helpers/appFormHarness').configApiMock()
+);
+jest.mock('../../../client/src/api/client', () =>
+  require('./helpers/appFormHarness').apiClientMock()
+);
+jest.mock('../../../client/src/shared/contexts/PlatformConfigContext', () =>
+  require('./helpers/appFormHarness').platformConfigMock()
+);
+jest.mock('../../../client/src/shared/hooks/useFeatureFlags', () =>
+  require('./helpers/appFormHarness').featureFlagsMock()
+);
+jest.mock('../../../client/src/utils/runtimeBasePath', () =>
+  require('./helpers/appFormHarness').basePathMock()
+);
+// The JSON mode's editor is Monaco, which does not run in jsdom. The switch
+// between the modes, which is what the test is about, is the real one.
+jest.mock('../../../client/src/shared/components/MonacoJsonEditor', () =>
+  require('./helpers/appFormHarness').stubComponent('json-editor')
+);
 
 const ROOT = path.resolve(__dirname, '../../..');
 const SHIPPED_APPS_DIR = path.join(ROOT, 'server/defaults/apps');
@@ -554,6 +595,158 @@ describe('app editor round trip, pure level', () => {
         'upload',
         'variables'
       ]);
+    });
+  });
+});
+
+describe('app editor round trip, rendered level', () => {
+  const {
+    groupParts,
+    openGroupIds,
+    renderedGroupIds,
+    renderForm,
+    setUiLanguage
+  } = require('./helpers/appFormHarness');
+  const { getAppJsonSchema } = require('../../../server/utils/schemaExport.js');
+  const jsonSchema = getAppJsonSchema();
+
+  /** As the create page stores an app that was started empty. */
+  const flowCreatedApp = cleanAppForSave({
+    ...newAppDefaults('en'),
+    id: 'plain-language',
+    name: { en: 'Plain language' },
+    description: { en: 'Rewrites a text so that everyone understands it.' },
+    system: { en: 'You rewrite texts in plain language.' }
+  });
+
+  const fixtures = [
+    ['a flow-created app', flowCreatedApp],
+    ['the app with every field', everyFieldApp],
+    ['the app with the inheritance fields', inheritedApp],
+    ['the German-only app', germanOnlyApp]
+  ];
+
+  /** The editor's state after loading a stored app. */
+  const load = stored => padLoadedApp(copy(stored));
+
+  beforeEach(() => setUiLanguage('en'));
+
+  test('the flow-created fixture is what the schema accepts', () => {
+    expect(appConfigSchema.safeParse(flowCreatedApp).success).toBe(true);
+    expect(flowCreatedApp.enabled).toBe(false);
+  });
+
+  describe.each(fixtures)('%s', (_name, stored) => {
+    test('is not changed by the form when it is mounted, expanded and collapsed', async () => {
+      const loaded = load(stored);
+      const { probe } = await renderForm(loaded, { jsonSchema });
+      expect(openGroupIds()).toEqual(['basics', 'instructions']);
+      act(() => probe.groups.expandAll());
+      expect(openGroupIds()).toEqual(renderedGroupIds());
+      act(() => probe.groups.collapseAll());
+      expect(openGroupIds()).toEqual([]);
+
+      expect(probe.changes).toEqual([]);
+      expect(probe.app).toBe(loaded);
+      expect(cleanAppForSave(probe.app)).toEqual(roundTrip(copy(stored)));
+    });
+
+    test('reports no error for it', async () => {
+      const { probe } = await renderForm(load(stored), { jsonSchema });
+      expect(probe.validation.errors).toEqual([]);
+    });
+
+    test('sends the same body with every group collapsed as with every group open', async () => {
+      const bodies = [];
+      for (const state of ['collapseAll', 'expandAll']) {
+        const { probe, unmount } = await renderForm(load(stored), { jsonSchema });
+        act(() => probe.groups[state]());
+        // One edit in a group that is hidden in the collapsed run.
+        const description = groupParts('basics').panel.querySelector(
+          '[data-field="description"] textarea'
+        );
+        fireEvent.change(description, { target: { value: 'Changed in the editor.' } });
+        expect(probe.changes).toHaveLength(1);
+        bodies.push(cleanAppForSave(probe.app));
+        unmount();
+      }
+      expect(bodies[0]).toEqual(bodies[1]);
+
+      const language = Object.keys(stored.description)[0];
+      const expected = roundTrip(copy(stored));
+      expected.description = { ...expected.description, [language]: 'Changed in the editor.' };
+      expect(bodies[0]).toEqual(expected);
+      // toEqual treats a missing key and an undefined one alike; the stored JSON does not.
+      expect(JSON.stringify(bodies[0])).toBe(JSON.stringify(bodies[1]));
+      expect(appConfigSchema.safeParse(bodies[0]).success).toBe(true);
+    });
+  });
+
+  test('the flow-created app and the app with every field come back exactly as stored', async () => {
+    for (const stored of [flowCreatedApp, everyFieldApp]) {
+      const { probe, unmount } = await renderForm(load(stored), { jsonSchema });
+      act(() => probe.groups.expandAll());
+      expect(cleanAppForSave(probe.app)).toEqual(stored);
+      unmount();
+    }
+  });
+
+  describe.each(shippedApps)('the shipped app %s', (_file, stored) => {
+    test('is not changed by the form, open or collapsed', async () => {
+      const loaded = load(stored);
+      const { probe } = await renderForm(loaded, { jsonSchema });
+      act(() => probe.groups.expandAll());
+      act(() => probe.groups.collapseAll());
+      expect(probe.changes).toEqual([]);
+      expect(cleanAppForSave(probe.app)).toEqual(normalised(stored));
+    });
+  });
+
+  describe('Form to JSON to Form', () => {
+    const DualModeEditor = require('../../../client/src/shared/components/DualModeEditor').default;
+    const AppFormEditor =
+      require('../../../client/src/features/admin/components/AppFormEditor').default;
+    const { MemoryRouter } = require('react-router-dom');
+
+    test.each([
+      ['a flow-created app', flowCreatedApp],
+      ['the app with every field', everyFieldApp]
+    ])('leaves the state of %s deep-equal without an edit', async (_name, stored) => {
+      const loaded = load(stored);
+      const before = copy(loaded);
+      const changes = [];
+      await act(async () => {
+        render(
+          <MemoryRouter>
+            <DualModeEditor
+              value={loaded}
+              onChange={next => changes.push(next)}
+              formComponent={AppFormEditor}
+              formProps={{ availableModels: [], uiConfig: null, jsonSchema }}
+              jsonSchema={jsonSchema}
+            />
+          </MemoryRouter>
+        );
+      });
+      expect(groupParts('basics').group).not.toBeNull();
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'JSON' }));
+      });
+      expect(screen.getByTestId('stub-json-editor')).toBeInTheDocument();
+      expect(groupParts('basics').group).toBeNull();
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Form' }));
+      });
+      // The form is mounted anew: it opens like on the first visit and hands nothing back.
+      expect(openGroupIds()).toEqual(['basics', 'instructions']);
+      expect(
+        within(groupParts('basics').panel).getByDisplayValue(stored.name.en)
+      ).toBeInTheDocument();
+      expect(changes).toEqual([]);
+      expect(loaded).toEqual(before);
+      expect(JSON.stringify(loaded)).toBe(JSON.stringify(before));
     });
   });
 });

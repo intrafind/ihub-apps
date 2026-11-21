@@ -12,7 +12,7 @@ function WorkflowsConfigSection({ selectedWorkflows, onWorkflowsChange }) {
       <div className="md:grid md:grid-cols-3 md:gap-6">
         <div className="md:col-span-1">
           <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
-            {t('admin.apps.edit.workflows', 'Workflows')}
+            {t('admin.apps.edit.workflowsTitle')}
           </h3>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
             {t(

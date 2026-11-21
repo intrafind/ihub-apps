@@ -13,6 +13,10 @@ jest.mock('../../../client/src/shared/components/Icon', () => ({
   __esModule: true,
   default: () => null
 }));
+// The picker reads the UI language to show a name that has several languages.
+jest.mock('react-i18next', () => ({
+  useTranslation: () => ({ t: key => key, i18n: { language: 'en' } })
+}));
 
 const ResourceSelector =
   require('../../../client/src/features/admin/components/ResourceSelector').default;

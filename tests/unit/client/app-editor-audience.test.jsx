@@ -11,6 +11,11 @@
  * signs in can use this app." when that is so, never reads "No group can use
  * this app yet", and nobody reads the name of a group that every signed-in
  * user carries ("Authenticated").
+ *
+ * The table has no row for an app that is open to people who are not signed
+ * in while signed-in people do not get it (the two facts of `audience` are
+ * independent on the server). That case has its own sentence, so that the
+ * dialog never says "Everyone" when it is not so.
  */
 
 import '@testing-library/jest-dom';
@@ -163,19 +168,19 @@ function renderDialog(view, props = {}) {
   return screen.getByRole('alertdialog');
 }
 
-const sentenceOf = view => {
-  const text = audienceText(view);
-  return [mockT(text.key, text.values), text.noteKey && mockT(text.noteKey)]
-    .filter(Boolean)
+const sentenceOf = view =>
+  audienceText(view)
+    .sentences.map(sentence => mockT(sentence.key, sentence.values))
     .join(' ');
-};
+const keysOf = view => audienceText(view).sentences.map(sentence => sentence.key);
+const textOf = (bundle, key) => key.split('.').reduce((node, part) => node?.[part], bundle);
 
 describe('audienceText: the table of the publish dialog', () => {
   test.each(ROWS)('$situation', ({ view, kind, en: english, de: german }) => {
     const text = audienceText(view);
 
     expect(text.kind).toBe(kind);
-    expect(text.key).toBe(AUDIENCE_KEYS[kind]);
+    expect(text.sentences[0].key).toBe(AUDIENCE_KEYS[kind]);
     expect(sentenceOf(view)).toBe(english);
     return mockI18n.changeLanguage('de').then(() => expect(sentenceOf(view)).toBe(german));
   });
@@ -224,7 +229,56 @@ describe('audienceText: the table of the publish dialog', () => {
   test('a group without a name is named by its ID', () => {
     const view = fullAdminView({ groups: [{ ...SALES, name: '' }] });
 
-    expect(audienceText(view).values).toEqual({ groups: 'sales' });
+    expect(audienceText(view).sentences[0].values).toEqual({ groups: 'sales' });
+  });
+
+  describe('open to people who are not signed in, but not to everyone who signs in', () => {
+    const { notSignedIn, groups, partial } = AUDIENCE_KEYS;
+
+    test('is never called "Everyone"', () => {
+      const views = [
+        fullAdminView({ anonymous: true }),
+        fullAdminView({ anonymous: true, groups: [SALES] }),
+        contentAdminView({ anonymous: true }),
+        contentAdminView({ anonymous: true, groups: [SALES] })
+      ];
+
+      for (const view of views) {
+        expect(audienceText(view).kind).toBe('notSignedIn');
+        expect(keysOf(view)[0]).toBe(notSignedIn);
+        expect(keysOf(view)).not.toContain(AUDIENCE_KEYS.everyone);
+        expect(keysOf(view)).not.toContain(AUDIENCE_KEYS.everyoneSignedIn);
+        // "No group can use this app" would contradict the first sentence.
+        expect(keysOf(view)).not.toContain(AUDIENCE_KEYS.noGroups);
+        expect(keysOf(view)).not.toContain(AUDIENCE_KEYS.noOwnGroups);
+      }
+    });
+
+    test('a full admin reads the groups after it, where there are any', () => {
+      expect(keysOf(fullAdminView({ anonymous: true }))).toEqual([notSignedIn]);
+
+      const withGroups = audienceText(fullAdminView({ anonymous: true, groups: [SALES, USERS] }));
+      expect(withGroups.sentences.map(sentence => sentence.key)).toEqual([notSignedIn, groups]);
+      expect(withGroups.sentences[1].values).toEqual({ groups: 'Sales, Users' });
+    });
+
+    test('a content admin is also told that they see only the groups they manage', () => {
+      expect(keysOf(contentAdminView({ anonymous: true }))).toEqual([notSignedIn, partial]);
+      expect(keysOf(contentAdminView({ anonymous: true, groups: [SALES] }))).toEqual([
+        notSignedIn,
+        groups,
+        partial
+      ]);
+    });
+
+    test('the dialog says the groups too', () => {
+      renderDialog(fullAdminView({ anonymous: true, groups: [SALES] }));
+
+      const audience = screen.getByTestId('publish-audience');
+      expect(audience).toHaveAttribute('data-audience', 'notSignedIn');
+      expect(audience).toHaveTextContent('Members of these groups can use it: Sales.');
+      expect(audience).not.toHaveTextContent(/Everyone|Authenticated|Anonymous/);
+    });
   });
 
   test('a view that does not say who can use the app gives no sentence', () => {
@@ -234,17 +288,26 @@ describe('audienceText: the table of the publish dialog', () => {
     // Without `audience` the rows alone would tell a content admin a wrong story.
     expect(audienceText({ scope: 'membership', groups: [] })).toBeNull();
     expect(audienceText({ scope: 'all', groups: [SALES] })).toBeNull();
+    // Rows of a scope the page does not know cannot be read as "these groups" …
     expect(
-      audienceText({ scope: 'other', groups: [], audience: { allSignedIn: false } })
+      audienceText({ scope: 'other', groups: [SALES], audience: { allSignedIn: false } })
     ).toBeNull();
+    // … while what `audience` says about everyone holds for every scope.
+    expect(audienceText({ groups: [], audience: { allSignedIn: true } }).kind).toBe(
+      'everyoneSignedIn'
+    );
   });
 
   test('every key is a text in English and German', () => {
-    const textOf = (bundle, key) => key.split('.').reduce((node, part) => node?.[part], bundle);
-
     for (const key of Object.values(AUDIENCE_KEYS)) {
-      expect(typeof textOf(en, key)).toBe('string');
-      expect(typeof textOf(de, key)).toBe('string');
+      expect([key, typeof textOf(en, key)]).toEqual([key, 'string']);
+      expect([key, typeof textOf(de, key)]).toEqual([key, 'string']);
+    }
+  });
+
+  test('the German sentences address the reader formally and never say "Nutzer"', () => {
+    for (const key of Object.values(AUDIENCE_KEYS)) {
+      expect(textOf(de, key)).not.toMatch(/Nutzer|\b(du|dein|deine)\b/i);
     }
   });
 });

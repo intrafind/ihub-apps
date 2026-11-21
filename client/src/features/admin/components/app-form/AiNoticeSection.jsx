@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { useTranslation } from 'react-i18next';
-import DynamicLanguageEditor from '../../../../shared/components/DynamicLanguageEditor';
+import AppLanguageField from './AppLanguageField';
 import EuAiActStateNote from '../euAiAct/EuAiActStateNote';
 
 /**
@@ -71,7 +71,7 @@ function AiNoticeSection({ app, onChange }) {
             </div>
           </fieldset>
           {mode === 'custom' && (
-            <DynamicLanguageEditor
+            <AppLanguageField
               label={t('admin.apps.aiNotice.text', 'Notice text')}
               value={notice.text || {}}
               onChange={text => write({ text })}

@@ -185,7 +185,7 @@ function IconPicker({ value, onChange, className = '', error, id, labelledBy }) 
       {isOpen && (
         <div
           id={listId}
-          className="absolute z-50 mt-1 w-full sm:min-w-[20rem] bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-96 overflow-hidden"
+          className="absolute z-50 mt-1 w-full sm:min-w-[24rem] bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-96 overflow-hidden"
         >
           {/* Search Input */}
           <div className="p-2 border-b border-gray-200 dark:border-gray-700">
@@ -218,7 +218,7 @@ function IconPicker({ value, onChange, className = '', error, id, labelledBy }) 
                     onClick={() => handleIconSelect(iconName)}
                     aria-label={iconName}
                     aria-pressed={value === iconName}
-                    className={`flex flex-col items-center justify-center p-3 rounded-md hover:bg-indigo-50 dark:hover:bg-indigo-900/40 transition-colors focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 ${
+                    className={`flex flex-col items-center justify-center px-1 py-2.5 rounded-md hover:bg-indigo-50 dark:hover:bg-indigo-900/40 transition-colors focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 ${
                       value === iconName
                         ? 'bg-indigo-100 dark:bg-indigo-900/60 ring-2 ring-indigo-500'
                         : 'bg-gray-50 dark:bg-gray-700'

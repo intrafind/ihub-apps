@@ -108,6 +108,7 @@ jest.mock(
 );
 
 const { createAppServer } = require('./helpers/appEditorHarness');
+const { AuthContext } = require('../../../client/src/shared/contexts/authContextValue');
 const AdminAppEditPage =
   require('../../../client/src/features/admin/pages/AdminAppEditPage').default;
 
@@ -135,10 +136,21 @@ function LocationProbe() {
   );
 }
 
-async function renderEditor({ app = SAVED_APP, path: route = '/admin/apps/chat' } = {}) {
+/**
+ * @param {object} [options]
+ * @param {object} [options.app] - The stored app.
+ * @param {string} [options.path] - Where the editor is opened.
+ * @param {object|null} [options.user] - Who is signed in; without one the page is
+ *   rendered outside an auth provider, as for someone who is no full admin.
+ */
+async function renderEditor({
+  app = SAVED_APP,
+  path: route = '/admin/apps/chat',
+  user = null
+} = {}) {
   server = createAppServer({ app });
   mockRequest.mockImplementation(server.request);
-  const view = render(
+  const routes = (
     <MemoryRouter initialEntries={[route]}>
       <Routes>
         <Route path="/admin/apps/new" element={<div>New app page</div>} />
@@ -147,6 +159,9 @@ async function renderEditor({ app = SAVED_APP, path: route = '/admin/apps/chat' 
       </Routes>
       <LocationProbe />
     </MemoryRouter>
+  );
+  const view = render(
+    user ? <AuthContext.Provider value={{ user }}>{routes}</AuthContext.Provider> : routes
   );
   await screen.findByRole('heading', { level: 1 });
   return view;
@@ -245,11 +260,42 @@ describe('saving', () => {
     await screen.findByText(TEXT.saved);
     expect(server.writes().map(call => call.method)).toEqual(['PUT']);
 
-    const source = fs.readFileSync(
-      path.resolve(__dirname, '../../../client/src/features/admin/pages/AdminAppEditPage.jsx'),
-      'utf8'
+    // Neither the page nor its parts hold a default app, a "new" mode or a
+    // request that creates one.
+    const adminRoot = path.resolve(__dirname, '../../../client/src/features/admin');
+    const partsRoot = path.join(adminRoot, 'components/app-editor');
+    const sources = [
+      path.join(adminRoot, 'pages/AdminAppEditPage.jsx'),
+      ...fs.readdirSync(partsRoot).map(name => path.join(partsRoot, name))
+    ];
+    expect(sources.length).toBeGreaterThan(5);
+    const offenders = sources.filter(file =>
+      /makeDefault|newAppDefaults|isNew|saveAndExit|['"]POST['"]/.test(
+        fs.readFileSync(file, 'utf8')
+      )
     );
-    expect(source).not.toMatch(/makeDefault|isNew|saveAndExit|['"]POST['"]/);
+    expect(offenders.map(file => path.basename(file))).toEqual([]);
+  });
+
+  test('"new" is an ID like any other: the editor looks it up and offers nothing to create', async () => {
+    server = createAppServer({ app: SAVED_APP });
+    mockRequest.mockImplementation(server.request);
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+    render(
+      <MemoryRouter initialEntries={['/admin/apps/new']}>
+        <Routes>
+          <Route path="/admin/apps/:appId" element={<AdminAppEditPage />} />
+          <Route path="/admin/apps" element={<div>Apps list</div>} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    // The stand-in server has no app "new" and answers 404.
+    fireEvent.click(await screen.findByRole('button', { name: TEXT.backToApps }));
+
+    expect(screen.getByText('Apps list')).toBeInTheDocument();
+    expect(server.calls.map(call => `${call.method} ${call.url}`)).toContain('GET /admin/apps/new');
+    expect(server.writes()).toEqual([]);
   });
 
   test('Ctrl+S and Cmd+S save without leaving the editor', async () => {
@@ -261,6 +307,29 @@ describe('saving', () => {
     fireEvent.keyDown(window, { key: 's', metaKey: true });
     await waitFor(() => expect(puts()).toHaveLength(2));
     expect(location()).toBe('/admin/apps/chat');
+  });
+
+  test('two key presses in a row send one request', async () => {
+    await renderEditor();
+    editName('Chat 2');
+
+    fireEvent.keyDown(window, { key: 's', ctrlKey: true });
+    fireEvent.keyDown(window, { key: 's', ctrlKey: true });
+
+    expect(await screen.findByText(TEXT.saved)).toBeInTheDocument();
+    expect(puts()).toHaveLength(1);
+  });
+
+  test('other key combinations do not save', async () => {
+    await renderEditor();
+    editName('Chat 2');
+
+    fireEvent.keyDown(window, { key: 's' });
+    fireEvent.keyDown(window, { key: 's', ctrlKey: true, shiftKey: true });
+    fireEvent.keyDown(window, { key: 's', ctrlKey: true, altKey: true });
+    await act(async () => {});
+
+    expect(server.writes()).toEqual([]);
   });
 
   test('a failed save says why and keeps the edit unsaved', async () => {
@@ -505,7 +574,7 @@ describe('arriving from "Create and test"', () => {
     const heading = screen.getByRole('heading', { name: DONE.heading });
     expect(heading).toHaveFocus();
     expect(screen.getByText(DONE.body)).toBeInTheDocument();
-    expect(location()).toBe('/admin/apps/chat');
+    await waitFor(() => expect(location()).toBe('/admin/apps/chat'));
     // Removing the marker is not an edit.
     expect(saveBar()).not.toBeInTheDocument();
   });
@@ -514,7 +583,7 @@ describe('arriving from "Create and test"', () => {
     await renderEditor({ app: NEW_APP, path: '/admin/apps/chat?created=1&tab=x#access' });
 
     await screen.findByText('App "Plain-language summary" created');
-    expect(location()).toBe('/admin/apps/chat?tab=x#access');
+    await waitFor(() => expect(location()).toBe('/admin/apps/chat?tab=x#access'));
   });
 
   test('happens once: a later visit shows the steps, but no toast and no test chat', async () => {
@@ -543,13 +612,37 @@ describe('arriving from "Create and test"', () => {
     expect(screen.queryByRole('heading', { name: DONE.heading })).not.toBeInTheDocument();
     first.unmount();
 
-    const second = await renderEditor({ app: NEW_APP });
+    await renderEditor({ app: NEW_APP });
     expect(screen.queryByRole('heading', { name: DONE.heading })).not.toBeInTheDocument();
-    second.unmount();
+  });
 
-    // Not even the marker brings them back for this app.
+  test('an app that is created again under the ID of a hidden one gets its steps', async () => {
+    const first = await renderEditor({ app: NEW_APP, path: CREATED });
+    fireEvent.click(await screen.findByRole('button', { name: DONE.dismiss }));
+    first.unmount();
+
+    // The first app was deleted; another one was created with the same ID.
+    await renderEditor({ app: { ...NEW_APP, name: { en: 'Second try' } }, path: CREATED });
+
+    expect(await screen.findByText('App "Second try" created')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: DONE.heading })).toBeInTheDocument();
+  });
+
+  test('the steps show for this visit when the browser keeps nothing', async () => {
+    // Only for the card's own entries; the rest of the page reads storage too.
+    const refuse = original =>
+      function refusing(key, ...rest) {
+        if (String(key).includes('appNextSteps')) throw new Error('storage is not available');
+        return original.call(this, key, ...rest);
+      };
+    const { getItem, setItem } = Storage.prototype;
+    jest.spyOn(Storage.prototype, 'setItem').mockImplementation(refuse(setItem));
+    jest.spyOn(Storage.prototype, 'getItem').mockImplementation(refuse(getItem));
+
     await renderEditor({ app: NEW_APP, path: CREATED });
-    await screen.findByText('App "Plain-language summary" created');
+
+    expect(await screen.findByRole('heading', { name: DONE.heading })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: DONE.dismiss }));
     expect(screen.queryByRole('heading', { name: DONE.heading })).not.toBeInTheDocument();
   });
 
@@ -603,11 +696,33 @@ describe('arriving from "Create and test"', () => {
   });
 
   test('offers the guide to someone who may open the documentation only', async () => {
-    await renderEditor({ app: NEW_APP, path: CREATED });
+    const first = await renderEditor({
+      app: NEW_APP,
+      path: CREATED,
+      user: { id: 'builder', isAdmin: false, isContentAdmin: true, permissions: {} }
+    });
     await screen.findByText('App "Plain-language summary" created');
 
-    // Rendered without a signed-in admin: the documentation would refuse.
+    // The documentation is for full admins; it would refuse a content admin.
+    expect(screen.getByRole('heading', { name: DONE.heading })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: DONE.guide })).not.toBeInTheDocument();
+    first.unmount();
+
+    await renderEditor({ app: NEW_APP, user: { id: 'admin', isAdmin: true } });
+
+    const guide = screen.getByRole('link', { name: DONE.guide });
+    expect(guide).toHaveAttribute('href', '/ihub/admin/docs/app-quickstart.md');
+    // In a new tab, so that the editor and its unsaved edits stay as they are.
+    expect(guide).toHaveAttribute('target', '_blank');
+  });
+
+  test('a published app is not offered "Publish" among the steps', async () => {
+    await renderEditor({ app: { ...NEW_APP, enabled: true }, path: CREATED });
+    await screen.findByText('App "Plain-language summary" created');
+
+    const steps = screen.getByRole('heading', { name: DONE.heading }).closest('section');
+    expect(within(steps).getByRole('button', { name: DONE.steps.test })).toBeInTheDocument();
+    expect(within(steps).queryByRole('button', { name: DONE.steps.publish })).toBeNull();
   });
 });
 
@@ -657,7 +772,7 @@ describe('the test panel', () => {
 
     expect(await screen.findByTestId('app-chat')).toHaveTextContent('chat: Chat');
     expect(screen.getByTestId('test-not-published')).toHaveTextContent(TEXT.notPublishedHint);
-    expect(screen.queryByText(/This app is disabled/)).not.toBeInTheDocument();
+    expect(screen.queryByText(en.admin.apps.test.disabled)).not.toBeInTheDocument();
   });
 
   test('a published app carries no such hint', async () => {
@@ -718,6 +833,29 @@ describe('the test panel', () => {
     ).toBeNull();
     expect(screen.queryByTestId('app-chat')).not.toBeInTheDocument();
     expect(mockFetchAppDetails).not.toHaveBeenCalled();
+  });
+
+  test('without a model it leads a full admin to the page where one is set up', async () => {
+    mockFetchModels.mockResolvedValue([]);
+    await renderEditor({ user: { id: 'admin', permissions: { adminAccess: true } } });
+
+    fireEvent.click(testButton());
+
+    const setup = await screen.findByRole('link', {
+      name: en.admin.apps.create.noModel.actionAdmin
+    });
+    expect(setup).toHaveAttribute('href', '/admin/models');
+  });
+
+  test('a model list that could not be loaded is not read as "no model"', async () => {
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+    mockFetchModels.mockRejectedValue(new Error('offline'));
+    await renderEditor();
+
+    fireEvent.click(testButton());
+
+    expect(await screen.findByTestId('app-chat')).toBeInTheDocument();
+    expect(screen.queryByText(en.admin.apps.create.noModel.title)).not.toBeInTheDocument();
   });
 
   test('explains that only chat apps can be tested in it', async () => {

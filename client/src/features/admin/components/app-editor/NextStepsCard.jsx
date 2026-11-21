@@ -14,11 +14,14 @@ const LINK_CLASS =
  * and conversation starters, check who can use it, publish it. A link opens
  * the part of the editor it names; the steps do not tick themselves.
  *
- * The card knows no path and no group: it reports the step, and the page
- * decides what the step opens.
+ * The card knows no path and opens nothing itself: the page does, through the
+ * three callbacks.
  *
  * @param {object} props
- * @param {(step: {id: string, group?: string}) => void} props.onStep - The author chose a step.
+ * @param {(groupId: string) => void} props.onOpenGroup - A step that lives in a group of
+ *   the editor (`app-form/editorGroups.js`) was chosen.
+ * @param {() => void} props.onTest - "Test it with a real example".
+ * @param {() => void} props.onPublish - "Publish".
  * @param {() => void} props.onDismiss - "Hide these steps".
  * @param {boolean} [props.published=false] - The app is published; "Publish" is then left out.
  * @param {boolean} [props.focusHeading=false] - Move the focus to the heading when the card
@@ -28,7 +31,9 @@ const LINK_CLASS =
  * @returns {JSX.Element}
  */
 function NextStepsCard({
-  onStep,
+  onOpenGroup,
+  onTest,
+  onPublish,
   onDismiss,
   published = false,
   focusHeading = false,
@@ -43,6 +48,11 @@ function NextStepsCard({
   }, [focusHeading]);
 
   const steps = NEXT_STEPS.filter(step => !(published && step.id === 'publish'));
+  const choose = step => {
+    if (step.group) onOpenGroup(step.group);
+    else if (step.id === 'publish') onPublish();
+    else onTest();
+  };
 
   return (
     <section
@@ -68,7 +78,11 @@ function NextStepsCard({
       <ul className="mt-3 list-disc space-y-1.5 pl-5 text-gray-700 dark:text-gray-300">
         {steps.map(step => (
           <li key={step.id}>
-            <button type="button" className={LINK_CLASS} onClick={() => onStep(step)}>
+            <button
+              type="button"
+              className={`${LINK_CLASS} align-top`}
+              onClick={() => choose(step)}
+            >
               {t(step.labelKey)}
             </button>
           </li>

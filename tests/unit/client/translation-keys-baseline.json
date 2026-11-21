@@ -1073,26 +1073,6 @@
     "admin.prompts.status.disabled",
     "admin.prompts.status.enabled"
   ],
-  "shared/components/DualModeEditor.jsx": [
-    "admin.editor.allValid",
-    "admin.editor.errorCount",
-    "admin.editor.formMode",
-    "admin.editor.jsonMode",
-    "admin.editor.moreErrors",
-    "admin.editor.noFormComponent",
-    "admin.editor.noFormComponentDesc",
-    "admin.editor.reset",
-    "admin.editor.unsavedChanges",
-    "admin.editor.validationErrors",
-    "admin.editor.validationSummary"
-  ],
-  "shared/components/IconPicker.jsx": [
-    "admin.apps.edit.iconCount",
-    "admin.apps.edit.iconCountFiltered",
-    "admin.apps.edit.noIconsFound",
-    "admin.apps.edit.searchIcons",
-    "admin.apps.edit.selectIcon"
-  ],
   "shared/components/ModelDetailsPopup.jsx": [
     "admin.models.details.apiConfiguration",
     "admin.models.details.apiUrl",
@@ -1112,17 +1092,6 @@
     "admin.models.details.supportsTools",
     "admin.models.details.technicalDetails",
     "admin.models.details.usageStats"
-  ],
-  "shared/components/MonacoJsonEditor.jsx": [
-    "admin.editor.errorAtLine",
-    "admin.editor.format",
-    "admin.editor.formatJson",
-    "admin.editor.invalidJson",
-    "admin.editor.jsonEditor",
-    "admin.editor.loadingEditor",
-    "admin.editor.validate",
-    "admin.editor.validateJson",
-    "admin.editor.validationErrors"
   ],
   "shared/components/ShortLinkDetailsPopup.jsx": [
     "admin.shortlinks.appId",

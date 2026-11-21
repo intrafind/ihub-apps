@@ -3586,14 +3586,7 @@
         "test": "Testen",
         "hideTest": "Test ausblenden",
         "testHint": "Die gespeicherte App neben dem Editor ausprobieren",
-        "openDisabledHint": "Aktivieren und speichern Sie die App, um sie zu öffnen",
-        "save": "Speichern",
-        "saveAndExit": "Speichern & schließen",
-        "saveHint": "Speichern und weiter bearbeiten (Strg+S / ⌘S)",
-        "saving": "Wird gespeichert...",
         "saved": "App gespeichert",
-        "created": "App erstellt",
-        "idRequired": "Die App-ID ist erforderlich",
         "integrations": {
           "title": "Angebundene Systeme",
           "desc": "Installierte Integrationen binden. Auf einzelne Aktionen einschränken und den Bereich festlegen, mit dem Benutzer starten.",
@@ -3868,7 +3861,8 @@
           "partial": "Sie sehen nur die Gruppen, die Sie verwalten. Möglicherweise können weitere Personen sie nutzen; fragen Sie einen Administrator.",
           "noOwnGroups": "Keine der Gruppen, die Sie verwalten, darf diese App bisher nutzen. Möglicherweise können andere Personen sie nutzen; fragen Sie einen Administrator.",
           "savesFirst": "Ihre ungespeicherten Änderungen werden zuerst gespeichert.",
-          "noModel": "Es ist kein KI-Modell verfügbar. Benutzer sehen „Keine Modelle verfügbar“."
+          "noModel": "Es ist kein KI-Modell verfügbar. Benutzer sehen „Keine Modelle verfügbar“.",
+          "notSignedIn": "Personen, die nicht angemeldet sind, können diese App nutzen."
         },
         "unpublish": {
           "action": "Zurückziehen",
@@ -3881,7 +3875,8 @@
           "body": "Geben Sie einer Ihrer Gruppen Zugriff und testen Sie dann."
         },
         "access": {
-          "everyoneSignedIn": "Alle, die sich anmelden"
+          "everyoneSignedIn": "Alle, die sich anmelden",
+          "everyone": "Alle, auch Personen, die nicht angemeldet sind"
         },
         "liveHint": "Benutzer erhalten die Änderung, sobald Sie speichern.",
         "fieldsNeedAttention_one": "1 Feld benötigt Ihre Aufmerksamkeit.",
@@ -3956,7 +3951,7 @@
         "settingsDesc": "Jeder Schalter blendet ein Bedienelement im Chat ein oder aus.",
         "enableModelSelection": "Benutzer können das KI-Modell wählen",
         "enableOutputFormat": "Benutzer können das Antwortformat wählen",
-        "enableChatHistory": "Benutzer können „Frühere Nachrichten berücksichtigen“ ausschalten",
+        "enableChatHistory": "Benutzer können „Chatverlauf in Anfragen einbeziehen“ ausschalten",
         "enableStyleControl": "Benutzer können den Antwortstil wählen",
         "skillsTitle": "Skills",
         "workflowsTitle": "Workflows",
@@ -3993,21 +3988,15 @@
         "autoSendPrompt": "Beim Klick sofort senden",
         "automaticMode": "Automatisch (Sprachaktivierung)",
         "azureService": "Azure Speech",
-        "back": "Zurück zu den Apps",
         "basicInfo": "Grundlegende Informationen",
         "basicInfoDesc": "Grundlegende Konfiguration und Metadaten der App",
-        "cancel": "Abbrechen",
         "category": "Kategorie",
         "color": "Farbe",
         "compareMode": "Vergleichsmodus",
         "compareModeDesc": "Benutzer können zwei Modelle gleichzeitig befragen und die Antworten nebeneinander vergleichen",
         "compareModeNote": "Wenn aktiviert, können Benutzer den Vergleichsmodus einschalten, um ihre Eingabe an zwei verschiedene Modelle zu senden und die Antworten nebeneinander zu sehen. Dafür muss der Vergleichsmodus auch auf Plattformebene aktiviert sein.",
-        "configureNewApp": "Neue App konfigurieren",
-        "configureNewAppDesc": "Richten Sie die Konfiguration Ihrer neuen iHub-App im Formular oder im JSON-Editor ein.",
         "customService": "Eigener Dienst",
         "customServiceHost": "Host des eigenen Dienstes",
-        "editAppConfig": "App-Konfiguration bearbeiten",
-        "editAppConfigDesc": "Ändern Sie die App-Konfiguration im Formular oder im JSON-Editor.",
         "enableCompareMode": "Vergleichsmodus aktivieren",
         "enableExport": "Export aktivieren",
         "enableMagicPrompt": "Magic Prompt aktivieren",
@@ -4038,10 +4027,10 @@
         "noAppData": "Keine App-Daten verfügbar",
         "noModelsSelected": "Keine Einschränkung – alle verfügbaren Modelle können mit dieser App verwendet werden",
         "openInNewTab": "In neuem Tab öffnen",
-        "outputFormat": "Ausgabeformat",
+        "outputFormat": "Antwortformat",
         "predefinedValuesHint": "Optionale Vorschläge, die bei der Eingabe als Autovervollständigung angeboten werden.",
         "predefinedValuesHintSelect": "Optionen, die in der Auswahlliste zur Verfügung stehen.",
-        "preferredModel": "Bevorzugtes Modell",
+        "preferredModel": "KI-Modell",
         "redirectConfig": "Weiterleitungskonfiguration",
         "redirectConfigDesc": "Das Verhalten der Weiterleitung konfigurieren",
         "redirectUrl": "Weiterleitungs-URL",
@@ -4057,10 +4046,6 @@
         "skillsDesc": "Legen Sie fest, welche Agent-Skills in dieser App verfügbar sind",
         "skillsHelper": "Suchen und wählen Sie Skills aus, um sie dieser App hinzuzufügen. Klicken Sie auf ausgewählte Skills, um sie zu entfernen.",
         "speechRecognitionService": "Spracherkennungsdienst",
-        "subtitleEdit": "Einstellungen und Konfiguration der App ändern",
-        "subtitleNew": "Eine neue iHub-App konfigurieren",
-        "titleEdit": "App bearbeiten",
-        "titleNew": "Neue App hinzufügen",
         "tools": "Tools",
         "toolsDesc": "Wie das Modell die Tools der Integrationen verwendet, die diese App einbindet",
         "typeChat": "Chat",
@@ -4070,7 +4055,41 @@
         "uploadDesc": "Das Hochladen von Dateien und Bildern konfigurieren",
         "validationErrorsExist": "Bitte beheben Sie die Validierungsfehler vor dem Speichern",
         "workflowsDesc": "Verknüpfen Sie Workflows mit dieser App. Benutzer können sie im Chat mit @workflow-id auslösen.",
-        "workflowsHelper": "Suchen und wählen Sie Workflows aus, die in dieser App verfügbar sein sollen. Benutzer können sie im Chat mit @workflow-id auslösen."
+        "workflowsHelper": "Suchen und wählen Sie Workflows aus, die in dieser App verfügbar sein sollen. Benutzer können sie im Chat mit @workflow-id auslösen.",
+        "selectIcon": "Symbol auswählen",
+        "searchIcons": "Symbole suchen…",
+        "noIconsFound": "Keine Symbole gefunden",
+        "iconCount": "{{count}} Symbole verfügbar",
+        "iconCountFiltered": "{{filtered}} von {{total}} Symbolen",
+        "summary": {
+          "standardModel": "Standardmodell",
+          "webSearchOn": "Websuche an",
+          "webSearchOff": "Websuche aus",
+          "connectedSystems_one": "{{count}} angebundenes System",
+          "connectedSystems_other": "{{count}} angebundene Systeme",
+          "allConnectedSystems": "alle angebundenen Systeme",
+          "uploadOn": "Upload an",
+          "uploadOff": "Upload aus",
+          "featuresOn": "{{features}} an",
+          "featureExport": "Export",
+          "featureFeedback": "Feedback",
+          "singleLine": "Einzeilig",
+          "multiLine": "Mehrzeilig",
+          "microphoneOn": "Mikrofon an",
+          "microphoneOff": "Mikrofon aus",
+          "settingsOn": "{{on}} von {{total}} an",
+          "groups_one": "{{count}} Gruppe",
+          "groups_other": "{{count}} Gruppen",
+          "noGroups": "Noch keine Gruppe",
+          "ownGroups_one": "{{count}} der Gruppen, die Sie verwalten",
+          "ownGroups_other": "{{count}} der Gruppen, die Sie verwalten",
+          "noOwnGroups": "Keine der Gruppen, die Sie verwalten"
+        },
+        "modelTitle": "KI-Modell",
+        "modelDesc": "Welches KI-Modell in dieser App antwortet und in welchem Format.",
+        "chatBehaviour": "Chat-Verhalten",
+        "chatBehaviourDesc": "Wie ein Chat mit dieser App beginnt und ob er gespeichert wird.",
+        "standardModel": "Standardmodell"
       },
       "reorder": "Reihenfolge",
       "reorderHelp": "Ziehen Sie eine Zeile oder nutzen Sie die Pfeile, um die Reihenfolge festzulegen, in der Apps für Benutzer erscheinen – in der App-Übersicht, auf der Startseite und in der Seitenleiste. Es werden immer alle Apps aufgelistet, Suche und Filter gelten hier nicht. Gespeichert wird erst mit „Reihenfolge speichern“.",
@@ -4078,7 +4097,6 @@
       "savingOrder": "Reihenfolge wird gespeichert...",
       "openApp": "App öffnen",
       "openAppHint": "App in einem neuen Tab öffnen",
-      "openDisabledHint": "Aktivieren Sie die App, um sie zu öffnen",
       "openMissingFeaturesHint": "Schalten Sie {{features}} ein, um sie zu öffnen",
       "missingInstalledIntegration": "Installierte Integration \"{{id}}\"",
       "missingWebSearchEngine": "Eine Websuchmaschine",
@@ -4091,14 +4109,12 @@
         "close": "Testbereich schließen",
         "unsavedHint": "Sie haben ungespeicherte Änderungen. Speichern Sie, um sie zu testen – der Test startet nach jedem Speichern neu.",
         "chatOnly": "Der Test hier funktioniert für Chat-Apps. Öffnen Sie diese App mit „App öffnen“.",
-        "disabled": "Diese App ist deaktiviert und kann daher nicht im Chat geöffnet werden. Aktivieren und speichern Sie sie, um sie zu testen."
+        "disabled": "Diese App ist nicht veröffentlicht und kann daher nicht im Chat geöffnet werden. Veröffentlichen Sie sie, um sie zu testen."
       },
       "status": {
-        "disabled": "Deaktiviert",
         "hiddenUntilFeature": "Für Benutzer ausgeblendet, bis {{features}} eingeschaltet ist",
         "published": "Veröffentlicht",
-        "notPublished": "Nicht veröffentlicht",
-        "enabled": "Aktiviert"
+        "notPublished": "Nicht veröffentlicht"
       },
       "integrationNames": {
         "jira": "Jira-Integration",
@@ -4239,7 +4255,17 @@
           "categoryHelp": "Benutzer können die App-Liste nach Kategorie filtern.",
           "language": "Sie schreiben auf {{language}}. Weitere Sprachen können Sie im Editor ergänzen.",
           "audience": "Die App startet als „Nicht veröffentlicht“. Bis Sie sie veröffentlichen, können nur Sie und andere, die Apps verwalten, sie öffnen und testen.",
-          "audienceLive": "Alle, die über ihre Gruppe Apps nutzen dürfen, sehen sie, sobald Sie sie erstellen."
+          "audienceLive": "Alle, die über ihre Gruppe Apps nutzen dürfen, sehen sie, sobald Sie sie erstellen.",
+          "colors": {
+            "indigo": "Indigo",
+            "blue": "Blau",
+            "teal": "Türkis",
+            "green": "Grün",
+            "orange": "Orange",
+            "red": "Rot",
+            "pink": "Pink",
+            "gray": "Grau"
+          }
         },
         "draft": {
           "intro": "Die KI hat diesen Entwurf vorbereitet. Prüfen Sie den Text; Sie können alles ändern.",
@@ -4321,14 +4347,16 @@
         "publishConfirm_other": "Diese {{count}} Apps werden für ihre Benutzer sichtbar:",
         "unpublishConfirm_one": "Benutzer können diese App nicht mehr öffnen:",
         "unpublishConfirm_other": "Benutzer können diese {{count}} Apps nicht mehr öffnen:",
-        "noMatch": "Keine App passt zu „{{query}}“."
+        "noMatch": "Keine App passt zu „{{query}}“.",
+        "nothingToPublish": "Alle diese Apps sind bereits veröffentlicht.",
+        "nothingToUnpublish": "Keine dieser Apps ist veröffentlicht.",
+        "openNotPublishedHint": "Nicht veröffentlicht. Öffnen Sie den Editor, um die App zu testen."
       },
       "empty": {
         "title": "Noch keine Apps",
         "body": "Eine App ist ein Assistent für eine Aufgabe, zum Beispiel „Text zusammenfassen“ oder „Fragen zur Reiserichtlinie beantworten“."
       },
       "actions": {
-        "clone": "Klonen",
         "delete": "Löschen",
         "download": "Konfiguration herunterladen",
         "edit": "Bearbeiten",
@@ -4351,7 +4379,6 @@
         "order": "Reihenfolge",
         "status": "Status"
       },
-      "uploadConfig": "Konfiguration hochladen",
       "uploading": "Wird hochgeladen..."
     },
     "features": {
@@ -5317,7 +5344,7 @@
         "installationDisabled": "Diese Installation ist deaktiviert: Eine App, die sie voraussetzt, ist ausgeblendet, andere laufen ohne ihre Aktionen. Aktivieren Sie sie zum Testen.",
         "notGranted": "Ihre Gruppen geben diese Installation nicht frei, daher läuft der Chat ohne ihre Aktionen. Geben Sie sie unter Administration → Gruppen frei.",
         "openGroups": "Gruppen öffnen",
-        "appDisabled": "Diese App ist deaktiviert und kann daher nicht im Chat geöffnet werden. Aktivieren Sie sie im App-Editor, um sie zu testen."
+        "appDisabled": "Diese App ist nicht veröffentlicht und kann daher nicht im Chat geöffnet werden. Veröffentlichen Sie sie im App-Editor, um sie zu testen."
       },
       "actionReview": {
         "new": "Neu",
@@ -8075,7 +8102,26 @@
       "switchToFormTitle": "Zum Formular-Editor wechseln?",
       "switchAction": "Editor wechseln",
       "resetConsequence": "Ihre nicht gespeicherten Änderungen werden verworfen.",
-      "switchConsequence": "Sie haben nicht gespeicherte Änderungen. Beim Wechsel des Editors können einige davon verloren gehen."
+      "switchConsequence": "Sie haben nicht gespeicherte Änderungen. Beim Wechsel des Editors können einige davon verloren gehen.",
+      "formMode": "Formular",
+      "jsonMode": "JSON",
+      "unsavedChanges": "Ungespeicherte Änderungen",
+      "validationErrors": "Validierungsfehler",
+      "allValid": "Alles gültig",
+      "reset": "Zurücksetzen",
+      "noFormComponent": "Keine Formularkomponente",
+      "noFormComponentDesc": "Für diesen Editor wurde keine Formularkomponente angegeben.",
+      "validationSummary": "Validierungsübersicht",
+      "errorCount": "{{count}} Fehler gefunden:",
+      "moreErrors": "... und {{count}} weitere",
+      "jsonEditor": "JSON-Editor",
+      "invalidJson": "Ungültiges JSON",
+      "formatJson": "JSON formatieren",
+      "format": "Formatieren",
+      "validateJson": "JSON validieren",
+      "validate": "Validieren",
+      "loadingEditor": "Editor wird geladen...",
+      "errorAtLine": "Zeile {{line}}: {{message}}"
     },
     "pages": {
       "fields": {

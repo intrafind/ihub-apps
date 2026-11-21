@@ -11,7 +11,8 @@
  * - Unpublish never saves, so an app with an invalid field can be unpublished,
  *   and unsaved edits stay.
  * - After a toggle the page is not dirty because of it.
- * - The page has one control that changes the published state.
+ * - The page has one control that changes the published state (with the real
+ *   form: `app-editor-publish-control.test.jsx`).
  *
  * The page, its parts, the admin API module, the save bar, the access section
  * and the group state are the real ones, with the real English and German
@@ -19,8 +20,6 @@
  * that follows the contract between page and form (see the harness).
  */
 
-import fs from 'fs';
-import path from 'path';
 import '@testing-library/jest-dom';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
@@ -463,26 +462,6 @@ describe('one control that changes the published state', () => {
     expect(screen.queryByRole('button', { name: TEXT.publish.action })).toBeNull();
   });
 
-  test('the form, which the page renders, has no control for it', () => {
-    // The form is a stand-in in this file, so this reads its source: no part of
-    // the form writes the app's `enabled` field or shows the "Enabled" label.
-    const formRoot = path.resolve(__dirname, '../../../client/src/features/admin/components');
-    const sources = [
-      path.join(formRoot, 'AppFormEditor.jsx'),
-      ...fs
-        .readdirSync(path.join(formRoot, 'app-form'))
-        .filter(name => /\.jsx?$/.test(name))
-        .map(name => path.join(formRoot, 'app-form', name))
-    ];
-
-    const offenders = sources.filter(file => {
-      const source = fs.readFileSync(file, 'utf8');
-      return (
-        /handleInputChange\(\s*['"]enabled['"]/.test(source) ||
-        /['"]admin\.apps\.edit\.enabled['"]/.test(source)
-      );
-    });
-
-    expect(offenders.map(file => path.basename(file))).toEqual([]);
-  });
+  // The form is a stand-in in this file. That the real form has no control for
+  // it is checked with the real form in `app-editor-publish-control.test.jsx`.
 });

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 /** The query parameter that names the app to copy: `?from=<id>`. */
@@ -18,6 +18,10 @@ export const COPY_SOURCE_PARAM = 'from';
  *
  * @param {object} options
  * @param {(id: string) => Promise<object>} options.fetchApp - One app, as stored.
+ * @param {(app: object) => Promise<unknown>|null|undefined} [options.prepare] -
+ *   Runs before a source is handed over, whichever way it was chosen (the page
+ *   loads what the copy needs). When it returns a promise, the source waits
+ *   for it. It must be stable; a failure does not stop the copy.
  * @returns {{
  *   requested: boolean,
  *   status: 'idle'|'loading'|'gone'|'failed',
@@ -28,13 +32,32 @@ export const COPY_SOURCE_PARAM = 'from';
  * }} `requested`: the page was opened with a source in its URL. `gone`: that
  *   app does not exist. `failed`: it could not be loaded; `retry()` tries again.
  */
-export function useCopySource({ fetchApp }) {
+export function useCopySource({ fetchApp, prepare }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const fromId = searchParams.get(COPY_SOURCE_PARAM);
   const [requested] = useState(Boolean(fromId));
   const [status, setStatus] = useState(fromId ? 'loading' : 'idle');
   const [source, setSource] = useState(null);
   const [attempt, setAttempt] = useState(0);
+  // Counts the picks, so a pick that is still being prepared cannot replace a later one.
+  const pickRef = useRef(0);
+
+  /**
+   * The caller's preparation for an app: a promise that never rejects, or
+   * null when there is nothing to wait for (the copy then opens at once).
+   */
+  const preparing = useCallback(
+    app => {
+      let wait = null;
+      try {
+        wait = prepare?.(app);
+      } catch {
+        // A preparation that fails does not stop the copy.
+      }
+      return typeof wait?.then === 'function' ? Promise.resolve(wait).catch(() => undefined) : null;
+    },
+    [prepare]
+  );
 
   const dropParam = useCallback(() => {
     setSearchParams(
@@ -51,6 +74,7 @@ export function useCopySource({ fetchApp }) {
     if (!fromId) return undefined;
     let current = true;
     fetchApp(fromId)
+      .then(app => preparing(app)?.then(() => app) ?? app)
       .then(app => {
         if (current) setSource(app);
       })
@@ -67,12 +91,23 @@ export function useCopySource({ fetchApp }) {
     };
     // `dropParam` changes with the URL it rewrites; the request must not repeat for that.
     // eslint-disable-next-line @eslint-react/exhaustive-deps
-  }, [fromId, attempt, fetchApp]);
+  }, [fromId, attempt, fetchApp, preparing]);
 
-  const use = useCallback(app => {
-    setStatus('loading');
-    setSource(app);
-  }, []);
+  const use = useCallback(
+    app => {
+      const pick = (pickRef.current += 1);
+      setStatus('loading');
+      const wait = preparing(app);
+      if (!wait) {
+        setSource(app);
+        return;
+      }
+      void wait.then(() => {
+        if (pickRef.current === pick) setSource(app);
+      });
+    },
+    [preparing]
+  );
 
   const done = useCallback(() => {
     setSource(null);

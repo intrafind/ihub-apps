@@ -1,76 +1,62 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import DynamicLanguageEditor from '../../../../shared/components/DynamicLanguageEditor';
+import AppLanguageField from './AppLanguageField';
 
 /**
- * SystemInstructionsSection - System prompt, message placeholder and prompt template
- * editor for chat apps, extracted from AppFormEditor.
+ * SystemInstructionsSection - the instructions of a chat app (its system
+ * prompt), the hint in the message box and the message template.
  *
- * @component
+ * @param {object} props
+ * @param {object} props.app - The app as the editor holds it.
+ * @param {function(object): void} props.onChange - Receives the changed app.
+ * @param {function} props.t - The translation function.
+ * @param {Object<string, string>} [props.validationErrors] - Messages by field.
+ * @returns {JSX.Element}
  */
 function SystemInstructionsSection({ app, onChange, t, validationErrors = {} }) {
-  const handleLocalizedChange = (field, value) => {
-    onChange({
-      ...app,
-      [field]: value
-    });
-  };
+  const set = (field, value) => onChange({ ...app, [field]: value });
 
   return (
     <div className="bg-white dark:bg-gray-800 shadow-sm px-4 py-5 sm:rounded-lg sm:p-6">
       <div className="md:grid md:grid-cols-3 md:gap-6">
         <div className="md:col-span-1">
           <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
-            {t('admin.apps.edit.systemInstructions', 'System Instructions')}
+            {t('admin.apps.edit.systemInstructions')}
           </h3>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            {t(
-              'admin.apps.edit.systemInstructionsDesc',
-              'System prompts that define the app behavior'
-            )}
+            {t('admin.apps.edit.systemInstructionsDesc')}
           </p>
         </div>
         <div className="mt-5 md:col-span-2 md:mt-0">
-          <DynamicLanguageEditor
-            label={
-              <span>
-                {t('admin.apps.edit.systemInstructions', 'System Instructions')}
-                <span className="text-red-500 ml-1">*</span>
-              </span>
-            }
+          <AppLanguageField
+            label={t('admin.apps.edit.systemInstructions')}
             value={app.system || {}}
-            onChange={value => handleLocalizedChange('system', value)}
+            onChange={value => set('system', value)}
+            required={true}
             type="textarea"
-            placeholder={{
-              en: 'Enter system instructions in English',
-              de: 'Systeminstruktionen auf Deutsch eingeben'
-            }}
             className="mb-6"
             error={validationErrors.system}
             name="system"
           />
 
-          <DynamicLanguageEditor
-            label={t('admin.apps.edit.messagePlaceholder', 'Message Placeholder')}
+          <AppLanguageField
+            label={t('admin.apps.edit.messagePlaceholder')}
+            help={t('admin.apps.edit.messagePlaceholderHelp')}
             value={app.messagePlaceholder || {}}
-            onChange={value => handleLocalizedChange('messagePlaceholder', value)}
-            placeholder={{
-              en: 'Enter message placeholder in English',
-              de: 'Nachrichtenplatzhalter auf Deutsch eingeben'
-            }}
+            onChange={value => set('messagePlaceholder', value)}
             className="mb-6"
+            name="messagePlaceholder"
           />
 
-          <DynamicLanguageEditor
-            label={t('admin.apps.edit.prompt', 'Prompt Template')}
+          <AppLanguageField
+            label={t('admin.apps.edit.prompt')}
+            // The placeholder is text for the reader, not a value to fill in.
+            help={t('admin.apps.edit.promptHelp', { content: '{{content}}' })}
             value={app.prompt || {}}
-            onChange={value => handleLocalizedChange('prompt', value)}
+            onChange={value => set('prompt', value)}
             type="textarea"
-            placeholder={{
-              en: 'Enter prompt template in English',
-              de: 'Prompt-Vorlage auf Deutsch eingeben'
-            }}
+            name="prompt"
           />
         </div>
       </div>

@@ -3089,14 +3089,7 @@
         "test": "Test",
         "hideTest": "Hide test",
         "testHint": "Chat with the saved app next to the editor",
-        "openDisabledHint": "Enable the app and save to open it",
-        "save": "Save",
-        "saveAndExit": "Save & Exit",
-        "saveHint": "Save and keep editing (Ctrl+S / ⌘S)",
-        "saving": "Saving...",
         "saved": "App saved",
-        "created": "App created",
-        "idRequired": "App ID is required",
         "integrations": {
           "title": "Connected systems",
           "desc": "Bind installed integrations. Narrow them to some actions, and set the scope users start with.",
@@ -3371,7 +3364,8 @@
           "partial": "You see only the groups you manage. Other people may also be able to use it; ask an administrator.",
           "noOwnGroups": "None of the groups you manage can use this app yet. Other people may be able to use it; ask an administrator.",
           "savesFirst": "Your unsaved changes are saved first.",
-          "noModel": "No AI model is available. Users will see \"No models available\"."
+          "noModel": "No AI model is available. Users will see \"No models available\".",
+          "notSignedIn": "People who are not signed in can use this app."
         },
         "unpublish": {
           "action": "Unpublish",
@@ -3384,7 +3378,8 @@
           "body": "Give one of your groups access, then test it."
         },
         "access": {
-          "everyoneSignedIn": "Everyone who signs in"
+          "everyoneSignedIn": "Everyone who signs in",
+          "everyone": "Everyone, including people who are not signed in"
         },
         "liveHint": "Users get the change as soon as you save.",
         "fieldsNeedAttention_one": "1 field needs your attention.",
@@ -3459,7 +3454,7 @@
         "settingsDesc": "Each switch shows or hides one control in the chat.",
         "enableModelSelection": "Users can choose the AI model",
         "enableOutputFormat": "Users can choose the answer format",
-        "enableChatHistory": "Users can switch off \"Remember earlier messages\"",
+        "enableChatHistory": "Users can switch off \"Include chat history in requests\"",
         "enableStyleControl": "Users can choose the response style",
         "skillsTitle": "Skills",
         "workflowsTitle": "Workflows",
@@ -3496,21 +3491,15 @@
         "autoSendPrompt": "Send immediately when clicked",
         "automaticMode": "Automatic (Voice Activation)",
         "azureService": "Azure Speech",
-        "back": "Back to Apps",
         "basicInfo": "Basic Information",
         "basicInfoDesc": "Basic app configuration and metadata",
-        "cancel": "Cancel",
         "category": "Category",
         "color": "Color",
         "compareMode": "Compare Mode",
         "compareModeDesc": "Allow users to query two models simultaneously and compare their responses side-by-side",
         "compareModeNote": "When enabled, users can activate compare mode to send their input to two different models and view the responses side-by-side. The platform-level compare mode feature must also be enabled for this to work.",
-        "configureNewApp": "Configure New App",
-        "configureNewAppDesc": "Set up the configuration for your new iHub app using the form interface or JSON editor.",
         "customService": "Custom Service",
         "customServiceHost": "Custom Service Host",
-        "editAppConfig": "Edit App Configuration",
-        "editAppConfigDesc": "Modify the app configuration using the form interface or raw JSON editor.",
         "enableCompareMode": "Enable Compare Mode",
         "enableExport": "Enable Export",
         "enableMagicPrompt": "Enable Magic Prompt",
@@ -3541,10 +3530,10 @@
         "noAppData": "No app data available",
         "noModelsSelected": "No restriction — all available models can be used with this app",
         "openInNewTab": "Open in New Tab",
-        "outputFormat": "Output Format",
+        "outputFormat": "Answer format",
         "predefinedValuesHint": "Optional suggested values that can be used as autocomplete options.",
         "predefinedValuesHintSelect": "Options that will be available in the dropdown menu.",
-        "preferredModel": "Preferred Model",
+        "preferredModel": "AI model",
         "redirectConfig": "Redirect Configuration",
         "redirectConfigDesc": "Configure the redirect behavior",
         "redirectUrl": "Redirect URL",
@@ -3560,10 +3549,6 @@
         "skillsDesc": "Configure which agent skills are available for this app",
         "skillsHelper": "Search and select skills to add to this app. Click on selected skills to remove them.",
         "speechRecognitionService": "Speech Recognition Service",
-        "subtitleEdit": "Modify app settings and configuration",
-        "subtitleNew": "Configure a new iHub application",
-        "titleEdit": "Edit App",
-        "titleNew": "Add New App",
         "tools": "Tools",
         "toolsDesc": "How the model uses the tools of the integrations this app binds",
         "typeChat": "Chat",
@@ -3573,7 +3558,41 @@
         "uploadDesc": "Configure file and image upload capabilities",
         "validationErrorsExist": "Please fix validation errors before saving",
         "workflowsDesc": "Attach workflows to this app. Users can trigger them in chat with @workflow-id.",
-        "workflowsHelper": "Search and select workflows to make available in this app. Users can trigger them with @workflow-id in chat."
+        "workflowsHelper": "Search and select workflows to make available in this app. Users can trigger them with @workflow-id in chat.",
+        "selectIcon": "Select an icon",
+        "searchIcons": "Search icons…",
+        "noIconsFound": "No icons found",
+        "iconCount": "{{count}} icons available",
+        "iconCountFiltered": "{{filtered}} of {{total}} icons",
+        "summary": {
+          "standardModel": "Standard model",
+          "webSearchOn": "Web search on",
+          "webSearchOff": "Web search off",
+          "connectedSystems_one": "{{count}} connected system",
+          "connectedSystems_other": "{{count}} connected systems",
+          "allConnectedSystems": "all connected systems",
+          "uploadOn": "Upload on",
+          "uploadOff": "Upload off",
+          "featuresOn": "{{features}} on",
+          "featureExport": "export",
+          "featureFeedback": "feedback",
+          "singleLine": "Single line",
+          "multiLine": "Multi-line",
+          "microphoneOn": "microphone on",
+          "microphoneOff": "microphone off",
+          "settingsOn": "{{on}} of {{total}} on",
+          "groups_one": "{{count}} group",
+          "groups_other": "{{count}} groups",
+          "noGroups": "No group yet",
+          "ownGroups_one": "{{count}} of the groups you manage",
+          "ownGroups_other": "{{count}} of the groups you manage",
+          "noOwnGroups": "None of the groups you manage"
+        },
+        "modelTitle": "AI model",
+        "modelDesc": "Which AI model answers in this app, and in which format.",
+        "chatBehaviour": "Chat behavior",
+        "chatBehaviourDesc": "How a chat with this app starts and whether it is stored.",
+        "standardModel": "Standard model"
       },
       "reorder": "Reorder",
       "reorderHelp": "Drag a row or use the arrows to set the order apps appear in for users — in the apps browser, on the start page and in the sidebar. Every app is listed, so search and filters do not apply here. Nothing is saved until you choose \"Save order\".",
@@ -3581,7 +3600,6 @@
       "savingOrder": "Saving order...",
       "openApp": "Open app",
       "openAppHint": "Open the app in a new tab",
-      "openDisabledHint": "Enable the app to open it",
       "openMissingFeaturesHint": "Turn on {{features}} to open it",
       "missingInstalledIntegration": "Installed integration \"{{id}}\"",
       "missingWebSearchEngine": "A web search engine",
@@ -3594,14 +3612,12 @@
         "close": "Close test panel",
         "unsavedHint": "You have unsaved changes. Save to test them — the test restarts after every save.",
         "chatOnly": "Testing here works for chat apps. Use Open app to try this app.",
-        "disabled": "This app is disabled, so it cannot be opened in the chat. Enable it and save to test it."
+        "disabled": "This app is not published, so it cannot be opened in the chat. Publish it to test it."
       },
       "status": {
-        "disabled": "Disabled",
         "hiddenUntilFeature": "Hidden from users until {{features}} is on",
         "published": "Published",
-        "notPublished": "Not published",
-        "enabled": "Enabled"
+        "notPublished": "Not published"
       },
       "integrationNames": {
         "jira": "Jira integration",
@@ -3742,7 +3758,17 @@
           "categoryHelp": "Users can filter the app list by category.",
           "language": "You are writing in {{language}}. You can add other languages in the editor.",
           "audience": "The app starts as \"Not published\". Only you and others who manage apps can open and test it until you publish it.",
-          "audienceLive": "Everyone who may use apps through their group sees it as soon as you create it."
+          "audienceLive": "Everyone who may use apps through their group sees it as soon as you create it.",
+          "colors": {
+            "indigo": "Indigo",
+            "blue": "Blue",
+            "teal": "Teal",
+            "green": "Green",
+            "orange": "Orange",
+            "red": "Red",
+            "pink": "Pink",
+            "gray": "Gray"
+          }
         },
         "draft": {
           "intro": "The AI prepared this draft. Check the text; you can change everything.",
@@ -3824,14 +3850,16 @@
         "publishConfirm_other": "These {{count}} apps become visible to their users:",
         "unpublishConfirm_one": "Users can no longer open this app:",
         "unpublishConfirm_other": "Users can no longer open these {{count}} apps:",
-        "noMatch": "No app matches \"{{query}}\"."
+        "noMatch": "No app matches \"{{query}}\".",
+        "nothingToPublish": "All of these apps are already published.",
+        "nothingToUnpublish": "None of these apps is published.",
+        "openNotPublishedHint": "Not published. Open the editor to test the app."
       },
       "empty": {
         "title": "No apps yet",
         "body": "An app is an assistant for one task, for example \"Summarize a text\" or \"Answer questions about our travel policy\"."
       },
       "actions": {
-        "clone": "Clone",
         "delete": "Delete",
         "download": "Download Config",
         "edit": "Edit",
@@ -3854,7 +3882,6 @@
         "order": "Order",
         "status": "Status"
       },
-      "uploadConfig": "Upload Config",
       "uploading": "Uploading..."
     },
     "features": {
@@ -4820,7 +4847,7 @@
         "installationDisabled": "This installation is disabled: an app that requires it is hidden, others run without its actions. Enable it to test.",
         "notGranted": "Your groups do not grant this installation, so the chat runs without its actions. Grant it under Admin → Groups.",
         "openGroups": "Open groups",
-        "appDisabled": "This app is disabled, so it cannot be opened in the chat. Enable it in the app editor to test it."
+        "appDisabled": "This app is not published, so it cannot be opened in the chat. Publish it in the app editor to test it."
       },
       "actionReview": {
         "new": "New",
@@ -7578,7 +7605,26 @@
       "switchToFormTitle": "Switch to the form editor?",
       "switchAction": "Switch editor",
       "resetConsequence": "Your unsaved changes are discarded.",
-      "switchConsequence": "You have unsaved changes. Switching editors may lose some of them."
+      "switchConsequence": "You have unsaved changes. Switching editors may lose some of them.",
+      "formMode": "Form",
+      "jsonMode": "JSON",
+      "unsavedChanges": "Unsaved changes",
+      "validationErrors": "Validation errors",
+      "allValid": "All valid",
+      "reset": "Reset",
+      "noFormComponent": "No Form Component",
+      "noFormComponentDesc": "No form component provided for this editor.",
+      "validationSummary": "Validation Summary",
+      "errorCount": "{{count}} error(s) found:",
+      "moreErrors": "... and {{count}} more",
+      "jsonEditor": "JSON Editor",
+      "invalidJson": "Invalid JSON",
+      "formatJson": "Format JSON",
+      "format": "Format",
+      "validateJson": "Validate JSON",
+      "validate": "Validate",
+      "loadingEditor": "Loading editor...",
+      "errorAtLine": "Line {{line}}: {{message}}"
     },
     "pages": {
       "fields": {

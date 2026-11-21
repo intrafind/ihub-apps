@@ -1,13 +1,10 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-
-const NOT_LOADED = Object.freeze({ loading: true, failed: false, view: null });
+import { useCallback, useState } from 'react';
 
 /**
- * Publishing and unpublishing an app from its editor, and the view that says
- * who can use it.
+ * Publishing and unpublishing an app from its editor.
  *
  * Both actions change only the published flag on the server. They are not a
  * save of the form:
@@ -25,17 +22,15 @@ const NOT_LOADED = Object.freeze({ loading: true, failed: false, view: null });
  * @param {object} options
  * @param {string} options.appId
  * @param {boolean} options.isDirty - The editor has unsaved changes.
- * @param {(appId: string) => Promise<object>} options.loadAccess - Resolves with the
- *   content-access view `{ scope, groups, audience }`.
  * @param {(appId: string, published: boolean) => Promise<unknown>} options.setPublished -
  *   Sets the flag on the server.
  * @param {() => Promise<boolean>} options.saveFirst - Saves the form; resolves with
  *   whether it was saved.
  * @param {(published: boolean) => void} options.onChanged - The flag was set.
  * @param {(error: unknown) => string} options.describeError - A failed request as a sentence.
+ * @param {() => void} [options.onAskPublish] - The publish dialog opens: the moment to
+ *   ask again who can use the app.
  * @returns {{
- *   access: {loading: boolean, failed: boolean, view: object|null},
- *   setAccessView: (view: object) => void,
  *   dialog: 'publish'|'unpublish'|null,
  *   busy: boolean,
  *   error: string|null,
@@ -43,69 +38,36 @@ const NOT_LOADED = Object.freeze({ loading: true, failed: false, view: null });
  *   askUnpublish: () => void,
  *   cancel: () => void,
  *   confirm: () => Promise<void>
- * }}
+ * }} `error` is why the flag could not be set; the dialog stays open with it.
+ *
+ * @example
+ * const publishing = useAppPublishing({ appId, isDirty, setPublished, saveFirst: save,
+ *   onChanged: enabled => editor.applySaved({ enabled }), describeError });
+ * <button onClick={publishing.askPublish}>Publish</button>
  */
 export function useAppPublishing({
   appId,
   isDirty,
-  loadAccess,
   setPublished,
   saveFirst,
   onChanged,
-  describeError
+  describeError,
+  onAskPublish
 }) {
-  const [accessState, setAccessState] = useState({ appId: null, ...NOT_LOADED });
-  const access = accessState.appId === appId ? accessState : NOT_LOADED;
   const [dialog, setDialog] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
-  // The newest request wins: the dialog asks again when it opens.
-  const requestRef = useRef(0);
 
-  const loadAccessRef = useRef(loadAccess);
-  loadAccessRef.current = loadAccess;
-
-  const refreshAccess = useCallback(async () => {
-    const request = ++requestRef.current;
-    setAccessState(held => (held.appId === appId ? { ...held, loading: true } : held));
-    try {
-      const view = await loadAccessRef.current(appId);
-      if (request !== requestRef.current) return;
-      setAccessState({ appId, loading: false, failed: false, view });
-    } catch {
-      if (request !== requestRef.current) return;
-      setAccessState({ appId, loading: false, failed: true, view: null });
-    }
-  }, [appId]);
-
-  useEffect(() => {
-    void refreshAccess();
-    return () => {
-      requestRef.current += 1;
-    };
-  }, [refreshAccess]);
-
-  /** What the access section saved is newer than anything still on its way. */
-  const setAccessView = useCallback(
-    view => {
-      requestRef.current += 1;
-      setAccessState({ appId, loading: false, failed: false, view });
-    },
-    [appId]
-  );
-
-  const open = useCallback(kind => {
+  const askPublish = () => {
     setError(null);
-    setDialog(kind);
+    setDialog('publish');
+    onAskPublish?.();
+  };
+
+  const askUnpublish = useCallback(() => {
+    setError(null);
+    setDialog('unpublish');
   }, []);
-
-  const askPublish = useCallback(() => {
-    open('publish');
-    // Groups may have changed since the page loaded; say who sees the app now.
-    void refreshAccess();
-  }, [open, refreshAccess]);
-
-  const askUnpublish = useCallback(() => open('unpublish'), [open]);
 
   const cancel = useCallback(() => {
     setDialog(null);
@@ -132,17 +94,7 @@ export function useAppPublishing({
     }
   };
 
-  return {
-    access,
-    setAccessView,
-    dialog,
-    busy,
-    error,
-    askPublish,
-    askUnpublish,
-    cancel,
-    confirm
-  };
+  return { dialog, busy, error, askPublish, askUnpublish, cancel, confirm };
 }
 
 export default useAppPublishing;

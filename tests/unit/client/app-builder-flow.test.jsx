@@ -33,6 +33,7 @@ const mockApi = {
   fetchAppStartTemplates: jest.fn(),
   generateAppDraft: jest.fn(),
   makeAdminApiCall: jest.fn(),
+  reorderApps: jest.fn(),
   toggleApps: jest.fn()
 };
 jest.mock('../../../client/src/api/adminApi', () => ({
@@ -45,7 +46,7 @@ jest.mock('../../../client/src/api/adminApi', () => ({
   generateAppDraft: (...args) => mockApi.generateAppDraft(...args),
   getAdminApiErrorMessage: err => err?.message || 'error',
   makeAdminApiCall: (...args) => mockApi.makeAdminApiCall(...args),
-  reorderApps: jest.fn(),
+  reorderApps: (...args) => mockApi.reorderApps(...args),
   toggleApps: (...args) => mockApi.toggleApps(...args)
 }));
 
@@ -56,6 +57,13 @@ jest.mock('../../../client/src/api', () => ({
 }));
 jest.mock('../../../client/src/api/integrationsAdminApi', () => ({
   fetchInstalledIntegrations: jest.fn().mockResolvedValue({ items: [] })
+}));
+
+// The loader of another language's texts: the real one fetches them from the server.
+const mockLanguages = { load: jest.fn() };
+jest.mock('../../../client/src/services/i18nService', () => ({
+  __esModule: true,
+  default: { loadFullTranslations: (...args) => mockLanguages.load(...args) }
 }));
 
 // What the page reads about the installation and the person.
@@ -190,6 +198,7 @@ beforeEach(async () => {
     throw apiProblem(404, { code: 'NOT_FOUND', detail: 'App not found' });
   });
   mockApi.createAdminApp.mockImplementation(async payload => payload);
+  mockLanguages.load.mockResolvedValue(undefined);
 });
 
 // A state update outside act() means a test ended, or went on, before the page had settled.
@@ -567,8 +576,9 @@ describe('copy start (?from=<id>)', () => {
       )
     ).toBeInTheDocument();
     expect(screen.queryByText(/Started from the template/)).not.toBeInTheDocument();
-    // A reload now brings back the draft instead of a fresh copy.
-    expect(where()).toBe('NEW:/admin/apps/new');
+    // A reload now brings back the draft instead of a fresh copy. The router
+    // applies a change of the URL as a transition, which may land a moment later.
+    await waitFor(() => expect(where()).toBe('NEW:/admin/apps/new'));
   });
 
   it('keeps the languages of the source and drops the lineage; one click creates it', async () => {
@@ -596,6 +606,51 @@ describe('copy start (?from=<id>)', () => {
     expect(payload.upload.fileUpload.maxFileSizeMB).toBe(5);
     expect(appConfigSchema.safeParse(payload).success).toBe(true);
     expect(where()).toBe('EDITOR:/admin/apps/travel-policy-copy?created=1');
+  });
+
+  describe('in a UI that holds only the texts of its own language, as in the browser', () => {
+    const loadGerman = async language => {
+      mockI18n.addResourceBundle(language, 'translation', de, true, true);
+    };
+    beforeEach(() => {
+      mockI18n.removeResourceBundle('de', 'translation');
+    });
+    afterEach(() => {
+      mockI18n.addResourceBundle('de', 'translation', de, true, true);
+    });
+
+    it('loads the other language of the name, so each name gets its own "(copy)"', async () => {
+      mockLanguages.load.mockImplementation(loadGerman);
+      await openCopy();
+      expect(mockLanguages.load.mock.calls).toEqual([['de']]);
+      await submit();
+      expect(lastPayload().name).toEqual({
+        en: 'Travel policy (copy)',
+        de: 'Reiserichtlinie (Kopie)'
+      });
+    });
+
+    it('does the same for an app picked from the list', async () => {
+      mockLanguages.load.mockImplementation(loadGerman);
+      await openStart();
+      fireEvent.click(screen.getByRole('button', { name: CREATE.start.other }));
+      fireEvent.click(screen.getByRole('button', { name: CREATE.start.copy }));
+      const dialog = await screen.findByRole('dialog', { name: CREATE.copy.heading });
+      fireEvent.click(await within(dialog).findByRole('button', { name: /Travel policy/ }));
+      await screen.findByRole('heading', { level: 1, name: CREATE.essentials.heading.copy });
+      expect(mockLanguages.load.mock.calls).toEqual([['de']]);
+      await submit();
+      expect(lastPayload().name.de).toBe('Reiserichtlinie (Kopie)');
+    });
+
+    it('opens the copy all the same when that language cannot be loaded', async () => {
+      mockLanguages.load.mockRejectedValue(new Error('offline'));
+      await openCopy();
+      expect(nameField()).toHaveValue('Travel policy (copy)');
+      await submit();
+      expect(mockApi.createAdminApp).toHaveBeenCalledTimes(1);
+      expect(lastPayload().name.de).toBe('Reiserichtlinie (copy)');
+    });
   });
 
   it('after the author changed the instructions, says so and stores them in one language', async () => {
@@ -627,6 +682,11 @@ describe('copy start (?from=<id>)', () => {
     expect(
       screen.getByText('You are writing in German. You can add other languages in the editor.')
     ).toBeInTheDocument();
+    // The page itself stays in the author's language: the category names are English.
+    fireEvent.click(screen.getByRole('button', { name: CREATE.essentials.details }));
+    const categories = within(screen.getByLabelText(CREATE.essentials.category));
+    expect(categories.getByRole('option', { name: 'Utility' })).toBeInTheDocument();
+    expect(categories.queryByRole('option', { name: 'Werkzeuge' })).not.toBeInTheDocument();
   });
 
   it('copies an app without instructions without asking for some', async () => {
@@ -645,7 +705,7 @@ describe('copy start (?from=<id>)', () => {
     expect(await screen.findByText(CREATE.copy.sourceGone)).toBeInTheDocument();
     expect(await screen.findByRole('button', { name: 'Start empty' })).toBeInTheDocument();
     expect(await screen.findByRole('button', { name: /Text Summarizer/ })).toBeInTheDocument();
-    expect(where()).toBe('NEW:/admin/apps/new');
+    await waitFor(() => expect(where()).toBe('NEW:/admin/apps/new'));
   });
 
   it('offers to retry when the app to copy could not be loaded', async () => {
@@ -860,6 +920,34 @@ describe('Essentials screen', () => {
     expect(tips).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByText(CREATE.essentials.tips.role)).toBeInTheDocument();
     expect(screen.getByText(CREATE.essentials.tips.limits)).toBeInTheDocument();
+  });
+
+  it('lets the author pick an icon from a named list, which Escape closes, and sends the pick', async () => {
+    await startEmpty();
+    fillEssentials();
+    // The button is named by its label and by the icon it shows.
+    const trigger = screen.getByRole('button', { name: 'Icon chat-bubbles' });
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(trigger);
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('button', { name: 'chat-bubbles' })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+
+    // Escape closes the list and nothing else: the screen and its input stay.
+    fireEvent.keyDown(screen.getByRole('textbox', { name: /searchIcons|Search icons/ }), {
+      key: 'Escape'
+    });
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    expect(trigger).toHaveFocus();
+    expect(nameField()).toHaveValue('Plain-language summary');
+
+    fireEvent.click(trigger);
+    fireEvent.click(screen.getByRole('button', { name: 'globe' }));
+    expect(screen.getByRole('button', { name: 'Icon globe' })).toHaveFocus();
+    await submit();
+    expect(lastPayload().icon).toBe('globe');
   });
 
   it('lets the author pick a colour and a category, and sends both', async () => {
@@ -1351,6 +1439,72 @@ describe('apps list', () => {
     fireEvent.click(within(row).getByRole('button', { name: /more actions/i }));
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Duplicate' }));
     expect(where()).toBe(`NEW:/admin/apps/new?from=${id}`);
+  });
+
+  describe('"Upload a config file" works as before', () => {
+    /** A chosen file as the page reads it (jsdom's File has no `text()`). */
+    const chosen = (name, content) => ({ name, text: async () => content });
+
+    async function upload(file) {
+      renderList();
+      await screen.findByText('Travel policy');
+      expect(screen.getByRole('button', { name: 'Upload a config file' })).toBeInTheDocument();
+      await act(async () => {
+        fireEvent.change(document.querySelector('input[type="file"]'), {
+          target: { files: [file] }
+        });
+      });
+    }
+
+    it('stores the file as it is, with the "enabled" value it carries, and reloads the list', async () => {
+      const config = {
+        id: 'imported',
+        name: { en: 'Imported' },
+        description: { en: 'From a file.' },
+        system: { en: 'Be brief.' },
+        enabled: true,
+        parentId: 'chat'
+      };
+      await upload(chosen('app-imported.json', JSON.stringify(config)));
+      expect(mockApi.createAdminApp).toHaveBeenCalledTimes(1);
+      expect(mockApi.createAdminApp).toHaveBeenCalledWith(config, { origin: 'upload' });
+      // Once for the page, once after the upload.
+      expect(mockApi.fetchAdminApps).toHaveBeenCalledTimes(2);
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    });
+
+    it.each([
+      ['a file that is not JSON by name', chosen('app.txt', '{}'), 'Please select a JSON file'],
+      [
+        'a file that cannot be parsed',
+        chosen('app.json', '{ not json'),
+        'Invalid JSON file format'
+      ],
+      [
+        'a file without the required fields',
+        chosen('app.json', JSON.stringify({ id: 'x' })),
+        /missing required fields/
+      ]
+    ])('refuses %s and sends nothing', async (_case, file, message) => {
+      await upload(file);
+      expect(await screen.findByText(message)).toBeInTheDocument();
+      expect(mockApi.createAdminApp).not.toHaveBeenCalled();
+    });
+  });
+
+  it('"Reorder" works as before: it lists every app and saves the order shown', async () => {
+    mockApi.reorderApps.mockResolvedValue({});
+    renderList('/admin/apps?q=travel');
+    await screen.findByText('Travel policy');
+    fireEvent.click(screen.getByRole('button', { name: 'Reorder' }));
+    // Every app, whatever the search says; an app that is not published is marked.
+    expect(screen.getByText('Chat')).toBeInTheDocument();
+    expect(screen.getByText('(Not published)')).toBeInTheDocument();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save order' }));
+    });
+    // `order` first (Travel policy has 7), then by name.
+    expect(mockApi.reorderApps).toHaveBeenCalledWith(['travel-policy', 'chat', 'draft-app']);
   });
 
   it.each([

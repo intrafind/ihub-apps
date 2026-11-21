@@ -13,12 +13,14 @@ import {
   fetchAppStartTemplates,
   generateAppDraft
 } from '../../../api/adminApi';
+import i18nService from '../../../services/i18nService';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 import { apiErrorMessage } from '../../../utils/apiErrorMessage';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
+import { copyLabelWith, loadCopyLanguages } from '../components/app-create/copyLanguages';
 import CreateHeader from '../components/app-create/CreateHeader';
 import CreateNotices, { EssentialsNotice } from '../components/app-create/CreateNotices';
 import DescribeSlot from '../components/app-create/DescribeSlot';
@@ -36,6 +38,7 @@ import { useAppDraft } from '../components/app-create/useAppDraft';
 import { useCopySource } from '../components/app-create/useCopySource';
 import { useCreateResources } from '../components/app-create/useCreateResources';
 import { useCreateSubmit } from '../components/app-create/useCreateSubmit';
+import { useScreenTitle } from '../components/app-create/useScreenTitle';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import { appCategoryOptions, contentLanguage } from '../utils/appDraft';
 
@@ -48,6 +51,8 @@ const MARKETPLACE_PATH = '/admin/marketplace';
 // A fresh list: a model that was connected a minute ago must be found.
 const loadModels = () => fetchModels({ skipCache: true });
 const loadUiConfig = () => fetchUIConfig();
+// The UI holds its own language; "(copy)" in another language of a name is loaded.
+const loadLanguage = language => i18nService.loadFullTranslations(language);
 
 /**
  * "New app": the one page every way of creating an app leads to (the list
@@ -69,7 +74,8 @@ function AdminAppCreatePage() {
   const { user } = useAuth();
   const featureFlags = useFeatureFlags();
 
-  const copy = useCopySource({ fetchApp: fetchAdminApp });
+  const prepareCopy = useCallback(app => loadCopyLanguages(app, { i18n, loadLanguage }), [i18n]);
+  const copy = useCopySource({ fetchApp: fetchAdminApp, prepare: prepareCopy });
   const draft = useAppDraft({ restore: !copy.requested });
   const { state, begin, describe, deriveId, setExtras, back, reset, forget } = draft;
   const resources = useCreateResources({
@@ -141,7 +147,7 @@ function AdminAppCreatePage() {
         uiLanguage: i18n.language,
         platformDefault: platformLanguage,
         isTaken,
-        copyLabel: (name, lng) => t('admin.apps.create.copy.nameSuffix', { name, lng })
+        copyLabel: copyLabelWith(t)
       })
     );
     copy.done();
@@ -164,13 +170,7 @@ function AdminAppCreatePage() {
 
   const heading =
     state.screen === 'essentials' ? t(HEADING_KEYS[state.start]) : t('admin.apps.create.title');
-  useEffect(() => {
-    const previous = document.title;
-    document.title = previous ? `${heading} | ${previous}` : heading;
-    return () => {
-      document.title = previous;
-    };
-  }, [heading]);
+  useScreenTitle(heading);
 
   const leaveScreen = kind => {
     setLeaving(null);

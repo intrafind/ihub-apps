@@ -6,7 +6,8 @@
  * two screens and what the tab keeps of it (`draftState.js`), what each start
  * hands over and what the create request carries (`createFlow.js`), the
  * checks before the request and the reading of the server's answer
- * (`createErrors.js`), and the keys picked by a value (`createKeys.js`).
+ * (`createErrors.js`), the keys picked by a value (`createKeys.js`), and the
+ * name of a copy in every language of its source (`copyLanguages.js`).
  *
  * The last block checks the files of the slice themselves: their size, their
  * colour classes, and that no reusable part names a path or carries fallback
@@ -15,12 +16,19 @@
 
 import fs from 'fs';
 import path from 'path';
+import i18next from 'i18next';
 import en from '../../../shared/i18n/en.json';
 import de from '../../../shared/i18n/de.json';
 import emailTemplate from '../../../server/appTemplates/email-composer.json';
 import { appConfigSchema } from '../../../server/validators/appConfigSchema.js';
 import { newAppDefaults } from '../../../shared/appDefaults.js';
 import { APP_CREATE_ORIGINS } from '../../../shared/appGenerator.js';
+import {
+  COPY_NAME_KEY,
+  copyLabelWith,
+  copyLanguagesToLoad,
+  loadCopyLanguages
+} from '../../../client/src/features/admin/components/app-create/copyLanguages.js';
 import {
   CREATE_ERROR_KEYS,
   idError,
@@ -246,6 +254,91 @@ describe('what each start hands to the Essentials screen', () => {
     expect(derivedAppId('要約', () => false)).toBe('app');
     expect(derivedAppId('', () => false)).toBe('');
     expect(derivedAppId('   ', () => false)).toBe('');
+  });
+});
+
+describe('the name of a copy in every language of its source', () => {
+  /** A UI as the browser has it: the texts of its own language only, until another is loaded. */
+  async function uiWith(languages) {
+    const all = { en: { translation: en }, de: { translation: de } };
+    const instance = i18next.createInstance();
+    await instance.init({
+      lng: languages[0],
+      fallbackLng: 'en',
+      resources: Object.fromEntries(
+        ['en', 'de'].map(lng => [lng, languages.includes(lng) ? all[lng] : { translation: {} }])
+      ),
+      interpolation: { escapeValue: false }
+    });
+    const loadLanguage = jest.fn(async lng => {
+      if (all[lng])
+        instance.addResourceBundle(lng, 'translation', all[lng].translation, true, true);
+    });
+    return { i18n: instance, loadLanguage };
+  }
+
+  it('is a text in both languages', () => {
+    expect(lookup(en, COPY_NAME_KEY)).toBe('{{name}} (copy)');
+    expect(lookup(de, COPY_NAME_KEY)).toBe('{{name}} (Kopie)');
+  });
+
+  it('needs nothing loaded when the UI holds every language of the name', async () => {
+    const { i18n, loadLanguage } = await uiWith(['en', 'de']);
+    expect(copyLanguagesToLoad(SOURCE_APP, i18n)).toEqual([]);
+    // Null, not a promise: the copy opens at once.
+    expect(loadCopyLanguages(SOURCE_APP, { i18n, loadLanguage })).toBeNull();
+    expect(loadLanguage).not.toHaveBeenCalled();
+  });
+
+  it('an English UI loads German for a name that has a German version', async () => {
+    const { i18n, loadLanguage } = await uiWith(['en']);
+    const label = copyLabelWith(i18n.t.bind(i18n));
+    // Before: the fallback language answers, which is the defect this module prevents.
+    expect(label('Reiserichtlinie', 'de')).toBe('Reiserichtlinie (copy)');
+    expect(copyLanguagesToLoad(SOURCE_APP, i18n)).toEqual(['de']);
+
+    await loadCopyLanguages(SOURCE_APP, { i18n, loadLanguage });
+    expect(loadLanguage.mock.calls).toEqual([['de']]);
+    expect(label('Reiserichtlinie', 'de')).toBe('Reiserichtlinie (Kopie)');
+    expect(label('Travel policy', 'en')).toBe('Travel policy (copy)');
+    expect(copyLanguagesToLoad(SOURCE_APP, i18n)).toEqual([]);
+
+    const start = beginCopy(SOURCE_APP, { uiLanguage: 'en', copyLabel: label });
+    expect(start.draft.name).toEqual({ en: 'Travel policy (copy)', de: 'Reiserichtlinie (Kopie)' });
+  });
+
+  it('a name stored as plain text, or no name, needs no language', async () => {
+    const { i18n } = await uiWith(['en']);
+    expect(copyLanguagesToLoad({ name: 'Old app' }, i18n)).toEqual([]);
+    expect(copyLanguagesToLoad({}, i18n)).toEqual([]);
+    expect(copyLanguagesToLoad(null, i18n)).toEqual([]);
+  });
+
+  it('a language that cannot be loaded does not stop the copy', async () => {
+    const { i18n } = await uiWith(['en']);
+    const failing = jest.fn(() => {
+      throw new Error('offline');
+    });
+    await expect(
+      loadCopyLanguages(SOURCE_APP, { i18n, loadLanguage: failing })
+    ).resolves.toBeUndefined();
+    const rejecting = jest.fn().mockRejectedValue(new Error('offline'));
+    await expect(
+      loadCopyLanguages(SOURCE_APP, { i18n, loadLanguage: rejecting })
+    ).resolves.toBeUndefined();
+    // The fallback language names the copy.
+    expect(copyLabelWith(i18n.t.bind(i18n))('Reiserichtlinie', 'de')).toBe(
+      'Reiserichtlinie (copy)'
+    );
+  });
+
+  it('does not wait longer than it was told for a language that never arrives', async () => {
+    const { i18n } = await uiWith(['en']);
+    const never = jest.fn(() => new Promise(() => {}));
+    const started = Date.now();
+    await loadCopyLanguages(SOURCE_APP, { i18n, loadLanguage: never, waitMs: 20 });
+    expect(never).toHaveBeenCalledWith('de');
+    expect(Date.now() - started).toBeLessThan(1000);
   });
 });
 

@@ -15,8 +15,8 @@ const CREATED_PARAM = 'created';
  * next-steps card, and takes the marker out of the URL, so that a reload or a
  * shared link does not repeat it.
  *
- * The card then stays for this app until the author hides it; that is
- * remembered per app in the browser (`nextSteps.js`).
+ * The card then stays for this app, across visits, until the author hides it;
+ * that is remembered per app in the browser (`nextSteps.js`).
  *
  * @param {object} options
  * @param {string} options.appId
@@ -42,9 +42,10 @@ export function useCreatedArrival({ appId, ready, onArrive }) {
   useEffect(() => {
     if (!created || !ready) return;
     const latest = latestRef.current;
+    showNextSteps(appId);
     // The URL is outside React: this is the one place it turns into state.
     // eslint-disable-next-line @eslint-react/set-state-in-effect
-    setSteps({ appId, shown: showNextSteps(appId), arrived: true });
+    setSteps({ appId, shown: true, arrived: true });
     latest.onArrive();
     const params = new URLSearchParams(latest.location.search);
     params.delete(CREATED_PARAM);

@@ -192,7 +192,7 @@ function EssentialsScreen({
             touch('category');
             editMeta('category', category);
           }}
-          language={state.language}
+          language={String(i18n.language || state.language).split('-')[0]}
         />
 
         <div className="space-y-2 border-t border-gray-200 dark:border-gray-700 pt-4">

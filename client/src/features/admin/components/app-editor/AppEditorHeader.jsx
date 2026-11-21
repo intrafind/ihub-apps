@@ -8,12 +8,12 @@ import { PRIMARY_BUTTON_CLASS, SECONDARY_BUTTON_CLASS } from '../formStyles';
 import { DEFAULT_APP_COLOR, DEFAULT_APP_ICON } from '../../../../../../shared/appDefaults.js';
 
 const STATUS_CLASS =
-  'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium';
+  'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium';
 const STATUS_TONE = {
   published:
-    'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/30 text-green-800 dark:text-green-200',
+    'border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/30 text-green-800 dark:text-green-200',
   notPublished:
-    'border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300'
+    'border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300'
 };
 const DOT_CLASS = {
   published: 'h-2 w-2 rounded-full bg-green-600 dark:bg-green-400',

@@ -139,9 +139,9 @@ const isNotFound = error => (error?.status ?? error?.response?.status) === 404;
  *
  * An app that is not published runs here too: the server hands it to the
  * people who manage apps, and the panel says that nobody else sees it. When
- * the author's groups do not grant the app, the load answers 404 and the
- * panel says what to do instead of "could not be loaded". Without a model the
- * panel explains that instead of showing a chat that cannot answer.
+ * the author's groups do not grant the app, its load answers 404 and the panel
+ * says what to do. Without a model it says that instead of showing a chat
+ * that cannot answer.
  *
  * Beside the editor on wide screens, full screen on narrow ones. Full screen it
  * covers the editor, so it is a dialog there (see `useOverlayPanel`): focus
@@ -154,15 +154,14 @@ const isNotFound = error => (error?.status ?? error?.response?.status) === 404;
  * @param {number} props.reloadKey - Changes whenever the app was saved
  * @param {Function} props.onClose - Close the panel
  * @param {boolean} [props.runsUnpublished] - Whether an app that is not published runs
- *   here. Follows `UI_CREATES_PUBLISHED`: where new apps start published, the server
- *   serves no unpublished app and the panel only says so.
+ *   here; where new apps start published (`UI_CREATES_PUBLISHED`), the panel only says
+ *   that it is not.
  * @param {boolean} [props.noModel=false] - No AI model is available to the author
  * @param {string|null} [props.modelSetupHref] - Where a model is set up, for someone
  *   who may open that page
  * @param {() => void} [props.onOpenAccess] - Opens "Who can use this app" in the editor
- * @param {number} [props.focusToken=0] - Moves the focus to the panel whenever it changes
- *   to another number above 0: the author followed a link to the test. Opening the
- *   panel with its button leaves the focus where it is.
+ * @param {number} [props.focusToken=0] - A new number above 0 moves the focus to the
+ *   panel: the author followed a link to the test. Its button leaves the focus alone.
  */
 function AppTestPanel({
   appId,
@@ -202,14 +201,7 @@ function AppTestPanel({
 
   let body;
   if (!runs) {
-    body = (
-      <PanelMessage icon="eye-slash">
-        {t(
-          'admin.apps.test.disabled',
-          'This app is disabled, so it cannot be opened in the chat. Enable it and save to test it.'
-        )}
-      </PanelMessage>
-    );
+    body = <PanelMessage icon="eye-slash">{t('admin.apps.test.disabled')}</PanelMessage>;
   } else if (noModel) {
     body = (
       <div className="flex-1 overflow-y-auto p-4">

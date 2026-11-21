@@ -6,8 +6,9 @@
  * their card is shown for an app. Pure, apart from the browser's local
  * storage.
  *
- * The card appears when the editor is opened for a new app and stays until
- * the author hides it; that choice is remembered per app in this browser.
+ * The card appears when the editor is opened for a new app and stays, across
+ * visits, until the author hides it. Which apps still show it is remembered in
+ * this browser.
  *
  * @module features/admin/components/app-editor/nextSteps
  */
@@ -41,55 +42,52 @@ export const NEXT_STEPS = Object.freeze([
 
 const STORAGE_PREFIX = 'ihub.admin.appNextSteps.';
 const SHOWN = 'shown';
-const HIDDEN = 'hidden';
 
 const storageKey = appId => `${STORAGE_PREFIX}${appId}`;
 
-/** Local storage can be switched off or full; the card then shows for this visit only. */
-function read(appId) {
+/**
+ * Whether the next-steps card is shown for an app.
+ *
+ * Local storage can be switched off or full; the card then shows for this
+ * visit only, which the caller holds in its own state.
+ *
+ * @param {string} appId
+ * @returns {boolean}
+ */
+export function nextStepsShown(appId) {
+  if (!appId) return false;
   try {
-    return window.localStorage.getItem(storageKey(appId));
+    return window.localStorage.getItem(storageKey(appId)) === SHOWN;
   } catch {
-    return null;
+    return false;
   }
 }
 
-function write(appId, value) {
+/**
+ * Shows the card for an app that was just created, until the author hides it.
+ *
+ * @param {string} appId
+ */
+export function showNextSteps(appId) {
+  if (!appId) return;
   try {
-    window.localStorage.setItem(storageKey(appId), value);
+    window.localStorage.setItem(storageKey(appId), SHOWN);
   } catch {
     // Not remembered; nothing else depends on it.
   }
 }
 
 /**
- * Whether the next-steps card is shown for an app.
- *
- * @param {string} appId
- * @returns {boolean}
- */
-export function nextStepsShown(appId) {
-  return Boolean(appId) && read(appId) === SHOWN;
-}
-
-/**
- * Shows the card for an app that was just created. An author who hid the
- * card for this app keeps it hidden.
- *
- * @param {string} appId
- * @returns {boolean} Whether the card is shown now.
- */
-export function showNextSteps(appId) {
-  if (!appId || read(appId) === HIDDEN) return false;
-  write(appId, SHOWN);
-  return true;
-}
-
-/**
- * Hides the card for an app, for good.
+ * Hides the card for an app. Nothing is kept about the app afterwards, so an
+ * app that is created later under the same ID gets its card again.
  *
  * @param {string} appId
  */
 export function hideNextSteps(appId) {
-  if (appId) write(appId, HIDDEN);
+  if (!appId) return;
+  try {
+    window.localStorage.removeItem(storageKey(appId));
+  } catch {
+    // Nothing was stored, so there is nothing to forget.
+  }
 }

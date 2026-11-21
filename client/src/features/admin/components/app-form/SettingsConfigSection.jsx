@@ -1,11 +1,25 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
+import { CHECKBOX_CLASS } from '../formStyles';
+
+/** The controls users can be given in the chat: the settings key and its label. */
+const USER_SETTINGS = [
+  { key: 'model', labelKey: 'admin.apps.edit.enableModelSelection' },
+  { key: 'outputFormat', labelKey: 'admin.apps.edit.enableOutputFormat' },
+  { key: 'chatHistory', labelKey: 'admin.apps.edit.enableChatHistory' },
+  { key: 'style', labelKey: 'admin.apps.edit.enableStyleControl' }
+];
+
 /**
- * SettingsConfigSection - Toggles controlling which per-chat settings end
- * users are allowed to change, extracted from AppFormEditor.
+ * SettingsConfigSection - what users can change in a chat with the app. Each
+ * switch shows or hides one control in the chat.
  *
- * @component
+ * @param {object} props
+ * @param {object} props.app - The app as the editor holds it.
+ * @param {function(object): void} props.onChange - Receives the changed app.
+ * @param {function} props.t - The translation function.
+ * @returns {JSX.Element}
  */
 function SettingsConfigSection({ app, onChange, t }) {
   const handleSettingChange = (key, enabled) => {
@@ -23,61 +37,32 @@ function SettingsConfigSection({ app, onChange, t }) {
       <div className="md:grid md:grid-cols-3 md:gap-6">
         <div className="md:col-span-1">
           <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
-            {t('admin.apps.edit.settings', 'User Settings')}
+            {t('admin.apps.edit.settings')}
           </h3>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            {t('admin.apps.edit.settingsDesc', 'Configure which settings users can modify')}
+            {t('admin.apps.edit.settingsDesc')}
           </p>
         </div>
         <div className="mt-5 md:col-span-2 md:mt-0">
           <div className="space-y-4">
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                checked={app.settings?.model?.enabled !== false}
-                onChange={e => handleSettingChange('model', e.target.checked)}
-                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
-              />
-              <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
-                {t('admin.apps.edit.enableModelSelection', 'Enable Model Selection')}
-              </label>
-            </div>
-
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                checked={app.settings?.outputFormat?.enabled !== false}
-                onChange={e => handleSettingChange('outputFormat', e.target.checked)}
-                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
-              />
-              <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
-                {t('admin.apps.edit.enableOutputFormat', 'Enable Output Format Selection')}
-              </label>
-            </div>
-
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                checked={app.settings?.chatHistory?.enabled !== false}
-                onChange={e => handleSettingChange('chatHistory', e.target.checked)}
-                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
-              />
-              <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
-                {t('admin.apps.edit.enableChatHistory', 'Enable Chat History Control')}
-              </label>
-            </div>
-
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                checked={app.settings?.style?.enabled !== false}
-                onChange={e => handleSettingChange('style', e.target.checked)}
-                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
-              />
-              <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
-                {t('admin.apps.edit.enableStyleControl', 'Enable Style Control')}
-              </label>
-            </div>
+            {USER_SETTINGS.map(({ key, labelKey }) => (
+              <div key={key} className="flex items-center">
+                <input
+                  id={`app-settings-${key}`}
+                  name={`settings.${key}.enabled`}
+                  type="checkbox"
+                  checked={app.settings?.[key]?.enabled !== false}
+                  onChange={e => handleSettingChange(key, e.target.checked)}
+                  className={CHECKBOX_CLASS}
+                />
+                <label
+                  htmlFor={`app-settings-${key}`}
+                  className="ml-2 block text-sm text-gray-900 dark:text-gray-100"
+                >
+                  {t(labelKey)}
+                </label>
+              </div>
+            ))}
           </div>
         </div>
       </div>
