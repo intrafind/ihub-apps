@@ -158,14 +158,17 @@ jobs:
 
       - name: Every changed golden is named by a row
         env:
-          GOLDEN_BASE_REF: origin/${{ github.base_ref }}
+          # The branch this pull request is opened against, not github.base_ref: for a pull
+          # request in a stack GitHub starts the workflow as if it targeted the bottom of the
+          # stack, and the changes of the pull requests below would count as its own.
+          GOLDEN_BASE_REF: origin/${{ github.event.pull_request.base.ref }}
           GOLDEN_REQUIRE_BASE: '1'
         run: node --test server/tests/golden/differenceList.test.js
 
       - name: A signature has the approving review of the owner
         env:
           GH_TOKEN: ${{ github.token }}
-          DIFFERENCES_BASE_REF: origin/${{ github.base_ref }}
+          DIFFERENCES_BASE_REF: origin/${{ github.event.pull_request.base.ref }}
           DIFFERENCES_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: node scripts/check-difference-signatures.js
