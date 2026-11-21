@@ -897,6 +897,7 @@ A spec reads what reached the model with `stub.requests('<text of its message>')
 - Sign in as the default admin (`admin` / `password123`) or as one of the two regular users the suite seeds, `e2e-user` and `e2e-other` (`tests/config/agents-scenario.mjs`). Use the second to show that one user cannot see or change what the other owns.
 - `restartServer()` stops the server and starts it again on the same contents directory; `restartServer({ signal: 'SIGKILL' })` does it the hard way. The stub keeps running, with the requests it has seen.
 - Platform settings are read once at startup. A spec that needs another setting restarts the server with an overlay: `restartServer({ overlay: { platform: { … }, features: { … } } })`. The overlay is laid over the seeded `platform.json` and `features.json`; `{ overlay: {} }` goes back to them.
+- The request that sends a chat message waits five minutes for its reply. A spec that needs that reply to be lost sets `window.__ihubStreamTimeoutMs` (milliseconds) with `page.addInitScript` before the page loads, as `long-turn.spec.js` does. Only a development build reads the value (`client/src/api/endpoints/apps.js`), and it can only shorten the timeout; a production build does not contain the name.
 
 #### Tags and the pull request gate
 

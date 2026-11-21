@@ -617,6 +617,7 @@
     "modelTakesNoImage": "Das ausgewählte Modell kann keine Bilder verarbeiten. Wählen Sie ein Modell mit Bilderkennung oder entfernen Sie den Bildanhang.",
     "streamingError": "Ein Fehler ist beim Streaming aufgetreten",
     "connectionLost": "Die Verbindung wurde unterbrochen, bevor die Antwort vollständig war.",
+    "requestTimedOut": "Zeitüberschreitung bei der Anfrage. Der Vorgang hat möglicherweise länger gedauert als erwartet.",
     "runInterrupted": "Diese Antwort wurde unterbrochen: Der Server wurde angehalten, während sie erstellt wurde.",
     "failedToGenerateResponse": "Fehler beim Generieren der Antwort. Bitte versuchen Sie es erneut oder wählen Sie ein anderes Modell.",
     "sessionExpired": "Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an, um fortzufahren.",

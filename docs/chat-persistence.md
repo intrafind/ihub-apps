@@ -1043,6 +1043,25 @@ Temporary chats keep expiring either way.
   than two minutes ago. The liveness signals are those of one host: two
   installations sharing one store are not supported (see the filesystem
   provider below), and recovery would treat the other host's live runs as dead.
+- **A lost reply does not end a turn.** The request that sends a message is
+  answered when the turn ends. When the turn takes longer than the browser
+  waits for that reply (five minutes), or a reverse proxy answers 502 or 504
+  first, the reply is lost and the turn runs on. The browser asks
+  `GET /api/apps/:appId/chat/:chatId/status` and keeps reading the stream while
+  the server reports `processing: true`. A check that fails, or gets no answer
+  within 5 seconds, is repeated after 1, 2 and 4 seconds, so the search ends
+  after 27 seconds at the latest. A turn whose start the stream has already
+  shown is followed whatever the check says (`/status.processing` is per pod,
+  so without sticky sessions another pod may answer that nothing is running).
+  Otherwise, when the server says that nothing is running or all four checks
+  fail, the answer ends with the error of the lost reply: "Request timed out.
+  The operation may have taken longer than expected." after the browser's own
+  timeout, "A server error occurred. Please try again later." after a 502 or
+  504 (that text is English in every language). No path here sends a stop. With the feature
+  **Chat answers on one connection** (`chatPostStream`) the answer arrives on
+  the request that sent the message: there is no separate reply to lose, and
+  the browser sets no overall time limit on that connection, only a limit of
+  60 seconds without data (the server sends a heartbeat every 30).
 - **One in-flight turn per chat, still.** Starting a turn on a chat that is
   already producing aborts the first one. Two tabs on the same chat cannot
   corrupt the stored transcript, but they can cut each other off. The aborted
