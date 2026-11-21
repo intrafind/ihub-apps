@@ -344,11 +344,20 @@ function absolutizeLinks(element) {
 /** Openers and closers of the raw-text elements `dropRawTextElements` knows, by tag list. */
 const rawTextPatterns = new Map();
 
+/** A tag name, or a `|`-separated list of them: nothing else may reach a regex. */
+const TAG_LIST_RE = /^[a-z][a-z0-9-]*(?:\|[a-z][a-z0-9-]*)*$/i;
+
 function rawTextPattern(tag, closing = false) {
+  if (!TAG_LIST_RE.test(tag)) throw new TypeError(`Not a list of tag names: ${tag}`);
   const key = `${closing ? '/' : ''}${tag}`;
   let pattern = rawTextPatterns.get(key);
   if (!pattern) {
-    pattern = new RegExp(`<${closing ? '/' : ''}(${tag})(?=[\\s/>]|$)`, 'gi');
+    // Validated above, so the only regex syntax left is the `|` between names.
+    const names = tag
+      .split('|')
+      .map(name => name.replaceAll(/[.*+?^${}()|[\]\\-]/g, String.raw`\$&`))
+      .join('|');
+    pattern = new RegExp(`<${closing ? '/' : ''}(${names})(?=[\\s/>]|$)`, 'gi');
     rawTextPatterns.set(key, pattern);
   }
   return pattern;
