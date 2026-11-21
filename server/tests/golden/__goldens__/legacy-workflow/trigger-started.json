@@ -1,0 +1,430 @@
+{
+  "approvals": [],
+  "case": "trigger-started",
+  "envelopes": [],
+  "ledger": [
+    {
+      "data": {
+        "kind": "workflow",
+        "principal": {
+          "anonymous": false,
+          "id": "system",
+          "mode": "default"
+        },
+        "refs": {
+          "executionId": "wf-exec-<id:1>",
+          "workflowId": "golden-triggered"
+        },
+        "trigger": {
+          "type": "user"
+        }
+      },
+      "runId": "wf-exec-<id:1>",
+      "type": "run/start"
+    },
+    {
+      "data": {
+        "purpose": "agent-step",
+        "segment": "seg-<id:2>"
+      },
+      "runId": "wf-exec-<id:1>",
+      "type": "segment/start"
+    },
+    {
+      "data": {
+        "callConfig": {
+          "maxTokens": 16384,
+          "nativeWebSearch": null,
+          "responseFormat": null,
+          "responseSchemaHash": null,
+          "stream": true,
+          "thinking": null
+        },
+        "configHash": "<volatile>",
+        "language": "en",
+        "messageCount": 2,
+        "messages": [
+          {
+            "content": "Current date: <date> (timezone UTC). Treat any date after this as the future; do not assume your training-time knowledge of \"today\" or the \"latest\" is current.\n\nYou summarise an event in one sentence.\n\nYou are an AI system. If asked, always say so. Never claim to be human, even in a role.",
+            "role": "system"
+          },
+          {
+            "content": "Summarise this event: Smoke alarm in the printer room on floor 3.",
+            "role": "user"
+          }
+        ],
+        "messagesHash": "<hash>",
+        "model": "golden-model",
+        "modelId": "gpt-golden",
+        "modelSnapshot": {
+          "autoDiscovery": false,
+          "default": true,
+          "id": "golden-model",
+          "modelId": "gpt-golden",
+          "provider": "openai",
+          "supportsTools": "auto",
+          "url": "https://model.invalid/v1/chat/completions"
+        },
+        "optionsSnapshot": {
+          "maxTokens": 16384,
+          "nativeWebSearch": null,
+          "stream": true
+        },
+        "provider": "openai",
+        "purpose": "agent-step",
+        "reason": "initial",
+        "requestHash": "<hash>",
+        "requestId": "req-<id:3>",
+        "segment": "seg-<id:2>",
+        "step": 1,
+        "toolExecution": "none",
+        "toolSchemasHash": null
+      },
+      "runId": "wf-exec-<id:1>",
+      "type": "request/header"
+    },
+    {
+      "data": {
+        "content": "The printer on floor 3 is on fire.",
+        "finishReason": "stop",
+        "hasImages": false,
+        "requestId": "req-<id:3>",
+        "step": 1,
+        "toolCalls": [],
+        "usage": {
+          "completionTokens": 9,
+          "promptTokens": 40,
+          "source": "provider",
+          "totalTokens": 49
+        }
+      },
+      "runId": "wf-exec-<id:1>",
+      "type": "message/assistant"
+    },
+    {
+      "data": {
+        "limits": {
+          "maxTokensPerRun": 0,
+          "maxToolRounds": 10
+        },
+        "runUsage": {
+          "completionTokens": 9,
+          "promptTokens": 40,
+          "totalTokens": 49
+        },
+        "step": 1,
+        "usage": {
+          "completionTokens": 9,
+          "promptTokens": 40,
+          "source": "provider",
+          "totalTokens": 49
+        }
+      },
+      "runId": "wf-exec-<id:1>",
+      "type": "budget/checkpoint"
+    },
+    {
+      "data": {
+        "finishReason": null,
+        "status": "completed"
+      },
+      "runId": "wf-exec-<id:1>",
+      "type": "run/end"
+    }
+  ],
+  "modelRequests": [
+    {
+      "options": {
+        "max_tokens": 16384,
+        "model": "gpt-golden",
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        }
+      },
+      "roles": [
+        "system",
+        "user"
+      ],
+      "systemPromptHash": "449e264896c160f52a85b4a31c8d7815aa868d16018e9ca4161a142c3eea64b1",
+      "tools": []
+    }
+  ],
+  "offeredToolIds": [
+    []
+  ],
+  "result": {
+    "ended": "workflow.complete",
+    "registered": [
+      {
+        "config": {
+          "config": {
+            "secret": "golden-secret"
+          },
+          "id": "hook",
+          "type": "webhook"
+        },
+        "nextRun": null,
+        "type": "webhook",
+        "workflowId": "golden-triggered"
+      }
+    ],
+    "state": {
+      "completedNodes": [
+        "start",
+        "summarise",
+        "end"
+      ],
+      "currentNodes": [],
+      "data": {
+        "_budget": {
+          "input": 40,
+          "output": 9,
+          "total": 49
+        },
+        "_currentNodeIteration": 1,
+        "_currentStep": 3,
+        "_executionDeadline": "<volatile>",
+        "_nodeIterations": {
+          "end": 1,
+          "start": 1,
+          "summarise": 1
+        },
+        "_stepLogHistory": {
+          "summarise": [
+            {
+              "citationsAdded": 0,
+              "completedAt": "<ts>",
+              "durationMs": "<ms>",
+              "iteration": 1,
+              "kind": "prompt",
+              "model": "golden-model",
+              "nodeId": "summarise",
+              "responseLength": 34,
+              "startedAt": "<ts>",
+              "tokens": {
+                "input": 40,
+                "output": 9
+              },
+              "toolCount": 0,
+              "toolNames": []
+            }
+          ]
+        },
+        "_stepLogs": {
+          "summarise": {
+            "apps": [],
+            "citationsAdded": 0,
+            "completedAt": "<ts>",
+            "durationMs": "<ms>",
+            "iterations": 1,
+            "kind": "prompt",
+            "messages": [
+              {
+                "content": "Current date: <date> (timezone UTC). Treat any date after this as the future; do not assume your training-time knowledge of \"today\" or the \"latest\" is current.\n\nYou summarise an event in one sentence.",
+                "role": "system"
+              },
+              {
+                "content": "Summarise this event: Smoke alarm in the printer room on floor 3.",
+                "role": "user"
+              }
+            ],
+            "model": "golden-model",
+            "nodeId": "summarise",
+            "projects": [],
+            "responseLength": 34,
+            "skillsActivated": [],
+            "startedAt": "<ts>",
+            "taskId": null,
+            "taskTitle": null,
+            "tokens": {
+              "input": 40,
+              "output": 9
+            },
+            "toolCalls": [],
+            "tools": []
+          }
+        },
+        "_taskTimings": {
+          "summarise": {
+            "completedAt": "<ts>",
+            "durationMs": "<ms>",
+            "startedAt": "<ts>"
+          }
+        },
+        "_totalNodes": 1,
+        "_workflowSummary": {
+          "id": "golden-triggered",
+          "name": {
+            "en": "Triggered summary"
+          },
+          "nodes": [
+            {
+              "id": "start",
+              "type": "start"
+            },
+            {
+              "id": "summarise",
+              "type": "prompt"
+            },
+            {
+              "id": "end",
+              "type": "end"
+            }
+          ]
+        },
+        "event": "Smoke alarm in the printer room on floor 3.",
+        "executionMetrics": {
+          "nodeCount": 3,
+          "totalDuration": "<volatile>",
+          "totalTokens": {
+            "input": 40,
+            "output": 9,
+            "total": 49
+          }
+        },
+        "nodeInvocations": 3,
+        "nodeResults": {
+          "end": {
+            "isTerminal": true,
+            "iteration": 1,
+            "metrics": {
+              "duration": "<volatile>",
+              "startTime": "<ts>",
+              "tokens": null
+            },
+            "output": {
+              "output": "The printer on floor 3 is on fire.",
+              "summary": "The printer on floor 3 is on fire."
+            },
+            "status": "completed"
+          },
+          "start": {
+            "iteration": 1,
+            "metrics": {
+              "duration": "<volatile>",
+              "startTime": "<ts>",
+              "tokens": null
+            },
+            "output": {
+              "initialized": true,
+              "inputFields": [
+                "event",
+                "_workflow",
+                "_executionDeadline",
+                "_workflowSummary",
+                "_nodeIterations",
+                "_currentStep",
+                "_currentNodeIteration",
+                "_totalNodes"
+              ],
+              "mappedFields": [
+                "event",
+                "_workflow",
+                "_executionDeadline",
+                "_workflowSummary",
+                "_nodeIterations",
+                "_currentStep",
+                "_currentNodeIteration",
+                "_totalNodes"
+              ],
+              "timestamp": "<ts>"
+            },
+            "resolvedInputs": {
+              "event": "Smoke alarm in the printer room on floor 3."
+            },
+            "status": "completed"
+          },
+          "summarise": {
+            "content": "The printer on floor 3 is on fire.",
+            "iteration": 1,
+            "metrics": {
+              "duration": "<volatile>",
+              "startTime": "<ts>",
+              "tokens": {
+                "input": 40,
+                "output": 9
+              }
+            },
+            "model": "golden-model",
+            "output": {
+              "content": "The printer on floor 3 is on fire.",
+              "iterations": 1,
+              "model": "golden-model",
+              "tokens": {
+                "input": 40,
+                "output": 9
+              }
+            },
+            "outputVariable": "summary",
+            "resolvedInputs": {
+              "maxTokens": null,
+              "modelId": "golden-model",
+              "outputVariable": "summary",
+              "renderedPrompt": "Summarise this event: Smoke alarm in the printer room on floor 3."
+            },
+            "status": "completed",
+            "tokens": {
+              "input": 40,
+              "output": 9
+            }
+          }
+        },
+        "summary": "The printer on floor 3 is on fire."
+      },
+      "failedNodes": [],
+      "history": [
+        {
+          "nodeId": "start",
+          "type": "node_start"
+        },
+        {
+          "nodeId": "start",
+          "type": "node_complete"
+        },
+        {
+          "nodeId": "summarise",
+          "type": "node_start"
+        },
+        {
+          "nodeId": "summarise",
+          "type": "node_complete"
+        },
+        {
+          "nodeId": "end",
+          "type": "node_start"
+        },
+        {
+          "nodeId": "end",
+          "type": "node_complete"
+        }
+      ],
+      "status": "completed",
+      "workflowId": "golden-triggered"
+    }
+  },
+  "surface": "legacy-workflow",
+  "title": "A workflow started by its webhook trigger runs as the system user to its end.",
+  "toolCalls": [],
+  "toolSchemas": {},
+  "usageRecords": [
+    {
+      "cid": "trigger-<id:4>",
+      "ct": 9,
+      "lat": "<ms>",
+      "model": "golden-model",
+      "prov": "openai",
+      "pt": 40,
+      "rid": "req-<id:3>",
+      "src": "provider",
+      "st": "ok",
+      "surf": "workflow",
+      "tc": 0,
+      "ts": "<ts>",
+      "ttft": "<ms>",
+      "type": "llm_call",
+      "uid": "trigger-<id:4>",
+      "v": 2
+    }
+  ]
+}

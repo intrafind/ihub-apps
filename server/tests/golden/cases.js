@@ -12,9 +12,25 @@
  * @module tests/golden/cases
  */
 import { harnessCases } from './harnessCases.js';
+import { chatCases } from './surfaces/chat.js';
+import { scheduledTaskCases } from './surfaces/scheduledTask.js';
+import { completionsCases, inferenceAppCases } from './surfaces/inference.js';
+import { appAsToolCases } from './surfaces/appAsTool.js';
+import { a2aCases, mcpCases } from './surfaces/gateway.js';
+import { legacyWorkflowCases } from './surfaces/legacyWorkflow.js';
 
 /** @type {ReadonlyArray<ReturnType<typeof import('./harness.js').defineCase>>} */
-export const CASES = Object.freeze([...harnessCases]);
+export const CASES = Object.freeze([
+  ...harnessCases,
+  ...chatCases,
+  ...scheduledTaskCases,
+  ...completionsCases,
+  ...inferenceAppCases,
+  ...appAsToolCases,
+  ...mcpCases,
+  ...a2aCases,
+  ...legacyWorkflowCases
+]);
 
 {
   const seen = new Set();

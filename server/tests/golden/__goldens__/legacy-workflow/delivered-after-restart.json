@@ -1,0 +1,1694 @@
+{
+  "approvals": [
+    {
+      "data": {
+        "interaction": {
+          "createdAt": "<ts>",
+          "id": "ckpt-<id:3>",
+          "kind": "approval",
+          "ordinal": 1,
+          "origin": "node",
+          "policy": {
+            "fallback": "park",
+            "onTimeout": "fail"
+          },
+          "prompt": {
+            "allowOther": false,
+            "allowSkip": false,
+            "displayData": {
+              "data_research_results": "1. Records are kept for ten years.\n2. Access is logged."
+            },
+            "inputSchema": {
+              "properties": {
+                "feedback": {
+                  "title": "Feedback (optional)",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "inputType": "single_select",
+            "message": "Please review the research results below and decide how to proceed.",
+            "options": [
+              {
+                "label": "Approve & Summarize",
+                "style": "primary",
+                "value": "approve"
+              },
+              {
+                "label": "Reject",
+                "style": "danger",
+                "value": "reject"
+              },
+              {
+                "label": "Request Revision",
+                "style": "secondary",
+                "value": "revise"
+              }
+            ],
+            "showData": [
+              "$.data.research_results"
+            ]
+          },
+          "runId": "workflow-<id:2>",
+          "source": {
+            "checkpointId": "ckpt-<id:3>",
+            "executionId": "workflow-<id:2>",
+            "identityMode": "default",
+            "nodeId": "approval",
+            "nodeName": "Review Research",
+            "principalId": "golden-user"
+          },
+          "status": "pending",
+          "step": 3
+        }
+      },
+      "runId": "workflow-<id:2>",
+      "type": "interaction/raised"
+    },
+    {
+      "data": {
+        "answer": {
+          "approver": {
+            "groups": [],
+            "id": "golden-user",
+            "via": "owner"
+          },
+          "at": "<ts>",
+          "by": "golden-user",
+          "channel": "api",
+          "data": {
+            "feedback": "Keep it short."
+          },
+          "value": "approve"
+        },
+        "interactionId": "ckpt-<id:3>",
+        "kind": "approval"
+      },
+      "runId": "workflow-<id:2>",
+      "type": "interaction/answered"
+    }
+  ],
+  "case": "delivered-after-restart",
+  "envelopes": [
+    {
+      "data": {
+        "kind": "workflow",
+        "refs": {
+          "appId": "desk",
+          "chatId": "<id:1>",
+          "messageId": "msg-1",
+          "workflowId": "approval-workflow"
+        }
+      },
+      "runId": "workflow-<id:2>",
+      "streamId": "<id:1>",
+      "type": "run/started"
+    },
+    {
+      "data": {
+        "executionId": "workflow-<id:2>",
+        "nodeId": "workflow-<id:2>:start:1",
+        "nodeName": "Starting: \"Record keeping\"",
+        "nodeType": "start",
+        "progress": {
+          "chatVisible": true,
+          "workflowName": "Research with Approval"
+        },
+        "status": "running"
+      },
+      "runId": "workflow-<id:2>",
+      "streamId": "<id:1>",
+      "type": "progress/node"
+    },
+    {
+      "data": {
+        "executionId": "workflow-<id:2>",
+        "nodeId": "start",
+        "nodeName": "Start",
+        "nodeType": "start",
+        "progress": {
+          "chatVisible": true,
+          "workflowName": "Research with Approval"
+        },
+        "status": "running"
+      },
+      "runId": "workflow-<id:2>",
+      "streamId": "<id:1>",
+      "type": "progress/node"
+    },
+    {
+      "data": {
+        "executionId": "workflow-<id:2>",
+        "nodeId": "start",
+        "nodeName": "Start",
+        "nodeType": "start",
+        "progress": {
+          "chatVisible": true,
+          "workflowName": "Research with Approval"
+        },
+        "status": "completed"
+      },
+      "runId": "workflow-<id:2>",
+      "streamId": "<id:1>",
+      "type": "progress/node"
+    },
+    {
+      "data": {
+        "executionId": "workflow-<id:2>",
+        "nodeId": "research",
+        "nodeName": "Research Topic",
+        "nodeType": "prompt",
+        "progress": {
+          "chatVisible": true,
+          "workflowName": "Research with Approval"
+        },
+        "status": "running"
+      },
+      "runId": "workflow-<id:2>",
+      "streamId": "<id:1>",
+      "type": "progress/node"
+    },
+    {
+      "data": {
+        "executionId": "workflow-<id:2>",
+        "nodeId": "research",
+        "nodeName": "Research Topic",
+        "nodeType": "prompt",
+        "progress": {
+          "chatVisible": true,
+          "workflowName": "Research with Approval"
+        },
+        "status": "completed"
+      },
+      "runId": "workflow-<id:2>",
+      "streamId": "<id:1>",
+      "type": "progress/node"
+    },
+    {
+      "data": {
+        "executionId": "workflow-<id:2>",
+        "nodeId": "approval",
+        "nodeName": "Review Research",
+        "nodeType": "human",
+        "progress": {
+          "chatVisible": true,
+          "workflowName": "Research with Approval"
+        },
+        "status": "running"
+      },
+      "runId": "workflow-<id:2>",
+      "streamId": "<id:1>",
+      "type": "progress/node"
+    },
+    {
+      "data": {
+        "executionId": "workflow-<id:2>",
+        "nodeId": "approval",
+        "nodeName": "Review Research",
+        "nodeType": "human",
+        "progress": {
+          "chatVisible": true,
+          "workflowName": "Research with Approval"
+        },
+        "status": "paused"
+      },
+      "runId": "workflow-<id:2>",
+      "streamId": "<id:1>",
+      "type": "progress/node"
+    },
+    {
+      "data": {
+        "interaction": {
+          "createdAt": "<ts>",
+          "id": "ckpt-<id:3>",
+          "kind": "approval",
+          "origin": "node",
+          "policy": {
+            "expiresAt": null,
+            "fallback": "park",
+            "onTimeout": "fail",
+            "timeoutMs": null
+          },
+          "prompt": {
+            "allowOther": false,
+            "allowSkip": false,
+            "displayData": {
+              "data_research_results": "1. Records are kept for ten years.\n2. Access is logged."
+            },
+            "inputSchema": {
+              "properties": {
+                "feedback": {
+                  "title": "Feedback (optional)",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "inputType": "single_select",
+            "message": "Please review the research results below and decide how to proceed.",
+            "options": [
+              {
+                "label": "Approve & Summarize",
+                "style": "primary",
+                "value": "approve"
+              },
+              {
+                "label": "Reject",
+                "style": "danger",
+                "value": "reject"
+              },
+              {
+                "label": "Request Revision",
+                "style": "secondary",
+                "value": "revise"
+              }
+            ],
+            "showData": [
+              "$.data.research_results"
+            ]
+          },
+          "runId": "workflow-<id:2>",
+          "source": {
+            "chatId": "<id:1>",
+            "checkpointId": "ckpt-<id:3>",
+            "executionId": "workflow-<id:2>",
+            "nodeId": "approval",
+            "nodeName": "Review Research"
+          },
+          "status": "pending",
+          "step": 0
+        }
+      },
+      "runId": "workflow-<id:2>",
+      "streamId": "<id:1>",
+      "type": "interaction/raised"
+    },
+    {
+      "data": {
+        "interactionId": "ckpt-<id:3>",
+        "reason": "interaction"
+      },
+      "runId": "workflow-<id:2>",
+      "streamId": "<id:1>",
+      "type": "run/paused"
+    },
+    {
+      "data": {
+        "executionId": "workflow-<id:2>",
+        "nodeId": "approval",
+        "nodeName": "Review Research",
+        "nodeType": "human",
+        "progress": {
+          "chatVisible": true,
+          "workflowName": "Research with Approval"
+        },
+        "status": "completed"
+      },
+      "runId": "workflow-<id:2>",
+      "streamId": "<id:1>",
+      "type": "progress/node"
+    }
+  ],
+  "evidence": [
+    {
+      "messageId": "<id:9>",
+      "record": null
+    }
+  ],
+  "httpResponse": {
+    "afterRestart": {
+      "firstRead": {
+        "request": {
+          "method": "GET",
+          "path": "/api/chats/<id:1>"
+        },
+        "response": {
+          "body": {
+            "chat": {
+              "activeRunId": null,
+              "appId": "desk",
+              "createdAt": "<ts>",
+              "hasUnseenActivity": false,
+              "id": "<id:1>",
+              "identityMode": "default",
+              "lastMessageAt": "<ts>",
+              "messageCount": 2,
+              "modelId": "golden-model",
+              "origin": {
+                "createdVia": "ui"
+              },
+              "ownerId": "golden-user",
+              "runIds": [
+                "workflow-<id:2>"
+              ],
+              "settings": null,
+              "status": "active",
+              "title": "Record keeping",
+              "titleSetByUser": false
+            },
+            "messages": [
+              {
+                "clientMessageId": "msg-1",
+                "content": "@approval-workflow Record keeping",
+                "id": "<id:8>",
+                "role": "user",
+                "runId": "workflow-<id:2>",
+                "ts": "<ts>"
+              },
+              {
+                "activity": {
+                  "workflowResult": {
+                    "executionId": "workflow-<id:2>",
+                    "status": "paused",
+                    "workflowName": {
+                      "de": "Recherche mit Genehmigung",
+                      "en": "Research with Approval"
+                    }
+                  }
+                },
+                "content": "",
+                "finishReason": "paused",
+                "id": "<id:10>",
+                "role": "assistant",
+                "runId": "workflow-<id:2>",
+                "ts": "<ts>"
+              }
+            ],
+            "version": 1
+          },
+          "headers": {
+            "content-type": "application/json; charset=utf-8"
+          },
+          "status": 200
+        }
+      },
+      "secondRead": {
+        "request": {
+          "method": "GET",
+          "path": "/api/chats/<id:1>"
+        },
+        "response": {
+          "body": {
+            "chat": {
+              "activeRunId": null,
+              "appId": "desk",
+              "createdAt": "<ts>",
+              "hasUnseenActivity": false,
+              "id": "<id:1>",
+              "identityMode": "default",
+              "lastMessageAt": "<ts>",
+              "messageCount": 2,
+              "modelId": "golden-model",
+              "origin": {
+                "createdVia": "ui"
+              },
+              "ownerId": "golden-user",
+              "runIds": [
+                "workflow-<id:2>"
+              ],
+              "settings": null,
+              "status": "active",
+              "title": "Record keeping",
+              "titleSetByUser": false
+            },
+            "messages": [
+              {
+                "clientMessageId": "msg-1",
+                "content": "@approval-workflow Record keeping",
+                "id": "<id:8>",
+                "role": "user",
+                "runId": "workflow-<id:2>",
+                "ts": "<ts>"
+              },
+              {
+                "activity": {
+                  "outputFormat": "markdown",
+                  "workflowResult": {
+                    "executionId": "workflow-<id:2>",
+                    "status": "completed",
+                    "workflowName": {
+                      "de": "Recherche mit Genehmigung",
+                      "en": "Research with Approval"
+                    }
+                  }
+                },
+                "content": "Records are kept for ten years and every access is logged.",
+                "finishReason": "stop",
+                "id": "<id:9>",
+                "role": "assistant",
+                "runId": "workflow-<id:2>",
+                "ts": "<ts>"
+              }
+            ],
+            "version": 1
+          },
+          "headers": {
+            "content-type": "application/json; charset=utf-8"
+          },
+          "status": 200
+        }
+      },
+      "thirdReadHasTheSameMessages": true
+    },
+    "beforeRestart": {
+      "getStream": {
+        "request": {
+          "accept": "text/event-stream",
+          "method": "GET",
+          "path": "/api/apps/desk/chat/<id:1>"
+        },
+        "response": {
+          "status": 200,
+          "stream": [
+            {
+              "data": {
+                "protocol": 2,
+                "runId": "<id:1>"
+              },
+              "runId": "<id:1>",
+              "type": "stream/connected"
+            },
+            {
+              "data": {
+                "kind": "workflow",
+                "refs": {
+                  "appId": "desk",
+                  "chatId": "<id:1>",
+                  "messageId": "msg-1",
+                  "workflowId": "approval-workflow"
+                }
+              },
+              "runId": "workflow-<id:2>",
+              "type": "run/started"
+            },
+            {
+              "data": {
+                "executionId": "workflow-<id:2>",
+                "nodeId": "workflow-<id:2>:start:1",
+                "nodeName": "Starting: \"Record keeping\"",
+                "nodeType": "start",
+                "progress": {
+                  "chatVisible": true,
+                  "workflowName": "Research with Approval"
+                },
+                "status": "running"
+              },
+              "runId": "workflow-<id:2>",
+              "type": "progress/node"
+            },
+            {
+              "data": {
+                "executionId": "workflow-<id:2>",
+                "nodeId": "start",
+                "nodeName": "Start",
+                "nodeType": "start",
+                "progress": {
+                  "chatVisible": true,
+                  "workflowName": "Research with Approval"
+                },
+                "status": "running"
+              },
+              "runId": "workflow-<id:2>",
+              "type": "progress/node"
+            },
+            {
+              "data": {
+                "executionId": "workflow-<id:2>",
+                "nodeId": "start",
+                "nodeName": "Start",
+                "nodeType": "start",
+                "progress": {
+                  "chatVisible": true,
+                  "workflowName": "Research with Approval"
+                },
+                "status": "completed"
+              },
+              "runId": "workflow-<id:2>",
+              "type": "progress/node"
+            },
+            {
+              "data": {
+                "executionId": "workflow-<id:2>",
+                "nodeId": "research",
+                "nodeName": "Research Topic",
+                "nodeType": "prompt",
+                "progress": {
+                  "chatVisible": true,
+                  "workflowName": "Research with Approval"
+                },
+                "status": "running"
+              },
+              "runId": "workflow-<id:2>",
+              "type": "progress/node"
+            },
+            {
+              "data": {
+                "executionId": "workflow-<id:2>",
+                "nodeId": "research",
+                "nodeName": "Research Topic",
+                "nodeType": "prompt",
+                "progress": {
+                  "chatVisible": true,
+                  "workflowName": "Research with Approval"
+                },
+                "status": "completed"
+              },
+              "runId": "workflow-<id:2>",
+              "type": "progress/node"
+            },
+            {
+              "data": {
+                "executionId": "workflow-<id:2>",
+                "nodeId": "approval",
+                "nodeName": "Review Research",
+                "nodeType": "human",
+                "progress": {
+                  "chatVisible": true,
+                  "workflowName": "Research with Approval"
+                },
+                "status": "running"
+              },
+              "runId": "workflow-<id:2>",
+              "type": "progress/node"
+            },
+            {
+              "data": {
+                "executionId": "workflow-<id:2>",
+                "nodeId": "approval",
+                "nodeName": "Review Research",
+                "nodeType": "human",
+                "progress": {
+                  "chatVisible": true,
+                  "workflowName": "Research with Approval"
+                },
+                "status": "paused"
+              },
+              "runId": "workflow-<id:2>",
+              "type": "progress/node"
+            },
+            {
+              "data": {
+                "interaction": {
+                  "createdAt": "<ts>",
+                  "id": "ckpt-<id:3>",
+                  "kind": "approval",
+                  "origin": "node",
+                  "policy": {
+                    "expiresAt": null,
+                    "fallback": "park",
+                    "onTimeout": "fail",
+                    "timeoutMs": null
+                  },
+                  "prompt": {
+                    "allowOther": false,
+                    "allowSkip": false,
+                    "displayData": {
+                      "data_research_results": "1. Records are kept for ten years.\n2. Access is logged."
+                    },
+                    "inputSchema": {
+                      "properties": {
+                        "feedback": {
+                          "title": "Feedback (optional)",
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "inputType": "single_select",
+                    "message": "Please review the research results below and decide how to proceed.",
+                    "options": [
+                      {
+                        "label": "Approve & Summarize",
+                        "style": "primary",
+                        "value": "approve"
+                      },
+                      {
+                        "label": "Reject",
+                        "style": "danger",
+                        "value": "reject"
+                      },
+                      {
+                        "label": "Request Revision",
+                        "style": "secondary",
+                        "value": "revise"
+                      }
+                    ],
+                    "showData": [
+                      "$.data.research_results"
+                    ]
+                  },
+                  "runId": "workflow-<id:2>",
+                  "source": {
+                    "chatId": "<id:1>",
+                    "checkpointId": "ckpt-<id:3>",
+                    "executionId": "workflow-<id:2>",
+                    "nodeId": "approval",
+                    "nodeName": "Review Research"
+                  },
+                  "status": "pending",
+                  "step": 0
+                }
+              },
+              "runId": "workflow-<id:2>",
+              "type": "interaction/raised"
+            },
+            {
+              "data": {
+                "interactionId": "ckpt-<id:3>",
+                "reason": "interaction"
+              },
+              "runId": "workflow-<id:2>",
+              "type": "run/paused"
+            },
+            {
+              "data": {
+                "executionId": "workflow-<id:2>",
+                "nodeId": "approval",
+                "nodeName": "Review Research",
+                "nodeType": "human",
+                "progress": {
+                  "chatVisible": true,
+                  "workflowName": "Research with Approval"
+                },
+                "status": "completed"
+              },
+              "runId": "workflow-<id:2>",
+              "type": "progress/node"
+            }
+          ]
+        }
+      },
+      "post": {
+        "request": {
+          "body": {
+            "language": "en",
+            "messages": [
+              {
+                "content": "@approval-workflow Record keeping",
+                "messageId": "msg-1",
+                "role": "user"
+              }
+            ],
+            "modelId": "golden-model"
+          },
+          "method": "POST",
+          "path": "/api/apps/desk/chat/<id:1>"
+        },
+        "response": {
+          "body": {
+            "chatId": "<id:1>",
+            "status": "streaming"
+          },
+          "headers": {
+            "content-type": "application/json; charset=utf-8"
+          },
+          "status": 200
+        }
+      }
+    }
+  },
+  "ledger": [
+    {
+      "data": {
+        "kind": "workflow",
+        "principal": {
+          "anonymous": false,
+          "id": "golden-user",
+          "mode": "default"
+        },
+        "refs": {
+          "appId": "desk",
+          "chatId": "<id:1>",
+          "executionId": "workflow-<id:2>",
+          "workflowId": "approval-workflow"
+        },
+        "trigger": {
+          "source": "chat",
+          "type": "tool"
+        }
+      },
+      "runId": "workflow-<id:2>",
+      "type": "run/start"
+    },
+    {
+      "data": {
+        "purpose": "agent-step",
+        "segment": "seg-<id:4>"
+      },
+      "runId": "workflow-<id:2>",
+      "type": "segment/start"
+    },
+    {
+      "data": {
+        "callConfig": {
+          "maxTokens": 16384,
+          "nativeWebSearch": null,
+          "responseFormat": null,
+          "responseSchemaHash": null,
+          "stream": true,
+          "thinking": null
+        },
+        "configHash": "<volatile>",
+        "language": "en",
+        "messageCount": 2,
+        "messages": [
+          {
+            "content": "Current date: <date> (timezone UTC). Treat any date after this as the future; do not assume your training-time knowledge of \"today\" or the \"latest\" is current.\n\nYou are a research assistant. Research the given topic and provide key findings. If you have received feedback from a previous revision, incorporate it into your research.\n\nYou are an AI system. If asked, always say so. Never claim to be human, even in a role.",
+            "role": "system"
+          },
+          {
+            "content": "[Step 2/3, iteration 1] Research the following topic and provide 3-5 key points: Record keeping\n\n\n\nUser instruction: Record keeping",
+            "role": "user"
+          }
+        ],
+        "messagesHash": "<hash>",
+        "model": "golden-model",
+        "modelId": "gpt-golden",
+        "modelSnapshot": {
+          "autoDiscovery": false,
+          "default": true,
+          "id": "golden-model",
+          "modelId": "gpt-golden",
+          "provider": "openai",
+          "supportsTools": "auto",
+          "url": "https://model.invalid/v1/chat/completions"
+        },
+        "optionsSnapshot": {
+          "maxTokens": 16384,
+          "nativeWebSearch": null,
+          "stream": true
+        },
+        "provider": "openai",
+        "purpose": "agent-step",
+        "reason": "initial",
+        "requestHash": "<hash>",
+        "requestId": "req-<id:5>",
+        "segment": "seg-<id:4>",
+        "step": 1,
+        "toolExecution": "none",
+        "toolSchemasHash": null
+      },
+      "runId": "workflow-<id:2>",
+      "type": "request/header"
+    },
+    {
+      "data": {
+        "content": "1. Records are kept for ten years.\n2. Access is logged.",
+        "finishReason": "stop",
+        "hasImages": false,
+        "requestId": "req-<id:5>",
+        "step": 1,
+        "toolCalls": [],
+        "usage": {
+          "completionTokens": 20,
+          "promptTokens": 120,
+          "source": "provider",
+          "totalTokens": 140
+        }
+      },
+      "runId": "workflow-<id:2>",
+      "type": "message/assistant"
+    },
+    {
+      "data": {
+        "limits": {
+          "maxTokensPerRun": 0,
+          "maxToolRounds": 10
+        },
+        "runUsage": {
+          "completionTokens": 20,
+          "promptTokens": 120,
+          "totalTokens": 140
+        },
+        "step": 1,
+        "usage": {
+          "completionTokens": 20,
+          "promptTokens": 120,
+          "source": "provider",
+          "totalTokens": 140
+        }
+      },
+      "runId": "workflow-<id:2>",
+      "type": "budget/checkpoint"
+    },
+    {
+      "data": {
+        "interaction": {
+          "createdAt": "<ts>",
+          "id": "ckpt-<id:3>",
+          "kind": "approval",
+          "ordinal": 1,
+          "origin": "node",
+          "policy": {
+            "fallback": "park",
+            "onTimeout": "fail"
+          },
+          "prompt": {
+            "allowOther": false,
+            "allowSkip": false,
+            "displayData": {
+              "data_research_results": "1. Records are kept for ten years.\n2. Access is logged."
+            },
+            "inputSchema": {
+              "properties": {
+                "feedback": {
+                  "title": "Feedback (optional)",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "inputType": "single_select",
+            "message": "Please review the research results below and decide how to proceed.",
+            "options": [
+              {
+                "label": "Approve & Summarize",
+                "style": "primary",
+                "value": "approve"
+              },
+              {
+                "label": "Reject",
+                "style": "danger",
+                "value": "reject"
+              },
+              {
+                "label": "Request Revision",
+                "style": "secondary",
+                "value": "revise"
+              }
+            ],
+            "showData": [
+              "$.data.research_results"
+            ]
+          },
+          "runId": "workflow-<id:2>",
+          "source": {
+            "checkpointId": "ckpt-<id:3>",
+            "executionId": "workflow-<id:2>",
+            "identityMode": "default",
+            "nodeId": "approval",
+            "nodeName": "Review Research",
+            "principalId": "golden-user"
+          },
+          "status": "pending",
+          "step": 3
+        }
+      },
+      "runId": "workflow-<id:2>",
+      "type": "interaction/raised"
+    },
+    {
+      "data": {
+        "interactionId": "ckpt-<id:3>",
+        "pausedAt": "<ts>",
+        "reason": "interaction"
+      },
+      "runId": "workflow-<id:2>",
+      "type": "run/paused"
+    },
+    {
+      "data": {
+        "purpose": "agent-step",
+        "segment": "seg-<id:6>"
+      },
+      "runId": "workflow-<id:2>",
+      "type": "segment/start"
+    },
+    {
+      "data": {
+        "callConfig": {
+          "maxTokens": 16384,
+          "nativeWebSearch": null,
+          "responseFormat": null,
+          "responseSchemaHash": null,
+          "stream": true,
+          "thinking": null
+        },
+        "configHash": "<volatile>",
+        "language": "en",
+        "messageCount": 2,
+        "messages": [
+          {
+            "content": "Current date: <date> (timezone UTC). Treat any date after this as the future; do not assume your training-time knowledge of \"today\" or the \"latest\" is current.\n\nYou are a writing assistant. Create a concise summary from the research.\n\nYou are an AI system. If asked, always say so. Never claim to be human, even in a role.",
+            "role": "system"
+          },
+          {
+            "content": "[Step 4/3] Create a concise summary of the following research:\n\n1. Records are kept for ten years.\n2. Access is logged.\n\nUser feedback: Keep it short.\n\nUser instruction: Record keeping",
+            "role": "user"
+          }
+        ],
+        "messagesHash": "<hash>",
+        "model": "golden-model",
+        "modelId": "gpt-golden",
+        "provider": "openai",
+        "purpose": "agent-step",
+        "reason": "change",
+        "requestHash": "<hash>",
+        "requestId": "req-<id:7>",
+        "segment": "seg-<id:6>",
+        "step": 1,
+        "toolExecution": "none",
+        "toolSchemasHash": null
+      },
+      "runId": "workflow-<id:2>",
+      "type": "request/header"
+    },
+    {
+      "data": {
+        "answer": {
+          "approver": {
+            "groups": [],
+            "id": "golden-user",
+            "via": "owner"
+          },
+          "at": "<ts>",
+          "by": "golden-user",
+          "channel": "api",
+          "data": {
+            "feedback": "Keep it short."
+          },
+          "value": "approve"
+        },
+        "interactionId": "ckpt-<id:3>",
+        "kind": "approval"
+      },
+      "runId": "workflow-<id:2>",
+      "type": "interaction/answered"
+    },
+    {
+      "data": {
+        "interactionId": "ckpt-<id:3>"
+      },
+      "runId": "workflow-<id:2>",
+      "type": "run/resumed"
+    },
+    {
+      "data": {
+        "content": "Records are kept for ten years and every access is logged.",
+        "finishReason": "stop",
+        "hasImages": false,
+        "requestId": "req-<id:7>",
+        "step": 1,
+        "toolCalls": [],
+        "usage": {
+          "completionTokens": 14,
+          "promptTokens": 160,
+          "source": "provider",
+          "totalTokens": 174
+        }
+      },
+      "runId": "workflow-<id:2>",
+      "type": "message/assistant"
+    },
+    {
+      "data": {
+        "limits": {
+          "maxTokensPerRun": 0,
+          "maxToolRounds": 10
+        },
+        "runUsage": {
+          "completionTokens": 34,
+          "promptTokens": 280,
+          "totalTokens": 314
+        },
+        "step": 1,
+        "usage": {
+          "completionTokens": 14,
+          "promptTokens": 160,
+          "source": "provider",
+          "totalTokens": 174
+        }
+      },
+      "runId": "workflow-<id:2>",
+      "type": "budget/checkpoint"
+    },
+    {
+      "data": {
+        "finishReason": null,
+        "status": "completed"
+      },
+      "runId": "workflow-<id:2>",
+      "type": "run/end"
+    }
+  ],
+  "modelRequests": [
+    {
+      "options": {
+        "max_tokens": 16384,
+        "model": "gpt-golden",
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        }
+      },
+      "roles": [
+        "system",
+        "user"
+      ],
+      "systemPromptHash": "9d9c1a02227bcbc704eabea39ad12573377bb84378654d11866543feec714e3f",
+      "tools": []
+    },
+    {
+      "options": {
+        "max_tokens": 16384,
+        "model": "gpt-golden",
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        }
+      },
+      "roles": [
+        "system",
+        "user"
+      ],
+      "systemPromptHash": "e5cca5c4c143f9a1e749934f296d8d8a54efd4866786f8aa704c38577f4a4fc9",
+      "tools": []
+    }
+  ],
+  "offeredToolIds": [
+    [],
+    []
+  ],
+  "result": {
+    "answered": {
+      "answer": {
+        "approver": {
+          "groups": [],
+          "id": "golden-user",
+          "via": "owner"
+        },
+        "at": "<ts>",
+        "by": "golden-user",
+        "channel": "api",
+        "data": {
+          "feedback": "Keep it short."
+        },
+        "value": "approve"
+      },
+      "status": "answered"
+    },
+    "beforeRestart": {
+      "chat": {
+        "runIsActive": true,
+        "status": "running"
+      }
+    },
+    "ended": "workflow.complete",
+    "ledgerSequence": {
+      "firstAfterRestart": 1,
+      "lastBeforeRestart": 7
+    },
+    "state": {
+      "completedNodes": [
+        "start",
+        "research",
+        "approval",
+        "approval",
+        "summarize",
+        "end-approved"
+      ],
+      "currentNodes": [],
+      "data": {
+        "_answerLog": [
+          {
+            "approver": {
+              "groups": [],
+              "id": "golden-user",
+              "via": "owner"
+            },
+            "at": "<ts>",
+            "by": "golden-user",
+            "checkpointId": "ckpt-<id:3>",
+            "nodeId": "approval",
+            "type": "human_input"
+          }
+        ],
+        "_appId": "desk",
+        "_budget": {
+          "input": 280,
+          "output": 34,
+          "total": 314
+        },
+        "_chatId": "<id:1>",
+        "_currentNodeIteration": 1,
+        "_currentStep": 5,
+        "_executionDeadline": "<volatile>",
+        "_humanResult_approval": {
+          "branch": "approve",
+          "checkpointId": "ckpt-<id:3>",
+          "data": {
+            "feedback": "Keep it short."
+          },
+          "nodeId": "approval",
+          "respondedAt": "<ts>",
+          "response": "approve"
+        },
+        "_humanWaitMs": "<volatile>",
+        "_modelOverride": "golden-model",
+        "_nodeIterations": {
+          "approval": 1,
+          "end-approved": 1,
+          "research": 1,
+          "start": 1,
+          "summarize": 1
+        },
+        "_pauseReason": "human_input_required",
+        "_pausedAt": "approval",
+        "_pausedAtMs": null,
+        "_resumedAt": "<ts>",
+        "_stepLogHistory": {
+          "research": [
+            {
+              "citationsAdded": 0,
+              "completedAt": "<ts>",
+              "durationMs": "<ms>",
+              "iteration": 1,
+              "kind": "prompt",
+              "model": "golden-model",
+              "nodeId": "research",
+              "responseLength": 55,
+              "startedAt": "<ts>",
+              "tokens": {
+                "input": 120,
+                "output": 20
+              },
+              "toolCount": 0,
+              "toolNames": []
+            }
+          ],
+          "summarize": [
+            {
+              "citationsAdded": 0,
+              "completedAt": "<ts>",
+              "durationMs": "<ms>",
+              "iteration": 1,
+              "kind": "prompt",
+              "model": "golden-model",
+              "nodeId": "summarize",
+              "responseLength": 58,
+              "startedAt": "<ts>",
+              "tokens": {
+                "input": 160,
+                "output": 14
+              },
+              "toolCount": 0,
+              "toolNames": []
+            }
+          ]
+        },
+        "_stepLogs": {
+          "research": {
+            "apps": [],
+            "citationsAdded": 0,
+            "completedAt": "<ts>",
+            "durationMs": "<ms>",
+            "iterations": 1,
+            "kind": "prompt",
+            "messages": [
+              {
+                "content": "Current date: <date> (timezone UTC). Treat any date after this as the future; do not assume your training-time knowledge of \"today\" or the \"latest\" is current.\n\nYou are a research assistant. Research the given topic and provide key findings. If you have received feedback from a previous revision, incorporate it into your research.",
+                "role": "system"
+              },
+              {
+                "content": "[Step 2/3, iteration 1] Research the following topic and provide 3-5 key points: Record keeping\n\n\n\nUser instruction: Record keeping",
+                "role": "user"
+              }
+            ],
+            "model": "golden-model",
+            "nodeId": "research",
+            "projects": [],
+            "responseLength": 55,
+            "skillsActivated": [],
+            "startedAt": "<ts>",
+            "taskId": null,
+            "taskTitle": null,
+            "tokens": {
+              "input": 120,
+              "output": 20
+            },
+            "toolCalls": [],
+            "tools": []
+          },
+          "summarize": {
+            "apps": [],
+            "citationsAdded": 0,
+            "completedAt": "<ts>",
+            "durationMs": "<ms>",
+            "iterations": 1,
+            "kind": "prompt",
+            "messages": [
+              {
+                "content": "Current date: <date> (timezone UTC). Treat any date after this as the future; do not assume your training-time knowledge of \"today\" or the \"latest\" is current.\n\nYou are a writing assistant. Create a concise summary from the research.",
+                "role": "system"
+              },
+              {
+                "content": "[Step 4/3] Create a concise summary of the following research:\n\n1. Records are kept for ten years.\n2. Access is logged.\n\nUser feedback: Keep it short.\n\nUser instruction: Record keeping",
+                "role": "user"
+              }
+            ],
+            "model": "golden-model",
+            "nodeId": "summarize",
+            "projects": [],
+            "responseLength": 58,
+            "skillsActivated": [],
+            "startedAt": "<ts>",
+            "taskId": null,
+            "taskTitle": null,
+            "tokens": {
+              "input": 160,
+              "output": 14
+            },
+            "toolCalls": [],
+            "tools": []
+          }
+        },
+        "_taskTimings": {
+          "research": {
+            "completedAt": "<ts>",
+            "durationMs": "<ms>",
+            "startedAt": "<ts>"
+          },
+          "summarize": {
+            "completedAt": "<ts>",
+            "durationMs": "<ms>",
+            "startedAt": "<ts>"
+          }
+        },
+        "_totalNodes": 3,
+        "_userHint": "Record keeping",
+        "_workflowSummary": {
+          "id": "approval-workflow",
+          "name": {
+            "de": "Recherche mit Genehmigung",
+            "en": "Research with Approval"
+          },
+          "nodes": [
+            {
+              "id": "start",
+              "type": "start"
+            },
+            {
+              "id": "research",
+              "type": "prompt"
+            },
+            {
+              "id": "approval",
+              "type": "human"
+            },
+            {
+              "id": "summarize",
+              "type": "prompt"
+            },
+            {
+              "id": "end-approved",
+              "type": "end"
+            },
+            {
+              "id": "end-rejected",
+              "type": "end"
+            }
+          ]
+        },
+        "executionMetrics": {
+          "nodeCount": 5,
+          "totalDuration": "<volatile>",
+          "totalTokens": {
+            "input": 280,
+            "output": 34,
+            "total": 314
+          }
+        },
+        "humanResponse_approval": {
+          "checkpointId": "ckpt-<id:3>",
+          "data": {
+            "feedback": "Keep it short."
+          },
+          "nodeId": "approval",
+          "respondedAt": "<ts>",
+          "response": "approve"
+        },
+        "input": "Record keeping",
+        "nodeInvocations": 5,
+        "nodeResults": {
+          "approval": {
+            "branch": "approve",
+            "checkpoint": {
+              "createdAt": "<ts>",
+              "displayData": {
+                "data_research_results": "1. Records are kept for ten years.\n2. Access is logged."
+              },
+              "expiresAt": null,
+              "id": "ckpt-<id:3>",
+              "inputSchema": {
+                "properties": {
+                  "feedback": {
+                    "title": "Feedback (optional)",
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "message": "Please review the research results below and decide how to proceed.",
+              "nodeId": "approval",
+              "nodeName": "Review Research",
+              "options": [
+                {
+                  "description": null,
+                  "label": "Approve & Summarize",
+                  "style": "primary",
+                  "value": "approve"
+                },
+                {
+                  "description": null,
+                  "label": "Reject",
+                  "style": "danger",
+                  "value": "reject"
+                },
+                {
+                  "description": null,
+                  "label": "Request Revision",
+                  "style": "secondary",
+                  "value": "revise"
+                }
+              ],
+              "showData": [
+                "$.data.research_results"
+              ],
+              "timeout": null,
+              "type": "human_input"
+            },
+            "checkpointId": "ckpt-<id:3>",
+            "data": {
+              "feedback": "Keep it short."
+            },
+            "iteration": 1,
+            "metrics": {
+              "duration": "<volatile>",
+              "startTime": "<ts>",
+              "tokens": null
+            },
+            "nodeId": "approval",
+            "output": {
+              "awaitingHuman": true,
+              "checkpointId": "ckpt-<id:3>"
+            },
+            "pauseReason": "human_input_required",
+            "respondedAt": "<ts>",
+            "response": "approve",
+            "status": "paused"
+          },
+          "end-approved": {
+            "isTerminal": true,
+            "iteration": 1,
+            "metrics": {
+              "duration": "<volatile>",
+              "startTime": "<ts>",
+              "tokens": null
+            },
+            "output": {
+              "output": "Records are kept for ten years and every access is logged.",
+              "research_results": "1. Records are kept for ten years.\n2. Access is logged.",
+              "summary": "Records are kept for ten years and every access is logged.",
+              "topic": "Record keeping"
+            },
+            "status": "completed"
+          },
+          "research": {
+            "content": "1. Records are kept for ten years.\n2. Access is logged.",
+            "iteration": 1,
+            "metrics": {
+              "duration": "<volatile>",
+              "startTime": "<ts>",
+              "tokens": {
+                "input": 120,
+                "output": 20
+              }
+            },
+            "model": "golden-model",
+            "output": {
+              "content": "1. Records are kept for ten years.\n2. Access is logged.",
+              "iterations": 1,
+              "model": "golden-model",
+              "tokens": {
+                "input": 120,
+                "output": 20
+              }
+            },
+            "outputVariable": "research_results",
+            "resolvedInputs": {
+              "maxTokens": null,
+              "modelId": "golden-model",
+              "outputVariable": "research_results",
+              "renderedPrompt": "[Step 2/3, iteration 1] Research the following topic and provide 3-5 key points: Record keeping\n\n\n\nUser instruction: Record keeping"
+            },
+            "status": "completed",
+            "tokens": {
+              "input": 120,
+              "output": 20
+            }
+          },
+          "start": {
+            "iteration": 1,
+            "metrics": {
+              "duration": "<volatile>",
+              "startTime": "<ts>",
+              "tokens": null
+            },
+            "output": {
+              "initialized": true,
+              "inputFields": [
+                "input",
+                "_workflowDefinition",
+                "_modelOverride",
+                "topic",
+                "_userHint",
+                "_chatId",
+                "_appId",
+                "_workflow",
+                "_executionDeadline",
+                "_workflowSummary",
+                "_nodeIterations",
+                "_currentStep",
+                "_currentNodeIteration",
+                "_totalNodes"
+              ],
+              "mappedFields": [
+                "input",
+                "_workflowDefinition",
+                "_modelOverride",
+                "topic",
+                "_userHint",
+                "_chatId",
+                "_appId",
+                "_workflow",
+                "_executionDeadline",
+                "_workflowSummary",
+                "_nodeIterations",
+                "_currentStep",
+                "_currentNodeIteration",
+                "_totalNodes"
+              ],
+              "timestamp": "<ts>"
+            },
+            "resolvedInputs": {
+              "input": "Record keeping",
+              "topic": "Record keeping"
+            },
+            "status": "completed"
+          },
+          "summarize": {
+            "content": "Records are kept for ten years and every access is logged.",
+            "iteration": 1,
+            "metrics": {
+              "duration": "<volatile>",
+              "startTime": "<ts>",
+              "tokens": {
+                "input": 160,
+                "output": 14
+              }
+            },
+            "model": "golden-model",
+            "output": {
+              "content": "Records are kept for ten years and every access is logged.",
+              "iterations": 1,
+              "model": "golden-model",
+              "tokens": {
+                "input": 160,
+                "output": 14
+              }
+            },
+            "outputVariable": "summary",
+            "resolvedInputs": {
+              "maxTokens": null,
+              "modelId": "golden-model",
+              "outputVariable": "summary",
+              "renderedPrompt": "[Step 4/3] Create a concise summary of the following research:\n\n1. Records are kept for ten years.\n2. Access is logged.\n\nUser feedback: Keep it short.\n\nUser instruction: Record keeping"
+            },
+            "status": "completed",
+            "tokens": {
+              "input": 160,
+              "output": 14
+            }
+          }
+        },
+        "pendingCheckpoint": null,
+        "research_results": "1. Records are kept for ten years.\n2. Access is logged.",
+        "summary": "Records are kept for ten years and every access is logged.",
+        "topic": "Record keeping"
+      },
+      "failedNodes": [],
+      "history": [
+        {
+          "nodeId": "start",
+          "type": "node_start"
+        },
+        {
+          "nodeId": "start",
+          "type": "node_complete"
+        },
+        {
+          "nodeId": "research",
+          "type": "node_start"
+        },
+        {
+          "nodeId": "research",
+          "type": "node_complete"
+        },
+        {
+          "nodeId": "approval",
+          "type": "node_start"
+        },
+        {
+          "nodeId": "approval",
+          "type": "node_complete"
+        },
+        {
+          "nodeId": "summarize",
+          "type": "node_start"
+        },
+        {
+          "nodeId": "summarize",
+          "type": "node_complete"
+        },
+        {
+          "nodeId": "end-approved",
+          "type": "node_start"
+        },
+        {
+          "nodeId": "end-approved",
+          "type": "node_complete"
+        }
+      ],
+      "status": "completed",
+      "workflowId": "approval-workflow"
+    },
+    "sweep": {
+      "resumed": [],
+      "scanned": 0,
+      "skipped": []
+    }
+  },
+  "storedMessage": {
+    "chat": {
+      "activeRunId": null,
+      "appId": "desk",
+      "createdAt": "<ts>",
+      "hasUnseenActivity": false,
+      "id": "<id:1>",
+      "identityMode": "default",
+      "lastMessageAt": "<ts>",
+      "messageCount": 2,
+      "modelId": "golden-model",
+      "origin": {
+        "createdVia": "ui"
+      },
+      "ownerId": "golden-user",
+      "runIds": [
+        "workflow-<id:2>"
+      ],
+      "settings": null,
+      "status": "active",
+      "title": "Record keeping",
+      "titleSetByUser": false
+    },
+    "messages": [
+      {
+        "clientMessageId": "msg-1",
+        "content": "@approval-workflow Record keeping",
+        "id": "<id:8>",
+        "role": "user",
+        "runId": "workflow-<id:2>",
+        "ts": "<ts>"
+      },
+      {
+        "activity": {
+          "outputFormat": "markdown",
+          "workflowResult": {
+            "executionId": "workflow-<id:2>",
+            "status": "completed",
+            "workflowName": {
+              "de": "Recherche mit Genehmigung",
+              "en": "Research with Approval"
+            }
+          }
+        },
+        "content": "Records are kept for ten years and every access is logged.",
+        "finishReason": "stop",
+        "id": "<id:9>",
+        "role": "assistant",
+        "runId": "workflow-<id:2>",
+        "ts": "<ts>"
+      }
+    ]
+  },
+  "surface": "legacy-workflow",
+  "title": "A workflow started from a chat waits for a person when its server dies. After the restart the chat says that it waits, the person answers, and the next read of the chat holds the result in the place of the waiting answer.",
+  "toolCalls": [],
+  "toolSchemas": {},
+  "usageRecords": [
+    {
+      "app": "desk",
+      "cid": "workflow-<id:2>",
+      "ct": 20,
+      "grp": [
+        "users"
+      ],
+      "lat": "<ms>",
+      "model": "golden-model",
+      "prov": "openai",
+      "pt": 120,
+      "rid": "req-<id:5>",
+      "src": "provider",
+      "st": "ok",
+      "surf": "workflow",
+      "tc": 0,
+      "ts": "<ts>",
+      "ttft": "<ms>",
+      "type": "llm_call",
+      "uid": "workflow-<id:2>",
+      "v": 2
+    },
+    {
+      "cid": "workflow-<id:2>",
+      "ct": 14,
+      "grp": [
+        "users"
+      ],
+      "lat": "<ms>",
+      "model": "golden-model",
+      "prov": "openai",
+      "pt": 160,
+      "rid": "req-<id:7>",
+      "src": "provider",
+      "st": "ok",
+      "surf": "chat",
+      "tc": 0,
+      "ts": "<ts>",
+      "ttft": "<ms>",
+      "type": "llm_call",
+      "uid": "workflow-<id:2>",
+      "v": 2
+    }
+  ]
+}

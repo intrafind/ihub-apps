@@ -1,0 +1,249 @@
+{
+  "approvals": [],
+  "case": "user-without-permissions",
+  "envelopes": [],
+  "ledger": [
+    {
+      "data": {
+        "kind": "subagent",
+        "language": "en",
+        "model": "golden-model",
+        "parentRunId": "chat-of-the-caller",
+        "principal": {
+          "anonymous": false,
+          "id": "no-permissions",
+          "mode": "default"
+        },
+        "refs": {
+          "appId": "restricted",
+          "chatId": "agent:chat-of-the-caller:<id:1>",
+          "executionId": "chat-of-the-caller"
+        },
+        "trigger": {
+          "type": "user"
+        }
+      },
+      "runId": "subagent-<id:2>",
+      "type": "run/start"
+    },
+    {
+      "data": {
+        "purpose": "agent-step",
+        "segment": "seg-<id:3>"
+      },
+      "runId": "subagent-<id:2>",
+      "type": "segment/start"
+    },
+    {
+      "data": {
+        "callConfig": {
+          "maxTokens": 16384,
+          "nativeWebSearch": null,
+          "responseFormat": null,
+          "responseSchemaHash": null,
+          "stream": true,
+          "thinking": null
+        },
+        "configHash": "<volatile>",
+        "language": "en",
+        "messageCount": 2,
+        "messages": [
+          {
+            "content": "You are the restricted.\n\nYou are an AI system. If asked, always say so. Never claim to be human, even in a role.",
+            "role": "system"
+          },
+          {
+            "content": "How do I file a claim?",
+            "role": "user"
+          }
+        ],
+        "messagesHash": "<hash>",
+        "model": "golden-model",
+        "modelId": "gpt-golden",
+        "modelSnapshot": {
+          "autoDiscovery": false,
+          "default": true,
+          "id": "golden-model",
+          "modelId": "gpt-golden",
+          "provider": "openai",
+          "supportsTools": "auto",
+          "url": "https://model.invalid/v1/chat/completions"
+        },
+        "optionsSnapshot": {
+          "appConfig": {
+            "description": {
+              "en": "The restricted app"
+            },
+            "enabled": true,
+            "id": "restricted",
+            "name": {
+              "en": "restricted"
+            },
+            "preferredModel": "golden-model",
+            "system": {
+              "en": "You are the restricted."
+            }
+          },
+          "chatId": "agent:chat-of-the-caller:<id:1>",
+          "imageConfig": null,
+          "integrationScopes": {},
+          "language": "en",
+          "maxTokens": 16384,
+          "nativeWebSearch": null,
+          "stream": true,
+          "user": {
+            "id": "no-permissions"
+          }
+        },
+        "provider": "openai",
+        "purpose": "agent-step",
+        "reason": "initial",
+        "requestHash": "<hash>",
+        "requestId": "req-<id:4>",
+        "segment": "seg-<id:3>",
+        "step": 1,
+        "toolExecution": "none",
+        "toolSchemasHash": null
+      },
+      "runId": "subagent-<id:2>",
+      "type": "request/header"
+    },
+    {
+      "data": {
+        "content": "the restricted answer",
+        "finishReason": "stop",
+        "hasImages": false,
+        "requestId": "req-<id:4>",
+        "step": 1,
+        "toolCalls": [],
+        "usage": {
+          "completionTokens": 7,
+          "promptTokens": 11,
+          "source": "provider",
+          "totalTokens": 18
+        }
+      },
+      "runId": "subagent-<id:2>",
+      "type": "message/assistant"
+    },
+    {
+      "data": {
+        "limits": {
+          "maxTokensPerRun": 0,
+          "maxToolRounds": 50
+        },
+        "runUsage": {
+          "completionTokens": 7,
+          "promptTokens": 11,
+          "totalTokens": 18
+        },
+        "step": 1,
+        "usage": {
+          "completionTokens": 7,
+          "promptTokens": 11,
+          "source": "provider",
+          "totalTokens": 18
+        }
+      },
+      "runId": "subagent-<id:2>",
+      "type": "budget/checkpoint"
+    },
+    {
+      "data": {
+        "durationMs": "<ms>",
+        "finishReason": "stop",
+        "provenance": {
+          "ai_generated": true,
+          "content_hash": {
+            "alg": "sha-256",
+            "normalization": "nfc-trim",
+            "value": "e4a3235908dcb3da55839409e3ee58b3d4043fb011e683136cb4c3083ea69715"
+          },
+          "created_at": "<ts>",
+          "generator": {
+            "installation_id": "inst_<id:5>",
+            "product": "iHub Apps",
+            "version": "<version>"
+          },
+          "model": {
+            "id": "golden-model",
+            "watermark": {
+              "applied": false,
+              "by": "none"
+            }
+          },
+          "output_id": "<id:6>",
+          "spec": "intrafind-provenance/1.0"
+        },
+        "status": "completed",
+        "usage": {
+          "completionTokens": 7,
+          "promptTokens": 11,
+          "source": "provider",
+          "totalTokens": 18
+        }
+      },
+      "runId": "subagent-<id:2>",
+      "type": "run/end"
+    }
+  ],
+  "modelRequests": [
+    {
+      "options": {
+        "max_tokens": 16384,
+        "model": "gpt-golden",
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        }
+      },
+      "roles": [
+        "system",
+        "user"
+      ],
+      "systemPromptHash": "10fd5bfe08cd05cea80d1cdc918952d9e155b796cbf5532f4e3478d175eb6d71",
+      "tools": []
+    }
+  ],
+  "offeredToolIds": [
+    []
+  ],
+  "result": {
+    "content": "the restricted answer",
+    "finishReason": "stop",
+    "usage": {
+      "completionTokens": 7,
+      "promptTokens": 11,
+      "source": "provider",
+      "totalTokens": 18
+    }
+  },
+  "surface": "app-as-tool",
+  "title": "FAIL-OPEN, current behaviour: a principal without a permissions object may call an app no group grants.",
+  "toolCalls": [],
+  "toolSchemas": {},
+  "usageRecords": [
+    {
+      "app": "restricted",
+      "cid": "agent:chat-of-the-caller:<id:1>",
+      "ct": 7,
+      "grp": [
+        "users"
+      ],
+      "lat": "<ms>",
+      "model": "golden-model",
+      "prov": "openai",
+      "pt": 11,
+      "rid": "req-<id:4>",
+      "src": "provider",
+      "st": "ok",
+      "surf": "chat",
+      "tc": 0,
+      "ts": "<ts>",
+      "ttft": "<ms>",
+      "type": "llm_call",
+      "uid": "agent:chat-of-the-caller:<id:1>",
+      "v": 2
+    }
+  ]
+}

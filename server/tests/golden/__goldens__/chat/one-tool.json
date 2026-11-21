@@ -1,0 +1,1523 @@
+{
+  "approvals": [],
+  "case": "one-tool",
+  "envelopes": [
+    {
+      "data": {
+        "kind": "chat",
+        "model": "golden-model",
+        "refs": {
+          "appId": "desk",
+          "chatId": "<id:1>",
+          "messageId": "msg-1"
+        }
+      },
+      "runId": "chat-<id:2>",
+      "streamId": "<id:1>",
+      "type": "run/started"
+    },
+    {
+      "data": {
+        "content": "",
+        "finishReason": "tool_calls",
+        "sources": [],
+        "step": 1,
+        "toolCalls": [
+          {
+            "arguments": "{\"key\":\"A-1\"}",
+            "id": "call_1",
+            "index": 0,
+            "metadata": {
+              "originalFormat": "openai",
+              "type": "function"
+            },
+            "name": "lookup",
+            "type": "function"
+          }
+        ],
+        "usage": {
+          "completionTokens": 8,
+          "promptTokens": 40,
+          "source": "provider",
+          "totalTokens": 48
+        }
+      },
+      "runId": "chat-<id:2>",
+      "streamId": "<id:1>",
+      "type": "step/completed"
+    },
+    {
+      "data": {
+        "activityKind": "tool",
+        "activityOrigin": "integration",
+        "args": {
+          "key": "A-1"
+        },
+        "callId": "call_1",
+        "execution": "server",
+        "integration": "lookup",
+        "name": "lookup",
+        "step": 1,
+        "title": "lookup",
+        "toolId": "lookup"
+      },
+      "runId": "chat-<id:2>",
+      "streamId": "<id:1>",
+      "type": "tool/started"
+    },
+    {
+      "data": {
+        "callId": "call_1",
+        "durationMs": "<ms>",
+        "knowledgeSource": "integration",
+        "name": "lookup",
+        "resultPreview": {
+          "key": "A-1",
+          "value": "record A-1"
+        },
+        "step": 1,
+        "toolId": "lookup"
+      },
+      "runId": "chat-<id:2>",
+      "streamId": "<id:1>",
+      "type": "tool/completed"
+    },
+    {
+      "data": {
+        "content": "Record A-1 is open.",
+        "kind": "text",
+        "step": 2
+      },
+      "runId": "chat-<id:2>",
+      "streamId": "<id:1>",
+      "type": "step/delta"
+    },
+    {
+      "data": {
+        "content": "Record A-1 is open.",
+        "finishReason": "stop",
+        "sources": [
+          "integration"
+        ],
+        "step": 2,
+        "toolCalls": [],
+        "usage": {
+          "completionTokens": 5,
+          "promptTokens": 62,
+          "source": "provider",
+          "totalTokens": 67
+        }
+      },
+      "runId": "chat-<id:2>",
+      "streamId": "<id:1>",
+      "type": "step/completed"
+    },
+    {
+      "data": {
+        "answerBasis": [
+          {
+            "kind": "integration",
+            "label": "lookup"
+          }
+        ],
+        "finishReason": "stop",
+        "knowledgeSources": [
+          "integration"
+        ],
+        "provenance": {
+          "ai_generated": true,
+          "content_hash": {
+            "alg": "sha-256",
+            "normalization": "nfc-trim",
+            "value": "0ccdd28a4e10ce410ddc3014c22b5cd8530ead620a2363d1d6e488da8a3d1b9a"
+          },
+          "created_at": "<ts>",
+          "generator": {
+            "installation_id": "inst_<id:3>",
+            "product": "iHub Apps",
+            "version": "<version>"
+          },
+          "model": {
+            "id": "golden-model",
+            "watermark": {
+              "applied": false,
+              "by": "none"
+            }
+          },
+          "output_id": "<id:4>",
+          "spec": "intrafind-provenance/1.0"
+        },
+        "status": "completed",
+        "usage": {
+          "completionTokens": 13,
+          "promptTokens": 102,
+          "source": "provider",
+          "totalTokens": 115
+        }
+      },
+      "runId": "chat-<id:2>",
+      "streamId": "<id:1>",
+      "type": "run/ended"
+    }
+  ],
+  "evidence": [
+    {
+      "messageId": "<id:9>",
+      "record": {
+        "app": {
+          "config": "sha256:21de82c12132e8d266e767c503a2e1b94aabbeeda775bbfc569f30047d1d7aeb",
+          "id": "desk"
+        },
+        "calls": [
+          {
+            "attempt": 1,
+            "config": "sha256:dc9decb6b813a97faff3c90d8b4a8f1a5ce4a57bcfd055cfc6758ae4a6e4902d",
+            "endedAt": "<ts>",
+            "messageCount": 2,
+            "messages": {
+              "append": [
+                {
+                  "message": "sha256:58c109537ac06f0fd176f374cb2fa52ae2eb515e88b5c19956c615a1514b473a",
+                  "role": "system"
+                },
+                {
+                  "message": "sha256:f08a72b93f9dfe33285e950fa9aee82ccc36ee12376655ac64a4c90bd206cae9",
+                  "role": "user"
+                }
+              ],
+              "from": null
+            },
+            "messagesHash": "<hash>",
+            "model": "golden-model",
+            "modelId": "gpt-golden",
+            "output": "sha256:54e7fedacd9a227ba774f63e90bb54cd7357ce47af3af0d1764d34eba2985ba9",
+            "provider": "openai",
+            "purpose": "agent-step",
+            "requestId": "req-<id:6>",
+            "segment": "seg-<id:5>",
+            "startedAt": "<ts>",
+            "status": "ok",
+            "step": 1,
+            "tools": [
+              "sha256:b2a9e321c2ca167dc6460df6a2e7ef36d8853908e7ec62cb0d94c95010706991",
+              "sha256:0002f32964d5317adf0fe5c1b16df63e9706dfdd57ac41acbdfd6a4971957f06",
+              "sha256:95d65b80292914727e3eda53da4ee66f62480386f63b035bd5ec1f65fc966ae8",
+              "sha256:ed8f42c45cc632d140e9dbeab4d6b246065a600de9c9bc6bd8b782bdafbb9dc1",
+              "sha256:63577b999bb7b927697e5351062e0ea90b34d13aa44cb5d5c3b2bf4fc0ab995e"
+            ]
+          },
+          {
+            "attempt": 1,
+            "config": "sha256:dc9decb6b813a97faff3c90d8b4a8f1a5ce4a57bcfd055cfc6758ae4a6e4902d",
+            "endedAt": "<ts>",
+            "messageCount": 4,
+            "messages": {
+              "append": [
+                {
+                  "message": "sha256:aed7f0e24bc865171241fc5006cbb8114e95186e043bc1764946806135a5cf20",
+                  "role": "assistant"
+                },
+                {
+                  "message": "sha256:307a6c45dcc5316165c318e8c529ca005a35761a442e8d0e756f86957eff5419",
+                  "role": "tool"
+                }
+              ],
+              "from": 0
+            },
+            "messagesHash": "<hash>",
+            "model": "golden-model",
+            "modelId": "gpt-golden",
+            "output": "sha256:8d7f3ef0e0461cf74c0bd973d9cdaa677fb8d36a940e18960810bcca1e972d2b",
+            "provider": "openai",
+            "purpose": "agent-step",
+            "requestId": "req-<id:7>",
+            "segment": "seg-<id:5>",
+            "startedAt": "<ts>",
+            "status": "ok",
+            "step": 2,
+            "tools": [
+              "sha256:b2a9e321c2ca167dc6460df6a2e7ef36d8853908e7ec62cb0d94c95010706991",
+              "sha256:0002f32964d5317adf0fe5c1b16df63e9706dfdd57ac41acbdfd6a4971957f06",
+              "sha256:95d65b80292914727e3eda53da4ee66f62480386f63b035bd5ec1f65fc966ae8",
+              "sha256:ed8f42c45cc632d140e9dbeab4d6b246065a600de9c9bc6bd8b782bdafbb9dc1",
+              "sha256:63577b999bb7b927697e5351062e0ea90b34d13aa44cb5d5c3b2bf4fc0ab995e"
+            ]
+          }
+        ],
+        "chatId": "<id:1>",
+        "content": {
+          "0002f32964d5317adf0fe5c1b16df63e9706dfdd57ac41acbdfd6a4971957f06": "<id:9>",
+          "21de82c12132e8d266e767c503a2e1b94aabbeeda775bbfc569f30047d1d7aeb": "<id:9>",
+          "25e1af75e71bb8b29933dfae3a5f0e2ff7508922e97ae36dc512cd20f4771ee3": "<id:9>",
+          "307a6c45dcc5316165c318e8c529ca005a35761a442e8d0e756f86957eff5419": "<id:9>",
+          "3b0432e78b1d3e99befacca60fc3efdf1aa3739ac1bde4dd94a0d8ac86e394da": "<id:9>",
+          "54e7fedacd9a227ba774f63e90bb54cd7357ce47af3af0d1764d34eba2985ba9": "<id:9>",
+          "58c109537ac06f0fd176f374cb2fa52ae2eb515e88b5c19956c615a1514b473a": "<id:9>",
+          "63577b999bb7b927697e5351062e0ea90b34d13aa44cb5d5c3b2bf4fc0ab995e": "<id:9>",
+          "8d7f3ef0e0461cf74c0bd973d9cdaa677fb8d36a940e18960810bcca1e972d2b": "<id:9>",
+          "95d65b80292914727e3eda53da4ee66f62480386f63b035bd5ec1f65fc966ae8": "<id:9>",
+          "aed7f0e24bc865171241fc5006cbb8114e95186e043bc1764946806135a5cf20": "<id:9>",
+          "b2a9e321c2ca167dc6460df6a2e7ef36d8853908e7ec62cb0d94c95010706991": "<id:9>",
+          "dc9decb6b813a97faff3c90d8b4a8f1a5ce4a57bcfd055cfc6758ae4a6e4902d": "<id:9>",
+          "ed8f42c45cc632d140e9dbeab4d6b246065a600de9c9bc6bd8b782bdafbb9dc1": "<id:9>",
+          "f08a72b93f9dfe33285e950fa9aee82ccc36ee12376655ac64a4c90bd206cae9": "<id:9>"
+        },
+        "endedAt": "<ts>",
+        "ihubVersion": "<version>",
+        "journalEnded": true,
+        "knowledge": [],
+        "messageId": "<id:9>",
+        "model": {
+          "id": "golden-model",
+          "modelId": "gpt-golden",
+          "provider": "openai",
+          "settings": {
+            "maxTokens": 16384
+          }
+        },
+        "output": {
+          "contentSha256": "0ccdd28a4e10ce410ddc3014c22b5cd8530ead620a2363d1d6e488da8a3d1b9a",
+          "files": [],
+          "finishReason": "stop",
+          "provenanceId": "<id:4>",
+          "usage": {
+            "completionTokens": 13,
+            "promptTokens": 102,
+            "source": "provider",
+            "totalTokens": 115
+          }
+        },
+        "runId": "chat-<id:2>",
+        "startedAt": "<ts>",
+        "status": "completed",
+        "toolCalls": [
+          {
+            "activityKind": "tool",
+            "activityOrigin": "integration",
+            "args": "sha256:25e1af75e71bb8b29933dfae3a5f0e2ff7508922e97ae36dc512cd20f4771ee3",
+            "argsRepaired": false,
+            "callId": "call_1",
+            "durationMs": "<ms>",
+            "endedAt": "<ts>",
+            "execution": "server",
+            "integration": "lookup",
+            "name": "lookup",
+            "result": "sha256:3b0432e78b1d3e99befacca60fc3efdf1aa3739ac1bde4dd94a0d8ac86e394da",
+            "resultBytes": 34,
+            "resultSource": "message",
+            "startedAt": "<ts>",
+            "step": 1,
+            "title": "lookup",
+            "toolId": "lookup"
+          }
+        ],
+        "userId": "golden-user",
+        "v": 2
+      }
+    }
+  ],
+  "httpResponse": {
+    "exchanges": [
+      {
+        "request": {
+          "body": {
+            "language": "en",
+            "messages": [
+              {
+                "content": "Look up record A-1.",
+                "messageId": "msg-1",
+                "role": "user"
+              }
+            ],
+            "modelId": "golden-model",
+            "toolApprovalCapable": true
+          },
+          "method": "POST",
+          "path": "/api/apps/desk/chat/<id:1>"
+        },
+        "response": {
+          "body": {
+            "chatId": "<id:1>",
+            "status": "streaming"
+          },
+          "headers": {
+            "content-type": "application/json; charset=utf-8"
+          },
+          "status": 200
+        }
+      }
+    ],
+    "getStream": {
+      "request": {
+        "accept": "text/event-stream",
+        "method": "GET",
+        "path": "/api/apps/desk/chat/<id:1>"
+      },
+      "response": {
+        "headers": {
+          "cache-control": "no-cache",
+          "content-type": "text/event-stream",
+          "x-accel-buffering": "no"
+        },
+        "status": 200,
+        "stream": [
+          {
+            "data": {
+              "protocol": 2,
+              "runId": "<id:1>"
+            },
+            "runId": "<id:1>",
+            "type": "stream/connected"
+          },
+          {
+            "data": {
+              "kind": "chat",
+              "model": "golden-model",
+              "refs": {
+                "appId": "desk",
+                "chatId": "<id:1>",
+                "messageId": "msg-1"
+              }
+            },
+            "runId": "chat-<id:2>",
+            "type": "run/started"
+          },
+          {
+            "data": {
+              "content": "",
+              "finishReason": "tool_calls",
+              "sources": [],
+              "step": 1,
+              "toolCalls": [
+                {
+                  "id": "call_1",
+                  "index": 0,
+                  "name": "lookup",
+                  "type": "function"
+                }
+              ],
+              "usage": {
+                "completionTokens": 8,
+                "promptTokens": 40,
+                "source": "provider",
+                "totalTokens": 48
+              }
+            },
+            "runId": "chat-<id:2>",
+            "type": "step/completed"
+          },
+          {
+            "data": {
+              "activityKind": "tool",
+              "activityOrigin": "integration",
+              "args": {
+                "key": "A-1"
+              },
+              "callId": "call_1",
+              "execution": "server",
+              "integration": "lookup",
+              "name": "lookup",
+              "step": 1,
+              "title": "lookup",
+              "toolId": "lookup"
+            },
+            "runId": "chat-<id:2>",
+            "type": "tool/started"
+          },
+          {
+            "data": {
+              "callId": "call_1",
+              "durationMs": "<ms>",
+              "knowledgeSource": "integration",
+              "name": "lookup",
+              "resultPreview": null,
+              "step": 1,
+              "toolId": "lookup"
+            },
+            "runId": "chat-<id:2>",
+            "type": "tool/completed"
+          },
+          {
+            "data": {
+              "content": "Record A-1 is open.",
+              "kind": "text",
+              "step": 2
+            },
+            "runId": "chat-<id:2>",
+            "type": "step/delta"
+          },
+          {
+            "data": {
+              "content": "Record A-1 is open.",
+              "finishReason": "stop",
+              "sources": [
+                "integration"
+              ],
+              "step": 2,
+              "toolCalls": [],
+              "usage": {
+                "completionTokens": 5,
+                "promptTokens": 62,
+                "source": "provider",
+                "totalTokens": 67
+              }
+            },
+            "runId": "chat-<id:2>",
+            "type": "step/completed"
+          },
+          {
+            "data": {
+              "answerBasis": [
+                {
+                  "kind": "integration",
+                  "label": "lookup"
+                }
+              ],
+              "finishReason": "stop",
+              "knowledgeSources": [
+                "integration"
+              ],
+              "provenance": {
+                "ai_generated": true,
+                "content_hash": {
+                  "alg": "sha-256",
+                  "normalization": "nfc-trim",
+                  "value": "0ccdd28a4e10ce410ddc3014c22b5cd8530ead620a2363d1d6e488da8a3d1b9a"
+                },
+                "created_at": "<ts>",
+                "generator": {
+                  "installation_id": "inst_<id:3>",
+                  "product": "iHub Apps",
+                  "version": "<version>"
+                },
+                "model": {
+                  "id": "golden-model",
+                  "watermark": {
+                    "applied": false,
+                    "by": "none"
+                  }
+                },
+                "output_id": "<id:4>",
+                "spec": "intrafind-provenance/1.0"
+              },
+              "status": "completed",
+              "usage": {
+                "completionTokens": 13,
+                "promptTokens": 102,
+                "source": "provider",
+                "totalTokens": 115
+              }
+            },
+            "runId": "chat-<id:2>",
+            "type": "run/ended"
+          }
+        ]
+      }
+    },
+    "position": "chatPostStream off: the POST answers with JSON, the frames arrive on the GET stream"
+  },
+  "ledger": [
+    {
+      "data": {
+        "kind": "chat",
+        "language": "en",
+        "model": "golden-model",
+        "principal": {
+          "anonymous": false,
+          "id": "golden-user",
+          "mode": "default"
+        },
+        "refs": {
+          "appId": "desk",
+          "chatId": "<id:1>"
+        },
+        "trigger": {
+          "type": "user"
+        }
+      },
+      "runId": "chat-<id:2>",
+      "type": "run/start"
+    },
+    {
+      "data": {
+        "content": "Look up record A-1.",
+        "messageId": "msg-1",
+        "step": 0
+      },
+      "runId": "chat-<id:2>",
+      "type": "message/user"
+    },
+    {
+      "data": {
+        "purpose": "agent-step",
+        "segment": "seg-<id:5>"
+      },
+      "runId": "chat-<id:2>",
+      "type": "segment/start"
+    },
+    {
+      "data": {
+        "callConfig": {
+          "maxTokens": 16384,
+          "nativeWebSearch": null,
+          "responseFormat": null,
+          "responseSchemaHash": null,
+          "stream": true,
+          "thinking": null
+        },
+        "configHash": "3c93315185ef6941913a41ff08ac06937738b4ddc106974917d4b46693fa0c31",
+        "language": "en",
+        "messageCount": 2,
+        "messages": [
+          {
+            "content": "You are the desk.\n\nHow to use the connected integrations:\n<integration-guidance integration=\"iHub\" id=\"ihub\">\n- Ask the user (tool `ask_user`): Ask only when the answer depends on something only the user knows; ask one short question and offer choices when there are few.\n</integration-guidance>\n\nYou are an AI system. If asked, always say so. Never claim to be human, even in a role.",
+            "role": "system"
+          },
+          {
+            "content": "Look up record A-1.",
+            "role": "user"
+          }
+        ],
+        "messagesHash": "<hash>",
+        "model": "golden-model",
+        "modelId": "gpt-golden",
+        "modelSnapshot": {
+          "autoDiscovery": false,
+          "default": true,
+          "id": "golden-model",
+          "modelId": "gpt-golden",
+          "provider": "openai",
+          "supportsTools": "auto",
+          "url": "https://model.invalid/v1/chat/completions"
+        },
+        "optionsSnapshot": {
+          "appConfig": {
+            "description": {
+              "en": "The desk app"
+            },
+            "enabled": true,
+            "id": "desk",
+            "integrations": {
+              "archive": {},
+              "dangerous": {},
+              "ihub": {
+                "actions": [
+                  "ask_user"
+                ]
+              },
+              "lookup": {},
+              "tracker": {}
+            },
+            "name": {
+              "en": "desk"
+            },
+            "preferredModel": "golden-model",
+            "system": {
+              "en": "You are the desk."
+            }
+          },
+          "chatId": "<id:1>",
+          "imageConfig": null,
+          "integrationScopes": {},
+          "language": "en",
+          "maxTokens": 16384,
+          "nativeWebSearch": null,
+          "stream": true,
+          "user": {
+            "id": "golden-user"
+          }
+        },
+        "provider": "openai",
+        "purpose": "agent-step",
+        "reason": "initial",
+        "requestHash": "<hash>",
+        "requestId": "req-<id:6>",
+        "segment": "seg-<id:5>",
+        "step": 1,
+        "toolExecution": "server",
+        "toolSchemas": [
+          {
+            "_integration": {
+              "action": "lookup",
+              "actionTitle": "lookup",
+              "definition": "test.fixture/lookup",
+              "fingerprint": "sha256:bc7875865e9da481dc2ab49f6f962f5f4431b52f241441cb0e3ebcc8859832ba",
+              "fixedToolId": true,
+              "instanceId": "lookup",
+              "instanceLabel": "lookup"
+            },
+            "approval": "never",
+            "approvalSource": "default",
+            "dataFlow": "external",
+            "description": "Look up a record",
+            "examples": [],
+            "id": "lookup",
+            "name": "lookup: lookup",
+            "parameters": {
+              "properties": {
+                "key": {
+                  "description": "The key of the record",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key"
+              ],
+              "type": "object"
+            },
+            "readOnly": true,
+            "sideEffect": "read",
+            "sideEffectSource": "definition",
+            "type": "integration"
+          },
+          {
+            "_integration": {
+              "action": "archive",
+              "actionTitle": "archive",
+              "definition": "test.fixture/archive",
+              "fingerprint": "sha256:6223310c2ca0eed2934c55a385740c141bb86ba423027681dfdfcbbac997d290",
+              "fixedToolId": true,
+              "instanceId": "archive",
+              "instanceLabel": "archive"
+            },
+            "approval": "never",
+            "approvalSource": "default",
+            "dataFlow": "external",
+            "description": "Read a volume of the archive",
+            "examples": [],
+            "id": "archive",
+            "name": "archive: archive",
+            "parameters": {
+              "properties": {
+                "volume": {
+                  "description": "The volume to read",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "volume"
+              ],
+              "type": "object"
+            },
+            "readOnly": true,
+            "sideEffect": "read",
+            "sideEffectSource": "definition",
+            "type": "integration"
+          },
+          {
+            "_integration": {
+              "action": "dangerous",
+              "actionTitle": "dangerous",
+              "definition": "test.fixture/dangerous",
+              "fingerprint": "sha256:dfd1e2fcf928e6e343368b935321e5bc105cc592a5c7d726bbc1b20c39ae8cd1",
+              "fixedToolId": true,
+              "instanceId": "dangerous",
+              "instanceLabel": "dangerous"
+            },
+            "approval": "always",
+            "approvalSource": "tool",
+            "dataFlow": "external",
+            "description": "Close a record for good",
+            "examples": [],
+            "id": "dangerous",
+            "name": "dangerous: dangerous",
+            "parameters": {
+              "properties": {
+                "key": {
+                  "description": "The key of the record",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key"
+              ],
+              "type": "object"
+            },
+            "readOnly": false,
+            "requiresApproval": true,
+            "sideEffect": "write",
+            "sideEffectSource": "definition",
+            "type": "integration"
+          },
+          {
+            "_integration": {
+              "action": "tracker",
+              "actionTitle": "tracker",
+              "definition": "test.fixture/tracker",
+              "fingerprint": "sha256:ff3a6dcc63508924260394134b1ce199eb70305f89292896af892566b9f0f8ce",
+              "fixedToolId": true,
+              "instanceId": "tracker",
+              "instanceLabel": "tracker"
+            },
+            "approval": "never",
+            "approvalSource": "default",
+            "dataFlow": "external",
+            "description": "Search the issue tracker",
+            "examples": [],
+            "id": "tracker",
+            "name": "tracker: tracker",
+            "parameters": {
+              "properties": {
+                "query": {
+                  "description": "What to search for",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "query"
+              ],
+              "type": "object"
+            },
+            "readOnly": true,
+            "sideEffect": "read",
+            "sideEffectSource": "definition",
+            "type": "integration"
+          },
+          {
+            "_integration": {
+              "action": "ask_user",
+              "actionTitle": "Ask the user",
+              "definition": "com.intrafind/ihub",
+              "fingerprint": "sha256:cb354e6336086e7afe1bd7667c0211d9dc843c5a9f567c168dfc8ba68b6354a6",
+              "fixedToolId": true,
+              "guidance": "Ask only when the answer depends on something only the user knows; ask one short question and offer choices when there are few.",
+              "instanceId": "ihub",
+              "instanceLabel": "iHub"
+            },
+            "approval": "never",
+            "approvalSource": "default",
+            "dataFlow": "internal",
+            "description": "Ask the user a clarifying question when you need more information. IMPORTANT: Always use 'select' or 'multiselect' with options when there are common choices - this is faster for users than typing. Keep questions SHORT (e.g., 'Which language?' not 'Into which language would you like me to translate your text?'). Do NOT repeat the user's input in your question.",
+            "enabled": true,
+            "examples": [],
+            "id": "ask_user",
+            "interactive": true,
+            "name": "iHub: Ask the user",
+            "parameters": {
+              "properties": {
+                "allow_other": {
+                  "default": false,
+                  "description": "For select/multiselect: allow user to enter a custom 'Other' value not in the options list.",
+                  "type": "boolean"
+                },
+                "allow_skip": {
+                  "default": false,
+                  "description": "Allow the user to skip this question without providing an answer.",
+                  "type": "boolean"
+                },
+                "context": {
+                  "description": "Brief explanation of why you need this information, shown to the user to help them understand the question's purpose.",
+                  "maxLength": 500,
+                  "type": "string"
+                },
+                "input_type": {
+                  "default": "select",
+                  "description": "PREFER 'select' or 'multiselect' over 'text' when there are common choices! Use 'select' for single choice from options (RECOMMENDED), 'multiselect' for multiple choices, 'text' ONLY for truly open-ended answers, 'confirm' for yes/no, 'number' for numeric input, 'date' for dates.",
+                  "enum": [
+                    "text",
+                    "select",
+                    "multiselect",
+                    "confirm",
+                    "number",
+                    "date"
+                  ],
+                  "type": "string"
+                },
+                "options": {
+                  "description": "REQUIRED for select/multiselect! Provide 2-10 common options. Example: [{\"label\": \"English\", \"value\": \"en\"}, {\"label\": \"French\", \"value\": \"fr\"}]. Set allow_other=true if user might need an unlisted option.",
+                  "items": {
+                    "properties": {
+                      "label": {
+                        "description": "Display text for the option (max 100 chars)",
+                        "maxLength": 100,
+                        "type": "string"
+                      },
+                      "value": {
+                        "description": "Value returned when selected (defaults to label if not provided, max 100 chars)",
+                        "maxLength": 100,
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "label"
+                    ],
+                    "type": "object"
+                  },
+                  "maxItems": 20,
+                  "type": "array"
+                },
+                "placeholder": {
+                  "description": "Placeholder text shown in the input field before user types.",
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                "question": {
+                  "description": "A SHORT clarifying question (e.g., 'Which language?' or 'What format?'). Do NOT include the user's input text in the question. Maximum 500 characters.",
+                  "maxLength": 500,
+                  "type": "string"
+                },
+                "validation": {
+                  "description": "Validation rules for the user's input.",
+                  "properties": {
+                    "max": {
+                      "description": "Maximum value for number input or maximum length for text.",
+                      "type": "number"
+                    },
+                    "message": {
+                      "description": "Custom error message to show when validation fails.",
+                      "maxLength": 200,
+                      "type": "string"
+                    },
+                    "min": {
+                      "description": "Minimum value for number input or minimum length for text.",
+                      "type": "number"
+                    },
+                    "pattern": {
+                      "description": "Regular expression pattern for text validation (max 200 chars). Use simple patterns to avoid ReDoS.",
+                      "maxLength": 200,
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "question"
+              ],
+              "type": "object"
+            },
+            "readOnly": true,
+            "requiresUserInput": true,
+            "sideEffect": "read",
+            "sideEffectSource": "definition",
+            "type": "integration"
+          }
+        ],
+        "toolSchemasHash": "63c8d635951ce6386760cddb8441264454c5d32ec38fd3bd53ae1df4c80ceb29"
+      },
+      "runId": "chat-<id:2>",
+      "type": "request/header"
+    },
+    {
+      "data": {
+        "content": "",
+        "finishReason": "tool_calls",
+        "hasImages": false,
+        "requestId": "req-<id:6>",
+        "step": 1,
+        "toolCalls": [
+          {
+            "arguments": "{\"key\":\"A-1\"}",
+            "id": "call_1",
+            "index": 0,
+            "metadata": {
+              "originalFormat": "openai",
+              "type": "function"
+            },
+            "name": "lookup",
+            "type": "function"
+          }
+        ],
+        "usage": {
+          "completionTokens": 8,
+          "promptTokens": 40,
+          "source": "provider",
+          "totalTokens": 48
+        }
+      },
+      "runId": "chat-<id:2>",
+      "type": "message/assistant"
+    },
+    {
+      "data": {
+        "limits": {
+          "maxTokensPerRun": 0,
+          "maxToolRounds": 50
+        },
+        "runUsage": {
+          "completionTokens": 8,
+          "promptTokens": 40,
+          "totalTokens": 48
+        },
+        "step": 1,
+        "usage": {
+          "completionTokens": 8,
+          "promptTokens": 40,
+          "source": "provider",
+          "totalTokens": 48
+        }
+      },
+      "runId": "chat-<id:2>",
+      "type": "budget/checkpoint"
+    },
+    {
+      "data": {
+        "activityKind": "tool",
+        "activityOrigin": "integration",
+        "args": {
+          "key": "A-1"
+        },
+        "argsRepaired": false,
+        "callId": "call_1",
+        "execution": "server",
+        "integration": "lookup",
+        "name": "lookup",
+        "parallelGroup": 0,
+        "step": 1,
+        "title": "lookup",
+        "toolId": "lookup"
+      },
+      "runId": "chat-<id:2>",
+      "type": "tool/call"
+    },
+    {
+      "data": {
+        "callId": "call_1",
+        "durationMs": "<ms>",
+        "hasImage": false,
+        "knowledgeSource": "integration",
+        "name": "lookup",
+        "resultBytes": 34,
+        "resultPreview": "{\"key\":\"A-1\",\"value\":\"record A-1\"}",
+        "step": 1,
+        "toolId": "lookup"
+      },
+      "runId": "chat-<id:2>",
+      "type": "tool/result"
+    },
+    {
+      "data": {
+        "callConfig": {
+          "maxTokens": 16384,
+          "nativeWebSearch": null,
+          "responseFormat": null,
+          "responseSchemaHash": null,
+          "stream": true,
+          "thinking": null
+        },
+        "configHash": "3c93315185ef6941913a41ff08ac06937738b4ddc106974917d4b46693fa0c31",
+        "language": "en",
+        "messageCount": 4,
+        "messagesDelta": [
+          {
+            "content": null,
+            "role": "assistant",
+            "tool_calls": [
+              {
+                "function": {
+                  "arguments": "{\"key\":\"A-1\"}",
+                  "name": "lookup"
+                },
+                "id": "call_1",
+                "index": 0,
+                "metadata": {
+                  "originalFormat": "openai",
+                  "type": "function"
+                },
+                "type": "function"
+              }
+            ]
+          },
+          {
+            "content": "{\"key\":\"A-1\",\"value\":\"record A-1\"}",
+            "name": "lookup",
+            "role": "tool",
+            "tool_call_id": "call_1"
+          }
+        ],
+        "messagesHash": "<hash>",
+        "model": "golden-model",
+        "modelId": "gpt-golden",
+        "provider": "openai",
+        "purpose": "agent-step",
+        "reason": "append",
+        "requestHash": "<hash>",
+        "requestId": "req-<id:7>",
+        "segment": "seg-<id:5>",
+        "step": 2,
+        "toolExecution": "server",
+        "toolSchemasHash": "63c8d635951ce6386760cddb8441264454c5d32ec38fd3bd53ae1df4c80ceb29"
+      },
+      "runId": "chat-<id:2>",
+      "type": "request/header"
+    },
+    {
+      "data": {
+        "content": "Record A-1 is open.",
+        "finishReason": "stop",
+        "hasImages": false,
+        "requestId": "req-<id:7>",
+        "step": 2,
+        "toolCalls": [],
+        "usage": {
+          "completionTokens": 5,
+          "promptTokens": 62,
+          "source": "provider",
+          "totalTokens": 67
+        }
+      },
+      "runId": "chat-<id:2>",
+      "type": "message/assistant"
+    },
+    {
+      "data": {
+        "limits": {
+          "maxTokensPerRun": 0,
+          "maxToolRounds": 50
+        },
+        "runUsage": {
+          "completionTokens": 13,
+          "promptTokens": 102,
+          "totalTokens": 115
+        },
+        "step": 2,
+        "usage": {
+          "completionTokens": 5,
+          "promptTokens": 62,
+          "source": "provider",
+          "totalTokens": 67
+        }
+      },
+      "runId": "chat-<id:2>",
+      "type": "budget/checkpoint"
+    },
+    {
+      "data": {
+        "answerBasis": [
+          {
+            "kind": "integration",
+            "label": "lookup"
+          }
+        ],
+        "durationMs": "<ms>",
+        "finishReason": "stop",
+        "knowledgeSources": [
+          "integration"
+        ],
+        "provenance": {
+          "ai_generated": true,
+          "content_hash": {
+            "alg": "sha-256",
+            "normalization": "nfc-trim",
+            "value": "0ccdd28a4e10ce410ddc3014c22b5cd8530ead620a2363d1d6e488da8a3d1b9a"
+          },
+          "created_at": "<ts>",
+          "generator": {
+            "installation_id": "inst_<id:3>",
+            "product": "iHub Apps",
+            "version": "<version>"
+          },
+          "model": {
+            "id": "golden-model",
+            "watermark": {
+              "applied": false,
+              "by": "none"
+            }
+          },
+          "output_id": "<id:4>",
+          "spec": "intrafind-provenance/1.0"
+        },
+        "status": "completed",
+        "usage": {
+          "completionTokens": 13,
+          "promptTokens": 102,
+          "source": "provider",
+          "totalTokens": 115
+        }
+      },
+      "runId": "chat-<id:2>",
+      "type": "run/end"
+    }
+  ],
+  "modelRequests": [
+    {
+      "options": {
+        "max_tokens": 16384,
+        "model": "gpt-golden",
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        }
+      },
+      "roles": [
+        "system",
+        "user"
+      ],
+      "systemPromptHash": "13fadf9ecc5aabb6cd6d7440d33d570933d30b88e7efa8c2527a999629fdec9a",
+      "tools": [
+        {
+          "name": "lookup",
+          "schema": "c7a040393456"
+        },
+        {
+          "name": "archive",
+          "schema": "bd859a150cfb"
+        },
+        {
+          "name": "dangerous",
+          "schema": "c7a040393456"
+        },
+        {
+          "name": "tracker",
+          "schema": "a805729d82e7"
+        },
+        {
+          "name": "ask_user",
+          "schema": "62fd0a80cb71"
+        }
+      ]
+    },
+    {
+      "options": {
+        "max_tokens": 16384,
+        "model": "gpt-golden",
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        }
+      },
+      "roles": [
+        "system",
+        "user",
+        "assistant",
+        "tool"
+      ],
+      "systemPromptHash": "13fadf9ecc5aabb6cd6d7440d33d570933d30b88e7efa8c2527a999629fdec9a",
+      "tools": [
+        {
+          "name": "lookup",
+          "schema": "c7a040393456"
+        },
+        {
+          "name": "archive",
+          "schema": "bd859a150cfb"
+        },
+        {
+          "name": "dangerous",
+          "schema": "c7a040393456"
+        },
+        {
+          "name": "tracker",
+          "schema": "a805729d82e7"
+        },
+        {
+          "name": "ask_user",
+          "schema": "62fd0a80cb71"
+        }
+      ]
+    }
+  ],
+  "offeredToolIds": [
+    [
+      "lookup",
+      "archive",
+      "dangerous",
+      "tracker",
+      "ask_user"
+    ],
+    [
+      "lookup",
+      "archive",
+      "dangerous",
+      "tracker",
+      "ask_user"
+    ]
+  ],
+  "storedMessage": {
+    "chat": {
+      "activeRunId": null,
+      "appId": "desk",
+      "createdAt": "<ts>",
+      "hasUnseenActivity": false,
+      "id": "<id:1>",
+      "identityMode": "default",
+      "lastMessageAt": "<ts>",
+      "messageCount": 2,
+      "modelId": "golden-model",
+      "origin": {
+        "createdVia": "ui"
+      },
+      "ownerId": "golden-user",
+      "runIds": [
+        "chat-<id:2>"
+      ],
+      "settings": null,
+      "status": "active",
+      "title": "Look up record A-1.",
+      "titleSetByUser": false
+    },
+    "messages": [
+      {
+        "clientMessageId": "msg-1",
+        "content": "Look up record A-1.",
+        "id": "<id:8>",
+        "role": "user",
+        "runId": "chat-<id:2>",
+        "ts": "<ts>"
+      },
+      {
+        "activity": {
+          "toolActivity": {
+            "items": [
+              {
+                "details": [
+                  {
+                    "more": 0,
+                    "name": "key",
+                    "values": [
+                      {
+                        "text": "A-1"
+                      }
+                    ]
+                  }
+                ],
+                "durationMs": "<ms>",
+                "id": "call_1",
+                "integration": "lookup",
+                "kind": "tool",
+                "name": "lookup",
+                "origin": "integration",
+                "sources": [],
+                "status": "completed",
+                "toolId": "lookup"
+              }
+            ],
+            "reading": null
+          }
+        },
+        "answerBasis": [
+          {
+            "kind": "integration",
+            "label": "lookup"
+          }
+        ],
+        "content": "Record A-1 is open.",
+        "finishReason": "stop",
+        "id": "<id:9>",
+        "provenance": {
+          "ai_generated": true,
+          "content_hash": {
+            "alg": "sha-256",
+            "normalization": "nfc-trim",
+            "value": "0ccdd28a4e10ce410ddc3014c22b5cd8530ead620a2363d1d6e488da8a3d1b9a"
+          },
+          "created_at": "<ts>",
+          "generator": {
+            "installation_id": "inst_<id:3>",
+            "product": "iHub Apps",
+            "version": "<version>"
+          },
+          "model": {
+            "id": "golden-model",
+            "watermark": {
+              "applied": false,
+              "by": "none"
+            }
+          },
+          "output_id": "<id:4>",
+          "spec": "intrafind-provenance/1.0"
+        },
+        "role": "assistant",
+        "runId": "chat-<id:2>",
+        "ts": "<ts>",
+        "usage": {
+          "completionTokens": 13,
+          "promptTokens": 102,
+          "totalTokens": 115
+        }
+      }
+    ]
+  },
+  "surface": "chat",
+  "title": "One tool call: the tool runs on the server and the model answers from its result. (GET stream)",
+  "toolCalls": [
+    {
+      "args": {
+        "key": "A-1"
+      },
+      "execution": "server",
+      "outcome": {
+        "result": "{\"key\":\"A-1\",\"value\":\"record A-1\"}"
+      },
+      "runId": "chat-<id:2>",
+      "toolId": "lookup"
+    }
+  ],
+  "toolSchemas": {
+    "62fd0a80cb71": {
+      "properties": {
+        "allow_other": {
+          "default": false,
+          "description": "For select/multiselect: allow user to enter a custom 'Other' value not in the options list.",
+          "type": "boolean"
+        },
+        "allow_skip": {
+          "default": false,
+          "description": "Allow the user to skip this question without providing an answer.",
+          "type": "boolean"
+        },
+        "context": {
+          "description": "Brief explanation of why you need this information, shown to the user to help them understand the question's purpose.",
+          "maxLength": 500,
+          "type": "string"
+        },
+        "input_type": {
+          "default": "select",
+          "description": "PREFER 'select' or 'multiselect' over 'text' when there are common choices! Use 'select' for single choice from options (RECOMMENDED), 'multiselect' for multiple choices, 'text' ONLY for truly open-ended answers, 'confirm' for yes/no, 'number' for numeric input, 'date' for dates.",
+          "enum": [
+            "text",
+            "select",
+            "multiselect",
+            "confirm",
+            "number",
+            "date"
+          ],
+          "type": "string"
+        },
+        "options": {
+          "description": "REQUIRED for select/multiselect! Provide 2-10 common options. Example: [{\"label\": \"English\", \"value\": \"en\"}, {\"label\": \"French\", \"value\": \"fr\"}]. Set allow_other=true if user might need an unlisted option.",
+          "items": {
+            "properties": {
+              "label": {
+                "description": "Display text for the option (max 100 chars)",
+                "maxLength": 100,
+                "type": "string"
+              },
+              "value": {
+                "description": "Value returned when selected (defaults to label if not provided, max 100 chars)",
+                "maxLength": 100,
+                "type": "string"
+              }
+            },
+            "required": [
+              "label"
+            ],
+            "type": "object"
+          },
+          "maxItems": 20,
+          "type": "array"
+        },
+        "placeholder": {
+          "description": "Placeholder text shown in the input field before user types.",
+          "maxLength": 200,
+          "type": "string"
+        },
+        "question": {
+          "description": "A SHORT clarifying question (e.g., 'Which language?' or 'What format?'). Do NOT include the user's input text in the question. Maximum 500 characters.",
+          "maxLength": 500,
+          "type": "string"
+        },
+        "validation": {
+          "description": "Validation rules for the user's input.",
+          "properties": {
+            "max": {
+              "description": "Maximum value for number input or maximum length for text.",
+              "type": "number"
+            },
+            "message": {
+              "description": "Custom error message to show when validation fails.",
+              "maxLength": 200,
+              "type": "string"
+            },
+            "min": {
+              "description": "Minimum value for number input or minimum length for text.",
+              "type": "number"
+            },
+            "pattern": {
+              "description": "Regular expression pattern for text validation (max 200 chars). Use simple patterns to avoid ReDoS.",
+              "maxLength": 200,
+              "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "required": [
+        "question"
+      ],
+      "type": "object"
+    },
+    "a805729d82e7": {
+      "properties": {
+        "query": {
+          "description": "What to search for",
+          "type": "string"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "type": "object"
+    },
+    "bd859a150cfb": {
+      "properties": {
+        "volume": {
+          "description": "The volume to read",
+          "type": "string"
+        }
+      },
+      "required": [
+        "volume"
+      ],
+      "type": "object"
+    },
+    "c7a040393456": {
+      "properties": {
+        "key": {
+          "description": "The key of the record",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key"
+      ],
+      "type": "object"
+    }
+  },
+  "usageRecords": [
+    {
+      "app": "desk",
+      "cid": "<id:1>",
+      "ct": 8,
+      "grp": [
+        "users"
+      ],
+      "lat": "<ms>",
+      "model": "golden-model",
+      "prov": "openai",
+      "pt": 40,
+      "rid": "req-<id:6>",
+      "src": "provider",
+      "st": "ok",
+      "surf": "chat",
+      "tc": 1,
+      "ts": "<ts>",
+      "ttft": "<ms>",
+      "type": "llm_call",
+      "uid": "<id:1>",
+      "v": 2
+    },
+    {
+      "app": "desk",
+      "cid": "<id:1>",
+      "ct": 5,
+      "grp": [
+        "users"
+      ],
+      "lat": "<ms>",
+      "model": "golden-model",
+      "prov": "openai",
+      "pt": 62,
+      "rid": "req-<id:7>",
+      "src": "provider",
+      "st": "ok",
+      "surf": "chat",
+      "tc": 0,
+      "ts": "<ts>",
+      "ttft": "<ms>",
+      "type": "llm_call",
+      "uid": "<id:1>",
+      "v": 2
+    }
+  ]
+}

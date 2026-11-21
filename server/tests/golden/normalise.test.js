@@ -21,6 +21,7 @@ import {
   projectModelRequest,
   sha256
 } from './normalise.js';
+import { RUN_CHAT_TITLE_RULE } from './surfaces/textRules.js';
 
 const UUID_A = '0b0c7d3e-5a1f-4c7e-9d2b-3f4a5b6c7d8e';
 const UUID_B = '9f8e7d6c-5b4a-4c3d-8e2f-1a0b9c8d7e6f';
@@ -119,6 +120,7 @@ test('durations become <ms>; a limit in milliseconds is a setting and stays', ()
       lat: 16,
       ttft: 15,
       took: 3,
+      pausedMs: 27,
       timeoutMs: 120000,
       maxWallClockMs: 180000,
       nested: [{ durationMs: 0 }]
@@ -129,6 +131,7 @@ test('durations become <ms>; a limit in milliseconds is a setting and stays', ()
       latencyMs: '<ms>',
       maxWallClockMs: 180000,
       nested: [{ durationMs: '<ms>' }],
+      pausedMs: '<ms>',
       timeoutMs: 120000,
       took: '<ms>',
       ttft: '<ms>'
@@ -196,6 +199,24 @@ test('a surface can name more volatile keys', () => {
   );
 });
 
+test('a surface can name more text rules, for a date that is written in a form of its own', () => {
+  // The rule a surface uses, not a copy of it (`surfaces/textRules.test.js` runs it over every
+  // month). "Sept" has four letters in en-GB.
+  const { normalise } = createNormaliser({ textRules: [RUN_CHAT_TITLE_RULE] });
+  assert.deepEqual(
+    normalise({
+      title: 'Release watch · Fri, 20 Nov 2026, 12:19',
+      september: 'Release watch · Fri, 10 Sept 2027, 11:00',
+      name: 'Release watch'
+    }),
+    {
+      name: 'Release watch',
+      september: 'Release watch · <when>',
+      title: 'Release watch · <when>'
+    }
+  );
+});
+
 /** What the harness captures: an envelope and the stream it was delivered to. */
 const onStream = (streamId, envelopes) => envelopes.map(envelope => ({ streamId, envelope }));
 
@@ -254,6 +275,41 @@ test('seq and rseq are dropped, after a check that they increase', () => {
     () => normaliseLedger([ledger[1], ledger[0]], normaliser),
     /seq does not increase at event 1 \(run\/start\): 2 then 1/
   );
+});
+
+test('a case that lets its server die names where: seq is checked on each side of the restart', () => {
+  const normaliser = createNormaliser();
+  const event = (seq, type) => ({ seq, ts: 'x', runId: 'workflow-1', type, data: {} });
+  // The process that started the run wrote 1 to 3; the one that continued it counts from 1.
+  const events = [
+    event(1, 'run/start'),
+    event(2, 'interaction/raised'),
+    event(3, 'run/paused'),
+    event(1, 'segment/start'),
+    event(2, 'run/end')
+  ];
+  // Without the restart named, a sequence that starts again is an error of the recording.
+  assert.throws(
+    () => normaliseLedger(events, normaliser),
+    /seq does not increase at event 3 \(segment\/start\): 3 then 1/
+  );
+  assert.deepEqual(
+    normaliseLedger(events, normaliser, { restartsAt: [3] }).map(e => e.type),
+    ['run/start', 'interaction/raised', 'run/paused', 'segment/start', 'run/end']
+  );
+  // Naming a restart excuses nothing on either side of it.
+  const brokenBefore = [event(1, 'run/start'), event(1, 'run/paused'), event(1, 'segment/start')];
+  assert.throws(
+    () => normaliseLedger(brokenBefore, normaliser, { restartsAt: [2] }),
+    /seq does not increase at event 1 \(run\/paused\): 1 then 1/
+  );
+  const brokenAfter = [event(1, 'run/start'), event(2, 'segment/start'), event(2, 'run/end')];
+  assert.throws(
+    () => normaliseLedger(brokenAfter, normaliser, { restartsAt: [1] }),
+    /seq does not increase at event 1 \(run\/end\): 2 then 2/
+  );
+  // A restart in the wrong place does not hide a sequence that starts again elsewhere.
+  assert.throws(() => normaliseLedger(events, normaliser, { restartsAt: [2] }), /3 then 1/);
 });
 
 test('seq counts per stream: a second stream starts again at 1, and the record names the stream', () => {

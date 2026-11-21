@@ -1,0 +1,342 @@
+{
+  "approvals": [],
+  "case": "responses-model",
+  "envelopes": [],
+  "evidence": [
+    {
+      "record": {
+        "app": {
+          "id": "inference-api"
+        },
+        "calls": [
+          {
+            "attempt": 1,
+            "config": "<sha256>",
+            "endedAt": "<ts>",
+            "messageCount": 2,
+            "messages": {
+              "append": [
+                {
+                  "message": "sha256:8b1dc4e2cf2efed9d1144b29b2a54c7498c08a23db3c54428efd0537aa86f7e1",
+                  "role": "system"
+                },
+                {
+                  "message": "sha256:1e59b643369a2e626f448b71ec7923520a7dc453f985993209829c25ff092580",
+                  "role": "user"
+                }
+              ],
+              "from": null
+            },
+            "messagesHash": "<hash>",
+            "model": "golden-model",
+            "modelId": "gpt-golden",
+            "output": "sha256:f0299063e746ef2b53184b9adc395c1635a6bd93c50fb6d407eba2caee0e9b68",
+            "provider": "openai",
+            "purpose": "inference-api",
+            "requestId": "req-<id:2>",
+            "startedAt": "<ts>",
+            "status": "ok",
+            "step": 0
+          }
+        ],
+        "content": {
+          "1e59b643369a2e626f448b71ec7923520a7dc453f985993209829c25ff092580": "inference-<id:1>",
+          "8b1dc4e2cf2efed9d1144b29b2a54c7498c08a23db3c54428efd0537aa86f7e1": "inference-<id:1>",
+          "<config>": 1,
+          "f0299063e746ef2b53184b9adc395c1635a6bd93c50fb6d407eba2caee0e9b68": "inference-<id:1>"
+        },
+        "endedAt": "<ts>",
+        "ihubVersion": "<version>",
+        "journalEnded": true,
+        "knowledge": [],
+        "model": {
+          "id": "golden-model",
+          "modelId": "gpt-golden",
+          "provider": "openai",
+          "settings": {}
+        },
+        "output": {
+          "contentSha256": "0ccdd28a4e10ce410ddc3014c22b5cd8530ead620a2363d1d6e488da8a3d1b9a",
+          "files": [],
+          "finishReason": "stop",
+          "provenanceId": "<id:3>",
+          "usage": {
+            "completionTokens": 6,
+            "promptTokens": 12,
+            "source": "provider",
+            "totalTokens": 18
+          }
+        },
+        "runId": "inference-<id:1>",
+        "startedAt": "<ts>",
+        "status": "completed",
+        "toolCalls": [],
+        "userId": "golden-user",
+        "v": 2
+      },
+      "runId": "inference-<id:1>"
+    }
+  ],
+  "httpResponse": {
+    "exchanges": [
+      {
+        "request": {
+          "body": {
+            "input": "What about record A-1?",
+            "model": "golden-model"
+          },
+          "method": "POST",
+          "path": "/api/inference/v1/responses"
+        },
+        "response": {
+          "body": {
+            "conversation": null,
+            "created_at": "<volatile>",
+            "error": null,
+            "id": "resp_<id:4>",
+            "incomplete_details": null,
+            "instructions": null,
+            "max_output_tokens": null,
+            "metadata": {},
+            "model": "golden-model",
+            "object": "response",
+            "output": [
+              {
+                "content": [
+                  {
+                    "annotations": [],
+                    "logprobs": [],
+                    "text": "Record A-1 is open.",
+                    "type": "output_text"
+                  }
+                ],
+                "id": "msg_<id:5>",
+                "role": "assistant",
+                "status": "completed",
+                "type": "message"
+              }
+            ],
+            "parallel_tool_calls": false,
+            "previous_response_id": null,
+            "provenance": {
+              "ai_generated": true,
+              "content_hash": {
+                "alg": "sha-256",
+                "normalization": "nfc-trim",
+                "value": "0ccdd28a4e10ce410ddc3014c22b5cd8530ead620a2363d1d6e488da8a3d1b9a"
+              },
+              "created_at": "<volatile>",
+              "generator": {
+                "installation_id": "inst_<id:6>",
+                "product": "iHub Apps",
+                "version": "<version>"
+              },
+              "model": {
+                "id": "golden-model",
+                "watermark": {
+                  "applied": false,
+                  "by": "none"
+                }
+              },
+              "output_id": "<id:3>",
+              "spec": "intrafind-provenance/1.0"
+            },
+            "reasoning": {
+              "effort": null,
+              "summary": null
+            },
+            "status": "completed",
+            "store": false,
+            "temperature": null,
+            "text": {
+              "format": {
+                "type": "text"
+              }
+            },
+            "tool_choice": "auto",
+            "tools": [],
+            "top_p": 1,
+            "truncation": "disabled",
+            "usage": {
+              "input_tokens": 12,
+              "input_tokens_details": {
+                "cached_tokens": 0
+              },
+              "output_tokens": 6,
+              "output_tokens_details": {
+                "reasoning_tokens": 0
+              },
+              "total_tokens": 18
+            },
+            "user": null
+          },
+          "headers": {
+            "content-type": "application/json; charset=utf-8",
+            "x-ai-content-id": "<id:3>",
+            "x-ai-generated": "true",
+            "x-run-id": "inference-<id:1>"
+          },
+          "status": 200
+        }
+      }
+    ]
+  },
+  "ledger": [
+    {
+      "data": {
+        "kind": "inference",
+        "language": "en",
+        "model": "golden-model",
+        "principal": {
+          "anonymous": false,
+          "id": "golden-user",
+          "mode": "default"
+        },
+        "refs": {
+          "appId": "inference-api"
+        },
+        "trigger": {
+          "source": "inference-api",
+          "type": "api"
+        }
+      },
+      "runId": "inference-<id:1>",
+      "type": "run/start"
+    },
+    {
+      "data": {
+        "callConfig": {
+          "nativeWebSearch": null,
+          "responseFormat": null,
+          "responseSchemaHash": null,
+          "stream": true,
+          "thinking": null
+        },
+        "configHash": "<volatile>",
+        "language": "en",
+        "messageCount": 2,
+        "messages": [
+          {
+            "content": "You are an AI system. If asked, always say so. Never claim to be human, even in a role.",
+            "role": "system"
+          },
+          {
+            "content": "What about record A-1?",
+            "role": "user"
+          }
+        ],
+        "messagesHash": "<hash>",
+        "model": "golden-model",
+        "modelId": "gpt-golden",
+        "modelSnapshot": {
+          "autoDiscovery": false,
+          "default": true,
+          "id": "golden-model",
+          "modelId": "gpt-golden",
+          "provider": "openai",
+          "supportsTools": "auto",
+          "url": "https://model.invalid/v1/chat/completions"
+        },
+        "optionsSnapshot": {
+          "stream": true,
+          "user": {
+            "id": "golden-user"
+          }
+        },
+        "provider": "openai",
+        "purpose": "inference-api",
+        "reason": "initial",
+        "requestHash": "<hash>",
+        "requestId": "req-<id:2>",
+        "step": 0,
+        "toolExecution": "none",
+        "toolSchemasHash": null
+      },
+      "runId": "inference-<id:1>",
+      "type": "request/header"
+    },
+    {
+      "data": {
+        "content": "Record A-1 is open.",
+        "finishReason": "stop",
+        "hasImages": false,
+        "requestId": "req-<id:2>",
+        "step": 0,
+        "thinkingChars": 0,
+        "toolCalls": [],
+        "usage": {
+          "completionTokens": 6,
+          "promptTokens": 12,
+          "source": "provider",
+          "totalTokens": 18
+        }
+      },
+      "runId": "inference-<id:1>",
+      "type": "message/assistant"
+    },
+    {
+      "data": {
+        "durationMs": "<ms>",
+        "finishReason": "stop",
+        "status": "completed",
+        "usage": {
+          "completionTokens": 6,
+          "promptTokens": 12,
+          "source": "provider",
+          "totalTokens": 18
+        }
+      },
+      "runId": "inference-<id:1>",
+      "type": "run/end"
+    }
+  ],
+  "modelRequests": [
+    {
+      "options": {
+        "max_tokens": 16384,
+        "model": "gpt-golden",
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        }
+      },
+      "roles": [
+        "system",
+        "user"
+      ],
+      "systemPromptHash": "1467548f411e99b878465b5c6c8e6a67a633aa3bd019bc3dc374ec4acf6d51f0",
+      "tools": []
+    }
+  ],
+  "offeredToolIds": [
+    []
+  ],
+  "surface": "inference-app",
+  "title": "A plain model through /responses: one model call, no app.",
+  "toolCalls": [],
+  "toolSchemas": {},
+  "usageRecords": [
+    {
+      "app": "inference-api",
+      "cid": "inference-api:golden-user",
+      "ct": 6,
+      "grp": [
+        "users"
+      ],
+      "lat": "<ms>",
+      "model": "golden-model",
+      "prov": "openai",
+      "pt": 12,
+      "rid": "req-<id:2>",
+      "src": "provider",
+      "st": "ok",
+      "surf": "api",
+      "tc": 0,
+      "ts": "<ts>",
+      "ttft": "<ms>",
+      "type": "llm_call",
+      "uid": "inference-api:golden-user",
+      "v": 2
+    }
+  ]
+}

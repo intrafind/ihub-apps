@@ -1,0 +1,757 @@
+{
+  "approvals": [],
+  "case": "plain",
+  "envelopes": [
+    {
+      "data": {
+        "kind": "chat",
+        "model": "golden-model",
+        "refs": {
+          "appId": "digest",
+          "chatId": "<id:1>",
+          "messageId": "<id:2>"
+        }
+      },
+      "runId": "chat-<id:3>",
+      "streamId": "<id:1>",
+      "type": "run/started"
+    },
+    {
+      "data": {
+        "content": "Record A-1 is open.",
+        "kind": "text",
+        "step": 1
+      },
+      "runId": "chat-<id:3>",
+      "streamId": "<id:1>",
+      "type": "step/delta"
+    },
+    {
+      "data": {
+        "content": "Record A-1 is open.",
+        "finishReason": "stop",
+        "sources": [],
+        "step": 1,
+        "toolCalls": [],
+        "usage": {
+          "completionTokens": 6,
+          "promptTokens": 60,
+          "source": "provider",
+          "totalTokens": 66
+        }
+      },
+      "runId": "chat-<id:3>",
+      "streamId": "<id:1>",
+      "type": "step/completed"
+    },
+    {
+      "data": {
+        "answerBasis": [
+          {
+            "kind": "model"
+          }
+        ],
+        "finishReason": "stop",
+        "knowledgeSources": [
+          "llm"
+        ],
+        "provenance": {
+          "ai_generated": true,
+          "content_hash": {
+            "alg": "sha-256",
+            "normalization": "nfc-trim",
+            "value": "0ccdd28a4e10ce410ddc3014c22b5cd8530ead620a2363d1d6e488da8a3d1b9a"
+          },
+          "created_at": "<ts>",
+          "generator": {
+            "installation_id": "inst_<id:4>",
+            "product": "iHub Apps",
+            "version": "<version>"
+          },
+          "model": {
+            "id": "golden-model",
+            "watermark": {
+              "applied": false,
+              "by": "none"
+            }
+          },
+          "output_id": "<id:5>",
+          "spec": "intrafind-provenance/1.0"
+        },
+        "status": "completed",
+        "usage": {
+          "completionTokens": 6,
+          "promptTokens": 60,
+          "source": "provider",
+          "totalTokens": 66
+        }
+      },
+      "runId": "chat-<id:3>",
+      "streamId": "<id:1>",
+      "type": "run/ended"
+    }
+  ],
+  "evidence": [
+    {
+      "messageId": "<id:12>",
+      "record": {
+        "app": {
+          "config": "<sha256>",
+          "id": "digest"
+        },
+        "calls": [
+          {
+            "attempt": 1,
+            "config": "<sha256>",
+            "endedAt": "<ts>",
+            "messageCount": 2,
+            "messages": {
+              "append": [
+                {
+                  "message": "<sha256>",
+                  "role": "system"
+                },
+                {
+                  "message": "<sha256>",
+                  "role": "user"
+                }
+              ],
+              "from": null
+            },
+            "messagesHash": "<hash>",
+            "model": "golden-model",
+            "modelId": "gpt-golden",
+            "output": "<sha256>",
+            "provider": "openai",
+            "purpose": "agent-step",
+            "requestId": "req-<id:7>",
+            "segment": "seg-<id:6>",
+            "startedAt": "<ts>",
+            "status": "ok",
+            "step": 1,
+            "tools": [
+              "<sha256>",
+              "<sha256>"
+            ]
+          }
+        ],
+        "chatId": "<id:1>",
+        "content": {
+          "<sha256>": 7
+        },
+        "endedAt": "<ts>",
+        "ihubVersion": "<version>",
+        "journalEnded": true,
+        "knowledge": [],
+        "messageId": "<id:12>",
+        "model": {
+          "id": "golden-model",
+          "modelId": "gpt-golden",
+          "provider": "openai",
+          "settings": {
+            "maxTokens": 16384
+          }
+        },
+        "output": {
+          "contentSha256": "<sha256>",
+          "files": [],
+          "finishReason": "stop",
+          "provenanceId": "<id:5>",
+          "usage": {
+            "completionTokens": 6,
+            "promptTokens": 60,
+            "source": "provider",
+            "totalTokens": 66
+          }
+        },
+        "runId": "chat-<id:3>",
+        "startedAt": "<ts>",
+        "status": "completed",
+        "toolCalls": [],
+        "userId": "golden-user",
+        "v": 2
+      }
+    }
+  ],
+  "ledger": [
+    {
+      "data": {
+        "kind": "chat",
+        "language": "en",
+        "model": "golden-model",
+        "principal": {
+          "anonymous": false,
+          "id": "golden-user",
+          "mode": "default"
+        },
+        "refs": {
+          "appId": "digest",
+          "chatId": "<id:1>"
+        },
+        "trigger": {
+          "source": "scheduled-task",
+          "type": "schedule"
+        }
+      },
+      "runId": "chat-<id:3>",
+      "type": "run/start"
+    },
+    {
+      "data": {
+        "content": "Report the state of record A-1. Run 1.",
+        "messageId": "<id:2>",
+        "step": 0
+      },
+      "runId": "chat-<id:3>",
+      "type": "message/user"
+    },
+    {
+      "data": {
+        "purpose": "agent-step",
+        "segment": "seg-<id:6>"
+      },
+      "runId": "chat-<id:3>",
+      "type": "segment/start"
+    },
+    {
+      "data": {
+        "callConfig": {
+          "maxTokens": 16384,
+          "nativeWebSearch": null,
+          "responseFormat": null,
+          "responseSchemaHash": null,
+          "stream": true,
+          "thinking": null
+        },
+        "configHash": "<volatile>",
+        "language": "en",
+        "messageCount": 2,
+        "messages": [
+          {
+            "content": "You write digests.\n\nUnattended run: this conversation was started by a scheduled task, and no user is available while it runs. Do not ask questions or wait for confirmation; make reasonable assumptions, state them briefly, and complete the task. The user will read the result later.\n\nYou are an AI system. If asked, always say so. Never claim to be human, even in a role.",
+            "role": "system"
+          },
+          {
+            "content": "Report the state of record A-1. Run 1.",
+            "role": "user"
+          }
+        ],
+        "messagesHash": "<hash>",
+        "model": "golden-model",
+        "modelId": "gpt-golden",
+        "modelSnapshot": {
+          "autoDiscovery": false,
+          "default": true,
+          "id": "golden-model",
+          "modelId": "gpt-golden",
+          "provider": "openai",
+          "supportsTools": "auto",
+          "url": "https://model.invalid/v1/chat/completions"
+        },
+        "optionsSnapshot": {
+          "appConfig": {
+            "description": {
+              "en": "The digest app"
+            },
+            "enabled": true,
+            "id": "digest",
+            "integrations": {
+              "dangerous": {},
+              "lookup": {}
+            },
+            "name": {
+              "en": "digest"
+            },
+            "preferredModel": "golden-model",
+            "system": {
+              "en": "You write digests."
+            }
+          },
+          "chatId": "<id:1>",
+          "imageConfig": null,
+          "integrationScopes": {},
+          "language": "en",
+          "maxTokens": 16384,
+          "nativeWebSearch": null,
+          "stream": true,
+          "user": {
+            "id": "golden-user"
+          }
+        },
+        "provider": "openai",
+        "purpose": "agent-step",
+        "reason": "initial",
+        "requestHash": "<hash>",
+        "requestId": "req-<id:7>",
+        "segment": "seg-<id:6>",
+        "step": 1,
+        "toolExecution": "server",
+        "toolSchemas": [
+          {
+            "_integration": {
+              "action": "lookup",
+              "actionTitle": "lookup",
+              "definition": "test.fixture/lookup",
+              "fingerprint": "sha256:bc7875865e9da481dc2ab49f6f962f5f4431b52f241441cb0e3ebcc8859832ba",
+              "fixedToolId": true,
+              "instanceId": "lookup",
+              "instanceLabel": "lookup"
+            },
+            "approval": "never",
+            "approvalSource": "default",
+            "dataFlow": "external",
+            "description": "Look up a record",
+            "examples": [],
+            "id": "lookup",
+            "name": "lookup: lookup",
+            "parameters": {
+              "properties": {
+                "key": {
+                  "description": "The key of the record",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key"
+              ],
+              "type": "object"
+            },
+            "readOnly": true,
+            "sideEffect": "read",
+            "sideEffectSource": "definition",
+            "type": "integration"
+          },
+          {
+            "_integration": {
+              "action": "dangerous",
+              "actionTitle": "dangerous",
+              "definition": "test.fixture/dangerous",
+              "fingerprint": "sha256:dfd1e2fcf928e6e343368b935321e5bc105cc592a5c7d726bbc1b20c39ae8cd1",
+              "fixedToolId": true,
+              "instanceId": "dangerous",
+              "instanceLabel": "dangerous"
+            },
+            "approval": "always",
+            "approvalSource": "tool",
+            "dataFlow": "external",
+            "description": "Close a record for good",
+            "examples": [],
+            "id": "dangerous",
+            "name": "dangerous: dangerous",
+            "parameters": {
+              "properties": {
+                "key": {
+                  "description": "The key of the record",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key"
+              ],
+              "type": "object"
+            },
+            "readOnly": false,
+            "requiresApproval": true,
+            "sideEffect": "write",
+            "sideEffectSource": "definition",
+            "type": "integration"
+          }
+        ],
+        "toolSchemasHash": "eada8b50ef6dee94444d7561562823e424bda24577b843d5640d6329213e425e"
+      },
+      "runId": "chat-<id:3>",
+      "type": "request/header"
+    },
+    {
+      "data": {
+        "content": "Record A-1 is open.",
+        "finishReason": "stop",
+        "hasImages": false,
+        "requestId": "req-<id:7>",
+        "step": 1,
+        "toolCalls": [],
+        "usage": {
+          "completionTokens": 6,
+          "promptTokens": 60,
+          "source": "provider",
+          "totalTokens": 66
+        }
+      },
+      "runId": "chat-<id:3>",
+      "type": "message/assistant"
+    },
+    {
+      "data": {
+        "limits": {
+          "maxTokensPerRun": 0,
+          "maxToolRounds": 50
+        },
+        "runUsage": {
+          "completionTokens": 6,
+          "promptTokens": 60,
+          "totalTokens": 66
+        },
+        "step": 1,
+        "usage": {
+          "completionTokens": 6,
+          "promptTokens": 60,
+          "source": "provider",
+          "totalTokens": 66
+        }
+      },
+      "runId": "chat-<id:3>",
+      "type": "budget/checkpoint"
+    },
+    {
+      "data": {
+        "answerBasis": [
+          {
+            "kind": "model"
+          }
+        ],
+        "durationMs": "<ms>",
+        "finishReason": "stop",
+        "knowledgeSources": [
+          "llm"
+        ],
+        "provenance": {
+          "ai_generated": true,
+          "content_hash": {
+            "alg": "sha-256",
+            "normalization": "nfc-trim",
+            "value": "0ccdd28a4e10ce410ddc3014c22b5cd8530ead620a2363d1d6e488da8a3d1b9a"
+          },
+          "created_at": "<ts>",
+          "generator": {
+            "installation_id": "inst_<id:4>",
+            "product": "iHub Apps",
+            "version": "<version>"
+          },
+          "model": {
+            "id": "golden-model",
+            "watermark": {
+              "applied": false,
+              "by": "none"
+            }
+          },
+          "output_id": "<id:5>",
+          "spec": "intrafind-provenance/1.0"
+        },
+        "status": "completed",
+        "usage": {
+          "completionTokens": 6,
+          "promptTokens": 60,
+          "source": "provider",
+          "totalTokens": 66
+        }
+      },
+      "runId": "chat-<id:3>",
+      "type": "run/end"
+    }
+  ],
+  "modelRequests": [
+    {
+      "options": {
+        "max_tokens": 16384,
+        "model": "gpt-golden",
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        }
+      },
+      "roles": [
+        "system",
+        "user"
+      ],
+      "systemPromptHash": "627d01094bc3fe570f9901513294925a5559ec12ddde1058534de0ef84b23a55",
+      "tools": [
+        {
+          "name": "lookup",
+          "schema": "c7a040393456"
+        },
+        {
+          "name": "dangerous",
+          "schema": "c7a040393456"
+        }
+      ]
+    }
+  ],
+  "offeredToolIds": [
+    [
+      "lookup",
+      "dangerous"
+    ]
+  ],
+  "result": {
+    "executions": [
+      {
+        "appId": "digest",
+        "approval": null,
+        "chatId": "<id:1>",
+        "durationMs": "<ms>",
+        "execution": {
+          "leaseUntil": "<ts>",
+          "token": "<id:8>"
+        },
+        "finishedAt": "<ts>",
+        "id": "<id:9>",
+        "ledgerRunIds": [
+          "chat-<id:3>"
+        ],
+        "modelId": null,
+        "ownerId": "golden-user",
+        "queuedAt": "<ts>",
+        "reason": null,
+        "runNumber": 1,
+        "scheduledFor": "<ts>",
+        "startedAt": "<ts>",
+        "status": "succeeded",
+        "taskId": "st-<id:10>",
+        "taskName": "Release watch",
+        "trigger": "manual",
+        "usage": {
+          "completionTokens": 6,
+          "promptTokens": 60,
+          "totalTokens": 66
+        },
+        "watched": false
+      }
+    ],
+    "notes": {
+      "body": "",
+      "chars": 0,
+      "enabled": false,
+      "maxChars": 16000,
+      "platformEnabled": true,
+      "updatedAt": null,
+      "updatedBy": null,
+      "version": 0
+    },
+    "run": {
+      "appId": "digest",
+      "approval": null,
+      "chatId": "<id:1>",
+      "durationMs": "<ms>",
+      "execution": {
+        "leaseUntil": "<ts>",
+        "token": "<id:8>"
+      },
+      "finishedAt": "<ts>",
+      "id": "<id:9>",
+      "ledgerRunIds": [
+        "chat-<id:3>"
+      ],
+      "modelId": null,
+      "ownerId": "golden-user",
+      "queuedAt": "<ts>",
+      "reason": null,
+      "runNumber": 1,
+      "scheduledFor": "<ts>",
+      "startedAt": "<ts>",
+      "status": "succeeded",
+      "taskId": "st-<id:10>",
+      "taskName": "Release watch",
+      "trigger": "manual",
+      "usage": {
+        "completionTokens": 6,
+        "promptTokens": 60,
+        "totalTokens": 66
+      },
+      "watched": false
+    },
+    "task": {
+      "activeRun": null,
+      "allowedTools": [],
+      "appId": "digest",
+      "consecutiveFailures": 0,
+      "createdAt": "<ts>",
+      "createdVia": "ui",
+      "description": "",
+      "effectiveRetention": {
+        "maxAgeDays": 90,
+        "maxRuns": 0
+      },
+      "enabledTools": null,
+      "id": "st-<id:10>",
+      "instructions": "Report the state of record A-1. Run {{run_number}}.",
+      "integrationScopes": null,
+      "lastRun": {
+        "chatId": "<id:1>",
+        "durationMs": "<ms>",
+        "finishedAt": "<ts>",
+        "id": "<id:9>",
+        "reason": null,
+        "scheduledFor": "<ts>",
+        "startedAt": "<ts>",
+        "status": "succeeded",
+        "trigger": "manual"
+      },
+      "lastRunAt": "<ts>",
+      "lastSuccessfulRunAt": "<ts>",
+      "memory": {
+        "enabled": false
+      },
+      "memorySummary": null,
+      "modelId": null,
+      "name": "Release watch",
+      "nextRunAt": "<ts>",
+      "nextSlotAt": "<ts>",
+      "notify": "always",
+      "owner": {
+        "name": "Golden User",
+        "userId": "golden-user",
+        "username": "golden-user"
+      },
+      "ownerId": "golden-user",
+      "retention": null,
+      "runNumber": 1,
+      "schedule": {
+        "time": "08:00",
+        "timezone": "Europe/Berlin",
+        "type": "daily"
+      },
+      "scheduleDescription": "Every day at 08:00, time zone Europe/Berlin",
+      "scheduledRunCount": 0,
+      "schemaVersion": 1,
+      "staggerMinutes": 0,
+      "status": "active",
+      "statusReason": null,
+      "unseenCount": 1,
+      "unseenRuns": [
+        {
+          "chatId": "<id:1>",
+          "finishedAt": "<ts>",
+          "id": "<id:9>",
+          "status": "succeeded"
+        }
+      ],
+      "upcomingRuns": [
+        "<ts>",
+        "<ts>",
+        "<ts>"
+      ],
+      "updatedAt": "<ts>",
+      "variables": null,
+      "websearchEnabled": null
+    }
+  },
+  "storedMessage": {
+    "chat": {
+      "activeRunId": null,
+      "appId": "digest",
+      "createdAt": "<ts>",
+      "hasUnseenActivity": true,
+      "id": "<id:1>",
+      "identityMode": "default",
+      "lastMessageAt": "<ts>",
+      "messageCount": 2,
+      "modelId": "golden-model",
+      "origin": {
+        "createdVia": "scheduled-task",
+        "runId": "<id:9>",
+        "taskId": "st-<id:10>",
+        "taskName": "Release watch"
+      },
+      "ownerId": "golden-user",
+      "runIds": [
+        "chat-<id:3>"
+      ],
+      "settings": null,
+      "status": "active",
+      "title": "Release watch · <when>",
+      "titleSetByUser": false
+    },
+    "messages": [
+      {
+        "clientMessageId": "<id:2>",
+        "content": "Report the state of record A-1. Run 1.",
+        "id": "<id:11>",
+        "role": "user",
+        "runId": "chat-<id:3>",
+        "ts": "<ts>"
+      },
+      {
+        "answerBasis": [
+          {
+            "kind": "model"
+          }
+        ],
+        "content": "Record A-1 is open.",
+        "finishReason": "stop",
+        "id": "<id:12>",
+        "provenance": {
+          "ai_generated": true,
+          "content_hash": {
+            "alg": "sha-256",
+            "normalization": "nfc-trim",
+            "value": "0ccdd28a4e10ce410ddc3014c22b5cd8530ead620a2363d1d6e488da8a3d1b9a"
+          },
+          "created_at": "<ts>",
+          "generator": {
+            "installation_id": "inst_<id:4>",
+            "product": "iHub Apps",
+            "version": "<version>"
+          },
+          "model": {
+            "id": "golden-model",
+            "watermark": {
+              "applied": false,
+              "by": "none"
+            }
+          },
+          "output_id": "<id:5>",
+          "spec": "intrafind-provenance/1.0"
+        },
+        "role": "assistant",
+        "runId": "chat-<id:3>",
+        "ts": "<ts>",
+        "usage": {
+          "completionTokens": 6,
+          "promptTokens": 60,
+          "totalTokens": 66
+        }
+      }
+    ]
+  },
+  "surface": "scheduled-task",
+  "title": "A run without tools: the answer is stored in the chat of the run.",
+  "toolCalls": [],
+  "toolSchemas": {
+    "c7a040393456": {
+      "properties": {
+        "key": {
+          "description": "The key of the record",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key"
+      ],
+      "type": "object"
+    }
+  },
+  "usageRecords": [
+    {
+      "app": "digest",
+      "cid": "<id:1>",
+      "ct": 6,
+      "grp": [
+        "users"
+      ],
+      "lat": "<ms>",
+      "model": "golden-model",
+      "prov": "openai",
+      "pt": 60,
+      "rid": "req-<id:7>",
+      "src": "provider",
+      "st": "ok",
+      "surf": "task",
+      "tc": 0,
+      "ts": "<ts>",
+      "ttft": "<ms>",
+      "type": "llm_call",
+      "uid": "<id:1>",
+      "v": 2
+    }
+  ]
+}

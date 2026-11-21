@@ -1,0 +1,2622 @@
+{
+  "approvals": [],
+  "case": "connect-resume",
+  "envelopes": [
+    {
+      "data": {
+        "kind": "chat",
+        "model": "golden-model",
+        "refs": {
+          "appId": "desk",
+          "chatId": "<id:1>",
+          "messageId": "msg-1"
+        }
+      },
+      "runId": "chat-<id:2>",
+      "streamId": "<id:1>",
+      "type": "run/started"
+    },
+    {
+      "data": {
+        "content": "",
+        "finishReason": "tool_calls",
+        "sources": [],
+        "step": 1,
+        "toolCalls": [
+          {
+            "arguments": "{\"query\":\"printer\"}",
+            "id": "call_1",
+            "index": 0,
+            "metadata": {
+              "originalFormat": "openai",
+              "type": "function"
+            },
+            "name": "tracker",
+            "type": "function"
+          }
+        ],
+        "usage": {
+          "completionTokens": 8,
+          "promptTokens": 40,
+          "source": "provider",
+          "totalTokens": 48
+        }
+      },
+      "runId": "chat-<id:2>",
+      "streamId": "<id:1>",
+      "type": "step/completed"
+    },
+    {
+      "data": {
+        "activityKind": "tool",
+        "activityOrigin": "integration",
+        "args": {
+          "query": "printer"
+        },
+        "callId": "call_1",
+        "execution": "server",
+        "integration": "tracker",
+        "name": "tracker",
+        "step": 1,
+        "title": "tracker",
+        "toolId": "tracker"
+      },
+      "runId": "chat-<id:2>",
+      "streamId": "<id:1>",
+      "type": "tool/started"
+    },
+    {
+      "data": {
+        "authRequired": {
+          "action": "tracker",
+          "integration": "tracker",
+          "name": "tracker",
+          "reason": "not_connected"
+        },
+        "callId": "call_1",
+        "durationMs": "<ms>",
+        "name": "tracker",
+        "resultPreview": {
+          "connectUrl": "/api/integrations/tracker/_connect",
+          "error": "INTEGRATION_AUTH_REQUIRED",
+          "integration": "tracker",
+          "message": "Connect the tracker to use this tool.",
+          "reason": "not_connected"
+        },
+        "step": 1,
+        "toolId": "tracker"
+      },
+      "runId": "chat-<id:2>",
+      "streamId": "<id:1>",
+      "type": "tool/completed"
+    },
+    {
+      "data": {
+        "content": "Connect the tracker and I will search it.",
+        "kind": "text",
+        "step": 2
+      },
+      "runId": "chat-<id:2>",
+      "streamId": "<id:1>",
+      "type": "step/delta"
+    },
+    {
+      "data": {
+        "content": "Connect the tracker and I will search it.",
+        "finishReason": "stop",
+        "sources": [],
+        "step": 2,
+        "toolCalls": [],
+        "usage": {
+          "completionTokens": 9,
+          "promptTokens": 70,
+          "source": "provider",
+          "totalTokens": 79
+        }
+      },
+      "runId": "chat-<id:2>",
+      "streamId": "<id:1>",
+      "type": "step/completed"
+    },
+    {
+      "data": {
+        "answerBasis": [
+          {
+            "kind": "model"
+          }
+        ],
+        "finishReason": "stop",
+        "knowledgeSources": [
+          "llm"
+        ],
+        "provenance": {
+          "ai_generated": true,
+          "content_hash": {
+            "alg": "sha-256",
+            "normalization": "nfc-trim",
+            "value": "65a5ce18dc05112c6f440f669b086fdbe20eeeba4f1f044fa4725bf135ddcb89"
+          },
+          "created_at": "<ts>",
+          "generator": {
+            "installation_id": "inst_<id:3>",
+            "product": "iHub Apps",
+            "version": "<version>"
+          },
+          "model": {
+            "id": "golden-model",
+            "watermark": {
+              "applied": false,
+              "by": "none"
+            }
+          },
+          "output_id": "<id:4>",
+          "spec": "intrafind-provenance/1.0"
+        },
+        "status": "completed",
+        "usage": {
+          "completionTokens": 17,
+          "promptTokens": 110,
+          "source": "provider",
+          "totalTokens": 127
+        }
+      },
+      "runId": "chat-<id:2>",
+      "streamId": "<id:1>",
+      "type": "run/ended"
+    },
+    {
+      "data": {
+        "kind": "chat",
+        "model": "golden-model",
+        "refs": {
+          "appId": "desk",
+          "chatId": "<id:1>",
+          "messageId": "msg-2"
+        }
+      },
+      "runId": "chat-<id:5>",
+      "streamId": "<id:1>",
+      "type": "run/started"
+    },
+    {
+      "data": {
+        "activityKind": "tool",
+        "activityOrigin": "integration",
+        "args": {
+          "query": "printer"
+        },
+        "callId": "call_1",
+        "execution": "server",
+        "integration": "tracker",
+        "name": "tracker",
+        "step": 0,
+        "title": "tracker",
+        "toolId": "tracker"
+      },
+      "runId": "chat-<id:5>",
+      "streamId": "<id:1>",
+      "type": "tool/started"
+    },
+    {
+      "data": {
+        "callId": "call_1",
+        "durationMs": "<ms>",
+        "knowledgeSource": "integration",
+        "name": "tracker",
+        "resultPreview": {
+          "issues": [
+            {
+              "key": "TRK-7",
+              "title": "Printer on fire"
+            }
+          ],
+          "query": "printer"
+        },
+        "step": 0,
+        "toolId": "tracker"
+      },
+      "runId": "chat-<id:5>",
+      "streamId": "<id:1>",
+      "type": "tool/completed"
+    },
+    {
+      "data": {
+        "content": "TRK-7: the printer is on fire.",
+        "kind": "text",
+        "step": 1
+      },
+      "runId": "chat-<id:5>",
+      "streamId": "<id:1>",
+      "type": "step/delta"
+    },
+    {
+      "data": {
+        "content": "TRK-7: the printer is on fire.",
+        "finishReason": "stop",
+        "sources": [
+          "integration"
+        ],
+        "step": 1,
+        "toolCalls": [],
+        "usage": {
+          "completionTokens": 8,
+          "promptTokens": 80,
+          "source": "provider",
+          "totalTokens": 88
+        }
+      },
+      "runId": "chat-<id:5>",
+      "streamId": "<id:1>",
+      "type": "step/completed"
+    },
+    {
+      "data": {
+        "answerBasis": [
+          {
+            "kind": "integration",
+            "label": "tracker"
+          }
+        ],
+        "finishReason": "stop",
+        "knowledgeSources": [
+          "integration"
+        ],
+        "provenance": {
+          "ai_generated": true,
+          "content_hash": {
+            "alg": "sha-256",
+            "normalization": "nfc-trim",
+            "value": "b8feab89b6dc83e52c16faf35589dc1e233beed3c39dacab22e42c7417e493f6"
+          },
+          "created_at": "<ts>",
+          "generator": {
+            "installation_id": "inst_<id:3>",
+            "product": "iHub Apps",
+            "version": "<version>"
+          },
+          "model": {
+            "id": "golden-model",
+            "watermark": {
+              "applied": false,
+              "by": "none"
+            }
+          },
+          "output_id": "<id:6>",
+          "spec": "intrafind-provenance/1.0"
+        },
+        "status": "completed",
+        "usage": {
+          "completionTokens": 8,
+          "promptTokens": 80,
+          "source": "provider",
+          "totalTokens": 88
+        }
+      },
+      "runId": "chat-<id:5>",
+      "streamId": "<id:1>",
+      "type": "run/ended"
+    }
+  ],
+  "evidence": [
+    {
+      "messageId": "<id:13>",
+      "record": {
+        "app": {
+          "config": "sha256:21de82c12132e8d266e767c503a2e1b94aabbeeda775bbfc569f30047d1d7aeb",
+          "id": "desk"
+        },
+        "calls": [
+          {
+            "attempt": 1,
+            "config": "sha256:dc9decb6b813a97faff3c90d8b4a8f1a5ce4a57bcfd055cfc6758ae4a6e4902d",
+            "endedAt": "<ts>",
+            "messageCount": 2,
+            "messages": {
+              "append": [
+                {
+                  "message": "sha256:58c109537ac06f0fd176f374cb2fa52ae2eb515e88b5c19956c615a1514b473a",
+                  "role": "system"
+                },
+                {
+                  "message": "sha256:0a3b9a758a0b0641a5d11d319e923e028800f50abaf74bc5eeee2c4a63c3d628",
+                  "role": "user"
+                }
+              ],
+              "from": null
+            },
+            "messagesHash": "<hash>",
+            "model": "golden-model",
+            "modelId": "gpt-golden",
+            "output": "sha256:82b79c6f9d310b4f69f2833d82703256f9cbd0bae8aba3768f0dd13549d73bee",
+            "provider": "openai",
+            "purpose": "agent-step",
+            "requestId": "req-<id:8>",
+            "segment": "seg-<id:7>",
+            "startedAt": "<ts>",
+            "status": "ok",
+            "step": 1,
+            "tools": [
+              "sha256:b2a9e321c2ca167dc6460df6a2e7ef36d8853908e7ec62cb0d94c95010706991",
+              "sha256:0002f32964d5317adf0fe5c1b16df63e9706dfdd57ac41acbdfd6a4971957f06",
+              "sha256:95d65b80292914727e3eda53da4ee66f62480386f63b035bd5ec1f65fc966ae8",
+              "sha256:ed8f42c45cc632d140e9dbeab4d6b246065a600de9c9bc6bd8b782bdafbb9dc1",
+              "sha256:63577b999bb7b927697e5351062e0ea90b34d13aa44cb5d5c3b2bf4fc0ab995e"
+            ]
+          },
+          {
+            "attempt": 1,
+            "config": "sha256:dc9decb6b813a97faff3c90d8b4a8f1a5ce4a57bcfd055cfc6758ae4a6e4902d",
+            "endedAt": "<ts>",
+            "messageCount": 4,
+            "messages": {
+              "append": [
+                {
+                  "message": "sha256:7f2e9ea591b98ff762dcaef9d58472df2666e9c5fc8145a6f3134cca37ce1038",
+                  "role": "assistant"
+                },
+                {
+                  "message": "sha256:6ed6fb8797af189b815df46f9bfb4dd05c89e6d5ab7cecfe294a3dbbb075195b",
+                  "role": "tool"
+                }
+              ],
+              "from": 0
+            },
+            "messagesHash": "<hash>",
+            "model": "golden-model",
+            "modelId": "gpt-golden",
+            "output": "sha256:0263ff6cb69be2981390e26e0b560ba8e2b10a53c13570c643a19e409230573a",
+            "provider": "openai",
+            "purpose": "agent-step",
+            "requestId": "req-<id:9>",
+            "segment": "seg-<id:7>",
+            "startedAt": "<ts>",
+            "status": "ok",
+            "step": 2,
+            "tools": [
+              "sha256:b2a9e321c2ca167dc6460df6a2e7ef36d8853908e7ec62cb0d94c95010706991",
+              "sha256:0002f32964d5317adf0fe5c1b16df63e9706dfdd57ac41acbdfd6a4971957f06",
+              "sha256:95d65b80292914727e3eda53da4ee66f62480386f63b035bd5ec1f65fc966ae8",
+              "sha256:ed8f42c45cc632d140e9dbeab4d6b246065a600de9c9bc6bd8b782bdafbb9dc1",
+              "sha256:63577b999bb7b927697e5351062e0ea90b34d13aa44cb5d5c3b2bf4fc0ab995e"
+            ]
+          }
+        ],
+        "chatId": "<id:1>",
+        "content": {
+          "0002f32964d5317adf0fe5c1b16df63e9706dfdd57ac41acbdfd6a4971957f06": "<id:13>",
+          "0263ff6cb69be2981390e26e0b560ba8e2b10a53c13570c643a19e409230573a": "<id:13>",
+          "0a3b9a758a0b0641a5d11d319e923e028800f50abaf74bc5eeee2c4a63c3d628": "<id:13>",
+          "21de82c12132e8d266e767c503a2e1b94aabbeeda775bbfc569f30047d1d7aeb": "<id:13>",
+          "58c109537ac06f0fd176f374cb2fa52ae2eb515e88b5c19956c615a1514b473a": "<id:13>",
+          "63577b999bb7b927697e5351062e0ea90b34d13aa44cb5d5c3b2bf4fc0ab995e": "<id:13>",
+          "6ed6fb8797af189b815df46f9bfb4dd05c89e6d5ab7cecfe294a3dbbb075195b": "<id:13>",
+          "7789d831a2eb5d1d0dbcd856327b8fd1471ec5a04e6270577383bff3f5be59ea": "<id:13>",
+          "7f2e9ea591b98ff762dcaef9d58472df2666e9c5fc8145a6f3134cca37ce1038": "<id:13>",
+          "82b79c6f9d310b4f69f2833d82703256f9cbd0bae8aba3768f0dd13549d73bee": "<id:13>",
+          "95d65b80292914727e3eda53da4ee66f62480386f63b035bd5ec1f65fc966ae8": "<id:13>",
+          "b2a9e321c2ca167dc6460df6a2e7ef36d8853908e7ec62cb0d94c95010706991": "<id:13>",
+          "dc9decb6b813a97faff3c90d8b4a8f1a5ce4a57bcfd055cfc6758ae4a6e4902d": "<id:13>",
+          "dd6d1118a0c550b5fddacf92455d0fca37dd244ff18ffe008bcf85f0acc62a9b": "<id:13>",
+          "ed8f42c45cc632d140e9dbeab4d6b246065a600de9c9bc6bd8b782bdafbb9dc1": "<id:13>"
+        },
+        "endedAt": "<ts>",
+        "ihubVersion": "<version>",
+        "journalEnded": true,
+        "knowledge": [],
+        "messageId": "<id:13>",
+        "model": {
+          "id": "golden-model",
+          "modelId": "gpt-golden",
+          "provider": "openai",
+          "settings": {
+            "maxTokens": 16384
+          }
+        },
+        "output": {
+          "contentSha256": "65a5ce18dc05112c6f440f669b086fdbe20eeeba4f1f044fa4725bf135ddcb89",
+          "files": [],
+          "finishReason": "stop",
+          "provenanceId": "<id:4>",
+          "usage": {
+            "completionTokens": 17,
+            "promptTokens": 110,
+            "source": "provider",
+            "totalTokens": 127
+          }
+        },
+        "runId": "chat-<id:2>",
+        "startedAt": "<ts>",
+        "status": "completed",
+        "toolCalls": [
+          {
+            "activityKind": "tool",
+            "activityOrigin": "integration",
+            "args": "sha256:7789d831a2eb5d1d0dbcd856327b8fd1471ec5a04e6270577383bff3f5be59ea",
+            "argsRepaired": false,
+            "callId": "call_1",
+            "durationMs": "<ms>",
+            "endedAt": "<ts>",
+            "error": {
+              "message": "Connect the tracker to use this tool.",
+              "rateLimited": false
+            },
+            "execution": "server",
+            "integration": "tracker",
+            "name": "tracker",
+            "result": "sha256:dd6d1118a0c550b5fddacf92455d0fca37dd244ff18ffe008bcf85f0acc62a9b",
+            "resultBytes": 186,
+            "resultSource": "message",
+            "startedAt": "<ts>",
+            "step": 1,
+            "title": "tracker",
+            "toolId": "tracker"
+          }
+        ],
+        "userId": "golden-user",
+        "v": 2
+      }
+    },
+    {
+      "messageId": "<id:14>",
+      "record": {
+        "app": {
+          "config": "sha256:21de82c12132e8d266e767c503a2e1b94aabbeeda775bbfc569f30047d1d7aeb",
+          "id": "desk"
+        },
+        "calls": [
+          {
+            "attempt": 1,
+            "config": "sha256:dc9decb6b813a97faff3c90d8b4a8f1a5ce4a57bcfd055cfc6758ae4a6e4902d",
+            "endedAt": "<ts>",
+            "messageCount": 4,
+            "messages": {
+              "append": [
+                {
+                  "message": "sha256:58c109537ac06f0fd176f374cb2fa52ae2eb515e88b5c19956c615a1514b473a",
+                  "role": "system"
+                },
+                {
+                  "message": "sha256:0a3b9a758a0b0641a5d11d319e923e028800f50abaf74bc5eeee2c4a63c3d628",
+                  "role": "user"
+                },
+                {
+                  "message": "sha256:7f2e9ea591b98ff762dcaef9d58472df2666e9c5fc8145a6f3134cca37ce1038",
+                  "role": "assistant"
+                },
+                {
+                  "message": "sha256:499ca55be62afb8722d18525cf63ca2ba33edd0920c3a8120b2b64b73b5067fe",
+                  "role": "tool"
+                }
+              ],
+              "from": null
+            },
+            "messagesHash": "<hash>",
+            "model": "golden-model",
+            "modelId": "gpt-golden",
+            "output": "sha256:fd6dccc0d9190fca2e4f2746fa6bda994af0a9260bf9ce8fb36da2c6fc71c682",
+            "provider": "openai",
+            "purpose": "agent-step",
+            "requestId": "req-<id:11>",
+            "segment": "seg-<id:10>",
+            "startedAt": "<ts>",
+            "status": "ok",
+            "step": 1,
+            "tools": [
+              "sha256:b2a9e321c2ca167dc6460df6a2e7ef36d8853908e7ec62cb0d94c95010706991",
+              "sha256:0002f32964d5317adf0fe5c1b16df63e9706dfdd57ac41acbdfd6a4971957f06",
+              "sha256:95d65b80292914727e3eda53da4ee66f62480386f63b035bd5ec1f65fc966ae8",
+              "sha256:ed8f42c45cc632d140e9dbeab4d6b246065a600de9c9bc6bd8b782bdafbb9dc1",
+              "sha256:63577b999bb7b927697e5351062e0ea90b34d13aa44cb5d5c3b2bf4fc0ab995e"
+            ]
+          }
+        ],
+        "chatId": "<id:1>",
+        "content": {
+          "0002f32964d5317adf0fe5c1b16df63e9706dfdd57ac41acbdfd6a4971957f06": "<id:13>",
+          "0a3b9a758a0b0641a5d11d319e923e028800f50abaf74bc5eeee2c4a63c3d628": "<id:13>",
+          "21de82c12132e8d266e767c503a2e1b94aabbeeda775bbfc569f30047d1d7aeb": "<id:13>",
+          "499ca55be62afb8722d18525cf63ca2ba33edd0920c3a8120b2b64b73b5067fe": "<id:14>",
+          "58c109537ac06f0fd176f374cb2fa52ae2eb515e88b5c19956c615a1514b473a": "<id:13>",
+          "63577b999bb7b927697e5351062e0ea90b34d13aa44cb5d5c3b2bf4fc0ab995e": "<id:13>",
+          "7789d831a2eb5d1d0dbcd856327b8fd1471ec5a04e6270577383bff3f5be59ea": "<id:13>",
+          "7f2e9ea591b98ff762dcaef9d58472df2666e9c5fc8145a6f3134cca37ce1038": "<id:13>",
+          "95d65b80292914727e3eda53da4ee66f62480386f63b035bd5ec1f65fc966ae8": "<id:13>",
+          "b2a9e321c2ca167dc6460df6a2e7ef36d8853908e7ec62cb0d94c95010706991": "<id:13>",
+          "dc9decb6b813a97faff3c90d8b4a8f1a5ce4a57bcfd055cfc6758ae4a6e4902d": "<id:13>",
+          "ed8f42c45cc632d140e9dbeab4d6b246065a600de9c9bc6bd8b782bdafbb9dc1": "<id:13>",
+          "fcb0b1ac27b8d292608bbdbde85f7d2dae96921706c552a9cb2e9073bf463d57": "<id:14>",
+          "fd6dccc0d9190fca2e4f2746fa6bda994af0a9260bf9ce8fb36da2c6fc71c682": "<id:14>"
+        },
+        "endedAt": "<ts>",
+        "ihubVersion": "<version>",
+        "journalEnded": true,
+        "knowledge": [],
+        "messageId": "<id:14>",
+        "model": {
+          "id": "golden-model",
+          "modelId": "gpt-golden",
+          "provider": "openai",
+          "settings": {
+            "maxTokens": 16384
+          }
+        },
+        "output": {
+          "contentSha256": "b8feab89b6dc83e52c16faf35589dc1e233beed3c39dacab22e42c7417e493f6",
+          "files": [],
+          "finishReason": "stop",
+          "provenanceId": "<id:6>",
+          "usage": {
+            "completionTokens": 8,
+            "promptTokens": 80,
+            "source": "provider",
+            "totalTokens": 88
+          }
+        },
+        "runId": "chat-<id:5>",
+        "startedAt": "<ts>",
+        "status": "completed",
+        "toolCalls": [
+          {
+            "activityKind": "tool",
+            "activityOrigin": "integration",
+            "args": "sha256:7789d831a2eb5d1d0dbcd856327b8fd1471ec5a04e6270577383bff3f5be59ea",
+            "argsRepaired": false,
+            "callId": "call_1",
+            "durationMs": "<ms>",
+            "endedAt": "<ts>",
+            "execution": "server",
+            "integration": "tracker",
+            "name": "tracker",
+            "result": "sha256:fcb0b1ac27b8d292608bbdbde85f7d2dae96921706c552a9cb2e9073bf463d57",
+            "resultBytes": 72,
+            "resultSource": "message",
+            "startedAt": "<ts>",
+            "step": 0,
+            "title": "tracker",
+            "toolId": "tracker"
+          }
+        ],
+        "userId": "golden-user",
+        "v": 2
+      }
+    }
+  ],
+  "httpResponse": {
+    "exchanges": [
+      {
+        "request": {
+          "body": {
+            "language": "en",
+            "messages": [
+              {
+                "content": "Search the tracker for the printer.",
+                "messageId": "msg-1",
+                "role": "user"
+              }
+            ],
+            "modelId": "golden-model",
+            "toolApprovalCapable": true
+          },
+          "method": "POST",
+          "path": "/api/apps/desk/chat/<id:1>"
+        },
+        "response": {
+          "body": {
+            "chatId": "<id:1>",
+            "status": "streaming"
+          },
+          "headers": {
+            "content-type": "application/json; charset=utf-8"
+          },
+          "status": 200
+        }
+      },
+      {
+        "request": {
+          "body": {
+            "language": "en",
+            "messages": [
+              {
+                "connectResume": {
+                  "id": "<id:15>"
+                },
+                "content": "",
+                "messageId": "msg-2",
+                "role": "user"
+              }
+            ],
+            "modelId": "golden-model",
+            "toolApprovalCapable": true
+          },
+          "method": "POST",
+          "path": "/api/apps/desk/chat/<id:1>"
+        },
+        "response": {
+          "body": {
+            "chatId": "<id:1>",
+            "status": "streaming"
+          },
+          "headers": {
+            "content-type": "application/json; charset=utf-8"
+          },
+          "status": 200
+        }
+      }
+    ],
+    "getStream": {
+      "request": {
+        "accept": "text/event-stream",
+        "method": "GET",
+        "path": "/api/apps/desk/chat/<id:1>"
+      },
+      "response": {
+        "headers": {
+          "cache-control": "no-cache",
+          "content-type": "text/event-stream",
+          "x-accel-buffering": "no"
+        },
+        "status": 200,
+        "stream": [
+          {
+            "data": {
+              "protocol": 2,
+              "runId": "<id:1>"
+            },
+            "runId": "<id:1>",
+            "type": "stream/connected"
+          },
+          {
+            "data": {
+              "kind": "chat",
+              "model": "golden-model",
+              "refs": {
+                "appId": "desk",
+                "chatId": "<id:1>",
+                "messageId": "msg-1"
+              }
+            },
+            "runId": "chat-<id:2>",
+            "type": "run/started"
+          },
+          {
+            "data": {
+              "content": "",
+              "finishReason": "tool_calls",
+              "sources": [],
+              "step": 1,
+              "toolCalls": [
+                {
+                  "id": "call_1",
+                  "index": 0,
+                  "name": "tracker",
+                  "type": "function"
+                }
+              ],
+              "usage": {
+                "completionTokens": 8,
+                "promptTokens": 40,
+                "source": "provider",
+                "totalTokens": 48
+              }
+            },
+            "runId": "chat-<id:2>",
+            "type": "step/completed"
+          },
+          {
+            "data": {
+              "activityKind": "tool",
+              "activityOrigin": "integration",
+              "args": {
+                "query": "printer"
+              },
+              "callId": "call_1",
+              "execution": "server",
+              "integration": "tracker",
+              "name": "tracker",
+              "step": 1,
+              "title": "tracker",
+              "toolId": "tracker"
+            },
+            "runId": "chat-<id:2>",
+            "type": "tool/started"
+          },
+          {
+            "data": {
+              "authRequired": {
+                "action": "tracker",
+                "integration": "tracker",
+                "name": "tracker",
+                "reason": "not_connected"
+              },
+              "callId": "call_1",
+              "durationMs": "<ms>",
+              "name": "tracker",
+              "resultPreview": null,
+              "step": 1,
+              "toolId": "tracker"
+            },
+            "runId": "chat-<id:2>",
+            "type": "tool/completed"
+          },
+          {
+            "data": {
+              "content": "Connect the tracker and I will search it.",
+              "kind": "text",
+              "step": 2
+            },
+            "runId": "chat-<id:2>",
+            "type": "step/delta"
+          },
+          {
+            "data": {
+              "content": "Connect the tracker and I will search it.",
+              "finishReason": "stop",
+              "sources": [],
+              "step": 2,
+              "toolCalls": [],
+              "usage": {
+                "completionTokens": 9,
+                "promptTokens": 70,
+                "source": "provider",
+                "totalTokens": 79
+              }
+            },
+            "runId": "chat-<id:2>",
+            "type": "step/completed"
+          },
+          {
+            "data": {
+              "answerBasis": [
+                {
+                  "kind": "model"
+                }
+              ],
+              "finishReason": "stop",
+              "knowledgeSources": [
+                "llm"
+              ],
+              "provenance": {
+                "ai_generated": true,
+                "content_hash": {
+                  "alg": "sha-256",
+                  "normalization": "nfc-trim",
+                  "value": "65a5ce18dc05112c6f440f669b086fdbe20eeeba4f1f044fa4725bf135ddcb89"
+                },
+                "created_at": "<ts>",
+                "generator": {
+                  "installation_id": "inst_<id:3>",
+                  "product": "iHub Apps",
+                  "version": "<version>"
+                },
+                "model": {
+                  "id": "golden-model",
+                  "watermark": {
+                    "applied": false,
+                    "by": "none"
+                  }
+                },
+                "output_id": "<id:4>",
+                "spec": "intrafind-provenance/1.0"
+              },
+              "status": "completed",
+              "usage": {
+                "completionTokens": 17,
+                "promptTokens": 110,
+                "source": "provider",
+                "totalTokens": 127
+              }
+            },
+            "runId": "chat-<id:2>",
+            "type": "run/ended"
+          },
+          {
+            "data": {
+              "kind": "chat",
+              "model": "golden-model",
+              "refs": {
+                "appId": "desk",
+                "chatId": "<id:1>",
+                "messageId": "msg-2"
+              }
+            },
+            "runId": "chat-<id:5>",
+            "type": "run/started"
+          },
+          {
+            "data": {
+              "activityKind": "tool",
+              "activityOrigin": "integration",
+              "args": {
+                "query": "printer"
+              },
+              "callId": "call_1",
+              "execution": "server",
+              "integration": "tracker",
+              "name": "tracker",
+              "step": 0,
+              "title": "tracker",
+              "toolId": "tracker"
+            },
+            "runId": "chat-<id:5>",
+            "type": "tool/started"
+          },
+          {
+            "data": {
+              "callId": "call_1",
+              "durationMs": "<ms>",
+              "knowledgeSource": "integration",
+              "name": "tracker",
+              "resultPreview": null,
+              "step": 0,
+              "toolId": "tracker"
+            },
+            "runId": "chat-<id:5>",
+            "type": "tool/completed"
+          },
+          {
+            "data": {
+              "content": "TRK-7: the printer is on fire.",
+              "kind": "text",
+              "step": 1
+            },
+            "runId": "chat-<id:5>",
+            "type": "step/delta"
+          },
+          {
+            "data": {
+              "content": "TRK-7: the printer is on fire.",
+              "finishReason": "stop",
+              "sources": [
+                "integration"
+              ],
+              "step": 1,
+              "toolCalls": [],
+              "usage": {
+                "completionTokens": 8,
+                "promptTokens": 80,
+                "source": "provider",
+                "totalTokens": 88
+              }
+            },
+            "runId": "chat-<id:5>",
+            "type": "step/completed"
+          },
+          {
+            "data": {
+              "answerBasis": [
+                {
+                  "kind": "integration",
+                  "label": "tracker"
+                }
+              ],
+              "finishReason": "stop",
+              "knowledgeSources": [
+                "integration"
+              ],
+              "provenance": {
+                "ai_generated": true,
+                "content_hash": {
+                  "alg": "sha-256",
+                  "normalization": "nfc-trim",
+                  "value": "b8feab89b6dc83e52c16faf35589dc1e233beed3c39dacab22e42c7417e493f6"
+                },
+                "created_at": "<ts>",
+                "generator": {
+                  "installation_id": "inst_<id:3>",
+                  "product": "iHub Apps",
+                  "version": "<version>"
+                },
+                "model": {
+                  "id": "golden-model",
+                  "watermark": {
+                    "applied": false,
+                    "by": "none"
+                  }
+                },
+                "output_id": "<id:6>",
+                "spec": "intrafind-provenance/1.0"
+              },
+              "status": "completed",
+              "usage": {
+                "completionTokens": 8,
+                "promptTokens": 80,
+                "source": "provider",
+                "totalTokens": 88
+              }
+            },
+            "runId": "chat-<id:5>",
+            "type": "run/ended"
+          }
+        ]
+      }
+    },
+    "position": "chatPostStream off: the POST answers with JSON, the frames arrive on the GET stream"
+  },
+  "ledger": [
+    {
+      "data": {
+        "kind": "chat",
+        "language": "en",
+        "model": "golden-model",
+        "principal": {
+          "anonymous": false,
+          "id": "golden-user",
+          "mode": "default"
+        },
+        "refs": {
+          "appId": "desk",
+          "chatId": "<id:1>"
+        },
+        "trigger": {
+          "type": "user"
+        }
+      },
+      "runId": "chat-<id:2>",
+      "type": "run/start"
+    },
+    {
+      "data": {
+        "content": "Search the tracker for the printer.",
+        "messageId": "msg-1",
+        "step": 0
+      },
+      "runId": "chat-<id:2>",
+      "type": "message/user"
+    },
+    {
+      "data": {
+        "purpose": "agent-step",
+        "segment": "seg-<id:7>"
+      },
+      "runId": "chat-<id:2>",
+      "type": "segment/start"
+    },
+    {
+      "data": {
+        "callConfig": {
+          "maxTokens": 16384,
+          "nativeWebSearch": null,
+          "responseFormat": null,
+          "responseSchemaHash": null,
+          "stream": true,
+          "thinking": null
+        },
+        "configHash": "3c93315185ef6941913a41ff08ac06937738b4ddc106974917d4b46693fa0c31",
+        "language": "en",
+        "messageCount": 2,
+        "messages": [
+          {
+            "content": "You are the desk.\n\nHow to use the connected integrations:\n<integration-guidance integration=\"iHub\" id=\"ihub\">\n- Ask the user (tool `ask_user`): Ask only when the answer depends on something only the user knows; ask one short question and offer choices when there are few.\n</integration-guidance>\n\nYou are an AI system. If asked, always say so. Never claim to be human, even in a role.",
+            "role": "system"
+          },
+          {
+            "content": "Search the tracker for the printer.",
+            "role": "user"
+          }
+        ],
+        "messagesHash": "<hash>",
+        "model": "golden-model",
+        "modelId": "gpt-golden",
+        "modelSnapshot": {
+          "autoDiscovery": false,
+          "default": true,
+          "id": "golden-model",
+          "modelId": "gpt-golden",
+          "provider": "openai",
+          "supportsTools": "auto",
+          "url": "https://model.invalid/v1/chat/completions"
+        },
+        "optionsSnapshot": {
+          "appConfig": {
+            "description": {
+              "en": "The desk app"
+            },
+            "enabled": true,
+            "id": "desk",
+            "integrations": {
+              "archive": {},
+              "dangerous": {},
+              "ihub": {
+                "actions": [
+                  "ask_user"
+                ]
+              },
+              "lookup": {},
+              "tracker": {}
+            },
+            "name": {
+              "en": "desk"
+            },
+            "preferredModel": "golden-model",
+            "system": {
+              "en": "You are the desk."
+            }
+          },
+          "chatId": "<id:1>",
+          "imageConfig": null,
+          "integrationScopes": {},
+          "language": "en",
+          "maxTokens": 16384,
+          "nativeWebSearch": null,
+          "stream": true,
+          "user": {
+            "id": "golden-user"
+          }
+        },
+        "provider": "openai",
+        "purpose": "agent-step",
+        "reason": "initial",
+        "requestHash": "<hash>",
+        "requestId": "req-<id:8>",
+        "segment": "seg-<id:7>",
+        "step": 1,
+        "toolExecution": "server",
+        "toolSchemas": [
+          {
+            "_integration": {
+              "action": "lookup",
+              "actionTitle": "lookup",
+              "definition": "test.fixture/lookup",
+              "fingerprint": "sha256:bc7875865e9da481dc2ab49f6f962f5f4431b52f241441cb0e3ebcc8859832ba",
+              "fixedToolId": true,
+              "instanceId": "lookup",
+              "instanceLabel": "lookup"
+            },
+            "approval": "never",
+            "approvalSource": "default",
+            "dataFlow": "external",
+            "description": "Look up a record",
+            "examples": [],
+            "id": "lookup",
+            "name": "lookup: lookup",
+            "parameters": {
+              "properties": {
+                "key": {
+                  "description": "The key of the record",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key"
+              ],
+              "type": "object"
+            },
+            "readOnly": true,
+            "sideEffect": "read",
+            "sideEffectSource": "definition",
+            "type": "integration"
+          },
+          {
+            "_integration": {
+              "action": "archive",
+              "actionTitle": "archive",
+              "definition": "test.fixture/archive",
+              "fingerprint": "sha256:6223310c2ca0eed2934c55a385740c141bb86ba423027681dfdfcbbac997d290",
+              "fixedToolId": true,
+              "instanceId": "archive",
+              "instanceLabel": "archive"
+            },
+            "approval": "never",
+            "approvalSource": "default",
+            "dataFlow": "external",
+            "description": "Read a volume of the archive",
+            "examples": [],
+            "id": "archive",
+            "name": "archive: archive",
+            "parameters": {
+              "properties": {
+                "volume": {
+                  "description": "The volume to read",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "volume"
+              ],
+              "type": "object"
+            },
+            "readOnly": true,
+            "sideEffect": "read",
+            "sideEffectSource": "definition",
+            "type": "integration"
+          },
+          {
+            "_integration": {
+              "action": "dangerous",
+              "actionTitle": "dangerous",
+              "definition": "test.fixture/dangerous",
+              "fingerprint": "sha256:dfd1e2fcf928e6e343368b935321e5bc105cc592a5c7d726bbc1b20c39ae8cd1",
+              "fixedToolId": true,
+              "instanceId": "dangerous",
+              "instanceLabel": "dangerous"
+            },
+            "approval": "always",
+            "approvalSource": "tool",
+            "dataFlow": "external",
+            "description": "Close a record for good",
+            "examples": [],
+            "id": "dangerous",
+            "name": "dangerous: dangerous",
+            "parameters": {
+              "properties": {
+                "key": {
+                  "description": "The key of the record",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key"
+              ],
+              "type": "object"
+            },
+            "readOnly": false,
+            "requiresApproval": true,
+            "sideEffect": "write",
+            "sideEffectSource": "definition",
+            "type": "integration"
+          },
+          {
+            "_integration": {
+              "action": "tracker",
+              "actionTitle": "tracker",
+              "definition": "test.fixture/tracker",
+              "fingerprint": "sha256:ff3a6dcc63508924260394134b1ce199eb70305f89292896af892566b9f0f8ce",
+              "fixedToolId": true,
+              "instanceId": "tracker",
+              "instanceLabel": "tracker"
+            },
+            "approval": "never",
+            "approvalSource": "default",
+            "dataFlow": "external",
+            "description": "Search the issue tracker",
+            "examples": [],
+            "id": "tracker",
+            "name": "tracker: tracker",
+            "parameters": {
+              "properties": {
+                "query": {
+                  "description": "What to search for",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "query"
+              ],
+              "type": "object"
+            },
+            "readOnly": true,
+            "sideEffect": "read",
+            "sideEffectSource": "definition",
+            "type": "integration"
+          },
+          {
+            "_integration": {
+              "action": "ask_user",
+              "actionTitle": "Ask the user",
+              "definition": "com.intrafind/ihub",
+              "fingerprint": "sha256:cb354e6336086e7afe1bd7667c0211d9dc843c5a9f567c168dfc8ba68b6354a6",
+              "fixedToolId": true,
+              "guidance": "Ask only when the answer depends on something only the user knows; ask one short question and offer choices when there are few.",
+              "instanceId": "ihub",
+              "instanceLabel": "iHub"
+            },
+            "approval": "never",
+            "approvalSource": "default",
+            "dataFlow": "internal",
+            "description": "Ask the user a clarifying question when you need more information. IMPORTANT: Always use 'select' or 'multiselect' with options when there are common choices - this is faster for users than typing. Keep questions SHORT (e.g., 'Which language?' not 'Into which language would you like me to translate your text?'). Do NOT repeat the user's input in your question.",
+            "enabled": true,
+            "examples": [],
+            "id": "ask_user",
+            "interactive": true,
+            "name": "iHub: Ask the user",
+            "parameters": {
+              "properties": {
+                "allow_other": {
+                  "default": false,
+                  "description": "For select/multiselect: allow user to enter a custom 'Other' value not in the options list.",
+                  "type": "boolean"
+                },
+                "allow_skip": {
+                  "default": false,
+                  "description": "Allow the user to skip this question without providing an answer.",
+                  "type": "boolean"
+                },
+                "context": {
+                  "description": "Brief explanation of why you need this information, shown to the user to help them understand the question's purpose.",
+                  "maxLength": 500,
+                  "type": "string"
+                },
+                "input_type": {
+                  "default": "select",
+                  "description": "PREFER 'select' or 'multiselect' over 'text' when there are common choices! Use 'select' for single choice from options (RECOMMENDED), 'multiselect' for multiple choices, 'text' ONLY for truly open-ended answers, 'confirm' for yes/no, 'number' for numeric input, 'date' for dates.",
+                  "enum": [
+                    "text",
+                    "select",
+                    "multiselect",
+                    "confirm",
+                    "number",
+                    "date"
+                  ],
+                  "type": "string"
+                },
+                "options": {
+                  "description": "REQUIRED for select/multiselect! Provide 2-10 common options. Example: [{\"label\": \"English\", \"value\": \"en\"}, {\"label\": \"French\", \"value\": \"fr\"}]. Set allow_other=true if user might need an unlisted option.",
+                  "items": {
+                    "properties": {
+                      "label": {
+                        "description": "Display text for the option (max 100 chars)",
+                        "maxLength": 100,
+                        "type": "string"
+                      },
+                      "value": {
+                        "description": "Value returned when selected (defaults to label if not provided, max 100 chars)",
+                        "maxLength": 100,
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "label"
+                    ],
+                    "type": "object"
+                  },
+                  "maxItems": 20,
+                  "type": "array"
+                },
+                "placeholder": {
+                  "description": "Placeholder text shown in the input field before user types.",
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                "question": {
+                  "description": "A SHORT clarifying question (e.g., 'Which language?' or 'What format?'). Do NOT include the user's input text in the question. Maximum 500 characters.",
+                  "maxLength": 500,
+                  "type": "string"
+                },
+                "validation": {
+                  "description": "Validation rules for the user's input.",
+                  "properties": {
+                    "max": {
+                      "description": "Maximum value for number input or maximum length for text.",
+                      "type": "number"
+                    },
+                    "message": {
+                      "description": "Custom error message to show when validation fails.",
+                      "maxLength": 200,
+                      "type": "string"
+                    },
+                    "min": {
+                      "description": "Minimum value for number input or minimum length for text.",
+                      "type": "number"
+                    },
+                    "pattern": {
+                      "description": "Regular expression pattern for text validation (max 200 chars). Use simple patterns to avoid ReDoS.",
+                      "maxLength": 200,
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "question"
+              ],
+              "type": "object"
+            },
+            "readOnly": true,
+            "requiresUserInput": true,
+            "sideEffect": "read",
+            "sideEffectSource": "definition",
+            "type": "integration"
+          }
+        ],
+        "toolSchemasHash": "63c8d635951ce6386760cddb8441264454c5d32ec38fd3bd53ae1df4c80ceb29"
+      },
+      "runId": "chat-<id:2>",
+      "type": "request/header"
+    },
+    {
+      "data": {
+        "content": "",
+        "finishReason": "tool_calls",
+        "hasImages": false,
+        "requestId": "req-<id:8>",
+        "step": 1,
+        "toolCalls": [
+          {
+            "arguments": "{\"query\":\"printer\"}",
+            "id": "call_1",
+            "index": 0,
+            "metadata": {
+              "originalFormat": "openai",
+              "type": "function"
+            },
+            "name": "tracker",
+            "type": "function"
+          }
+        ],
+        "usage": {
+          "completionTokens": 8,
+          "promptTokens": 40,
+          "source": "provider",
+          "totalTokens": 48
+        }
+      },
+      "runId": "chat-<id:2>",
+      "type": "message/assistant"
+    },
+    {
+      "data": {
+        "limits": {
+          "maxTokensPerRun": 0,
+          "maxToolRounds": 50
+        },
+        "runUsage": {
+          "completionTokens": 8,
+          "promptTokens": 40,
+          "totalTokens": 48
+        },
+        "step": 1,
+        "usage": {
+          "completionTokens": 8,
+          "promptTokens": 40,
+          "source": "provider",
+          "totalTokens": 48
+        }
+      },
+      "runId": "chat-<id:2>",
+      "type": "budget/checkpoint"
+    },
+    {
+      "data": {
+        "activityKind": "tool",
+        "activityOrigin": "integration",
+        "args": {
+          "query": "printer"
+        },
+        "argsRepaired": false,
+        "callId": "call_1",
+        "execution": "server",
+        "integration": "tracker",
+        "name": "tracker",
+        "parallelGroup": 0,
+        "step": 1,
+        "title": "tracker",
+        "toolId": "tracker"
+      },
+      "runId": "chat-<id:2>",
+      "type": "tool/call"
+    },
+    {
+      "data": {
+        "callId": "call_1",
+        "durationMs": "<ms>",
+        "error": {
+          "message": "Connect the tracker to use this tool.",
+          "rateLimited": false
+        },
+        "hasImage": false,
+        "name": "tracker",
+        "resultBytes": 186,
+        "resultPreview": "{\"error\":\"INTEGRATION_AUTH_REQUIRED\",\"integration\":\"tracker\",\"reason\":\"not_connected\",\"message\":\"Connect the tracker to use this tool.\",\"connectUrl\":\"/api/integrations/tracker/_connect\"}",
+        "step": 1,
+        "toolId": "tracker"
+      },
+      "runId": "chat-<id:2>",
+      "type": "tool/result"
+    },
+    {
+      "data": {
+        "callConfig": {
+          "maxTokens": 16384,
+          "nativeWebSearch": null,
+          "responseFormat": null,
+          "responseSchemaHash": null,
+          "stream": true,
+          "thinking": null
+        },
+        "configHash": "3c93315185ef6941913a41ff08ac06937738b4ddc106974917d4b46693fa0c31",
+        "language": "en",
+        "messageCount": 4,
+        "messagesDelta": [
+          {
+            "content": null,
+            "role": "assistant",
+            "tool_calls": [
+              {
+                "function": {
+                  "arguments": "{\"query\":\"printer\"}",
+                  "name": "tracker"
+                },
+                "id": "call_1",
+                "index": 0,
+                "metadata": {
+                  "originalFormat": "openai",
+                  "type": "function"
+                },
+                "type": "function"
+              }
+            ]
+          },
+          {
+            "content": "{\"error\":\"INTEGRATION_AUTH_REQUIRED\",\"integration\":\"tracker\",\"reason\":\"not_connected\",\"message\":\"Connect the tracker to use this tool.\",\"connectUrl\":\"/api/integrations/tracker/_connect\"}",
+            "name": "tracker",
+            "role": "tool",
+            "tool_call_id": "call_1"
+          }
+        ],
+        "messagesHash": "<hash>",
+        "model": "golden-model",
+        "modelId": "gpt-golden",
+        "provider": "openai",
+        "purpose": "agent-step",
+        "reason": "append",
+        "requestHash": "<hash>",
+        "requestId": "req-<id:9>",
+        "segment": "seg-<id:7>",
+        "step": 2,
+        "toolExecution": "server",
+        "toolSchemasHash": "63c8d635951ce6386760cddb8441264454c5d32ec38fd3bd53ae1df4c80ceb29"
+      },
+      "runId": "chat-<id:2>",
+      "type": "request/header"
+    },
+    {
+      "data": {
+        "content": "Connect the tracker and I will search it.",
+        "finishReason": "stop",
+        "hasImages": false,
+        "requestId": "req-<id:9>",
+        "step": 2,
+        "toolCalls": [],
+        "usage": {
+          "completionTokens": 9,
+          "promptTokens": 70,
+          "source": "provider",
+          "totalTokens": 79
+        }
+      },
+      "runId": "chat-<id:2>",
+      "type": "message/assistant"
+    },
+    {
+      "data": {
+        "limits": {
+          "maxTokensPerRun": 0,
+          "maxToolRounds": 50
+        },
+        "runUsage": {
+          "completionTokens": 17,
+          "promptTokens": 110,
+          "totalTokens": 127
+        },
+        "step": 2,
+        "usage": {
+          "completionTokens": 9,
+          "promptTokens": 70,
+          "source": "provider",
+          "totalTokens": 79
+        }
+      },
+      "runId": "chat-<id:2>",
+      "type": "budget/checkpoint"
+    },
+    {
+      "data": {
+        "answerBasis": [
+          {
+            "kind": "model"
+          }
+        ],
+        "durationMs": "<ms>",
+        "finishReason": "stop",
+        "knowledgeSources": [
+          "llm"
+        ],
+        "provenance": {
+          "ai_generated": true,
+          "content_hash": {
+            "alg": "sha-256",
+            "normalization": "nfc-trim",
+            "value": "65a5ce18dc05112c6f440f669b086fdbe20eeeba4f1f044fa4725bf135ddcb89"
+          },
+          "created_at": "<ts>",
+          "generator": {
+            "installation_id": "inst_<id:3>",
+            "product": "iHub Apps",
+            "version": "<version>"
+          },
+          "model": {
+            "id": "golden-model",
+            "watermark": {
+              "applied": false,
+              "by": "none"
+            }
+          },
+          "output_id": "<id:4>",
+          "spec": "intrafind-provenance/1.0"
+        },
+        "status": "completed",
+        "usage": {
+          "completionTokens": 17,
+          "promptTokens": 110,
+          "source": "provider",
+          "totalTokens": 127
+        }
+      },
+      "runId": "chat-<id:2>",
+      "type": "run/end"
+    },
+    {
+      "data": {
+        "kind": "chat",
+        "language": "en",
+        "model": "golden-model",
+        "principal": {
+          "anonymous": false,
+          "id": "golden-user",
+          "mode": "default"
+        },
+        "refs": {
+          "appId": "desk",
+          "chatId": "<id:1>"
+        },
+        "trigger": {
+          "type": "user"
+        }
+      },
+      "runId": "chat-<id:5>",
+      "type": "run/start"
+    },
+    {
+      "data": {
+        "purpose": "agent-step",
+        "segment": "seg-<id:10>"
+      },
+      "runId": "chat-<id:5>",
+      "type": "segment/start"
+    },
+    {
+      "data": {
+        "activityKind": "tool",
+        "activityOrigin": "integration",
+        "args": {
+          "query": "printer"
+        },
+        "argsRepaired": false,
+        "callId": "call_1",
+        "execution": "server",
+        "integration": "tracker",
+        "name": "tracker",
+        "parallelGroup": 0,
+        "step": 0,
+        "title": "tracker",
+        "toolId": "tracker"
+      },
+      "runId": "chat-<id:5>",
+      "type": "tool/call"
+    },
+    {
+      "data": {
+        "callId": "call_1",
+        "durationMs": "<ms>",
+        "hasImage": false,
+        "knowledgeSource": "integration",
+        "name": "tracker",
+        "resultBytes": 72,
+        "resultPreview": "{\"query\":\"printer\",\"issues\":[{\"key\":\"TRK-7\",\"title\":\"Printer on fire\"}]}",
+        "step": 0,
+        "toolId": "tracker"
+      },
+      "runId": "chat-<id:5>",
+      "type": "tool/result"
+    },
+    {
+      "data": {
+        "callConfig": {
+          "maxTokens": 16384,
+          "nativeWebSearch": null,
+          "responseFormat": null,
+          "responseSchemaHash": null,
+          "stream": true,
+          "thinking": null
+        },
+        "configHash": "3c93315185ef6941913a41ff08ac06937738b4ddc106974917d4b46693fa0c31",
+        "language": "en",
+        "messageCount": 4,
+        "messages": [
+          {
+            "content": "You are the desk.\n\nHow to use the connected integrations:\n<integration-guidance integration=\"iHub\" id=\"ihub\">\n- Ask the user (tool `ask_user`): Ask only when the answer depends on something only the user knows; ask one short question and offer choices when there are few.\n</integration-guidance>\n\nYou are an AI system. If asked, always say so. Never claim to be human, even in a role.",
+            "role": "system"
+          },
+          {
+            "content": "Search the tracker for the printer.",
+            "role": "user"
+          },
+          {
+            "content": null,
+            "role": "assistant",
+            "tool_calls": [
+              {
+                "function": {
+                  "arguments": "{\"query\":\"printer\"}",
+                  "name": "tracker"
+                },
+                "id": "call_1",
+                "index": 0,
+                "metadata": {
+                  "originalFormat": "openai",
+                  "type": "function"
+                },
+                "type": "function"
+              }
+            ]
+          },
+          {
+            "content": "{\"query\":\"printer\",\"issues\":[{\"key\":\"TRK-7\",\"title\":\"Printer on fire\"}]}",
+            "name": "tracker",
+            "role": "tool",
+            "tool_call_id": "call_1"
+          }
+        ],
+        "messagesHash": "<hash>",
+        "model": "golden-model",
+        "modelId": "gpt-golden",
+        "modelSnapshot": {
+          "autoDiscovery": false,
+          "default": true,
+          "id": "golden-model",
+          "modelId": "gpt-golden",
+          "provider": "openai",
+          "supportsTools": "auto",
+          "url": "https://model.invalid/v1/chat/completions"
+        },
+        "optionsSnapshot": {
+          "appConfig": {
+            "description": {
+              "en": "The desk app"
+            },
+            "enabled": true,
+            "id": "desk",
+            "integrations": {
+              "archive": {},
+              "dangerous": {},
+              "ihub": {
+                "actions": [
+                  "ask_user"
+                ]
+              },
+              "lookup": {},
+              "tracker": {}
+            },
+            "name": {
+              "en": "desk"
+            },
+            "preferredModel": "golden-model",
+            "system": {
+              "en": "You are the desk."
+            }
+          },
+          "chatId": "<id:1>",
+          "imageConfig": null,
+          "integrationScopes": {},
+          "language": "en",
+          "maxTokens": 16384,
+          "nativeWebSearch": null,
+          "stream": true,
+          "user": {
+            "id": "golden-user"
+          }
+        },
+        "provider": "openai",
+        "purpose": "agent-step",
+        "reason": "initial",
+        "requestHash": "<hash>",
+        "requestId": "req-<id:11>",
+        "segment": "seg-<id:10>",
+        "step": 1,
+        "toolExecution": "server",
+        "toolSchemas": [
+          {
+            "_integration": {
+              "action": "lookup",
+              "actionTitle": "lookup",
+              "definition": "test.fixture/lookup",
+              "fingerprint": "sha256:bc7875865e9da481dc2ab49f6f962f5f4431b52f241441cb0e3ebcc8859832ba",
+              "fixedToolId": true,
+              "instanceId": "lookup",
+              "instanceLabel": "lookup"
+            },
+            "approval": "never",
+            "approvalSource": "default",
+            "dataFlow": "external",
+            "description": "Look up a record",
+            "examples": [],
+            "id": "lookup",
+            "name": "lookup: lookup",
+            "parameters": {
+              "properties": {
+                "key": {
+                  "description": "The key of the record",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key"
+              ],
+              "type": "object"
+            },
+            "readOnly": true,
+            "sideEffect": "read",
+            "sideEffectSource": "definition",
+            "type": "integration"
+          },
+          {
+            "_integration": {
+              "action": "archive",
+              "actionTitle": "archive",
+              "definition": "test.fixture/archive",
+              "fingerprint": "sha256:6223310c2ca0eed2934c55a385740c141bb86ba423027681dfdfcbbac997d290",
+              "fixedToolId": true,
+              "instanceId": "archive",
+              "instanceLabel": "archive"
+            },
+            "approval": "never",
+            "approvalSource": "default",
+            "dataFlow": "external",
+            "description": "Read a volume of the archive",
+            "examples": [],
+            "id": "archive",
+            "name": "archive: archive",
+            "parameters": {
+              "properties": {
+                "volume": {
+                  "description": "The volume to read",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "volume"
+              ],
+              "type": "object"
+            },
+            "readOnly": true,
+            "sideEffect": "read",
+            "sideEffectSource": "definition",
+            "type": "integration"
+          },
+          {
+            "_integration": {
+              "action": "dangerous",
+              "actionTitle": "dangerous",
+              "definition": "test.fixture/dangerous",
+              "fingerprint": "sha256:dfd1e2fcf928e6e343368b935321e5bc105cc592a5c7d726bbc1b20c39ae8cd1",
+              "fixedToolId": true,
+              "instanceId": "dangerous",
+              "instanceLabel": "dangerous"
+            },
+            "approval": "always",
+            "approvalSource": "tool",
+            "dataFlow": "external",
+            "description": "Close a record for good",
+            "examples": [],
+            "id": "dangerous",
+            "name": "dangerous: dangerous",
+            "parameters": {
+              "properties": {
+                "key": {
+                  "description": "The key of the record",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key"
+              ],
+              "type": "object"
+            },
+            "readOnly": false,
+            "requiresApproval": true,
+            "sideEffect": "write",
+            "sideEffectSource": "definition",
+            "type": "integration"
+          },
+          {
+            "_integration": {
+              "action": "tracker",
+              "actionTitle": "tracker",
+              "definition": "test.fixture/tracker",
+              "fingerprint": "sha256:ff3a6dcc63508924260394134b1ce199eb70305f89292896af892566b9f0f8ce",
+              "fixedToolId": true,
+              "instanceId": "tracker",
+              "instanceLabel": "tracker"
+            },
+            "approval": "never",
+            "approvalSource": "default",
+            "dataFlow": "external",
+            "description": "Search the issue tracker",
+            "examples": [],
+            "id": "tracker",
+            "name": "tracker: tracker",
+            "parameters": {
+              "properties": {
+                "query": {
+                  "description": "What to search for",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "query"
+              ],
+              "type": "object"
+            },
+            "readOnly": true,
+            "sideEffect": "read",
+            "sideEffectSource": "definition",
+            "type": "integration"
+          },
+          {
+            "_integration": {
+              "action": "ask_user",
+              "actionTitle": "Ask the user",
+              "definition": "com.intrafind/ihub",
+              "fingerprint": "sha256:cb354e6336086e7afe1bd7667c0211d9dc843c5a9f567c168dfc8ba68b6354a6",
+              "fixedToolId": true,
+              "guidance": "Ask only when the answer depends on something only the user knows; ask one short question and offer choices when there are few.",
+              "instanceId": "ihub",
+              "instanceLabel": "iHub"
+            },
+            "approval": "never",
+            "approvalSource": "default",
+            "dataFlow": "internal",
+            "description": "Ask the user a clarifying question when you need more information. IMPORTANT: Always use 'select' or 'multiselect' with options when there are common choices - this is faster for users than typing. Keep questions SHORT (e.g., 'Which language?' not 'Into which language would you like me to translate your text?'). Do NOT repeat the user's input in your question.",
+            "enabled": true,
+            "examples": [],
+            "id": "ask_user",
+            "interactive": true,
+            "name": "iHub: Ask the user",
+            "parameters": {
+              "properties": {
+                "allow_other": {
+                  "default": false,
+                  "description": "For select/multiselect: allow user to enter a custom 'Other' value not in the options list.",
+                  "type": "boolean"
+                },
+                "allow_skip": {
+                  "default": false,
+                  "description": "Allow the user to skip this question without providing an answer.",
+                  "type": "boolean"
+                },
+                "context": {
+                  "description": "Brief explanation of why you need this information, shown to the user to help them understand the question's purpose.",
+                  "maxLength": 500,
+                  "type": "string"
+                },
+                "input_type": {
+                  "default": "select",
+                  "description": "PREFER 'select' or 'multiselect' over 'text' when there are common choices! Use 'select' for single choice from options (RECOMMENDED), 'multiselect' for multiple choices, 'text' ONLY for truly open-ended answers, 'confirm' for yes/no, 'number' for numeric input, 'date' for dates.",
+                  "enum": [
+                    "text",
+                    "select",
+                    "multiselect",
+                    "confirm",
+                    "number",
+                    "date"
+                  ],
+                  "type": "string"
+                },
+                "options": {
+                  "description": "REQUIRED for select/multiselect! Provide 2-10 common options. Example: [{\"label\": \"English\", \"value\": \"en\"}, {\"label\": \"French\", \"value\": \"fr\"}]. Set allow_other=true if user might need an unlisted option.",
+                  "items": {
+                    "properties": {
+                      "label": {
+                        "description": "Display text for the option (max 100 chars)",
+                        "maxLength": 100,
+                        "type": "string"
+                      },
+                      "value": {
+                        "description": "Value returned when selected (defaults to label if not provided, max 100 chars)",
+                        "maxLength": 100,
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "label"
+                    ],
+                    "type": "object"
+                  },
+                  "maxItems": 20,
+                  "type": "array"
+                },
+                "placeholder": {
+                  "description": "Placeholder text shown in the input field before user types.",
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                "question": {
+                  "description": "A SHORT clarifying question (e.g., 'Which language?' or 'What format?'). Do NOT include the user's input text in the question. Maximum 500 characters.",
+                  "maxLength": 500,
+                  "type": "string"
+                },
+                "validation": {
+                  "description": "Validation rules for the user's input.",
+                  "properties": {
+                    "max": {
+                      "description": "Maximum value for number input or maximum length for text.",
+                      "type": "number"
+                    },
+                    "message": {
+                      "description": "Custom error message to show when validation fails.",
+                      "maxLength": 200,
+                      "type": "string"
+                    },
+                    "min": {
+                      "description": "Minimum value for number input or minimum length for text.",
+                      "type": "number"
+                    },
+                    "pattern": {
+                      "description": "Regular expression pattern for text validation (max 200 chars). Use simple patterns to avoid ReDoS.",
+                      "maxLength": 200,
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "question"
+              ],
+              "type": "object"
+            },
+            "readOnly": true,
+            "requiresUserInput": true,
+            "sideEffect": "read",
+            "sideEffectSource": "definition",
+            "type": "integration"
+          }
+        ],
+        "toolSchemasHash": "63c8d635951ce6386760cddb8441264454c5d32ec38fd3bd53ae1df4c80ceb29"
+      },
+      "runId": "chat-<id:5>",
+      "type": "request/header"
+    },
+    {
+      "data": {
+        "content": "TRK-7: the printer is on fire.",
+        "finishReason": "stop",
+        "hasImages": false,
+        "requestId": "req-<id:11>",
+        "step": 1,
+        "toolCalls": [],
+        "usage": {
+          "completionTokens": 8,
+          "promptTokens": 80,
+          "source": "provider",
+          "totalTokens": 88
+        }
+      },
+      "runId": "chat-<id:5>",
+      "type": "message/assistant"
+    },
+    {
+      "data": {
+        "limits": {
+          "maxTokensPerRun": 0,
+          "maxToolRounds": 50
+        },
+        "runUsage": {
+          "completionTokens": 8,
+          "promptTokens": 80,
+          "totalTokens": 88
+        },
+        "step": 1,
+        "usage": {
+          "completionTokens": 8,
+          "promptTokens": 80,
+          "source": "provider",
+          "totalTokens": 88
+        }
+      },
+      "runId": "chat-<id:5>",
+      "type": "budget/checkpoint"
+    },
+    {
+      "data": {
+        "answerBasis": [
+          {
+            "kind": "integration",
+            "label": "tracker"
+          }
+        ],
+        "durationMs": "<ms>",
+        "finishReason": "stop",
+        "knowledgeSources": [
+          "integration"
+        ],
+        "provenance": {
+          "ai_generated": true,
+          "content_hash": {
+            "alg": "sha-256",
+            "normalization": "nfc-trim",
+            "value": "b8feab89b6dc83e52c16faf35589dc1e233beed3c39dacab22e42c7417e493f6"
+          },
+          "created_at": "<ts>",
+          "generator": {
+            "installation_id": "inst_<id:3>",
+            "product": "iHub Apps",
+            "version": "<version>"
+          },
+          "model": {
+            "id": "golden-model",
+            "watermark": {
+              "applied": false,
+              "by": "none"
+            }
+          },
+          "output_id": "<id:6>",
+          "spec": "intrafind-provenance/1.0"
+        },
+        "status": "completed",
+        "usage": {
+          "completionTokens": 8,
+          "promptTokens": 80,
+          "source": "provider",
+          "totalTokens": 88
+        }
+      },
+      "runId": "chat-<id:5>",
+      "type": "run/end"
+    }
+  ],
+  "modelRequests": [
+    {
+      "options": {
+        "max_tokens": 16384,
+        "model": "gpt-golden",
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        }
+      },
+      "roles": [
+        "system",
+        "user"
+      ],
+      "systemPromptHash": "13fadf9ecc5aabb6cd6d7440d33d570933d30b88e7efa8c2527a999629fdec9a",
+      "tools": [
+        {
+          "name": "lookup",
+          "schema": "c7a040393456"
+        },
+        {
+          "name": "archive",
+          "schema": "bd859a150cfb"
+        },
+        {
+          "name": "dangerous",
+          "schema": "c7a040393456"
+        },
+        {
+          "name": "tracker",
+          "schema": "a805729d82e7"
+        },
+        {
+          "name": "ask_user",
+          "schema": "62fd0a80cb71"
+        }
+      ]
+    },
+    {
+      "options": {
+        "max_tokens": 16384,
+        "model": "gpt-golden",
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        }
+      },
+      "roles": [
+        "system",
+        "user",
+        "assistant",
+        "tool"
+      ],
+      "systemPromptHash": "13fadf9ecc5aabb6cd6d7440d33d570933d30b88e7efa8c2527a999629fdec9a",
+      "tools": [
+        {
+          "name": "lookup",
+          "schema": "c7a040393456"
+        },
+        {
+          "name": "archive",
+          "schema": "bd859a150cfb"
+        },
+        {
+          "name": "dangerous",
+          "schema": "c7a040393456"
+        },
+        {
+          "name": "tracker",
+          "schema": "a805729d82e7"
+        },
+        {
+          "name": "ask_user",
+          "schema": "62fd0a80cb71"
+        }
+      ]
+    },
+    {
+      "options": {
+        "max_tokens": 16384,
+        "model": "gpt-golden",
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        }
+      },
+      "roles": [
+        "system",
+        "user",
+        "assistant",
+        "tool"
+      ],
+      "systemPromptHash": "13fadf9ecc5aabb6cd6d7440d33d570933d30b88e7efa8c2527a999629fdec9a",
+      "tools": [
+        {
+          "name": "lookup",
+          "schema": "c7a040393456"
+        },
+        {
+          "name": "archive",
+          "schema": "bd859a150cfb"
+        },
+        {
+          "name": "dangerous",
+          "schema": "c7a040393456"
+        },
+        {
+          "name": "tracker",
+          "schema": "a805729d82e7"
+        },
+        {
+          "name": "ask_user",
+          "schema": "62fd0a80cb71"
+        }
+      ]
+    }
+  ],
+  "offeredToolIds": [
+    [
+      "lookup",
+      "archive",
+      "dangerous",
+      "tracker",
+      "ask_user"
+    ],
+    [
+      "lookup",
+      "archive",
+      "dangerous",
+      "tracker",
+      "ask_user"
+    ],
+    [
+      "lookup",
+      "archive",
+      "dangerous",
+      "tracker",
+      "ask_user"
+    ]
+  ],
+  "storedMessage": {
+    "chat": {
+      "activeRunId": null,
+      "appId": "desk",
+      "createdAt": "<ts>",
+      "hasUnseenActivity": false,
+      "id": "<id:1>",
+      "identityMode": "default",
+      "lastMessageAt": "<ts>",
+      "messageCount": 3,
+      "modelId": "golden-model",
+      "origin": {
+        "createdVia": "ui"
+      },
+      "ownerId": "golden-user",
+      "pendingConnect": null,
+      "runIds": [
+        "chat-<id:2>",
+        "chat-<id:5>"
+      ],
+      "settings": null,
+      "status": "active",
+      "title": "Search the tracker for the printer.",
+      "titleSetByUser": false
+    },
+    "messages": [
+      {
+        "clientMessageId": "msg-1",
+        "content": "Search the tracker for the printer.",
+        "id": "<id:12>",
+        "role": "user",
+        "runId": "chat-<id:2>",
+        "ts": "<ts>"
+      },
+      {
+        "activity": {
+          "toolActivity": {
+            "items": [
+              {
+                "details": [
+                  {
+                    "more": 0,
+                    "name": "query",
+                    "values": [
+                      {
+                        "text": "printer"
+                      }
+                    ]
+                  }
+                ],
+                "durationMs": "<ms>",
+                "id": "call_1",
+                "integration": "tracker",
+                "kind": "tool",
+                "name": "tracker",
+                "origin": "integration",
+                "sources": [],
+                "status": "completed",
+                "toolId": "tracker"
+              }
+            ],
+            "reading": null
+          }
+        },
+        "answerBasis": [
+          {
+            "kind": "model"
+          }
+        ],
+        "content": "Connect the tracker and I will search it.",
+        "finishReason": "stop",
+        "id": "<id:13>",
+        "integrationAuthRequired": [
+          {
+            "action": "tracker",
+            "integration": "tracker",
+            "name": "tracker",
+            "reason": "not_connected"
+          }
+        ],
+        "provenance": {
+          "ai_generated": true,
+          "content_hash": {
+            "alg": "sha-256",
+            "normalization": "nfc-trim",
+            "value": "65a5ce18dc05112c6f440f669b086fdbe20eeeba4f1f044fa4725bf135ddcb89"
+          },
+          "created_at": "<ts>",
+          "generator": {
+            "installation_id": "inst_<id:3>",
+            "product": "iHub Apps",
+            "version": "<version>"
+          },
+          "model": {
+            "id": "golden-model",
+            "watermark": {
+              "applied": false,
+              "by": "none"
+            }
+          },
+          "output_id": "<id:4>",
+          "spec": "intrafind-provenance/1.0"
+        },
+        "role": "assistant",
+        "runId": "chat-<id:2>",
+        "ts": "<ts>",
+        "usage": {
+          "completionTokens": 17,
+          "promptTokens": 110,
+          "totalTokens": 127
+        }
+      },
+      {
+        "activity": {
+          "toolActivity": {
+            "items": [
+              {
+                "details": [
+                  {
+                    "more": 0,
+                    "name": "query",
+                    "values": [
+                      {
+                        "text": "printer"
+                      }
+                    ]
+                  }
+                ],
+                "durationMs": "<ms>",
+                "id": "call_1",
+                "integration": "tracker",
+                "kind": "tool",
+                "name": "tracker",
+                "origin": "integration",
+                "sources": [],
+                "status": "completed",
+                "toolId": "tracker"
+              }
+            ],
+            "reading": null
+          }
+        },
+        "answerBasis": [
+          {
+            "kind": "integration",
+            "label": "tracker"
+          }
+        ],
+        "content": "TRK-7: the printer is on fire.",
+        "finishReason": "stop",
+        "id": "<id:14>",
+        "provenance": {
+          "ai_generated": true,
+          "content_hash": {
+            "alg": "sha-256",
+            "normalization": "nfc-trim",
+            "value": "b8feab89b6dc83e52c16faf35589dc1e233beed3c39dacab22e42c7417e493f6"
+          },
+          "created_at": "<ts>",
+          "generator": {
+            "installation_id": "inst_<id:3>",
+            "product": "iHub Apps",
+            "version": "<version>"
+          },
+          "model": {
+            "id": "golden-model",
+            "watermark": {
+              "applied": false,
+              "by": "none"
+            }
+          },
+          "output_id": "<id:6>",
+          "spec": "intrafind-provenance/1.0"
+        },
+        "role": "assistant",
+        "runId": "chat-<id:5>",
+        "ts": "<ts>",
+        "usage": {
+          "completionTokens": 8,
+          "promptTokens": 80,
+          "totalTokens": 88
+        }
+      }
+    ]
+  },
+  "surface": "chat",
+  "title": "A call stops on a missing connection; after the connect the stored call runs again without a new message. (GET stream)",
+  "toolCalls": [
+    {
+      "args": {
+        "query": "printer"
+      },
+      "execution": "server",
+      "outcome": {
+        "error": {
+          "message": "Connect the tracker to use this tool.",
+          "rateLimited": false
+        }
+      },
+      "runId": "chat-<id:2>",
+      "toolId": "tracker"
+    },
+    {
+      "args": {
+        "query": "printer"
+      },
+      "execution": "server",
+      "outcome": {
+        "result": "{\"query\":\"printer\",\"issues\":[{\"key\":\"TRK-7\",\"title\":\"Printer on fire\"}]}"
+      },
+      "runId": "chat-<id:5>",
+      "toolId": "tracker"
+    }
+  ],
+  "toolSchemas": {
+    "62fd0a80cb71": {
+      "properties": {
+        "allow_other": {
+          "default": false,
+          "description": "For select/multiselect: allow user to enter a custom 'Other' value not in the options list.",
+          "type": "boolean"
+        },
+        "allow_skip": {
+          "default": false,
+          "description": "Allow the user to skip this question without providing an answer.",
+          "type": "boolean"
+        },
+        "context": {
+          "description": "Brief explanation of why you need this information, shown to the user to help them understand the question's purpose.",
+          "maxLength": 500,
+          "type": "string"
+        },
+        "input_type": {
+          "default": "select",
+          "description": "PREFER 'select' or 'multiselect' over 'text' when there are common choices! Use 'select' for single choice from options (RECOMMENDED), 'multiselect' for multiple choices, 'text' ONLY for truly open-ended answers, 'confirm' for yes/no, 'number' for numeric input, 'date' for dates.",
+          "enum": [
+            "text",
+            "select",
+            "multiselect",
+            "confirm",
+            "number",
+            "date"
+          ],
+          "type": "string"
+        },
+        "options": {
+          "description": "REQUIRED for select/multiselect! Provide 2-10 common options. Example: [{\"label\": \"English\", \"value\": \"en\"}, {\"label\": \"French\", \"value\": \"fr\"}]. Set allow_other=true if user might need an unlisted option.",
+          "items": {
+            "properties": {
+              "label": {
+                "description": "Display text for the option (max 100 chars)",
+                "maxLength": 100,
+                "type": "string"
+              },
+              "value": {
+                "description": "Value returned when selected (defaults to label if not provided, max 100 chars)",
+                "maxLength": 100,
+                "type": "string"
+              }
+            },
+            "required": [
+              "label"
+            ],
+            "type": "object"
+          },
+          "maxItems": 20,
+          "type": "array"
+        },
+        "placeholder": {
+          "description": "Placeholder text shown in the input field before user types.",
+          "maxLength": 200,
+          "type": "string"
+        },
+        "question": {
+          "description": "A SHORT clarifying question (e.g., 'Which language?' or 'What format?'). Do NOT include the user's input text in the question. Maximum 500 characters.",
+          "maxLength": 500,
+          "type": "string"
+        },
+        "validation": {
+          "description": "Validation rules for the user's input.",
+          "properties": {
+            "max": {
+              "description": "Maximum value for number input or maximum length for text.",
+              "type": "number"
+            },
+            "message": {
+              "description": "Custom error message to show when validation fails.",
+              "maxLength": 200,
+              "type": "string"
+            },
+            "min": {
+              "description": "Minimum value for number input or minimum length for text.",
+              "type": "number"
+            },
+            "pattern": {
+              "description": "Regular expression pattern for text validation (max 200 chars). Use simple patterns to avoid ReDoS.",
+              "maxLength": 200,
+              "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "required": [
+        "question"
+      ],
+      "type": "object"
+    },
+    "a805729d82e7": {
+      "properties": {
+        "query": {
+          "description": "What to search for",
+          "type": "string"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "type": "object"
+    },
+    "bd859a150cfb": {
+      "properties": {
+        "volume": {
+          "description": "The volume to read",
+          "type": "string"
+        }
+      },
+      "required": [
+        "volume"
+      ],
+      "type": "object"
+    },
+    "c7a040393456": {
+      "properties": {
+        "key": {
+          "description": "The key of the record",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key"
+      ],
+      "type": "object"
+    }
+  },
+  "usageRecords": [
+    {
+      "app": "desk",
+      "cid": "<id:1>",
+      "ct": 8,
+      "grp": [
+        "users"
+      ],
+      "lat": "<ms>",
+      "model": "golden-model",
+      "prov": "openai",
+      "pt": 40,
+      "rid": "req-<id:8>",
+      "src": "provider",
+      "st": "ok",
+      "surf": "chat",
+      "tc": 1,
+      "ts": "<ts>",
+      "ttft": "<ms>",
+      "type": "llm_call",
+      "uid": "<id:1>",
+      "v": 2
+    },
+    {
+      "app": "desk",
+      "cid": "<id:1>",
+      "ct": 9,
+      "grp": [
+        "users"
+      ],
+      "lat": "<ms>",
+      "model": "golden-model",
+      "prov": "openai",
+      "pt": 70,
+      "rid": "req-<id:9>",
+      "src": "provider",
+      "st": "ok",
+      "surf": "chat",
+      "tc": 0,
+      "ts": "<ts>",
+      "ttft": "<ms>",
+      "type": "llm_call",
+      "uid": "<id:1>",
+      "v": 2
+    },
+    {
+      "app": "desk",
+      "cid": "<id:1>",
+      "ct": 8,
+      "grp": [
+        "users"
+      ],
+      "lat": "<ms>",
+      "model": "golden-model",
+      "prov": "openai",
+      "pt": 80,
+      "rid": "req-<id:11>",
+      "src": "provider",
+      "st": "ok",
+      "surf": "chat",
+      "tc": 0,
+      "ts": "<ts>",
+      "ttft": "<ms>",
+      "type": "llm_call",
+      "uid": "<id:1>",
+      "v": 2
+    }
+  ]
+}
