@@ -48,6 +48,7 @@ const AdminAdvancedPage = lazyWithRetry(() => import('./features/admin/pages/Adm
 const AdminUsageReports = lazyWithRetry(() => import('./features/admin/pages/AdminUsageReports'));
 const AdminFeedbackPage = lazyWithRetry(() => import('./features/admin/pages/AdminFeedbackPage'));
 const AdminAppsPage = lazyWithRetry(() => import('./features/admin/pages/AdminAppsPage'));
+const AdminAppCreatePage = lazyWithRetry(() => import('./features/admin/pages/AdminAppCreatePage'));
 const AdminAppEditPage = lazyWithRetry(() => import('./features/admin/pages/AdminAppEditPage'));
 const AdminShortLinks = lazyWithRetry(() => import('./features/admin/pages/AdminShortLinks'));
 const AdminShortLinkEditPage = lazyWithRetry(
@@ -554,6 +555,10 @@ function App() {
             {/* AI Workspace */}
             {showAdminPage('apps') && (
               <Route path="apps" element={<LazyAdminRoute component={AdminAppsPage} />} />
+            )}
+            {/* Before apps/:appId, so "new" is the create page and never an app ID. */}
+            {showAdminPage('apps') && (
+              <Route path="apps/new" element={<LazyAdminRoute component={AdminAppCreatePage} />} />
             )}
             {showAdminPage('apps') && (
               <Route path="apps/:appId" element={<LazyAdminRoute component={AdminAppEditPage} />} />

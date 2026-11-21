@@ -186,6 +186,78 @@ export const fetchAdminAppTemplates = async () => {
   const response = await makeAdminApiCall('/admin/apps/templates');
   return response.data?.items ?? [];
 };
+
+/**
+ * One app's configuration as it is stored (`GET /api/admin/apps/{id}`).
+ *
+ * @param {string} appId
+ * @returns {Promise<Object>}
+ */
+export const fetchAdminApp = async appId => {
+  const response = await makeAdminApiCall(`/admin/apps/${encodeURIComponent(appId)}`);
+  return response.data;
+};
+
+/**
+ * The templates the "New app" page offers (`GET /api/admin/app-templates`):
+ * `{ id, name, description, icon, color, category, hasInputFields, app }`.
+ * Not to be confused with {@link fetchAdminAppTemplates}, which lists the
+ * existing apps a new app can be copied from.
+ *
+ * @returns {Promise<Object[]>}
+ */
+export const fetchAppStartTemplates = async () => {
+  const response = await makeAdminApiCall('/admin/app-templates');
+  return response.data?.items ?? [];
+};
+
+/**
+ * How long the browser waits for an app draft. Above the server's own limit
+ * for the model call (80 seconds), and well above the 30 seconds of other
+ * admin calls.
+ */
+export const APP_DRAFT_TIMEOUT_MS = 90000;
+
+/**
+ * Have an AI model prepare an app draft from a description
+ * (`POST /api/admin/apps/_generate`). Nothing is stored.
+ *
+ * @param {Object} request
+ * @param {string} request.description - What the app should do, 1 to 2,000 characters.
+ * @param {string} [request.language] - The language of the draft's texts; the
+ *   platform's default language when absent.
+ * @param {AbortSignal} [request.signal] - Aborting it cancels the request; the
+ *   server then stops the model call.
+ * @returns {Promise<{ app: Object, suggestions: Object, warnings: Object[], model: Object, brief: string }>}
+ */
+export const generateAppDraft = async ({ description, language, signal }) => {
+  const response = await makeAdminApiCall('/admin/apps/_generate', {
+    method: 'POST',
+    body: { description, ...(language ? { language } : {}) },
+    timeout: APP_DRAFT_TIMEOUT_MS,
+    signal
+  });
+  return response.data;
+};
+
+/**
+ * Create an app (`POST /api/admin/apps`).
+ *
+ * @param {Object} app - The app configuration; stored as sent.
+ * @param {{ origin?: string }} [options] - How the app was started, one of
+ *   `APP_CREATE_ORIGINS` (`shared/appGenerator.js`). It goes into the audit
+ *   entry and changes nothing about the app.
+ * @returns {Promise<Object>} The created app.
+ */
+export const createAdminApp = async (app, { origin } = {}) => {
+  const response = await makeAdminApiCall('/admin/apps', {
+    method: 'POST',
+    body: app,
+    ...(origin ? { params: { origin } } : {})
+  });
+  return response.data;
+};
+
 export const createPrompt = async promptData => {
   const response = await makeAdminApiCall('/admin/prompts', {
     method: 'POST',

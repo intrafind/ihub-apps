@@ -2,8 +2,25 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { useId, useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
+import { getLocalizedContent } from '../../../utils/localizeContent';
 import { CHECKBOX_CLASS } from './formStyles';
+
+/**
+ * The text a resource is shown and searched by. A name is either a plain text
+ * (models, groups) or one text per language (apps, prompts); an app written in
+ * one language has only that language, so `name.en` may not exist.
+ *
+ * @param {{ id: string, name?: string | Record<string, string> }} resource
+ * @param {string} [language] - The base language of the UI, such as `de`.
+ * @returns {string} The name in that language, else in another language the
+ *   resource has, else the ID.
+ */
+function resourceLabel(resource, language) {
+  const name = getLocalizedContent(resource.name, language);
+  return typeof name === 'string' && name.trim() !== '' ? name : String(resource.id);
+}
 
 function ResourceSelector({
   label,
@@ -14,6 +31,9 @@ function ResourceSelector({
   placeholder = 'Search and select...',
   emptyMessage = 'No items selected'
 }) {
+  const { i18n } = useTranslation();
+  // Localized names are stored under base languages, so `de-DE` reads `de`.
+  const uiLanguage = i18n.language?.split('-')[0] || undefined;
   const [searchTerm, setSearchTerm] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
   // The field label names the search input; the "All (*)" checkbox is named
@@ -23,17 +43,23 @@ function ResourceSelector({
 
   const isWildcard = selectedResources.includes('*');
 
+  // Every resource with the one text it is shown and searched by.
+  const namedResources = useMemo(
+    () =>
+      resources.map(resource => ({ id: resource.id, name: resourceLabel(resource, uiLanguage) })),
+    [resources, uiLanguage]
+  );
+
   // Filter available resources based on search term and exclude already selected
   const filteredResources = useMemo(() => {
     if (isWildcard) return [];
 
-    return resources.filter(resource => {
-      const name = resource.name?.en || resource.name || resource.id;
-      const matchesSearch = name.toLowerCase().includes(searchTerm.toLowerCase());
-      const notSelected = !selectedResources.includes(resource.id);
-      return matchesSearch && notSelected;
-    });
-  }, [resources, searchTerm, selectedResources, isWildcard]);
+    const term = searchTerm.toLowerCase();
+    return namedResources.filter(
+      resource =>
+        resource.name.toLowerCase().includes(term) && !selectedResources.includes(resource.id)
+    );
+  }, [namedResources, searchTerm, selectedResources, isWildcard]);
 
   // Get display names for selected resources
   const selectedResourcesWithNames = useMemo(() => {
@@ -41,17 +67,11 @@ function ResourceSelector({
 
     return selectedResources
       .map(id => {
-        const resource = resources.find(r => r.id === id);
-        return resource
-          ? {
-              id,
-              name: resource.name?.en || resource.name || resource.id,
-              isWildcard: false
-            }
-          : null;
+        const resource = namedResources.find(r => r.id === id);
+        return resource ? { id, name: resource.name, isWildcard: false } : null;
       })
       .filter(Boolean);
-  }, [selectedResources, resources, isWildcard]);
+  }, [selectedResources, namedResources, isWildcard]);
 
   const handleWildcardToggle = checked => {
     if (checked) {
@@ -178,9 +198,7 @@ function ResourceSelector({
                         size="sm"
                         className="mr-2 text-green-700 dark:text-green-400"
                       />
-                      <span className="text-gray-900 dark:text-gray-100">
-                        {resource.name?.en || resource.name || resource.id}
-                      </span>
+                      <span className="text-gray-900 dark:text-gray-100">{resource.name}</span>
                     </div>
                   </button>
                 ))

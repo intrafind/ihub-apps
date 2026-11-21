@@ -11,8 +11,8 @@
  *   network).
  * - Adds the principals the suite signs in as (`AUTHZ_USERS` in
  *   `tests/security/authz/principals.js`), a restricted group for carol, one app,
- *   model and prompt only the `users` group may use, and turns on every feature
- *   that registers user-owned resources.
+ *   model and prompt only the `users` group may use, one app that is not published,
+ *   and turns on every feature that registers user-owned resources.
  * - Starts `server/server.js` with `authz-route-dump.mjs` preloaded, which writes the
  *   live route table to `<contents>/.authz-routes.json` for the coverage guard.
  *
@@ -36,6 +36,8 @@ import {
   SECRET_MODEL_ID,
   SECRET_PAGE_ID,
   SECRET_PROMPT_ID,
+  UNPUBLISHED_APP_ID,
+  UNPUBLISHED_APP_MARKER,
   WORKFLOW_ID
 } from '../security/authz/principals.js';
 
@@ -216,6 +218,19 @@ writeJson(contents('apps', `${SECRET_APP_ID}.json`), {
   preferredModel: SECRET_MODEL_ID,
   features: {},
   skills: []
+});
+// An app that is not published. The `users` group grants every app, so the
+// published rule alone keeps alice and bob out; the admin can try it.
+writeJson(contents('apps', `${UNPUBLISHED_APP_ID}.json`), {
+  ...chatApp,
+  id: UNPUBLISHED_APP_ID,
+  name: { en: `${UNPUBLISHED_APP_MARKER} name` },
+  description: { en: `${UNPUBLISHED_APP_MARKER} description` },
+  system: { en: `${UNPUBLISHED_APP_MARKER} instructions` },
+  preferredModel: 'e2e-stub',
+  features: {},
+  skills: [],
+  enabled: false
 });
 // Chat uses the stub, not the seeded default model that needs a key.
 writeJson(contents('apps', 'chat.json'), {

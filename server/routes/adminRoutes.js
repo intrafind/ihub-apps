@@ -8,6 +8,7 @@ import registerAdminOAuthCimdRoutes from './admin/oauthCimdClients.js';
 import registerAdminOAuthConnectionRoutes from './admin/oauthConnections.js';
 import registerAdminCacheRoutes from './admin/cache.js';
 import registerAdminConfigRoutes from './admin/configs.js';
+import registerAdminAppBuilderRoutes from './admin/appBuilder.js';
 import registerAdminAppsRoutes from './admin/apps.js';
 import registerAdminAppUsageGuideRoute from './admin/appUsageGuide.js';
 import registerAdminModelsRoutes from './admin/models.js';
@@ -78,6 +79,8 @@ export default async function registerAdminRoutes(app) {
   registerAdminOAuthConnectionRoutes(app);
   registerAdminCacheRoutes(app);
   registerAdminConfigRoutes(app);
+  // Before the app routes: `_generate` is an action on the same collection.
+  registerAdminAppBuilderRoutes(app);
   registerAdminAppsRoutes(app);
   registerAdminAppUsageGuideRoute(app);
   registerAdminModelsRoutes(app);

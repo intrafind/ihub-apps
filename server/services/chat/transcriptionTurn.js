@@ -28,7 +28,6 @@ import { resolveChatStorage } from './chatPersistence.js';
 import { resolveChatOwner } from './chatOwner.js';
 import { settleAssistantTurn, settleUserTurn } from './chatMaterializer.js';
 import { resolveChatProjects } from '../knowledge/chatProjects.js';
-import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
 
 const COMPONENT = 'TranscriptionTurn';
 const MAX_LABEL_CHARS = 300;
@@ -96,7 +95,7 @@ export async function beginTranscriptionTurn({
   const chatProjects = await resolveChatProjects({
     req: { user },
     chat: access.chat,
-    app: findByIdCaseInsensitive(configCache.getApps()?.data || [], appId) || null,
+    app: configCache.getAppForRequest(appId, user),
     projectId
   });
   if (!chatProjects.ok) {

@@ -51,8 +51,7 @@ export default function registerMagicPromptRoutes(app, { llmClient = defaultLlmC
       // the platform defaults apply.
       let magicConfig = {};
       if (appId && appId !== 'direct') {
-        const { data: apps = [] } = configCache.getApps();
-        const appConfig = findByIdCaseInsensitive(apps || [], appId);
+        const appConfig = configCache.getAppForRequest(appId, req.user);
         if (!appConfig || !canUserAccessResource(req.user, 'apps', appConfig.id)) {
           throw new ServiceError('NOT_FOUND', 'App not found');
         }

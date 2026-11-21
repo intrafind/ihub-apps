@@ -43,9 +43,7 @@ function AppDetailsPopup({ app, isOpen, onClose }) {
                 : 'bg-red-100 dark:bg-red-900/50 text-red-800 dark:text-red-300'
             }`}
           >
-            {app.enabled
-              ? t('admin.apps.status.enabled', 'Enabled')
-              : t('admin.apps.status.disabled', 'Disabled')}
+            {app.enabled ? t('admin.apps.status.published') : t('admin.apps.status.notPublished')}
           </span>
         </div>
 

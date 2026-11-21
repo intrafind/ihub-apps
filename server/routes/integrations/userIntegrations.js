@@ -80,7 +80,6 @@ import {
   effectivePreferences,
   getIntegrationPreferencesRepository
 } from '../../services/integrations/IntegrationPreferencesRepository.js';
-import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
 
 const COMPONENT = 'UserIntegrations';
 
@@ -298,8 +297,9 @@ function appOfRequest(req) {
   if (typeof appId !== 'string' || !isValidId(appId)) {
     throw new ServiceError('INVALID_APP', 'A valid app is required');
   }
-  const app = findByIdCaseInsensitive(configCache.getApps()?.data || [], appId);
-  if (!app || app.enabled === false || !canUserAccessResource(req.user, 'apps', app.id)) {
+  // Published, or one a content admin is trying before publishing it.
+  const app = configCache.getAppForRequest(appId, req.user);
+  if (!app || !canUserAccessResource(req.user, 'apps', app.id)) {
     throw new ServiceError('APP_NOT_FOUND', 'App not found');
   }
   return app;

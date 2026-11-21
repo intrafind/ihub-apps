@@ -10,6 +10,16 @@
 /** Carol's only group: no access to the secret app, model and prompt. */
 export const RESTRICTED_GROUP = 'authz-restricted';
 export const SECRET_APP_ID = 'authz-secret-app';
+/**
+ * An app that is not published (`enabled: false`). The `users` group may use
+ * every app, so what keeps alice and bob out is the published rule alone; a
+ * content admin or admin can try it in the interactive chat.
+ */
+export const UNPUBLISHED_APP_ID = 'authz-unpublished-app';
+/** In the unpublished app's name and instructions; never in an answer to a user. */
+export const UNPUBLISHED_APP_MARKER = 'AUTHZ-UNPUBLISHED-APP-9d2e';
+/** No app has this id. */
+export const UNKNOWN_APP_ID = 'authz-no-such-app';
 export const SECRET_MODEL_ID = 'authz-secret-model';
 export const SECRET_PROMPT_ID = 'authz-secret-prompt';
 /** A global skill carol's group may not use (it may use none). */

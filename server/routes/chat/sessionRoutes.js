@@ -1092,12 +1092,18 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             );
           }
         }
+        // The app this turn runs, decided once for the request from the
+        // signed-in user and never from the body (`getAppForRequest`): the
+        // published app, or one that is not published yet when a content
+        // admin tries it. For everyone else such an app is null here, as an
+        // unknown id is, and the request builder below answers APP_NOT_FOUND.
+        // Ids match regardless of case, as the request builder matches them: a
+        // missed app would skip its `userProjects` gate.
+        const requestApp = configCache.getAppForRequest(appId, req.user);
         const chatProjects = await resolveChatProjects({
           req,
           chat: access.chat,
-          // Case-insensitive like the request builder, which accepts the id
-          // in any case: a missed app would skip its `userProjects` gate.
-          app: findByIdCaseInsensitive(configCache.getApps()?.data || [], appId) || null,
+          app: requestApp,
           projectId: projectTest ? undefined : requestedProjectId,
           projects: projectTest ? undefined : requestedProjects
         });
@@ -1333,7 +1339,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
         // model. The viewer's own "Include chat history in requests" toggle
         // says the same thing for one turn: with the client posting a single
         // message either way, this field is the only channel it has left.
-        const chatApp = (configCache.getApps().data || []).find(a => a.id === appId);
+        const chatApp = requestApp;
         // The app variables are chat state: a turn that sets them (the
         // start form's, or any turn of an app that asks for them beside the
         // chat) stores them, and a turn that does not gets the stored ones —
@@ -1561,7 +1567,10 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           projectId: chatProjects.containerId,
           attachedProjectIds: chatProjects.attachedIds,
           ...(projectTest ? { testProjectId: projectTest.projectId } : {}),
-          integrationScopes
+          integrationScopes,
+          // The only place `resolvedApp` is set: this route is the one way to
+          // run an app that is not published (see `requestApp` above).
+          resolvedApp: requestApp
         };
 
         // The answer reaches the browser over the chat's stream only. In

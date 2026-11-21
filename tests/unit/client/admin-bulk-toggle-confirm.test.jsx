@@ -8,6 +8,11 @@
  * the server applies (`models.js` clears `default` on every disabled model,
  * and `ensureStoredDefault` later promotes the first enabled chat model).
  * Cancel sends no write.
+ *
+ * On Apps the actions read "Publish all" / "Unpublish all". An unpublished app
+ * may be an unfinished one, so the dialog names every app that changes and the
+ * request carries exactly those IDs, never `*`. With a filter the action
+ * covers the rows shown.
  */
 import '@testing-library/jest-dom';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
@@ -51,14 +56,6 @@ jest.mock('../../../client/src/shared/contexts/PlatformConfigContext', () => ({
   usePlatformConfig: () => ({ platformConfig: { admin: { pages: {} } } })
 }));
 jest.mock('../../../client/src/features/apps/components/AppDetailsPopup', () => ({
-  __esModule: true,
-  default: () => null
-}));
-jest.mock('../../../client/src/features/apps/components/AppCreationWizard', () => ({
-  __esModule: true,
-  default: () => null
-}));
-jest.mock('../../../client/src/features/apps/components/AppTemplateSelector', () => ({
   __esModule: true,
   default: () => null
 }));
@@ -108,28 +105,30 @@ beforeEach(() => {
 
 const app = (id, enabled) => ({ id, name: { en: `App ${id}` }, enabled });
 
-describe('Apps: Enable All / Disable All', () => {
-  async function renderApps(apps) {
+describe('Apps: Publish all / Unpublish all', () => {
+  async function renderApps(apps, url = '/admin/apps') {
     mockApi.fetchAdminApps.mockResolvedValue(apps);
     mockApi.fetchAppIntegrationStatus.mockResolvedValue({});
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={[url]}>
         <AdminAppsPage />
       </MemoryRouter>
     );
-    await screen.findByText(apps[0].name.en);
+    await screen.findAllByText(/^App /);
   }
 
-  it('Enable All names the count and the disabled apps; Cancel sends nothing', async () => {
-    await renderApps([app('a', true), app('b', false), app('c', false)]);
-    fireEvent.click(screen.getByRole('button', { name: 'Enable All' }));
-
-    const dialog = screen.getByRole('alertdialog', { name: 'Enable all apps?' });
-    expect(dialog).toHaveTextContent('2 of 3 apps are disabled now and will be enabled.');
-    const names = within(dialog)
+  const namesIn = dialog =>
+    within(dialog)
       .getAllByRole('listitem')
       .map(item => item.textContent);
-    expect(names).toEqual(['App b', 'App c']);
+
+  it('Publish all names the count and every app that changes; Cancel sends nothing', async () => {
+    await renderApps([app('a', true), app('b', false), app('c', false)]);
+    fireEvent.click(screen.getByRole('button', { name: 'Publish all' }));
+
+    const dialog = screen.getByRole('alertdialog', { name: 'Publish all' });
+    expect(dialog).toHaveTextContent('These 2 apps become visible to their users:');
+    expect(namesIn(dialog)).toEqual(['App b', 'App c']);
     expect(mockApi.toggleApps).not.toHaveBeenCalled();
 
     fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
@@ -137,17 +136,84 @@ describe('Apps: Enable All / Disable All', () => {
     expect(mockApi.toggleApps).not.toHaveBeenCalled();
   });
 
-  it('Disable All toggles every app only after the confirm button', async () => {
+  it('sends exactly the IDs the dialog listed, never "*"', async () => {
+    mockApi.toggleApps.mockResolvedValue({});
+    await renderApps([app('a', true), app('b', false), app('c', false)]);
+    fireEvent.click(screen.getByRole('button', { name: 'Publish all' }));
+    const dialog = screen.getByRole('alertdialog', { name: 'Publish all' });
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Publish all' }));
+    });
+    expect(mockApi.toggleApps).toHaveBeenCalledTimes(1);
+    expect(mockApi.toggleApps).toHaveBeenCalledWith(['b', 'c'], true);
+    expect(JSON.stringify(mockApi.toggleApps.mock.calls)).not.toContain('*');
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    // The rows show the new state without a reload.
+    expect(screen.queryByText('Not published')).not.toBeInTheDocument();
+  });
+
+  it('names every app, not only the first five', async () => {
+    await renderApps(Array.from({ length: 8 }, (_, i) => app(`n${i}`, false)));
+    fireEvent.click(screen.getByRole('button', { name: 'Publish all' }));
+    const dialog = screen.getByRole('alertdialog', { name: 'Publish all' });
+    expect(dialog).toHaveTextContent('These 8 apps become visible to their users:');
+    expect(namesIn(dialog)).toEqual(Array.from({ length: 8 }, (_, i) => `App n${i}`));
+    expect(dialog).not.toHaveTextContent('more');
+    // A long list scrolls inside the dialog and can be reached with the keyboard.
+    expect(within(dialog).getByRole('list')).toHaveAttribute('tabindex', '0');
+  });
+
+  it('uses the singular for one app', async () => {
+    await renderApps([app('a', true), app('b', false)]);
+    fireEvent.click(screen.getByRole('button', { name: 'Unpublish all' }));
+    const dialog = screen.getByRole('alertdialog', { name: 'Unpublish all' });
+    expect(dialog).toHaveTextContent('Users can no longer open this app:');
+    expect(namesIn(dialog)).toEqual(['App a']);
+  });
+
+  it('Unpublish all sends the published apps only after the confirm button', async () => {
     mockApi.toggleApps.mockResolvedValue({});
     await renderApps([app('a', true), app('b', true), app('c', false)]);
-    fireEvent.click(screen.getByRole('button', { name: 'Disable All' }));
-    const dialog = screen.getByRole('alertdialog', { name: 'Disable all apps?' });
-    expect(dialog).toHaveTextContent('2 of 3 apps are enabled now and will be disabled.');
+    fireEvent.click(screen.getByRole('button', { name: 'Unpublish all' }));
+    const dialog = screen.getByRole('alertdialog', { name: 'Unpublish all' });
+    expect(dialog).toHaveTextContent('Users can no longer open these 2 apps:');
+    expect(mockApi.toggleApps).not.toHaveBeenCalled();
     await act(async () => {
-      fireEvent.click(within(dialog).getByRole('button', { name: 'Disable All' }));
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Unpublish all' }));
     });
-    expect(mockApi.toggleApps).toHaveBeenCalledWith('*', false);
+    expect(mockApi.toggleApps).toHaveBeenCalledWith(['a', 'b'], false);
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  });
+
+  it('with a search filter the action covers the rows shown and says so', async () => {
+    mockApi.toggleApps.mockResolvedValue({});
+    await renderApps(
+      [app('alpha', false), app('beta', false), app('gamma', true)],
+      '/admin/apps?q=beta'
+    );
+    expect(screen.queryByRole('button', { name: 'Publish all' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Publish shown' }));
+    const dialog = screen.getByRole('alertdialog', { name: 'Publish shown' });
+    expect(dialog).toHaveTextContent('This app becomes visible to its users:');
+    expect(namesIn(dialog)).toEqual(['App beta']);
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Publish shown' }));
+    });
+    expect(mockApi.toggleApps).toHaveBeenCalledWith(['beta'], true);
+    // The app outside the filter is still not published.
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: '' } });
+    const alphaRow = (await screen.findByText('App alpha')).closest('tr');
+    expect(within(alphaRow).getByText('Not published')).toBeInTheDocument();
+  });
+
+  it('offers no confirm button when no app would change', async () => {
+    await renderApps([app('a', true), app('b', true)]);
+    fireEvent.click(screen.getByRole('button', { name: 'Publish all' }));
+    const dialog = screen.getByRole('alertdialog', { name: 'Publish all' });
+    expect(within(dialog).queryByRole('button', { name: 'Publish all' })).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole('listitem')).not.toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
+    expect(mockApi.toggleApps).not.toHaveBeenCalled();
   });
 });
 
@@ -249,6 +315,59 @@ describe('buildBulkToggleConfirm', () => {
       '8 of 8 prompts are disabled now and will be enabled. Users with access see them right away:'
     );
     expect(request.danger).toBe(false);
+  });
+
+  it('without wording it returns the items that change, for callers that need them', () => {
+    const request = buildBulkToggleConfirm({
+      items: [{ id: 'a', enabled: true }, { id: 'b', enabled: false }, { id: 'c' }],
+      enable: false,
+      itemsLabel: 'prompts',
+      getName,
+      t
+    });
+    // An item without `enabled` counts as enabled, as on the server.
+    expect(request.affected.map(item => item.id)).toEqual(['a', 'c']);
+    expect(request.consequences).toEqual(['a', 'c']);
+  });
+
+  it("with wording it uses the list's own texts and names every item", () => {
+    const items = Array.from({ length: 7 }, (_, i) => ({ id: `p${i}`, enabled: false }));
+    const request = buildBulkToggleConfirm({
+      items,
+      enable: true,
+      itemsLabel: 'apps',
+      getName,
+      t,
+      wording: {
+        title: 'Publish all',
+        confirmLabel: 'Publish all',
+        message: count => `${count} change:`,
+        nothingToChange: 'Nothing to publish.'
+      }
+    });
+    expect(request.title).toBe('Publish all');
+    expect(request.confirmLabel).toBe('Publish all');
+    expect(request.consequences).toEqual([]);
+    expect(request.affected).toHaveLength(7);
+    render(<div data-testid="message">{request.message}</div>);
+    expect(screen.getByTestId('message')).toHaveTextContent('7 change:');
+    expect(within(screen.getByTestId('message')).getAllByRole('listitem')).toHaveLength(7);
+
+    const nothing = buildBulkToggleConfirm({
+      items: [{ id: 'a', enabled: true }],
+      enable: true,
+      itemsLabel: 'apps',
+      getName,
+      t,
+      wording: {
+        title: 'Publish all',
+        confirmLabel: 'Publish all',
+        message: () => '',
+        nothingToChange: 'Nothing to publish.'
+      }
+    });
+    expect(nothing.blocked.reason).toBe('Nothing to publish.');
+    expect(nothing.affected).toEqual([]);
   });
 
   it('uses the singular for one item', () => {

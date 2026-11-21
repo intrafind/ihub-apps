@@ -167,6 +167,24 @@
       "version": "number"
     }
   },
+  "GET /api/admin/app-templates": {
+    "status": 200,
+    "shape": {
+      "items": [
+        {
+          "app": "object",
+          "category": "string",
+          "color": "string",
+          "description": "object",
+          "hasInputFields": "boolean",
+          "icon": "string",
+          "id": "string",
+          "name": "object"
+        }
+      ],
+      "nextCursor": "null"
+    }
+  },
   "GET /api/admin/apps": {
     "status": 200,
     "shape": {

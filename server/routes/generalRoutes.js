@@ -11,7 +11,6 @@ import { authRequired } from '../middleware/authRequired.js';
 import { buildServerPath, getRelativeRequestPath } from '../utils/basePath.js';
 import { ServiceError } from '../utils/ServiceError.js';
 import { responseEtag } from '../utils/etag.js';
-import { findByIdCaseInsensitive } from '../utils/resourceLookup.js';
 import { getStorage, isStorageReady } from '../storage/bootstrap.js';
 import { describeWebSearchAvailability } from '../services/tools/webSearchResolver.js';
 import { withoutUsageGuideContent } from '../utils/appUsageGuide.js';
@@ -339,13 +338,13 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
     const defaultLang = platform?.defaultLanguage || 'en';
     const language = req.headers['accept-language']?.split(',')[0] || defaultLang;
 
-    // Try to get apps from cache first
-    const { data: apps } = configCache.getApps();
-
-    if (!apps) {
+    if (!configCache.getApps()?.data) {
       throw new ServiceError('INTERNAL_ERROR', 'Failed to load apps configuration');
     }
-    const appData = findByIdCaseInsensitive(apps, appId);
+    // A content admin also gets an app that is not published yet, to try it
+    // (`getAppForRequest`); for everyone else it does not exist. The group
+    // permission below applies to both.
+    const appData = configCache.getAppForRequest(appId, req.user);
     if (!appData) {
       const errorMessage = await getLocalizedError('appNotFound', {}, language);
       throw new ServiceError('NOT_FOUND', errorMessage);

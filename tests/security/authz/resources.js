@@ -37,6 +37,8 @@ import {
   SECRET_PAGE_ID,
   SECRET_PROMPT_ID,
   SECRET_SKILL_ID,
+  UNKNOWN_APP_ID,
+  UNPUBLISHED_APP_ID,
   WORKFLOW_ID
 } from './principals.js';
 
@@ -842,6 +844,103 @@ export const GROUP_GATED = [
   }
 ];
 
+/**
+ * An app that is not published (`enabled: false`, `UNPUBLISHED_APP_ID`): one
+ * entry per route that looks an app up with `configCache.getAppForRequest`,
+ * which lets a content admin try such an app in the interactive chat. For a
+ * user, an API key and an anonymous visitor the answer must be the one an id
+ * that names no app gets (`UNKNOWN_APP_ID`): same status, same body.
+ *
+ * `request(appId, context)` builds the request for an app id; it may send
+ * requests of its own first (a chat that belongs to the app).
+ */
+export const UNPUBLISHED_APP = [
+  {
+    route: 'GET /api/apps/:appId',
+    request: appId => ({ method: 'GET', url: `/api/apps/${appId}` })
+  },
+  {
+    // Without `Accept: text/event-stream`: the refusal is one JSON body.
+    route: 'POST /api/apps/:appId/chat/:chatId',
+    request: appId => ({
+      method: 'POST',
+      url: `/api/apps/${appId}/chat/${randomUUID()}`,
+      data: { messages: [{ role: 'user', content: 'hello', messageId: 'u1' }] }
+    })
+  },
+  {
+    route: 'POST /api/magic-prompt',
+    request: appId => ({
+      method: 'POST',
+      url: '/api/magic-prompt',
+      data: { input: 'make it better', appId }
+    })
+  },
+  {
+    route: 'GET /api/integrations/scopes',
+    request: appId => ({ method: 'GET', url: `/api/integrations/scopes?appId=${appId}` })
+  },
+  {
+    route: 'GET /api/integrations/picker',
+    request: appId => ({ method: 'GET', url: `/api/integrations/picker?app=${appId}` })
+  },
+  {
+    route: 'GET /api/integrations/preferences',
+    request: appId => ({ method: 'GET', url: `/api/integrations/preferences?app=${appId}` })
+  },
+  {
+    route: 'PUT /api/integrations/preferences',
+    request: appId => ({
+      method: 'PUT',
+      url: `/api/integrations/preferences?app=${appId}`,
+      data: { enabledTools: [], websearchEnabled: false }
+    })
+  },
+  {
+    route: 'DELETE /apps/:appId/conversations/:conversationId',
+    request: appId => ({ method: 'DELETE', url: `/apps/${appId}/conversations/authz-conversation` })
+  },
+  {
+    // The app named with a first upload decides how the file is stored.
+    route: 'POST /api/chats/:chatId/files',
+    request: appId => ({
+      method: 'POST',
+      url: `/api/chats/${randomUUID()}/files`,
+      multipart: { file: textFile('note.txt', 'a note'), appId }
+    })
+  },
+  {
+    // The chat's app decides whether projects can be attached to it.
+    route: 'PATCH /api/chats/:chatId',
+    request: async (appId, context) => {
+      const chatId = randomUUID();
+      await send(context, {
+        method: 'POST',
+        url: `/api/chats/${chatId}/files`,
+        multipart: { file: textFile('note.txt', 'a note'), appId }
+      });
+      return {
+        method: 'PATCH',
+        url: `/api/chats/${chatId}`,
+        data: { attachedProjectIds: ['authz-no-such-project'] }
+      };
+    }
+  },
+  {
+    // Another way of running an app: it never knows an unpublished one.
+    route: 'GET /api/scheduled-tasks/_apps/:appId/tools',
+    request: appId => ({ method: 'GET', url: `/api/scheduled-tasks/_apps/${appId}/tools` })
+  },
+  {
+    route: 'POST /api/inference/v1/chat/completions',
+    request: appId => ({
+      method: 'POST',
+      url: '/api/inference/v1/chat/completions',
+      data: { model: `app:${appId}`, messages: [{ role: 'user', content: 'hello' }] }
+    })
+  }
+];
+
 /** Admin-only routes outside `/api/admin` (a signed-in user must not reach them). */
 export const ADMIN_ONLY = [
   {
@@ -861,6 +960,8 @@ export const FIXED_IDS = {
   toolId: 'ask_user',
   artifactName: 'report.md',
   secretAppId: SECRET_APP_ID,
+  unpublishedAppId: UNPUBLISHED_APP_ID,
+  unknownAppId: UNKNOWN_APP_ID,
   secretModelId: SECRET_MODEL_ID,
   secretPromptId: SECRET_PROMPT_ID,
   secretSkillId: SECRET_SKILL_ID,

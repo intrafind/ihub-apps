@@ -12,6 +12,7 @@ import iAssistantService from '../../services/integrations/iAssistantService.js'
 import { buildServerPath } from '../../utils/basePath.js';
 import { ServiceError } from '../../utils/ServiceError.js';
 import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
+import { canUserAccessResource } from '../../utils/authorization.js';
 
 /** The `config` block of an app's preferred model, or an empty object. */
 function preferredModelConfig(app) {
@@ -77,9 +78,14 @@ export default function registerConversationRoutes(app) {
       const { appId, conversationId } = req.params;
       const user = req.user;
 
-      const { data: apps = [] } = configCache.getApps() || {};
-      const appConfig = findByIdCaseInsensitive(apps, appId);
-      if (!appConfig) {
+      const appConfig = configCache.getAppForRequest(appId, user);
+      // This route has never checked the group permission of a published app,
+      // and still does not. An app that is not published exists only for a
+      // content admin whose groups grant it, as in the chat: for anyone else
+      // the answer is the one an unknown id gets.
+      const hidden =
+        appConfig?.enabled === false && !canUserAccessResource(user, 'apps', appConfig.id);
+      if (!appConfig || hidden) {
         throw new ServiceError('NOT_FOUND', 'App not found');
       }
 

@@ -7,10 +7,9 @@ import { useTranslation } from 'react-i18next';
 import { useFilterState } from '../hooks/useFilterState';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import AppDetailsPopup from '../../apps/components/AppDetailsPopup';
-import AppCreationWizard from '../../apps/components/AppCreationWizard';
-import AppTemplateSelector from '../../apps/components/AppTemplateSelector';
 import Icon from '../../../shared/components/Icon';
 import {
+  createAdminApp,
   fetchAdminApps,
   fetchAppIntegrationStatus,
   getAdminApiErrorMessage,
@@ -204,9 +203,6 @@ function AdminAppsPage() {
   const [selectedCategory, setSelectedCategory] = useFilterState('category', 'all');
   const [selectedApp, setSelectedApp] = useState(null);
   const [showAppDetails, setShowAppDetails] = useState(false);
-  const [showCreationWizard, setShowCreationWizard] = useState(false);
-  const [showTemplateSelector, setShowTemplateSelector] = useState(false);
-  const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [uiConfig, setUiConfig] = useState(null);
   const [uploading, setUploading] = useState(false);
   const { requestConfirm, dialogProps: confirmDialogProps } = useConfirmAction();
@@ -293,28 +289,6 @@ function AdminAppsPage() {
     }
   };
 
-  /**
-   * Enable All / Disable All toggle every app (`*`) for every user, so they
-   * open a confirmation that names the count and the apps first (AI-B2).
-   *
-   * @param {boolean} enable - Target state.
-   */
-  const confirmToggleAll = enable => {
-    requestConfirm({
-      ...buildBulkToggleConfirm({
-        items: apps,
-        enable,
-        itemsLabel: t('admin.confirm.plural.apps', 'apps'),
-        getName: app => getLocalizedContent(app.name, currentLanguage) || app.id,
-        t
-      }),
-      action: async () => {
-        await toggleApps('*', enable);
-        setApps(prev => prev.map(app => ({ ...app, enabled: enable })));
-      }
-    });
-  };
-
   const deleteApp = app => {
     requestConfirm({
       ...deleteConfirmText({
@@ -351,24 +325,69 @@ function AdminAppsPage() {
     return matchesSearch && matchesFilter && matchesCategory;
   });
 
-  const handleCreateApp = () => setShowTemplateSelector(true);
+  // Any narrowed view: the bulk actions then cover the rows shown and say so.
+  const isFiltered =
+    searchTerm.trim() !== '' || filterEnabled !== 'all' || selectedCategory !== 'all';
 
-  const handleTemplateSelected = template => {
-    setSelectedTemplate(template);
-    setShowTemplateSelector(false);
-    setShowCreationWizard(true);
+  /**
+   * The label of a bulk action: "Publish all", or "Publish shown" while a
+   * filter narrows the list.
+   *
+   * @param {boolean} publish
+   * @returns {string}
+   */
+  const bulkLabel = publish => {
+    if (isFiltered) {
+      return t(publish ? 'admin.apps.list.publishShown' : 'admin.apps.list.unpublishShown');
+    }
+    return t(publish ? 'admin.apps.list.publishAll' : 'admin.apps.list.unpublishAll');
   };
 
-  const handleWizardClose = () => {
-    setShowCreationWizard(false);
-    setSelectedTemplate(null);
-    void loadApps();
+  /**
+   * "Publish all" / "Unpublish all" change what users see, and an unpublished
+   * app may be an unfinished one. So the confirmation names every app that
+   * changes, and the request carries exactly those IDs, never `*`: an app
+   * another author created in the meantime is not touched. With a filter
+   * active the action covers the rows shown.
+   *
+   * @param {boolean} publish - Target state.
+   */
+  const confirmToggleAll = publish => {
+    const label = bulkLabel(publish);
+    const { affected, ...confirmation } = buildBulkToggleConfirm({
+      items: isFiltered ? filteredApps : apps,
+      enable: publish,
+      itemsLabel: t('admin.confirm.plural.apps', 'apps'),
+      getName: app => getLocalizedContent(app.name, currentLanguage) || app.id,
+      t,
+      wording: {
+        title: label,
+        confirmLabel: label,
+        message: count =>
+          t(publish ? 'admin.apps.list.publishConfirm' : 'admin.apps.list.unpublishConfirm', {
+            count
+          }),
+        nothingToChange: t(
+          publish ? 'admin.apps.list.nothingToPublish' : 'admin.apps.list.nothingToUnpublish'
+        )
+      }
+    });
+    const ids = affected.map(app => app.id);
+    requestConfirm({
+      ...confirmation,
+      action: async () => {
+        await toggleApps(ids, publish);
+        setApps(prev =>
+          prev.map(app => (ids.includes(app.id) ? { ...app, enabled: publish } : app))
+        );
+      }
+    });
   };
 
-  const handleCloneApp = app => {
-    setSelectedTemplate(app);
-    setShowCreationWizard(true);
-  };
+  // Every way to start an app is one page; a copy names its source in the URL.
+  const handleCreateApp = () => navigate('/admin/apps/new');
+
+  const handleDuplicateApp = app => navigate(`/admin/apps/new?from=${encodeURIComponent(app.id)}`);
 
   const downloadAppConfig = async appId => {
     try {
@@ -404,7 +423,8 @@ function AdminAppsPage() {
       if (!appConfig.id || !appConfig.name || !appConfig.description) {
         throw new Error('Invalid app config: missing required fields (id, name, description)');
       }
-      await makeAdminApiCall('/admin/apps', { method: 'POST', body: appConfig });
+      // The file is stored as it is, with the `enabled` value it carries.
+      await createAdminApp(appConfig, { origin: 'upload' });
       await loadApps();
       event.target.value = '';
     } catch (err) {
@@ -425,6 +445,26 @@ function AdminAppsPage() {
     const found = uiConfig?.appsList?.categories?.list?.find(cat => cat.id === app.category);
     return found ? getLocalizedContent(found.name, currentLanguage) : app.category;
   };
+
+  /**
+   * What the table says when it has no row: that there is no app yet and what
+   * an app is, that the search matched nothing, or that the filters did.
+   */
+  const emptyText = (() => {
+    if (apps.length === 0) {
+      return { title: t('admin.apps.empty.title'), description: t('admin.apps.empty.body') };
+    }
+    if (searchTerm.trim() !== '') {
+      return { title: t('admin.apps.list.noMatch', { query: searchTerm.trim() }) };
+    }
+    return {
+      title: t('admin.apps.noApps', 'No apps found'),
+      description: t(
+        'admin.apps.noAppsDescription',
+        'Try adjusting your search or filter criteria.'
+      )
+    };
+  })();
 
   const columns = [
     {
@@ -466,12 +506,10 @@ function AdminAppsPage() {
               className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                 app.enabled
                   ? 'bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300'
-                  : 'bg-red-100 dark:bg-red-900/50 text-red-800 dark:text-red-300'
+                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200'
               }`}
             >
-              {app.enabled
-                ? t('admin.apps.status.enabled', 'Enabled')
-                : t('admin.apps.status.disabled', 'Disabled')}
+              {app.enabled ? t('admin.apps.status.published') : t('admin.apps.status.notPublished')}
             </span>
             {missing.length > 0 && (
               <span className="text-xs text-amber-700 dark:text-amber-400">
@@ -507,13 +545,14 @@ function AdminAppsPage() {
 
   const actions = [
     {
-      // A new tab keeps the admin list (filters, scroll) where it was. Disabled
-      // apps aren't served to the chat UI, so there is nothing to open.
+      // A new tab keeps the admin list (filters, scroll) where it was. An app
+      // that is not published is not in the users' app list; it is tried in
+      // the editor's test chat.
       id: 'open',
       label: t('admin.apps.openApp', 'Open app'),
       title: app => {
         if (app.enabled === false) {
-          return t('admin.apps.openDisabledHint', 'Enable the app to open it');
+          return t('admin.apps.list.openNotPublishedHint');
         }
         const missing = missingRequirements(
           app,
@@ -547,16 +586,16 @@ function AdminAppsPage() {
     },
     {
       id: 'toggle',
-      label: t('admin.apps.actions.toggle', 'Toggle enabled'),
+      label: t('admin.apps.actions.toggle'),
       icon: 'eye',
       priority: 'primary',
       onClick: app => toggleApp(app.id)
     },
     {
-      id: 'clone',
-      label: t('admin.apps.actions.clone', 'Clone'),
+      id: 'duplicate',
+      label: t('admin.apps.list.duplicate'),
       icon: 'copy',
-      onClick: app => handleCloneApp(app)
+      onClick: app => handleDuplicateApp(app)
     },
     {
       id: 'download',
@@ -578,10 +617,10 @@ function AdminAppsPage() {
       <div className="sm:flex sm:items-center">
         <div className="sm:flex-auto">
           <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
-            {t('admin.apps.title', 'Apps Administration')}
+            {t('admin.apps.title')}
           </h1>
           <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
-            {t('admin.apps.subtitle', 'Manage your iHub applications')}
+            {t('admin.apps.subtitle')}
           </p>
         </div>
         <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
@@ -615,28 +654,27 @@ function AdminAppsPage() {
                   onClick={handleCreateApp}
                 >
                   <Icon name="plus" className="h-4 w-4 mr-2" />
-                  {t('admin.apps.createApp', 'Create App')}
+                  {t('admin.apps.createApp')}
                 </button>
                 <UploadConfigButton
                   onChange={handleUploadConfig}
                   uploading={uploading}
-                  title={t('admin.apps.uploadConfig', 'Upload App Config')}
                   uploadingLabel={t('admin.apps.uploading', 'Uploading...')}
-                  label={t('admin.apps.uploadConfig', 'Upload Config')}
+                  label={t('admin.apps.list.uploadConfig')}
                 />
                 <button
                   type="button"
                   className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600"
                   onClick={() => confirmToggleAll(true)}
                 >
-                  {t('admin.common.enableAll', 'Enable All')}
+                  {bulkLabel(true)}
                 </button>
                 <button
                   type="button"
                   className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600"
                   onClick={() => confirmToggleAll(false)}
                 >
-                  {t('admin.common.disableAll', 'Disable All')}
+                  {bulkLabel(false)}
                 </button>
                 <button
                   type="button"
@@ -686,7 +724,7 @@ function AdminAppsPage() {
                     {getLocalizedContent(app.name, currentLanguage) || app.id}
                     {app.enabled === false && (
                       <span className="ml-2 text-xs font-normal text-gray-500 dark:text-gray-400">
-                        ({t('admin.apps.status.disabled', 'Disabled')})
+                        ({t('admin.apps.status.notPublished')})
                       </span>
                     )}
                   </span>
@@ -712,8 +750,8 @@ function AdminAppsPage() {
               onChange={setFilterEnabled}
               options={[
                 { value: 'all', label: t('admin.apps.filterAll', 'All Apps') },
-                { value: 'enabled', label: t('admin.apps.filterEnabled', 'Enabled Only') },
-                { value: 'disabled', label: t('admin.apps.filterDisabled', 'Disabled Only') }
+                { value: 'enabled', label: t('admin.apps.filterEnabled') },
+                { value: 'disabled', label: t('admin.apps.filterDisabled') }
               ]}
             />
           </div>
@@ -762,18 +800,14 @@ function AdminAppsPage() {
               }}
               empty={{
                 icon: 'sparkles',
-                title: t('admin.apps.noApps', 'No apps found'),
-                description: t(
-                  'admin.apps.noAppsDescription',
-                  'Try adjusting your search or filter criteria.'
-                ),
+                ...emptyText,
                 action: (
                   <button
                     onClick={handleCreateApp}
                     className="inline-flex items-center px-4 py-2 border border-transparent shadow-xs text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                   >
                     <Icon name="plus" className="h-4 w-4 mr-2" />
-                    {t('admin.apps.createApp', 'Create App')}
+                    {t('admin.apps.createApp')}
                   </button>
                 )
               }}
@@ -788,16 +822,6 @@ function AdminAppsPage() {
         onClose={() => setShowAppDetails(false)}
       />
 
-      {showTemplateSelector && (
-        <AppTemplateSelector
-          onSelect={handleTemplateSelected}
-          onClose={() => setShowTemplateSelector(false)}
-        />
-      )}
-
-      {showCreationWizard && (
-        <AppCreationWizard templateApp={selectedTemplate} onClose={handleWizardClose} />
-      )}
       <ConfirmDialog {...confirmDialogProps} />
     </div>
   );

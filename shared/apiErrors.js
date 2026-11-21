@@ -456,6 +456,14 @@ export const ADMIN_GUARD_ERROR_CODES = Object.freeze({
   ADMIN_CHECK_FAILED: 503
 });
 
+/** Codes of the app draft generator (`POST /api/admin/apps/_generate`, `server/services/appGenerator.js`). */
+export const APP_GENERATOR_ERROR_CODES = Object.freeze({
+  /** No chat model the caller may use can write the draft. */
+  APP_GENERATOR_NO_MODEL: 503,
+  /** The model's answer is not JSON, is cut off, or leaves nothing usable (`details.reason`). */
+  APP_GENERATOR_INVALID_ANSWER: 502
+});
+
 /** Every code, with its default HTTP status. */
 export const API_ERROR_CODES = Object.freeze({
   ...GENERIC_ERROR_CODES,
@@ -481,7 +489,8 @@ export const API_ERROR_CODES = Object.freeze({
   ...VOICE_ERROR_CODES,
   ...MISC_ERROR_CODES,
   ...WATERMARK_ERROR_CODES,
-  ...ADMIN_GUARD_ERROR_CODES
+  ...ADMIN_GUARD_ERROR_CODES,
+  ...APP_GENERATOR_ERROR_CODES
 });
 
 /**

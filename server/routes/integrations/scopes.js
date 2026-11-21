@@ -51,8 +51,9 @@ function resolveContext(req) {
 
   // An app the user may not use answers like one that does not exist, so the
   // route cannot be used to probe app ids.
-  const app = findByIdCaseInsensitive(configCache.getApps()?.data || [], appId);
-  if (!app || app.enabled === false || !isPermitted(req.user, 'apps', app.id)) {
+  // Published, or one a content admin is trying before publishing it.
+  const app = configCache.getAppForRequest(appId, req.user);
+  if (!app || !isPermitted(req.user, 'apps', app.id)) {
     throw new ServiceError('NOT_FOUND', 'App not found');
   }
 

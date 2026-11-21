@@ -1,0 +1,136 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
+import { useId, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import Icon from '../../../../shared/components/Icon';
+import { HELP_CLASS, SECONDARY_BUTTON_CLASS } from '../formStyles';
+import { DISCLOSURE_BUTTON_CLASS, LINK_BUTTON_CLASS } from './createStyles';
+import ExistingAppPicker from './ExistingAppPicker';
+import TemplateGallery from './TemplateGallery';
+
+/**
+ * Screen 1 of "New app": the ways to start.
+ *
+ * It shows what a newcomer needs and nothing else: the description box (the
+ * caller's `describe` slot), the templates and "Start empty". The three
+ * starts few people need sit under one collapsed line, "Other ways to start":
+ * copy an existing app, create a link app, and the Marketplace.
+ *
+ * The screen makes no request of its own and names no path: the lists come
+ * from the caller's functions, and the Marketplace link is shown only when
+ * the caller hands over where it leads.
+ *
+ * @param {object} props
+ * @param {React.ReactNode} props.describe - The description box, or what
+ *   stands in its place (no model, drafting switched off).
+ * @param {() => Promise<object[]>} props.fetchTemplates - The templates.
+ * @param {() => Promise<object[]>} props.fetchExistingApps - The apps that can be copied.
+ * @param {string} props.language - The language of names and descriptions.
+ * @param {(template: object) => void} props.onPickTemplate
+ * @param {() => void} props.onStartBlank
+ * @param {(app: object) => void} props.onPickExisting
+ * @param {() => void} props.onStartLink
+ * @param {string|null} [props.marketplaceHref] - Where the Marketplace is, for
+ *   someone who may open it.
+ * @returns {JSX.Element}
+ */
+function StartScreen({
+  describe,
+  fetchTemplates,
+  fetchExistingApps,
+  language,
+  onPickTemplate,
+  onStartBlank,
+  onPickExisting,
+  onStartLink,
+  marketplaceHref = null
+}) {
+  const { t } = useTranslation();
+  const otherId = useId();
+  const [otherOpen, setOtherOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  return (
+    <div className="space-y-6">
+      {describe}
+
+      <p className="flex items-center gap-3 text-sm text-gray-600 dark:text-gray-400">
+        <span className="h-px flex-1 bg-gray-200 dark:bg-gray-700" aria-hidden="true" />
+        {t('admin.apps.create.start.or')}
+        <span className="h-px flex-1 bg-gray-200 dark:bg-gray-700" aria-hidden="true" />
+      </p>
+
+      <TemplateGallery
+        fetchTemplates={fetchTemplates}
+        language={language}
+        onPick={onPickTemplate}
+      />
+
+      <div>
+        <button
+          type="button"
+          className={`${SECONDARY_BUTTON_CLASS} w-full sm:w-auto`}
+          onClick={onStartBlank}
+        >
+          {t('admin.apps.create.start.blank')}
+        </button>
+      </div>
+
+      <div>
+        <button
+          type="button"
+          className={DISCLOSURE_BUTTON_CLASS}
+          aria-expanded={otherOpen}
+          aria-controls={otherId}
+          onClick={() => setOtherOpen(open => !open)}
+        >
+          <Icon name={otherOpen ? 'chevron-down' : 'chevron-right'} size="sm" aria-hidden="true" />
+          {t('admin.apps.create.start.other')}
+        </button>
+        <div id={otherId}>
+          {otherOpen && (
+            <ul className="mt-3 space-y-3 pl-5">
+              <li>
+                <button
+                  type="button"
+                  className={LINK_BUTTON_CLASS}
+                  onClick={() => setPickerOpen(true)}
+                >
+                  {t('admin.apps.create.start.copy')}
+                </button>
+              </li>
+              <li>
+                <button type="button" className={LINK_BUTTON_CLASS} onClick={onStartLink}>
+                  {t('admin.apps.create.start.link.action')}
+                </button>
+                <p className={HELP_CLASS}>{t('admin.apps.create.start.link.help')}</p>
+              </li>
+              {marketplaceHref && (
+                <li>
+                  <Link to={marketplaceHref} className={LINK_BUTTON_CLASS}>
+                    {t('admin.apps.create.start.marketplace')}
+                  </Link>
+                </li>
+              )}
+            </ul>
+          )}
+        </div>
+      </div>
+
+      <ExistingAppPicker
+        isOpen={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        fetchApps={fetchExistingApps}
+        language={language}
+        onPick={app => {
+          setPickerOpen(false);
+          onPickExisting(app);
+        }}
+      />
+    </div>
+  );
+}
+
+export default StartScreen;

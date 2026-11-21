@@ -1,0 +1,1 @@
+Here is the app: {"name": "Meeting agenda", "description": "Drafts an agenda for a meeting.", "system": "You draft meeting agendas with a time for every item.", "icon": "calendar"} If you need {other fields}, tell me.

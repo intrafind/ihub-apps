@@ -2239,7 +2239,7 @@ plan assumes and what a wrong assumption costs.
 
 | # | Question | Assumed | Cost if wrong |
 |---|---|---|---|
-| Q1 | May a user without admin rights build an app ("My assistants": private, shared with the own team, "everyone" on request)? And is the content-admin role meant for people like the knowledge expert, although it shows every app with a delete button? | No change. Builders are admins and content admins. | The complaint is half answered for people who cannot get the role. Personal apps need an owner field, a personal scope, a capability ceiling checked on every run, a promote step and quotas; that is a project of its own. The creation components take their data from `adminApi.js` only and can be mounted elsewhere. |
+| Q1 | May a user without admin rights build an app ("My assistants": private, shared with the own team, "everyone" on request)? And is the content-admin role meant for people like the knowledge expert, although it shows every app with a delete button? | **Answered by the owner on 2026-11-20:** "we definitely have to plan an chat-based app builder too. regarding the question if users should be able to do it. yes let's just do this as well. similar to projects, where you can have projects managed by the admins. a user can create an own app. a user can share an app. a user can publish an app (it comes an admin managed app). the owner can be transfered." Increment 2 implements the answer: [02-personal-apps.md](02-personal-apps.md). **The owner added on the same day:** "An admin should be able to configure if user based apps are allowed. Similar to projects. Same principal. We will make this a common scheme later for skills/prompts as well". Section 3.1 of that document compares the admin configuration with projects, and section 3.2 names the common scheme; publishing is direct, as in projects (its section 8.2). The chat-based builder is planned in [03-chat-based-app-builder.md](03-chat-based-app-builder.md). For this increment the assumption stays: No change. Builders are admins and content admins. | The complaint is half answered for people who cannot get the role. Personal apps need an owner field, a personal scope, a capability ceiling checked on every run, a promote step and quotas; that is a project of its own. The creation components take their data from `adminApi.js` only and can be mounted elsewhere. |
 | Q2 | May apps created in the UI start not published, and may content admins open and test an unpublished app in the interactive chat? | Yes. Built (D5, D6). It changes no permission list and no API default. | Flip `UI_CREATES_PUBLISHED`, do not merge S5; half a day. |
 | Q3 | `POST /api/completions`: cap `maxTokens` and allow only models the caller may use? Is the admin rate limit on it acceptable? | The limit is added now (D24). Cap and model check wait. | If the limit is unwanted: remove one line. While cap and check wait, a content admin can run the most expensive configured model through this endpoint, up to the admin budget. That budget does not count failed requests. |
 | Q4 | Is "Instructions" / „Anweisungen" acceptable where the Review recommended "System prompt" (open decision 11)? | Yes, with "system prompt" once in the help text. | Four strings and the docs glossary. |
@@ -2472,7 +2472,11 @@ Taken when revising after the critiques:
 **Later (each needs an owner decision first):**
 
 - Personal apps for users without admin rights (Q1), with the five preconditions of the security
-  report.
+  report. **Q1 is answered: the owner decided on 2026-11-20 that users may build, share, publish
+  and hand over apps of their own** ("yes let's just do this as well. similar to projects").
+  The design is [02-personal-apps.md](02-personal-apps.md) (increment 2). The owner also asked
+  for a chat-based app builder; its plan is
+  [03-chat-based-app-builder.md](03-chat-based-app-builder.md).
 - "Only these groups" when creating or publishing (open decision 1), and marketplace access for
   content admins.
 - Drafts of an already published app (open decision 6).

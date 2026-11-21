@@ -4,7 +4,11 @@
 import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
 import { contentAdminAuth } from '../../middleware/contentAdminAuth.js';
-import { isAdmin } from '../../utils/authorization.js';
+import {
+  getDefaultAnonymousGroups,
+  isAdmin,
+  isAnonymousAccessAllowed
+} from '../../utils/authorization.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { ServiceError } from '../../utils/ServiceError.js';
 import { assertValidId, isValidId } from '../../utils/pathSecurity.js';
@@ -17,6 +21,7 @@ import {
   CONTENT_ACCESS_TYPES,
   applyContentAccessChanges,
   canonicalContentAccessType,
+  describeAudience,
   describeContentAccess,
   resolveManageableGroups
 } from '../../utils/contentAccess.js';
@@ -99,21 +104,41 @@ function implicitGroups() {
  */
 function buildView(req, groupsData, type, contentId) {
   const groups = groupsData.groups || {};
+  const implicit = implicitGroups();
   const { scope, groupIds } = resolveManageableGroups({
     groups,
     user: req.user,
     // The same rule adminAuth applies: adminAccess through a group, and an
     // eligible principal (no API keys, OAuth clients or agents).
     fullAdmin: isAdmin(req.user),
-    implicitGroups: implicitGroups()
+    implicitGroups: implicit
   });
+  const platform = configCache.getPlatform() || {};
   return {
     manageableIds: groupIds,
     view: {
       type,
       id: contentId,
       scope,
-      groups: describeContentAccess({ groups, type, contentId, groupIds })
+      groups: describeContentAccess({
+        groups,
+        type,
+        contentId,
+        groupIds,
+        implicitGroups: implicit
+      }),
+      // Over all groups, for both scopes: a content admin does not get the row
+      // of the group every signed-in user carries, but has to know whether it
+      // grants the content before publishing.
+      audience: describeAudience({
+        groups,
+        type,
+        contentId,
+        authenticatedGroup: platform.auth?.authenticatedGroup || 'authenticated',
+        anonymousGroups: isAnonymousAccessAllowed(platform)
+          ? getDefaultAnonymousGroups(platform)
+          : []
+      })
     }
   };
 }
@@ -148,6 +173,27 @@ function buildView(req, groupsData, type, contentId) {
  *         effective:
  *           type: boolean
  *           description: Members of the group can use the content, by any of the above
+ *         implicit:
+ *           type: boolean
+ *           description: >
+ *             Present and `true` on the rows of groups people carry without
+ *             being a member: the group of every signed-in user and the
+ *             anonymous group. Who such a group stands for is said by
+ *             `audience`; its name is not the name of a team.
+ *     ContentAccessAudience:
+ *       type: object
+ *       description: >
+ *         Who gets the content without being in any particular group. Computed
+ *         over all groups, also for a content admin who does not see the rows
+ *         of those groups.
+ *       required: [allSignedIn, anonymous]
+ *       properties:
+ *         allSignedIn:
+ *           type: boolean
+ *           description: The group every signed-in user carries grants the content (by name, wildcard or inheritance)
+ *         anonymous:
+ *           type: boolean
+ *           description: Anonymous access is on and the groups of the anonymous principal grant the content
  *     ContentAccess:
  *       type: object
  *       properties:
@@ -168,6 +214,8 @@ function buildView(req, groupsData, type, contentId) {
  *           type: array
  *           items:
  *             $ref: '#/components/schemas/ContentAccessGroup'
+ *         audience:
+ *           $ref: '#/components/schemas/ContentAccessAudience'
  */
 export default function registerAdminContentAccessRoutes(app) {
   /**

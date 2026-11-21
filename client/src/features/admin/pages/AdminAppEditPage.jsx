@@ -1,409 +1,228 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import DualModeEditor from '../../../shared/components/DualModeEditor';
-import AppFormEditor from '../components/AppFormEditor';
+import AdminEditPageShell from '../../../shared/components/AdminEditPageShell';
 import Icon from '../../../shared/components/Icon';
-import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi';
+import { useOptionalAuth } from '../../../shared/contexts/authContextValue';
+import { fetchContentAccess, makeAdminApiCall, toggleApps } from '../../../api/adminApi';
 import { fetchModels, fetchUIConfig } from '../../../api';
 import { fetchJsonSchema } from '../../../utils/schemaService';
-import ChangeHistoryDrawer from '../components/ChangeHistoryDrawer';
-import { useAdminResourceEditor } from '../hooks/useAdminResourceEditor';
-import AdminEditPageShell from '../../../shared/components/AdminEditPageShell';
-import ContentAccessSection from '../components/ContentAccessSection';
-import AppTestPanel from '../components/AppTestPanel';
+import { apiErrorMessage } from '../../../utils/apiErrorMessage';
+import { getLocalizedContent } from '../../../utils/localizeContent';
 import { buildPath } from '../../../utils/runtimeBasePath';
+import {
+  UI_CREATES_PUBLISHED,
+  cleanAppForSave,
+  padLoadedApp
+} from '../../../../../shared/appDefaults.js';
+import AppFormEditor from '../components/AppFormEditor';
+import AdminSaveBar from '../components/AdminSaveBar';
+import AppTestPanel from '../components/AppTestPanel';
+import ChangeHistoryDrawer from '../components/ChangeHistoryDrawer';
+import ContentAccessSection from '../components/ContentAccessSection';
+import { CALLOUT_CLASS } from '../components/formStyles';
+import AppEditorHeader from '../components/app-editor/AppEditorHeader';
+import NextStepsCard from '../components/app-editor/NextStepsCard';
+import PublishDialog, { UnpublishDialog } from '../components/app-editor/PublishDialog';
+import { useAppEditorState } from '../components/app-editor/useAppEditorState';
+import { useAppPublishing } from '../components/app-editor/useAppPublishing';
+import { useCreatedArrival } from '../components/app-editor/useCreatedArrival';
+import { useEditorResources } from '../components/app-editor/useEditorResources';
+import EditorGroup from '../components/app-form/EditorGroup';
+import EditorGroupNav from '../components/app-form/EditorGroupNav';
+import { groupOfField } from '../components/app-form/editorGroups';
+import { useEditorGroups } from '../components/app-form/useEditorGroups';
 
+/** Where the page lives and where it leads. Nothing below this file names a path. */
+const APPS_PATH = '/admin/apps';
+const NEW_APP_PATH = '/admin/apps/new';
+const MODELS_PATH = '/admin/models';
+const GUIDE_PATH = '/admin/docs/app-quickstart.md';
+const CONTENT_CLASS = 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8';
+
+const appUrl = appId => `/admin/apps/${encodeURIComponent(appId)}`;
+const loadApp = async appId => padLoadedApp((await makeAdminApiCall(appUrl(appId))).data);
+const saveApp = (app, appId) =>
+  makeAdminApiCall(appUrl(appId), { method: 'PUT', body: cleanAppForSave(app) });
+const loadAccess = appId => fetchContentAccess('apps', appId);
+const setPublished = (appId, published) => toggleApps([appId], published);
+const RESOURCES = {
+  fetchModels: () => fetchModels(),
+  fetchUiConfig: () => fetchUIConfig(),
+  fetchSchema: () => fetchJsonSchema('app')
+};
+
+/** The index beside the form; with the test panel open the column is narrower. */
+const INDEX_LAYOUT = {
+  wide: 'lg:grid lg:grid-cols-[13rem_minmax(0,1fr)] lg:items-start lg:gap-8',
+  besideTest: '2xl:grid 2xl:grid-cols-[13rem_minmax(0,1fr)] 2xl:items-start 2xl:gap-8'
+};
+const TOAST_MS = 4000;
+
+/**
+ * The app editor: one existing app, its form, who can use it, and the test
+ * chat beside it. An app is created on the "New app" page and arrives here
+ * with `?created=1`; the editor has no "new" mode.
+ *
+ * This file is the frame. It saves, publishes and unpublishes, and holds the
+ * state of the editor's groups, which it shares with the form
+ * (`components/app-form/`). Its parts live in `components/app-editor/`.
+ *
+ * @returns {JSX.Element}
+ */
 function AdminAppEditPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { appId } = useParams();
   const navigate = useNavigate();
-  // Which save is running: 'stay' (Save) or 'exit' (Save & Exit); null when idle.
-  const [saving, setSaving] = useState(null);
+  const user = useOptionalAuth()?.user;
+  const isFullAdmin = Boolean(user?.isAdmin || user?.permissions?.adminAccess);
+  const uiLanguage = String(i18n.language || '').split('-')[0] || 'en';
+
+  const editor = useAppEditorState({ appId, loadApp, saveApp });
+  const { app, savedApp, isDirty, loading, loadError } = editor;
+  const { models, uiConfig, jsonSchema } = useEditorResources(RESOURCES);
+
+  const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
-  const [availableModels, setAvailableModels] = useState([]);
-  const [uiConfig, setUiConfig] = useState(null);
-  const [jsonSchema, setJsonSchema] = useState(null);
   const [editingMode, setEditingMode] = useState('form');
   const [validationState, setValidationState] = useState({ isValid: true, errors: [] });
   const [historyOpen, setHistoryOpen] = useState(false);
   const [testOpen, setTestOpen] = useState(false);
-  // Bumped after every save so the test panel reloads the saved app.
-  const [previewReloadKey, setPreviewReloadKey] = useState(0);
+  const [testFocus, setTestFocus] = useState(0);
+  // Bumped whenever the test has to start over: after a save, after access changed.
+  const [testRun, setTestRun] = useState(0);
   const [toast, setToast] = useState(null);
   const toastTimerRef = useRef(null);
 
   const showToast = useCallback(message => {
     clearTimeout(toastTimerRef.current);
     setToast(message);
-    toastTimerRef.current = setTimeout(() => setToast(null), 4000);
+    toastTimerRef.current = setTimeout(() => setToast(null), TOAST_MS);
   }, []);
-
   useEffect(() => () => clearTimeout(toastTimerRef.current), []);
 
-  useEffect(() => {
-    // Load available models, UI config, and JSON schema
-    const loadModels = async () => {
-      try {
-        const models = await fetchModels();
-        setAvailableModels(models);
-      } catch (err) {
-        console.error('Failed to load models:', err);
-      }
-    };
+  const published = savedApp?.enabled !== false;
+  // The name in the reader's language, else in a language the app has (an app
+  // named only in German shows that name in an English UI too).
+  const appName = getLocalizedContent(app?.name, uiLanguage) || appId;
+  const noModel = Array.isArray(models) && models.length === 0 && (app?.type || 'chat') === 'chat';
+  const describeError = useCallback(
+    error => apiErrorMessage(error, t, t('admin.apps.errorTitle')),
+    [t]
+  );
 
-    const loadUIConfig = async () => {
-      try {
-        const config = await fetchUIConfig();
-        setUiConfig(config);
-      } catch (err) {
-        console.error('Failed to load UI config:', err);
-      }
-    };
+  // Always the latest `save` (defined below, once the groups are known): for
+  // Ctrl/Cmd+S, whose listener is registered once, and for publishing.
+  const saveRef = useRef(null);
 
-    const loadJsonSchema = async () => {
-      try {
-        const schema = await fetchJsonSchema('app');
-        setJsonSchema(schema);
-      } catch (err) {
-        console.error('Failed to load app JSON schema:', err);
-        // Continue without schema - validation will be server-side only
-      }
-    };
-
-    void loadModels();
-    void loadUIConfig();
-    void loadJsonSchema();
-  }, []);
-
-  const makeDefault = () => {
-    return {
-      id: '',
-      type: 'chat',
-      order: 0,
-      name: { en: '' },
-      description: { en: '' },
-      color: '#4F46E5',
-      icon: 'chat-bubbles',
-      system: { en: '' },
-      preferredModel: undefined,
-      preferredOutputFormat: 'markdown',
-      preferredStyle: 'keep',
-      enabled: true,
-      variables: [],
-      starterPrompts: [],
-      greeting: {
-        en: {
-          title: '👋 Hello!',
-          subtitle: 'How can I help you today?'
-        },
-        de: {
-          title: '👋 Hallo!',
-          subtitle: 'Wie kann ich Ihnen heute helfen?'
-        }
-      },
-      allowEmptyContent: false,
-      sendChatHistory: true,
-      ephemeral: false,
-      category: 'utility',
-      inputMode: {
-        type: 'singleline',
-        rows: 5,
-        microphone: {
-          enabled: true,
-          mode: 'manual',
-          showTranscript: true
-        }
-      },
-      upload: {
-        enabled: false,
-        imageUpload: {
-          enabled: false,
-          resizeImages: true,
-          maxFileSizeMB: 10,
-          supportedFormats: ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
-        },
-        fileUpload: {
-          enabled: false,
-          maxFileSizeMB: 20,
-          supportedFormats: [
-            'text/plain',
-            'text/markdown',
-            'text/csv',
-            'text/vtt',
-            'application/json',
-            'text/html',
-            'text/css',
-            'text/javascript',
-            'application/javascript',
-            'text/xml',
-            'message/rfc822',
-            'application/pdf',
-            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            'application/vnd.ms-outlook',
-            'application/vnd.oasis.opendocument.text',
-            'application/vnd.oasis.opendocument.spreadsheet',
-            'application/vnd.oasis.opendocument.presentation'
-          ]
-        }
-      }
-    };
-  };
-
-  const loadResource = async id => {
-    const response = await makeAdminApiCall(`/admin/apps/${id}`);
-    const data = response.data;
-
-    // Ensure all configuration sections exist with defaults
-    const appWithDefaults = {
-      ...data,
-      greeting: data.greeting || {
-        en: {
-          title: '👋 Hello!',
-          subtitle: 'How can I help you today?'
-        },
-        de: {
-          title: '👋 Hallo!',
-          subtitle: 'Wie kann ich Ihnen heute helfen?'
-        }
-      },
-      allowEmptyContent: data.allowEmptyContent ?? false,
-      sendChatHistory: data.sendChatHistory ?? true,
-      ephemeral: data.ephemeral ?? false,
-      inputMode: {
-        type: 'singleline',
-        rows: 5,
-        microphone: {
-          enabled: true,
-          mode: 'manual',
-          showTranscript: true
-        },
-        ...data.inputMode
-      },
-      upload: {
-        enabled: data.upload?.enabled || false,
-        imageUpload: {
-          enabled: data.upload?.imageUpload?.enabled || false,
-          resizeImages: data.upload?.imageUpload?.resizeImages ?? true,
-          maxFileSizeMB: data.upload?.imageUpload?.maxFileSizeMB || 10,
-          supportedFormats: data.upload?.imageUpload?.supportedFormats || [
-            'image/jpeg',
-            'image/jpg',
-            'image/png',
-            'image/gif',
-            'image/webp'
-          ]
-        },
-        fileUpload: {
-          enabled: data.upload?.fileUpload?.enabled || false,
-          maxFileSizeMB: data.upload?.fileUpload?.maxFileSizeMB || 20,
-          supportedFormats: data.upload?.fileUpload?.supportedFormats || [
-            'text/plain',
-            'text/markdown',
-            'text/csv',
-            'text/vtt',
-            'application/json',
-            'text/html',
-            'text/css',
-            'text/javascript',
-            'application/javascript',
-            'text/xml',
-            'message/rfc822',
-            'application/pdf',
-            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            'application/vnd.ms-outlook',
-            'application/vnd.oasis.opendocument.text',
-            'application/vnd.oasis.opendocument.spreadsheet',
-            'application/vnd.oasis.opendocument.presentation'
-          ]
-        },
-        ...data.upload
-      }
-    };
-
-    return appWithDefaults;
-  };
-
-  const saveResource = async (data, id) => {
-    const isNew = id === 'new';
-    const method = isNew ? 'POST' : 'PUT';
-    const url = isNew ? '/admin/apps' : `/admin/apps/${id}`;
-
-    // Clean the app data before saving
-    await makeAdminApiCall(url, {
-      method,
-      body: cleanAppData(data)
-    });
-  };
-
-  const {
-    data: app,
-    setData: setApp,
-    initialData,
+  const publishing = useAppPublishing({
+    appId,
     isDirty,
-    loading,
-    error,
-    setError,
-    loadError,
-    retryLoad,
-    isNew: isNewApp,
-    save,
-    blocker
-  } = useAdminResourceEditor({ resourceId: appId, loadResource, makeDefault, saveResource });
+    loadAccess,
+    setPublished,
+    saveFirst: () => saveRef.current(),
+    onChanged: enabled => editor.applySaved({ enabled }),
+    describeError
+  });
+  const { access } = publishing;
 
-  const cleanAppData = appData => {
-    // Clean up variables - remove empty defaultValue and predefinedValues
-    const cleanedApp = { ...appData };
+  const groupsExtra = useMemo(
+    () => ({ models: models || [], language: i18n.language, access: access.view }),
+    [models, i18n.language, access.view]
+  );
+  const groups = useEditorGroups({ app, errors: validationState.errors, extra: groupsExtra });
+  const formMode = editingMode === 'form';
 
-    if (cleanedApp.variables) {
-      cleanedApp.variables = cleanedApp.variables.map(variable => {
-        const cleanedVariable = { ...variable };
-
-        // Remove defaultValue if all language values are empty
-        if (cleanedVariable.defaultValue) {
-          const hasNonEmptyValue = Object.values(cleanedVariable.defaultValue).some(
-            val => val && val !== ''
-          );
-          if (!hasNonEmptyValue) {
-            delete cleanedVariable.defaultValue;
-          }
-        }
-
-        // Remove predefinedValues if empty array
-        if (cleanedVariable.predefinedValues && cleanedVariable.predefinedValues.length === 0) {
-          delete cleanedVariable.predefinedValues;
-        }
-
-        return cleanedVariable;
-      });
-    }
-
-    // Clean up upload configuration when disabled
-    if (cleanedApp.upload) {
-      const upload = { ...cleanedApp.upload };
-
-      // Remove imageUpload configuration if disabled
-      if (upload.imageUpload && upload.imageUpload.enabled === false) {
-        delete upload.imageUpload;
-      }
-
-      // Remove fileUpload configuration if disabled
-      if (upload.fileUpload && upload.fileUpload.enabled === false) {
-        delete upload.fileUpload;
-      }
-
-      // Remove entire upload configuration if main upload is disabled
-      if (upload.enabled === false) {
-        delete cleanedApp.upload;
-      } else {
-        cleanedApp.upload = upload;
-      }
-    }
-
-    // Clean up features configuration when disabled
-    if (cleanedApp.features) {
-      const features = { ...cleanedApp.features };
-
-      // Remove magicPrompt configuration if disabled
-      if (features.magicPrompt && features.magicPrompt.enabled === false) {
-        delete features.magicPrompt;
-      }
-
-      // Remove entire features object if empty
-      if (Object.keys(features).length === 0) {
-        delete cleanedApp.features;
-      } else {
-        cleanedApp.features = features;
-      }
-    }
-
-    return cleanedApp;
+  /** Opens the group of the first field that needs attention and moves the focus to it. */
+  const showFirstError = () => {
+    const field = groups.firstErrorField;
+    if (!formMode || !field) return false;
+    groups.open(groupOfField(field), { focus: field });
+    return true;
   };
 
-  // Save keeps the admin in the editor; Save & Exit (`exit: true`) goes back
-  // to the list, which is what saving always did before.
-  const saveApp = async ({ exit = false } = {}) => {
-    if (!app || saving) return;
-
-    // Check validation state
+  /** Saves the form and stays in the editor. Resolves with whether it was saved. */
+  const save = async () => {
+    if (!app || saving) return false;
     if (!validationState.isValid) {
-      setSaveError(
-        t('admin.apps.edit.validationErrorsExist', 'Please fix validation errors before saving')
-      );
-      return;
+      if (!showFirstError()) setSaveError(t('admin.apps.edit.validationErrorsExist'));
+      return false;
     }
-
-    if (!app.id) {
-      setSaveError(t('admin.apps.edit.idRequired', 'App ID is required'));
-      return;
-    }
-
-    // The state being saved; the admin may keep editing while the request runs.
-    const savedApp = app;
-
     try {
-      setSaving(exit ? 'exit' : 'stay');
+      setSaving(true);
       setSaveError(null);
-
-      // Persists the (cleaned) app and marks the editor as saved.
-      await save();
-
-      if (exit) {
-        navigate('/admin/apps');
-        return;
-      }
-
-      if (isNewApp) {
-        // From now on this is an existing app: later saves use PUT, and
-        // History, Download, Open app and Test become available.
-        navigate(`/admin/apps/${encodeURIComponent(savedApp.id)}`, { replace: true });
-        showToast(t('admin.apps.edit.created', 'App created'));
-        return;
-      }
-
-      setPreviewReloadKey(key => key + 1);
-      showToast(t('admin.apps.edit.saved', 'App saved'));
-    } catch (err) {
-      setSaveError(getAdminApiErrorMessage(err));
+      await editor.save();
+      setTestRun(run => run + 1);
+      showToast(t('admin.apps.edit.saved'));
+      return true;
+    } catch (error) {
+      setSaveError(describeError(error));
+      return false;
     } finally {
-      setSaving(null);
+      setSaving(false);
     }
   };
+  saveRef.current = save;
 
-  const handleSave = e => {
-    e.preventDefault();
-    void saveApp();
-  };
-
-  // Ctrl/Cmd+S saves without leaving the editor. The ref always holds the
-  // latest saveApp, so the listener is registered once.
-  const saveAppRef = useRef(saveApp);
-  saveAppRef.current = saveApp;
+  // Ctrl/Cmd+S saves without leaving the editor.
   useEffect(() => {
-    const handleKeyDown = e => {
-      if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
-      if (e.key !== 's' && e.key !== 'S') return;
-      e.preventDefault();
-      saveAppRef.current();
+    const handleKeyDown = event => {
+      if (!(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey) return;
+      if (event.key !== 's' && event.key !== 'S') return;
+      event.preventDefault();
+      void saveRef.current();
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  const handleAppChange = updatedApp => {
-    setApp(updatedApp);
+  // Arriving from "Create and test": the test chat opens and a toast says that
+  // the app exists; the hook shows the next steps and cleans the URL.
+  const arrival = useCreatedArrival({
+    appId,
+    ready: Boolean(app),
+    onArrive: () => {
+      setTestOpen(true);
+      showToast(t('admin.apps.create.done.toast', { name: appName }));
+    }
+  });
+
+  const handleStep = step => {
+    if (step.group) {
+      groups.open(step.group, { focus: true });
+    } else if (step.id === 'test') {
+      setTestOpen(true);
+      setTestFocus(token => token + 1);
+    } else if (step.id === 'publish') {
+      publishing.askPublish();
+    }
   };
 
-  const handleValidationChange = validation => {
-    setValidationState(validation);
+  const handleAccessSaved = view => {
+    publishing.setAccessView(view);
+    // A group that got access a moment ago: the test can load the app now.
+    setTestRun(run => run + 1);
   };
 
-  const handleModeChange = mode => {
-    setEditingMode(mode);
+  const downloadApp = () => {
+    const link = document.createElement('a');
+    link.setAttribute(
+      'href',
+      `data:application/json;charset=utf-8,${encodeURIComponent(JSON.stringify(app, null, 2))}`
+    );
+    link.setAttribute('download', `app-${app.id}.json`);
+    link.click();
   };
+
+  const breadcrumbs = [
+    { label: t('documentTitle.admin'), href: '/admin' },
+    { label: t('admin.apps.title'), href: APPS_PATH },
+    { label: loadError ? appId : appName }
+  ];
 
   // A failed load: the shell shows the error with an in-place Retry, and no form
   // (rendering it would only show defaults that a Save would store).
@@ -411,302 +230,142 @@ function AdminAppEditPage() {
     return (
       <AdminEditPageShell
         loading={false}
-        contentClassName="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8"
-        breadcrumbs={[
-          { label: 'Admin', href: '/admin' },
-          { label: 'Apps', href: '/admin/apps' },
-          { label: appId }
-        ]}
-        blocker={blocker}
+        contentClassName={CONTENT_CLASS}
+        breadcrumbs={breadcrumbs}
+        blocker={editor.blocker}
         loadError={loadError}
-        onRetry={retryLoad}
+        onRetry={editor.retryLoad}
         resourceLabel={t('admin.apps.edit.resource', 'app "{{id}}"', { id: appId })}
         notFoundAction={{
           label: t('admin.apps.edit.backToApps', 'Back to Apps'),
-          onClick: () => navigate('/admin/apps')
+          onClick: () => navigate(APPS_PATH)
         }}
       />
     );
   }
 
-  if (error && !loading) {
-    return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-4">
-          <div className="flex">
-            <div className="shrink-0">
-              <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                <path
-                  fillRule="evenodd"
-                  d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            </div>
-            <div className="ml-3">
-              <h3 className="text-sm font-medium text-red-800 dark:text-red-300">
-                {t('admin.apps.errorTitle', 'Error')}
-              </h3>
-              <div className="mt-2 text-sm text-red-700 dark:text-red-300">{error}</div>
-              <button
-                type="button"
-                onClick={() => setError(null)}
-                className="mt-2 text-sm text-red-700 hover:text-red-800 underline"
-              >
-                {t('common.dismiss', 'Dismiss')}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Open app and Test run the saved app, so they follow the saved enabled
-  // state; disabled apps aren't served to the chat UI.
-  const savedEnabled = initialData?.enabled !== false;
-  const appName = app?.name?.en ?? appId;
-  const secondaryButton =
-    'inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2';
+  const errorCount = groups.totalErrors;
+  let barMessage;
+  if (errorCount > 0) barMessage = t('admin.apps.edit.fieldsNeedAttention', { count: errorCount });
+  else if (published) barMessage = t('admin.apps.edit.liveHint');
+  const canJump = errorCount > 0 && formMode && Boolean(groups.firstErrorField);
 
   return (
     // With the test panel open the page splits: the editor scrolls on the
     // left, the app runs on the right (full screen below the lg breakpoint).
     <div className={testOpen ? 'lg:flex lg:h-full' : undefined}>
+      {/* The form's scroll column. The save bar is its last child, so it never
+          runs under the test panel. */}
       <div className={testOpen ? 'lg:flex-1 lg:min-w-0 lg:overflow-y-auto' : undefined}>
         <AdminEditPageShell
           loading={loading}
           loadingFallback={
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-              <div className="text-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
-                <p className="mt-2 text-gray-600 dark:text-gray-400">
-                  {t('admin.apps.loading', 'Loading...')}
-                </p>
-              </div>
+            <div className={`${CONTENT_CLASS} text-center`}>
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
+              <p className="mt-2 text-gray-600 dark:text-gray-400">{t('admin.apps.loading')}</p>
             </div>
           }
-          contentClassName="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8"
-          breadcrumbs={[
-            { label: 'Admin', href: '/admin' },
-            { label: 'Apps', href: '/admin/apps' },
-            { label: isNewApp ? 'New App' : appName }
-          ]}
-          blocker={blocker}
+          contentClassName={CONTENT_CLASS}
+          breadcrumbs={breadcrumbs}
+          blocker={editor.blocker}
         >
-          {/* Wraps the actions below the title when they don't fit beside it,
-              e.g. next to the test panel. */}
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex-auto min-w-[14rem]">
-              <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
-                {isNewApp
-                  ? t('admin.apps.edit.titleNew', 'Add New App')
-                  : t('admin.apps.edit.titleEdit', 'Edit App')}
-              </h1>
-              <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
-                {isNewApp
-                  ? t('admin.apps.edit.subtitleNew', 'Configure a new iHub application')
-                  : t('admin.apps.edit.subtitleEdit', 'Modify app settings and configuration')}
-              </p>
-            </div>
-            <div className="min-w-0">
-              <div className="flex flex-wrap gap-3">
-                {!isNewApp && (
-                  <button
-                    type="button"
-                    onClick={() => setTestOpen(open => !open)}
-                    aria-expanded={testOpen}
-                    title={t(
-                      'admin.apps.edit.testHint',
-                      'Chat with the saved app next to the editor'
-                    )}
-                    className={`${secondaryButton} ${testOpen ? 'ring-2 ring-indigo-500' : ''}`}
-                  >
-                    <Icon name="beaker" className="w-4 h-4 mr-2" />
-                    {testOpen
-                      ? t('admin.apps.edit.hideTest', 'Hide test')
-                      : t('admin.apps.edit.test', 'Test')}
-                  </button>
-                )}
-                {!isNewApp &&
-                  (savedEnabled ? (
-                    <a
-                      href={buildPath(`/apps/${encodeURIComponent(appId)}`)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      title={t('admin.apps.openAppHint', 'Open the app in a new tab')}
-                      className={secondaryButton}
-                    >
-                      <Icon name="external-link" className="w-4 h-4 mr-2" />
-                      {t('admin.apps.openApp', 'Open app')}
-                    </a>
-                  ) : (
-                    <button
-                      type="button"
-                      disabled
-                      title={t(
-                        'admin.apps.edit.openDisabledHint',
-                        'Enable the app and save to open it'
-                      )}
-                      className={`${secondaryButton} opacity-50 cursor-not-allowed`}
-                    >
-                      <Icon name="external-link" className="w-4 h-4 mr-2" />
-                      {t('admin.apps.openApp', 'Open app')}
-                    </button>
-                  ))}
-                {!isNewApp && (
-                  <button
-                    type="button"
-                    onClick={() => setHistoryOpen(true)}
-                    className={secondaryButton}
-                  >
-                    <Icon name="clock" className="w-4 h-4 mr-2" />
-                    {t('admin.apps.edit.history', 'History')}
-                  </button>
-                )}
-                {!isNewApp && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const dataStr = JSON.stringify(app, null, 2);
-                      const dataUri =
-                        'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
-                      const exportFileDefaultName = `app-${app.id}.json`;
-                      const linkElement = document.createElement('a');
-                      linkElement.setAttribute('href', dataUri);
-                      linkElement.setAttribute('download', exportFileDefaultName);
-                      linkElement.click();
-                    }}
-                    className={secondaryButton}
-                  >
-                    <Icon name="download" className="w-4 h-4 mr-2" />
-                    {t('common.download')}
-                  </button>
-                )}
-                <button
-                  type="button"
-                  className={secondaryButton}
-                  onClick={() => navigate('/admin/apps')}
-                >
-                  {t('admin.apps.edit.back', 'Back to Apps')}
-                </button>
-              </div>
-            </div>
-          </div>
+          <AppEditorHeader
+            appId={appId}
+            name={appName}
+            icon={app?.icon}
+            color={app?.color}
+            published={published}
+            testOpen={testOpen}
+            onToggleTest={() => setTestOpen(open => !open)}
+            onPublish={publishing.askPublish}
+            onUnpublish={publishing.askUnpublish}
+            onOpenApp={() =>
+              window.open(
+                buildPath(`/apps/${encodeURIComponent(appId)}`),
+                '_blank',
+                'noopener,noreferrer'
+              )
+            }
+            // An app that is not published opens only where the server serves it to its authors.
+            openAppDisabled={!published && UI_CREATES_PUBLISHED}
+            onHistory={() => setHistoryOpen(true)}
+            onDownload={downloadApp}
+            onDuplicate={() => navigate(`${NEW_APP_PATH}?from=${encodeURIComponent(appId)}`)}
+          />
 
           {saveError && (
-            <div className="mt-6 rounded-md bg-red-50 dark:bg-red-900/30 p-4">
-              <div className="flex">
-                <div className="shrink-0">
-                  <Icon name="x-circle" className="h-5 w-5 text-red-400" />
-                </div>
-                <div className="ml-3">
-                  <h3 className="text-sm font-medium text-red-800 dark:text-red-200">
-                    {t('admin.apps.errorTitle', 'Error')}
-                  </h3>
-                  <div className="mt-2 text-sm text-red-700 dark:text-red-300">{saveError}</div>
-                </div>
+            <div role="alert" className={`mt-6 flex items-start gap-2 ${CALLOUT_CLASS.danger}`}>
+              <Icon name="x-circle" className="shrink-0" aria-hidden="true" />
+              <div>
+                <h2 className="font-medium">{t('admin.apps.errorTitle')}</h2>
+                <p className="mt-1">{saveError}</p>
               </div>
             </div>
           )}
 
-          <form onSubmit={handleSave} className="mt-8">
-            {/* Dual Mode Editor */}
-            <DualModeEditor
-              value={app}
-              onChange={handleAppChange}
-              formComponent={AppFormEditor}
-              formProps={{
-                availableModels,
-                uiConfig,
-                jsonSchema
-              }}
-              jsonSchema={jsonSchema}
-              defaultMode={editingMode}
-              onModeChange={handleModeChange}
-              onValidationChange={handleValidationChange}
-              title={
-                isNewApp
-                  ? t('admin.apps.edit.configureNewApp', 'Configure New App')
-                  : t('admin.apps.edit.editAppConfig', 'Edit App Configuration')
-              }
-              description={
-                isNewApp
-                  ? t(
-                      'admin.apps.edit.configureNewAppDesc',
-                      'Set up the configuration for your new iHub app using the form interface or JSON editor.'
-                    )
-                  : t(
-                      'admin.apps.edit.editAppConfigDesc',
-                      'Modify the app configuration using the form interface or raw JSON editor.'
-                    )
-              }
-              showValidationSummary={true}
-              className="mb-6"
+          {arrival.stepsShown && (
+            <NextStepsCard
+              onStep={handleStep}
+              onDismiss={arrival.dismissSteps}
+              published={published}
+              focusHeading={arrival.focusSteps}
+              guideHref={isFullAdmin ? buildPath(GUIDE_PATH) : null}
             />
+          )}
 
-            {/* Group access — which groups may use this app (groups.json) */}
-            <ContentAccessSection
-              resourceType="apps"
-              resourceId={appId}
-              isNew={isNewApp}
-              className="mb-6"
-            />
+          <div className={`mt-8 ${testOpen ? INDEX_LAYOUT.besideTest : INDEX_LAYOUT.wide}`}>
+            {formMode && <EditorGroupNav groups={groups} compact={testOpen} />}
+            <div className={formMode ? 'min-w-0' : 'min-w-0 col-span-full'}>
+              <DualModeEditor
+                value={app}
+                onChange={editor.setApp}
+                formComponent={AppFormEditor}
+                formProps={{ availableModels: models || [], uiConfig, jsonSchema, groups }}
+                jsonSchema={jsonSchema}
+                defaultMode={editingMode}
+                onModeChange={setEditingMode}
+                onValidationChange={setValidationState}
+                showValidationSummary={true}
+                className="mb-6"
+              />
 
-            {/* Save buttons: Save stays in the editor, Save & Exit returns to the list */}
-            <div className="flex flex-wrap justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => navigate('/admin/apps')}
-                className="bg-white dark:bg-gray-700 py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              >
-                {t('admin.apps.edit.cancel', 'Cancel')}
-              </button>
-              <button
-                type="button"
-                onClick={() => saveApp({ exit: true })}
-                disabled={Boolean(saving) || !validationState.isValid}
-                className="inline-flex justify-center items-center py-2 px-4 border border-gray-300 dark:border-gray-600 shadow-xs text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {saving === 'exit' ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-500 mr-2"></div>
-                    {t('admin.apps.edit.saving', 'Saving...')}
-                  </>
-                ) : (
-                  t('admin.apps.edit.saveAndExit', 'Save & Exit')
-                )}
-              </button>
-              <button
-                type="submit"
-                disabled={Boolean(saving) || !validationState.isValid}
-                title={t('admin.apps.edit.saveHint', 'Save and keep editing (Ctrl+S / ⌘S)')}
-                className="inline-flex justify-center items-center py-2 px-4 border border-transparent shadow-xs text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {saving === 'stay' ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                    {t('admin.apps.edit.saving', 'Saving...')}
-                  </>
-                ) : (
-                  <>
-                    <Icon name="check" className="h-4 w-4 mr-2" />
-                    {t('admin.apps.edit.save', 'Save')}
-                  </>
-                )}
-              </button>
+              {/* Which groups may use this app (groups.json); saved on its own. */}
+              <EditorGroup id="access" groups={groups}>
+                <ContentAccessSection
+                  resourceType="apps"
+                  resourceId={appId}
+                  onSaved={handleAccessSaved}
+                />
+              </EditorGroup>
             </div>
-          </form>
+          </div>
         </AdminEditPageShell>
+
+        <AdminSaveBar
+          dirty={isDirty}
+          saving={saving}
+          onSave={() => void save()}
+          onDiscard={editor.discard}
+          message={barMessage}
+          action={
+            canJump
+              ? { label: t('admin.apps.edit.showFirstError'), onClick: showFirstError }
+              : undefined
+          }
+        />
       </div>
 
-      {testOpen && !isNewApp && (
+      {testOpen && app && (
         <AppTestPanel
           appId={appId}
-          enabled={savedEnabled}
+          enabled={published}
           isDirty={isDirty}
-          reloadKey={previewReloadKey}
+          reloadKey={testRun}
           onClose={() => setTestOpen(false)}
+          noModel={noModel}
+          modelSetupHref={isFullAdmin ? MODELS_PATH : null}
+          onOpenAccess={() => groups.open('access', { focus: true })}
+          focusToken={testFocus}
         />
       )}
 
@@ -719,6 +378,26 @@ function AdminAppEditPage() {
           {toast}
         </div>
       )}
+
+      <PublishDialog
+        isOpen={publishing.dialog === 'publish'}
+        name={appName}
+        access={access}
+        savesFirst={isDirty}
+        noModel={noModel}
+        busy={publishing.busy}
+        error={publishing.error}
+        onConfirm={publishing.confirm}
+        onCancel={publishing.cancel}
+      />
+      <UnpublishDialog
+        isOpen={publishing.dialog === 'unpublish'}
+        name={appName}
+        busy={publishing.busy}
+        error={publishing.error}
+        onConfirm={publishing.confirm}
+        onCancel={publishing.cancel}
+      />
 
       <ChangeHistoryDrawer
         isOpen={historyOpen}

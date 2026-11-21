@@ -48,7 +48,7 @@ const ADMIN_PAGES = [
 ];
 
 const ACTIONS = [
-  { label: 'New App', href: '/admin/apps/new' },
+  { label: 'New app', href: '/admin/apps/new' },
   { label: 'View Audit Log', href: '/admin/audit-log' },
   { label: 'Run Backup', href: '/admin/backup' },
   { label: 'Check for Updates', href: '/admin/updates' }

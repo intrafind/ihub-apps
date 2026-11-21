@@ -44,8 +44,8 @@ import { buildServerPath } from '../utils/basePath.js';
 import { assertValidId } from '../utils/pathSecurity.js';
 import { buildContentDisposition } from '../utils/safeContentDisposition.js';
 import configCache from '../configCache.js';
+import { canUserAccessResource } from '../utils/authorization.js';
 import { appAllowsUserProjects } from '../../shared/appProjects.js';
-import { findByIdCaseInsensitive } from '../utils/resourceLookup.js';
 import runLog from '../services/loop/RunLog.js';
 import { isAnonymousUser, resolvePrincipal } from '../services/loop/runIdentity.js';
 import { authorizeChat } from '../services/chat/chatAccess.js';
@@ -219,6 +219,28 @@ async function loadOwnedChat(chatId, user, repository, intent = 'read') {
 }
 
 /**
+ * The app whose settings apply to a chat (its upload policy, whether it takes
+ * projects), or null when there is none for this caller.
+ *
+ * A published app applies to every caller, as before: these routes act on the
+ * caller's own chat and have never checked the app's group permission. An app
+ * that is not published applies only to a content admin whose groups grant it,
+ * the one who can try it in the chat (`configCache.getAppForRequest`); for
+ * anyone else it is no app, as an unknown id is.
+ *
+ * @param {string|null|undefined} appId - The chat's app
+ * @param {Object} user - `req.user`
+ * @returns {Object|null}
+ */
+function appOfChat(appId, user) {
+  if (!appId) return null;
+  const app = configCache.getAppForRequest(appId, user);
+  if (!app) return null;
+  if (app.enabled === false && !canUserAccessResource(user, 'apps', app.id)) return null;
+  return app;
+}
+
+/**
  * Refuse adding `added` projects to a chat unless the caller may use every one
  * of them, user projects are switched on and the chat's app takes them.
  *
@@ -240,9 +262,7 @@ async function assertMayAttach(
   }
   // The chat's app decides too: one that takes no personal projects gets
   // none attached here either, as with a message (`resolveChatProjects`).
-  const app = chat.appId
-    ? findByIdCaseInsensitive(configCache.getApps()?.data || [], chat.appId)
-    : null;
+  const app = appOfChat(chat.appId, req.user);
   if (app && !appAllowsUserProjects(app)) {
     throw new ServiceError('APP_PROJECTS_DISABLED', 'This app takes no projects');
   }
@@ -620,9 +640,7 @@ export default function registerChatRoutes(app) {
     // request must not be able to pick a looser one for somebody's chat.
     const requestedAppId =
       auth.chat?.appId || (typeof req.body?.appId === 'string' && req.body.appId) || null;
-    const chatApp = requestedAppId
-      ? findByIdCaseInsensitive(configCache.getApps()?.data || [], requestedAppId)
-      : null;
+    const chatApp = appOfChat(requestedAppId, req.user);
     // The user's own file storage limit (group/user `usageLimits`).
     const policy = withUserFileLimit(chatFilePolicy(chatApp), req.user);
     if (!policy.enabled) {
