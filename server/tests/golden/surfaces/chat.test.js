@@ -80,3 +80,36 @@ test('the counters the server put on the wire are checked before a record drops 
     /seq does not increase/
   );
 });
+
+test('a counter that is missing from the wire fails, as one that is wrong does', () => {
+  const wire = (type, counters, runId = 'run-1') => ({
+    event: type,
+    data: { type, runId, ...counters, data: {} }
+  });
+  // `stream/connected` is written by the route for the connection: it has a seq and no rseq.
+  const connected = wire('stream/connected', { seq: 1 }, CHAT);
+  const started = wire('run/started', { seq: 2, rseq: 1 });
+  assert.doesNotThrow(() => recordedFrames([connected, started]));
+  // A server that stopped numbering its frames: nothing is out of order, nothing is there.
+  assert.throws(
+    () => recordedFrames([wire('stream/connected', {}, CHAT), started]),
+    /frame at 0 \(stream\/connected\) carries no seq/
+  );
+  assert.throws(
+    () => recordedFrames([connected, started, wire('run/ended', { rseq: 2 })]),
+    /frame at 2 \(run\/ended\) carries no seq/
+  );
+  assert.throws(
+    () => recordedFrames([connected, started, wire('run/ended', { seq: 3 })]),
+    /frame at 2 \(run\/ended\) carries no rseq/
+  );
+  // The 0 an envelope is built with (`buildEnvelope`) is not a number of the stream.
+  assert.throws(
+    () => recordedFrames([connected, wire('run/started', { seq: 0, rseq: 1 })]),
+    /carries no seq on the wire: 0/
+  );
+  assert.throws(
+    () => recordedFrames([connected, wire('run/started', { seq: 2, rseq: '1' })]),
+    /carries no rseq on the wire: "1"/
+  );
+});
