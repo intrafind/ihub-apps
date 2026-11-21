@@ -31,8 +31,19 @@
  * has no owner anybody can prove to be, and only an admin stops or deletes it.
  *
  * **Admin.** An admin reads every run and may stop or delete it; the decision
- * is marked `viaAdmin` so the route writes it to the audit log. An admin never
- * steers, re-runs, rates or answers in somebody else's name.
+ * is marked `viaAdmin` so the route writes it to the audit log. Through this
+ * module an admin never steers, re-runs, rates or answers in somebody else's
+ * name.
+ *
+ * **Where this holds.** In the routes that ask this module: `/api/runs/*`,
+ * `/api/interactions/pending`, the chat routes that answer an approval or a
+ * question, `POST /api/feedback` and the approval of an MCP app view's call.
+ * Two older surfaces keep a check of their own and are NOT covered: the
+ * workflow execution routes (`/api/workflows/executions/:executionId/_cancel`,
+ * `/_restart` and `DELETE`, `loadOwnedExecution`) and the agent run routes
+ * (`/api/agents/runs/:runId/_cancel` and `/_resume`). There an admin still
+ * cancels, restarts, resumes and deletes somebody else's run, and nothing is
+ * written to the audit log.
  *
  * **A run of no person.** A run whose principal is an agent's own identity
  * (`agent:<profileId>`) or the system principal of a triggered workflow has no
@@ -43,7 +54,10 @@
  * Workflow executions and agent runs the ledger does not know (persistence
  * off, or a run restored from a checkpoint before it was re-registered) are
  * authorized against their execution record: the launching principal or, for
- * agent runs, the human who triggered the run.
+ * agent runs, the human who triggered the run. The execution record adds
+ * callers (whoever triggered an agent run); it never overrules a refusal that
+ * rests on the run's chat or on the guest of an anonymous run, and it applies
+ * the chat rule of `steer` and `rerun` itself.
  *
  * Both checks read the `runs` namespace, the shared, owner-indexed record of
  * every run, so a run started on one worker authorizes on any of them. The
@@ -129,6 +143,23 @@ function runIntentRule(intent) {
 }
 
 /**
+ * A known interaction intent, as it was passed. A missing or unknown intent is
+ * a programming error and throws, like {@link runIntentRule}.
+ *
+ * @param {unknown} intent
+ * @returns {string} one of {@link INTERACTION_INTENTS}
+ * @throws {TypeError} when `intent` is not one of them
+ */
+function interactionIntent(intent) {
+  if (typeof intent !== 'string' || !INTERACTION_INTENTS.includes(intent)) {
+    throw new TypeError(
+      `Interaction access needs an intent (${INTERACTION_INTENTS.join(', ')}); got ${JSON.stringify(intent ?? null)}`
+    );
+  }
+  return intent;
+}
+
+/**
  * Whether `user` may write the chat a run belongs to, as that chat's owner.
  *
  * A storage failure is a refusal, not an error: the caller is asking to act,
@@ -183,31 +214,36 @@ async function isPrincipalOfNoPerson(principalId, { identityMode, profileId } = 
 /**
  * Whether `user` owns the run described by `meta`.
  *
+ * A refusal is `final` when it rests on a fact the execution record cannot
+ * check: the run is anonymous (its owner is proven by the chat alone), or the
+ * caller is the run's principal and the run's chat is stored for somebody
+ * else. The execution record must not turn such a refusal into a grant.
+ *
  * @param {Object} meta - the run's record (`principalId`, `anonymous`, `identityMode`, `refs`)
  * @param {Object} user - req.user
  * @param {Object} rule - the intent's rule
- * @returns {Promise<boolean>}
+ * @returns {Promise<{owner: boolean, final: boolean}>}
  */
-async function ownsLedgerRun(meta, user, rule) {
+async function ledgerOwnership(meta, user, rule) {
   const chatId =
     typeof meta.refs?.chatId === 'string' && meta.refs.chatId ? meta.refs.chatId : null;
   if (meta.anonymous) {
     // Nobody can present the random principal of an anonymous run again. Its
     // owner is the guest who owns its chat; without a stored chat there is none.
-    if (!chatId) return false;
-    return (await chatOwnership(chatId, user)).owner;
+    if (!chatId) return { owner: false, final: true };
+    return { owner: (await chatOwnership(chatId, user)).owner, final: true };
   }
-  if (isAnonymousUser(user)) return false;
+  if (isAnonymousUser(user)) return { owner: false, final: false };
   // Resolve the caller in the mode the run's principal was recorded in: a run
   // written under `pseudonymized` keeps matching its owner after an admin
   // switches the global mode.
   const me = await resolvePrincipal(user, { mode: meta.identityMode || runLog.identityMode() });
-  if (me.id !== meta.principalId) return false;
-  if (!rule.chatWrite || !chatId) return true;
+  if (me.id !== meta.principalId) return { owner: false, final: false };
+  if (!rule.chatWrite || !chatId) return { owner: true, final: false };
   // A chat that is stored and somebody else's refuses; one that is not stored
   // (a headless chat id, a deleted chat) leaves the principal as the owner.
   const chat = await chatOwnership(chatId, user);
-  return chat.owner || !chat.stored;
+  return { owner: chat.owner || !chat.stored, final: true };
 }
 
 /**
@@ -243,8 +279,8 @@ async function readRunSummary(runId) {
  *
  * @param {string} executionId
  * @returns {Promise<{ownerId:string|null, kind:string|null, anonymous:boolean,
- *   startedAt:string|null, triggeredBy:Object|null}|null>} null when neither
- *   source knows the execution
+ *   startedAt:string|null, triggeredBy:Object|null, chatId:string|null}|null>} null when
+ *   neither source knows the execution
  */
 async function resolveExecutionRecord(executionId) {
   const summary = await readRunSummary(executionId);
@@ -254,7 +290,9 @@ async function resolveExecutionRecord(executionId) {
       kind: summary.kind || null,
       anonymous: summary.anonymous === true,
       startedAt: summary.startedAt || null,
-      triggeredBy: summary.triggeredBy || null
+      triggeredBy: summary.triggeredBy || null,
+      chatId:
+        typeof summary.refs?.chatId === 'string' && summary.refs.chatId ? summary.refs.chatId : null
     };
   }
   let execution = null;
@@ -273,7 +311,8 @@ async function resolveExecutionRecord(executionId) {
     kind: null,
     anonymous: false,
     startedAt: execution.startedAt || null,
-    triggeredBy: execution.triggeredBy || null
+    triggeredBy: execution.triggeredBy || null,
+    chatId: null
   };
 }
 
@@ -295,11 +334,19 @@ export async function authorizeExecution(executionId, user, { intent } = {}) {
   const userId = String(user.id);
   const { ownerId } = execution;
   const isAgentRun = typeof ownerId === 'string' && ownerId.startsWith(AGENT_PRINCIPAL_PREFIX);
-  const owner =
+  let owner =
     ownerId === userId ||
     (rule.triggeredBy &&
       Boolean(execution.triggeredBy) &&
       String(execution.triggeredBy.userId) === userId);
+  // The same chat rule as on the run's own record: an intent that speaks in the
+  // run's chat is refused when that chat is stored for somebody else. The
+  // summary of a chat run is an execution record too, so without this the
+  // record would grant what the ledger check has just refused.
+  if (owner && rule.chatWrite && execution.chatId) {
+    const chat = await chatOwnership(execution.chatId, user);
+    owner = chat.owner || !chat.stored;
+  }
   // The registry and the summary of an execution hold the launching principal
   // as it is, so an agent's own identity and the system principal show.
   const ofNoPerson = isAgentRun || ownerId === SYSTEM_PRINCIPAL_ID;
@@ -320,19 +367,16 @@ export async function authorizeExecution(executionId, user, { intent } = {}) {
 }
 
 /**
- * Authorize against the run's own record: memory (this worker, then the
- * owning worker over the bus), then the `runs` namespace, then the persisted
- * `run/start` line.
+ * The decision of the run's own record, with what {@link authorizeRun} needs
+ * to know about a refusal.
  *
  * @param {string} runId
  * @param {Object} user - req.user
- * @param {Object} opts
- * @param {string} opts.intent - one of {@link RUN_INTENTS}; mandatory
- * @returns {Promise<{ok:boolean, status?:number, meta?:Object, viaAdmin?:boolean}>}
- *   `viaAdmin` marks a decision that rests on admin rights and not on ownership.
+ * @param {ReturnType<typeof intentRule>} rule - the intent's rule
+ * @returns {Promise<{ok:boolean, status?:number, meta?:Object, viaAdmin?:boolean,
+ *   final?:boolean}>} `final` marks a 403 the execution record must not overrule
  */
-export async function authorizeLedgerRun(runId, user, { intent } = {}) {
-  const rule = runIntentRule(intent);
+async function decideLedgerRun(runId, user, rule) {
   const mem = await runLog.resolveRunMeta(runId);
   let principalId = mem?.principalId ?? null;
   let anonymous = mem?.anonymous ?? null;
@@ -375,7 +419,8 @@ export async function authorizeLedgerRun(runId, user, { intent } = {}) {
     /** Identity mode the run's principal was recorded in (actor ids on the run use the same). */
     identityMode: identityMode || null
   };
-  if (await ownsLedgerRun(meta, user, rule)) return { ok: true, meta };
+  const ownership = await ledgerOwnership(meta, user, rule);
+  if (ownership.owner) return { ok: true, meta };
   if (rule.admin && isAdmin(user)) return { ok: true, meta, viaAdmin: true };
   if (
     rule.adminOfNoPerson &&
@@ -387,7 +432,24 @@ export async function authorizeLedgerRun(runId, user, { intent } = {}) {
   }
   // Reading an anonymous run stays possible for whoever holds its random id.
   if (rule.idHolder && anonymous) return { ok: true, meta };
-  return { ok: false, status: 403 };
+  return { ok: false, status: 403, final: ownership.final };
+}
+
+/**
+ * Authorize against the run's own record: memory (this worker, then the
+ * owning worker over the bus), then the `runs` namespace, then the persisted
+ * `run/start` line.
+ *
+ * @param {string} runId
+ * @param {Object} user - req.user
+ * @param {Object} opts
+ * @param {string} opts.intent - one of {@link RUN_INTENTS}; mandatory
+ * @returns {Promise<{ok:boolean, status?:number, meta?:Object, viaAdmin?:boolean}>}
+ *   `viaAdmin` marks a decision that rests on admin rights and not on ownership.
+ */
+export async function authorizeLedgerRun(runId, user, { intent } = {}) {
+  const decision = await decideLedgerRun(runId, user, runIntentRule(intent));
+  return decision.ok ? decision : { ok: false, status: decision.status };
 }
 
 /**
@@ -404,13 +466,17 @@ export async function authorizeLedgerRun(runId, user, { intent } = {}) {
  * @throws {TypeError} when `intent` is missing or unknown
  */
 export async function authorizeRun(runId, user, { intent, executionId } = {}) {
-  runIntentRule(intent);
-  const ledger = await authorizeLedgerRun(runId, user, { intent });
+  const ledger = await decideLedgerRun(runId, user, runIntentRule(intent));
   // A read that rests on admin rights has no side effect to tell apart, so it
   // is not worth the second lookup below.
   if (ledger.ok && (!ledger.viaAdmin || intent === 'read')) return ledger;
+  // The execution record adds callers: who launched a run, who triggered it.
+  // A refusal that rests on the run's chat, or on the guest behind an
+  // anonymous run, is not its to overrule: it stands, and the record is not
+  // asked.
+  if (ledger.final) return { ok: false, status: 403 };
   const execution = await authorizeExecution(executionId || runId, user, { intent });
-  if (!ledger.ok) return execution || ledger;
+  if (!ledger.ok) return execution || { ok: false, status: ledger.status };
   // An admin who triggered the run stops or deletes it as its owner, not as an
   // admin: that is not an entry for the audit log.
   if (execution && !execution.viaAdmin) return { ok: true, meta: ledger.meta };
@@ -444,12 +510,8 @@ export async function authorizeRun(runId, user, { intent, executionId } = {}) {
  * @returns {Promise<boolean>}
  * @throws {TypeError} when `intent` is missing or unknown
  */
-export async function authorizeInteraction(interaction, user, { intent } = {}) {
-  if (typeof intent !== 'string' || !INTERACTION_INTENTS.includes(intent)) {
-    throw new TypeError(
-      `Interaction access needs an intent (${INTERACTION_INTENTS.join(', ')}); got ${JSON.stringify(intent ?? null)}`
-    );
-  }
+export async function authorizeInteraction(interaction, user, opts = {}) {
+  const intent = interactionIntent(opts.intent);
   if (!interaction || typeof interaction.runId !== 'string') return false;
   const source = interaction.source || {};
   if (intent !== 'answer' && isAdmin(user)) return true;

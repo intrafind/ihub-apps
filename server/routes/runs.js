@@ -125,7 +125,9 @@ function journalNotKept() {
 
 /**
  * The refusal of a caller who knows a run and may not do `intent` with it.
- * A steer has its own code: the client shows why the message was not sent.
+ * A steer has its own code: the client shows why the message was not sent. Its
+ * text names neither a chat nor an owner: the same code answers for an agent
+ * run and a workflow run, which have no chat and take no message from anybody.
  *
  * @param {string} intent - a run intent, or a human event kind
  * @returns {ServiceError}
@@ -134,7 +136,7 @@ function runForbidden(intent) {
   if (intent === 'steer') {
     return new ServiceError(
       'RUN_STEER_FORBIDDEN',
-      'Only the owner of this chat can send a message to its running answer'
+      'Only the person this answer is written for can send a message while it is being written'
     );
   }
   const action =
@@ -156,6 +158,25 @@ async function requireRunAccess(runId, user, intent) {
   const auth = await loadRunAccess(runId, user, { intent });
   if (auth.ok) return auth;
   throw auth.status === 404 ? new ServiceError('NOT_FOUND', 'Run not found') : runForbidden(intent);
+}
+
+/**
+ * The audit summary of an admin's stop of a run that is not their own.
+ *
+ * The entry is written for every such stop, also when nothing was running any
+ * more: the summary says which of the two happened, so the audit log never
+ * shows a stop that stopped nothing as an intervention. The run may belong to
+ * no person (an agent's own identity, a trigger's system principal), so the
+ * wording names no user.
+ *
+ * @param {boolean} completed - false when stopping threw
+ * @param {string|null} effect - what `stopRun` stopped, null for nothing
+ * @returns {string}
+ */
+function adminStopSummary(completed, effect) {
+  if (!completed) return 'Admin stop of a run that is not their own failed';
+  if (!effect) return 'Admin sent a stop to a run that is not their own; nothing was running';
+  return 'Admin stopped a run that is not their own';
 }
 
 /**
@@ -263,7 +284,7 @@ export default function registerRunRoutes(app) {
           'delete',
           runId,
           auth.meta,
-          "Admin deleted another user's run",
+          'Admin deleted a run that is not their own',
           {},
           deleted ? 'success' : 'failure'
         );
@@ -605,15 +626,16 @@ export default function registerRunRoutes(app) {
         effect = await stopRun(runId, auth.meta, cause);
         stopped = true;
       } finally {
-        // An admin's stop of somebody else's run is on record whatever became of it.
+        // An admin's stop of somebody else's run is on record whatever became
+        // of it; `effect` and the summary say whether anything was stopped.
         if (auth.viaAdmin) {
           auditAdminRunAction(
             req,
             'update',
             runId,
             auth.meta,
-            "Admin stopped another user's run",
-            { event: 'stop', effect },
+            adminStopSummary(stopped, effect),
+            { event: 'stop', effect, stoppedSomething: Boolean(effect) },
             stopped ? 'success' : 'failure'
           );
         }

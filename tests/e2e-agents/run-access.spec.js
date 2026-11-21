@@ -86,7 +86,12 @@ test.describe('Run access by intent', () => {
       );
       expect(audit.status()).toBe(200);
       const entries = (await audit.json()).items.filter(entry => entry.resourceId === runId);
-      expect(entries.map(entry => entry.summary)).toEqual(["Admin stopped another user's run"]);
+      // The entry says that nothing was stopped: the audit log shows no
+      // intervention that did not happen.
+      expect(entries.map(entry => entry.summary)).toEqual([
+        'Admin sent a stop to a run that is not their own; nothing was running'
+      ]);
+      expect(entries[0].details.stoppedSomething).toBe(false);
     }
   );
 

@@ -190,7 +190,10 @@ describe('run access: what an admin does to somebody else’s run is on record',
     assert.equal(entries[0].action, 'update');
     assert.equal(entries[0].actor.id, USERS.admin.id);
     assert.equal(entries[0].result, 'success');
+    assert.equal(entries[0].summary, 'Admin stopped a run that is not their own');
     assert.equal(entries[0].details.event, 'stop');
+    assert.equal(entries[0].details.effect, 'chat_aborted');
+    assert.equal(entries[0].details.stoppedSomething, true);
     assert.equal(entries[0].details.principalId, run.principalId);
 
     const own = await h.seedUserRun();
@@ -204,6 +207,27 @@ describe('run access: what an admin does to somebody else’s run is on record',
     assert.deepEqual(await h.auditEntriesFor(own.runId), []);
   });
 
+  it('says in the audit entry when the stop reached a run that was no longer running', async () => {
+    const run = await h.seedUserRun();
+    h.runLog.endRun(run.runId, { status: 'completed', finishReason: 'stop' });
+    const res = await h.send(
+      'post',
+      `/api/runs/${run.runId}/human-events`,
+      { user: USERS.admin },
+      { kind: 'stop' }
+    );
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    assert.equal(res.body.effect, undefined, 'nothing was stopped');
+    const entries = await h.auditEntriesFor(run.runId);
+    assert.equal(entries.length, 1, JSON.stringify(entries));
+    assert.equal(
+      entries[0].summary,
+      'Admin sent a stop to a run that is not their own; nothing was running'
+    );
+    assert.equal(entries[0].details.effect, null);
+    assert.equal(entries[0].details.stoppedSomething, false);
+  });
+
   it('writes an admin delete to the audit log', async () => {
     const run = await h.seedUserRun();
     const res = await h.send('delete', `/api/runs/${run.runId}`, { user: USERS.admin });
@@ -211,6 +235,7 @@ describe('run access: what an admin does to somebody else’s run is on record',
     const entries = await h.auditEntriesFor(run.runId);
     assert.equal(entries.length, 1, JSON.stringify(entries));
     assert.equal(entries[0].action, 'delete');
+    assert.equal(entries[0].summary, 'Admin deleted a run that is not their own');
     assert.equal(entries[0].actor.id, USERS.admin.id);
   });
 
@@ -311,8 +336,8 @@ describe('run access: the intents no route asks for yet', () => {
 });
 
 describe('run access: a message into a run needs the write right on its chat', () => {
-  it('refuses the run’s principal when the chat is stored for somebody else', async () => {
-    // The chat belongs to Bob; the run on it was recorded for Alice.
+  /** A run recorded for Alice on a chat that is stored for Bob. */
+  async function seedRunOnSomebodyElsesChat() {
     const bob = await h.chatOwner.resolveChatOwner(USERS.otherUser, { mode: 'default' });
     const chatId = await h.seedChat(bob.id);
     const { runId } = await h.runLog.startRun({
@@ -320,14 +345,86 @@ describe('run access: a message into a run needs the write right on its chat', (
       user: USERS.owner,
       refs: { chatId, appId: 'chat' }
     });
+    // The run's summary is written behind the start. It is the record the
+    // execution check reads, so the cases below ask once it is stored: before
+    // that only the ledger check could answer, and the question would be easier
+    // than the one a request asks.
+    await h.runLog.flush();
+    return { runId, chatId };
+  }
+
+  it('refuses the run’s principal when the chat is stored for somebody else', async () => {
+    const { runId } = await seedRunOnSomebodyElsesChat();
     const { authorizeRun } = h.runAccess;
-    assert.equal((await authorizeRun(runId, USERS.owner, { intent: 'steer' })).ok, false);
-    assert.equal((await authorizeRun(runId, USERS.owner, { intent: 'rerun' })).ok, false);
+    for (const intent of ['steer', 'rerun']) {
+      assert.deepEqual(
+        await authorizeRun(runId, USERS.owner, { intent }),
+        { ok: false, status: 403 },
+        intent
+      );
+    }
     // What does not speak in the chat stays with the principal.
     assert.equal((await authorizeRun(runId, USERS.owner, { intent: 'stop' })).ok, true);
     assert.equal((await authorizeRun(runId, USERS.owner, { intent: 'read' })).ok, true);
     // Owning the chat is not owning the run.
     assert.equal((await authorizeRun(runId, USERS.otherUser, { intent: 'steer' })).ok, false);
+  });
+
+  it('is not overruled by the run’s summary: the execution record keeps the chat rule', async () => {
+    const { runId } = await seedRunOnSomebodyElsesChat();
+    const { authorizeRun, authorizeLedgerRun, authorizeExecution } = h.runAccess;
+    // The summary names Alice as the owner, so the execution record knows her.
+    const read = await authorizeExecution(runId, USERS.owner, { intent: 'read' });
+    assert.equal(read?.ok, true, 'the summary of the run is stored and names its principal');
+    for (const intent of ['steer', 'rerun']) {
+      assert.deepEqual(
+        await authorizeLedgerRun(runId, USERS.owner, { intent }),
+        { ok: false, status: 403 },
+        `${intent}: the run’s own record refuses`
+      );
+      assert.equal(
+        await authorizeExecution(runId, USERS.owner, { intent }),
+        null,
+        `${intent}: the execution record does not grant what the chat refuses`
+      );
+      assert.deepEqual(
+        await authorizeRun(runId, USERS.owner, { intent }),
+        { ok: false, status: 403 },
+        `${intent}: and the refusal stands`
+      );
+    }
+  });
+
+  it('answers the route with RUN_STEER_FORBIDDEN and queues nothing', async () => {
+    const { runId } = await seedRunOnSomebodyElsesChat();
+    const res = await h.send(
+      'post',
+      `/api/runs/${runId}/human-events`,
+      { user: USERS.owner },
+      { kind: 'steer', message: 'Use the newer report' }
+    );
+    assert.equal(res.status, 403, JSON.stringify(res.body));
+    assert.equal(res.body.code, 'RUN_STEER_FORBIDDEN');
+    assert.deepEqual(h.steering.takeSteers(runId), []);
+    const events = await h.runLog.readEvents(runId);
+    assert.equal(
+      events.some(event => event.type === 'human/event'),
+      false,
+      'a refused message must not be recorded'
+    );
+  });
+
+  it('lets no execution record speak for the guest of an anonymous run', async () => {
+    const run = await h.seedGuestRun();
+    await h.runLog.flush();
+    const { authorizeRun } = h.runAccess;
+    for (const intent of ['stop', 'delete', 'steer', 'feedback', 'answer', 'rerun']) {
+      assert.deepEqual(
+        await authorizeRun(run.runId, USERS.otherUser, { intent }),
+        { ok: false, status: 403 },
+        intent
+      );
+    }
   });
 
   it('leaves a run without a stored chat to its principal', async () => {
