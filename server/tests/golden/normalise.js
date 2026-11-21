@@ -290,6 +290,8 @@ const whileModelStreams = event =>
  * random.
  *
  * @param {Object[]} ledger - Run ledger events (`{ type, runId, data }`), in any order.
+ * A group of one call is left out: nothing ran beside it.
+ *
  * @returns {Map<string, {group: number, position: number|null}>} By run, step and call id.
  */
 export function parallelGroupsOf(ledger) {
@@ -304,14 +306,28 @@ export function parallelGroupsOf(ledger) {
     }
   }
   const groups = new Map();
+  const groupOf = new Map();
   for (const event of ledger) {
     const group = event?.data?.parallelGroup;
     const callId = callIdOf(event);
     if (event?.type !== 'tool/call' || group === undefined || group === null || !callId) continue;
     const key = callKey(event.runId, event.data.step, callId);
     groups.set(key, { group, position: positions.get(key) ?? null });
+    groupOf.set(key, groupKey(event, group));
+  }
+  // A call that ran alone has no order to fix: its events, and what arrives between them
+  // (a question raised by the tool, for one), keep the places the server gave them.
+  const sizes = new Map();
+  for (const of of groupOf.values()) sizes.set(of, (sizes.get(of) ?? 0) + 1);
+  for (const [key, of] of groupOf) {
+    if (sizes.get(of) < 2) groups.delete(key);
   }
   return groups;
+}
+
+/** One group of one step of one run. */
+function groupKey(event, group) {
+  return JSON.stringify([event.runId ?? '', event.data?.step ?? '', group]);
 }
 
 /** The order of two calls of one group: as the model asked for them, else by call id. */

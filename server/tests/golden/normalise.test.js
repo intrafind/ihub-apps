@@ -647,6 +647,24 @@ test('an event without a call id that arrives between the events of a group is p
   assert.deepEqual(orderParallelGroups(elsewhere), elsewhere);
 });
 
+test('a call that ran alone is no group: what arrives between its events keeps its place', () => {
+  const { assistant, call, started, completed } = parallel;
+  // A tool that asks the person a question raises it before the call is completed.
+  const raised = { v: 2, runId: RUN, type: 'interaction/raised', data: { kind: 'question' } };
+  const ledger = [assistant(1, ['call_1']), call('call_1')];
+  const groups = parallelGroupsOf(ledger);
+  assert.equal(groups.size, 0);
+  const envelopes = [started('call_1'), raised, completed('call_1')].map(event => ({
+    ...event,
+    streamId: 'golden-chat'
+  }));
+  assert.deepEqual(typesAndCalls(orderParallelGroups(envelopes, groups)), [
+    'tool/started call_1',
+    'interaction/raised',
+    'tool/completed call_1'
+  ]);
+});
+
 test('the progress frames of the model writing its calls are not moved, and a call known by index 0 has its place', () => {
   const { assistant, call, started, completed } = parallel;
   const groups = parallelGroupsOf([assistant(), call('call_1'), call('call_2')]);
