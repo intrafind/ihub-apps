@@ -24,6 +24,14 @@
 #   (scripts/check-difference-signatures.js). No review event starts this
 #   workflow: a run started by a review would report the gate job as skipped, and
 #   a skipped job counts as passed. After the owner approved, re-run this job.
+#   For the same reason the workflow does not start on `edited` (a new target
+#   branch, a new title, a new description): the gate job would have to be
+#   skipped on such a run, and with the concurrency group below the run would
+#   first cancel a gate that is still running. So after a pull request was
+#   given another target branch, this job still shows the result against the
+#   old one, and a re-run does too (it repeats the event it was started by).
+#   The next push compares with the new target branch; without one, close and
+#   reopen the pull request.
 #
 # There is deliberately no `paths:` filter, for the reason given in
 # api-guidelines-check.yml: a required check that a PR never triggers would block it.

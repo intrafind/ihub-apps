@@ -136,7 +136,7 @@ Some values differ between two runs and say nothing about behaviour. `normalise.
 | The date in the date sentence of the system prompt is replaced | `The current date is <date>.` |
 | `seq` and `rseq` are dropped, after a check that they increase: `seq` within one stream, `rseq` within one run | |
 | Consecutive `step/delta` events of one step are merged, because the cut of a text into deltas depends on timing | |
-| Events of one `parallelGroup` are ordered by call id, because tools that run side by side finish in any order | |
+| The events of tool calls that ran side by side are put in the order the model asked for the calls, because they arrive in the order the tools finish. The group comes from `parallelGroup` on the ledger event `tool/call`; `tool/result` and the envelopes `tool/started` and `tool/completed` are matched to it by run, step and call id | |
 | Temporary paths, the product version and hashes over dated content are replaced | `<tmp>`, `<version>`, `<hash>` |
 | `heartbeat` and `stream/connected` frames are dropped | |
 
@@ -148,6 +148,7 @@ A case can name more id patterns and volatile keys in its config (`idPatterns`, 
 |---|---|
 | `golden.test.js` | every case equals its golden, and every file under `__goldens__/` belongs to a case |
 | `determinism.test.js` | every case gives the same bytes twice in one process and once in a second process that runs 400 days later |
+| `parallelTools.test.js` | a turn with two tool calls that run side by side gives the same record whichever tool finishes first |
 | `goldenChange.test.js` | a changed prompt order and a changed tool schema fail the golden |
 | `differenceList.test.js` | every changed golden is named by a row of the difference list |
 | `differenceSignatures.test.js` | the signature check, on a scratch repository |
@@ -234,6 +235,8 @@ The signature is valid only with the owner's approving review of the pull reques
 The check and the difference list test run in the job **Golden difference list** of the end-to-end workflow (`.github/workflows/e2e.yml`), because they need the history of the target branch. In `npm run test:quick` on a shallow checkout the repository part of `differenceList.test.js` is skipped and says so.
 
 After the owner approved, re-run the job **Golden difference list**. A review does not start the workflow by itself.
+
+A new target branch does not start the workflow either (a stacked pull request that is pointed at `main` after its base was merged). The job then still shows the result against the old target branch, and a re-run repeats it, because a re-run uses the event the run was started by. The next push compares with the new target branch. Without a push, close and reopen the pull request. The workflow does not run on `edited` because that event also fires for every change of the title or the description, and the browser gate in the same workflow would be cancelled and started again each time, or be reported as skipped, which counts as passed.
 
 GitHub does not let the author of a pull request approve it. This is why there are two owners: a pull request that one owner opened is approved, and with that signed, by the other. The approval of either owner satisfies the check; `signedBy` names an owner, and the approving review is the proof.
 
