@@ -136,7 +136,7 @@ Some values differ between two runs and say nothing about behaviour. `normalise.
 | The date in the date sentence of the system prompt is replaced | `The current date is <date>.` |
 | `seq` and `rseq` are dropped, after a check that they increase: `seq` within one stream, `rseq` within one run | |
 | Consecutive `step/delta` events of one step are merged, because the cut of a text into deltas depends on timing | |
-| The events of tool calls that ran side by side are put in the order the model asked for the calls, because they arrive in the order the tools finish. The group comes from `parallelGroup` on the ledger event `tool/call`; `tool/result` and the envelopes `tool/started` and `tool/completed` are matched to it by run, step and call id | |
+| The events of tool calls that ran side by side are put in the order the model asked for the calls, because they arrive in the order the tools finish. The group comes from `parallelGroup` on the ledger event `tool/call`; `tool/result` and the envelopes `tool/started` and `tool/completed` are matched to it by run, step and call id. An event without a call id that arrives between them (`tool/disabled`, a `tool/progress` with a phase only) is placed behind the group; the `tool/progress` frames of the model writing its calls are not moved. The order of two such events from different calls, and whether the circuit breaker trips, still follow the timing: a case that needs them is not stable | |
 | Temporary paths, the product version and hashes over dated content are replaced | `<tmp>`, `<version>`, `<hash>` |
 | `heartbeat` and `stream/connected` frames are dropped | |
 

@@ -555,8 +555,8 @@ test('only the calls of one group, step, run and stream are ordered among themse
     call('call_1', 0, 2),
     result('call_1', 10, 2)
   ]);
-  // An event that is not of a call keeps its place and ends the run of events around it.
-  same([assistant(), call('call_2'), checkpoint(), call('call_1'), result('call_1')]);
+  // An event of another step keeps its place and ends the run of events around it.
+  same([assistant(), call('call_2'), checkpoint(2), call('call_1'), result('call_1')]);
   // The same call ids in another run are other calls.
   const other = event => ({ ...event, runId: `chat-${UUID_B}` });
   same([assistant(), call('call_1'), call('call_2'), other(result('call_2')), result('call_1')]);
@@ -584,6 +584,112 @@ test('only the calls of one group, step, run and stream are ordered among themse
       'tool/result call_2',
       'tool/call call_1',
       'tool/result call_1'
+    ]
+  );
+});
+
+test('an event without a call id that arrives between the events of a group is placed behind the group', () => {
+  const { assistant, call, result, started, completed } = parallel;
+  const ids = ['call_1', 'call_2', 'call_3', 'call_4'];
+  // The circuit breaker: three calls fail, the fourth succeeds first or last (`AgentLoop.js`).
+  const disabled = {
+    type: 'tool/disabled',
+    runId: RUN,
+    data: { step: 1, toolId: 'lookup', reason: 'repeated_failures', failures: 3 }
+  };
+  const head = [assistant(1, ids), ...ids.map(id => call(id))];
+  const failures = ['call_1', 'call_2', 'call_3'].map(id => result(id));
+  const lastOrdered = orderParallelGroups([...head, ...failures, disabled, result('call_4')]);
+  assert.deepEqual(typesAndCalls(lastOrdered), [
+    'message/assistant',
+    ...ids.flatMap(id => [`tool/call ${id}`, `tool/result ${id}`]),
+    'tool/disabled'
+  ]);
+  assert.deepEqual(
+    orderParallelGroups([...head, result('call_4'), ...failures, disabled]),
+    lastOrdered
+  );
+  assert.deepEqual(orderParallelGroups(lastOrdered), lastOrdered);
+
+  // A tool that reports progress with its phase only (`emitToolProgress(chatId, { phase })`).
+  const progress = {
+    v: 2,
+    runId: RUN,
+    type: 'tool/progress',
+    data: { phase: 'search.started', toolId: 'lookup' }
+  };
+  const groups = parallelGroupsOf(head);
+  const stream = events =>
+    orderParallelGroups(
+      events.map(event => ({ ...event, streamId: 'golden-chat' })),
+      groups
+    );
+  const startedBoth = [started('call_1'), started('call_2')];
+  const before = stream([...startedBoth, progress, completed('call_1'), completed('call_2')]);
+  assert.deepEqual(typesAndCalls(before), [
+    'tool/started call_1',
+    'tool/completed call_1',
+    'tool/started call_2',
+    'tool/completed call_2',
+    'tool/progress'
+  ]);
+  assert.deepEqual(
+    stream([...startedBoth, completed('call_2'), progress, completed('call_1')]),
+    before
+  );
+  // Of another run or stream it keeps its place and ends the run.
+  const elsewhere = [
+    call('call_2'),
+    { ...disabled, runId: `chat-${UUID_B}` },
+    call('call_1'),
+    result('call_1')
+  ];
+  assert.deepEqual(orderParallelGroups(elsewhere), elsewhere);
+});
+
+test('the progress frames of the model writing its calls are not moved, and a call known by index 0 has its place', () => {
+  const { assistant, call, started, completed } = parallel;
+  const groups = parallelGroupsOf([assistant(), call('call_1'), call('call_2')]);
+  const args = (callId, n, phase = 'args') => ({
+    v: 2,
+    runId: RUN,
+    streamId: 'golden-chat',
+    type: 'tool/progress',
+    data: { step: 1, callId, toolId: 'lookup', phase, data: { n } }
+  });
+  const onChat = event => ({ ...event, streamId: 'golden-chat' });
+  // As the model streams them: interleaved, and directly before the calls start.
+  const frames = [args('call_2', 1), args('call_1', 1), args('call_2', 2, 'args.ended')];
+  const ordered = orderParallelGroups(
+    [
+      ...frames,
+      ...[started('call_1'), started('call_2'), completed('call_2'), completed('call_1')].map(
+        onChat
+      )
+    ],
+    groups
+  );
+  assert.deepEqual(ordered.slice(0, 3), frames);
+  assert.deepEqual(typesAndCalls(ordered.slice(3)), [
+    'tool/started call_1',
+    'tool/completed call_1',
+    'tool/started call_2',
+    'tool/completed call_2'
+  ]);
+
+  // A provider that sends no call ids: the server uses the index, "0" for the first call.
+  const noIds = {
+    type: 'message/assistant',
+    runId: RUN,
+    data: { step: 1, toolCalls: [{ index: 1 }, { index: 0 }, { id: '', index: 2 }, {}] }
+  };
+  const byIndex = parallelGroupsOf([noIds, call('1'), call('0'), call('2')]);
+  assert.deepEqual(
+    [...byIndex.values()],
+    [
+      { group: 0, position: 0 },
+      { group: 0, position: 1 },
+      { group: 0, position: 2 }
     ]
   );
 });

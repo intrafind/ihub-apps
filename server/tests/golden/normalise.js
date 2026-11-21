@@ -267,6 +267,15 @@ const callIdOf = event => {
 const callKey = (runId, step, callId) => `${runId}\u0000${step}\u0000${callId}`;
 
 /**
+ * `tool/progress` phases sent while the model still writes a call
+ * (`toolArgProgress.js`), before any tool runs. They carry the call id, and
+ * their order is the order of the model stream, so they are not moved.
+ */
+const MODEL_STREAM_PHASES = new Set(['args', 'args.ended']);
+const whileModelStreams = event =>
+  event?.type === 'tool/progress' && MODEL_STREAM_PHASES.has(event.data?.phase);
+
+/**
  * Which tool calls ran side by side, read from the run ledger.
  *
  * The server names the group in one place only: `parallelGroup` on the ledger
@@ -288,8 +297,9 @@ export function parallelGroupsOf(ledger) {
   for (const event of ledger) {
     if (event?.type !== 'message/assistant' || !Array.isArray(event.data?.toolCalls)) continue;
     for (const [position, call] of event.data.toolCalls.entries()) {
-      const callId = call?.id || call?.index;
-      if (callId === undefined || callId === null) continue;
+      // The id the server gives the call (`AgentLoop.js`): the model's, else its index, 0 included.
+      const callId = call?.id || `${call?.index ?? ''}`;
+      if (!callId) continue;
       positions.set(callKey(event.runId, event.data.step, callId), position);
     }
   }
@@ -315,16 +325,31 @@ function byCall(a, b) {
 /**
  * Put the events of tool calls that ran side by side into a fixed order. The
  * calls of one group run under one `Promise.all`, so their events arrive in
- * the order the tools finish. A run of consecutive events of the same stream,
- * run, step and group is put in the order the model asked for the calls (by
- * call id where the ledger does not say) and, for one call, in the order its
- * events arrived in.
+ * the order the tools finish. A run of events of the same stream, run, step
+ * and group is put in the order the model asked for the calls (by call id
+ * where the ledger does not say) and, for one call, in the order its events
+ * arrived in.
  *
  * An event belongs to a group when `groups` knows its run, step and call id.
  * That holds for the ledger events `tool/call` and `tool/result` and for
  * every envelope of the call that carries `callId` (`tool/started`,
- * `tool/completed`). Every other event keeps its place and ends a run: an
- * event without a call id that a tool emits while its group runs is not moved.
+ * `tool/completed`, `sources/added`). The `tool/progress` frames sent while
+ * the model writes the call are left out: they are not the result of running
+ * side by side, and their order is the model's.
+ *
+ * An event without a call id that arrives between the events of a group, in
+ * the same stream and run and with the same step or none, is placed behind the
+ * group: the circuit breaker's `tool/disabled` and a `tool/progress` a tool
+ * sends with its phase only say nothing about which call they came from, so
+ * their place between the results is a matter of timing. Several of them keep
+ * the order they arrived in. Every other event keeps its place and ends the
+ * run.
+ *
+ * What stays timing-dependent, and makes a golden of such a case unstable:
+ * the order of two events without a call id that come from different calls of
+ * one group, and the content of `tool/disabled` (a success between the
+ * failures of the same tool resets the count, so whether and with which
+ * `failures` the breaker trips depends on the finishing order).
  *
  * @param {Object[]} events - Envelopes (`{ type, streamId, runId, data }`) or ledger events
  *   (`{ type, runId, data }`).
@@ -335,32 +360,43 @@ function byCall(a, b) {
 export function orderParallelGroups(events, groups = parallelGroupsOf(events)) {
   const memberOf = event => {
     const callId = callIdOf(event);
-    if (!callId) return null;
+    if (!callId || whileModelStreams(event)) return null;
     const found = groups.get(callKey(event.runId, event.data?.step, callId));
     return found ? { ...found, callId } : null;
   };
   const out = [];
   let run = [];
+  let behind = [];
   const flush = () => {
     if (run.length > 1) run.sort(byCall);
     for (const entry of run) out.push(entry.event);
+    out.push(...behind);
     run = [];
+    behind = [];
+  };
+  /** Of the stream, run and step of the group being collected (`anyStep`: or of no step). */
+  const ofOpenRun = (event, anyStep = false) => {
+    const first = run[0]?.event;
+    const step = event.data?.step;
+    return (
+      first !== undefined &&
+      first.streamId === event.streamId &&
+      first.runId === event.runId &&
+      (first.data?.step === step || (anyStep && (step === undefined || step === null)))
+    );
   };
   for (const event of events) {
     const member = memberOf(event);
     if (!member) {
-      flush();
-      out.push(event);
+      if (!callIdOf(event) && ofOpenRun(event, true)) {
+        behind.push(event);
+      } else {
+        flush();
+        out.push(event);
+      }
       continue;
     }
-    const first = run[0];
-    const sameRun =
-      first &&
-      first.group === member.group &&
-      first.event.streamId === event.streamId &&
-      first.event.runId === event.runId &&
-      first.event.data?.step === event.data?.step;
-    if (!sameRun) flush();
+    if (!(run[0]?.group === member.group && ofOpenRun(event))) flush();
     run.push({ ...member, event, index: run.length });
   }
   flush();
