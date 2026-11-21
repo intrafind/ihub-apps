@@ -91,6 +91,22 @@ function leafTexts(node, prefix = '') {
 /** A UI text without its `{{placeholders}}`, which name variables and are never shown. */
 const shownText = text => text.replace(/\{\{[^}]*\}\}/g, ' ');
 
+/**
+ * A line without its HTML comments. Each comment is cut out by its position, so
+ * that no opening mark can be left over from two that overlapped.
+ */
+function withoutHtmlComments(line) {
+  let text = line;
+  let start = text.indexOf('<!--');
+  while (start !== -1) {
+    const end = text.indexOf('-->', start + 4);
+    if (end === -1) break;
+    text = `${text.slice(0, start)} ${text.slice(end + 3)}`;
+    start = text.indexOf('<!--');
+  }
+  return text;
+}
+
 /** The prose lines of a Markdown page with the heading each one stands under. */
 function proseWithHeadings(markdown) {
   const lines = [];
@@ -104,10 +120,7 @@ function proseWithHeadings(markdown) {
       continue;
     }
     if (fence) continue;
-    const text = line
-      .replace(/`[^`]*`/g, ' ')
-      .replace(/\]\([^)]*\)/g, '] ')
-      .replace(/<!--.*?-->/g, ' ');
+    const text = withoutHtmlComments(line.replace(/`[^`]*`/g, ' ').replace(/\]\([^)]*\)/g, '] '));
     // The heading names the place, so it keeps the words of its inline code.
     const headingMatch = /^#{1,6}\s+(.*?)\s*#*$/.exec(line);
     if (headingMatch) {
