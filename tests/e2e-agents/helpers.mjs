@@ -4,7 +4,8 @@
 /**
  * Helpers of the agents end-to-end specs: signing in, sending a message in the
  * chat page or through the chat API, watching the page's chat requests, driving
- * the model stub (what it was sent, releasing a hang) and restarting the server.
+ * the model stub (what it was sent, releasing a hang), reading the counter of the
+ * test tools and restarting the server.
  *
  * The specs run against the real server. They never answer an `/api` request
  * themselves (`page.route(…)` with `route.fulfill(…)`): what a spec needs from the
@@ -210,6 +211,32 @@ export const stub = {
   },
   /** End every hang, for an `afterEach` that must leave nothing waiting. */
   releaseAll: () => stubJson('/__release-all', { method: 'POST' })
+};
+
+/**
+ * The counter of the test tools (`tests/config/test-counter.mjs`), hosted by the
+ * suite's helper process: what `e2e_counter_write` wrote, counted outside the
+ * server. A spec that needs a write to prove something reads it here, never from
+ * a fixture of its own.
+ */
+export const counter = {
+  /**
+   * @returns {Promise<{total: number, counters: Record<string, {count: number, values: string[]}>}>}
+   */
+  async read() {
+    const res = await fetch(`${CONTROL}/__counter`);
+    if (!res.ok) throw new Error(`the test counter: ${res.status}`);
+    return res.json();
+  },
+  /** How often `key` was written. */
+  async count(key) {
+    return (await counter.read()).counters[key]?.count ?? 0;
+  },
+  /** Set every counter to zero. */
+  async reset() {
+    const res = await fetch(`${CONTROL}/__counter/reset`, { method: 'POST' });
+    if (!res.ok) throw new Error(`reset of the test counter: ${res.status}`);
+  }
 };
 
 /**

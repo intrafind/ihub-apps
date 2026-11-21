@@ -21,8 +21,24 @@ const RAISED_LIMIT = 1_000_000;
  * `startLlmStub` (a scripted model, see e2e-llm-stub.mjs).
  */
 export async function prepareE2eContents({ root, contentsDir, llmPort, stubOptions }) {
+  await seedE2eContents({ root, contentsDir });
+  // The default model, served by a local stub (see e2e-llm-stub.mjs): a chat turn
+  // runs end to end without a model key or network.
+  await startLlmStub(llmPort, stubOptions);
+  writeStubModels({ root, contentsDir, llmPort });
+}
+
+/**
+ * Seed `contentsDir` (relative to `root`) as a first start does, and change what an
+ * end-to-end run needs changed: raised rate limits, no AI-use acknowledgement, no
+ * remote marketplace. Starts nothing. `process.env.CONTENTS_DIR` must already name
+ * the directory.
+ *
+ * The fault harness (`server/tests/faults/seed.mjs`) calls it in a process of its
+ * own: its model stub lives in the test process, not in the one that seeds.
+ */
+export async function seedE2eContents({ root, contentsDir }) {
   const CONTENTS_DIR = contentsDir;
-  const LLM_PORT = llmPort;
   // Seed and migrate exactly as a first start does (a pre-copied platform.json
   // would make the migration runner treat the directory as an old installation).
   const { prepareContents } = await import('../../server/startup/bootstrap.js');
@@ -68,10 +84,15 @@ export async function prepareE2eContents({ root, contentsDir, llmPort, stubOptio
     fs.writeFileSync(registriesPath, `${JSON.stringify(registries, null, 2)}\n`);
   }
   fs.rmSync(path.resolve(root, CONTENTS_DIR, '.registry-cache'), { recursive: true, force: true });
+}
 
-  // The default model, served by a local stub (see e2e-llm-stub.mjs): a chat turn
-  // runs end to end without a model key or network.
-  await startLlmStub(LLM_PORT, stubOptions);
+/**
+ * Write the two stub models into `models/`: `e2e-stub` (the default, no tools) and
+ * `e2e-stub-tools`, both served by the model stub on `llmPort`.
+ */
+export function writeStubModels({ root, contentsDir, llmPort }) {
+  const CONTENTS_DIR = contentsDir;
+  const LLM_PORT = llmPort;
   fs.writeFileSync(
     path.resolve(root, CONTENTS_DIR, 'models', 'e2e-stub.json'),
     `${JSON.stringify(

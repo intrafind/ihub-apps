@@ -17,6 +17,7 @@ import {
   QUARANTINED,
   TIERS,
   checkQuarantine,
+  nodeTestArgs,
   parseArgs,
   selectFiles,
   tierOf
@@ -338,4 +339,40 @@ test('npm run test:nightly runs the whole nightly tier, test:faults its fault te
   assert.deepEqual(select(scripts['test:nightly']), files);
   assert.deepEqual(select(scripts['test:faults']), ['server/tests/faults/kill.fault.test.js']);
   assert.deepEqual(select(scripts['test:server']), []);
+});
+
+test('npm run test:faults:smoke runs the fault tests tagged smoke by their file name', () => {
+  const scripts = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).scripts;
+  assert.equal(
+    scripts['test:faults:smoke'],
+    'node scripts/run-server-tests.js --tier=nightly faults .smoke.fault.test.js'
+  );
+  const files = [
+    'server/tests/faults/harness.fault.test.js',
+    'server/tests/faults/write-in-flight.smoke.fault.test.js',
+    // Outside the fault directory, and in the pr tier: never part of the smoke run.
+    'server/tests/run/write.smoke.fault.test.js'
+  ];
+  const { selected } = selectFiles(files, {
+    ...parseArgs(scripts['test:faults:smoke'].split(' ').slice(2)),
+    quarantined: {}
+  });
+  assert.deepEqual(selected, ['server/tests/faults/write-in-flight.smoke.fault.test.js']);
+});
+
+test('files of the nightly tier run one at a time, the pr tier side by side', () => {
+  assert.deepEqual(nodeTestArgs(['server/tests/faults/harness.fault.test.js']), [
+    '--test',
+    '--test-concurrency=1',
+    'server/tests/faults/harness.fault.test.js'
+  ]);
+  assert.deepEqual(nodeTestArgs(['server/tests/run/long.nightly.test.js']), [
+    '--test',
+    '--test-concurrency=1',
+    'server/tests/run/long.nightly.test.js'
+  ]);
+  assert.deepEqual(nodeTestArgs(['server/tests/killPoint.test.js']), [
+    '--test',
+    'server/tests/killPoint.test.js'
+  ]);
 });

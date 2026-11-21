@@ -38,6 +38,7 @@ import {
   readBaseline,
   seedAgentsApps,
   seedAgentsUsers,
+  serverEnvironment,
   writeOverlay
 } from '../../tests/config/agents-contents.mjs';
 import { OTHER, TOOLS_APP, USER } from '../../tests/config/agents-scenario.mjs';
@@ -527,9 +528,55 @@ describe('agents e2e suite: contents', () => {
       assert.deepEqual([USER.username, OTHER.username], ['e2e-user', 'e2e-other']);
       const app = JSON.parse(fs.readFileSync(path.join(dir, 'apps', `${TOOLS_APP}.json`), 'utf8'));
       assert.equal(app.preferredModel, 'e2e-stub-tools');
-      assert.deepEqual(app.integrations, { ihub: {} });
+      // iHub's own tools and the counter tools of the suite.
+      assert.deepEqual(app.integrations, { ihub: {}, 'e2e-counter': {} });
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  test('the server is started as a test server with the test tools and never with a kill point', () => {
+    const settings = {
+      contentsDir: 'contents-e2e-agents',
+      serverPort: 3501,
+      counterUrl: 'counter-address'
+    };
+    const inherited = {
+      PATH: '/usr/bin',
+      NODE_ENV: 'development',
+      JWT_SECRET: 'kept',
+      // Left in the shell by a developer who ran a fault test by hand.
+      IHUB_TEST_KILLPOINT: 'e2e-counter-after-write',
+      IHUB_TEST_KILLPOINT_FILE: 'reached-file',
+      IHUB_TEST_TOOLS: '0'
+    };
+    const env = serverEnvironment(inherited, settings);
+    assert.deepEqual(env, {
+      PATH: '/usr/bin',
+      JWT_SECRET: 'kept',
+      NODE_ENV: 'test',
+      IHUB_TEST_TOOLS: '1',
+      IHUB_TEST_COUNTER_URL: 'counter-address',
+      // Set, and empty: a value in a `.env` file cannot arm one either.
+      IHUB_TEST_KILLPOINT: '',
+      WORKERS: '1',
+      CONTENTS_DIR: 'contents-e2e-agents',
+      HOST: '127.0.0.1',
+      PORT: '3501'
+    });
+    assert.deepEqual(
+      Object.entries(env).filter(([key]) => key.startsWith('IHUB_TEST_KILLPOINT')),
+      [['IHUB_TEST_KILLPOINT', '']]
+    );
+    // The caller's environment is not changed.
+    assert.equal(inherited.IHUB_TEST_KILLPOINT, 'e2e-counter-after-write');
+  });
+
+  test('agents-server.mjs starts its server with that environment and no other', () => {
+    const source = fs.readFileSync(path.join(root, 'tests', 'config', 'agents-server.mjs'), 'utf8');
+    assert.match(source, /env: serverEnv\(\)/);
+    assert.match(source, /serverEnvironment\(process\.env,/);
+    // The Vite client is the only other process it starts.
+    assert.equal(source.split('spawn(').length - 1, 2);
   });
 });

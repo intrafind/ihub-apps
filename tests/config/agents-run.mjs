@@ -21,9 +21,9 @@
  *   (`npm run test:e2e:agents`) covers them.
  *
  * The gate runs on every pull request (`.github/workflows/e2e.yml`). The full suite
- * and the matrix are the workflow's `full` job, which is started by hand (Actions,
- * "End-to-end", "Run workflow") and before a slice of the stack is merged; nothing
- * runs it on a schedule yet.
+ * and the matrix are the workflow's `full` job. The nightly workflow runs it every
+ * night (`.github/workflows/nightly.yml`); it is also started by hand (Actions,
+ * "End-to-end", "Run workflow") and before a slice of the stack is merged.
  */
 
 import fs from 'node:fs';
