@@ -1,9 +1,0 @@
-{
-  "name": "ihub-apps-issue-summary-copilot-cli",
-  "version": "0.0.0",
-  "private": true,
-  "description": "Locked install of the GitHub Copilot CLI used by .github/workflows/summary.yml. Not part of the application.",
-  "dependencies": {
-    "@github/copilot": "1.0.93"
-  }
-}
