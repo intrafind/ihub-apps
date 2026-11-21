@@ -259,6 +259,18 @@ async function setUp(config, restore, stop) {
       ledgerRestarts.push(ledger.length);
     },
 
+    /**
+     * Do something when the recording is over: after the record was taken (or the case failed)
+     * and before the storage of the recording goes. For what a case has to end but must not
+     * record, such as a model call that a process which "died" in the case was still waiting on.
+     * Whatever `fn` causes to be written is in no record. Last registered, first run.
+     *
+     * @param {() => (void|Promise<void>)} fn
+     */
+    afterRecording(fn) {
+      restore(fn);
+    },
+
     /** Wait until everything the run wrote in the background is stored. */
     async settle() {
       await runLog.flush();

@@ -281,6 +281,36 @@ export function withoutConfigHashes(evidence) {
   });
 }
 
+/**
+ * `wanted`, unless `over` settles first: then the wait fails and says so, where it would
+ * otherwise never end.
+ *
+ * A case waits for something its run is expected to do (a model call arrives, a question is
+ * raised). When the run takes another path and ends, nothing would wake that wait: the case
+ * would hang its job in the place of failing. If `over` rejects, the wait fails with that
+ * failure, which is the reason the run took the other path.
+ *
+ * @template T
+ * @param {Promise<T>} wanted - What the case waits for.
+ * @param {Promise<any>} over - The end of the run that should have done it.
+ * @param {string} what - What had not happened when the run ended.
+ * @returns {Promise<T>}
+ */
+export function unlessOver(wanted, over, what) {
+  return Promise.race([
+    wanted,
+    Promise.resolve(over).then(value => {
+      let ending = '';
+      try {
+        ending = `: ${JSON.stringify(value)?.slice(0, 400)}`;
+      } catch {
+        // Not something JSON can hold: the message says what was awaited, which is enough.
+      }
+      throw new Error(`${what}${ending}`);
+    })
+  ]);
+}
+
 /** The signed-in user of the cases. */
 export const goldenUser = (env, fields = {}) =>
   env.principal({ id: 'golden-user', name: 'Golden User', groups: ['users'], ...fields });
