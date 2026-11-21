@@ -10,6 +10,7 @@
  */
 import { fetchUserIntegration, requestConnectUrl } from '../../../api/userIntegrationsApi';
 import { currentReturnUrl } from './connectResult';
+import { getHttpUrl } from '../../../utils/httpUrl';
 
 /** How long one answer is reused by the cards of a page. */
 export const INFO_TTL_MS = 30 * 1000;
@@ -58,7 +59,11 @@ export async function startIntegrationConnect(
   id,
   { reconnect = false, scopes, returnUrl = currentReturnUrl(), navigate } = {}
 ) {
-  const url = await requestConnectUrl(id, { reconnect, scopes, returnUrl });
+  const connectUrl = await requestConnectUrl(id, { reconnect, scopes, returnUrl });
+  // The server answers with the vendor's consent page. The page leaves for it
+  // only when that is an http(s) URL, never a `javascript:` or `data:` one.
+  const url = getHttpUrl(connectUrl);
+  if (!url) throw new Error('The sign-in address returned by the server is not an http(s) URL.');
   invalidateIntegrationInfo(id);
   if (typeof navigate === 'function') navigate(url);
   else window.location.assign(url);
