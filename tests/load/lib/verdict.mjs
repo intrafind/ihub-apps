@@ -13,6 +13,17 @@ import { CHAT_LABELS } from './report.mjs';
 const byCodeUnit = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 
 /**
+ * Whether a value is a share in percent. `NaN` is not: every comparison with
+ * it is false, so a limit of `NaN` would let any share of failures pass.
+ *
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+export function isShare(value) {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 100;
+}
+
+/**
  * The verdict on one run, from its shard result.
  *
  * `run.mjs` counts every session of a scenario as `session.<scenario>.ok` or
@@ -24,8 +35,12 @@ const byCodeUnit = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
  * @param {Object} options
  * @param {number} options.maxErrorPct - Of the turns, and of the sessions of each scenario
  * @returns {{ok: boolean, lines: string[]}}
+ * @throws {TypeError} When `maxErrorPct` is not a share: no comparison with it would ever fail
  */
 export function judge(result, { maxErrorPct: limit = 0 } = {}) {
+  if (!isShare(limit)) {
+    throw new TypeError(`maxErrorPct must be a number from 0 to 100, got ${limit}`);
+  }
   const counts = result.metrics.counts || {};
   const total = name => Object.values(counts[name] || {}).reduce((a, b) => a + b, 0);
   const share = (failed, all) => (all ? (failed / all) * 100 : 0);

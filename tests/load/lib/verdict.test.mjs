@@ -4,7 +4,7 @@
 // node --test "tests/load/**/*.test.mjs"
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { judge } from './verdict.mjs';
+import { isShare, judge } from './verdict.mjs';
 
 /** A shard result with the given counters, all in stage 0. */
 const result = (mix, counts) => ({
@@ -130,4 +130,16 @@ test('an agent turn that ran fewer tool calls than asked for fails the run', () 
   );
   assert.equal(verdict.ok, false);
   assert.ok(verdict.lines.includes('FAILED: 2 agent turns ran fewer tool calls than asked for'));
+});
+
+test('a limit that is not a share is refused: with NaN no share of failures would ever be over it', () => {
+  const failing = withChat({ browse: 10 }, { 'session.browse.ok': 1, 'session.browse.error': 5 });
+  assert.equal(judge(failing).ok, false);
+  for (const bad of [Number.NaN, Number('abc'), -1, 101, Infinity, '5', null]) {
+    assert.equal(isShare(bad), false, String(bad));
+    assert.throws(() => judge(failing, { maxErrorPct: bad }), TypeError, String(bad));
+  }
+  for (const good of [0, 2.5, 100]) assert.equal(isShare(good), true);
+  // `undefined` is "not given": the default, 0.
+  assert.equal(judge(failing, { maxErrorPct: undefined }).ok, false);
 });

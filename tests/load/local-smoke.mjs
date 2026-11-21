@@ -37,7 +37,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { removeDisposableContents } from '../config/e2e-fresh-contents.mjs';
-import { judge } from './lib/verdict.mjs';
+import { isShare, judge } from './lib/verdict.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const CONTENTS_DIR = 'contents-e2e-load';
@@ -56,7 +56,15 @@ const profiles = option('profiles', 'smoke,agentic')
   .split(',')
   .map(name => name.trim())
   .filter(name => name !== '');
-const maxErrorPct = Number(option('max-error-pct', '0'));
+const maxErrorPctText = String(option('max-error-pct', '0')).trim();
+const maxErrorPct = maxErrorPctText === '' ? Number.NaN : Number(maxErrorPctText);
+if (!isShare(maxErrorPct)) {
+  // Before anything is started: a limit that is no number would let every failure pass.
+  console.error(
+    `[local-smoke] --max-error-pct must be a number from 0 to 100, got "${maxErrorPctText}"`
+  );
+  process.exit(2);
+}
 const keep = process.argv.includes('--keep');
 
 const log = message => console.log(`[local-smoke] ${message}`);
