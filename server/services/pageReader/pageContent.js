@@ -357,7 +357,7 @@ function rawTextPattern(tag, closing = false) {
       .split('|')
       .map(name => name.replaceAll(/[.*+?^${}()|[\]\\-]/g, String.raw`\$&`))
       .join('|');
-    pattern = new RegExp(`<${closing ? '/' : ''}(${names})(?=[\\s/>]|$)`, 'gi');
+    pattern = new RegExp(String.raw`<${closing ? '/' : ''}(${names})(?=[\s/>]|$)`, 'gi');
     rawTextPatterns.set(key, pattern);
   }
   return pattern;

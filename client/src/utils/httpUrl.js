@@ -64,7 +64,11 @@ export function getHttpBaseUrl(value) {
   try {
     const url = new URL(trimmed);
     if (url.username || url.password) return null;
-    return `${url.origin}${url.pathname}`.replace(/\/+$/, '');
+    const base = `${url.origin}${url.pathname}`;
+    // Trailing slashes are trimmed with a loop: `/\/+$/` backtracks super-linearly on long runs.
+    let end = base.length;
+    while (end > 0 && base[end - 1] === '/') end -= 1;
+    return base.slice(0, end);
   } catch {
     return null;
   }

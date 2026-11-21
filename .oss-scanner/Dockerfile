@@ -9,11 +9,12 @@ RUN apk add --no-cache \
     git \
     make \
     musl-dev \
-    python3
+    python3 \
+    && mkdir /src \
+    && chown node:node /src
 
 # Build and tests run as the image's unprivileged `node` user (uid 1000); only the
 # package installation above needs root.
-RUN mkdir /src && chown node:node /src
 USER node
 # The whole checkout is copied on purpose: the tests read tests/, .git, .github and docs
 # (see Dockerfile.dockerignore, which is what keeps unrelated and secret files out).
