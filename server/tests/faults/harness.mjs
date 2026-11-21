@@ -65,9 +65,11 @@ import {
   KILL_POINT_TIMEOUT_MS,
   LOOK_TIMEOUT_MS,
   POLL_MS,
+  RESTART_TIMEOUT_MS,
   SERVER_LOG,
   START_TIMEOUT_MS,
   afterStop,
+  childEnvironment,
   keepsContents
 } from './settings.mjs';
 
@@ -210,18 +212,8 @@ async function answers(address) {
   }
 }
 
-/**
- * The environment of a child: the one of the test, without a kill point of
- * somebody else and without the mark of the test runner (a server is not a
- * test file).
- */
-function childEnv(extra) {
-  const env = { ...process.env };
-  for (const key of Object.keys(env)) {
-    if (key.startsWith('IHUB_TEST_KILLPOINT') || key === 'NODE_TEST_CONTEXT') delete env[key];
-  }
-  return { ...env, ...extra };
-}
+/** The environment of a child: see `childEnvironment` in `settings.mjs`. */
+const childEnv = extra => childEnvironment(process.env, extra);
 
 /** A namespace or key as one path segment, or throws. */
 function plainName(name) {
@@ -807,7 +799,8 @@ export async function startStack({
     },
     /**
      * Stop the server when it still runs, and start one on the same contents
-     * directory. Resolves when it answers.
+     * directory. Resolves when it answers, or rejects after `RESTART_TIMEOUT_MS`
+     * with the log of the server: before the case that restarts is cancelled.
      *
      * @param {Object} [options]
      * @param {string} [options.killPoint] - The kill point of the new server; none when absent
@@ -818,7 +811,7 @@ export async function startStack({
      */
     async restart({ killPoint: spec, signal = 'SIGKILL', env, clockAheadMs } = {}) {
       await stack.kill(signal);
-      await start({ killPoint: spec, env, clockAheadMs });
+      await start({ killPoint: spec, env, clockAheadMs, timeoutMs: RESTART_TIMEOUT_MS });
     },
     /**
      * Wait until the server reached its kill point. With one worker the whole
@@ -1000,7 +993,7 @@ export async function startFixture({ guard = true, killPoint } = {}) {
   let server = null;
   let reachedFile = null;
 
-  const start = async ({ killPoint: spec, guard: withGuard }) => {
+  const start = async ({ killPoint: spec, guard: withGuard, timeoutMs = START_TIMEOUT_MS }) => {
     const armed = arm(spec, scratch);
     reachedFile = armed.reachedFile;
     server = launch({
@@ -1024,7 +1017,11 @@ export async function startFixture({ guard = true, killPoint } = {}) {
         }
         return answers(`${url}/health`);
       },
-      { what: 'the fixture server to answer /health', detail: () => started.logTail() }
+      {
+        what: 'the fixture server to answer /health',
+        timeoutMs,
+        detail: () => started.logTail()
+      }
     );
   };
 
@@ -1059,7 +1056,7 @@ export async function startFixture({ guard = true, killPoint } = {}) {
     /** Start the server again on the same journal. */
     async restart({ killPoint: spec, guard: withGuard = guard } = {}) {
       await end(server, 'SIGKILL');
-      await start({ killPoint: spec, guard: withGuard });
+      await start({ killPoint: spec, guard: withGuard, timeoutMs: RESTART_TIMEOUT_MS });
     },
     async stop() {
       await end(server, 'SIGKILL');

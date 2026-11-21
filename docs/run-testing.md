@@ -444,7 +444,7 @@ Name the file `<what>.fault.test.js` and put it under `server/tests/faults/`. Gi
 | The stack | |
 |---|---|
 | `startStack({ workers, killPoint, seed, stub, env, contents })` | seeds a contents directory and starts a server on it; `workers: 2` starts a primary with two workers. `contents` names a directory another stack left: the stack starts on it as it is and does not remove it. The seed and the start share one limit of two minutes; a start that runs into it stops what it started |
-| `stack.restart({ killPoint, signal, env, clockAheadMs })` | stops the server if it runs (`SIGKILL` unless told otherwise) and starts one on the same contents directory |
+| `stack.restart({ killPoint, signal, env, clockAheadMs })` | stops the server if it runs (`SIGKILL` unless told otherwise) and starts one on the same contents directory. The new server has 70 seconds to answer (`RESTART_TIMEOUT_MS`), less than a case has: a restart that hangs fails with the log of the server, before the case is cancelled |
 | `stack.kill(signal)` | `SIGKILL` or `SIGTERM` and waits until the server is gone; `SIGSTOP` and `SIGCONT` freeze and thaw it |
 | `stack.waitKilledAt(name)` | waits until the server reached its kill point |
 | `stack.killPointHits()` | the kill points that fired since this start, one name for each time |
@@ -488,11 +488,11 @@ killPoint('after-tool-start');
 
 In every installation this call does nothing. A kill point is armed only in a process that was started with **both** `NODE_ENV=test` and `IHUB_TEST_KILLPOINT=<name>`. The two are read once, when the module is imported; setting them in a running server arms nothing. With `NODE_ENV=production` the module is inert whatever else is set. `server/tests/killPoint.test.js` proves each of these with real processes.
 
-When an armed process reaches its kill point, it appends the name to the file in `IHUB_TEST_KILLPOINT_FILE` and kills itself with SIGKILL: no handler runs, no buffer is flushed, as when a machine loses power. The harness reads the file. That is how `waitKilledAt` knows that the place was reached.
+When an armed process reaches its kill point, it claims the kill point, appends the name to the file in `IHUB_TEST_KILLPOINT_FILE` and kills itself with SIGKILL: no handler runs, no buffer is flushed, as when a machine loses power. The harness reads the file. That is how `waitKilledAt` knows that the place was reached. The claim is a file beside it, `<file>.<name>.claim`, made with an exclusive create that only one process can win.
 
 - `IHUB_TEST_KILLPOINT=<name>@<n>` kills at the n-th time the place is reached, counted per process.
-- A kill point fires once per start of a stack. With two workers the worker that reaches it dies, the primary starts another, and neither the new worker nor the one beside it dies at the same place again.
-- `startStack` and `restart` set the variables. Never set them yourself, and never in an installation.
+- A kill point fires once per start of a stack. With two workers the worker that reaches it dies, the primary starts another, and neither the new worker nor the one beside it dies at the same place again. This also holds when two workers reach the place in the same instant: one wins the claim and dies, the other goes on, and `killPointHits()` holds the name once.
+- `startStack` and `restart` set the variables. Never set them yourself, and never in an installation. A server that is started without a kill point gets both variables as empty text, so a `.env` file in `server/` that names a kill point does not arm it (dotenv leaves a variable alone that is set, even to nothing).
 
 To add a kill point:
 

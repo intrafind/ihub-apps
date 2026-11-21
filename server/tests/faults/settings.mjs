@@ -21,6 +21,13 @@ export const START_TIMEOUT_MS = 120_000;
 /** How long a signalled process may take to be gone. */
 export const EXIT_TIMEOUT_MS = 15_000;
 /**
+ * How long the start of a `restart` may take. A restart happens inside a case,
+ * so it gives up before the case does (`CASE_TIMEOUT_MS`), with room for the
+ * stop of the server that ran before it: the error then names the wait and
+ * shows the log of the server. A case that node:test cancels shows neither.
+ */
+export const RESTART_TIMEOUT_MS = CASE_TIMEOUT_MS - EXIT_TIMEOUT_MS - 5_000;
+/**
  * The limit of a `before` hook that seeds a contents directory and starts a
  * server. It is longer than a start may take plus the stop of one that failed
  * (see `fault-harness-settings.test.js`): `startStack` gives up and stops what
@@ -67,4 +74,32 @@ export function keepsContents(env = process.env) {
  */
 export function afterStop({ keep, ownsContents }) {
   return { log: keep, remove: !keep && ownsContents };
+}
+
+/** The variables of a kill point (`server/utils/killPoint.js`). */
+const KILL_POINT_VARIABLES = ['IHUB_TEST_KILLPOINT', 'IHUB_TEST_KILLPOINT_FILE'];
+
+/**
+ * The environment of a child of the harness: the one of the test, without the
+ * mark of the test runner (a server is not a test file) and with no kill point
+ * but the one in `extra`.
+ *
+ * The kill point variables are set to the empty text, not taken out. The
+ * server reads a `.env` file when it starts, and dotenv fills in every
+ * variable the environment does not have; one that is there, even empty, it
+ * leaves alone. A `.env` with `IHUB_TEST_KILLPOINT` would otherwise arm a
+ * server that was started without a kill point.
+ *
+ * @param {Record<string, string|undefined>} env - The environment of the test process
+ * @param {Record<string, string>} [extra] - What the child gets on top; wins over `env`
+ * @returns {Record<string, string|undefined>}
+ */
+export function childEnvironment(env, extra = {}) {
+  const inherited = Object.fromEntries(
+    Object.entries(env).filter(
+      ([key]) => !key.startsWith('IHUB_TEST_KILLPOINT') && key !== 'NODE_TEST_CONTEXT'
+    )
+  );
+  const unarmed = Object.fromEntries(KILL_POINT_VARIABLES.map(key => [key, '']));
+  return { ...inherited, ...unarmed, ...extra };
 }
