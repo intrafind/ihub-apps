@@ -153,7 +153,8 @@ jobs:
           # event is the one of the time the workflow started, also when the job is run again.
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
-          TEST_ONLY_BASE_REF: origin/${{ github.base_ref }}
+          # The branch this pull request is opened against (see the next step).
+          TEST_ONLY_BASE_REF: origin/${{ github.event.pull_request.base.ref }}
         run: node scripts/check-test-only-diff.js
 
       - name: Every changed golden is named by a row
