@@ -102,6 +102,21 @@ updates:
         update-types:
           - "minor"
 
+  # Copilot CLI of the issue-summary workflow (.github/workflows/summary.yml),
+  # installed from this lockfile with `npm ci`.
+  - package-ecosystem: 'npm'
+    directory: '/.github/copilot-cli'
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Europe/Berlin"
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
+      semver-minor-days: 7
+      semver-patch-days: 7
+
   - package-ecosystem: 'github-actions'
     directory: '/'
     schedule:

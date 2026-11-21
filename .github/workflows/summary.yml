@@ -38,6 +38,8 @@ on:
   issues:
     types: [opened]
 
+permissions: {}
+
 jobs:
   summary:
     # not restricting it yet
@@ -53,7 +55,9 @@ jobs:
     timeout-minutes: 10
     permissions:
       # `models: read` is gone with GitHub Models; inference is authorized by
-      # COPILOT_GITHUB_TOKEN instead. Only the comment step needs a scope.
+      # COPILOT_GITHUB_TOKEN instead. The comment step needs `issues: write`;
+      # `contents: read` is only for checking out the Copilot CLI lockfile.
+      contents: read
       issues: write
 
     env:
@@ -76,10 +80,21 @@ jobs:
         with:
           node-version: '24'
 
+      - name: Check out the Copilot CLI lockfile
+        if: steps.creds.outputs.configured == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/copilot-cli
+          sparse-checkout-cone-mode: false
+
       - name: Install Copilot CLI
         if: steps.creds.outputs.configured == 'true'
-        # Exact version, so a new release is adopted by a reviewed change rather than silently.
-        run: npm install -g --ignore-scripts @github/copilot@1.0.93
+        # Installed from .github/copilot-cli/package-lock.json (versions and integrity
+        # hashes), so a new release is adopted by a reviewed change (Dependabot PR).
+        run: |
+          npm ci --ignore-scripts --prefix .github/copilot-cli
+          echo "$GITHUB_WORKSPACE/.github/copilot-cli/node_modules/.bin" >> "$GITHUB_PATH"
 
       - name: Summarize the issue
         id: inference
