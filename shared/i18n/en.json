@@ -11155,6 +11155,7 @@
     "SOURCE_FAILED": "The file could not be fetched from the connected system.",
     "EVIDENCE_NOT_RECORDED": "No evidence record was kept for this answer.",
     "JOURNAL_NOT_KEPT": "The events of this run are no longer kept. Read its evidence record instead.",
+    "RUN_STEER_FORBIDDEN": "Only the owner of this chat can send a message while iHub is answering.",
     "MCP_AUTH_REFRESH_FAILED": "The sign-in to the MCP server could not be refreshed. Try again in a moment.",
     "APPROVAL_REQUIRED_NO_USER": "This call needs a person's approval, and this client cannot ask for it.",
     "APPROVAL_ALREADY_ANSWERED": "This approval was already answered.",

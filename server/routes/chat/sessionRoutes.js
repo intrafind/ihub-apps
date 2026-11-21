@@ -761,9 +761,12 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
       const pending = await interactionService.listPending({ chatId, kind: 'question' });
       for (const interaction of pending) {
         // `chatAuthRequired` authorizes the app, not the chat: only the
-        // principal who owns the interaction's run may settle it (a chat id
-        // alone must not let someone answer another user's question).
-        if (!(await authorizeInteraction(interaction, user))) {
+        // principal who owns the interaction's run may answer it (a chat id
+        // alone must not let someone answer another user's question). A
+        // question the message skips past is superseded by its owner's own
+        // message, so it takes the same right: the `cancel` intent would let
+        // an admin's message into somebody else's chat settle it unaudited.
+        if (!(await authorizeInteraction(interaction, user, { intent: 'answer' }))) {
           logger.warn('Chat clarification belongs to another principal; not settled', {
             component: 'sessionRoutes',
             chatId,

@@ -11154,6 +11154,7 @@
     "SOURCE_FAILED": "Die Datei konnte nicht aus dem angebundenen System abgerufen werden.",
     "EVIDENCE_NOT_RECORDED": "Für diese Antwort wurde kein Nachweis gespeichert.",
     "JOURNAL_NOT_KEPT": "Die Ereignisse dieses Laufs werden nicht mehr aufbewahrt. Lesen Sie stattdessen seinen Nachweis.",
+    "RUN_STEER_FORBIDDEN": "Nur der Eigentümer dieses Chats kann eine Nachricht senden, während iHub antwortet.",
     "MCP_AUTH_REFRESH_FAILED": "Die Anmeldung beim MCP-Server konnte nicht erneuert werden. Versuchen Sie es gleich noch einmal.",
     "APPROVAL_REQUIRED_NO_USER": "Dieser Aufruf benötigt die Freigabe einer Person, und dieser Client kann sie nicht einholen.",
     "APPROVAL_ALREADY_ANSWERED": "Diese Freigabe wurde bereits beantwortet.",

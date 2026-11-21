@@ -7,11 +7,14 @@
  *   GET    /api/runs                                  admin: list runs from the ledger index
  *   GET    /api/runs/:runId                           run metadata (owner, admin, or anonymous-run id possession)
  *   GET    /api/runs/:runId/events?cursor=&lt;c&gt;       ledger events (`view=sse` → SSE v2 envelopes for re-sync)
- *   DELETE /api/runs/:runId                           erase a run with cascade (owner or admin)
+ *   DELETE /api/runs/:runId                           erase a run with cascade (owner, or admin: audited)
  *   GET    /api/runs/:runId/interactions              pending interactions of a run
- *   POST   /api/runs/:runId/interactions/:id/answer   THE one answer endpoint
- *   POST   /api/runs/:runId/human-events              steer / stop / feedback into a run
+ *   POST   /api/runs/:runId/interactions/:id/answer   THE one answer endpoint (owner or approver group)
+ *   POST   /api/runs/:runId/human-events              steer / feedback (owner), stop (owner, or admin: audited)
  *   GET    /api/interactions/pending                  the interactions queue (approver-group filtered)
+ *
+ * Every access check names its intent (`services/loop/runAccess.js`); a new
+ * route under `/api/runs` needs its row in `server/tests/routeInventory.table.js`.
  *
  * Workflow executions and agent runs are ledger runs too (runId === executionId),
  * so a paused `human` node is answered here; the answer resumes the execution
@@ -42,6 +45,8 @@ import { isChatToolApproval } from '../services/chat/chatToolApproval.js';
 import { isViewToolApproval } from '../services/mcp/mcpViewToolApproval.js';
 import { redactInteractionForViewer } from '../utils/toolApproval.js';
 import { steerRun } from '../services/loop/steering.js';
+import { createRunSteerLimiter } from '../middleware/rateLimiting.js';
+import { logAudit } from '../services/AuditLogService.js';
 import { RUN_LOG_EVENTS } from '../../shared/runEvents.js';
 import { projectLedgerEvent, getStreamRun } from '../services/loop/RunStream.js';
 import { clientEnvelope } from '../services/loop/clientProjection.js';
@@ -118,7 +123,73 @@ function journalNotKept() {
   );
 }
 
+/**
+ * The refusal of a caller who knows a run and may not do `intent` with it.
+ * A steer has its own code: the client shows why the message was not sent.
+ *
+ * @param {string} intent - a run intent, or a human event kind
+ * @returns {ServiceError}
+ */
+function runForbidden(intent) {
+  if (intent === 'steer') {
+    return new ServiceError(
+      'RUN_STEER_FORBIDDEN',
+      'Only the owner of this chat can send a message to its running answer'
+    );
+  }
+  const action =
+    { read: 'access run', delete: 'delete run', stop: 'stop run', feedback: 'rate run' }[intent] ||
+    'access run';
+  return new ServiceError('FORBIDDEN', `Insufficient permissions: ${action} required`);
+}
+
+/**
+ * The run access of the request for `intent`, or the refusal as an error.
+ *
+ * @param {string} runId
+ * @param {Object} user - req.user
+ * @param {string} intent - one of `RUN_INTENTS`
+ * @returns {Promise<{ok: true, meta: Object, viaAdmin?: boolean}>}
+ * @throws {ServiceError} `NOT_FOUND`, `FORBIDDEN` or `RUN_STEER_FORBIDDEN`
+ */
+async function requireRunAccess(runId, user, intent) {
+  const auth = await loadRunAccess(runId, user, { intent });
+  if (auth.ok) return auth;
+  throw auth.status === 404 ? new ServiceError('NOT_FOUND', 'Run not found') : runForbidden(intent);
+}
+
+/**
+ * Write what an admin did to somebody else's run to the audit log.
+ *
+ * @param {import('express').Request} req
+ * @param {'update'|'delete'} action
+ * @param {string} runId
+ * @param {Object} meta - the run's record
+ * @param {string} summary
+ * @param {Object} [details]
+ * @param {'success'|'failure'} [result='success']
+ */
+function auditAdminRunAction(req, action, runId, meta, summary, details = {}, result = 'success') {
+  logAudit({
+    req,
+    action,
+    resource: 'run',
+    resourceId: runId,
+    summary,
+    result,
+    details: {
+      runKind: meta?.kind || null,
+      // The run's owner as the ledger records it (a pseudonym in that mode).
+      principalId: meta?.principalId || null,
+      anonymous: meta?.anonymous === true,
+      ...details
+    }
+  });
+}
+
 export default function registerRunRoutes(app) {
+  const steerLimiter = createRunSteerLimiter();
+
   app.get(buildServerPath('/api/runs'), adminAuth, async (req, res) => {
     const limit = Math.min(Math.max(Number.parseInt(req.query.limit, 10) || 100, 1), 1000);
     const runs = await runLog.listRuns({
@@ -134,24 +205,14 @@ export default function registerRunRoutes(app) {
   app.get(buildServerPath('/api/runs/:runId'), authRequired, async (req, res) => {
     const { runId } = req.params;
     assertValidId(runId, 'run');
-    const auth = await loadRunAccess(runId, req.user);
-    if (!auth.ok) {
-      throw auth.status === 404
-        ? new ServiceError('NOT_FOUND', 'Run not found')
-        : new ServiceError('FORBIDDEN', 'Insufficient permissions: access run required');
-    }
+    const auth = await requireRunAccess(runId, req.user, 'read');
     res.json({ ...auth.meta, seq: await runLog.lastSeq(runId), persisted: runLog.isEnabled() });
   });
 
   app.get(buildServerPath('/api/runs/:runId/events'), authRequired, async (req, res) => {
     const { runId } = req.params;
     assertValidId(runId, 'run');
-    const auth = await loadRunAccess(runId, req.user);
-    if (!auth.ok) {
-      throw auth.status === 404
-        ? new ServiceError('NOT_FOUND', 'Run not found')
-        : new ServiceError('FORBIDDEN', 'Insufficient permissions: access run required');
-    }
+    await requireRunAccess(runId, req.user, 'read');
     const after = offsetFromCursor(req.query.cursor);
     const limit = limitFrom(req.query.limit, { fallback: 1000, max: 5000 });
     const events = await runLog.readEvents(runId, { afterSeq: after, limit });
@@ -186,13 +247,28 @@ export default function registerRunRoutes(app) {
   app.delete(buildServerPath('/api/runs/:runId'), authRequired, async (req, res) => {
     const { runId } = req.params;
     assertValidId(runId, 'run');
-    const auth = await loadRunAccess(runId, req.user);
-    if (!auth.ok) {
-      throw auth.status === 404
-        ? new ServiceError('NOT_FOUND', 'Run not found')
-        : new ServiceError('FORBIDDEN', 'Insufficient permissions: delete run required');
+    // The owner, or an admin. An anonymous run is deleted by the guest who owns
+    // its chat; holding its id is not enough.
+    const auth = await requireRunAccess(runId, req.user, 'delete');
+    let result;
+    let deleted = false;
+    try {
+      result = await runLog.deleteRun(runId);
+      deleted = true;
+    } finally {
+      // An admin's delete of somebody else's run is on record whatever became of it.
+      if (auth.viaAdmin) {
+        auditAdminRunAction(
+          req,
+          'delete',
+          runId,
+          auth.meta,
+          "Admin deleted another user's run",
+          {},
+          deleted ? 'success' : 'failure'
+        );
+      }
     }
-    const result = await runLog.deleteRun(runId);
     // A run without a chat keeps its evidence record beside the ledger (#3687).
     try {
       await getChatEvidenceRepository().deleteRun(runId);
@@ -265,13 +341,16 @@ export default function registerRunRoutes(app) {
   app.get(buildServerPath('/api/runs/:runId/interactions'), authRequired, async (req, res) => {
     const { runId } = req.params;
     assertValidId(runId, 'run');
-    const auth = await loadRunAccess(runId, req.user);
+    const auth = await loadRunAccess(runId, req.user, { intent: 'read' });
     const interactions = await interactionService.listPending({ runId });
     // The run may be gone from memory (persistence off, restart) while its
     // interactions are still on record: the principal recorded on them decides.
     if (
       !auth.ok &&
-      !(interactions.length && (await loadInteractionAccess(interactions[0], req.user)))
+      !(
+        interactions.length &&
+        (await loadInteractionAccess(interactions[0], req.user, { intent: 'read' }))
+      )
     ) {
       throw auth.status === 404
         ? new ServiceError('NOT_FOUND', 'Run not found')
@@ -348,7 +427,12 @@ export default function registerRunRoutes(app) {
    *       400:
    *         description: Invalid answer, or the execution rejected it
    *       403:
-   *         description: Not an approver / not the run's owner
+   *         description: >-
+   *           Not an approver, or not the run's owner. An admin does not answer an interaction of
+   *           another user's run unless it names an approver group; an admin does answer for a run
+   *           that belongs to no person (an agent's own identity, a workflow a trigger started). An
+   *           interaction of an anonymous run is answered from the browser session that owns its
+   *           chat.
    *       404:
    *         description: Run or interaction not found
    *       409:
@@ -371,14 +455,19 @@ export default function registerRunRoutes(app) {
       if (!interaction || interaction.runId !== runId) {
         throw new ServiceError('NOT_FOUND', 'Interaction not found');
       }
-      // Approver groups are enforced by the service; otherwise the principal
-      // recorded on the interaction, the run's owner (or anyone holding an
-      // anonymous run id) may answer — the interaction outlives the run's
+      // Approver groups are enforced by the service. Otherwise only the owner
+      // of the run answers: the answer continues the run with the owner's
+      // rights, so an admin does not give it (except for a run that belongs to
+      // no person), and for an anonymous run the ids are not enough (the guest
+      // who owns its chat answers). The interaction outlives the run's
       // in-memory record, so it is authorized from its own source first.
       const hasApproverPolicy =
         Array.isArray(interaction.policy?.approverGroups) &&
         interaction.policy.approverGroups.length > 0;
-      if (!hasApproverPolicy && !(await loadInteractionAccess(interaction, req.user))) {
+      if (
+        !hasApproverPolicy &&
+        !(await loadInteractionAccess(interaction, req.user, { intent: 'answer' }))
+      ) {
         throw new ServiceError(
           'FORBIDDEN',
           'Insufficient permissions: answer interaction required'
@@ -408,6 +497,12 @@ export default function registerRunRoutes(app) {
    *       Records a `human/event` on the run's ledger. `stop` also aborts the run:
    *       a chat run's active model call (and any workflow it launched), or the
    *       engine cancels the workflow / agent execution.
+   *
+   *       Who may send which kind: `steer` and `feedback` only the run's owner;
+   *       `stop` the owner, and an admin (written to the audit log). For a run of
+   *       an anonymous visitor the owner is the browser session that owns its chat.
+   *       A `steer` is refused while the run waits for an approval, and one caller
+   *       sends at most 30 of them per minute.
    *     tags:
    *       - Runs
    *     security:
@@ -444,24 +539,42 @@ export default function registerRunRoutes(app) {
    *       400:
    *         description: Invalid body
    *       403:
-   *         description: Not the run's owner
+   *         description: >-
+   *           Not the run's owner. `RUN_STEER_FORBIDDEN` for a `steer`, `FORBIDDEN` for the
+   *           other kinds.
    *       404:
    *         description: Run not found
+   *       409:
+   *         description: >-
+   *           `RUN_NOT_ACTIVE`: a `steer` for a run that waits for an approval. The approval
+   *           stays pending.
+   *       429:
+   *         description: '`RATE_LIMITED`: more than 30 `steer` events in a minute'
    */
-  app.post(buildServerPath('/api/runs/:runId/human-events'), authRequired, async (req, res) => {
+  const humanEventsPath = buildServerPath('/api/runs/:runId/human-events');
+  app.post(humanEventsPath, authRequired, steerLimiter, async (req, res) => {
     const { runId } = req.params;
     assertValidId(runId, 'run');
     const parsed = humanEventRequestSchema.safeParse(req.body || {});
     if (!parsed.success) {
       throw parsed.error;
     }
-    const auth = await loadRunAccess(runId, req.user);
-    if (!auth.ok) {
-      throw auth.status === 404
-        ? new ServiceError('NOT_FOUND', 'Run not found')
-        : new ServiceError('FORBIDDEN', 'Insufficient permissions: send human event required');
-    }
     const { kind, message, messageId, rating } = parsed.data;
+    // Each kind is its own intent: a steer and a rating are the owner's alone,
+    // a stop is also an admin's.
+    const auth = await requireRunAccess(runId, req.user, kind);
+    // A message is never the answer to an approval. While the run waits for
+    // one, nothing is queued and nothing is written: the approval stays pending
+    // and is answered where it is shown.
+    if (
+      kind === 'steer' &&
+      (await interactionService.listPending({ runId, kind: 'approval' })).length > 0
+    ) {
+      throw new ServiceError(
+        'RUN_NOT_ACTIVE',
+        'This run waits for an approval; answer the approval before sending a message'
+      );
+    }
     // The run may live on another worker: continue its persisted sequence.
     const event = await runLog.appendRecovered(
       runId,
@@ -487,7 +600,24 @@ export default function registerRunRoutes(app) {
         via: 'POST /api/runs/:runId/human-events (stop)',
         related: { runId }
       });
-      effect = await stopRun(runId, auth.meta, cause);
+      let stopped = false;
+      try {
+        effect = await stopRun(runId, auth.meta, cause);
+        stopped = true;
+      } finally {
+        // An admin's stop of somebody else's run is on record whatever became of it.
+        if (auth.viaAdmin) {
+          auditAdminRunAction(
+            req,
+            'update',
+            runId,
+            auth.meta,
+            "Admin stopped another user's run",
+            { event: 'stop', effect },
+            stopped ? 'success' : 'failure'
+          );
+        }
+      }
     }
     // A steer reaches the running loop at its next step boundary (queued on
     // the worker that owns the run, relayed there in a cluster); without an
@@ -505,9 +635,11 @@ export default function registerRunRoutes(app) {
    *   get:
    *     summary: The interactions queue
    *     description: |
-   *       Every pending interaction the caller may answer — admins see all,
-   *       approvers those of their groups, users their own runs'. Filter with
-   *       `kind` (question | approval | review | notify).
+   *       The pending interactions the caller may see: users those of their own
+   *       runs, approvers those of their groups, admins all of them. An admin
+   *       sees more than an admin may answer: an interaction of another user's
+   *       run that names no approver group is answered by that user only.
+   *       Filter with `kind` (question | approval | review | notify).
    *     tags:
    *       - Runs
    *       - Human Checkpoint

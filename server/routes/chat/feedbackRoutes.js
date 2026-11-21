@@ -157,12 +157,13 @@ export default function registerFeedbackRoutes(app, { getLocalizedError }) {
       }
 
       // Feedback is a human event on the run that produced the message — only
-      // on a run the caller may access (same check as /api/runs/:runId/*) and
+      // on a run the caller owns (the `feedback` intent of /api/runs/:runId/*:
+      // an admin reading somebody else's chat writes nothing into its run) and
       // only when that run belongs to this chat. Anything else is ignored;
       // the feedback itself is still stored below.
       if (runId && isValidRunId(runId)) {
         try {
-          const access = await authorizeRun(runId, req.user);
+          const access = await authorizeRun(runId, req.user, { intent: 'feedback' });
           const runChatId = access.meta?.refs?.chatId;
           if (access.ok && access.meta?.kind === 'chat' && runChatId === chatId) {
             // The run may live on another worker: continue its persisted sequence.

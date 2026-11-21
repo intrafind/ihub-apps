@@ -426,7 +426,7 @@ export default function registerMcpAppRoutes(app) {
         ) {
           throw new ServiceError('NOT_FOUND', 'Approval not found');
         }
-        if (!(await loadInteractionAccess(interaction, user))) {
+        if (!(await loadInteractionAccess(interaction, user, { intent: 'answer' }))) {
           throw new ServiceError('FORBIDDEN', 'This approval belongs to another user');
         }
       }

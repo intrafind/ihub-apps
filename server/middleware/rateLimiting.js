@@ -481,3 +481,44 @@ export function createProvenanceVerifyLimiter(platformConfig = {}) {
     shared: true
   });
 }
+
+/**
+ * How many messages one caller may send into running answers
+ * (`POST /api/runs/{runId}/human-events` with `kind: 'steer'`).
+ */
+export const RUN_STEER_RATE_LIMIT = Object.freeze({ limit: 30, windowMs: 60 * 1000 });
+
+/**
+ * The limiter of messages sent into a running answer. The run routes mount it
+ * themselves, after authentication.
+ *
+ * It counts per signed-in user, and per address for a caller who is not signed
+ * in (a guest cookie is not a key: dropping the cookie would start a new
+ * count). Every attempt counts, a refused one too, so the limit also bounds
+ * guessing at other people's run ids. Only `kind: 'steer'` counts: a stop must
+ * never be held back by the messages sent before it.
+ *
+ * The count is shared by the workers of one server (`ClusterRateLimitStore`:
+ * the primary process counts; a worker whose primary does not answer within
+ * half a second counts that request alone). It is not shared between servers:
+ * an installation with several servers behind a load balancer counts in each
+ * of them, so a caller gets the limit once per server.
+ *
+ * @param {{limit?: number, windowMs?: number}} [config] - Overrides for tests.
+ * @returns {Function} Express rate limiter middleware
+ */
+export function createRunSteerLimiter(config = {}) {
+  const settings = { ...RUN_STEER_RATE_LIMIT, ...config };
+  return createRateLimiter(
+    {
+      ...settings,
+      message: 'Too many messages to a running answer. Try again in a minute.',
+      skipSuccessfulRequests: false,
+      skipFailedRequests: false
+    },
+    {},
+    'run steer',
+    req => req.body?.kind !== 'steer',
+    { shared: true, keyGenerator: userKeyOptions(settings).keyGenerator }
+  );
+}

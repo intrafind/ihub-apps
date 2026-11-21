@@ -316,7 +316,12 @@ export const CHAT_ERROR_CODES = Object.freeze({
   /** No evidence record was kept for this answer or run (#3687). */
   EVIDENCE_NOT_RECORDED: 404,
   /** The journal of a finished run was deleted after its grace period; its evidence record remains. */
-  JOURNAL_NOT_KEPT: 404
+  JOURNAL_NOT_KEPT: 404,
+  /**
+   * A message for a running answer (`human-events`, `kind: 'steer'`) from a caller who is not the
+   * owner of the run. An admin gets it too: only the owner speaks in the owner's voice.
+   */
+  RUN_STEER_FORBIDDEN: 403
 });
 
 /** MCP App views (`server/routes/mcpAppRoutes.js`) and the approval of their tool calls. */

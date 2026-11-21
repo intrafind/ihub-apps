@@ -155,7 +155,11 @@ export const interactionSourceSchema = z.object({
   /** Owner of the run (its ledger principal id) and the identity mode it was recorded in. */
   principalId: z.string().optional(),
   identityMode: z.enum(LEDGER_IDENTITY_MODES).optional(),
-  /** The run is anonymous: whoever holds the run and interaction ids may answer (as for the run itself). */
+  /**
+   * The run is anonymous: whoever holds the run and interaction ids may read
+   * the interaction; only the guest who owns the run's chat answers it
+   * (`runAccess.authorizeInteraction`).
+   */
   anonymous: z.boolean().optional()
 });
 
