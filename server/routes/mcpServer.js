@@ -5,6 +5,7 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { createHash, randomUUID } from 'node:crypto';
 import express from 'express';
 import mcpAuth from '../middleware/mcpAuth.js';
+import { createRateLimiters } from '../middleware/rateLimiting.js';
 import { buildMcpServer } from '../services/mcp/McpServerService.js';
 import { dispatchA2A, buildAgentCard, A2aError, A2A_ERRORS } from '../services/mcp/a2aHandler.js';
 import { getA2aTaskStore } from '../services/mcp/a2aTaskStore.js';
@@ -300,6 +301,13 @@ export default function registerMcpServerRoutes(app) {
   setInterval(sweepIdleSessions, SESSION_SWEEP_INTERVAL_MS).unref();
   registerSessionBusHandlers();
 
+  // The gateway sits outside `/api`, so the app-level limiters of middleware/setup.js do not
+  // reach it. This is the public API budget (`rateLimit.publicApi`), mounted after `mcpAuth`:
+  // it counts per signed-in caller or OAuth client, so many users behind one proxy or one
+  // hosted MCP client do not share a bucket.
+  const rateLimiters = createRateLimiters(configCache.getPlatform() || {});
+  const gatewayLimiter = rateLimiters.publicApiLimiter;
+
   const enabledCheck = (req, res, next) => {
     if (!gatewayEnabled()) {
       return res
@@ -549,9 +557,16 @@ export default function registerMcpServerRoutes(app) {
   // payloads can exceed the default 100kb limit.
   const jsonBody = express.json({ limit: '4mb' });
 
-  app.post(buildServerPath('/mcp'), enabledCheck, jsonBody, mcpAuth, streamableHttpHandler);
-  app.get(buildServerPath('/mcp'), enabledCheck, mcpAuth, streamableHttpHandler);
-  app.delete(buildServerPath('/mcp'), enabledCheck, mcpAuth, async (req, res) => {
+  app.post(
+    buildServerPath('/mcp'),
+    enabledCheck,
+    jsonBody,
+    mcpAuth,
+    gatewayLimiter,
+    streamableHttpHandler
+  );
+  app.get(buildServerPath('/mcp'), enabledCheck, mcpAuth, gatewayLimiter, streamableHttpHandler);
+  app.delete(buildServerPath('/mcp'), enabledCheck, mcpAuth, gatewayLimiter, async (req, res) => {
     const sessionId = req.headers['mcp-session-id'];
     const entry = sessionId ? sessions.get(sessionId) : null;
     if (!entry && sessionId && hasRemote(SESSION_PRESENCE, sessionId)) {
@@ -825,7 +840,7 @@ export default function registerMcpServerRoutes(app) {
     }
   };
 
-  const rpcMiddleware = [a2aEnabledCheck, jsonBody, acceptApiKeyHeader, mcpAuth];
+  const rpcMiddleware = [a2aEnabledCheck, jsonBody, acceptApiKeyHeader, mcpAuth, gatewayLimiter];
   app.post(buildServerPath('/a2a'), ...rpcMiddleware, a2aRpcHandler);
   app.post(buildServerPath('/a2a/skills/:skillId'), ...rpcMiddleware, a2aRpcHandler);
 

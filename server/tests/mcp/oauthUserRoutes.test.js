@@ -90,10 +90,12 @@ jest.unstable_mockModule('@modelcontextprotocol/sdk/client/auth.js', () => ({
   UnauthorizedError: FakeUnauthorizedError
 }));
 
-// The per-IP limit of the start route is not what these tests exercise.
-jest.unstable_mockModule('express-rate-limit', () => ({
-  default: () => (_req, _res, next) => next()
-}));
+// The per-IP limit of the start route is not what these tests exercise. The other exports
+// stay real: the route module also builds the shared limiters, which need `MemoryStore` etc.
+jest.unstable_mockModule('express-rate-limit', async () => {
+  const actual = await import('express-rate-limit');
+  return { ...actual, default: () => (_req, _res, next) => next() };
+});
 
 const safeFetch = jest.fn();
 jest.unstable_mockModule('../../services/mcp/safeFetch.js', () => ({
