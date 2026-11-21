@@ -36,7 +36,10 @@
  *   reach the place in the same instant do not both die either: before it
  *   writes the name, a process creates the file `<file>.<name>.claim` with an
  *   exclusive create, which only one process can win. The one that loses
- *   goes on.
+ *   goes on. The claim belongs to the file: a process that finds a claim
+ *   without the name in the file, when it starts, was given a file that was
+ *   removed without its claim. It is not armed and says so in one line; it
+ *   does not print that it will die and then live.
  *
  * Every call site is listed in `server/tests/faults/KILLPOINTS.md`;
  * `server/tests/killPoint-inventory.test.js` fails when the list and the code
@@ -117,6 +120,7 @@ function claimed(file, createFile) {
  * @param {(file: string, text: string) => void} [options.appendFile]
  * @param {(file: string, encoding: string) => string} [options.readFile]
  * @param {(file: string) => void} [options.createFile] - Creates a file that must not exist yet
+ * @param {(file: string) => boolean} [options.fileExists]
  * @param {(line: string) => void} [options.warn] - Gets one line when the point is armed
  * @returns {((name: string) => void) & {armed: boolean}}
  * @throws {Error} When armed with a malformed `IHUB_TEST_KILLPOINT`
@@ -127,6 +131,7 @@ export function createKillPoint({
   appendFile = fs.appendFileSync,
   readFile = fs.readFileSync,
   createFile = file => fs.closeSync(fs.openSync(file, 'wx')),
+  fileExists = fs.existsSync,
   warn = line => process.stderr.write(`${line}\n`)
 } = {}) {
   const spec = env.IHUB_TEST_KILLPOINT;
@@ -135,6 +140,15 @@ export function createKillPoint({
   const target = parseKillPointSpec(spec);
   const file = env.IHUB_TEST_KILLPOINT_FILE || '';
   if (firedBefore(file, target.name, readFile)) return disarmed();
+  const claim = file ? `${file}.${target.name}.claim` : '';
+  if (claim && fileExists(claim)) {
+    // The claim of an earlier start, whose file is gone: nobody could win it again.
+    warn(
+      `[killPoint] TEST ONLY: "${target.name}" is NOT armed. The claim of an earlier start is ` +
+        `still there: ${claim}. Remove it together with ${file}.`
+    );
+    return disarmed();
+  }
 
   warn(
     `[killPoint] TEST ONLY: this process kills itself at "${target.name}" (hit ${target.hit}). ` +
@@ -148,7 +162,7 @@ export function createKillPoint({
     // Another process of this stack fired the point in the meantime: once is enough.
     if (firedBefore(file, target.name, readFile)) return;
     // Two processes can both get this far in the same instant. Only one dies.
-    if (file && !claimed(`${file}.${target.name}.claim`, createFile)) return;
+    if (claim && !claimed(claim, createFile)) return;
     // Synchronous, so the line is written before the process is gone.
     if (file) appendFile(file, `${target.name}\n`);
     kill();

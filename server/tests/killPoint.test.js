@@ -25,7 +25,7 @@ const MODULE = pathToFileURL(
 ).href;
 
 /** A kill point for an environment, with the kill and the file writes recorded. */
-function build(env, { existing = null, claimError = null } = {}) {
+function build(env, { existing = null, claimError = null, staleClaim = false } = {}) {
   const calls = { kills: 0, appended: [], warned: [] };
   // Not in `calls`: most tests compare that with what an inert process does.
   const claims = [];
@@ -43,6 +43,7 @@ function build(env, { existing = null, claimError = null } = {}) {
       claims.push(file);
       if (claimError) throw claimError;
     },
+    fileExists: () => staleClaim,
     warn: line => calls.warned.push(line)
   });
   return { point, calls, claims };
@@ -126,6 +127,30 @@ test('a process that loses the claim to another lives and writes nothing', () =>
   const broken = build(env, { claimError: denied });
   assert.throws(() => broken.point('after-write'), /permission denied/);
   assert.equal(broken.calls.kills, 0);
+});
+
+test('a claim that outlived its file: the process is not armed, and says so', () => {
+  const env = {
+    NODE_ENV: 'test',
+    IHUB_TEST_KILLPOINT: 'after-write',
+    IHUB_TEST_KILLPOINT_FILE: 'reached-file'
+  };
+  const { point, calls, claims } = build(env, { staleClaim: true });
+  assert.equal(point.armed, false);
+  assert.equal(calls.warned.length, 1);
+  assert.match(calls.warned[0], /"after-write" is NOT armed/);
+  assert.match(calls.warned[0], /reached-file\.after-write\.claim/);
+  point('after-write');
+  assert.equal(calls.kills, 0);
+  assert.deepEqual(calls.appended, []);
+  assert.deepEqual(claims, []);
+
+  // Without a file there is no claim to find.
+  const noFile = build(
+    { NODE_ENV: 'test', IHUB_TEST_KILLPOINT: 'after-write' },
+    { staleClaim: true }
+  );
+  assert.equal(noFile.point.armed, true);
 });
 
 test('"<name>@<n>" kills at the n-th time the place is reached, and only then', () => {
@@ -263,6 +288,28 @@ test('a process with NODE_ENV=test and the variable is killed with SIGKILL after
   });
   assert.equal(next.status, 0, next.stderr);
   assert.equal(next.stdout.trim(), 'alive');
+
+  // The file removed and its claim left: the process is not armed, and it does
+  // not announce a kill that will not come.
+  fs.rmSync(file);
+  const stale = run(REACH, {
+    NODE_ENV: 'test',
+    IHUB_TEST_KILLPOINT: 'after-write',
+    IHUB_TEST_KILLPOINT_FILE: file
+  });
+  assert.equal(stale.status, 0, stale.stderr);
+  assert.equal(stale.stdout.trim(), 'alive');
+  assert.match(stale.stderr, /"after-write" is NOT armed/);
+  assert.doesNotMatch(stale.stderr, /kills itself/);
+
+  // Both removed: armed again.
+  fs.rmSync(`${file}.after-write.claim`);
+  const again = run(REACH, {
+    NODE_ENV: 'test',
+    IHUB_TEST_KILLPOINT: 'after-write',
+    IHUB_TEST_KILLPOINT_FILE: file
+  });
+  assert.equal(again.signal, 'SIGKILL');
 });
 
 /**
