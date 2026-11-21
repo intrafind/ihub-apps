@@ -49,6 +49,11 @@ const SEARCHED = [
   'test-counter.test.js',
   'nightly-red-issue.test.js',
   'fault-harness-settings.test.js',
+  'helpers/runAccessHarness.js',
+  'runAccessIntent.test.js',
+  'steerApproval.test.js',
+  'runHumanEventsRoute.test.js',
+  'routeInventory.test.js',
   'fixtures/scriptedModel',
   'fixtures/sideBySide'
 ];

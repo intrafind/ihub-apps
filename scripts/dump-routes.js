@@ -68,6 +68,23 @@ function recordMountPaths(router) {
   };
 }
 
+/**
+ * The routes an Express app holds, as `[{ method, path }]`, sorted.
+ *
+ * @param {import('express').Express} app - an app whose routes are registered
+ * @returns {Array<{method: string, path: string}>}
+ */
+export function listRoutes(app) {
+  const out = new Set();
+  collect(app.router.stack, '', out);
+  return [...out]
+    .sort((a, b) => a.localeCompare(b))
+    .map(line => {
+      const [method, ...rest] = line.split(' ');
+      return { method, path: rest.join(' ') };
+    });
+}
+
 export async function dumpRoutes() {
   // express lives in server/node_modules, not next to this script.
   const express = createRequire(path.join(root, 'server', 'package.json'))('express');
@@ -83,14 +100,7 @@ export async function dumpRoutes() {
     basePath: '',
     DEFAULT_TIMEOUT: 30000
   });
-  const out = new Set();
-  collect(app.router.stack, '', out);
-  return [...out]
-    .sort((a, b) => a.localeCompare(b))
-    .map(line => {
-      const [method, ...rest] = line.split(' ');
-      return { method, path: rest.join(' ') };
-    });
+  return listRoutes(app);
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
