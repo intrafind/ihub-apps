@@ -47,7 +47,7 @@ test('a set-up that fails undoes what it had already set up', async () => {
   assert.ok(!integrationRegistry.get(fixtureDefinitionId('lookup')), 'the fixture tool is gone');
 
   // The recording after the failed one starts clean: it equals its golden.
-  assertGolden(await recordCase(toolCase), { update: false });
+  assertGolden(await recordCase(toolCase), { update: false, reportDir: null });
 });
 
 test('stopping an environment twice is harmless', async () => {

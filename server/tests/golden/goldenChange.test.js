@@ -56,7 +56,9 @@ const row = parts => ({
 function compare(record) {
   let failure = null;
   try {
-    assertGolden(record, { update: false });
+    // No report: these records are changed on purpose, and the report of the real case
+    // (`golden.test.js`, same file name under GOLDEN_REPORT_DIR) must keep its wording.
+    assertGolden(record, { update: false, reportDir: null });
   } catch (error) {
     failure = error;
   }
@@ -133,18 +135,20 @@ test('assertGolden: a missing golden fails, UPDATE_GOLDENS writes it, and never 
       envelopes: [{ type: 'run/started', data: { b: 1, a: 2 } }],
       report: { modelRequestBodies: [{ model: 'x' }] }
     };
-    assert.throws(() => assertGolden(record, { dir, update: false }), /No golden is recorded/);
+    // Whatever GOLDEN_REPORT_DIR says, the example writes no report there.
+    const quiet = { dir, reportDir: null };
+    assert.throws(() => assertGolden(record, { ...quiet, update: false }), /No golden is recorded/);
     assert.throws(
-      () => assertGolden(record, { dir, update: true, ci: true }),
+      () => assertGolden(record, { ...quiet, update: true, ci: true }),
       /UPDATE_GOLDENS is set in a CI run/
     );
-    assert.equal(assertGolden(record, { dir, update: true, ci: false }).written, true);
+    assert.equal(assertGolden(record, { ...quiet, update: true, ci: false }).written, true);
     const file = path.join(dir, 'harness', 'example.json');
     const text = fs.readFileSync(file, 'utf8');
     assert.equal(text, canonicalJson(comparable(record)));
     assert.doesNotMatch(text, /modelRequestBodies/, 'the report is not part of a golden');
-    assert.equal(assertGolden(record, { dir, update: true, ci: false }).written, false);
-    assert.equal(assertGolden(record, { dir, update: false }).written, false);
+    assert.equal(assertGolden(record, { ...quiet, update: true, ci: false }).written, false);
+    assert.equal(assertGolden(record, { ...quiet, update: false }).written, false);
 
     // The full request bodies go beside the goldens only when a directory is named.
     const reportDir = path.join(dir, 'report');
@@ -154,9 +158,23 @@ test('assertGolden: a missing golden fails, UPDATE_GOLDENS writes it, and never 
       record.report
     );
 
+    // Without the option the directory comes from GOLDEN_REPORT_DIR; `reportDir: null` turns it off.
+    const fromEnv = path.join(dir, 'report-from-env');
+    const envBefore = process.env.GOLDEN_REPORT_DIR;
+    process.env.GOLDEN_REPORT_DIR = fromEnv;
+    try {
+      assertGolden(record, { ...quiet, update: false });
+      assert.ok(!fs.existsSync(fromEnv), 'reportDir: null wrote a report');
+      assertGolden(record, { dir, update: false });
+      assert.ok(fs.existsSync(path.join(fromEnv, 'harness', 'example.requests.json')));
+    } finally {
+      if (envBefore === undefined) delete process.env.GOLDEN_REPORT_DIR;
+      else process.env.GOLDEN_REPORT_DIR = envBefore;
+    }
+
     const changed = { ...record, envelopes: [{ type: 'run/started', data: { b: 1, a: 3 } }] };
     assert.throws(
-      () => assertGolden(changed, { dir, update: false }),
+      () => assertGolden(changed, { ...quiet, update: false }),
       error =>
         /at 1 place\(s\)/.test(error.message) &&
         /envelopes\[0\]\.data\.a\n {4}golden: 2\n {4}now: {4}3/.test(error.message)
