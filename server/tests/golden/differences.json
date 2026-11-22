@@ -44,7 +44,7 @@
         "inference-app/responses-non-stream.json"
       ],
       "parts": ["envelopes", "httpResponse", "ledger", "result", "toolCalls"],
-      "pr": "tool-runner",
+      "pr": "run-service-headless",
       "signedBy": null,
       "signedOn": null
     },
@@ -79,7 +79,7 @@
         "chat/approval-deny-post-stream.json"
       ],
       "parts": ["envelopes", "httpResponse", "ledger", "result", "toolCalls"],
-      "pr": "tool-runner",
+      "pr": "run-service-headless",
       "signedBy": null,
       "signedOn": null
     },

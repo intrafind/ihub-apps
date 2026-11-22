@@ -24,7 +24,7 @@ import { approvalSeam } from '../../services/loop/seams/approvalSeam.js';
 import { scheduledRunSeams } from '../../services/scheduler/tasks/runSeams.js';
 import { PromptNodeExecutor } from '../../services/workflow/executors/PromptNodeExecutor.js';
 import { resumeApprovalPlan, pausedLoopState } from '../../services/workflow/questionPause.js';
-import { gatewayCallNeedsApproval } from '../../services/mcp/McpServerService.js';
+import { ToolRunner } from '../../services/run/ToolRunner.js';
 import { planMigration } from '../../services/integrations/definitions/migrationPlanner.js';
 
 const GATED = { id: 'dangerous', approval: 'always', approvalSource: 'tool', sideEffect: 'write' };
@@ -187,13 +187,29 @@ test('scheduled runs: the gate is the shared seam; "always allow for this task" 
   assert.equal(paused.terminate.pendingInteraction.id, 'int-2');
 });
 
-test('MCP gateway: a gated tool cannot run, an ungated one can', () => {
-  assert.equal(gatewayCallNeedsApproval({ id: 'x', approval: 'always' }, {}), true);
-  assert.equal(gatewayCallNeedsApproval({ id: 'y' }, {}), false);
-  assert.equal(
-    gatewayCallNeedsApproval({ id: 'z' }, { toolApproval: { defaults: { default: 'always' } } }),
-    true
+test('MCP gateway: a gated tool cannot run, an ungated one can', async () => {
+  // The gateway hands its calls to the tool runner with `approval: 'refuse'`
+  // (server/tests/mcpToolUserContext.test.js drives the handler itself).
+  const ran = [];
+  const runner = new ToolRunner({ runTool: async toolId => ran.push(toolId) });
+  const gatewayCall = (toolDef, platform = {}) =>
+    runner.execute(null, {
+      toolId: toolDef.id,
+      toolDef,
+      args: {},
+      toolContext: { origin: 'mcp', approval: 'refuse', argsFrom: 'caller', platform }
+    });
+  await assert.rejects(gatewayCall({ id: 'x', approval: 'always' }), {
+    code: 'APPROVAL_REQUIRED_NO_USER'
+  });
+  await gatewayCall({ id: 'y' });
+  await assert.rejects(
+    gatewayCall({ id: 'z' }, { toolApproval: { defaults: { default: 'always' } } }),
+    {
+      code: 'APPROVAL_REQUIRED_NO_USER'
+    }
   );
+  assert.deepEqual(ran, ['y']);
 });
 
 test('a definition migration that renames an action keeps its approval', () => {

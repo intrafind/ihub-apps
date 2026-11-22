@@ -94,9 +94,10 @@ async function drainToolResponse(response, emit, { limit } = {}) {
 export { drainToolResponse };
 
 /**
- * @param {Object} options
- * @param {(info: Object, ctx: Object) => Promise<unknown>} options.execute - runs the call and
- *   returns its response (text, an async iterable of chunks, or a fetch response)
+ * @param {Object} [options]
+ * @param {((info: Object, ctx: Object) => Promise<unknown>)|undefined} options.execute - required:
+ *   runs the call and returns its response (text, an async iterable of chunks, or a fetch
+ *   response); the seam refuses to be built without it
  * @param {Function} [options.onChunk]
  * @param {Function} [options.onComplete]
  * @param {Function} [options.onError]

@@ -22,22 +22,7 @@ import logger from '../../utils/logger.js';
 import { getLocalizedString } from '../../utils/localize.js';
 import { workflowAnswerParts } from '../workflow/answerParts.js';
 import { installedIntegrationById } from '../integrations/installedRefs.js';
-import { directCallNeedsApproval } from '../../utils/toolApproval.js';
 import { APPROVAL_ERROR_CODES } from '../../../shared/toolApproval.js';
-
-/**
- * Whether a tool exposed through the gateway needs a person's approval
- * (#2945). The gateway has nobody to ask: such a call is refused with
- * `APPROVAL_REQUIRED_NO_USER` instead of running. The tool runner applies the
- * same rule to a gateway call (`approval: 'refuse'`, `services/run/ToolRunner.js`).
- *
- * @param {Object} tool
- * @param {Object} platform
- * @returns {boolean}
- */
-export function gatewayCallNeedsApproval(tool, platform) {
-  return directCallNeedsApproval(tool, platform, { getInstallation: installedIntegrationById });
-}
 
 /**
  * Builds and serves the iHub MCP gateway. Each incoming HTTP/SSE request
@@ -250,7 +235,10 @@ const IHUB_DEFINITION_ID = 'com.intrafind/ihub';
  * The integrations are the tools (#3275): every action of an enabled
  * installation the caller's groups grant (`permissions.integrations`, checked
  * by `filterIntegrationToolsForUser` and again at call time) is offered, with
- * the approval policy of the action (`gatewayCallNeedsApproval`).
+ * the approval policy of the action: nobody at the gateway can approve, so the
+ * `tools/call` handler hands the call to the tool runner with
+ * `approval: 'refuse'`, which refuses a gated action
+ * (`APPROVAL_REQUIRED_NO_USER`, `services/run/ToolRunner.js`).
  *
  * Four kinds stay out:
  * - the actions of an outbound MCP server (`_mcp`) and the skills of a remote

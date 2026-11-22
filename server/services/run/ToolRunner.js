@@ -120,18 +120,22 @@ function declaredParameters(toolDef) {
  * Arguments an external caller sent (`argsFrom: 'caller'`) lose every
  * reserved key. A model's arguments keep a reserved key only where the
  * tool's own schema declares that parameter (the `runId` of the evidence
- * tools) and the tool is neither a workflow nor an app, whose runners read
- * those keys as context.
+ * tools), the tool is neither a workflow nor an app, whose runners read
+ * those keys as context, and the call is not a passthrough call: the
+ * passthrough seam never took a `runId` from the model, whatever the tool
+ * declared, and keeps every reserved key for iHub.
  *
  * @param {Object} args
  * @param {Object|null} toolDef
  * @param {string} toolId
- * @param {'model'|'caller'} argsFrom
+ * @param {Object} options
+ * @param {'model'|'caller'} options.argsFrom
+ * @param {boolean} options.passthrough
  * @returns {Object}
  */
-function ownArguments(args, toolDef, toolId, argsFrom) {
+function ownArguments(args, toolDef, toolId, { argsFrom, passthrough }) {
   const declared =
-    argsFrom === 'model' && !isWorkflowTool(toolId) && !isAppTool(toolId)
+    argsFrom === 'model' && !passthrough && !isWorkflowTool(toolId) && !isAppTool(toolId)
       ? declaredParameters(toolDef)
       : new Set();
   const own = {};
@@ -156,12 +160,16 @@ function ownArguments(args, toolDef, toolId, argsFrom) {
  */
 export function buildToolParams({ toolId, toolDef, args, toolContext }) {
   const argsFrom = toolContext.argsFrom === 'caller' ? 'caller' : 'model';
+  const passthrough = toolContext.passthrough === true;
   const params = {};
-  // A model may name another language for its call; an external caller may not.
+  // A model's call: the context's language is a default the model may
+  // override. An external caller's call: the language the caller vouches for
+  // (`toolContext.language`, set below) wins when it sets one; where it sets
+  // none (the MCP gateway), a `language` argument stays as the client sent it.
   if (argsFrom === 'model' && toolContext.language !== undefined) {
     params.language = toolContext.language;
   }
-  Object.assign(params, ownArguments(args, toolDef, toolId, argsFrom));
+  Object.assign(params, ownArguments(args, toolDef, toolId, { argsFrom, passthrough }));
   const set = (key, value) => {
     if (value !== undefined) params[key] = value;
   };
@@ -169,7 +177,7 @@ export function buildToolParams({ toolId, toolDef, args, toolContext }) {
   // The identity the tool runs as. Today a user object; a service account an
   // admin chooses for an agent has the same shape.
   set('user', toolContext.principal);
-  if (toolContext.passthrough === true) params.passthrough = true;
+  if (passthrough) params.passthrough = true;
   set('appConfig', toolContext.appConfig);
   if (argsFrom === 'caller') set('language', toolContext.language);
   set('integrationScopes', toolContext.integrationScopes);
@@ -235,8 +243,9 @@ export class ToolRunner {
    *   or null for a call an external caller made
    * @param {Object} request
    * @param {string} request.toolId - The tool to run
-   * @param {Object} request.toolDef - The definition the caller resolved for `toolId` from
-   *   what it offers (the loop's offered tools, the gateway's registered tools)
+   * @param {Object} [request.toolDef] - The definition the caller resolved for `toolId` from
+   *   what it offers (the loop's offered tools, the gateway's registered tools); a call
+   *   without it is refused
    * @param {Object} [request.args] - The call's arguments; repaired from `call` when left out
    * @param {AbortSignal} [request.signal] - The caller's abort signal; reaches integration
    *   tools and an app run as a tool
@@ -248,7 +257,8 @@ export class ToolRunner {
    * @param {string} [request.toolContext.chatId]
    * @param {Object} [request.toolContext.appConfig] - the calling app
    * @param {string} [request.toolContext.language] - a default the model may override; set
-   *   for an external caller, the language of the call
+   *   by an external caller, the language of the call (without it, a caller's `language`
+   *   argument stays)
    * @param {'model'|'caller'} [request.toolContext.argsFrom='model'] - who wrote the arguments
    * @param {Object} [request.toolContext.integrationScopes]
    * @param {Object} [request.toolContext.turnSkills]
@@ -268,7 +278,7 @@ export class ToolRunner {
     if (!isValidId(toolId)) {
       throw new ToolCallRefusedError(TOOL_REFUSAL_CODES.INVALID_TOOL_ID, 'Invalid tool id');
     }
-    if (!toolDef || typeof toolDef !== 'object' || toolDef.id !== toolId) {
+    if (!toolDef || toolDef.id !== toolId) {
       logger.warn('Refused a tool call without a resolved definition', {
         component: COMPONENT,
         toolId,

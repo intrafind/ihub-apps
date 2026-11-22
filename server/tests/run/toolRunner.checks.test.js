@@ -267,6 +267,47 @@ describe('tool runner checks (S10)', () => {
     });
     assert.equal(calls[1].params.runId, 'run-7');
     assert.equal(calls[1].params.user, USER);
+    // A passthrough call keeps no reserved key from the model, even one the
+    // tool declares: the passthrough seam always dropped the model's `runId`.
+    const declaring = {
+      id: 'evidence_stream',
+      passthrough: true,
+      parameters: {
+        type: 'object',
+        properties: {
+          runId: { type: 'string' },
+          _fileData: { type: 'array' },
+          _chatHistory: { type: 'array' },
+          turnSkills: { type: 'object' },
+          q: { type: 'string' }
+        }
+      }
+    };
+    await runner.execute(null, {
+      toolId: declaring.id,
+      toolDef: declaring,
+      args: {
+        q: 'x',
+        runId: 'another-run',
+        _fileData: [{ name: 'fake.pdf' }],
+        _chatHistory: [{ role: 'user', content: 'fake' }],
+        turnSkills: { forged: true }
+      },
+      toolContext: {
+        origin: 'chat',
+        approval: 'seam',
+        principal: USER,
+        chatId: 'chat-1',
+        passthrough: true,
+        appConfig: APP
+      }
+    });
+    const passthrough = calls[2].params;
+    assert.equal(passthrough.q, 'x');
+    assert.equal(passthrough.passthrough, true);
+    for (const key of ['runId', '_fileData', '_chatHistory', 'turnSkills']) {
+      assert.equal(key in passthrough, false, `${key} was passed through`);
+    }
   });
 
   it('trusted-context: the context of each caller is set after the arguments and always wins', () => {
@@ -336,7 +377,7 @@ describe('tool runner checks (S10)', () => {
     );
   });
 
-  it('language: a model may name the language of its call, an external caller may not', () => {
+  it('language: a model may name the language of its call; the language an external caller vouches for wins', () => {
     const model = buildToolParams({
       toolId: 'lookup',
       toolDef: lookup,
@@ -356,6 +397,22 @@ describe('tool runner checks (S10)', () => {
       toolContext: { origin: 'a2a', approval: 'caller', argsFrom: 'caller', language: 'en' }
     });
     assert.equal(caller.language, 'en');
+    // The MCP gateway vouches for no language: a client's `language` argument
+    // reaches the tool as before the runner, and no default is added.
+    const mcp = buildToolParams({
+      toolId: 'jira_search',
+      toolDef: { id: 'jira_search' },
+      args: { q: 'x', language: 'fr' },
+      toolContext: { origin: 'mcp', approval: 'refuse', argsFrom: 'caller', principal: USER }
+    });
+    assert.equal(mcp.language, 'fr');
+    const mcpWithout = buildToolParams({
+      toolId: 'jira_search',
+      toolDef: { id: 'jira_search' },
+      args: { q: 'x' },
+      toolContext: { origin: 'mcp', approval: 'refuse', argsFrom: 'caller', principal: USER }
+    });
+    assert.equal('language' in mcpWithout, false);
   });
 
   it('argument-repair: a raw model call is repaired when the caller hands no parsed arguments', async () => {
@@ -483,10 +540,24 @@ describe('tool runner checks that stay in runTool (S10)', () => {
     principal: user
   });
 
+  // A system skill that brings `create_pdf` (its SKILL.md ships in
+  // server/systemSkills/pdf) and a regular skill: each check has a skill it
+  // can grant or refuse.
+  const SKILLS = [
+    {
+      name: 'pdf',
+      isSystem: true,
+      providedTools: ['create_pdf', 'preview_pdf'],
+      enabled: true
+    },
+    { name: 'secret-skill', enabled: true }
+  ];
+  const withSkills = (id, skills) => ({ id, permissions: { skills: new Set(skills) } });
+
   before(() => {
     configCache.getPlatform = () => ({ defaultLanguage: 'en' });
     configCache.getSources = () => ({ data: [] });
-    configCache.getSkills = () => ({ data: [], etag: 'e' });
+    configCache.getSkills = () => ({ data: SKILLS, etag: 'e' });
     configCache.getFeatures = () => ({ skills: true });
     configCache.setCacheEntry('config/workflows.json', [WORKFLOW]);
     mcpClientManager.listAllTools = async () => [];
@@ -520,30 +591,70 @@ describe('tool runner checks that stay in runTool (S10)', () => {
   });
 
   it('system-skill-permission: a system skill tool runs only for a user with the skill', async () => {
-    await assert.rejects(
+    const createPdf = user =>
       runner.execute(null, {
         toolId: 'create_pdf',
         toolDef: { id: 'create_pdf' },
-        args: { title: 't', markdown: 'x' },
-        toolContext: caller({ id: 'user-1', permissions: { skills: new Set() } })
-      }),
-      /not available/
-    );
+        // No content: an entitled call fails in the tool itself, before any rendering.
+        args: { title: 't' },
+        toolContext: caller(user)
+      });
+    for (const user of [
+      withSkills('user-1', []),
+      withSkills('user-2', ['secret-skill']),
+      { id: 'user-3' }
+    ]) {
+      await assert.rejects(createPdf(user), /Tool create_pdf is not available/, user.id);
+    }
+    // The control: a user granted the skill gets past the check, into the tool.
+    for (const user of [withSkills('user-4', ['pdf']), withSkills('user-5', ['*'])]) {
+      const answer = await createPdf(user);
+      assert.equal(answer?.success, false, user.id);
+      assert.match(JSON.stringify(answer), /markdown/, user.id);
+    }
   });
 
   it('skill-usable: a skill the app or the user may not use is answered like a missing one', async () => {
-    const answer = await runner.execute(null, {
-      toolId: 'activate_skill',
-      toolDef: { id: 'activate_skill' },
-      args: { skill_name: 'secret-skill' },
-      toolContext: {
-        origin: 'chat',
-        approval: 'seam',
-        principal: { id: 'user-1', permissions: { skills: new Set(['*']) } },
-        appConfig: { id: 'writer', skills: [], skillSettings: { enabled: true } }
-      }
-    });
-    assert.match(String(answer), /not found or could not be loaded/);
+    const activate = (skillName, { user, skills }) =>
+      runner.execute(null, {
+        toolId: 'activate_skill',
+        toolDef: { id: 'activate_skill' },
+        args: { skill_name: skillName },
+        toolContext: {
+          origin: 'chat',
+          approval: 'seam',
+          principal: user,
+          appConfig: { id: 'writer', skills, skillSettings: { enabled: true } }
+        }
+      });
+    const missing = name => new RegExp(`Skill '${name}' not found or could not be loaded`);
+    // The app does not list the skill: refused, whatever the user may use.
+    assert.match(
+      String(await activate('pdf', { user: withSkills('user-1', ['*']), skills: [] })),
+      missing('pdf')
+    );
+    assert.match(
+      String(
+        await activate('secret-skill', {
+          user: withSkills('user-1', ['*']),
+          skills: ['pdf']
+        })
+      ),
+      missing('secret-skill')
+    );
+    // The app lists it, the user may not use it: refused the same way.
+    assert.match(
+      String(
+        await activate('pdf', { user: withSkills('user-2', ['secret-skill']), skills: ['pdf'] })
+      ),
+      missing('pdf')
+    );
+    // The control: the app lists it and the user may use it, so it loads.
+    const loaded = String(
+      await activate('pdf', { user: withSkills('user-3', ['pdf']), skills: ['pdf'] })
+    );
+    assert.doesNotMatch(loaded, missing('pdf'));
+    assert.match(loaded, /create_pdf/);
   });
 });
 
