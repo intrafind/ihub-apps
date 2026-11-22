@@ -4,6 +4,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
+import { COMPOSER_SELECTOR } from '../../../shared/utils/focusPolicy';
 
 /** Rows shown before the rest fold behind "N pending · Show all". */
 export const PENDING_MAX_ROWS = 2;
@@ -21,7 +22,7 @@ const KIND_ICONS = { steer: 'chat-bubble-left', send_after: 'clock' };
  * nothing when it has no text.
  *
  * @param {Function} t
- * @param {string} labelKey
+ * @param {string|undefined} labelKey - The item's `labelKey`; an item may come without one.
  * @param {{exists?: (key: string) => boolean}} [i18n] - Tells whether an unknown key has a text.
  * @returns {string}
  */
@@ -44,6 +45,34 @@ function excerpt(text) {
     .replace(/\s+/g, ' ')
     .trim();
   return flat.length > NAME_EXCERPT_CHARS ? `${flat.slice(0, NAME_EXCERPT_CHARS - 1)}…` : flat;
+}
+
+/** The ids of a list, in order: two lists with the same ids are the same list. */
+function idsOf(list) {
+  return list.map(item => item.id).join('\n');
+}
+
+/** The composer's first control that takes the focus, where a removal of the last item sends it. */
+function composerTarget() {
+  const composer = document.querySelector(COMPOSER_SELECTOR);
+  return (
+    composer?.querySelector(
+      'textarea:not([disabled]), input:not([disabled]):not([type="hidden"]), [contenteditable="true"], button:not([disabled])'
+    ) || null
+  );
+}
+
+/**
+ * Where the focus goes once the item the person removed has left the list: the
+ * row now at its place (or the last row), its last button; with no row left,
+ * the composer.
+ */
+function restoreTarget(root, index) {
+  if (!root) return composerTarget();
+  const rows = root.querySelectorAll('[data-testid="pending-item"]');
+  const row = rows[Math.min(index, rows.length - 1)];
+  const buttons = row ? row.querySelectorAll('button') : [];
+  return buttons[buttons.length - 1] || root.querySelector('button[aria-controls]');
 }
 
 /**
@@ -79,8 +108,11 @@ function ActionButton({ action, item, onAction, t }) {
  * message: use the 2025 numbers"). After {@link PENDING_MAX_ROWS} rows the rest
  * fold behind a disclosure button ("3 pending · Show all"); `collapsed` (for a
  * narrow embed) starts with the disclosure alone. When an item the person
- * removed is gone from the list, the focus moves to the next item's button, so
- * the keyboard does not fall back to the top of the page.
+ * removed is gone from the list, the focus moves to the next item's button (or,
+ * when it was the last item, to the composer), so the keyboard does not fall
+ * back to the top of the page. A list that changes and still holds the item
+ * means the removal did not happen: the focus is then left alone, then and
+ * later.
  *
  * @param {Object} props
  * @param {Array<{id: string, kind?: string, labelKey?: string, text?: string, actions?: string[]}>} props.items
@@ -106,23 +138,20 @@ function PendingWorkStrip({
   const restoreRef = useRef(null);
   const list = Array.isArray(items) ? items.filter(item => item?.id) : [];
 
-  // The removed item has left the list: move the focus to where it was.
+  // The removed item has left the list: move the focus to where it was. Only the
+  // list that answers the removal counts; an entry never outlives it.
+  const ids = idsOf(list);
   useEffect(() => {
     const restore = restoreRef.current;
-    if (!restore || !rootRef.current) return;
-    if (list.some(item => item.id === restore.id)) return;
+    if (!restore || ids === restore.ids) return;
     restoreRef.current = null;
+    // Still listed after the list changed: the removal did not happen.
+    if (ids.split('\n').includes(restore.id)) return;
     // Only when the focus went with the removed button; never away from where the person went.
     const active = document.activeElement;
     if (active && active !== document.body) return;
-    // The row now at the removed one's place (or the last row): its last button.
-    const rows = rootRef.current.querySelectorAll('[data-testid="pending-item"]');
-    const row = rows[Math.min(restore.index, rows.length - 1)];
-    const buttons = row ? row.querySelectorAll('button') : [];
-    const target =
-      buttons[buttons.length - 1] || rootRef.current.querySelector('button[aria-controls]');
-    target?.focus();
-  });
+    restoreTarget(rootRef.current, restore.index)?.focus();
+  }, [ids]);
 
   if (list.length === 0) return null;
 
@@ -134,7 +163,7 @@ function PendingWorkStrip({
   const act = (action, item) => {
     if (action === 'remove') {
       const index = shown.findIndex(entry => entry.id === item.id);
-      restoreRef.current = { id: item.id, index: Math.max(index, 0) };
+      restoreRef.current = { id: item.id, index: Math.max(index, 0), ids };
     }
     onAction?.(action, item);
   };

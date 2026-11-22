@@ -12,7 +12,10 @@ import Icon from './Icon';
  * screen.
  *
  * `paused` is a run an admin held (Runs page), not a run that waits for the
- * person: that one is `waiting`.
+ * person: that one is `waiting`. The text of `waiting` names no one ("Waiting
+ * for an answer"): the badge is also shown to someone who is not the person
+ * waited for (an admin, the group that answers a run of no person). "Needs you"
+ * belongs to the viewer's own list of what waits for them.
  */
 export const RUN_STATES = Object.freeze([
   'queued',
@@ -113,7 +116,7 @@ export function runStateLabel(t, state, { since } = {}) {
     case 'running':
       return t('runState.running', 'Running');
     case 'waiting':
-      return t('runState.waiting', 'Waiting for you');
+      return t('runState.waiting', 'Waiting for an answer');
     case 'scheduled':
       return t('runState.scheduled', 'Scheduled');
     case 'done':

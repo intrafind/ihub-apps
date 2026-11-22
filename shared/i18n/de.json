@@ -11403,7 +11403,7 @@
   "runState": {
     "queued": "In der Warteschlange",
     "running": "Läuft",
-    "waiting": "Wartet auf Sie",
+    "waiting": "Wartet auf Antwort",
     "scheduled": "Geplant",
     "done": "Erledigt",
     "noChange": "Keine Änderung",

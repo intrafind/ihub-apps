@@ -23,6 +23,7 @@ import RunAnnouncer from '../../../client/src/features/chat/components/RunAnnoun
 import { AnnouncerProvider } from '../../../client/src/shared/announce/AnnouncerProvider';
 import ChatMessageList from '../../../client/src/features/chat/components/ChatMessageList';
 import ChatMessage from '../../../client/src/features/chat/components/ChatMessage';
+import ApprovalCard from '../../../client/src/features/chat/components/ApprovalCard';
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -283,6 +284,38 @@ describe('deriveAnnouncements', () => {
       text: 'Waiting for approval',
       priority: 'high'
     });
+  });
+
+  test('leaves a waiting call to its approval card, which speaks for it', () => {
+    const approval = env(4, 'interaction/raised', {
+      interaction: {
+        id: 'a1',
+        kind: 'approval',
+        origin: 'tool',
+        status: 'pending',
+        source: { toolCallId: 'x1' }
+      }
+    });
+    const frames = [args(2, 'x1', T0), argsEnded(3, 'x1', T0 + 900, 'ready'), approval];
+    const card = { interactionId: 'a1', status: 'pending', toolName: 'Count a write' };
+    const writing = derive(createAnnouncerState(), [assistant(frames.slice(0, 1))], T0 + 100);
+    const result = derive(
+      writing.state,
+      [assistant(frames, { loading: false, toolApproval: card })],
+      T0 + 2000
+    );
+    expect(result.announcements).toEqual([]);
+    // Counted as said: it does not come later either, when the card has gone.
+    expect(result.state.done['x1:awaiting']).toBe(true);
+    const later = derive(result.state, [assistant(frames, { loading: false })], T0 + 3000);
+    expect(later.announcements.map(a => a.key)).not.toContain('x1:awaiting');
+    // A card already decided does not speak: the announcer does as before.
+    const decided = derive(
+      writing.state,
+      [assistant(frames, { loading: false, toolApproval: { ...card, decision: 'approved' } })],
+      T0 + 2000
+    );
+    expect(decided.announcements.map(a => a.key)).toContain('x1:awaiting');
   });
 
   test('says once that nothing has grown for a while, and looks again in time', () => {
@@ -553,6 +586,43 @@ describe('RunAnnouncer', () => {
       jest.advanceTimersByTime(100);
     });
     expect(region()).toHaveTextContent('Creating web artifact');
+  });
+
+  test('one approval is said once: the card speaks, the run announcer does not', () => {
+    const approvalFrame = env(4, 'interaction/raised', {
+      interaction: {
+        id: 'a1',
+        kind: 'approval',
+        origin: 'tool',
+        status: 'pending',
+        source: { toolCallId: 'x1' }
+      }
+    });
+    const frames = [args(2, 'x1', T0), argsEnded(3, 'x1', T0 + 900, 'ready'), approvalFrame];
+    const card = { interactionId: 'a1', status: 'pending', toolName: 'Count a write', args: {} };
+    const said = [];
+    const listen = () => {
+      const text = region().textContent;
+      if (text && text !== said[said.length - 1]) said.push(text);
+    };
+    const page = (messages, approval) => (
+      <AnnouncerProvider>
+        <input aria-label="Search apps" />
+        <RunAnnouncer messages={messages} />
+        {approval && <ApprovalCard approval={approval} onDecide={() => {}} />}
+      </AnnouncerProvider>
+    );
+    const { rerender } = render(page([assistant(frames.slice(0, 1))], null));
+    // The person types elsewhere when the approval arrives: the card cannot take the focus.
+    screen.getByRole('textbox', { name: 'Search apps' }).focus();
+    rerender(page([assistant(frames, { loading: false, toolApproval: card })], card));
+    for (let i = 0; i < 100; i += 1) {
+      act(() => {
+        jest.advanceTimersByTime(100);
+      });
+      listen();
+    }
+    expect(said.filter(text => /approv/i.test(text))).toEqual(['Approval needed: Count a write']);
   });
 
   test('forgets what is waiting when the next turn begins', () => {

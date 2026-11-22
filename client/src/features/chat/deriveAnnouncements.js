@@ -11,7 +11,8 @@
  *
  *   - a call starts (once it is shown): "Creating web artifact"
  *   - several calls start side by side: "3 searches running", once for the batch
- *   - a call is waiting for approval, was cut off or refused, was stopped
+ *   - a call is waiting for approval (unless the message shows its approval
+ *     card: the card speaks for it), was cut off or refused, was stopped
  *   - a file is done: "Created web artifact"
  *   - the size has not grown for a while (the stall caption)
  *   - the model has been silent for a while: "Waiting for the model" / "Thinking"
@@ -98,10 +99,27 @@ function createCollector(done) {
   return collector;
 }
 
+/**
+ * Whether the message shows an approval card that waits for its decision. The
+ * card speaks for the waiting call itself (it takes the focus, or says
+ * "Approval needed: <tool>"), so the announcer leaves it out: one speaker per
+ * event.
+ */
+function hasPendingApprovalCard(message) {
+  const approval = message?.toolApproval;
+  return Boolean(approval) && approval.status === 'pending' && !approval.decision;
+}
+
 /** The events of a call that is being written, waits for approval or runs. */
-function announceActiveCall(collector, item, { t, now }) {
+function announceActiveCall(collector, item, { t, now, approvalCard }) {
   const label = spoken(activeLabel(t, item, null));
   if (item.status === 'awaiting') {
+    if (approvalCard) {
+      // Counted as said: the card says it, and it is not said later either.
+      collector.done[`${item.id}:start`] = true;
+      collector.done[`${item.id}:awaiting`] = true;
+      return;
+    }
     collector.say(`${item.id}:start`, label, 'normal');
     collector.say(`${item.id}:awaiting`, awaitingApprovalLabel(t), 'high');
     return;
@@ -210,13 +228,14 @@ export function deriveAnnouncements(state, messages, context) {
   const idleSince = { ...previous.idleSince };
   const activity = message.toolActivity;
   announceBatchStarts(collector, activity?.items || [], context);
+  const callContext = { ...context, approvalCard: hasPendingApprovalCard(message) };
   for (const item of activity?.items || []) {
     // A skill is not a call the user waits for.
     if (item.kind === 'skill') continue;
     if (!isPainted(item, context.now)) {
       collector.wakeIn(paintsIn(item, context.now));
     } else if (isActiveItem(item)) {
-      announceActiveCall(collector, item, context);
+      announceActiveCall(collector, item, callContext);
     } else {
       announceEndedCall(collector, item, context);
     }

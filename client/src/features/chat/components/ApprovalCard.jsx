@@ -56,7 +56,11 @@ export function formatApprovalArgs(args) {
  * through the three buttons. It does not when the person is typing
  * (`mayTakeFocus`, shared/utils/focusPolicy.js): the focus stays in the
  * composer, so an Enter meant for the message never approves, and the card's
- * arrival is said through the page's live region instead.
+ * arrival is said through the page's live region instead ("Approval needed:
+ * <tool>"; also on a surface that cannot answer). The card is the one speaker
+ * for a waiting approval: the run announcer leaves the call to it
+ * (`deriveAnnouncements`), so a screen reader hears the event once. The region
+ * is described by its intro, so the focus says what the card asks.
  *
  * @param {Object} props
  * @param {Object} props.approval - `message.toolApproval` (see runToMessage.buildToolApproval)
@@ -71,6 +75,7 @@ function ApprovalCard({ approval, onDecide = null, disabled = false, allowChatGr
   const { t } = useTranslation();
   const titleId = useId();
   const argsId = useId();
+  const introId = useId();
   const regionRef = useRef(null);
   const announce = useAnnounce();
   const decided = approval?.decision || null;
@@ -84,11 +89,11 @@ function ApprovalCard({ approval, onDecide = null, disabled = false, allowChatGr
   const canAnswer = pending && Boolean(onDecide);
   const toolLabel = approval?.toolName || approval?.toolId || '';
   useEffect(() => {
-    if (!canAnswer || !regionRef.current || focusedForRef.current === interactionId) return;
+    if (!pending || !regionRef.current || focusedForRef.current === interactionId) return;
     // A copy the page does not show (the chat list for the other screen width) stays quiet.
     if (!isShown(regionRef.current)) return;
     focusedForRef.current = interactionId;
-    if (mayTakeFocus()) {
+    if (canAnswer && mayTakeFocus()) {
       regionRef.current.focus({ preventScroll: false });
     } else {
       announce(
@@ -97,7 +102,7 @@ function ApprovalCard({ approval, onDecide = null, disabled = false, allowChatGr
         })
       );
     }
-  }, [canAnswer, interactionId, announce, t, toolLabel]);
+  }, [pending, canAnswer, interactionId, announce, t, toolLabel]);
 
   if (!approval) return null;
 
@@ -126,6 +131,7 @@ function ApprovalCard({ approval, onDecide = null, disabled = false, allowChatGr
       ref={regionRef}
       tabIndex={-1}
       aria-labelledby={titleId}
+      aria-describedby={introId}
       data-testid="tool-approval-card"
       className="mt-2 w-full max-w-2xl rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-gray-800 p-4 text-sm text-gray-900 dark:text-gray-100 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500"
     >
@@ -154,7 +160,7 @@ function ApprovalCard({ approval, onDecide = null, disabled = false, allowChatGr
         </div>
       </div>
 
-      <p className="mt-2 text-gray-700 dark:text-gray-300">
+      <p id={introId} className="mt-2 text-gray-700 dark:text-gray-300">
         {pending
           ? t(
               'chat.toolApproval.intro',

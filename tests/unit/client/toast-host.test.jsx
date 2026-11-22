@@ -4,7 +4,7 @@
 import { useEffect } from 'react';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useNavigate } from 'react-router-dom';
 import i18next from 'i18next';
 import en from '../../../shared/i18n/en.json';
 import de from '../../../shared/i18n/de.json';
@@ -13,7 +13,8 @@ import {
   MAX_VISIBLE_TOASTS,
   TOAST_MS,
   ToastProvider,
-  useToasts
+  useToasts,
+  visibleToasts
 } from '../../../client/src/shared/components/ToastHost';
 import ScheduledTaskNotifier from '../../../client/src/features/tasks/components/ScheduledTaskNotifier';
 
@@ -117,6 +118,76 @@ describe('ToastHost', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Close notification: Toast 2' }));
     expect(screen.getAllByTestId('toast')).toHaveLength(MAX_VISIBLE_TOASTS);
     expect(screen.getByText('Toast 4', { selector: 'p' })).toBeInTheDocument();
+  });
+
+  test('toasts that need the person never hold every slot: a later failure is shown and said', () => {
+    const sticky = n => toast(n, { needsYou: true, text: `Waits ${n}` });
+    const { rerender } = render(
+      <Page>
+        <Producer toasts={[sticky(1), sticky(2), sticky(3)]} />
+      </Page>
+    );
+    expect(screen.getAllByTestId('toast')).toHaveLength(MAX_VISIBLE_TOASTS - 1);
+    act(() => {
+      jest.advanceTimersByTime(2000);
+    });
+    rerender(
+      <Page>
+        <Producer toasts={[sticky(1), sticky(2), sticky(3), toast(4, { text: 'Run failed' })]} />
+      </Page>
+    );
+    expect(screen.getByText('Run failed', { selector: 'p' })).toBeInTheDocument();
+    expect(screen.getAllByTestId('toast')).toHaveLength(MAX_VISIBLE_TOASTS);
+    act(() => {
+      jest.advanceTimersByTime(2000);
+    });
+    expect(screen.getByRole('status')).toHaveTextContent('Run failed');
+  });
+
+  test('visibleToasts: oldest first, one slot kept free of toasts that need the person, stable as toasts arrive', () => {
+    const sticky = n => toast(n, { needsYou: true });
+    const ids = list => visibleToasts(list).map(entry => entry.id);
+    expect(ids([sticky(1), sticky(2), sticky(3), toast(4)])).toEqual(['t1', 't2', 't4']);
+    expect(ids([sticky(1), sticky(2), sticky(3)])).toEqual(['t1', 't2']);
+    expect(ids([toast(1), toast(2), toast(3), toast(4)])).toEqual(['t1', 't2', 't3']);
+    // A newer toast never pushes out a visible one.
+    expect(ids([sticky(1), toast(2), toast(3), sticky(4)])).toEqual(['t1', 't2', 't3']);
+    // Closing one lets the next waiting toast in.
+    expect(ids([sticky(1), toast(3), sticky(4)])).toEqual(['t1', 't3', 't4']);
+  });
+
+  test('a toast that waited for a slot is said when it appears, and a visible one is said once', () => {
+    const { rerender } = render(
+      <Page>
+        <Producer toasts={[toast(1), toast(2), toast(3), toast(4)]} />
+      </Page>
+    );
+    const said = [];
+    const listen = () => {
+      const text = screen.getByRole('status').textContent;
+      if (text && text !== said[said.length - 1]) said.push(text);
+    };
+    for (let i = 0; i < 60; i += 1) {
+      act(() => {
+        jest.advanceTimersByTime(100);
+      });
+      listen();
+    }
+    expect(said).toEqual(['Toast 1', 'Toast 2', 'Toast 3']);
+    fireEvent.click(screen.getByRole('button', { name: 'Close notification: Toast 1' }));
+    // Shown again with the same text: a toast that is already there is not said again.
+    rerender(
+      <Page>
+        <Producer toasts={[toast(2), toast(3), toast(4)]} />
+      </Page>
+    );
+    for (let i = 0; i < 30; i += 1) {
+      act(() => {
+        jest.advanceTimersByTime(100);
+      });
+      listen();
+    }
+    expect(said).toEqual(['Toast 1', 'Toast 2', 'Toast 3', 'Toast 4']);
   });
 
   test('the close button is a named 24 px target', () => {
@@ -233,6 +304,76 @@ describe('ScheduledTaskNotifier through the ToastHost', () => {
     expect(
       screen.getByText('"Task r2" needs your approval', { selector: 'p' })
     ).toBeInTheDocument();
+  });
+
+  /** Exposes the router's navigate to the test. */
+  function Navigator({ onNavigate }) {
+    onNavigate(useNavigate());
+    return null;
+  }
+
+  test('a toast the person closed does not come back on the next navigation or language switch, nor is said again', async () => {
+    mockNotifications.items = [run('r5', 'awaiting_approval')];
+    let navigate;
+    render(
+      <Page path="/apps">
+        <Navigator onNavigate={value => (navigate = value)} />
+        <ScheduledTaskNotifier />
+      </Page>
+    );
+    act(() => {
+      jest.advanceTimersByTime(100);
+    });
+    expect(screen.getByRole('status')).toHaveTextContent('"Task r5" needs your approval');
+    act(() => {
+      jest.advanceTimersByTime(10_000);
+    });
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+    fireEvent.click(screen.getByRole('button', { name: /^Close notification: .*Task r5/ }));
+    expect(screen.queryByTestId('toast')).toBeNull();
+
+    act(() => navigate('/chats'));
+    await act(async () => {
+      await mockI18n.changeLanguage('de');
+    });
+    act(() => {
+      jest.advanceTimersByTime(2000);
+    });
+    expect(screen.queryByTestId('toast')).toBeNull();
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+  });
+
+  test("following the toast's own link to the task and leaving the Tasks page does not bring it back", () => {
+    mockNotifications.items = [run('r6', 'awaiting_approval')];
+    let navigate;
+    render(
+      <Page path="/apps">
+        <Navigator onNavigate={value => (navigate = value)} />
+        <ScheduledTaskNotifier />
+      </Page>
+    );
+    fireEvent.click(screen.getByRole('link', { name: 'Open task' }));
+    expect(screen.queryByTestId('toast')).toBeNull();
+    act(() => navigate('/apps'));
+    expect(screen.queryByTestId('toast')).toBeNull();
+  });
+
+  test('the remembered runs hold each id once, however often the page moves', () => {
+    localStorage.setItem('ihub.scheduledTasks.toastedRuns', JSON.stringify(['old-1', 'old-2']));
+    mockNotifications.items = [run('r7', 'succeeded'), run('old-1', 'succeeded')];
+    let navigate;
+    render(
+      <Page path="/apps">
+        <Navigator onNavigate={value => (navigate = value)} />
+        <ScheduledTaskNotifier />
+      </Page>
+    );
+    for (const path of ['/chats', '/apps', '/tasks', '/apps']) act(() => navigate(path));
+    expect(JSON.parse(localStorage.getItem('ihub.scheduledTasks.toastedRuns'))).toEqual([
+      'old-1',
+      'old-2',
+      'r7'
+    ]);
   });
 
   test('once per run and browser, and not on the Tasks page', () => {

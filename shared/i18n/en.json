@@ -11404,7 +11404,7 @@
   "runState": {
     "queued": "Queued",
     "running": "Running",
-    "waiting": "Waiting for you",
+    "waiting": "Waiting for an answer",
     "scheduled": "Scheduled",
     "done": "Done",
     "noChange": "No change",

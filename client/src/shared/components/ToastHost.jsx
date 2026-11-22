@@ -30,11 +30,12 @@ const NO_TOASTS = Object.freeze({ show: () => {}, dismiss: () => {} });
 
 /**
  * ToastHost — the page's toasts, bottom right: at most
- * {@link MAX_VISIBLE_TOASTS} at once, the others wait for their turn. A toast
- * closes by itself after {@link TOAST_MS} unless it is about something that
- * needs the person (`needsYou`); every toast has a close button with a 24 px
- * target. The host has no live region of its own: what a toast says is said
- * through the page's announcer when the toast appears.
+ * {@link MAX_VISIBLE_TOASTS} at once, the others wait for their turn (see
+ * {@link visibleToasts}). A toast closes by itself after {@link TOAST_MS}
+ * unless it is about something that needs the person (`needsYou`); every toast
+ * has a close button with a 24 px target. The host has no live region of its
+ * own: what a toast says is said through the page's announcer when the toast
+ * becomes visible.
  *
  * Rendered by {@link ToastProvider}; use {@link useToasts} to show one.
  *
@@ -60,21 +61,12 @@ export function ToastHost({ toasts, onDismiss }) {
 }
 
 /**
- * One toast. It is said through the page's announcer and its clock starts when
- * it becomes visible, not when it is queued; a toast that needs the person has
- * no clock.
+ * One toast. Its clock starts when it becomes visible, not when it is queued;
+ * a toast that needs the person has no clock.
  */
 function ToastItem({ toast, onDismiss }) {
   const { t } = useTranslation();
-  const announce = useAnnounce();
-  const saidRef = useRef(false);
   const { id, text, needsYou } = toast;
-
-  useEffect(() => {
-    if (saidRef.current) return;
-    saidRef.current = true;
-    announce(text);
-  }, [announce, text]);
 
   useEffect(() => {
     if (needsYou) return undefined;
@@ -143,10 +135,42 @@ export function ToastProvider({ children }) {
   return <ToastRoot>{children}</ToastRoot>;
 }
 
+/**
+ * The toasts that are visible now, oldest first: at most `max`, and at most
+ * `max - 1` of them toasts that need the person (`needsYou`). Those never close
+ * by themselves, so without the free slot three of them would hold the screen
+ * and a later toast (a failure) would wait unseen and unsaid until one is
+ * closed. Taken oldest first, so a toast that is visible stays visible when a
+ * newer one arrives.
+ *
+ * @param {Toast[]} toasts - All toasts, oldest first.
+ * @param {number} [max=MAX_VISIBLE_TOASTS]
+ * @returns {Toast[]}
+ */
+export function visibleToasts(toasts, max = MAX_VISIBLE_TOASTS) {
+  const stickyMax = Math.max(1, max - 1);
+  const shown = [];
+  let sticky = 0;
+  for (const toast of toasts) {
+    if (shown.length >= max) break;
+    if (toast.needsYou) {
+      if (sticky >= stickyMax) continue;
+      sticky += 1;
+    }
+    shown.push(toast);
+  }
+  return shown;
+}
+
 function ToastRoot({ children }) {
   const [toasts, setToasts] = useState([]);
+  const announce = useAnnounce();
+  // The ids said so far: a toast is said once when it becomes visible, not again
+  // when it waits for a while and comes back. A closed toast shown again is new.
+  const saidRef = useRef(new Set());
 
   const dismiss = useCallback(id => {
+    saidRef.current.delete(id);
     setToasts(current => current.filter(toast => toast.id !== id));
   }, []);
 
@@ -161,7 +185,16 @@ function ToastRoot({ children }) {
     });
   }, []);
 
-  const visible = useMemo(() => toasts.slice(0, MAX_VISIBLE_TOASTS), [toasts]);
+  const visible = useMemo(() => visibleToasts(toasts), [toasts]);
+
+  useEffect(() => {
+    for (const toast of visible) {
+      if (saidRef.current.has(toast.id)) continue;
+      saidRef.current.add(toast.id);
+      announce(toast.text);
+    }
+  }, [visible, announce]);
+
   const value = useMemo(() => ({ show, dismiss }), [show, dismiss]);
 
   return (

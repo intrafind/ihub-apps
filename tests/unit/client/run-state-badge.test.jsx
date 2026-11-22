@@ -67,7 +67,7 @@ describe('RunStateBadge', () => {
   });
 
   test('every runState string is used by a state, and both languages have the same keys', () => {
-    const used = new Set([...RUN_STATES.map(keyOf), 'stalledSince']);
+    const used = new Set([...RUN_STATES.map(state => keyOf(state)), 'stalledSince']);
     expect(Object.keys(en.runState).sort((a, b) => a.localeCompare(b))).toEqual(
       [...used].sort((a, b) => a.localeCompare(b))
     );
@@ -85,12 +85,24 @@ describe('RunStateBadge', () => {
       no_change: 'Keine Änderung',
       running: 'Läuft',
       scheduled: 'Geplant',
-      waiting: 'Wartet auf Sie'
+      // Names no one: the badge is also seen by someone who is not waited for.
+      waiting: 'Wartet auf Antwort'
     };
     for (const [state, word] of Object.entries(words)) {
       const { unmount } = render(<RunStateBadge state={state} />);
       expect(screen.getByTestId('run-state-badge')).toHaveTextContent(word);
       unmount();
+    }
+  });
+
+  test('a run that waits names no one: an admin or a group may see it, not only the person waited for', async () => {
+    const { unmount } = render(<RunStateBadge state="waiting" />);
+    expect(screen.getByTestId('run-state-badge')).toHaveTextContent('Waiting for an answer');
+    expect(screen.getByTestId('run-state-badge').textContent).not.toMatch(/\byou\b/i);
+    unmount();
+    // "Needs you" / "Wartet auf Sie" belong to the viewer's own list, not to the badge.
+    for (const locale of [en, de]) {
+      expect(locale.runState.waiting).not.toMatch(/\b(you|Sie)\b/);
     }
   });
 

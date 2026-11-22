@@ -19,6 +19,17 @@
  * - the person pressed a key in a text field or pressed a pointer anywhere less
  *   than {@link RECENT_INTERACTION_MS} ago.
  *
+ * The first two rules do not apply to a focus the page placed by itself (the
+ * composer takes the focus back at the end of a turn, {@link noteAutoFocus})
+ * as long as the person has not pressed a key or a pointer since: an empty
+ * composer the page just focused is not someone typing, and a card that
+ * appears in the next moment (the turn ended because it asks) still takes the
+ * focus.
+ *
+ * A disabled or inert element that still counts as focused (a browser without
+ * the focus fixup leaves a text field focused when it is disabled, as the
+ * composer is while an answer runs) holds no focus: nobody types into it.
+ *
  * @module shared/utils/focusPolicy
  */
 
@@ -44,6 +55,8 @@ const NON_TEXT_INPUT_TYPES = new Set([
 
 let lastInteractionAt = null;
 let trackedDocument = null;
+/** The element the page moved the focus to by itself, until the person next interacts. */
+let autoFocused = null;
 
 const now = () =>
   typeof performance !== 'undefined' && typeof performance.now === 'function'
@@ -51,13 +64,27 @@ const now = () =>
     : Date.now();
 
 /**
- * Whether an element takes typed text.
+ * Whether an element can be used at all: not disabled (itself or through a
+ * disabled `fieldset`) and not inside an `inert` subtree.
+ *
+ * @param {Element} element
+ * @returns {boolean}
+ */
+function isUsable(element) {
+  if (element.disabled === true) return false;
+  if (element.matches?.(':disabled')) return false;
+  return !element.closest?.('[inert]');
+}
+
+/**
+ * Whether an element takes typed text. A disabled or inert field does not.
  *
  * @param {Element|null|undefined} element
  * @returns {boolean}
  */
 export function isEditable(element) {
   if (!element || element.nodeType !== 1) return false;
+  if (!isUsable(element)) return false;
   if (element.isContentEditable) return true;
   // Where `isContentEditable` is not implemented (jsdom), the attribute says it.
   if (element.closest?.('[contenteditable]:not([contenteditable="false"])')) return true;
@@ -76,11 +103,24 @@ export function isEditable(element) {
 function composerHoldsText(doc) {
   for (const composer of doc.querySelectorAll(COMPOSER_SELECTOR)) {
     for (const field of composer.querySelectorAll('textarea, input')) {
-      if (!isEditable(field) || field.disabled) continue;
+      if (!isEditable(field)) continue;
       if (typeof field.value === 'string' && field.value.trim() !== '') return true;
     }
   }
   return false;
+}
+
+/**
+ * The element that holds the focus, or null when nothing does: the page itself,
+ * or a disabled or inert element the browser still reports as focused.
+ *
+ * @param {Document} doc
+ * @returns {Element|null}
+ */
+function focusHolder(doc) {
+  const active = doc.activeElement;
+  if (!active || active === doc.body || active === doc.documentElement) return null;
+  return isUsable(active) ? active : null;
 }
 
 /**
@@ -91,6 +131,19 @@ function composerHoldsText(doc) {
  */
 export function noteInteraction(at = now()) {
   lastInteractionAt = at;
+  autoFocused = null;
+}
+
+/**
+ * Note that the page, not the person, just moved the focus to `element` (the
+ * composer taking the focus back at the end of a turn). Until the person
+ * presses a key in a text field or a pointer, that focus does not count as
+ * typing.
+ *
+ * @param {Element|null|undefined} element
+ */
+export function noteAutoFocus(element) {
+  autoFocused = element ?? null;
 }
 
 function onKeyDown(event) {
@@ -122,6 +175,7 @@ export function trackInteractions(doc = typeof document === 'undefined' ? null :
 /** Forget the last interaction (tests). */
 export function resetFocusPolicy() {
   lastInteractionAt = null;
+  autoFocused = null;
 }
 
 /**
@@ -134,9 +188,10 @@ export function resetFocusPolicy() {
  */
 export function mayTakeFocus({ doc = typeof document === 'undefined' ? null : document, at } = {}) {
   if (!doc) return false;
-  const active = doc.activeElement;
-  if (active && active !== doc.body && active.closest?.(COMPOSER_SELECTOR)) return false;
-  if (isEditable(active)) return false;
+  const active = focusHolder(doc);
+  const placedByPage = active !== null && active === autoFocused;
+  if (!placedByPage && active?.closest?.(COMPOSER_SELECTOR)) return false;
+  if (!placedByPage && isEditable(active)) return false;
   if (composerHoldsText(doc)) return false;
   const time = at ?? now();
   if (lastInteractionAt !== null && time - lastInteractionAt < RECENT_INTERACTION_MS) return false;
@@ -160,17 +215,17 @@ export function isShown(element) {
 
 /**
  * Whether nobody holds the focus but the composer: the focus is on nothing (the
- * page), or inside `[data-composer]`. The composer takes the focus back at the
- * end of a turn only then, so a card that took it, or a field the person types
- * in, keeps it.
+ * page, or a disabled element), or inside `[data-composer]`. The composer takes
+ * the focus back at the end of a turn only then, so a card that took it, or a
+ * field the person types in, keeps it.
  *
  * @param {Document} [doc=document]
  * @returns {boolean}
  */
 export function focusIsFree(doc = typeof document === 'undefined' ? null : document) {
   if (!doc) return false;
-  const active = doc.activeElement;
-  if (!active || active === doc.body || active === doc.documentElement) return true;
+  const active = focusHolder(doc);
+  if (!active) return true;
   return Boolean(active.closest?.(COMPOSER_SELECTOR));
 }
 

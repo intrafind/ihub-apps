@@ -14,6 +14,7 @@ import {
   isEditable,
   isShown,
   mayTakeFocus,
+  noteAutoFocus,
   noteInteraction,
   resetFocusPolicy
 } from '../../../client/src/shared/utils/focusPolicy';
@@ -204,6 +205,61 @@ describe('mayTakeFocus', () => {
     expect(focusIsFree()).toBe(false);
   });
 
+  test('a disabled or inert element the browser still reports as focused holds no focus', () => {
+    mount(
+      '<form data-composer><textarea></textarea></form><input id="other"><div inert><button id="in">x</button></div>'
+    );
+    const composer = document.querySelector('textarea');
+    composer.focus();
+    expect(mayTakeFocus()).toBe(false);
+    // The composer is disabled while an answer runs. jsdom, like a browser without the
+    // focus fixup, leaves the disabled field as the active element.
+    composer.disabled = true;
+    expect(document.activeElement).toBe(composer);
+    expect(mayTakeFocus()).toBe(true);
+    expect(focusIsFree()).toBe(true);
+
+    const other = document.getElementById('other');
+    other.focus();
+    expect(mayTakeFocus()).toBe(false);
+    expect(focusIsFree()).toBe(false);
+    other.disabled = true;
+    expect(document.activeElement).toBe(other);
+    expect(mayTakeFocus()).toBe(true);
+    expect(focusIsFree()).toBe(true);
+
+    const inert = document.getElementById('in');
+    inert.focus();
+    expect(document.activeElement).toBe(inert);
+    expect(focusIsFree()).toBe(true);
+  });
+
+  test('a composer the page focused by itself (end of a turn) does not count as typing, until the person acts', () => {
+    mount('<form data-composer><textarea></textarea></form><input id="search">');
+    const composer = document.querySelector('textarea');
+    composer.focus();
+    noteAutoFocus(composer);
+    expect(mayTakeFocus()).toBe(true);
+    // A key in it: now the person types there.
+    fireEvent.keyDown(composer, { key: 'a' });
+    expect(mayTakeFocus({ at: Number.MAX_SAFE_INTEGER })).toBe(false);
+
+    resetFocusPolicy();
+    noteAutoFocus(composer);
+    // A pointer press anywhere ends it as well.
+    fireEvent.pointerDown(document.body);
+    expect(mayTakeFocus({ at: Number.MAX_SAFE_INTEGER })).toBe(false);
+
+    // Text in it still keeps the focus away, and so does a field the person went to.
+    resetFocusPolicy();
+    noteAutoFocus(composer);
+    composer.value = 'draft';
+    expect(mayTakeFocus()).toBe(false);
+    composer.value = '';
+    document.getElementById('search').focus();
+    expect(mayTakeFocus()).toBe(false);
+  });
+
   test('isEditable', () => {
     mount('<input id="t"><input id="r" type="radio"><textarea id="x"></textarea><p id="p"></p>');
     expect(isEditable(document.getElementById('t'))).toBe(true);
@@ -211,6 +267,11 @@ describe('mayTakeFocus', () => {
     expect(isEditable(document.getElementById('r'))).toBe(false);
     expect(isEditable(document.getElementById('p'))).toBe(false);
     expect(isEditable(null)).toBe(false);
+    // Nobody types into a disabled field, nor into one of a disabled fieldset.
+    document.getElementById('t').disabled = true;
+    expect(isEditable(document.getElementById('t'))).toBe(false);
+    mount('<fieldset disabled><input id="f"></fieldset>');
+    expect(isEditable(document.getElementById('f'))).toBe(false);
   });
 });
 
@@ -249,6 +310,31 @@ describe('ApprovalCard and the focus policy', () => {
     render(<Page card={<ApprovalCard approval={APPROVAL} onDecide={() => {}} />} />);
     expect(screen.getByTestId('tool-approval-card')).toHaveFocus();
     expect(screen.getByRole('status')).toBeEmptyDOMElement();
+  });
+
+  test('after a send the disabled composer still reported as focused does not keep the approval from the focus', () => {
+    const { rerender } = render(<Page card={null} />);
+    const composer = screen.getByRole('textbox', { name: 'Type your message' });
+    composer.focus();
+    // The turn runs: the composer is disabled but, without the focus fixup, still active.
+    composer.disabled = true;
+    expect(document.activeElement).toBe(composer);
+    rerender(<Page card={<ApprovalCard approval={APPROVAL} onDecide={() => {}} />} />);
+    expect(screen.getByTestId('tool-approval-card')).toHaveFocus();
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+  });
+
+  test('the card names what it asks when it takes the focus: its intro describes it', () => {
+    render(<Page card={<ApprovalCard approval={APPROVAL} onDecide={() => {}} />} />);
+    expect(screen.getByTestId('tool-approval-card')).toHaveAccessibleDescription(
+      'The assistant wants to run this tool with the arguments below. Nothing is sent until you choose.'
+    );
+  });
+
+  test('a card that cannot be answered here still says that an approval waits, and takes no focus', () => {
+    render(<Page card={<ApprovalCard approval={APPROVAL} />} />);
+    expect(screen.getByTestId('tool-approval-card')).not.toHaveFocus();
+    expect(screen.getByRole('status')).toHaveTextContent('Approval needed: Add comment');
   });
 
   test('draft text in the composer is enough to keep the focus away', () => {

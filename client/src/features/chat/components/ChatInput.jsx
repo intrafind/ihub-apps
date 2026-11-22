@@ -48,7 +48,7 @@ import { composerLineLimits } from '../utils/composerLines';
 import { submitShortcutLabel } from '../utils/submitShortcut';
 import { entryKey } from '../utils/chatFileUpload';
 import ComposerQuote from '../../workspace/components/ComposerQuote';
-import { focusIsFree } from '../../../shared/utils/focusPolicy';
+import { focusIsFree, noteAutoFocus } from '../../../shared/utils/focusPolicy';
 import './ChatInput.css';
 
 /**
@@ -650,7 +650,9 @@ function ChatInput({
   autoFocusSuspendedRef.current = autoFocusSuspended;
   // At the end of a turn the focus comes back only when nobody else holds it
   // (`focusIsFree`): a card that took it (an approval, a question) keeps it, and
-  // a person typing in another field (the app search) keeps typing there.
+  // a person typing in another field (the app search) keeps typing there. The
+  // focus placed here is the page's, not the person's (`noteAutoFocus`): a card
+  // that arrives a moment later, because the turn ended to ask, still takes it.
   const wasProcessingRef = useRef(isProcessing);
   useEffect(() => {
     const turnEnded = wasProcessingRef.current && !isProcessing;
@@ -658,7 +660,8 @@ function ChatInput({
     if (isProcessing || voiceModeActiveRef.current || autoFocusSuspendedRef.current) return;
     if (turnEnded && !focusIsFree()) return;
     focusInputAtEnd();
-  }, [isProcessing, focusInputAtEnd]);
+    noteAutoFocus(actualInputRef.current);
+  }, [isProcessing, focusInputAtEnd, actualInputRef]);
 
   // Fit the textarea to its content. The lower and upper limits are CSS
   // (ChatInput.css, from `--composer-min-lines` / `--composer-max-lines`), so

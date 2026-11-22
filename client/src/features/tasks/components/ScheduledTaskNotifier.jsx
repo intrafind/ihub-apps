@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useToasts } from '../../../shared/components/ToastHost';
@@ -24,7 +24,8 @@ function readToasted() {
 
 function rememberToasted(ids) {
   try {
-    const list = [...readToasted(), ...ids].slice(-MAX_REMEMBERED);
+    // A Set keeps each id once, at its first place: a repeat never pushes a real id out.
+    const list = [...new Set([...readToasted(), ...ids])].slice(-MAX_REMEMBERED);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
   } catch {
     // Private mode: the toast may show again next time, nothing worse.
@@ -37,6 +38,8 @@ function rememberToasted(ids) {
  * one). The runs stay listed as new on the Tasks page until their chat is
  * opened. The toasts are the page's `ToastHost`'s: a run that waits for the
  * owner's approval stays until it is closed, the others close by themselves.
+ * Each run is toasted once per page: a navigation or a language switch does
+ * not bring back a toast the person closed.
  *
  * @returns {null}
  */
@@ -45,6 +48,10 @@ export default function ScheduledTaskNotifier() {
   const location = useLocation();
   const { items } = useScheduledTaskNotifications();
   const { show } = useToasts();
+  // The runs handled since the page loaded. `fresh` changes only with the next
+  // poll, while the effect also runs on each navigation: without this a toast
+  // the person closed would come back, and be said again.
+  const handledRef = useRef(new Set());
 
   const fresh = useMemo(() => {
     const toasted = readToasted();
@@ -53,11 +60,14 @@ export default function ScheduledTaskNotifier() {
   }, [items]);
 
   useEffect(() => {
-    if (fresh.length === 0) return;
-    rememberToasted(fresh.map(item => item.id));
+    const handled = handledRef.current;
+    const unhandled = fresh.filter(item => !handled.has(item.id));
+    if (unhandled.length === 0) return;
+    for (const item of unhandled) handled.add(item.id);
+    rememberToasted(unhandled.map(item => item.id));
     // Not on the page that already lists them.
     if (location.pathname.startsWith('/tasks')) return;
-    for (const item of fresh.slice(0, MAX_TOASTED)) {
+    for (const item of unhandled.slice(0, MAX_TOASTED)) {
       const waiting = item.status === 'awaiting_approval';
       const failed = item.status === 'failed';
       let status = t('scheduledTasks.toast.finished', 'finished');

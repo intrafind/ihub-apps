@@ -36,6 +36,8 @@ import { APPROVAL_APP, TOOLS_APP, USER } from '../config/agents-scenario.mjs';
 
 /** The page's one polite live region (`AnnouncerProvider`). */
 const announcer = page => page.getByTestId('announcer');
+/** Longer than `RECENT_INTERACTION_MS` (1000) in client/src/shared/utils/focusPolicy.js. */
+const QUIET_MS = 1300;
 /** The app search of the shell (Ctrl+K). */
 const appSearch = page => page.getByPlaceholder('Search apps...');
 
@@ -101,7 +103,46 @@ test.describe('Focus policy of the cards', () => {
       await page.keyboard.type('Use the newer numbers');
       await page.keyboard.press('Enter');
       await expect(transcript(page).getByText('Use the newer numbers')).toBeVisible();
+      // Wait until the turn the Enter started is over: an approval it had sent along
+      // would have run the write by then.
+      await expect(
+        transcript(page).getByText('E2E reply to: Use the newer numbers').filter({ visible: true })
+      ).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByRole('button', { name: 'Cancel' })).toHaveCount(0);
+      await expect(page.getByTestId('tool-approval-decision')).toHaveCount(0);
       await expect(card.getByText('You approved this call.')).toHaveCount(0);
+      expect(await counter.count(key)).toBe(0);
+    }
+  );
+
+  test(
+    'an approval that appears while nobody types takes the focus, and keeps it when the run pauses',
+    { tag: '@gate' },
+    async ({ page }) => {
+      await signInPage(page, USER);
+      const key = `free-${crypto.randomUUID().slice(0, 8)}`;
+      await openApp(page, APPROVAL_APP);
+
+      // Sent by keyboard, as a keyboard user does; then nobody types anywhere. The
+      // composer is disabled while the answer runs.
+      const input = composer(page);
+      await input.fill(heldCall(key, 'e2e_counter_write', { key, value: 'focus test' }));
+      await input.press('Enter');
+      await expect(page.getByRole('button', { name: 'Cancel' })).toBeVisible();
+      await page.waitForTimeout(QUIET_MS);
+      await stub.release(key);
+
+      const card = page.getByTestId('tool-approval-card').filter({ visible: true });
+      await expect(card.getByRole('button', { name: 'Approve', exact: true })).toBeVisible();
+      await expect(card).toBeFocused();
+      // The run has paused for the decision: the composer is open again, and it did not
+      // take the focus back at the end of the turn.
+      await expect(page.getByRole('button', { name: 'Cancel' })).toHaveCount(0);
+      await expect(input).toBeEditable();
+      await expect(card).toBeFocused();
+      // Focused, not merely visible: Tab goes on to its first button.
+      await page.keyboard.press('Tab');
+      await expect(card.getByRole('button', { name: 'Approve', exact: true })).toBeFocused();
       expect(await counter.count(key)).toBe(0);
     }
   );

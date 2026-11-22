@@ -178,6 +178,78 @@ describe('PendingWorkStrip', () => {
     expect(screen.getByRole('button', { name: 'Remove message: Message number 3' })).toHaveFocus();
   });
 
+  /** A strip whose list the test sets, as the next read of the chat would; beside a composer. */
+  function Harness({ initial, removes = true, onHost }) {
+    const [items, setItems] = useState(initial);
+    onHost?.({ setItems });
+    return (
+      <>
+        <button type="button">elsewhere</button>
+        <PendingWorkStrip
+          items={items}
+          onAction={(action, target) => {
+            if (removes) setItems(current => current.filter(entry => entry.id !== target.id));
+          }}
+        />
+        <form data-composer="">
+          <textarea aria-label="Type your message" />
+        </form>
+      </>
+    );
+  }
+
+  test('removing the last item sends the focus to the composer, not to the top of the page', async () => {
+    const user = userEvent.setup();
+    let host;
+    render(<Harness initial={[item(1)]} onHost={value => (host = value)} />);
+    screen.getByRole('button', { name: 'Remove message: Message number 1' }).focus();
+    await user.keyboard('{Enter}');
+    expect(screen.queryByTestId('pending-work-strip')).toBeNull();
+    const composer = screen.getByRole('textbox', { name: 'Type your message' });
+    expect(composer).toHaveFocus();
+
+    // Nothing is left over: a new item later, with the focus on the page, takes nothing.
+    composer.blur();
+    expect(document.activeElement).toBe(document.body);
+    act(() => host.setItems([item(2)]));
+    expect(screen.getByTestId('pending-work-strip')).toBeInTheDocument();
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  test('a removal that did not happen leaves no entry behind that later moves the focus', async () => {
+    const user = userEvent.setup();
+    let host;
+    render(
+      <Harness initial={[item(1), item(2)]} removes={false} onHost={value => (host = value)} />
+    );
+    screen.getByRole('button', { name: 'Remove message: Message number 1' }).focus();
+    await user.keyboard('{Enter}');
+    // The remove failed: the next read of the chat still lists the item (and one more).
+    act(() => host.setItems([item(1), item(2), item(3)]));
+    expect(screen.getByRole('button', { name: 'Remove message: Message number 1' })).toHaveFocus();
+
+    // Later the run reads the item and the server drops it, while the focus is on the page.
+    document.activeElement.blur();
+    expect(document.activeElement).toBe(document.body);
+    act(() => host.setItems([item(2), item(3)]));
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  test('a list that does not change yet keeps the entry until the answer to the removal', async () => {
+    const user = userEvent.setup();
+    let host;
+    render(
+      <Harness initial={[item(1), item(2)]} removes={false} onHost={value => (host = value)} />
+    );
+    screen.getByRole('button', { name: 'Remove message: Message number 1' }).focus();
+    await user.keyboard('{Enter}');
+    // A render with the same list (a new array, the same ids) is no answer yet.
+    act(() => host.setItems([item(1), item(2)]));
+    // The answer: the item is gone, and its button with it.
+    act(() => host.setItems([item(2)]));
+    expect(screen.getByRole('button', { name: 'Remove message: Message number 2' })).toHaveFocus();
+  });
+
   test('collapsed (for an embed) starts with the disclosure alone', async () => {
     const user = userEvent.setup();
     render(<PendingWorkStrip items={[item(1)]} collapsed />);
