@@ -593,6 +593,14 @@
     },
     "input": {
       "contextSection": "Message context"
+    },
+    "pending": {
+      "steer": "Will be read at the next step",
+      "sendAfter": "Will be sent as the next message",
+      "listLabel": "Pending in this chat",
+      "remove": "Remove message: {{text}}",
+      "showAll": "{{count}} pending · Show all",
+      "showLess": "Show less"
     }
   },
   "auth": {
@@ -11390,6 +11398,23 @@
     "loadFailed": "The notice could not be loaded. Check your connection and try again.",
     "cookieBlocked": "Your browser blocks cookies in this frame, so the confirmation cannot be kept here. Open iHub in its own tab to confirm.",
     "openInBrowser": "Open iHub in the browser"
+  },
+  "runState": {
+    "queued": "Queued",
+    "running": "Running",
+    "waiting": "Waiting for you",
+    "scheduled": "Scheduled",
+    "done": "Done",
+    "noChange": "No change",
+    "blocked": "Blocked",
+    "needsAttention": "Needs attention",
+    "failed": "Failed",
+    "stopped": "Stopped",
+    "interrupted": "Interrupted",
+    "stalled": "No progress",
+    "stalledSince": "No progress since {{time}}",
+    "paused": "Paused",
+    "skipped": "Skipped"
   },
   "toast": {
     "region": "Notifications",
