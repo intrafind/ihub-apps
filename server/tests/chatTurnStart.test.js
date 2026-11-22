@@ -30,8 +30,10 @@ import {
   registerScopeProvider,
   unregisterScopeProvider
 } from '../services/integrations/scopes/index.js';
+import { turnRequestOf } from '../routes/chat/sessionRoutes.js';
 import { isChatDurable } from '../sse.js';
 import { ServiceError } from '../utils/ServiceError.js';
+import { chatPostSchema } from '../validators/index.js';
 
 const MODEL = {
   id: 'golden-model',
@@ -448,4 +450,76 @@ test('a failure after the commit point is a frame on the stream of the caller, a
     error => error instanceof ServiceError && error.code === 'CONFLICT'
   );
   assert.equal(isChatDurable(plain.turn.chatId), false);
+});
+
+/** What `turnRequestOf` reads of a request: no Express, a plain object. */
+function chatPost(body, headers = {}) {
+  return {
+    params: { appId: 'desk', chatId: 'chat-1' },
+    body,
+    headers,
+    user,
+    ip: '203.0.113.7',
+    originalUrl: '/api/apps/desk/chat/chat-1'
+  };
+}
+
+test('the chat route carries every field of its body into the turn request', () => {
+  // A field that is added to the schema of the POST and not to `turnRequestOf` would be
+  // accepted and then silently dropped: this is where that fails.
+  const fields = Object.keys(chatPostSchema.body.shape).filter(field => field !== 'messages');
+  assert.ok(fields.length >= 20, 'the schema of the chat POST lists its fields');
+  const body = Object.fromEntries(fields.map(field => [field, `value of ${field}`]));
+  const message = { role: 'user', content: 'hi', messageId: 'msg-9' };
+  const request = turnRequestOf(chatPost({ ...body, messages: [message] }));
+  for (const field of fields) {
+    assert.equal(request[field], `value of ${field}`, `${field} is not in the turn request`);
+  }
+  assert.equal(request.chatId, 'chat-1');
+  assert.equal(request.appId, 'desk');
+  assert.deepEqual(request.principalRef, { type: 'user', id: 'u1' });
+  assert.equal(request.origin, 'person');
+  assert.equal(request.clientTimezone, null);
+  // Plain data: no request, no response, no user object, nothing that cannot be copied.
+  assert.doesNotThrow(() => structuredClone(request));
+  assert.ok(!Object.values(request).includes(user));
+});
+
+test('the chat route names the new message, counts what was sent before it, and reads three headers', () => {
+  const first = { role: 'user', content: 'earlier' };
+  const last = { role: 'user', content: 'new', messageId: 'msg-2' };
+
+  const one = turnRequestOf(chatPost({ messages: [last] }));
+  assert.equal(one.message, last);
+  assert.equal(one.messageId, 'msg-2');
+  assert.equal(one.clientHistory, 0);
+  // What the body left out stays undefined: the stored setup of the chat fills it in.
+  assert.equal(one.modelId, undefined);
+  assert.equal(one.integrationScopes, undefined);
+
+  const two = turnRequestOf(chatPost({ messages: [first, last] }));
+  assert.equal(two.message, last);
+  assert.equal(two.clientHistory, 1);
+
+  const none = turnRequestOf(chatPost({ messages: [] }));
+  assert.equal(none.message, undefined);
+  assert.equal(none.messageId, null);
+  assert.equal(none.clientHistory, 0);
+
+  const headers = {
+    'accept-language': 'de-DE,de;q=0.9,en;q=0.8',
+    'x-session-id': 'session-7',
+    'user-agent': 'test-agent'
+  };
+  const withHeaders = turnRequestOf(chatPost({ messages: [last] }, headers));
+  assert.equal(withHeaders.language, 'de-DE');
+  assert.deepEqual(withHeaders.client, {
+    sessionId: 'session-7',
+    userAgent: 'test-agent',
+    ip: '203.0.113.7',
+    url: '/api/apps/desk/chat/chat-1'
+  });
+  // The language of the body wins over the header.
+  const named = turnRequestOf(chatPost({ messages: [last], language: 'en' }, headers));
+  assert.equal(named.language, 'en');
 });

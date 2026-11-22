@@ -129,9 +129,11 @@ const COMPONENT = 'chatTurnStart';
  * @property {Object<string, string>} [integrationScopes] - The scope picked per integration.
  * @property {string} [language] - The language the sender works in; the
  *   platform's default language when left out.
- * @property {string|null} [clientTimezone] - The sender's IANA time zone.
+ * @property {string|null} [clientTimezone] - The sender's IANA time zone, handed to the
+ *   tools and to the scheduling note of the prompt. The chat POST carries none.
  * @property {boolean} [toolApprovalCapable] - The sender's client draws tool approval cards.
- * @property {'person'} origin - What started the turn. A message somebody sent is `person`.
+ * @property {'person'} origin - What started the turn. A message somebody sent is `person`,
+ *   and that is the only origin so far: the turn carries it and decides nothing by it yet.
  * @property {*} [bypassAppPrompts]
  * @property {string[]} [requestedSkills]
  * @property {string[]} [documentIds]

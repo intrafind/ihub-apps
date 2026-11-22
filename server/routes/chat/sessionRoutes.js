@@ -95,7 +95,7 @@ function wantsEventStream(req) {
  * @param {import('express').Request} req
  * @returns {import('../../services/chat/chatTurnStart.js').TurnRequest}
  */
-function turnRequestOf(req) {
+export function turnRequestOf(req) {
   const { appId, chatId } = req.params;
   const { messages } = req.body;
   const message = messages.at(-1);
