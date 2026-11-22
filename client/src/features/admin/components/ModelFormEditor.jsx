@@ -1426,7 +1426,7 @@ function ModelFormEditor({
                             >
                               {t(
                                 'admin.models.hints.parallelToolCalls',
-                                'Only has an effect while the feature "Read-only tool calls side by side" is on (Admin → Features). Turn it off for a model that should get its tool results one call at a time.'
+                                'Only has an effect while the feature "Read-only tool calls side by side" is on (Admin → Features). Turn it off for a model whose tool calls should run one after the other.'
                               )}
                             </p>
                           </div>

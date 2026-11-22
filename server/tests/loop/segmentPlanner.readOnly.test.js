@@ -11,9 +11,12 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { planToolBatches } from '../../services/loop/segmentPlanner.js';
 import { toolPoliciesSchema } from '../../services/loop/contracts/loop.js';
 import { stampToolApproval } from '../../utils/toolApproval.js';
+import { shippedToolsDir } from '../../services/tools/shippedToolDefinitions.js';
 
 const READ_ONLY = { parallel: true, parallelMode: 'readOnly' };
 
@@ -214,6 +217,52 @@ test('the targets mode does not ask the seams: it is planned as before', () => {
   };
   assert.deepEqual(ids(planToolBatches(calls, { parallel: true }, { mayTakeOver })), [
     ['call_0', 'call_1']
+  ]);
+});
+
+test('the targets mode batches by the same stamp: a declared read, never a claim', () => {
+  // What a workflow or agent node with `parallelToolCalls: true` runs on
+  // (`PromptNodeExecutor`): the mode `targets`, on tools stamped like a chat's.
+  const TARGETS = { parallel: true };
+  const shipped = id =>
+    JSON.parse(readFileSync(path.join(shippedToolsDir(), `${id}.json`), 'utf8'));
+  // No arguments: nothing names a target, so only `readOnly` can put two calls together.
+  const bare = (...tools) => round(...tools).map(item => ({ ...item, args: {} }));
+
+  const memory = stamped(shipped('read_memory'));
+  const inbox = stamped(shipped('read_inbox'));
+  assert.equal(memory.readOnly, true);
+  assert.equal(inbox.readOnly, true);
+  assert.deepEqual(ids(planToolBatches(bare(memory, inbox), TARGETS)), [['call_0', 'call_1']]);
+
+  // The same two tools as they shipped before they declared anything: one at a time.
+  // This is what the declaration changed for such a node, with no feature involved.
+  const undeclaredTool = id => {
+    const { sideEffect: _declared, ...before } = shipped(id);
+    return stamped(before);
+  };
+  assert.deepEqual(
+    ids(
+      planToolBatches(bare(undeclaredTool('read_memory'), undeclaredTool('read_inbox')), TARGETS)
+    ),
+    [['call_0'], ['call_1']]
+  );
+
+  // A write, a tool that only claims to read and a remote tool that says so
+  // about itself never count as read-only here either.
+  const claims = stamped({ id: 'claims', readOnly: true });
+  for (const other of [stamped(shipped('write_memory')), claims, annotated, undeclared]) {
+    assert.deepEqual(
+      ids(planToolBatches(bare(memory, other), TARGETS)),
+      [['call_0'], ['call_1']],
+      other.id
+    );
+  }
+
+  // The node's default (`parallelToolCalls` unset): one call at a time, declared or not.
+  assert.deepEqual(ids(planToolBatches(bare(memory, inbox), { parallel: false })), [
+    ['call_0'],
+    ['call_1']
   ]);
 });
 

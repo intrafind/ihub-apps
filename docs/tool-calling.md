@@ -482,9 +482,22 @@ The feature covers every chat turn: an answer in a chat, the run of a scheduled 
 that another app calls as a tool.
 
 A model can be taken out: `"parallelToolCalls": false` in the model file, or the checkbox of the
-same name in the model's settings ([Models](models.md)). Workflow steps are not affected by the
-feature; they keep their own setting (`parallelToolCalls` of the step, see
-[Agent Loop](agent-loop.md#workflow-prompt--agent-nodes)).
+same name in the model's settings ([Models](models.md)).
+
+The feature does not switch anything in workflow steps. A step runs its calls one after the other
+unless the step itself sets `parallelToolCalls: true`
+([Agent Loop](agent-loop.md#workflow-prompt--agent-nodes)), whether the feature is on or off.
+
+One thing does change for a step that sets `parallelToolCalls: true`, without any feature: such a
+step has always run read-only calls side by side, and what counts as read-only is the declaration
+described above. iHub's own read tools that declared nothing before now declare `read`: among
+them the project knowledge tools, `read_memory`, `read_inbox`, `list_tasks`,
+`list_scheduled_tasks`, `list_task_runs`, `get_task_run`, `evidence_collect`,
+`evidence_validateQuotesFastPath`, `preview_pdf`, `activate_skill`, `read_skill_resource`,
+`find_skill` and `search_tools` (the table above has every tool). Two calls of them in one step of
+such a workflow therefore run at the same time where they ran one after the other before, for
+example `read_memory` and `read_inbox`. The model still gets the results in the order of its
+calls. A step without the setting, which is the default, is unchanged.
 
 What the feature changes in the events of a run is described in
 [Streaming Events](streaming-events.md) (`tool/started.parallelGroup` and `callIndex`).

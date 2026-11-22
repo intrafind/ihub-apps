@@ -82,7 +82,7 @@ defaults.
 | `tools.maxRateLimitFailures`      | 2       | 429/503-style failures before a tool is withheld for the segment       |
 | `tools.maxConsecutiveFailures`    | 3       | Consecutive failures (any error) before a tool is withheld              |
 | `tools.parallel` / `maxParallel`  | true / 4 | Segment planner: whether calls of one model step may run concurrently, and how many at once |
-| `tools.parallelMode`              | `targets` | Which calls may share a batch. `targets`: read-only tools, and calls whose arguments do not overlap. `readOnly`: only calls of tools that are a read by declaration (`isTrustedReadOnly`, see [Tool Approval](tool-approval.md#for-developers)), and only when every call of the step is one; any other call makes the step run one call at a time, in the model's order. A chat turn uses `readOnly` |
+| `tools.parallelMode`              | `targets` | Which calls may share a batch. `targets`: read-only tools (the stamped `readOnly`, a read by declaration), and calls whose arguments do not overlap. `readOnly`: only calls of tools that are a read by declaration (`isTrustedReadOnly`, see [Tool Approval](tool-approval.md#for-developers)), and only when every call of the step is one; any other call makes the step run one call at a time, in the model's order. A chat turn uses `readOnly` |
 | `tools.choice`                    | `auto`  | `required` makes the first model call of a turn call a tool; later calls are `auto`. See [Requiring a tool call](tool-calling.md#requiring-a-tool-call) |
 | `context.compactThresholdTokens`  | 16000   | Proactive compaction threshold (see [Context compaction](#context-compaction)) |
 | `context.strategy`                | `elide` | `elide`: old tool/assistant bodies collapse to previews (lossy). `digest`: old tool batches are condensed into a findings digest |
@@ -354,7 +354,7 @@ supplies `executeToolCall` as the tool executor. Node config knobs:
 | Node config                   | Maps to                                     |
 | ----------------------------- | ------------------------------------------- |
 | `maxIterations`               | `budgets.maxToolRounds` (else the agent profile's `budgets.maxToolRoundsPerNode`, else 10) |
-| `parallelToolCalls`           | `tools.parallel` (default **false** for workflow nodes — workflow tools mutate shared run state). The mode stays `targets`; the feature `parallelToolCalls` of chats does not apply to workflow nodes |
+| `parallelToolCalls`           | `tools.parallel` (default **false** for workflow nodes — workflow tools mutate shared run state). The mode stays `targets`; the feature `parallelToolCalls` of chats does not apply to workflow nodes. In `targets`, "read-only" is the tool's stamped `readOnly`, which is a read by declaration (`isTrustedReadOnly`): a node that sets `true` batches two calls of iHub's own read tools (`read_memory` and `read_inbox`, for example) since they declare `read`, where it ran them one after the other before |
 | `maxRateLimitFailures`        | `tools.maxRateLimitFailures`                |
 | `maxConsecutiveToolFailures`  | `tools.maxConsecutiveFailures`              |
 | `toolChoice`                  | `tools.choice` (`auto` or `required`; default `auto`) |

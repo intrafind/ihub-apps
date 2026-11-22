@@ -29,7 +29,8 @@ about as long as the slowest of them. The feature is a preview and off by defaul
 **Admin → Features → Read-only tool calls side by side**.
 
 - It applies to answers in a chat, to the runs of scheduled tasks and to apps that are called as
-  a tool. Workflow steps keep their own setting.
+  a tool. Workflow steps keep their own setting (`parallelToolCalls` of the step, off by default)
+  and are not switched by the feature.
 - Up to four calls run at once. A step that holds a call which changes something, asks the user a
   question or needs an approval runs one call at a time, in the order the model asked for them, as
   before.
@@ -50,3 +51,9 @@ about as long as the slowest of them. The feature is a preview and off by defaul
   `knowledge_list`), `read_memory`, `read_inbox`, `list_tasks`, `evidence_collect`,
   `evidence_validateQuotesFastPath` and `preview_pdf`. Tools that change something are asked for
   as before. Use the mode **Always ask** where these reads should still be confirmed.
+- The same declarations change one thing without the feature: a workflow or agent step that sets
+  `parallelToolCalls: true` has always run read-only calls side by side, and now counts these
+  tools among them. Two calls of iHub's own read tools in one such step (for example
+  `read_memory` and `read_inbox`) run at the same time where they ran one after the other before;
+  the model still gets the results in the order of its calls. Steps without the setting are
+  unchanged.
