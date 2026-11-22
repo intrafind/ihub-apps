@@ -72,3 +72,14 @@ signed-in user) could call any app as a tool, including apps no group of it gran
 When an MCP client cancels a `tools/call`, the integration tool, app or workflow it started now
 stops as well, as it does when you press Stop in a chat. Before, it went on running on the server
 until it finished.
+
+## Chat: A Finished Answer Is Stored Before the Chat Says It Is Done
+
+Right after an answer finished, the chat could briefly have no answer stored: opening the chat
+again at that moment, or a browser that had lost the reply to the message and caught up with the
+answer, could show the question without its answer until the chat was opened once more.
+
+- The server now stores the answer first and only then tells the browser that the answer is
+  complete.
+
+No action is needed after the upgrade.

@@ -1306,6 +1306,19 @@ class ChatService {
           basis: carriedBasis({ prior: resume?.basis || connectResume?.basis, result })
         });
       }
+      // The terminal frames (`stream/error`, `run/ended`) are held back until
+      // the answer is stored (below), and then sent in the order they were
+      // made: the client stops reading at either of them.
+      const terminalFrames = [];
+      const finishStream = {
+        emit: (type, data) => {
+          if (type === SSE_V2_EVENTS.STREAM_ERROR || type === SSE_V2_EVENTS.RUN_ENDED) {
+            terminalFrames.push([type, data]);
+            return null;
+          }
+          return stream.emit(type, data);
+        }
+      };
       outcome = await this._finishTurn({
         result,
         outputId,
@@ -1313,7 +1326,7 @@ class ChatService {
         runId,
         chatId,
         streaming,
-        stream,
+        stream: finishStream,
         buildLogData: log,
         model,
         timeoutMs,
@@ -1371,17 +1384,31 @@ class ChatService {
       // The single choke point: every terminal shape `_finishTurn` produces —
       // normal, aborted, error, passthrough answer, malformed response —
       // passes through here with the same summary.
+      //
+      // The answer is stored BEFORE the client is told the turn is over. A
+      // client that has seen `run/ended` re-reads the stored chat (a reattached
+      // turn does at once, `useAppChat`'s `rereadStoredChat`; a user reloads):
+      // told first, it can read the chat in the window before the append and
+      // replace the answer on screen with a transcript that lacks it. The
+      // stored activity does not need the frame: the materializer settles a
+      // run that is still open in its recording (`runActivity.js`).
+      try {
+        if (persist) {
+          await materializeAssistantTurn({
+            repository: persist.repository,
+            chatId,
+            runId,
+            summary: outcome,
+            clientConnected: clientConnectedOf(persist, chatId),
+            message: persist.assistant,
+            runLog: this.runLog,
+            takeLeftover: leftover.takerFor(outcome.status, outcome.abortCause?.kind)
+          });
+        }
+      } finally {
+        for (const [type, data] of terminalFrames) stream.emit(type, data);
+      }
       if (persist) {
-        await materializeAssistantTurn({
-          repository: persist.repository,
-          chatId,
-          runId,
-          summary: outcome,
-          clientConnected: clientConnectedOf(persist, chatId),
-          message: persist.assistant,
-          runLog: this.runLog,
-          takeLeftover: leftover.takerFor(outcome.status, outcome.abortCause?.kind)
-        });
         // A named chat is easier to find again. After the answer is stored and
         // not awaited: the title never delays the turn, and it works the same
         // when the client has long gone, because the user is a closure value.
@@ -1404,16 +1431,8 @@ class ChatService {
     } catch (error) {
       // The loop never throws for model or tool failures; this is a bug path.
       logger.error('Chat turn crashed', { component: COMPONENT, chatId, runId, error });
-      stream.emit(SSE_V2_EVENTS.STREAM_ERROR, {
-        code: 'INTERNAL_ERROR',
-        message: error.message || 'Internal error'
-      });
-      stream.emit(SSE_V2_EVENTS.RUN_ENDED, {
-        status: 'error',
-        finishReason: 'error',
-        error: { code: 'INTERNAL_ERROR', message: error.message || 'Internal error' }
-      });
-      // Ledger first here too, for the reason above.
+      // Ledger first here too, for the reason above; `stream/error` and
+      // `run/ended` after the chat is settled, as on the ordinary path.
       this._endLedgerRun(runId, {
         status: 'error',
         finishReason: 'error',
@@ -1423,20 +1442,32 @@ class ChatService {
       });
       // `_finishTurn` never ran, so nothing else releases the chat: without
       // this it stays `running` with a live `activeRunId` forever.
-      if (persist) {
-        await materializeAssistantTurn({
-          repository: persist.repository,
-          chatId,
-          runId,
-          summary: {
-            status: 'error',
-            content: '',
-            finishReason: 'error',
-            errorInfo: { code: 'INTERNAL_ERROR', message: error.message || 'Internal error' }
-          },
-          clientConnected: clientConnectedOf(persist, chatId),
-          runLog: this.runLog,
-          takeLeftover: leftover.takerFor('error')
+      try {
+        if (persist) {
+          await materializeAssistantTurn({
+            repository: persist.repository,
+            chatId,
+            runId,
+            summary: {
+              status: 'error',
+              content: '',
+              finishReason: 'error',
+              errorInfo: { code: 'INTERNAL_ERROR', message: error.message || 'Internal error' }
+            },
+            clientConnected: clientConnectedOf(persist, chatId),
+            runLog: this.runLog,
+            takeLeftover: leftover.takerFor('error')
+          });
+        }
+      } finally {
+        stream.emit(SSE_V2_EVENTS.STREAM_ERROR, {
+          code: 'INTERNAL_ERROR',
+          message: error.message || 'Internal error'
+        });
+        stream.emit(SSE_V2_EVENTS.RUN_ENDED, {
+          status: 'error',
+          finishReason: 'error',
+          error: { code: 'INTERNAL_ERROR', message: error.message || 'Internal error' }
         });
       }
       throw error;
@@ -1653,12 +1684,15 @@ class ChatService {
     // from the stored messages), so they are in the live frames only.
     const context = contextTracker?.replay(content) || contextTracker?.last() || undefined;
     if (context) summary.context = context;
-    const endRun = data =>
+    // `runTurn` passes a stream that holds the terminal frames back until the
+    // answer is stored, so the client is told the turn is over only then.
+    const endRun = data => {
       stream.emit(SSE_V2_EVENTS.RUN_ENDED, {
         ...(usage ? { usage } : {}),
         ...(context ? { context } : {}),
         ...data
       });
+    };
     // The provenance object of the answer (EU AI Act Art. 50(2)): hashed from
     // the text the caller receives, so it runs after structured-output
     // validation and before citation markers. A store failure never fails the
