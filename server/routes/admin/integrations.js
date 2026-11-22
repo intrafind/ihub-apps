@@ -870,6 +870,13 @@ export default function registerAdminIntegrationsRoutes(app) {
    *                     enum: [project, web, ifinder, iassistant, documents, integration]
    *                   place:
    *                     type: string
+   *               untrustedInput:
+   *                 type: boolean
+   *                 enum: [true]
+   *                 description: >
+   *                   The action returns content from outside iHub. Only `true` is
+   *                   accepted (`null` removes the admin's own mark); it never takes
+   *                   away what the tool's data flow or kind already says.
    *     responses:
    *       200:
    *         description: "`{ success, override, detail }`"

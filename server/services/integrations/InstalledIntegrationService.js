@@ -828,8 +828,10 @@ export class InstalledIntegrationService {
   /**
    * Change the admin override of one action (#2974): any of `description`,
    * `guidance`, `examples` (texts, `{ en, de }` or a string), `sideEffect`
-   * `dataFlow` and `activity` (what the tool is in the chat, see
-   * `services/tools/toolCategory`). A key set to null removes that part of the override; a
+   * `dataFlow`, `activity` (what the tool is in the chat, see
+   * `services/tools/toolCategory`) and `untrustedInput` (`true`: the action
+   * returns content from outside iHub; it can only be added, so `false` is
+   * refused). A key set to null removes that part of the override; a
    * key left out keeps it. Only this action's override changes.
    *
    * @param {string} id
@@ -854,7 +856,8 @@ export class InstalledIntegrationService {
           'examples',
           'sideEffect',
           'dataFlow',
-          'activity'
+          'activity',
+          'untrustedInput'
         ]) {
           if (!Object.hasOwn(patch, key)) continue;
           const value =

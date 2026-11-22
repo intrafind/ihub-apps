@@ -43,6 +43,10 @@ import {
   stampToolApproval
 } from '../utils/toolApproval.js';
 import { needsApproval } from '../../shared/toolApproval.js';
+import {
+  actionOverrideSchema,
+  integrationsConfigSchema
+} from '../validators/integrationsConfigSchema.js';
 
 const SERVER_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DECLARABLE = ['read', 'write', 'destructive'];
@@ -389,6 +393,43 @@ describe('isTrustedReadOnly', () => {
     assert.equal(isTrustedReadOnly({ ...mcp({ readOnlyHint: true }), sideEffect: 'read' }), false);
   });
 
+  it('is false for a read that only the tool of an A2A agent claims, until an admin declares it', () => {
+    // As the A2A adapter builds it (`_a2a` and `_integration`), and as the client manager does.
+    const viaAdapter = {
+      id: 'a2a__agent__summarise',
+      sideEffect: 'read',
+      _integration: { instanceId: 'agent', action: 'summarise' },
+      _a2a: { agentId: 'agent', skillId: 'summarise' }
+    };
+    const bare = { id: 'a2a__agent__summarise', sideEffect: 'read', _a2a: { agentId: 'agent' } };
+    const admin = sideEffect => ({
+      id: 'agent',
+      actions: { overrides: { summarise: { sideEffect } } }
+    });
+    for (const tool of [viaAdapter, bare]) {
+      assert.equal(isTrustedReadOnly(tool), false);
+      // Nothing iHub trusts said `read`: the gate of the mode `writes` asks.
+      const resolved = resolveSideEffect(tool);
+      assert.deepEqual(resolved, { sideEffect: 'unknown', sideEffectSource: 'default' });
+      assert.equal(needsApproval({ approval: 'writes', ...resolved }), true);
+    }
+    assert.equal(isTrustedReadOnly(viaAdapter, admin('read')), true);
+    assert.deepEqual(resolveSideEffect(viaAdapter, admin('read')), {
+      sideEffect: 'read',
+      sideEffectSource: 'admin'
+    });
+    assert.equal(isTrustedReadOnly(viaAdapter, admin('write')), false);
+
+    // The stamp follows: no `readOnly` without the admin, `readOnly` with it.
+    const stamp = installation =>
+      stampToolApproval([viaAdapter], null, null, { getInstallation: () => installation })[0];
+    assert.equal(stamp(null).sideEffect, 'unknown');
+    assert.notEqual(stamp(null).readOnly, true);
+    assert.equal(isTrustedReadOnly(stamp(null)), false);
+    assert.equal(stamp(admin('read')).readOnly, true);
+    assert.equal(isTrustedReadOnly(stamp(admin('read'))), true);
+  });
+
   it('is false for a tool that declares nothing', () => {
     assert.equal(isTrustedReadOnly({ id: 'custom__lookup', _integration: {} }), false);
     assert.equal(isTrustedReadOnly({ id: 'internal', isInternalTool: true }), false);
@@ -484,6 +525,58 @@ describe('resolveUntrustedInput', () => {
         id: 'crm',
         actions: { overrides: { notes: { dataFlow: 'internal' } } }
       }),
+      true
+    );
+  });
+
+  it('the flag an admin adds can be stored on the action, and only as `true`', async () => {
+    assert.deepEqual(actionOverrideSchema.parse({ sideEffect: 'read', untrustedInput: true }), {
+      sideEffect: 'read',
+      untrustedInput: true
+    });
+    assert.deepEqual(actionOverrideSchema.parse({ sideEffect: 'read' }), { sideEffect: 'read' });
+    assert.equal(actionOverrideSchema.safeParse({ untrustedInput: false }).success, false);
+    assert.equal(actionOverrideSchema.safeParse({ untrustedInput: 'yes' }).success, false);
+
+    // Through the service behind `PUT …/installed/{id}/actions/{action}`, and back out.
+    const { InstalledIntegrationService } =
+      await import('../services/integrations/InstalledIntegrationService.js');
+    const config = { installed: [{ id: 'crm', definition: 'custom/crm', actions: {} }] };
+    const service = new InstalledIntegrationService({
+      registry: { list: () => [], get: () => null }
+    });
+    service._updateConfig = async mutate => mutate(config);
+    service._afterChange = async () => {};
+    const tool = {
+      id: 'crm__notes',
+      dataFlow: 'internal',
+      _integration: { instanceId: 'crm', action: 'notes' }
+    };
+
+    const set = await service.setActionOverride('crm', 'notes', { untrustedInput: true });
+    assert.deepEqual(set.override, { untrustedInput: true });
+    assert.equal(resolveUntrustedInput(tool, config.installed[0]), true);
+    // What is stored passes the schema of the config file unchanged.
+    assert.deepEqual(integrationsConfigSchema.parse(config).installed[0].actions.overrides.notes, {
+      untrustedInput: true
+    });
+
+    await assert.rejects(
+      service.setActionOverride('crm', 'notes', { untrustedInput: false }),
+      error => error.code === 'INVALID_OVERRIDE'
+    );
+    assert.equal(
+      resolveUntrustedInput(tool, config.installed[0]),
+      true,
+      'a refused change changes nothing'
+    );
+
+    // The admin takes the own mark back; what the tool says itself is not theirs to take.
+    const cleared = await service.setActionOverride('crm', 'notes', { untrustedInput: null });
+    assert.equal(cleared.override, null);
+    assert.equal(resolveUntrustedInput(tool, config.installed[0]), false);
+    assert.equal(
+      resolveUntrustedInput({ ...tool, dataFlow: 'external' }, config.installed[0]),
       true
     );
   });

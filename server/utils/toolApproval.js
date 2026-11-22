@@ -151,6 +151,9 @@ export function actionNameOf(toolDef) {
  * 1. The installation's admin override (`actions.overrides[action].sideEffect`).
  * 2. A tool's own `sideEffect` (a platform tool's shipped definition).
  * 3. An integration action's declared side effect (definition, OpenAPI method).
+ *    Steps 2 and 3 never hold for a tool of a remote MCP server or A2A agent
+ *    (`_mcp`, `_a2a`): what such a tool carries is what the remote side says
+ *    about itself, so only step 1 declares it.
  * 4. MCP annotations — **untrusted**, see the module docs.
  * 5. `readOnly: true` (iHub's own connectors) or an internal tool → `read`.
  * 6. `unknown`.
@@ -185,7 +188,10 @@ function sideEffectOf(toolDef, installation) {
   }
   const declared = toolDef?.sideEffect;
   const isMcp = Boolean(toolDef?._mcp);
-  if (SIDE_EFFECTS.includes(declared) && declared !== 'unknown' && !isMcp) {
+  // A remote tool's own `sideEffect` is never a declaration: nobody iHub
+  // trusts wrote it. Only the admin's override above declares such a tool.
+  const isRemote = isMcp || Boolean(toolDef?._a2a);
+  if (SIDE_EFFECTS.includes(declared) && declared !== 'unknown' && !isRemote) {
     return {
       sideEffect: declared,
       sideEffectSource: toolDef?._integration ? 'definition' : 'tool',

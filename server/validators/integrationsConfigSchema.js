@@ -64,7 +64,14 @@ export const actionOverrideSchema = z.object({
   sideEffect: z.enum(SIDE_EFFECTS).optional(),
   dataFlow: z.enum(DATA_FLOWS).optional(),
   /** What the tool is and where it looks (`services/tools/toolCategory`): corrects a mislabelled MCP or custom tool. */
-  activity: activityDeclarationSchema.optional()
+  activity: activityDeclarationSchema.optional(),
+  /**
+   * The action returns content from outside iHub's control (#3785,
+   * `utils/toolApproval.js` `resolveUntrustedInput`). An admin can only add
+   * the mark: `true` or absent, never `false`, which would read as taking
+   * away what the tool's own data flow or kind already says.
+   */
+  untrustedInput: z.literal(true).optional()
 });
 
 const installedActionsSchema = z.object({

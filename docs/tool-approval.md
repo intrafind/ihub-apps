@@ -33,6 +33,9 @@ Every tool has a side effect (`read`, `write`, `destructive`, `unknown`) and a d
 1. The installation's admin override (`actions.overrides[<action>].sideEffect`).
 2. The tool file's own `sideEffect` (per function or for the whole tool).
 3. The integration action's declaration (definition, OpenAPI HTTP method).
+   Steps 2 and 3 never apply to a tool of a remote MCP server or a skill of an A2A agent: whatever
+   such a tool carries is what the remote side says about itself. Only the admin's override
+   (step 1) declares it.
 4. MCP tool annotations (`readOnlyHint`, `destructiveHint`). These are **untrusted**: a remote
    server can say anything about its own tools. They are shown, and `destructiveHint` makes a
    tool stricter, but a claimed `readOnlyHint` never relaxes a gate. Under `writes`, such a tool
@@ -264,7 +267,11 @@ be resumed after an answer (`EXECUTION_PRINCIPAL_UNKNOWN`): start it again.
   `sideEffect === 'read'`, wherever a read is allowed to do more than a write.
   `resolveUntrustedInput(toolDef, installation)` answers whether a tool returns content from
   outside iHub (an external data flow, a remote MCP server or A2A agent, a search, a page, a
-  document or a file read, or a tool that says so with `untrustedInput: true`).
+  document or a file read, or a tool that says so with `untrustedInput: true`). An admin can add
+  the mark to an action of an installation (`actions.overrides[<action>].untrustedInput: true`,
+  `PUT /api/admin/integrations/installed/{id}/actions/{action}`; no control in the admin UI yet).
+  The mark can only be added: `false` is refused, and `null` removes the admin's own mark without
+  touching what the rules above say. Nothing reads the answer at run time yet.
 - Seam: `server/services/loop/seams/approvalSeam.js`, registered first in the chat turn, workflow
   nodes and scheduled runs, before the seams that announce (`tool/started`) or run a call.
 - Chat continuation: `server/services/chat/chatToolApproval.js`. The stored chat transcript holds

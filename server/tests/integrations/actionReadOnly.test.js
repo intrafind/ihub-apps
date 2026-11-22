@@ -216,3 +216,56 @@ describe('a tool of a remote MCP server', () => {
     assert.equal(batched(stamp(mcpTool({ readOnlyHint: true }), instance)), false);
   });
 });
+
+describe('a skill of a remote A2A agent', () => {
+  const stamp = (tool, instance = null, platform = null) =>
+    stampToolApproval([tool], null, platform, { getInstallation: () => instance })[0];
+  /**
+   * A skill as `A2aAdapter.discoverTools` hands it over. `claims` is what the
+   * remote side would say about its own skill; no agent card field feeds it
+   * today, and nothing it says may count.
+   */
+  const a2aTool = (claims = {}) => ({
+    id: 'a2a__desk__summarise',
+    name: 'a2a__desk__summarise',
+    description: 'Summarise a text',
+    parameters: { type: 'object', properties: { message: { type: 'string' } } },
+    type: 'integration',
+    _a2a: { agentId: 'desk', agentName: 'Desk', skillId: 'summarise', skillName: 'Summarise' },
+    _integration: {
+      instanceId: 'desk',
+      instanceLabel: 'Desk',
+      action: 'summarise',
+      definition: 'com.intrafind/a2a-agent'
+    },
+    ...claims
+  });
+  const WRITES = { toolApproval: { defaults: { external: 'writes' } } };
+
+  it('as built today: unknown, never batched, asked for under writes', () => {
+    const tool = stamp(a2aTool(), null, WRITES);
+    assert.equal(tool.sideEffect, 'unknown');
+    assert.equal(needsApproval(tool), true);
+    assert.equal(batched(stamp(a2aTool())), false);
+  });
+
+  it('a read the skill claims for itself: still unknown, never batched, still asked for', () => {
+    const claims = { sideEffect: 'read' };
+    const tool = stamp(a2aTool(claims), null, WRITES);
+    assert.equal(tool.sideEffect, 'unknown');
+    assert.equal(tool.sideEffectSource, 'default');
+    assert.notEqual(tool.readOnly, true);
+    assert.equal(isTrustedReadOnly(tool), false);
+    assert.equal(needsApproval(tool), true);
+    assert.equal(batched(stamp(a2aTool(claims))), false);
+  });
+
+  it('batched, and no longer asked for, once an admin set the skill to read', () => {
+    const instance = { id: 'desk', actions: { overrides: { summarise: { sideEffect: 'read' } } } };
+    const tool = stamp(a2aTool(), instance, WRITES);
+    assert.equal(tool.sideEffectSource, 'admin');
+    assert.equal(tool.readOnly, true);
+    assert.equal(needsApproval(tool), false);
+    assert.equal(batched(stamp(a2aTool(), instance)), true);
+  });
+});
