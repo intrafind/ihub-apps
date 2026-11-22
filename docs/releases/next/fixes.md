@@ -47,3 +47,18 @@ back from wherever it was.
   of going round inside the card.
 - The notice of a scheduled run that waits for your approval stays until you close it; the other
   notices still close by themselves after 12 seconds.
+
+## An App Call Without Resolved Permissions Is Refused
+
+An app that calls another app as a tool, an MCP `tools/call` of an app and an A2A task of an app
+run only for a caller whose permissions are resolved and whose groups grant the app. Before, a
+caller that carried no resolved permissions (an internal or hand-built principal rather than a
+signed-in user) could call any app as a tool, including apps no group of it grants.
+
+- Such a call now answers "You do not have permission to access app …" and no model is called.
+- A refused app call, and a tool call refused because the caller may no longer use the tool (an
+  installation that was disabled or a group grant that was withdrawn after the tools were
+  listed), is written to the audit log: action `execute`, resource `app` or `tool`, result
+  `failure`.
+- Signed-in users, personal API keys and OAuth clients keep the access their groups and clients
+  give them; nothing changes for them.

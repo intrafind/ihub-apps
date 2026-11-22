@@ -213,7 +213,7 @@ Every chat case is recorded twice, once for each position of the feature **Chat 
 
 The routes are mounted in an Express app with the error handler of the product. One thing stands in front of them that the product does not have: a middleware that signs the request in as the user of the case. For `mcp` and `a2a` the bearer token check (`mcpAuth`) is not part of the recording for the same reason; the caller is built with the scopes of a token.
 
-Two cases are named after a known weakness and pin it: `app-as-tool/user-without-permissions` (a caller without a permissions object may call any app) and `scheduled-task/admin-owner` (the run of a task whose owner is an admin: its model is offered a workflow that no group of the owner grants, because an administrator may run every workflow). A row of the difference list names each.
+Two cases were named after a known weakness. `app-as-tool/user-without-permissions` pinned that a caller without a permissions object could call any app; since the run service it pins the refusal (row `fail-open-removal`). `scheduled-task/admin-owner` pins the run of a task whose owner is an admin: its model is offered a workflow that no group of the owner grants, because an administrator may run every workflow (row `unattended-admin-rights`).
 
 ## The legacy workflow path
 
@@ -275,7 +275,7 @@ The list starts with the differences that are known before any code moves. Each 
 | `usage-origin-agent-id` | a usage record names the origin of its run and the agent |
 | `evidence-actor` | an evidence record names the actor of the run |
 | `run-started-additive-fields` | `run/started` gains fields |
-| `app-as-tool-display-fields` | the tool row of an app call gets the display fields of a sub-agent: the name of the app alone as its title (today `App: <name>`) and the activity kind of a sub-agent (today `tool`) |
+| `app-as-tool-display-fields` | the tool row of an app call is titled with the name of the app alone (before: `App: <name>`); the activity kind of a sub-agent follows with the sub-agent row of the chat |
 
 A proposed row accepts nothing yet. The pull request that makes the change edits the row (it says what was decided in the end and names the goldens and parts that really changed), records the goldens again, and gets the row signed.
 
@@ -564,4 +564,6 @@ The nightly workflow also runs a load smoke: `npm run loadtest:smoke` starts the
 
 `server/tests/appToolsGateway.characterization.test.js` pins what happens today when one app calls another as the tool `app__<id>`: the shape of the result, the run of kind `subagent` and its link to the caller, the usage record, the 3-minute limit, the depth of one, the refused approval and the refused question. It runs the real pipeline on a scripted model.
 
-Two of its tests are named `FAIL-OPEN, current behaviour`. They pin a known weakness: a caller without resolved permissions may call any app. Change them only together with the row of the difference list that removes the weakness.
+Two of its tests pin the refusal of a caller without resolved permissions (a bare principal, or none at all): the gateway fails closed and no run starts. Until the run service they pinned the opposite, a known weakness; the row `fail-open-removal` of the difference list records the change.
+
+`server/tests/helpers/appRunEnv.js` starts the environment the tests of apps without a client share (`appToolsGateway.test.js`, `mcp/appInvoker.test.js`, `mcp/mcpServerFiles.test.js` and the tests under `server/tests/run/`): the golden harness with a few apps, groups and integration tools, the real run service, gateway and tool runner, and a scripted model. Use it instead of replacing a part of the run service with a mock.
