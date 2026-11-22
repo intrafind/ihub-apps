@@ -29,6 +29,8 @@ import {
   MCP_OAUTH_CLIENT_METADATA_PATH
 } from '../services/mcp/mcpOAuthPublicUrl.js';
 import { authOptional } from '../middleware/authRequired.js';
+import { createRateLimiters } from '../middleware/rateLimiting.js';
+import configCache from '../configCache.js';
 import { buildServerPath } from '../utils/basePath.js';
 import { zSafeId } from '../validators/common.js';
 import { integrationOAuthCallbackHandler } from './integrations/oauthCallback.js';
@@ -85,10 +87,17 @@ export default function registerMcpOAuthRoutes(app) {
   });
 
   // The per-server callback registered at the authorization servers: an alias
-  // of the one integration callback, bound to this server's flows.
+  // of the one integration callback, bound to this server's flows. It is
+  // reached by browsers returning from a sign-in, with or without a session,
+  // and exchanges the code at the authorization server, so it has the public
+  // API budget (`rateLimit.publicApi`), counted per signed-in user or per
+  // address. The path is not under `/api/integrations`, which the app-level
+  // limiter of middleware/setup.js covers.
+  const callbackLimiter = createRateLimiters(configCache.getPlatform() || {}).publicApiLimiter;
   app.get(
     buildServerPath(`${MCP_OAUTH_CALLBACK_PATH}/:serverId`),
     authOptional,
+    callbackLimiter,
     integrationOAuthCallbackHandler(req => ({
       stack: 'mcp',
       installationId: String(req.params.serverId || '').slice(0, 64)

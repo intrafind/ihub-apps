@@ -4,6 +4,7 @@
 /* global Office, chrome */
 
 import { getOfficeRemote } from '../features/office/utilities/officeRemote';
+import { getHttpUrl } from './httpUrl';
 
 /**
  * Host-aware "leave this surface" helpers: open a URL in the user's browser,
@@ -72,7 +73,7 @@ export function detectExternalNavigationHost() {
  * Open `url` outside the current surface, using whichever API this host
  * provides.
  *
- * @param {string} url Absolute URL to open.
+ * @param {string} url Absolute http(s) URL to open.
  * @returns {boolean} `true` when the URL was handed to the host, `false` when
  *   there was nothing to open or every available path was blocked. A `false`
  *   result means the user saw nothing happen — surface it.
@@ -107,7 +108,7 @@ export function canConfirmExternalOpen() {
  * The URL is handed to the host before this returns, inside the caller's click
  * handler, so no host loses the user gesture it needs to open a window.
  *
- * @param {string} url Absolute URL to open.
+ * @param {string} url Absolute http(s) URL to open.
  * @returns {Promise<boolean>} `false` means the user saw nothing happen.
  */
 export async function openExternalUrlSettled(url) {
@@ -117,12 +118,18 @@ export async function openExternalUrlSettled(url) {
 /**
  * Hand `url` to whichever host API this surface has.
  *
- * @param {string} url
+ * Only `http:` and `https:` URLs are handed off. Every caller passes a URL
+ * that came from a server response, a source's link or the configuration, and
+ * a `javascript:` or `data:` URL must not reach `window.open`,
+ * `chrome.tabs.create` or Office's `openBrowserWindow`.
+ *
+ * @param {string} rawUrl
  * @returns {boolean|Promise<boolean>} A promise only while the extension's tab
  *   is being created, or while the pane behind a popped-out chat answers; it
  *   never rejects.
  */
-function handOffExternalUrl(url) {
+function handOffExternalUrl(rawUrl) {
+  const url = getHttpUrl(rawUrl);
   if (!url) return false;
 
   // A popped-out chat runs in an Office dialog, where only `messageParent`

@@ -55,6 +55,7 @@ import { getChatRepository, MAX_TITLE_LENGTH } from '../services/chat/ChatReposi
 import { chatModelOf, scheduleChatTitle } from '../services/chat/chatTitles.js';
 import { getArtifactRepository } from '../services/artifacts/ArtifactRepository.js';
 import { servedMediaType } from '../services/artifacts/artifactPolicy.js';
+import { setUserFileContentType } from '../utils/activeContentHeaders.js';
 import { sendArtifactsZip } from '../services/artifacts/artifactZip.js';
 import { providerMarkingOfArtifact } from '../services/provenance/artifactProvenance.js';
 import { requireEuAiActEnabled } from '../services/euAiAct/conformity.js';
@@ -753,14 +754,15 @@ export default function registerChatRoutes(app) {
 
     const body = original.data;
     const download = req.query.download === '1' || req.query.download === 'true';
-    res.setHeader('Content-Type', servedMediaType(original.mimeType));
+    // The original is what the user uploaded, under the type they declared: an
+    // HTML or SVG file must not run when this URL is opened on its own.
+    setUserFileContentType(res, servedMediaType(original.mimeType));
     res.setHeader('Content-Length', String(body.length));
     res.setHeader('Cache-Control', 'private, max-age=31536000, immutable');
     res.setHeader(
       'Content-Disposition',
       download ? buildContentDisposition(original.name) : 'inline'
     );
-    res.setHeader('X-Content-Type-Options', 'nosniff');
     return res.send(body);
   });
 

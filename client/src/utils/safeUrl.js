@@ -3,13 +3,13 @@
 
 /**
  * URL checks for the places where the client navigates to a URL that came
- * from outside the code: a `?returnUrl=` parameter, the `authReturnUrl`
- * value in sessionStorage, or an admin-configured link.
+ * from outside the code: a `?returnUrl=` parameter or the `authReturnUrl`
+ * value in sessionStorage.
  *
  * - {@link getSafeReturnPath} turns a stored or requested return URL into a
  *   path on this app, or the app root when it does not point here.
- * - {@link getHttpUrl} resolves a URL and accepts it only with the `http:` or
- *   `https:` scheme.
+ *
+ * The scheme check for admin-configured links, `getHttpUrl`, lives in `httpUrl`.
  */
 
 import { getBasePath } from './runtimeBasePath';
@@ -87,31 +87,4 @@ export function getSafeReturnPath(returnUrl, options = {}) {
   if (!isWithinBasePath(url.pathname, basePath)) return fallback;
 
   return `${url.pathname}${url.search}${url.hash}`;
-}
-
-/**
- * Resolve `value` to an absolute `http:` or `https:` URL, for navigating to an
- * admin-configured link.
- *
- * Relative values are resolved against `base`, so a path such as
- * `/apps/other` stays on the current site.
- *
- * @param {unknown} value - URL to check.
- * @param {string} [base] - Base for relative URLs; the current page by default.
- * @returns {string|null} The resolved URL, or `null` for any other scheme
- *   (`javascript:`, `data:`, `mailto:`, …), an empty value or anything
- *   `new URL()` cannot parse.
- *
- * @example
- * getHttpUrl('https://example.com/tool'); // 'https://example.com/tool'
- * getHttpUrl('mailto:someone@example.com'); // null
- */
-export function getHttpUrl(value, base = window.location.href) {
-  if (typeof value !== 'string' || value.trim() === '') return null;
-  try {
-    const url = new URL(value, base);
-    return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : null;
-  } catch {
-    return null;
-  }
 }
