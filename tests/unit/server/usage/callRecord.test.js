@@ -24,11 +24,15 @@ describe('resolveSurface', () => {
   it('maps run kinds', () => {
     expect(resolveSurface({}, { kind: 'chat' })).toBe('chat');
     expect(resolveSurface({}, { kind: 'subagent' })).toBe('chat');
-    expect(resolveSurface({}, { kind: 'agent' })).toBe('agent');
     expect(resolveSurface({}, { kind: 'workflow' })).toBe('workflow');
     expect(resolveSurface({}, { kind: 'inference' })).toBe('api');
     expect(resolveSurface({ kind: 'utility' })).toBe('system');
     expect(resolveSurface({})).toBe('system');
+  });
+  it('has no run kind agent since the Agent Factory was removed', () => {
+    expect(resolveSurface({}, { kind: 'agent' })).toBe('system');
+    // Records written before name the surface themselves and keep it.
+    expect(resolveSurface({ surface: 'agent' })).toBe('agent');
   });
 });
 

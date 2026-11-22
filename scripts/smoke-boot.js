@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { spawn } from 'node:child_process';
-import { mkdir, rm } from 'node:fs/promises';
+import { access, mkdir, rm, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:net';
 import { join, dirname } from 'node:path';
@@ -48,8 +48,62 @@ const SCENARIOS = [
   {
     name: 'cluster sticky sessions (WORKERS=2, STICKY_SESSIONS=true)',
     env: { WORKERS: '2', STICKY_SESSIONS: 'true' }
+  },
+  {
+    name: 'upgrade with Agent Factory data (WORKERS=1)',
+    env: { WORKERS: '1' },
+    seed: seedAgentFactoryData,
+    verify: verifyAgentFactoryRemoved
   }
 ];
+
+/**
+ * The files the removed Agent Factory left in an installation (#3773). The
+ * server must boot on them and leave them where they are.
+ */
+const AGENT_FACTORY_FILES = {
+  'agents/profiles/legacy-agent.json': JSON.stringify({
+    id: 'legacy-agent',
+    name: { en: 'Legacy agent' },
+    description: { en: 'Written before the Agent Factory was removed.' },
+    enabled: true,
+    workflow: { ref: 'external', workflowId: 'legacy-agent-workflow' }
+  }),
+  'agents/memory/legacy-agent.md': '## iFinder corpus map\n\nTwo sources.\n',
+  'data/agent-inboxes/legacy-inbox.md': '# Inbox\n\n- [ ] open item\n',
+  'data/agent-artifacts/wf-exec-legacy/report.md': '# Report\n'
+};
+
+async function seedAgentFactoryData(contentsPath) {
+  for (const [relative, content] of Object.entries(AGENT_FACTORY_FILES)) {
+    const file = join(contentsPath, relative);
+    await mkdir(dirname(file), { recursive: true });
+    await writeFile(file, content);
+  }
+}
+
+/** The Agent Factory API is gone, its files are still there. */
+async function verifyAgentFactoryRemoved(port, contentsPath) {
+  const failures = [];
+  for (const path of ['/api/agents/runs', '/api/agents/profiles/legacy-agent/runs']) {
+    const response = await fetch(`http://127.0.0.1:${port}${path}`, {
+      signal: AbortSignal.timeout(5000)
+    });
+    // 404 as for any path no route serves (the body is the framework's default, not
+    // problem+json: there is no catch-all for unknown API paths).
+    if (response.status !== 404) {
+      failures.push(`GET ${path} answered ${response.status}, expected 404`);
+    }
+  }
+  for (const relative of Object.keys(AGENT_FACTORY_FILES)) {
+    try {
+      await access(join(contentsPath, relative));
+    } catch {
+      failures.push(`the boot removed ${relative}`);
+    }
+  }
+  return failures;
+}
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -136,6 +190,7 @@ async function runScenario(scenario, keepLogs) {
   const contentsDir = join('.smoke-contents', randomUUID());
   const contentsPath = join(rootDir, contentsDir);
   await mkdir(contentsPath, { recursive: true });
+  if (scenario.seed) await scenario.seed(contentsPath);
 
   let output = '';
   const child = spawn(process.execPath, ['server/server.js'], {
@@ -162,6 +217,8 @@ async function runScenario(scenario, keepLogs) {
     const fatal = findFatalLogLines(output);
     if (fatal.length)
       failures.push(`error-level log output during boot:\n    ${fatal.join('\n    ')}`);
+
+    if (ready.ok && scenario.verify) failures.push(...(await scenario.verify(port, contentsPath)));
 
     if (ready.ok) {
       const stopped = await shutdown(child);

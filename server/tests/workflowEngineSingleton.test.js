@@ -122,7 +122,7 @@ async function run() {
     const nodeStarted = await waitFor(() => holdExecutor.invoked);
     check('the node executor actually started running', nodeStarted);
 
-    // Simulates a DIFFERENT entry point (e.g. an admin/agents route) fetching
+    // Simulates a DIFFERENT entry point (e.g. the workflow execution routes) fetching
     // "its own" engine reference and issuing the cancel.
     const engineB = getWorkflowEngine();
     check('cancelling reference is the same instance as the starting one', engineB === engineA);

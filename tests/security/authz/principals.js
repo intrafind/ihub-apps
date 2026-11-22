@@ -18,8 +18,6 @@ export const SECRET_SKILL_ID = 'interview-to-blog';
 export const SECRET_PAGE_ID = 'authz-members';
 /** A workflow that stops at a human checkpoint (no model call); only `users` may run it. */
 export const WORKFLOW_ID = 'authz-workflow';
-/** An agent profile that runs {@link WORKFLOW_ID}. */
-export const AGENT_PROFILE_ID = 'authz-agent';
 
 export const AUTHZ_USERS = {
   alice: {

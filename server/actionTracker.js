@@ -8,8 +8,8 @@
  * `actionTracker.emit('fire-sse', { event, chatId, ...payload })` where
  * `event` is an internal name (`workflow.node.start`, `agent.task.created`, …)
  * and `chatId` is the execution id the event belongs to. Consumers are the
- * run-scoped stream endpoints (`routes/workflow/workflowRoutes.js`,
- * `routes/agents/runs.js`) and the chat bridge (`tools/workflowRunner.js`),
+ * run-scoped stream endpoint (`routes/workflow/workflowRoutes.js`) and the
+ * chat bridge (`tools/workflowRunner.js`),
  * which translate these events onto SSE v2 envelopes
  * (`services/loop/RunStream.js`). Nothing on this bus reaches a client
  * verbatim — the wire dialect is SSE v2 only.

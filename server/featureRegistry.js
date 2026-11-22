@@ -216,17 +216,6 @@ export const featureRegistry = [
     preview: true
   },
   {
-    id: 'agentFactory',
-    name: { en: 'Agent Factory', de: 'Agent-Fabrik' },
-    description: {
-      en: 'Autonomous agent profiles with cron/webhook/manual triggers, long-term memory, inboxes, and HITL approval',
-      de: 'Autonome Agentenprofile mit Cron-/Webhook-/Manuelle Trigger, Langzeitgedächtnis, Inboxes und HITL-Freigabe'
-    },
-    category: 'preview',
-    default: false,
-    preview: true
-  },
-  {
     id: 'appAsTool',
     name: { en: 'App-as-Tool', de: 'App-als-Tool' },
     description: {

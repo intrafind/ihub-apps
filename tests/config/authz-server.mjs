@@ -29,7 +29,6 @@ import { createRequire } from 'node:module';
 import { prepareE2eContents } from './e2e-contents.mjs';
 import { e2eContentsDir, removeDisposableContents } from './e2e-fresh-contents.mjs';
 import {
-  AGENT_PROFILE_ID,
   AUTHZ_USERS,
   RESTRICTED_GROUP,
   SECRET_APP_ID,
@@ -75,7 +74,6 @@ writeJson(featuresPath, {
   feedback: true,
   export: true,
   toolsService: true,
-  agentFactory: true,
   appAsTool: true,
   runLog: true,
   integrations: true
@@ -248,7 +246,7 @@ writeJson(uiPath, ui);
 
 // --- A workflow that needs no model: it stops at a human checkpoint, so an
 // execution stays open (and leaves a pending interaction) while the suite runs.
-// Started by alice directly and through an agent profile.
+// Started by alice.
 const humanWorkflow = {
   id: WORKFLOW_ID,
   name: { en: 'Authz checkpoint workflow' },
@@ -292,19 +290,6 @@ const humanWorkflow = {
   ]
 };
 writeJson(contents('workflows', `${WORKFLOW_ID}.json`), humanWorkflow);
-writeJson(contents('agents', 'profiles', `${AGENT_PROFILE_ID}.json`), {
-  id: AGENT_PROFILE_ID,
-  name: { en: 'Authz agent' },
-  description: { en: 'Runs the checkpoint workflow.' },
-  enabled: true,
-  workflow: { ref: 'external', workflowId: WORKFLOW_ID },
-  preferredModel: 'e2e-stub',
-  maxIterations: 3,
-  apps: [],
-  skills: [],
-  memory: { enabled: false },
-  concurrency: { maxConcurrent: 50 }
-});
 
 // --- The server, with the route table dumped for the coverage guard.
 const server = spawn(

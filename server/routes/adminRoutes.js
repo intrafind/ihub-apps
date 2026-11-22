@@ -55,8 +55,6 @@ import registerAdminWatermarkKeyRoutes from './admin/watermarkKeys.js';
 import registerAdminWatermarkDetectorRoutes from './admin/watermarkDetectors.js';
 import registerAdminEuAiActRoutes from './admin/euAiAct.js';
 import registerAdminEuAiActConformityRoutes from './admin/euAiActConformity.js';
-import registerAdminAgentsRoutes from './admin/agents.js';
-import registerAdminAgentInboxesRoutes from './admin/agentInboxes.js';
 import registerAdminSearchRoutes from './admin/search.js';
 import registerAdminAuditLogRoutes from './admin/auditLog.js';
 import registerAdminChatHistoryRoutes from './admin/chatHistory.js';
@@ -125,8 +123,6 @@ export default async function registerAdminRoutes(app) {
   registerAdminWatermarkDetectorRoutes(app);
   registerAdminEuAiActRoutes(app);
   registerAdminEuAiActConformityRoutes(app);
-  registerAdminAgentsRoutes(app);
-  registerAdminAgentInboxesRoutes(app);
   registerAdminSearchRoutes(app);
   registerAdminAuditLogRoutes(app);
   registerAdminChatHistoryRoutes(app);

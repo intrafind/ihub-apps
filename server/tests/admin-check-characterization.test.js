@@ -6,8 +6,7 @@
  *
  * One rule, decided once per request in `enhanceUserWithPermissions` and read
  * through `isAdmin(user)` / `isContentAdmin(user)` everywhere (`adminAuth`,
- * `contentAdminAuth`, `/api/admin/auth/status`, short links, the agent run and
- * artifact routes, ...). The principals below are built the way a request builds
+ * `contentAdminAuth`, `/api/admin/auth/status`, short links, ...). The principals below are built the way a request builds
  * them, and every site must agree about each of them. The rule: a signed-in,
  * interactive principal in a group with `adminAccess` (content admin: or
  * `contentAdmin`). The anonymous principal, OAuth clients, delegated tokens
@@ -19,16 +18,6 @@ import { jest } from '@jest/globals';
 import { promises as fsp } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-
-// Agent run routes talk to the workflow engine; one scripted run is enough.
-const getState = jest.fn(async () => ({
-  status: 'completed',
-  data: { _agent: { triggeredBy: { userId: 'owner' } } }
-}));
-jest.unstable_mockModule('../services/workflow/index.js', () => ({
-  getWorkflowEngine: () => ({ getState }),
-  getExecutionRegistry: () => ({ getByUser: async () => [] })
-}));
 
 // The short link store lives in memory.
 jest.unstable_mockModule('../utils/sharedJsonFile.js', () => ({
@@ -57,8 +46,6 @@ const { hasAnyAdmin, isLastAdmin, assignAdminGroup, ensureFirstUserIsAdmin } =
   await import('../utils/adminRescue.js');
 const { default: registerShortLinkRoutes } = await import('../routes/shortLinkRoutes.js');
 const { default: registerAdminAuthRoutes } = await import('../routes/admin/auth.js');
-const { default: registerAgentRunRoutes } = await import('../routes/agents/runs.js');
-const { default: registerAgentArtifactRoutes } = await import('../routes/agents/artifacts.js');
 
 const GROUPS = {
   groups: {
@@ -219,15 +206,7 @@ function buildApp(register) {
     req.user = { ...(PRINCIPALS[name] || PRINCIPALS.anonymous) };
     next();
   });
-  // registerAgentRunRoutes starts a sweep interval that is meant to live as long as the
-  // server; unref it here so the test process can exit.
-  const realSetInterval = globalThis.setInterval;
-  globalThis.setInterval = (...args) => realSetInterval(...args).unref();
-  try {
-    for (const r of [].concat(register)) r(app);
-  } finally {
-    globalThis.setInterval = realSetInterval;
-  }
+  for (const r of [].concat(register)) r(app);
   return app;
 }
 const as = (req, name) => (name ? req.set('x-principal', name) : req);
@@ -262,29 +241,6 @@ describe('short links: an admin may manage another user’s link', () => {
     expect((await as(request(app).get('/api/shortlinks'), 'anonymousWithAdminGroups')).status).toBe(
       401
     );
-  });
-});
-
-describe('agent run and artifact routes: only an admin reads a run that is not theirs', () => {
-  const app = buildApp([registerAgentRunRoutes, registerAgentArtifactRoutes]);
-  // The run belongs to `owner`; nobody in PRINCIPALS is `owner`, so only the admin rule can pass.
-  const callers = NAMES.filter(n => !n.startsWith('anonymous'));
-  test.each(callers)('%s', async name => {
-    const res = await as(request(app).get('/api/agents/runs/run-1/artifacts'), name);
-    expect(res.status === 403).toBe(!EXPECTED[name][0]);
-  });
-  test('an admin’s personal API key and an agent with admin groups are refused (403)', async () => {
-    for (const name of ['personalApiKeyOfAdmin', 'authCodeTokenOfAdmin', 'agent']) {
-      const res = await as(request(app).get('/api/agents/runs/run-1/artifacts'), name);
-      expect(res.status).toBe(403);
-    }
-  });
-  test('anonymous is stopped by authenticatedOnly before the admin rule is reached', async () => {
-    expect((await request(app).get('/api/agents/runs/run-1/artifacts')).status).toBe(401);
-    expect(
-      (await as(request(app).get('/api/agents/runs/run-1/artifacts'), 'anonymousWithAdminGroups'))
-        .status
-    ).toBe(401);
   });
 });
 

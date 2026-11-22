@@ -318,7 +318,6 @@ export async function seedData(base, cookie) {
     chatSharing: true,
     compareMode: true,
     appAsTool: true,
-    agentFactory: true,
     toolsService: true,
     voiceMode: true
   };
@@ -369,18 +368,6 @@ export async function seedData(base, cookie) {
     'POST',
     '/api/admin/document-templates',
     { id: 'contract-template', name: { en: 'Contract template' }, description: { en: 'x' } },
-    [201]
-  );
-  await send(
-    'POST',
-    '/api/admin/agents/inboxes/contract-inbox',
-    { name: { en: 'Contract inbox' } },
-    [201]
-  );
-  await send(
-    'POST',
-    '/api/admin/agents/profiles',
-    { id: 'contract-agent', name: { en: 'Contract agent' }, description: { en: 'x' } },
     [201]
   );
   await send(

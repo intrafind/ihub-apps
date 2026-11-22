@@ -477,8 +477,8 @@ export class RunSummaryRepository {
 
     // One enumeration for the whole namespace. Paging this with a cursor made
     // every page re-read and re-sort the entire directory, so a scan cost
-    // O(N) per page — and `GET /api/agents/runs` reaches here from a plain
-    // authenticated request, which made a namespace-sized scan something any
+    // O(N) per page — and `GET /api/workflows/my-executions` reaches here from a
+    // plain authenticated request, which made a namespace-sized scan something any
     // signed-in user could ask for repeatedly.
     let exhausted = true;
     for await (const doc of walkDocuments(this.documents, RUNS_NAMESPACE, {

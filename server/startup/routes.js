@@ -29,7 +29,6 @@ import registerWellKnownRoutes from '../routes/wellKnown.js';
 import registerMcpServerRoutes from '../routes/mcpServer.js';
 import registerSwaggerRoutes from '../routes/swagger.js';
 import registerWorkflowRoutes from '../routes/workflow/index.js';
-import registerAgentRoutes from '../routes/agents/index.js';
 import registerRunRoutes from '../routes/runs.js';
 import registerStoredChatRoutes from '../routes/chats.js';
 import registerChatShareRoutes from '../routes/chatShares.js';
@@ -116,7 +115,6 @@ const ROUTE_STEPS = [
   app => registerSwaggerRoutes(app),
   app => registerWorkflowRoutes(app, { getLocalizedError }),
   app => registerTriggerRoutes(app),
-  app => registerAgentRoutes(app),
   app => registerRunRoutes(app),
   app => registerStoredChatRoutes(app),
   app => registerChatShareRoutes(app),

@@ -278,9 +278,8 @@ describe('ExecutionRegistry: the runs namespace', () => {
 
 describe('ExecutionRegistry: the cost of a listing', () => {
   it('serves a burst of listings from one walk of the namespace', async () => {
-    // `GET /api/agents/runs` is `authRequired, authenticatedOnly`, so any
-    // signed-in user reaches this, and `/api/agents` is not behind the rate
-    // limiter. The namespace is shared with every chat and inference run the
+    // `GET /api/workflows/my-executions` is open to any signed-in user, so
+    // any of them reaches this. The namespace is shared with every chat and inference run the
     // ledger records, so a listing is a walk of all of them — and the
     // docstring here used to call the scan "administrator-initiated rather
     // than per-request".

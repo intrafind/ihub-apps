@@ -14,9 +14,8 @@
  *
  * Not in the inventory, and not decided through `services/loop/runAccess.js`:
  * the workflow execution routes (`/api/workflows/executions/...`, a frozen
- * legacy file) and the agent run routes (`/api/agents/runs/...`). They keep
- * their own owner-or-admin checks; see docs/run-ledger.md, "Routes with their
- * own check".
+ * legacy file). They keep their own owner-or-admin checks; see
+ * docs/run-ledger.md, "Routes with their own check".
  *
  * The five callers (the columns of `expect`):
  *

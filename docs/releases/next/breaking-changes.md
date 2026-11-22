@@ -37,3 +37,34 @@ with the owner's rights, so nobody else gives the approval.
 through the API (a workflow a user started, a scheduled task of a user), have the owner answer
 them. A script that stops an anonymous visitor's run with the run id alone needs an admin
 sign-in now.
+
+## The Agent Factory Is Removed
+
+The Agent Factory, a preview feature, is gone: its admin pages, its API and its switch. Nothing
+replaces it in this release. Workflows keep running, also those with memory, inbox or planner
+steps such as the shipped law consultation workflows.
+
+- **Admin pages:** everything under **Admin → Agents** (profiles, memory, inboxes, runs, and
+  **Pending Approvals & Questions**) shows the not-found page. The sidebar entry is gone.
+- **API:** `/api/agents/{runs,profiles}` (start, list, read, stream, artifacts, cancel and resume
+  of agent runs) and `/api/admin/agents/{profiles,inboxes,memory/shaper-prompt}` (profiles, their
+  memory, inboxes) answer `404`.
+- **Switch:** **Agent Factory** is no longer in **Admin → Features**; a value left in
+  `features.json` does nothing.
+- **Shipped profiles:** `claude-style-agent` and `claude-style-agent-phased` are no longer
+  installed on a new installation.
+- **Runs not finished at the upgrade** (running, waiting to start, or paused at an approval or a
+  question) are cancelled when the server starts, with the reason `AGENT_FACTORY_REMOVED`, and are
+  not resumed. Their open approvals and questions are withdrawn. Finished runs stay as they are.
+- **Stored files stay on disk** and are neither moved nor deleted: agent profiles
+  (`contents/agents/profiles/`), memory files (`contents/agents/memory/*.md`), inboxes
+  (`contents/data/agent-inboxes/`), artifacts (`contents/data/agent-artifacts/`) and the agent runs
+  in the `workflow-state` namespace (`contents/data/workflow-state/`).
+- **App tools in workflows:** a prompt step with a list of `apps` offered them as tools only inside
+  an Agent Factory run, so no workflow run offers them any more.
+
+**Before upgrading:** Let running Agent Factory runs finish, or accept that they are cancelled.
+Copy what you still need from the runs' artifacts and the memory files; afterwards no page shows
+them. A workflow that reads a profile's memory file (the iFinder corpus map of
+`stellungnahmen-review-ifinder`) keeps reading it; edit that file on disk from now on. See
+[Agent Factory (Removed)](../../agents.md).
