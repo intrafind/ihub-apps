@@ -1295,7 +1295,7 @@ describe('the form in its groups', () => {
       for (const label of groupParts(id).panel.querySelectorAll('label, span[id], legend')) {
         const stars = (label.textContent.match(/\*/g) || []).length;
         expect(stars).toBeLessThanOrEqual(1);
-        if (stars === 1) starred.push(label.textContent.replace('*', '').trim());
+        if (stars === 1) starred.push(label.textContent.replaceAll('*', '').trim());
       }
     }
     expect(starred).toEqual(['Name', 'Short description', 'Icon', 'Color', 'Instructions']);
