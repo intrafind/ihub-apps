@@ -32,7 +32,7 @@ import {
   writeStreamStart
 } from '../../sse.js';
 import { resumeChatRun } from '../../services/chat/chatResume.js';
-import { RunStreamEmitter, buildEnvelope, getStreamRun } from '../../services/loop/RunStream.js';
+import { RunStreamEmitter, getStreamRun } from '../../services/loop/RunStream.js';
 import runLog, { newRunId, isValidRunId } from '../../services/loop/RunLog.js';
 import { resolveActorId } from '../../services/loop/runIdentity.js';
 import { dropRun } from '../../services/loop/partialRunState.js';
@@ -52,6 +52,13 @@ import {
 import { aiAcknowledgementRequired } from '../../middleware/aiAcknowledgementRequired.js';
 
 import ChatService from '../../services/chat/ChatService.js';
+import {
+  announcedSkills,
+  historyForPrompt,
+  lateRefusalFrames,
+  messageAttachments,
+  principalRefOf
+} from '../../services/chat/chatTurnStart.js';
 import { authorizeChat } from '../../services/chat/chatAccess.js';
 import { emitFailedRun } from '../../services/chat/failedRun.js';
 import { tryHandleMentionWorkflow } from '../../services/workflow/mentionWorkflow.js';
@@ -73,7 +80,7 @@ import { describeCause, userAbortCause } from '../../services/chat/abortCause.js
 import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
 import { resolveChatScopes } from '../../services/integrations/scopes/index.js';
 import { ServiceError } from '../../utils/ServiceError.js';
-import { codeOfStatus, toErrorResponse } from '../../utils/errorResponse.js';
+import { codeOfStatus } from '../../utils/errorResponse.js';
 import { drainPendingFinish } from '../../services/workflow/chatBridge.js';
 import { cancelChatWorkflow, replayChatWorkflowProgress } from '../../tools/workflowRunner.js';
 import {
@@ -95,32 +102,6 @@ function refusal(status, message, { code, details } = {}) {
 }
 
 /**
- * The frames that answer a refusal or failure after a POST stream committed,
- * when no status line can carry it any more: `stream/error`, then the turn's
- * `run/ended { status: 'error' }`. The error is described exactly as its
- * problem+json body would be (`toErrorResponse`): the same code, and a 5xx
- * message only when it is safe to show.
- *
- * @param {string} chatId
- * @param {string} runId - The turn's run
- * @param {Error} error
- * @returns {Object[]} SSE v2 envelopes
- */
-function lateRefusalFrames(chatId, runId, error) {
-  const { body } = toErrorResponse(error);
-  const frame = (type, data) => buildEnvelope({ streamId: chatId, runId, type, data });
-  const described = { code: body.code, message: body.detail };
-  return [
-    frame(SSE_V2_EVENTS.STREAM_ERROR, {
-      ...described,
-      retryable: false,
-      details: { ...body.details, status: body.status }
-    }),
-    frame(SSE_V2_EVENTS.RUN_ENDED, { status: 'error', finishReason: 'error', error: described })
-  ];
-}
-
-/**
  * Whether a chat POST asks for its turn as a stream: `text/event-stream` named
  * in `Accept` and preferred over JSON (q-values respected). A wildcard alone
  * (any type, `text/*`) keeps the JSON answer.
@@ -137,94 +118,72 @@ function wantsEventStream(req) {
 }
 
 /**
- * Chat-shaped view of a persisted transcript: role, content, and any hydrated
- * `fileData` payloads.
+ * The chat POST as a turn request: everything the turn reads from the request,
+ * as plain data (`TurnRequest` of `services/chat/chatTurnStart.js`). What the
+ * body left out stays `undefined`: the chat's stored setup fills it in.
  *
- * Everything else on a stored message — ids, usage, the error of a failed turn,
- * attachment descriptors — is bookkeeping for the history UI and has no place
- * in a model prompt. Contentless turns are dropped with it: an aborted or
- * failed turn is stored with an empty answer, and several providers reject a
- * blank message outright.
+ * The body is checked by `chatPostSchema`, so `messages` is a list. Its last
+ * entry is the new message; how many came before it is `clientHistory`, which
+ * the turn start refuses, after it checked who is asking.
  *
- * @param {Array<Object>} stored - Messages as `ChatRepository` returns them.
- * @returns {Array<{role: string, content: string, fileData?: Array<Object>, activeSkills?: Array<Object>}>} An answer
- *   keeps the skills it activated (`activity.activeSkills`), so they stay active.
+ * @param {import('express').Request} req
+ * @returns {import('../../services/chat/chatTurnStart.js').TurnRequest}
  */
-export function historyForPrompt(stored) {
-  return stored
-    .filter(
-      entry =>
-        entry?.role &&
-        ((typeof entry.content === 'string' && entry.content.trim()) || Boolean(entry.fileData))
-    )
-    .map(entry => {
-      // The skills an answer activated stay active in the chat; the request
-      // builder reads them from here and re-checks access every turn.
-      // A stored answer carries them in `activity`; a history rebuilt from the file
-      // store (`hydrateHistoryForPrompt`) already has them as `activeSkills`.
-      const skills =
-        entry.role === 'assistant' ? (entry.activity?.activeSkills ?? entry.activeSkills) : null;
-      return {
-        role: entry.role,
-        content: typeof entry.content === 'string' ? entry.content : '',
-        ...(entry.fileData ? { fileData: entry.fileData } : {}),
-        ...(Array.isArray(skills) && skills.length > 0 ? { activeSkills: skills } : {})
-      };
-    });
+function turnRequestOf(req) {
+  const { appId, chatId } = req.params;
+  const { messages } = req.body;
+  const message = messages.at(-1);
+  let messageId = null;
+  if (message && message.messageId) {
+    messageId = message.messageId;
+    logger.debug('Using client-provided messageId', { component: 'sessionRoutes', messageId });
+  }
+  return {
+    chatId,
+    appId,
+    principalRef: principalRefOf(req.user),
+    messageId,
+    message,
+    clientHistory: Math.max(messages.length - 1, 0),
+    modelId: req.body.modelId,
+    style: req.body.style,
+    outputFormat: req.body.outputFormat,
+    sendChatHistory: req.body.sendChatHistory,
+    thinkingEnabled: req.body.thinkingEnabled,
+    thinkingLevel: req.body.thinkingLevel,
+    thinkingThoughts: req.body.thinkingThoughts,
+    enabledTools: req.body.enabledTools,
+    websearchEnabled: req.body.websearchEnabled,
+    imageAspectRatio: req.body.imageAspectRatio,
+    imageQuality: req.body.imageQuality,
+    integrationScopes: req.body.integrationScopes,
+    language: req.body.language || req.headers['accept-language']?.split(',')[0],
+    // The chat POST carries no time zone.
+    clientTimezone: null,
+    toolApprovalCapable: req.body.toolApprovalCapable,
+    // A message somebody sent: the only origin this route has.
+    origin: 'person',
+    bypassAppPrompts: req.body.bypassAppPrompts,
+    requestedSkills: req.body.requestedSkills,
+    documentIds: req.body.documentIds,
+    replaceFromMessageId: req.body.replaceFromMessageId,
+    ephemeral: req.body.ephemeral,
+    mcpAppContext: req.body.mcpAppContext,
+    voiceMode: req.body.voiceMode,
+    projectId: req.body.projectId,
+    projects: req.body.projects,
+    testProjectId: req.body.testProjectId,
+    client: {
+      sessionId: req.headers['x-session-id'],
+      userAgent: req.headers['user-agent'],
+      ip: req.ip,
+      url: req.originalUrl || req.baseUrl || req.url || ''
+    }
+  };
 }
 
-/**
- * Who brought a skill into the turn, by the route `resolveSkillsForTurn`
- * found it by: picked in the composer or `/name` in the message is the user's
- * (`requested`, `message`), `skillSettings.autoActivate` is the app's, and one
- * an earlier turn activated is kept (`chat`). The model's own activation is
- * announced by the `activate_skill` tool, not here.
- */
-const SKILL_ACTIVATOR_OF_ORIGIN = Object.freeze({
-  requested: 'user',
-  message: 'user',
-  app: 'app',
-  chat: 'chat'
-});
-
-/**
- * The skills a turn announces on its run (`skill.activation`): every skill in
- * force, each saying who brought it in: the user, the app, or an earlier
- * message of the chat. A skill is shown once, in the activity block, with its
- * reason, so a carried-over skill is announced too.
- *
- * @param {Array<{name: string, displayName: string, description?: string, origin: string}>} [skills]
- *   `activeSkills` of the prepared request
- * @returns {Array<{skillName: string, skillId: string, activatedBy: 'user'|'app'|'chat', description: string}>}
- */
-export function announcedSkills(skills) {
-  return (Array.isArray(skills) ? skills : []).map(skill => ({
-    skillName: skill.displayName,
-    skillId: skill.name,
-    activatedBy: SKILL_ACTIVATOR_OF_ORIGIN[skill.origin] || 'user',
-    description: skill.description || ''
-  }));
-}
-
-/**
- * Upload descriptors carried by a chat message, for the materializer to
- * normalize. The base64 payloads stay in the request: what a stored message
- * keeps is the fact that a file was attached, not the file.
- *
- * Each of the three fields is a single object for one upload and an array for
- * several — the shape the chat client has always sent and `RequestBuilder`
- * already handles — so they are flattened here. Without that an array is
- * `typeof 'object'` and survives as one opaque descriptor, turning three named
- * PDFs into a single nameless `{ type: 'file' }`.
- *
- * @param {Object} message - The new user message from the request.
- * @returns {Array<Object>}
- */
-export function messageAttachments(message) {
-  return [message?.fileData, message?.imageData, message?.audioData]
-    .flatMap(value => (Array.isArray(value) ? value : value ? [value] : []))
-    .filter(entry => entry && typeof entry === 'object');
-}
+// These helpers of a turn live with the turn start; the names stay importable from here.
+export { announcedSkills, historyForPrompt, messageAttachments };
 
 /**
  * Settle the chat's pending clarifications for an incoming message: the
@@ -1026,8 +985,10 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
       let postStream = null;
       let postStreamRunId = null;
       try {
+        const turnRequest = turnRequestOf(req);
         const {
-          messages,
+          messageId,
+          message: newMessage,
           language,
           bypassAppPrompts,
           requestedSkills,
@@ -1039,8 +1000,9 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           projectId: requestedProjectId,
           projects: requestedProjects,
           testProjectId: requestedTestProjectId,
-          toolApprovalCapable
-        } = req.body;
+          toolApprovalCapable,
+          client
+        } = turnRequest;
 
         // `chatAuthRequired` authorizes the app, never the chat id. Once chats
         // are stored, anyone who guesses one could otherwise append a turn to
@@ -1074,13 +1036,12 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           imageAspectRatio,
           imageQuality,
           integrationScopes: requestedScopes
-        } = chatTurnSettings(req.body, access.chat);
+        } = chatTurnSettings(turnRequest, access.chat);
         // The chat's container project and the projects attached from the
         // picker (#1036): checked against the caller's access here, carried
         // on the request to the prompt builder, persisted with the chat.
         const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
-        const clientLanguage =
-          language || req.headers['accept-language']?.split(',')[0] || defaultLang;
+        const clientLanguage = language || defaultLang;
         // A project test (#3309) puts one admin project in scope for this turn
         // and keeps the chat temporary; the picker's fields do not apply to it.
         let projectTest = null;
@@ -1118,25 +1079,14 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             code: chatProjects.code
           });
         }
-        let messageId = null;
-        if (messages && Array.isArray(messages) && messages.length > 0) {
-          const lastMessage = messages.at(-1);
-          if (lastMessage && lastMessage.messageId) {
-            messageId = lastMessage.messageId;
-            logger.debug('Using client-provided messageId', {
-              component: 'sessionRoutes',
-              messageId
-            });
-          }
-        }
-        const userSessionId = req.headers['x-session-id'];
+        const userSessionId = client.sessionId;
         // A clarification (`ask_user`) is answered by the next message: settle the
         // pending interaction (channel `chat`) before the turn runs; any other
         // message supersedes clarifications the user chose not to answer.
         const answeredClarification = await settleChatClarifications({
           chatId,
           user: req.user,
-          lastMessage: Array.isArray(messages) ? messages.at(-1) : null
+          lastMessage: newMessage
         });
         let model;
         let llmMessages;
@@ -1154,10 +1104,6 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           };
         }
         logger.debug('Processing chat', { component: 'sessionRoutes', language: clientLanguage });
-        if (!messages || !Array.isArray(messages)) {
-          const errorMessage = await getLocalizedError('messagesRequired', {}, clientLanguage);
-          throw new ServiceError('BAD_REQUEST', errorMessage);
-        }
 
         // --- the server owns the history ---
         // Every chat is stored, so a turn posts exactly one message — the new
@@ -1183,7 +1129,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             code: 'CHAT_STORAGE_UNAVAILABLE'
           });
         }
-        if (messages.length > 1) {
+        if (turnRequest.clientHistory > 0) {
           // The code alone tells an integrator nothing about what to do
           // instead, and this is the one refusal they can hit by doing exactly
           // what the documentation told them to do before chats were stored.
@@ -1198,7 +1144,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             }
           });
         }
-        if (messages.length === 0) {
+        if (newMessage === undefined) {
           const errorMessage = await getLocalizedError('messagesRequired', {}, clientLanguage);
           throw new ServiceError('BAD_REQUEST', errorMessage);
         }
@@ -1230,7 +1176,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           chatId,
           user: req.user,
           chat: access.chat || null,
-          lastMessage: messages[0],
+          lastMessage: newMessage,
           repository
         });
         if (approvals.refusal) {
@@ -1248,7 +1194,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           appId,
           chat: access.chat || null,
           ownerId: owner.id,
-          lastMessage: messages[0],
+          lastMessage: newMessage,
           repository,
           req,
           isConnected: async (userId, integration) => {
@@ -1279,10 +1225,9 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           return null;
         };
 
-        let conversation = messages;
+        let conversation;
         let persistence = null;
         let priorContext = null;
-        const newMessage = messages[0];
         const stored = await repository.getMessages(chatId);
         let history = stored.messages;
         let forkStoredId = null;
@@ -1521,14 +1466,14 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           })
         };
 
-        trackSession(chatId, { appId, userSessionId, userAgent: req.headers['user-agent'] });
+        trackSession(chatId, { appId, userSessionId, userAgent: client.userAgent });
 
         // A project test hands nothing on: an @mention stays plain text, for
         // the workflow would run with its own projects (#3309).
         const mention = projectTest
           ? { handled: false }
           : await tryHandleMentionWorkflow({
-              messages,
+              messages: [newMessage],
               conversation,
               chatId,
               appId,
