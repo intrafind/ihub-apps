@@ -43,7 +43,7 @@ const HIDDEN_CHARACTERS = /(?![\n\t])[\p{Cc}\p{Cf}\u{E0000}-\u{E007F}]/gu;
  * @returns {string}
  *
  * @example
- * stripHiddenCharacters('Be​ brief‮.'); // → 'Be brief.'
+ * stripHiddenCharacters('Be\u200B brief\u202E.'); // → 'Be brief.'
  */
 export function stripHiddenCharacters(text) {
   return typeof text === 'string' ? text.replace(HIDDEN_CHARACTERS, '') : text;

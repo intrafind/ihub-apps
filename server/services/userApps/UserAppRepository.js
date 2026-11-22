@@ -977,7 +977,7 @@ export class UserAppRepository {
     } = {}
   ) {
     if (!this.isAvailable() || !isUserAppId(appId) || !receiver?.id) return null;
-    if (!Number.isInteger(Number(expectedRevision)) || expectedRevision === null) {
+    if (expectedRevision == null || !Number.isInteger(Number(expectedRevision))) {
       throw new StorageError('acceptOffer needs the revision the receiver read', {
         code: 'INVALID_ARGUMENT'
       });

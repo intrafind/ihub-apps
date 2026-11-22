@@ -299,8 +299,10 @@ export function ownerSnapshotNeedsRefresh(record, user, now = Date.now()) {
   if (!stored) return true;
   const takenAt = Date.parse(record.ownerPrincipalAt || '');
   if (!Number.isFinite(takenAt) || now - takenAt > OWNER_SNAPSHOT_REFRESH_MS) return true;
-  const before = [...(stored.groups || [])].map(String).sort();
-  const after = (Array.isArray(user?.groups) ? user.groups : []).map(String).sort();
+  // Code-unit order: the two lists are only compared with each other.
+  const byCodeUnit = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+  const before = [...(stored.groups || [])].map(String).sort(byCodeUnit);
+  const after = (Array.isArray(user?.groups) ? user.groups : []).map(String).sort(byCodeUnit);
   if (before.length !== after.length || before.some((group, index) => group !== after[index])) {
     return true;
   }

@@ -306,9 +306,9 @@ describe('every cap holds', () => {
 describe('hidden characters are gone after a save', () => {
   // Zero-width space, right-to-left override, a tag character, a NUL and a
   // soft hyphen: none of them shows in a text field.
-  const HIDDEN = '​‮\u{E0041}\u0000­';
+  const HIDDEN = '\u200B\u202E\u{E0041}\u0000\u00AD';
   const dirty = text => `${text.slice(0, 1)}${HIDDEN}${text.slice(1)}`;
-  const hasHidden = text => /[​‮\u0000­]|\u{E0041}/u.test(text);
+  const hasHidden = text => /[\u200B\u202E\u0000\u00AD]|\u{E0041}/u.test(text);
 
   it('strips controls, format characters and the tag block, and keeps newline and tab', () => {
     assert.equal(stripHiddenCharacters(`a${HIDDEN}b`), 'ab');

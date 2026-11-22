@@ -421,7 +421,7 @@ describe('POST /api/apps', () => {
   it('strips hidden characters from the instructions', async () => {
     const res = await as('anna')
       .post('/api/apps')
-      .send(createBody({ system: { en: 'Be​ kind‮.' } }));
+      .send(createBody({ system: { en: 'Be\u200B kind\u202E.' } }));
     assert.equal(res.status, 201, res.text);
     assert.equal(res.body.system.en, 'Be kind.');
   });

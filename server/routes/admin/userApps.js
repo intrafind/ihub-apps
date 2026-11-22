@@ -482,7 +482,7 @@ export default function registerAdminUserAppRoutes(app) {
     res.json({
       items: [...states]
         .sort((a, b) => (Number(b.revision) || 0) - (Number(a.revision) || 0))
-        .map(userAppRevisionView),
+        .map(state => userAppRevisionView(state)),
       nextCursor: null
     });
   });
