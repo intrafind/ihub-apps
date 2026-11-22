@@ -414,7 +414,7 @@ function AdminPromptsPage() {
                 <UploadConfigButton
                   onChange={handleUploadConfig}
                   uploading={uploading}
-                  title={t('admin.prompts.uploadConfig', 'Upload Prompt Config')}
+                  title={t('admin.prompts.uploadConfigTitle', 'Upload Prompt Config')}
                   uploadingLabel={t('admin.prompts.uploading', 'Uploading...')}
                   label={t('admin.prompts.uploadConfig', 'Upload Config')}
                 />

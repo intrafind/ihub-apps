@@ -269,7 +269,11 @@ function AdminGroupEditPage() {
           onCancel={() => navigate('/admin/groups')}
           cancelLabel={t('admin.groups.edit.cancel', 'Cancel')}
           saving={saving}
-          saveLabel={t('admin.groups.edit.save', groupId === 'new' ? 'Create Group' : 'Save Group')}
+          saveLabel={
+            groupId === 'new'
+              ? t('admin.groups.edit.create', 'Create Group')
+              : t('admin.groups.edit.save', 'Save Group')
+          }
           savingLabel={t('admin.groups.edit.saving', 'Saving...')}
         />
       </form>

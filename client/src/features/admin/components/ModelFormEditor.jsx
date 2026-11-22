@@ -1017,10 +1017,7 @@ function ModelFormEditor({
                         onClick={addTtsVoiceLanguage}
                         className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline"
                       >
-                        {t(
-                          'admin.models.actions.addTtsVoiceLanguage',
-                          '+ Add a voice for a language'
-                        )}
+                        {t('admin.models.ttsVoices.addLanguage', '+ Add a voice for a language')}
                       </button>
                     )}
                     {data.provider === 'mistral' &&

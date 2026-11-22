@@ -227,7 +227,7 @@ function FeedbackEntriesCard() {
                 {t('admin.usage.previous', 'Previous')}
               </button>
               <span className="text-sm text-gray-600 dark:text-gray-400">
-                {t('admin.usage.pageInfo', `Page ${page} of ${totalPages}`)}
+                {t('admin.usage.pageInfo', 'Page {{page}} of {{totalPages}}', { page, totalPages })}
               </span>
               <button
                 onClick={() => goNext(nextCursor)}

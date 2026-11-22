@@ -149,8 +149,9 @@ function AdminWorkflowsPage() {
         setActionError(
           t(
             'admin.workflows.cloneExists',
-            'A workflow with ID "${id}" already exists. Please rename before cloning.'
-          ).replace('${id}', `${workflow.id}-copy`)
+            'A workflow with ID "{{id}}" already exists. Please rename it before cloning.',
+            { id: `${workflow.id}-copy` }
+          )
         );
       } else {
         setActionError(getAdminApiErrorMessage(err));
@@ -368,7 +369,7 @@ function AdminWorkflowsPage() {
               <UploadConfigButton
                 onChange={handleUploadConfig}
                 uploading={uploading}
-                title={t('admin.workflows.uploadConfig', 'Upload Workflow Config')}
+                title={t('admin.workflows.uploadConfigTitle', 'Upload Workflow Config')}
                 uploadingLabel={t('admin.workflows.uploading', 'Uploading...')}
                 label={t('admin.workflows.uploadConfig', 'Upload Config')}
               />

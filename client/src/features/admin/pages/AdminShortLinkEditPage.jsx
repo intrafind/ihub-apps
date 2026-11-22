@@ -198,7 +198,7 @@ function AdminShortLinkEditPage() {
         <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
           {isNew
             ? t('admin.shortlinks.new', 'Create Short Link')
-            : t('admin.shortlinks.edit', 'Edit Short Link')}
+            : t('admin.shortlinks.editTitle', 'Edit Short Link')}
         </h1>
         {error && (
           <div role="alert" className="text-red-600 dark:text-red-400">
@@ -313,7 +313,7 @@ function AdminShortLinkEditPage() {
               htmlFor="shortlink-expires-at"
               className="block text-sm font-medium text-gray-700 dark:text-gray-300"
             >
-              {t('admin.shortlinks.expiresAt', 'Expires At')}
+              {t('admin.shortlinks.expiresAt', 'Expires')}
             </label>
             <input
               type="datetime-local"
@@ -328,7 +328,7 @@ function AdminShortLinkEditPage() {
               htmlFor="shortlink-params"
               className="block text-sm font-medium text-gray-700 dark:text-gray-300"
             >
-              {t('admin.shortlinks.params', 'Params (JSON)')}
+              {t('admin.shortlinks.paramsJson', 'Parameters (JSON)')}
             </label>
             <textarea
               rows="4"

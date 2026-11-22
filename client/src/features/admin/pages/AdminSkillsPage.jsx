@@ -286,7 +286,7 @@ function AdminSkillsPage() {
                     type="button"
                     className="inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-xs hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled={uploading}
-                    title={t('admin.skills.importSkill', 'Import Skill (.zip)')}
+                    title={t('admin.skills.importSkillTitle', 'Import Skill (.zip)')}
                   >
                     <Icon
                       name={uploading ? 'refresh' : 'upload'}
@@ -515,7 +515,7 @@ function AdminSkillsPage() {
                                     void handleExportSkill(skill.name);
                                   }}
                                   className="p-2 text-green-700 hover:bg-green-50 dark:hover:bg-green-900/30 rounded-full"
-                                  title={t('admin.skills.export', 'Export Skill')}
+                                  title={t('admin.skills.exportTitle', 'Export Skill')}
                                 >
                                   <Icon name="download" className="h-4 w-4" />
                                 </button>

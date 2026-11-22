@@ -319,10 +319,8 @@ function AssetManager({ t }) {
               </div>
               <div className="mt-3 p-3 bg-blue-100 dark:bg-blue-900/50 rounded-sm">
                 <p className="font-mono text-xs">
-                  {t(
-                    'admin.ui.assets.usage.example',
-                    `Example: <img src="${buildUploadUrl('assets/logo-123456.png')}" alt="Logo" />`
-                  )}
+                  {t('admin.ui.assets.usage.example', 'Example:')}{' '}
+                  {`<img src="${buildUploadUrl('assets/logo-123456.png')}" alt="Logo" />`}
                 </p>
               </div>
             </div>
@@ -421,7 +419,7 @@ function AssetManager({ t }) {
                         scope="col"
                         className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide"
                       >
-                        {t('admin.ui.assets.uploaded', 'Uploaded')}
+                        {t('admin.ui.assets.uploadedColumn', 'Uploaded')}
                       </th>
                       <th scope="col" className="relative px-6 py-3">
                         <span className="sr-only">{t('admin.common.actions', 'Actions')}</span>

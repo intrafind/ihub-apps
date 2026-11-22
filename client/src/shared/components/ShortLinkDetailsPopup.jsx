@@ -61,7 +61,7 @@ function ShortLinkDetailsPopup({ link, isOpen, onClose }) {
           {link.params && Object.keys(link.params).length > 0 && (
             <div className="bg-gray-50 rounded-lg p-3">
               <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                {t('admin.shortlinks.params', 'Params')}
+                {t('admin.shortlinks.params', 'Parameters')}
               </div>
               <pre className="text-sm text-gray-900 whitespace-pre-wrap break-all mt-1">
                 {JSON.stringify(link.params, null, 2)}

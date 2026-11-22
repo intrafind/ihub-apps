@@ -87,7 +87,10 @@ function UserFormEditor({
     if (userData.password) {
       const passwordError = validatePasswordConfirmation(userData.password, confirmPassword);
       if (passwordError) {
-        errors.confirmPassword = t('admin.users.validation.passwordMismatch', passwordError);
+        errors.confirmPassword = t(
+          'admin.users.validation.passwordMismatch',
+          'Passwords do not match'
+        );
       }
     }
 
