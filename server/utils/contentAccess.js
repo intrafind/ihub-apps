@@ -173,15 +173,23 @@ export function resolveManageableGroups({
  * own lists do either. `effective` is what the user in that group actually
  * gets, before any OAuth-client filtering.
  *
+ * A row of a group that people carry without being a member of it (the group
+ * of every signed-in user, the anonymous group) is marked `implicit: true`.
+ * Such a group is not a team somebody belongs to: who it stands for is said
+ * by {@link describeAudience}, and a client must not print its name as one of
+ * "these groups".
+ *
  * @param {object} options
  * @param {Object<string, object>} options.groups - `groups` map from groups.json
  * @param {string} options.type - One of CONTENT_ACCESS_TYPES
  * @param {string} options.contentId - The content's id
  * @param {string[]} options.groupIds - Groups to describe, in output order
+ * @param {string[]} [options.implicitGroups] - Groups people carry without
+ *   being a member; their rows get `implicit: true`
  * @returns {Array<{id: string, name: string, description: string, granted: boolean,
- *   wildcard: boolean, inheritedFrom: string[], effective: boolean}>}
+ *   wildcard: boolean, inheritedFrom: string[], effective: boolean, implicit?: true}>}
  */
-export function describeContentAccess({ groups, type, contentId, groupIds }) {
+export function describeContentAccess({ groups, type, contentId, groupIds, implicitGroups = [] }) {
   const key = canonicalContentAccessType(type);
   return groupIds.map(groupId => {
     const group = groups[groupId];
@@ -199,9 +207,63 @@ export function describeContentAccess({ groups, type, contentId, groupIds }) {
       granted,
       wildcard,
       inheritedFrom,
-      effective: granted || wildcard || inheritedFrom.length > 0
+      effective: granted || wildcard || inheritedFrom.length > 0,
+      ...(implicitGroups.includes(groupId) ? { implicit: true } : {})
     };
   });
+}
+
+/**
+ * Who gets one piece of content without being in any particular group.
+ *
+ * Computed over all groups, whoever asks: a content admin does not see the row
+ * of the group every signed-in user carries, yet has to know before publishing
+ * whether that group grants the content. The answer reveals that one fact and
+ * nothing else about the group.
+ *
+ * - `allSignedIn`: the group every signed-in user carries grants the content,
+ *   by name, by wildcard or through a group it inherits from.
+ * - `anonymous`: anonymous access is on and one of the groups of the anonymous
+ *   principal grants the content the same way. It says nothing about signed-in
+ *   users; read `allSignedIn` for them.
+ *
+ * @param {object} options
+ * @param {Object<string, object>} options.groups - `groups` map from groups.json
+ * @param {string} options.type - One of CONTENT_ACCESS_TYPES
+ * @param {string} options.contentId - The content's id
+ * @param {string} [options.authenticatedGroup='authenticated'] - The group
+ *   every signed-in user carries (`auth.authenticatedGroup`)
+ * @param {string[]} [options.anonymousGroups=[]] - The groups of the anonymous
+ *   principal (`anonymousAuth.defaultGroups`); empty while anonymous access is off
+ * @returns {{ allSignedIn: boolean, anonymous: boolean }}
+ *
+ * @example
+ * describeAudience({
+ *   groups: { authenticated: { permissions: { apps: ['*'] } } },
+ *   type: 'apps',
+ *   contentId: 'chat'
+ * }); // → { allSignedIn: true, anonymous: false }
+ */
+export function describeAudience({
+  groups,
+  type,
+  contentId,
+  authenticatedGroup = 'authenticated',
+  anonymousGroups = []
+}) {
+  const map = groups || {};
+  const grants = groupIds => {
+    const existing = [...new Set(groupIds)].filter(
+      id => typeof id === 'string' && Object.hasOwn(map, id)
+    );
+    return describeContentAccess({ groups: map, type, contentId, groupIds: existing }).some(
+      row => row.effective
+    );
+  };
+  return {
+    allSignedIn: grants([authenticatedGroup]),
+    anonymous: grants(Array.isArray(anonymousGroups) ? anonymousGroups : [])
+  };
 }
 
 /**

@@ -80,6 +80,13 @@ export function useFocusTrap(
 ) {
   /** Stores the element that had focus before the trap was activated. */
   const previousFocusRef = useRef(null);
+  /**
+   * The restore that a cleanup queued and that has not run yet. An activation
+   * that follows at once (React StrictMode runs effects twice in development,
+   * or the dependencies changed) takes it over instead of letting it pull the
+   * focus out of the container a moment later.
+   */
+  const pendingRestoreRef = useRef(null);
 
   /**
    * Handles Tab and Shift+Tab key presses to keep focus cycling within the
@@ -129,8 +136,15 @@ export function useFocusTrap(
     const container = containerRef.current;
     if (!container) return;
 
-    // Save the element that currently holds focus so we can restore it later
-    previousFocusRef.current = document.activeElement;
+    // Save the element that currently holds focus so we can restore it later.
+    // When a restore is still queued, the trap was only re-run: keep the
+    // element from before the first activation and cancel that restore.
+    if (pendingRestoreRef.current) {
+      previousFocusRef.current = pendingRestoreRef.current.element;
+      pendingRestoreRef.current = null;
+    } else {
+      previousFocusRef.current = document.activeElement;
+    }
 
     // Move focus into the container
     if (initialFocusRef?.current) {
@@ -156,7 +170,12 @@ export function useFocusTrap(
         // same time the trap is deactivated.
         const elementToRestore = previousFocusRef.current;
         previousFocusRef.current = null;
+        const pending = { element: elementToRestore };
+        pendingRestoreRef.current = pending;
         queueMicrotask(() => {
+          // Taken over by an activation that followed at once.
+          if (pendingRestoreRef.current !== pending) return;
+          pendingRestoreRef.current = null;
           // Focus that something moved on purpose to an element outside the
           // trap (the page heading after a confirmed delete, another dialog
           // that opened meanwhile) stays there. Focus that was inside the

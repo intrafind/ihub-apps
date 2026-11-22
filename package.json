@@ -10,6 +10,7 @@
   "scripts": {
     "// === DEVELOPMENT ===": "",
     "setup:dev": "npm run install:all && npm run docs:build:markdown && echo '\\n✅ Dependencies installed\\n✅ Default configuration ready\\n\\nRun: npm run dev\\nThen open http://localhost:3000 to configure your AI providers.'",
+    "predev": "node scripts/check-installed-deps.js",
     "dev": "cross-env NODE_ENV=development WORKERS=1 concurrently --kill-others-on-fail \"npm run server\" \"sleep 2 && npm run client\"",
     "server": "cd server && cross-env WORKERS=1 node --env-file-if-exists=../.env server.js",
     "client": "cd client && npm run dev",
@@ -90,6 +91,7 @@
     "test:e2e:crawl": "playwright test --config tests/config/playwright.config.js tests/e2e/route-crawl.spec.js",
     "test:e2e:subpath": "playwright test --config tests/config/playwright.subpath.config.js",
     "test:e2e:admin-safety": "playwright test --config tests/config/playwright.admin-safety.config.js",
+    "test:e2e:app-builder": "playwright test --config tests/config/playwright.app-builder.config.js",
     "test:e2e:authz": "playwright test --config tests/config/playwright.authz.config.js",
     "test:e2e:injection": "playwright test --config tests/config/playwright.injection.config.js",
     "check:artifact-libraries": "node scripts/check-artifact-libraries.js",

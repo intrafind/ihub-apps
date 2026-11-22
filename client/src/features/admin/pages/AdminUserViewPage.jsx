@@ -2,12 +2,31 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
-import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi';
+import {
+  fetchAdminUserApps,
+  fetchUserAppSettings,
+  getAdminApiErrorMessage,
+  makeAdminApiCall,
+  saveUserAppSettings
+} from '../../../api/adminApi';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
+import ConfirmDialog from '../../../shared/components/ConfirmDialog';
+import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 import AdminLoadError from '../components/AdminLoadError';
+import { DANGER_BUTTON_CLASS } from '../components/formStyles';
+import { useConfirmAction } from '../hooks/useConfirmAction';
+
+/**
+ * Whether a personal app is shared with anyone.
+ *
+ * @param {Object} app - An item of `GET /api/admin/user-apps`.
+ * @returns {boolean}
+ */
+const isShared = app =>
+  app.sharedWith?.everyone === true || app.sharedWith?.users > 0 || app.sharedWith?.groups > 0;
 
 function AdminUserViewPage() {
   const { t } = useTranslation();
@@ -22,6 +41,13 @@ function AdminUserViewPage() {
   // clients can be switched off entirely, in which case there is nothing to
   // show and the section stays hidden.
   const [connections, setConnections] = useState([]);
+  // The personal apps this user owns, and whether an admin switched them all
+  // off. Best effort and for full admins: null while unknown, and then the
+  // section stays hidden.
+  const [personalApps, setPersonalApps] = useState(null);
+  const [appsBlocked, setAppsBlocked] = useState(false);
+  const userAppsFeatureOn = useFeatureFlags().isEnabled('userApps', false);
+  const { requestConfirm, dialogProps: confirmDialogProps } = useConfirmAction();
 
   useEffect(() => {
     const loadUser = async () => {
@@ -67,6 +93,45 @@ function AdminUserViewPage() {
 
     void loadConnections();
   }, [userId]);
+
+  useEffect(() => {
+    let active = true;
+    Promise.all([fetchAdminUserApps({ ownerId: userId }), fetchUserAppSettings()])
+      .then(([items, settings]) => {
+        if (!active) return;
+        setPersonalApps({ count: items.length, shared: items.filter(isShared).length });
+        setAppsBlocked((settings?.blockedOwners || []).includes(userId));
+      })
+      .catch(() => {
+        if (active) setPersonalApps(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [userId]);
+
+  /**
+   * Add the user to `blockedOwners`: their apps stop for everyone and they
+   * cannot create new ones. The list is replaced as a whole, so it is read
+   * again right before the write.
+   */
+  const blockPersonalApps = () =>
+    requestConfirm({
+      title: t('admin.userApps.user.block'),
+      message: t('admin.userApps.user.blockBody'),
+      confirmLabel: t('admin.userApps.disable.action'),
+      danger: true,
+      action: async () => {
+        const current = await fetchUserAppSettings();
+        const blockedOwners = [...new Set([...(current?.blockedOwners || []), userId])];
+        const settings = await saveUserAppSettings({ blockedOwners });
+        setAppsBlocked((settings?.blockedOwners || []).includes(userId));
+      }
+    });
+
+  // With the feature off the section appears only when there is something to say.
+  const showPersonalApps =
+    personalApps !== null && (userAppsFeatureOn || personalApps.count > 0 || appsBlocked);
 
   if (loading) {
     return (
@@ -328,6 +393,35 @@ function AdminUserViewPage() {
           </dl>
         </div>
 
+        {/* Personal apps of this user, and the switch that stops them all */}
+        {showPersonalApps && (
+          <div className="px-6 py-6 border-t border-gray-200 dark:border-gray-700">
+            <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">
+              {t('admin.userApps.tab')}
+            </h3>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <Link
+                to={`/admin/apps?tab=personal&owner=${encodeURIComponent(userId)}`}
+                className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline"
+              >
+                {t('admin.userApps.user.count', {
+                  count: personalApps.count,
+                  shared: personalApps.shared
+                })}
+              </Link>
+              {appsBlocked ? (
+                <span className="text-sm text-amber-800 dark:text-amber-300">
+                  {t('admin.userApps.user.blocked')}
+                </span>
+              ) : (
+                <button type="button" onClick={blockPersonalApps} className={DANGER_BUTTON_CLASS}>
+                  {t('admin.userApps.user.block')}
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Connected applications — the OAuth grants this user has given */}
         {connections.length > 0 && (
           <div className="px-6 py-6 border-t border-gray-200 dark:border-gray-700">
@@ -366,6 +460,7 @@ function AdminUserViewPage() {
           </div>
         )}
       </div>
+      <ConfirmDialog {...confirmDialogProps} />
     </div>
   );
 }

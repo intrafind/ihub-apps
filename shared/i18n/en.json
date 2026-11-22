@@ -3080,25 +3080,18 @@
         "autoStart": "Auto-start conversation",
         "autoStartHelp": "When enabled, the app will automatically start the conversation when the chat is opened or reset",
         "startForm": "Start chats with a form",
-        "startFormHelp": "A new chat opens with these variables as a form instead of the chat input, with a message field, a model selector when users may pick the model, and a drop zone for files when uploads are enabled. Sending the form fills the prompt template once and sends it as the first message; the conversation then continues without the template.",
+        "startFormHelp": "A new chat opens with the input fields as a form instead of the message box, with a drop zone for files when uploads are on. Sending the form fills the message template once and sends it as the first message. The conversation then continues without the template.",
         "startFormSubmitLabel": "Send button label",
-        "variablesPanelPinned": "Pin the input parameters by default",
-        "variablesPanelPinnedHelp": "Pinned, the input parameters stay open beside the chat. Unpinned, they collapse each time a message is sent and can be expanded again. Users can collapse, expand and pin the panel themselves; this sets where it starts.",
+        "variablesPanelPinned": "Keep the input fields open beside the chat",
+        "variablesPanelPinnedHelp": "Open, the input fields stay beside the chat. Otherwise they collapse each time a message is sent and can be opened again. Users can change this themselves; the setting says where it starts.",
         "ephemeral": "Ephemeral chat",
         "ephemeralHelp": "When enabled, the chat is never stored. Messages exist only while the chat is open and are discarded when you switch apps or reload.",
         "test": "Test",
         "hideTest": "Hide test",
         "testHint": "Chat with the saved app next to the editor",
-        "openDisabledHint": "Enable the app and save to open it",
-        "save": "Save",
-        "saveAndExit": "Save & Exit",
-        "saveHint": "Save and keep editing (Ctrl+S / ⌘S)",
-        "saving": "Saving...",
         "saved": "App saved",
-        "created": "App created",
-        "idRequired": "App ID is required",
         "integrations": {
-          "title": "Integrations",
+          "title": "Connected systems",
           "desc": "Bind installed integrations. Narrow them to some actions, and set the scope users start with.",
           "none": "No integration is installed yet.",
           "openCatalog": "Open the catalog",
@@ -3340,7 +3333,7 @@
         "documentTemplateFree": "The default template applies; the model may use another template when the user asks for it.",
         "documentTemplatesLink": "Manage document templates",
         "documentTemplateMissing": "The template \"{{id}}\" does not exist; the default template applies.",
-        "addLanguage": "Add Language",
+        "addLanguage": "Add a translation",
         "selectLanguage": "Select...",
         "languageCode": "Language code (e.g., en, de, es)",
         "invalidLanguageCode": "Use a two-letter language code, optionally with a region: \"de\", \"pt-BR\".",
@@ -3359,7 +3352,278 @@
         "toolSearchBudgetHelp": "Tokens the tool definitions of one request may take before integrations are left to the search. Default 6000; never more than a tenth of the model's context window.",
         "selectCategory": "Select category...",
         "resource": "app \"{{id}}\"",
-        "backToApps": "Back to Apps"
+        "backToApps": "Back to Apps",
+        "publish": {
+          "action": "Publish",
+          "title": "Publish \"{{name}}\"?",
+          "who": "Who will see it",
+          "everyone": "Everyone can use this app, including people who are not signed in.",
+          "everyoneSignedIn": "Everyone who signs in can use this app.",
+          "groups": "Members of these groups can use it: {{groups}}.",
+          "noGroups": "No group can use this app yet. Choose groups under \"Who can use this app\".",
+          "partial": "You see only the groups you manage. Other people may also be able to use it; ask an administrator.",
+          "noOwnGroups": "None of the groups you manage can use this app yet. Other people may be able to use it; ask an administrator.",
+          "savesFirst": "Your unsaved changes are saved first.",
+          "noModel": "No AI model is available. Users will see \"No models available\".",
+          "notSignedIn": "People who are not signed in can use this app."
+        },
+        "unpublish": {
+          "action": "Unpublish",
+          "title": "Unpublish \"{{name}}\"?",
+          "body": "Users can no longer open the app."
+        },
+        "notPublishedHint": "Not published. Only you and others who manage apps can open and test this app.",
+        "testNoAccess": {
+          "title": "Your groups cannot use this app yet",
+          "body": "Give one of your groups access, then test it."
+        },
+        "access": {
+          "everyoneSignedIn": "Everyone who signs in",
+          "everyone": "Everyone, including people who are not signed in",
+          "notSignedIn": "People who are not signed in"
+        },
+        "liveHint": "Users get the change as soon as you save.",
+        "fieldsNeedAttention_one": "1 field needs your attention.",
+        "fieldsNeedAttention_other": "{{count}} fields need your attention.",
+        "showFirstError": "Show",
+        "more": "More",
+        "expandAll": "Expand all",
+        "collapseAll": "Collapse all",
+        "jump": "Jump to section",
+        "jumpGo": "Go",
+        "groups": {
+          "basics": "Basics",
+          "instructions": "Instructions and inputs",
+          "model": "Model",
+          "knowledge": "Knowledge and tools",
+          "chat": "Chat features",
+          "input": "Input and voice",
+          "userSettings": "What users can change",
+          "access": "Who can use this app"
+        },
+        "systemInstructions": "Instructions",
+        "systemInstructionsDesc": "Tell the AI what its task is and how it should answer. It reads this before every chat; users do not see it. (Also called the system prompt.)",
+        "prompt": "Message template",
+        "promptHelp": "Optional. Text that is sent together with every message of a user. Write one placeholder for each input field. Write {{content}} where the user's message should go; without it, the message is added at the end.",
+        "messagePlaceholder": "Hint in the message box",
+        "messagePlaceholderHelp": "Grey text in the empty message box, for example \"Paste your text here\".",
+        "variables": "Input fields",
+        "variablesDesc": "Fields users fill in before they send, for example a language or a tone. Each field has a placeholder. What a user enters replaces the placeholder in the instructions and in the message template.",
+        "variablesEmpty": "No input fields. Users write a message, nothing else.",
+        "variable": "Input field",
+        "addVariable": "Add input field",
+        "variableLabel": "Field name",
+        "variableLabelHelp": "The text users see above the field.",
+        "variableName": "Placeholder",
+        "variableNameHelp": "Write {{placeholder}} in the instructions or the message template. It is replaced by what the user enters.",
+        "variableUnused": "This field is not used yet. The AI does not receive what users enter.",
+        "variableAddToTemplate": "Add to message template",
+        "variableType": "Kind of field",
+        "typeString": "Short text",
+        "typeText": "Long text",
+        "typeSelect": "Dropdown (choose one)",
+        "typeDate": "Date",
+        "typeNumber": "Number",
+        "required": "Users must fill this in",
+        "defaultValue": "Prefilled value",
+        "predefinedValues": "Options",
+        "option": "Option",
+        "value": "Text the AI receives",
+        "addOption": "Add option",
+        "starterPrompts": "Conversation starters",
+        "starterPromptsDesc": "Buttons in an empty chat. A click puts the text into the message box.",
+        "starterPrompt": "Conversation starter",
+        "addStarterPrompt": "Add conversation starter",
+        "title": "Text on the button",
+        "message": "Message",
+        "description": "Short description",
+        "moreDetails": "More details",
+        "appType": "App type",
+        "order": "Position in the app list",
+        "systemPrompt": "Instructions",
+        "validation": {
+          "systemRequired": "Enter instructions. One sentence is enough to start.",
+          "colorInvalid": "Color must be a valid hex code",
+          "colorRequired": "Color is required",
+          "descriptionRequired": "App description is required",
+          "iconRequired": "Icon is required",
+          "idInvalid": "App ID can only contain letters, numbers, hyphens, and underscores",
+          "idRequired": "App ID is required",
+          "nameRequired": "App name is required",
+          "empty": "This field is empty. Enter a text.",
+          "required": "This entry is missing. Fill it in.",
+          "minLength_one": "This text is too short. Enter at least {{count}} character.",
+          "minLength_other": "This text is too short. Enter at least {{count}} characters.",
+          "maxLength_one": "This text is too long. Shorten it to {{count}} character.",
+          "maxLength_other": "This text is too long. Shorten it to {{count}} characters.",
+          "minimum": "This number is too small. Enter a number that is at least {{limit}}.",
+          "maximum": "This number is too large. Enter a number that is at most {{limit}}.",
+          "exclusiveMinimum": "This number is too small. Enter a number greater than {{limit}}.",
+          "exclusiveMaximum": "This number is too large. Enter a number less than {{limit}}.",
+          "pattern": "This entry does not have the required form. Check it for characters that are not allowed.",
+          "uri": "This is not a complete web address. Enter one that starts with https:// or http://.",
+          "email": "This is not an e-mail address. Enter one like name@example.com.",
+          "enum": "This value is not offered. Choose one of: {{values}}.",
+          "uniqueItems": "This list contains an entry twice. Remove the duplicate.",
+          "type": "This value has the wrong kind (for example a text where a number belongs). Correct it.",
+          "invalid": "This value is not valid. Check it.",
+          "variableName": "This placeholder is not allowed. Start with a letter or an underscore, and use only letters, digits, hyphens and underscores."
+        },
+        "groupChanged": "changed",
+        "settings": "What users can change",
+        "settingsDesc": "Each switch shows or hides one control in the chat.",
+        "enableModelSelection": "Users can choose the AI model",
+        "enableOutputFormat": "Users can choose the answer format",
+        "enableChatHistory": "Users can switch off \"Include chat history in requests\"",
+        "enableStyleControl": "Users can choose the response style",
+        "skillsTitle": "Skills",
+        "workflowsTitle": "Workflows",
+        "skills": {
+          "noResults": "No skills match your search",
+          "noSkills": "No skills available"
+        },
+        "workflows": {
+          "noResults": "No workflows match your search",
+          "noWorkflows": "No workflows available"
+        },
+        "allowFullscreen": "Allow Fullscreen",
+        "allowScripts": "Allow Scripts (required for most interactive content)",
+        "allowSameOrigin": "Allow Same Origin (enables localStorage, cookies)",
+        "allowForms": "Allow Forms (enable form submission)",
+        "allowPopups": "Allow Popups",
+        "allowModals": "Allow Modals (alert, confirm, etc.)",
+        "allowTopNavigation": "Allow Top Navigation (navigate parent window)",
+        "enableImageUpload": "Enable Image Upload",
+        "maxImageSize": "Max Image Size (MB)",
+        "supportedImageFormats": "Supported Image Formats",
+        "resizeImages": "Resize Images",
+        "enableFileUpload": "Enable File Upload",
+        "maxFileSize": "Max File Size (MB)",
+        "supportedFormats": "Supported File Formats",
+        "enableAudioUpload": "Enable Audio Upload",
+        "maxAudioSize": "Max Audio File Size (MB)",
+        "supportedAudioFormats": "Supported Audio Formats",
+        "allowMultiple": "Allow Multiple Files",
+        "allowedModels": "Allowed Models",
+        "allowedModelsHint": "Restrict which models users can select for this app. Leave empty to allow all models.",
+        "appId": "App ID",
+        "appTypeHint": "Chat apps use AI models, Iframe apps embed external content, Redirect apps open external links",
+        "autoSendPrompt": "Send immediately when clicked",
+        "automaticMode": "Automatic (Voice Activation)",
+        "azureService": "Azure Speech",
+        "basicInfo": "Basic Information",
+        "basicInfoDesc": "Basic app configuration and metadata",
+        "category": "Category",
+        "color": "Color",
+        "compareMode": "Compare Mode",
+        "compareModeDesc": "Allow users to query two models simultaneously and compare their responses side-by-side",
+        "compareModeNote": "When enabled, users can activate compare mode to send their input to two different models and view the responses side-by-side. The platform-level compare mode feature must also be enabled for this to work.",
+        "customService": "Custom Service",
+        "customServiceHost": "Custom Service Host",
+        "enableCompareMode": "Enable Compare Mode",
+        "enableExport": "Enable Export",
+        "enableMagicPrompt": "Enable Magic Prompt",
+        "enableMicrophone": "Enable Microphone",
+        "enableUpload": "Enable Upload",
+        "enabled": "Enabled",
+        "export": "Export",
+        "exportDesc": "Control whether users can export conversations from this app",
+        "exportNote": "When disabled, users cannot export conversations in any format (JSON, Markdown, PDF, etc.). The platform-level export setting must also be enabled for export to work.",
+        "fixErrors": "Please fix the following errors",
+        "history": "History",
+        "icon": "Icon",
+        "iframeConfig": "Iframe Configuration",
+        "iframeConfigDesc": "Configure the embedded iframe content",
+        "iframeUrl": "Iframe URL",
+        "inputMode": "Input Mode & Microphone",
+        "inputModeDesc": "Configure input methods and voice recognition",
+        "inputType": "Input Type",
+        "magicPrompt": "Magic Prompt",
+        "magicPromptDesc": "AI-powered prompt enhancement feature",
+        "magicPromptInstructions": "Magic Prompt Instructions",
+        "magicPromptModel": "Magic Prompt Model",
+        "magicPromptPlaceholder": "Use {{prompt}} to reference the user's original prompt",
+        "manualMode": "Manual (Click to Record)",
+        "microphoneMode": "Microphone Mode",
+        "multiLine": "Multi Line",
+        "name": "Name",
+        "noAppData": "No app data available",
+        "noModelsSelected": "No restriction — all available models can be used with this app",
+        "openInNewTab": "Open in New Tab",
+        "outputFormat": "Answer format",
+        "predefinedValuesHint": "Optional suggested values that can be used as autocomplete options.",
+        "predefinedValuesHintSelect": "Options that will be available in the dropdown menu.",
+        "preferredModel": "AI model",
+        "redirectConfig": "Redirect Configuration",
+        "redirectConfigDesc": "Configure the redirect behavior",
+        "redirectUrl": "Redirect URL",
+        "sandboxPermissions": "Sandbox Permissions",
+        "sandboxPermissionsDesc": "Control what the embedded content is allowed to do. Uncheck options to restrict permissions for better security.",
+        "searchModels": "Search models to add...",
+        "searchSkills": "Search skills to add...",
+        "searchWorkflows": "Search workflows to add...",
+        "selectModel": "Select model...",
+        "showTranscript": "Show Transcript",
+        "showWarning": "Show Warning Before Redirect",
+        "singleLine": "Single Line",
+        "skillsDesc": "Configure which agent skills are available for this app",
+        "skillsHelper": "Search and select skills to add to this app. Click on selected skills to remove them.",
+        "speechRecognitionService": "Speech Recognition Service",
+        "tools": "Tools",
+        "toolsDesc": "How the model uses the tools of the integrations this app binds",
+        "typeChat": "Chat",
+        "typeIframe": "Iframe",
+        "typeRedirect": "Redirect",
+        "upload": "Upload Configuration",
+        "uploadDesc": "Configure file and image upload capabilities",
+        "validationErrorsExist": "Please fix validation errors before saving",
+        "workflowsDesc": "Attach workflows to this app. Users can trigger them in chat with @workflow-id.",
+        "workflowsHelper": "Search and select workflows to make available in this app. Users can trigger them with @workflow-id in chat.",
+        "selectIcon": "Select an icon",
+        "searchIcons": "Search icons…",
+        "noIconsFound": "No icons found",
+        "iconCount": "{{count}} icons available",
+        "iconCountFiltered": "{{filtered}} of {{total}} icons",
+        "summary": {
+          "standardModel": "Standard model",
+          "webSearchOn": "Web search on",
+          "webSearchOff": "Web search off",
+          "connectedSystems_one": "{{count}} connected system",
+          "connectedSystems_other": "{{count}} connected systems",
+          "allConnectedSystems": "all connected systems",
+          "uploadOn": "Upload on",
+          "uploadOff": "Upload off",
+          "featuresOn": "{{features}} on",
+          "featureExport": "export",
+          "featureFeedback": "feedback",
+          "singleLine": "Single line",
+          "multiLine": "Multi-line",
+          "microphoneOn": "microphone on",
+          "microphoneOff": "microphone off",
+          "settingsOn": "{{on}} of {{total}} on",
+          "groups_one": "{{count}} group",
+          "groups_other": "{{count}} groups",
+          "noGroups": "No group yet",
+          "ownGroups_one": "{{count}} of the groups you manage",
+          "ownGroups_other": "{{count}} of the groups you manage",
+          "noOwnGroups": "None of the groups you manage"
+        },
+        "modelTitle": "AI model",
+        "modelDesc": "Which AI model answers in this app, and in which format.",
+        "chatBehaviour": "Chat behavior",
+        "chatBehaviourDesc": "How a chat with this app starts and whether it is stored.",
+        "standardModel": "Standard model",
+        "loadingFormats": "Loading the available formats...",
+        "categoryNotFound": "This kind of file is not set up on this installation.",
+        "useEntireCategory": "Use the entire {{category}} category",
+        "selectIndividualFormats": "Or select individual formats:",
+        "errorLabel": {
+          "variable": "Input field {{number}}",
+          "starterPrompt": "Conversation starter {{number}}",
+          "option": "Option {{number}}",
+          "part": "{{parent}}, {{field}}",
+          "language": "{{field}} — {{language}}"
+        }
       },
       "reorder": "Reorder",
       "reorderHelp": "Drag a row or use the arrows to set the order apps appear in for users — in the apps browser, on the start page and in the sidebar. Every app is listed, so search and filters do not apply here. Nothing is saved until you choose \"Save order\".",
@@ -3367,7 +3631,6 @@
       "savingOrder": "Saving order...",
       "openApp": "Open app",
       "openAppHint": "Open the app in a new tab",
-      "openDisabledHint": "Enable the app to open it",
       "openMissingFeaturesHint": "Turn on {{features}} to open it",
       "missingInstalledIntegration": "Installed integration \"{{id}}\"",
       "missingWebSearchEngine": "A web search engine",
@@ -3380,11 +3643,12 @@
         "close": "Close test panel",
         "unsavedHint": "You have unsaved changes. Save to test them — the test restarts after every save.",
         "chatOnly": "Testing here works for chat apps. Use Open app to try this app.",
-        "disabled": "This app is disabled, so it cannot be opened in the chat. Enable it and save to test it."
+        "disabled": "This app is not published, so it cannot be opened in the chat. Publish it to test it."
       },
       "status": {
-        "disabled": "Disabled",
-        "hiddenUntilFeature": "Hidden from users until {{features}} is on"
+        "hiddenUntilFeature": "Hidden from users until {{features}} is on",
+        "published": "Published",
+        "notPublished": "Not published"
       },
       "integrationNames": {
         "jira": "Jira integration",
@@ -3407,6 +3671,267 @@
         "custom": "Custom notice",
         "off": "No notice for this app",
         "text": "Notice text"
+      },
+      "create": {
+        "title": "New app",
+        "stepOf": "Step {{current}} of {{total}}: {{name}}",
+        "steps": {
+          "start": "Start",
+          "essentials": "Essentials"
+        },
+        "back": "Back",
+        "cancel": "Cancel",
+        "submit": "Create and test",
+        "submitting": "Creating app…",
+        "requiredHint": "Fields marked with * are required.",
+        "restored": "Your unfinished draft was restored.",
+        "startOver": "Start over",
+        "discard": {
+          "title": "Discard this app?",
+          "body": "You have not created the app yet. What you entered will be lost.",
+          "confirm": "Discard",
+          "keep": "Keep editing"
+        },
+        "start": {
+          "heading": "What should your app do?",
+          "label": "Your description",
+          "placeholder": "Example: An assistant that rewrites a difficult text in plain language. The user pastes the text and chooses a reading level.",
+          "help": "Say who uses the app, what they put in and what they should get back. Two or three sentences are enough.",
+          "examples": {
+            "label": "Examples:",
+            "summary": {
+              "chip": "Plain-language summary",
+              "text": "An assistant that rewrites a difficult text in plain language. The user pastes the text and chooses a reading level."
+            },
+            "reply": {
+              "chip": "Reply to a customer",
+              "text": "An assistant that drafts a reply to a customer email. The user pastes the email and chooses a tone: friendly, neutral or formal."
+            },
+            "translate": {
+              "chip": "Translate a text",
+              "text": "An assistant that translates a text and keeps its tone and formatting. The user chooses the target language."
+            }
+          },
+          "generate": "Prepare draft",
+          "generating": "Preparing your draft. This can take up to a minute.",
+          "privacy": "Your description is sent to the AI model {{model}}.",
+          "or": "or start from",
+          "templates": {
+            "heading": "Templates",
+            "loadError": "The templates could not be loaded."
+          },
+          "badge": {
+            "inputFields": "Input fields"
+          },
+          "copy": "Copy an existing app",
+          "copyHelp": "Start from a copy of an app that already exists.",
+          "blank": "Start empty",
+          "other": "Other ways to start",
+          "link": {
+            "help": "A link to a website, or a page shown inside iHub.",
+            "action": "Create a link app"
+          },
+          "marketplace": "More apps in the Marketplace"
+        },
+        "noModel": {
+          "title": "No AI model is set up yet",
+          "body": "You can prepare the app, but it cannot answer until a model is connected.",
+          "actionAdmin": "Set up a model",
+          "actionOther": "Ask an administrator to set up a model."
+        },
+        "generatorOff": "Drafting with AI is switched off on this installation.",
+        "copy": {
+          "heading": "Which app do you want to copy?",
+          "search": "Search apps",
+          "noMatch": "No app matches \"{{query}}\".",
+          "none": "There is no app to copy yet. Choose another way to start.",
+          "loadError": "The apps could not be loaded.",
+          "sourceGone": "The app you wanted to copy no longer exists.",
+          "nameSuffix": "{{name}} (copy)",
+          "note": "Copied from \"{{name}}\". Everything is copied, including connected systems and file settings. Group access is not copied.",
+          "languagesNote": "You changed texts that also exist in other languages. Those other versions are removed, so that all users get your new text. You can add translations in the editor."
+        },
+        "retry": "Try again",
+        "template": {
+          "note": "Started from the template \"{{name}}\". Change anything you like."
+        },
+        "essentials": {
+          "heading": {
+            "blank": "Describe your app",
+            "draft": "Check your draft",
+            "copy": "Adjust your copy",
+            "template": "Adjust the template",
+            "link": "Set up your link app"
+          },
+          "name": "Name",
+          "namePlaceholder": "Plain-language summary",
+          "nameHelp": "Users see the name in the app list.",
+          "nameExists": "An app named \"{{name}}\" already exists. You can still use the name.",
+          "description": "Short description",
+          "descriptionPlaceholder": "Rewrites a text so that everyone understands it.",
+          "descriptionHelp": "One sentence under the name. It tells users when to pick this app.",
+          "instructions": "Instructions",
+          "instructionsPlaceholder": "You rewrite texts in plain language. Use short sentences and common words. Keep all facts. Answer in the language of the text.",
+          "instructionsHelp": "Tell the AI what its task is and how it should answer. It reads this before every chat; users do not see it. (Also called the system prompt.)",
+          "tips": {
+            "toggle": "Tips for good instructions",
+            "role": "Say what the app does: \"You summarize meeting notes.\"",
+            "form": "Say what the answer looks like: \"Five bullet points at most.\"",
+            "limits": "Say what it must not do: \"Do not add facts that are not in the text.\""
+          },
+          "icon": "Icon",
+          "color": "Color",
+          "colorCustom": "Custom color",
+          "details": "More details",
+          "id": "App ID",
+          "idHelp": "Part of the app's link. Lowercase letters, digits and hyphens. It cannot be changed after the app is created.",
+          "idFree": "Available",
+          "category": "Category",
+          "categoryHelp": "Users can filter the app list by category.",
+          "language": "You are writing in {{language}}. You can add other languages in the editor.",
+          "audience": "The app starts as \"Not published\". Only you and others who manage apps can open and test it until you publish it.",
+          "audienceLive": "Everyone who may use apps through their group sees it as soon as you create it.",
+          "colors": {
+            "indigo": "Indigo",
+            "blue": "Blue",
+            "teal": "Teal",
+            "green": "Green",
+            "orange": "Orange",
+            "red": "Red",
+            "pink": "Pink",
+            "gray": "Gray"
+          }
+        },
+        "draft": {
+          "intro": "The AI prepared this draft. Check the text; you can change everything.",
+          "also": "Also in this draft",
+          "inputFields": "Input fields: {{names}}",
+          "fieldsLocked": "The instructions use these fields. You can remove them in the editor.",
+          "briefCustomised": "An administrator changed how drafts are prepared on this installation.",
+          "suggestions": "The app could also use",
+          "suggestionsHelp": "Nothing here is switched on unless you tick it.",
+          "webSearch": "Web search: the app can search the internet.",
+          "system": "{{name}}: {{actions}}",
+          "systemAll": "{{name}}: all functions",
+          "leftOut": "Some parts of the answer could not be used and were left out.",
+          "regenerate": "Prepare a new draft",
+          "regenerateWarning": "A new draft replaces the current one, including your changes.",
+          "arrived": {
+            "title": "The new draft is ready",
+            "body": "You changed the current draft while the new one was being prepared. The new draft replaces it, including your changes.",
+            "use": "Use the new draft",
+            "keep": "Keep my changes"
+          }
+        },
+        "link": {
+          "url": "Website address",
+          "urlHelp": "The full address, starting with https://",
+          "mode": "How should it open?",
+          "redirect": "Open the website",
+          "iframe": "Show the website inside iHub",
+          "iframeHelp": "Some websites do not allow being shown inside other pages."
+        },
+        "done": {
+          "toast": "App \"{{name}}\" created",
+          "heading": "Your app is ready to test",
+          "body": "Write a message in the test chat on the right. Change the instructions, save, and try again.",
+          "steps": {
+            "test": "Test it with a real example",
+            "inputFields": "Add input fields, if users should choose something (optional)",
+            "starters": "Add conversation starters (optional)",
+            "access": "Check who can use the app",
+            "publish": "Publish"
+          },
+          "dismiss": "Hide these steps",
+          "guide": "Guide: Build your first app"
+        },
+        "error": {
+          "noModel": "No AI model is available to you, so a draft cannot be prepared. Start from a template or start empty, or ask an administrator to set up a model.",
+          "unreadable": "The AI's draft could not be used. Try again.",
+          "model": "The AI model did not answer. Try again in a moment.",
+          "modelSetup": "The AI model is not set up correctly. Ask an administrator. You can still start from a template or start empty.",
+          "quota": "You have reached your usage limit, so a draft cannot be prepared now. Ask an administrator, or start from a template or start empty.",
+          "refused": "The AI model refused this description. Change the wording and try again.",
+          "tooManyDrafts": "You have prepared many drafts in the last hour. Try again later, or start from a template or start empty.",
+          "busy": "Too many requests right now. Wait a moment and try again.",
+          "failed": "The draft could not be prepared. {{detail}}",
+          "empty": "Describe the app first.",
+          "tooLong": "Shorten your description to at most 2,000 characters.",
+          "nameRequired": "Enter a name.",
+          "descriptionRequired": "Enter a short description.",
+          "instructionsRequired": "Enter instructions. One sentence is enough to start.",
+          "idRequired": "Enter an app ID.",
+          "idFormat": "Use only lowercase letters, digits, hyphens, dots and underscores, without spaces. Example: {{example}}",
+          "idTooLong": "The app ID can have at most 50 characters.",
+          "idTaken": "An app with the ID \"{{id}}\" already exists. Choose another ID.",
+          "idReserved": "\"{{id}}\" cannot be used as an app ID. Choose another ID.",
+          "urlFormat": "Enter the full website address, starting with https://",
+          "summary_one": "1 field needs your attention.",
+          "summary_other": "{{count}} fields need your attention.",
+          "validation": "The app could not be created because these entries are not accepted: {{fields}}.",
+          "forbidden": "You are not allowed to create apps. Ask an administrator.",
+          "offline": "The server cannot be reached. Your entries are still here. Try again.",
+          "unknown": "The app could not be created. {{detail}}"
+        }
+      },
+      "title": "Apps",
+      "subtitle": "Assistants your users can open.",
+      "createApp": "New app",
+      "list": {
+        "duplicate": "Duplicate",
+        "uploadConfig": "Upload a config file",
+        "publishAll": "Publish all",
+        "unpublishAll": "Unpublish all",
+        "publishShown": "Publish shown",
+        "unpublishShown": "Unpublish shown",
+        "publishConfirm_one": "This app becomes visible to its users:",
+        "publishConfirm_other": "These {{count}} apps become visible to their users:",
+        "unpublishConfirm_one": "Users can no longer open this app:",
+        "unpublishConfirm_other": "Users can no longer open these {{count}} apps:",
+        "noMatch": "No app matches \"{{query}}\".",
+        "nothingToPublish": "All of these apps are already published.",
+        "nothingToUnpublish": "None of these apps is published.",
+        "openNotPublishedHint": "Not published. Open the editor to test the app."
+      },
+      "empty": {
+        "title": "No apps yet",
+        "body": "An app is an assistant for one task, for example \"Summarize a text\" or \"Answer questions about our travel policy\"."
+      },
+      "actions": {
+        "delete": "Delete",
+        "download": "Download Config",
+        "edit": "Edit",
+        "toggle": "Publish or unpublish"
+      },
+      "allCategories": "All Categories",
+      "errorTitle": "Error",
+      "filterAll": "All Apps",
+      "filterDisabled": "Not published only",
+      "filterEnabled": "Published only",
+      "loading": "Loading...",
+      "noApps": "No apps found",
+      "noAppsDescription": "Try adjusting your search or filter criteria.",
+      "searchPlaceholder": "Search apps...",
+      "statusLabel": "Status",
+      "table": {
+        "app": "App",
+        "category": "Category",
+        "model": "Model",
+        "order": "Order",
+        "status": "Status"
+      },
+      "uploading": "Uploading...",
+      "details": {
+        "status": "Status",
+        "description": "Short description",
+        "systemInstructions": "Instructions",
+        "technicalDetails": "Details",
+        "model": "AI model",
+        "order": "Position in the app list",
+        "variables": "Input fields",
+        "starterPrompts": "Conversation starters",
+        "editApp": "Edit app",
+        "close": "Close"
       }
     },
     "features": {
@@ -4372,7 +4897,7 @@
         "installationDisabled": "This installation is disabled: an app that requires it is hidden, others run without its actions. Enable it to test.",
         "notGranted": "Your groups do not grant this installation, so the chat runs without its actions. Grant it under Admin → Groups.",
         "openGroups": "Open groups",
-        "appDisabled": "This app is disabled, so it cannot be opened in the chat. Enable it in the app editor to test it."
+        "appDisabled": "This app is not published, so it cannot be opened in the chat. Publish it in the app editor to test it."
       },
       "actionReview": {
         "new": "New",
@@ -4655,6 +5180,7 @@
         "title": "Header",
         "description": "The navigation links and the color of the classic top header."
       },
+      "save": "Save Changes",
       "saveBar": {
         "label": "Save changes",
         "saving": "Saving…",
@@ -7130,7 +7656,26 @@
       "switchToFormTitle": "Switch to the form editor?",
       "switchAction": "Switch editor",
       "resetConsequence": "Your unsaved changes are discarded.",
-      "switchConsequence": "You have unsaved changes. Switching editors may lose some of them."
+      "switchConsequence": "You have unsaved changes. Switching editors may lose some of them.",
+      "formMode": "Form",
+      "jsonMode": "JSON",
+      "unsavedChanges": "Unsaved changes",
+      "validationErrors": "Validation errors",
+      "allValid": "All valid",
+      "reset": "Reset",
+      "noFormComponent": "No Form Component",
+      "noFormComponentDesc": "No form component provided for this editor.",
+      "validationSummary": "Validation Summary",
+      "errorCount": "{{count}} error(s) found:",
+      "moreErrors": "... and {{count}} more",
+      "jsonEditor": "JSON Editor",
+      "invalidJson": "Invalid JSON",
+      "formatJson": "Format JSON",
+      "format": "Format",
+      "validateJson": "Validate JSON",
+      "validate": "Validate",
+      "loadingEditor": "Loading editor...",
+      "errorAtLine": "Line {{line}}: {{message}}"
     },
     "pages": {
       "fields": {
@@ -7217,6 +7762,150 @@
       "conflict": "Someone else changed the artifact settings after you opened this page, so nothing was saved. Your edits are still here: load the current settings, then make your change again.",
       "reload": "Load the current settings",
       "reloadError": "The current settings could not be loaded."
+    },
+    "formErrors": {
+      "title": "Please fix the following errors",
+      "count_one": "({{count}} error)",
+      "count_other": "({{count}} errors)"
+    },
+    "resourceSelector": {
+      "placeholder": "Search and select...",
+      "noneSelected": "Nothing selected",
+      "all": "All (*)",
+      "noMatches": "Nothing matches your search.",
+      "startTyping": "Type to search."
+    },
+    "userApps": {
+      "tab": "Personal apps",
+      "tabWaiting_one": "Personal apps · {{count}} waiting",
+      "tabWaiting_other": "Personal apps · {{count}} waiting",
+      "featureOff": "Personal apps are switched off. Switch them on under Features.",
+      "featureOn": "Personal apps are switched on.",
+      "filter": {
+        "all": "All",
+        "everyone": "Shared with everyone",
+        "ownerInactive": "Owner inactive",
+        "ownerStale": "Owner rights stale",
+        "waiting": "Published, not switched on",
+        "label": "Show",
+        "clash": "ID clash",
+        "owner": "Owner: {{name}}",
+        "clearOwner": "Show all owners"
+      },
+      "waiting": {
+        "row": "Published {{age}} ago, not switched on",
+        "open": "Open company app",
+        "notice_one": "{{count}} app published by a user is not switched on yet.",
+        "notice_other": "{{count}} apps published by users are not switched on yet."
+      },
+      "takeOver": {
+        "action": "Take over as app…",
+        "title": "Take over \"{{name}}\" as an app?",
+        "willUse": "The new app will be able to:",
+        "dropped": "Not taken over: {{list}}",
+        "plain": "The owner's rights could not be checked. The new app is created without web search, files, skills and connected systems.",
+        "notPublished": "The app is created as \"Not published\". You test it and publish it in the app editor.",
+        "owner": "{{owner}} can no longer change the personal app.",
+        "users_one": "{{count}} person uses the personal app today. It keeps working for this person until they can use the new app.",
+        "users_other": "{{count}} people use the personal app today. It keeps working for each of them until they can use the new app.",
+        "submit": "Take over",
+        "noCategory": "No category",
+        "groups_one": "The personal app is shared with {{count}} group. It keeps working for its members until they can use the new app.",
+        "groups_other": "The personal app is shared with {{count}} groups. It keeps working for their members until they can use the new app.",
+        "everyone": "The personal app is shared with everyone signed in. It keeps working for them until they can use the new app.",
+        "alreadyPublished": "The app was published in the meantime and cannot be taken over.",
+        "unavailable": "What a take-over would write could not be worked out. Close the dialog and try again later."
+      },
+      "noAccess_one": "{{count}} of {{total}} members cannot use the company app.",
+      "noAccess_other": "{{count}} of {{total}} members cannot use the company app.",
+      "release": {
+        "action": "Give back to the owner",
+        "published": "Unpublish or delete the company app first.",
+        "title": "Give \"{{name}}\" back to the owner?",
+        "body": "{{owner}} can change the personal app again. The company app stays."
+      },
+      "changed": "The app changed since you opened it. Check it again.",
+      "disable": {
+        "action": "Switch off",
+        "body": "Nobody can use the app while it is switched off. The owner and everyone the app is shared with see your reason.",
+        "title": "Switch off \"{{name}}\"?",
+        "reason": "Reason (the owner and members see it)"
+      },
+      "enable": {
+        "action": "Switch on"
+      },
+      "offerOwner": "Offer to a new owner",
+      "revisions": "Earlier versions",
+      "clash": "ID clash: an app file has the same ID. Rename the file or delete this app.",
+      "settings": {
+        "title": "Personal app settings",
+        "shareWith": "Users may share their apps with",
+        "allowUsers": "Specific users",
+        "allowGroups": "Groups",
+        "allowEveryone": "Everyone signed in",
+        "allowPublish": "Publishing as a company app",
+        "allowPublishHelp": "Owners publish an app with one click. It becomes an app that administrators manage. An app with web search, skills or a connected system stays switched off until an administrator switches it on.",
+        "adminEnablesAlways": "Every published app stays switched off until an administrator switches it on",
+        "permissionHint": "Users also need the \"userAppSharing\" permission of their group.",
+        "groupsCreate": "Groups with \"Personal apps\": {{list}}",
+        "groupsShare": "Groups with \"Sharing personal apps\": {{list}}",
+        "limits": "Limits of personal apps",
+        "max": "Apps per person",
+        "mayUse": "Personal apps may use",
+        "integrationsHelp": "A personal app can use the functions you tick here, for people whose groups may use that system. People who did not write the app are asked before every step.",
+        "blocked": "People whose apps are switched off",
+        "none": "none",
+        "change": "Change",
+        "notAvailable": "Not available yet",
+        "maxHelp": "0 means no limit.",
+        "choose": "Choose…",
+        "noInstallations": "No connected system is installed.",
+        "noActions": "No functions",
+        "unblock": "Switch on again"
+      },
+      "groups": {
+        "userApps": "Personal apps",
+        "userAppSharing": "Sharing personal apps",
+        "userAppsHint": "Allow members to create apps of their own (needs the Personal apps feature). Inherited by groups that inherit this one.",
+        "userAppSharingHint": "Allow members to share the apps they own or edit, and to publish the apps they own."
+      },
+      "user": {
+        "count": "Personal apps: {{count}} ({{shared}} shared)",
+        "block": "Switch off all apps of this person",
+        "blockBody": "The person's apps stop for everyone, and the person cannot create new ones. You can undo this in the settings.",
+        "blocked": "The apps of this person are switched off."
+      },
+      "capability": {
+        "model": "A chosen AI model",
+        "upload": "Files"
+      },
+      "empty": "No personal apps yet.",
+      "noMatch": "No personal app matches.",
+      "offer": {
+        "title": "Offer \"{{name}}\" to a new owner",
+        "body": "The person is asked to take the app over. Until they accept, nothing changes.",
+        "search": "Find a person",
+        "results": "People found",
+        "me": "{{name}} (you)"
+      },
+      "revision": {
+        "empty": "No earlier versions are stored.",
+        "item": "Version {{revision}}, saved {{date}} by {{name}}",
+        "instructions": "Instructions"
+      },
+      "shared": {
+        "none": "Only the owner",
+        "users_one": "{{count}} person",
+        "users_other": "{{count}} people",
+        "groups_one": "{{count}} group",
+        "groups_other": "{{count}} groups"
+      },
+      "table": {
+        "owner": "Owner",
+        "sharedWith": "Shared with",
+        "mayUse": "May use",
+        "lastUsed": "Last used"
+      }
     }
   },
   "cloudStorage": {
@@ -8939,7 +9628,16 @@
     "chatsUnavailable": "Chats could not be loaded",
     "unseenBadge": "{{count}} new",
     "tasks": "Scheduled tasks",
-    "projects": "Projects"
+    "projects": "Projects",
+    "create": {
+      "label": "Create",
+      "menu": "Create new",
+      "app": "App",
+      "project": "Project",
+      "skill": "Skill",
+      "prompt": "Prompt",
+      "task": "Scheduled task"
+    }
   },
   "chatHistory": {
     "title": "Your chats",
@@ -10979,7 +11677,7 @@
     "SHORT_LINK_HOST_NOT_ALLOWED": "Short links may not lead to this website. An administrator can allow its host on the SSRF allowlist under Admin → Security → SSRF Allowlist.",
     "SCHEDULED_TASKS_UNAVAILABLE": "Scheduled tasks are not available on this installation.",
     "INTERACTIVE_USER_REQUIRED": "Scheduled tasks need a signed-in person, not a token or agent.",
-    "PERMISSION_DENIED": "You are not allowed to use scheduled tasks.",
+    "PERMISSION_DENIED": "You are not allowed to do this.",
     "TASK_NOT_FOUND": "The scheduled task was not found.",
     "RUN_NOT_FOUND": "The run was not found.",
     "TASK_LIMIT_REACHED": "You have reached the maximum number of scheduled tasks.",
@@ -11246,7 +11944,15 @@
     "SELF_LOCKOUT": "You cannot deactivate or delete your own account. Ask another administrator to do it.",
     "GROUP_IN_USE": "The group \"{{groupId}}\" cannot be deleted because other groups inherit from it. Remove it from their inherited groups first.",
     "ADMIN_CHECK_FAILED": "Could not verify that an administrator keeps access, so nothing was changed. Please try again.",
-    "PRECONDITION_FAILED": "This configuration was changed after you opened it (by another administrator, another tab or a script). Nothing was saved, and your changes are still on the page. Reload to see the current version, then apply your changes again."
+    "PRECONDITION_FAILED": "This configuration was changed after you opened it (by another administrator, another tab or a script). Nothing was saved, and your changes are still on the page. Reload to see the current version, then apply your changes again.",
+    "APP_GENERATOR_NO_MODEL": "No AI model is available to you, so a draft cannot be prepared.",
+    "APP_GENERATOR_INVALID_ANSWER": "The AI's draft could not be used.",
+    "USER_APPS_DISABLED": "Personal apps are switched off on this installation.",
+    "USER_APPS_UNAVAILABLE": "Personal apps are not available right now. Try again later.",
+    "QUOTA_USER_APPS": "The limit of personal apps is reached.",
+    "QUOTA_USER_APP_OFFERS": "Too many open offers.",
+    "USER_APP_CAPABILITY_DENIED": "The app cannot use this. Remove it and save again.",
+    "USER_APP_ACCESS_CHANGED": "Your access to this app changed. Reload the page."
   },
   "workspace": {
     "backTo": "Back to {{name}}",
@@ -11380,5 +12086,224 @@
     "loadFailed": "The notice could not be loaded. Check your connection and try again.",
     "cookieBlocked": "Your browser blocks cookies in this frame, so the confirmation cannot be kept here. Open iHub in its own tab to confirm.",
     "openInBrowser": "Open iHub in the browser"
+  },
+  "userApps": {
+    "list": {
+      "scope": {
+        "all": "All",
+        "mine": "My apps",
+        "shared": "Shared with me",
+        "label": "Which apps to show"
+      },
+      "badge": {
+        "mine": "Mine",
+        "offered": "Offered to you"
+      },
+      "empty": {
+        "mine": "You have no apps of your own yet. An app is an assistant for one task, for example \"Write a job ad from my notes\".",
+        "mineHint": "To create one, open + in the sidebar and choose App.",
+        "shared": "Nobody has shared an app with you yet."
+      },
+      "menu": {
+        "edit": "Edit",
+        "share": "Share",
+        "duplicate": "Duplicate",
+        "delete": "Delete",
+        "leave": "Leave",
+        "label": "Actions for \"{{name}}\"",
+        "viewOffer": "View offer"
+      },
+      "limitReached": "You have {{max}} apps, which is the limit. Delete one to create a new one.",
+      "status": {
+        "left": "You left \"{{name}}\".",
+        "deleted": "\"{{name}}\" deleted."
+      }
+    },
+    "create": {
+      "stateLine": "Only you can see the app until you share it.",
+      "limits": "An app of your own cannot use a document collection yet. It can work with text you paste or a file a user attaches.",
+      "created": "App \"{{name}}\" created",
+      "copyNote": "Copied from \"{{name}}\". The texts, input fields and conversation starters are copied. Who the app is shared with is not copied, and what apps of your own may not use is left out.",
+      "copyUnsupported": "This app cannot be copied into an app of your own."
+    },
+    "edit": {
+      "state": {
+        "private": "Only you",
+        "everyone": "Shared with everyone",
+        "promoted": "Now with the administrators",
+        "offered": "Offered to {{owner}}",
+        "disabled": "Switched off by an administrator",
+        "shared": "Shared with {{list}}",
+        "people_one": "{{count}} person",
+        "people_other": "{{count}} people",
+        "groups_one": "{{count}} group",
+        "groups_other": "{{count}} groups"
+      },
+      "extras": {
+        "title": "What the app may use",
+        "model": "AI model",
+        "upload": "Users can attach files",
+        "webSearch": "Web search",
+        "webSearchHelp": "Each person switches web search on in their chat. Other people are asked before every search and every page the app opens.",
+        "skills": "Skills",
+        "integrations": "Connected systems",
+        "approvalHelp": "When someone else uses your app, it asks them before every step in a connected system. In your own chats it asks before it changes something.",
+        "gone": "{{capability}} is no longer available for your apps. The app runs without it.",
+        "remove": "Remove"
+      },
+      "conflict": "Someone else changed this app. Reload to see the changes.",
+      "readOnly": {
+        "ownerInactive": "The owner's account is inactive. Only an administrator can change this app.",
+        "promoted": "This app became a company app on {{date}}. Administrators manage it now. You can no longer change it here.",
+        "disabled": "An administrator switched this app off: {{reason}}",
+        "capability": "This app uses {{capability}}, which you may not use. You can use the app but not change it."
+      },
+      "delete": {
+        "title": "Delete \"{{name}}\"?",
+        "body": "The app is removed for you and for everyone you shared it with. Chats stay in the chat history and cannot be continued."
+      },
+      "breadcrumb": "Breadcrumb",
+      "reload": "Reload",
+      "steps": {
+        "share": "Share it (optional)"
+      },
+      "capability": {
+        "model": "The chosen AI model",
+        "upload": "File upload",
+        "webSearch": "Web search",
+        "skills": "Skills"
+      },
+      "saveFirst": "Save your changes first",
+      "instructionsDesc": "Tell the AI what its task is and how it should answer. It reads this before every chat. People you share the app with can read it. (Also called the system prompt.)",
+      "capabilityNoun": {
+        "model": "the chosen AI model",
+        "upload": "file upload",
+        "webSearch": "web search",
+        "skills": "skills"
+      }
+    },
+    "share": {
+      "title": "Share \"{{name}}\"",
+      "help": "People you share with can use the app and read its instructions. The app can do for them only what you and they are both allowed to do. Before it searches the web or uses a connected system for them, it asks them.",
+      "private": "Not shared. Only you can use this app.",
+      "role": {
+        "user": "Can use",
+        "editor": "Can edit"
+      },
+      "everyone": "Everyone signed in",
+      "copyLink": "Copy link",
+      "linkCopied": "Link copied",
+      "notAllowed": "You cannot share apps. Ask an administrator.",
+      "changed": "Someone changed the app in the meantime. If you save again, the list shown here replaces the stored one."
+    },
+    "publish": {
+      "action": "Publish",
+      "titleNow": "Publish \"{{name}}\" for everyone?",
+      "titleLater": "Publish \"{{name}}\"?",
+      "bodyNow": "The app becomes a company app. Everyone who may use the company's apps sees it right away.",
+      "bodyLaterTools": "The app becomes a company app. Because it uses {{list}}, an administrator checks it and switches it on.",
+      "bodyLaterAlways": "The app becomes a company app. An administrator checks it and switches it on.",
+      "willUse": "The company app will be able to:",
+      "dropped": "Not taken over: {{list}}",
+      "plain": "Your rights could not be checked. The company app is created without web search, files, skills and connected systems.",
+      "managed": "From now on administrators manage the app. You can no longer change it, and you cannot take it back.",
+      "membersNow": "People you shared it with are sent to the company app.",
+      "membersLater": "Your app keeps working for you and the people you shared it with until they can use the company app.",
+      "submit": "Publish",
+      "waiting": "Published on {{date}}. An administrator has not switched the company app on yet. Your app keeps working until then.",
+      "changed": "Someone else changed this app. Reload and check it before you publish.",
+      "retired": {
+        "title": "This app is now a company app.",
+        "open": "Open \"{{name}}\"",
+        "chats": "Your earlier chats stay in your chat history."
+      },
+      "can": {
+        "model": "use the AI model {{model}}",
+        "upload": "take files from users",
+        "webSearch": "search the web",
+        "skills": "use the skills: {{list}}",
+        "skillsNone": "use skills",
+        "integration": "{{name}}: {{actions}}",
+        "none": "answer in the chat, and nothing else"
+      },
+      "tool": {
+        "webSearch": "web search",
+        "skills": "skills",
+        "integrations": "a connected system"
+      },
+      "droppedItem": "{{name}} ({{reason}})",
+      "reason": {
+        "offOnInstallation": "no longer allowed for personal apps",
+        "ownerMayNot": "the owner may not use it",
+        "youMayNot": "you may not use it",
+        "ownerInactive": "the owner's account is inactive",
+        "ownerStale": "the owner's rights are out of date"
+      }
+    },
+    "transfer": {
+      "action": "Hand over",
+      "title": "Hand over \"{{name}}\" to {{owner}}?",
+      "line1": "{{owner}} is asked to take the app over. Until {{owner}} accepts, you stay the owner and nothing changes.",
+      "line2": "After that, {{owner}} can change, share and delete the app. Everyone with \"Can edit\" gets \"Can use\".",
+      "line3": "You keep no access unless {{owner}} shares it with you.",
+      "submit": "Ask {{owner}}",
+      "withdraw": "Withdraw",
+      "received": "{{from}} wants to hand this app over to you.",
+      "receivedDuty": "As the owner you answer for what it does. Read the instructions below.",
+      "receivedMembers": "It is shared with: {{list}}",
+      "receivedEditors": "People with \"Can edit\" will only be able to use it.",
+      "try": "Try it",
+      "decline": "Decline",
+      "accept": "Take over",
+      "changed": "The app was changed after you opened it. Read it again.",
+      "tooMany": "You have {{max}} open offers. Withdraw one first.",
+      "pickHint": "Choose who should take the app over. You confirm in the next step.",
+      "search": "Search people",
+      "next": "Next",
+      "receivedMore": "{{count}} more…",
+      "showAll": "Show all"
+    },
+    "notice": {
+      "ownedBy": "{{owner}} owns this app. Administrators have not checked it.",
+      "mayUse": "It may use: {{list}}.",
+      "switchOn": "you switch it on in the chat",
+      "asksFirst": "It asks you before every search and every page it opens.",
+      "asksFirstSystems": "It asks you before every step in a connected system.",
+      "notForYou": "Not available to you here: {{list}}.",
+      "unavailable": "Not available in this app right now: {{list}}.",
+      "showInstructions": "Show instructions",
+      "collapsed": "Personal app by {{owner}}",
+      "suspended": "This app is not available at the moment. Ask {{owner}} or an administrator.",
+      "capability": {
+        "model": "the preferred AI model",
+        "upload": "files you attach",
+        "webSearch": "web search",
+        "skills": "skills"
+      },
+      "expand": "Show details",
+      "collapse": "Show less",
+      "instructionsTitle": "Instructions of \"{{name}}\"",
+      "instructionsSystem": "Instructions",
+      "instructionsTemplate": "Message template",
+      "instructionsTemplateHelp": "Each message you send is put into this text before it reaches the AI. {{placeholder}} stands for your message.",
+      "instructionsOptions": "What a choice sends",
+      "instructionsOption": "{{variable}}: “{{label}}” sends “{{value}}”",
+      "viewOffer": "View the offer"
+    },
+    "conflict": {
+      "owner": "As the owner you cannot leave your own app.",
+      "noDirectShare": "The app is shared with you through a group or with everyone. You cannot leave it yourself.",
+      "promoted": "The app is with the administrators now and cannot be changed.",
+      "disabled": "An administrator switched the app off. It cannot be changed or duplicated.",
+      "published": "Unpublish or delete the company app first.",
+      "idTaken": "An app with this ID already exists."
+    },
+    "denied": {
+      "publish": "You may not publish this app. Publishing is switched off, or your account lacks the permission.",
+      "edit": "You may no longer change this app. Your role in it may have changed.",
+      "userApps": "You may not create personal apps.",
+      "share": "You may not share personal apps.",
+      "ownerMayNotShare": "The owner of this app may not share it, so it cannot be shared."
+    }
   }
 }

@@ -82,7 +82,7 @@ Press `Cmd+K` (Mac) or `Ctrl+K` (Windows/Linux) from anywhere in the admin UI to
 The palette lets you:
 - **Navigate** to any admin page by name
 - **Search entities** — type an app name, model ID, user, prompt, or project to jump directly to its edit page
-- **Run actions** — "New App", "Run Backup", "Check for Updates", "View Audit Log"
+- **Run actions** — "New app", "Run Backup", "Check for Updates", "View Audit Log"
 - **See recent pages** — the last 5 pages you visited appear at the top
 
 Results update as you type. Press `Enter` to navigate to the highlighted result, `Esc` to close.
@@ -158,54 +158,172 @@ The old documentation site at `/docs` redirects here. The documentation is also 
 
 ## Managing Apps
 
-Apps are the AI-powered tools your users interact with. Each app has its own system prompt, model preference, variables, and permissions.
+Apps are the assistants your users open. Each app has its own instructions, input fields, model
+preference and group access. For a first walk through the pages below, see
+[Build your first app](app-quickstart.md).
 
-![Apps administration list with categories, status, order and model](assets/screenshots/admin-apps.png)
+![The app list with category, status, position and model](assets/screenshots/admin-apps.png)
 
-**To create an app:** Go to **AI Workspace → Apps** and click **Create App**. You can start from a blank form, use a template, upload a JSON file, or install one from the [Marketplace](#marketplace).
+Apps are managed by administrators and by content admins (see [Managing Groups](#managing-groups)).
+Other users cannot create apps.
 
-**To edit an app:** Click the app name in the list, or use `Cmd+K` to search for it directly.
+### The app list
 
-**Key fields:**
-- **ID** — unique identifier, used in URLs. Cannot be changed after creation.
-- **Name / Description** — localized; enter values for each language you support.
-- **System prompt** — the instruction given to the AI model before the user's message.
-- **Preferred model** — override the platform default for this app; optionally restrict the selectable models or hide the model selector. Token limits come from the model (context window and output limit), not from the app.
-- **Variables** — user-facing input fields (text, date, select, etc.), shown beside the chat or as a start form (see below).
-- **Tools, projects, skills, workflows** — what the app may use beyond the model. The **Projects** card links admin projects and has the switches **Use projects in this app** and **Allow personal projects** (see [Projects](projects.md#switching-projects-off-for-an-app)).
-- **Upload, transcription, web search, image generation** — per-app features users switch on in the chat input's **+** menu.
-- **Permissions** — which groups can access this app. The **Group access** card on the edit page shows the groups that already have access as chips, with a search box to grant more; every change saves immediately; see [Managing Groups](#managing-groups).
+**AI Workspace → Apps** lists every app with its status, **Published** or **Not published**
+(`enabled` in the app's JSON). A published app is visible to the users whose groups may use it. An
+app that is not published appears in no list of the chat, also not for administrators; it is
+opened in the editor.
 
-**Start chats with a form:** In the **Variables** section, tick **Start chats with a form** to open every new chat with a form of the app's variables, a message field and — when uploads are on — a drop zone. **Send button label** sets the button text per language (default: **Start**). Sending the form fills the prompt template once and sends it as the first message; the conversation then continues without the template. See [App Configuration](apps.md).
+- **New app** opens the page described under [Creating an app](#creating-an-app).
+- **Upload a config file** creates an app from a JSON file. The app keeps the `enabled` value of
+  the file. A file without that value creates a published app.
+- **Publish all** and **Unpublish all** change every app that is not yet in that state. An app
+  that is not published may be unfinished or may have been switched off on purpose, so the
+  confirmation lists every app that changes, by name, and only those apps are changed. While a
+  search, a status filter or a category narrows the list, the buttons read **Publish shown** and
+  **Unpublish shown** and cover the rows shown.
+- **Reorder** changes the position of the apps by drag and drop.
+- Row actions: open the app, edit, publish or unpublish (the eye icon), delete, and under **⋮**
+  **Duplicate** and **Download Config**. The open icon is greyed out for an app that is not
+  published; such an app is tried in the editor's test chat.
 
-![App editor: the Variables section with "Start chats with a form"](assets/screenshots/admin-app-editor-start-form.png)
+Apps can also be installed from the [Marketplace](#marketplace), which is a page for
+administrators.
 
-**Enabling/disabling:** Use the toggle in the app list or the Enabled field on the edit page.
+### Creating an app
 
-**Saving:** **Save** (or `Cmd+S` / `Ctrl+S`) stores the app and keeps you in the editor, so you can
-keep tweaking it. **Save & Exit** stores it and returns to the app list. Saving a new app with
-**Save** moves the editor to the app's own address (`/admin/apps/<id>`); from then on History,
-Download, Open app and Test are available.
+**New app** opens a page with two steps (`/admin/apps/new`). The same page opens from the command
+palette, from the last step of the setup wizard and from **Duplicate**.
 
-**Opening an app:** **Open app** in the editor header, or the open icon in the app list, opens the
-app's chat page in a new tab. Disabled apps are not served to the chat, so for them the button is
-greyed out until the app is enabled (in the editor: enabled and saved).
+![New app, step 1: the description box, the templates and "Start empty"](assets/screenshots/admin-app-new-start.png)
+
+**Step 1, Start,** offers the following ways to begin:
+
+- **Describe the app.** Write two or three sentences under **What should your app do?** and click
+  **Prepare draft**. The AI model named beside the button prepares a draft. The box is missing
+  when no AI model is available to you (a notice says so) or when the feature
+  **App Drafts with AI** is switched off.
+- **Templates.** Six short starting points, such as **Text Summarizer** or **Email Composer**.
+  The last card, **Copy an existing app**, lists the published apps to copy one.
+- **Start empty.**
+- **Other ways to start:** **Create a link app** (a link to a website, or a website shown inside
+  iHub) and, for administrators with the Marketplace switched on, **More apps in the
+  Marketplace**.
+
+**Step 2, Essentials,** is one form for every start: **Name**, **Short description**
+(`description`) and **Instructions** (`system`), plus icon and color. **More details** holds the
+**App ID** and the **Category**. The ID follows the name until you edit it, and it cannot be
+changed after the app is created. A link app asks for a **Website address** instead of
+instructions.
+
+![New app, step 2: the draft with its input fields and the unticked suggestions](assets/screenshots/admin-app-new-essentials.png)
+
+**Create and test** creates the app as **Not published** and opens the editor with the test chat.
+The app is written in one language, the language of your user interface; translations are added
+in the editor. Unfinished entries survive a reload of the page in the same browser tab.
+
+**What the AI draft can and cannot set.** A draft sets the name, the short description, the
+instructions, icon, color and category, input fields with the message template, the hint in the
+message box and up to four conversation starters. It never switches on web search or a connected
+system: both appear as unticked suggestions under **The app could also use**, and only ticked
+suggestions are stored. It never sets the model, uploads, tools, skills, workflows, projects or
+group access, and the app is never published by the draft. The server builds the app from the
+model's answer and refuses an answer it cannot use.
+
+A person can prepare 30 drafts per hour; failed drafts count. Each draft is a model call that
+counts against that person's [usage limit](usage-limits.md). Every draft request is written to
+the [audit log](#audit-log) with the model and the token usage, without the description text.
+
+### Editing an app
+
+Click an app in the list, or use `Cmd+K` to search for it. The header shows the app's name, its
+ID, the status, and the buttons **Publish** (while the app is not published), **Test** and
+**More** (⋮): **Open app**, **History**, **Download**, **Duplicate** and, for a published app,
+**Unpublish**. The App ID is shown but cannot be edited.
+
+![The editor with the next steps, the groups and the test chat](assets/screenshots/admin-app-editor-test.png)
+
+The settings are sorted into groups. **Basics** and **Instructions and inputs** are open; the
+others are collapsed and show a one-line summary of their settings, with the marker **changed**
+when they differ from the defaults. A group opens when you click it, when one of its fields has
+an error, or with **Expand all**. The index on the left jumps to a group; on a narrow window it is
+the **Jump to section** list: choose a group and press **Go**.
+
+| Group | Settings (JSON name) |
+| --- | --- |
+| **Basics** | Name, short description (`description`), icon, color, category. **More details**: app type (`type`) and **Position in the app list** (`order`). |
+| **Instructions and inputs** | **Instructions** (`system`), **Hint in the message box** (`messagePlaceholder`), **Message template** (`prompt`), **Input fields** (`variables`), **Conversation starters** (`starterPrompts`). |
+| **Model** | **AI model** (`preferredModel`; empty means the standard model), **Allowed models**, **Answer format** (`preferredOutputFormat`). Token limits come from the model, not from the app. |
+| **Knowledge and tools** | Web search, **Connected systems** (`integrations`), tools, workflows, apps as tools, skills and projects. The **Projects** card links admin projects and has the switches **Use projects in this app** and **Allow personal projects** (see [Projects](projects.md#switching-projects-off-for-an-app)). |
+| **Chat features** | Upload, Magic Prompt, export, document template, compare mode, feedback, AI notice, usage guide, and **Chat behavior**: **Auto-start conversation** and **Ephemeral chat**. |
+| **Input and voice** | Single-line or multi-line input and the microphone. |
+| **What users can change** | The settings users may change in the chat (`settings`). |
+| **Who can use this app** | The **Group access** card: the groups that may use the app, as chips, with a search box to grant more. Every change here saves immediately; see [Managing Groups](#managing-groups). |
+
+**Texts in one language.** A text that exists in one language shows one input without a language
+code. **Add a translation** adds a second language; the language list shows names such as
+"German (de)". Emptying an optional text that has one language removes it.
+
+**Input fields.** Each field has a **Field name** (what users see) and a **Placeholder**. The
+placeholder of a new field follows the field name until you edit it or use it in a text. A field
+whose placeholder appears in neither the instructions nor the message template shows
+**This field is not used yet. The AI does not receive what users enter.** with the button
+**Add to message template**, which adds a line such as `Tone: {{tone}}` to the message template.
+
+**Start chats with a form:** In **Input fields**, tick **Start chats with a form** to open every
+new chat with a form of the app's input fields, a message field and — when uploads are on — a
+drop zone. **Send button label** sets the button text (default: **Start**). Sending the form
+fills the message template once and sends it as the first message; the conversation then
+continues without the template. See [App Configuration](apps.md).
+
+![App editor: the end of the Input fields section with "Start chats with a form"](assets/screenshots/admin-app-editor-start-form.png)
+
+**Saving:** **Save Changes** in the bar at the bottom (or `Cmd+S` / `Ctrl+S`) stores the app and
+keeps you in the editor. With errors the bar reads, for example, "2 fields need your attention";
+**Show** opens the group of the first one. **Discard** returns to the saved state. The **Form** /
+**JSON** switch above the form edits the same app as JSON; the line beside it and **Reset** refer
+to the saved state.
+
+**Publishing:** **Publish** opens a confirmation that says who will see the app, for example
+"Everyone who signs in can use this app." or "Members of these groups can use it: Sales."
+A content admin sees only the groups they manage, and the dialog says so. Unsaved changes are
+saved first; if that save fails, nothing is published. **More → Unpublish** hides the app from
+users again. It changes only the status and does not save the form, so it also works while a
+field has an error. Saving a published app changes it for users at once, and the save bar says
+so.
+
+**Opening an app:** **More → Open app** opens the app's chat page in a new tab. For an app that
+is not published this works for the people who may test it (see below).
 
 **Testing an app:** **Test** in the editor header opens the app's chat next to the editor (full
-screen on small screens), so you can check the start screen, send messages and see how the prompt,
-model, tools and projects behave without leaving the editor. It is the same chat users get, not a
-separate preview.
+screen on small screens), so you can check the start screen, send messages and see how the
+instructions, model, tools and projects behave without leaving the editor. It is the same chat
+users get, not a separate preview.
 
 - The test runs the **saved** version of the app. While you have unsaved changes the panel says so;
   every save restarts the test with the new version.
-- Each start is a new chat that begins from the app's own defaults (model, settings, variables), as
-  a new user would see it. What you last chose on the app's own page is neither used nor changed.
-  **Restart** (the circular arrow) starts over without saving.
+- Each start is a new chat that begins from the app's own defaults (model, settings, input
+  fields), as a new user would see it. What you last chose on the app's own page is neither used
+  nor changed. **Restart** (the circular arrow) starts over without saving.
 - Test chats are ordinary chats of your own account, stored and counted like any other chat you
-  have with the app.
-- Changes are live for users as soon as you save, so test risky changes on a cloned app.
+  have with the app, including against your usage limit.
+- Changes to a published app are live for users as soon as you save, so test risky changes on a
+  copy (**Duplicate** in the app list).
 - The test is available for chat apps. For iframe and redirect apps, use **Open app**.
 - Canvas and "open in app" links from the test open in a new tab, so the editor stays where it is.
+
+**Testing an app that is not published:** Administrators and content admins can open and test an
+app before it is published, provided one of their groups may use it. Everyone else gets the same
+answer as for an app that does not exist.
+
+- If the panel says **Your groups cannot use this app yet**, none of your groups may use the
+  app. **Who can use this app** opens the group where you grant access. The panel shows the same
+  message when a feature or a connected system the app requires is switched off.
+- Only the chat runs the app. Scheduled tasks, apps used as tools, workflows and the inference
+  API treat it as not existing until it is published.
+- A few parts of the chat behave differently than after publishing: read-aloud uses the voices
+  of the model, not those set for the app; an export uses the default export settings; an
+  `@workflow` mention is refused; and the view of an MCP App tool does not open.
 
 **Change history:** Every edit page has a **History** button. Click it to see a before/after diff of every saved change, including who made the change and when.
 
@@ -263,6 +381,8 @@ Go to **AI Workspace → Prompts**. Prompts and Global Variables are organized a
 
 **Global Variables** are key-value pairs injected into any system prompt that references `{{variableName}}`. They allow you to maintain shared values (company name, product names, URLs) in one place.
 
+The library entry **App Generator** steers the drafts of **New app** only after an administrator has changed it. While it is unchanged, switched off or missing, iHub uses its own instructions for drafts. A changed entry is named in the draft notice ("An administrator changed how drafts are prepared on this installation.") and in the audit entry of the draft.
+
 ---
 
 ## Managing Users
@@ -298,7 +418,7 @@ Groups control what users can access. Go to **Access & Identity → Groups**.
 
 **Group access from the content side:** Every app, prompt, skill and workflow edit page has a **Group access** card showing the same permission lists per group, as a search-and-add list rather than a long list of every group: groups that already have access appear as chips, and a search box finds the rest by name — the same pattern used to add apps, models or prompts to a group elsewhere in the admin area. Picking a group in the search results adds the item to that group's list in `groups.json`; removing its chip takes it off. Each change is saved immediately and recorded in the change history and audit log like an edit of the group itself. A group that holds a wildcard (`"*"`) for the type is shown as a locked chip, because a single item cannot be withdrawn from a wildcard — replace the wildcard with an explicit list in the group editor instead.
 
-**Content admins:** Members of a group with `contentAdmin: true` (the shipped `content-admins` group) can use the **Group access** card too, but only for the groups they belong to and for the groups that inherit from those. A content admin who is in `sales` can grant or withdraw content for `sales` and for every group with `sales` in its `inherits` chain, and sees no other groups. The `authenticated` and `anonymous` groups every user carries implicitly do not count as membership, so a content admin cannot publish to all users unless an administrator has explicitly made them a member of such a group. Everything else about a group — name, inheritance, models, external mappings, admin flags — stays with full administrators.
+**Content admins:** Members of a group with the permission **Content Admin (Apps, Prompts, Projects)** (`contentAdmin: true`, as the shipped `content-admins` group has it) manage apps, prompts and projects in the admin area. They can use the **Group access** card too, but only for the groups they belong to and for the groups that inherit from those. A content admin who is in `sales` can grant or withdraw content for `sales` and for every group with `sales` in its `inherits` chain, and sees no other groups. The `authenticated` and `anonymous` groups every user carries implicitly do not count as membership, so a content admin cannot publish to all users unless an administrator has explicitly made them a member of such a group. Everything else about a group — name, inheritance, models, external mappings, admin flags — stays with full administrators.
 
 ---
 
@@ -330,7 +450,7 @@ See [Marketplace](marketplace.md) for statuses, updates, private registries and 
 
 ## Features
 
-**Platform → Features** switches platform features on and off — among them the preview features Agent Skills, Workflows and Integrations, plus Marketplace, Chat History (keeping chats in a history; every chat is stored either way), Scheduled Tasks, Prompt Library, Usage Tracking, Tools, Projects, User Projects (preview), Compare Mode, Chat Sharing, Short Links, Feedback and Export. The corresponding admin pages and user features appear or disappear with them.
+**Platform → Features** switches platform features on and off — among them the preview features Agent Skills, Workflows and Integrations, plus Marketplace, App Drafts with AI (the description box of **New app**; see [Creating an app](#creating-an-app)), Chat History (keeping chats in a history; every chat is stored either way), Scheduled Tasks, Prompt Library, Usage Tracking, Tools, Projects, User Projects (preview), Compare Mode, Chat Sharing, Short Links, Feedback and Export. The corresponding admin pages and user features appear or disappear with them.
 
 ![Platform features with preview toggles](assets/screenshots/admin-features.png)
 
@@ -637,7 +757,8 @@ Actions that remove something, change what every user sees or replace stored dat
 | Delete an app, model, prompt, provider, skill, workflow, asset or TTS voice | The type and name of the item |
 | Delete a credential | Which installed integrations use it and will stop working (tools, MCP servers and sign-in settings that reference it are not checked) |
 | Delete a marketplace registry | Its name; a registry that ships with iHub (**iHub Official Marketplace**) also asks you to type its id, because it has no "restore default" |
-| **Enable All** / **Disable All** on Apps, Models and Prompts | How many items change and their names. **Disable All** on Models also clears the default model; when models are enabled again, the first chat model in the list becomes the default |
+| **Publish all** / **Unpublish all** on Apps (**Publish shown** / **Unpublish shown** while a search or filter narrows the list) | Every app that changes, by name. Only the listed apps are changed |
+| **Enable All** / **Disable All** on Models and Prompts | How many items change and their names. **Disable All** on Models also clears the default model; when models are enabled again, the first chat model in the list becomes the default |
 | Change the usage **Tracking mode** | What the new mode records; it applies to usage records written from then on |
 | **Run cleanup now** (Audit Log) | The cut-off date; older audit log files are deleted for good |
 | **Trigger Force Refresh** (Advanced) | Every browser clears its cached files and reloads the next time iHub is loaded in it |

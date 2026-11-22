@@ -21,7 +21,6 @@
     "admin.returnToLogin",
     "admin.skipToContent"
   ],
-  "features/admin/components/AdminSaveBar.jsx": ["admin.ui.save"],
   "features/admin/components/AdminShortcutsModal.jsx": [
     "admin.shortcuts.hint",
     "admin.shortcuts.title"
@@ -30,24 +29,6 @@
     "admin.prompts.delete",
     "admin.prompts.searchPlaceholder",
     "admin.prompts.table.name"
-  ],
-  "features/admin/components/AppFormEditor.jsx": [
-    "admin.apps.edit.appId",
-    "admin.apps.edit.color",
-    "admin.apps.edit.description",
-    "admin.apps.edit.fixErrors",
-    "admin.apps.edit.icon",
-    "admin.apps.edit.name",
-    "admin.apps.edit.noAppData",
-    "admin.apps.edit.systemPrompt",
-    "admin.apps.edit.validation.colorInvalid",
-    "admin.apps.edit.validation.colorRequired",
-    "admin.apps.edit.validation.descriptionRequired",
-    "admin.apps.edit.validation.iconRequired",
-    "admin.apps.edit.validation.idInvalid",
-    "admin.apps.edit.validation.idRequired",
-    "admin.apps.edit.validation.nameRequired",
-    "admin.apps.edit.validation.systemRequired"
   ],
   "features/admin/components/AppsListCustomization.jsx": [
     "admin.ui.content.appsListLogo",
@@ -215,12 +196,6 @@
     "admin.ui.header.samePage",
     "admin.ui.remove"
   ],
-  "features/admin/components/MimeTypeSelector.jsx": [
-    "admin.apps.edit.categoryNotFound",
-    "admin.apps.edit.loadingFormats",
-    "admin.apps.edit.selectIndividualFormats",
-    "admin.apps.edit.useEntireCategory"
-  ],
   "features/admin/components/ModelFormEditor.jsx": [
     "admin.models.actions.addTtsVoiceLanguage",
     "admin.models.edit.fixErrors",
@@ -362,145 +337,6 @@
     "admin.users.validation.usernameInvalid",
     "admin.users.validation.usernameRequired"
   ],
-  "features/admin/components/app-form/BasicInfoSection.jsx": [
-    "admin.apps.edit.allowedModels",
-    "admin.apps.edit.allowedModelsHint",
-    "admin.apps.edit.appId",
-    "admin.apps.edit.appType",
-    "admin.apps.edit.appTypeHint",
-    "admin.apps.edit.basicInfo",
-    "admin.apps.edit.basicInfoDesc",
-    "admin.apps.edit.category",
-    "admin.apps.edit.color",
-    "admin.apps.edit.description",
-    "admin.apps.edit.enabled",
-    "admin.apps.edit.icon",
-    "admin.apps.edit.name",
-    "admin.apps.edit.noModelsSelected",
-    "admin.apps.edit.order",
-    "admin.apps.edit.outputFormat",
-    "admin.apps.edit.preferredModel",
-    "admin.apps.edit.searchModels",
-    "admin.apps.edit.selectModel",
-    "admin.apps.edit.typeChat",
-    "admin.apps.edit.typeIframe",
-    "admin.apps.edit.typeRedirect"
-  ],
-  "features/admin/components/app-form/CompareModeSection.jsx": [
-    "admin.apps.edit.compareMode",
-    "admin.apps.edit.compareModeDesc",
-    "admin.apps.edit.compareModeNote",
-    "admin.apps.edit.enableCompareMode"
-  ],
-  "features/admin/components/app-form/ExportConfigSection.jsx": [
-    "admin.apps.edit.enableExport",
-    "admin.apps.edit.export",
-    "admin.apps.edit.exportDesc",
-    "admin.apps.edit.exportNote"
-  ],
-  "features/admin/components/app-form/IframeConfigSection.jsx": [
-    "admin.apps.edit.allowFullscreen",
-    "admin.apps.edit.iframeConfig",
-    "admin.apps.edit.iframeConfigDesc",
-    "admin.apps.edit.iframeUrl",
-    "admin.apps.edit.sandboxPermissions",
-    "admin.apps.edit.sandboxPermissionsDesc"
-  ],
-  "features/admin/components/app-form/InputModeSection.jsx": [
-    "admin.apps.edit.automaticMode",
-    "admin.apps.edit.azureService",
-    "admin.apps.edit.customService",
-    "admin.apps.edit.customServiceHost",
-    "admin.apps.edit.enableMicrophone",
-    "admin.apps.edit.inputMode",
-    "admin.apps.edit.inputModeDesc",
-    "admin.apps.edit.inputType",
-    "admin.apps.edit.manualMode",
-    "admin.apps.edit.microphoneMode",
-    "admin.apps.edit.multiLine",
-    "admin.apps.edit.showTranscript",
-    "admin.apps.edit.singleLine",
-    "admin.apps.edit.speechRecognitionService"
-  ],
-  "features/admin/components/app-form/MagicPromptSection.jsx": [
-    "admin.apps.edit.enableMagicPrompt",
-    "admin.apps.edit.magicPrompt",
-    "admin.apps.edit.magicPromptDesc",
-    "admin.apps.edit.magicPromptInstructions",
-    "admin.apps.edit.magicPromptModel",
-    "admin.apps.edit.magicPromptPlaceholder",
-    "admin.apps.edit.selectModel"
-  ],
-  "features/admin/components/app-form/RedirectConfigSection.jsx": [
-    "admin.apps.edit.openInNewTab",
-    "admin.apps.edit.redirectConfig",
-    "admin.apps.edit.redirectConfigDesc",
-    "admin.apps.edit.redirectUrl",
-    "admin.apps.edit.showWarning"
-  ],
-  "features/admin/components/app-form/SettingsConfigSection.jsx": [
-    "admin.apps.edit.enableChatHistory",
-    "admin.apps.edit.enableModelSelection",
-    "admin.apps.edit.enableOutputFormat",
-    "admin.apps.edit.enableStyleControl",
-    "admin.apps.edit.settings",
-    "admin.apps.edit.settingsDesc"
-  ],
-  "features/admin/components/app-form/SkillsConfigSection.jsx": [
-    "admin.apps.edit.skills",
-    "admin.apps.edit.skillsDesc"
-  ],
-  "features/admin/components/app-form/StarterPromptsSection.jsx": [
-    "admin.apps.edit.addStarterPrompt",
-    "admin.apps.edit.autoSendPrompt",
-    "admin.apps.edit.message",
-    "admin.apps.edit.starterPrompt",
-    "admin.apps.edit.starterPrompts",
-    "admin.apps.edit.starterPromptsDesc",
-    "admin.apps.edit.title"
-  ],
-  "features/admin/components/app-form/SystemInstructionsSection.jsx": [
-    "admin.apps.edit.messagePlaceholder",
-    "admin.apps.edit.prompt",
-    "admin.apps.edit.systemInstructions",
-    "admin.apps.edit.systemInstructionsDesc"
-  ],
-  "features/admin/components/app-form/ToolsConfigSection.jsx": [
-    "admin.apps.edit.tools",
-    "admin.apps.edit.toolsDesc"
-  ],
-  "features/admin/components/app-form/UploadConfigSection.jsx": [
-    "admin.apps.edit.allowMultiple",
-    "admin.apps.edit.enableUpload",
-    "admin.apps.edit.upload",
-    "admin.apps.edit.uploadDesc"
-  ],
-  "features/admin/components/app-form/VariablesSection.jsx": [
-    "admin.apps.edit.addOption",
-    "admin.apps.edit.addVariable",
-    "admin.apps.edit.defaultValue",
-    "admin.apps.edit.option",
-    "admin.apps.edit.predefinedValues",
-    "admin.apps.edit.predefinedValuesHint",
-    "admin.apps.edit.predefinedValuesHintSelect",
-    "admin.apps.edit.required",
-    "admin.apps.edit.typeDate",
-    "admin.apps.edit.typeNumber",
-    "admin.apps.edit.typeSelect",
-    "admin.apps.edit.typeString",
-    "admin.apps.edit.typeText",
-    "admin.apps.edit.value",
-    "admin.apps.edit.variable",
-    "admin.apps.edit.variableLabel",
-    "admin.apps.edit.variableName",
-    "admin.apps.edit.variableType",
-    "admin.apps.edit.variables",
-    "admin.apps.edit.variablesDesc"
-  ],
-  "features/admin/components/app-form/WorkflowsConfigSection.jsx": [
-    "admin.apps.edit.workflows",
-    "admin.apps.edit.workflowsDesc"
-  ],
   "features/admin/components/feedback/FeedbackReview.jsx": [
     "admin.dashboard.feedbackOverview",
     "admin.usage.feedbackComment",
@@ -521,10 +357,6 @@
   "features/admin/components/platform-form/OidcProvidersSection.jsx": [
     "admin.auth.oidc.clientSecret",
     "admin.auth.oidc.clientSecretHelp"
-  ],
-  "features/admin/components/voice/DictationTest.jsx": [
-    "admin.apps.edit.automaticMode",
-    "admin.apps.edit.manualMode"
   ],
   "features/admin/hooks/useOverviewData.js": [
     "admin.overview.chats.period",
@@ -715,48 +547,6 @@
     "admin.agents.triggerSucceeded",
     "admin.title",
     "common.status"
-  ],
-  "features/admin/pages/AdminAppEditPage.jsx": [
-    "admin.apps.edit.back",
-    "admin.apps.edit.cancel",
-    "admin.apps.edit.configureNewApp",
-    "admin.apps.edit.configureNewAppDesc",
-    "admin.apps.edit.editAppConfig",
-    "admin.apps.edit.editAppConfigDesc",
-    "admin.apps.edit.history",
-    "admin.apps.edit.subtitleEdit",
-    "admin.apps.edit.subtitleNew",
-    "admin.apps.edit.titleEdit",
-    "admin.apps.edit.titleNew",
-    "admin.apps.edit.validationErrorsExist",
-    "admin.apps.errorTitle",
-    "admin.apps.loading"
-  ],
-  "features/admin/pages/AdminAppsPage.jsx": [
-    "admin.apps.actions.clone",
-    "admin.apps.actions.delete",
-    "admin.apps.actions.download",
-    "admin.apps.actions.edit",
-    "admin.apps.actions.toggle",
-    "admin.apps.allCategories",
-    "admin.apps.createApp",
-    "admin.apps.filterAll",
-    "admin.apps.filterDisabled",
-    "admin.apps.filterEnabled",
-    "admin.apps.noApps",
-    "admin.apps.noAppsDescription",
-    "admin.apps.searchPlaceholder",
-    "admin.apps.status.enabled",
-    "admin.apps.statusLabel",
-    "admin.apps.subtitle",
-    "admin.apps.table.app",
-    "admin.apps.table.category",
-    "admin.apps.table.model",
-    "admin.apps.table.order",
-    "admin.apps.table.status",
-    "admin.apps.title",
-    "admin.apps.uploadConfig",
-    "admin.apps.uploading"
   ],
   "features/admin/pages/AdminBackupPage.jsx": ["admin.backup.description"],
   "features/admin/pages/AdminBrowserExtensionPage.jsx": [
@@ -1247,114 +1037,6 @@
     "admin.agents.title",
     "admin.title"
   ],
-  "features/apps/components/AppCreationWizard.jsx": [
-    "admin.apps.wizard.advanced.allowEmptyContent",
-    "admin.apps.wizard.advanced.category",
-    "admin.apps.wizard.advanced.description",
-    "admin.apps.wizard.advanced.imageUpload",
-    "admin.apps.wizard.advanced.instruction",
-    "admin.apps.wizard.advanced.order",
-    "admin.apps.wizard.advanced.sendChatHistory",
-    "admin.apps.wizard.advanced.title",
-    "admin.apps.wizard.ai.description",
-    "admin.apps.wizard.ai.error.network",
-    "admin.apps.wizard.ai.error.parse",
-    "admin.apps.wizard.ai.generate",
-    "admin.apps.wizard.ai.generating",
-    "admin.apps.wizard.ai.language",
-    "admin.apps.wizard.ai.loadingPrompt",
-    "admin.apps.wizard.ai.prompt",
-    "admin.apps.wizard.ai.promptPlaceholder",
-    "admin.apps.wizard.ai.success",
-    "admin.apps.wizard.ai.title",
-    "admin.apps.wizard.back",
-    "admin.apps.wizard.basedOn",
-    "admin.apps.wizard.basic.appId",
-    "admin.apps.wizard.basic.appIdHelp",
-    "admin.apps.wizard.basic.appIdPlaceholder",
-    "admin.apps.wizard.basic.appIdTitle",
-    "admin.apps.wizard.basic.color",
-    "admin.apps.wizard.basic.description",
-    "admin.apps.wizard.basic.descriptionPlaceholder",
-    "admin.apps.wizard.basic.icon",
-    "admin.apps.wizard.basic.iconPlaceholder",
-    "admin.apps.wizard.basic.language",
-    "admin.apps.wizard.basic.name",
-    "admin.apps.wizard.basic.namePlaceholder",
-    "admin.apps.wizard.basic.title",
-    "admin.apps.wizard.create",
-    "admin.apps.wizard.creating",
-    "admin.apps.wizard.error.colorRequired",
-    "admin.apps.wizard.error.descriptionRequired",
-    "admin.apps.wizard.error.iconRequired",
-    "admin.apps.wizard.error.idRequired",
-    "admin.apps.wizard.error.methodRequired",
-    "admin.apps.wizard.error.missingFields",
-    "admin.apps.wizard.error.nameRequired",
-    "admin.apps.wizard.error.systemRequired",
-    "admin.apps.wizard.finish",
-    "admin.apps.wizard.method.ai",
-    "admin.apps.wizard.method.aiDescription",
-    "admin.apps.wizard.method.description",
-    "admin.apps.wizard.method.instruction",
-    "admin.apps.wizard.method.manual",
-    "admin.apps.wizard.method.manualDescription",
-    "admin.apps.wizard.method.template",
-    "admin.apps.wizard.method.templateDescription",
-    "admin.apps.wizard.method.title",
-    "admin.apps.wizard.next",
-    "admin.apps.wizard.revert",
-    "admin.apps.wizard.review.basedOn",
-    "admin.apps.wizard.review.description",
-    "admin.apps.wizard.review.instruction",
-    "admin.apps.wizard.review.overridden",
-    "admin.apps.wizard.review.title",
-    "admin.apps.wizard.review.warning",
-    "admin.apps.wizard.system.description",
-    "admin.apps.wizard.system.loadingModels",
-    "admin.apps.wizard.system.messagePlaceholder",
-    "admin.apps.wizard.system.messagePlaceholderPlaceholder",
-    "admin.apps.wizard.system.model",
-    "admin.apps.wizard.system.modelHelp",
-    "admin.apps.wizard.system.noPreferredModel",
-    "admin.apps.wizard.system.prompt",
-    "admin.apps.wizard.system.promptPlaceholder",
-    "admin.apps.wizard.system.title",
-    "admin.apps.wizard.title",
-    "admin.apps.wizard.variables.add",
-    "admin.apps.wizard.variables.description",
-    "admin.apps.wizard.variables.instruction",
-    "admin.apps.wizard.variables.label",
-    "admin.apps.wizard.variables.labelPlaceholder",
-    "admin.apps.wizard.variables.name",
-    "admin.apps.wizard.variables.namePlaceholder",
-    "admin.apps.wizard.variables.required",
-    "admin.apps.wizard.variables.title",
-    "admin.apps.wizard.variables.type",
-    "admin.apps.wizard.variables.variable"
-  ],
-  "features/apps/components/AppDetailsPopup.jsx": [
-    "admin.apps.details.close",
-    "admin.apps.details.description",
-    "admin.apps.details.editApp",
-    "admin.apps.details.model",
-    "admin.apps.details.order",
-    "admin.apps.details.starterPrompts",
-    "admin.apps.details.status",
-    "admin.apps.details.systemInstructions",
-    "admin.apps.details.technicalDetails",
-    "admin.apps.details.variables",
-    "admin.apps.status.enabled"
-  ],
-  "features/apps/components/AppTemplateSelector.jsx": [
-    "admin.apps.template.createFromScratch",
-    "admin.apps.template.createFromScratchDescription",
-    "admin.apps.template.description",
-    "admin.apps.template.loading",
-    "admin.apps.template.noApps",
-    "admin.apps.template.searchPlaceholder",
-    "admin.apps.template.title"
-  ],
   "features/apps/components/SearchableAppsSelector.jsx": [
     "admin.prompts.edit.noAppsFound",
     "admin.prompts.edit.searchApps"
@@ -1371,26 +1053,6 @@
     "admin.prompts.details.variables",
     "admin.prompts.status.disabled",
     "admin.prompts.status.enabled"
-  ],
-  "shared/components/DualModeEditor.jsx": [
-    "admin.editor.allValid",
-    "admin.editor.errorCount",
-    "admin.editor.formMode",
-    "admin.editor.jsonMode",
-    "admin.editor.moreErrors",
-    "admin.editor.noFormComponent",
-    "admin.editor.noFormComponentDesc",
-    "admin.editor.reset",
-    "admin.editor.unsavedChanges",
-    "admin.editor.validationErrors",
-    "admin.editor.validationSummary"
-  ],
-  "shared/components/IconPicker.jsx": [
-    "admin.apps.edit.iconCount",
-    "admin.apps.edit.iconCountFiltered",
-    "admin.apps.edit.noIconsFound",
-    "admin.apps.edit.searchIcons",
-    "admin.apps.edit.selectIcon"
   ],
   "shared/components/ModelDetailsPopup.jsx": [
     "admin.models.details.apiConfiguration",
@@ -1412,17 +1074,6 @@
     "admin.models.details.technicalDetails",
     "admin.models.details.usageStats"
   ],
-  "shared/components/MonacoJsonEditor.jsx": [
-    "admin.editor.errorAtLine",
-    "admin.editor.format",
-    "admin.editor.formatJson",
-    "admin.editor.invalidJson",
-    "admin.editor.jsonEditor",
-    "admin.editor.loadingEditor",
-    "admin.editor.validate",
-    "admin.editor.validateJson",
-    "admin.editor.validationErrors"
-  ],
   "shared/components/ShortLinkDetailsPopup.jsx": [
     "admin.shortlinks.appId",
     "admin.shortlinks.edit",
@@ -1434,17 +1085,5 @@
     "admin.shortlinks.url",
     "admin.shortlinks.usage",
     "admin.shortlinks.userId"
-  ],
-  "shared/components/SkillsSelector.jsx": [
-    "admin.apps.edit.searchSkills",
-    "admin.apps.edit.skills.noResults",
-    "admin.apps.edit.skills.noSkills",
-    "admin.apps.edit.skillsHelper"
-  ],
-  "shared/components/WorkflowsSelector.jsx": [
-    "admin.apps.edit.searchWorkflows",
-    "admin.apps.edit.workflows.noResults",
-    "admin.apps.edit.workflows.noWorkflows",
-    "admin.apps.edit.workflowsHelper"
   ]
 }

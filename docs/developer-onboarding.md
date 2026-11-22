@@ -483,6 +483,14 @@ For detailed architecture information, see [docs/architecture.md](architecture.m
 
 ### Adding a New AI Application
 
+The usual way is the admin UI: **Admin → Apps → New app** creates the app, opens its editor and
+lets you test it in a chat beside the form (see [Build your first app](app-quickstart.md)). The
+code of that page is in `client/src/features/admin/pages/AdminAppCreatePage.jsx` and
+`client/src/features/admin/components/app-create/`; the draft endpoint is
+`POST /api/admin/apps/_generate` (`server/routes/admin/appBuilder.js`).
+
+To add an app as a file instead:
+
 1. **Create App Configuration** (e.g., `contents/apps/my-new-app.json`):
 ```json
 {
@@ -499,13 +507,16 @@ For detailed architecture information, see [docs/architecture.md](architecture.m
     "en": "You are a helpful assistant that...",
     "de": "Du bist ein hilfreicher Assistent, der..."
   },
-  "color": "blue",
+  "color": "#4F46E5",
   "icon": "lightbulb"
 }
 ```
 
+   The `id` allows lowercase letters, digits, dots, hyphens and underscores, at most 50
+   characters. A file without `enabled` is a published app.
+
 2. **Test the App**:
-   - Restart development server: `npm run dev`
+   - Apps reload by themselves; a restart is not needed
    - Navigate to http://localhost:5173
    - Find your new app in the list
    - Test chat functionality
@@ -649,6 +660,32 @@ export const sourceHandlers = [
 ```
 
 ## Debugging and Troubleshooting
+
+### Dependencies Out of Date After a Pull
+
+**Symptom**: after pulling, a page fails to open in the dev server, and Vite shows an overlay such
+as:
+
+```text
+[plugin:vite:import-analysis] Failed to resolve import "highlight.js/lib/languages/bash"
+from "src/features/admin/utils/docsHighlight.js". Does the file exist?
+```
+
+The admin Documentation and What's New pages, for example, need `highlight.js`. The rest of the
+app still works, so the cause is easy to miss: a dependency was added to `client/package.json` (or
+the root or server `package.json`) since your last install.
+
+**Fix**: install the dependencies of all three packages again, then restart the dev server:
+
+```bash
+npm run install:all
+npm run dev
+```
+
+`npm run dev` checks this before it starts (`scripts/check-installed-deps.js`, run as `predev`).
+When a declared package is missing, or installed in a version outside its range, it lists the
+packages per `package.json` and stops with the command above. The check is skipped when `CI` is
+set or `NODE_ENV=production`; set `SKIP_DEPS_CHECK=1` to start anyway.
 
 ### Server Debugging
 
