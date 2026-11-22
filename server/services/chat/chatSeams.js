@@ -954,9 +954,20 @@ export function approvalRefusalPayload(outcome, toolName) {
 }
 
 /**
- * Options for the shared `passthroughSeam`: run the tool with the chat
- * context, stream its text as `step/delta` frames, close with `tool/completed`
- * and the tool/interaction log.
+ * Options for the shared `passthroughSeam`: run the tool through the tool
+ * runner with the chat context, stream its text as `step/delta` frames, close
+ * with `tool/completed` and the tool/interaction log.
+ *
+ * The runner builds the parameters: the model's arguments never carry iHub's
+ * context (the run id of a chat-launched workflow is minted by the chat route,
+ * never taken from the model's arguments), a workflow tool receives the
+ * upload, so its inputFiles mechanism can inject file content into agent node
+ * messages, and whether the chat is stored, so its execution links back to it
+ * only when there is a chat to go back to.
+ *
+ * @param {Object} options
+ * @param {import('../run/ToolRunner.js').ToolRunner} options.toolRunner
+ * @param {'chat'|'subagent'} [options.origin='chat'] - the run kind, for the runner's log
  */
 export function chatPassthroughOptions({
   chatId,
@@ -968,31 +979,29 @@ export function chatPassthroughOptions({
   streaming,
   buildLogData,
   logInteraction,
-  runTool
+  toolRunner,
+  origin = 'chat'
 }) {
   return {
-    runTool: (toolId, params) => runTool(toolId, params),
-    buildParams(info) {
-      // The run id of a chat-launched workflow is minted by the chat route, never
-      // taken from the model's arguments.
-      const { runId: _modelRunId, ...args } = info.args || {};
-      const params = {
-        ...args,
-        chatId,
-        user,
-        passthrough: true,
-        appConfig: app,
-        integrationScopes
-      };
-      // Workflow tools receive the upload so their inputFiles mechanism can
-      // inject file content into agent node messages.
-      if (String(info.toolId).startsWith('workflow_') && userFileData)
-        params._fileData = userFileData;
-      // Whether the chat is stored, so the workflow's execution links back to
-      // it only when there is a chat to go back to.
-      if (String(info.toolId).startsWith('workflow_')) params._chatStored = chatStored;
-      return params;
-    },
+    execute: (info, ctx) =>
+      toolRunner.execute(info.call, {
+        toolId: info.toolId,
+        toolDef: info.toolDef,
+        args: info.args || {},
+        signal: ctx?.signal,
+        toolContext: {
+          origin,
+          // The approval seam is the first seam of the run.
+          approval: 'seam',
+          principal: user,
+          chatId,
+          passthrough: true,
+          appConfig: app,
+          integrationScopes,
+          fileData: userFileData,
+          chatStored
+        }
+      }),
     onChunk(text, info, ctx) {
       if (!streaming || !text) return;
       emit(ctx, SSE_V2_EVENTS.STEP_DELTA, { step: ctx.iteration, kind: 'text', content: text });

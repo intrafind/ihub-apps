@@ -8,12 +8,11 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import configCache from '../../configCache.js';
-import { runTool } from '../tools/runTool.js';
+import { toolRunner, ToolCallRefusedError, workflowToolDef } from '../run/ToolRunner.js';
 import {
   filterDirectoryToolsForUser,
   mayUseDirectory
 } from '../peopleDirectory/PeopleDirectoryService.js';
-import { withTrustedToolContext } from '../../utils/toolCallContext.js';
 import { invokeAppNonStreaming } from './appInvoker.js';
 import { recordTextOutput } from '../provenance/turnProvenance.js';
 import { mcpMeta } from '../provenance/httpProvenance.js';
@@ -29,7 +28,8 @@ import { APPROVAL_ERROR_CODES } from '../../../shared/toolApproval.js';
 /**
  * Whether a tool exposed through the gateway needs a person's approval
  * (#2945). The gateway has nobody to ask: such a call is refused with
- * `APPROVAL_REQUIRED_NO_USER` instead of running.
+ * `APPROVAL_REQUIRED_NO_USER` instead of running. The tool runner applies the
+ * same rule to a gateway call (`approval: 'refuse'`, `services/run/ToolRunner.js`).
  *
  * @param {Object} tool
  * @param {Object} platform
@@ -384,24 +384,35 @@ export async function buildMcpServer({ user, platform }) {
           ) {
             return toolErrorResult('access_denied: tool not permitted for this caller');
           }
-          // A gated tool waits for a person's approval; nobody here can give it.
-          if (gatewayCallNeedsApproval(tool, configCache.getPlatform?.() || platform)) {
-            return toolErrorResult(
-              `${APPROVAL_ERROR_CODES.APPROVAL_REQUIRED_NO_USER}: this tool needs a person's approval and cannot run through the MCP gateway`
-            );
-          }
           try {
-            // Inject the authenticated caller's identity + a tracking chatId.
-            // Integration tools (iFinder, Entra, Jira, ...) run *as the user* and
-            // reject calls without an authenticated `user`/`chatId` in their
-            // params. MCP args are schema-validated first, so they can never
-            // spoof these fields — we set them last regardless.
-            const result = await runTool(
-              tool.id,
-              withTrustedToolContext(args, { user, chatId: `mcp-${Date.now()}` })
-            );
+            // The tool runner sets the authenticated caller's identity and a
+            // tracking chatId after the arguments, which lose every key of
+            // iHub's context first: integration tools (iFinder, Entra, Jira,
+            // ...) run *as the user*. A gated tool waits for a person's
+            // approval, and nobody here can give it: the runner refuses it.
+            const result = await toolRunner.execute(null, {
+              toolId: tool.id,
+              toolDef: tool,
+              args: args || {},
+              toolContext: {
+                origin: 'mcp',
+                approval: 'refuse',
+                argsFrom: 'caller',
+                principal: user,
+                chatId: `mcp-${Date.now()}`,
+                platform: configCache.getPlatform?.() || platform
+              }
+            });
             return toolSuccessResult(result);
           } catch (err) {
+            if (
+              err instanceof ToolCallRefusedError &&
+              err.code === APPROVAL_ERROR_CODES.APPROVAL_REQUIRED_NO_USER
+            ) {
+              return toolErrorResult(
+                `${APPROVAL_ERROR_CODES.APPROVAL_REQUIRED_NO_USER}: this tool needs a person's approval and cannot run through the MCP gateway`
+              );
+            }
             logger.warn('MCP gateway tool call failed', {
               component: 'McpServerService',
               toolId: tool.id,
@@ -493,14 +504,22 @@ export async function buildMcpServer({ user, platform }) {
             // OAuth MCP calls use the caller's own token); the arguments can
             // never name another user.
             const { input: workflowArgs, context } = await workflowFileInput(args, user);
-            const result = await runTool(
-              `workflow_${wf.id}`,
-              withTrustedToolContext(workflowArgs, {
-                user,
+            const toolDef = workflowToolDef(wf.id, wf);
+            const result = await toolRunner.execute(null, {
+              toolId: toolDef.id,
+              toolDef,
+              args: workflowArgs,
+              toolContext: {
+                origin: 'mcp',
+                // The client starts the workflow by name, as a person does on
+                // the workflow page: no tool approval.
+                approval: 'caller',
+                argsFrom: 'caller',
+                principal: user,
                 chatId: context.chatId || `mcp-${Date.now()}`,
-                ...(context.fileData ? { _fileData: context.fileData } : {})
-              })
-            );
+                fileData: context.fileData || undefined
+              }
+            });
             const answer = workflowAnswerParts(result);
             const provenance = answer.ok
               ? await recordTextOutput({

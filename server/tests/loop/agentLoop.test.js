@@ -1150,7 +1150,7 @@ test('passthrough seam streams the tool answer and ends the turn without a model
     {
       seams: [
         passthroughSeam({
-          runTool: async function* () {
+          execute: async function* () {
             yield 'Hello ';
             yield 'world';
           },

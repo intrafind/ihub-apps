@@ -230,26 +230,13 @@ test('a definition migration that renames an action keeps its approval', () => {
 });
 
 // ── pre-mortem #4: every runTool caller is known ────────────────────────────
+//
+// Every call of `runTool(` outside `server/services/run/` is an entry of
+// `server/tests/run/runToolAllowList.json`, with its reason and the issue that
+// removes it: server/tests/run/runToolCallers.test.js.
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const serverRoot = path.resolve(here, '../..');
-
-/**
- * Every place that calls `runTool(` directly, and why it is not a
- * model-decided call the approval seam must see. A new caller fails this test
- * until it is listed here with its reason — or routed through the loop.
- */
-const KNOWN_RUN_TOOL_CALLERS = {
-  // Model-decided calls through the agent loop (the approval seam runs first).
-  'services/chat/ChatService.js': 'executeTool of the chat loop (seams run before it)',
-  'services/chat/chatSeams.js': 'passthrough seam runner, after the approval seam',
-  'services/loop/seams/passthroughSeam.js': 'passthrough seam, after the approval seam',
-  'services/workflow/executors/PromptNodeExecutor.js': 'executeTool of the node loop',
-  // Not model-decided: an author, an admin or the user chose this exact call.
-  'services/workflow/executors/ToolNodeExecutor.js': 'workflow tool node (author-chosen)',
-  'services/mcp/a2aHandler.js': 'A2A skill runs a workflow; its nodes are gated',
-  'services/mcp/McpServerService.js': 'MCP gateway: gated tools are refused before runTool'
-};
 
 async function* jsFiles(dir) {
   for (const entry of await fs.readdir(dir, { withFileTypes: true })) {
@@ -259,24 +246,6 @@ async function* jsFiles(dir) {
     else if (entry.name.endsWith('.js')) yield full;
   }
 }
-
-test('every runTool caller is listed with a reason (no unnoticed bypass of the approval gate)', async () => {
-  const callers = new Set();
-  for await (const file of jsFiles(serverRoot)) {
-    const rel = path.relative(serverRoot, file).split(path.sep).join('/');
-    if (rel === 'services/tools/runTool.js') continue; // the definition
-    const source = await fs.readFile(file, 'utf8');
-    const code = source
-      .split('\n')
-      .filter(line => !/^\s*(\*|\/\/)/.test(line))
-      .join('\n');
-    if (/(^|[^\w.])runTool\(|this\.runTool\(/.test(code)) callers.add(rel);
-  }
-  const unknown = [...callers].filter(rel => !KNOWN_RUN_TOOL_CALLERS[rel]);
-  assert.deepEqual(unknown, [], `new runTool callers: list them with a reason or use the loop`);
-  const gone = Object.keys(KNOWN_RUN_TOOL_CALLERS).filter(rel => !callers.has(rel));
-  assert.deepEqual(gone, [], 'listed callers that no longer call runTool');
-});
 
 /**
  * Every place that calls an MCP server's or A2A agent's tool directly

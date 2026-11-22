@@ -18,7 +18,7 @@ import { v4 as uuidv4 } from 'uuid';
 import RequestBuilder from './RequestBuilder.js';
 import { processMessageTemplates } from '../../serverHelpers.js';
 import { logInteraction as defaultLogInteraction } from '../../utils.js';
-import { runTool as defaultRunTool } from '../tools/runTool.js';
+import { ToolRunner } from '../run/ToolRunner.js';
 import configCache from '../../configCache.js';
 import { isFeatureEnabled } from '../../featureRegistry.js';
 import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
@@ -339,7 +339,8 @@ class ChatService {
    * @param {import('../loop/AgentLoop.js').AgentLoop} [options.agentLoop]
    * @param {import('../loop/RunLog.js').RunLog} [options.runLog]
    * @param {Function} [options.logInteraction] - interaction logger (tests inject a spy)
-   * @param {Function} [options.runTool] - tool runner (tests inject a stub)
+   * @param {Function} [options.runTool] - `runTool` behind the tool runner (tests inject a stub)
+   * @param {ToolRunner} [options.toolRunner] - the tool runner (defaults to one around `runTool`)
    * @param {{recordChatCallStart: Function, recordChatCallEnd: Function}} [options.telemetry] -
    *   usage/metrics recorder (defaults to chatTelemetry.js)
    */
@@ -349,7 +350,7 @@ class ChatService {
     this.runLog = options.runLog || runLogSingleton;
     this.interactionService = options.interactionService || interactionServiceSingleton;
     this.logInteraction = options.logInteraction || defaultLogInteraction;
-    this.runTool = options.runTool || defaultRunTool;
+    this.toolRunner = options.toolRunner || new ToolRunner({ runTool: options.runTool });
     this.telemetry = options.telemetry || defaultTelemetry;
     /** @type {Map<string, number>} clarification count per conversation */
     this.clarificationCounts = new Map();
@@ -1090,7 +1091,7 @@ class ChatService {
           streaming,
           buildLogData: log,
           logInteraction: this.logInteraction,
-          runTool: this.runTool
+          toolRunner: this.toolRunner
         })
       ),
       imageLiftSeam,
@@ -1209,44 +1210,39 @@ class ChatService {
         meta: { stream },
         seams,
         channel,
-        // `language` is a default the tool may use; explicit model-provided
-        // args of the same name win, while chatId/user/appConfig — and the
-        // scopes the user picked for the chat (`integrationScopes`, #3050) —
-        // can never be overridden by the model.
+        // The tool runner (`services/run/ToolRunner.js`) builds the tool's
+        // parameters: `language` is a default the model's arguments may
+        // override, while the chat, the user, the app and the scopes the user
+        // picked for the chat (`integrationScopes`, #3050) never can. Page
+        // reads are capped per turn by the gate (`websearch.maxPageReads`).
         //
         // An MCP tool of a server with MCP Apps enabled hands back its raw
         // result on the shared `info` object, where `chatToolSeam` builds the
         // view from it (declared, or embedded in the result).
-        //
-        // Page reads are capped per turn (`websearch.maxPageReads`): past the
-        // cap the gate answers the call itself instead of fetching the page.
-        executeTool: (call, { toolId, args, info, signal }) =>
-          pageReads.admit(toolId) ||
-          this.runTool(
+        executeTool: (call, { toolId, toolDef, args, info, signal }) =>
+          this.toolRunner.execute(call, {
             toolId,
-            {
-              language,
-              ...args,
+            toolDef,
+            args,
+            signal,
+            toolContext: {
+              origin: 'chat',
+              // The approval seam is the first seam of the turn.
+              approval: 'seam',
+              principal: user,
               chatId,
-              user,
               appConfig: app,
+              language,
               integrationScopes,
               turnSkills,
-              // The user's timezone, for the scheduling tools' defaults. Only
-              // when known: a value the model put in `args` could only pick a
-              // default timezone, which the schedule itself can name anyway.
-              ...(clientTimezone ? { clientTimezone } : {}),
-              // A workflow links its execution back to the chat only when the
-              // chat is stored (see `tools/workflowRunner.js`).
-              ...(String(toolId).startsWith('workflow_') ? { _chatStored: Boolean(persist) } : {})
-            },
-            {
-              signal,
+              clientTimezone,
+              chatStored: Boolean(persist),
+              pageReads,
               onMcpAppResult: result => {
                 if (info) info.mcpAppResult = result;
               }
             }
-          )
+          })
       });
       // Paused on a chat approval: keep what the continuation needs with the
       // chat, and only then show the card (`interaction/raised`), so even an
@@ -2218,20 +2214,33 @@ class ChatService {
               streaming: false,
               buildLogData,
               logInteraction: this.logInteraction,
-              runTool: this.runTool
+              toolRunner: this.toolRunner,
+              origin: 'subagent'
             })
           ),
           imageLiftSeam,
           headlessToolOutputSeam({ chatId, user, generatedFiles, generatedImages }),
           collector
         ],
-        executeTool: (call, { toolId, args, signal }) =>
-          pageReads.admit(toolId) ||
-          this.runTool(
+        executeTool: (call, { toolId, toolDef, args, signal }) =>
+          this.toolRunner.execute(call, {
             toolId,
-            { language, ...args, chatId, user, appConfig: app, integrationScopes: {}, turnSkills },
-            { signal }
-          )
+            toolDef,
+            args,
+            signal,
+            toolContext: {
+              origin: 'subagent',
+              // The headless approval seam above refuses a gated call.
+              approval: 'seam',
+              principal: user,
+              chatId,
+              appConfig: app,
+              language,
+              integrationScopes: {},
+              turnSkills,
+              pageReads
+            }
+          })
       });
 
       if (result.status === 'error' || result.status === 'aborted') {
