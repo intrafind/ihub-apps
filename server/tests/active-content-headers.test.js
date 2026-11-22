@@ -29,7 +29,9 @@ describe('isActiveDocumentType', () => {
       'application/xhtml+xml',
       'image/svg+xml',
       'text/xml',
-      'Application/XML; charset=utf-8'
+      'Application/XML; charset=utf-8',
+      'text/example+xml',
+      'application/rss+xml; charset=utf-8'
     ]) {
       assert.equal(isActiveDocumentType(type), true, type);
     }

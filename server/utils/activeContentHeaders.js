@@ -5,7 +5,7 @@
  * Headers for serving a user-supplied file from the application's own origin.
  *
  * A file a user uploaded is served under the media type it was stored with. For
- * an HTML, XHTML, SVG or generic XML file (an XML document in the XHTML namespace
+ * an HTML, XHTML, SVG or any other XML file (an XML document in the XHTML namespace
  * runs its script too) that type makes a browser run the document, with
  * script, on the origin of the application: whoever follows the link (a shared
  * chat's viewer, say) would run the uploader's code as themselves. `nosniff`
@@ -18,13 +18,7 @@
  */
 
 /** Media types a browser opens as a document that can run script. */
-const ACTIVE_DOCUMENT_TYPES = new Set([
-  'text/html',
-  'application/xhtml+xml',
-  'image/svg+xml',
-  'text/xml',
-  'application/xml'
-]);
+const ACTIVE_DOCUMENT_TYPES = new Set(['text/html', 'text/xml', 'application/xml']);
 
 /**
  * Whether a browser would run a document served under this `Content-Type`.
@@ -34,7 +28,10 @@ const ACTIVE_DOCUMENT_TYPES = new Set([
  */
 export function isActiveDocumentType(contentType) {
   if (typeof contentType !== 'string') return false;
-  return ACTIVE_DOCUMENT_TYPES.has(contentType.split(';')[0].trim().toLowerCase());
+  const mediaType = contentType.split(';')[0].trim().toLowerCase();
+  // Every `+xml` subtype is an XML media type, so a browser parses it as XML and runs XHTML
+  // script in it (`application/xhtml+xml`, `image/svg+xml`, `text/example+xml`, ...).
+  return ACTIVE_DOCUMENT_TYPES.has(mediaType) || mediaType.endsWith('+xml');
 }
 
 /**
