@@ -119,7 +119,10 @@ export const generateUserApp = ({ description, language, signal } = {}) =>
  *
  * @param {{q?: string, purpose?: 'share'|'offer'}} [options] - `offer` answers
  *   users only, for the hand-over dialog.
- * @returns {Promise<{users: Array<Object>, groups: Array<Object>, everyone: boolean}>}
+ * @returns {Promise<{allowed: {user: boolean, group: boolean, everyone: boolean}|null,
+ *   users: Array<Object>, groups: Array<Object>, everyone: boolean}>} `allowed`: which
+ *   kinds of target the installation lets the caller pick; null when the server
+ *   did not say.
  */
 export const fetchUserAppShareTargets = async ({ q = '', purpose } = {}) => {
   const data = await call(() =>
@@ -127,7 +130,16 @@ export const fetchUserAppShareTargets = async ({ q = '', purpose } = {}) => {
       params: { q, ...(purpose ? { purpose } : {}) }
     })
   );
+  const allowed = data?.allowed;
   return {
+    allowed:
+      allowed && typeof allowed === 'object'
+        ? {
+            user: allowed.user === true,
+            group: allowed.group === true,
+            everyone: allowed.everyone === true
+          }
+        : null,
     users: Array.isArray(data?.users) ? data.users : [],
     groups: Array.isArray(data?.groups) ? data.groups : [],
     everyone: data?.everyone === true
@@ -233,7 +245,9 @@ export const acceptUserAppOffer = (appId, { revision }) =>
  *
  * @param {string} appId
  * @param {{revision: number}} options
- * @returns {Promise<Object>} The app, now `promoted`, with `publishedAs`.
+ * @returns {Promise<Object>} The app, now `promoted`, with `publishedAs`; for
+ *   an owner who can use the company app at once the retired body
+ *   (`state: 'retired'`), as `GET` then answers it.
  */
 export const publishUserApp = (appId, { revision }) =>
   call(() => apiClient.post(`${appPath(appId)}/_publish`, undefined, ifMatch(revision)));

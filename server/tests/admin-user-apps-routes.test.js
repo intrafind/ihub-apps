@@ -225,6 +225,7 @@ describe('the list of personal apps', () => {
     'owner',
     'pendingOwner',
     'publishedAs',
+    'revision',
     'sharedWith',
     'state',
     'updatedAt'

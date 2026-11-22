@@ -939,6 +939,83 @@ test.describe('Accessibility — personal apps', () => {
     await expect(dialog).toBeVisible();
     await expectNoBlockingViolations(page, 'Admin — switch a personal app off');
   });
+
+  test('the admin offer and take-over dialogs, the receiver of an offer, publishing and the retired app', async ({
+    page
+  }) => {
+    const settingsBefore = await (await page.request.get('/api/admin/user-apps/_settings')).json();
+    const setPublish = allowPublish =>
+      page.request.put('/api/admin/user-apps/_settings', { data: { sharing: { allowPublish } } });
+    let companyAppId = null;
+    try {
+      expect((await setPublish(true)).status()).toBe(200);
+
+      // Admin: the offer dialog with people listed, and the take-over dialog. Someone
+      // to list besides the owner and the administrator, who are never offered.
+      const users = Object.values(
+        (await (await page.request.get('/api/admin/auth/users')).json()).users || {}
+      );
+      if (!users.some(user => user.username === 'e2e-a11y-receiver')) {
+        const created = await page.request.post('/api/admin/auth/users', {
+          data: {
+            username: 'e2e-a11y-receiver',
+            password: 'receiver-a11y-pass-1',
+            name: 'Demo Receiver',
+            email: 'receiver@example.com',
+            internalGroups: ['users'],
+            active: true
+          }
+        });
+        expect(created.ok(), await created.text()).toBe(true);
+      }
+      await gotoSettled(page, '/admin/apps?tab=personal');
+      const row = page.getByRole('row').filter({ hasText: `${NAME} of a colleague` });
+      await row.getByRole('button', { name: 'More actions' }).click();
+      await page.getByRole('menuitem', { name: 'Offer to a new owner' }).click();
+      const offer = page.getByRole('dialog');
+      await offer.getByRole('searchbox', { name: 'Find a person' }).fill('Demo');
+      await expect(offer.getByRole('radio').first()).toBeVisible();
+      await expectNoBlockingViolations(page, 'Admin — offer a personal app, people listed');
+      await page.keyboard.press('Escape');
+
+      await row.getByRole('button', { name: 'More actions' }).click();
+      await page.getByRole('menuitem', { name: 'Take over as app…' }).click();
+      await expect(page.getByLabel('App ID')).toBeVisible();
+      await expectNoBlockingViolations(page, 'Admin — take a personal app over as an app');
+      await page.keyboard.press('Escape');
+
+      // The receiver of an offer: the colleague offers their app to the administrator.
+      const adminId = (await (await page.request.get(`/api/apps/${ownAppId}`)).json()).owner.id;
+      const foreignApp = await (await foreign.get(`/api/apps/${foreignAppId}`)).json();
+      const offered = await foreign.put(`/api/apps/${foreignAppId}/owner-offer`, {
+        data: { ownerId: adminId },
+        headers: { 'If-Match': `"${foreignApp.revision}"` }
+      });
+      expect(offered.status(), await offered.text()).toBe(200);
+      await gotoSettled(page, `/apps/${foreignAppId}/edit`);
+      await expect(page.getByTestId('user-app-offer')).toBeVisible();
+      await expectNoBlockingViolations(page, 'Personal app editor — the receiver of an offer');
+
+      // The owner publishes an app without tools: the dialog, then the page of the retired app.
+      await gotoSettled(page, `/apps/${ownAppId}/edit`);
+      await page.getByRole('button', { name: 'More' }).click();
+      await page.getByRole('menuitem', { name: 'Publish' }).click();
+      const publish = page.getByRole('alertdialog');
+      await expect(publish).toContainText(`Publish "${NAME}"`);
+      await expectNoBlockingViolations(page, 'Personal app editor — publish dialog');
+      const [published] = await Promise.all([
+        page.waitForResponse(response => response.url().endsWith(`/${ownAppId}/_publish`)),
+        publish.getByRole('button', { name: 'Publish' }).click()
+      ]);
+      expect(published.status(), await published.text()).toBe(200);
+      companyAppId = (await published.json()).publishedAs?.appId ?? null;
+      await expect(page.getByText('This app is now a company app.')).toBeVisible();
+      await expectNoBlockingViolations(page, 'Personal app — the page of a retired app');
+    } finally {
+      if (companyAppId) await page.request.delete(`/api/admin/apps/${companyAppId}`);
+      await setPublish(settingsBefore?.sharing?.allowPublish === true);
+    }
+  });
 });
 
 // axe's WCAG tag set does not include the landmark rules (they are best

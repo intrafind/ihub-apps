@@ -353,7 +353,8 @@ async function listUserPrompts(user, repo) {
  * most one entry per target, the strongest permission winning. A target that
  * is new to the list must be one the caller may pick now; targets already on
  * it stay whatever the settings say today, so an editor with narrower rights
- * can still save a prompt the owner shared widely.
+ * can still save a prompt the owner shared widely. Such a target keeps its
+ * permission or a weaker one; raising it from `use` to `edit` counts as new.
  *
  * `prompt` is any shared item with `ownerId` and `shares` (a user skill too);
  * `noun` names what is shared in the refusal message.
@@ -362,7 +363,13 @@ async function listUserPrompts(user, repo) {
  *   details?: Object}}
  */
 export function resolveShares(requested, { prompt, allowed, users, groups, noun = 'prompts' }) {
-  const existing = new Set((prompt.shares || []).map(shareTargetKey));
+  // Target key -> the permission stored for it now.
+  const existing = new Map();
+  for (const stored of prompt.shares || []) {
+    const key = shareTargetKey(stored);
+    if (existing.get(key) !== 'edit')
+      existing.set(key, stored.permission === 'edit' ? 'edit' : 'use');
+  }
   const byKey = new Map();
   const unknown = [];
   for (const entry of requested) {
@@ -407,7 +414,11 @@ export function resolveShares(requested, { prompt, allowed, users, groups, noun 
     };
   }
   for (const [key, share] of byKey) {
-    if (!existing.has(key) && !allowed[share.type]) {
+    // A target already on the list keeps what it has, never more: raising
+    // "use" to "edit" for an audience the settings no longer allow is a new
+    // grant, not a kept one.
+    const kept = existing.has(key) && (existing.get(key) === 'edit' || share.permission === 'use');
+    if (!kept && !allowed[share.type]) {
       return {
         ok: false,
         status: 403,

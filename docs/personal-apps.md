@@ -81,7 +81,10 @@ With the feature on, the apps page gets three filters and the button **New app**
 
 The ⋮ menu of a tile offers **Edit**, **Share**, **Duplicate** and **Delete** for an app you
 own, and **Duplicate** and **Leave** for an app that was shared with you by name. **Leave** is
-not offered when your access comes only through a group.
+not offered when your access comes only through a group or through "Everyone signed in". For an
+app offered to you it offers **View offer**, and the tile itself opens the offer instead of the
+chat. **Duplicate** and **Publish** in the editor wait until your changes are saved: they take
+the saved app.
 
 ## Creating an app
 
@@ -114,8 +117,12 @@ The editor of a personal app is a page of its own, at `/apps/<id>/edit`. It has 
 | **Instructions and inputs**   | The instructions, input fields and conversation starters.                                                                             |
 | **What the app may use**      | **AI model**, **Users can attach files**, **Web search**, **Skills** and **Connected systems**, as far as the installation allows them. |
 
-- The header shows who can see the app: **Only you**, "Shared with 3 people", **Shared with
-  everyone**, **Now with the administrators** or **Switched off by an administrator**.
+- The header shows who can see the app: **Only you**, "Shared with 3 people" (groups are
+  counted apart: "Shared with 2 people, 1 group"), **Shared with everyone**, **Now with the
+  administrators** or **Switched off by an administrator**.
+- The help under the instructions says that the people you share the app with can read them.
+  A person who may read the app but not change it sees the instructions as text, not in a
+  locked field, so that long instructions can be scrolled with the keyboard.
 - **Test** opens the test chat beside the form. It runs the saved app, as the test chat of the
   admin editor does.
 - **Share** opens the share dialog. The ⋮ menu holds **Open app**, **Publish**, **Hand over**,
@@ -215,13 +222,17 @@ steer tools that run with the rights of the person chatting. iHub therefore trea
 an app you do not own differently:
 
 - A notice above the chat names the owner and says "Administrators have not checked it." It
-  lists what the app may use and what is not available to you. **Show instructions** opens the
-  instructions. The notice can be reduced to one line; it cannot be dismissed for good.
+  lists what the app may use and what is not available to you. **Show instructions** opens
+  everything the author wrote that reaches the AI: the instructions, the message template your
+  messages are put into, and the value a choice sends where it differs from its label. The notice can be reduced to one line; it cannot be dismissed for good.
 - Web search and connected systems are off in a new chat until you switch them on.
 - Every tool call asks you first, reads included, with the tool and its arguments on the card.
   Approving a call applies to that one call. **Approve & allow for this chat** is not offered.
 - In the owner's own chats the app asks before it changes something, and the owner can allow a
   tool for the rest of the chat. A stricter approval setting of the installation still applies.
+  This holds only while the current instructions are the owner's own (the owner saved them, or
+  accepted the app with them): after a "Can edit" member changed them, the owner is asked before
+  every tool call too, until the owner saves the app.
 
 A research turn with three searches and two page reads therefore shows five cards to a person
 who does not own the app. This is intended; see [Three limits](#three-limits-to-know-first).
@@ -272,8 +283,10 @@ A change of owner is an offer that the other person accepts.
 1. The owner chooses **Hand over** in the ⋮ menu of the editor, picks a person and confirms with
    **Ask …**. Until that person accepts, the owner stays the owner and nothing changes. The
    editor shows "Offered to Ben Koch" and **Withdraw**.
-2. The receiver finds the app under **My apps**, marked **Offered to you**, and can read its
-   instructions, see who it is shared with and try it with **Try it**.
+2. The receiver finds the app under **My apps**, marked **Offered to you**. Its tile, **View
+   offer** in its ⋮ menu, and **View the offer** in the notice above its chat open the app
+   read-only with the offer, where the receiver can read its instructions, see who it is shared
+   with and try it with **Try it**.
 3. **Take over** makes the receiver the owner. **Decline** removes the offer.
 
 When the offer is accepted:
@@ -391,10 +404,10 @@ may use and when it was last used. The filters are **All**, **Published, not swi
 
 | Action                              | Who                | Effect                                                                                                                                                                         |
 | ----------------------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Open app**                        | Full administrator | Opens the chat of the app. The first turn of each chat is written to the audit log.                                                                                            |
+| **Open app**                        | Full administrator | Opens the chat of the app. The first turn of each chat is written to the audit log. Not offered while the feature is off.                                                      |
 | **Earlier versions**                | Full administrator | Shows the last 20 saved states of the app with who saved them. There is no restore.                                                                                            |
 | **Switch off**, **Switch on**       | Full administrator | Nobody but a full administrator can chat with a switched-off app. The owner and the people it is shared with see your reason. The owner cannot change or duplicate the app, only delete it. |
-| **Offer to a new owner**            | Full administrator | Makes the offer described under [Handing an app over](#handing-an-app-over). The person becomes the owner by accepting; an administrator cannot make someone an owner.          |
+| **Offer to a new owner**            | Full administrator | Makes the offer described under [Handing an app over](#handing-an-app-over). The person becomes the owner by accepting; an administrator cannot make someone an owner. You are listed first, so you can offer the app to yourself. Not offered for a switched-off app. |
 | **Take over as app…**               | Full administrator | Makes a company app without the owner; see below.                                                                                                                              |
 | **Give back to the owner**          | Full administrator | Makes a published personal app editable again. The company app stays. Unpublish or delete the company app first.                                                               |
 | **Delete**                          | Full administrator | Removes the app for everyone.                                                                                                                                                  |

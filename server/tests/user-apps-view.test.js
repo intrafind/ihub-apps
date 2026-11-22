@@ -429,7 +429,8 @@ describe('the reduced and the retired body', () => {
       state: 'retired',
       publishedAs: {
         appId: 'stellenanzeigen-schreiben',
-        name: { de: 'Stellenanzeigen schreiben' }
+        name: { de: 'Stellenanzeigen schreiben' },
+        enabled: true
       }
     });
   });
@@ -475,6 +476,7 @@ describe('the admin views (9.2)', () => {
       },
       sharedWith: { users: 2, groups: 1, everyone: false },
       capabilities: ['upload', 'webSearch', 'integrations'],
+      revision: 7,
       updatedAt: '2026-11-20T09:00:00Z',
       lastUsedAt: '2026-11-19T10:00:00Z'
     });

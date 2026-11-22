@@ -6,6 +6,7 @@ import Icon from '../../../../shared/components/Icon';
 import MoreActionsMenu from '../../../admin/components/MoreActionsMenu';
 import { SECONDARY_BUTTON_CLASS } from '../../../admin/components/formStyles';
 import { DEFAULT_APP_COLOR, DEFAULT_APP_ICON } from '../../../../../../shared/appDefaults.js';
+import { userAppStateChipText } from './userAppForm';
 
 const CHIP_CLASS =
   'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium border';
@@ -34,7 +35,8 @@ const LINK_CLASS =
  * @param {string} props.name - The name in the reader's language.
  * @param {string} [props.icon] - An icon name.
  * @param {string} [props.color] - `#RRGGBB`.
- * @param {{key: string, values?: object, tone: string}} props.chip - The result of `userAppStateChip`.
+ * @param {{key: string, values?: object, counts?: object, tone: string}} props.chip - The
+ *   result of `userAppStateChip`.
  * @param {boolean} props.testOpen - The test panel is open.
  * @param {() => void} [props.onToggleTest]
  * @param {() => void} [props.onShare]
@@ -44,6 +46,8 @@ const LINK_CLASS =
  * @param {() => void} [props.onWithdraw] - Shown beside the chip while an offer is open.
  * @param {() => void} [props.onDuplicate]
  * @param {() => void} [props.onDelete]
+ * @param {boolean} [props.unsaved=false] - The form has unsaved changes. "Publish" and
+ *   "Duplicate" take the stored state, so they wait until the changes are saved.
  * @param {{ current: HTMLElement|null }} [props.headingRef] - The heading, for a focus that
  *   lost its control.
  * @returns {JSX.Element}
@@ -62,20 +66,29 @@ function UserAppEditorHeader({
   onWithdraw,
   onDuplicate,
   onDelete,
+  unsaved = false,
   headingRef
 }) {
   const { t } = useTranslation();
+  // What is copied or published is the stored state, never the input on the page.
+  const storedOnly = unsaved ? { disabled: true, hint: t('userApps.edit.saveFirst') } : {};
   const moreItems = [
     onOpenApp && { id: 'open', label: t('admin.apps.openApp'), onSelect: onOpenApp },
     // P12 MOUNT POINT (publish): the "Publish" entry of the editor menu. It is
     // shown when the page passes `onPublish`, which it does once P12's dialog
     // is mounted there and the server says `permissions.canPublish`.
-    onPublish && { id: 'publish', label: t('userApps.publish.action'), onSelect: onPublish },
+    onPublish && {
+      id: 'publish',
+      label: t('userApps.publish.action'),
+      onSelect: onPublish,
+      ...storedOnly
+    },
     onHandOver && { id: 'handOver', label: t('userApps.transfer.action'), onSelect: onHandOver },
     onDuplicate && {
       id: 'duplicate',
       label: t('userApps.list.menu.duplicate'),
-      onSelect: onDuplicate
+      onSelect: onDuplicate,
+      ...storedOnly
     },
     onDelete && {
       id: 'delete',
@@ -109,7 +122,7 @@ function UserAppEditorHeader({
               data-testid="user-app-state"
               className={`${CHIP_CLASS} ${CHIP_TONE[chip.tone] || CHIP_TONE.neutral}`}
             >
-              {t(chip.key, chip.values)}
+              {userAppStateChipText(chip, t)}
             </span>
             {onWithdraw && (
               <button type="button" onClick={onWithdraw} className={LINK_CLASS}>

@@ -36,8 +36,8 @@ function languageName(language, uiLanguage) {
  * @param {object} props
  * @param {object} [props.source] - What the create page offers (section 11.3 of the personal
  *   apps plan): whether "More details" has the app ID and the category, and the keys of the
- *   line above the buttons and of the submit button. Without a source the screen is the
- *   admin screen.
+ *   line above the buttons, of the submit button and of the help under the instructions.
+ *   Without a source the screen is the admin screen.
  * @param {object} props.draft - The page's state with its actions (`useAppDraft`).
  * @param {object} props.form - Validation and the request (`useCreateSubmit`).
  * @param {React.ReactNode} [props.notice] - What stands above the fields for this start.
@@ -156,6 +156,7 @@ function EssentialsScreen({
           draft={state.draft}
           language={state.language}
           instructionsRequired={!form.instructionsOptional}
+          instructionsHelpKey={source?.copy?.instructionsHelp}
           errors={fieldMessages}
           notes={notes}
           describedBy={summaryId}

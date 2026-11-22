@@ -46,7 +46,13 @@ import {
   effectiveGroups,
   shareTargetKey
 } from '../prompts/userPromptAccess.js';
-import { ownerSnapshot, resolveOwnerPrincipal } from '../scheduler/tasks/ownerPrincipal.js';
+import configCache from '../../configCache.js';
+import {
+  findUserRecord,
+  ownerSnapshot,
+  resolveOwnerPrincipal
+} from '../scheduler/tasks/ownerPrincipal.js';
+import { enhanceUserGroups } from '../../utils/authorization.js';
 import { USER_APP_MEMBER_ROLES } from '../../../shared/userAppContent.js';
 import { isBlockedOwner } from './userAppSettings.js';
 
@@ -81,6 +87,7 @@ export const NO_ACCESS = Object.freeze({
   canOffer: false,
   canAcceptOffer: false,
   canPublish: false,
+  canLeave: false,
   isOwner: false,
   role: null,
   readOnly: false,
@@ -118,7 +125,7 @@ export function canHoldUserApps(user) {
 }
 
 /** Whether the request is made with a personal API key. */
-function isPersonalApiKey(user) {
+export function isPersonalApiKey(user) {
   return user?.authMode === 'oauth_personal_key';
 }
 
@@ -250,19 +257,45 @@ export function effectiveUserAppState(record, { publishedAppExists = true } = {}
   return record?.state === 'promoted' && publishedAppExists !== false ? 'promoted' : 'active';
 }
 
+/** Whether a `users.json` record is a local account (it signs in with a password). */
+function isLocalAccountRecord(record) {
+  if (!record || typeof record !== 'object') return false;
+  if (Array.isArray(record.authMethods) && record.authMethods.includes('local')) return true;
+  return typeof record.passwordHash === 'string' && record.passwordHash.length > 0;
+}
+
 /**
  * The owner snapshot a personal app stores: who the owner is and the groups
  * they had at this request. The snapshot scheduled tasks store, without the
  * identity mode a task needs.
+ *
+ * The snapshot records the kind of **account**, not the kind of credential.
+ * A request made with a personal API key carries the groups the key was
+ * created with and the auth mode `oauth_personal_key`; stored as they are,
+ * a local owner would lose the rule that their groups are read from
+ * `users.json` on every lookup (design 6.2). So for a key of a local account
+ * the snapshot is taken from its `users.json` record: auth mode `local` and
+ * the groups of that record.
  *
  * @param {Object} user - `req.user` of the owner.
  * @param {Object} [options] - Passed to `ownerSnapshot` (`platform`, `lookupUser`).
  * @returns {{userId: string, username: string, name: string, email: string|null,
  *   groups: string[], authMode: string|null, provider: string|null, recorded: boolean}}
  */
-export function userAppOwnerSnapshot(user, options) {
+export function userAppOwnerSnapshot(user, options = {}) {
   const { identityMode: _unused, ...snapshot } = ownerSnapshot(user, 'default', options);
-  return snapshot;
+  if (!isPersonalApiKey(user)) return snapshot;
+  const platform = options.platform || configCache.getPlatform() || {};
+  const lookup = (options.lookupUser || findUserRecord)(snapshot.userId, platform);
+  if (!lookup?.found || !isLocalAccountRecord(lookup.record)) return snapshot;
+  const internal = lookup.record.internalGroups;
+  const groups = Array.isArray(internal) ? internal.map(String) : ['users'];
+  return {
+    ...snapshot,
+    groups: enhanceUserGroups({ id: snapshot.userId, groups }, platform.auth || {}).groups,
+    authMode: 'local',
+    provider: null
+  };
 }
 
 /**
@@ -289,6 +322,10 @@ export function isOwnerSnapshotStale(record, settings, now = Date.now()) {
  * Whether a request of the owner should rewrite the stored snapshot: the
  * groups differ, or the snapshot is older than a day.
  *
+ * A request made with a personal API key never rewrites a stored snapshot:
+ * its groups are those the key was created with, not the account's current
+ * ones. Only a signed-in request of the owner refreshes it.
+ *
  * @param {Object} record - Stored personal app.
  * @param {Object} user - `req.user` of the owner.
  * @param {number} [now] - Clock in milliseconds, for tests.
@@ -297,6 +334,7 @@ export function isOwnerSnapshotStale(record, settings, now = Date.now()) {
 export function ownerSnapshotNeedsRefresh(record, user, now = Date.now()) {
   const stored = record?.ownerPrincipal;
   if (!stored) return true;
+  if (isPersonalApiKey(user)) return false;
   const takenAt = Date.parse(record.ownerPrincipalAt || '');
   if (!Number.isFinite(takenAt) || now - takenAt > OWNER_SNAPSHOT_REFRESH_MS) return true;
   // Code-unit order: the two lists are only compared with each other.
@@ -418,7 +456,7 @@ export function ownerLookupFromRequest(user, settings) {
  * @param {number} [context.now] - Clock in milliseconds, for tests.
  * @returns {{canView: boolean, canUse: boolean, canEdit: boolean, canShare: boolean,
  *   canDelete: boolean, canOffer: boolean, canAcceptOffer: boolean, canPublish: boolean,
- *   isOwner: boolean, role: 'owner'|'editor'|'user'|'offered'|'admin'|null,
+ *   canLeave: boolean, isOwner: boolean, role: 'owner'|'editor'|'user'|'offered'|'admin'|null,
  *   readOnly: boolean, suspended: null|'ownerMayNotShare'|'ownerBlocked'}}
  *
  * @example
@@ -453,6 +491,9 @@ export function userAppPermissions(
   const memberRole = isOwner ? null : memberRoleFor(record, user, groups);
   const offer = openOffer(record, now);
   const isReceiver = !isOwner && Boolean(offer) && String(offer.id) === String(user.id);
+  // An offer is made by the owner or by a full admin.
+  const offerByAdmin =
+    Boolean(offer?.offeredBy?.id) && String(offer.offeredBy.id) !== String(record.owner?.id ?? '');
   const role = isOwner
     ? 'owner'
     : memberRole || (isReceiver ? 'offered' : null) || (admin ? 'admin' : null);
@@ -503,14 +544,23 @@ export function userAppPermissions(
     canEdit,
     canShare: canEdit && mayShareUserApps(user) && ownerInfo.mayShare === true,
     canDelete: isOwner || admin,
-    canOffer: active && (isOwner || admin),
-    canAcceptOffer: active && isReceiver,
+    // A blocked owner keeps the own row (design 5), but cannot hand the app
+    // over: under a new owner the block would no longer apply (design 8.4).
+    canOffer: active && (admin || (isOwner && !blocked)),
+    // While the shares are suspended (the owner is blocked or may not share)
+    // only an offer a full admin made can be accepted: an offer of the owner
+    // would hand the app, and the instructions, past the block or past the
+    // missing permission (design 8.3, 8.4).
+    canAcceptOffer: active && isReceiver && (!sharesSuspended || offerByAdmin),
     canPublish:
       active &&
       isOwner &&
       !blocked &&
       mayShareUserApps(user) &&
       settings?.sharing?.allowPublish === true,
+    // `_leave` removes a share that names the caller; access through a group
+    // or through everyone cannot be left (design 11.5).
+    canLeave: !isOwner && hasDirectShare(record, user),
     isOwner,
     role,
     readOnly: promoted || disabled || (role === 'editor' && ownerGone),

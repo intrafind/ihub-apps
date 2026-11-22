@@ -483,4 +483,47 @@ describe('a full admin changes an owner the same way', () => {
     assert.equal(accepted.status, 200, accepted.text);
     assert.equal(accepted.body.owner.id, 'sam');
   });
+
+  it('a blocked owner cannot hand the app over, and an offer made earlier cannot be accepted', async () => {
+    const record = await sharedApp();
+    const early = await offer('anna', record.id, 'dave');
+    assert.equal(early.status, 200, early.text);
+    setConfig({ userApps: { blockedOwners: ['anna'] } });
+
+    // The receiver of the owner's offer cannot take the app past the block.
+    const seen = await read('dave', record.id);
+    assert.equal(seen.body.permissions.canAcceptOffer, false);
+    assert.equal('system' in seen.body, false);
+    const refused = await accept('dave', record.id, early.body.revision);
+    assert.deepEqual(problem(refused), {
+      status: 403,
+      code: 'PERMISSION_DENIED',
+      details: { required: 'use', reason: 'ownerBlocked' }
+    });
+    assert.equal((await api.repo().get(record.id)).owner.id, 'anna');
+
+    // Nor can the blocked owner make a new offer.
+    const again = await offer('anna', record.id, 'ben');
+    assert.equal(again.status, 403, again.text);
+    assert.equal(again.body.code, 'PERMISSION_DENIED');
+
+    // A full admin may reassign the app; the receiver reads it and accepts.
+    const byAdmin = await offer('root', record.id, 'dave');
+    assert.equal(byAdmin.status, 200, byAdmin.text);
+    const reread = await read('dave', record.id);
+    assert.equal(reread.body.permissions.canAcceptOffer, true);
+    assert.ok(reread.body.system, 'the receiver reads the instructions before accepting');
+    const accepted = await accept('dave', record.id, reread.body.revision);
+    assert.equal(accepted.status, 200, accepted.text);
+    assert.equal(accepted.body.owner.id, 'dave');
+  });
+
+  it('an offer the owner made before losing userAppSharing waits until the shares count again', async () => {
+    const record = await api.createApp('anna', { members: [member('sam', 'user')] });
+    const made = await offer('anna', record.id, 'sam');
+    assert.equal(made.status, 200, made.text);
+    setConfig({ groups: groupsWith({ users: { userApps: false, userAppSharing: false } }) });
+    const refused = await accept('sam', record.id, made.body.revision);
+    assert.deepEqual(problem(refused).details, { required: 'use', reason: 'ownerMayNotShare' });
+  });
 });

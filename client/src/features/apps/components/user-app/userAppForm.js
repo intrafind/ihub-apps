@@ -236,13 +236,15 @@ export function stillAsksFor(form, capability) {
 
 /**
  * What the state chip of the editor says. The chip is text; the key names it.
+ * A shared app names people and groups apart: a group is not one person.
  *
  * @param {Object} app - The answer of the server.
- * @returns {{key: string, values?: Object, tone: 'neutral'|'shared'|'warning'}}
+ * @returns {{key: string, values?: Object, counts?: {users: number, groups: number},
+ *   tone: 'neutral'|'shared'|'warning'}} Render it with {@link userAppStateChipText}.
  *
  * @example
  * userAppStateChip({ state: 'active', sharedWith: { users: 4, groups: 1, everyone: false } });
- * // → { key: 'userApps.edit.state.shared', values: { count: 5 }, tone: 'shared' }
+ * // → { key: 'userApps.edit.state.shared', counts: { users: 4, groups: 1 }, tone: 'shared' }
  */
 export function userAppStateChip(app) {
   if (app?.disabled) return { key: 'userApps.edit.state.disabled', tone: 'warning' };
@@ -256,9 +258,35 @@ export function userAppStateChip(app) {
   }
   const shared = app?.sharedWith || {};
   if (shared.everyone === true) return { key: 'userApps.edit.state.everyone', tone: 'shared' };
-  const count = (Number(shared.users) || 0) + (Number(shared.groups) || 0);
-  if (count > 0) return { key: 'userApps.edit.state.shared', values: { count }, tone: 'shared' };
+  const users = Number(shared.users) || 0;
+  const groups = Number(shared.groups) || 0;
+  if (users + groups > 0) {
+    return { key: 'userApps.edit.state.shared', counts: { users, groups }, tone: 'shared' };
+  }
   return { key: 'userApps.edit.state.private', tone: 'neutral' };
+}
+
+/**
+ * The text of a state chip.
+ *
+ * @param {ReturnType<typeof userAppStateChip>} chip
+ * @param {(key: string, options?: Object) => string} t
+ * @returns {string}
+ *
+ * @example
+ * userAppStateChipText({ key: 'userApps.edit.state.shared', counts: { users: 2, groups: 1 } }, t);
+ * // → 'Shared with 2 people, 1 group'
+ */
+export function userAppStateChipText(chip, t) {
+  if (!chip.counts) return t(chip.key, chip.values);
+  const parts = [];
+  if (chip.counts.users > 0) {
+    parts.push(t('userApps.edit.state.people', { count: chip.counts.users }));
+  }
+  if (chip.counts.groups > 0) {
+    parts.push(t('userApps.edit.state.groups', { count: chip.counts.groups }));
+  }
+  return t(chip.key, { list: parts.join(', ') });
 }
 
 /**

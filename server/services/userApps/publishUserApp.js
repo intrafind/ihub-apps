@@ -171,8 +171,9 @@ export function startsEnabled(tools, settings) {
  * ceiling built, and writes the granted capabilities as ordinary app config:
  * `preferredModel`, `upload`, `websearch.enabled`, `skillSettings` with
  * `skills` as the list of granted skill IDs (never `*`), `integrations` with
- * the named `actions` of each binding, and `toolApproval.default: 'writes'`.
- * Nothing is copied from the stored record but its language.
+ * the named `actions` of each binding, `features` with projects switched off
+ * and `toolApproval.default: 'writes'`. Nothing is copied from the stored
+ * record but its language.
  *
  * @param {Object} record - Stored personal app.
  * @param {Object} options
@@ -221,16 +222,46 @@ export function toAdminApp(record, { effective, id, enabled, category }) {
       };
     }
   }
+  // The personal app ran without projects: a project attached to a chat would
+  // hand the knowledge tools to instructions nobody reviewed, and those reads
+  // run without a card. The company app starts the same way; an admin switches
+  // projects on in the editor (design 8.2).
+  app.features = { ...(app.features || {}), projects: false, userProjects: false };
   app.toolApproval = { default: 'writes' };
   if (typeof category === 'string' && category !== '') app.category = category;
   return cleanAppForSave(app);
 }
 
 /** The IDs of every app file the cache knows, in lower case. */
-function takenAppIds() {
+function configAppIds() {
   return new Set(
     (configCache.getApps(true)?.data || []).map(app => String(app.id || '').toLowerCase())
   );
+}
+
+/**
+ * The IDs a publish may not give the company app, in lower case: every app
+ * file the cache knows, and every ID another personal app still holds. A
+ * promoted record whose company app was deleted keeps its ID until it is
+ * released, so the ID is not handed to somebody else's app meanwhile.
+ *
+ * @param {Object} record - The record being published.
+ * @param {Object} repo - The repository.
+ * @returns {Promise<Set<string>>}
+ */
+async function takenAppIds(record, repo) {
+  const taken = configAppIds();
+  let held = [];
+  try {
+    held = (await repo?.heldCompanyAppIds?.({ exceptAppId: record?.id ?? null })) || [];
+  } catch (error) {
+    logger.warn('Could not read the app IDs personal apps hold; counting app files only', {
+      component: COMPONENT,
+      error: error.message
+    });
+  }
+  for (const id of held) taken.add(id);
+  return taken;
 }
 
 /**
@@ -241,7 +272,7 @@ function takenAppIds() {
  * @param {Set<string>} [taken] - IDs in use, lower case.
  * @returns {string}
  */
-export function suggestedAppId(record, taken = takenAppIds()) {
+export function suggestedAppId(record, taken = configAppIds()) {
   return uniqueAppId(slugifyAppId(userAppName(record)), id => taken.has(id));
 }
 
@@ -303,7 +334,7 @@ export async function takeOverPreview(record, { admin, settings = currentUserApp
     nameOf: id => installationName(id, record?.language)
   });
   return {
-    suggestedId: suggestedAppId(record),
+    suggestedId: suggestedAppId(record, await takenAppIds(record, getUserAppRepository())),
     capabilities: projected.capabilities,
     dropped: projected.dropped,
     plain: projected.plain
@@ -328,10 +359,44 @@ function assertValidAdminApp(app) {
   if (!result.success) throw validationError(result.error);
 }
 
-/** Whether a stored app file is the one this publish would write: same texts. */
+/** JSON with the keys of every object in code-unit order, for comparing two apps. */
+function canonical(value) {
+  if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
+  if (value && typeof value === 'object') {
+    const keys = Object.keys(value)
+      .filter(key => value[key] !== undefined)
+      .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+    return `{${keys.map(key => `${JSON.stringify(key)}:${canonical(value[key])}`).join(',')}}`;
+  }
+  return JSON.stringify(value ?? null);
+}
+
+/**
+ * Whether a stored app file is the one this publish would write: the whole
+ * app, capabilities included, apart from `enabled` and `order` (an admin may
+ * have switched it on or moved it). Comparing the texts alone would adopt a
+ * file whose capabilities were taken away since it was written.
+ */
 function isSameApp(existing, app) {
-  const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
-  return same(existing?.name, app.name) && same(existing?.system, app.system);
+  if (!existing || typeof existing !== 'object') return false;
+  const strip = ({ enabled: _enabled, order: _order, ...rest }) => rest;
+  return canonical(strip(existing)) === canonical(strip(app));
+}
+
+/**
+ * Whether another personal app holds `appId`: its publish marked the ID, or
+ * it is published as it. A file such a publish wrote is never adopted as
+ * this publish's own, even when it has the same content (two apps made from
+ * one template).
+ */
+async function heldByAnother(repo, record, appId) {
+  try {
+    const held = await repo?.heldCompanyAppIds?.({ exceptAppId: record.id });
+    return Boolean(held?.has?.(String(appId).toLowerCase()));
+  } catch {
+    // Cannot tell: do not adopt.
+    return true;
+  }
 }
 
 async function readAppFile(appId) {
@@ -379,7 +444,7 @@ async function writeCompanyApp(
   const enabled = enabledFor(projected);
   const build = id => toAdminApp(record, { effective, id, enabled, category });
 
-  const taken = takenAppIds();
+  const taken = await takenAppIds(record, repo);
   const marked = record.publishing?.appId;
   let appId = requestedId || null;
   let resumed = false;
@@ -388,7 +453,11 @@ async function writeCompanyApp(
     const existing = await readAppFile(marked);
     // Never onto a file that is switched on when this call would not switch it on.
     const fits = existing && (existing.enabled !== true || enabled === true);
-    if (fits && isSameApp(existing, build(marked))) {
+    if (
+      fits &&
+      isSameApp(existing, build(marked)) &&
+      !(await heldByAnother(repo, record, marked))
+    ) {
       appId = marked;
       resumed = true;
     } else if (!existing && !taken.has(marked.toLowerCase()) && !requestedId) {
@@ -431,7 +500,9 @@ async function writeCompanyApp(
         // A parallel call of the same publish wrote it: finish with that file.
         const existing = await readAppFile(appId);
         const fits = existing && (existing.enabled !== true || enabled === true);
-        if (fits && isSameApp(existing, app)) break;
+        if (fits && isSameApp(existing, app) && !(await heldByAnother(repo, record, appId))) {
+          break;
+        }
         if (requestedId || attempt >= MAX_ID_ATTEMPTS) {
           throw new ServiceError('CONFLICT', 'An app with this ID already exists', {
             details: { reason: 'idTaken', id: appId }
@@ -468,10 +539,12 @@ async function writeCompanyApp(
       if (cleared?.record) stored = cleared.record;
     }
   } catch (error) {
-    // The personal app changed, or changed hands, while the file was written:
-    // the copy is not what anyone confirmed. Take the file this call wrote
-    // away again, so no app stays behind that no record points to.
-    const refused = error?.code === 'ETAG_MISMATCH' || error?.code === 'USER_APP_ACCESS_CHANGED';
+    // The personal app changed, changed hands or was deleted while the file
+    // was written: the copy is not what anyone confirmed. Take the file this
+    // call wrote away again, so no app stays behind that no record points to,
+    // and take the mark off the record, so a later publish does not pick the
+    // file up again.
+    const refused = ['ETAG_MISMATCH', 'USER_APP_ACCESS_CHANGED', 'NOT_FOUND'].includes(error?.code);
     if (wrote && !stored && refused) {
       try {
         // Unless a parallel call of the same publish finished with this file.
@@ -479,6 +552,14 @@ async function writeCompanyApp(
         if (current?.publishedAs?.appId !== appId) {
           await configStore.remove(`apps/${appId}.json`);
           await configCache.refreshAppsCache();
+          if (current?.publishing?.appId === appId) {
+            await repo.mutate(
+              record.id,
+              loaded =>
+                loaded.publishing?.appId === appId ? { ...loaded, publishing: undefined } : null,
+              { bumpRevision: false }
+            );
+          }
         }
       } catch (cleanupError) {
         logger.error('A company app was written, but its personal app could not be marked', {

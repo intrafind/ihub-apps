@@ -24,6 +24,7 @@ import { canUserAccessResource, isAdmin } from '../../utils/authorization.js';
 import logger from '../../utils/logger.js';
 import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
 import { logAudit } from '../AuditLogService.js';
+import { getLocalizedString } from '../../utils/localize.js';
 import installedIntegrationService from '../integrations/InstalledIntegrationService.js';
 import { isWebSearchAvailableTo } from '../tools/webSearchResolver.js';
 import { isUserAppId } from '../../../shared/userAppContent.js';
@@ -314,6 +315,37 @@ async function removeLapsedOffer(repo, record, { req, user }) {
   }
 }
 
+/**
+ * Store the release of a promoted record whose company app no longer exists
+ * (design 8.2, "Released by itself"): `state: 'active'`, `publishedAs: null`.
+ * Derived only, the release would come undone as soon as any app with that
+ * ID existed again, and the record would point at somebody else's app. The
+ * revision stays: the record already reads as active. Never throws.
+ *
+ * @returns {Promise<Object|null>} The released record, or null when nothing was written.
+ */
+async function storeRelease(repo, record) {
+  try {
+    const released = await repo.mutate(
+      record.id,
+      current => ({ ...current, state: 'active', publishedAs: null }),
+      {
+        bumpRevision: false,
+        authorize: loaded =>
+          loaded.state === 'promoted' && !isConfigAppId(loaded.publishedAs?.appId)
+      }
+    );
+    return released?.state === 'active' ? released : null;
+  } catch (error) {
+    logger.debug('The release of a personal app was not stored', {
+      component: COMPONENT,
+      appId: record.id,
+      error: error.message
+    });
+    return null;
+  }
+}
+
 async function inspect(appId, user, { req, repository, catalogs }) {
   if (!isUserAppId(appId)) return { status: 'notPersonal' };
   const repo = repository || getUserAppRepository();
@@ -356,6 +388,17 @@ async function inspect(appId, user, { req, repository, catalogs }) {
     const cleared = await removeLapsedOffer(repo, record, { req, user });
     if (cleared) {
       record = cleared;
+      standing = userAppStanding(record, user);
+      if (!standing.permissions.canView) return { status: 'notFound' };
+    }
+  }
+
+  // The company app was deleted: store the release, so the record cannot
+  // point at a later app of the same ID.
+  if (record.state === 'promoted' && standing.publishedAppExists === false) {
+    const released = await storeRelease(repo, record);
+    if (released) {
+      record = released;
       standing = userAppStanding(record, user);
       if (!standing.permissions.canView) return { status: 'notFound' };
     }
@@ -433,6 +476,15 @@ export async function resolveUserApp(appId, user, { req, repository } = {}) {
   };
 }
 
+/**
+ * Whether the caller reads the full body: they may use the app, or they are
+ * the receiver of an offer they may accept and read what they would own
+ * (design 8.3), also while they may not chat with it.
+ */
+function readsFull(permissions) {
+  return permissions?.canUse === true || permissions?.canAcceptOffer === true;
+}
+
 function fullView(state, user) {
   return userAppView(state.record, {
     permissions: state.permissions,
@@ -456,8 +508,15 @@ function reducedView(state) {
     publishedAppExists: state.publishedAppExists
   });
   // The reason an owner cannot use their own published app: the company app.
+  // Retired means that app is visible, so it is switched on. The keys are
+  // those of the full view (design 9.1).
   if (state.retired && state.companyApp) {
-    view.publishedAs = { appId: state.companyApp.id, name: state.companyApp.name ?? null };
+    view.publishedAs = {
+      appId: state.companyApp.id,
+      name: state.companyApp.name ?? null,
+      enabled: state.companyApp.enabled !== false,
+      at: state.record.publishedAs?.at ?? null
+    };
   }
   return view;
 }
@@ -499,7 +558,9 @@ export async function readUserAppFor(appId, user, { req, repository } = {}) {
       })
     };
   }
-  if (!state.permissions.canUse) {
+  // The receiver of an offer they may accept reads what they would own
+  // (design 8.3), also while they may not chat with it.
+  if (!readsFull(state.permissions)) {
     return {
       configApp: false,
       kind: 'reduced',
@@ -507,6 +568,10 @@ export async function readUserAppFor(appId, user, { req, repository } = {}) {
       body: reducedView(state)
     };
   }
+  // A full admin who is neither owner nor member reads someone's private
+  // instructions: that is audited on every path, not only on the admin routes
+  // (design 10).
+  if (state.permissions.role === 'admin') auditAdminRead(state.record, { req, user });
   return {
     configApp: false,
     kind: 'full',
@@ -516,9 +581,49 @@ export async function readUserAppFor(appId, user, { req, repository } = {}) {
 }
 
 /**
+ * The audit entry of a full admin's read of the content of a personal app
+ * they are no member of: the entry the admin route writes. Never throws.
+ *
+ * @param {Object} record - Stored personal app.
+ * @param {Object} options
+ * @param {Object} [options.req] - The request.
+ * @param {Object} options.user - The admin.
+ */
+function auditAdminRead(record, { req, user }) {
+  try {
+    const name =
+      getLocalizedString(record.content?.name, record.language || 'en', 'en', record.id) ||
+      record.id;
+    logAudit({
+      req,
+      ...(req ? {} : { actor: user }),
+      action: 'read',
+      resource: 'userApp',
+      resourceId: record.id,
+      summary: `Read the content of personal app "${name}" of ${record.owner?.name || record.owner?.id || 'unknown'}`,
+      details: {
+        revision: Number(record.revision) || 1,
+        contentHash: record.contentHash || null,
+        ownerId: record.owner?.id ?? null,
+        what: 'the content'
+      }
+    });
+  } catch (error) {
+    logger.warn('The audit entry of an admin read of a personal app was not written', {
+      component: COMPONENT,
+      appId: record.id,
+      error: error.message
+    });
+  }
+}
+
+/**
  * A stored personal app as a response carries it for one caller: the body
  * `GET /api/apps/{appId}` answers, and the `ETag`. For the routes that write
  * an app and answer with it: they pass the record the repository returned.
+ * For a caller for whom the app is retired that is the pointer to the company
+ * app, as `GET` answers it; an owner who publishes an app they can use at once
+ * gets it from `_publish`.
  *
  * @param {Object} record - Stored personal app.
  * @param {Object} user - `req.user` with resolved permissions.
@@ -526,7 +631,8 @@ export async function readUserAppFor(appId, user, { req, repository } = {}) {
  * @param {ReturnType<typeof currentUserAppSettings>} [options.settings]
  * @returns {Promise<{body: Object, etag: string,
  *   permissions: ReturnType<typeof userAppPermissions>}>} The full body when
- *   the caller may use the app, the reduced one otherwise.
+ *   the caller may use the app, the retired one when it is retired for them,
+ *   the reduced one otherwise.
  *
  * @example
  * const record = await repo.update(appId, merged, { actor, expectedRevision });
@@ -536,8 +642,15 @@ export async function readUserAppFor(appId, user, { req, repository } = {}) {
  */
 export async function userAppResponse(record, user, { settings } = {}) {
   const state = await withCeiling(record, user, userAppStanding(record, user, { settings }), null);
+  let body;
+  if (state.retired && state.companyApp) {
+    body = retiredUserAppView(state.record, {
+      appId: state.companyApp.id,
+      name: state.companyApp.name
+    });
+  } else body = readsFull(state.permissions) ? fullView(state, user) : reducedView(state);
   return {
-    body: state.permissions.canUse ? fullView(state, user) : reducedView(state),
+    body,
     etag: userAppEtag(record),
     permissions: state.permissions
   };
@@ -599,7 +712,7 @@ export async function listUserAppsFor(user, scope, { repository } = {}) {
 
   for (const record of owned) {
     const state = await describe(record);
-    if (state) mine.push(state.permissions.canUse ? fullView(state, user) : reducedView(state));
+    if (state) mine.push(readsFull(state.permissions) ? fullView(state, user) : reducedView(state));
   }
   for (const record of reached) {
     const state = await describe(record);
@@ -610,7 +723,7 @@ export async function listUserAppsFor(user, scope, { repository } = {}) {
       state.permissions.role === 'offered' || state.permissions.canAcceptOffer === true;
     if (offered ? !wantsMine : !wantsShared) continue;
     if (!offered && state.retired) continue;
-    const item = state.permissions.canUse ? fullView(state, user) : reducedView(state);
+    const item = readsFull(state.permissions) ? fullView(state, user) : reducedView(state);
     if (offered) mine.push(item);
     else if (shared.length < MAX_SHARED_LISTED) shared.push(item);
   }

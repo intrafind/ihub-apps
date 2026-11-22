@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Modal from '../../../shared/components/Modal';
 import Icon from '../../../shared/components/Icon';
@@ -66,6 +66,7 @@ function PromptShareDialog({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const searchRef = useRef(null);
+  const titleId = useId();
 
   useEffect(() => {
     let active = true;
@@ -143,10 +144,16 @@ function PromptShareDialog({
     : [];
 
   return (
-    <Modal isOpen onClose={onClose} maxWidthClassName="max-w-xl" initialFocusRef={searchRef}>
+    <Modal
+      isOpen
+      onClose={onClose}
+      maxWidthClassName="max-w-xl"
+      initialFocusRef={searchRef}
+      labelledBy={titleId}
+    >
       <div className="flex items-start justify-between p-5 border-b border-gray-200 dark:border-gray-700">
         <div className="min-w-0">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+          <h2 id={titleId} className="text-lg font-semibold text-gray-900 dark:text-gray-100">
             {labels.title || t('prompts.share.title', 'Share prompt')}
           </h2>
           <p className="text-sm text-gray-500 dark:text-gray-400 truncate">{prompt.name}</p>

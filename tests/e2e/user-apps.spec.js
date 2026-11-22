@@ -426,6 +426,18 @@ test.describe('Personal apps', () => {
     // Not an administrator of any kind.
     expect((await api.get('/api/admin/apps')).status()).toBe(403);
 
+    // Every request the browser makes on the walk, to catch a call to an admin
+    // route that fails quietly or answers 200 (acceptance item 1). The app shell
+    // asks /api/admin/auth/status on every page (AdminAuthProvider in App.jsx,
+    // older than personal apps); it reads no app and is left out.
+    const adminCalls = [];
+    page.on('request', request => {
+      const { pathname } = new URL(request.url());
+      if (pathname.includes('/api/admin/') && !pathname.endsWith('/api/admin/auth/status')) {
+        adminCalls.push(`${request.method()} ${pathname}`);
+      }
+    });
+
     await page.goto('/apps');
     await expect(page.getByTestId('apps-scope-mine')).toHaveText(
       new RegExp(`^${tr('userApps.list.scope.mine')}`)
@@ -464,7 +476,9 @@ test.describe('Personal apps', () => {
 
     await expectChatAnswer(testPanel(page), 'hello', 'E2E reply to:');
 
-    // No request of the whole walk went to an admin route.
+    // No request the browser made on the whole walk went to an admin route,
+    // and the admin route of the app refuses the user.
+    expect(adminCalls).toEqual([]);
     expect((await api.get(`/api/admin/apps/${app.id}`)).status()).toBe(403);
     // It is no company app: the list of everyone's apps does not hold it.
     const all = await (await api.get('/api/apps')).json();
@@ -599,7 +613,9 @@ test.describe('Personal apps', () => {
     await expect(
       ben.page.getByTestId('user-app-badge').filter({ hasText: tr('userApps.list.badge.offered') })
     ).toBeVisible();
-    await ben.page.goto(`/apps/${app.id}/edit`);
+    // The tile of an offered app opens the editor with the offer, not the chat.
+    await ben.page.getByRole('button', { name, exact: true }).click();
+    await expect(ben.page).toHaveURL(new RegExp(`/apps/${app.id}/edit$`));
     const banner = ben.page.getByTestId('user-app-offer');
     await expect(banner).toContainText(tr('userApps.transfer.received', { from: OWNER_NAME }));
     await expect(banner).toContainText(tr('userApps.transfer.receivedDuty'));
@@ -613,7 +629,7 @@ test.describe('Personal apps', () => {
     expect(accepted.request().headers()['if-match']).toMatch(/^"\d+"$/);
     await expect(banner).toHaveCount(0);
     await expect(ben.page.getByTestId('user-app-state')).toHaveText(
-      tr('userApps.edit.state.shared', { count: 1 })
+      tr('userApps.edit.state.shared', { list: tr('userApps.edit.state.people', { count: 1 }) })
     );
 
     const taken = (await readApp(ben.api, app.id)).body;
@@ -819,7 +835,8 @@ test.describe('Personal apps: publishing', () => {
     expect(response.status(), await response.text()).toBe(200);
     expect(response.request().headers()['if-match']).toMatch(/^"\d+"$/);
     const published = await response.json();
-    expect(published.state).toBe('promoted');
+    // `retired` when the owner can use the company app at once: the body GET answers then.
+    expect(['promoted', 'retired']).toContain(published.state);
     return published.publishedAs;
   }
 
@@ -901,7 +918,7 @@ test.describe('Personal apps: publishing', () => {
       id: app.id,
       ownership: 'user',
       state: 'retired',
-      publishedAs: { appId: company.appId, name: { en: name } }
+      publishedAs: { appId: company.appId, name: { en: name }, enabled: true }
     });
     await expectPointer(ben.page, app.id, company.appId, name);
     // Someone the app was never shared with learns nothing at the personal

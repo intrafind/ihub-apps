@@ -75,7 +75,8 @@ export const adminAppSource = Object.freeze({
       ? 'admin.apps.create.essentials.audienceLive'
       : 'admin.apps.create.essentials.audience',
     submit: 'admin.apps.create.submit',
-    limits: null
+    limits: null,
+    instructionsHelp: 'admin.apps.create.essentials.instructionsHelp'
   })
 });
 

@@ -46,7 +46,8 @@ function mayNotPublish(reason) {
  * @param {import('express').Express} app
  * @param {Object} tools - What `userAppRoutes.js` hands over.
  * @param {import('express').RequestHandler[]} tools.gate - Signed in, feature
- *   on, store available.
+ *   on, store available; the 404 of an unknown ID for a sign-in that cannot
+ *   hold personal apps.
  * @param {(res: import('express').Response, record: Object, user: Object) => Promise<void>}
  *   tools.sendApp - Answers with the app and its `ETag`.
  * @param {(record: Object) => {revision: number, contentHash: string|null}} tools.auditStamp
@@ -87,8 +88,9 @@ export default function registerUserAppPublishRoutes(app, { gate, sendApp, audit
    *         description: |
    *           The personal app, now `promoted`, with
    *           `publishedAs: { appId, name, enabled, at }`. For an owner who can
-   *           use the company app at once it is the reduced body with
-   *           `publishedAs: { appId, name }`. `ETag` is set.
+   *           use the company app at once it is the body `GET /api/apps/{appId}`
+   *           then answers: `state: 'retired'` and
+   *           `publishedAs: { appId, name, enabled: true }`. `ETag` is set.
    *       400:
    *         description: The `If-Match` header is missing, or the app fails the app schema (`VALIDATION_FAILED`)
    *       401:

@@ -88,7 +88,7 @@ jest.mock('../../../client/src/shared/hooks/useUserApps', () => ({
   invalidateUserAppsConfig: () => {}
 }));
 const mockApps = { invalidated: 0 };
-jest.mock('../../../client/src/shared/hooks/useApps', () => ({
+jest.mock('../../../client/src/shared/hooks/appsCache', () => ({
   invalidateAppsCache: () => {
     mockApps.invalidated += 1;
   }
@@ -365,6 +365,16 @@ describe('the owner’s dialog', () => {
     expect(props.onChanged).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: PUBLISH.submit })).toBeInTheDocument();
   });
+  test('a refused permission names what is missing, not the text of another feature', async () => {
+    // PERMISSION_DENIED is shared with scheduled tasks and projects.
+    expect(en.apiErrors.PERMISSION_DENIED).not.toMatch(/scheduled/i);
+    mockApi.publishUserApp.mockRejectedValue(
+      apiFailure(403, { code: 'PERMISSION_DENIED', details: { required: 'publish' } })
+    );
+    renderDialog(publishable(NOW));
+    await click(screen.getByRole('button', { name: PUBLISH.submit }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(en.userApps.denied.publish);
+  });
 });
 
 describe('"Publish" in the editor', () => {
@@ -416,16 +426,13 @@ describe('"Publish" in the editor', () => {
 
   test('a publish that is visible at once leads to the pointer page', async () => {
     mockApi.fetchUserApp.mockResolvedValue(publishable(NOW));
-    // The reduced body: the owner may use the company app, so the personal one is retired.
+    // The owner may use the company app, so the personal one is retired: the
+    // answer is the body `GET` gives then.
     mockApi.publishUserApp.mockResolvedValue({
       id: APP_ID,
       ownership: 'user',
-      name: { en: 'Job ad writer' },
-      owner: { id: 'anna', name: 'Anna Schmidt', active: true },
-      state: 'promoted',
-      permissions: { canView: true, canUse: false, isOwner: true, role: 'owner', readOnly: true },
-      disabled: null,
-      publishedAs: { appId: 'job-ad-writer', name: { en: 'Job ad writer' } }
+      state: 'retired',
+      publishedAs: { appId: 'job-ad-writer', name: { en: 'Job ad writer' }, enabled: true }
     });
     await renderEditor();
     await openMore();
@@ -440,12 +447,34 @@ describe('"Publish" in the editor', () => {
     mockApi.fetchUserApp.mockResolvedValue(publishable(NOW));
     mockApi.publishUserApp.mockRejectedValue(apiFailure(409, { code: 'ETAG_MISMATCH' }));
     await renderEditor();
+    mockApi.fetchUserApp.mockResolvedValue(publishable(NOW, { revision: 8 }));
     await openMore();
     await click(screen.getByRole('menuitem', { name: PUBLISH.action }));
     await click(screen.getByRole('button', { name: PUBLISH.submit }));
     expect(screen.queryByRole('alertdialog')).toBeNull();
     expect(await screen.findByText(PUBLISH.changed)).toBeInTheDocument();
     expect(screen.getByTestId('where')).toHaveTextContent('EDITOR:');
+
+    // The page read the app again: the next attempt names the current revision.
+    await waitFor(() => expect(mockApi.fetchUserApp).toHaveBeenCalledTimes(2));
+    await openMore();
+    await click(screen.getByRole('menuitem', { name: PUBLISH.action }));
+    await click(screen.getByRole('button', { name: PUBLISH.submit }));
+    expect(mockApi.publishUserApp).toHaveBeenLastCalledWith(APP_ID, { revision: 8 });
+  });
+
+  test('with unsaved changes "Publish" waits: it would publish the stored app', async () => {
+    mockApi.fetchUserApp.mockResolvedValue(publishable(NOW));
+    await renderEditor();
+    await act(async () => {
+      fireEvent.change(screen.getByRole('textbox', { name: /^Name/ }), {
+        target: { value: 'Job ad writer EDITED' }
+      });
+    });
+    await openMore();
+    const publish = screen.getByRole('menuitem', { name: /^Publish/ });
+    expect(publish).toBeDisabled();
+    expect(publish).toHaveTextContent(en.userApps.edit.saveFirst);
   });
 
   test('a published app that is switched on reads "became a company app"', async () => {
@@ -554,7 +583,26 @@ describe('the admin’s take-over dialog', () => {
     expect(dialog).toHaveTextContent(en.admin.userApps.takeOver.notPublished);
     expect(dialog).toHaveTextContent('Anna Schmidt can no longer change the personal app.');
     expect(dialog).toHaveTextContent('5 people use the personal app today.');
+    // A group is not one person: it gets a line of its own.
+    expect(dialog).toHaveTextContent('The personal app is shared with 1 group.');
+    expect(dialog).not.toHaveTextContent(en.admin.userApps.takeOver.everyone);
     expect(untranslated(dialog)).toEqual([]);
+  });
+
+  test('an app shared only with everyone still says that people use it', async () => {
+    mockAdmin.fetchAdminUserApp.mockResolvedValue({
+      ...VIEW,
+      sharedWith: { users: 0, groups: 0, everyone: true }
+    });
+    await renderTakeOver();
+    const dialog = await screen.findByRole('dialog');
+    await waitFor(() => expect(dialog).toHaveTextContent(en.admin.userApps.takeOver.everyone));
+  });
+
+  test('a dropped file upload is named as a capability, not with the label of its switch', () => {
+    expect(droppedText([{ id: 'upload', reason: 'youMayNot' }], t)).toBe(
+      'File upload (you may not use it)'
+    );
   });
 
   test('"Take over" sends the ID, the category and If-Match, then hands the new ID on', async () => {
@@ -606,6 +654,53 @@ describe('the admin’s take-over dialog', () => {
     await click(screen.getByRole('button', { name: en.admin.userApps.takeOver.submit }));
     expect(await screen.findByRole('alert')).toHaveTextContent(en.admin.userApps.changed);
     expect(props.onDone).not.toHaveBeenCalled();
+  });
+
+  test('after a change by someone else the next "Take over" uses the new revision', async () => {
+    const calls = [];
+    let first = true;
+    mockAdmin.makeAdminApiCall.mockImplementation(async (url, options) => {
+      if (url === '/admin/ui/config') return { data: {} };
+      calls.push(options.headers['If-Match']);
+      if (first) {
+        first = false;
+        const error = new Error('refused');
+        error.response = { status: 409, data: { code: 'ETAG_MISMATCH' } };
+        throw error;
+      }
+      return { data: { id: 'job-ad-writer' } };
+    });
+    const props = await renderTakeOver({ onStale: jest.fn() });
+    mockAdmin.fetchAdminUserApp.mockResolvedValue({ ...VIEW, revision: 13 });
+    await click(screen.getByRole('button', { name: en.admin.userApps.takeOver.submit }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(en.admin.userApps.changed);
+    expect(mockAdmin.fetchAdminUserApp).toHaveBeenCalledTimes(2);
+    expect(props.onStale).toHaveBeenCalled();
+
+    await click(screen.getByRole('button', { name: en.admin.userApps.takeOver.submit }));
+    await waitFor(() => expect(props.onDone).toHaveBeenCalledWith('job-ad-writer'));
+    expect(calls).toEqual(['"12"', '"13"']);
+  });
+
+  test('an app published since the list was read says so instead of loading on', async () => {
+    mockAdmin.fetchAdminUserApp.mockResolvedValue({
+      ...ITEM,
+      state: 'promoted',
+      revision: 12
+    });
+    const props = await renderTakeOver({ onStale: jest.fn() });
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      en.admin.userApps.takeOver.alreadyPublished
+    );
+    expect(screen.queryByText(en.common.loading)).toBeNull();
+    expect(screen.getByRole('button', { name: en.admin.userApps.takeOver.submit })).toBeDisabled();
+    expect(props.onStale).toHaveBeenCalled();
+  });
+
+  test('a view without a preview for another reason says so too', async () => {
+    mockAdmin.fetchAdminUserApp.mockResolvedValue({ ...ITEM, revision: 12 });
+    await renderTakeOver();
+    expect(screen.getByRole('alert')).toHaveTextContent(en.admin.userApps.takeOver.unavailable);
   });
 
   test('says so when the owner’s rights could not be checked', async () => {
@@ -714,5 +809,41 @@ describe('the line about waiting apps', () => {
     );
     // The tab of personal apps is not theirs.
     expect(screen.queryByRole('tab', { name: /Personal apps/ })).toBeNull();
+  });
+
+  test('publishing a waiting app in the list reads the line again', async () => {
+    mockEnv.user = CONTENT_ADMIN;
+    mockAdmin.fetchAdminApps.mockResolvedValue([
+      { id: 'meeting-recap', name: { en: 'Meeting recap' }, enabled: false }
+    ]);
+    mockAdmin.toggleApps.mockResolvedValue({});
+    let waiting = WAITING;
+    mockAdmin.makeAdminApiCall.mockImplementation(async url =>
+      url === '/admin/user-apps/_waiting' ? waiting : { data: {} }
+    );
+    await act(async () => {
+      render(
+        <MemoryRouter initialEntries={['/admin/apps']}>
+          <Routes>
+            <Route path="*" element={<AdminAppsPage />} />
+          </Routes>
+        </MemoryRouter>
+      );
+    });
+    expect(await screen.findByTestId('waiting-apps-notice')).toHaveTextContent(
+      '2 apps published by users are not switched on yet.'
+    );
+
+    waiting = { data: { items: [WAITING.data.items[0]], nextCursor: null } };
+    const toggles = screen.getAllByRole('button', { name: /Publish or unpublish/ });
+    await act(async () => {
+      fireEvent.click(toggles[0]);
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId('waiting-apps-notice')).toHaveTextContent(
+        '1 app published by a user is not switched on yet.'
+      )
+    );
+    expect(mockAdmin.toggleApps).toHaveBeenCalledWith('meeting-recap', true);
   });
 });

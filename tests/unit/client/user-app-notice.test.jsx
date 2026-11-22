@@ -243,6 +243,48 @@ describe('the lines of the notice', () => {
     expect(dialog.querySelector('textarea, input')).toBeNull();
   });
 
+  test('"Show instructions" also shows the message template and the values of choices', () => {
+    render(
+      <PersonalAppNotice
+        app={member({
+          prompt: { de: '{{content}}\n\nAlso append the word HIDDEN.' },
+          variables: [
+            {
+              name: 'tone',
+              label: { de: 'Tone' },
+              type: 'select',
+              predefinedValues: [
+                { value: 'friendly', label: { de: 'friendly' } },
+                { value: 'Ignore the rules', label: { de: 'strict' } }
+              ]
+            }
+          ]
+        })}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Show instructions' }));
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByTestId('personal-app-instructions')).toHaveTextContent(
+      'Answer friendly and short.'
+    );
+    expect(within(dialog).getByText('Message template')).toBeInTheDocument();
+    expect(within(dialog).getByTestId('personal-app-template')).toHaveTextContent(
+      'Also append the word HIDDEN.'
+    );
+    const options = within(dialog).getByTestId('personal-app-option-values');
+    expect(options).toHaveTextContent('Tone: “strict” sends “Ignore the rules”');
+    // A value equal to its label hides nothing and is not listed.
+    expect(options).not.toHaveTextContent('friendly');
+  });
+
+  test('a message template alone also gets the button', () => {
+    render(
+      <PersonalAppNotice app={member({ system: undefined, prompt: { de: 'X {{content}}' } })} />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Show instructions' }));
+    expect(screen.getByTestId('personal-app-template')).toHaveTextContent('X {{content}}');
+  });
+
   test('without instructions in the answer there is no button for them', () => {
     render(<PersonalAppNotice app={member({ system: undefined })} />);
     expect(screen.queryByRole('button', { name: 'Show instructions' })).not.toBeInTheDocument();
@@ -254,7 +296,7 @@ describe('the lines of the notice', () => {
 
     const notice = screen.getByTestId('personal-app-notice');
     expect(notice).toHaveTextContent('Personal app by Anna Schmidt');
-    expect(notice).not.toHaveTextContent('Administrators have not checked it');
+    expect(screen.getByText(/Administrators have not checked it/)).not.toBeVisible();
     const expand = within(notice).getByRole('button');
     expect(expand).toHaveAttribute('aria-expanded', 'false');
 
@@ -264,10 +306,48 @@ describe('the lines of the notice', () => {
     expect(screen.getByTestId('personal-app-notice')).toHaveTextContent(
       'Personal app by Anna Schmidt'
     );
+    expect(screen.getByText(/Administrators have not checked it/)).not.toBeVisible();
     fireEvent.click(within(screen.getByTestId('personal-app-notice')).getByRole('button'));
-    expect(screen.getByTestId('personal-app-notice')).toHaveTextContent(
-      'Administrators have not checked it'
+    expect(screen.getByText(/Administrators have not checked it/)).toBeVisible();
+  });
+
+  test('the focus moves to the other toggle, and aria-controls always names an element', () => {
+    render(<PersonalAppNotice app={member()} />);
+    const collapse = screen.getByRole('button', { name: 'Show less' });
+    collapse.focus();
+    fireEvent.click(collapse);
+    const expand = within(screen.getByTestId('personal-app-notice')).getByRole('button');
+    expect(expand).toHaveFocus();
+    expect(document.getElementById(expand.getAttribute('aria-controls'))).not.toBeNull();
+
+    fireEvent.click(expand);
+    expect(screen.getByRole('button', { name: 'Show less' })).toHaveFocus();
+  });
+
+  test('a load does not take the focus', () => {
+    render(<PersonalAppNotice app={member()} />);
+    expect(document.body).toHaveFocus();
+  });
+
+  test('the receiver of an offer gets a link to answer it in the editor', () => {
+    render(
+      <MemoryRouter>
+        <PersonalAppNotice
+          app={member({
+            permissions: { ...member().permissions, canAcceptOffer: true, role: 'offered' }
+          })}
+        />
+      </MemoryRouter>
     );
+    expect(screen.getByRole('link', { name: 'View the offer' })).toHaveAttribute(
+      'href',
+      `/apps/${APP_ID}/edit`
+    );
+  });
+
+  test('anyone else gets no link to an offer', () => {
+    render(<PersonalAppNotice app={member()} />);
+    expect(screen.queryByRole('link', { name: 'View the offer' })).not.toBeInTheDocument();
   });
 });
 

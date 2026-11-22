@@ -224,7 +224,11 @@ function AdminAppsPage() {
   const isFullAdmin = Boolean(user?.isAdmin || user?.permissions?.adminAccess);
   const [tabParam, setTabParam] = useFilterState('tab', APPS_TAB);
   const showPersonal = isFullAdmin && tabParam === PERSONAL_TAB;
-  const [waitingCount, setWaitingCount] = useWaitingUserAppCount(isFullAdmin);
+  // Raised after the list publishes, unpublishes or deletes apps: the line
+  // about waiting apps and the count on the tab then read the list again.
+  const [waitingRefresh, setWaitingRefresh] = useState(0);
+  const refreshWaiting = () => setWaitingRefresh(value => value + 1);
+  const [waitingCount, setWaitingCount] = useWaitingUserAppCount(isFullAdmin, waitingRefresh);
   // With tabs, today's page is the panel of the "Apps" tab.
   const appsPanelProps = isFullAdmin
     ? { role: 'tabpanel', id: `tabpanel-${APPS_TAB}`, 'aria-labelledby': `tab-${APPS_TAB}` }
@@ -303,6 +307,7 @@ function AdminAppsPage() {
       const enabled = !apps.find(app => app.id === appId)?.enabled;
       await toggleApps(appId, enabled);
       setApps(prev => prev.map(app => (app.id === appId ? { ...app, enabled } : app)));
+      refreshWaiting();
     } catch (err) {
       setError(getAdminApiErrorMessage(err));
     }
@@ -319,6 +324,7 @@ function AdminAppsPage() {
       action: async () => {
         await makeAdminApiCall(`/admin/apps/${app.id}`, { method: 'DELETE' });
         setApps(prev => prev.filter(item => item.id !== app.id));
+        refreshWaiting();
       }
     });
   };
@@ -398,11 +404,16 @@ function AdminAppsPage() {
         // One request per part: every ID in one path is too long for a large
         // installation. The list follows each part, so it matches the server
         // when a later part fails.
-        for (const part of chunkIdsForPath(ids)) {
-          await toggleApps(part, publish);
-          setApps(prev =>
-            prev.map(app => (part.includes(app.id) ? { ...app, enabled: publish } : app))
-          );
+        try {
+          for (const part of chunkIdsForPath(ids)) {
+            await toggleApps(part, publish);
+            setApps(prev =>
+              prev.map(app => (part.includes(app.id) ? { ...app, enabled: publish } : app))
+            );
+          }
+        } finally {
+          // Also after a failed later part: the earlier parts were changed.
+          refreshWaiting();
         }
       }
     });
@@ -742,7 +753,7 @@ function AdminAppsPage() {
       )}
 
       {/* Apps that users published and no administrator has switched on yet. */}
-      {!showPersonal && <WaitingAppsNotice />}
+      {!showPersonal && <WaitingAppsNotice refreshKey={waitingRefresh} />}
 
       {showPersonal ? (
         <div

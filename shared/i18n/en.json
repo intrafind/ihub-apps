@@ -7808,7 +7808,12 @@
         "users_one": "{{count}} person uses the personal app today. It keeps working for this person until they can use the new app.",
         "users_other": "{{count}} people use the personal app today. It keeps working for each of them until they can use the new app.",
         "submit": "Take over",
-        "noCategory": "No category"
+        "noCategory": "No category",
+        "groups_one": "The personal app is shared with {{count}} group. It keeps working for its members until they can use the new app.",
+        "groups_other": "The personal app is shared with {{count}} groups. It keeps working for their members until they can use the new app.",
+        "everyone": "The personal app is shared with everyone signed in. It keeps working for them until they can use the new app.",
+        "alreadyPublished": "The app was published in the meantime and cannot be taken over.",
+        "unavailable": "What a take-over would write could not be worked out. Close the dialog and try again later."
       },
       "noAccess_one": "{{count}} of {{total}} members cannot use the company app.",
       "noAccess_other": "{{count}} of {{total}} members cannot use the company app.",
@@ -7821,9 +7826,9 @@
       "changed": "The app changed since you opened it. Check it again.",
       "disable": {
         "action": "Switch off",
-        "body": "Nobody can use the app while it is switched off. The owner sees your reason.",
+        "body": "Nobody can use the app while it is switched off. The owner and everyone the app is shared with see your reason.",
         "title": "Switch off \"{{name}}\"?",
-        "reason": "Reason (the owner sees it)"
+        "reason": "Reason (the owner and members see it)"
       },
       "enable": {
         "action": "Switch on"
@@ -7878,7 +7883,9 @@
       "offer": {
         "title": "Offer \"{{name}}\" to a new owner",
         "body": "The person is asked to take the app over. Until they accept, nothing changes.",
-        "search": "Find a person"
+        "search": "Find a person",
+        "results": "People found",
+        "me": "{{name}} (you)"
       },
       "revision": {
         "empty": "No earlier versions are stored.",
@@ -11660,7 +11667,7 @@
     "SHORT_LINK_HOST_NOT_ALLOWED": "Short links may not lead to this website. An administrator can allow its host on the SSRF allowlist under Admin → Security → SSRF Allowlist.",
     "SCHEDULED_TASKS_UNAVAILABLE": "Scheduled tasks are not available on this installation.",
     "INTERACTIVE_USER_REQUIRED": "Scheduled tasks need a signed-in person, not a token or agent.",
-    "PERMISSION_DENIED": "You are not allowed to use scheduled tasks.",
+    "PERMISSION_DENIED": "You are not allowed to do this.",
     "TASK_NOT_FOUND": "The scheduled task was not found.",
     "RUN_NOT_FOUND": "The run was not found.",
     "TASK_LIMIT_REACHED": "You have reached the maximum number of scheduled tasks.",
@@ -12093,9 +12100,14 @@
         "duplicate": "Duplicate",
         "delete": "Delete",
         "leave": "Leave",
-        "label": "Actions for \"{{name}}\""
+        "label": "Actions for \"{{name}}\"",
+        "viewOffer": "View offer"
       },
-      "limitReached": "You have {{max}} apps, which is the limit. Delete one to create a new one."
+      "limitReached": "You have {{max}} apps, which is the limit. Delete one to create a new one.",
+      "status": {
+        "left": "You left \"{{name}}\".",
+        "deleted": "\"{{name}}\" deleted."
+      }
     },
     "create": {
       "stateLine": "Only you can see the app until you share it.",
@@ -12105,12 +12117,15 @@
     "edit": {
       "state": {
         "private": "Only you",
-        "shared_one": "Shared with {{count}} person",
-        "shared_other": "Shared with {{count}} people",
         "everyone": "Shared with everyone",
         "promoted": "Now with the administrators",
         "offered": "Offered to {{owner}}",
-        "disabled": "Switched off by an administrator"
+        "disabled": "Switched off by an administrator",
+        "shared": "Shared with {{list}}",
+        "people_one": "{{count}} person",
+        "people_other": "{{count}} people",
+        "groups_one": "{{count}} group",
+        "groups_other": "{{count}} groups"
       },
       "extras": {
         "title": "What the app may use",
@@ -12145,6 +12160,14 @@
         "upload": "File upload",
         "webSearch": "Web search",
         "skills": "Skills"
+      },
+      "saveFirst": "Save your changes first",
+      "instructionsDesc": "Tell the AI what its task is and how it should answer. It reads this before every chat. People you share the app with can read it. (Also called the system prompt.)",
+      "capabilityNoun": {
+        "model": "the chosen AI model",
+        "upload": "file upload",
+        "webSearch": "web search",
+        "skills": "skills"
       }
     },
     "share": {
@@ -12158,7 +12181,8 @@
       "everyone": "Everyone signed in",
       "copyLink": "Copy link",
       "linkCopied": "Link copied",
-      "notAllowed": "You cannot share apps. Ask an administrator."
+      "notAllowed": "You cannot share apps. Ask an administrator.",
+      "changed": "Someone changed the app in the meantime. If you save again, the list shown here replaces the stored one."
     },
     "publish": {
       "action": "Publish",
@@ -12246,7 +12270,28 @@
       },
       "expand": "Show details",
       "collapse": "Show less",
-      "instructionsTitle": "Instructions of \"{{name}}\""
+      "instructionsTitle": "Instructions of \"{{name}}\"",
+      "instructionsSystem": "Instructions",
+      "instructionsTemplate": "Message template",
+      "instructionsTemplateHelp": "Each message you send is put into this text before it reaches the AI. {{placeholder}} stands for your message.",
+      "instructionsOptions": "What a choice sends",
+      "instructionsOption": "{{variable}}: “{{label}}” sends “{{value}}”",
+      "viewOffer": "View the offer"
+    },
+    "conflict": {
+      "owner": "As the owner you cannot leave your own app.",
+      "noDirectShare": "The app is shared with you through a group or with everyone. You cannot leave it yourself.",
+      "promoted": "The app is with the administrators now and cannot be changed.",
+      "disabled": "An administrator switched the app off. It cannot be changed or duplicated.",
+      "published": "Unpublish or delete the company app first.",
+      "idTaken": "An app with this ID already exists."
+    },
+    "denied": {
+      "publish": "You may not publish this app. Publishing is switched off, or your account lacks the permission.",
+      "edit": "You may no longer change this app. Your role in it may have changed.",
+      "userApps": "You may not create personal apps.",
+      "share": "You may not share personal apps.",
+      "ownerMayNotShare": "The owner of this app may not share it, so it cannot be shared."
     }
   }
 }

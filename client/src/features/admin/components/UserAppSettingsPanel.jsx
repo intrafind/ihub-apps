@@ -91,6 +91,23 @@ function parseMaxApps(text) {
 }
 
 /**
+ * The keys of a settings block whose value differs from the stored one; a
+ * list such as `capabilities.integrations` counts as one value.
+ *
+ * @param {Object|undefined} draft - The block as the admin edited it.
+ * @param {Object|undefined} stored - The block as it was loaded or last saved.
+ * @returns {Object|null} The changed keys with their new values; null when
+ *   nothing changed.
+ */
+export function changedKeys(draft, stored) {
+  const changes = {};
+  for (const [key, value] of Object.entries(draft || {})) {
+    if (JSON.stringify(value) !== JSON.stringify(stored?.[key])) changes[key] = value;
+  }
+  return Object.keys(changes).length > 0 ? changes : null;
+}
+
+/**
  * The settings of personal apps (`platform.userApps`), on the tab "Personal
  * apps" of Admin → Apps. The first groups of fields are those of the project
  * panel, in its order: the audiences users may share with, the publishing
@@ -251,11 +268,16 @@ function UserAppSettingsPanel({ publishingAvailable = PUBLISHING_AVAILABLE }) {
     setSaving(true);
     setError(null);
     try {
+      // Only the keys this admin changed: the server merges key by key, so a
+      // setting another admin saved since the panel loaded stays as it is.
+      const sharing = changedKeys(draft.sharing, stored.sharing);
+      const publishing = changedKeys(draft.publishing, stored.publishing);
+      const capabilities = changedKeys(draft.capabilities, stored.capabilities);
       const settings = await saveUserAppSettings({
-        ...(changed('sharing') ? { sharing: draft.sharing } : {}),
-        ...(changed('publishing') ? { publishing: draft.publishing } : {}),
+        ...(sharing ? { sharing } : {}),
+        ...(publishing ? { publishing } : {}),
         ...(maxChanged ? { limits: { maxAppsPerUser: maxApps } } : {}),
-        ...(changed('capabilities') ? { capabilities: draft.capabilities } : {}),
+        ...(capabilities ? { capabilities } : {}),
         ...(changed('blockedOwners') ? { blockedOwners: draft.blockedOwners } : {})
       });
       setStored(settings);
@@ -301,7 +323,11 @@ function UserAppSettingsPanel({ publishingAvailable = PUBLISHING_AVAILABLE }) {
                 t('admin.userApps.settings.none')
         })}
       </span>
-      <Link to="/admin/groups" className="text-indigo-600 dark:text-indigo-400 underline">
+      {/* A link on its own, not in a sentence: at least 24px high (WCAG 2.5.8). */}
+      <Link
+        to="/admin/groups"
+        className="inline-flex min-h-6 items-center text-indigo-600 dark:text-indigo-400 underline"
+      >
         {t('admin.userApps.settings.change')}
       </Link>
     </p>
@@ -365,7 +391,7 @@ function UserAppSettingsPanel({ publishingAvailable = PUBLISHING_AVAILABLE }) {
           )}
         </fieldset>
 
-        <div className="space-y-1">
+        <div className="space-y-2">
           <p className="text-xs text-gray-600 dark:text-gray-400">
             {t('admin.userApps.settings.permissionHint')}
           </p>

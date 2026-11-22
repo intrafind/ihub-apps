@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { fetchUserAppShareTargets, setUserAppMembers } from '../../../../api';
 import { buildPath } from '../../../../utils/runtimeBasePath';
 import PromptShareDialog from '../../../prompts/components/PromptShareDialog';
-import { userAppErrorMessage } from './userAppErrors';
+import { userAppErrorCode, userAppErrorMessage } from './userAppErrors';
 import { membersToShares, sharesToMembers } from './userAppForm';
 
 const LINK_BUTTON_CLASS =
@@ -45,11 +45,25 @@ const loadTargets = async query => {
 
 /**
  * Saves the shares of the dialog as the member list of the app, on the
- * revision the dialog was opened with: a member list someone else changed in
- * the meantime is not overwritten (409 `ETAG_MISMATCH`).
+ * revision of the app the page holds: a member list someone else changed in
+ * the meantime is not overwritten (409 `ETAG_MISMATCH`). On that answer
+ * `onConflict` lets the page read the app again, so the next save carries the
+ * current revision.
  */
-const saveMembersOf = app => (appId, shares) =>
-  setUserAppMembers(appId, sharesToMembers(shares), { revision: app.revision });
+const saveMembersOf = (app, onConflict) => async (appId, shares) => {
+  try {
+    return await setUserAppMembers(appId, sharesToMembers(shares), { revision: app.revision });
+  } catch (error) {
+    if (userAppErrorCode(error) === 'ETAG_MISMATCH') onConflict?.();
+    throw error;
+  }
+};
+
+/** The error line of the dialog; a conflict says what saving again does. */
+const shareErrorMessage = (error, t) =>
+  userAppErrorCode(error) === 'ETAG_MISMATCH'
+    ? t('userApps.share.changed')
+    : userAppErrorMessage(error, t);
 
 /**
  * "Copy link" with its confirmation. Nobody is notified when an app is shared
@@ -96,9 +110,11 @@ function CopyLinkButton({ appId }) {
  * @param {string} props.name - The name of the app in the reader's language.
  * @param {() => void} props.onClose
  * @param {(app: object) => void} props.onSaved - The app after the member change.
+ * @param {() => void} [props.onConflict] - Someone changed the app since the page read
+ *   it; the page reads it again.
  * @returns {JSX.Element}
  */
-function UserAppShareDialog({ app, name, onClose, onSaved }) {
+function UserAppShareDialog({ app, name, onClose, onSaved, onConflict }) {
   const { t } = useTranslation();
   return (
     <PromptShareDialog
@@ -107,8 +123,8 @@ function UserAppShareDialog({ app, name, onClose, onSaved }) {
       onClose={onClose}
       onSaved={onSaved}
       fetchTargets={loadTargets}
-      saveShares={saveMembersOf(app)}
-      errorMessage={userAppErrorMessage}
+      saveShares={saveMembersOf(app, onConflict)}
+      errorMessage={shareErrorMessage}
       labels={{
         title: t('userApps.share.title', { name }),
         private: t('userApps.share.private'),

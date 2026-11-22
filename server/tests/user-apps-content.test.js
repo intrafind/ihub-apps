@@ -347,6 +347,37 @@ describe('hidden characters are gone after a save', () => {
     assert.equal(parsed.variables[0].predefinedValues[0].value, 'value');
   });
 
+  it('strips variation selectors, invisible letters, blanks and private-use characters too', () => {
+    const invisible = [
+      '\u{E0100}', // variation selector supplement: one byte each
+      '\uFE0F', // variation selector 16
+      '\u034F', // combining grapheme joiner
+      '\u115F', // Hangul choseong filler
+      '\u1160', // Hangul jungseong filler
+      '\u3164', // Hangul filler
+      '\uFFA0', // halfwidth Hangul filler
+      '\u2800', // Braille pattern blank
+      '\u2028', // line separator
+      '\u2029', // paragraph separator
+      '\uE000' // private use
+    ];
+    for (const char of invisible) {
+      const label = `U+${char.codePointAt(0).toString(16).toUpperCase()}`;
+      assert.equal(stripHiddenCharacters(`a${char}b`), 'ab', label);
+    }
+    const payload = 'Be nice.' + '\u{E0101}\u{E0142}\u{E0163}'.repeat(10);
+    assert.equal(
+      userAppContentSchema.parse(content({ system: { en: payload } })).system.en,
+      'Be nice.'
+    );
+  });
+
+  it('refuses a name that looks blank: only invisible letters or blanks', () => {
+    for (const name of ['\u3164\u3164', '\u2800', '\u115F \uFFA0', '\u3000']) {
+      assert.equal(accepts(userAppContentSchema, content({ name: { en: name } })), false, name);
+    }
+  });
+
   it('counts the length after cleaning, and refuses a text that is only hidden characters', () => {
     const padded = `${'a'.repeat(USER_APP_LIMITS.name)}${HIDDEN}`;
     assert.equal(accepts(userAppContentSchema, content({ name: { en: padded } })), true);

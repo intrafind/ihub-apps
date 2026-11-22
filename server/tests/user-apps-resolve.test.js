@@ -584,7 +584,7 @@ describe('GET /api/apps/{appId} for a personal app', () => {
       id: record.id,
       ownership: 'user',
       state: 'retired',
-      publishedAs: { appId: ADMIN_APP, name: { en: ADMIN_APP } }
+      publishedAs: { appId: ADMIN_APP, name: { en: ADMIN_APP }, enabled: true }
     });
   });
 

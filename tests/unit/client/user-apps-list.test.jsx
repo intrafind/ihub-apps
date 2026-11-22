@@ -109,7 +109,7 @@ const mockI18n = { t: mockT, i18n: { language: 'en' } };
 jest.mock('react-i18next', () => ({ useTranslation: () => mockI18n }));
 
 const AppsList = require('../../../client/src/features/apps/pages/AppsList').default;
-const { invalidateAppsCache } = require('../../../client/src/shared/hooks/useApps');
+const { invalidateAppsCache } = require('../../../client/src/shared/hooks/appsCache');
 const { invalidateUserAppsConfig } = require('../../../client/src/shared/hooks/useUserApps');
 const UserAppsRoute = require('../../../client/src/features/apps/components/UserAppsRoute').default;
 const {
@@ -150,8 +150,13 @@ const ADMIN_APPS = [
   { id: 'translator', name: { en: 'Translator' }, description: { en: 'Translates' } }
 ];
 const MINE = personalApp(1, 'Job ad writer', 'owner');
-const SHARED = personalApp(2, 'Reply to a customer', 'user');
-const OFFERED = personalApp(3, 'Meeting notes', 'offered');
+// Shared with the viewer by name: the share can be left.
+const SHARED = personalApp(2, 'Reply to a customer', 'user', {
+  permissions: permissions('user', { canLeave: true })
+});
+const OFFERED = personalApp(3, 'Meeting notes', 'offered', {
+  permissions: permissions('offered', { canAcceptOffer: true })
+});
 const PROMOTED = personalApp(4, 'Glossary', 'owner', {
   state: 'promoted',
   publishedAs: { appId: 'glossary' }
@@ -457,6 +462,115 @@ describe('with the feature on', () => {
     );
   });
 
+  test('a member through a group or everyone gets no Leave: the server cannot remove that', async () => {
+    mockApi.fetchUserApps.mockResolvedValue([
+      { ...SHARED, permissions: permissions('user', { canLeave: false }) }
+    ]);
+    renderList();
+    await screen.findByRole('button', { name: 'Reply to a customer' });
+    fireEvent.click(
+      within(tile('Reply to a customer')).getByRole('button', {
+        name: 'Actions for "Reply to a customer"'
+      })
+    );
+    expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toEqual(['Duplicate']);
+  });
+
+  test('a refused Leave is worded from its reason, not with the English sentence', async () => {
+    mockApi.leaveUserApp.mockRejectedValue({
+      originalError: {
+        response: {
+          status: 409,
+          data: {
+            code: 'CONFLICT',
+            detail: 'The app is not shared with you directly',
+            details: { reason: 'noDirectShare' }
+          }
+        }
+      }
+    });
+    renderList();
+    await screen.findByRole('button', { name: 'Reply to a customer' });
+    fireEvent.click(
+      within(tile('Reply to a customer')).getByRole('button', {
+        name: 'Actions for "Reply to a customer"'
+      })
+    );
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Leave' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(en.userApps.conflict.noDirectShare);
+  });
+
+  test('the receiver of an offer reaches it from the tile and from the menu', async () => {
+    renderList();
+    await screen.findByRole('button', { name: 'Meeting notes' });
+    fireEvent.click(
+      within(tile('Meeting notes')).getByRole('button', { name: 'Actions for "Meeting notes"' })
+    );
+    expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toContain('View offer');
+    fireEvent.click(screen.getByRole('menuitem', { name: 'View offer' }));
+    expect(await screen.findByTestId('location')).toHaveTextContent(`/apps/${OFFERED.id}/edit`);
+  });
+
+  test('the tile of an offered app opens the editor with the offer, not the chat', async () => {
+    renderList();
+    fireEvent.click(await screen.findByRole('button', { name: 'Meeting notes' }));
+    expect(await screen.findByTestId('location')).toHaveTextContent(`/apps/${OFFERED.id}/edit`);
+  });
+
+  test('an open menu is not covered by the trigger of the next tile', async () => {
+    renderList();
+    await screen.findByRole('button', { name: 'Job ad writer' });
+    const trigger = within(tile('Job ad writer')).getByRole('button', {
+      name: 'Actions for "Job ad writer"'
+    });
+    // No z-index on the wrapper of a tile's menu: it would trap the open menu in a
+    // stacking context under the wrapper of the next tile.
+    const wrapper = trigger.parentElement.parentElement;
+    expect(wrapper.className).not.toMatch(/\bz-\d+/);
+    expect(trigger.parentElement.className).not.toMatch(/\bz-\d+/);
+    fireEvent.click(trigger);
+    expect(trigger.parentElement).toHaveClass('z-30');
+  });
+
+  test('Duplicate says what it did and moves the focus to the copy', async () => {
+    const COPY = personalApp(7, 'Job ad writer (copy)', 'owner');
+    mockApi.duplicateUserApp.mockResolvedValue(COPY);
+    renderList();
+    await screen.findByRole('button', { name: 'Job ad writer' });
+    mockApi.fetchUserApps.mockResolvedValue([...PERSONAL, COPY]);
+    fireEvent.click(
+      within(tile('Job ad writer')).getByRole('button', { name: 'Actions for "Job ad writer"' })
+    );
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Duplicate' }));
+    await waitFor(() =>
+      expect(screen.getByTestId('user-apps-status')).toHaveTextContent(
+        'App "Job ad writer (copy)" created'
+      )
+    );
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Job ad writer (copy)' })).toHaveFocus()
+    );
+  });
+
+  test('Leave says what it did and moves the focus to the selected scope', async () => {
+    mockApi.leaveUserApp.mockResolvedValue(undefined);
+    renderList();
+    await screen.findByRole('button', { name: 'Reply to a customer' });
+    mockApi.fetchUserApps.mockResolvedValue(PERSONAL.filter(app => app !== SHARED));
+    fireEvent.click(
+      within(tile('Reply to a customer')).getByRole('button', {
+        name: 'Actions for "Reply to a customer"'
+      })
+    );
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Leave' }));
+    await waitFor(() =>
+      expect(screen.getByTestId('user-apps-status')).toHaveTextContent(
+        'You left "Reply to a customer".'
+      )
+    );
+    await waitFor(() => expect(screen.getByTestId('apps-scope-all')).toHaveFocus());
+  });
+
   test('Delete asks first, deletes, and reloads the list', async () => {
     renderList();
     await screen.findByRole('button', { name: 'Job ad writer' });
@@ -476,6 +590,7 @@ describe('with the feature on', () => {
     await waitFor(() => expect(mockApi.deleteUserApp).toHaveBeenCalledWith(MINE.id));
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Job ad writer' })).toBeNull());
     expect(mockApi.fetchUserApps).toHaveBeenCalledTimes(2);
+    expect(screen.getByTestId('user-apps-status')).toHaveTextContent('"Job ad writer" deleted.');
   });
 
   test("a refused duplicate shows the server's reason", async () => {

@@ -58,9 +58,10 @@ import {
   mayShareUserApps,
   memberTargetKey,
   openOffer,
+  ownerSnapshotNeedsRefresh,
   userAppOwnerSnapshot
 } from './userAppAccess.js';
-import { userAppCatalog } from './userAppResolution.js';
+import { isConfigAppId, userAppCatalog, userAppStanding } from './userAppResolution.js';
 import {
   allowedUserAppShareTargets,
   currentUserAppSettings,
@@ -349,7 +350,12 @@ export class UserAppService {
       this.repository.update(record.id, merged, {
         actor: actorOf(user),
         expectedRevision,
-        ownerPrincipal: byOwner ? userAppOwnerSnapshot(user) : undefined,
+        // A personal API key carries the groups it was created with; it does
+        // not replace the snapshot of a signed-in request (design 6.2).
+        ownerPrincipal:
+          byOwner && ownerSnapshotNeedsRefresh(record, user)
+            ? userAppOwnerSnapshot(user)
+            : undefined,
         // A promoted app whose company app was deleted is active again; this write stores it.
         release: record.state === 'promoted' && context.publishedAppExists === false,
         authorize: context.authorize('edit')
@@ -625,6 +631,14 @@ export class UserAppService {
       throw new ServiceError('NOT_FOUND', NOT_FOUND_MESSAGE);
     }
     assertChangeable(record, context);
+    // Nobody becomes owner of instructions they cannot read (design 8.3): while
+    // the owner is blocked or may not share, the receiver sees the reduced
+    // body only. Accepting would also move the app away from the block.
+    const standing = userAppStanding(record, user, { settings: context.settings });
+    if (!standing.permissions.canAcceptOffer) {
+      const reason = standing.permissions.suspended;
+      throw denied('use', 'The app cannot be handed over right now', reason ? { reason } : {});
+    }
     if (Number(expectedRevision) !== Number(record.revision)) {
       throw new ServiceError('ETAG_MISMATCH', 'The app was changed by someone else');
     }
@@ -636,8 +650,16 @@ export class UserAppService {
           ownerPrincipal: userAppOwnerSnapshot(user),
           expectedRevision,
           limit: context.settings.limits.maxAppsPerUser,
-          // Judged again under the lock: switched off or published since the read.
-          authorize: loaded => loaded.state !== 'promoted' && !loaded.disabled
+          // Judged again under the lock, with the settings of now: switched
+          // off, published, the owner blocked or the shares suspended since
+          // the read. The state is the effective one: a promoted record whose
+          // company app was deleted counts as active.
+          authorize: loaded =>
+            userAppStanding(loaded, user, { settings: currentUserAppSettings() }).permissions
+              .canAcceptOffer === true,
+          // The same write stores the release of such a record.
+          release: loaded =>
+            loaded.state === 'promoted' && !isConfigAppId(loaded.publishedAs?.appId)
         }),
       { max: context.settings.limits.maxAppsPerUser }
     );

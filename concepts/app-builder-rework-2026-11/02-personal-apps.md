@@ -489,9 +489,12 @@ templates, the AI draft and `cleanAppForSave` of increment 1 fit without convers
   store such a binding. The security report asks for the same (panel/09-security-expert.md:268-270).
 - **Hidden characters are removed on save.** In every text key the schema strips control
   characters other than newline and tab, format characters (Unicode category Cf: zero-width and
-  bidirectional marks) and the tag block U+E0000 to U+E007F. A reader of the instructions
-  therefore sees everything the model sees. Cost: an emoji that is joined with a zero-width
-  joiner falls apart into its parts.
+  bidirectional marks), every default-ignorable code point (variation selectors, the combining
+  grapheme joiner, the Hangul fillers), the tag block U+E0000 to U+E007F, private-use
+  characters, the line and paragraph separators and the Braille blank U+2800. A text that is
+  blank after that is refused. A reader of the instructions therefore sees everything the model
+  sees. Cost: an emoji that is joined with a zero-width joiner falls apart into its parts, and an
+  emoji loses its variation selector (it still shows, perhaps in text style).
 - **Members** are capped at 100 entries per app.
 
 The caps and the allowed sub-keys are those of a generated draft (README 5.3). They live in
@@ -691,6 +694,7 @@ export function mayCreateUserApps(user, settings)   // canHold && permissions.us
 export function mayShareUserApps(user)     // canHold && user.permissions.userAppSharing === true
 export function userAppPermissions(record, user, { groups, isAdmin, owner, settings, retired })
 // → { canView, canUse, canEdit, canShare, canDelete, canOffer, canAcceptOffer, canPublish,
+//     canLeave,   // a share names the caller directly (`_leave` removes only that)
 //     isOwner, role: 'owner' | 'editor' | 'user' | 'offered' | 'admin' | null,
 //     readOnly, suspended: null | 'ownerMayNotShare' | 'ownerBlocked' }
 ```
@@ -727,7 +731,11 @@ Modifiers, applied after the table:
 - **Shares count only while the owner may hold and share personal apps.** When the owner's
   principal no longer holds `userApps` or `userAppSharing`, or the owner is on the list
   `blockedOwners`, the members' rows above turn into "View: yes, everything else: no", with
-  `suspended` set. The owner keeps the own row, except that a blocked owner cannot chat either.
+  `suspended` set. The owner keeps the own row, except that a blocked owner cannot chat, publish
+  or offer the app to a new owner: under a new owner the block would no longer apply. For the
+  same reason, while the shares are suspended the receiver can accept only an offer a full admin
+  made; an offer the owner made earlier waits until the shares count again. A receiver who can
+  accept reads the full app, instructions included, also while the chat is closed to them (8.3).
   This is what makes the group permission a working lever: taking it away stops the apps that
   exist, not only new ones. The check uses the owner lookup of 6.2 and has its limits.
 - **Owner inactive:** editors lose "Edit" and "Members" (`readOnly`), as in projects
@@ -838,7 +846,7 @@ when someone leaves, which takes effect at once.
 | Web search | `settings.capabilities.webSearch`; a search engine is available to both. The caller computes this with `isWebSearchAvailableTo(user)`, which is exported (`server/services/tools/webSearchResolver.js:144-146`), and passes the two results in `catalog`. | The same for both. The existing check for the person chatting runs again when the tool is offered and when it is called. | `websearch: { enabled: true, provider: 'auto', enabledByDefault: false, useNativeSearch: false }` or `{ enabled: false }` |
 | Skills | `settings.capabilities.skills` | Global skills: only those granted to both. Personal skills of the person chatting follow the existing rule (`server/services/skillAccess.js:9-16`). | `skillSettings: { enabled: true, allowPersonal: true }`, `skills: [the IDs granted to both]`. Never `*`. The list holds only skills the person chatting may use anyway, so it tells them nothing about the owner. |
 | Connected system | The installation and every named action are in `settings.capabilities.integrations`, the installation is enabled, both may use it (`mayUseIntegration`, `server/services/integrations/integrationAccess.js:145-148`). | The same for both, per binding. The existing run-time refusal for the person chatting stays (`appTools.js:176-211`). | `integrations: { [id]: { actions, required: false, enabledByDefault: false } }`, always with `actions` |
-| Approval of tool calls | not stored | Always. See below. | `toolApproval: { default: 'writes' }` when the runner is the owner, `{ default: 'always' }` for everyone else. |
+| Approval of tool calls | not stored | Always. See below. | `toolApproval: { default: 'writes' }` when the runner is the owner and the owner saved the current content, `{ default: 'always' }` otherwise. |
 | Everything else that adds tools | cannot be stored | Absent. | no `projects`, `apps`, `workflows`, `iassistant` |
 
 An app has no tool list of its own (`appTools.js:124-126`). Its tools come from the rows above.
@@ -890,6 +898,13 @@ The ceiling therefore sets the mode by who is chatting:
   `useNativeSearch: false` (`appConfigSchema.js:118`) the search runs as a tool of an installed
   engine, and every call is visible. Cost: a personal app has web search only where an engine
   is installed and granted.
+- **The owner runs `writes` only on content they saved.** The reason for `writes` is that the
+  owner reads their own instructions. A "Can edit" member can rewrite them, and after a
+  hand-over the content is the previous owner's. So the owner gets `writes` and the chat grant
+  only while the content is the owner's own: `updatedBy` of the record, which changes only when
+  the content changes, is the owner, or the owner accepted the app with exactly this content
+  (`contentConfirmedBy: { id, contentHash }`, written by the accept of 8.3, after the receiver
+  read it). Otherwise the owner is asked as everyone else is, until the owner saves the content.
 - An admin setting that is stricter than `writes` still wins for the owner
   (`server/utils/toolApproval.js:19-21`).
 
@@ -922,8 +937,10 @@ are part of this increment:
 - Every tool call asks that person, one call at a time, with the tool and its arguments on the
   card. A page the app wants to open is shown with its full address.
 - Connected systems are off for personal apps until an admin names installations and actions.
-- The chat shows who owns the app, that administrators did not check it, and the instructions
-  on request (11.8). Hidden characters cannot be in them (4.4).
+- The chat shows who owns the app, that administrators did not check it, and on request
+  everything the author wrote that reaches the model (11.8): the system text, the message
+  template every message is put into, and the value a choice sends where it differs from its
+  label. Hidden characters cannot be in them (4.4).
 - "Everyone signed in" as a share target is off by default.
 
 What stays open:
@@ -1121,7 +1138,8 @@ The header is required because an editor may have changed the app since the owne
    - Start from `newAppDefaults(language)`, add the content keys, and write the granted
      capabilities as ordinary app config: `websearch.enabled`, `upload`, `skillSettings` with
      `skills` as the explicit list of granted skill IDs (never `*`), `integrations` with the
-     explicit `actions` of each binding, `toolApproval: { default: 'writes' }`.
+     explicit `actions` of each binding, `features: { projects: false, userProjects: false }`
+     as the personal app had them, `toolApproval: { default: 'writes' }`.
    - The ID is `uniqueAppId(slugifyAppId(name), isTaken)` (`shared/appId.js:73`, `:167`). The
      owner does not choose it. The app gets no category.
    - `enabled` follows the rule below.
@@ -1134,10 +1152,16 @@ The header is required because an editor may have changed the app since the owne
 4. On the record: `state: 'promoted'`, `publishedAs: { appId, at, by }`, an open offer cleared.
 5. Audit (section 10), with the projected capabilities, their actions and the skill IDs.
    Answer 200 with the personal app, which now carries
-   `publishedAs: { appId, name, enabled }`.
+   `publishedAs: { appId, name, enabled }`. For an owner who can use the company app at once,
+   the app is retired for them, and the answer is the retired body below, the one the next
+   `GET` answers.
 
 Before step 3 the record gets a marker `publishing: { appId }`. If the server stops between
-step 3 and step 4, a second publish finds the file, skips step 3 and finishes step 4.
+step 3 and step 4, a second publish finds the file, skips step 3 and finishes step 4. It does so
+only when the file is exactly the app this publish would write (everything but `enabled` and
+`order`) and no other personal app holds the ID; otherwise it picks a new ID. When step 4 is
+refused (the app changed, changed hands or was deleted meanwhile), the file of step 3 is
+removed and the marker taken off the record.
 
 **Visible at once, or switched off until an admin looks.** A published project is in the
 catalog at once. For apps we keep that wherever the capability ceiling does not argue against
@@ -1157,7 +1181,9 @@ same instructions run as a company app.
   the reach of a prompt shared with everyone, which iHub allows by default today
   (`server/services/prompts/userPromptSettings.js:30`). The admin accepted it by switching
   `sharing.allowPublish` on. **Such an app is created with `enabled: true`.** It is visible at
-  once, as a project is.
+  once, as a project is. Projects stay switched off in it, as they were in the personal app: a
+  project attached to the chat would bring the knowledge tools, which are reads and run without
+  a card. An admin switches projects on in the admin editor after looking at the app.
 - **An app with web search, skills or a connected system** is different. Its instructions were
   written by a user, and as a company app they would steer the tools of every user without the
   cards, and in runs where nobody watches. Pre-mortems 1 and 2 would then happen at the scale
@@ -1204,7 +1230,8 @@ It returns nothing of the personal app. The owner sees since when the app waits 
   caller, and on an installation without the `apps: ["*"]` wildcard a member whose groups do
   not grant the company app would lose a working app.
 - For a caller for whom it is retired, `GET /api/apps/{appId}` answers 200 with
-  `{ id, ownership: 'user', state: 'retired', publishedAs: { appId, name } }` and no app
+  `{ id, ownership: 'user', state: 'retired', publishedAs: { appId, name, enabled: true } }`
+  and no app
   content. The chat route answers 404. The client shows a pointer page (11.6). Old chats stay
   readable.
 - For every other member the personal app keeps working, read-only, for as long as they cannot
@@ -1224,8 +1251,11 @@ what the owner's statement says. This differs from projects, where the owner tak
 out of the catalog (`server/routes/projectRoutes.js:1039-1047`). An admin can give it back:
 
 - **Released by itself.** When `publishedAs.appId` no longer exists in `getApps(true)`, because
-  an admin deleted the company app, the resolver treats the record as `active`. The next write
-  stores that. A content admin can therefore give an app back by deleting the copy.
+  an admin deleted the company app, the resolver treats the record as `active`, and the next
+  read of the app stores that (`state: 'active'`, `publishedAs: null`). Until then the ID
+  stays taken: a publish or a take-over never hands out an ID that a personal app still holds
+  as `publishedAs.appId` or `publishing.appId`, so an earlier record cannot end up pointing at
+  somebody else's app. A content admin can therefore give an app back by deleting the copy.
 - **Release.** `POST /api/admin/user-apps/{appId}/_release`, for full admins. It sets
   `state: 'active'` and clears `publishedAs`, and the company app stays. The owner can edit
   again. It answers 409 `CONFLICT` with `details.reason: 'published'` while the company app is
@@ -1396,14 +1426,14 @@ library the same way) and calls these routes only when it is on.
 | `DELETE /api/apps/{appId}/owner-offer` | owner, receiver or full admin | 204 | none |
 | `POST /api/apps/{appId}/owner-offer/_accept` | the receiver; `If-Match` | 200 | the app, owned by the caller |
 | `POST /api/apps/{appId}/_duplicate` | `use` + may create | 201 + `Location` | the new app, owned by the caller, without members. 409 `CONFLICT` (`disabled`) for a switched-off app. |
-| `POST /api/apps/{appId}/_publish` (P12) | owner; `userAppSharing`; `sharing.allowPublish`; `If-Match` | 200 | the app, now `promoted`, with `publishedAs: { appId, name, enabled }` |
+| `POST /api/apps/{appId}/_publish` (P12) | owner; `userAppSharing`; `sharing.allowPublish`; `If-Match` | 200 | the app, now `promoted`, with `publishedAs: { appId, name, enabled }`; for an owner who can use the company app at once the retired body of 8.2, as `GET` answers it |
 
 Changed existing routes (`server/routes/generalRoutes.js`, both changes belong to slice P3):
 
 | Route | Change |
 |---|---|
 | `GET /api/apps` | New optional query parameter `scope` with the values `mine`, `shared` and `personal` (both). Without it the response is today's, byte for byte, with today's ETag. With it the response is `{ items, nextCursor: null }` and holds personal apps only. `mine` also holds apps that are offered to the caller, with `permissions.role: 'offered'`. At most 200 shared apps are returned, newest first. An unknown value answers 400. A request of an owner refreshes that owner's snapshots (6.2). |
-| `GET /api/apps/{appId}` | Also answers for a personal app the caller may see (7.2). Unknown and forbidden stay one 404. For a caller who may see the app but not use it (switched off, sharing suspended, retired), it answers 200 with a reduced body: `id`, `ownership`, `name`, `icon`, `color`, `owner`, `state`, `permissions` and the reason (`disabled`, `permissions.suspended` or `publishedAs`). The reduced body has no instructions and no capabilities. |
+| `GET /api/apps/{appId}` | Also answers for a personal app the caller may see (7.2). Unknown and forbidden stay one 404. For a caller who may see the app but not use it (switched off, sharing suspended, retired), it answers 200 with a reduced body: `id`, `ownership`, `name`, `icon`, `color`, `owner`, `state`, `permissions` and the reason (`disabled`, `permissions.suspended` or `publishedAs`). The reduced body has no instructions and no capabilities. The receiver of an offer they may accept gets the full body even when they may not chat (5, 8.3). |
 
 A personal app in a response is built by `server/services/userApps/userAppView.js` from an
 allow-list of fields. It is the app object of the ceiling plus these fields:
@@ -1529,11 +1559,15 @@ An item of the list:
   "publishedAs": { "appId": "stellenanzeigen-schreiben", "at": "…",
                    "by": { "id": "anna", "name": "Anna Schmidt" }, "enabled": false },
   "sharedWith": { "users": 4, "groups": 1, "everyone": false },
-  "capabilities": ["upload", "webSearch"],
+  "capabilities": ["upload", "webSearch"], "revision": 7,
   "updatedAt": "…", "lastUsedAt": "…" }
 ```
 
-The admin view of one app adds `content`, `members`, `language`, `origin`, `revision`, for a
+`revision` is the `If-Match` of an action started from the list, such as an offer: it refuses a
+change made since the list was read, and the admin does not read the content for it (a read of
+the admin view is audited as a read of the content).
+
+The admin view of one app adds `content`, `members`, `language`, `origin`, for a
 promoted app the number of members who cannot use the company app, and `takeOverPreview` (8.2).
 It never contains `ownerPrincipal`: the owner's e-mail address and group list are not shown
 through this route. The list walks the store with a cursor, as `UserPromptRepository.scan` does
@@ -1812,7 +1846,8 @@ maps members to shares and back as `ProjectMembersSection.jsx:173-193` does.
   with me".
 - A person with a direct share sees "Leave" in the tile menu, as projects offer "Leave project"
   (`ProjectMembersSection.jsx:160-167`). It calls `POST /api/apps/{appId}/_leave`. Someone who
-  has access through a group does not see it.
+  has access through a group does not see it: the server sends `permissions.canLeave`, true only
+  for a share that names the caller.
 
 ### 11.6 Publish
 
@@ -1954,7 +1989,9 @@ One component, `PersonalAppNotice.jsx`, mounted by `AppChat.jsx` above the chat 
 - The lines come from `owner`, `capabilities` and `approval` of the response.
 - The first line says "owns", not "made". After a change of owner the person named is the one
   who accepted the app, and that is the person who answers for it.
-- "Show instructions" opens the `system` text read-only.
+- "Show instructions" opens read-only the `system` text, the message template (`prompt`, with
+  `{{content}}` explained as "your message") and, for each choice whose value differs from its
+  label, the value it sends. The button is there when any of the three is.
 - The notice can be collapsed to one line ("Personal app by Anna Schmidt"). It cannot be
   dismissed for good.
 - A capability that is missing for a reason on the owner's side (inactive account, stale
@@ -2145,7 +2182,9 @@ admin keys under `admin.userApps.*`. One term per thing:
 | Key | en | de |
 |---|---|---|
 | `state.private` | Only you | Nur Sie |
-| `state.shared` | Shared with {{count}} people | Mit {{count}} Personen geteilt |
+| `state.shared` | Shared with {{list}} | Geteilt mit {{list}} |
+| `state.people` | {{count}} people | {{count}} Personen |
+| `state.groups` | {{count}} groups | {{count}} Gruppen |
 | `state.everyone` | Shared with everyone | Mit allen geteilt |
 | `state.promoted` | Now with the administrators | Jetzt bei den Administratoren |
 | `state.offered` | Offered to {{owner}} | {{owner}} angeboten |
@@ -2234,6 +2273,11 @@ admin keys under `admin.userApps.*`. One term per thing:
 | `notForYou` | Not available to you here: {{list}}. | Für Sie hier nicht verfügbar: {{list}}. |
 | `unavailable` | Not available in this app right now: {{list}}. | In dieser App derzeit nicht verfügbar: {{list}}. |
 | `showInstructions` | Show instructions | Anweisungen anzeigen |
+| `instructionsSystem` | Instructions | Anweisungen |
+| `instructionsTemplate` | Message template | Nachrichtenvorlage |
+| `instructionsTemplateHelp` | Each message you send is put into this text before it reaches the AI. {{placeholder}} stands for your message. | Jede Nachricht, die Sie senden, wird in diesen Text eingesetzt, bevor sie die KI erreicht. {{placeholder}} steht für Ihre Nachricht. |
+| `instructionsOptions` | What a choice sends | Was eine Auswahl sendet |
+| `instructionsOption` | {{variable}}: “{{label}}” sends “{{value}}” | {{variable}}: „{{label}}“ sendet „{{value}}“ |
 | `collapsed` | Personal app by {{owner}} | Persönliche App von {{owner}} |
 | `suspended` | This app is not available at the moment. Ask {{owner}} or an administrator. | Diese App ist im Moment nicht verfügbar. Wenden Sie sich an {{owner}} oder an einen Administrator. |
 
@@ -2258,13 +2302,16 @@ admin keys under `admin.userApps.*`. One term per thing:
 | `takeOver.notPublished` | The app is created as "Not published". You test it and publish it in the app editor. | Die App wird als „Nicht veröffentlicht" angelegt. Sie testen und veröffentlichen sie im App-Editor. |
 | `takeOver.owner` | {{owner}} can no longer change the personal app. | {{owner}} kann die persönliche App nicht mehr ändern. |
 | `takeOver.users` | {{count}} people use the personal app today. It keeps working for each of them until they can use the new app. | {{count}} Personen nutzen die persönliche App derzeit. Sie funktioniert für jede von ihnen weiter, bis sie die neue App nutzen kann. |
+| `takeOver.groups` | The personal app is shared with {{count}} groups. It keeps working for their members until they can use the new app. | Die persönliche App ist mit {{count}} Gruppen geteilt. Sie funktioniert für deren Mitglieder weiter, bis sie die neue App nutzen können. |
+| `takeOver.everyone` | The personal app is shared with everyone signed in. It keeps working for them until they can use the new app. | Die persönliche App ist mit allen angemeldeten Personen geteilt. Sie funktioniert für sie weiter, bis sie die neue App nutzen können. |
 | `takeOver.submit` | Take over | Übernehmen |
 | `noAccess` | {{count}} of {{total}} members cannot use the company app. | {{count}} von {{total}} Mitgliedern können die Unternehmens-App nicht nutzen. |
 | `release.action` | Give back to the owner | An den Besitzer zurückgeben |
 | `release.published` | Unpublish or delete the company app first. | Nehmen Sie zuerst die Unternehmens-App zurück oder löschen Sie sie. |
 | `changed` | The app changed since you opened it. Check it again. | Die App wurde geändert, seit Sie sie geöffnet haben. Prüfen Sie sie erneut. |
 | `disable.action` / `enable.action` | Switch off / Switch on | Abschalten / Einschalten |
-| `disable.body` | Nobody can use the app while it is switched off. The owner sees your reason. | Solange die App abgeschaltet ist, kann niemand sie nutzen. Der Besitzer sieht Ihre Begründung. |
+| `disable.body` | Nobody can use the app while it is switched off. The owner and everyone the app is shared with see your reason. | Solange die App abgeschaltet ist, kann niemand sie nutzen. Der Besitzer und alle, mit denen die App geteilt ist, sehen Ihre Begründung. |
+| `disable.reason` | Reason (the owner and members see it) | Begründung (Besitzer und Mitglieder sehen sie) |
 | `offerOwner` | Offer to a new owner | Neuem Besitzer anbieten |
 | `revisions` | Earlier versions | Frühere Versionen |
 | `clash` | ID clash: an app file has the same ID. Rename the file or delete this app. | ID-Konflikt: Eine App-Datei hat dieselbe ID. Benennen Sie die Datei um oder löschen Sie diese App. |
@@ -2379,9 +2426,10 @@ Jest; the cross-user suite runs in CI.
   `preferredOutputFormat: html`, `customResponseRenderer`, `toolApproval: { default: 'never' }`)
   yields an app whose key set equals `USER_APP_RUN_KEYS`. Parsed with `appConfigSchema` it gains
   only `disallowModelSelection`, `autoStart`, `ephemeral` and `allowInheritance`, each `false`.
-- `toolApproval.default` is `writes` when runner and owner are the same user and `always`
-  otherwise. `websearch.useNativeSearch` is `false` whenever web search is granted.
-- `approval.chatGrants` is `false` for every runner but the owner.
+- `toolApproval.default` is `writes` when runner and owner are the same user and the owner
+  saved the current content (`updatedBy`), and `always` otherwise. `websearch.useNativeSearch` is `false` whenever web search is granted.
+- `approval.chatGrants` is `false` for every runner but the owner, and for the owner while a
+  member saved the current content.
 - An owner with `authMode: 'oidc'` whose snapshot is 31 days old: every capability is withheld
   with `ownerStale`. With a snapshot of today and changed groups in it, the ceiling follows the
   new groups. A local owner is never stale.
@@ -3327,3 +3375,36 @@ show errors that need the owner of the routes.
   of P11). It belongs to the pull request, which does not exist yet.
 - The acceptance criteria of the slices one by one. The gate ran the suites; it did not
   compare each criterion of section 21 with a test.
+
+### 23.7 After the review
+
+The review fixes were run again on the uncommitted working tree on 2026-11-22, with Node 24,
+private ports and contents directories, and Chromium build 1243 under Playwright 1.65. Lint
+and format: 0 errors. The only errors `eslint .` reports are in the git-ignored
+`playwright-report/` of an earlier run, so it was run with that directory left out. In
+`test:quick`, `test:unit` passed (9062 tests). `test:server` had two failures. One is the
+known `extraction-pool` test. The other was new: `admin-user-apps-routes.test.js` still
+expected the list item without `revision`, which the fixes added to it as section 9.2 asks.
+The test now expects `revision` and passes (39 of 39). The other parts of `test:quick` passed.
+These passed too: `check:response-shapes` without `STAAN_API_KEY`, `build:api-docs` (the user
+document now has 114 paths, so 23.4 is fixed), `check-a11y-diff` (0 findings in 149 files),
+authz (32), injection (51), app-builder (33: 22 app builder and 11 personal apps), the two
+subpath specs (2), `test:a11y` with fresh contents (100), and the boot check (no errors).
+`NODE_ENV=production npm run build` built the client, the server and the copies. Only its
+documentation step failed, because `mdbook` is not installed in the sandbox.
+
+What became of the open points:
+
+- (a) The OAuth client now gets the 404 of design 14.2 on the routes of one app. On the routes
+  without an app ID it gets 403. The title of `PERMISSION_DENIED` now reads "You are not allowed
+  to do this." in English and "Das dürfen Sie nicht." in German.
+- (b) The owner's answer to `_publish` carries `publishedAs.enabled`, and a test checks it.
+- (c) Not reproduced. Under `/ihub` on the production build, 50 first messages in new chats of
+  `/apps/chat` were sent, 25 with `userApps` off and 25 with it on. Every answer appeared
+  without a reload.
+- (d) Not caused by the increment. The check in `server/middleware/jwtAuth.js` compares `iat`
+  in whole seconds with `lastRotated` in milliseconds. Neither the increment nor the fixes
+  change that file.
+- (e) Not caused by the increment. On a wide screen `AppChat.jsx` renders the message list
+  twice, once for mobile (hidden) and once for the desktop layout. So every card and every
+  answer exists twice, and so does the test ID. `origin/main` does the same.

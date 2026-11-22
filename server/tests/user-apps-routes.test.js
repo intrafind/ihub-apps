@@ -130,13 +130,26 @@ describe('the gate of every route', () => {
     assert.ok(await api.repo().get(record.id), 'the record stays in the store');
   });
 
-  it('refuses a sign-in that cannot hold personal apps', async () => {
+  it('refuses a sign-in that cannot hold personal apps: 403, or on one app the 404 (14.2)', async () => {
     const record = await api.createApp('anna');
     for (const who of ['client', 'agent', 'benDelegated']) {
       for (const call of calls(record.id)) {
         const res = await send(who, call);
-        assert.equal(res.status, 403, `${who} ${call[0]} ${call[1]}: ${res.text}`);
-        assert.equal(res.body.code, 'PERMISSION_DENIED');
+        const perApp = call[1].includes(record.id);
+        assert.deepEqual(
+          [res.status, res.body.code],
+          perApp ? [404, 'NOT_FOUND'] : [403, 'PERMISSION_DENIED'],
+          `${who} ${call[0]} ${call[1]}: ${res.text}`
+        );
+        if (perApp) {
+          // The same answer as for an ID nobody has.
+          const unknown = await send(who, [
+            call[0],
+            call[1].replace(record.id, UNKNOWN_PERSONAL_ID),
+            call[2]
+          ]);
+          assert.deepEqual(shape(res, record.id), shape(unknown, UNKNOWN_PERSONAL_ID));
+        }
       }
     }
   });
@@ -813,6 +826,29 @@ describe('PUT /api/apps/{appId}/members', () => {
     assert.deepEqual(res.body.sharedWith, { users: 2, groups: 0, everyone: true });
   });
 
+  it('does not raise a kept target the settings no longer allow from "Can use" to "Can edit"', async () => {
+    const record = await sharedApp({
+      members: [member('carol', 'editor'), member(null, 'user', 'everyone')]
+    });
+    setConfig({
+      userApps: { sharing: { allowEveryone: false, allowUsers: false, allowGroups: false } }
+    });
+    const keep = [{ type: 'user', id: 'carol', role: 'editor' }];
+    const raised = await put('anna', record.id, [...keep, { type: 'everyone', role: 'editor' }]);
+    assert.deepEqual(problem(raised), {
+      status: 403,
+      code: 'SHARE_TARGET_NOT_ALLOWED',
+      details: { type: 'everyone' }
+    });
+    const stored = await api.repo().get(record.id);
+    assert.equal(stored.members.find(entry => entry.type === 'everyone').role, 'user');
+    // Unchanged it is kept, and lowering is always possible.
+    const same = await put('anna', record.id, [...keep, { type: 'everyone', role: 'user' }]);
+    assert.equal(same.status, 200, same.text);
+    const lowered = await put('anna', record.id, [{ type: 'user', id: 'carol', role: 'user' }]);
+    assert.equal(lowered.status, 200, lowered.text);
+  });
+
   it('needs the permission to share of the caller', async () => {
     // Sam's second group grants sharing; Anna's does not.
     setConfig({ groups: groupsWith({ users: { userAppSharing: false } }) });
@@ -954,10 +990,20 @@ describe('POST /api/apps/{appId}/_duplicate', () => {
       code: 'PERMISSION_DENIED',
       details: { required: 'userApps' }
     });
-    // Retired for the owner: the company app is theirs to use.
+    // Retired for a member: the company app is theirs to use.
     const gone = await sharedApp({ change: promoted });
     const retired = await as('ben').post(`/api/apps/${gone.id}/_duplicate`);
     assert.deepEqual([retired.status, retired.body.details.required], [403, 'use']);
+  });
+
+  it('lets the owner duplicate a published app that is retired for them (8.2)', async () => {
+    const gone = await sharedApp({ change: promoted });
+    assert.equal((await as('anna').get(`/api/apps/${gone.id}`)).body.state, 'retired');
+    const res = await as('anna').post(`/api/apps/${gone.id}/_duplicate`);
+    assert.equal(res.status, 201, res.text);
+    const copy = await api.repo().get(res.body.id);
+    assert.deepEqual(copy.content.system, gone.content.system);
+    assert.equal(copy.state, 'active');
   });
 });
 
@@ -1081,6 +1127,10 @@ describe('POST /api/apps/_generate', () => {
       'warnings'
     ]);
     assert.deepEqual(res.body.app.name, { en: 'Mail summary' });
+    // Nothing of an admin app: the free admin ID would tell which app IDs exist.
+    for (const key of ['id', 'category', 'order', 'enabled']) {
+      assert.equal(key in res.body.app, false, key);
+    }
     assert.deepEqual(res.body.suggestions, { websearch: false, integrations: [] });
     assert.equal(api.drafts.length, 1);
     // Nothing is stored.

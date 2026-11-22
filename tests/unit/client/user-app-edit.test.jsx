@@ -98,6 +98,14 @@ jest.mock('../../../client/src/api/adminApi', () => {
   );
 });
 
+// The apps list of the sidebar and the apps page: every write of the page drops it.
+const mockAppsCache = { invalidated: 0 };
+jest.mock('../../../client/src/shared/hooks/appsCache', () => ({
+  invalidateAppsCache: () => {
+    mockAppsCache.invalidated += 1;
+  }
+}));
+
 const mockUserApps = { config: null, invalidated: 0 };
 jest.mock('../../../client/src/shared/hooks/useUserApps', () => ({
   useUserAppsConfig: () => ({ enabled: true, config: mockUserApps.config, loading: false }),
@@ -144,6 +152,7 @@ const {
   patchFor,
   readOnlyReason,
   userAppStateChip,
+  userAppStateChipText,
   withheldCapabilities
 } = require('../../../client/src/features/apps/components/user-app/userAppForm');
 
@@ -157,6 +166,7 @@ beforeEach(() => {
   mockAdminCalls.length = 0;
   mockUserApps.config = CONFIG;
   mockUserApps.invalidated = 0;
+  mockAppsCache.invalidated = 0;
   window.localStorage.clear();
   mockApi.fetchUserApp.mockResolvedValue(userApp());
   mockApi.fetchModels.mockResolvedValue([]);
@@ -214,6 +224,16 @@ async function renderEditor(entry = `/apps/${APP_ID}/edit`) {
 
 const nameField = () => screen.getByRole('textbox', { name: /^Name/ });
 const instructionsField = () => screen.getByRole('textbox', { name: /^Instructions/ });
+/**
+ * A reader gets the instructions as text, not as a disabled field: it can be
+ * focused, scrolled with the keyboard and selected (WCAG 2.1.1).
+ */
+function readOnlyInstructions() {
+  expect(screen.queryByRole('textbox', { name: /^Instructions/ })).not.toBeInTheDocument();
+  const text = screen.getByTestId('read-only-system');
+  expect(text).toHaveAttribute('tabindex', '0');
+  return text;
+}
 // The save bar's own text (it carries its fallback; the key is not in the locale file).
 const SAVE = 'Save Changes';
 const saveButton = () => screen.getByRole('button', { name: SAVE });
@@ -319,7 +339,7 @@ describe('the form state (userAppForm.js)', () => {
     expect(chip({})).toBe('userApps.edit.state.private');
     expect(userAppStateChip(userApp({ sharedWith: { users: 4, groups: 1 } }))).toEqual({
       key: 'userApps.edit.state.shared',
-      values: { count: 5 },
+      counts: { users: 4, groups: 1 },
       tone: 'shared'
     });
     expect(chip({ sharedWith: { users: 1, groups: 0, everyone: true } })).toBe(
@@ -338,9 +358,13 @@ describe('the form state (userAppForm.js)', () => {
     for (const state of ['private', 'everyone', 'promoted', 'offered', 'disabled']) {
       expect(typeof EDIT.state[state]).toBe('string');
     }
-    const shared = count => mockTexts.instance.t('userApps.edit.state.shared', { count });
-    expect(shared(1)).toBe('Shared with 1 person');
-    expect(shared(5)).toBe('Shared with 5 people');
+    // People and groups are counted apart: a group is not one person.
+    const shared = sharedWith =>
+      userAppStateChipText(userAppStateChip(userApp({ sharedWith })), mockTexts.instance.t);
+    expect(shared({ users: 1, groups: 0 })).toBe('Shared with 1 person');
+    expect(shared({ users: 5, groups: 0 })).toBe('Shared with 5 people');
+    expect(shared({ users: 0, groups: 1 })).toBe('Shared with 1 group');
+    expect(shared({ users: 2, groups: 3 })).toBe('Shared with 2 people, 3 groups');
   });
 
   test('read-only has one reason, and an owner is never stopped by a capability', () => {
@@ -510,6 +534,8 @@ describe('saving', () => {
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Job ads');
     expect(screen.queryByRole('button', { name: SAVE })).not.toBeInTheDocument();
     expect(screen.getByTestId('test-panel')).toHaveAttribute('data-run', '1');
+    // The apps page and the sidebar read the new name, not the cached one.
+    expect(mockAppsCache.invalidated).toBe(1);
 
     // The next save names the new revision.
     await typeName('Job ads 2');
@@ -677,7 +703,7 @@ describe('read-only', () => {
     await renderEditor();
     expect(banner()).toHaveTextContent(EDIT.readOnly.ownerInactive);
     expect(nameField()).toBeDisabled();
-    expect(instructionsField()).toBeDisabled();
+    readOnlyInstructions();
     expect(extras().getByRole('checkbox', { name: EDIT.extras.upload })).toBeDisabled();
     expect(screen.queryByRole('button', { name: 'Share' })).not.toBeInTheDocument();
     // The groups still open and close.
@@ -752,10 +778,21 @@ describe('read-only', () => {
       'This app uses Jira, which you may not use. You can use the app but not change it.'
     );
     expect(banner()).toHaveAttribute('data-reason', 'capability');
-    expect(instructionsField()).toBeDisabled();
+    readOnlyInstructions();
     expect(screen.queryByRole('button', { name: SAVE })).not.toBeInTheDocument();
     // The app still runs for this editor.
     expect(screen.getByRole('button', { name: en.admin.apps.edit.test })).toBeEnabled();
+  });
+
+  test('a capability inside the read-only sentence is named as a noun', async () => {
+    mockApi.fetchUserApp.mockResolvedValue(
+      userApp({
+        permissions: EDITOR_PERMISSIONS,
+        capabilities: [{ id: 'model', requested: true, granted: false, reason: 'youMayNot' }]
+      })
+    );
+    await renderEditor();
+    expect(banner()).toHaveTextContent('This app uses the chosen AI model, which you may not use.');
   });
 
   test('a member with "Can use" reads the form without a banner', async () => {
@@ -775,8 +812,10 @@ describe('read-only', () => {
     );
     await renderEditor();
     expect(screen.queryByTestId('user-app-status')).not.toBeInTheDocument();
-    expect(instructionsField()).toBeDisabled();
-    expect(instructionsField()).toHaveValue('You write job ads from notes.');
+    expect(readOnlyInstructions()).toHaveTextContent('You write job ads from notes.');
+    // The help says who can read them; the admin sentence "users do not see it" is not there.
+    expect(screen.getByText(EDIT.instructionsDesc)).toBeInTheDocument();
+    expect(screen.queryByText(en.admin.apps.edit.systemInstructionsDesc)).not.toBeInTheDocument();
   });
 });
 
@@ -802,7 +841,7 @@ describe('the header', () => {
       })
     );
     await renderEditor();
-    expect(screen.getByTestId('user-app-state')).toHaveTextContent('Shared with 3 people');
+    expect(screen.getByTestId('user-app-state')).toHaveTextContent('Shared with 2 people, 1 group');
     expect(screen.queryByRole('button', { name: 'Share' })).not.toBeInTheDocument();
     expect(await openMore()).toEqual([en.admin.apps.openApp, en.userApps.list.menu.duplicate]);
   });
@@ -816,6 +855,7 @@ describe('the header', () => {
     expect(mockApi.duplicateUserApp).toHaveBeenCalledWith(APP_ID);
     expect(screen.getByTestId('where')).toHaveTextContent(`EDITOR:/apps/${copyId}/edit`);
     expect(mockUserApps.invalidated).toBe(1);
+    expect(mockAppsCache.invalidated).toBe(1);
 
     await openMore();
     await click(screen.getByRole('menuitem', { name: en.userApps.list.menu.delete }));
@@ -826,6 +866,16 @@ describe('the header', () => {
     await click(within(dialog).getByRole('button', { name: en.userApps.list.menu.delete }));
     expect(mockApi.deleteUserApp).toHaveBeenCalledWith(copyId);
     expect(screen.getByTestId('where')).toHaveTextContent('LIST:/apps');
+    expect(mockAppsCache.invalidated).toBe(2);
+  });
+
+  test('with unsaved changes "Duplicate" waits: it copies the stored app, not the input', async () => {
+    await renderEditor();
+    await typeName('Unsaved name');
+    await openMore();
+    const duplicate = screen.getByRole('menuitem', { name: /^Duplicate/ });
+    expect(duplicate).toBeDisabled();
+    expect(duplicate).toHaveTextContent(EDIT.saveFirst);
   });
 });
 

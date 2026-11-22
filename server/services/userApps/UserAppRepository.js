@@ -102,6 +102,9 @@ const PAGE_SIZE = 200;
 /** Hard bound on documents walked for one listing. */
 const MAX_SCANNED = 5000;
 
+/** What {@link UserAppRepository#_getReadable} answers for a document that cannot be read. */
+const UNREADABLE = Symbol('unreadable');
+
 /** Lock lease for one write: the shape the project repository uses. */
 const LOCK_OPTIONS = { ttlMs: 15000, waitMs: 5000, fence: false };
 
@@ -508,6 +511,29 @@ export class UserAppRepository {
   }
 
   /**
+   * `get`, for the listings that read many apps: an app whose document
+   * cannot be read is logged and answered with {@link UNREADABLE}, so the
+   * caller can skip it, as `documents.list` skips a damaged document.
+   *
+   * @param {string} appId
+   * @returns {Promise<Object|null|typeof UNREADABLE>}
+   */
+  async _getReadable(appId) {
+    try {
+      return await this.get(appId);
+    } catch (error) {
+      if (!(error instanceof StorageError)) throw error;
+      this.logger.warn('A personal app could not be read and is skipped', {
+        component: COMPONENT,
+        appId,
+        code: error.code || null,
+        error: error.message
+      });
+      return UNREADABLE;
+    }
+  }
+
+  /**
    * Every app one user owns, promoted ones included.
    *
    * @param {string} ownerId
@@ -566,7 +592,10 @@ export class UserAppRepository {
     }
     const records = [];
     for (const [appId, markers] of candidates) {
-      const record = await this.get(appId);
+      // One unreadable app must not take every listing of its members down.
+      // Its markers stay: the document may be repaired.
+      const record = await this._getReadable(appId);
+      if (record === UNREADABLE) continue;
       const memberKeys = new Set((record?.members || []).map(memberTargetKey));
       const offerTarget = record?.pendingOwner?.id
         ? memberTargetKey({ type: 'user', id: record.pendingOwner.id })
@@ -620,6 +649,32 @@ export class UserAppRepository {
       next = page.nextCursor;
     } while (next && items.length < wanted && scanned < maxScanned);
     return { items, nextCursor: next || null };
+  }
+
+  /**
+   * The company-app IDs personal apps still hold: `publishedAs.appId` of a
+   * promoted record and `publishing.appId` of a publish in progress, in
+   * lower case. A publish never hands out one of them, so a released ID
+   * cannot point an earlier record at somebody else's app.
+   *
+   * @param {Object} [options]
+   * @param {string|null} [options.exceptAppId] - The record being published:
+   *   its own mark does not count.
+   * @returns {Promise<Set<string>>}
+   */
+  async heldCompanyAppIds({ exceptAppId = null } = {}) {
+    const held = new Set();
+    if (!this.isAvailable()) return held;
+    const docs = await collect(this.documents, USER_APPS_NAMESPACE, { includeData: true });
+    for (const doc of docs) {
+      const record = doc.data;
+      if (!record || record.id === exceptAppId) continue;
+      const published = record.state === 'promoted' ? record.publishedAs?.appId : null;
+      for (const id of [published, record.publishing?.appId]) {
+        if (typeof id === 'string' && id) held.add(id.toLowerCase());
+      }
+    }
+    return held;
   }
 
   /**
@@ -853,7 +908,10 @@ export class UserAppRepository {
     for (const doc of docs) {
       const appId = doc.data?.appId;
       if (!isUserAppId(appId) || appId === exceptAppId) continue;
-      const offer = openOffer(await this.get(appId), now);
+      // An unreadable app is not counted: nobody can accept its offer meanwhile.
+      const record = await this._getReadable(appId);
+      if (record === UNREADABLE) continue;
+      const offer = openOffer(record, now);
       if (offer && String(offer.offeredBy?.id) === String(senderId)) open += 1;
     }
     return open;
@@ -966,6 +1024,9 @@ export class UserAppRepository {
    * @param {number} options.expectedRevision - The revision the receiver read. Required.
    * @param {number} [options.limit=0] - `limits.maxAppsPerUser`; zero means no limit.
    * @param {(record: Object) => boolean} [options.authorize]
+   * @param {(record: Object) => boolean} [options.release] - Whether the same
+   *   write stores that a promoted record whose company app is gone is
+   *   `active` again.
    * @param {string} [options.now] - ISO clock, for tests.
    * @returns {Promise<{record: Object, previousOwner: {id: string, name: string},
    *   downgraded: number}|null>} Null when there is no such app.
@@ -980,6 +1041,7 @@ export class UserAppRepository {
       expectedRevision,
       limit = 0,
       authorize,
+      release,
       now = new Date().toISOString()
     } = {}
   ) {
@@ -1019,6 +1081,12 @@ export class UserAppRepository {
             membersUpdatedBy:
               droppedOwn || downgraded > 0 ? newOwner : record.membersUpdatedBy || null,
             pendingOwner: null,
+            // The receiver read this content before accepting: it counts as
+            // theirs for the approval mode until somebody else changes it.
+            contentConfirmedBy: { id: newOwner.id, contentHash: record.contentHash || null },
+            ...(typeof release === 'function' && release(record)
+              ? { state: 'active', publishedAs: null }
+              : {}),
             revision: (Number(record.revision) || 1) + 1
           },
           etag

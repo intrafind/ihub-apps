@@ -879,11 +879,11 @@ const ANONYMOUS_READ = ANONYMOUS_ON ? 404 : 401;
 /**
  * The status each principal gets. A member's API key gets 404 on every route: a
  * key reaches only the apps of its own user. An OAuth client can hold no
- * personal app: the routes that read an app answer 404, the routes that exist
- * for personal apps only answer 403 `PERMISSION_DENIED` before they look at the
- * id (the suite checks that an id that names no app gets the same answer).
+ * personal app: to it no personal app exists, so every route of one app answers
+ * the 404 of an unknown id (design 14.2; the suite checks that an id that names
+ * no app gets the same answer).
  */
-const row = (mallory, bob, carol, aliceKey, { anonymous = 401, oauthClient = 403 } = {}) => ({
+const row = (mallory, bob, carol, aliceKey, { anonymous = 401, oauthClient = 404 } = {}) => ({
   mallory,
   bob,
   carol,

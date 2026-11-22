@@ -312,6 +312,30 @@ export function isRunnerOwner(record, runner) {
 }
 
 /**
+ * Whether the content state of `record` is the owner's own: the owner saved
+ * it (`updatedBy` changes only when the content changes), or the owner
+ * accepted the app with exactly this content after reading it
+ * (`contentConfirmedBy`, written by the accept of an offer). A record
+ * without `updatedBy` counts as the owner's.
+ *
+ * @param {Object} record - Stored personal app.
+ * @returns {boolean}
+ */
+export function ownerWroteContent(record) {
+  const ownerId = String(record?.owner?.id ?? '');
+  const savedBy = record?.updatedBy?.id;
+  if (savedBy === undefined || savedBy === null) return true;
+  if (String(savedBy) === ownerId) return true;
+  const confirmed = record?.contentConfirmedBy;
+  return (
+    Boolean(confirmed?.id) &&
+    String(confirmed.id) === ownerId &&
+    Boolean(confirmed.contentHash) &&
+    confirmed.contentHash === record?.contentHash
+  );
+}
+
+/**
  * The app a chat request runs, with what the ceiling grants this runner.
  *
  * @param {Object} record - Stored personal app.
@@ -396,7 +420,11 @@ export function effectiveUserApp(record, { runner, owner, settings, catalog, now
   }
   // The owner reads their own instructions; everyone else is asked before
   // every tool call, reads included, and cannot grant a tool for the chat.
-  app.toolApproval = { default: runnerIsOwner ? 'writes' : 'always' };
+  // That holds for the owner too while the content they run was saved by
+  // somebody else (a "Can edit" member, or the owner before a hand-over):
+  // those are instructions the owner did not write (design 6.3).
+  const trusted = runnerIsOwner && ownerWroteContent(record);
+  app.toolApproval = { default: trusted ? 'writes' : 'always' };
 
   return {
     app,
@@ -416,7 +444,7 @@ export function effectiveUserApp(record, { runner, owner, settings, catalog, now
       name: binding.name,
       actions: [...binding.storedActions]
     })),
-    approval: { mode: runnerIsOwner ? 'writes' : 'always', chatGrants: runnerIsOwner }
+    approval: { mode: trusted ? 'writes' : 'always', chatGrants: trusted }
   };
 }
 

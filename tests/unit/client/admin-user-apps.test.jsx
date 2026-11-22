@@ -140,6 +140,7 @@ const {
 const UserAppSettingsPanel =
   require('../../../client/src/features/admin/components/UserAppSettingsPanel').default;
 const {
+  changedKeys,
   groupsWithPermission,
   PUBLISHING_AVAILABLE
 } = require('../../../client/src/features/admin/components/UserAppSettingsPanel');
@@ -169,6 +170,7 @@ function item(overrides = {}) {
     publishedAs: null,
     sharedWith: { users: 0, groups: 0, everyone: false },
     capabilities: ['upload'],
+    revision: 7,
     updatedAt: '2026-11-12T10:00:00Z',
     lastUsedAt: '2026-11-12T10:00:00Z',
     ...overrides
@@ -358,7 +360,9 @@ describe('the tab "Personal apps" of Admin → Apps', () => {
     expect(read('components/AdminUserAppsTab.jsx')).toContain(
       'const TakeOverDialog = UserAppTakeOverDialog;'
     );
-    expect(read('pages/AdminAppsPage.jsx')).toContain('<WaitingAppsNotice />');
+    expect(read('pages/AdminAppsPage.jsx')).toContain(
+      '<WaitingAppsNotice refreshKey={waitingRefresh} />'
+    );
   });
 });
 
@@ -508,7 +512,6 @@ describe('the list of personal apps', () => {
       { id: 'ben', name: 'Ben Koch', email: null },
       { id: 'eva', name: 'Eva Neu', email: 'eva@example.com' }
     ]);
-    mockApi.fetchAdminUserApp.mockResolvedValue({ ...RECAP, revision: 7 });
     mockApi.offerAdminUserApp.mockResolvedValue({});
     renderTab();
 
@@ -521,6 +524,10 @@ describe('the list of personal apps', () => {
     const eva = await within(dialog).findByRole('radio', { name: /Eva Neu/ });
     // The owner is not offered their own app.
     expect(within(dialog).queryByRole('radio', { name: /Ben Koch/ })).toBeNull();
+    // The admin is, first: to change a personal app an admin becomes its owner (design 8.4).
+    expect(within(dialog).getAllByRole('radio')[0]).toHaveAccessibleName(
+      text('admin.userApps.offer.me', { name: 'root' })
+    );
     expect(mockApi.fetchUserAppOfferTargets).toHaveBeenCalledWith('');
     fireEvent.click(eva);
     fireEvent.click(
@@ -528,7 +535,77 @@ describe('the list of personal apps', () => {
         name: text('userApps.transfer.submit', { owner: 'Eva Neu' })
       })
     );
+    // The revision of the list: no read of the admin view, which is audited as a read of the content.
     await waitFor(() => expect(mockApi.offerAdminUserApp).toHaveBeenCalledWith(APP_ID, 'eva', 7));
+    expect(mockApi.fetchAdminUserApp).not.toHaveBeenCalled();
+  });
+
+  it('the admin can offer an app to themselves', async () => {
+    mockApi.fetchUserAppOfferTargets.mockResolvedValue([]);
+    mockApi.offerAdminUserApp.mockResolvedValue({});
+    renderTab();
+    fireEvent.click(
+      within(await openMenu('Meeting recap')).getByRole('menuitem', {
+        name: text('admin.userApps.offerOwner')
+      })
+    );
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(
+      within(dialog).getByRole('radio', { name: text('admin.userApps.offer.me', { name: 'root' }) })
+    );
+    fireEvent.click(within(dialog).getByRole('button', { name: /root/ }));
+    await waitFor(() => expect(mockApi.offerAdminUserApp).toHaveBeenCalledWith(APP_ID, 'root', 7));
+  });
+
+  it('the people of the offer dialog are one radio group: one tab stop, the arrow keys pick', async () => {
+    mockApi.fetchUserAppOfferTargets.mockResolvedValue([
+      { id: 'ben', name: 'Ben Koch', email: null },
+      { id: 'eva', name: 'Eva Neu', email: null },
+      { id: 'finn', name: 'Finn Ott', email: null }
+    ]);
+    // The admin owns the app here, so the list holds no entry for the admin.
+    mockEnv.user = { ...FULL_ADMIN, id: 'ben' };
+    renderTab();
+    fireEvent.click(
+      within(await openMenu('Meeting recap')).getByRole('menuitem', {
+        name: text('admin.userApps.offerOwner')
+      })
+    );
+    const dialog = await screen.findByRole('dialog');
+    const eva = await within(dialog).findByRole('radio', { name: /Eva Neu/ });
+    const finn = within(dialog).getByRole('radio', { name: /Finn Ott/ });
+    const group = within(dialog).getByRole('radiogroup', {
+      name: text('admin.userApps.offer.results')
+    });
+    // The radios are the group's own children: no list items without a list.
+    expect(group.querySelector('li')).toBeNull();
+    expect(eva).toHaveAttribute('tabindex', '0');
+    expect(finn).toHaveAttribute('tabindex', '-1');
+
+    eva.focus();
+    fireEvent.keyDown(eva, { key: 'ArrowDown' });
+    await waitFor(() => expect(finn).toHaveAttribute('aria-checked', 'true'));
+    expect(finn).toHaveFocus();
+    expect(finn).toHaveAttribute('tabindex', '0');
+    fireEvent.keyDown(finn, { key: 'ArrowDown' });
+    await waitFor(() => expect(eva).toHaveAttribute('aria-checked', 'true'));
+    expect(eva).toHaveFocus();
+  });
+
+  it('the filter chips move and select with the arrow keys', async () => {
+    renderTab();
+    await screen.findByText('Meeting recap');
+    const chips = screen.getByRole('radiogroup');
+    const radios = within(chips).getAllByRole('radio');
+    expect(radios.map(radio => radio.getAttribute('tabindex'))).toEqual(
+      radios.map((_, index) => (index === 0 ? '0' : '-1'))
+    );
+    radios[0].focus();
+    fireEvent.keyDown(radios[0], { key: 'ArrowRight' });
+    await waitFor(() =>
+      expect(within(chips).getAllByRole('radio')[1]).toHaveAttribute('aria-checked', 'true')
+    );
+    expect(within(chips).getAllByRole('radio')[1]).toHaveFocus();
   });
 
   it('lists the earlier versions with who saved them', async () => {
@@ -565,6 +642,28 @@ describe('the list of personal apps', () => {
     // What an admin does while setting things up stays.
     expect(entries).toContain(text('admin.userApps.disable.action'));
     expect(entries).toContain(text('admin.userApps.revisions'));
+    // The chat does not resolve a personal app while the feature is off.
+    expect(
+      within(rowOf('Meeting recap')).queryByRole('link', { name: text('admin.apps.openApp') })
+    ).toBeNull();
+  });
+
+  it('"Open app" leads to the chat of the app while the feature is on', async () => {
+    renderTab();
+    await screen.findByText('Meeting recap');
+    expect(
+      within(rowOf('Meeting recap')).getByRole('link', { name: text('admin.apps.openApp') })
+    ).toHaveAttribute('href', `/apps/${APP_ID}`);
+  });
+
+  it('a switched-off app has no offer: it cannot change hands', async () => {
+    renderTab();
+    const menu = await openMenu('Switched off app');
+    const entries = within(menu)
+      .getAllByRole('menuitem')
+      .map(entry => entry.textContent);
+    expect(entries).not.toContain(text('admin.userApps.offerOwner'));
+    expect(entries).toContain(text('admin.userApps.enable.action'));
   });
 
   it('offers "Give back to the owner" for a promoted app, and says when the company app is in the way', async () => {
@@ -737,13 +836,13 @@ describe('the settings panel', () => {
       fireEvent.click(save);
     });
     expect(mockApi.saveUserAppSettings).toHaveBeenCalledTimes(1);
+    // Only the keys that changed: the server merges key by key.
     expect(mockApi.saveUserAppSettings).toHaveBeenCalledWith({
-      sharing: { allowUsers: false, allowGroups: true, allowEveryone: true, allowPublish: true },
+      sharing: { allowUsers: false, allowEveryone: true, allowPublish: true },
       publishing: { adminEnables: 'always' },
       limits: { maxAppsPerUser: 5 },
       capabilities: {
         modelChoice: false,
-        upload: true,
         webSearch: true,
         skills: true,
         integrations: [{ id: 'jira-main', actions: ['readIssue'] }]
@@ -774,15 +873,28 @@ describe('the settings panel', () => {
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     });
+    // Not the other switches nor the list of connected systems as the panel
+    // loaded them: another admin may have changed them since.
     expect(mockApi.saveUserAppSettings).toHaveBeenCalledWith({
-      capabilities: {
-        modelChoice: true,
-        upload: false,
-        webSearch: false,
-        skills: false,
-        integrations: []
-      }
+      capabilities: { upload: false }
     });
+
+    fireEvent.click(box(text('admin.userApps.settings.allowEveryone')));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    });
+    expect(mockApi.saveUserAppSettings).toHaveBeenLastCalledWith({
+      sharing: { allowEveryone: true }
+    });
+  });
+
+  it('changedKeys: the keys that differ, a list as one value, null for none', () => {
+    expect(changedKeys({ a: 1, b: [1], c: true }, { a: 1, b: [1, 2], c: false })).toEqual({
+      b: [1],
+      c: true
+    });
+    expect(changedKeys({ a: [{ id: 'x' }] }, { a: [{ id: 'x' }] })).toBeNull();
+    expect(changedKeys(undefined, { a: 1 })).toBeNull();
   });
 
   it('refuses a limit that is no whole number in the range', async () => {
@@ -815,7 +927,7 @@ describe('the settings panel', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     });
     expect(mockApi.saveUserAppSettings).toHaveBeenCalledWith({
-      capabilities: { ...settings().capabilities, integrations: [] }
+      capabilities: { integrations: [] }
     });
   });
 

@@ -20,9 +20,12 @@ import { CALLOUT_CLASS } from './formStyles';
  * rendered when no app waits or the list cannot be read. While the personal
  * apps feature is off the list is not requested, so the page is unchanged.
  *
+ * @param {Object} props
+ * @param {number} [props.refreshKey=0] - Read the list again when it changes:
+ *   the page raises it after it published, unpublished or deleted apps.
  * @returns {JSX.Element|null}
  */
-function WaitingAppsNotice() {
+function WaitingAppsNotice({ refreshKey = 0 }) {
   const { t, i18n } = useTranslation();
   const featureOn = useFeatureFlags().isEnabled('userApps', false);
   const [items, setItems] = useState([]);
@@ -36,12 +39,15 @@ function WaitingAppsNotice() {
         const list = response?.data?.items;
         if (active && Array.isArray(list)) setItems(list.filter(item => item?.appId));
       })
-      // The line is a hint. Without it the page is the page of today.
-      .catch(() => {});
+      // The line is a hint. Without it the page is the page of today; after a
+      // failed reload it no longer names apps that may have changed.
+      .catch(() => {
+        if (active) setItems([]);
+      });
     return () => {
       active = false;
     };
-  }, [featureOn]);
+  }, [featureOn, refreshKey]);
 
   if (!featureOn || items.length === 0) return null;
   return (

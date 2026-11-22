@@ -19,10 +19,13 @@ const LINE_KEYS = {
   webSearch: 'userApps.publish.can.webSearch'
 };
 
-/** The name of a capability that is not a connected system, for "Not taken over: …". */
+/**
+ * The name of a capability that is not a connected system, for "Not taken
+ * over: …": a noun, never the label of a switch ("Users can attach files").
+ */
 const NAME_KEYS = {
   model: 'userApps.edit.extras.model',
-  upload: 'userApps.edit.extras.upload',
+  upload: 'userApps.edit.capability.upload',
   webSearch: 'userApps.edit.extras.webSearch',
   skills: 'userApps.edit.extras.skills'
 };

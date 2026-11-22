@@ -17,6 +17,7 @@ import {
 } from '../../../api';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import TransferOwnerDialog from '../../../shared/components/TransferOwnerDialog';
+import { invalidateAppsCache } from '../../../shared/hooks/appsCache';
 import { invalidateUserAppsConfig, useUserAppsConfig } from '../../../shared/hooks/useUserApps';
 import NotFound from '../../../pages/error/NotFound';
 import { getLocalizedContent } from '../../../utils/localizeContent';
@@ -215,6 +216,11 @@ function UserAppEditPage() {
     getLocalizedContent(form?.name ?? app?.name, contentLanguage) ||
     appId;
   useScreenTitle(status === 'ready' ? name : '');
+  // The name as stored: what "Publish" and "Duplicate" take.
+  const storedName =
+    getLocalizedContent(app?.name, uiLanguage) ||
+    getLocalizedContent(app?.name, contentLanguage) ||
+    appId;
 
   const readOnly = useMemo(() => (app ? readOnlyReason(app) : null), [app]);
   const withheld = useMemo(() => (app ? withheldCapabilities(app) : []), [app]);
@@ -223,8 +229,13 @@ function UserAppEditPage() {
   const offered = permissions.canAcceptOffer === true;
   const offerOpen = Boolean(app?.pendingOwner);
 
+  /**
+   * The name of a capability. `form: 'noun'` is the form that stands inside a
+   * sentence ("This app uses the chosen AI model"); the default opens one
+   * ("The chosen AI model is no longer available").
+   */
   const capabilityName = useCallback(
-    capability => {
+    (capability, { form: wording = 'title' } = {}) => {
       if (capability.kind === 'integration') {
         const system = (allowed?.integrations || []).find(
           entry => entry.id === capability.installationId
@@ -235,9 +246,15 @@ function UserAppEditPage() {
           capability.installationId
         );
       }
-      return t(`userApps.edit.capability.${capability.kind}`);
+      return wording === 'noun'
+        ? t(`userApps.edit.capabilityNoun.${capability.kind}`)
+        : t(`userApps.edit.capability.${capability.kind}`);
     },
     [allowed, t, uiLanguage]
+  );
+  const capabilityNoun = useCallback(
+    capability => capabilityName(capability, { form: 'noun' }),
+    [capabilityName]
   );
 
   // Arriving from "Create and test": the test chat opens and a toast says that the app exists.
@@ -303,6 +320,7 @@ function UserAppEditPage() {
     try {
       const next = await updateUserApp(appId, patch, { revision: app.revision });
       adopt(next);
+      invalidateAppsCache();
       setConflict(false);
       setTestRun(run => run + 1);
       showToast(t('admin.apps.edit.saved'));
@@ -331,12 +349,14 @@ function UserAppEditPage() {
   const duplicate = () =>
     run(async () => {
       const copy = await duplicateUserApp(appId);
+      invalidateAppsCache();
       invalidateUserAppsConfig();
       navigate(editPath(copy.id));
     });
   const remove = () =>
     run(async () => {
       await deleteUserApp(appId);
+      invalidateAppsCache();
       invalidateUserAppsConfig();
       markSaved();
       setDialog(null);
@@ -345,11 +365,13 @@ function UserAppEditPage() {
   const withdraw = () =>
     run(async () => {
       await clearUserAppOffer(appId);
+      invalidateAppsCache();
       adopt(await fetchUserApp(appId), { keepInput: true });
     });
   const decline = () =>
     run(async () => {
       await clearUserAppOffer(appId);
+      invalidateAppsCache();
       navigate(APPS_PATH);
     });
   const accept = async () => {
@@ -358,6 +380,7 @@ function UserAppEditPage() {
     setOfferNotice(null);
     try {
       adopt(await acceptUserAppOffer(appId, { revision: app.revision }));
+      invalidateAppsCache();
       invalidateUserAppsConfig();
       headingRef.current?.focus();
     } catch (error) {
@@ -370,6 +393,20 @@ function UserAppEditPage() {
       }
     } finally {
       setBusy(false);
+    }
+  };
+
+  /**
+   * A dialog was refused because someone changed the app (409
+   * `ETAG_MISMATCH`): read the app again so the next attempt carries the
+   * current revision. Unsaved input stays.
+   */
+  const refreshAfterConflict = async () => {
+    try {
+      adopt(await fetchUserApp(appId), { keepInput: true });
+    } catch {
+      // The page keeps what it has; the save bar's "Reload" is still there.
+      setConflict(true);
     }
   };
 
@@ -469,6 +506,7 @@ function UserAppEditPage() {
             onWithdraw={permissions.canOffer === true && offerOpen ? withdraw : undefined}
             onDuplicate={canUse && config?.canCreate === true ? duplicate : undefined}
             onDelete={permissions.canDelete === true ? () => setDialog('delete') : undefined}
+            unsaved={isDirty}
             headingRef={headingRef}
           />
 
@@ -479,7 +517,7 @@ function UserAppEditPage() {
             </p>
           )}
 
-          <UserAppStatusBanner app={app} readOnly={readOnly} capabilityName={capabilityName} />
+          <UserAppStatusBanner app={app} readOnly={readOnly} capabilityName={capabilityNoun} />
 
           {offered && (
             <UserAppOfferBanner
@@ -527,7 +565,14 @@ function UserAppEditPage() {
                   disabled={formDisabled}
                 >
                   {/* No `onImprove`: a personal app has no route that rewrites instructions. */}
-                  <SystemInstructionsSection app={form} onChange={applySections} t={t} />
+                  <SystemInstructionsSection
+                    app={form}
+                    onChange={applySections}
+                    t={t}
+                    // Every member can read the instructions (design 6.4).
+                    description={t('userApps.edit.instructionsDesc')}
+                    readOnly={formDisabled}
+                  />
                   <VariablesSection app={form} onChange={applySections} showStartOptions={false} />
                   <StarterPromptsSection app={form} onChange={applySections} showAutoSend={false} />
                 </UserAppEditorGroup>
@@ -594,8 +639,10 @@ function UserAppEditPage() {
           onClose={() => setDialog(null)}
           onSaved={next => {
             setDialog(null);
+            invalidateAppsCache();
             adopt(next, { keepInput: true });
           }}
+          onConflict={() => void refreshAfterConflict()}
         />
       )}
       {dialog === 'handOver' && (
@@ -609,6 +656,7 @@ function UserAppEditPage() {
           onClose={() => setDialog(null)}
           onTransferred={next => {
             setDialog(null);
+            invalidateAppsCache();
             adopt(next, { keepInput: true });
           }}
         />
@@ -616,19 +664,18 @@ function UserAppEditPage() {
       {dialog === 'publish' && PUBLISH_DIALOG && (
         <PUBLISH_DIALOG
           app={app}
-          name={name}
+          // What is published is the stored app, so the dialog names the stored name.
+          name={storedName}
           onClose={() => setDialog(null)}
           onPublished={next => {
             setDialog(null);
-            // The list of apps changed: the company app is new in it. The
-            // hook is loaded here and not with the page: it brings the whole
-            // sign-in context with it.
-            import('../../../shared/hooks/useApps')
-              .then(apps => apps.invalidateAppsCache())
-              .catch(() => {});
-            // Visible at once and usable by the owner: the chat route shows
-            // the pointer to the company app.
-            if (next?.permissions?.canUse === false && next?.publishedAs?.appId) {
+            // The list of apps changed: the company app is new in it.
+            invalidateAppsCache();
+            // The menu offers "Publish" only for a saved form; nothing is left to lose.
+            markSaved();
+            // Visible at once and usable by the owner: the answer is the
+            // pointer to the company app, and so is the chat route.
+            if (next?.state === 'retired' && next?.publishedAs?.appId) {
               navigate(chatPath(appId));
               return;
             }
@@ -637,6 +684,7 @@ function UserAppEditPage() {
           onChanged={() => {
             setDialog(null);
             setActionError(t('userApps.publish.changed'));
+            void refreshAfterConflict();
           }}
         />
       )}

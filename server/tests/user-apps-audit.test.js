@@ -318,6 +318,26 @@ describe('the user routes', () => {
     assert.equal((await drafts()).length, 2);
   });
 
+  it('a full admin who is no member reads the app on the user route: one read entry', async () => {
+    const record = await api.createApp('anna', { members: [member('ben', 'user')] });
+    const view = await as('root').get(`/api/apps/${record.id}`);
+    assert.equal(view.status, 200, view.text);
+    assert.equal(view.body.permissions.role, 'admin');
+    const entry = last(await api.audit(record.id, { resource: 'userApp', action: 'read' }));
+    assertEntry(entry, {
+      action: 'read',
+      resource: 'userApp',
+      actor: 'root',
+      revision: record.revision,
+      contentHash: record.contentHash
+    });
+    assert.equal(entry.details.ownerId, 'anna');
+    // A member's and the owner's reads are not audited.
+    await as('ben').get(`/api/apps/${record.id}`);
+    await as('anna').get(`/api/apps/${record.id}`);
+    assert.equal((await api.audit(record.id, { resource: 'userApp', action: 'read' })).length, 1);
+  });
+
   it('a refused request writes no entry about the app', async () => {
     const record = await api.createApp('anna', { members: [member('ben', 'user')] });
     await as('ben')

@@ -34,6 +34,8 @@ export const INSTRUCTION_TIP_KEYS = Object.freeze([
  * @param {object} props.draft - The app as the author sees it.
  * @param {string} props.language - The language of the texts being edited.
  * @param {boolean} [props.instructionsRequired=true]
+ * @param {string} [props.instructionsHelpKey] - The key of the help under the instructions;
+ *   the admin text ("users do not see it") by default.
  * @param {Object<string, string|true>} [props.errors] - By field: the message,
  *   or `true` for a field that is marked and explained by `describedBy`.
  * @param {Object<string, string[]>} [props.notes] - By field: hints that do not block.
@@ -49,6 +51,7 @@ function EssentialsForm({
   draft,
   language,
   instructionsRequired = true,
+  instructionsHelpKey = 'admin.apps.create.essentials.instructionsHelp',
   errors = {},
   notes = {},
   describedBy,
@@ -127,7 +130,7 @@ function EssentialsForm({
             field="system"
             label={t('admin.apps.create.essentials.instructions')}
             required={instructionsRequired}
-            help={t('admin.apps.create.essentials.instructionsHelp')}
+            help={t(instructionsHelpKey)}
             error={errors.system}
             notes={notes.system}
             describedBy={describedBy}

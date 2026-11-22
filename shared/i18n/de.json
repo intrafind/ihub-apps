@@ -8305,7 +8305,12 @@
         "users_one": "{{count}} Person nutzt die persönliche App derzeit. Sie funktioniert für diese Person weiter, bis sie die neue App nutzen kann.",
         "users_other": "{{count}} Personen nutzen die persönliche App derzeit. Sie funktioniert für jede von ihnen weiter, bis sie die neue App nutzen kann.",
         "submit": "Übernehmen",
-        "noCategory": "Keine Kategorie"
+        "noCategory": "Keine Kategorie",
+        "groups_one": "Die persönliche App ist mit {{count}} Gruppe geteilt. Sie funktioniert für deren Mitglieder weiter, bis sie die neue App nutzen können.",
+        "groups_other": "Die persönliche App ist mit {{count}} Gruppen geteilt. Sie funktioniert für deren Mitglieder weiter, bis sie die neue App nutzen können.",
+        "everyone": "Die persönliche App ist mit allen angemeldeten Personen geteilt. Sie funktioniert für sie weiter, bis sie die neue App nutzen können.",
+        "alreadyPublished": "Die App wurde inzwischen veröffentlicht und kann nicht übernommen werden.",
+        "unavailable": "Was eine Übernahme schreiben würde, konnte nicht ermittelt werden. Schließen Sie den Dialog und versuchen Sie es später erneut."
       },
       "noAccess_one": "{{count}} von {{total}} Mitgliedern kann die Unternehmens-App nicht nutzen.",
       "noAccess_other": "{{count}} von {{total}} Mitgliedern können die Unternehmens-App nicht nutzen.",
@@ -8318,9 +8323,9 @@
       "changed": "Die App wurde geändert, seit Sie sie geöffnet haben. Prüfen Sie sie erneut.",
       "disable": {
         "action": "Abschalten",
-        "body": "Solange die App abgeschaltet ist, kann niemand sie nutzen. Der Besitzer sieht Ihre Begründung.",
+        "body": "Solange die App abgeschaltet ist, kann niemand sie nutzen. Der Besitzer und alle, mit denen die App geteilt ist, sehen Ihre Begründung.",
         "title": "„{{name}}“ abschalten?",
-        "reason": "Begründung (der Besitzer sieht sie)"
+        "reason": "Begründung (Besitzer und Mitglieder sehen sie)"
       },
       "enable": {
         "action": "Einschalten"
@@ -8375,7 +8380,9 @@
       "offer": {
         "title": "„{{name}}“ einem neuen Besitzer anbieten",
         "body": "Die Person wird gebeten, die App zu übernehmen. Bis sie annimmt, ändert sich nichts.",
-        "search": "Person suchen"
+        "search": "Person suchen",
+        "results": "Gefundene Personen",
+        "me": "{{name}} (Sie)"
       },
       "revision": {
         "empty": "Es sind keine früheren Versionen gespeichert.",
@@ -11659,7 +11666,7 @@
     "SHORT_LINK_HOST_NOT_ALLOWED": "Kurzlinks dürfen nicht auf diese Website verweisen. Ein Administrator kann ihren Host auf der SSRF-Allowlist unter Admin → Sicherheit → SSRF-Allowlist freigeben.",
     "SCHEDULED_TASKS_UNAVAILABLE": "Geplante Aufgaben sind auf dieser Installation nicht verfügbar.",
     "INTERACTIVE_USER_REQUIRED": "Geplante Aufgaben erfordern eine angemeldete Person, kein Token und keinen Agenten.",
-    "PERMISSION_DENIED": "Sie dürfen geplante Aufgaben nicht verwenden.",
+    "PERMISSION_DENIED": "Das dürfen Sie nicht.",
     "TASK_NOT_FOUND": "Die geplante Aufgabe wurde nicht gefunden.",
     "RUN_NOT_FOUND": "Der Lauf wurde nicht gefunden.",
     "TASK_LIMIT_REACHED": "Sie haben die maximale Anzahl geplanter Aufgaben erreicht.",
@@ -12092,9 +12099,14 @@
         "duplicate": "Duplizieren",
         "delete": "Löschen",
         "leave": "Verlassen",
-        "label": "Aktionen für „{{name}}“"
+        "label": "Aktionen für „{{name}}“",
+        "viewOffer": "Angebot ansehen"
       },
-      "limitReached": "Sie haben {{max}} Apps, das ist die Obergrenze. Löschen Sie eine App, um eine neue zu erstellen."
+      "limitReached": "Sie haben {{max}} Apps, das ist die Obergrenze. Löschen Sie eine App, um eine neue zu erstellen.",
+      "status": {
+        "left": "Sie haben „{{name}}“ verlassen.",
+        "deleted": "„{{name}}“ gelöscht."
+      }
     },
     "create": {
       "stateLine": "Nur Sie sehen die App, bis Sie sie teilen.",
@@ -12104,12 +12116,15 @@
     "edit": {
       "state": {
         "private": "Nur Sie",
-        "shared_one": "Mit {{count}} Person geteilt",
-        "shared_other": "Mit {{count}} Personen geteilt",
         "everyone": "Mit allen geteilt",
         "promoted": "Jetzt bei den Administratoren",
         "offered": "{{owner}} angeboten",
-        "disabled": "Von einem Administrator abgeschaltet"
+        "disabled": "Von einem Administrator abgeschaltet",
+        "shared": "Geteilt mit {{list}}",
+        "people_one": "{{count}} Person",
+        "people_other": "{{count}} Personen",
+        "groups_one": "{{count}} Gruppe",
+        "groups_other": "{{count}} Gruppen"
       },
       "extras": {
         "title": "Was die App nutzen darf",
@@ -12144,6 +12159,14 @@
         "upload": "Datei-Upload",
         "webSearch": "Websuche",
         "skills": "Skills"
+      },
+      "saveFirst": "Speichern Sie zuerst Ihre Änderungen",
+      "instructionsDesc": "Sagen Sie der KI, was ihre Aufgabe ist und wie sie antworten soll. Sie liest das vor jedem Chat. Personen, mit denen Sie die App teilen, können es lesen. (Auch System-Prompt genannt.)",
+      "capabilityNoun": {
+        "model": "das gewählte KI-Modell",
+        "upload": "den Datei-Upload",
+        "webSearch": "die Websuche",
+        "skills": "Skills"
       }
     },
     "share": {
@@ -12157,7 +12180,8 @@
       "everyone": "Alle angemeldeten Benutzer",
       "copyLink": "Link kopieren",
       "linkCopied": "Link kopiert",
-      "notAllowed": "Sie können keine Apps teilen. Wenden Sie sich an einen Administrator."
+      "notAllowed": "Sie können keine Apps teilen. Wenden Sie sich an einen Administrator.",
+      "changed": "Jemand hat die App in der Zwischenzeit geändert. Wenn Sie erneut speichern, ersetzt die Liste hier die gespeicherte."
     },
     "publish": {
       "action": "Veröffentlichen",
@@ -12245,7 +12269,28 @@
       },
       "expand": "Details anzeigen",
       "collapse": "Weniger anzeigen",
-      "instructionsTitle": "Anweisungen von „{{name}}“"
+      "instructionsTitle": "Anweisungen von „{{name}}“",
+      "instructionsSystem": "Anweisungen",
+      "instructionsTemplate": "Nachrichtenvorlage",
+      "instructionsTemplateHelp": "Jede Nachricht, die Sie senden, wird in diesen Text eingesetzt, bevor sie die KI erreicht. {{placeholder}} steht für Ihre Nachricht.",
+      "instructionsOptions": "Was eine Auswahl sendet",
+      "instructionsOption": "{{variable}}: „{{label}}“ sendet „{{value}}“",
+      "viewOffer": "Angebot ansehen"
+    },
+    "conflict": {
+      "owner": "Als Besitzer können Sie Ihre eigene App nicht verlassen.",
+      "noDirectShare": "Die App ist über eine Gruppe oder mit allen geteilt. Sie können sie nicht selbst verlassen.",
+      "promoted": "Die App liegt jetzt bei den Administratoren und kann nicht geändert werden.",
+      "disabled": "Ein Administrator hat die App abgeschaltet. Sie kann nicht geändert oder dupliziert werden.",
+      "published": "Nehmen Sie zuerst die Unternehmens-App zurück oder löschen Sie sie.",
+      "idTaken": "Eine App mit dieser ID gibt es bereits."
+    },
+    "denied": {
+      "publish": "Sie dürfen diese App nicht veröffentlichen. Das Veröffentlichen ist abgeschaltet, oder Ihrem Konto fehlt die Berechtigung.",
+      "edit": "Sie dürfen diese App nicht mehr ändern. Möglicherweise hat sich Ihre Rolle geändert.",
+      "userApps": "Sie dürfen keine persönlichen Apps anlegen.",
+      "share": "Sie dürfen persönliche Apps nicht teilen.",
+      "ownerMayNotShare": "Der Besitzer dieser App darf sie nicht teilen, deshalb kann sie nicht geteilt werden."
     }
   }
 }

@@ -281,20 +281,26 @@ export function reducedUserAppView(record, { permissions, owner, publishedAppExi
 
 /**
  * The body for a caller for whom a promoted app is retired: the pointer to
- * the company app, and nothing of the personal app.
+ * the company app, and nothing of the personal app. `enabled` is always true:
+ * retired means the caller can see the company app, so it is switched on. It
+ * is there so the body has the keys of design 9.1.
  *
  * @param {Object} record - Stored personal app.
  * @param {{appId: string, name: Object|string}} companyApp - The company app
  *   the caller may use.
  * @returns {{id: string, ownership: 'user', state: 'retired',
- *   publishedAs: {appId: string, name: Object|string}}}
+ *   publishedAs: {appId: string, name: Object|string, enabled: true}}}
  */
 export function retiredUserAppView(record, companyApp) {
   return {
     id: record.id,
     ownership: 'user',
     state: 'retired',
-    publishedAs: { appId: companyApp?.appId || null, name: companyApp?.name ?? null }
+    publishedAs: {
+      appId: companyApp?.appId || null,
+      name: companyApp?.name ?? null,
+      enabled: true
+    }
   };
 }
 
@@ -373,6 +379,9 @@ export function adminUserAppListItem(
       ? { membersWithoutCompanyApp }
       : {}),
     capabilities: requestedCapabilities(record.content),
+    // The If-Match of an action started from the list: it then refuses a
+    // change made since the list was read, without a read of the content.
+    revision: Number(record.revision) || 1,
     updatedAt: record.updatedAt || null,
     lastUsedAt: record.lastUsedAt || null
   };
@@ -380,7 +389,8 @@ export function adminUserAppListItem(
 
 /**
  * The admin view of one app (`GET /api/admin/user-apps/{appId}`): the list
- * item plus the content, the members and what a take-over would write.
+ * item (which carries the revision) plus the content, the members and what a
+ * take-over would write.
  *
  * @param {Object} record - Stored personal app.
  * @param {Object} [context] - The context of {@link adminUserAppListItem}, and:
@@ -397,7 +407,6 @@ export function adminUserAppView(record, context = {}) {
     members: (record.members || []).map(memberView),
     language: record.language || null,
     origin: record.origin || null,
-    revision: Number(record.revision) || 1,
     createdAt: record.createdAt || null,
     createdBy: person(record.createdBy),
     updatedBy: person(record.updatedBy),

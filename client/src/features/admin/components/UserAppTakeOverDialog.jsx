@@ -42,9 +42,12 @@ const CATEGORY_FIELD = 'user-app-take-over-category';
  * @param {() => void} props.onClose
  * @param {(newAppId: string) => void} props.onDone - Called with the ID of
  *   the new admin app after the server created it.
+ * @param {() => void} [props.onStale] - Called when the app changed since the
+ *   list was read (it was published meanwhile, or changed while the dialog was
+ *   open), so the list can be read again.
  * @returns {JSX.Element}
  */
-function UserAppTakeOverDialog({ app, onClose, onDone }) {
+function UserAppTakeOverDialog({ app, onClose, onDone, onStale }) {
   const { t, i18n } = useTranslation();
   const [view, setView] = useState(null);
   const [categories, setCategories] = useState([]);
@@ -54,13 +57,33 @@ function UserAppTakeOverDialog({ app, onClose, onDone }) {
   const [error, setError] = useState(null);
   const [idMessage, setIdMessage] = useState(null);
 
+  /**
+   * Takes a freshly read admin view. Without a preview the dialog cannot go
+   * on: the app was published meanwhile, or the server could not work out
+   * what a take-over would write. Either way it says so instead of loading on.
+   *
+   * @returns {boolean} Whether the view carries a preview.
+   */
+  const adopt = loaded => {
+    setView(loaded);
+    if (loaded?.takeOverPreview) return true;
+    setError(
+      t(
+        loaded?.state === 'promoted'
+          ? 'admin.userApps.takeOver.alreadyPublished'
+          : 'admin.userApps.takeOver.unavailable'
+      )
+    );
+    if (loaded?.state === 'promoted') onStale?.();
+    return false;
+  };
+
   useEffect(() => {
     let active = true;
     fetchAdminUserApp(app.id)
       .then(loaded => {
         if (!active) return;
-        setView(loaded);
-        setId(loaded?.takeOverPreview?.suggestedId || '');
+        if (adopt(loaded)) setId(loaded.takeOverPreview.suggestedId || '');
       })
       .catch(err => {
         if (active) setError(apiErrorMessage(err, t, getAdminApiErrorMessage(err)));
@@ -75,12 +98,17 @@ function UserAppTakeOverDialog({ app, onClose, onDone }) {
     return () => {
       active = false;
     };
+    // `adopt` is a new function on each render; the app is read once per app.
+    // eslint-disable-next-line @eslint-react/exhaustive-deps
   }, [app.id, t]);
 
   const preview = view?.takeOverPreview;
   const lines = capabilityLines(preview?.capabilities, t);
   const dropped = droppedText(preview?.dropped, t);
+  // Who uses the personal app today: people named directly, groups, and everyone.
   const users = view?.sharedWith?.users || 0;
+  const groups = view?.sharedWith?.groups || 0;
+  const everyone = view?.sharedWith?.everyone === true;
   const ownerName = app.owner?.name || app.owner?.id || '';
 
   const submit = async event => {
@@ -109,7 +137,14 @@ function UserAppTakeOverDialog({ app, onClose, onDone }) {
       if (problemBody?.details?.reason === 'idTaken') {
         setIdMessage(t('admin.apps.create.error.idTaken', { id }));
       } else if (problemBody?.code === 'ETAG_MISMATCH') {
-        setError(t('admin.userApps.changed'));
+        // Read the app again: the preview then shows the new state, and the
+        // next "Take over" is made on its revision instead of failing again.
+        onStale?.();
+        try {
+          if (adopt(await fetchAdminUserApp(app.id))) setError(t('admin.userApps.changed'));
+        } catch (reloadError) {
+          setError(apiErrorMessage(reloadError, t, getAdminApiErrorMessage(reloadError)));
+        }
       } else {
         setError(apiErrorMessage(err, t, getAdminApiErrorMessage(err)));
       }
@@ -200,6 +235,8 @@ function UserAppTakeOverDialog({ app, onClose, onDone }) {
                 <li>{t('admin.userApps.takeOver.notPublished')}</li>
                 {ownerName && <li>{t('admin.userApps.takeOver.owner', { owner: ownerName })}</li>}
                 {users > 0 && <li>{t('admin.userApps.takeOver.users', { count: users })}</li>}
+                {groups > 0 && <li>{t('admin.userApps.takeOver.groups', { count: groups })}</li>}
+                {everyone && <li>{t('admin.userApps.takeOver.everyone')}</li>}
               </ul>
             </div>
           </>

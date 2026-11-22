@@ -404,6 +404,29 @@ describe('the share dialog', () => {
     expect(within(dialog).getByRole('alert')).toBeInTheDocument();
     expect(within(dialog).getAllByRole('combobox')).toHaveLength(2);
   });
+
+  test('a share refused because the owner may not share says so', async () => {
+    const dialog = await renderDialog(userApp({ members: MEMBERS }));
+    mockApi.setUserAppMembers.mockRejectedValue(
+      apiFailure(403, {
+        code: 'PERMISSION_DENIED',
+        details: { required: 'userAppSharing', reason: 'ownerMayNotShare' }
+      })
+    );
+    await click(within(dialog).getByRole('button', { name: 'Save' }));
+    expect(within(dialog).getByRole('alert')).toHaveTextContent(
+      en.userApps.denied.ownerMayNotShare
+    );
+  });
+
+  test('a share refused without a known reason gets the neutral text of its code', async () => {
+    const dialog = await renderDialog(userApp({ members: MEMBERS }));
+    mockApi.setUserAppMembers.mockRejectedValue(
+      apiFailure(403, { code: 'PERMISSION_DENIED', details: { required: 'view' } })
+    );
+    await click(within(dialog).getByRole('button', { name: 'Save' }));
+    expect(within(dialog).getByRole('alert')).toHaveTextContent(en.apiErrors.PERMISSION_DENIED);
+  });
 });
 
 describe('sharing from the editor', () => {
@@ -426,7 +449,7 @@ describe('sharing from the editor', () => {
     await click(within(dialog).getByRole('button', { name: 'Save' }));
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    expect(screen.getByTestId('user-app-state')).toHaveTextContent('Shared with 2 people');
+    expect(screen.getByTestId('user-app-state')).toHaveTextContent('Shared with 1 person, 1 group');
     expect(screen.getByRole('textbox', { name: /^Name/ })).toHaveValue('Unsaved name');
 
     // The save that follows names the revision the member change produced.
@@ -437,6 +460,29 @@ describe('sharing from the editor', () => {
       { name: { en: 'Unsaved name' } },
       { revision: 8 }
     );
+  });
+
+  test('the dialog is named by its title (WCAG 4.1.2)', async () => {
+    await renderEditor();
+    await click(screen.getByRole('button', { name: 'Share' }));
+    expect(screen.getByRole('dialog', { name: 'Share "Job ad writer"' })).toBeInTheDocument();
+  });
+
+  test('a change by someone else reloads the app; saving again carries the new revision', async () => {
+    await renderEditor();
+    await click(screen.getByRole('button', { name: 'Share' }));
+    const dialog = screen.getByRole('dialog');
+    mockApi.setUserAppMembers.mockRejectedValueOnce(
+      apiFailure(409, { code: 'ETAG_MISMATCH', detail: 'The data was changed' })
+    );
+    mockApi.fetchUserApp.mockResolvedValue(userApp({ revision: 8 }));
+    await click(within(dialog).getByRole('button', { name: 'Save' }));
+    expect(within(dialog).getByRole('alert')).toHaveTextContent(SHARE.changed);
+    await waitFor(() => expect(mockApi.fetchUserApp).toHaveBeenCalledTimes(2));
+
+    mockApi.setUserAppMembers.mockResolvedValue(userApp({ revision: 9 }));
+    await click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Save' }));
+    expect(mockApi.setUserAppMembers).toHaveBeenLastCalledWith(APP_ID, [], { revision: 8 });
   });
 
   test('the apps page opens the dialog with ?dialog=share', async () => {
@@ -589,9 +635,11 @@ describe('handing over: the receiver', () => {
     );
     expect(banner().getByText(TRANSFER.receivedEditors)).toBeInTheDocument();
     // The instructions are there to be read, and cannot be changed.
-    const instructions = screen.getByRole('textbox', { name: /^Instructions/ });
-    expect(instructions).toHaveValue('You write job ads from notes.');
-    expect(instructions).toBeDisabled();
+    expect(screen.queryByRole('textbox', { name: /^Instructions/ })).not.toBeInTheDocument();
+    const instructions = screen.getByTestId('read-only-system');
+    expect(instructions).toHaveTextContent('You write job ads from notes.');
+    // Keyboard users can reach and scroll long instructions (WCAG 2.1.1).
+    expect(instructions).toHaveAttribute('tabindex', '0');
     expect(screen.queryByTestId('user-app-status')).not.toBeInTheDocument();
     expect(untranslated(document.body)).toEqual([]);
 
@@ -658,7 +706,7 @@ describe('handing over: the receiver', () => {
 
     expect(mockApi.fetchUserApp).toHaveBeenCalledTimes(2);
     expect(banner().getByText(TRANSFER.changed)).toBeInTheDocument();
-    expect(screen.getByRole('textbox', { name: /^Instructions/ })).toHaveValue(
+    expect(screen.getByTestId('read-only-system')).toHaveTextContent(
       'You write job ads. Always mention the salary.'
     );
     // The app is still offered, and the next answer names the new revision.

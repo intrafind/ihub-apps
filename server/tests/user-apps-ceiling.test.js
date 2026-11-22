@@ -475,6 +475,37 @@ describe('approval (6.3)', () => {
     assert.deepEqual(approval, { mode: 'writes', chatGrants: true });
   });
 
+  it('the owner runs content an editor saved: every call asks, nothing for the chat', () => {
+    const edited = recordWith({}, { updatedBy: { id: 'carol', name: 'Carol' } });
+    const { app, approval } = effectiveUserApp(edited, { ...context, runner: ANNA });
+    assert.deepEqual(app.toolApproval, { default: 'always' });
+    assert.deepEqual(approval, { mode: 'always', chatGrants: false });
+    // Once the owner saves the content again, it is theirs.
+    const own = recordWith({}, { updatedBy: { id: 'anna', name: 'Anna Schmidt' } });
+    assert.deepEqual(effectiveUserApp(own, { ...context, runner: ANNA }).approval, {
+      mode: 'writes',
+      chatGrants: true
+    });
+  });
+
+  it('the owner who accepted the app with this content runs it as their own', () => {
+    const handedOver = recordWith(
+      {},
+      {
+        updatedBy: { id: 'carol', name: 'Carol' },
+        contentHash: 'h1',
+        contentConfirmedBy: { id: 'anna', contentHash: 'h1' }
+      }
+    );
+    assert.equal(
+      effectiveUserApp(handedOver, { ...context, runner: ANNA }).approval.mode,
+      'writes'
+    );
+    // Changed by an editor after the accept: no longer the content the owner read.
+    const changed = { ...handedOver, contentHash: 'h2' };
+    assert.equal(effectiveUserApp(changed, { ...context, runner: ANNA }).approval.mode, 'always');
+  });
+
   it('everyone else: every call asks, and nothing can be allowed for the chat', () => {
     const editor = principal('carol');
     const admin = { ...principal('root'), isAdmin: true };

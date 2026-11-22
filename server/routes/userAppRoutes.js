@@ -11,8 +11,10 @@
  * `routes/generalRoutes.js`.
  *
  * Every route needs a signed-in user and the feature; the first failing check
- * wins: 401 `AUTH_REQUIRED`, 403 `USER_APPS_DISABLED`, 403 `PERMISSION_DENIED`
- * for a sign-in that cannot hold personal apps, 503 `USER_APPS_UNAVAILABLE`.
+ * wins: 401 `AUTH_REQUIRED`, 403 `USER_APPS_DISABLED`, for a sign-in that
+ * cannot hold personal apps 403 `PERMISSION_DENIED` on the routes without an
+ * app ID and the 404 of an unknown ID on the routes of one app (design 14.2),
+ * 503 `USER_APPS_UNAVAILABLE`.
  * `GET /api/apps/_config` is the exception: it answers with the feature off
  * and says so (`enabled: false`).
  *
@@ -68,8 +70,9 @@ const GENERATOR_FEATURE = 'appGenerator';
  * (slice P12). To switch it off, replace the register function by `null`.
  *
  * It is called as `PUBLISH_ROUTES(app, { gate, sendApp, auditStamp, service })`
- * before the other `:appId` routes: `gate` is the middleware list every user
- * route starts with (signed in, feature on, store available), `sendApp(res,
+ * before the other `:appId` routes: `gate` is the middleware list every route
+ * of one app starts with (signed in, feature on, store available; the 404 of
+ * an unknown ID for a sign-in that cannot hold personal apps), `sendApp(res,
  * record, user)` answers with the app and its `ETag`, `auditStamp(record)` is
  * the `{ revision, contentHash }` every audit entry carries.
  *
@@ -92,21 +95,35 @@ function ensurePrincipal(req, _res, next) {
   next();
 }
 
-/** The feature is on, the sign-in can hold personal apps, the store answers. */
-function userAppsAvailable(req, _res, next) {
-  if (!isUserAppsEnabled()) {
-    throw new ServiceError('USER_APPS_DISABLED', 'Personal apps are switched off');
-  }
-  if (!canHoldUserApps(req.user)) {
-    throw new ServiceError('PERMISSION_DENIED', 'This sign-in cannot hold personal apps', {
-      status: 403,
-      details: { required: 'userApps' }
-    });
-  }
-  if (!getUserAppRepository().isAvailable()) {
-    throw new ServiceError('USER_APPS_UNAVAILABLE', 'Personal apps are unavailable');
-  }
-  next();
+/**
+ * The feature is on, the sign-in can hold personal apps, the store answers.
+ *
+ * A sign-in that cannot hold personal apps (an OAuth client, an agent, a
+ * user-delegated token) gets 403 `PERMISSION_DENIED` on the routes without an
+ * app ID. On the routes of one app it gets the 404 of an unknown ID (design
+ * 14.2): to such a principal no personal app exists.
+ *
+ * @param {Object} [options]
+ * @param {boolean} [options.perApp=false] - The route names one app (`:appId`).
+ * @returns {import('express').RequestHandler}
+ */
+function userAppsAvailable({ perApp = false } = {}) {
+  return function userAppsAvailableGate(req, _res, next) {
+    if (!isUserAppsEnabled()) {
+      throw new ServiceError('USER_APPS_DISABLED', 'Personal apps are switched off');
+    }
+    if (!canHoldUserApps(req.user)) {
+      if (perApp) throw new ServiceError('NOT_FOUND', 'App not found');
+      throw new ServiceError('PERMISSION_DENIED', 'This sign-in cannot hold personal apps', {
+        status: 403,
+        details: { required: 'userApps' }
+      });
+    }
+    if (!getUserAppRepository().isAvailable()) {
+      throw new ServiceError('USER_APPS_UNAVAILABLE', 'Personal apps are unavailable');
+    }
+    next();
+  };
 }
 
 /** `{ revision, contentHash }`: what ties an audit entry to a content state. */
@@ -186,6 +203,25 @@ function requireLevel(req, level) {
   });
 }
 
+/** The keys of an admin draft a personal app has no use for. */
+const ADMIN_ONLY_DRAFT_KEYS = ['id', 'category', 'order', 'enabled'];
+
+/**
+ * The draft of a personal app: the admin draft without the keys only an
+ * admin app has. Its `id` is a free admin app ID, picked against every app
+ * file including unpublished ones, so it would tell a non-admin which IDs
+ * exist; a personal app never uses it.
+ *
+ * @param {Object} draft - The result of `generateAppDraft`.
+ * @returns {Object}
+ */
+export function personalDraft(draft) {
+  if (!draft?.app || typeof draft.app !== 'object') return draft;
+  const app = { ...draft.app };
+  for (const key of ADMIN_ONLY_DRAFT_KEYS) delete app[key];
+  return { ...draft, app };
+}
+
 /** The registry code an error of the draft route is answered with, for the audit entry. */
 function codeOf(error) {
   if (error instanceof ServiceError || isLLMError(error)) return error.code || 'INTERNAL_ERROR';
@@ -209,7 +245,10 @@ export default function registerUserAppRoutes(app, { llmClient, service: injecte
   const service = () => injected || getUserAppService();
   const route = suffix => buildServerPath(`/api/apps${suffix}`);
   const signedIn = [ensurePrincipal, authenticatedOnly];
-  const gate = [...signedIn, userAppsAvailable];
+  const gate = [...signedIn, userAppsAvailable()];
+  // The gate of the routes of one app: the same, but the 404 of an unknown ID
+  // for a sign-in that cannot hold personal apps.
+  const appGate = [...signedIn, userAppsAvailable({ perApp: true })];
   const view = userAppAccessRequired('view');
   const mayCreate = (req, _res, next) => {
     service().assertMayCreate(req.user, currentUserAppSettings());
@@ -372,8 +411,10 @@ export default function registerUserAppRoutes(app, { llmClient, service: injecte
    *       personal apps may use on this installation and the caller may use: web
    *       search when it is allowed and a search engine is available to the caller,
    *       and connected systems an administrator allowed, each with named actions
-   *       from the allowed list. Counts against the draft limit of the admin route
-   *       (30 per user per hour; failed drafts count).
+   *       from the allowed list. `app` carries no `id`, `category`, `order` or
+   *       `enabled`: a personal app gets its ID from the server when it is created.
+   *       Counts against the draft limit of the admin route (30 per user per hour;
+   *       failed drafts count).
    *     tags: [Apps]
    *     security:
    *       - bearerAuth: []
@@ -432,7 +473,7 @@ export default function registerUserAppRoutes(app, { llmClient, service: injecte
           ...(llmClient ? { llmClient } : {})
         });
         auditDraft(req, 'success');
-        res.json(draft);
+        res.json(personalDraft(draft));
       } finally {
         res.off('close', onClose);
       }
@@ -604,7 +645,7 @@ export default function registerUserAppRoutes(app, { llmClient, service: injecte
   });
 
   if (PUBLISH_ROUTES) {
-    PUBLISH_ROUTES(app, { gate, sendApp: sendUserApp, auditStamp, service: service() });
+    PUBLISH_ROUTES(app, { gate: appGate, sendApp: sendUserApp, auditStamp, service: service() });
   }
 
   /**
@@ -668,7 +709,7 @@ export default function registerUserAppRoutes(app, { llmClient, service: injecte
    *       404:
    *         description: No app the caller can see (`NOT_FOUND`)
    */
-  app.patch(route('/:appId'), ...gate, view, async (req, res) => {
+  app.patch(route('/:appId'), ...appGate, view, async (req, res) => {
     requireLevel(req, 'edit');
     const before = req.userApp;
     const { record, changedKeys, capabilitiesChanged } = await service().update(before, req.body, {
@@ -694,7 +735,7 @@ export default function registerUserAppRoutes(app, { llmClient, service: injecte
     await sendUserApp(res, record, req.user);
   });
 
-  app.delete(route('/:appId'), ...gate, userAppAccessRequired('own'), async (req, res) => {
+  app.delete(route('/:appId'), ...appGate, userAppAccessRequired('own'), async (req, res) => {
     const removed = await service().remove(req.userApp, { context: req.userAppContext });
     logAudit({
       req,
@@ -715,7 +756,8 @@ export default function registerUserAppRoutes(app, { llmClient, service: injecte
    *     description: |
    *       A new app owned by the caller, with the content of this one and no
    *       members. A capability the caller may not use in an app of their own is
-   *       left out of the copy.
+   *       left out of the copy. The owner may duplicate their app also when it is
+   *       published and they use the company app; everyone else must be able to use it.
    *     tags: [Apps]
    *     security:
    *       - bearerAuth: []
@@ -734,10 +776,12 @@ export default function registerUserAppRoutes(app, { llmClient, service: injecte
    *       409:
    *         description: The app is switched off (`CONFLICT`, `details.reason` `disabled`), or the caller's limit is reached (`QUOTA_USER_APPS`)
    */
-  app.post(route('/:appId/_duplicate'), ...gate, view, async (req, res) => {
+  app.post(route('/:appId/_duplicate'), ...appGate, view, async (req, res) => {
     // A duplicate of a switched-off app would undo the admin's decision in one click.
     if (req.userApp.disabled) assertChangeable({ disabled: req.userApp.disabled });
-    requireLevel(req, 'use');
+    // The owner may always copy their own instructions, also once the app is
+    // published and retired for them (design 8.2). Everyone else needs `use`.
+    if (!req.userAppPermissions.isOwner) requireLevel(req, 'use');
     const { record, dropped } = await service().duplicate(req.userApp, { user: req.user });
     logAudit({
       req,
@@ -807,7 +851,7 @@ export default function registerUserAppRoutes(app, { llmClient, service: injecte
    *       409:
    *         description: Changed by someone else (`ETAG_MISMATCH`), or the app is published or switched off (`CONFLICT`)
    */
-  app.put(route('/:appId/members'), ...gate, view, async (req, res) => {
+  app.put(route('/:appId/members'), ...appGate, view, async (req, res) => {
     requireLevel(req, 'share');
     const result = await service().setMembers(req.userApp, req.body, {
       user: req.user,
@@ -861,7 +905,7 @@ export default function registerUserAppRoutes(app, { llmClient, service: injecte
    *       409:
    *         description: The caller is the owner, or has access only through a group (`CONFLICT`, `details.reason` `owner` or `noDirectShare`)
    */
-  app.post(route('/:appId/_leave'), ...gate, view, async (req, res) => {
+  app.post(route('/:appId/_leave'), ...appGate, view, async (req, res) => {
     const record = await service().leave(req.userApp, { user: req.user });
     logAudit({
       req,
@@ -933,7 +977,7 @@ export default function registerUserAppRoutes(app, { llmClient, service: injecte
    *       404:
    *         description: No app the caller can see, or the app is not offered (`NOT_FOUND`)
    */
-  app.put(route('/:appId/owner-offer'), ...gate, view, async (req, res) => {
+  app.put(route('/:appId/owner-offer'), ...appGate, view, async (req, res) => {
     requireLevel(req, 'offer');
     const { record, replaced, lapsed } = await service().offer(req.userApp, req.body, {
       user: req.user,
@@ -969,7 +1013,7 @@ export default function registerUserAppRoutes(app, { llmClient, service: injecte
     await sendUserApp(res, record, req.user);
   });
 
-  app.delete(route('/:appId/owner-offer'), ...gate, view, async (req, res) => {
+  app.delete(route('/:appId/owner-offer'), ...appGate, view, async (req, res) => {
     const { record, offer, outcome } = await service().clearOffer(req.userApp, { user: req.user });
     logAudit({
       req,
@@ -1015,7 +1059,7 @@ export default function registerUserAppRoutes(app, { llmClient, service: injecte
    *       400:
    *         description: The `If-Match` header is missing (`VALIDATION_FAILED`)
    *       403:
-   *         description: The caller may not create personal apps (`PERMISSION_DENIED`, `details.required` `userApps`)
+   *         description: The caller may not create personal apps (`PERMISSION_DENIED`, `details.required` `userApps`), or the owner is blocked or may not share, so the caller cannot read the instructions (`PERMISSION_DENIED`, `details.reason`)
    *       404:
    *         description: No open offer for the caller (`NOT_FOUND`)
    *       409:
@@ -1023,7 +1067,7 @@ export default function registerUserAppRoutes(app, { llmClient, service: injecte
    */
   app.post(
     route('/:appId/owner-offer/_accept'),
-    ...gate,
+    ...appGate,
     async (req, res, next) => {
       // Before the app is looked up: a missing header says nothing about the app.
       requiredRevision(req);

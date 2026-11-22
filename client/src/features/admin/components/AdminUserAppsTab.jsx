@@ -8,7 +8,6 @@ import {
   deleteAdminUserApp,
   disableAdminUserApp,
   enableAdminUserApp,
-  fetchAdminUserApp,
   fetchAdminUserAppRevisions,
   fetchAdminUserApps,
   fetchUserAppOfferTargets,
@@ -20,6 +19,8 @@ import {
 import { apiErrorMessage } from '../../../utils/apiErrorMessage';
 import { buildPath } from '../../../utils/runtimeBasePath';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
+import useRadioGroup from '../../../shared/hooks/useRadioGroup';
+import { useOptionalAuth } from '../../../shared/contexts/authContextValue';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import UserAppTakeOverDialog from './UserAppTakeOverDialog';
 import Modal from '../../../shared/components/Modal';
@@ -136,10 +137,12 @@ export function ageText(from, now, language) {
  * Null until known and when the list cannot be read.
  *
  * @param {boolean} enabled - Ask only for a full admin.
+ * @param {number} [refreshKey=0] - Ask again when it changes: the page raises
+ *   it after the list of the "Apps" tab published, unpublished or deleted apps.
  * @returns {[number|null, (count: number) => void]} The count and its setter;
  *   the tab sets it after each load of its own.
  */
-export function useWaitingUserAppCount(enabled) {
+export function useWaitingUserAppCount(enabled, refreshKey = 0) {
   const [count, setCount] = useState(null);
   useEffect(() => {
     if (!enabled) return undefined;
@@ -154,7 +157,7 @@ export function useWaitingUserAppCount(enabled) {
     return () => {
       active = false;
     };
-  }, [enabled]);
+  }, [enabled, refreshKey]);
   return [count, setCount];
 }
 
@@ -239,6 +242,10 @@ function DisableDialog({ app, onClose, onDone }) {
  * The dialog "Offer to a new owner". The admin picks a person; nothing changes
  * until that person accepts.
  *
+ * The admin is listed first, as "(you)": an admin never edits a personal app,
+ * and to change one becomes its owner by offer and accept (design 8.4). The
+ * lookup itself never lists the caller, which is right for an owner.
+ *
  * @param {Object} props
  * @param {Object} props.app - The list item.
  * @param {() => void} props.onClose
@@ -246,11 +253,26 @@ function DisableDialog({ app, onClose, onDone }) {
  */
 function OfferDialog({ app, onClose, onDone }) {
   const { t } = useTranslation();
+  const me = useOptionalAuth()?.user;
   const [query, setQuery] = useState('');
   const [people, setPeople] = useState([]);
   const [picked, setPicked] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const self =
+    me?.id && me.id !== app.owner?.id
+      ? {
+          id: String(me.id),
+          name: t('admin.userApps.offer.me', { name: me.name || me.username || me.id }),
+          email: me.email || null
+        }
+      : null;
+  const choices = self ? [self, ...people.filter(person => person.id !== self.id)] : people;
+  const personRadio = useRadioGroup({
+    ids: choices.map(person => person.id),
+    selected: picked?.id ?? null,
+    onSelect: id => setPicked(choices.find(person => person.id === id) || null)
+  });
 
   useEffect(() => {
     let active = true;
@@ -275,9 +297,9 @@ function OfferDialog({ app, onClose, onDone }) {
     setBusy(true);
     setError(null);
     try {
-      // The offer is made on the state the admin sees now: a newer one answers 409.
-      const view = await fetchAdminUserApp(app.id);
-      await offerAdminUserApp(app.id, picked.id, view.revision);
+      // The offer is made on the state of the list: a change since then answers 409. Reading
+      // the admin view for the revision would log a read of the content nobody saw.
+      await offerAdminUserApp(app.id, picked.id, app.revision);
       onDone();
     } catch (err) {
       setError(apiErrorMessage(err, t, getAdminApiErrorMessage(err)));
@@ -310,30 +332,28 @@ function OfferDialog({ app, onClose, onDone }) {
             className={INPUT_CLASS}
           />
         </div>
-        <ul
+        {/* The radios are direct children: a list inside a radiogroup loses its list semantics. */}
+        <div
           role="radiogroup"
-          aria-labelledby="user-app-offer-title"
+          aria-label={t('admin.userApps.offer.results')}
           className="max-h-56 overflow-y-auto space-y-1"
         >
-          {people.map(person => (
-            <li key={person.id}>
-              <button
-                type="button"
-                role="radio"
-                aria-checked={picked?.id === person.id}
-                onClick={() => setPicked(person)}
-                className="w-full rounded-md border border-gray-200 dark:border-gray-700 px-3 py-2 text-left text-sm text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700 aria-checked:border-indigo-500 aria-checked:bg-indigo-50 dark:aria-checked:bg-indigo-900/30"
-              >
-                {person.name}
-                {person.email && (
-                  <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">
-                    {person.email}
-                  </span>
-                )}
-              </button>
-            </li>
+          {choices.map(person => (
+            <button
+              key={person.id}
+              type="button"
+              {...personRadio(person.id)}
+              className="block w-full rounded-md border border-gray-200 dark:border-gray-700 px-3 py-2 text-left text-sm text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700 aria-checked:border-indigo-500 aria-checked:bg-indigo-50 dark:aria-checked:bg-indigo-900/30"
+            >
+              {person.name}
+              {person.email && (
+                <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">
+                  {person.email}
+                </span>
+              )}
+            </button>
           ))}
-        </ul>
+        </div>
         {error && (
           <p role="alert" className="text-sm text-red-700 dark:text-red-300">
             {error}
@@ -572,6 +592,11 @@ function AdminUserAppsTab({ onWaitingChange }) {
     ...entry,
     count: ofOwner.filter(entry.matches).length
   })).filter(entry => !entry.onlyWhenFound || entry.count > 0 || entry.id === filter);
+  const filterRadio = useRadioGroup({
+    ids: chips.map(chip => chip.id),
+    selected: activeFilter.id,
+    onSelect: setFilter
+  });
 
   const closeDialog = () => setDialog(null);
   const afterChange = async () => {
@@ -697,7 +722,8 @@ function AdminUserAppsTab({ onWaitingChange }) {
       priority: 'primary',
       href: app => buildPath(`/apps/${encodeURIComponent(app.id)}`),
       target: '_blank',
-      hidden: app => isWaiting(app)
+      // With the feature off the chat does not resolve a personal app.
+      hidden: app => !featureOn || isWaiting(app)
     },
     {
       // The admin editor of the company app, where it is tested and published.
@@ -722,7 +748,9 @@ function AdminUserAppsTab({ onWaitingChange }) {
       onClick: app => setDialog({ kind: 'offer', app }),
       // An offer goes through the routes of personal apps, which answer only while the feature
       // is on; nobody could accept it before that either.
-      hidden: app => !featureOn || app.state === 'promoted' || Boolean(app.pendingOwner)
+      // A switched-off app cannot change hands (design 8.3): the server would refuse it.
+      hidden: app =>
+        !featureOn || app.state === 'promoted' || Boolean(app.pendingOwner) || Boolean(app.disabled)
     },
     {
       id: 'withdrawOffer',
@@ -813,9 +841,7 @@ function AdminUserAppsTab({ onWaitingChange }) {
           <button
             key={chip.id}
             type="button"
-            role="radio"
-            aria-checked={activeFilter.id === chip.id}
-            onClick={() => setFilter(chip.id)}
+            {...filterRadio(chip.id)}
             className="px-3 py-1.5 rounded-full text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 aria-checked:bg-gray-900 aria-checked:text-white dark:aria-checked:bg-gray-100 dark:aria-checked:text-gray-900"
           >
             {t(chip.label)} {apps ? chip.count : ''}
@@ -857,6 +883,7 @@ function AdminUserAppsTab({ onWaitingChange }) {
           app={dialog.app}
           onClose={closeDialog}
           onDone={newAppId => navigate(`/admin/apps/${encodeURIComponent(newAppId)}?created=1`)}
+          onStale={() => void load()}
         />
       )}
       <ConfirmDialog {...dialogProps} />

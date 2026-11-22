@@ -30,8 +30,10 @@ import {
   ownerSnapshotNeedsRefresh,
   principalMemberKeys,
   satisfiesUserAppLevel,
+  userAppOwnerSnapshot,
   userAppPermissions
 } from '../services/userApps/userAppAccess.js';
+import { resolveOwnerPrincipal } from '../services/scheduler/tasks/ownerPrincipal.js';
 import { userAppSettings } from '../services/userApps/userAppSettings.js';
 
 const NOW = Date.parse('2026-11-20T10:00:00Z');
@@ -174,6 +176,17 @@ describe('the table of section 5', () => {
     assert.equal(permissions.canAcceptOffer, true);
     for (const other of [ALICE, CAROL, BOB, ROOT]) {
       assert.equal(permissionsOf(other).canAcceptOffer, false, other.id);
+    }
+  });
+
+  it('only a share that names the caller can be left', () => {
+    assert.equal(permissionsOf(BOB).canLeave, true);
+    assert.equal(permissionsOf(CAROL).canLeave, true);
+    assert.equal(permissionsOf(GINA).canLeave, false);
+    const shared = record({ members: [{ type: 'everyone', id: null, role: 'user' }] });
+    assert.equal(permissionsOf(EVE, shared).canLeave, false);
+    for (const other of [ALICE, DAVE, ROOT]) {
+      assert.equal(permissionsOf(other).canLeave, false, other.id);
     }
   });
 
@@ -386,6 +399,15 @@ describe('modifier: shares count only while the owner may hold and share', () =>
     const own = permissionsOf(ALICE, record(), { owner });
     assert.equal(own.canUse, false, 'a blocked owner cannot chat either');
     assert.equal(own.canEdit, true, 'the owner keeps the own row otherwise');
+    // ... but cannot hand the app past the block, and an earlier offer of the
+    // owner cannot be accepted. An admin may still offer it.
+    assert.equal(own.canOffer, false);
+    assert.equal(permissionsOf(DAVE, record(), { owner }).canAcceptOffer, false);
+    assert.equal(permissionsOf(ROOT, record(), { owner }).canOffer, true);
+    const byAdmin = record({
+      pendingOwner: { ...record().pendingOwner, offeredBy: { id: 'root', name: 'Root' } }
+    });
+    assert.equal(permissionsOf(DAVE, byAdmin, { owner }).canAcceptOffer, true);
     assert.equal(own.canDelete, true);
     assert.equal(own.suspended, 'ownerBlocked');
     assert.equal(permissionsOf(ROOT, record(), { owner }).canUse, false);
@@ -408,10 +430,18 @@ describe('modifier: shares count only while the owner may hold and share', () =>
     assert.equal(UNKNOWN_OWNER.mayShare, false);
   });
 
-  it('the receiver of an offer can still accept while the shares are suspended', () => {
-    const permissions = permissionsOf(DAVE, record(), { owner: { ...OWNER_OK, mayHold: false } });
-    assert.equal(permissions.canUse, false);
-    assert.equal(permissions.canAcceptOffer, true);
+  it('while the shares are suspended the receiver accepts only an offer of a full admin', () => {
+    const owner = { ...OWNER_OK, mayHold: false };
+    // The owner's own offer would hand the app past the missing permission.
+    const ownOffer = permissionsOf(DAVE, record(), { owner });
+    assert.equal(ownOffer.canUse, false);
+    assert.equal(ownOffer.canAcceptOffer, false);
+    const byAdmin = record({
+      pendingOwner: { ...record().pendingOwner, offeredBy: { id: 'root', name: 'Root' } }
+    });
+    const adminOffer = permissionsOf(DAVE, byAdmin, { owner });
+    assert.equal(adminOffer.canUse, false);
+    assert.equal(adminOffer.canAcceptOffer, true);
   });
 });
 
@@ -645,5 +675,82 @@ describe('the owner lookup (6.2)', () => {
     const old = record({ ownerPrincipalAt: '2026-11-19T09:59:00Z' });
     assert.equal(ownerSnapshotNeedsRefresh(old, { ...ALICE, authMode: 'local' }, NOW), true);
     assert.equal(ownerSnapshotNeedsRefresh(record({ ownerPrincipal: null }), ALICE, NOW), true);
+  });
+
+  describe('a request with the personal API key of the owner', () => {
+    const KEY = {
+      ...ALICE,
+      authMode: 'oauth_personal_key',
+      isPersonalApiKey: true,
+      // The groups the key was created with.
+      groups: ['users', 'authenticated']
+    };
+    const PLATFORM = { auth: {} };
+    const usersJson = internalGroups => ({
+      found: true,
+      record: { id: 'alice', passwordHash: '$2b$12$x', internalGroups, active: true }
+    });
+
+    it('never rewrites a stored snapshot', () => {
+      const old = record({ ownerPrincipalAt: '2026-11-01T00:00:00Z' });
+      assert.equal(ownerSnapshotNeedsRefresh(record(), KEY, NOW), false);
+      assert.equal(ownerSnapshotNeedsRefresh(old, KEY, NOW), false);
+      // Without any snapshot the key's request stores one.
+      assert.equal(ownerSnapshotNeedsRefresh(record({ ownerPrincipal: null }), KEY, NOW), true);
+    });
+
+    it('records a local account as local, with the groups of users.json', () => {
+      const snapshot = userAppOwnerSnapshot(KEY, {
+        platform: PLATFORM,
+        lookupUser: () => usersJson(['hr'])
+      });
+      assert.equal(snapshot.authMode, 'local');
+      assert.ok(snapshot.groups.includes('hr'));
+      assert.ok(!snapshot.groups.includes('users'));
+    });
+
+    it('keeps the key snapshot for an account without a local record', () => {
+      const snapshot = userAppOwnerSnapshot(KEY, {
+        platform: PLATFORM,
+        lookupUser: () => ({ found: true, record: { id: 'alice', authMethods: ['oidc'] } })
+      });
+      assert.equal(snapshot.authMode, 'oauth_personal_key');
+    });
+
+    it('a group removal in users.json still suspends the shares after a key request', () => {
+      // users.json now has alice in a group without the two permissions.
+      const lookupUser = () => usersJson(['restricted']);
+      const platform = {
+        auth: {},
+        groups: {
+          groups: {
+            users: { id: 'users', permissions: { userApps: true, userAppSharing: true } },
+            restricted: { id: 'restricted', permissions: {} }
+          }
+        }
+      };
+      const snapshot = userAppOwnerSnapshot(KEY, { platform, lookupUser });
+      const stored = record({ ownerPrincipal: snapshot });
+      const owner = lookupUserAppOwner(stored, {
+        settings: SETTINGS,
+        now: NOW,
+        resolve: task => {
+          const result = resolveOwnerPrincipal(task, { platform, lookupUser });
+          // Report the groups the lookup used, as resolved now.
+          return result.ok
+            ? {
+                ok: true,
+                user: {
+                  ...result.user,
+                  permissions: result.user.groups.includes('users') ? may : {}
+                }
+              }
+            : result;
+        }
+      });
+      assert.equal(owner.principal.groups.includes('users'), false);
+      assert.equal(permissionsOf(BOB, stored, { owner }).suspended, 'ownerMayNotShare');
+      assert.equal(permissionsOf(BOB, stored, { owner }).canUse, false);
+    });
   });
 });

@@ -42,6 +42,7 @@ import {
   shareMarkerKey
 } from '../services/userApps/UserAppRepository.js';
 import { OFFER_TTL_MS } from '../services/userApps/userAppAccess.js';
+import { CorruptDocumentError } from '../storage/errors.js';
 import { isUserAppId } from '../../shared/userAppContent.js';
 import { isValidAppId } from '../../shared/appId.js';
 
@@ -573,6 +574,64 @@ describe('the offer', () => {
     assert.equal(await repo.countOpenOffers('alice'), 0);
     await repo.delete(record.id, { keepLastState: false });
     assert.equal(await repo.countOpenOffers('root'), 0);
+  });
+});
+
+describe('an unreadable app document', () => {
+  it('is skipped by the shared listing and by the offer count, and its markers stay', async () => {
+    const broken = await createApp();
+    const fine = await createApp();
+    for (const record of [broken, fine]) {
+      await repo.setMembers(
+        record.id,
+        [{ type: 'user', id: 'ben', name: 'Ben Koch', role: 'user' }],
+        {
+          actor: ALICE
+        }
+      );
+      await repo.setOffer(record.id, CAROL, { actor: ALICE });
+    }
+    const damaged = makeRepo();
+    const get = damaged.get.bind(damaged);
+    damaged.get = async appId => {
+      if (appId === broken.id) throw new CorruptDocumentError('The stored data is damaged.');
+      return get(appId);
+    };
+
+    const listed = await damaged.listSharedWith(['user:ben']);
+    assert.deepEqual(
+      listed.filter(app => [broken.id, fine.id].includes(app.id)).map(app => app.id),
+      [fine.id]
+    );
+    assert.equal(await damaged.countOpenOffers('alice'), 1);
+    assert.ok((await markersOf('user:ben')).some(marker => marker.appId === broken.id));
+
+    for (const record of [broken, fine]) await repo.delete(record.id, { keepLastState: false });
+  });
+});
+
+describe('the company-app IDs personal apps hold', () => {
+  it('lists published and publishing IDs, in lower case, without the excepted app', async () => {
+    const published = await createApp();
+    const publishing = await createApp();
+    await repo.mutate(published.id, r => ({
+      ...r,
+      state: 'promoted',
+      publishedAs: { appId: 'Chat-2', at: T0, by: { id: 'alice', name: 'Alice' } }
+    }));
+    await repo.mutate(publishing.id, r => ({ ...r, publishing: { appId: 'chat-3' } }), {
+      bumpRevision: false
+    });
+    const held = await repo.heldCompanyAppIds();
+    assert.ok(held.has('chat-2'));
+    assert.ok(held.has('chat-3'));
+    assert.equal(
+      (await repo.heldCompanyAppIds({ exceptAppId: publishing.id })).has('chat-3'),
+      false
+    );
+    for (const record of [published, publishing]) {
+      await repo.delete(record.id, { keepLastState: false });
+    }
   });
 });
 

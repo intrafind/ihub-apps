@@ -27,7 +27,7 @@ function dateText(value, language) {
  * @param {{reason: string, capability?: object}|null} props.readOnly - The result of
  *   `readOnlyReason(app)`.
  * @param {(capability: object) => string} props.capabilityName - The name of a capability
- *   for a sentence ("Web search", "Jira").
+ *   as it stands inside a sentence ("the chosen AI model", "Jira").
  * @returns {JSX.Element|null}
  */
 function UserAppStatusBanner({ app, readOnly, capabilityName }) {

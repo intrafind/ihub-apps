@@ -6,6 +6,8 @@ import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
+import { invalidateAppsCache } from '../../../shared/hooks/appsCache';
+import { invalidateUserAppsConfig } from '../../../shared/hooks/useUserApps';
 import { apiErrorMessage } from '../../../utils/apiErrorMessage';
 import CreateHeader from '../../admin/components/app-create/CreateHeader';
 import CreateNotices, { EssentialsNotice } from '../../admin/components/app-create/CreateNotices';
@@ -111,6 +113,9 @@ function UserAppCreatePage({ source = userAppSource }) {
       // The draft became an app: nothing of it is kept for the tab.
       forget();
       markSaved();
+      // The new app belongs in the apps list and the sidebar, and counts against the limit.
+      invalidateAppsCache();
+      invalidateUserAppsConfig();
       navigate(editPath(id), { replace: true });
     },
     [forget, markSaved, navigate]

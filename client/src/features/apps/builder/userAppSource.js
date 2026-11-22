@@ -211,7 +211,9 @@ export const userAppSource = Object.freeze({
   copy: Object.freeze({
     stateLine: 'userApps.create.stateLine',
     submit: 'admin.apps.create.submit',
-    limits: 'userApps.create.limits'
+    limits: 'userApps.create.limits',
+    // Every member of a personal app can read its instructions (design 6.4).
+    instructionsHelp: 'userApps.edit.instructionsDesc'
   })
 });
 

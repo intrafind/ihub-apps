@@ -33,6 +33,19 @@ const mockApi = {
   createUserApp: jest.fn(),
   generateUserApp: jest.fn()
 };
+// What a created app makes stale: the apps list (sidebar, apps page) and the count of apps.
+const mockStale = { apps: 0, config: 0 };
+jest.mock('../../../client/src/shared/hooks/appsCache', () => ({
+  invalidateAppsCache: () => {
+    mockStale.apps += 1;
+  }
+}));
+jest.mock('../../../client/src/shared/hooks/useUserApps', () => ({
+  invalidateUserAppsConfig: () => {
+    mockStale.config += 1;
+  }
+}));
+
 jest.mock('../../../client/src/api', () => ({
   fetchModels: (...args) => mockApi.fetchModels(...args),
   fetchUserAppsConfig: (...args) => mockApi.fetchUserAppsConfig(...args),
@@ -211,6 +224,8 @@ function enhanced(status, data) {
 beforeEach(async () => {
   jest.clearAllMocks();
   mockAdminCalls.length = 0;
+  mockStale.apps = 0;
+  mockStale.config = 0;
   window.sessionStorage.clear();
   await mockI18n.changeLanguage('en');
   mockEnv.platformConfig = { defaultLanguage: 'en', featuresMap: { userApps: true } };
@@ -414,6 +429,12 @@ describe('the Essentials screen of a personal app', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('says under the instructions that the people it is shared with can read them', async () => {
+    await startEmpty();
+    expect(screen.getByText(en.userApps.edit.instructionsDesc)).toBeInTheDocument();
+    expect(screen.queryByText(CREATE.essentials.instructionsHelp)).not.toBeInTheDocument();
+  });
+
   it('names a name that is missing, and never an app ID', async () => {
     await startEmpty();
     await submit();
@@ -453,6 +474,8 @@ describe('creating a personal app', () => {
     expect(body).not.toHaveProperty('category');
     expect(body).not.toHaveProperty('enabled');
     expect(where()).toBe(`EDITOR:/apps/${NEW_ID}/edit?created=1`);
+    // The new app is in the apps list and the sidebar, and counts against the limit.
+    expect(mockStale).toEqual({ apps: 1, config: 1 });
     // Nothing of the draft is kept for the tab.
     expect(window.sessionStorage.getItem(USER_APP_DRAFT_STORAGE_KEY)).toBeNull();
   });
@@ -714,7 +737,9 @@ describe('the source contract', () => {
     expect(userAppSource.copy).toEqual({
       stateLine: 'userApps.create.stateLine',
       submit: 'admin.apps.create.submit',
-      limits: 'userApps.create.limits'
+      limits: 'userApps.create.limits',
+      // Members can read the instructions: not the admin sentence "users do not see it".
+      instructionsHelp: 'userApps.edit.instructionsDesc'
     });
   });
 

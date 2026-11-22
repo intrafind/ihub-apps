@@ -259,6 +259,8 @@ describe('what a publish writes', () => {
     assert.equal('integrations' in file, false);
     assert.equal('skills' in file, false);
     assert.equal('websearch' in file, false);
+    // Projects stay off, as in the personal app: an admin switches them on.
+    assert.deepEqual(file.features, { projects: false, userProjects: false });
     // No ownership field: an admin app has no owner.
     assert.equal(JSON.stringify(file).includes('anna'), false);
 
@@ -269,18 +271,17 @@ describe('what a publish writes', () => {
     assert.equal(stored.pendingOwner ?? null, null);
     assert.equal('publishing' in stored, false);
 
-    // The owner may use the company app at once: the answer points there.
-    assert.equal(res.body.state, 'promoted');
-    assert.equal(res.body.permissions.canUse, false);
-    assert.equal(res.body.publishedAs.appId, SLUG);
-    assert.equal('system' in res.body, false);
-    const pointer = await as('anna').get(`/api/apps/${record.id}`);
-    assert.deepEqual(pointer.body, {
+    // The owner may use the company app at once: the answer is the pointer
+    // there, the same body the next GET answers, with the keys of 9.1.
+    const retired = {
       id: record.id,
       ownership: 'user',
       state: 'retired',
-      publishedAs: { appId: SLUG, name: { en: 'Job ad writer' } }
-    });
+      publishedAs: { appId: SLUG, name: { en: 'Job ad writer' }, enabled: true }
+    };
+    assert.deepEqual(res.body, retired);
+    const pointer = await as('anna').get(`/api/apps/${record.id}`);
+    assert.deepEqual(pointer.body, retired);
     // The company app is in the list of apps of everyone.
     const list = await as('dave').get('/api/apps');
     assert.equal(JSON.stringify(list.body).includes(`"id":"${SLUG}"`), true);
@@ -318,6 +319,7 @@ describe('what a publish writes', () => {
     assert.equal(res.body.publishedAs.enabled, false);
     assert.deepEqual(res.body.publishedAs.name, { en: 'Job ad writer' });
     assert.ok(res.body.publishedAs.at);
+    assert.deepEqual(Object.keys(res.body.publishedAs).sort(), ['appId', 'at', 'enabled', 'name']);
     assert.equal('publish' in res.body, false);
 
     assert.equal((await chat('ben', record.id)).status, 200);
@@ -449,6 +451,108 @@ describe('what a publish writes', () => {
       (configCache.getApps(true).data || []).some(app => app.id === SLUG),
       false
     );
+  });
+
+  it('a personal app deleted during the publish leaves no company app behind', async () => {
+    const record = await api.createApp('anna');
+    const repo = api.repo();
+    const original = repo.mutate.bind(repo);
+    let calls = 0;
+    // Between the mark and the final write, the owner deletes the app in another tab.
+    repo.mutate = async (...args) => {
+      calls += 1;
+      if (calls === 2) await repo.delete(record.id);
+      return original(...args);
+    };
+    try {
+      const res = await publish('anna', record);
+      assert.equal(res.status, 404, res.text);
+    } finally {
+      delete repo.mutate;
+    }
+    assert.equal(await appFile(SLUG), null);
+    assert.equal(
+      (configCache.getApps(true).data || []).some(app => app.id === SLUG),
+      false
+    );
+  });
+
+  it('a refused publish takes its mark off the record', async () => {
+    const record = await api.createApp('anna');
+    const repo = api.repo();
+    const original = repo.mutate.bind(repo);
+    let calls = 0;
+    repo.mutate = async (...args) => {
+      calls += 1;
+      if (calls === 2) {
+        await repo.update(
+          record.id,
+          { ...record.content, description: { en: 'Changed meanwhile' } },
+          { actor: { id: 'anna', name: 'Anna Schmidt' } }
+        );
+      }
+      return original(...args);
+    };
+    try {
+      assert.equal((await publish('anna', record)).status, 409);
+    } finally {
+      delete repo.mutate;
+    }
+    assert.equal((await repo.get(record.id)).publishing ?? null, null);
+  });
+
+  it('the crash window: a leftover file with a capability taken away since is not adopted', async () => {
+    await configure(jira());
+    const record = await api.createApp('anna', { content: withBinding });
+    const anna = api.user('anna');
+    const settings = currentUserAppSettings();
+    const effective = effectiveUserApp(record, {
+      runner: anna,
+      owner: anna,
+      settings,
+      catalog: await userAppCatalog({ owner: anna, runner: anna })
+    });
+    // The first call wrote the file with the binding, then the server stopped.
+    await api
+      .repo()
+      .mutate(record.id, r => ({ ...r, publishing: { appId: SLUG } }), { bumpRevision: false });
+    await configStore.createJson(
+      `apps/${SLUG}.json`,
+      toAdminApp(record, { effective, id: SLUG, enabled: false })
+    );
+    // Meanwhile the admin takes the installation away from personal apps.
+    await configure({ ...jira(), userApps: { capabilities: { integrations: [] } } });
+
+    const res = await publish('anna', await api.repo().get(record.id));
+    assert.equal(res.status, 200, res.text);
+    const stored = await api.repo().get(record.id);
+    assert.notEqual(stored.publishedAs.appId, SLUG);
+    assert.equal('integrations' in (await appFile(stored.publishedAs.appId)), false);
+  });
+
+  it('a file of the same content that another personal app is publishing is not adopted', async () => {
+    const first = await api.createApp('anna');
+    const second = await api.createApp('ben');
+    // Ben's publish of an app from the same template is under way: marked, file written.
+    await api
+      .repo()
+      .mutate(second.id, r => ({ ...r, publishing: { appId: SLUG } }), { bumpRevision: false });
+    const ben = api.user('ben');
+    const settings = currentUserAppSettings();
+    const effective = effectiveUserApp(second, {
+      runner: ben,
+      owner: ben,
+      settings,
+      catalog: await userAppCatalog({ owner: ben, runner: ben })
+    });
+    await configStore.createJson(
+      `apps/${SLUG}.json`,
+      toAdminApp(second, { effective, id: SLUG, enabled: true })
+    );
+
+    const res = await publish('anna', first);
+    assert.equal(res.status, 200, res.text);
+    assert.equal((await api.repo().get(first.id)).publishedAs.appId, `${SLUG}-2`);
   });
 
   it('a published app counts against the limit of its owner', async () => {
@@ -610,7 +714,7 @@ describe('retired is decided per person, on an installation without the wildcard
       id: record.id,
       ownership: 'user',
       state: 'retired',
-      publishedAs: { appId: SLUG, name: { en: 'Job ad writer' } }
+      publishedAs: { appId: SLUG, name: { en: 'Job ad writer' }, enabled: true }
     });
     assert.equal((await chat('sam', record.id)).status, 404);
 
@@ -885,5 +989,71 @@ describe('the way back', () => {
     const again = await publish('anna', await api.repo().get(record.id));
     assert.equal(again.status, 200, again.text);
     assert.equal((await api.repo().get(record.id)).publishedAs.appId, SLUG);
+  });
+
+  it('the ID of a deleted company app is not handed out while a record still holds it', async () => {
+    const first = await sharedApp();
+    assert.equal((await publish('anna', first)).status, 200);
+    await configStore.remove(`apps/${SLUG}.json`);
+    await configCache.refreshAppsCache();
+
+    // Nobody read Anna's app since. Ben publishes his own app of the same name.
+    const second = await api.createApp('ben');
+    const res = await publish('ben', second);
+    assert.equal(res.status, 200, res.text);
+    assert.equal((await api.repo().get(second.id)).publishedAs.appId, `${SLUG}-2`);
+
+    // Anna's app is still released, and does not point at Ben's app.
+    const view = await as('anna').get(`/api/apps/${first.id}`);
+    assert.equal(view.body.state, 'active');
+    assert.equal(view.body.permissions.canEdit, true);
+  });
+
+  it('the release of a deleted company app is stored when the app is read', async () => {
+    const record = await sharedApp();
+    assert.equal((await publish('anna', record)).status, 200);
+    const promotedRevision = (await api.repo().get(record.id)).revision;
+    await configStore.remove(`apps/${SLUG}.json`);
+    await configCache.refreshAppsCache();
+
+    assert.equal((await as('ben').get(`/api/apps/${record.id}`)).status, 200);
+    const stored = await api.repo().get(record.id);
+    assert.equal(stored.state, 'active');
+    assert.equal(stored.publishedAs, null);
+    assert.equal(stored.revision, promotedRevision);
+
+    // An app of that ID written later is somebody else's: the record stays active.
+    await configStore.writeJson(`apps/${SLUG}.json`, { ...APPS[0], id: SLUG });
+    await configCache.refreshAppsCache();
+    const view = await as('anna').get(`/api/apps/${record.id}`);
+    assert.equal(view.body.state, 'active');
+    assert.equal(view.body.permissions.canEdit, true);
+  });
+
+  it('an offer of an app whose company app was deleted can be accepted', async () => {
+    const record = await sharedApp();
+    assert.equal((await publish('anna', record)).status, 200);
+    await configStore.remove(`apps/${SLUG}.json`);
+    await configCache.refreshAppsCache();
+    // The release is not stored yet: the offer is made on the stored record.
+    await api
+      .repo()
+      .setOffer(
+        record.id,
+        { id: 'dave', name: 'Dave Lund' },
+        { actor: { id: 'anna', name: 'Anna Schmidt' } }
+      );
+    const stored = await api.repo().get(record.id);
+    assert.equal(stored.state, 'promoted');
+
+    const res = await as('dave')
+      .post(`/api/apps/${record.id}/owner-offer/_accept`)
+      .set('If-Match', etag(stored))
+      .send();
+    assert.equal(res.status, 200, res.text);
+    const after = await api.repo().get(record.id);
+    assert.equal(after.owner.id, 'dave');
+    assert.equal(after.state, 'active');
+    assert.equal(after.publishedAs, null);
   });
 });
