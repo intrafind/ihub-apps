@@ -1311,19 +1311,27 @@ class ChatService {
           basis: carriedBasis({ prior: resume?.basis || connectResume?.basis, result })
         });
       }
-      // `run/ended` is held back until the answer is stored (below).
-      let endFrame = null;
+      // The terminal frames (`stream/error`, `run/ended`) are held back until
+      // the answer is stored (below), and then sent in the order they were
+      // made: the client stops reading at either of them.
+      const terminalFrames = [];
+      const finishStream = {
+        emit: (type, data) => {
+          if (type === SSE_V2_EVENTS.STREAM_ERROR || type === SSE_V2_EVENTS.RUN_ENDED) {
+            terminalFrames.push([type, data]);
+            return null;
+          }
+          return stream.emit(type, data);
+        }
+      };
       outcome = await this._finishTurn({
-        announceEnd: frame => {
-          endFrame = frame;
-        },
         result,
         outputId,
         user,
         runId,
         chatId,
         streaming,
-        stream,
+        stream: finishStream,
         buildLogData: log,
         model,
         timeoutMs,
@@ -1403,7 +1411,7 @@ class ChatService {
           });
         }
       } finally {
-        if (endFrame) stream.emit(SSE_V2_EVENTS.RUN_ENDED, endFrame);
+        for (const [type, data] of terminalFrames) stream.emit(type, data);
       }
       if (persist) {
         // A named chat is easier to find again. After the answer is stored and
@@ -1428,12 +1436,8 @@ class ChatService {
     } catch (error) {
       // The loop never throws for model or tool failures; this is a bug path.
       logger.error('Chat turn crashed', { component: COMPONENT, chatId, runId, error });
-      stream.emit(SSE_V2_EVENTS.STREAM_ERROR, {
-        code: 'INTERNAL_ERROR',
-        message: error.message || 'Internal error'
-      });
-      // Ledger first here too, for the reason above; `run/ended` after the
-      // chat is settled, as on the ordinary path.
+      // Ledger first here too, for the reason above; `stream/error` and
+      // `run/ended` after the chat is settled, as on the ordinary path.
       this._endLedgerRun(runId, {
         status: 'error',
         finishReason: 'error',
@@ -1461,6 +1465,10 @@ class ChatService {
           });
         }
       } finally {
+        stream.emit(SSE_V2_EVENTS.STREAM_ERROR, {
+          code: 'INTERNAL_ERROR',
+          message: error.message || 'Internal error'
+        });
         stream.emit(SSE_V2_EVENTS.RUN_ENDED, {
           status: 'error',
           finishReason: 'error',
@@ -1603,9 +1611,6 @@ class ChatService {
   /**
    * Project the loop result onto the terminal frames (`stream/error`,
    * `run/paused`, `run/ended`) and the interaction log.
-   *
-   * `announceEnd`, when given, receives the `run/ended` payload instead of the
-   * stream, so the caller emits it once the answer is stored.
    * @private
    */
   async _finishTurn({
@@ -1632,8 +1637,7 @@ class ChatService {
     priorBasis = null,
     contextTracker = null,
     structured = null,
-    signal = null,
-    announceEnd = null
+    signal = null
   }) {
     // A continuation after an approval starts a new loop run: what the turn used
     // before it paused is added, so the answer's basis is the whole turn's.
@@ -1685,16 +1689,14 @@ class ChatService {
     // from the stored messages), so they are in the live frames only.
     const context = contextTracker?.replay(content) || contextTracker?.last() || undefined;
     if (context) summary.context = context;
-    // The terminal frame goes to `announceEnd` when the caller has to store the
-    // answer before the client is told the turn is over (see `runTurn`).
+    // `runTurn` passes a stream that holds the terminal frames back until the
+    // answer is stored, so the client is told the turn is over only then.
     const endRun = data => {
-      const frame = {
+      stream.emit(SSE_V2_EVENTS.RUN_ENDED, {
         ...(usage ? { usage } : {}),
         ...(context ? { context } : {}),
         ...data
-      };
-      if (typeof announceEnd === 'function') announceEnd(frame);
-      else stream.emit(SSE_V2_EVENTS.RUN_ENDED, frame);
+      });
     };
     // The provenance object of the answer (EU AI Act Art. 50(2)): hashed from
     // the text the caller receives, so it runs after structured-output

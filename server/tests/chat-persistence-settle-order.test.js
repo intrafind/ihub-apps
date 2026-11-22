@@ -45,14 +45,25 @@ const PREP = {
  *
  * @param {Object} [options]
  * @param {boolean} [options.crash] - Make the loop throw, to drive the bug path.
+ * @param {boolean} [options.modelError] - Make the loop end with a model error.
  * @returns {Promise<string[]>} The writes, in the order they happened.
  */
-async function settleOrder({ crash = false } = {}) {
+async function settleOrder({ crash = false, modelError = false } = {}) {
   const order = [];
   const service = new ChatService({
     agentLoop: {
       run: async () => {
         if (crash) throw new Error('the loop blew up');
+        if (modelError) {
+          return {
+            status: 'error',
+            content: '',
+            finishReason: 'error',
+            error: { code: 'MODEL_ERROR', message: 'Invalid request sent to local API' },
+            messages: [],
+            usage: null
+          };
+        }
         return { status: 'ok', content: 'done', finishReason: 'stop', messages: [], usage: null };
       }
     },
@@ -64,7 +75,7 @@ async function settleOrder({ crash = false } = {}) {
       }
     },
     logInteraction: () => {},
-    telemetry: { recordTurn: () => {}, recordError: () => {} }
+    telemetry: { recordTurn: () => {}, recordError: () => {}, recordChatCallEnd: () => {} }
   });
 
   // `materializeAssistantTurn` reaches the repository; recording `releaseRun`
@@ -87,11 +98,15 @@ async function settleOrder({ crash = false } = {}) {
     runId: null,
     emit: type => {
       if (type === SSE_V2_EVENTS.RUN_ENDED) order.push('run-ended-sent');
+      if (type === SSE_V2_EVENTS.STREAM_ERROR) order.push('stream-error-sent');
       return null;
     }
   };
 
-  const chatId = `chat-settle-order-${crash ? 'crash' : 'normal'}`;
+  let variant = 'normal';
+  if (crash) variant = 'crash';
+  else if (modelError) variant = 'error';
+  const chatId = `chat-settle-order-${variant}`;
   try {
     await service.runTurn({
       prep: PREP,
@@ -147,5 +162,27 @@ describe('a finished durable turn stores its answer before it tells the client i
 
     assert.equal(order.filter(entry => entry === 'run-ended-sent').length, 1, order.join(', '));
     assert.ok(order.indexOf('run-released') < order.indexOf('run-ended-sent'), order.join(', '));
+  });
+
+  it('holds stream/error back with run/ended: the client stops reading at either', async () => {
+    const order = await settleOrder({ modelError: true });
+
+    assert.equal(order.filter(entry => entry === 'stream-error-sent').length, 1, order.join(', '));
+    assert.equal(order.filter(entry => entry === 'run-ended-sent').length, 1, order.join(', '));
+    assert.ok(order.indexOf('run-released') < order.indexOf('stream-error-sent'), order.join(', '));
+    assert.ok(
+      order.indexOf('stream-error-sent') < order.indexOf('run-ended-sent'),
+      `run/ended must follow stream/error, or a client that stopped at the error misses it: ${order.join(', ')}`
+    );
+  });
+
+  it('and on the crash path, stream/error first, both after the chat is released', async () => {
+    const order = await settleOrder({ crash: true });
+
+    assert.ok(order.indexOf('run-released') < order.indexOf('stream-error-sent'), order.join(', '));
+    assert.ok(
+      order.indexOf('stream-error-sent') < order.indexOf('run-ended-sent'),
+      order.join(', ')
+    );
   });
 });
