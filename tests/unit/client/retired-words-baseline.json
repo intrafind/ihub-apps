@@ -1,5 +1,4 @@
 {
-  "sub-task": ["docs:agents.md#Memory pipeline (memory-compose → memory-finalize)"],
   "lease": ["en:abortCauses.lease_lost"],
   "worker": [
     "de:abortCauses.lease_lost",

@@ -283,22 +283,20 @@ is `404 NOT_FOUND` for every caller.
   those of a run that belongs to no person, which is an agent run under the agent's own identity
   or a workflow run started by a trigger. Nobody else could answer the latter, and the answer
   continues the run with that identity's rights, not with a user's.
-  `GET /api/interactions/pending` and Admin → Agents → Pending Approvals & Questions still list
-  every pending interaction for an admin, also those only their owner answers; the answer to
+  `GET /api/interactions/pending` still lists every pending interaction for an admin, also those only their owner answers; the answer to
   such a one is `403 FORBIDDEN`. The list carries no marker yet for which entries the caller
   may answer.
 
 #### Routes with their own check
 
-These rules hold where the routes ask the run access check. Two groups of routes were there
-before it, decide on their own and are **not** covered:
+These rules hold where the routes ask the run access check. One group of routes was there
+before it, decides on its own and is **not** covered:
 
 | Routes | What an admin can still do there | Audit log |
 | ------ | -------------------------------- | --------- |
 | `POST /api/workflows/executions/:executionId/_cancel`, `POST .../_restart`, `DELETE /api/workflows/executions/:executionId` | cancel, restart (run again) and delete another user's workflow run | no entry |
-| `POST /api/agents/runs/:runId/_cancel`, `POST /api/agents/runs/:runId/_resume` | cancel and resume an agent run they did not trigger | no entry |
 
-The admin pages for workflow runs and agent runs use these routes. So a statement such as "an
+The admin pages for workflow runs use these routes. So a statement such as "an
 admin stop is written to the audit log" is true for `POST /api/runs/:runId/human-events` and
 `DELETE /api/runs/:runId`, and not for a cancel from those pages.
 

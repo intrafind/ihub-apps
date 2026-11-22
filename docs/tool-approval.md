@@ -203,8 +203,8 @@ The decision is only used once the turn is ready to run; a request refused befor
 approval open, so the same decision can be sent again. An approval that expired in the meantime
 continues with `APPROVAL_EXPIRED`.
 
-Admins and approver groups who see an approval in **Admin → Agents → Approvals** (or a run's
-interactions) see secret-looking argument values (passwords, tokens, API keys, authorization,
+Admins and approver groups who see an approval in the list of pending interactions
+(`GET /api/interactions/pending`) or in a run's interactions see secret-looking argument values (passwords, tokens, API keys, authorization,
 credentials, …) redacted; only the person who asked sees them in full. The call itself always
 runs with the full arguments.
 
@@ -218,7 +218,7 @@ approving. Both may come later.
 | Inference API (OpenAI-compatible), app-as-tool, MCP gateway, A2A gateway | The call is refused with the tool result `APPROVAL_REQUIRED_NO_USER`; the model carries on. |
 | A client that does not draw the card (an integration posting to the chat API without `toolApprovalCapable: true`, or a chat request without an open stream) | Same: `APPROVAL_REQUIRED_NO_USER`. |
 | An MCP App view in a host that cannot show the card (an embed, a shared chat, Office) | 403 `APPROVAL_REQUIRED_NO_USER` for a gated tool. |
-| Workflow and agent nodes                                                 | Refused, unless the node names approver groups (`config.toolApproval.approverGroups`). Then the approval is parked for them in **Admin → Agents → Approvals**, and the node continues with the stored call once a member approves (or with `USER_REJECTED`). The call runs as the execution's own principal, never as the approver; the approver is recorded as the answer's author. A step that is retried after the approved call ran does not run it again (`APPROVAL_ALREADY_USED`). |
+| Workflow and agent nodes                                                 | Refused, unless the node names approver groups (`config.toolApproval.approverGroups`). Then the approval is parked for them (listed by `GET /api/interactions/pending`), and the node continues with the stored call once a member approves (or with `USER_REJECTED`). The call runs as the execution's own principal, never as the approver; the approver is recorded as the answer's author. A step that is retried after the approved call ran does not run it again (`APPROVAL_ALREADY_USED`). |
 | Scheduled tasks                                                          | Unchanged flow: the run pauses for the task owner, who approves from the run's chat or the task page. **Always allow for this task** still applies. The gate now uses the same resolver, so every mode above applies to scheduled runs too. |
 
 The loop policy `interactions.headlessFallback` decides the no-person case for the shared seam:

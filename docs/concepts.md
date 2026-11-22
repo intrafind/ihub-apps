@@ -170,7 +170,7 @@ Note that tool calling requires a model that supports it — check the model's `
 | **Vision / image understanding**             | Depends on the model. It must support images (`supportsImages`) and be configured accordingly. See [Image Upload](image-upload-feature.md). |
 | **[Magic Prompt](magic-prompt-feature.md)**  | Rewrites a short or incomplete user input into a better prompt, with an undo option.                               |
 | **[Compare Mode](compare-mode.md)**          | Sends one input to two models and shows the answers side by side — useful for evaluating models against each other. |
-| **Chat history**                             | Users can keep a conversation across reloads. There is no persistent memory spanning different conversations in chat apps — keeping chat history and long-term memory are separate things. Long-term memory exists only for agents in the [Agent Factory](agents.md). |
+| **Chat history**                             | Users can keep a conversation across reloads. There is no persistent memory spanning different conversations in chat apps — keeping chat history and long-term memory are separate things. Long-term memory exists only for [scheduled tasks](scheduled-tasks.md#memory-and-earlier-runs) that keep notes between runs. |
 | **[Structured output](structured-output.md)**| JSON-schema-validated responses for apps whose output feeds another system.                                        |
 
 ---

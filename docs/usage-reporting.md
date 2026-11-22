@@ -22,7 +22,7 @@ call passes through, so every surface is counted the same way:
 | Surface | What it covers |
 | --- | --- |
 | Chat | Chat turns, including every round of a tool loop and sub-agents |
-| Agent | Agent runs |
+| Agent | Runs of the removed [Agent Factory](agents.md); only records written before its removal |
 | Workflow | Workflow nodes (prompt, planner, verifier, …) |
 | Scheduled task | Runs of a scheduled task |
 | API | The OpenAI-compatible Inference API |
