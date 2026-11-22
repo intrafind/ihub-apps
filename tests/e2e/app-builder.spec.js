@@ -30,6 +30,8 @@ import { ADMIN, BUILDER, BUILDER_GROUP, NORMAL_USER } from '../config/app-builde
 const PREFIX = 'e2e-ab-';
 const STUB_URL = process.env.E2E_APP_BUILDER_LLM_URL;
 const STUB_MODEL = 'e2e-stub';
+/** Every model the e2e contents set up (`tests/config/e2e-contents.mjs`): all off is "no model". */
+const STUB_MODELS = [STUB_MODEL, 'e2e-stub-tools'];
 const here = path.dirname(fileURLToPath(import.meta.url));
 
 /** The texts of the UI, so German labels are the ones the product ships. */
@@ -1140,10 +1142,16 @@ test.describe('Without a model', () => {
     browser,
     baseURL
   }) => {
-    const toggleModel = enabled =>
-      adminApi.post(`/api/admin/models/${STUB_MODEL}/_toggle`, { data: { enabled } });
-    const off = await toggleModel(false);
-    expect(off.ok(), await off.text()).toBeTruthy();
+    // Every stub model goes off, or one left on still counts as a model.
+    const toggleModels = async enabled => {
+      for (const model of STUB_MODELS) {
+        const response = await adminApi.post(`/api/admin/models/${model}/_toggle`, {
+          data: { enabled }
+        });
+        expect(response.ok(), `${model}: ${await response.text()}`).toBeTruthy();
+      }
+    };
+    await toggleModels(false);
     try {
       await page.goto('/admin/apps/new');
       const notice = page.getByRole('status').filter({ hasText: 'No AI model is set up yet' });
@@ -1201,8 +1209,7 @@ test.describe('Without a model', () => {
         await context.close();
       }
     } finally {
-      const on = await toggleModel(true);
-      expect(on.ok(), 'the stub model is enabled again').toBeTruthy();
+      await toggleModels(true);
     }
   });
 });
