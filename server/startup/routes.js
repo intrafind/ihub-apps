@@ -4,6 +4,7 @@
 import registerChatRoutes from '../routes/chat/index.js';
 import registerAdminRoutes from '../routes/adminRoutes.js';
 import registerStaticRoutes from '../routes/staticRoutes.js';
+import apiNotFound from '../middleware/apiNotFound.js';
 import registerGeneralRoutes from '../routes/generalRoutes.js';
 import registerModelRoutes from '../routes/modelRoutes.js';
 import registerMcpAppRoutes from '../routes/mcpAppRoutes.js';
@@ -194,7 +195,10 @@ const ROUTE_STEPS = [
   app => registerToolsServiceRoutes(app),
   // Register static file and SPA routes after API routes
   (app, { isPackaged, rootDir, basePath }) =>
-    registerStaticRoutes(app, { isPackaged, rootDir, basePath })
+    registerStaticRoutes(app, { isPackaged, rootDir, basePath }),
+  // Last: an API path nothing above answered is a 404 problem+json, also a
+  // removed one such as the Agent Factory's `/api/agents/...` (#3773).
+  app => app.use(buildApiPath('/'), apiNotFound)
 ];
 
 /**

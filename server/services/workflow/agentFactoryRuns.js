@@ -6,7 +6,7 @@
  * (#3773).
  *
  * An Agent Factory run is a workflow execution whose start data carries
- * `_agent` (the profile id and who started it). Its routes, its pages and its
+ * `_agent.profileId` (the profile it ran for). Its routes, its pages and its
  * flag are gone, so nothing can show, answer or resume such a run any more. A
  * starting server therefore settles every one of them that is not finished
  * (running, pending or paused at an approval) as cancelled with the reason
@@ -33,12 +33,20 @@ export const AGENT_FACTORY_REMOVED = 'AGENT_FACTORY_REMOVED';
 /**
  * Whether a stored execution is an Agent Factory run.
  *
+ * Told by `_agent.profileId`, the marker the rest of the server uses
+ * (`WorkflowEngine` for the ledger kind, `checkpointResume`,
+ * `WorkflowStateRepository`). `_agent` alone is no marker: the frozen
+ * artifact store (`agents/runtime/artifactStore.js`) writes
+ * `_agent.artifacts` into every run that writes an artifact, plain workflow
+ * runs included (template render, planner tasks, synthesizer steps,
+ * `write_artifact`).
+ *
  * @param {Object|null|undefined} state - Stored workflow state.
  * @returns {boolean}
  */
 export function isAgentFactoryExecution(state) {
-  const agent = state?.data?._agent;
-  return Boolean(agent) && typeof agent === 'object';
+  const profileId = state?.data?._agent?.profileId;
+  return typeof profileId === 'string' && profileId.length > 0;
 }
 
 /**

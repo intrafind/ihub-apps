@@ -265,8 +265,7 @@ is `404 NOT_FOUND` for every caller.
 
 - **The owner** is the principal recorded on the run, resolved in the identity mode the run was
   written in. A message into a running answer is sent in the owner's name, so it also needs the
-  write right on the run's chat, and for an agent run the person who triggered it does not count:
-  they read, stop and answer it, and do not send a message into it.
+  write right on the run's chat.
 - **An anonymous run** has a random principal nobody can present again. Its owner is the browser
   session that owns the run's chat: the request must carry the guest cookie the chat was started
   with. Whoever holds the run id can still read the run and see that it waits for an answer, and
@@ -280,12 +279,15 @@ is `404 NOT_FOUND` for every caller.
   an approval or a question of another user's run, because the approved call would run with that
   user's rights, and does not send a message into it. Two kinds of interaction an admin still
   answers: those that name an approver group (the group's members and admins answer them), and
-  those of a run that belongs to no person, which is an agent run under the agent's own identity
-  or a workflow run started by a trigger. Nobody else could answer the latter, and the answer
-  continues the run with that identity's rights, not with a user's.
-  `GET /api/interactions/pending` still lists every pending interaction for an admin, also those only their owner answers; the answer to
-  such a one is `403 FORBIDDEN`. The list carries no marker yet for which entries the caller
-  may answer.
+  those of a run that belongs to no person, such as a workflow run started by a trigger. Nobody
+  else could answer the latter, and the answer continues the run with that identity's rights, not
+  with a user's. (Runs of the removed Agent Factory, which ran under the agent's own identity, no
+  longer continue: see [Agent Factory (Removed)](agents.md).)
+  `GET /api/interactions/pending` still lists every pending interaction for an admin, also those
+  only their owner answers; the answer to such a one is `403 FORBIDDEN`. The list carries no
+  marker yet for which entries the caller may answer. No page shows this list across runs since
+  the Agent Factory's **Pending Approvals & Questions** page was removed; a pending step is
+  answered on its run's page or in its chat.
 
 #### Routes with their own check
 
@@ -337,9 +339,8 @@ recorded that way, `anonymous` for anonymous users), never a raw user id.
 | Touchpoint                              | Raised by                                  | Answered by                                                                                                  |
 | --------------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
 | Chat clarification (`ask_user`)         | the chat turn's question seam (`origin: tool`, `source.chatId`) | the next chat message (`clarificationResponse.questionId`, channel `chat`) or the answer endpoint; unanswered ones expire after 24 h or are cancelled by the next message |
-| Workflow `human` node checkpoint        | `HumanNodeExecutor` (`origin: node`, `source.checkpointId`, id = checkpoint id) | the answer endpoint (`channel` `run_page` / `queue` / `chat`): `checkpointResume` validates the option, routes the branch and resumes the execution before the answer is persisted |
-| Agent HITL approval                     | same as above with `policy.approverGroups` from `profile.hitl.approverGroups` | same; the service enforces the approver groups (admins may always answer)                                                                |
-| Workflow / agent question (`ask_user` inside a prompt or agent node) | the node's question seam (`origin: tool`, `source.checkpointId` + `nodeId`): the execution pauses on a question checkpoint with the node's loop transcript persisted (`_pausedLoops`), parked in the queue without a timeout | the answer endpoint (run page, chat, queue; free text, number or options, skippable when the model allowed it): the execution resumes the same node, which continues its loop with the answer as the `ask_user` result |
+| Workflow `human` node checkpoint        | `HumanNodeExecutor` (`origin: node`, `source.checkpointId`, id = checkpoint id); with `policy.approverGroups` when the step names approver groups | the answer endpoint (`channel` `run_page` / `chat`; the API also accepts `queue`, which no page sends since the Agent Factory's queue page was removed): `checkpointResume` validates the option, routes the branch and resumes the execution before the answer is persisted; the service enforces approver groups (admins may always answer them) |
+| Workflow question (`ask_user` inside a prompt node) | the node's question seam (`origin: tool`, `source.checkpointId` + `nodeId`): the execution pauses on a question checkpoint with the node's loop transcript persisted (`_pausedLoops`), without a timeout | the answer endpoint (run page or chat; free text, number or options, skippable when the model allowed it): the execution resumes the same node, which continues its loop with the answer as the `ask_user` result |
 
 The answer body is `{ value?, data?, decision?, reason?, skipped? }`. It is
 validated server-side against the prompt: the options, the prompt's

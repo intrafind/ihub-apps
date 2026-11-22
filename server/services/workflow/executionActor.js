@@ -19,9 +19,14 @@
  *
  * @module services/workflow/executionActor
  */
-import configCache from '../../configCache.js';
-import { buildAgentPrincipal } from '../../utils/authorization.js';
 import { ownerSnapshot, resolveOwnerPrincipal } from '../scheduler/tasks/ownerPrincipal.js';
+
+/**
+ * The code a recorded agent principal is refused with. Kept here as a literal
+ * (it equals `AGENT_FACTORY_REMOVED` of `agentFactoryRuns.js`): the engine
+ * imports this module, and that one reads the state store.
+ */
+const AGENT_FACTORY_REMOVED = 'AGENT_FACTORY_REMOVED';
 
 /**
  * The snapshot of the principal an execution runs as.
@@ -45,22 +50,22 @@ export function actorSnapshot(user) {
  *
  * @param {Object|null} snapshot - see {@link actorSnapshot}
  * @returns {{ok: true, user: Object}|{ok: false, code: string, message: string}}
+ *   A recorded agent principal is refused with `AGENT_FACTORY_REMOVED`.
  */
 export function resolveExecutionActor(snapshot) {
   if (!snapshot || typeof snapshot !== 'object') {
     return { ok: false, code: 'ACTOR_UNKNOWN', message: 'The execution has no recorded principal' };
   }
   if (snapshot.kind === 'agent') {
-    const { data: profiles = [] } = configCache.getAgentProfiles?.(true) || {};
-    const profile = profiles.find(p => p.id === snapshot.profileId);
-    if (!profile) {
-      return {
-        ok: false,
-        code: 'AGENT_PROFILE_MISSING',
-        message: `Agent profile ${snapshot.profileId} no longer exists`
-      };
-    }
-    return { ok: true, user: buildAgentPrincipal(profile, snapshot.triggeredBy || null) };
+    // An agent principal was the identity of an Agent Factory run. The Agent
+    // Factory was removed (#3773): a starting server cancels its unfinished
+    // runs, and a run that escaped that sweep (a failed cancel, a truncated
+    // scan) must not continue as an agent identity no admin can see any more.
+    return {
+      ok: false,
+      code: AGENT_FACTORY_REMOVED,
+      message: 'The Agent Factory was removed; its runs cannot continue'
+    };
   }
   const { kind: _kind, ...owner } = snapshot;
   const resolved = resolveOwnerPrincipal({ owner });

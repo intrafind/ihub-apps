@@ -4,11 +4,11 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { spawn } from 'node:child_process';
-import { access, mkdir, rm, writeFile } from 'node:fs/promises';
+import { access, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:net';
 import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -53,7 +53,8 @@ const SCENARIOS = [
     name: 'upgrade with Agent Factory data (WORKERS=1)',
     env: { WORKERS: '1' },
     seed: seedAgentFactoryData,
-    verify: verifyAgentFactoryRemoved
+    verify: verifyAgentFactoryRemoved,
+    verifyStopped: verifyAgentFactoryRunsSettled
   }
 ];
 
@@ -74,26 +75,120 @@ const AGENT_FACTORY_FILES = {
   'data/agent-artifacts/wf-exec-legacy/report.md': '# Report\n'
 };
 
+const AGENT = { profileId: 'legacy-agent', triggeredBy: { userId: 'alice', kind: 'manual' } };
+
+/**
+ * Executions stored before the upgrade, in the run store of the server's
+ * filesystem provider (`<contents>/data`). Two unfinished Agent Factory runs
+ * must end cancelled with the reason `AGENT_FACTORY_REMOVED`; a plain run of a
+ * shipped workflow that carries `_agent.artifacts` (the artifact store writes
+ * that into any run that writes an artifact) is no Agent Factory run and is
+ * resumed.
+ */
+const AGENT_FACTORY_RUNS = {
+  'wf-exec-smoke-agent-running': {
+    workflowId: 'legacy-agent-workflow',
+    status: 'running',
+    data: { _agent: AGENT }
+  },
+  'wf-exec-smoke-agent-paused': {
+    workflowId: 'legacy-agent-workflow',
+    status: 'paused',
+    data: { _agent: AGENT }
+  }
+};
+const PLAIN_RUN_ID = 'wf-exec-smoke-plain-artifact';
+const PLAIN_RUN = {
+  workflowId: 'document-analysis',
+  status: 'running',
+  data: { _agent: { artifacts: [{ name: 'report.md', bytes: 9 }] } }
+};
+
+/** The workflow-state store of the provider a starting server uses on these contents. */
+async function openRunStore(contentsPath) {
+  const serverUrl = name => pathToFileURL(join(rootDir, 'server', name)).href;
+  const { FilesystemStorageProvider } = await import(
+    serverUrl('storage/providers/filesystem/index.js')
+  );
+  const { WorkflowStateRepository } = await import(
+    serverUrl('services/workflow/WorkflowStateRepository.js')
+  );
+  const provider = new FilesystemStorageProvider({ baseDir: join(contentsPath, 'data') });
+  await provider.initialize();
+  const repository = new WorkflowStateRepository({
+    documents: provider.documents,
+    locks: provider.locks
+  });
+  return { provider, repository };
+}
+
 async function seedAgentFactoryData(contentsPath) {
   for (const [relative, content] of Object.entries(AGENT_FACTORY_FILES)) {
     const file = join(contentsPath, relative);
     await mkdir(dirname(file), { recursive: true });
     await writeFile(file, content);
   }
+  // Every step before the end is done, so a resume has only the end step left.
+  const shipped = JSON.parse(
+    await readFile(
+      join(rootDir, 'server/defaults/workflows', `${PLAIN_RUN.workflowId}.json`),
+      'utf8'
+    )
+  );
+  const completedNodes = shipped.nodes.map(node => node.id).filter(id => id !== 'end');
+  const { provider, repository } = await openRunStore(contentsPath);
+  try {
+    const runs = { ...AGENT_FACTORY_RUNS, [PLAIN_RUN_ID]: PLAIN_RUN };
+    for (const [executionId, run] of Object.entries(runs)) {
+      await repository.write(executionId, {
+        executionId,
+        ...run,
+        currentNodes: ['end'],
+        completedNodes,
+        failedNodes: [],
+        errors: [],
+        checkpoints: [],
+        history: []
+      });
+    }
+  } finally {
+    await provider.shutdown();
+  }
+}
+
+/** Resolves when the server logged the end of its workflow recovery, or after the timeout. */
+async function waitForLogLine(getOutput, pattern, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (pattern.test(getOutput())) return true;
+    await sleep(POLL_INTERVAL_MS);
+  }
+  return false;
 }
 
 /** The Agent Factory API is gone, its files are still there. */
-async function verifyAgentFactoryRemoved(port, contentsPath) {
+async function verifyAgentFactoryRemoved(port, contentsPath, getOutput) {
   const failures = [];
-  for (const path of ['/api/agents/runs', '/api/agents/profiles/legacy-agent/runs']) {
+  for (const path of [
+    '/api/agents/runs',
+    '/api/agents/profiles/legacy-agent/runs',
+    '/api/admin/agents'
+  ]) {
     const response = await fetch(`http://127.0.0.1:${port}${path}`, {
       signal: AbortSignal.timeout(5000)
     });
-    // 404 as for any path no route serves (the body is the framework's default, not
-    // problem+json: there is no catch-all for unknown API paths).
+    // 404 problem+json with the code NOT_FOUND, as for any API path no route serves.
     if (response.status !== 404) {
       failures.push(`GET ${path} answered ${response.status}, expected 404`);
     }
+    const type = response.headers.get('content-type') || '';
+    const body = await response.json().catch(() => null);
+    if (!type.startsWith('application/problem+json') || body?.code !== 'NOT_FOUND') {
+      failures.push(`GET ${path} answered ${type} ${JSON.stringify(body)}, expected problem+json`);
+    }
+  }
+  if (!(await waitForLogLine(getOutput, /Initialized \d+ workflow triggers/, 60_000))) {
+    failures.push('the workflow recovery did not finish within 60s');
   }
   for (const relative of Object.keys(AGENT_FACTORY_FILES)) {
     try {
@@ -101,6 +196,34 @@ async function verifyAgentFactoryRemoved(port, contentsPath) {
     } catch {
       failures.push(`the boot removed ${relative}`);
     }
+  }
+  return failures;
+}
+
+/** After the server stopped: the Agent Factory runs are cancelled, the plain run was not. */
+async function verifyAgentFactoryRunsSettled(contentsPath) {
+  const failures = [];
+  const { provider, repository } = await openRunStore(contentsPath);
+  try {
+    for (const executionId of Object.keys(AGENT_FACTORY_RUNS)) {
+      const state = await repository.read(executionId);
+      const reason = state?.history?.find(entry => entry.type === 'workflow_cancelled')?.data
+        ?.reason;
+      if (state?.status !== 'cancelled' || reason !== 'AGENT_FACTORY_REMOVED') {
+        failures.push(
+          `${executionId} ended ${state?.status} (reason ${reason}), expected cancelled with AGENT_FACTORY_REMOVED`
+        );
+      }
+    }
+    const plain = await repository.read(PLAIN_RUN_ID);
+    const cancel = plain?.history?.find(entry => entry.type === 'workflow_cancelled');
+    if (!plain || plain.status === 'cancelled' || cancel || !plain.data?._resumedAt) {
+      failures.push(
+        `${PLAIN_RUN_ID} ended ${plain?.status} (cancel ${JSON.stringify(cancel?.data ?? null)}, resumed at ${plain?.data?._resumedAt}), expected it resumed and not cancelled`
+      );
+    }
+  } finally {
+    await provider.shutdown();
   }
   return failures;
 }
@@ -218,11 +341,16 @@ async function runScenario(scenario, keepLogs) {
     if (fatal.length)
       failures.push(`error-level log output during boot:\n    ${fatal.join('\n    ')}`);
 
-    if (ready.ok && scenario.verify) failures.push(...(await scenario.verify(port, contentsPath)));
+    if (ready.ok && scenario.verify) {
+      failures.push(...(await scenario.verify(port, contentsPath, () => output)));
+    }
 
     if (ready.ok) {
       const stopped = await shutdown(child);
       if (!stopped.ok) failures.push(stopped.reason);
+      if (stopped.ok && scenario.verifyStopped) {
+        failures.push(...(await scenario.verifyStopped(contentsPath)));
+      }
     }
   } finally {
     if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');

@@ -17,7 +17,8 @@ memory file, inbox and approver groups, started from **Admin → Agents** or thr
   Questions**. A link to one of them shows the not-found page.
 - The API: `/api/agents/...` (start a run, list runs, read a run, its stream and its
   artifacts, cancel, resume) and `/api/admin/agents/...` (profiles, memory, inboxes).
-  These paths answer `404`.
+  These paths answer `404` with an `application/problem+json` body and the code
+  `NOT_FOUND`.
 - The **Agent Factory** switch in **Admin → Features**. A value for it that is still
   in `contents/config/features.json` does nothing.
 - The two shipped profiles `claude-style-agent` and `claude-style-agent-phased`. A new
@@ -30,6 +31,14 @@ running, waiting to start, or paused at an approval or a question. The run is
 stored as cancelled with the reason `AGENT_FACTORY_REMOVED`, its open approvals
 and questions are withdrawn, and it is not resumed. Finished runs stay as they
 are.
+
+Such a run is not started again either: **Restart** on its page (`POST
+/api/workflows/executions/<id>/_restart`) answers `409 CONFLICT`, also for an Agent
+Factory run that had failed. An approval or a question that such a run still holds
+(when the cancel at the start failed) is refused with `AGENT_FACTORY_REMOVED`: the
+run does not continue as the agent's identity. A workflow run that only wrote
+artifacts (its data holds `_agent.artifacts`, but no profile) is no Agent Factory
+run and is resumed as before.
 
 ## Stored files
 

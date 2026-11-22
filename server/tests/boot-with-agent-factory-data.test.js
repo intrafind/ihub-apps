@@ -12,12 +12,16 @@
  * - every unfinished Agent Factory run is cancelled with the reason
  *   `AGENT_FACTORY_REMOVED` before the resume, its open interactions are
  *   withdrawn, and it is not resumed; a plain workflow interrupted at the same
- *   time is still resumed, and finished runs are left alone;
+ *   time is still resumed, also one whose data holds `_agent.artifacts` (the
+ *   frozen artifact store writes that into every run that writes an
+ *   artifact), and finished runs are left alone;
  * - `startup/worker.js` cancels before it resumes, and its resolver never
  *   hands an Agent Factory run to the engine.
  *
  * The real boot of the entry point on such contents is a scenario of
- * `scripts/smoke-boot.js` (`npm run test:boot`); a test that starts a server
+ * `scripts/smoke-boot.js` (`npm run test:boot`): it seeds unfinished Agent
+ * Factory runs and a plain run with `_agent.artifacts` into the run store and
+ * reads them back after the server stopped. A test that starts a server
  * process belongs there or in the nightly tier.
  */
 import { test, before, after } from 'node:test';
@@ -66,10 +70,30 @@ const { resumeInterruptedRuns } = await import('../services/workflow/resumeManag
 const { loadResources } = await import('../resourceLoaders.js');
 const { AGENT_FACTORY_REMOVED, cancelAgentFactoryExecutions, isAgentFactoryExecution } =
   await import('../services/workflow/agentFactoryRuns.js');
+const { resolveExecutionActor } = await import('../services/workflow/executionActor.js');
+const { executionActingUser } = await import('../services/workflow/checkpointResume.js');
+
+const { writeArtifactDirect } = await import('../agents/runtime/artifactStore.js');
 
 const AGENT = { profileId: PROFILE.id, triggeredBy: { userId: 'alice', kind: 'manual' } };
 
-/** Stored executions: four of the Agent Factory, two plain workflow runs. */
+/**
+ * The data of a plain workflow run that wrote an artifact (a template render,
+ * a planner task, a synthesizer step): the frozen artifact store adds
+ * `_agent: { artifacts: [...] }` and no profile id.
+ */
+const PLAIN_WITH_ARTIFACT = { data: { topic: 'y' } };
+await writeArtifactDirect({
+  runId: 'wf-exec-plain-artifact',
+  name: 'report.md',
+  content: '# Report\n',
+  state: PLAIN_WITH_ARTIFACT
+});
+
+/**
+ * Stored executions: five of the Agent Factory, four plain workflow runs (two
+ * of them carry `_agent.artifacts`, one a sub-workflow of a planner).
+ */
 const SEED = {
   'wf-exec-agent-running': { status: 'running', data: { _agent: AGENT } },
   'wf-exec-agent-pending': { status: 'pending', data: { _agent: AGENT } },
@@ -77,7 +101,17 @@ const SEED = {
   'wf-child-agent-task': { status: 'running', data: { _agent: AGENT } },
   'wf-exec-agent-done': { status: 'completed', data: { _agent: AGENT } },
   'wf-exec-plain': { status: 'running', workflowId: 'plain', data: { topic: 'x' } },
-  'wf-exec-plain-paused': { status: 'paused', workflowId: 'plain', data: {} }
+  'wf-exec-plain-paused': { status: 'paused', workflowId: 'plain', data: {} },
+  'wf-exec-plain-artifact': {
+    status: 'running',
+    workflowId: 'plain',
+    data: PLAIN_WITH_ARTIFACT.data
+  },
+  'wf-child-plain-task': {
+    status: 'running',
+    workflowId: 'plain',
+    data: { _agent: { artifacts: [] } }
+  }
 };
 
 const PLAIN = {
@@ -185,6 +219,10 @@ test('unfinished Agent Factory runs are cancelled before the resume and are not 
   assert.equal((await fresh.read('wf-exec-agent-done')).status, 'completed');
   assert.equal((await fresh.read('wf-exec-plain')).status, 'running');
   assert.equal((await fresh.read('wf-exec-plain-paused')).status, 'paused');
+  // A plain run that wrote an artifact is no Agent Factory run.
+  assert.equal(PLAIN_WITH_ARTIFACT.data._agent.artifacts[0].name, 'report.md');
+  assert.equal((await fresh.read('wf-exec-plain-artifact')).status, 'running');
+  assert.equal((await fresh.read('wf-child-plain-task')).status, 'running');
 
   // The resume that follows, with the resolver startup/worker.js uses.
   const resumed = [];
@@ -202,8 +240,8 @@ test('unfinished Agent Factory runs are cancelled before the resume and are not 
     repository: fresh,
     heldByAnotherWorker: () => false
   });
-  assert.deepEqual(resumed, ['wf-exec-plain']);
-  assert.equal(sweep.scanned, 1, 'no cancelled Agent Factory run is a resume candidate');
+  assert.deepEqual([...resumed].sort(byCodeUnit), ['wf-exec-plain', 'wf-exec-plain-artifact']);
+  assert.equal(sweep.scanned, 2, 'no cancelled Agent Factory run is a resume candidate');
 
   // A second start finds nothing left to cancel.
   const again = await cancelAgentFactoryExecutions({
@@ -219,6 +257,35 @@ test('the resolver tells an Agent Factory run from a plain workflow run', async 
   assert.equal(isAgentFactoryExecution(state), true);
   assert.equal(isAgentFactoryExecution({ status: 'running', data: { topic: 'x' } }), false);
   assert.equal(isAgentFactoryExecution(null), false);
+  // `_agent` without a profile id is what the artifact store leaves in a plain run.
+  assert.equal(
+    isAgentFactoryExecution({
+      status: 'running',
+      data: { _agent: { artifacts: [{ name: 'task_t1.md' }] } }
+    }),
+    false
+  );
+  assert.equal(isAgentFactoryExecution({ data: { _agent: { profileId: '' } } }), false);
+  assert.equal(isAgentFactoryExecution({ data: { _agent: { profileId: 42 } } }), false);
+});
+
+test('an answer cannot continue a run as the agent principal of a removed profile', async () => {
+  // The profile still loads (frozen legacy code reads it), and still the
+  // recorded agent identity is not rebuilt: a run that escaped the boot sweep
+  // (a failed cancel, a truncated scan) stays where it is.
+  const snapshot = { kind: 'agent', profileId: PROFILE.id, triggeredBy: AGENT.triggeredBy };
+  const resolved = resolveExecutionActor(snapshot);
+  assert.equal(resolved.ok, false);
+  assert.equal(resolved.code, AGENT_FACTORY_REMOVED);
+
+  const paused = {
+    status: 'paused',
+    data: { _agent: AGENT, _workflow: { actor: snapshot } }
+  };
+  assert.throws(
+    () => executionActingUser(paused, { id: 'checkpoint-1', nodeId: 'review', type: 'human' }),
+    error => error.code === AGENT_FACTORY_REMOVED
+  );
 });
 
 test('only the scheduler-lock owner cancels', async () => {
