@@ -2,8 +2,6 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import configCache from '../../configCache.js';
-import { appendMcpAppContext, renderMcpAppContext } from '../../services/mcp/mcpAppContext.js';
-import { logInteraction } from '../../utils.js';
 import llmClient, {
   usageToOpenAI,
   isLLMError,
@@ -13,13 +11,10 @@ import {
   clients,
   abortChatRequest,
   abortChatRequestOnDisconnect,
-  clearChatDurable,
   closeChatClient,
   hasActiveChatRequest,
   hasChatClient,
   isChatDurable,
-  locateChatClient,
-  markChatDurable,
   openChatPostStream,
   postStreams,
   writeStreamStart
@@ -28,11 +23,9 @@ import { resumeChatRun } from '../../services/chat/chatResume.js';
 import { RunStreamEmitter, getStreamRun } from '../../services/loop/RunStream.js';
 import runLog, { newRunId, isValidRunId } from '../../services/loop/RunLog.js';
 import { resolveActorId } from '../../services/loop/runIdentity.js';
-import { dropRun } from '../../services/loop/partialRunState.js';
 import { authorizeInteraction } from '../../services/loop/runAccess.js';
 import interactionService from '../../services/loop/InteractionService.js';
 import { SSE_V2_EVENTS, RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
-import { KNOWLEDGE_REFRESH_PHASE } from '../../../shared/run/knowledgeRefresh.js';
 import { createSseChannel } from '../../utils/sseChannel.js';
 import {
   authRequired,
@@ -43,12 +36,10 @@ import { aiAcknowledgementRequired } from '../../middleware/aiAcknowledgementReq
 
 import ChatService from '../../services/chat/ChatService.js';
 import {
-  announcedSkills,
-  historyForPrompt,
-  lateRefusalFrames,
-  messageAttachments,
   prepareTurn,
-  principalRefOf
+  principalRefOf,
+  refusalError,
+  runPreparedTurn
 } from '../../services/chat/chatTurnStart.js';
 import { authorizeChat } from '../../services/chat/chatAccess.js';
 import { emitFailedRun } from '../../services/chat/failedRun.js';
@@ -158,7 +149,28 @@ function turnRequestOf(req) {
 }
 
 // These helpers of a turn live with the turn start; the names stay importable from here.
-export { announcedSkills, historyForPrompt, messageAttachments };
+export {
+  announcedSkills,
+  historyForPrompt,
+  messageAttachments
+} from '../../services/chat/chatTurnStart.js';
+
+/**
+ * The JSON answer of a chat POST whose turn was told on the chat's GET stream.
+ * A refused turn is not answered here: the handler throws it once the turn has
+ * let go of the chat.
+ *
+ * @param {import('express').Response} res
+ * @param {string} chatId
+ * @param {import('../../services/chat/chatTurnStart.js').TurnOutcome} outcome
+ */
+function answerTurnAsJson(res, chatId, outcome) {
+  if (outcome.status === 'failed') {
+    res.json({ status: 'error', message: outcome.error.message, code: outcome.error.code });
+  } else if (outcome.status === 'ran') {
+    res.json({ status: 'streaming', chatId });
+  }
+}
 
 /**
  * Settle the chat's pending clarifications for an incoming message: the
@@ -740,57 +752,6 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
   );
 
   /**
-   * Run one chat turn through the shared chat service. The turn streams over
-   * the chat's channel and this resolves once it ended.
-   *
-   * `persistence` is the durable-chat context the POST handler assembled, or
-   * null when this turn is not stored — the service treats null as "behave
-   * exactly as you did before chat persistence existed".
-   */
-  async function processChatRequest({
-    prep,
-    buildLogData,
-    messageId,
-    activatedSkills = [],
-    chatId,
-    DEFAULT_TIMEOUT,
-    getLocalizedError,
-    clientLanguage,
-    user,
-    persistence = null,
-    toolApproval = null,
-    connectResume = null,
-    canApproveTools = false,
-    runId = null,
-    continueRun = null,
-    priorContext = null,
-    promptResent = false
-  }) {
-    await logInteraction('chat_request', buildLogData(true));
-
-    return chatService.runTurn({
-      prep,
-      chatId,
-      messageId,
-      ...(runId ? { runId } : {}),
-      ...(continueRun ? { continueRun } : {}),
-      activatedSkills,
-      streaming: true,
-      buildLogData,
-      timeoutMs: DEFAULT_TIMEOUT,
-      getLocalizedError,
-      language: clientLanguage,
-      user,
-      persistence,
-      toolApproval,
-      connectResume,
-      canApproveTools,
-      priorContext,
-      promptResent
-    });
-  }
-
-  /**
    * @swagger
    * /apps/{appId}/chat/{chatId}:
    *   post:
@@ -937,28 +898,15 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
     aiAcknowledgementRequired,
     validate(chatPostSchema),
     async (req, res) => {
-      // Destructured outside the try, and the durable mark tracked next to it,
-      // so the finally below can release the chat even when the handler throws
-      // before it ever reaches the turn.
-      const { appId, chatId } = req.params;
-      let durableTurn = false;
-      // A tool approval this request answered, and how to put it back if the
-      // turn never reached its loop (see `commitApproval`).
-      let restoreApproval = null;
-      let toolApproval = null;
-      // The same for the call a connect resumes (#3752).
-      let restoreConnect = null;
-      let connectResume = null;
-
+      const { chatId } = req.params;
       // A client that accepts `text/event-stream` gets the turn's frames on this
       // response instead of over its GET stream; without the header the answer
-      // is the JSON it always was. Opened at the commit point below: every
-      // refusal before it is problem+json either way.
-      const wantsStream = wantsEventStream(req);
-      // This request's own stream (`openChatPostStream`) and the turn's run, for
-      // a refusal that can only be told as frames.
-      let postStream = null;
-      let postStreamRunId = null;
+      // is the JSON it always was. The stream is opened at the commit point of
+      // the turn: every refusal before it is problem+json either way, and one
+      // after it is a `stream/error` frame.
+      const sink = wantsEventStream(req)
+        ? { open: turn => openChatPostStream({ req, res, ...turn }) }
+        : { answer: outcome => answerTurnAsJson(res, chatId, outcome) };
       let prepared = null;
       try {
         prepared = await prepareTurn(turnRequestOf(req), {
@@ -966,278 +914,28 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           getLocalizedError,
           settleClarifications: settleChatClarifications
         });
-        if (prepared.refusal) {
-          throw refusal(prepared.refusal.status, prepared.refusal.message, {
-            code: prepared.refusal.code,
-            details: prepared.refusal.details
-          });
-        }
+        if (prepared.refusal) throw refusalError(prepared.refusal);
         // An `@workflow` mention: the workflow took the message and runs on the GET stream.
         if (prepared.answer) return res.json(prepared.answer);
 
-        const {
-          messageId,
-          language: clientLanguage,
-          requestOptions: chatRequestOptions,
-          persistence,
-          pausedTurn,
-          priorContext,
-          resendsHistory,
-          promptMessage: preparedPromptMessage,
-          mcpAppContext
-        } = prepared.turn;
-        toolApproval = prepared.turn.toolApproval;
-        /**
-         * Answer the approval once the turn can run. Returns a refusal to send
-         * instead of running the turn, or null. A turn refused after this
-         * (before its loop started) puts the approval back (`restoreApproval`).
-         */
-        const commitApproval = async () => {
-          if (!prepared.turn.commitApproval) return null;
-          const committed = await prepared.turn.commitApproval();
-          if (committed.refusal) return committed.refusal;
-          toolApproval.grants = committed.grants;
-          toolApproval.resume = committed.resume;
-          restoreApproval = committed.restore;
-          return null;
-        };
-        let model;
-        let llmMessages;
-        function buildLogData(streaming, extra = {}) {
-          return {
-            messageId,
-            appId,
-            modelId: model?.id,
-            sessionId: chatId,
-            userSessionId: prepared.turn.sessionId,
-            user: prepared.turn.user,
-            messages: llmMessages,
-            options: {
-              style: chatRequestOptions.style,
-              outputFormat: chatRequestOptions.outputFormat,
-              language: clientLanguage,
-              streaming
-            },
-            ...extra
-          };
-        }
-
-        // The answer reaches the browser over the chat's stream only. In
-        // cluster mode that stream may be held by another worker, opened a
-        // moment ago — before this worker heard of it — so make sure it is
-        // known here before the turn's first frame is routed (#3674). With no
-        // stream anywhere the turn still runs and is stored; its frames have
-        // nowhere to go.
-        //
-        // A turn streamed on its own POST needs none of that: its frames are
-        // written here, to the response this worker holds.
-        if (!wantsStream) await locateChatClient(chatId);
-
-        // From here the turn owns the chat. A kept chat's turn has to survive
-        // the browser closing — its answer is written to the store either way —
-        // so the three paths that abort a run on disconnect must leave it alone
-        // until the finally below releases the mark. A temporary chat's turn is
-        // not: like the ephemeral turn it replaces, it stops when nobody is left
-        // to read it, so an anonymous or incognito visitor who closes the tab is
-        // not billed for the rest.
-        if (!persistence.temporary) {
-          markChatDurable(chatId);
-          durableTurn = true;
-        }
-
-        // Note that `hasChatClient` (inside `locateChatClient`) refreshed
-        // lastActivity on the existing map entry in place rather than
-        // replacing it: the SSE GET handler pins that object reference via
-        // `myEntry` to identify a stale `req.on('close')` after a reconnect,
-        // and replacing the entry would defeat that check, letting a dead
-        // socket's close handler bail out and leak the Map entry +
-        // activeRequests controller for up to 5 minutes until
-        // cleanupInactiveClients evicts it.
-        //
-        // The turn's run is named before its preparation (#3622): while the
-        // prompt is built, the refresh of outdated project documents it
-        // waits for is shown on that run, and the turn then runs as it (or
-        // fails as it, so the status line ends with the turn).
-        //
-        // A turn that answers a paused one (a clarification above, a tool
-        // approval) is named after the paused run: it continues that run, so
-        // one answer is one run (`ChatService.runTurn` falls back to a new id
-        // when the run cannot be continued).
-        const continuesRun = pausedTurn && isValidRunId(pausedTurn.runId);
-        const turnRunId = continuesRun ? pausedTurn.runId : newRunId('chat');
-        // The commit point of a POST stream: the SSE headers go out now, so the
-        // wait for outdated documents below already streams. From here on a
-        // refusal is a `stream/error` frame (see the catch below).
-        if (wantsStream) {
-          postStream = openChatPostStream({
-            req,
-            res,
-            chatId,
-            runId: turnRunId,
-            durable: !persistence.temporary
-          });
-          postStreamRunId = turnRunId;
-          // Whether the reader is still there when a durable turn ends (the
-          // stored answer is marked unread otherwise): this stream, or a GET
-          // the client re-attached with after losing it.
-          persistence.clientConnected = () => postStream.isOpen() || hasChatClient(chatId);
-        }
-        const refreshStatus = new RunStreamEmitter({ streamId: chatId, runId: turnRunId });
-        const prep = await chatService.prepareChatRequest({
-          ...chatRequestOptions,
-          onKnowledgeRefresh: ({ total, done }) =>
-            refreshStatus.emit(SSE_V2_EVENTS.TOOL_PROGRESS, {
-              phase: KNOWLEDGE_REFRESH_PHASE,
-              data: { total, done }
-            })
-        });
-        if (!prep.success) {
-          const errMsg = await getLocalizedError(
-            prep.error.code || 'internalError',
-            {},
-            clientLanguage
-          );
-          emitFailedRun(chatId, {
-            messageId,
-            code: prep.error.code,
-            message: errMsg,
-            // Not the paused run's id: a second request answering the same
-            // pause must not end the run the first one may be continuing.
-            runId: continuesRun ? null : turnRunId
-          });
-          // A POST stream carried those frames itself; the finally ends it.
-          if (postStream) return;
-          return res.json({ status: 'error', message: errMsg, code: prep.error.code });
-        }
-        if (prepared.turn.commitConnectResume) {
-          const committed = await prepared.turn.commitConnectResume();
-          if (committed.refusal) {
-            emitFailedRun(chatId, {
-              runId: turnRunId,
-              messageId,
-              code: committed.refusal.code,
-              message: committed.refusal.message
-            });
-            // The failed run's frames (with the code) were the answer on a POST stream.
-            if (postStream) return;
-            throw refusal(committed.refusal.status, committed.refusal.message, {
-              code: committed.refusal.code
-            });
-          }
-          connectResume = committed.resume;
-          restoreConnect = committed.restore;
-        }
-        const approvalRefusal = await commitApproval();
-        if (approvalRefusal) {
-          emitFailedRun(chatId, {
-            // Not the paused run's id: a refused second answer must not end
-            // the run the first one is continuing.
-            runId: continuesRun ? null : turnRunId,
-            messageId,
-            code: approvalRefusal.code,
-            message: approvalRefusal.message
-          });
-          // The failed run's frames (with the code) were the answer on a POST stream.
-          if (postStream) return;
-          throw refusal(approvalRefusal.status, approvalRefusal.message, {
-            code: approvalRefusal.code
-          });
-        }
-        // A temporary chat's client that went away while the turn was prepared
-        // has nobody left to answer: the disconnect could not abort a turn that
-        // had not started yet.
-        if (postStream && !postStream.isOpen() && persistence.temporary) return;
-        model = prep.data.model;
-        // What open MCP App views reported since the last turn; model-only.
-        appendMcpAppContext(prep.data.llmMessages, mcpAppContext);
-        llmMessages = prep.data.llmMessages;
-
-        // Skills in force this turn are announced on the run: the usable
-        // subset the request builder put in the system prompt, never a skill
-        // the app or the user may not use. Each says who brought it in (the
-        // user's `/name` or composer pick, the app, or an earlier message).
-        const activatedSkills = announcedSkills(prep.data.activeSkills);
-
-        // The prompt holds the history the last answer's context counted only
-        // when the file budget left nothing of it out. A next turn resends this
-        // prompt as it is only when, besides, nothing in it is this turn's
-        // alone: the app's prompt template around the message, a host item
-        // rendered from the request, what open views reported.
-        const historyFilesOmitted = prep.data.historyFilesOmitted > 0;
-        const turnOnlyContext = Boolean(
-          (preparedPromptMessage?.promptTemplate && preparedPromptMessage?.variables) ||
-          preparedPromptMessage?.hostContext ||
-          renderMcpAppContext(mcpAppContext)
-        );
-        const outcome = await processChatRequest({
-          prep: prep.data,
-          buildLogData,
-          messageId,
-          activatedSkills,
-          chatId,
-          DEFAULT_TIMEOUT,
+        const outcome = await runPreparedTurn(prepared.turn, {
+          sink,
+          chatService,
           getLocalizedError,
-          clientLanguage,
-          user: prepared.turn.user,
-          persistence,
-          toolApproval,
-          connectResume,
-          canApproveTools: prepared.turn.canApproveTools,
-          runId: turnRunId,
-          priorContext: historyFilesOmitted ? null : priorContext,
-          promptResent: resendsHistory && !historyFilesOmitted && !turnOnlyContext,
-          ...(continuesRun ? { continueRun: { interactionId: pausedTurn.interactionId } } : {})
+          timeoutMs: DEFAULT_TIMEOUT
         });
-        // Refused at persistence: the chat's container changed under the
-        // turn (`settleUserTurn`), and nothing of it was stored.
-        if (outcome?.refusal) {
-          // The failed run's frames, when ChatService emitted them, were the
-          // answer on a POST stream (a refusal before the run started has none).
-          if (postStream?.hasEnded(turnRunId)) return;
-          throw refusal(409, outcome.refusal.message, {
-            code: outcome.refusal.code
-          });
-        }
-
-        // A POST stream ends in the finally, after the turn's last frame.
-        if (postStream) return;
-        return res.json({ status: 'streaming', chatId });
+        // Refused when it was about to run, with no stream to say so: answered
+        // here, after the turn let go of the chat.
+        if (outcome.status === 'refused' && !outcome.told) throw refusalError(outcome.refusal);
       } catch (error) {
         const expected = error instanceof ServiceError || isLLMError(error);
         // Only an unexpected failure is logged here.
         if (!expected) logger.error('Error in app chat', { component: 'sessionRoutes', error });
-        // Past the commit point the status line is gone: the refusal is a frame.
-        if (postStream) {
-          // A run that already ended on this stream has said its last word.
-          if (!postStream.hasEnded(postStreamRunId)) {
-            for (const frame of lateRefusalFrames(chatId, postStreamRunId, error)) {
-              postStream.write(frame);
-            }
-          }
-          return;
-        }
         // A refusal and a failing model call are answered as they are.
         throw error;
       } finally {
-        // The turn is over however it ended, so a disconnect from here on has
-        // nothing to protect and should abort again.
-        try {
-          if (durableTurn) clearChatDurable(chatId);
-          // Answered, but the turn was refused (or failed) before its loop
-          // could run the call: put the approval back, with its answer, so the
-          // same decision can be sent again.
-          if (restoreApproval && !toolApproval?.started) await restoreApproval();
-          // Never after the loop started: the call may have run.
-          if (restoreConnect && !connectResume?.started) await restoreConnect();
-        } finally {
-          // Ended however the restores went: the client is waiting for it.
-          postStream?.end();
-          // A run refused late ended with frames written straight to the
-          // response, past the emit observer that frees its partial state.
-          if (postStreamRunId) dropRun(postStreamRunId);
-          // An audit entry the turn wrote stands for this request (`auditLogger`).
-          if (prepared?.turn?.audited()) req._auditLogged = true;
-        }
+        // An audit entry the turn wrote stands for this request (`auditLogger`).
+        if (prepared?.turn?.audited()) req._auditLogged = true;
       }
     }
   );
