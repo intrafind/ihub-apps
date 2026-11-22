@@ -10,9 +10,10 @@
  *   word-sized chunks (or as one JSON body when `stream` is off).
  * - A last user message containing `e2e-fail` is answered with HTTP 400 (a failure the
  *   server does not retry, so the error shows at once), one containing `e2e-auth`
- *   with HTTP 401 (a model that is set up with a wrong key).
- * - A last user message containing a bare `e2e-slow` (not the timed
- *   `e2e-slow:<ms>:<n>` below) gets the reply above only after
+ *   with HTTP 401 (a model that is set up with a wrong key). These words count
+ *   outside the JSON arguments of an `e2e-tool:` marker only, as does `e2e-slow`.
+ * - A last user message containing a bare `e2e-slow` (not `e2e-slow:` followed by
+ *   anything, such as the timed `e2e-slow:<ms>:<n>` below) gets the reply above only after
  *   `E2E_LLM_SLOW_MS` milliseconds (default 5000), for timeouts and "Cancel". A
  *   caller that hangs up before then gets nothing, and the stub records it.
  * - A last user message containing one of the `e2e-app-*` markers is answered with
@@ -37,7 +38,7 @@
  *
  * - `e2e-slow:<ms>:<n>`: the words `slow-1` … `slow-<n>`, one every `<ms>`
  *   milliseconds (the first after `<ms>` too).
- * - `e2e-hang:<key>`: sends the first (role) chunk and then nothing, until
+ * - `e2e-hang:<key>` (not `.` or `..`, which the release path cannot carry): sends the first (role) chunk and then nothing, until
  *   `POST /__release/<key>` (or `POST /__release-all`); the answer then is
  *   `E2E released: <key>`. A hang nobody releases ends by itself after
  *   {@link HANG_AUTO_RELEASE_MS}, so a failed spec leaves no open socket.
@@ -314,12 +315,12 @@ const MAX_SLOW_WORDS = 500;
 const MARKER = /e2e-(slow|hang|tools-parallel|tool|script):(\S.*)/s;
 
 /**
- * The JSON value a text starts with (an object or an array), or `undefined`.
- * What follows the value is ignored, so a marker can stand in a sentence.
+ * The length of the JSON object or array a text starts with, or 0 when it
+ * starts with none. What follows the value is ignored.
  */
-function leadingJson(text) {
+function leadingJsonLength(text) {
   const open = text[0];
-  if (open !== '{' && open !== '[') return undefined;
+  if (open !== '{' && open !== '[') return 0;
   let depth = 0;
   let inString = false;
   for (let i = 0; i < text.length; i++) {
@@ -333,16 +334,46 @@ function leadingJson(text) {
     else if (char === '{' || char === '[') depth++;
     else if (char === '}' || char === ']') {
       depth--;
-      if (depth === 0) {
-        try {
-          return JSON.parse(text.slice(0, i + 1));
-        } catch {
-          return undefined;
-        }
-      }
+      if (depth === 0) return i + 1;
     }
   }
-  return undefined;
+  return 0;
+}
+
+/**
+ * The JSON value a text starts with (an object or an array), or `undefined`.
+ * What follows the value is ignored, so a marker can stand in a sentence.
+ */
+function leadingJson(text) {
+  const length = leadingJsonLength(text);
+  if (!length) return undefined;
+  try {
+    return JSON.parse(text.slice(0, length));
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * A user message without the argument JSON of its `e2e-tool:` or
+ * `e2e-tools-parallel:` marker, so a word in a tool argument (`e2e-fail`,
+ * `e2e-auth`, `e2e-slow`) is not read as a marker of its own.
+ */
+function withoutToolArguments(text) {
+  const match = /e2e-(?:tools-parallel|tool):[A-Za-z0-9_,-]+:/.exec(text);
+  if (!match) return text;
+  const start = match.index + match[0].length;
+  const length = leadingJsonLength(text.slice(start));
+  return length ? text.slice(0, start) + text.slice(start + length) : text;
+}
+
+/** The text of anything thrown, even a value that is no `Error` (`throw null`). */
+function describeError(error) {
+  try {
+    return error instanceof Error ? error.message : String(error);
+  } catch {
+    return 'unknown error';
+  }
 }
 
 const isPlainObject = value => !!value && typeof value === 'object' && !Array.isArray(value);
@@ -380,7 +411,8 @@ export function parseMarker(text) {
 
   if (name === 'hang' || name === 'script') {
     const word = /^[A-Za-z0-9_.-]+(?!\S)/.exec(rest)?.[0];
-    if (!word) return null;
+    // `POST /__release/<key>` cannot carry `.` or `..`: the URL path normalises them away.
+    if (!word || (name === 'hang' && (word === '.' || word === '..'))) return null;
     return name === 'hang' ? { kind: 'hang', key: word } : { kind: 'script', name: word };
   }
 
@@ -585,6 +617,8 @@ export function startLlmStub(
   const requests = [];
   /** Chat requests the caller closed before they were answered. */
   let aborted = 0;
+  /** Responses the stub itself broke off (a failure after the headers): no caller abort. */
+  const brokenOff = new WeakSet();
   /** The hangs waiting for a release: key -> the functions that end them. */
   const hangs = new Map();
 
@@ -699,7 +733,9 @@ export function startLlmStub(
       const marker = url.searchParams.get('marker');
       const items = marker
         ? requests.filter(body =>
-            (body.messages || []).some(message => textOf(message.content).includes(marker))
+            (Array.isArray(body?.messages) ? body.messages : []).some(
+              message => message && textOf(message.content).includes(marker)
+            )
           )
         : requests;
       sendJson(res, 200, { items });
@@ -760,7 +796,7 @@ export function startLlmStub(
     lastRequestAborted = false;
     // A caller that hangs up before the answer is complete ("Cancel", a timeout).
     res.on('close', () => {
-      if (res.writableFinished) return;
+      if (res.writableFinished || brokenOff.has(res)) return;
       aborted++;
       if (lastRequestBody === body) lastRequestAborted = true;
     });
@@ -771,12 +807,13 @@ export function startLlmStub(
       return;
     }
     const { last, reply: echo } = replyFor(body.messages);
-    if (last.includes('e2e-fail')) {
+    const standalone = withoutToolArguments(last);
+    if (standalone.includes('e2e-fail')) {
       res.writeHead(400, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ error: { message: 'The stub model refused this request.' } }));
       return;
     }
-    if (last.includes('e2e-auth')) {
+    if (standalone.includes('e2e-auth')) {
       res.writeHead(401, { 'content-type': 'application/json' });
       res.end(
         JSON.stringify({
@@ -785,8 +822,9 @@ export function startLlmStub(
       );
       return;
     }
-    // A bare `e2e-slow` only: `e2e-slow:<ms>:<n>` is the timed answer of `planFor`.
-    if (/e2e-slow(?!:\d)/.test(last)) {
+    // A bare `e2e-slow` only: `e2e-slow:<ms>:<n>` is the timed answer of `planFor`,
+    // and any other `e2e-slow:...` is a timed marker it refuses.
+    if (/e2e-slow(?!:)/.test(standalone)) {
       const slowMs = Number(process.env.E2E_LLM_SLOW_MS) || DEFAULT_SLOW_MS;
       if (!(await waitUnlessClosed(res, slowMs))) return;
     }
@@ -837,10 +875,11 @@ export function startLlmStub(
     // stub does not expect) ends that request, never the process.
     handle(req, res).catch(error => {
       if (res.headersSent) {
+        brokenOff.add(res);
         res.destroy();
         return;
       }
-      sendJson(res, 500, { error: { message: `The stub model failed: ${error.message}` } });
+      sendJson(res, 500, { error: { message: `The stub model failed: ${describeError(error)}` } });
     });
   });
 

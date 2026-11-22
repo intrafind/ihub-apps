@@ -855,8 +855,10 @@ A marker in the user message scripts the stub (`tests/config/e2e-llm-stub.mjs`).
 | `e2e-hang:<key>` | starts the answer and waits until the spec calls `stub.release('<key>')`; a hang nobody releases ends after two minutes |
 | `e2e-tool:<name>:<json-args>` | calls the tool once and then answers `E2E tool result seen: <start of the result>` |
 | `e2e-tools-parallel:<a>,<b>` | calls the tools in one step (arguments: an optional JSON array, `:[{…},{…}]`) |
-| `e2e-script:<name>` | follows the named script in `tests/config/e2e-scripts.mjs`, one turn per model call |
-| `e2e-fail` | fails with HTTP 400 |
+| `e2e-script:<name>` | follows the named script in `tests/config/e2e-scripts.mjs` (see below) |
+| `e2e-fail` | fails with HTTP 400 (not when the word stands inside the JSON arguments of `e2e-tool:`) |
+
+A script picks its turn by counting the assistant messages in the request, not the calls it has had: a request with no assistant message gets turn 1, one with two gets turn 3. Assistant messages from earlier in the chat therefore shift the turn (start `e2e-script:two-step` after two earlier answers and the first call gets "no turn 3"), so start a script in a new chat or build the history it expects. The same request sent again gets the same turn again.
 
 Two models are seeded: `e2e-stub` (the default, without tools) and `e2e-stub-tools`, which is offered the tools of the app. The app `e2e-tools` prefers the second and offers iHub's own tools (`ask_user`, the scheduled-task tools).
 
