@@ -11164,6 +11164,7 @@
     "EVIDENCE_NOT_RECORDED": "Für diese Antwort wurde kein Nachweis gespeichert.",
     "JOURNAL_NOT_KEPT": "Die Ereignisse dieses Laufs werden nicht mehr aufbewahrt. Lesen Sie stattdessen seinen Nachweis.",
     "RUN_STEER_FORBIDDEN": "Nur die Person, für die diese Antwort geschrieben wird, kann währenddessen eine Nachricht senden.",
+    "STEER_ALREADY_APPLIED": "iHub hat diese Nachricht bereits gelesen. Sie kann nicht mehr entfernt werden.",
     "MCP_AUTH_REFRESH_FAILED": "Die Anmeldung beim MCP-Server konnte nicht erneuert werden. Versuchen Sie es gleich noch einmal.",
     "APPROVAL_REQUIRED_NO_USER": "Dieser Aufruf benötigt die Freigabe einer Person, und dieser Client kann sie nicht einholen.",
     "APPROVAL_ALREADY_ANSWERED": "Diese Freigabe wurde bereits beantwortet.",

@@ -17,7 +17,8 @@ import {
   INTERACTION_ORIGINS,
   INTERACTION_STATUSES,
   HUMAN_EVENT_KINDS,
-  LEDGER_IDENTITY_MODES
+  LEDGER_IDENTITY_MODES,
+  STEER_MODES
 } from '../../../../shared/runEvents.js';
 
 const ts = z.string().datetime({ offset: true });
@@ -206,6 +207,8 @@ export const humanEventRequestSchema = z
   .object({
     kind: z.enum(['steer', 'stop', 'feedback']),
     message: z.string().max(4000).optional(),
+    /** A `steer` only: read at the next step (`steer`, the default) or sent after the answer. */
+    mode: z.enum(STEER_MODES).optional(),
     messageId: z.string().max(200).optional(),
     rating: z.union([z.number(), z.string().max(50)]).optional()
   })
@@ -217,6 +220,13 @@ export const humanEventRequestSchema = z
         message: 'A steer event needs a non-empty message'
       });
     }
+    if (body.mode !== undefined && body.kind !== 'steer') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['mode'],
+        message: 'Only a steer event has a mode'
+      });
+    }
   });
 
 /** A human→agent event delivered into a run (steer / stop / feedback). */
@@ -226,6 +236,12 @@ export const humanEventSchema = z.object({
   message: z.string().optional(),
   messageId: z.string().optional(),
   rating: z.union([z.number(), z.string()]).optional(),
+  /** A `steer`: the id of the message, minted by the route. */
+  steerId: z.string().optional(),
+  /** A `steer`: read at the next step, or sent after the answer. */
+  mode: z.enum(STEER_MODES).optional(),
+  /** A `steer`: the person removed the message `steerId` before it was read. */
+  removed: z.literal(true).optional(),
   by: z.string(),
   at: ts
 });

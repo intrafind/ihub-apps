@@ -139,7 +139,13 @@ export const SSE_V2_EVENTS = Object.freeze({
   INTERACTION_RAISED: 'interaction/raised',
   INTERACTION_ANSWERED: 'interaction/answered',
   PROGRESS_NODE: 'progress/node',
-  META: 'meta'
+  META: 'meta',
+  /** A message the person sent into the running answer is queued (`services/loop/steering.js`). */
+  STEER_QUEUED: 'steer/queued',
+  /** A queued message was read at a step (`step`), or sent as the next turn (`nextRunId`). */
+  STEER_APPLIED: 'steer/applied',
+  /** A queued message will never be read (`reason`); the client gives its text back. */
+  STEER_DROPPED: 'steer/dropped'
 });
 
 export const SSE_V2_EVENT_LIST = Object.freeze(Object.values(SSE_V2_EVENTS));
@@ -155,6 +161,38 @@ export const INTERACTION_ORIGINS = Object.freeze(['tool', 'node', 'policy', 'sys
 
 /** Interaction lifecycle. */
 export const INTERACTION_STATUSES = Object.freeze(['pending', 'answered', 'expired', 'cancelled']);
+
+/**
+ * The kinds of message the person can send into a running answer (`human-events`,
+ * `kind: 'steer'`, field `mode`): read at the next step, or sent after the answer.
+ */
+export const STEER_MODES = Object.freeze(['steer', 'afterwards']);
+
+/** The kinds of a queued message in the chat read model (`pending[].kind`) and the frames. */
+export const PENDING_MESSAGE_KINDS = Object.freeze(['steer', 'send_after']);
+
+/**
+ * Why a queued message will never be read (`steer/dropped.reason`):
+ * `expired` — not read within its lifetime; `queue_full` — the oldest of more than
+ * twenty; `removed` — the person removed it; `run_paused` — the answer stopped for a
+ * question or an approval; `run_stopped` — the answer was stopped; `run_failed` — the
+ * answer ended with an error; `superseded` — a newer message replaced the answer;
+ * `temporary_chat` — the answer ended in a temporary or guest chat, where the server
+ * starts no next turn; `run_ended` — the answer ended where nothing starts a next turn
+ * (an API run); `not_started` — the next turn could not be started.
+ */
+export const STEER_DROP_REASONS = Object.freeze([
+  'expired',
+  'queue_full',
+  'removed',
+  'run_paused',
+  'run_stopped',
+  'run_failed',
+  'superseded',
+  'temporary_chat',
+  'run_ended',
+  'not_started'
+]);
 
 /** Human→agent events that ride the same rails as answers. */
 export const HUMAN_EVENT_KINDS = Object.freeze(['answer', 'steer', 'stop', 'feedback']);

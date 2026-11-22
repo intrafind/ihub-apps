@@ -134,3 +134,18 @@ export function startedDisplayOf(toolDef) {
   delete display.outputKind;
   return display;
 }
+
+/** The row a message the person sent into the running answer makes in the activity list. */
+export const APPLIED_MESSAGE_ACTIVITY_KIND = 'user_message';
+
+/**
+ * The display fields of `steer/applied` for a message read at a step: the
+ * activity item the chat draws at that step, live and from the stored turn
+ * ("Read your message"). The server decides it; the client draws what it is
+ * told and never works it out from the text or the id.
+ *
+ * @returns {{activityKind: 'user_message'}}
+ */
+export function appliedMessageDisplayOf() {
+  return { activityKind: APPLIED_MESSAGE_ACTIVITY_KIND };
+}

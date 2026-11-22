@@ -321,7 +321,12 @@ export const CHAT_ERROR_CODES = Object.freeze({
    * A message for a running answer (`human-events`, `kind: 'steer'`) from a caller who is not the
    * owner of the run. An admin gets it too: only the owner speaks in the owner's voice.
    */
-  RUN_STEER_FORBIDDEN: 403
+  RUN_STEER_FORBIDDEN: 403,
+  /**
+   * A queued message for a running answer (`DELETE /api/runs/{runId}/human-events/{id}`) that the
+   * answer already read at a step, or sent as the next message: too late to remove.
+   */
+  STEER_ALREADY_APPLIED: 409
 });
 
 /** MCP App views (`server/routes/mcpAppRoutes.js`) and the approval of their tool calls. */

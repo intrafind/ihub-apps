@@ -277,7 +277,15 @@ export const messageUserData = z.object({
     )
     .optional(),
   /** Set when this user message was injected by the system (wrap-up nudge, steer). */
-  synthetic: z.enum(['nudge', 'steer', 'system']).optional()
+  synthetic: z.enum(['nudge', 'steer', 'system']).optional(),
+  /** A message the person sent into the running answer: its id, as the route minted it. */
+  steerId: z.string().optional(),
+  /** ... what the person wrote (`content` is the message as the model read it). */
+  text: z.string().optional(),
+  /** ... who sent it, in the run's identity mode. */
+  by: z.string().nullable().optional(),
+  /** ... when it was sent. */
+  at: z.string().optional()
 });
 
 export const messageAssistantData = z.object({

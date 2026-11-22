@@ -24,6 +24,7 @@
  */
 import { SSE_V2_EVENTS, RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
 import { compactedFrameOf, parseSseV2EventData } from './contracts/sseV2.js';
+import { appliedMessageDisplayOf } from '../../utils/toolDisplay.js';
 import logger from '../../utils/logger.js';
 
 const COMPONENT = 'RunStream';
@@ -697,6 +698,21 @@ export function projectLedgerEvent(ev) {
       ];
     case RUN_LOG_EVENTS.RUN_RESUMED:
       return [wrap(SSE_V2_EVENTS.RUN_RESUMED, { interactionId: d.interactionId })];
+    case RUN_LOG_EVENTS.MESSAGE_USER:
+      // A message the person sent into the running answer, read at this step:
+      // a re-sync says what the live stream said. A workflow answer and the
+      // loop's own nudges carry no `steerId` and make no frame.
+      return d.synthetic === 'steer' && typeof d.steerId === 'string' && d.steerId
+        ? [
+            wrap(SSE_V2_EVENTS.STEER_APPLIED, {
+              id: d.steerId,
+              kind: 'steer',
+              text: typeof d.text === 'string' ? d.text : '',
+              step: d.step ?? 0,
+              ...appliedMessageDisplayOf()
+            })
+          ]
+        : [];
     case RUN_LOG_EVENTS.MESSAGE_ASSISTANT:
       return [
         wrap(SSE_V2_EVENTS.STEP_COMPLETED, {

@@ -119,6 +119,9 @@ function slim(message, limit) {
   // A loop nudge stays one: a resumed turn tells it from the user's own words.
   if (message._nudge) out._nudge = true;
   if (message._steer) out._steer = true;
+  // A message the person sent mid-run stays theirs (`loop/steering.js`).
+  if (typeof message._steerId === 'string') out._steerId = message._steerId;
+  if (message._origin === 'person') out._origin = 'person';
   if (
     Array.isArray(message.thoughtSignatures) &&
     JSON.stringify(message.thoughtSignatures).length <= limit

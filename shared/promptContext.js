@@ -53,6 +53,8 @@
  * @module shared/promptContext
  */
 
+import { neutraliseSteerMarker } from './steerMarker.js';
+
 export const CONTEXT_TAGS = Object.freeze({
   content: 'content',
   contextRules: 'context_rules',
@@ -492,7 +494,11 @@ export function renderUserMessage({ content, hostContext, files } = {}) {
     hostBlocks.page || stored.page,
     hostBlocks.meeting || stored.meeting,
     ...renderDocuments(files)
-  ].filter(Boolean);
+  ]
+    .filter(Boolean)
+    // Source material never poses as a message the person sent into a
+    // running answer (`steerMarker.js`); the typed instruction is the person's.
+    .map(segment => neutraliseSteerMarker(segment));
   if (segments.length === 0) return typed;
 
   const hasOmitted = normalizeFiles(files).some(file => file.omitted === true);
