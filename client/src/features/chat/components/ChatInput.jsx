@@ -736,14 +736,14 @@ function ChatInput({
   // While a turn runs (`whileRunning`): the text goes to the running answer,
   // read at its next step. Never a stop.
   const submitWhileRunning = () => {
-    if (canSteer) whileRunning.onSteer?.(value);
+    if (canSteer) whileRunning?.onSteer?.(value);
     setTimeout(() => focusInputAtEnd(), 0);
   };
 
   // "Send after this answer" (menu item, Alt+Enter): the next message once the answer is done.
   const handleSendAfter = () => {
     setSendMenuOpen(false);
-    if (canSteer) whileRunning.onSendAfter?.(value);
+    if (canSteer) whileRunning?.onSendAfter?.(value);
     setTimeout(() => focusInputAtEnd(), 0);
   };
 
