@@ -59,45 +59,50 @@ function userOAuthServer(serverId) {
  * @param {import('express').Express} app
  */
 export default function registerMcpOAuthRoutes(app) {
+  // Both routes below are reached with no session, and they sit outside `/api/integrations`,
+  // which the app-level limiter of middleware/setup.js covers. They carry the public API
+  // budget (`rateLimit.publicApi`) themselves, counted per signed-in user or per address.
+  const publicLimiter = createRateLimiters(configCache.getPlatform() || {}).publicApiLimiter;
+
   // iHub's Client ID Metadata Document for one server. Authorization servers
   // that support CIMD fetch it with no credentials and no redirects;
   // `client_id` must be this exact URL. Only a configured Public URL makes the
   // document cacheable: one derived from the request depends on its Host.
-  app.get(buildServerPath(`${MCP_OAUTH_CLIENT_METADATA_PATH}/:serverId`), (req, res) => {
-    const parsedId = serverIdSchema.safeParse(req.params.serverId);
-    const serverConfig = parsedId.success ? userOAuthServer(parsedId.data) : null;
-    if (!serverConfig) return res.status(404).json({ error: 'Not found' });
-    const { publicBase, configured } = resolveMcpPublicBaseInfo(req);
-    if (!publicBase) return res.status(503).json({ error: 'Public URL unknown' });
-    const document = buildMcpClientMetadata({ publicBase, serverId: serverConfig.id });
-    const body = JSON.stringify(document);
-    if (Buffer.byteLength(body, 'utf8') > MAX_CLIENT_METADATA_BYTES) {
-      logger.error('MCP client metadata document exceeds 8 KB', { component: COMPONENT });
-      return res.status(500).json({ error: 'Client metadata document too large' });
+  app.get(
+    buildServerPath(`${MCP_OAUTH_CLIENT_METADATA_PATH}/:serverId`),
+    publicLimiter,
+    (req, res) => {
+      const parsedId = serverIdSchema.safeParse(req.params.serverId);
+      const serverConfig = parsedId.success ? userOAuthServer(parsedId.data) : null;
+      if (!serverConfig) return res.status(404).json({ error: 'Not found' });
+      const { publicBase, configured } = resolveMcpPublicBaseInfo(req);
+      if (!publicBase) return res.status(503).json({ error: 'Public URL unknown' });
+      const document = buildMcpClientMetadata({ publicBase, serverId: serverConfig.id });
+      const body = JSON.stringify(document);
+      if (Buffer.byteLength(body, 'utf8') > MAX_CLIENT_METADATA_BYTES) {
+        logger.error('MCP client metadata document exceeds 8 KB', { component: COMPONENT });
+        return res.status(500).json({ error: 'Client metadata document too large' });
+      }
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      if (configured) {
+        res.setHeader('Cache-Control', 'public, max-age=3600');
+      } else {
+        res.setHeader('Cache-Control', 'no-store');
+        res.setHeader('Vary', 'Host, X-Forwarded-Host, X-Forwarded-Proto');
+      }
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      return res.status(200).send(body);
     }
-    res.setHeader('Content-Type', 'application/json; charset=utf-8');
-    if (configured) {
-      res.setHeader('Cache-Control', 'public, max-age=3600');
-    } else {
-      res.setHeader('Cache-Control', 'no-store');
-      res.setHeader('Vary', 'Host, X-Forwarded-Host, X-Forwarded-Proto');
-    }
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    return res.status(200).send(body);
-  });
+  );
 
   // The per-server callback registered at the authorization servers: an alias
   // of the one integration callback, bound to this server's flows. It is
   // reached by browsers returning from a sign-in, with or without a session,
-  // and exchanges the code at the authorization server, so it has the public
-  // API budget (`rateLimit.publicApi`), counted per signed-in user or per
-  // address. The path is not under `/api/integrations`, which the app-level
-  // limiter of middleware/setup.js covers.
-  const callbackLimiter = createRateLimiters(configCache.getPlatform() || {}).publicApiLimiter;
+  // and exchanges the code at the authorization server.
   app.get(
     buildServerPath(`${MCP_OAUTH_CALLBACK_PATH}/:serverId`),
     authOptional,
-    callbackLimiter,
+    publicLimiter,
     integrationOAuthCallbackHandler(req => ({
       stack: 'mcp',
       installationId: String(req.params.serverId || '').slice(0, 64)
