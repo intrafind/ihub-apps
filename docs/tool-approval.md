@@ -39,6 +39,18 @@ Every tool has a side effect (`read`, `write`, `destructive`, `unknown`) and a d
    is still asked for until an admin confirms it as a read with an action override.
 5. Otherwise `unknown`, which `writes` treats as a write.
 
+Every tool iHub ships declares its side effect (step 2 or 3); the list is in
+[Tool Calling → What a Tool Does](tool-calling.md#what-a-tool-does-sideeffect). Under `writes` the
+read tools among them run without a question: the project knowledge tools, the lookups in a stored
+chat, `read_memory`, `read_inbox`, `list_tasks`, the two evidence checks and `preview_pdf`. An
+action of a custom integration that declares nothing stays `unknown` and is asked for until an
+admin sets its side effect.
+
+The same declaration decides which calls of one model step may run at the same time
+([Read-only tool calls side by side](tool-calling.md#read-only-tool-calls-side-by-side-preview)).
+There the rule is stricter than for approvals: only a `read` from steps 1 to 3 counts. An
+annotation of a remote server never does, and a call that needs an approval always runs alone.
+
 Remote MCP servers and A2A agents are `external`; integrations declare their data flow; the page
 reader `read_url` is an `external` read (whatever its URL carries reaches the host it opens, so
 `always` asks before every page read; `writes` does not); every
@@ -244,6 +256,15 @@ be resumed after an answer (`EXECUTION_PRINCIPAL_UNKNOWN`): start it again.
 
 - Resolver: `server/utils/toolApproval.js` (`resolveToolApproval`, stamped on every tool in
   `getToolsForApp`). Shared vocabulary: `shared/toolApproval.js`.
+- `isTrustedReadOnly(toolDef, installation)` in the same file answers whether a tool is a read by
+  declaration (an admin's override, the definition of its integration, the tool's own definition).
+  It is false for a `read` that only an MCP annotation claims, for a tool that declares nothing and
+  for `unknown`. The stamp writes its answer to the tool as `readOnly`, which is what the segment
+  planner of the [agent loop](agent-loop.md#policies) reads. Use this function, never
+  `sideEffect === 'read'`, wherever a read is allowed to do more than a write.
+  `resolveUntrustedInput(toolDef, installation)` answers whether a tool returns content from
+  outside iHub (an external data flow, a remote MCP server or A2A agent, a search, a page, a
+  document or a file read, or a tool that says so with `untrustedInput: true`).
 - Seam: `server/services/loop/seams/approvalSeam.js`, registered first in the chat turn, workflow
   nodes and scheduled runs, before the seams that announce (`tool/started`) or run a call.
 - Chat continuation: `server/services/chat/chatToolApproval.js`. The stored chat transcript holds

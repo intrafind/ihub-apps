@@ -398,6 +398,97 @@ what the call is: the URLs are read from the result's top level (a list, or `res
 `sources`, or a single `{ url, content }` page). A tool that nests its hits deeper (`data.results`)
 needs the source mapping described above as well.
 
+### What a Tool Does (`sideEffect`)
+
+Every tool says what a call does to the system it talks to:
+
+| Value | Meaning |
+|-------|---------|
+| `read` | The call only reads: a search, a lookup, a page or document read |
+| `write` | The call creates or changes something |
+| `destructive` | The call deletes or overwrites something |
+| `unknown` | Nothing is declared. Treated like a write wherever it matters |
+
+The value decides two things: whether a call is asked for under the approval mode `writes`
+([Tool Approval](tool-approval.md#side-effect-and-data-flow)), and whether calls of one model step
+may run side by side ([below](#read-only-tool-calls-side-by-side-preview)).
+
+Where it is declared:
+
+- **A tool iHub ships** declares it in its file under `server/defaults/tools/`, for the whole file
+  or per function when the functions differ:
+
+  ```json
+  {
+    "id": "evidence",
+    "functions": {
+      "collect": { "sideEffect": "read" },
+      "composeReport": { "sideEffect": "write" }
+    }
+  }
+  ```
+
+- **A tool the server builds in code** (`activate_skill`, `search_tools`, `recall_tool_result`, the
+  document tools of the system skills) declares it on its definition.
+- **An action of an integration** declares it in the definition (`actions[].sideEffect`). The
+  integration builder fills it in per action; for an OpenAPI source it proposes the value from the
+  HTTP method (GET and HEAD read, POST, PUT and PATCH write, DELETE destructive).
+- **An admin** sets it on an action of an installation (`actions.overrides[<action>].sideEffect`,
+  **Admin → Integrations** → the installation → the action → **Side effect**). This wins over
+  everything else and is the only way to declare a tool of a remote MCP server or an A2A agent.
+
+A tool is **read-only** for iHub only when one of these sources declares `read`. Two things do not
+count: what a remote MCP server says about its own tools (`readOnlyHint`), and the absence of a
+declaration. A custom integration that was made from an older tool file (migration V211) kept the
+side effect the file declared; where the file declared none, the action is `unknown` until an
+admin sets one.
+
+iHub's own tools:
+
+| Tools | Side effect |
+|-------|-------------|
+| `ask_user`, `read_url`, `knowledge_search`, `knowledge_read`, `knowledge_list`, `chat_sources_*`, `chat_files_*`, `chat_artifacts_*`, `iFinder_*`, `read_memory`, `read_inbox`, `list_tasks`, `list_scheduled_tasks`, `list_task_runs`, `get_task_run`, `evidence_collect`, `evidence_validateQuotesFastPath`, `preview_pdf`, `activate_skill`, `read_skill_resource`, `find_skill`, `search_tools`, `recall_tool_result` | `read` |
+| `write_memory`, `write_inbox`, `write_artifact`, `create_task`, `mark_task_done`, `evidence_composeReport`, `schedule_task`, `update_scheduled_task`, `run_scheduled_task_now`, the document tools (`create_pdf`, `create_docx`, `edit_docx`, `create_pptx`, `edit_pptx`, `restyle_pptx`, `create_xlsx`, `edit_xlsx`, `create_file`, `create_zip`, `create_web_artifact`, `edit_web_artifact`, `create_dashboard`, `edit_dashboard`) | `write` |
+| `delete_scheduled_task` | `destructive` |
+| A workflow offered as a tool (`workflow_<id>`), an app offered as a tool (`app__<id>`) | none: what they do depends on what they run, so they count as `unknown` |
+
+`server/tests/toolClassification.test.js` holds this list with the reason for every row and fails
+when a shipped tool, one of its functions or a tool built in code declares nothing. When you add a
+tool, declare its side effect and add its row there. Declare `read` only for a call that changes
+nothing: neither in the system it talks to nor in what iHub stores for the user.
+
+### Read-only tool calls side by side (preview)
+
+A model can ask for several tool calls in one step. A chat runs them one after the other. With the
+feature **Read-only tool calls side by side** on (**Admin → Features**, `parallelToolCalls`, a
+preview, off by default), the calls of a step run at the same time when **every** call of the step
+is read-only:
+
+- At most four calls run at once. A step with more calls runs them in groups of four, in the order
+  the model asked for them.
+- One call in the step that is not read-only makes the whole step run one call at a time, in the
+  model's order. The same holds for a call that asks the user (`ask_user`), a workflow tool that
+  takes the turn over, and a call that needs an approval.
+- The model gets the results in the order of its calls, whichever call finishes first. The chat
+  lists the calls in that order too, live and when the chat is opened again.
+- When one call of a group fails, the others finish and the model gets every result, the error
+  among them. Stopping the answer ends every call that is running.
+- A tool's own limit still applies. A web search engine that lets one request through at a time
+  (Brave, Qwant) handles three searches of one step one by one; the step is then no faster.
+- A tool of a remote MCP server, an A2A agent, and an action without a declared side effect are
+  never run side by side until an admin sets the side effect of the action to `read`.
+
+The feature covers every chat turn: an answer in a chat, the run of a scheduled task, and an app
+that another app calls as a tool.
+
+A model can be taken out: `"parallelToolCalls": false` in the model file, or the checkbox of the
+same name in the model's settings ([Models](models.md)). Workflow steps are not affected by the
+feature; they keep their own setting (`parallelToolCalls` of the step, see
+[Agent Loop](agent-loop.md#workflow-prompt--agent-nodes)).
+
+What the feature changes in the events of a run is described in
+[Streaming Events](streaming-events.md) (`tool/started.parallelGroup` and `callIndex`).
+
 ### External Service Integration
 
 Integrate with external APIs and services:
@@ -1121,7 +1212,7 @@ Each action of an integration definition uses these fields (the builder writes t
 | `name` | The action's name; the tool id is `<installationId>__<action>` unless the definition fixes a `toolId` |
 | `title` / `description` | Localized display name and the description the model receives |
 | `parameters` | JSON schema describing the tool input |
-| `sideEffect` | `read`, `write` or `destructive` (drives [tool approval](tool-approval.md)) |
+| `sideEffect` | `read`, `write` or `destructive`; left out it is `unknown`. Drives [tool approval](tool-approval.md) and whether calls may run side by side, see [What a Tool Does](#what-a-tool-does-sideeffect) |
 | `dataFlow` | Where the data goes (optional) |
 | `toolId` | A fixed tool id (built-in and custom definitions only) |
 

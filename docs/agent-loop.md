@@ -53,7 +53,7 @@ const result = await agentLoop.run({
   kind: 'workflow',         // chat | workflow | agent | subagent | inference | utility
   model,                    // resolved model object (see llmClient.resolveModel)
   messages,                 // starting transcript, system message first
-  tools,                    // ToolSpec[]: { id, description, parameters, readOnly?, interactive?, passthrough? }
+  tools,                    // ToolSpec[]: { id, description, parameters, sideEffect?, readOnly?, interactive?, passthrough? }
   toolExecution: 'server',  // 'caller' hands tool calls back instead of executing them
   policies: { budgets, tools, context, interactions, approval },
   options: { maxTokens, responseSchema, nativeWebSearch, thinking… },
@@ -81,7 +81,8 @@ defaults.
 | `budgets.maxWallClockMs`          | —       | Wall-clock deadline for the invocation, enforced as an abort signal: it cuts the in-flight model call or tool short (a tool that ignores the signal is abandoned) |
 | `tools.maxRateLimitFailures`      | 2       | 429/503-style failures before a tool is withheld for the segment       |
 | `tools.maxConsecutiveFailures`    | 3       | Consecutive failures (any error) before a tool is withheld              |
-| `tools.parallel` / `maxParallel`  | true / 4 | Segment planner: read-only tools and non-overlapping calls run concurrently |
+| `tools.parallel` / `maxParallel`  | true / 4 | Segment planner: whether calls of one model step may run concurrently, and how many at once |
+| `tools.parallelMode`              | `targets` | Which calls may share a batch. `targets`: read-only tools, and calls whose arguments do not overlap. `readOnly`: only calls of tools that are a read by declaration (`isTrustedReadOnly`, see [Tool Approval](tool-approval.md#for-developers)), and only when every call of the step is one; any other call makes the step run one call at a time, in the model's order. A chat turn uses `readOnly` |
 | `tools.choice`                    | `auto`  | `required` makes the first model call of a turn call a tool; later calls are `auto`. See [Requiring a tool call](tool-calling.md#requiring-a-tool-call) |
 | `context.compactThresholdTokens`  | 16000   | Proactive compaction threshold (see [Context compaction](#context-compaction)) |
 | `context.strategy`                | `elide` | `elide`: old tool/assistant bodies collapse to previews (lossy). `digest`: old tool batches are condensed into a findings digest |
@@ -126,6 +127,7 @@ is an object with any of these hooks; register it for every run with
 | `onChunk(ctx, chunk)`           | Every streamed chunk (`chunk.toolCallProgress` is the early signal of a tool call whose arguments are still streaming) | Forward to a client |
 | `streamEnd(ctx, { outcome, result? })` | Once per model call, after the last chunk, before `stepEnd` and any tool: `outcome` is `completed` (with the accumulated `result`), `error` (the provider or a later hook failed) or `aborted` (Stop, the run's deadline). It also runs on the paths that never reach `stepEnd` (the loop returns from its `catch`) | Close what `preStep` / `onChunk` opened. A throw is logged, never raised |
 | `stepEnd(ctx, step)`            | After each model turn (`step.result`, `step.usage`, `step.toolCalls`) | Capture grounding metadata, telemetry            |
+| `mayTakeOver(ctx, info)`        | Before the calls of a step are grouped (`parallelMode: 'readOnly'`); synchronous, without effects | Return `true` when this seam's `preTool` may take the call over (hold it for an approval, put a question, end the turn). Such a call never runs beside another one. Every seam whose `preTool` can return `handled` has this hook |
 | `preTool(ctx, info)`            | Before a tool executes                                              | Return `{ handled, message, terminate }` to take the call over |
 | `postTool(ctx, info, outcome)`  | After a tool executed                                               | Rewrite `outcome.message`, lift images, add knowledge sources |
 | `onHallucinated(ctx, info)`     | Model called an unregistered tool                                   | Record for audit                                   |
@@ -352,7 +354,7 @@ supplies `executeToolCall` as the tool executor. Node config knobs:
 | Node config                   | Maps to                                     |
 | ----------------------------- | ------------------------------------------- |
 | `maxIterations`               | `budgets.maxToolRounds` (else the agent profile's `budgets.maxToolRoundsPerNode`, else 10) |
-| `parallelToolCalls`           | `tools.parallel` (default **false** for workflow nodes — workflow tools mutate shared run state) |
+| `parallelToolCalls`           | `tools.parallel` (default **false** for workflow nodes — workflow tools mutate shared run state). The mode stays `targets`; the feature `parallelToolCalls` of chats does not apply to workflow nodes |
 | `maxRateLimitFailures`        | `tools.maxRateLimitFailures`                |
 | `maxConsecutiveToolFailures`  | `tools.maxConsecutiveFailures`              |
 | `toolChoice`                  | `tools.choice` (`auto` or `required`; default `auto`) |
@@ -382,7 +384,7 @@ Chat policies:
 | Policy                   | Value                                                                                 |
 | ------------------------ | ------------------------------------------------------------------------------------- |
 | `budgets.maxToolRounds`  | 50 (`CHAT_MAX_TOOL_ROUNDS`); the last round is a forced tool-less final answer (a cap of 1 gets one extra tool-less call)         |
-| `tools.parallel`         | **false** — chat tools have side effects and the client renders tool events in order |
+| `tools.parallel`         | **false**: one call at a time. With the feature `parallelToolCalls` on and a model that does not opt out (`parallelToolCalls: false` in the model file): **true** with `parallelMode: 'readOnly'` and `maxParallel: 4` (`chatToolPolicies`), for a chat turn and for an app that runs as a tool. See [Read-only tool calls side by side](tool-calling.md#read-only-tool-calls-side-by-side-preview) |
 | `tools.choice`           | the app's `toolChoice` (default `auto`) |
 | `budgets.maxWallClockMs` | headless invocations only (`invokeAppInternal`, default 180 s)                        |
 | `timeoutMs`              | hard timeout per model call (the chat route's `DEFAULT_TIMEOUT`)                      |
