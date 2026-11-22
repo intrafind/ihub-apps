@@ -859,7 +859,17 @@ describe('POST /api/admin/user-apps/{appId}/_promote', () => {
     assert.equal(taken.status, 409, taken.text);
     assert.equal(taken.body.code, 'CONFLICT');
     assert.equal(taken.body.details.reason, 'idTaken');
-    for (const body of [{ id: 'Not An Id' }, { id: 'new' }, { id: record.id }, { owner: 'x' }]) {
+    for (const body of [
+      { id: 'Not An Id' },
+      { id: 'new' },
+      { id: record.id },
+      { owner: 'x' },
+      { id: '../escape' },
+      { id: 'a..b' },
+      { id: '.' },
+      { id: 'a/b' },
+      { id: 'x'.repeat(51) }
+    ]) {
       const res = await promote('root', record, body);
       assert.equal(res.status, 400, JSON.stringify(body));
     }

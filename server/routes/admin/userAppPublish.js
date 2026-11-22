@@ -53,12 +53,21 @@ import { buildServerPath } from '../../utils/basePath.js';
 import { sendCreated, segment } from '../../utils/created.js';
 import { ServiceError } from '../../utils/ServiceError.js';
 import { isUserAppId } from '../../../shared/userAppContent.js';
+import { APP_ID_MAX_LENGTH, APP_ID_PATTERN } from '../../../shared/validationPatterns.js';
 import { registerAdminUserAppViewExtension } from './userApps.js';
 
 /** The body of `POST …/{appId}/_promote`. Both keys are optional; no other key passes. */
 const promoteBodySchema = z
   .object({
-    id: z.string().trim().min(1).max(200),
+    // The allow-list of an app ID at the source: the value becomes part of a
+    // file name (apps/<id>.json). promoteUserApp checks the reserved names.
+    id: z
+      .string()
+      .trim()
+      .min(1)
+      .max(APP_ID_MAX_LENGTH)
+      .regex(APP_ID_PATTERN)
+      .refine(value => !value.includes('..') && value !== '.', 'No path segments'),
     category: z.string().trim().min(1).max(64)
   })
   .partial()
