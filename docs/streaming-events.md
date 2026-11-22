@@ -313,9 +313,13 @@ How the web client follows them (`useAppChat.js`, `useRunSteering.js`):
   ends when the server ends it, after those frames.
 - On `steer/applied` with `nextRunId` the client places the next turn's question and an answer to
   draw into at once, bound to `nextRunId` (the server names that turn's message by the id of its
-  first message), and then follows that turn like one it attaches to again: the run's ledger first,
-  then the chat's GET stream with `resumeRun`. Once that stream is connected, the chat is read: a
-  next turn that already ended before the stream was open is read from the store.
+  first message). On the chat's GET stream, the held stream carries the next turn's `run/started`
+  and its frames like any turn's; the transcript is read again once that turn ends. After a turn's
+  own POST stream, or when the next turn's `run/started` has not come on the held stream within
+  ten and a half seconds of `steer/applied`, the client follows that turn like one it attaches to
+  again: the run's ledger first, then the chat's GET stream with `resumeRun`. Once that stream is
+  connected, the chat is read: a next turn that already ended before the stream was open is read
+  from the store.
 - What waits behind it is read from `pending` again. A message still listed a few seconds after
   the end of its answer (its frame did not arrive, for example after **Stop answer**, which closes
   the stream) is checked against `pending` as well.

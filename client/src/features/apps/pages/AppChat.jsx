@@ -1213,7 +1213,6 @@ function AppChat({
     setChatProjectId(prev => prev || containerProjectId);
   }, [containerProjectId]);
 
-  // The chat the last hydration attempt was for.
   // A message while iHub is working (#3191): the feature `steering`, and the
   // server's word that this person may send into the chat's running answer.
   const steeringEnabled = featureFlags.isEnabled('steering', false);
@@ -1226,6 +1225,7 @@ function AppChat({
     void refreshSteering();
   }, [steeringEnabled, runningRunId, steering.maySteer, refreshSteering]);
 
+  // The chat the last hydration attempt was for.
   const chatHydratedRef = useRef(null);
   // Whether the fetch below is still out. A re-run of the effect must not end
   // hydration behind its back — that is the greeting flash all over again.

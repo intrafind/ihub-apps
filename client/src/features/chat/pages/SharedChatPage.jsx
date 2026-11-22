@@ -36,9 +36,10 @@ const DEFAULT_APP_ICON = 'chat-bubble';
 
 /**
  * The snapshot messages as the chat bubbles render them: the mapping a reopened
- * chat uses (a message sent while an answer was written is drawn inside it). A user turn's attachments come out as the same views, each also
- * saying whether this viewer may open the file (`shared`), so the share and the
- * owner's chat show a file the same way.
+ * chat uses (a message sent while an answer was written is drawn inside it). A
+ * user turn's attachments come out as the same views, each also saying whether
+ * this viewer may open the file (`shared`), so the share and the owner's chat
+ * show a file the same way.
  *
  * @param {Object[]} messages - Snapshot messages from the share.
  * @returns {Object[]}

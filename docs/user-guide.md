@@ -138,9 +138,9 @@ can keep typing:
 - A message iHub could not take (the answer was stopped, ended with an error or asked you
   something first; in a temporary chat, where nothing is sent on its own) comes back as a notice
   with **Copy to input**. A message the answer ended before reading is sent as your next message.
-- While the answer waits for your answer to a question or an approval, the input says *Answer the
-  question above first*. Attaching files, the model selector and voice input wait until the answer
-  is finished.
+- While the answer waits for your answer to a question or an approval, the input asks you to
+  answer it first. Attaching files, the model selector and voice input wait until the answer is
+  finished.
 - A message that waits is held by the server that writes the answer; if that server restarts, it
   is lost.
 
