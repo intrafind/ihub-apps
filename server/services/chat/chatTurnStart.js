@@ -112,6 +112,13 @@ const COMPONENT = 'chatTurnStart';
  *   object or a list, and `fileIds` for files uploaded before), `variables`,
  *   `hostContext`, a `clarificationResponse`, an `approvalResponse`, a
  *   `connectResume`. Left out (`undefined`), the turn is refused.
+ *
+ *   The uploads stay on the message, in the format the chat client sends them:
+ *   there is no `files` field next to it. The file store reads them from the
+ *   message as it stores the message (`prepareTurnFiles`), and the order of
+ *   documents, images and audio there is what the prompt and the stored
+ *   message carry. A request with a `files` field is a programming error, and
+ *   {@link prepareTurn} throws it rather than drop the files.
  * @property {number} [clientHistory] - How many earlier messages the caller
  *   sent along with the new one. The server owns the history, so any refuses
  *   the turn (`CLIENT_HISTORY_NOT_ALLOWED`).
@@ -321,8 +328,6 @@ export function messageAttachments(message) {
  * @property {string|null} clientTimezone
  * @property {string} origin - What started the turn.
  * @property {string} [sessionId] - The sender's browser session, for the logs.
- * @property {() => boolean} audited - Whether the turn wrote an audit entry of its own
- *   (a call resumed after a connect). The caller is told through its sink (`TurnSink.audited`).
  */
 
 /**
@@ -575,7 +580,10 @@ async function prepareResumes(draft) {
     });
   }
   // What the audit entry of a resumed call reads from a request: who acted and
-  // from where. The audit log marks the object it wrote an entry for.
+  // from where. The audit log also marks the object it wrote an entry for
+  // (`_auditLogged`), which nobody reads here: the request-level audit skips
+  // every path with a `chat` segment (`auditLogger.js`), so the chat POST never
+  // had a coarse entry that this one could stand in for.
   draft.auditSubject = { user, ip: request.client?.ip, originalUrl: request.client?.url };
   const connectResume = await prepareConnectResume({
     chatId: request.chatId,
@@ -1043,8 +1051,7 @@ function preparedTurnOf(draft) {
     canApproveTools: request.toolApprovalCapable === true,
     clientTimezone: request.clientTimezone || null,
     origin: request.origin,
-    sessionId: request.client?.sessionId,
-    audited: () => draft.auditSubject._auditLogged === true
+    sessionId: request.client?.sessionId
   };
 }
 
@@ -1065,12 +1072,19 @@ function preparedTurnOf(draft) {
  * @param {(params: {chatId: string, user: Object, lastMessage: Object}) =>
  *   Promise<{runId: string, interactionId: string}|null>} host.settleClarifications - Answers
  *   or supersedes the chat's pending questions for the new message, and names the run the
- *   message answered a question of. It decides through run access, so it lives with the caller.
+ *   message answered a question of. The chat route hands in `settleChatClarifications` of
+ *   `routes/chat/sessionRoutes.js`, which reads no request. It stays in the route module for
+ *   now because it decides through run access (`authorizeInteraction`, intent `answer`) and
+ *   the route inventory lists every route module that does (`RUN_ACCESS_ROUTE_FILES`);
+ *   moving it is for the first caller without an HTTP request, together with that list.
  * @returns {Promise<TurnPreparation>}
  */
 export async function prepareTurn(request, { user, getLocalizedError, settleClarifications }) {
   if (typeof getLocalizedError !== 'function' || typeof settleClarifications !== 'function') {
     throw new TypeError('prepareTurn needs getLocalizedError and settleClarifications');
+  }
+  if (Object.hasOwn(request, 'files')) {
+    throw new TypeError('A turn request carries its uploads on its message, not in `files`');
   }
   const named = principalRefOf(user);
   const ref = request.principalRef;
@@ -1109,10 +1123,6 @@ export async function prepareTurn(request, { user, getLocalizedError, settleClar
  *   turn that was not told on a stream of the sink, before the turn lets go of
  *   the chat (its durable mark, an approval or a connect to put back). A
  *   caller that answers a request does so here.
- * @property {() => void} [audited] - Called as soon as the turn wrote an audit
- *   entry of its own (a call resumed after a connect), before anything is
- *   answered. A caller whose request is audited marks the request here, so
- *   that the request-level audit adds no second entry.
  */
 
 /**
@@ -1295,14 +1305,7 @@ async function buildModelRequest(run) {
 async function takeResumedCall(run) {
   const { turn } = run;
   if (!turn.commitConnectResume) return null;
-  let committed;
-  try {
-    committed = await turn.commitConnectResume();
-  } finally {
-    // The call that was taken is audited (`connection.resume`). The caller hears
-    // of it now, however the taking went on, and before anything is answered.
-    if (turn.audited()) run.sink?.audited?.();
-  }
+  const committed = await turn.commitConnectResume();
   if (committed.refusal) {
     emitFailedRun(turn.chatId, {
       runId: run.runId,
@@ -1505,9 +1508,12 @@ async function releaseTurn(run) {
 /**
  * Run a prepared turn to its end, and let go of the chat.
  *
- * Without a stream of the caller, a refusal is the returned outcome and a
- * failure is thrown: the caller answers them. On a stream of the caller both
- * are told there as frames, and the outcome says so (`told`).
+ * Without a stream of the caller, a refusal just before the turn runs (the
+ * approval, the connect, the chat's container: `refused`) and a model request
+ * that could not be built (`failed`, with `error`) are the returned outcome,
+ * which is also handed to `sink.answer`; any other failure is thrown. The
+ * caller answers all of them. On a stream of the caller they are told there as
+ * frames, and the outcome says so (`told`).
  *
  * @param {PreparedTurn} turn - From {@link prepareTurn}; a prepared turn runs once.
  * @param {Object} host

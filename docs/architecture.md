@@ -357,7 +357,7 @@ graph TB
 
 #### Chat Request Flow
 
-The route (`server/routes/chat/sessionRoutes.js`) does the HTTP part of a chat turn and nothing else: it reads the `Accept` header, builds a `TurnRequest` from the request, and answers. A `TurnRequest` is plain data: the chat, the app, who sends the message, the message with its uploads, and what the sender chose for this turn (model, style, output format, integration scopes, language). The turn starts in `server/services/chat/chatTurnStart.js`, which reads no request and writes no response. `prepareTurn(turnRequest, { user, … })` does everything that can refuse the turn before anything is sent to the reader: it checks who may write to the chat, settles pending questions, reads the uploads into the chat's file store, and assembles the history and what the turn stores. It returns a prepared turn, a refusal (a status and a code of `shared/apiErrors.js`, which the route throws as a `ServiceError`), or the answer of a workflow that the message mentioned. `runPreparedTurn(turn, { sink, … })` runs the prepared turn: it opens the reader's stream, makes the two `ChatService` calls of the diagram below, and releases the chat however the turn ended. The `sink` says where the turn is told. The route passes one that opens the stream of the `POST` when the client asked for `text/event-stream`, and otherwise one that answers the `POST` with JSON while the frames go to the chat's `GET` stream. Both functions run their steps in a fixed order, because the order decides which refusal a request gets. The chat route is the only caller today.
+The route (`server/routes/chat/sessionRoutes.js`) does the HTTP part of a chat turn and nothing else: it reads the `Accept` header, builds a `TurnRequest` from the request, and answers. A `TurnRequest` is plain data: the chat, the app, who sends the message, the message with its uploads, and what the sender chose for this turn (model, style, output format, integration scopes, language). The turn starts in `server/services/chat/chatTurnStart.js`, which reads no request and writes no response. `prepareTurn(turnRequest, { user, … })` does everything that can refuse the turn before anything is sent to the reader: it checks who may write to the chat, settles pending questions, reads the uploads into the chat's file store, and assembles the history and what the turn stores. It returns a prepared turn, a refusal (a status and a code of `shared/apiErrors.js`, which the route throws as a `ServiceError`), or the answer of a workflow that the message mentioned. `runPreparedTurn(turn, { sink, … })` runs the prepared turn: it opens the reader's stream, makes the two `ChatService` calls of the diagram below, and releases the chat however the turn ended. It can still refuse the turn just before it runs (an approval that was already answered, a connect that is no longer pending, a chat whose container changed: status `refused`), and it reports a model request that could not be built (status `failed`); on the `POST` stream both are frames, and without it the returned outcome carries them and the route answers the refusal as problem+json. The `sink` says where the turn is told. The route passes one that opens the stream of the `POST` when the client asked for `text/event-stream`, and otherwise one that answers the `POST` with JSON while the frames go to the chat's `GET` stream. Both functions run their steps in a fixed order, because the order decides which refusal a request gets. The chat route is the only caller today.
 
 ```mermaid
 sequenceDiagram
@@ -404,10 +404,11 @@ sequenceDiagram
     SSE->>Client: SSE v2 envelopes
 ```
 
-Without an open SSE connection the route runs the same turn with
-`streaming: false`: nothing is emitted, interactive tools run headless
-(`ask_user` gets a `NO_USER_AVAILABLE` result instead of pausing), and the POST
-answers with `{ messageId, model, content, finishReason, usage }`.
+A turn always streams. Without the stream of the `POST`, `chatTurnStart` runs
+the same turn and its frames go to the chat's `GET` stream, or nowhere when
+the chat has none (the turn is still stored). The `POST` then answers with
+`{ status: 'streaming', chatId }`, or with `{ status: 'error', message, code }`
+when the model request could not be built.
 
 #### Headless App Invocation
 

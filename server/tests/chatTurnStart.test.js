@@ -17,7 +17,7 @@
  * `TurnRequest` reaches the turn, that a refusal is a value, and the order of
  * the answer and the release.
  */
-import test, { before, after, beforeEach } from 'node:test';
+import test, { before, after, afterEach, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 // The harness first: it isolates the contents directory before the server loads.
@@ -131,6 +131,12 @@ beforeEach(() => {
   env.envelopes.length = 0;
   lookupCalls = [];
   settled = [];
+});
+
+// A turn writes its run log, its evidence and its chat in the background: every test waits
+// for them, so none is left running into the next test or into the shutdown.
+afterEach(async () => {
+  await env.settle();
 });
 
 /** Script the model for one test; the script must be used exactly. */
@@ -452,67 +458,225 @@ test('a failure after the commit point is a frame on the stream of the caller, a
   assert.equal(isChatDurable(plain.turn.chatId), false);
 });
 
-test('a turn that wrote an audit entry of its own tells its caller at once, before it runs and before it is answered', async () => {
-  // A call resumed after a connect is audited when it is taken off the chat. The
-  // request-level audit of a caller reads its mark when the response is finished, so
-  // the caller hears of the entry at the commit and not after the turn.
-  const order = [];
+/** A refusal as the approval, the connect or the chat's store answers one. */
+const lateRefusal = code => ({ status: 409, code, message: `refused: ${code}` });
+
+/**
+ * A chat service whose model request is built for real and whose turn is played by `play`:
+ * nothing of these turns reaches the model.
+ */
+function playedService(play) {
   const service = Object.create(env.chatService);
-  service.runTurn = async ({ connectResume }) => {
-    order.push('run');
-    connectResume.started = true;
-    return { runId: 'run-1', status: 'completed' };
-  };
-  const prepared = await prepareTurn(turnRequest(), host());
-  let written = false;
-  const resumed = {
+  service.runTurn = play;
+  return service;
+}
+
+/**
+ * A prepared turn that takes a resumed call after a connect and answers an approval, each
+ * through the given function, and notes each put-back in `order`.
+ */
+async function resumingTurn(order, { connect, approval, request = turnRequest() }) {
+  const prepared = await prepareTurn(request, host());
+  return {
     ...prepared.turn,
     commitConnectResume: async () => {
-      written = true;
-      order.push('taken');
-      return { resume: { calls: [] }, refusal: null, restore: async () => order.push('put back') };
+      order.push('connect taken');
+      return {
+        resume: { calls: [] },
+        refusal: null,
+        restore: async () => order.push('connect put back'),
+        ...connect
+      };
     },
-    audited: () => written
+    commitApproval: async () => {
+      order.push('approval answered');
+      return {
+        grants: ['lookup'],
+        resume: null,
+        refusal: null,
+        restore: async () => order.push('approval put back'),
+        ...approval
+      };
+    }
   };
+}
+
+test('an approval refused when the turn is about to run is the outcome without a stream, and the connect taken before it is put back after the answer', async () => {
+  const order = [];
+  const service = playedService(async () => {
+    order.push('run');
+    return { status: 'completed' };
+  });
+  const refusal = lateRefusal('APPROVAL_ALREADY_ANSWERED');
+  const prepared = await resumingTurn(order, { approval: { refusal, restore: undefined } });
   const outcome = await runPreparedTurn(
-    resumed,
+    prepared,
+    runHost({ chatService: service, sink: { answer: () => order.push('answered') } })
+  );
+  // Nothing was told: the caller answers the refusal with its status and code.
+  assert.deepEqual(outcome, { status: 'refused', told: false, refusal });
+  // The turn never ran. The refused approval was not used up, so there is nothing of it to put
+  // back; the call the connect gave was taken, and is put back once the caller was answered.
+  assert.deepEqual(order, ['connect taken', 'approval answered', 'answered', 'connect put back']);
+  // The chat's own stream was told as a failed run with the code.
+  const frames = env.envelopes.filter(entry => entry.streamId === prepared.chatId);
+  assert.deepEqual(
+    frames.map(entry => entry.envelope.type),
+    ['run/started', 'stream/error', 'run/ended']
+  );
+  assert.equal(frames[1].envelope.data.code, 'APPROVAL_ALREADY_ANSWERED');
+  assert.equal(isChatDurable(prepared.chatId), false);
+});
+
+test('a connect refused when the turn is about to run is told on the stream of the caller, which is ended, and nothing is answered', async () => {
+  const order = [];
+  const service = playedService(async () => {
+    order.push('run');
+    return { status: 'completed' };
+  });
+  const refusal = lateRefusal('NOT_PENDING');
+  const prepared = await resumingTurn(order, { connect: { refusal, restore: undefined } });
+  const stream = fakeStream();
+  stream.end = () => order.push('ended');
+  const outcome = await runPreparedTurn(
+    prepared,
     runHost({
       chatService: service,
-      sink: { audited: () => order.push('audited'), answer: () => order.push('answered') }
+      sink: { open: () => stream, answer: () => order.push('answered') }
     })
   );
+  assert.deepEqual(outcome, { status: 'refused', told: true, refusal });
+  // Refused before the approval was answered; the reader heard of it as the failed run.
+  assert.deepEqual(order, ['connect taken', 'ended']);
+  const failed = env.envelopes.filter(entry => entry.streamId === prepared.chatId);
+  assert.deepEqual(
+    failed.map(entry => entry.envelope.type),
+    ['run/started', 'stream/error', 'run/ended']
+  );
+  assert.equal(failed[1].envelope.data.code, 'NOT_PENDING');
+});
+
+test('a turn the chat store refuses before its loop starts is a 409, and the approval and the connect it used up are put back', async () => {
+  const order = [];
+  const refusal = { message: 'The chat moved', code: 'CHAT_CONTAINER_CHANGED' };
+  const service = playedService(async () => {
+    order.push('run');
+    return { status: 'error', refusal };
+  });
+  const expected = { status: 409, code: 'CHAT_CONTAINER_CHANGED', message: 'The chat moved' };
+
+  const plain = await resumingTurn(order, {});
+  const outcome = await runPreparedTurn(
+    plain,
+    runHost({ chatService: service, sink: { answer: () => order.push('answered') } })
+  );
+  assert.deepEqual(outcome, { status: 'refused', told: false, refusal: expected });
+  // The loop never started: both are put back, after the caller was answered.
+  assert.deepEqual(order, [
+    'connect taken',
+    'approval answered',
+    'run',
+    'answered',
+    'approval put back',
+    'connect put back'
+  ]);
+
+  // On a stream of the caller the refusal is a frame there; nothing is answered.
+  order.length = 0;
+  const onStream = await resumingTurn(order, {});
+  const stream = fakeStream();
+  const told = await runPreparedTurn(
+    onStream,
+    runHost({
+      chatService: service,
+      sink: { open: () => stream, answer: () => order.push('answered') }
+    })
+  );
+  assert.deepEqual(told, { status: 'refused', told: true, refusal: expected });
+  assert.deepEqual(
+    stream.written.map(frame => frame.type),
+    ['stream/error', 'run/ended']
+  );
+  assert.equal(stream.written[0].data.code, 'CHAT_CONTAINER_CHANGED');
+  assert.equal(stream.written[0].data.details.status, 409);
+  assert.equal(stream.ended, 1);
+  assert.deepEqual(order, [
+    'connect taken',
+    'approval answered',
+    'run',
+    'approval put back',
+    'connect put back'
+  ]);
+});
+
+test('an approval and a connect the loop started on are not put back', async () => {
+  const order = [];
+  const service = playedService(async ({ toolApproval, connectResume }) => {
+    order.push('run');
+    toolApproval.started = true;
+    connectResume.started = true;
+    return { status: 'completed' };
+  });
+  const prepared = await resumingTurn(order, {});
+  const outcome = await runPreparedTurn(prepared, runHost({ chatService: service }));
   assert.equal(outcome.status, 'ran');
-  // The call ran, so it is not put back.
-  assert.deepEqual(order, ['taken', 'audited', 'run', 'answered']);
+  // The calls may have run.
+  assert.deepEqual(order, ['connect taken', 'approval answered', 'run']);
+  assert.deepEqual(prepared.toolApproval.grants, ['lookup']);
+});
 
-  // A turn without an entry of its own tells nothing.
-  const plain = await prepareTurn(turnRequest(), host());
-  assert.equal(plain.turn.audited(), false);
-  const told = [];
-  await runPreparedTurn(
-    { ...plain.turn, commitConnectResume: async () => ({ resume: { calls: [] }, restore: null }) },
-    runHost({ chatService: service, sink: { audited: () => told.push('audited') } })
+test('a temporary chat whose reader left while the turn was prepared does not run; a kept chat does', async () => {
+  let runs = 0;
+  const service = playedService(async () => {
+    runs += 1;
+    return { status: 'completed' };
+  });
+  const closedStream = () => {
+    const stream = fakeStream();
+    stream.open = false;
+    return stream;
+  };
+
+  const temporary = await prepareTurn(turnRequest({ ephemeral: true }), host());
+  assert.equal(temporary.turn.persistence.temporary, true);
+  const left = closedStream();
+  const answered = [];
+  const abandoned = await runPreparedTurn(
+    temporary.turn,
+    runHost({
+      chatService: service,
+      sink: { open: () => left, answer: outcome => answered.push(outcome) }
+    })
   );
-  assert.deepEqual(told, []);
+  assert.deepEqual(abandoned, { status: 'abandoned', told: true });
+  assert.equal(runs, 0);
+  assert.deepEqual(answered, []);
+  assert.equal(left.ended, 1);
 
-  // An entry that was written is told also when the taking fails afterwards.
-  const failing = await prepareTurn(turnRequest(), host());
-  const late = [];
+  // A kept chat's turn outlives its reader.
+  const kept = await prepareTurn(turnRequest(), host());
+  assert.equal(kept.turn.persistence.temporary, false);
+  const ran = await runPreparedTurn(
+    kept.turn,
+    runHost({ chatService: service, sink: { open: closedStream } })
+  );
+  assert.equal(ran.status, 'ran');
+  assert.equal(runs, 1);
+
+  // Without a stream of the caller there is no reader to leave.
+  const unwatched = await prepareTurn(turnRequest({ ephemeral: true }), host());
+  const alone = await runPreparedTurn(unwatched.turn, runHost({ chatService: service }));
+  assert.equal(alone.status, 'ran');
+  assert.equal(runs, 2);
+});
+
+test('a turn request carries its uploads on its message: a `files` field is refused, not dropped', async () => {
   await assert.rejects(
-    () =>
-      runPreparedTurn(
-        {
-          ...failing.turn,
-          commitConnectResume: async () => {
-            throw new Error('the store went away');
-          },
-          audited: () => true
-        },
-        runHost({ chatService: service, sink: { audited: () => late.push('audited') } })
-      ),
-    /the store went away/
+    () => prepareTurn(turnRequest({ files: [UPLOAD] }), host()),
+    error => error instanceof TypeError && /uploads on its message/.test(error.message)
   );
-  assert.deepEqual(late, ['audited']);
+  // Nothing of the chat was touched.
+  assert.equal(settled.length, 0);
 });
 
 /** What `turnRequestOf` reads of a request: no Express, a plain object. */

@@ -183,6 +183,10 @@ function answerTurnAsJson(res, chatId, outcome) {
  * message. So both ask run access with the intent `answer`; an admin whose
  * message reaches somebody else's chat settles nothing.
  *
+ * It reads no request: `prepareTurn` takes it as `settleClarifications`. It
+ * stays in this module because it decides through run access, and the route
+ * inventory lists every route module that does (`RUN_ACCESS_ROUTE_FILES`).
+ *
  * @param {Object} params
  * @param {string} params.chatId
  * @param {Object} params.user - req.user
@@ -907,10 +911,6 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
       const sink = wantsEventStream(req)
         ? { open: turn => openChatPostStream({ req, res, ...turn }) }
         : { answer: outcome => answerTurnAsJson(res, chatId, outcome) };
-      // An audit entry the turn writes stands for this request (`auditLogger`).
-      sink.audited = () => {
-        req._auditLogged = true;
-      };
       try {
         const prepared = await prepareTurn(turnRequestOf(req), {
           user: req.user,

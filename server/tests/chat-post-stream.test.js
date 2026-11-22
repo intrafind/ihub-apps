@@ -277,6 +277,26 @@ describe('without Accept: text/event-stream the POST is unchanged', () => {
     const res = await post(`chat-json-${_what.replace(/\W/g, '')}`, message(), { accept });
     expect(res.headers['content-type']).toMatch(/^application\/json/);
   });
+  test('a turn refused when it is about to run is answered as problem+json with its 409', async () => {
+    // Refused at persistence (`settleUserTurn`): nothing told it on the POST, so the
+    // POST answers it, once the turn let go of the chat.
+    ChatService.prototype.runTurn = async params => {
+      turn.calls.push(params);
+      return {
+        status: 'error',
+        refusal: { message: 'The chat moved', code: 'CHAT_CONTAINER_CHANGED' }
+      };
+    };
+    const res = await post('chat-json-late-refusal', message());
+    expect(res.status).toBe(409);
+    expect(res.headers['content-type']).toMatch(/application\/problem\+json/);
+    expect(JSON.parse(res.text)).toMatchObject({
+      status: 409,
+      code: 'CHAT_CONTAINER_CHANGED',
+      detail: 'The chat moved'
+    });
+    expect(turn.calls).toHaveLength(1);
+  });
 });
 
 describe('with Accept: text/event-stream', () => {
