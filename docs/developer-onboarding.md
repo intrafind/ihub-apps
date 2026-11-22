@@ -661,6 +661,32 @@ export const sourceHandlers = [
 
 ## Debugging and Troubleshooting
 
+### Dependencies Out of Date After a Pull
+
+**Symptom**: after pulling, a page fails to open in the dev server, and Vite shows an overlay such
+as:
+
+```text
+[plugin:vite:import-analysis] Failed to resolve import "highlight.js/lib/languages/bash"
+from "src/features/admin/utils/docsHighlight.js". Does the file exist?
+```
+
+The admin Documentation and What's New pages, for example, need `highlight.js`. The rest of the
+app still works, so the cause is easy to miss: a dependency was added to `client/package.json` (or
+the root or server `package.json`) since your last install.
+
+**Fix**: install the dependencies of all three packages again, then restart the dev server:
+
+```bash
+npm run install:all
+npm run dev
+```
+
+`npm run dev` checks this before it starts (`scripts/check-installed-deps.js`, run as `predev`).
+When a declared package is missing, or installed in a version outside its range, it lists the
+packages per `package.json` and stops with the command above. The check is skipped when `CI` is
+set or `NODE_ENV=production`; set `SKIP_DEPS_CHECK=1` to start anyway.
+
 ### Server Debugging
 
 1. **Enable Debug Logging**:
