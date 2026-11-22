@@ -34,6 +34,7 @@ import {
   userAppPermissions
 } from '../services/userApps/userAppAccess.js';
 import { resolveOwnerPrincipal } from '../services/scheduler/tasks/ownerPrincipal.js';
+import configCache from '../configCache.js';
 import { userAppSettings } from '../services/userApps/userAppSettings.js';
 
 const NOW = Date.parse('2026-11-20T10:00:00Z');
@@ -717,7 +718,7 @@ describe('the owner lookup (6.2)', () => {
       assert.equal(snapshot.authMode, 'oauth_personal_key');
     });
 
-    it('a group removal in users.json still suspends the shares after a key request', () => {
+    it('a group removal in users.json still suspends the shares after a key request', t => {
       // users.json now has alice in a group without the two permissions.
       const lookupUser = () => usersJson(['restricted']);
       const platform = {
@@ -729,6 +730,13 @@ describe('the owner lookup (6.2)', () => {
           }
         }
       };
+      // The permissions come from the cached groups, not from contents/ on disk.
+      const before = configCache.cache.get('config/groups.json');
+      configCache.cache.set('config/groups.json', { data: platform.groups });
+      t.after(() => {
+        if (before) configCache.cache.set('config/groups.json', before);
+        else configCache.cache.delete('config/groups.json');
+      });
       const snapshot = userAppOwnerSnapshot(KEY, { platform, lookupUser });
       const stored = record({ ownerPrincipal: snapshot });
       const owner = lookupUserAppOwner(stored, {
