@@ -294,8 +294,8 @@ export const featureRegistry = [
       de: 'Nachrichten während der Antwort'
     },
     description: {
-      en: 'While an answer is being written, the person it is written for can send a message into it: iHub reads it at its next step, or sends it as the next message once the answer is done. A message that waits can be removed until iHub has read it. In this version the switch only decides whether the chat offers this to its clients; the chat input follows in a later version',
-      de: 'Während eine Antwort geschrieben wird, kann die Person, für die sie geschrieben wird, eine Nachricht hineinschicken: iHub liest sie beim nächsten Schritt oder sendet sie als nächste Nachricht, sobald die Antwort fertig ist. Eine wartende Nachricht kann entfernt werden, bis iHub sie gelesen hat. In dieser Version entscheidet der Schalter nur, ob der Chat dies seinen Clients anbietet; die Chat-Eingabe folgt in einer späteren Version'
+      en: 'While an answer is being written, the person it is written for can send a message into it: iHub reads it at its next step, or sends it as the next message once the answer is done. A message that waits can be removed until iHub has read it. The chat page offers it in its input (Stop and Send are then two buttons); the Outlook add-in and the browser extension do not',
+      de: 'Während eine Antwort geschrieben wird, kann die Person, für die sie geschrieben wird, eine Nachricht hineinschicken: iHub liest sie beim nächsten Schritt oder sendet sie als nächste Nachricht, sobald die Antwort fertig ist. Eine wartende Nachricht kann entfernt werden, bis iHub sie gelesen hat. Die Chat-Seite bietet dies in ihrer Eingabe an (Stoppen und Senden sind dann zwei Schaltflächen); das Outlook-Add-in und die Browser-Erweiterung nicht'
     },
     category: 'preview',
     default: false,

@@ -313,6 +313,11 @@ The side panel shares the Outlook add-in's pane, including its
 web app chats ([Chat Persistence](chat-persistence.md)), and with the Chat
 History feature on **Chat history** in the panel's menu lists and reopens them.
 
+Like the Outlook pane, the side panel does not offer
+[messages while iHub is working](user-guide.md#while-ihub-is-working): its input
+is closed while an answer is written and keeps the one button that stops the
+answer, whether the **Messages while iHub is working** feature is on or off.
+
 ---
 
 ## How the extension uses page content

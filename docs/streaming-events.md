@@ -304,6 +304,22 @@ a next turn made of a message it sent from the chat's `activeRunId` and its stor
 message is the question of that run). A restart of the server process that runs the answer loses
 what waits without a frame.
 
+How the web client follows them (`useAppChat.js`, `useRunSteering.js`):
+
+- The frames that come after the answer's `run/ended` reach a chat that streams its turn on the
+  chat's GET stream only because the client keeps that stream open past the end of the turn while
+  a message it sent into the turn has no `steer/applied` or `steer/dropped` yet, at most ten
+  seconds (`holdAfterTurnEnd` of `useEventSource.js`). A turn's own POST stream needs nothing: it
+  ends when the server ends it, after those frames.
+- On `steer/applied` with `nextRunId` the client places the next turn's question and an answer to
+  draw into at once, bound to `nextRunId` (the server names that turn's message by the id of its
+  first message), and then follows that turn like one it attaches to again: the run's ledger first,
+  then the chat's GET stream with `resumeRun`. Once that stream is connected, the chat is read: a
+  next turn that already ended before the stream was open is read from the store.
+- What waits behind it is read from `pending` again. A message still listed a few seconds after
+  the end of its answer (its frame did not arrive, for example after **Stop answer**, which closes
+  the stream) is checked against `pending` as well.
+
 ## Where a Tool Call Looked
 
 `activityOrigin`, `resultCount`, `readOutcome` and `places` are optional and additive; a client keeps working when

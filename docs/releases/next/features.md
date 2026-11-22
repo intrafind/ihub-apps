@@ -57,3 +57,25 @@ about as long as the slowest of them. The feature is a preview and off by defaul
   `read_memory` and `read_inbox`) run at the same time where they ran one after the other before;
   the model still gets the results in the order of its calls. Steps without the setting are
   unchanged.
+
+## Correct a Running Answer Without Stopping It (Preview)
+
+While iHub writes an answer, the person it writes for can keep typing in the chat: "use the 2025
+numbers instead" is read at the answer's next step, before iHub asks the model again, and the
+answer goes on. The feature is a preview and off by default: turn it on under
+**Admin → Features → Messages while iHub is working**.
+
+- With the feature on, the chat input stays open while an answer is written. **Stop answer** and
+  **Send** are two buttons; Enter sends the message and never stops the answer.
+- **Send after this answer** (the arrow next to **Send**, or **Alt+Enter**) sends the message as
+  the next message once the answer is done, without changing it.
+- Above the input a list shows each message that waits, with **×** to remove it until iHub has read
+  it. A message iHub has already read cannot be removed; a notice says *Already read by iHub*.
+- A message iHub read appears inside the answer, captioned *Sent while iHub was working*, also
+  after a reload. One the answer ended before reading is sent as the next message. One that cannot
+  be delivered (the answer was stopped or failed, or the chat is temporary) comes back as a notice
+  with **Copy to input**.
+- Only the chat's owner can send a message into the answer; an admin who reads the chat cannot.
+- The Outlook add-in and the browser extension keep one button that stops the answer.
+- A message that waits is held in the memory of the server that writes the answer and is lost if
+  that server restarts.
