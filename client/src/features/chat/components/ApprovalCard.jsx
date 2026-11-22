@@ -5,6 +5,8 @@ import { useEffect, useId, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import Badge from '../../../shared/components/Badge';
 import Icon from '../../../shared/components/Icon';
+import { useAnnounce } from '../../../shared/announce/AnnouncerProvider';
+import { isShown, mayTakeFocus } from '../../../shared/utils/focusPolicy';
 
 /** English fallbacks of the side effect and data flow badges. */
 const SIDE_EFFECT_TEXT = {
@@ -51,7 +53,10 @@ export function formatApprovalArgs(args) {
  *
  * Keyboard: when the card appears it takes focus (it is a region named by its
  * title), so a keyboard or screen-reader user lands on the decision; Tab moves
- * through the three buttons.
+ * through the three buttons. It does not when the person is typing
+ * (`mayTakeFocus`, shared/utils/focusPolicy.js): the focus stays in the
+ * composer, so an Enter meant for the message never approves, and the card's
+ * arrival is said through the page's live region instead.
  *
  * @param {Object} props
  * @param {Object} props.approval - `message.toolApproval` (see runToMessage.buildToolApproval)
@@ -67,19 +72,32 @@ function ApprovalCard({ approval, onDecide = null, disabled = false, allowChatGr
   const titleId = useId();
   const argsId = useId();
   const regionRef = useRef(null);
+  const announce = useAnnounce();
   const decided = approval?.decision || null;
   const pending = !decided && approval?.status === 'pending';
   const argsText = useMemo(() => formatApprovalArgs(approval?.args), [approval?.args]);
 
   // Focus only when the card first asks: a re-render must not steal focus back.
+  // While the person types it does not take it at all, and says it is there.
   const focusedForRef = useRef(null);
   const interactionId = approval?.interactionId || null;
   const canAnswer = pending && Boolean(onDecide);
+  const toolLabel = approval?.toolName || approval?.toolId || '';
   useEffect(() => {
     if (!canAnswer || !regionRef.current || focusedForRef.current === interactionId) return;
+    // A copy the page does not show (the chat list for the other screen width) stays quiet.
+    if (!isShown(regionRef.current)) return;
     focusedForRef.current = interactionId;
-    regionRef.current.focus({ preventScroll: false });
-  }, [canAnswer, interactionId]);
+    if (mayTakeFocus()) {
+      regionRef.current.focus({ preventScroll: false });
+    } else {
+      announce(
+        t('chat.toolApproval.waiting', 'Approval needed: {{tool}}', {
+          tool: toolLabel
+        })
+      );
+    }
+  }, [canAnswer, interactionId, announce, t, toolLabel]);
 
   if (!approval) return null;
 

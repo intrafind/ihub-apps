@@ -1,9 +1,11 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useId } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
+import { useAnnounce } from '../../../shared/announce/AnnouncerProvider';
+import { isShown, mayTakeFocus } from '../../../shared/utils/focusPolicy';
 import ClarificationChips from './ClarificationChips';
 import ClarificationDropdown from './ClarificationDropdown';
 import ClarificationInput from './ClarificationInput';
@@ -23,8 +25,12 @@ const CHIP_THRESHOLD = 4;
  * - Automatically selects chip or dropdown based on option count
  * - Handles all input types: single_select, multi_select, text, number, date, date_range, file
  * - Submit and skip actions
- * - Full accessibility with ARIA attributes and focus management
- * - Keyboard navigation support
+ * - A group named by its question (`role="group"`), part of the chat, not a
+ *   dialog: Tab moves on past its last control as anywhere else on the page
+ * - Takes the focus when it appears, unless the person is typing
+ *   (`mayTakeFocus`, shared/utils/focusPolicy.js); then the focus stays where
+ *   it is and the question is said through the page's live region
+ * - Keyboard navigation support (Ctrl/Cmd+Enter submits)
  *
  * Supports two API styles:
  * 1. Explicit props: question, inputType, options, etc. as separate props
@@ -77,6 +83,8 @@ function ClarificationCard({
   const placeholder = clarification?.placeholder || placeholderProp;
   const context = clarification?.context || contextProp;
   const { t } = useTranslation();
+  const announce = useAnnounce();
+  const headingId = useId();
   const [value, setValue] = useState(inputType === 'multi_select' ? [] : '');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const cardRef = useRef(null);
@@ -195,46 +203,39 @@ function ClarificationCard({
     [canSubmit, handleSubmit]
   );
 
+  // Ctrl/Cmd+Enter from any control inside the card. A listener rather than an
+  // `onKeyDown` prop: the card is a group, not a control of its own.
+  useEffect(() => {
+    const card = cardRef.current;
+    if (!card) return undefined;
+    card.addEventListener('keydown', handleKeyDown);
+    return () => card.removeEventListener('keydown', handleKeyDown);
+  }, [handleKeyDown]);
+
   /**
-   * Focus the first focusable element when the card mounts
+   * When the card appears: focus its first control, unless the person is
+   * typing. Then the focus stays (an Enter meant for the message must not
+   * answer the question) and the question is said instead. Only once, on
+   * mount: a re-render never takes the focus back.
    */
   useEffect(() => {
-    if (cardRef.current) {
-      // Find the first focusable element
-      const focusable = cardRef.current.querySelector(
-        'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-      );
-      if (focusable) {
-        firstFocusableRef.current = focusable;
-        focusable.focus();
+    // A copy the page does not show (the chat list for the other screen width) stays quiet.
+    if (!cardRef.current || !isShown(cardRef.current)) return;
+    if (!mayTakeFocus()) {
+      if (question) {
+        announce(t('clarification.waiting', 'The assistant asks: {{question}}', { question }));
       }
+      return;
     }
-  }, []);
-
-  /**
-   * Trap focus within the card for accessibility
-   */
-  useEffect(() => {
-    const handleTabKey = e => {
-      if (e.key !== 'Tab' || !cardRef.current) return;
-
-      const focusableElements = cardRef.current.querySelectorAll(
-        'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-      );
-      const firstElement = focusableElements[0];
-      const lastElement = focusableElements[focusableElements.length - 1];
-
-      if (e.shiftKey && document.activeElement === firstElement) {
-        e.preventDefault();
-        lastElement.focus();
-      } else if (!e.shiftKey && document.activeElement === lastElement) {
-        e.preventDefault();
-        firstElement.focus();
-      }
-    };
-
-    document.addEventListener('keydown', handleTabKey);
-    return () => document.removeEventListener('keydown', handleTabKey);
+    const focusable = cardRef.current.querySelector(
+      'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    );
+    if (focusable) {
+      firstFocusableRef.current = focusable;
+      focusable.focus();
+    }
+    // Once, when the card appears.
+    // eslint-disable-next-line @eslint-react/exhaustive-deps
   }, []);
 
   /**
@@ -325,9 +326,8 @@ function ClarificationCard({
   return (
     <div
       ref={cardRef}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="clarification-question"
+      role="group"
+      aria-labelledby={headingId}
       className={`
         w-full max-w-lg p-5 rounded-xl
         bg-white dark:bg-gray-800
@@ -336,7 +336,6 @@ function ClarificationCard({
         transition-all duration-200
         ${disabled ? 'opacity-60' : ''}
       `}
-      onKeyDown={handleKeyDown}
     >
       {/* Question section */}
       <div className="mb-4">
@@ -352,7 +351,7 @@ function ClarificationCard({
           </div>
           <div className="flex-1 min-w-0">
             <h3
-              id="clarification-question"
+              id={headingId}
               ref={questionRef}
               className="text-base font-semibold text-gray-900 dark:text-gray-100"
             >

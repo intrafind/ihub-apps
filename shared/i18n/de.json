@@ -262,7 +262,8 @@
       "dataFlow": {
         "internal": "Intern",
         "external": "Extern"
-      }
+      },
+      "waiting": "Freigabe erforderlich: {{tool}}"
     },
     "sourcePassage": {
       "more": "mehr",
@@ -11362,7 +11363,8 @@
     "numberMax": "Maximum: {{max}}",
     "datePlaceholder": "Datum auswählen",
     "startDate": "Startdatum",
-    "endDate": "Enddatum"
+    "endDate": "Enddatum",
+    "waiting": "Der Assistent fragt: {{question}}"
   },
   "upload": {
     "fileTypeNotSupported": "Dateityp wird nicht unterstützt",

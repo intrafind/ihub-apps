@@ -30,3 +30,20 @@ expected." after five minutes, "A server error occurred. Please try again later.
   every language.
 
 No action is needed after the upgrade.
+
+## A Question or Approval Card No Longer Takes the Focus While You Type
+
+When the assistant asked a question or asked for approval of a tool call while you were typing
+somewhere else, for example in the app search (Ctrl+K), the card moved the keyboard focus to itself
+and the next keys landed in the card. At the end of an answer the chat input also took the focus
+back from wherever it was.
+
+- A card that appears while you type, or right after you pressed a key or clicked, leaves the focus
+  where it is. A screen reader announces it instead ("Approval needed: …", "The assistant asks:
+  …"). When you are not typing, the card takes the focus as before.
+- Enter in the chat input never answers a card.
+- At the end of an answer the chat input takes the focus back only when nothing else has it.
+- The question card is part of the chat, not a dialog: Tab moves on past its last control instead
+  of going round inside the card.
+- The notice of a scheduled run that waits for your approval stays until you close it; the other
+  notices still close by themselves after 12 seconds.
