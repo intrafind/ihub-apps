@@ -17,12 +17,17 @@
  * client reopening inside that window attaches to a run that is already over,
  * nothing further ever arrives, and the placeholder spins with the composer
  * behind a Stop button until the user presses it.
+ *
+ * The client's own stream is told the turn is over (`run/ended`) only once the
+ * answer is stored: a client that has seen the end re-reads the stored chat,
+ * and one told earlier can read it before the append and lose the answer.
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
 import ChatService from '../services/chat/ChatService.js';
 import { activeRequests } from '../sse.js';
+import { SSE_V2_EVENTS } from '../../shared/runEvents.js';
 
 /** The minimum `prep` `runTurn` reads before it calls the loop. */
 const PREP = {
@@ -77,11 +82,21 @@ async function settleOrder({ crash = false } = {}) {
     }
   };
 
+  // The client's stream: where `run/ended` falls against the writes.
+  const emitter = {
+    runId: null,
+    emit: type => {
+      if (type === SSE_V2_EVENTS.RUN_ENDED) order.push('run-ended-sent');
+      return null;
+    }
+  };
+
   const chatId = `chat-settle-order-${crash ? 'crash' : 'normal'}`;
   try {
     await service.runTurn({
       prep: PREP,
       chatId,
+      emitter,
       streaming: false,
       user: { id: 'user-1' },
       persistence: { repository, ownerId: 'user-1', content: 'hi' }
@@ -112,5 +127,25 @@ describe('a finished durable turn ends its ledger before it releases its chat', 
     assert.ok(order.includes('ledger-ended'));
     assert.ok(order.includes('run-released'));
     assert.ok(order.indexOf('ledger-ended') < order.indexOf('run-released'));
+  });
+});
+
+describe('a finished durable turn stores its answer before it tells the client it ended', () => {
+  it('sends run/ended after the answer is appended and the chat released', async () => {
+    const order = await settleOrder();
+
+    assert.equal(order.filter(entry => entry === 'run-ended-sent').length, 1, order.join(', '));
+    assert.ok(
+      order.indexOf('answer-appended') < order.indexOf('run-ended-sent'),
+      `a client re-reading the chat on run/ended must find the answer: ${order.join(', ')}`
+    );
+    assert.ok(order.indexOf('run-released') < order.indexOf('run-ended-sent'), order.join(', '));
+  });
+
+  it('and on the crash path, after the chat is released', async () => {
+    const order = await settleOrder({ crash: true });
+
+    assert.equal(order.filter(entry => entry === 'run-ended-sent').length, 1, order.join(', '));
+    assert.ok(order.indexOf('run-released') < order.indexOf('run-ended-sent'), order.join(', '));
   });
 });
