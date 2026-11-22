@@ -407,6 +407,46 @@ function foldArgsProgress(run, frame, known, detail, when) {
 }
 
 /**
+ * The batch of a call that runs side by side with others, as the server sent
+ * it on `tool/started` (`parallelGroup` and `callIndex`, always together), or
+ * nothing for a call that runs alone.
+ *
+ * @param {Object} data - the frame's data
+ * @returns {{parallelGroup: number, callIndex: number}|{}}
+ */
+function sideBySideOf(data) {
+  return Number.isInteger(data.parallelGroup) && Number.isInteger(data.callIndex)
+    ? { parallelGroup: data.parallelGroup, callIndex: data.callIndex }
+    : {};
+}
+
+/**
+ * Add a started call to the rows of its run. A call takes the end of the
+ * list, except within its batch: the calls of one batch start in any order,
+ * and their rows stand in the model's order (`callIndex`, sent by the server),
+ * live and in the stored activity alike. Only the rows at the end of the list
+ * are looked at: a batch starts as a whole, before any other call of its run.
+ *
+ * @param {Array<Object>} tools - the run's rows, without the call itself
+ * @param {Object} tool - the started call
+ * @returns {Array<Object>} a new list
+ */
+function placeToolRow(tools, tool) {
+  let at = tools.length;
+  if (Number.isInteger(tool.callIndex)) {
+    while (
+      at > 0 &&
+      tools[at - 1].step === tool.step &&
+      tools[at - 1].parallelGroup === tool.parallelGroup &&
+      tools[at - 1].callIndex > tool.callIndex
+    ) {
+      at -= 1;
+    }
+  }
+  return [...tools.slice(0, at), tool, ...tools.slice(at)];
+}
+
+/**
  * Fold a `tool/progress` frame of phase `args` or `args.ended`: the model is
  * writing the arguments of a call, or has stopped.
  *
@@ -770,6 +810,9 @@ export function reduceRunEvent(state, envelope) {
         publicHits: data.publicHits === true ? true : null,
         args: data.args,
         execution: data.execution || 'server',
+        // Set by the server on a call that runs side by side with others of its
+        // step: the batch and the call's place in the model's order.
+        ...sideBySideOf(data),
         status: 'running',
         startedAt: ts,
         completedAt: null,
@@ -785,7 +828,10 @@ export function reduceRunEvent(state, envelope) {
       // A tool row is visible output: the model is no longer silent.
       run = {
         ...run,
-        tools: [...run.tools.filter(t => t.callId !== data.callId), tool],
+        tools: placeToolRow(
+          run.tools.filter(t => t.callId !== data.callId),
+          tool
+        ),
         waiting: null
       };
       return withRun(next, run);

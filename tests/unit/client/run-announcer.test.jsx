@@ -328,6 +328,51 @@ describe('deriveAnnouncements', () => {
     expect(result.announcements).toEqual([]);
   });
 
+  test('says one sentence for calls that run side by side, not one per call (#2485)', () => {
+    const search = (seq, callId, extra = {}) =>
+      env(seq, 'tool/started', {
+        step: 1,
+        callId,
+        toolId: 'braveSearch',
+        name: 'braveSearch',
+        activityKind: 'search',
+        args: { query: callId },
+        execution: 'server',
+        ...extra
+      });
+    const batch = [
+      search(2, 's1', { parallelGroup: 0, callIndex: 0 }),
+      search(3, 's2', { parallelGroup: 0, callIndex: 1 }),
+      search(4, 's3', { parallelGroup: 0, callIndex: 2 })
+    ];
+    const first = derive(createAnnouncerState(), [user, assistant(batch)], T0);
+    expect(texts(first)).toEqual(['3 searches running']);
+    // Once: neither the batch nor one of its calls is said again.
+    expect(texts(derive(first.state, [user, assistant(batch)], T0 + 1000))).toEqual([]);
+
+    // A batch that is not all searches is "calls".
+    const mixed = [
+      search(2, 's1', { parallelGroup: 0, callIndex: 0 }),
+      env(3, 'tool/started', {
+        step: 1,
+        callId: 'r1',
+        toolId: 'read_memory',
+        name: 'read_memory',
+        args: {},
+        execution: 'server',
+        parallelGroup: 0,
+        callIndex: 1
+      })
+    ];
+    expect(texts(derive(createAnnouncerState(), [user, assistant(mixed)], T0))).toEqual([
+      '2 calls running'
+    ]);
+
+    // Calls that run one after the other are announced one by one, as before.
+    const serial = [search(2, 's1'), search(3, 's2')];
+    expect(texts(derive(createAnnouncerState(), [user, assistant(serial)], T0))).toHaveLength(2);
+  });
+
   test('starts afresh for each turn', () => {
     const frames = [args(2, 'x1', T0)];
     const first = derive(createAnnouncerState(), [assistant(frames, { id: 'm1' })], T0 + 600);

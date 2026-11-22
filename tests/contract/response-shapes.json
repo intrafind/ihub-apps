@@ -3296,6 +3296,7 @@
           "modelType": "object",
           "name": "object",
           "nativeWebSearch": "object",
+          "parallelToolCalls": "object",
           "promptCaching": "object",
           "provider": "object",
           "providerId": "object",

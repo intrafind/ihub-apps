@@ -574,6 +574,12 @@ function callRow(run, { tool, stream }, finished) {
       durationMs: tool?.durationMs ?? null,
       // Whether the call itself started (the row has its arguments).
       started: Boolean(tool),
+      // The batch of a call the server ran side by side with others
+      // (`tool/started`: `parallelGroup` and `callIndex`); a call that ran
+      // alone has none. Never worked out here.
+      ...(Number.isInteger(tool?.parallelGroup) && Number.isInteger(tool?.callIndex)
+        ? { batch: `${tool.step}:${tool.parallelGroup}` }
+        : {}),
       ...(stream ? streamFields(stream, status) : {})
     }
   };

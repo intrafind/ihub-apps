@@ -1789,6 +1789,7 @@
         "supportsTools": "Tool-Nutzung",
         "supportsVision": "Unterstützt Bilderkennung",
         "supportsAudio": "Unterstützt Audio",
+        "parallelToolCalls": "Lesende Tool-Aufrufe nebeneinander",
         "enabled": "Aktiviert",
         "defaultModel": "Standardmodell",
         "supportsImageGeneration": "Unterstützt Bilderzeugung",
@@ -1845,6 +1846,7 @@
         "apiKeyEnvVars": "Umgebungsvariablen (in Prioritätsreihenfolge):\n{{envVars}}",
         "supportsVision": "Aktivieren, wenn dieses Modell Bildeingaben verarbeiten kann",
         "supportsAudio": "Aktivieren, wenn dieses Modell Audioeingaben verarbeiten kann",
+        "parallelToolCalls": "Wirkt nur, solange die Funktion „Lesende Tool-Aufrufe nebeneinander“ eingeschaltet ist (Admin → Funktionen). Schalten Sie die Option für ein Modell aus, das seine Tool-Ergebnisse Aufruf für Aufruf erhalten soll.",
         "supportsImageGeneration": "Aktivieren, wenn dieses Modell Bilder erzeugen kann (z.B. Gemini Bildmodelle)",
         "maxReferenceImages": "Maximale Anzahl von Referenzbildern (1-14)",
         "modelType": "Chat-Modelle beantworten Prompts. Transkriptionsmodelle wandeln Audio über einen Echtzeit-Endpunkt (z. B. Voxtral) in Text um. Sprachausgabemodelle lesen Chat-Nachrichten vor (z. B. Voxtral TTS).",
@@ -9223,6 +9225,10 @@
         "ifinder": "Die Suche in iFinder hat keine Ergebnisse geliefert",
         "iassistant": "Die Suche in iAssistant hat keine Ergebnisse geliefert",
         "documents": "Die Suche in Dokumentquellen hat keine Ergebnisse geliefert"
+      },
+      "batch": {
+        "searches": "{{count}} Suchen laufen",
+        "calls": "{{count}} Aufrufe laufen"
       }
     },
     "read": "Gelesen",

@@ -272,6 +272,20 @@ export const featureRegistry = [
     category: 'platform',
     // Off until measured (rollout phase 5 turns it on).
     default: false
+  },
+  {
+    id: 'parallelToolCalls',
+    name: {
+      en: 'Read-only tool calls side by side',
+      de: 'Lesende Tool-Aufrufe nebeneinander'
+    },
+    description: {
+      en: 'When a model asks for several tool calls in one step and all of them only read (a search, a page read, a document lookup), a chat runs up to four of them at the same time instead of one after the other. A call that changes something, asks a question or needs an approval still runs alone. A model can be excluded in its settings',
+      de: 'Fordert ein Modell in einem Schritt mehrere Tool-Aufrufe an, die alle nur lesen (eine Suche, das Lesen einer Seite, das Nachschlagen in Dokumenten), führt ein Chat bis zu vier davon gleichzeitig aus statt nacheinander. Ein Aufruf, der etwas ändert, eine Frage stellt oder eine Freigabe braucht, läuft weiterhin allein. Ein Modell kann in seinen Einstellungen ausgenommen werden'
+    },
+    category: 'preview',
+    default: false,
+    preview: true
   }
 ];
 

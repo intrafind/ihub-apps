@@ -482,6 +482,9 @@ export function chatToolSeam({
           : info.toolDef?.interactive
             ? 'clarification'
             : 'server',
+        // A call that runs side by side with others: its batch and its place
+        // in the model's order, decided by the loop (`AgentLoop._executeOne`).
+        ...(info.sideBySide || {}),
         ...(mcp
           ? {
               mcpApp: {
