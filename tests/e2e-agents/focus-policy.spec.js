@@ -56,11 +56,16 @@ async function typeElsewhereWhileItRuns(page, message, text) {
   await page.keyboard.press('Control+k');
   const search = appSearch(page);
   await expect(search).toBeFocused();
-  // The search empties itself once when its app list arrives: type until it sticks.
+  // The search empties itself whenever its app list is built anew (it is loaded on the
+  // first open and set twice): wait for the list, then type until the text stays.
+  await expect(page.getByRole('dialog').getByRole('option').first()).toBeVisible();
   await expect(async () => {
     await search.fill('');
     await page.keyboard.type(text);
     await expect(search).toHaveValue(text, { timeout: 500 });
+    // Still there a moment later: no late rebuild of the list emptied it.
+    await page.waitForTimeout(300);
+    expect(await search.inputValue()).toBe(text);
   }).toPass({ timeout: 10_000 });
   return search;
 }
