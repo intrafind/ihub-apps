@@ -16,6 +16,9 @@
  *   anonymous - anonymous access on (the platform default); `AUTHZ_ANONYMOUS=0`
  *            runs the same suite with it off
  *   admin  - the seeded default admin, for the sanity checks
+ *   mallory, dave - only in `user-apps-authz.spec.js`: who may do what on a
+ *            personal app alice shares (here her personal app is shared with
+ *            nobody, so bob and carol are strangers to it like everyone else)
  *
  * The matrix (`RESOURCES` in `resources.js`): every non-admin route with a path
  * parameter that reaches one of alice's resources, attacked by bob, carol and
@@ -209,6 +212,9 @@ const LISTS = [
   // The usage attack put alice's prompt id into the caller's own recents.
   { url: '/api/prompts/preferences', bob: 'secretOnly', carol: 'secretOnly' },
   { url: '/api/user-skills', carol: false },
+  { url: '/api/apps?scope=personal' },
+  { url: '/api/apps?scope=mine' },
+  { url: '/api/apps?scope=shared' },
   { url: '/api/projects' },
   { url: '/api/projects/_catalog' },
   { url: '/api/projects/_collections' },
@@ -251,7 +257,8 @@ function aliceMarkers() {
     'inferenceFileId',
     'keyId',
     'requestId',
-    'jobId'
+    'jobId',
+    'privateUserAppId'
   ];
   return [SECRET, ...keys.map(key => ids[key]).filter(Boolean)];
 }
@@ -304,6 +311,7 @@ test('the owner sees her items in the same lists (the list checks are not vacuou
     ['/api/prompts?scope=mine', ids.promptId],
     ['/api/user-skills', ids.skillId],
     ['/api/projects', ids.projectId],
+    ['/api/apps?scope=mine', ids.privateUserAppId],
     ['/api/scheduled-tasks', ids.taskId],
     ['/api/workflows/my-executions', ids.executionId],
     ['/api/interactions/pending', ids.interactionId],

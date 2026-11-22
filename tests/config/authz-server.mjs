@@ -12,7 +12,8 @@
  * - Adds the principals the suite signs in as (`AUTHZ_USERS` in
  *   `tests/security/authz/principals.js`), a restricted group for carol, one app,
  *   model and prompt only the `users` group may use, one app that is not published,
- *   and turns on every feature that registers user-owned resources.
+ *   and turns on every feature that registers user-owned resources. Personal apps
+ *   (`userApps`) are on, with both group permissions and publishing.
  * - Starts `server/server.js` with `authz-route-dump.mjs` preloaded, which writes the
  *   live route table to `<contents>/.authz-routes.json` for the coverage guard.
  *
@@ -80,7 +81,8 @@ writeJson(featuresPath, {
   agentFactory: true,
   appAsTool: true,
   runLog: true,
-  integrations: true
+  integrations: true,
+  userApps: true
 });
 
 // --- Platform: anonymous access as requested, local login on.
@@ -125,6 +127,12 @@ platform.chats = {
   enabled: true,
   sharing: { ...platform.chats?.sharing, enabled: true, allowPublic: true }
 };
+// Personal apps: owners may publish, so the publish route is reachable for its
+// owner and the matrix tests who else it refuses.
+platform.userApps = {
+  ...platform.userApps,
+  sharing: { ...platform.userApps?.sharing, allowPublish: true }
+};
 writeJson(platformPath, platform);
 
 // --- Groups. Every signed-in user is also in `authenticated`, so that group (and
@@ -141,6 +149,10 @@ const allow = (extra = {}) => ({
   scheduledTasks: true,
   projects: true,
   projectSharing: true,
+  // Personal apps: every signed-in principal of the suite may build and share
+  // them, so a refusal in the matrix is about the app and never about the group.
+  userApps: true,
+  userAppSharing: true,
   ...extra
 });
 const PUBLIC_APPS = ['chat'];

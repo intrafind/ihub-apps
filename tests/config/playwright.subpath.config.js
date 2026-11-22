@@ -5,7 +5,8 @@ import { defineConfig, devices } from '@playwright/test';
 
 /**
  * The route crawl, the short-link checks (admin-subpath-links.spec.js), the
- * "New app" page and the app editor (app-builder-subpath.spec.js) and the
+ * "New app" page and the app editor (app-builder-subpath.spec.js), the pages
+ * of personal apps (user-apps-subpath.spec.js) and the
  * opt-in connect flow (`CONNECT_E2E=1`, #3752), against a
  * deployment on a path prefix (`/ihub`): the production
  * build behind a proxy that adds `X-Forwarded-Prefix`, see subpath-server.mjs.
@@ -25,6 +26,7 @@ export default defineConfig({
     'route-crawl.spec.js',
     'admin-subpath-links.spec.js',
     'app-builder-subpath.spec.js',
+    'user-apps-subpath.spec.js',
     'integration-connect.spec.js'
   ],
   forbidOnly: !!process.env.CI,

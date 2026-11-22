@@ -25,6 +25,7 @@
   - [Magic Prompt](magic-prompt-feature.md)
   - [Compare Mode](compare-mode.md)
   - [Feedback](feedback-feature.md)
+- [Personal apps](personal-apps.md)
 - [Prompt Library](prompts.md)
 - [Styles](styles.md)
 - [Skills](skills.md)

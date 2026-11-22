@@ -306,10 +306,15 @@ describe('the share dialog', () => {
     const saved = userApp({ members: MEMBERS, revision: 8 });
     mockApi.setUserAppMembers.mockResolvedValue(saved);
     await click(within(dialog).getByRole('button', { name: 'Save' }));
-    expect(mockApi.setUserAppMembers).toHaveBeenCalledWith(APP_ID, [
-      { type: 'user', id: 'ben', role: 'user' },
-      { type: 'group', id: 'hr', role: 'editor' }
-    ]);
+    // On the revision the dialog was opened with (sent as `If-Match: "7"`).
+    expect(mockApi.setUserAppMembers).toHaveBeenCalledWith(
+      APP_ID,
+      [
+        { type: 'user', id: 'ben', role: 'user' },
+        { type: 'group', id: 'hr', role: 'editor' }
+      ],
+      { revision: 7 }
+    );
     expect(onSaved).toHaveBeenCalledWith(saved);
   });
 
@@ -372,9 +377,11 @@ describe('the share dialog', () => {
     await click(within(dialog).getByRole('button', { name: en.prompts.share.addEveryone }));
     mockApi.setUserAppMembers.mockResolvedValue(userApp());
     await click(within(dialog).getByRole('button', { name: 'Save' }));
-    expect(mockApi.setUserAppMembers).toHaveBeenCalledWith(APP_ID, [
-      { type: 'everyone', role: 'user' }
-    ]);
+    expect(mockApi.setUserAppMembers).toHaveBeenCalledWith(
+      APP_ID,
+      [{ type: 'everyone', role: 'user' }],
+      { revision: 7 }
+    );
   });
 
   test('"Copy link" copies the address of the chat under the base path', async () => {

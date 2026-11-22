@@ -315,6 +315,11 @@ export async function seedAlice(alice) {
     )
   ).items[0].jobId;
 
+  // A personal app shared with nobody, with an open offer to dave: to bob, carol
+  // and an anonymous visitor it is an app that does not exist. (The apps alice
+  // shares with bob and carol are attacked by `user-apps-authz.spec.js`.)
+  ids.privateUserAppId = await seedUserApp(alice, { members: [], offerTo: AUTHZ_USERS.dave.id });
+
   return ids;
 }
 
@@ -349,7 +354,9 @@ export async function aliceSnapshot(alice, ids) {
   const request = await read(`/api/integrations/requests/${ids.requestId}`);
   const job = await read(`/api/tools-service/jobs/${ids.jobId}/progress`);
   const run = await read(`/api/runs/${ids.runId}`);
+  const userApp = await read(`/api/apps/${ids.privateUserAppId}`);
   return {
+    userApp: [userApp.status, userAppState(userApp.body)],
     chat: [chat.status, chat.body?.chat?.title, chat.body?.messages?.length],
     chatFiles: [chatFiles.status, chatFiles.body?.items?.map(item => item.id)],
     shares: [
@@ -631,6 +638,38 @@ export const RESOURCES = [
     ]
   },
   {
+    // Shared with nobody: bob, carol and an anonymous visitor are all strangers
+    // here. Who may do what on a shared app is `USER_APP_MATRIX` below.
+    name: 'personal app (shared with nobody, offered to dave)',
+    params: { appId: 'privateUserAppId', chatId: 'freshChatId' },
+    routes: [
+      { route: 'GET /api/apps/:appId' },
+      {
+        route: 'POST /api/apps/:appId/chat/:chatId',
+        data: chatTurn,
+        headers: { accept: 'text/event-stream' },
+        stream: true
+      },
+      { route: 'PATCH /api/apps/:appId', data: { name: { en: 'pwned' } } },
+      { route: 'DELETE /api/apps/:appId' },
+      {
+        route: 'PUT /api/apps/:appId/members',
+        data: { members: [{ type: 'user', id: AUTHZ_USERS.bob.id, role: 'editor' }] }
+      },
+      { route: 'POST /api/apps/:appId/_leave', data: {} },
+      { route: 'PUT /api/apps/:appId/owner-offer', data: { ownerId: AUTHZ_USERS.bob.id } },
+      { route: 'DELETE /api/apps/:appId/owner-offer' },
+      {
+        // The revision of the seeded app: created (1), then offered (2).
+        route: 'POST /api/apps/:appId/owner-offer/_accept',
+        data: {},
+        headers: { 'if-match': '"2"' }
+      },
+      { route: 'POST /api/apps/:appId/_publish', data: {}, headers: { 'if-match': '"2"' } },
+      { route: 'POST /api/apps/:appId/_duplicate', data: {} }
+    ]
+  },
+  {
     name: 'scheduled task (memory, files, runs)',
     params: { runId: 'taskRunId', fileId: 'taskFileId' },
     routes: [
@@ -757,6 +796,170 @@ export const RESOURCES = [
       { route: 'POST /api/tools-service/jobs/:jobId/_cancel', data: {} }
     ]
   }
+];
+
+// --- Personal apps: who may do what on a shared app ---------------------------
+
+/** What of a personal app must not change when a request is refused. */
+export function userAppState(app) {
+  if (!app) return null;
+  return {
+    revision: app.revision,
+    name: app.name,
+    system: app.system,
+    owner: app.owner?.id,
+    members: app.members?.map(member => [member.type, member.id, member.role]),
+    pendingOwner: app.pendingOwner?.id ?? null,
+    state: app.state
+  };
+}
+
+/**
+ * Create a personal app as alice. By default it is shared with bob as "Can use"
+ * and with carol as "Can edit"; `offerTo` adds an open offer to take it over.
+ *
+ * @param {import('@playwright/test').APIRequestContext} alice
+ * @param {Object} [options]
+ * @param {Array<{type: string, id: string, role: string}>} [options.members]
+ * @param {string} [options.offerTo] - User id of the receiver of an offer
+ * @param {Object} [options.content] - Content keys that replace the defaults
+ * @returns {Promise<string>} The app id
+ */
+export async function seedUserApp(alice, { members, offerTo, content } = {}) {
+  const app = await json(
+    await alice.post('/api/apps', {
+      data: {
+        language: 'en',
+        origin: 'blank',
+        name: { en: 'Authz personal app' },
+        description: { en: 'An app of alice' },
+        system: { en: `${SECRET} personal app instructions` },
+        ...content
+      }
+    }),
+    'personal app'
+  );
+  const shares = members ?? [
+    { type: 'user', id: AUTHZ_USERS.bob.id, role: 'user' },
+    { type: 'user', id: AUTHZ_USERS.carol.id, role: 'editor' }
+  ];
+  if (shares.length > 0) {
+    await json(
+      await alice.put(`/api/apps/${app.id}/members`, { data: { members: shares } }),
+      'share personal app'
+    );
+  }
+  if (offerTo) {
+    await json(
+      await alice.put(`/api/apps/${app.id}/owner-offer`, { data: { ownerId: offerTo } }),
+      'offer personal app'
+    );
+  }
+  return app.id;
+}
+
+/** The principals of the personal-app matrix, in the order of its columns. */
+export const USER_APP_PRINCIPALS = [
+  'mallory', // signed in, no share
+  'bob', // "Can use"
+  'carol', // "Can edit"
+  'aliceKey', // the owner's personal API key: acts as the owner
+  'bobKey', // a member's personal API key: reaches only bob's own apps
+  'oauthClient', // a client-credentials token
+  'anonymous'
+];
+
+/** To these the app does not exist: a 404 must equal the 404 of an id that names no app. */
+export const USER_APP_STRANGERS = ['mallory', 'bobKey', 'oauthClient', 'anonymous'];
+
+const ANONYMOUS_ON = process.env.AUTHZ_ANONYMOUS !== '0';
+/** A read by an anonymous visitor: an unknown app, or sign in first when anonymous access is off. */
+const ANONYMOUS_READ = ANONYMOUS_ON ? 404 : 401;
+
+/**
+ * The status each principal gets. A member's API key gets 404 on every route: a
+ * key reaches only the apps of its own user. An OAuth client can hold no
+ * personal app: the routes that read an app answer 404, the routes that exist
+ * for personal apps only answer 403 `PERMISSION_DENIED` before they look at the
+ * id (the suite checks that an id that names no app gets the same answer).
+ */
+const row = (mallory, bob, carol, aliceKey, { anonymous = 401, oauthClient = 403 } = {}) => ({
+  mallory,
+  bob,
+  carol,
+  aliceKey,
+  bobKey: 404,
+  oauthClient,
+  anonymous
+});
+/** The two routes that also serve admin apps: unknown to a client and to a visitor. */
+const READ = { anonymous: ANONYMOUS_READ, oauthClient: 404 };
+
+/**
+ * The authorization matrix of a personal app of alice that is shared with bob
+ * ("Can use") and carol ("Can edit"): design 14.2 of
+ * `concepts/app-builder-rework-2026-11/02-personal-apps.md`. Every cell runs on
+ * an app of its own, so a cell that deletes, leaves or hands over cannot take
+ * the fixture of another cell.
+ *
+ *   route      METHOD + Express path
+ *   data       the body (a function of the cell's app id when it needs it)
+ *   ifMatch    send `If-Match` with the stored revision, so a refusal is about
+ *              the caller and never about the header
+ *   offer      seed the app with an open offer to dave
+ *   stream     a chat turn: a short timeout for a refusal, the stub's answer otherwise
+ *   expect     status per principal
+ */
+export const USER_APP_MATRIX = [
+  { route: 'GET /api/apps/:appId', expect: row(404, 200, 200, 200, READ) },
+  {
+    route: 'POST /api/apps/:appId/chat/:chatId',
+    data: { messages: [{ role: 'user', content: 'hello', messageId: 'p1' }] },
+    headers: { accept: 'text/event-stream' },
+    stream: true,
+    expect: row(404, 200, 200, 200, READ)
+  },
+  {
+    route: 'PATCH /api/apps/:appId',
+    data: { description: { en: 'changed' } },
+    ifMatch: true,
+    expect: row(404, 403, 200, 200)
+  },
+  { route: 'DELETE /api/apps/:appId', expect: row(404, 403, 403, 204) },
+  {
+    route: 'PUT /api/apps/:appId/members',
+    data: {
+      members: [
+        { type: 'user', id: AUTHZ_USERS.bob.id, role: 'user' },
+        { type: 'user', id: AUTHZ_USERS.carol.id, role: 'editor' },
+        { type: 'user', id: AUTHZ_USERS.mallory.id, role: 'editor' }
+      ]
+    },
+    ifMatch: true,
+    expect: row(404, 403, 200, 200)
+  },
+  { route: 'POST /api/apps/:appId/_leave', data: {}, expect: row(404, 204, 204, 409) },
+  {
+    route: 'PUT /api/apps/:appId/owner-offer',
+    data: { ownerId: AUTHZ_USERS.dave.id },
+    expect: row(404, 403, 403, 200)
+  },
+  { route: 'DELETE /api/apps/:appId/owner-offer', offer: true, expect: row(404, 403, 403, 204) },
+  {
+    // The offer is made to dave: nobody in the table is its receiver.
+    route: 'POST /api/apps/:appId/owner-offer/_accept',
+    data: {},
+    offer: true,
+    ifMatch: true,
+    expect: row(404, 404, 404, 404)
+  },
+  {
+    route: 'POST /api/apps/:appId/_publish',
+    data: {},
+    ifMatch: true,
+    expect: row(404, 403, 403, 200)
+  },
+  { route: 'POST /api/apps/:appId/_duplicate', data: {}, expect: row(404, 201, 201, 201) }
 ];
 
 /**

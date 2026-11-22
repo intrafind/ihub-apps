@@ -13,6 +13,7 @@ This comprehensive guide covers how to configure and customize AI applications i
 
 - [Quick Start](#quick-start)
   - [Creating an app as a file](#creating-an-app-as-a-file)
+  - [Reserved IDs](#reserved-ids)
 - [App Types](#app-types)
   - [Chat Apps](#chat-apps-default)
   - [Redirect Apps](#redirect-apps)
@@ -73,6 +74,22 @@ That's it! Your app will:
 A file without `enabled` is a published app: users whose groups may use it see it as soon as the
 file is loaded. Set `"enabled": false` to keep it out of sight while you work on it. An app
 created with **New app** in the admin UI starts with `"enabled": false`.
+
+### Reserved IDs
+
+`contents/apps/` holds the apps that administrators manage, and only those. The apps users build
+themselves ([Personal apps](personal-apps.md)) are runtime data in the storage provider and never
+appear in this directory.
+
+An app ID of the form `uap_` followed by 32 hexadecimal characters (for example
+`uap_3f9c2a0b1d4e5f60718293a4b5c6d7e8`) is reserved for personal apps. The admin UI, the admin
+API, a Marketplace install and the example apps of an integration refuse it with "This ID is
+reserved for personal apps". An ID that only starts with `uap_`, such as `uap_helper`, is not
+affected.
+
+An existing file with such an ID still loads, with a validation warning in the server log. Rename
+it: if a personal app is ever minted with the same ID, the ID answers "not found" for everyone
+until the file is renamed or the personal app is deleted.
 
 ### Quick Examples by Use Case
 

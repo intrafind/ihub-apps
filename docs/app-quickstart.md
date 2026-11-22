@@ -41,6 +41,15 @@ admin area, and it can give groups access to an app or a prompt. Giving access i
 groups the content admin belongs to and the groups that inherit from them. Models, users, groups
 and platform settings stay with administrators.
 
+### Without admin rights
+
+When an administrator has switched on the preview feature **Personal apps**, users without any
+admin right can build apps too. They click **New app** on the apps page and get the two steps
+described below, without the **App ID**, the category and **Other ways to start**. Such an app
+belongs to its author, who can share it, publish it as a company app and hand it over. It can
+use less than an app built here: for example, it cannot answer from a project.
+[Personal apps](personal-apps.md) describes what users can do and what administrators set up.
+
 ## Create the app by describing it
 
 1. Open **Admin → Apps** and click **New app**.

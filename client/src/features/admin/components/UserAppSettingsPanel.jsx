@@ -317,7 +317,11 @@ function UserAppSettingsPanel({ publishingAvailable = PUBLISHING_AVAILABLE }) {
       <div className="px-4 pb-4 space-y-4">
         <p className="flex flex-wrap items-baseline justify-between gap-2 text-sm text-gray-700 dark:text-gray-300">
           <span>{featureOn ? t('admin.userApps.featureOn') : t('admin.userApps.featureOff')}</span>
-          <Link to="/admin/features" className="text-indigo-600 dark:text-indigo-400 underline">
+          {/* A link on its own, not in a sentence: at least 24px high (WCAG 2.5.8). */}
+          <Link
+            to="/admin/features"
+            className="inline-block py-0.5 text-indigo-600 dark:text-indigo-400 underline"
+          >
             {t('admin.nav.features')}
           </Link>
         </p>

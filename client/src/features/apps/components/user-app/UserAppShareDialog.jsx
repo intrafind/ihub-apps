@@ -43,8 +43,13 @@ const loadTargets = async query => {
   };
 };
 
-/** Saves the shares of the dialog as the member list of the app. */
-const saveMembers = (appId, shares) => setUserAppMembers(appId, sharesToMembers(shares));
+/**
+ * Saves the shares of the dialog as the member list of the app, on the
+ * revision the dialog was opened with: a member list someone else changed in
+ * the meantime is not overwritten (409 `ETAG_MISMATCH`).
+ */
+const saveMembersOf = app => (appId, shares) =>
+  setUserAppMembers(appId, sharesToMembers(shares), { revision: app.revision });
 
 /**
  * "Copy link" with its confirmation. Nobody is notified when an app is shared
@@ -102,7 +107,7 @@ function UserAppShareDialog({ app, name, onClose, onSaved }) {
       onClose={onClose}
       onSaved={onSaved}
       fetchTargets={loadTargets}
-      saveShares={saveMembers}
+      saveShares={saveMembersOf(app)}
       errorMessage={userAppErrorMessage}
       labels={{
         title: t('userApps.share.title', { name }),

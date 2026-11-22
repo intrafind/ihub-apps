@@ -3205,3 +3205,125 @@ changed the document as follows.
 
 What this revision did not check with a person: whether an admin who knows the project
 settings finds the app settings without help. Section 14.5 has a manual check for it.
+
+## 23. Results of the merge gate
+
+The gate ran once, on 2026-11-22, on the working tree of the branch at `dd061bb` plus the
+uncommitted files of P10 and P11. The comparison base is `origin/main` (`2048f25`), which is
+also the commit the branch started from.
+
+**In short.** One failure came from the increment, and it is fixed: three cases of
+`tests/e2e/user-apps.spec.js` needed a web search engine that only exists when the environment
+holds a search key. Everything else is green, or red in a way that does not come from this
+increment (four results, listed below). One gap was found that no command of the gate reports:
+the user routes of personal apps are missing from the API documentation.
+
+### 23.1 The failure the increment caused
+
+`env -u STAAN_API_KEY npm run test:e2e:app-builder` ended with 30 passed and 3 failed: the
+cases 4, 5 and 7c of `user-apps.spec.js`. Each creates a personal app with web search, and the
+server answered 403 `USER_APP_CAPABILITY_DENIED` (`capability: webSearch`, `reason: youMayNot`).
+
+The server was right. A fresh install has no search engine unless `STAAN_API_KEY` or
+`BRAVE_SEARCH_API_KEY` is set, and without an engine nobody may use web search. The sandbox
+sets `STAAN_API_KEY`, so the cases passed when they were written; CI does not set it.
+
+The fix is in the spec, not in the product: `beforeAll` installs the engine `qwant`, which
+needs no key, and `afterAll` removes it if this run installed it. No case sends a search; the
+scripted model only reads a page. After the fix the same command passed with 33 of 33 tests,
+on a fresh contents directory.
+
+### 23.2 Commands and results
+
+Node 24.22.3. Playwright ran on the sandbox builds (Chromium 1243, ffmpeg 1011) through
+aliases in a private `PLAYWRIGHT_BROWSERS_PATH`; `playwright install` was not run. Only the
+project `chromium` ran.
+
+| Command | Result |
+|---|---|
+| `npm run lint:fix && npm run format:fix` | Passed: 0 errors, 540 warnings. Neither command changed a file. |
+| `npm run test:quick` | **Red, known.** Config-access check passed. `tests/unit`: 574 suites, 9025 tests passed. Server tests, `node:test` group: 9170 of 9173 passed, 2 skipped, 1 failed ("replaces a thread that crashed"). Server tests, Jest group: 315 suites, 4446 tests passed. |
+| `test:token-stats`, `test:export-formats`, `test:feature-flags` | Passed, run separately because `test:quick` stops at the failure. |
+| `npm run test:integration:ci` | Passed: 4 suites, 91 tests passed, 6 skipped. |
+| `npm run test:boot` | Passed: all 3 boot scenarios. |
+| `timeout 10s node server/server.js` | The server started, listened and was stopped by the timeout. The log has no entry of level error. Run on port 38411. |
+| `npm run build:api-docs` | Passed: 104, 159 and 10 paths. See 23.4 for what is missing from the first document. |
+| `env -u STAAN_API_KEY npm run check:response-shapes` | Passed: 360 GET routes, the answers match the snapshot. |
+| `git diff … origin/main -- server \| node scripts/check-api-guidelines.js` | Passed: 0 violations in 51 changed server files. |
+| `npm run security:audit` | Passed: 365 admin endpoints guarded, 1 documented exception. |
+| `npm run test:e2e:authz` | Passed: 32 tests, with `STAAN_API_KEY` set and once more with it unset. |
+| `env -u STAAN_API_KEY npm run test:e2e:app-builder -- --project=chromium --retries=0` | **Red at first, caused by the increment, fixed** (23.1). Then passed: 33 tests. |
+| `E2E_FRESH_CONTENTS=1 npm run test:a11y -- --project=chromium --reporter=list` | Passed: 99 tests, 5 of them on personal apps. |
+| `E2E_FRESH_CONTENTS=1 npm run test:e2e:crawl -- --project=chromium --retries=0` | Passed: 115 pages. |
+| `node scripts/check-a11y-diff.js origin/main` | Passed: 0 findings in 149 changed client files. |
+| SPDX headers | Passed: each of the 179 new source files against `origin/main` has both lines. `reuse lint` (6.3.0, CI pins 6.2.0) passed: 5951 of 5951 files. |
+| `tests/unit/client/known-routes-sync.test.jsx` | Passed: 2 tests. |
+
+Run in addition, because the increment adds a spec or changes a page they cover:
+
+| Command | Result |
+|---|---|
+| `(cd client && npm run build) && npm run test:e2e:subpath -- --retries=0` | **Red, known.** The build passed. 3 tests passed, among them the new `user-apps-subpath.spec.js`; the crawl failed on `/apps/embedded-website-wikipedia`; 6 skipped (the connect flow). |
+| The four admin specs on the default config (`admin-unsaved-guards`, `admin-controls-visible`, `admin-load-gating`, `admin-confirmations`) | **Red.** 40 passed, 2 failed: the known theme test, and the case "Voice input" of `admin-load-gating`. The second one passed when the spec ran again with one worker (15 of 15). |
+| `npm run test:e2e:admin-safety -- --project=chromium --retries=0` | **Red, not checked on the base.** Its one test fails. |
+
+### 23.3 What is red and why
+
+- *`extraction-pool.test.js`, "replaces a thread that crashed".* Known on the base. The
+  increment does not touch the extraction code.
+- *"A choice made in the sidebar survives an OS theme change"*
+  (`admin-controls-visible.spec.js`). Known on the base.
+- *The subpath crawl on `/apps/embedded-website-wikipedia`.* Known on the base: the browser
+  logs an error about Wikipedia's Content Security Policy, and the crawl counts it.
+- *"Voice input" of `admin-load-gating.spec.js`.* It failed once while four specs ran in
+  parallel and passed alone. The increment does not change the voice settings page. Treated as
+  unstable under load, not as a finding against the increment.
+- *`admin-safety-guards.spec.js`.* The test looks for the "Local Authentication" checkbox
+  inside `div.flex.items-start`. The page renders the checkbox inside a `label` in a plain
+  `div` (`PlatformFormEditor.jsx`). Neither the spec nor that file differs from `origin/main`,
+  so the increment cannot be the cause. The same run on the base was not done.
+
+`check:response-shapes` is red in this sandbox when `STAAN_API_KEY` is set. That was not run
+again; the gate asked for the run without the variable.
+
+### 23.4 Found, and not fixed
+
+**The user routes of personal apps are not in the API documentation.** Section 9 says that
+each route carries its OpenAPI block. The blocks exist: 11 in `server/routes/userAppRoutes.js`
+and 1 in `server/routes/userAppPublishRoutes.js`. But `apiDocGlobs()` in
+`server/utils/apiDocSpecs.js` lists the route files of the user document by name, and the two
+files are not on the list. The document still has 104 paths, the same number as before the
+increment. The admin routes are in (150 paths became 159), because that document takes
+`admin/**/*.js`.
+
+The fix is two entries in that list. The gate did not make it: no command fails, no slice owns
+the file, and with the entries the 12 blocks are parsed strictly for the first time, which may
+show errors that need the owner of the routes.
+
+### 23.5 State of the working tree and of the machine
+
+- The gate changed one file: `tests/e2e/user-apps.spec.js` (23.1). The checksum of every other
+  modified or untracked file is the same as before the gate. Nothing was committed.
+- No server is left running. The ports 3000, 5173, 5174, 3085, 5185, 8979, 8985, 3301, 8991
+  and 38411 answer nothing.
+- The git-ignored directories of the runs remain: `contents-e2e*`, `contents-subpath`,
+  `test-results/`, `playwright-report/`, `client/dist`, `server/generated/`.
+
+### 23.6 Not verified
+
+- The manual checks of section 14.5. Nobody looked at the screens.
+- Any browser other than Chromium, and Chromium only in a build older than the one
+  Playwright 1.65 expects.
+- An axe scan of the publish dialog, the take-over dialog, the notice about waiting apps and
+  the page of a retired app. `accessibility.spec.js` scans the apps page, "New app", the
+  editor with the hand-over and share dialogs, the chat notice and the admin tab; it does not
+  open those four.
+- The route crawl does not visit `/apps/new` or `/apps/<id>/edit`: it runs with the feature
+  off and counted the same 115 pages as before the increment. The cold loads of both routes
+  are covered by case 8 of `user-apps.spec.js` and by `user-apps-subpath.spec.js`.
+- Whether the red results of 23.3 are also red in CI. "Known on the base" rests on the gate
+  of increment 1 (`README.md`, section 14.1); this gate did not run the base again.
+- The table that ties each behavioural sentence of section 12 to a test (acceptance criterion
+  of P11). It belongs to the pull request, which does not exist yet.
+- The acceptance criteria of the slices one by one. The gate ran the suites; it did not
+  compare each criterion of section 21 with a test.

@@ -7,6 +7,8 @@ import { defineConfig, devices } from '@playwright/test';
  * The app builder suite (`tests/e2e/app-builder.spec.js`): creating an app from
  * the list to the first answer in the test chat, the draft from a description,
  * publishing, and the same as a content admin who is not an administrator.
+ * Personal apps (`tests/e2e/user-apps.spec.js`) run on the same server: a user
+ * without admin rights builds, shares, hands over and publishes an app.
  *
  * It runs on its own server, ports and contents directory
  * (`contents-e2e-app-builder`, recreated on every run), never on a server
@@ -52,7 +54,9 @@ process.env.E2E_APP_BUILDER_LLM_URL = `http://127.0.0.1:${LLM_PORT}`;
 
 export default defineConfig({
   testDir: '../e2e',
-  testMatch: 'app-builder.spec.js',
+  // In this order: `user-apps.spec.js` switches the feature `userApps` on for
+  // its own cases, after the app builder cases have run with it off.
+  testMatch: ['app-builder.spec.js', 'user-apps.spec.js'],
   globalSetup: './app-builder-seed.mjs',
   forbidOnly: !!process.env.CI,
   retries: 0,

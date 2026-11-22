@@ -762,6 +762,185 @@ test.describe('Accessibility — the app editor', () => {
   });
 });
 
+// Personal apps (concepts/app-builder-rework-2026-11/02-personal-apps.md, 11.10):
+// the apps page with its scope chips, "New app" and the editor for a user, the
+// chat notice of an app someone else owns, and the admin tab. The feature
+// ships switched off and a fresh contents/ has no personal app, so the tests
+// switch it on, create what they scan, and put both back. Every screen is held
+// at zero.
+test.describe('Accessibility — personal apps', () => {
+  // Each test switches the feature on and off again: one after the other, in
+  // one worker, so that no test switches it off under another one.
+  test.describe.configure({ mode: 'serial' });
+
+  const NAME = 'Accessibility check app';
+  let featureWasOn;
+  let ownAppId;
+  let foreignAppId;
+  let foreign;
+
+  test.beforeEach(async ({ page, playwright, baseURL }) => {
+    test.setTimeout(150_000);
+    await signInAsAdmin(page);
+    await page.addInitScript(() => {
+      window.localStorage.setItem('ihub-disclaimer-acknowledged', 'true');
+    });
+    const features = await page.request.get('/api/admin/features');
+    featureWasOn = (await features.json()).features?.find(f => f.id === 'userApps')?.enabled;
+    await page.request.put('/api/admin/features', { data: { userApps: true } });
+
+    const content = name => ({
+      language: 'en',
+      origin: 'blank',
+      name: { en: name },
+      description: { en: 'Rewrites a text in a friendlier tone.' },
+      system: { en: 'You rewrite the text the user sends. Keep every fact.' },
+      variables: [{ name: 'tone', label: { en: 'Tone' }, type: 'string', required: false }],
+      starterPrompts: [{ title: { en: 'Rewrite an email' }, message: { en: 'Rewrite this.' } }]
+    });
+    // One app of the signed-in administrator, to edit and share.
+    const own = await page.request.post('/api/apps', { data: content(NAME) });
+    expect(own.status(), await own.text()).toBe(201);
+    ownAppId = (await own.json()).id;
+    // One app of the default user, shared with nobody: the administrator reads
+    // it as someone who does not own it, with the notice.
+    foreign = await playwright.request.newContext({ baseURL });
+    const login = await foreign.post('/api/auth/local/login', {
+      data: { username: 'user', password: 'password123' }
+    });
+    expect(login.status(), await login.text()).toBe(200);
+    const other = await foreign.post('/api/apps', { data: content(`${NAME} of a colleague`) });
+    expect(other.status(), await other.text()).toBe(201);
+    foreignAppId = (await other.json()).id;
+  });
+
+  test.afterEach(async ({ page }) => {
+    for (const id of [ownAppId, foreignAppId]) {
+      if (id) await page.request.delete(`/api/admin/user-apps/${id}`);
+    }
+    ownAppId = foreignAppId = null;
+    await foreign?.dispose();
+    if (featureWasOn !== true) {
+      await page.request.put('/api/admin/features', { data: { userApps: false } });
+    }
+  });
+
+  test('the apps page: the scope chips, "My apps" with a tile and its menu', async ({ page }) => {
+    await gotoSettled(page, '/apps');
+    const chips = page.getByRole('radiogroup', { name: 'Which apps to show' });
+    await expect(chips.getByRole('radio')).toHaveCount(3);
+    await expect(page.getByTestId('user-app-new')).toBeVisible();
+    await expectNoBlockingViolations(page, 'Apps page — with personal apps');
+
+    await page.getByTestId('apps-scope-mine').click();
+    await expect(page.getByTestId('apps-scope-mine')).toHaveAttribute('aria-checked', 'true');
+    await expect(page.getByTestId('user-app-badge').first()).toBeVisible();
+    // The chip changes colour with a transition; scan the colours it ends on.
+    await page.waitForTimeout(500);
+    await expectNoBlockingViolations(page, 'Apps page — My apps');
+
+    await page.getByRole('button', { name: `Actions for "${NAME}"` }).click();
+    await expect(page.getByRole('menuitem', { name: 'Share' })).toBeVisible();
+    await expectNoBlockingViolations(page, 'Apps page — the menu of a tile');
+    await page.keyboard.press('Escape');
+
+    // Nothing shared with the administrator: the empty state of that chip.
+    await page.getByTestId('apps-scope-shared').click();
+    await expect(page.getByTestId('user-apps-empty')).toBeVisible();
+    await page.waitForTimeout(500);
+    await expectNoBlockingViolations(page, 'Apps page — Shared with me, empty');
+  });
+
+  test('"New app" for a user: Start and Essentials', async ({ page }) => {
+    await gotoSettled(page, '/apps/new');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
+    await expect(page.getByRole('textbox', { name: 'Your description' })).toBeVisible();
+    await expectNoBlockingViolations(page, 'New personal app — Start');
+
+    await page.getByRole('button', { name: 'Start empty' }).click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Describe your app' })).toBeVisible();
+    await expect(page.getByText('Only you can see the app until you share it.')).toBeVisible();
+    await expectNoBlockingViolations(page, 'New personal app — Essentials');
+
+    // After a submit with empty fields: the messages next to the fields.
+    await page.getByRole('button', { name: 'Create and test' }).click();
+    await expectNoBlockingViolations(page, 'New personal app — Essentials after a failed submit');
+  });
+
+  test('the editor: every group open, the menu, and the hand-over and share dialogs', async ({
+    page
+  }) => {
+    await gotoSettled(page, `/apps/${ownAppId}/edit`);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
+    await expect(page.getByTestId('user-app-state')).toHaveText('Only you');
+    // Open every group of the form: axe does not look into a collapsed one.
+    for (let closed = 0; closed < 12; closed++) {
+      const header = page.locator('main button[aria-expanded="false"][aria-controls]').first();
+      if (!(await header.count())) break;
+      await header.click();
+    }
+    await expect(page.getByTestId('user-app-extras')).toBeVisible();
+    await expectNoBlockingViolations(page, 'Personal app editor — every group open');
+
+    const more = page.locator('main button[aria-haspopup]').first();
+    await more.click();
+    await expect(page.getByRole('menuitem', { name: 'Hand over' })).toBeVisible();
+    await expectNoBlockingViolations(page, 'Personal app editor — the menu');
+
+    await page.getByRole('menuitem', { name: 'Hand over' }).click();
+    await expect(page.getByPlaceholder('Search people')).toBeVisible();
+    await expectNoBlockingViolations(page, 'Personal app editor — hand over');
+    await page.keyboard.press('Escape');
+
+    await gotoSettled(page, `/apps/${ownAppId}/edit?dialog=share`);
+    const dialog = page.getByRole('dialog');
+    await expect(dialog).toContainText(`Share "${NAME}"`);
+    await expectNoBlockingViolations(page, 'Personal app editor — share dialog');
+  });
+
+  test('the chat of an app someone else owns: the notice, collapsed, and the instructions', async ({
+    page
+  }) => {
+    await gotoSettled(page, `/apps/${foreignAppId}`);
+    const notice = page.getByTestId('personal-app-notice');
+    await expect(notice).toContainText('owns this app. Administrators have not checked it.');
+    await expectNoBlockingViolations(page, 'Personal app chat — the notice');
+
+    await notice.getByRole('button', { name: 'Show instructions' }).click();
+    await expect(page.getByTestId('personal-app-instructions')).toBeVisible();
+    await expectNoBlockingViolations(page, 'Personal app chat — the instructions');
+    await page.keyboard.press('Escape');
+
+    await notice.getByRole('button', { name: 'Show less' }).click();
+    await expect(notice.getByRole('button', { name: /Personal app by/ })).toBeVisible();
+    await expectNoBlockingViolations(page, 'Personal app chat — the notice collapsed');
+    // Remembered per app for the tab: put it back for whoever reads the page next.
+    await notice.getByRole('button', { name: /Personal app by/ }).click();
+  });
+
+  test('the admin tab: the list, the menu of a row, the settings and the switch-off dialog', async ({
+    page
+  }) => {
+    await gotoSettled(page, '/admin/apps?tab=personal');
+    const row = page.getByRole('row').filter({ hasText: `${NAME} of a colleague` });
+    await expect(row).toBeVisible();
+    await expectNoBlockingViolations(page, 'Admin — personal apps');
+
+    await page.getByText('Personal app settings').click();
+    await expect(page.locator('#user-app-settings-allowPublish')).toBeVisible();
+    await expectNoBlockingViolations(page, 'Admin — personal app settings');
+    await page.getByText('Personal app settings').click();
+
+    await row.getByRole('button', { name: 'More actions' }).click();
+    await expect(page.getByRole('menuitem').first()).toBeVisible();
+    await expectNoBlockingViolations(page, 'Admin — the menu of a personal app');
+    await page.getByRole('menuitem', { name: 'Switch off', exact: true }).click();
+    const dialog = page.getByRole('dialog').or(page.getByRole('alertdialog')).first();
+    await expect(dialog).toBeVisible();
+    await expectNoBlockingViolations(page, 'Admin — switch a personal app off');
+  });
+});
+
 // axe's WCAG tag set does not include the landmark rules (they are best
 // practices), so they are run explicitly: a screen-reader user navigates by
 // landmark, and a second <main> (or an unlabelled duplicate) makes that list

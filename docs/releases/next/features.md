@@ -81,3 +81,52 @@ content admins can build apps, as before. The guide
   `GET /api/admin/app-templates`, the optional query parameter `origin` on
   `POST /api/admin/apps` (recorded in the audit entry), and `audience` plus `implicit` in the
   answer of `GET /api/admin/content-access/{type}/{id}`.
+
+## Personal Apps (Preview, Off by Default)
+
+Users without admin rights can build apps of their own, share them with colleagues, publish them
+as company apps and hand them over to another person. The feature is a preview and stays off
+until an administrator switches it on under **Platform → Features → Personal apps**. With it
+off, nothing changes for users. [Personal apps](../../personal-apps.md) describes the feature
+for users and administrators.
+
+- **Who can build.** Signed-in users whose group has the permission **Personal apps**. An
+  upgrade gives it, and **Sharing personal apps**, to the built-in groups of signed-in users
+  (`admins`, `users`, `authenticated`); other groups of your own get neither. A person can own 20
+  personal apps. Anonymous visitors, OAuth clients and agents cannot hold one.
+- **Creating and editing.** **New app** on the apps page opens the two steps of the admin app
+  builder, without App ID and category. A personal app holds texts, input fields, conversation
+  starters and a few switches. Website apps, HTML answers, custom answer views, linked projects,
+  workflows and apps as tools cannot be stored in one.
+- **Interactive chat only.** Scheduled tasks, workflows, apps as tools, the inference API, MCP
+  and A2A do not see personal apps. A personal API key runs only the apps of its own user. A
+  personal app cannot use a document collection.
+- **Web search, skills and connected systems are off until you allow them** under **Admin → Apps
+  → Personal apps → Personal app settings**. Connected systems are allowed one by one, with the
+  functions personal apps may use. A preferred AI model and file attachments are allowed by
+  default. A capability works only when the installation allows it and both the owner and the
+  person chatting may use it; this is checked on every chat request.
+- **A shared app asks before every tool call.** The owner shares with people, groups or, if you
+  allow it, everyone signed in, as **Can use** or **Can edit**. In the chat of an app someone
+  else owns, a notice names the owner and says that administrators have not checked it. Every
+  tool call asks the person chatting, reads included, and cannot be allowed for the whole chat.
+  Web search and connected systems are off in each new chat until the person switches them on.
+- **Publishing is off until you allow it** with **Publishing as a company app** in the same
+  panel. The owner then publishes with one click: iHub writes an ordinary app file that
+  administrators manage, and the owner cannot take it back. A published app with web search,
+  skills or a connected system starts **Not published** until an administrator or content admin
+  publishes it in the app editor; one setting makes every published app start that way. A line
+  above the admin app list names the apps that wait.
+- **Handing over** is an offer. The other person reads the app and becomes the owner by
+  accepting; everyone with **Can edit** then gets **Can use**.
+- **For administrators.** The tab **Personal apps** under **Admin → Apps** lists every personal
+  app. Full administrators can open, switch off, delete and take over an app, offer it to a new
+  owner, read its earlier versions and switch off all apps of one person. They cannot edit one.
+  Content admins have no access to personal apps.
+- **Owners from an identity provider.** A change of the owner's groups reaches a shared app at
+  the owner's next visit, and at the latest after 30 days. When someone leaves, deactivate the
+  iHub account; that takes effect at once. Deleting a user deletes their personal apps, so offer
+  them to someone or take them over first.
+- New settings block `userApps` in `platform.json`, new group permissions `userApps` and
+  `userAppSharing`, new API under `/api/apps` and `/api/admin/user-apps`. `GET /api/apps`
+  without the new parameter `scope` is unchanged.

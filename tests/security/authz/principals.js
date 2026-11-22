@@ -45,5 +45,19 @@ export const AUTHZ_USERS = {
     password: 'carol-authz-pass-1',
     groups: [RESTRICTED_GROUP]
   },
+  // Personal apps: alice shares hers with bob ("Can use") and carol ("Can edit").
+  // Mallory holds no share; dave receives the offer to take an app over.
+  mallory: {
+    id: 'user_authz_mallory',
+    username: 'mallory',
+    password: 'mallory-authz-pass-1',
+    groups: ['users']
+  },
+  dave: {
+    id: 'user_authz_dave',
+    username: 'dave',
+    password: 'dave-authz-pass-1',
+    groups: ['users']
+  },
   admin: { id: 'user_demo_admin', username: 'admin', password: 'password123', groups: ['admins'] }
 };
