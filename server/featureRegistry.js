@@ -286,6 +286,20 @@ export const featureRegistry = [
     category: 'preview',
     default: false,
     preview: true
+  },
+  {
+    id: 'steering',
+    name: {
+      en: 'Messages while iHub is working',
+      de: 'Nachrichten während der Antwort'
+    },
+    description: {
+      en: 'While an answer is being written, the person it is written for can send a message into it: iHub reads it at its next step, or sends it as the next message once the answer is done. A message that waits can be removed until iHub has read it. In this version the switch only decides whether the chat offers this to its clients; the chat input follows in a later version',
+      de: 'Während eine Antwort geschrieben wird, kann die Person, für die sie geschrieben wird, eine Nachricht hineinschicken: iHub liest sie beim nächsten Schritt oder sendet sie als nächste Nachricht, sobald die Antwort fertig ist. Eine wartende Nachricht kann entfernt werden, bis iHub sie gelesen hat. In dieser Version entscheidet der Schalter nur, ob der Chat dies seinen Clients anbietet; die Chat-Eingabe folgt in einer späteren Version'
+    },
+    category: 'preview',
+    default: false,
+    preview: true
   }
 ];
 

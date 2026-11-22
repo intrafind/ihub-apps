@@ -542,6 +542,11 @@ export async function admitTurnProjects({ repository, chatId, projects = null, p
  *   stored when it is gone (`chatRecovery.js`, a resumed workflow's result)
  * @param {Object} [params.runLog] - the run journal the evidence record is built
  *   from, in the background after the answer is stored; the shared RunLog by default
+ * @param {(chat: Object) => Object|null} [params.takeLeftover] - called inside the chat
+ *   lock when this run still holds the chat, with the chat as stored; it takes the
+ *   messages the run did not read and returns the fields a next turn claims the chat
+ *   with, or null to leave it idle (`chatSteering.js`). Synchronous, and it may be
+ *   called twice (the release is tried again when the append failed)
  * @returns {Promise<Object|null>} the stored message, or null when nothing was written
  */
 export async function materializeAssistantTurn(params) {
@@ -567,7 +572,8 @@ export async function settleAssistantTurn({
   message = null,
   onlyIfUnanswered = false,
   supersedeMessageId = null,
-  runLog = null
+  runLog = null,
+  takeLeftover = null
 }) {
   const outcome = { message: null, skipped: false, released: false };
   if (!repository) return outcome;
@@ -690,13 +696,20 @@ export async function settleAssistantTurn({
         ? insertSupportMarkers(content, summary.sources.supports)
         : content;
 
-    const releasePatch = {
+    const idlePatch = {
       activeRunId: null,
       status: status === 'error' ? 'error' : 'active',
       // Nobody was watching when the answer landed, so the history list marks
       // the chat until it is opened.
       hasUnseenActivity: !clientConnected
     };
+    // What the run did not read is decided where the run lets go of the chat:
+    // inside the chat lock, only while this run still holds it. A next turn
+    // made of it claims the chat in the same write (`chatSteering.js`).
+    const releasePatch =
+      typeof takeLeftover === 'function'
+        ? chat => ({ ...idlePatch, ...(takeLeftover(chat) || {}) })
+        : idlePatch;
     let appended = null;
     if (!pausedWithoutAnswer) {
       try {

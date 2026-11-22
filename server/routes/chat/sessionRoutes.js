@@ -183,9 +183,11 @@ function answerTurnAsJson(res, chatId, outcome) {
  * message. So both ask run access with the intent `answer`; an admin whose
  * message reaches somebody else's chat settles nothing.
  *
- * It reads no request: `prepareTurn` takes it as `settleClarifications`. It
- * stays in this module because it decides through run access, and the route
- * inventory lists every route module that does (`RUN_ACCESS_ROUTE_FILES`).
+ * It reads no request: `prepareTurn` takes it as `settleClarifications`, for
+ * the turn of this POST and for a next turn made of the messages its answer did
+ * not read (`runPreparedTurn`, `leftover`). It stays in this module because it
+ * decides through run access, and the route inventory lists every route module
+ * that does (`RUN_ACCESS_ROUTE_FILES`).
  *
  * @param {Object} params
  * @param {string} params.chatId
@@ -928,7 +930,10 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           sink,
           chatService,
           getLocalizedError,
-          timeoutMs: DEFAULT_TIMEOUT
+          timeoutMs: DEFAULT_TIMEOUT,
+          // The messages sent into the answer that it did not read become the
+          // next turn, started with this same host once the answer ended.
+          leftover: { settleClarifications: settleChatClarifications }
         });
         // Refused when it was about to run, with no stream to say so: answered
         // here, after the turn let go of the chat.

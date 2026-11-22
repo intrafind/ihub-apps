@@ -68,6 +68,7 @@ import {
   normalizeChatVariables
 } from './ChatRepository.js';
 import { prepareChatApproval } from './chatToolApproval.js';
+import { closeSteering, dropSteers, steerMessage } from '../loop/steering.js';
 import { emitFailedRun } from './failedRun.js';
 import { isVoiceTurn, VOICE_INPUT_MODE } from './voiceMode.js';
 
@@ -222,9 +223,16 @@ export function historyForPrompt(stored) {
       // store (`hydrateHistoryForPrompt`) already has them as `activeSkills`.
       const skills =
         entry.role === 'assistant' ? (entry.activity?.activeSkills ?? entry.activeSkills) : null;
+      const content = typeof entry.content === 'string' ? entry.content : '';
       return {
         role: entry.role,
-        content: typeof entry.content === 'string' ? entry.content : '',
+        // A message the person sent while an answer was written reads in later
+        // turns as it read when it was sent: behind the marker, after the
+        // question of its turn and before the answer it changed.
+        content:
+          entry.role === 'user' && entry.steer === true
+            ? steerMessage({ message: content }).content
+            : content,
         ...(entry.fileData ? { fileData: entry.fileData } : {}),
         ...(Array.isArray(skills) && skills.length > 0 ? { activeSkills: skills } : {})
       };
@@ -1073,10 +1081,11 @@ function preparedTurnOf(draft) {
  *   Promise<{runId: string, interactionId: string}|null>} host.settleClarifications - Answers
  *   or supersedes the chat's pending questions for the new message, and names the run the
  *   message answered a question of. The chat route hands in `settleChatClarifications` of
- *   `routes/chat/sessionRoutes.js`, which reads no request. It stays in the route module for
- *   now because it decides through run access (`authorizeInteraction`, intent `answer`) and
- *   the route inventory lists every route module that does (`RUN_ACCESS_ROUTE_FILES`);
- *   moving it is for the first caller without an HTTP request, together with that list.
+ *   `routes/chat/sessionRoutes.js`, which reads no request. It stays in the route module
+ *   because it decides through run access (`authorizeInteraction`, intent `answer`) and the
+ *   route inventory lists every route module that does (`RUN_ACCESS_ROUTE_FILES`). The first
+ *   caller without an HTTP request, a next turn made of an answer's leftover, gets it from the
+ *   host of the turn that left the messages (`runPreparedTurn`, `host.leftover`).
  * @returns {Promise<TurnPreparation>}
  */
 export async function prepareTurn(request, { user, getLocalizedError, settleClarifications }) {
@@ -1238,7 +1247,9 @@ async function commitTurn(run) {
   // run (`ChatService.runTurn` falls back to a new id when the run cannot be
   // continued).
   run.continuesRun = Boolean(pausedTurn && isValidRunId(pausedTurn.runId));
-  run.runId = run.continuesRun ? pausedTurn.runId : newRunId('chat');
+  // A next turn made of an answer's leftover runs as the run the chat was
+  // claimed for when that answer let go of it (`chatSteering.js`).
+  run.runId = run.continuesRun ? pausedTurn.runId : run.host.runId || newRunId('chat');
   // The commit point of a stream of the caller: its headers go out now, so the
   // wait for outdated documents already streams. From here on a refusal is a
   // `stream/error` frame (see the catch of `runPreparedTurn`).
@@ -1448,7 +1459,8 @@ async function runModelTurn(run) {
     canApproveTools: turn.canApproveTools,
     ...(turn.clientTimezone ? { clientTimezone: turn.clientTimezone } : {}),
     priorContext: historyFilesOmitted ? null : turn.priorContext,
-    promptResent: turn.resendsHistory && !historyFilesOmitted && !turnOnlyContext
+    promptResent: turn.resendsHistory && !historyFilesOmitted && !turnOnlyContext,
+    startsLeftover: Boolean(host.leftover)
   });
   // Refused at persistence: the chat's container changed under the
   // turn (`settleUserTurn`), and nothing of it was stored.
@@ -1506,6 +1518,117 @@ async function releaseTurn(run) {
 }
 
 /**
+ * The turn request of a next turn made of an answer's leftover: the same chat,
+ * app and sender as the turn that left it, and its text as the message. What
+ * it leaves out is what the chat was last answered with (`chatTurnSettings`).
+ *
+ * @param {PreparedTurn} previous - The turn whose answer left the messages.
+ * @param {Object} first - The first message of the leftover (its id names the turn's message).
+ * @param {string} text - The text of the next turn.
+ * @returns {TurnRequest}
+ */
+function leftoverTurnRequest(previous, first, text) {
+  return {
+    chatId: previous.chatId,
+    appId: previous.appId,
+    principalRef: principalRefOf(previous.user),
+    messageId: first.id,
+    message: { role: 'user', content: text, messageId: first.id },
+    language: previous.language,
+    clientTimezone: previous.clientTimezone,
+    toolApprovalCapable: previous.canApproveTools,
+    // The person wrote it while the answer was being written.
+    origin: 'person',
+    ...(previous.sessionId ? { client: { sessionId: previous.sessionId } } : {})
+  };
+}
+
+/**
+ * A next turn that could not start: its messages are dropped (the client gives
+ * their text back) and the chat it was claimed for is let go of.
+ *
+ * @param {PreparedTurn} previous
+ * @param {{runId: string, fromRunId: string}} leftover
+ * @param {Object[]} first - The messages that were to be the turn's question.
+ */
+async function abandonLeftoverTurn(previous, leftover, first) {
+  dropSteers(leftover.fromRunId, first, 'not_started');
+  dropSteers(leftover.runId, closeSteering(leftover.runId), 'not_started');
+  await getChatRepository()
+    .releaseRun(previous.chatId, leftover.runId, { activeRunId: null, status: 'active' })
+    .catch(error =>
+      logger.warn('Chat claimed for a next turn not let go of', {
+        component: COMPONENT,
+        chatId: previous.chatId,
+        runId: leftover.runId,
+        error: error.message
+      })
+    );
+}
+
+/**
+ * Start the leftover of an answer as the next turn, in the run the chat was
+ * claimed for. The turn that left it already told which messages are the
+ * question and queued the rest in the new run (`chatSteering.createLeftover`).
+ * A turn that cannot start lets go of the chat and drops its messages, so the
+ * client gives their text back.
+ *
+ * The host is the one of the turn that left the messages: the same chat
+ * service, localized errors, model timeout and clarification settling.
+ *
+ * @param {PreparedTurn} previous
+ * @param {{runId: string, fromRunId: string, first: Object[], text: string}} leftover
+ * @param {Object} host - see {@link runPreparedTurn}
+ * @returns {Promise<TurnOutcome|null>} never rejects
+ */
+async function startLeftoverTurn(previous, leftover, host) {
+  const { first, text } = leftover;
+  try {
+    const prepared = await prepareTurn(leftoverTurnRequest(previous, first[0], text), {
+      user: previous.user,
+      getLocalizedError: host.getLocalizedError,
+      settleClarifications: host.leftover.settleClarifications
+    });
+    if (prepared.answer) {
+      // An `@workflow` mention: the workflow took the message and holds the
+      // chat now; nothing waits for a run that will not start.
+      dropSteers(leftover.runId, closeSteering(leftover.runId), 'not_started');
+      return null;
+    }
+    if (prepared.refusal) {
+      logger.info('Next turn of messages sent while answering refused', {
+        component: COMPONENT,
+        chatId: previous.chatId,
+        runId: leftover.runId,
+        code: prepared.refusal.code
+      });
+      await abandonLeftoverTurn(previous, leftover, first);
+      return null;
+    }
+    const outcome = await runPreparedTurn(prepared.turn, {
+      chatService: host.chatService,
+      getLocalizedError: host.getLocalizedError,
+      timeoutMs: host.timeoutMs,
+      runId: leftover.runId,
+      leftover: host.leftover
+    });
+    // Refused or failed before its run stored the question: the run told the
+    // stream; the chat is let go of and the text given back.
+    if (outcome.status !== 'ran') await abandonLeftoverTurn(previous, leftover, first);
+    return outcome;
+  } catch (error) {
+    logger.error('Next turn of messages sent while answering failed', {
+      component: COMPONENT,
+      chatId: previous.chatId,
+      runId: leftover.runId,
+      error
+    });
+    await abandonLeftoverTurn(previous, leftover, first);
+    return null;
+  }
+}
+
+/**
  * Run a prepared turn to its end, and let go of the chat.
  *
  * Without a stream of the caller, a refusal just before the turn runs (the
@@ -1522,16 +1645,42 @@ async function releaseTurn(run) {
  *   runs the turn.
  * @param {(key: string, params: Object, language: string) => Promise<string>} host.getLocalizedError
  * @param {number} host.timeoutMs - The request timeout of a model call.
+ * @param {string|null} [host.runId] - The run the turn runs as, when the chat was claimed for
+ *   it already (a next turn made of a leftover); a new one otherwise.
+ * @param {{settleClarifications: Function}|null} [host.leftover] - Given, the messages the
+ *   person sent into the answer and the answer did not read become the next turn of a kept
+ *   chat, started here with this same host once this turn let go of the chat
+ *   ({@link startLeftoverTurn}); the outcome carries it as `nextTurn`, a promise that never
+ *   rejects. `settleClarifications` is what {@link prepareTurn} takes for that turn. Left
+ *   out, they are dropped and the client is told (`steer/dropped`).
  * @returns {Promise<TurnOutcome>}
  */
-export async function runPreparedTurn(
+export async function runPreparedTurn(turn, host) {
+  const outcome = await runTurnOnce(turn, host);
+  const leftover = outcome.status === 'ran' ? outcome.result?.leftover : null;
+  if (leftover && host.leftover) {
+    // Not awaited: the caller has answered its request, and the next turn is
+    // told on the chat's stream like any turn without a stream of its own.
+    outcome.nextTurn = startLeftoverTurn(turn, leftover, host);
+  }
+  return outcome;
+}
+
+/**
+ * {@link runPreparedTurn} without the next turn.
+ *
+ * @param {PreparedTurn} turn
+ * @param {Object} host - see {@link runPreparedTurn}
+ * @returns {Promise<TurnOutcome>}
+ */
+async function runTurnOnce(
   turn,
-  { sink = null, chatService, getLocalizedError, timeoutMs }
+  { sink = null, chatService, getLocalizedError, timeoutMs, runId = null, leftover = null }
 ) {
   const run = {
     turn,
     sink,
-    host: { chatService, getLocalizedError, timeoutMs },
+    host: { chatService, getLocalizedError, timeoutMs, runId, leftover },
     durable: false,
     stream: null,
     streamRunId: null,

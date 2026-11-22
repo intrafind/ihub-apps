@@ -191,8 +191,27 @@ const OPTIONAL_MESSAGE_FIELDS = [
   'answerBasis',
   // A transcription turn (see services/chat/transcriptionTurn.js): its audio is
   // not kept, so the question can be neither edited nor resent.
-  'transcription'
+  'transcription',
+  // A message the person sent while the answer of its run was written, and read
+  // at a step of it (see services/chat/chatSteering.js): `steer: true`, the
+  // step it was read at and its id as the route minted it.
+  'steer',
+  'appliedAtStep',
+  'steerId'
 ];
+
+/**
+ * The patch a run releases its chat with: given, or decided from the stored chat
+ * inside the chat lock (`releaseRun`, `appendMessage` with `release`).
+ *
+ * @param {Object|((chat: Object) => Object)|undefined} patch
+ * @param {Object} chat - The chat as stored, before this write.
+ * @returns {Object}
+ */
+function releasePatchOf(patch, chat) {
+  const resolved = typeof patch === 'function' ? patch(chat) : patch;
+  return resolved && typeof resolved === 'object' ? resolved : {};
+}
 
 /** Variables kept per message, and the longest value kept. */
 const MAX_STORED_VARIABLES = 100;
@@ -1784,7 +1803,11 @@ export class ChatRepository {
    *
    * @param {string} chatId - Chat id.
    * @param {string} runId - Run releasing the chat.
-   * @param {Object} [patch] - Fields to apply when the run still owns the chat.
+   * @param {Object|((chat: Object) => Object)} [patch] - Fields to apply when the run still
+   *   owns the chat, or a synchronous function of the stored chat that returns them. The
+   *   function is called inside the chat lock, and only when the run still owns the chat:
+   *   what it decides holds against every other writer of the chat (the leftover of an
+   *   answer, `chatSteering.js`).
    * @returns {Promise<{chat: Object|null, released: boolean}>} The chat as it
    *   stands (null when it does not exist or cannot be stored) and whether the
    *   patch was applied.
@@ -1796,7 +1819,10 @@ export class ChatRepository {
       if (!existing) return { chat: null, released: false };
       if (existing.activeRunId !== runId) return { chat: existing, released: false };
       return {
-        chat: await this._writeChat(applyChatPatch(existing, patch), etag),
+        chat: await this._writeChat(
+          applyChatPatch(existing, releasePatchOf(patch, existing)),
+          etag
+        ),
         released: true
       };
     });
@@ -2035,8 +2061,9 @@ export class ChatRepository {
    * @param {Object|null} [options.chatPatch=null] - Further chat fields to set
    *   in the same chat write as the append ({@link ChatRepository#updateChat}
    *   in one lock instead of two). Applied only when the message is written.
-   * @param {{runId: string, patch: Object}|null} [options.release=null] - Apply
-   *   `patch` in the same chat write as the append, but only while `runId` is
+   * @param {{runId: string, patch: Object|Function}|null} [options.release=null] - Apply
+   *   `patch` (an object, or a function of the stored chat as for
+   *   {@link ChatRepository#releaseRun}) in the same chat write as the append, but only while `runId` is
    *   the chat's active run ({@link ChatRepository#releaseRun} in the same
    *   lock). Nothing is released when the message is not written; the caller
    *   releases separately then.
@@ -2166,7 +2193,10 @@ export class ChatRepository {
         if (derived) patch.title = derived;
       }
       const savedChat = await this._writeChat(
-        applyChatPatch(chat, released ? { ...patch, ...release.patch } : patch),
+        applyChatPatch(
+          chat,
+          released ? { ...patch, ...releasePatchOf(release.patch, storedChat) } : patch
+        ),
         chatEtag
       );
 
