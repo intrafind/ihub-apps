@@ -17,7 +17,7 @@
 import { after, before, beforeEach, describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
 // The environment first: it isolates the contents directory before the server loads.
-import { startAppRunEnv, USAGE } from './helpers/appRunEnv.js';
+import { startAppRunEnv, toolRuns, USAGE } from './helpers/appRunEnv.js';
 import { turn } from './helpers/scriptedModel.js';
 import {
   getAppAsTools,
@@ -28,6 +28,21 @@ import { getToolsForApp } from '../services/tools/appTools.js';
 import { runTool } from '../services/tools/runTool.js';
 import { toolDisplayOf } from '../utils/toolDisplay.js';
 import { RUN_LOG_EVENTS } from '../../shared/runEvents.js';
+import { ToolRunner } from '../services/run/ToolRunner.js';
+import { runService } from '../services/run/RunService.js';
+import { createTurnSkillLog } from '../services/chat/turnSkillLog.js';
+import {
+  registerScopeProvider,
+  unregisterScopeProvider
+} from '../services/integrations/scopes/index.js';
+import { queryAuditLog } from '../services/AuditLogService.js';
+
+/** A scope provider for the integration `lookup`: every scope is valid. */
+const scopeProvider = {
+  id: 'lookup',
+  appliesTo: ({ app }) => Boolean(app?.integrations?.lookup),
+  validateScope: async ({ scopeId }) => ({ ok: true, scopeId })
+};
 
 let env;
 let restricted;
@@ -133,18 +148,55 @@ describe('invokeAppTool', () => {
     assert.equal(start.data.refs.appId, 'specialist');
   });
 
-  it('keeps the context handed beside the arguments out of what the app reads (#3925)', async t => {
-    const model = env.script(t, [turn.text('ok', { usage: USAGE })]);
-    // What the tool runner hands the gateway for a chat turn's call: the model's
-    // arguments, and the chat's context beside them.
-    await call({
-      args: { message: 'How do I file a claim?', tone: 'formal' },
-      integrationScopes: {},
-      clientTimezone: 'Europe/Berlin'
+  it("a chat turn's call: the scopes the person picked reach the called app's tools, never its prompt (#3925)", async t => {
+    registerScopeProvider(scopeProvider);
+    t.after(() => {
+      unregisterScopeProvider('lookup');
+      mock.restoreAll();
     });
+    // What the called app's own tool calls get beside their arguments.
+    const inner = runService.chatService.toolRunner;
+    const innerExecute = inner.execute.bind(inner);
+    const innerContexts = [];
+    mock.method(inner, 'execute', (callArg, request) => {
+      innerContexts.push(request.toolContext);
+      return innerExecute(callArg, request);
+    });
+    const model = env.script(t, [
+      turn.toolCalls([{ name: 'lookup', args: { key: 'A-1' } }], { usage: USAGE }),
+      turn.text('Record A-1 is open.', { usage: USAGE })
+    ]);
+    const [toolDef] = await getAppAsTools(['specialist'], 'en', { user: everything });
+    // The chat turn's call, through the tool runner as the chat makes it: the
+    // model's arguments, and the chat's context beside them.
+    const result = await new ToolRunner().execute(null, {
+      toolId: 'app__specialist',
+      toolDef,
+      args: { message: 'Look up A-1.', tone: 'formal' },
+      toolContext: {
+        origin: 'chat',
+        approval: 'seam',
+        principal: everything,
+        chatId: 'chat-3925',
+        appConfig: { id: 'concierge' },
+        language: 'en',
+        integrationScopes: { lookup: 'records-2026' },
+        turnSkills: createTurnSkillLog(),
+        clientTimezone: 'Europe/Berlin'
+      }
+    });
+    assert.equal(result.content, 'Record A-1 is open.');
+    // The called app searched inside the picked scope, and has the timezone for its tools.
+    assert.equal(toolRuns.lookup[0].scope, 'records-2026');
+    assert.equal(innerContexts[0].clientTimezone, 'Europe/Berlin');
+    assert.deepEqual(innerContexts[0].integrationScopes, { lookup: 'records-2026' });
+    // Its model got the message alone: no scope, skill log or timezone as a variable or text.
     const { messages } = model.requests[0].body;
-    assert.equal(messages.at(-1).content, 'How do I file a claim?');
-    assert.doesNotMatch(JSON.stringify(messages), /integrationScopes|turnSkills|Europe\/Berlin/);
+    assert.equal(messages.at(-1).content, 'Look up A-1.');
+    assert.doesNotMatch(
+      JSON.stringify(messages),
+      /integrationScopes|turnSkills|records-2026|Europe\/Berlin/
+    );
   });
 
   it('hands the app’s sources to the caller as the tool-result envelope, without passages', async t => {
@@ -181,8 +233,9 @@ describe('invokeAppTool', () => {
     assert.equal(runStarts().length, 0);
   });
 
-  it('rejects apps the calling user may not access, and every app for a bare principal', async t => {
+  it('rejects apps the calling user may not access, and every app for a bare principal; both audited', async t => {
     env.script(t, []);
+    const since = new Date().toISOString();
     const denied = await call({ toolId: 'app__restricted' });
     assert.deepEqual(denied, {
       error: true,
@@ -194,6 +247,15 @@ describe('invokeAppTool', () => {
       message: 'You do not have permission to access app specialist'
     });
     assert.equal(runStarts().length, 0);
+    const { entries } = await queryAuditLog({ resource: 'app', result: 'failure', limit: 50 });
+    const audited = entries
+      .filter(entry => entry.ts >= since)
+      .map(entry => [entry.resourceId, entry.actor.id, entry.details.code, entry.details.origin])
+      .sort((a, b) => (a[0] < b[0] ? -1 : Number(a[0] > b[0])));
+    assert.deepEqual(audited, [
+      ['restricted', 'u-restricted', 'APP_NOT_PERMITTED', 'subagent'],
+      ['specialist', 'bare', 'PRINCIPAL_UNRESOLVED', 'subagent']
+    ]);
   });
 
   it('reports unknown and disabled apps as tool errors', async t => {

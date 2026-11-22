@@ -451,7 +451,10 @@ produces.
   `utils/toolApproval.js` reads it.
 - **Refusals.** Before the model is called the service refuses a spec without a
   context it built (`RUN_CONTEXT_INVALID`) and an app the principal may not open
-  (`APP_NOT_PERMITTED`), and writes each refusal to the audit log.
+  (`APP_NOT_PERMITTED`), and writes each refusal to the audit log. The callers
+  that refuse before they reach the service (the app-as-tool gateway, the MCP
+  and A2A app invoker, the MCP handler) write theirs too
+  (`PRINCIPAL_UNRESOLVED`, `APP_NOT_PERMITTED`).
 - **Seams.** `seamProfiles.build({ interactions: 'none', host, bindings })`
   returns the seams in order: `approval` (headless, fallback `deny`),
   `question` (headless), `passthrough`, `image-lift`, then the host's
@@ -517,7 +520,11 @@ A call of a run on the run service carries its run context
 (`toolContext.run`); the runner then uses the context's principal as the
 identity and re-checks the grant on every call. A refusal throws
 `TOOL_NOT_GRANTED` and is written to the audit log (action `execute`, resource
-`tool`, result `failure`). The rows below are tested in
+`tool`, result `failure`; `details.runId` is the run that made the call,
+`details.parentRunId` the run that started it). The context carries the
+principal's permissions as they were when the run started: a grant withdrawn
+from a group applies to the next run (or MCP session), while a disabled or
+removed installation is refused on the next call. The rows below are tested in
 `server/tests/run/toolRunner.grant.test.js`. Callers with a run context: an app
 that runs as a tool (and its passthrough calls), the MCP gateway (`tools/call`
 of an integration and of a workflow) and an A2A task that starts a workflow.
@@ -528,9 +535,9 @@ service.
 | --- | --- | --- |
 | `run-context-valid`: the run context is one the run service built | - | A copy or a look-alike is refused (`RUN_CONTEXT_INVALID`) |
 | `tool-grant`: the tool is one the run was granted | The MCP gateway (the tool was registered for the session) | Every call; no grant grants nothing |
-| `integration-grant`: the installation still exists and is enabled, the principal's groups grant it, the run may reach it | The MCP gateway at call time; `runIntegrationTool` | The runner, before the tool and before the approval check |
+| `integration-grant`: the installation still exists and is enabled, the principal's groups grant it, the run may reach it | The MCP gateway at call time; `runIntegrationTool` | The runner, before the tool and before the approval check; it reads the installation as the tool listing does (`installedIntegrationService.get`), so an always-installed built-in such as `ihub` counts as installed and enabled |
 | `app-grant`: the principal may open the app of an `app__` call | The gateway (`isAppInvocationAllowed`, which let a principal without permissions through) | The runner, and the gateway, which now fails closed |
-| `directory-grant`: a people directory is one the principal may use | The MCP gateway; the directory runner | The runner (fails closed for an unknown directory) |
+| `directory-grant`: a people directory is one the principal may use | The MCP gateway; the directory runner | The runner, on the frozen run principal (fails closed for an unknown directory) |
 
 One check stays with the MCP gateway: the token scope (`mcp:tools:call`,
 `mcp:workflows:run`).

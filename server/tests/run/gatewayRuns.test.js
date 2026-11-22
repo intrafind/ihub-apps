@@ -12,14 +12,24 @@
  * - a tool the caller may no longer use is refused by the tool runner and
  *   audited (the MCP grant re-check moved there): through `tools/call` of an
  *   integration, and inside an app an A2A task runs;
- * - a caller without resolved permissions, or one who may not open the app, is refused.
+ * - a caller without resolved permissions, or one who may not open the app, is refused
+ *   and audited, before the run service as well as in it;
+ * - a client that cancels a `tools/call` aborts the app run it started.
  *
  * Run: node --test server/tests/run/gatewayRuns.test.js
  */
 import { after, before, beforeEach, describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
 // The environment first: it isolates the contents directory before the server loads.
-import { startAppRunEnv, toolRuns, USAGE } from '../helpers/appRunEnv.js';
+import {
+  FILE_TOOL,
+  offerFileTool,
+  PNG_B64,
+  REPORT_PDF,
+  startAppRunEnv,
+  toolRuns,
+  USAGE
+} from '../helpers/appRunEnv.js';
 import { turn } from '../helpers/scriptedModel.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
@@ -28,7 +38,7 @@ import { dispatchA2A } from '../../services/mcp/a2aHandler.js';
 import { invokeApp } from '../../services/mcp/appInvoker.js';
 import { MCP_SCOPES } from '../../services/mcp/scopes.js';
 import { toolRunner } from '../../services/run/ToolRunner.js';
-import { RUN_REFUSAL_CODES } from '../../services/run/RunService.js';
+import { RUN_REFUSAL_CODES, runService } from '../../services/run/RunService.js';
 import { queryAuditLog } from '../../services/AuditLogService.js';
 import { APPROVAL_ERROR_CODES } from '../../../shared/toolApproval.js';
 import { RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
@@ -83,22 +93,15 @@ const disablingFirst = (instanceId, inner) => (request, ctx) => {
 };
 
 function disable(instanceId) {
-  const integrations = env.configCache.getIntegrations();
-  mock.method(env.configCache, 'getIntegrations', () => ({
-    ...integrations,
-    data: {
-      ...integrations.data,
-      installed: integrations.data.installed.map(instance =>
-        instance.id === instanceId ? { ...instance, enabled: false } : instance
-      )
-    }
-  }));
+  env.disableInstallation(instanceId);
 }
 
 async function auditEntries(resource, since) {
   const { entries } = await queryAuditLog({ resource, result: 'failure', limit: 50 });
   return entries.filter(entry => entry.ts >= since);
 }
+
+const byId = (a, b) => (a < b ? -1 : Number(a > b));
 
 const textOf = result => result.content.find(part => part.type === 'text')?.text;
 
@@ -129,6 +132,60 @@ describe('MCP tools/call of an app', () => {
     const denied = model.requests[1].body.messages.find(message => message.role === 'tool');
     assert.equal(JSON.parse(denied.content).code, APPROVAL_ERROR_CODES.APPROVAL_REQUIRED_NO_USER);
     assert.equal(eventsOf(RUN_LOG_EVENTS.INTERACTION_RAISED).length, 0);
+  });
+});
+
+describe('MCP tools/call of an app the client cancels', () => {
+  it('cancelling the call aborts the app run it started (#3926)', async t => {
+    const controller = new AbortController();
+    env.script(t, [
+      (request, ctx) => {
+        controller.abort();
+        return turn.hang().respond(request, ctx);
+      }
+    ]);
+    const runs = [];
+    const original = runService.run.bind(runService);
+    mock.method(runService, 'run', (...args) => {
+      const running = original(...args);
+      runs.push(running);
+      return running;
+    });
+    t.after(() => mock.restoreAll());
+    await assert.rejects(
+      withMcpClient(caller(['everything'], ALL_SCOPES), client =>
+        client.callTool(
+          { name: 'app__specialist', arguments: { message: 'Look up A-1.' } },
+          undefined,
+          { signal: controller.signal }
+        )
+      )
+    );
+    assert.equal(runs.length, 1);
+    const result = await runs[0];
+    assert.equal(result.status, 'error');
+    assert.match(result.error.message, /aborted/i);
+  });
+});
+
+describe('a refused app call over MCP and as a tool is audited', () => {
+  it('a caller who lost the app between listing and calling', async t => {
+    env.script(t, []);
+    const since = new Date().toISOString();
+    const user = caller(['everything'], ALL_SCOPES);
+    const result = await withMcpClient(user, async client => {
+      const { tools } = await client.listTools();
+      assert.ok(tools.some(tool => tool.name === 'app__specialist'));
+      user.permissions = { ...user.permissions, apps: new Set() };
+      return client.callTool({ name: 'app__specialist', arguments: { message: 'hi' } });
+    });
+    assert.equal(result.isError, true);
+    assert.equal(textOf(result), 'access_denied: app not permitted for this caller');
+    const [entry] = await auditEntries('app', since);
+    assert.deepEqual(
+      [entry.resourceId, entry.source, entry.actor.id, entry.details.code],
+      ['specialist', 'mcp', 'u-caller', RUN_REFUSAL_CODES.APP_NOT_PERMITTED]
+    );
   });
 });
 
@@ -229,6 +286,26 @@ describe('A2A message/send to an app skill', () => {
     assert.equal(start.data.principal.id, 'u-caller');
   });
 
+  it("the files the app's tools produced come back as file artifacts", async t => {
+    await offerFileTool(t);
+    env.script(t, [
+      turn.toolCalls([{ name: FILE_TOOL.id, args: {} }], { usage: USAGE }),
+      turn.text('Here is the report.', { usage: USAGE })
+    ]);
+    const response = await send(caller(['everything'], [MCP_SCOPES.APPS_INVOKE]), 'Render it.');
+    assert.equal(response.result.status.state, 'completed');
+    const files = (response.result.artifacts || [])
+      .flatMap(artifact => artifact.parts)
+      .filter(part => part.kind === 'file')
+      .map(part => part.file);
+    const pdf = files.find(file => file.mimeType === 'application/pdf');
+    const png = files.find(file => file.mimeType === 'image/png');
+    assert.ok(pdf, 'the PDF is an artifact');
+    assert.equal(pdf.bytes, REPORT_PDF.toString('base64'));
+    assert.ok(png, 'the picture is an artifact');
+    assert.equal(png.bytes, PNG_B64);
+  });
+
   it('a tool that needs approval is denied, never pending', async t => {
     env.script(t, [
       turn.toolCalls([{ name: 'dangerous', args: { key: 'A-1' } }], { usage: USAGE }),
@@ -250,14 +327,23 @@ describe('a caller the run service refuses', () => {
       origin: 'mcp'
     });
 
-  it('without resolved permissions: refused before anything runs', async t => {
+  it('without resolved permissions: refused before anything runs, and audited', async t => {
     env.script(t, []);
+    const since = new Date().toISOString();
     await assert.rejects(invoke({ id: 'bare', groups: ['everything'] }), error => {
       assert.equal(error.code, 'PRINCIPAL_UNRESOLVED');
       return true;
     });
     await assert.rejects(invoke(null), { code: 'PRINCIPAL_UNRESOLVED' });
     assert.equal(eventsOf(RUN_LOG_EVENTS.RUN_START).length, 0);
+    const audited = await auditEntries('app', since);
+    assert.equal(audited.length, 2);
+    for (const entry of audited) {
+      assert.equal(entry.details.code, 'PRINCIPAL_UNRESOLVED');
+      assert.equal(entry.resourceId, 'specialist');
+      assert.equal(entry.source, 'mcp');
+    }
+    assert.deepEqual(audited.map(entry => entry.actor.id).sort(byId), ['bare', 'unknown']);
   });
 
   it('who may not open the app: refused and audited', async t => {

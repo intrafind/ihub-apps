@@ -11,6 +11,7 @@
  * - what the service refuses before the model is called, and audits;
  * - nobody can answer a headless run: a call that needs approval is denied, never pending;
  * - a tool the run may no longer use is refused by the tool runner and audited;
+ * - the tools tool search loads and the web search fallback are in the grant;
  * - an app run as a tool cannot write memory;
  * - the caller's integration scopes reach the tools of the called app.
  *
@@ -19,7 +20,7 @@
 import { after, before, beforeEach, describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
 // The environment first: it isolates the contents directory before the server loads.
-import { startAppRunEnv, toolRuns, USAGE } from '../helpers/appRunEnv.js';
+import { MODEL, startAppRunEnv, toolRuns, USAGE } from '../helpers/appRunEnv.js';
 import { turn } from '../helpers/scriptedModel.js';
 import { RUN_REFUSAL_CODES, RunService, appRunSpec } from '../../services/run/RunService.js';
 import { HeadlessHost } from '../../services/run/hosts/HeadlessHost.js';
@@ -32,6 +33,15 @@ import {
   unregisterScopeProvider
 } from '../../services/integrations/scopes/index.js';
 import { queryAuditLog } from '../../services/AuditLogService.js';
+import {
+  createToolSearch,
+  SEARCH_TOOLS_TOOL_ID,
+  toolSearchToolDefinition
+} from '../../services/tools/toolSearch.js';
+import {
+  clearNativeWebSearchFallbackMemo,
+  markNativeWebSearchUnavailable
+} from '../../services/loop/nativeWebSearchFallback.js';
 import { APPROVAL_ERROR_CODES } from '../../../shared/toolApproval.js';
 import { RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
 
@@ -249,16 +259,7 @@ describe('nobody can answer a headless run', () => {
 describe('the grant of a run', () => {
   /** A model turn that disables an installation before it answers with its tool call. */
   const disablingFirst = (instanceId, inner) => (request, ctx) => {
-    const integrations = env.configCache.getIntegrations();
-    mock.method(env.configCache, 'getIntegrations', () => ({
-      ...integrations,
-      data: {
-        ...integrations.data,
-        installed: integrations.data.installed.map(instance =>
-          instance.id === instanceId ? { ...instance, enabled: false } : instance
-        )
-      }
-    }));
+    env.disableInstallation(instanceId);
     return inner.respond(request, ctx);
   };
 
@@ -282,6 +283,12 @@ describe('the grant of a run', () => {
     assert.equal(entry.source, 'web');
     assert.equal(entry.details.code, TOOL_REFUSAL_CODES.NOT_GRANTED);
     assert.equal(entry.details.origin, 'subagent');
+    // The run that made the call, found in the ledger; its caller beside it.
+    const [start] = eventsOf(RUN_LOG_EVENTS.RUN_START);
+    assert.match(entry.details.runId, /^subagent/);
+    assert.equal(entry.details.runId, start.runId ?? start.data.runId);
+    assert.equal(entry.details.runId, result.runId);
+    assert.equal(entry.details.parentRunId, 'chat-of-the-caller');
   });
 
   it('a tool the run offers runs, granted as offered', async t => {
@@ -293,6 +300,71 @@ describe('the grant of a run', () => {
     assert.equal(result.finalMessage.content, 'Record A-1 is open.');
     assert.equal(toolRuns.lookup.length, 1);
     assert.equal(result.toolCalls[0].toolName, 'lookup');
+  });
+
+  /**
+   * Prepare the run as the product does, then leave `lookup` out of what the
+   * model is offered: `move(prepared, lookupTool)` says where it goes instead.
+   */
+  const withLookupOutOfTheRequest = (t, move) => {
+    const original = env.chatService.prepareChatRequest.bind(env.chatService);
+    mock.method(env.chatService, 'prepareChatRequest', async request => {
+      const prepared = await original(request);
+      const lookupTool = prepared.data.tools.find(tool => tool.id === 'lookup');
+      assert.ok(lookupTool, 'the app offers lookup');
+      prepared.data.tools = prepared.data.tools.filter(tool => tool.id !== 'lookup');
+      move(prepared.data, lookupTool);
+      return prepared;
+    });
+    t.after(() => mock.restoreAll());
+  };
+
+  it('a tool that tool search loads is granted: found, loaded and called, it runs', async t => {
+    withLookupOutOfTheRequest(t, (data, lookupTool) => {
+      data.tools.push(toolSearchToolDefinition('en'));
+      data.toolSearch = createToolSearch({ deferred: [lookupTool] });
+    });
+    const model = env.script(t, [
+      turn.toolCalls([{ name: SEARCH_TOOLS_TOOL_ID, args: { query: 'look up a record' } }], {
+        usage: USAGE
+      }),
+      turn.toolCalls([{ name: 'lookup', args: { key: 'A-1' } }], { usage: USAGE }),
+      turn.text('Record A-1 is open.', { usage: USAGE })
+    ]);
+    const result = await run();
+    assert.equal(result.status, 'ok');
+    const offered = (index = 0) =>
+      (model.requests[index].body.tools || []).map(tool => tool.function.name);
+    assert.equal(offered(0).includes('lookup'), false, 'deferred at first');
+    assert.equal(offered(1).includes('lookup'), true, 'loaded by the search');
+    assert.equal(toolRuns.lookup.length, 1, 'the loaded tool ran');
+    assert.doesNotMatch(toolMessages(model, 2).at(-1).content, /not permitted/);
+  });
+
+  it('the search tool the loop falls back to when native web search is turned down is granted', async t => {
+    clearNativeWebSearchFallbackMemo();
+    t.after(() => clearNativeWebSearchFallbackMemo());
+    let fallbackTool = null;
+    withLookupOutOfTheRequest(t, (data, lookupTool) => {
+      fallbackTool = lookupTool;
+      data.llmOptions = {
+        ...data.llmOptions,
+        nativeWebSearch: { provider: 'openai', fallback: 'lookup' }
+      };
+    });
+    mock.method(env.chatService.agentLoop, 'resolveNativeWebSearchFallbackTools', async () => [
+      fallbackTool
+    ]);
+    // The provider turned native web search down before: the loop starts on the fallback.
+    markNativeWebSearchUnavailable(MODEL.id, { reason: 'web search disabled' });
+    const model = env.script(t, [
+      turn.toolCalls([{ name: 'lookup', args: { key: 'A-1' } }], { usage: USAGE }),
+      turn.text('Record A-1 is open.', { usage: USAGE })
+    ]);
+    const result = await run();
+    assert.equal(result.status, 'ok');
+    assert.equal(toolRuns.lookup.length, 1, 'the fallback tool ran');
+    assert.doesNotMatch(toolMessages(model, 1)[0].content, /not permitted/);
   });
 
   it('an app run as a tool cannot write memory: the tool is not offered and does not run', async t => {

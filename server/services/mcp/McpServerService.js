@@ -15,6 +15,8 @@ import {
   workflowToolDef
 } from '../run/ToolRunner.js';
 import { requestRunContext } from '../run/principalResolver.js';
+import { auditRefusal } from '../run/runAudit.js';
+import { RUN_REFUSAL_CODES } from '../run/RunService.js';
 import { filterDirectoryToolsForUser } from '../peopleDirectory/PeopleDirectoryService.js';
 import { invokeAppNonStreaming } from './appInvoker.js';
 import { recordTextOutput } from '../provenance/turnProvenance.js';
@@ -364,8 +366,19 @@ export async function buildMcpServer({ user, platform }) {
             return toolErrorResult('insufficient_scope: mcp:tools:call required');
           }
           // A caller without resolved permissions runs nothing.
-          const { context: run } = requestRunContext(user, { toolGrant });
-          if (!run) return toolErrorResult(ACCESS_DENIED_TOOL);
+          const resolved = requestRunContext(user, { toolGrant });
+          if (!resolved.ok) {
+            auditRefusal({
+              principal: user,
+              resource: 'tool',
+              resourceId: tool.id,
+              code: resolved.code,
+              origin: 'mcp',
+              summary: `Refused tool ${tool.id}: ${resolved.message}`
+            });
+            return toolErrorResult(ACCESS_DENIED_TOOL);
+          }
+          const run = resolved.context;
           try {
             // The tool runner re-checks the grant at call time, so a permission
             // change between list and call can't be exploited: the tool is one
@@ -440,6 +453,14 @@ export async function buildMcpServer({ user, platform }) {
             return toolErrorResult('insufficient_scope: mcp:apps:invoke required');
           }
           if (!isAppAllowed(app, user, expose)) {
+            auditRefusal({
+              principal: user,
+              resource: 'app',
+              resourceId: app.id,
+              code: RUN_REFUSAL_CODES.APP_NOT_PERMITTED,
+              origin: 'mcp',
+              summary: `Refused to run app ${app.id}: the caller may no longer open it`
+            });
             return toolErrorResult('access_denied: app not permitted for this caller');
           }
           try {

@@ -35,7 +35,7 @@ export const INTERACTIONS = Object.freeze(['none']);
  * @param {Object} params
  * @param {'none'} params.interactions - who can answer an approval or a question
  * @param {Object|null} [params.structuredOutput] - the run's output contract seam, if any
- * @param {{seams: (bindings: Object) => Array<Object>}} params.host - the host; its seams come last
+ * @param {{seams?: (bindings: Object) => Array<Object>}} params.host - the host; its seams come last
  * @param {Object} params.bindings - what the seams act on:
  * @param {string} params.bindings.chatId
  * @param {Object} params.bindings.app

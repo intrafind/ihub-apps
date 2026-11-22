@@ -465,7 +465,9 @@ export class ToolRunner {
       resourceId: toolId,
       code: TOOL_REFUSAL_CODES.NOT_GRANTED,
       origin,
-      runId: run.parentRunId,
+      // The run that made the call; the run that started it beside it.
+      runId: run.runId,
+      parentRunId: run.parentRunId,
       summary: `Refused tool ${toolId}: ${reason}`
     });
     throw new ToolCallRefusedError(
@@ -482,12 +484,15 @@ export class ToolRunner {
    * @private
    */
   async _integrationRefusal(toolDef, run) {
-    const [{ installedIntegrationById }, { userMayUse }] = await Promise.all([
-      import('../integrations/installedRefs.js'),
+    // The installation as the tool listing and the integration runner see it:
+    // through the service, with the always-installed built-ins (`ihub`) that
+    // the file may lack or hold switched off.
+    const [{ default: installedIntegrationService }, { userMayUse }] = await Promise.all([
+      import('../integrations/InstalledIntegrationService.js'),
       import('../integrations/integrationTools.js')
     ]);
     const instanceId = toolDef._integration.instanceId;
-    const instance = installedIntegrationById(instanceId);
+    const instance = installedIntegrationService.get(instanceId);
     if (!instance || instance.enabled === false) return 'the installation is gone or disabled';
     if (!userMayUse(instance, run.principal)) return "the principal's groups do not grant it";
     if (Array.isArray(run.integrationGrant) && !run.integrationGrant.includes(instanceId)) {

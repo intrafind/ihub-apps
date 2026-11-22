@@ -17,7 +17,14 @@
 import { after, before, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 // The environment first: it isolates the contents directory before the server loads.
-import { startAppRunEnv, USAGE } from '../helpers/appRunEnv.js';
+import {
+  FILE_TOOL,
+  offerFileTool,
+  PNG_B64,
+  REPORT_PDF,
+  startAppRunEnv,
+  USAGE
+} from '../helpers/appRunEnv.js';
 import { turn } from '../helpers/scriptedModel.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
@@ -75,9 +82,6 @@ async function withClient(fn) {
     await Promise.allSettled([client.close(), server.close()]);
   }
 }
-
-const PNG_B64 =
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
 
 /** The chat the app's run belonged to, from its ledger start. */
 const runChatId = () =>
@@ -233,6 +237,30 @@ describe('what an app returns over MCP', () => {
       client.callTool({ name: 'app__specialist', arguments: { message: 'make it' } })
     );
     assert.deepEqual(result.content, [{ type: 'text', text: 'done' }]);
+  });
+
+  it('an app run whose tool produced a PDF and a picture returns them as a resource and an image', async t => {
+    await offerFileTool(t);
+    const model = env.script(t, [
+      turn.toolCalls([{ name: FILE_TOOL.id, args: {} }], { usage: USAGE }),
+      turn.text('Here is the report.', { usage: USAGE })
+    ]);
+    const result = await withClient(client =>
+      client.callTool({ name: 'app__specialist', arguments: { message: 'Render the report' } })
+    );
+    assert.equal(result.isError, undefined);
+    assert.deepEqual(result.content[0], { type: 'text', text: 'Here is the report.' });
+    const resource = result.content.find(part => part.type === 'resource');
+    assert.ok(resource, 'the PDF comes back as an embedded resource');
+    assert.equal(resource.resource.mimeType, 'application/pdf');
+    assert.equal(resource.resource.blob, REPORT_PDF.toString('base64'));
+    const image = result.content.find(part => part.type === 'image');
+    assert.ok(image, 'the picture comes back as an image');
+    assert.equal(image.data, PNG_B64);
+    assert.equal(image.mimeType, 'image/png');
+    // The app's model read a descriptor, never the bytes.
+    const toolMessage = model.requests[1].body.messages.find(message => message.role === 'tool');
+    assert.doesNotMatch(toolMessage.content, new RegExp(PNG_B64.slice(0, 20)));
   });
 
   it('appToolResult skips entries without bytes', () => {

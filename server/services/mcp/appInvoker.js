@@ -9,6 +9,7 @@ import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
 import { appRunSpec, runService } from '../run/RunService.js';
 import { HeadlessHost } from '../run/hosts/HeadlessHost.js';
 import { requestRunContext } from '../run/principalResolver.js';
+import { auditRefusal } from '../run/runAudit.js';
 
 /**
  * Validate a caller-supplied app id and resolve the app from the config cache.
@@ -116,6 +117,16 @@ export async function invokeApp({
     budget: { timeoutMs, ...(maxWallClockMs ? { maxWallClockMs } : {}) }
   });
   if (!resolved.ok) {
+    // No run starts, so the run service never sees the refusal: audit it here.
+    auditRefusal({
+      principal: user,
+      resource: 'app',
+      resourceId: app.id,
+      code: resolved.code,
+      origin: origin === 'a2a' ? 'a2a' : 'mcp',
+      parentRunId: effectiveRunId,
+      summary: `Refused to run app ${app.id}: ${resolved.message}`
+    });
     const err = new Error(resolved.message);
     err.code = resolved.code;
     throw err;

@@ -1225,7 +1225,9 @@ callers with the matching scope.
   waits as a pending approval, and interactive tools (`ask_user`) are
   refused with a `NO_USER_AVAILABLE` result. A caller without resolved
   permissions, or one whose groups do not grant the app, is refused before
-  the model is called; the refusal is written to the audit log.
+  the model is called; the refusal is written to the audit log (action
+  `execute`, resource `app`, result `failure`). When the client cancels the
+  `tools/call`, the app's run is aborted.
 - **iHub workflow** → MCP tool with id `workflow__<workflowId>` and
   `inputSchema` derived from the start node's `inputVariables`. Dispatch
   goes through the existing `runTool('workflow_<id>', args)` path.

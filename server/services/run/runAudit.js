@@ -27,11 +27,21 @@ const SOURCE_BY_ORIGIN = Object.freeze({ mcp: 'mcp', a2a: 'api' });
  * @param {string} params.resourceId
  * @param {string} params.code - why it was refused
  * @param {string} [params.origin] - the caller (`chat`, `subagent`, `mcp`, `a2a`)
- * @param {string} [params.runId]
+ * @param {string|null} [params.runId] - the run the refused call belongs to
+ * @param {string|null} [params.parentRunId] - the run that started that run
  * @param {string} params.summary
  * @returns {Object|null} the entry, or null when none was written
  */
-export function auditRefusal({ principal, resource, resourceId, code, origin, runId, summary }) {
+export function auditRefusal({
+  principal,
+  resource,
+  resourceId,
+  code,
+  origin,
+  runId,
+  parentRunId,
+  summary
+}) {
   const actor = principal?.id
     ? {
         id: String(principal.id),
@@ -52,7 +62,8 @@ export function auditRefusal({ principal, resource, resourceId, code, origin, ru
     details: {
       code,
       ...(origin ? { origin } : {}),
-      ...(runId ? { runId: String(runId) } : {})
+      ...(runId ? { runId: String(runId) } : {}),
+      ...(parentRunId ? { parentRunId: String(parentRunId) } : {})
     }
   });
 }

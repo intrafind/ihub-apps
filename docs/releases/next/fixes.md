@@ -56,9 +56,19 @@ caller that carried no resolved permissions (an internal or hand-built principal
 signed-in user) could call any app as a tool, including apps no group of it grants.
 
 - Such a call now answers "You do not have permission to access app …" and no model is called.
-- A refused app call, and a tool call refused because the caller may no longer use the tool (an
-  installation that was disabled or a group grant that was withdrawn after the tools were
-  listed), is written to the audit log: action `execute`, resource `app` or `tool`, result
-  `failure`.
+- A refused app call is written to the audit log: action `execute`, resource `app`, result
+  `failure`. So is a tool call inside such a run, or over MCP, that is outside the tools the run
+  offered, or whose installation was disabled or removed after the tools were listed (resource
+  `tool`). A grant withdrawn from a group applies from the next MCP session or app run on, not to
+  one that is already running.
+- An app called as a tool from a chat now works within the scopes you picked in that chat, where it
+  uses the same integration: it searches only there, and a scope you may not use in the called app
+  refuses the call. Your timezone and your scope choices no longer reach its prompt as text.
 - Signed-in users, personal API keys and OAuth clients keep the access their groups and clients
-  give them; nothing changes for them.
+  give them.
+
+## Cancelling an MCP Tool Call Stops It
+
+When an MCP client cancels a `tools/call`, the integration tool, app or workflow it started now
+stops as well, as it does when you press Stop in a chat. Before, it went on running on the server
+until it finished.

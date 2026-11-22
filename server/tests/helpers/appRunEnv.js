@@ -13,6 +13,7 @@
  *
  * @module tests/helpers/appRunEnv
  */
+import { mock } from 'node:test';
 import { startGoldenEnv } from '../golden/harness.js';
 import { scriptedModel } from './scriptedModel.js';
 import { fixtureInstallation, fixtureTool } from './integrationToolFixture.js';
@@ -42,6 +43,60 @@ export const app = (id, extra = {}) => ({
 /** The usage of one scripted model turn. */
 export const USAGE = { prompt_tokens: 11, completion_tokens: 7, total_tokens: 18 };
 
+/** A one-pixel PNG, base64. */
+export const PNG_B64 =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+
+/** The PDF the file tool of {@link offerFileTool} returns. */
+export const REPORT_PDF = Buffer.from('%PDF-1.4 a fake report');
+
+/** A tool of a connected MCP server that hands back a PDF and a picture. */
+export const FILE_TOOL = Object.freeze({
+  id: 'render_report',
+  name: 'Render report',
+  description: 'Renders the report as a PDF with a chart',
+  parameters: { type: 'object', properties: {} },
+  _mcp: { serverId: 'reports', originalName: 'render' }
+});
+
+/**
+ * Offer {@link FILE_TOOL} to every app the run service runs, for one test:
+ * the app's run prepares as the product prepares it, and the tool joins its
+ * tools; calling it returns the MCP content blocks a server sends (text, an
+ * embedded PDF `resource`, an `image`). Nothing else of the run is replaced.
+ *
+ * @param {import('node:test').TestContext} t
+ */
+export async function offerFileTool(t) {
+  const { runService } = await import('../../services/run/RunService.js');
+  const svc = runService.chatService;
+  const prepare = svc.prepareChatRequest.bind(svc);
+  mock.method(svc, 'prepareChatRequest', async request => {
+    const prepared = await prepare(request);
+    if (prepared.success) prepared.data.tools = [...prepared.data.tools, FILE_TOOL];
+    return prepared;
+  });
+  const runTool = svc.toolRunner.runTool;
+  mock.method(svc.toolRunner, 'runTool', (toolId, ...rest) =>
+    toolId === FILE_TOOL.id
+      ? [
+          { type: 'text', text: 'Rendered the report.' },
+          {
+            type: 'resource',
+            resource: {
+              uri: 'file:///reports/Report.pdf',
+              name: 'Report.pdf',
+              mimeType: 'application/pdf',
+              blob: REPORT_PDF.toString('base64')
+            }
+          },
+          { type: 'image', data: PNG_B64, mimeType: 'image/png' }
+        ]
+      : runTool(toolId, ...rest)
+  );
+  t.after(() => mock.restoreAll());
+}
+
 /** What the tools of the environment did, by tool. */
 export const toolRuns = { lookup: [], dangerous: [], secret: [] };
 
@@ -51,9 +106,10 @@ export const toolRuns = { lookup: [], dangerous: [], secret: [] };
  * Apps: `concierge` (lists `specialist`, `restricted`, itself, `missing` and
  * `disabled` as apps), `specialist` (a variable `tone`; the tools `lookup`,
  * `dangerous`, which needs approval, and `ask_user`; lists `helper`), `helper`,
- * `restricted` (no group grants it), `disabled`.
+ * `translator` (a prompt template that renders the variable `tone`, in English
+ * and German), `restricted` (no group grants it), `disabled`.
  *
- * Groups: `users` (the three apps, the integrations `lookup`, `dangerous`,
+ * Groups: `users` (the four apps, the integrations `lookup`, `dangerous`,
  * `ihub`), `everything` (every app, every integration), `no-secret` (like
  * `users`, without the integration `secret`).
  *
@@ -83,6 +139,13 @@ export async function startAppRunEnv({ features = {}, platform = {}, workflows =
         integrations: { lookup: {}, dangerous: {}, secret: {}, ihub: { actions: ['ask_user'] } }
       }),
       app('helper'),
+      app('translator', {
+        variables: [{ name: 'tone', type: 'string', label: { en: 'Tone of the answer' } }],
+        prompt: {
+          en: 'Tone: {{tone}}. Text: {{content}}',
+          de: 'Ton: {{tone}}. Text: {{content}}'
+        }
+      }),
       app('restricted'),
       app('disabled', { enabled: false })
     ],
@@ -91,7 +154,7 @@ export async function startAppRunEnv({ features = {}, platform = {}, workflows =
         users: {
           id: 'users',
           permissions: {
-            apps: ['concierge', 'specialist', 'helper'],
+            apps: ['concierge', 'specialist', 'helper', 'translator'],
             models: ['*'],
             prompts: [],
             integrations: ['lookup', 'dangerous', 'secret', 'ihub']
@@ -100,7 +163,7 @@ export async function startAppRunEnv({ features = {}, platform = {}, workflows =
         'no-secret': {
           id: 'no-secret',
           permissions: {
-            apps: ['concierge', 'specialist', 'helper'],
+            apps: ['concierge', 'specialist', 'helper', 'translator'],
             models: ['*'],
             prompts: [],
             integrations: ['lookup', 'dangerous', 'ihub']
@@ -179,6 +242,29 @@ export async function startAppRunEnv({ features = {}, platform = {}, workflows =
     /** A signed-in user of these groups, with resolved permissions. */
     user(id, groups = ['users']) {
       return env.principal({ id, name: id, groups });
+    },
+    /**
+     * Change the installed integrations from here on, as every reader sees
+     * them (the raw cache and `installedIntegrationService`); undone by
+     * `mock.restoreAll()`.
+     *
+     * @param {(installed: Object[]) => Object[]} change - the new list from the current one
+     */
+    changeInstallations(change) {
+      const original = env.configCache.get.bind(env.configCache);
+      mock.method(env.configCache, 'get', key => {
+        const entry = original(key);
+        if (key !== 'config/integrations.json' || !entry?.data) return entry;
+        return { ...entry, data: { ...entry.data, installed: change(entry.data.installed) } };
+      });
+    },
+    /** Disable one installation from here on; undone by `mock.restoreAll()`. */
+    disableInstallation(instanceId) {
+      env.changeInstallations(installed =>
+        installed.map(instance =>
+          instance.id === instanceId ? { ...instance, enabled: false } : instance
+        )
+      );
     },
     /** Forget what the tools did and what the ledger holds. */
     reset() {

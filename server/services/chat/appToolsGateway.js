@@ -40,10 +40,11 @@ import logger from '../../utils/logger.js';
 import { getLocalizedString } from '../../utils/localize.js';
 import { canUserAccessResource } from '../../utils/authorization.js';
 import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
-import { appRunSpec, runService } from '../run/RunService.js';
+import { appRunSpec, runService, RUN_REFUSAL_CODES } from '../run/RunService.js';
 import { HeadlessHost } from '../run/hosts/HeadlessHost.js';
-import { childRunContext, MAX_RUN_DEPTH } from '../run/RunContext.js';
+import { childRunContext, MAX_RUN_DEPTH, RUN_CONTEXT_ERROR_CODES } from '../run/RunContext.js';
 import { resolveRequestPrincipal } from '../run/principalResolver.js';
+import { auditRefusal } from '../run/runAudit.js';
 
 /**
  * Prefix of the tool an app becomes when another app may call it
@@ -276,12 +277,31 @@ export async function invokeAppTool({
   // Enforce the calling user's app permissions — invoking an app through a
   // tool must not grant more access than opening it directly would, and a
   // caller without resolved permissions gets nothing.
+  // Both refusals are written to the audit log: no run starts, so the run
+  // service never sees them.
+  const refuse = (code, message) => {
+    auditRefusal({
+      principal: user,
+      resource: 'app',
+      resourceId: app.id,
+      code,
+      origin: 'subagent',
+      parentRunId: executionId || chatId,
+      summary: `Refused to run app ${app.id}: ${message}`
+    });
+    return { error: true, message };
+  };
   if (!isAppInvocationAllowed(user, app.id)) {
-    return { error: true, message: `You do not have permission to access app ${app.id}` };
+    return refuse(
+      user?.permissions
+        ? RUN_REFUSAL_CODES.APP_NOT_PERMITTED
+        : RUN_CONTEXT_ERROR_CODES.PRINCIPAL_UNRESOLVED,
+      `You do not have permission to access app ${app.id}`
+    );
   }
 
   const resolved = resolveRequestPrincipal(user, { origin: parentContext?.origin ?? 'person' });
-  if (!resolved.ok) return { error: true, message: resolved.message };
+  if (!resolved.ok) return refuse(resolved.code, resolved.message);
 
   const messageBody = args.message || JSON.stringify(args);
   const messages = [{ role: 'user', content: messageBody }];

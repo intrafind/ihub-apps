@@ -47,13 +47,18 @@ jest.unstable_mockModule('../services/integrations/integrationTools.js', () => (
   userMayUse: () => true
 }));
 // The Jira installation's approval policy gates its `comment` action (#2945).
+const installation = id => ({
+  id,
+  enabled: true,
+  ...(id === 'jira' ? { approval: { default: 'never', actions: { comment: 'always' } } } : {})
+});
 jest.unstable_mockModule('../services/integrations/installedRefs.js', () => ({
-  installedIntegrationById: id => ({
-    id,
-    enabled: true,
-    ...(id === 'jira' ? { approval: { default: 'never', actions: { comment: 'always' } } } : {})
-  }),
+  installedIntegrationById: installation,
   installedIntegrationRefs: () => []
+}));
+// The tool runner's grant re-check reads the installation through the service.
+jest.unstable_mockModule('../services/integrations/InstalledIntegrationService.js', () => ({
+  default: { get: installation, list: () => [] }
 }));
 
 const { buildMcpServer } = await import('../services/mcp/McpServerService.js');

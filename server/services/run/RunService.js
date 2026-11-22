@@ -186,6 +186,7 @@ export class RunService {
       code,
       origin: spec?.caller,
       runId,
+      parentRunId: isRunContext(spec?.context) ? spec.context.parentRunId : null,
       summary: `Refused to run app ${spec?.appId || '(none)'}: ${message}`
     });
     const error = { code, message };
@@ -198,7 +199,8 @@ export class RunService {
    * Run one piece of model work.
    *
    * @param {Readonly<Object>} spec - built by {@link appRunSpec}
-   * @param {import('./hosts/HeadlessHost.js').HeadlessHost} host - who receives the run
+   * @param {{interactions?: string, seams?: Function, failed?: Function, completed?: Function}|null} host -
+   *   who receives the run (`hosts/HeadlessHost.js`); anything else is refused
    * @returns {Promise<Object>} what the host makes of the run (`HeadlessHost.completed` /
    *   `failed`); a refusal is a failed run with `error.code` from {@link RUN_REFUSAL_CODES}
    */
@@ -307,7 +309,8 @@ export class RunService {
         agentLoop: svc.agentLoop,
         language,
         principal
-      })
+      }),
+      { runId }
     );
 
     await svc._startLedgerRun({

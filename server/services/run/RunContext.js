@@ -17,6 +17,7 @@
  * | `agentId`, `agentVersion` | the agent the run belongs to; `null` until agents exist |
  * | `origin` | what started the run: `person` (a request of a person or of a program acting for one, inbound `/v1`, MCP and A2A included) or `schedule` |
  * | `unattended` | no person can answer: every origin other than `person`, and every principal other than `user` |
+ * | `runId` | the run's own id, set by the run service when it starts the run (`withToolGrant`); `null` before |
  * | `parentRunId`, `depth` | the run that started this one (an app called as a tool) and how deep it is nested; 0 for a top-level run |
  * | `toolGrant` | the tool ids the run may call; the tool runner refuses any other (`null`: none) |
  * | `integrationGrant` | the installation ids the run may reach, or `null` for what the principal's groups grant |
@@ -135,6 +136,7 @@ const idList = (value, field) => {
  * @param {{kind: string, id: string}} [params.actor]
  * @param {string|null} [params.agentId]
  * @param {string|number|null} [params.agentVersion]
+ * @param {string|null} [params.runId] - the run's own id; the run service sets it
  * @param {string|null} [params.parentRunId]
  * @param {number} [params.depth=0]
  * @param {Iterable<string>|null} [params.toolGrant]
@@ -152,6 +154,7 @@ export function createRunContext({
   actor,
   agentId = null,
   agentVersion = null,
+  runId = null,
   parentRunId = null,
   depth = 0,
   toolGrant = null,
@@ -160,7 +163,7 @@ export function createRunContext({
   budget = {},
   taint = false
 } = {}) {
-  if (!principal || typeof principal !== 'object' || !principal.permissions) {
+  if (!principal?.permissions || typeof principal.permissions !== 'object') {
     throw new RunContextError(
       RUN_CONTEXT_ERROR_CODES.PRINCIPAL_UNRESOLVED,
       'A run needs a principal with resolved permissions'
@@ -192,6 +195,7 @@ export function createRunContext({
     agentVersion,
     origin,
     unattended,
+    runId: runId ? String(runId) : null,
     parentRunId: parentRunId ? String(parentRunId) : null,
     depth,
     toolGrant: idList(toolGrant, 'toolGrant'),
@@ -222,17 +226,23 @@ function fieldsOf(context) {
 }
 
 /**
- * The same context with another tool grant.
+ * The same context with another tool grant and, when given, the run's own id.
  *
  * @param {Object} context - a run context
  * @param {Iterable<string>} toolIds
+ * @param {Object} [options]
+ * @param {string} [options.runId] - the id of the run the context belongs to
  * @returns {Readonly<Object>}
  */
-export function withToolGrant(context, toolIds) {
+export function withToolGrant(context, toolIds, { runId } = {}) {
   if (!isRunContext(context)) {
     throw new RunContextError(RUN_CONTEXT_ERROR_CODES.INVALID, 'Not a run context');
   }
-  return createRunContext({ ...fieldsOf(context), toolGrant: toolIds });
+  return createRunContext({
+    ...fieldsOf(context),
+    toolGrant: toolIds,
+    runId: runId ?? context.runId
+  });
 }
 
 /**

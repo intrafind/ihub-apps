@@ -421,7 +421,7 @@ run it with a headless host (`server/services/run/hosts/HeadlessHost.js`).
 
 | Part | File | What it does |
 | --- | --- | --- |
-| Run context | `server/services/run/RunContext.js` | A frozen record of who the run acts as and what it may use: `principal`, `principalType` (`user`, `client`, `service`), `actor`, `origin` (`person`, `schedule`), `unattended`, `parentRunId`, `depth`, `toolGrant`, `integrationGrant`, `approvalRoute`, `budget`, `taint`. A change is a new context, never an edit |
+| Run context | `server/services/run/RunContext.js` | A frozen record of who the run acts as and what it may use: `principal`, `principalType` (`user`, `client`, `service`), `actor`, `origin` (`person`, `schedule`), `unattended`, `runId` (set when the run starts), `parentRunId`, `depth`, `toolGrant`, `integrationGrant`, `approvalRoute`, `budget`, `taint`. A change is a new context, never an edit |
 | Principal resolver | `server/services/run/principalResolver.js` | Resolves the principal from a request (`req.user`), the owner of a scheduled task or a service account an admin chose. A principal without resolved permissions is refused. Every origin other than `person`, and every service account, loses the admin flags |
 | Seam profiles | `server/services/run/seamProfiles.js` | The ordered seams of a run, the approval seam first |
 | Headless host | `server/services/run/hosts/HeadlessHost.js` | Collects the tool calls, files and pictures of the run and streams its text to a caller that wants it (A2A) |
@@ -430,7 +430,8 @@ run it with a headless host (`server/services/run/hosts/HeadlessHost.js`).
 Before the model is called the service refuses a spec without a run context
 it built (no context can be built for a principal without resolved
 permissions) and an app the principal may not open; each refusal is written to
-the audit log. The run is granted exactly the tools it offers its model, and
+the audit log, and so is the refusal of a caller that never reaches the service
+(the app-as-tool gateway, the MCP and A2A app invoker). The run is granted exactly the tools it offers its model, and
 the tool runner re-checks that grant on every call (see
 [Agent Loop, Tool runner](agent-loop.md#tool-runner)). The run is a `subagent`
 segment on `AgentLoop` with a wall-clock deadline (180 s by default); nobody
