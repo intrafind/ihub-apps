@@ -14,8 +14,11 @@ script in the context of the signed-in user.
 
 The MCP gateway (`/mcp`), the A2A routes (`/a2a`), the MCP OAuth callback and the OAuth client
 metadata document had no request limit.
-They now count against `rateLimit.publicApi`, per signed-in user or OAuth client, so many people
-behind one proxy or one hosted MCP client do not share a bucket.
+They now count against `rateLimit.publicApi`. A signed-in caller counts per user or OAuth client,
+so many people behind one proxy or one hosted MCP client do not share a bucket.
+
+- Anonymous requests count per address. The OAuth client metadata document, which authorization
+  servers fetch without credentials, and the OAuth callback share one per-address budget.
 
 - Clients that exceed the limit receive `429 Too Many Requests`.
 - Raise `rateLimit.publicApi` in `platform.json` if an automation legitimately needs more.
