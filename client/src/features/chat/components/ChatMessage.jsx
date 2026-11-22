@@ -26,6 +26,7 @@ import { findTrailingSourceList, resolveCitations } from '../../../../../shared/
 import SearchStatusIndicator from './SearchStatusIndicator';
 import SearchSummary from './SearchSummary';
 import ToolActivity from './ToolActivity';
+import AppliedMessages from './AppliedMessages';
 import { isActivityLineBusy } from '../activityHeadline.js';
 import { settleActivity } from '../settleActivity.js';
 import { withStoredSkills } from '../../../../../shared/run/toolActivity.js';
@@ -1031,6 +1032,11 @@ function ChatMessage({
             like the thoughts, so it stays put while the answer streams. */}
         {!isUser && toolActivity && (
           <ToolActivity activity={toolActivity} loading={!!message.loading} />
+        )}
+        {/* Messages the person sent while the answer was written, read at a
+            step: below the activity, above the answer, live and reopened. */}
+        {!isUser && message.appliedMessages?.length > 0 && (
+          <AppliedMessages items={message.appliedMessages} />
         )}
         {/* Interactive MCP App views the answer's tool calls rendered. */}
         {!isUser && message.mcpApps?.length > 0 && (

@@ -150,6 +150,69 @@ export function transformStoredMessage(msg) {
 }
 
 /**
+ * A stored message the answer of its run read at a step: `{ role: 'user',
+ * steer: true, runId, appliedAtStep, steerId, activityKind }` (see
+ * docs/chat-persistence.md, "Messages for the running answer").
+ *
+ * @param {Object} msg - Stored message.
+ * @returns {boolean}
+ */
+function isAppliedMessage(msg) {
+  return msg?.role === 'user' && msg.steer === true && typeof msg.runId === 'string';
+}
+
+/**
+ * A stored transcript as the chat UI renders it ({@link transformStoredMessage}
+ * per message), with the messages the person sent while an answer was written
+ * folded into that answer.
+ *
+ * The store keeps such a message as a user message of the answer's run, between
+ * its question and its answer. The chat draws it inside the answer, where a live
+ * turn draws it from `steer/applied` (`appliedMessages`, `runToMessage.js`):
+ * `{ id, text, step, activityKind }`, in step order, the activity item as the
+ * server stored it. A message whose answer is not stored yet (the answer still
+ * runs) is left out: the replay of the running answer draws it, and the
+ * transcript read once the answer ends has its answer.
+ *
+ * @param {Object[]} serverMessages - Stored messages, oldest first.
+ * @returns {Object[]} Chat messages.
+ */
+export function transformStoredMessages(serverMessages) {
+  const list = Array.isArray(serverMessages) ? serverMessages : [];
+  const appliedByRun = new Map();
+  list.forEach((msg, index) => {
+    if (!isAppliedMessage(msg)) return;
+    const entries = appliedByRun.get(msg.runId) || [];
+    entries.push({
+      entry: {
+        id: typeof msg.steerId === 'string' ? msg.steerId : msg.id,
+        text: typeof msg.content === 'string' ? msg.content : '',
+        step: Number.isInteger(msg.appliedAtStep) ? msg.appliedAtStep : null,
+        activityKind: typeof msg.activityKind === 'string' ? msg.activityKind : null
+      },
+      index
+    });
+    appliedByRun.set(msg.runId, entries);
+  });
+  const stepOf = item => (Number.isInteger(item.entry.step) ? item.entry.step : Infinity);
+  const messages = [];
+  for (const msg of list) {
+    if (isAppliedMessage(msg)) continue;
+    const message = transformStoredMessage(msg);
+    const applied = message.role === 'assistant' ? appliedByRun.get(msg.runId) : null;
+    if (applied?.length) {
+      message.appliedMessages = [...applied]
+        .sort((a, b) => stepOf(a) - stepOf(b) || a.index - b.index)
+        .map(item => item.entry);
+      // One answer per run takes them: a run continued after a pause stores more.
+      appliedByRun.delete(msg.runId);
+    }
+    messages.push(message);
+  }
+  return messages;
+}
+
+/**
  * Custom hook for managing chat messages.
  *
  * The server owns every transcript: a chat is stored whether it is kept in the
@@ -496,16 +559,9 @@ function useChatMessages(chatId = 'default', { hydrates = true } = {}) {
     setHydrated(true);
     if (!serverMessages || serverMessages.length === 0) return null;
 
-    let lastAssistantId = null;
-    const transformed = serverMessages.map(msg => {
-      const message = transformStoredMessage(msg);
-
-      if (message.role === 'assistant') {
-        lastAssistantId = message.id;
-      }
-
-      return message;
-    });
+    const transformed = transformStoredMessages(serverMessages);
+    const lastAssistantId =
+      [...transformed].reverse().find(message => message.role === 'assistant')?.id ?? null;
 
     setMessages(prev => {
       if (!preserveLocal || prev.length === 0) return transformed;

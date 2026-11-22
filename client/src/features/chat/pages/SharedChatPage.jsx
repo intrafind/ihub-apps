@@ -10,7 +10,7 @@ import ChatMessageList from '../components/ChatMessageList';
 import { AnnouncerProvider } from '../../../shared/announce/AnnouncerProvider';
 import { ArtifactFetchContext } from '../contexts/ArtifactFetchContext';
 import { ArtifactProvenanceFetchContext } from '../contexts/ArtifactProvenanceFetchContext';
-import { transformStoredMessage } from '../hooks/useChatMessages';
+import { transformStoredMessages } from '../hooks/useChatMessages';
 import {
   downloadSharedArtifactsZip,
   fetchSharedArtifact,
@@ -36,7 +36,7 @@ const DEFAULT_APP_ICON = 'chat-bubble';
 
 /**
  * The snapshot messages as the chat bubbles render them: the mapping a reopened
- * chat uses. A user turn's attachments come out as the same views, each also
+ * chat uses (a message sent while an answer was written is drawn inside it). A user turn's attachments come out as the same views, each also
  * saying whether this viewer may open the file (`shared`), so the share and the
  * owner's chat show a file the same way.
  *
@@ -44,7 +44,7 @@ const DEFAULT_APP_ICON = 'chat-bubble';
  * @returns {Object[]}
  */
 function toViewerMessages(messages) {
-  return (messages || []).map(stored => transformStoredMessage(stored));
+  return transformStoredMessages(messages);
 }
 
 function formatBytes(bytes) {
