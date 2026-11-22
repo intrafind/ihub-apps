@@ -539,10 +539,15 @@ function App() {
           {/* Opening a stored chat. Same element and guards as the bare app
               route — AppChat reads `:chatId` and hydrates it from the durable
               chat store instead of the id this tab holds in sessionStorage.
+              It must stay the same tree as the bare route (UserAppsRoute around
+              the chat), or the first message of a chat remounts it mid-turn.
               `apps` is already in both KNOWN_ROUTES lists and only the
               top-level segment matters for base-path detection, so neither
               list changes. */}
-          <Route path="apps/:appId/c/:chatId" element={<SafeAppRouterWrapper />} />
+          <Route
+            path="apps/:appId/c/:chatId"
+            element={<UserAppsRoute page="chat" fallback={<SafeAppRouterWrapper />} />}
+          />
           <Route
             path="apps/:appId/canvas"
             element={

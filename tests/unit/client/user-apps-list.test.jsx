@@ -592,6 +592,44 @@ describe('the routes of personal apps', () => {
     expect(mockApi.fetchUserAppsConfig).not.toHaveBeenCalled();
   });
 
+  test('the chat stays mounted when its first message moves the address to /apps/<id>/c/<chat>', async () => {
+    // A second mount would drop the turn that is running at that moment.
+    const { useNavigate } = require('react-router-dom');
+    let chatMounts = 0;
+    const NavigatingChat = () => {
+      const navigate = useNavigate();
+      const [mountNumber] = require('react').useState(() => (chatMounts += 1));
+      return (
+        <button type="button" onClick={() => navigate('/apps/helper/c/chat-1')}>
+          chat mount {mountNumber}
+        </button>
+      );
+    };
+    render(
+      <MemoryRouter initialEntries={['/apps/helper']}>
+        <Routes>
+          <Route
+            path="apps/:appId"
+            element={
+              <UserAppsRoute page="create" component={Create} fallback={<NavigatingChat />} />
+            }
+          />
+          <Route
+            path="apps/:appId/c/:chatId"
+            element={<UserAppsRoute page="chat" fallback={<NavigatingChat />} />}
+          />
+        </Routes>
+        <Where />
+      </MemoryRouter>
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'chat mount 1' }));
+    await waitFor(() =>
+      expect(screen.getByTestId('location')).toHaveTextContent('/apps/helper/c/chat-1')
+    );
+    expect(screen.getByRole('button', { name: 'chat mount 1' })).toBeInTheDocument();
+    expect(chatMounts).toBe(1);
+  });
+
   test('/apps/<id>/edit is the editor with the feature on and the 404 page with it off', async () => {
     const on = renderAt(`/apps/${uap(1)}/edit`);
     expect(await screen.findByTestId('edit-page')).toBeInTheDocument();
