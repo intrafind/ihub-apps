@@ -146,16 +146,22 @@ function UserAppEditPage() {
     forms.form
   );
 
-  /** Takes a new answer of the server. Unsaved input stays unless `keepInput` is false. */
+  /**
+   * Takes a new answer of the server. Unsaved input stays when `keepInput` is
+   * true, or when the form is no longer `sentForm` (typed while a save ran).
+   */
   const adopt = useCallback(
-    (next, { keepInput = false } = {}) => {
+    (next, { keepInput = false, sentForm } = {}) => {
       // The reduced body (switched off, shares suspended) has no content to edit.
       const full = isPlainName(next?.system);
       const saved = full ? formFromApp(next) : null;
       setLoaded({ appId, status: 'ready', app: next, error: null });
       setForms(held => ({
         saved,
-        form: keepInput && held.form && saved ? held.form : saved
+        form:
+          (keepInput || (sentForm && held.form !== sentForm)) && held.form && saved
+            ? held.form
+            : saved
       }));
     },
     [appId]
@@ -319,7 +325,8 @@ function UserAppEditPage() {
     setSaveError(null);
     try {
       const next = await updateUserApp(appId, patch, { revision: app.revision });
-      adopt(next);
+      // Input typed while the save ran stays in the form, as unsaved changes.
+      adopt(next, { sentForm: form });
       invalidateAppsCache();
       setConflict(false);
       setTestRun(run => run + 1);

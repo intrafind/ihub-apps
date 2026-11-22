@@ -477,6 +477,31 @@ describe('what a publish writes', () => {
     );
   });
 
+  it('a record that cannot be stored after the write leaves no company app behind', async () => {
+    const record = await api.createApp('anna');
+    const repo = api.repo();
+    const original = repo.mutate.bind(repo);
+    let calls = 0;
+    // The final write of the record fails for a reason that is no refusal (a disk error).
+    repo.mutate = async (...args) => {
+      calls += 1;
+      if (calls === 2) throw Object.assign(new Error('EIO: i/o error'), { code: 'EIO' });
+      return original(...args);
+    };
+    try {
+      const res = await publish('anna', record);
+      assert.equal(res.status, 500, res.text);
+    } finally {
+      delete repo.mutate;
+    }
+    assert.equal(await appFile(SLUG), null);
+    assert.equal(
+      (configCache.getApps(true).data || []).some(app => app.id === SLUG),
+      false
+    );
+    assert.equal((await repo.get(record.id)).state, 'active');
+  });
+
   it('a refused publish takes its mark off the record', async () => {
     const record = await api.createApp('anna');
     const repo = api.repo();

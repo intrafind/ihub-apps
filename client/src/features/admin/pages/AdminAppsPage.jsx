@@ -329,15 +329,13 @@ function AdminAppsPage() {
     });
   };
 
+  // The search as it filters: a term of only spaces does not narrow the list.
+  const query = searchTerm.trim().toLowerCase();
   const filteredApps = apps.filter(app => {
     const matchesSearch =
-      getLocalizedContent(app.name, currentLanguage)
-        .toLowerCase()
-        .includes(searchTerm.toLowerCase()) ||
-      getLocalizedContent(app.description, currentLanguage)
-        .toLowerCase()
-        .includes(searchTerm.toLowerCase()) ||
-      app.id.toLowerCase().includes(searchTerm.toLowerCase());
+      getLocalizedContent(app.name, currentLanguage).toLowerCase().includes(query) ||
+      getLocalizedContent(app.description, currentLanguage).toLowerCase().includes(query) ||
+      app.id.toLowerCase().includes(query);
 
     const matchesFilter =
       filterEnabled === 'all' ||
@@ -351,8 +349,7 @@ function AdminAppsPage() {
   });
 
   // Any narrowed view: the bulk actions then cover the rows shown and say so.
-  const isFiltered =
-    searchTerm.trim() !== '' || filterEnabled !== 'all' || selectedCategory !== 'all';
+  const isFiltered = query !== '' || filterEnabled !== 'all' || selectedCategory !== 'all';
 
   /**
    * The label of a bulk action: "Publish all", or "Publish shown" while a

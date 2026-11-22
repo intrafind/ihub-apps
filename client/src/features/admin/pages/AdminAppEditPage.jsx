@@ -230,7 +230,11 @@ function AdminAppEditPage() {
             color={app?.color}
             published={published}
             testOpen={testOpen}
-            onToggleTest={() => setTestOpen(open => !open)}
+            onToggleTest={() => {
+              // Opened from the header, the panel does not take the focus.
+              setTestFocus(0);
+              setTestOpen(open => !open);
+            }}
             onPublish={publishing.askPublish}
             onUnpublish={publishing.askUnpublish}
             onOpenApp={() => openApp(appId)}
@@ -313,7 +317,10 @@ function AdminAppEditPage() {
           enabled={published}
           isDirty={isDirty}
           reloadKey={testRun}
-          onClose={() => setTestOpen(false)}
+          onClose={() => {
+            setTestOpen(false);
+            setTestFocus(0);
+          }}
           noModel={noModel}
           modelSetupHref={isFullAdmin ? MODELS_PATH : null}
           onOpenAccess={() => openGroup('access')}

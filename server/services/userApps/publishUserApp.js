@@ -540,12 +540,14 @@ async function writeCompanyApp(
     }
   } catch (error) {
     // The personal app changed, changed hands or was deleted while the file
-    // was written: the copy is not what anyone confirmed. Take the file this
+    // was written, or the record could not be stored: the copy is not what
+    // anyone confirmed. Take the file this
     // call wrote away again, so no app stays behind that no record points to,
     // and take the mark off the record, so a later publish does not pick the
     // file up again.
-    const refused = ['ETAG_MISMATCH', 'USER_APP_ACCESS_CHANGED', 'NOT_FOUND'].includes(error?.code);
-    if (wrote && !stored && refused) {
+    // Whatever the error: the record does not point at the file unless a
+    // parallel call of the same publish stored it, which the check below sees.
+    if (wrote && !stored) {
       try {
         // Unless a parallel call of the same publish finished with this file.
         const current = await repo.get(record.id);

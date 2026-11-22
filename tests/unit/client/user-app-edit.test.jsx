@@ -548,6 +548,36 @@ describe('saving', () => {
     );
   });
 
+  test('input typed while a save runs stays in the form as an unsaved change', async () => {
+    await renderEditor();
+    await typeName('Job ads');
+    let answer;
+    mockApi.updateUserApp.mockReturnValue(
+      new Promise(resolve => {
+        answer = resolve;
+      })
+    );
+    await click(saveButton());
+    // The author keeps typing before the server answers.
+    await typeName('Job ads in Munich');
+    await act(async () => {
+      answer(userApp({ name: { en: 'Job ads' }, revision: 8 }));
+    });
+
+    expect(nameField()).toHaveValue('Job ads in Munich');
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Job ads');
+    // Against the stored 'Job ads', the newer input is the next change to save.
+    mockApi.updateUserApp.mockResolvedValue(
+      userApp({ name: { en: 'Job ads in Munich' }, revision: 9 })
+    );
+    await click(saveButton());
+    expect(mockApi.updateUserApp).toHaveBeenLastCalledWith(
+      APP_ID,
+      { name: { en: 'Job ads in Munich' } },
+      { revision: 8 }
+    );
+  });
+
   test('409 ETAG_MISMATCH shows the conflict line and keeps the input', async () => {
     await renderEditor();
     await typeName('My own wording');
