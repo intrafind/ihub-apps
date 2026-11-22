@@ -9,7 +9,8 @@
  * another app to answer a message routes through here:
  *
  *  - **Chat apps** (`app.apps: [...]`): `getToolsForApp()` surfaces the listed
- *    apps as synthetic `app__<appId>` tools; `runTool()` dispatches them to
+ *    apps as synthetic `app__<appId>` tools; the tool runner
+ *    (`services/run/ToolRunner.js`) dispatches them to
  *    `invokeAppTool()` (the "concierge" pattern — a bot delegating to
  *    specialist bots).
  *  - **Agent workflow nodes** (`node.config.apps`): PromptNodeExecutor
@@ -194,7 +195,8 @@ export function stripAppToolsForAgent(tools, user) {
 }
 
 /**
- * Invoke a synthetic app tool. Called by `runTool()` for chat apps and by
+ * Invoke a synthetic app tool. Called by the tool runner
+ * (`services/run/ToolRunner.js`) for chat apps and by
  * PromptNodeExecutor.executeToolCall for agent runs when the tool id matches
  * `app__<appId>`.
  *
