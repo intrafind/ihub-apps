@@ -9,8 +9,9 @@
     "de": "Die in diesen Chat hochgeladenen Dateien auflisten und lesen. Wird automatisch hinzugefügt, wenn der Chat Dateien hat."
   },
   "script": "chatFiles.js",
+  "sideEffect": "read",
+  "untrustedInput": true,
   "enabled": true,
-  "readOnly": true,
   "functions": {
     "list": {
       "name": {

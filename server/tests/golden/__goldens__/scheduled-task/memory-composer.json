@@ -370,7 +370,8 @@
               "properties": {},
               "type": "object"
             },
-            "script": "agentTools.js"
+            "script": "agentTools.js",
+            "sideEffect": "read"
           },
           {
             "description": "Append or replace the contents of your long-term memory file. Use mode='append' for adding notes, 'replace' for full rewrite. Provide expectedVersion to avoid clobbering concurrent writes.",
@@ -406,7 +407,8 @@
               ],
               "type": "object"
             },
-            "script": "agentTools.js"
+            "script": "agentTools.js",
+            "sideEffect": "write"
           },
           {
             "_integration": {
@@ -483,7 +485,7 @@
             "type": "integration"
           }
         ],
-        "toolSchemasHash": "813e32720dcd61dc20fe61804684daed3b4d2ac399376517893fefae5a11fd13"
+        "toolSchemasHash": "576d543fda3174e16e2269220e2f9fda506144f46aad900516e0a902dd8e1c54"
       },
       "runId": "chat-<id:3>",
       "type": "request/header"

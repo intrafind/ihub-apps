@@ -7,6 +7,7 @@
     "en": "Read your long-term memory file. Returns the full body and current version."
   },
   "script": "agentTools.js",
+  "sideEffect": "read",
   "method": "readMemory",
   "isAgentTool": true,
   "parameters": {

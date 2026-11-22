@@ -7,6 +7,7 @@
     "en": "List tasks currently on the queue. Filter by status / limit."
   },
   "script": "agentTools.js",
+  "sideEffect": "read",
   "method": "listTasks",
   "isAgentTool": true,
   "parameters": {

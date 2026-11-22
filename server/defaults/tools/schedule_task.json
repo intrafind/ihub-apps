@@ -9,6 +9,7 @@
     "de": "Eine geplante Aufgabe vorschlagen: ein Prompt, der von selbst als der Nutzer läuft (einmalig, im Intervall, täglich, werktags, wöchentlich, monatlich, per Cron oder nur manuell). Jeder Lauf ist ein eigener Chat. Es wird nichts gespeichert: Der Nutzer prüft die Aufgabe auf einer Bestätigungskarte und speichert sie dort. Verwenden, wenn der Nutzer etwas später oder regelmäßig erledigt haben möchte, z. B. „werktags um 8:00 meine Jira-Tickets zusammenfassen“."
   },
   "script": "scheduledTaskTools.js",
+  "sideEffect": "write",
   "method": "scheduleTask",
   "parameters": {
     "type": "object",

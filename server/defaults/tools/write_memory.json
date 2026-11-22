@@ -7,6 +7,7 @@
     "en": "Append or replace the contents of your long-term memory file. Use mode='append' for adding notes, 'replace' for full rewrite. Provide expectedVersion to avoid clobbering concurrent writes."
   },
   "script": "agentTools.js",
+  "sideEffect": "write",
   "method": "writeMemory",
   "isAgentTool": true,
   "parameters": {

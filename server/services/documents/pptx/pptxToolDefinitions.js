@@ -11,6 +11,8 @@ import { filenameParameter, settingsParameter, textEditsParameter } from '../edi
 
 export const RESTYLE_PPTX_TOOL = {
   id: 'restyle_pptx',
+  // Creates or changes a file of the chat (`utils/toolApproval`).
+  sideEffect: 'write',
   outputKind: 'presentation',
   name: { en: 'Restyle presentation', de: 'Präsentation umgestalten' },
   description: {
@@ -38,6 +40,8 @@ export const RESTYLE_PPTX_TOOL = {
 
 export const CREATE_PPTX_TOOL = {
   id: 'create_pptx',
+  // Creates or changes a file of the chat (`utils/toolApproval`).
+  sideEffect: 'write',
   outputKind: 'presentation',
   // The company template's text slots and what each slide type has are added to the description.
   templateGuide: 'pptx',
@@ -102,6 +106,8 @@ export const CREATE_PPTX_TOOL = {
 
 export const EDIT_PPTX_TOOL = {
   id: 'edit_pptx',
+  // Creates or changes a file of the chat (`utils/toolApproval`).
+  sideEffect: 'write',
   name: { en: 'Edit presentation', de: 'Präsentation bearbeiten' },
   description: {
     en: 'Change a presentation this chat created with create_pptx instead of building it again: slide operations ("changes": replace, update, insert, delete or move a slide), exact text replacements in its slide texts ("edits"), new settings ("set": title, footer, slideNumbers, aspectRatio, …), or a combination. Slide numbers are 1-based and refer to the deck as the operations before them left it. All changes apply or none. The deck is built again under the same name, on the same template. If you do not have its slides, read it with chat_artifacts_read first. Use create_pptx only for a new deck or a rewrite.',

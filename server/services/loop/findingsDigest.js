@@ -1272,6 +1272,8 @@ export function recallToolDefinition(language = 'en') {
       'the previous page names to read on. Use it instead of running the same call again.',
     isInternalTool: true,
     readOnly: true,
+    // Reads a result this run already holds; changes nothing.
+    sideEffect: 'read',
     isCompactionRecall: true,
     parameters: {
       type: 'object',

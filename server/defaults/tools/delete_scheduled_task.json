@@ -9,6 +9,7 @@
     "de": "Das Löschen einer geplanten Aufgabe des Nutzers vorschlagen. Es wird nichts gelöscht, bis der Nutzer es auf der Karte im Chat bestätigt."
   },
   "script": "scheduledTaskTools.js",
+  "sideEffect": "destructive",
   "method": "deleteScheduledTask",
   "parameters": {
     "type": "object",

@@ -9,8 +9,9 @@
     "de": "Die Dateien auflisten und lesen, die frühere Antworten dieses Chats erstellt haben: Dokumente, Tabellen, Präsentationen, Code, Web-Artefakte und Bilder. Wird automatisch hinzugefügt, wenn der Chat Dateien erstellt hat."
   },
   "script": "chatArtifacts.js",
+  "sideEffect": "read",
+  "untrustedInput": true,
   "enabled": true,
-  "readOnly": true,
   "functions": {
     "list": {
       "name": {

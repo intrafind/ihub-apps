@@ -11,6 +11,8 @@ import { filenameParameter, settingsParameter, textEditsParameter } from '../edi
 
 export const CREATE_XLSX_TOOL = {
   id: 'create_xlsx',
+  // Creates or changes a file of the chat (`utils/toolApproval`).
+  sideEffect: 'write',
   outputKind: 'workbook',
   name: { en: 'Create Excel workbook', de: 'Excel-Arbeitsmappe erstellen' },
   description: {
@@ -67,6 +69,8 @@ export const CREATE_XLSX_TOOL = {
 
 export const EDIT_XLSX_TOOL = {
   id: 'edit_xlsx',
+  // Creates or changes a file of the chat (`utils/toolApproval`).
+  sideEffect: 'write',
   name: { en: 'Edit Excel workbook', de: 'Excel-Arbeitsmappe bearbeiten' },
   description: {
     en: 'Change an Excel workbook this chat created with create_xlsx instead of building it again: sheet operations ("changes": set cells, append, insert or delete rows, replace, add, delete or rename a sheet), exact text replacements in its texts and formulas ("edits"), new settings ("set"), or a combination. Cells are addressed as in Excel: row 1 is the header row, data starts in row 2. Formulas are not adjusted when rows move: fix references yourself. All changes apply or none. The workbook is built again under the same name. If you do not have its sheets, read it with chat_artifacts_read first. Use create_xlsx only for a new workbook or a rewrite.',

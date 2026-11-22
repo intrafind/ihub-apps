@@ -313,6 +313,8 @@ export function toolSearchToolDefinition(language = 'en') {
     ),
     isInternalTool: true,
     readOnly: true,
+    // Searches the tools this request left out; changes nothing outside the run.
+    sideEffect: 'read',
     isToolSearch: true,
     parameters: {
       type: 'object',

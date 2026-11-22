@@ -11,6 +11,8 @@ import { filenameParameter, settingsParameter, textEditsParameter } from '../edi
 
 export const CREATE_DOCX_TOOL = {
   id: 'create_docx',
+  // Creates or changes a file of the chat (`utils/toolApproval`).
+  sideEffect: 'write',
   outputKind: 'document',
   name: { en: 'Create Word document', de: 'Word-Dokument erstellen' },
   description: {
@@ -100,6 +102,8 @@ export const CREATE_DOCX_TOOL = {
 
 export const EDIT_DOCX_TOOL = {
   id: 'edit_docx',
+  // Creates or changes a file of the chat (`utils/toolApproval`).
+  sideEffect: 'write',
   name: { en: 'Edit Word document', de: 'Word-Dokument bearbeiten' },
   description: {
     en: 'Change a Word document this chat created with create_docx instead of writing it again: exact text replacements in its Markdown ("edits"), new settings ("set": title, subtitle, author, date, header, footer, toc, coverPage, pageNumbers, …), or both. Each oldText must occur exactly once; all edits apply or none. The document is rendered again under the same name, in the same template. If you do not have its Markdown, read it with chat_artifacts_read first. Use create_docx only for a new document or a rewrite.',

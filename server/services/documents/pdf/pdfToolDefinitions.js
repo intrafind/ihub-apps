@@ -10,6 +10,8 @@
 
 export const CREATE_PDF_TOOL = {
   id: 'create_pdf',
+  // Creates or changes a file of the chat (`utils/toolApproval`).
+  sideEffect: 'write',
   outputKind: 'pdf',
   name: { en: 'Create PDF', de: 'PDF erstellen' },
   description: {
@@ -136,6 +138,8 @@ export const CREATE_PDF_TOOL = {
 
 export const PREVIEW_PDF_TOOL = {
   id: 'preview_pdf',
+  // Renders a page of a file the chat already holds; changes nothing (`utils/toolApproval`).
+  sideEffect: 'read',
   name: { en: 'Preview PDF page', de: 'PDF-Seite ansehen' },
   description: {
     en: 'Look at one page of a PDF you created with create_pdf, rendered as an image, to check the layout (overflowing tables, awkward page breaks, spacing). Only call it when the layout is uncertain; fix problems by calling create_pdf again.',

@@ -9,6 +9,7 @@
     "de": "Nur in einem geplanten Lauf einer Aufgabe verfügbar, die zwischen den Läufen Notizen führt. Lesen, was ein früherer Lauf dieser Aufgabe geantwortet hat, über seine Laufnummer aus list_task_runs. Mit include 'conversation' kommt auch zurück, was der Nutzer danach im Chat dieses Laufs geschrieben hat, samt den Antworten darauf. Damit prüfen, was du früher gemeldet hast, und ob der Nutzer etwas gewünscht hat."
   },
   "script": "scheduledTaskTools.js",
+  "sideEffect": "read",
   "method": "getTaskRun",
   "parameters": {
     "type": "object",

@@ -9,6 +9,7 @@
     "de": "Nur in einem geplanten Lauf einer Aufgabe verfügbar, die zwischen den Läufen Notizen führt. Die früheren Läufe dieser Aufgabe auflisten, neueste zuerst: Laufnummer, Zeit, Status, ob er etwas Neues gemeldet hat und ob sein Chat noch lesbar ist. Mit get_task_run lesen, was ein Lauf geantwortet hat."
   },
   "script": "scheduledTaskTools.js",
+  "sideEffect": "read",
   "method": "listTaskRuns",
   "parameters": {
     "type": "object",

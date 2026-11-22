@@ -15,6 +15,8 @@ import { filenameParameter, textEditsParameter } from '../editToolParameters.js'
 
 export const CREATE_DASHBOARD_TOOL = {
   id: 'create_dashboard',
+  // Creates or changes a file of the chat (`utils/toolApproval`).
+  sideEffect: 'write',
   outputKind: 'dashboard',
   name: { en: 'Create dashboard', de: 'Dashboard erstellen' },
   description: {
@@ -55,6 +57,8 @@ export const CREATE_DASHBOARD_TOOL = {
 
 export const EDIT_DASHBOARD_TOOL = {
   id: 'edit_dashboard',
+  // Creates or changes a file of the chat (`utils/toolApproval`).
+  sideEffect: 'write',
   name: { en: 'Edit dashboard', de: 'Dashboard bearbeiten' },
   description: {
     en: 'Change a dashboard this chat already created, by exact text replacements in its spec, instead of writing it again. The spec is the JSON chat_artifacts_read returns for the dashboard. Each "oldText" must occur exactly once in it; it is replaced by "newText". All edits apply or none. The page is laid out again from the changed spec and checked like a new one: "asOf" and "sources" stay required. Use it for every change that touches part of the dashboard (a label, a figure, a block, a source) and to fix what create_dashboard reports. Write a new dashboard with create_dashboard only for a rewrite. A figure you add is copied from the data of the conversation, never written from memory.',

@@ -9,6 +9,7 @@
     "de": "Eine geplante Aufgabe pausieren oder fortsetzen oder Änderungen an Name, Anweisungen, Zeitplan, App, Tools, Benachrichtigungen oder das Merken zwischen Läufen vorschlagen. Pausieren und Fortsetzen gelten sofort; jede andere Änderung wird dem Nutzer auf einer Bestätigungskarte gezeigt und erst beim Speichern übernommen. In einem geplanten Lauf darf sich eine Aufgabe nur selbst pausieren oder ihren eigenen Zeitplan ändern."
   },
   "script": "scheduledTaskTools.js",
+  "sideEffect": "write",
   "method": "updateScheduledTask",
   "parameters": {
     "type": "object",

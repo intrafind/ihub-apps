@@ -167,6 +167,8 @@ export async function getAppAsTools(appIds, language = 'en', { user } = {}) {
       name: `App: ${appName}`,
       description: localizedDescription(app, language),
       parameters: buildToolParameters(app),
+      // No `sideEffect`: what the app does depends on the tools it calls itself,
+      // so the tool resolves to `unknown` and is never a trusted read (#2485).
       isAppAsTool: true,
       _appId: app.id
     });

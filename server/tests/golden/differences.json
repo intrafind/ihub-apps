@@ -199,6 +199,22 @@
       "pr": "run-service-headless",
       "signedBy": null,
       "signedOn": null
+    },
+    {
+      "id": "tool-side-effect-declared",
+      "title": "The tool definitions a run records carry the declared side effect of iHub's own tools",
+      "state": "proposed",
+      "decision": "Proposed: accept as an added field. Every shipped and internal tool now declares what it does (sideEffect), and the run ledger records the tool definitions of a model request as they are. In these goldens three tools gain the field: recall_tool_result (read) in the compaction cases, read_memory (read) and write_memory (write) in the scheduled runs with notes. The hash over the recorded definitions (toolSchemasHash) and the evidence record of the same request change with it. Nothing the model is sent changes (modelRequests and toolSchemas are the same), no event is added, removed or moved, and no approval is asked or dropped in a golden. No option to keep the old record: a tool without a declaration would be an undeclared tool again.",
+      "goldens": [
+        "chat/compaction.json",
+        "chat/compaction-post-stream.json",
+        "scheduled-task/notes-injection.json",
+        "scheduled-task/memory-composer.json"
+      ],
+      "parts": ["evidence", "ledger"],
+      "pr": "tool-side-effects-parallel-calls",
+      "signedBy": null,
+      "signedOn": null
     }
   ]
 }

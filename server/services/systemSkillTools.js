@@ -263,6 +263,9 @@ function toolOfDefinition(definition, skillName, { templates, language }) {
     description,
     parameters,
     isSystemSkillTool: true,
+    // Declared by the definition: every system-skill tool says whether it only
+    // reads (`preview_pdf`) or creates or changes a file of the chat.
+    ...(definition.sideEffect ? { sideEffect: definition.sideEffect } : {}),
     // What the tool produces (`utils/toolDisplay.js` `outputKindOf`), for the
     // creators of a file or a document; the other tools bring none.
     ...(definition.outputKind ? { outputKind: definition.outputKind } : {}),

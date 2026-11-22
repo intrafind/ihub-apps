@@ -9,6 +9,8 @@
 
 export const CREATE_FILE_TOOL = {
   id: 'create_file',
+  // Creates or changes a file of the chat (`utils/toolApproval`).
+  sideEffect: 'write',
   outputKind: 'file',
   name: { en: 'Create file', de: 'Datei erstellen' },
   description: {
@@ -39,6 +41,8 @@ export const CREATE_FILE_TOOL = {
 
 export const CREATE_ZIP_TOOL = {
   id: 'create_zip',
+  // Creates or changes a file of the chat (`utils/toolApproval`).
+  sideEffect: 'write',
   outputKind: 'archive',
   name: { en: 'Create ZIP archive', de: 'ZIP-Archiv erstellen' },
   description: {
