@@ -490,14 +490,15 @@ unless the step itself sets `parallelToolCalls: true`
 
 One thing does change for a step that sets `parallelToolCalls: true`, without any feature: such a
 step has always run read-only calls side by side, and what counts as read-only is the declaration
-described above. iHub's own read tools that declared nothing before now declare `read`: among
-them the project knowledge tools, `read_memory`, `read_inbox`, `list_tasks`,
-`list_scheduled_tasks`, `list_task_runs`, `get_task_run`, `evidence_collect`,
-`evidence_validateQuotesFastPath`, `preview_pdf`, `activate_skill`, `read_skill_resource`,
-`find_skill` and `search_tools` (the table above has every tool). Two calls of them in one step of
-such a workflow therefore run at the same time where they ran one after the other before, for
-example `read_memory` and `read_inbox`. The model still gets the results in the order of its
-calls. A step without the setting, which is the default, is unchanged.
+described above. These read tools of iHub did not count as read-only before and do now: `read_url`,
+the project knowledge tools, `read_memory`, `read_inbox`, `list_tasks`, `evidence_collect`,
+`evidence_validateQuotesFastPath`, `preview_pdf`, `activate_skill`, `read_skill_resource` and
+`find_skill`. Two calls of them in one step of such a workflow therefore run at the same time where
+they ran one after the other before, for example `read_memory` and `read_inbox`. The model still
+gets the results in the order of its calls. Nothing changes for the tools that were read-only
+already (the lookups of scheduled tasks, the lookups in a stored chat, `iFinder_*`,
+`search_tools`, `recall_tool_result`), and a step without the setting, which is the default, is
+unchanged.
 
 What the feature changes in the events of a run is described in
 [Streaming Events](streaming-events.md) (`tool/started.parallelGroup` and `callIndex`).
