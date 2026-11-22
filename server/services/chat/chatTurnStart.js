@@ -9,13 +9,55 @@
  * this turn. The chat route (`routes/chat/sessionRoutes.js`) builds one from
  * its request; nothing in this module reads a request or writes a response.
  *
+ * {@link prepareTurn} does everything that can refuse the turn before
+ * anything is told to its reader: it checks who is asking, reads the uploads,
+ * assembles the history and what the turn stores. It answers with a
+ * {@link PreparedTurn}, with a refusal, or with the answer of a workflow the
+ * message was handed to. A refusal is a value: the status and the registry
+ * code the caller answers with.
+ *
+ * The steps of the preparation run in a fixed order ({@link PREPARE_STEPS}).
+ * The order is behaviour: a request that is wrong in two ways is refused for
+ * the first, and a step that changes something (a clarification is settled,
+ * an upload is stored) has done so when a later step refuses.
+ *
  * @module services/chat/chatTurnStart
  */
+import configCache from '../../configCache.js';
+import { resolveChatProjects } from '../knowledge/chatProjects.js';
+import {
+  checkProjectTestChat,
+  projectTestOrigin,
+  resolveProjectTestScope
+} from '../knowledge/projectTestScope.js';
+import { isPriorAnswer } from '../loop/contextTracker.js';
+import { trackSession } from '../../utils.js';
 import { buildEnvelope } from '../loop/RunStream.js';
+import runLog from '../loop/RunLog.js';
 import { isAnonymousUser } from '../loop/runIdentity.js';
+import { getIntegrationConnectionService } from '../integrations/auth/IntegrationConnectionService.js';
+import { resolveChatScopes } from '../integrations/scopes/index.js';
+import { tryHandleMentionWorkflow } from '../workflow/mentionWorkflow.js';
+import { hydrateHistoryForPrompt, prepareTurnFiles } from '../chatFiles/ChatFileService.js';
 import { SSE_V2_EVENTS } from '../../../shared/runEvents.js';
-import { toErrorResponse } from '../../utils/errorResponse.js';
-import { guestIdOf, guestOwnerId } from './chatOwner.js';
+import { codeOfStatus, toErrorResponse } from '../../utils/errorResponse.js';
+import logger from '../../utils/logger.js';
+import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
+import { authorizeChat } from './chatAccess.js';
+import { prepareConnectResume } from './chatConnectResume.js';
+import { guestIdOf, guestOwnerId, isNewGuest, resolveChatOwner } from './chatOwner.js';
+import { resolveChatStorage } from './chatPersistence.js';
+import {
+  getChatRepository,
+  isPersistableChatId,
+  normalizeChatSettings,
+  chatTurnSettings,
+  normalizeChatVariables
+} from './ChatRepository.js';
+import { prepareChatApproval } from './chatToolApproval.js';
+import { isVoiceTurn, VOICE_INPUT_MODE } from './voiceMode.js';
+
+const COMPONENT = 'chatTurnStart';
 
 /**
  * Who a turn is for, as plain data: no permissions, no groups, no secret.
@@ -217,4 +259,812 @@ export function messageAttachments(message) {
   return [message?.fileData, message?.imageData, message?.audioData]
     .flatMap(value => (Array.isArray(value) ? value : value ? [value] : []))
     .filter(entry => entry && typeof entry === 'object');
+}
+
+/**
+ * A refusal of a turn: what the caller answers with instead of running it.
+ *
+ * @typedef {Object} TurnRefusal
+ * @property {number} status - HTTP status
+ * @property {string} code - A code of `shared/apiErrors.js`
+ * @property {string} message
+ * @property {Object} [details]
+ */
+
+/**
+ * A turn that may run: checked, with its uploads read and its history and
+ * storage assembled. It is not plain data (it holds the chat repository and
+ * the one-time answers of an approval and of a connect) and it runs once.
+ *
+ * The model request is not built yet. It is built when the turn runs, after
+ * the reader's stream is open, because the wait for outdated project documents
+ * is already shown there.
+ *
+ * @typedef {Object} PreparedTurn
+ * @property {string} chatId
+ * @property {string} appId
+ * @property {string|null} messageId
+ * @property {Object} [user] - The principal the turn runs as.
+ * @property {string} language - The language the sender works in.
+ * @property {Object} requestOptions - What the model request is built from
+ *   (`ChatService.prepareChatRequest`).
+ * @property {Object} persistence - What the turn stores and how (`ChatService.runTurn`).
+ * @property {{grants: string[], resume: Object|null}} toolApproval - The chat's tool approval state.
+ * @property {(() => Promise<Object>)|null} commitApproval - Answers the approval this
+ *   message carries, exactly once; null when it carries none.
+ * @property {(() => Promise<Object>)|null} commitConnectResume - Takes the call this
+ *   message resumes after a connect, exactly once; null when it resumes none.
+ * @property {{runId: string, interactionId: string}|null} pausedTurn - The paused run this
+ *   message answers (a clarification or a tool approval): the turn continues it.
+ * @property {Object|null} priorContext - The context stored with the last answer of the
+ *   history the prompt holds.
+ * @property {boolean} resendsHistory - The prompt holds the stored history as it is.
+ * @property {Object} promptMessage - The new message as the prompt gets it, uploads read.
+ * @property {Object} [mcpAppContext] - What open MCP App views reported since the last turn.
+ * @property {boolean} canApproveTools - The sender's client draws tool approval cards.
+ * @property {string|null} clientTimezone
+ * @property {string} origin - What started the turn.
+ * @property {string} [sessionId] - The sender's browser session, for the logs.
+ * @property {() => boolean} audited - Whether the turn wrote an audit entry of its own
+ *   (a call resumed after a connect). The request-level audit of a caller then adds none.
+ */
+
+/**
+ * @typedef {Object} TurnPreparation
+ * @property {PreparedTurn} [turn] - The turn to run ({@link runPreparedTurn}).
+ * @property {TurnRefusal} [refusal] - The turn is refused.
+ * @property {Object} [answer] - The message was handed to a workflow (`@workflow`):
+ *   the body to answer with. No turn runs.
+ */
+
+/**
+ * A refusal as a value: its own code, else the one of its status.
+ *
+ * @param {number} status - HTTP status
+ * @param {string} message
+ * @param {{ code?: string, details?: Object }} [options]
+ * @returns {{refusal: TurnRefusal}}
+ */
+function refused(status, message, { code, details } = {}) {
+  return {
+    refusal: {
+      status,
+      code: code ?? codeOfStatus(status),
+      message,
+      ...(details === undefined ? {} : { details })
+    }
+  };
+}
+
+/**
+ * Who may write to the chat, and the setup the turn is answered with.
+ *
+ * @param {Object} draft - The turn as far as it is prepared.
+ * @returns {Promise<{refusal: TurnRefusal}|null>}
+ */
+async function authorizeTurn(draft) {
+  const { request, user } = draft;
+  // Access to the app is checked by the caller; that never covers the chat id. Once chats
+  // are stored, anyone who guesses one could otherwise append a turn to
+  // — and, through the stream, read back — another user's chat.
+  const access = await authorizeChat(request.chatId, user, { intent: 'write' });
+  if (!access.ok) {
+    if (isNewGuest(user)) {
+      // The chat exists but this request came without the guest cookie
+      // that owns it, so its browser does not keep cookies for this site.
+      return refused(
+        404,
+        'This chat cannot be continued: the browser did not keep the guest cookie it was started with',
+        { code: 'GUEST_COOKIE_MISSING' }
+      );
+    }
+    return refused(404, 'Chat session not found', { code: 'NOT_FOUND' });
+  }
+  draft.access = access;
+  // What the request left out is what the chat was last answered with,
+  // never the app's defaults: an approval or clarification answer, or an
+  // API caller, sends only part of the setup (`chatTurnSettings`).
+  draft.settings = chatTurnSettings(request, access.chat);
+  const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
+  draft.language = request.language || defaultLang;
+  return null;
+}
+
+/**
+ * The projects in scope: a project test, or the chat's container project and
+ * the projects attached from the picker (#1036), checked against the caller's
+ * access here, carried on the request to the prompt builder, persisted with
+ * the chat.
+ *
+ * @param {Object} draft
+ * @returns {Promise<{refusal: TurnRefusal}|null>}
+ */
+async function scopeProjects(draft) {
+  const { request, access } = draft;
+  // A project test (#3309) puts one admin project in scope for this turn
+  // and keeps the chat temporary; the picker's fields do not apply to it.
+  let projectTest = null;
+  if (request.testProjectId !== undefined) {
+    projectTest = await resolveProjectTestScope({
+      user: draft.user,
+      testProjectId: request.testProjectId
+    });
+    // A test runs in a temporary chat that a test of this project started
+    // (or one nothing has been said in yet), never in a kept chat and never
+    // in another conversation: that would put answers from a project that
+    // may be disabled into the admin's history, or read an unrelated chat.
+    const refusedTest = projectTest.ok
+      ? checkProjectTestChat(access.chat, projectTest.projectId)
+      : projectTest;
+    if (refusedTest) {
+      return refused(
+        refusedTest.status,
+        await draft.getLocalizedError(refusedTest.messageKey, {}, draft.language),
+        { code: refusedTest.code }
+      );
+    }
+  }
+  draft.projectTest = projectTest;
+  // `resolveChatProjects` reads the caller from an object shaped like a request
+  // and, when the caller's permissions are not resolved yet, resolves them on
+  // it (`ensurePrincipal`). The rest of the turn runs as the principal it left.
+  const principal = { user: draft.user };
+  const chatProjects = await resolveChatProjects({
+    req: principal,
+    chat: access.chat,
+    // Case-insensitive like the request builder, which accepts the id
+    // in any case: a missed app would skip its `userProjects` gate.
+    app: findByIdCaseInsensitive(configCache.getApps()?.data || [], request.appId) || null,
+    projectId: projectTest ? undefined : request.projectId,
+    projects: projectTest ? undefined : request.projects
+  });
+  draft.user = principal.user;
+  if (!chatProjects.ok) {
+    return refused(chatProjects.status, chatProjects.message, { code: chatProjects.code });
+  }
+  draft.chatProjects = chatProjects;
+  return null;
+}
+
+/**
+ * A clarification (`ask_user`) is answered by the next message: settle the
+ * pending interaction (channel `chat`) before the turn runs; any other
+ * message supersedes clarifications the user chose not to answer.
+ *
+ * @param {Object} draft
+ * @returns {Promise<null>}
+ */
+async function settlePendingClarifications(draft) {
+  draft.answeredClarification = await draft.settleClarifications({
+    chatId: draft.request.chatId,
+    user: draft.user,
+    lastMessage: draft.request.message
+  });
+  logger.debug('Processing chat', { component: COMPONENT, language: draft.language });
+  return null;
+}
+
+/**
+ * The server owns the history. Every chat is stored, so a turn carries
+ * exactly one message — the new one — and the server reads the rest back out
+ * of the store: a client can no longer rewrite what it already said. A chat
+ * the user does not want to keep (incognito, an anonymous visitor, an
+ * installation without chat history) is stored the same way, as a temporary
+ * chat that is never listed and expires on its own.
+ *
+ * @param {Object} draft
+ * @returns {Promise<{refusal: TurnRefusal}|null>}
+ */
+async function checkStorage(draft) {
+  const { request } = draft;
+  const repository = getChatRepository();
+  const storage = resolveChatStorage({
+    features: configCache.getFeatures(),
+    platformConfig: configCache.getPlatform(),
+    user: draft.user,
+    // A scratch chat of a project test is never kept (#3309).
+    ephemeral: draft.projectTest ? true : request.ephemeral
+  });
+  // An id the store cannot key cannot be a chat any more.
+  if (!isPersistableChatId(request.chatId)) {
+    return refused(400, 'Invalid chat id', { code: 'BAD_REQUEST' });
+  }
+  if (!storage.stored || !repository.isAvailable()) {
+    // No browser-held fallback: a conversation nobody can continue is
+    // not an answer. The provider failure itself was logged at boot.
+    return refused(503, 'Chat storage is unavailable', { code: 'CHAT_STORAGE_UNAVAILABLE' });
+  }
+  if (request.clientHistory > 0) {
+    // The code alone tells an integrator nothing about what to do
+    // instead, and this is the one refusal they can hit by doing exactly
+    // what the documentation told them to do before chats were stored.
+    return refused(400, 'The chat history is kept by the server: send only the new message', {
+      code: 'CLIENT_HISTORY_NOT_ALLOWED',
+      details: {
+        hint:
+          'Chats are stored server-side: post only the new message as a single-element ' +
+          'messages array (send ephemeral: true for a chat that is not kept in the history). ' +
+          'To send the whole conversation yourself, use the stateless OpenAI-compatible ' +
+          'chat completions endpoint instead.'
+      }
+    });
+  }
+  if (request.message === undefined) {
+    const errorMessage = await draft.getLocalizedError('messagesRequired', {}, draft.language);
+    return refused(400, errorMessage, { code: 'BAD_REQUEST' });
+  }
+  draft.repository = repository;
+  draft.storage = storage;
+  return null;
+}
+
+/**
+ * Who the chat is stored under, and whether it is temporary.
+ *
+ * @param {Object} draft
+ * @returns {Promise<{refusal: TurnRefusal}|null>}
+ */
+async function resolveOwner(draft) {
+  const { access } = draft;
+  // Resolved once here and carried on the turn: `resolvePrincipal` is
+  // async and hits the filesystem, and the run finishes with no request
+  // in scope. The mode travels with the id so that an admin changing
+  // `runLog.identityMode` later cannot orphan this chat. An anonymous
+  // caller owns its chats through its guest identity.
+  const owner = await resolveChatOwner(draft.user, {
+    mode: access.chat?.identityMode || runLog.identityMode()
+  });
+  if (!owner) {
+    return refused(403, 'This chat has no owner to be stored under', {
+      code: 'CHAT_OWNER_REQUIRED'
+    });
+  }
+  draft.owner = owner;
+  // Fixed when the chat is created: a later turn's `ephemeral` neither
+  // hides a kept chat nor keeps a temporary one (that is
+  // `PATCH /api/chats/:id { temporary: false }`).
+  draft.temporary = access.chat ? access.chat.temporary === true : draft.storage.temporary;
+  return null;
+}
+
+/**
+ * The paused call this message answers, checked and not yet used up.
+ *
+ * A tool approval (#2945) is answered by the next message, like a
+ * clarification: `approvalResponse` is checked here and answered (exactly
+ * once) only when the turn runs (`commitApproval`), so a request that fails
+ * first does not use it up; any other message supersedes a pending approval.
+ *
+ * A connect resumes the call that stopped on a missing connection (#3752):
+ * `connectResume { id }` is checked here and the record is taken (exactly
+ * once) only when the turn runs, like an approval. Any other message
+ * supersedes the record.
+ *
+ * @param {Object} draft
+ * @returns {Promise<{refusal: TurnRefusal}|null>}
+ */
+async function prepareResumes(draft) {
+  const { request, access, repository, user } = draft;
+  const chat = access.chat || null;
+  const approvals = await prepareChatApproval({
+    chatId: request.chatId,
+    user,
+    chat,
+    lastMessage: request.message,
+    repository
+  });
+  if (approvals.refusal) {
+    return refused(approvals.refusal.status, approvals.refusal.message, {
+      code: approvals.refusal.code
+    });
+  }
+  // What the audit entry of a resumed call reads from a request: who acted and
+  // from where. The audit log marks the object it wrote an entry for.
+  draft.auditSubject = { user, ip: request.client?.ip, originalUrl: request.client?.url };
+  const connectResume = await prepareConnectResume({
+    chatId: request.chatId,
+    user,
+    appId: request.appId,
+    chat,
+    ownerId: draft.owner.id,
+    lastMessage: request.message,
+    repository,
+    req: draft.auditSubject,
+    isConnected: async (userId, integration) => {
+      const resolved = await getIntegrationConnectionService()
+        .resolve({ type: 'user', id: userId }, integration)
+        .catch(() => null);
+      return resolved?.ok === true;
+    }
+  });
+  if (connectResume.refusal) {
+    return refused(connectResume.refusal.status, connectResume.refusal.message, {
+      code: connectResume.refusal.code
+    });
+  }
+  draft.approvals = approvals;
+  draft.connectResume = connectResume;
+  draft.toolApproval = { grants: approvals.grants, resume: null };
+  return null;
+}
+
+/**
+ * The stored history without the answers a resumed call replaces: the answer
+ * that carries the connect card is the last message of the chat (a resume
+ * that failed again left a chain of them), and the continuation is built from
+ * the question before them.
+ *
+ * @param {Object[]} history - The stored messages
+ * @param {Object} record - The record of the call that is resumed
+ * @returns {Object[]}
+ */
+function historyBeforeResume(history, record) {
+  const answerRuns = new Set([...(record.continues || []), record.runId]);
+  let kept = history;
+  while (
+    kept.length > 0 &&
+    kept[kept.length - 1].role === 'assistant' &&
+    answerRuns.has(kept[kept.length - 1].runId)
+  ) {
+    kept = kept.slice(0, -1);
+  }
+  return kept;
+}
+
+/**
+ * The stored history the turn continues from: all of it, cut before the
+ * answers a resumed call replaces, or cut at the message an edit or a
+ * regenerate forks from.
+ *
+ * @param {Object} draft
+ * @returns {Promise<{refusal: TurnRefusal}|null>}
+ */
+async function forkHistory(draft) {
+  const { request, repository } = draft;
+  const { replaceFromMessageId } = request;
+  const stored = await repository.getMessages(request.chatId);
+  let history = stored.messages;
+  draft.forkStoredId = null;
+  draft.replacedMessage = null;
+  const record = draft.connectResume.record;
+  if (record) {
+    const last = history[history.length - 1];
+    if (replaceFromMessageId || last?.role !== 'assistant' || last.runId !== record.runId) {
+      return refused(409, 'Nothing is waiting to be continued in this chat', {
+        code: 'CONNECT_RESUME_NOT_PENDING'
+      });
+    }
+    history = historyBeforeResume(history, record);
+  }
+  if (replaceFromMessageId) {
+    // Either id the client can know this message by: the stored id it
+    // was given on hydrate, or — for a turn made in the session that
+    // is still open, which never learns the stored id — the exchange
+    // id it sent and the store filed as `clientMessageId`. Without the
+    // second, regenerating the answer you just got would carry no fork
+    // id at all and the retry would be appended to the untouched
+    // history, duplicating the exchange.
+    const forkAt = history.findIndex(
+      entry => entry.id === replaceFromMessageId || entry.clientMessageId === replaceFromMessageId
+    );
+    // Appending onto the untouched history instead would silently
+    // duplicate everything the edit meant to replace, so refuse.
+    if (forkAt === -1) {
+      return refused(400, 'The message to continue from is not in this chat', {
+        code: 'UNKNOWN_MESSAGE'
+      });
+    }
+    // Carry the *stored* id onward. The store matches on `id` alone,
+    // so forwarding the client's value forked the prompt here and not
+    // the transcript: a regenerate in a session that never hydrated
+    // sends its exchange id, which this lookup resolves and the store
+    // then rejects with UNKNOWN_MESSAGE. `materializeUserTurn` logs
+    // and returns null, the chat document has already been updated,
+    // and the answer lands at the end — so the stored history keeps
+    // the exchange the user replaced and, for an edit, never records
+    // the edited question at all. Permanent, and replayed to the model
+    // every turn after.
+    draft.replacedMessage = history[forkAt];
+    draft.forkStoredId = history[forkAt].id;
+    history = history.slice(0, forkAt);
+  }
+  draft.history = history;
+  return null;
+}
+
+/**
+ * The app variables the prompt reads, and the integration scopes the turn
+ * runs with.
+ *
+ * @param {Object} draft
+ * @returns {Promise<{refusal: TurnRefusal}|null>}
+ */
+async function resolveVariablesAndScopes(draft) {
+  const { request, repository, settings } = draft;
+  const newMessage = request.message;
+  // An app that opted out of chat history stays a one-shot prompt:
+  // storing the transcript must not start feeding it back to the
+  // model. The viewer's own "Include chat history in requests" toggle
+  // says the same thing for one turn (see `buildConversation`).
+  const chatApp = (configCache.getApps().data || []).find(a => a.id === request.appId);
+  // The app variables are chat state: a turn that sets them (the
+  // start form's, or any turn of an app that asks for them beside the
+  // chat) stores them, and a turn that does not gets the stored ones —
+  // for the system prompt, never as a re-rendered `prompt` template.
+  const turnVariables = normalizeChatVariables(newMessage.variables);
+  const chatVariables =
+    turnVariables ||
+    (chatApp?.variables?.length
+      ? normalizeChatVariables((await repository.getChat(request.chatId))?.variables)
+      : null);
+  // The prompt reads the variables as they are stored, so this turn and
+  // the ones after it render them alike (`false` is "false" in both).
+  draft.promptMessage = chatVariables ? { ...newMessage, variables: chatVariables } : newMessage;
+  draft.chatApp = chatApp;
+  draft.turnVariables = turnVariables;
+
+  // Where the chat's integrations search and whom they ask (#3050): the
+  // scopes this turn names, or else the ones the chat was answered with,
+  // checked against what each integration offers this user. A pinned
+  // scope replaces the request's; one the user may not use refuses the
+  // turn rather than quietly searching somewhere else.
+  const scopeResolution = chatApp
+    ? await resolveChatScopes({
+        requested: settings.integrationScopes,
+        user: draft.user,
+        app: chatApp,
+        model: findByIdCaseInsensitive(
+          configCache.getModels()?.data || [],
+          settings.modelId || chatApp.preferredModel
+        ),
+        language: draft.language
+      })
+    : { ok: true, scopes: {} };
+  if (!scopeResolution.ok) {
+    return refused(403, scopeResolution.message, {
+      code: scopeResolution.code,
+      details: { integrationId: scopeResolution.integrationId }
+    });
+  }
+  draft.integrationScopes = scopeResolution.scopes;
+  return null;
+}
+
+/**
+ * Read the uploads of the new message into the chat's file store.
+ *
+ * @param {Object} draft
+ * @returns {Promise<null>}
+ */
+async function readUploads(draft) {
+  const { request, repository } = draft;
+  const { message, attachments } = await prepareTurnFiles({
+    chatId: request.chatId,
+    ownerId: draft.owner.id,
+    message: draft.promptMessage,
+    inheritedAttachments: draft.replacedMessage?.attachments,
+    appConfig: draft.chatApp,
+    store: repository.fileStore?.()
+  });
+  draft.promptMessage = message;
+  // `prepareTurnFiles` already describes the images and audio of the turn next to its
+  // documents; adding them again here stored every image and audio file twice.
+  draft.attachments = attachments.length > 0 ? attachments : messageAttachments(request.message);
+  return null;
+}
+
+/**
+ * The ids of the host items a message carries: an e-mail, a meeting or a page.
+ *
+ * @param {Object} [message]
+ * @returns {Set<string>}
+ */
+function hostItemIds(message) {
+  return new Set(
+    [message?.fileData]
+      .flat()
+      .filter(file => file && ['email', 'meeting', 'page'].includes(file.origin))
+      .map(file => file.fileId || file.id)
+      .filter(Boolean)
+  );
+}
+
+/**
+ * A history without the files named by `ids`; an entry left with neither a
+ * file nor text is dropped.
+ *
+ * @param {Object[]} history - A hydrated history
+ * @param {Set<string>} ids
+ * @returns {Object[]}
+ */
+function withoutFiles(history, ids) {
+  if (ids.size === 0) return history;
+  return history
+    .map(entry =>
+      entry.fileData
+        ? { ...entry, fileData: entry.fileData.filter(file => !ids.has(file.fileId || file.id)) }
+        : entry
+    )
+    .map(entry =>
+      entry.fileData && entry.fileData.length === 0
+        ? (({ fileData: _dropped, ...rest }) => rest)(entry)
+        : entry
+    )
+    .filter(entry => entry.fileData || (entry.content || '').trim());
+}
+
+/**
+ * The conversation the prompt is built from: the stored history, when the app
+ * and the sender include it, and the new message.
+ *
+ * @param {Object} draft
+ * @returns {Promise<null>}
+ */
+async function buildConversation(draft) {
+  const { request, repository, history, promptMessage } = draft;
+  // With the caller sending a single message either way, `sendChatHistory`
+  // is the only channel the viewer's toggle has left.
+  const includeHistory =
+    draft.chatApp?.sendChatHistory !== false && draft.settings.sendChatHistory !== false;
+  const hydratedHistory = includeHistory
+    ? await hydrateHistoryForPrompt(request.chatId, history, {
+        store: repository.fileStore?.()
+      })
+    : [];
+  // An e-mail, meeting or page is sent with every turn and stored once per
+  // chat: when this turn carries it again, earlier turns do not repeat it.
+  const currentItemIds = hostItemIds(promptMessage);
+  const repeatsHostItem =
+    currentItemIds.size > 0 &&
+    hydratedHistory.some(entry =>
+      entry.fileData?.some?.(file => currentItemIds.has(file.fileId || file.id))
+    );
+  // What the last answer's prompt held, stored with it: the context
+  // figure of this turn starts from it rather than counting the history
+  // again — only when this turn resends that prompt as it was. The
+  // history is already cut at an edit or a regenerate; an item this turn
+  // carries again is taken out of the earlier turn, which changes it.
+  // The answer is the one the tracker finds (`isPriorAnswer`).
+  draft.resendsHistory = includeHistory && !repeatsHostItem;
+  draft.priorContext = draft.resendsHistory
+    ? history.findLast(entry => isPriorAnswer(entry))?.context || null
+    : null;
+  const dedupedHistory = withoutFiles(hydratedHistory, currentItemIds);
+  const record = draft.connectResume.record;
+  if (record) {
+    // No new message: the history ends with the question that failed.
+    draft.conversation =
+      includeHistory && dedupedHistory.length > 0
+        ? historyForPrompt(dedupedHistory)
+        : [{ role: 'user', content: record.question || '' }];
+  } else if (includeHistory) {
+    draft.conversation = [...historyForPrompt(dedupedHistory), promptMessage];
+  } else {
+    draft.conversation = [promptMessage];
+  }
+  return null;
+}
+
+/**
+ * What the turn stores, and how (`persistence` of `ChatService.runTurn`).
+ *
+ * @param {Object} draft
+ * @returns {null}
+ */
+function describePersistence(draft) {
+  const { request, settings, chatProjects, projectTest } = draft;
+  const newMessage = request.message;
+  draft.persistence = {
+    repository: draft.repository,
+    ownerId: draft.owner.id,
+    identityMode: draft.owner.mode,
+    temporary: draft.temporary,
+    // The stored history is never client-asserted; the message being
+    // sent necessarily is — it only exists in this request.
+    content: typeof newMessage.content === 'string' ? newMessage.content : '',
+    // A resume after a connect stores no user message.
+    silent: Boolean(draft.connectResume.record),
+    clientMessageId: request.messageId,
+    attachments: draft.attachments,
+    variables: draft.turnVariables,
+    replaceFromMessageId: draft.forkStoredId,
+    // A message spoken in voice mode is marked, so the history can show
+    // it. Only when voice mode is on, like the request builder.
+    message: isVoiceTurn({
+      voiceMode: request.voiceMode,
+      platform: configCache.getPlatform(),
+      features: configCache.getFeatures()
+    })
+      ? { metadata: { inputMode: VOICE_INPUT_MODE } }
+      : undefined,
+    // The container project and the attached projects this turn
+    // names (`chatProjects`): written with the question under the
+    // chat lock, against the chat as it stands then — a container
+    // claimed by a racing first turn refuses this one with 409 — and
+    // a new container records the chat in its project once that is
+    // stored (`materializeUserTurn`), on the @workflow path too.
+    ...(chatProjects.projectPatch ? { projects: chatProjects.projectPatch } : {}),
+    projectId: chatProjects.containerId,
+    // A test chat is marked as one, on every turn: the chat a turn creates
+    // starts with it, and one a file upload created before the first
+    // message gets it now. It is what keeps the chat out of the history.
+    ...(projectTest
+      ? {
+          origin: projectTestOrigin(projectTest.projectId),
+          chat: { origin: projectTestOrigin(projectTest.projectId) }
+        }
+      : {}),
+    // How this turn is being answered, so reopening the chat comes
+    // back with the same setup rather than the app's defaults. These
+    // are the request's values over the stored ones
+    // (`chatTurnSettings`); the repository merges them over what
+    // earlier turns recorded, and `undefined` means neither has one.
+    settings: normalizeChatSettings({
+      style: settings.style,
+      outputFormat: settings.outputFormat,
+      sendChatHistory: settings.sendChatHistory,
+      thinkingEnabled: settings.thinkingEnabled,
+      thinkingLevel: settings.thinkingLevel,
+      thinkingThoughts: settings.thinkingThoughts,
+      enabledTools: settings.enabledTools,
+      websearchEnabled: settings.websearchEnabled,
+      imageAspectRatio: settings.imageAspectRatio,
+      imageQuality: settings.imageQuality,
+      integrationScopes: draft.integrationScopes
+    })
+  };
+  return null;
+}
+
+/**
+ * Hand a message that mentions a workflow (`@workflow`) to that workflow.
+ *
+ * @param {Object} draft
+ * @returns {Promise<{refusal: TurnRefusal}|{answer: Object}|null>}
+ */
+async function handOffToWorkflow(draft) {
+  const { request } = draft;
+  trackSession(request.chatId, {
+    appId: request.appId,
+    userSessionId: request.client?.sessionId,
+    userAgent: request.client?.userAgent
+  });
+  // A project test hands nothing on: an @mention stays plain text, for
+  // the workflow would run with its own projects (#3309).
+  const mention = draft.projectTest
+    ? { handled: false }
+    : await tryHandleMentionWorkflow({
+        messages: [request.message],
+        conversation: draft.conversation,
+        chatId: request.chatId,
+        appId: request.appId,
+        messageId: request.messageId,
+        modelId: draft.settings.modelId,
+        user: draft.user,
+        clientLanguage: draft.language,
+        persistence: draft.persistence
+      });
+  if (!mention.handled) return null;
+  // A refusal carries its status; its body is `{ error, code }` or `{ message }`.
+  if (mention.statusCode >= 400) {
+    return refused(mention.statusCode, mention.response.error ?? mention.response.message, {
+      code: mention.response.code
+    });
+  }
+  return { answer: mention.response };
+}
+
+/**
+ * The steps of the preparation, in the order they run. A step answers with a
+ * refusal or an answer, which ends the preparation, or with null.
+ */
+const PREPARE_STEPS = Object.freeze([
+  authorizeTurn,
+  scopeProjects,
+  settlePendingClarifications,
+  checkStorage,
+  resolveOwner,
+  prepareResumes,
+  forkHistory,
+  resolveVariablesAndScopes,
+  readUploads,
+  buildConversation,
+  describePersistence,
+  handOffToWorkflow
+]);
+
+/**
+ * The prepared turn of a draft that passed every step.
+ *
+ * @param {Object} draft
+ * @returns {PreparedTurn}
+ */
+function preparedTurnOf(draft) {
+  const { request, settings, chatProjects, projectTest } = draft;
+  return {
+    chatId: request.chatId,
+    appId: request.appId,
+    messageId: request.messageId,
+    user: draft.user,
+    language: draft.language,
+    requestOptions: {
+      appId: request.appId,
+      modelId: settings.modelId,
+      messages: draft.conversation,
+      style: settings.style,
+      outputFormat: settings.outputFormat,
+      language: draft.language,
+      bypassAppPrompts: request.bypassAppPrompts,
+      thinkingEnabled: settings.thinkingEnabled,
+      thinkingLevel: settings.thinkingLevel,
+      thinkingThoughts: settings.thinkingThoughts,
+      enabledTools: settings.enabledTools,
+      websearchEnabled: settings.websearchEnabled,
+      imageAspectRatio: settings.imageAspectRatio,
+      imageQuality: settings.imageQuality,
+      requestedSkills: request.requestedSkills,
+      documentIds: request.documentIds,
+      voiceMode: request.voiceMode,
+      user: draft.user,
+      chatId: request.chatId,
+      projectId: chatProjects.containerId,
+      attachedProjectIds: chatProjects.attachedIds,
+      ...(projectTest ? { testProjectId: projectTest.projectId } : {}),
+      integrationScopes: draft.integrationScopes
+    },
+    persistence: draft.persistence,
+    toolApproval: draft.toolApproval,
+    commitApproval: draft.approvals.commit || null,
+    commitConnectResume: draft.connectResume.commit || null,
+    // A turn that answers a paused one (a clarification, a tool approval)
+    // continues that run, so one answer is one run.
+    pausedTurn: draft.answeredClarification || draft.approvals.pausedTurn || null,
+    priorContext: draft.priorContext,
+    resendsHistory: draft.resendsHistory,
+    promptMessage: draft.promptMessage,
+    mcpAppContext: request.mcpAppContext,
+    // Only a client that draws the approval card can answer one.
+    canApproveTools: request.toolApprovalCapable === true,
+    clientTimezone: request.clientTimezone || null,
+    origin: request.origin,
+    sessionId: request.client?.sessionId,
+    audited: () => draft.auditSubject._auditLogged === true
+  };
+}
+
+/**
+ * Prepare a chat turn: everything that can refuse it before anything is told
+ * to its reader.
+ *
+ * The principal is passed resolved, next to the plain reference in the
+ * request. Resolving it again from the reference would change who the turn
+ * runs as: the groups of a signed-in user come from the token of the request,
+ * and an anonymous caller is its guest cookie, which is bound to the very
+ * object the request carries (`chatOwner.js`).
+ *
+ * @param {TurnRequest} request
+ * @param {Object} host
+ * @param {Object} [host.user] - The resolved principal `request.principalRef` names.
+ * @param {(key: string, params: Object, language: string) => Promise<string>} host.getLocalizedError
+ * @param {(params: {chatId: string, user: Object, lastMessage: Object}) =>
+ *   Promise<{runId: string, interactionId: string}|null>} host.settleClarifications - Answers
+ *   or supersedes the chat's pending questions for the new message, and names the run the
+ *   message answered a question of. It decides through run access, so it lives with the caller.
+ * @returns {Promise<TurnPreparation>}
+ */
+export async function prepareTurn(request, { user, getLocalizedError, settleClarifications }) {
+  if (typeof getLocalizedError !== 'function' || typeof settleClarifications !== 'function') {
+    throw new TypeError('prepareTurn needs getLocalizedError and settleClarifications');
+  }
+  const named = principalRefOf(user);
+  const ref = request.principalRef;
+  if (ref?.type !== named.type || ref?.id !== named.id) {
+    throw new TypeError('The principal of a turn request is not the user it is prepared for');
+  }
+  const draft = { request, user, getLocalizedError, settleClarifications };
+  for (const step of PREPARE_STEPS) {
+    const ended = await step(draft);
+    if (ended) return ended;
+  }
+  return { turn: preparedTurnOf(draft) };
 }
