@@ -31,19 +31,14 @@
 @custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
 
 /*
- * `form-cols:` lays a card of the app form out in columns (label and help
+ * `md:form-cols:` lays a card of the app form out in columns (label and help
  * left, fields right): from `md` up, except inside `[data-form-narrow]`. The
  * app editor sets that on the form's column while the test chat is open
  * beside it, where the column is too narrow for two (at 1024 px the fields
- * were 26 px wide).
+ * were 26 px wide). The variant carries only the exception; the breakpoint
+ * is the `md:` in front of it.
  */
-@custom-variant form-cols {
-  @media (width >= 48rem) {
-    &:not(:where([data-form-narrow] *)) {
-      @slot;
-    }
-  }
-}
+@custom-variant form-cols (&:not(:where([data-form-narrow] *)));
 
 @theme {
   --color-admin-50: #f8f9ff;

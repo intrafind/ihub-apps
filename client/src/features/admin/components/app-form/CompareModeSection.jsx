@@ -13,8 +13,8 @@ function CompareModeSection({ app, onChange }) {
 
   return (
     <div className="bg-white dark:bg-gray-800 shadow-sm px-4 py-5 sm:rounded-lg sm:p-6">
-      <div className="form-cols:grid form-cols:grid-cols-3 form-cols:gap-6">
-        <div className="form-cols:col-span-1">
+      <div className="md:form-cols:grid md:form-cols:grid-cols-3 md:form-cols:gap-6">
+        <div className="md:form-cols:col-span-1">
           <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
             {t('admin.apps.edit.compareMode', 'Compare Mode')}
           </h3>
@@ -25,7 +25,7 @@ function CompareModeSection({ app, onChange }) {
             )}
           </p>
         </div>
-        <div className="mt-5 form-cols:col-span-2 form-cols:mt-0">
+        <div className="mt-5 md:form-cols:col-span-2 md:form-cols:mt-0">
           <div className="space-y-4">
             <div className="flex items-center">
               <input

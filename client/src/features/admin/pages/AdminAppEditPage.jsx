@@ -196,7 +196,7 @@ function AdminAppEditPage() {
           runs under the test panel. */}
       <div
         className={testOpen ? 'lg:flex-1 lg:min-w-0 lg:overflow-y-auto' : undefined}
-        // Beside the test chat the form's cards are one column (`form-cols:` in tailwind.css).
+        // Beside the test chat the form's cards are one column (`md:form-cols:` in tailwind.css).
         data-form-narrow={testOpen ? '' : undefined}
       >
         {/* An app that did not load shows the error, with Retry, in place of the editor. */}
