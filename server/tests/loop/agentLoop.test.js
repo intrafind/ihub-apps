@@ -16,6 +16,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { AgentLoop, resolvePolicies } from '../../services/loop/AgentLoop.js';
 import {
+  approvalSeam,
   imageLiftSeam,
   knowledgeSourceSeam,
   passthroughSeam,
@@ -1225,6 +1226,262 @@ test('segment planner: read-only calls run in parallel, overlapping writes run s
     'transcript keeps the model call order'
   );
 });
+
+// ── read-only mode (#2485) ──────────────────────────────────────────────────
+
+/** A latch: `reached(n)` resolves once `n` calls have entered; no timer decides. */
+function createLatch() {
+  const latch = {
+    entered: [],
+    inFlight: 0,
+    maxInFlight: 0,
+    waiters: [],
+    enter(key) {
+      latch.entered.push(key);
+      latch.inFlight += 1;
+      latch.maxInFlight = Math.max(latch.maxInFlight, latch.inFlight);
+      for (const waiter of latch.waiters.filter(w => w.count <= latch.entered.length)) {
+        waiter.resolve();
+      }
+    },
+    leave() {
+      latch.inFlight -= 1;
+    },
+    reached(count) {
+      if (latch.entered.length >= count) return Promise.resolve();
+      return new Promise(resolve => {
+        latch.waiters.push({ count, resolve });
+      });
+    }
+  };
+  return latch;
+}
+
+const READ_ONLY_TOOLS = { parallel: true, parallelMode: 'readOnly' };
+const declaredRead = { id: 'lookup', sideEffect: 'read', parameters: { type: 'object' } };
+const declaredWrite = { id: 'store', sideEffect: 'write', parameters: { type: 'object' } };
+
+test(
+  'readOnly mode: declared reads of one step overlap; a write in the step makes every call wait its turn',
+  { timeout: 30_000 },
+  async () => {
+    // Two reads: neither returns before both have started, which a serial run never satisfies.
+    const both = createLatch();
+    const { loop } = makeLoop([
+      toolTurn([
+        { name: 'lookup', args: { key: 'a' } },
+        { name: 'lookup', args: { key: 'a' } }
+      ]),
+      textTurn('done')
+    ]);
+    const parallel = await loop.run({
+      model,
+      messages: baseMessages,
+      tools: [declaredRead, declaredWrite],
+      policies: { tools: READ_ONLY_TOOLS },
+      executeTool: async (call, { args }) => {
+        both.enter(call.id);
+        await both.reached(2);
+        both.leave();
+        return { id: call.id, key: args.key };
+      }
+    });
+    assert.equal(parallel.status, 'completed');
+    assert.equal(both.maxInFlight, 2, 'the same arguments do not keep two reads apart');
+    assert.deepEqual(
+      parallel.messages.filter(m => m.role === 'tool').map(m => m.tool_call_id),
+      ['call_1', 'call_2']
+    );
+
+    // A read, a write, a read: one at a time, in the model's order.
+    const serial = createLatch();
+    const { loop: mixedLoop } = makeLoop([
+      toolTurn([
+        { name: 'lookup', args: { key: 'a' } },
+        { name: 'store', args: { key: 'b' } },
+        { name: 'lookup', args: { key: 'c' } }
+      ]),
+      textTurn('done')
+    ]);
+    await mixedLoop.run({
+      model,
+      messages: baseMessages,
+      tools: [declaredRead, declaredWrite],
+      policies: { tools: READ_ONLY_TOOLS },
+      executeTool: async call => {
+        serial.enter(call.id);
+        // Give a second call the chance to start, were it allowed to.
+        await new Promise(resolve => setImmediate(resolve));
+        serial.leave();
+        return { id: call.id };
+      }
+    });
+    assert.equal(serial.maxInFlight, 1);
+    assert.deepEqual(serial.entered, ['call_1', 'call_2', 'call_3']);
+  }
+);
+
+test(
+  'readOnly mode: a tool that only claims to read, or carries no declaration, never overlaps',
+  { timeout: 30_000 },
+  async () => {
+    const claims = { id: 'claims', readOnly: true, parameters: { type: 'object' } };
+    const annotated = {
+      id: 'remote__list',
+      parameters: { type: 'object' },
+      _mcp: { serverId: 'remote', originalName: 'list', annotations: { readOnlyHint: true } }
+    };
+    const silent = { id: 'silent', isInternalTool: true, parameters: { type: 'object' } };
+    for (const tool of [claims, annotated, silent]) {
+      const latch = createLatch();
+      const { loop } = makeLoop([
+        toolTurn([
+          { name: tool.id, args: { key: 'a' } },
+          { name: tool.id, args: { key: 'b' } }
+        ]),
+        textTurn('done')
+      ]);
+      await loop.run({
+        model,
+        messages: baseMessages,
+        tools: [tool],
+        policies: { tools: READ_ONLY_TOOLS },
+        executeTool: async call => {
+          latch.enter(call.id);
+          await new Promise(resolve => setImmediate(resolve));
+          latch.leave();
+          return { id: call.id };
+        }
+      });
+      assert.equal(latch.maxInFlight, 1, tool.id);
+      assert.deepEqual(latch.entered, ['call_1', 'call_2'], tool.id);
+    }
+  }
+);
+
+test(
+  'readOnly mode: a call the approval seam may hold never shares a batch, also for a tool nobody stamped',
+  { timeout: 30_000 },
+  async () => {
+    // The loop's own tools carry no approval stamp. The seam resolves their
+    // policy from the platform default, here `always`: without asking the seam,
+    // the planner would put both calls into one batch and both would be raised.
+    const raised = [];
+    const gate = approvalSeam({
+      resolvePolicy: () => ({
+        approval: 'always',
+        approvalSource: 'platform',
+        sideEffect: 'read',
+        sideEffectSource: 'tool',
+        dataFlow: 'internal'
+      }),
+      raise: async info => {
+        raised.push(info.call.id);
+        return { id: `approval-${info.call.id}`, kind: 'approval' };
+      }
+    });
+    let executed = 0;
+    const { loop, requests } = makeLoop(
+      [
+        toolTurn([
+          { name: 'lookup', args: { key: 'a' } },
+          { name: 'lookup', args: { key: 'b' } }
+        ])
+      ],
+      { seams: [gate] }
+    );
+    const result = await loop.run({
+      model,
+      messages: baseMessages,
+      tools: [declaredRead],
+      policies: { tools: READ_ONLY_TOOLS },
+      executeTool: async () => {
+        executed += 1;
+        return {};
+      }
+    });
+    assert.equal(result.status, 'paused');
+    assert.equal(result.finishReason, 'approval');
+    assert.deepEqual(raised, ['call_1'], 'one approval is asked for, not one per call of the step');
+    assert.equal(result.pendingInteraction.id, 'approval-call_1');
+    assert.equal(executed, 0);
+    assert.equal(requests.length, 1);
+    const toolMessages = result.messages.filter(m => m.role === 'tool');
+    assert.equal(toolMessages.length, 2, 'both calls have a result in the transcript');
+    assert.deepEqual(JSON.parse(toolMessages[1].content), {
+      error: true,
+      message: 'not executed (turn ended)'
+    });
+
+    // The same step without a gate: one batch.
+    const latch = createLatch();
+    const { loop: free } = makeLoop([
+      toolTurn([
+        { name: 'lookup', args: { key: 'a' } },
+        { name: 'lookup', args: { key: 'b' } }
+      ]),
+      textTurn('done')
+    ]);
+    await free.run({
+      model,
+      messages: baseMessages,
+      tools: [declaredRead],
+      policies: { tools: READ_ONLY_TOOLS },
+      seams: [approvalSeam()],
+      executeTool: async call => {
+        latch.enter(call.id);
+        await latch.reached(2);
+        latch.leave();
+        return {};
+      }
+    });
+    assert.equal(latch.maxInFlight, 2);
+  }
+);
+
+test(
+  'readOnly mode: a stop while a batch runs ends every call of it, and no model call follows',
+  { timeout: 30_000 },
+  async () => {
+    const controller = new AbortController();
+    const latch = createLatch();
+    const { loop, requests } = makeLoop([
+      toolTurn([
+        { name: 'lookup', args: { key: 'a' } },
+        { name: 'lookup', args: { key: 'b' } },
+        { name: 'lookup', args: { key: 'c' } }
+      ]),
+      textTurn('never')
+    ]);
+    const signals = [];
+    const result = await loop.run({
+      model,
+      messages: baseMessages,
+      tools: [declaredRead],
+      policies: { tools: READ_ONLY_TOOLS },
+      signal: controller.signal,
+      executeTool: (call, { signal }) => {
+        latch.enter(call.id);
+        signals.push(signal);
+        // Never answers: only the stop ends the call.
+        if (latch.entered.length === 3) controller.abort();
+        return new Promise(() => {});
+      }
+    });
+    assert.equal(result.status, 'aborted');
+    assert.equal(latch.maxInFlight, 3, 'all three calls were running at the stop');
+    assert.ok(
+      signals.every(signal => signal.aborted),
+      'every call was handed the signal of the stop'
+    );
+    assert.equal(requests.length, 1);
+    const toolMessages = result.messages.filter(m => m.role === 'tool');
+    assert.equal(toolMessages.length, 3, 'every call has a result in the transcript');
+    for (const message of toolMessages) {
+      assert.deepEqual(JSON.parse(message.content), { error: true, message: 'aborted' });
+    }
+  }
+);
 
 // ── ledger ──────────────────────────────────────────────────────────────────
 

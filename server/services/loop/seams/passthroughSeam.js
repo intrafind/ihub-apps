@@ -101,6 +101,10 @@ export function passthroughSeam({
 } = {}) {
   return {
     name: 'passthrough',
+    /** A passthrough tool writes the answer and ends the turn: never beside another call. */
+    mayTakeOver(_ctx, info) {
+      return info?.toolDef?.passthrough === true;
+    },
     async preTool(ctx, info) {
       const { toolDef, toolId, args, call } = info;
       if (!toolDef || toolDef.passthrough !== true) return null;

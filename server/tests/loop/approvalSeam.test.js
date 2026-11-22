@@ -49,6 +49,23 @@ test('ungated, granted and interactive calls pass through untouched', async () =
   assert.equal(await seam.preTool(ctx(), info({ ...GATED, interactive: true })), null);
 });
 
+test('mayTakeOver: the seam says which calls it may hold, from the policy it resolves itself', () => {
+  const seam = approvalSeam({ isGranted: () => true });
+  assert.equal(seam.mayTakeOver(ctx(), info({ id: 'free' })), false);
+  // A grant is not looked at: the call still counts as one that may be held.
+  assert.equal(seam.mayTakeOver(ctx(), info()), true);
+  assert.equal(seam.mayTakeOver(ctx(), info({ ...GATED, interactive: true })), false);
+  assert.equal(seam.mayTakeOver(ctx(), { toolDef: null }), false);
+
+  // A tool nobody stamped: the stamp says nothing, the seam's own resolver decides.
+  const unstamped = { id: 'recall_tool_result', isInternalTool: true, sideEffect: 'read' };
+  const always = approvalSeam({
+    resolvePolicy: () => ({ approval: 'always', sideEffect: 'read', sideEffectSource: 'tool' })
+  });
+  assert.equal(always.mayTakeOver(ctx(), info(unstamped)), true);
+  assert.equal(approvalSeam().mayTakeOver(ctx(), info(unstamped)), false);
+});
+
 test('headless fallback: deny and park-without-a-parker refuse with APPROVAL_REQUIRED_NO_USER; fail ends the run', async () => {
   for (const mode of ['deny', 'park']) {
     const out = await approvalSeam({ headless: true }).preTool(ctx(mode), info());

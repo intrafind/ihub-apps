@@ -720,7 +720,11 @@ export function projectLedgerEvent(ev) {
           ...(d.activityKind ? { activityKind: d.activityKind } : {}),
           ...(d.activityOrigin ? { activityOrigin: d.activityOrigin } : {}),
           args: d.args,
-          execution: d.execution || 'server'
+          execution: d.execution || 'server',
+          // Only a call that shared its batch carries its place (`callIndex`).
+          ...(Number.isInteger(d.callIndex) && Number.isInteger(d.parallelGroup)
+            ? { parallelGroup: d.parallelGroup, callIndex: d.callIndex }
+            : {})
         })
       ];
     case RUN_LOG_EVENTS.TOOL_RESULT:

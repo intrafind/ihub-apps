@@ -317,7 +317,14 @@ export const toolCallData = z.object({
   argsRepaired: z.boolean().optional(),
   /** Execution class decided by the segment planner. */
   execution: z.enum(['server', 'caller', 'clarification', 'passthrough']).prefault('server'),
-  parallelGroup: z.number().int().nonnegative().optional()
+  /** The batch of the step the call ran in (`segmentPlanner`); every call has one. */
+  parallelGroup: z.number().int().nonnegative().optional(),
+  /**
+   * The call's place in the model's order of the step. Only on a call that
+   * shared its batch with another one: it is what tells a batch of several
+   * calls from a call that ran alone, and what orders their rows.
+   */
+  callIndex: z.number().int().nonnegative().optional()
 });
 
 /**

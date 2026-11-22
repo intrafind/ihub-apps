@@ -205,6 +205,16 @@ export function approvalSeam({
 } = {}) {
   return {
     name: 'approval',
+    /**
+     * Whether a call of this tool may be held for a person: the policy this
+     * seam resolves asks for it. A grant ("allow for this chat") is not looked
+     * at, so a granted call still counts and runs alone.
+     */
+    mayTakeOver(ctx, info) {
+      const toolDef = info?.toolDef;
+      if (!toolDef || toolDef.interactive === true) return false;
+      return needsApproval(resolvePolicy(toolDef, ctx));
+    },
     async preTool(ctx, info) {
       const { toolDef, call } = info;
       // Unregistered tools are refused by the loop; interactive ones ask
