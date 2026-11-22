@@ -390,7 +390,7 @@ describe('modifier: shares count only while the owner may hold and share', () =>
     });
   }
 
-  it('the owner is on blockedOwners: members cannot chat, and neither can the owner or an admin', () => {
+  it('the owner is on blockedOwners: nobody chats, and the owner is locked out of changes', () => {
     const owner = { ...OWNER_OK, blocked: true };
     for (const user of [CAROL, BOB, GINA, DAVE]) {
       const permissions = permissionsOf(user, record(), { owner });
@@ -399,7 +399,14 @@ describe('modifier: shares count only while the owner may hold and share', () =>
     }
     const own = permissionsOf(ALICE, record(), { owner });
     assert.equal(own.canUse, false, 'a blocked owner cannot chat either');
-    assert.equal(own.canEdit, true, 'the owner keeps the own row otherwise');
+    assert.equal(own.canView, true, 'the owner still sees the app');
+    // Locked out: no edit, no members, no delete (ticket #3897).
+    assert.equal(own.canEdit, false);
+    assert.equal(own.canShare, false);
+    assert.equal(own.canDelete, false);
+    assert.equal(own.canPublish, false);
+    assert.equal(satisfiesUserAppLevel(own, 'edit'), false);
+    assert.equal(satisfiesUserAppLevel(own, 'delete'), false);
     // ... but cannot hand the app past the block, and an earlier offer of the
     // owner cannot be accepted. An admin may still offer it.
     assert.equal(own.canOffer, false);
@@ -409,10 +416,17 @@ describe('modifier: shares count only while the owner may hold and share', () =>
       pendingOwner: { ...record().pendingOwner, offeredBy: { id: 'root', name: 'Root' } }
     });
     assert.equal(permissionsOf(DAVE, byAdmin, { owner }).canAcceptOffer, true);
-    assert.equal(own.canDelete, true);
     assert.equal(own.suspended, 'ownerBlocked');
-    assert.equal(permissionsOf(ROOT, record(), { owner }).canUse, false);
-    assert.equal(permissionsOf(ROOT, record(), { owner }).canDelete, true);
+    // An admin keeps every admin ability, and still never edits.
+    const admin = permissionsOf(ROOT, record(), { owner });
+    assert.equal(admin.canUse, false);
+    assert.equal(admin.canDelete, true);
+    assert.equal(admin.canOffer, true);
+    assert.equal(admin.canEdit, false);
+    // An editor of the blocked owner cannot edit or share either.
+    const editor = permissionsOf(CAROL, record(), { owner });
+    assert.equal(editor.canEdit, false);
+    assert.equal(editor.canShare, false);
   });
 
   it('a blocked person cannot create, and an unblocked one with the permission can', () => {

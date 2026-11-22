@@ -294,6 +294,8 @@ export function userAppStateChipText(chip, t) {
  *
  * - `disabled`: an administrator switched the app off.
  * - `promoted`: the app became a company app.
+ * - `ownerBlocked`: an administrator blocked the caller, who owns the app.
+ *   Their editors see the suspended shares instead (`role`).
  * - `ownerInactive`: the owner's account is inactive (an editor).
  * - `capability`: the app uses something this editor may not use; `capability`
  *   names the first one.
@@ -301,13 +303,16 @@ export function userAppStateChipText(chip, t) {
  *   receiver of an offer, an administrator). No banner; the form is read-only.
  *
  * @param {Object} app - The answer of the server.
- * @returns {{reason: 'disabled'|'promoted'|'ownerInactive'|'capability'|'role',
+ * @returns {{reason: 'disabled'|'promoted'|'ownerBlocked'|'ownerInactive'|'capability'|'role',
  *   capability?: Object}|null}
  */
 export function readOnlyReason(app) {
   const permissions = app?.permissions || {};
   if (app?.disabled) return { reason: 'disabled' };
   if (app?.state === 'promoted') return { reason: 'promoted' };
+  if (permissions.isOwner === true && permissions.suspended === 'ownerBlocked') {
+    return { reason: 'ownerBlocked' };
+  }
   if (
     permissions.role === 'editor' &&
     (permissions.readOnly === true || app?.owner?.active === false)

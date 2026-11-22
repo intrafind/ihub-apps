@@ -1081,9 +1081,6 @@ export class UserAppRepository {
             membersUpdatedBy:
               droppedOwn || downgraded > 0 ? newOwner : record.membersUpdatedBy || null,
             pendingOwner: null,
-            // The receiver read this content before accepting: it counts as
-            // theirs for the approval mode until somebody else changes it.
-            contentConfirmedBy: { id: newOwner.id, contentHash: record.contentHash || null },
             ...(typeof release === 'function' && release(record)
               ? { state: 'active', publishedAs: null }
               : {}),

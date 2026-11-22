@@ -186,7 +186,7 @@ export function beginCopy(app, { uiLanguage, platformDefault, isTaken, copyLabel
  * beyond texts and input fields stays in `generated.suggestions` until the
  * author ticks it.
  *
- * @param {{ app: object, suggestions?: object, warnings?: object[], model?: object, brief?: string }} result -
+ * @param {{ app: object, suggestions?: object, warnings?: object[], model?: object }} result -
  *   The answer of the draft request.
  * @param {{ description: string, language: string }} options - What the
  *   author wrote, and the language that was asked for.

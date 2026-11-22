@@ -25,12 +25,6 @@ export const APP_GENERATOR_DRAFT_LIMIT = 30;
 export const APP_GENERATOR_DRAFT_WINDOW_MS = 60 * 60 * 1000;
 
 /**
- * The values of `brief` in the answer: `standard` is the brief the server
- * owns, `customised` the library prompt `app-generator` an admin changed.
- */
-export const APP_GENERATOR_BRIEFS = Object.freeze(['standard', 'customised']);
-
-/**
  * `details.reason` of `APP_GENERATOR_INVALID_ANSWER`: the answer holds no JSON
  * object, it was cut off, or it lacks what an app needs.
  */

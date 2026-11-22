@@ -7,14 +7,10 @@
  *
  * The system message has two parts.
  *
- * 1. The brief. The server owns one ({@link STANDARD_BRIEF}). The library
- *    prompt `app-generator` replaces it only when an admin changed that prompt
- *    ({@link chooseBrief}); the shipped library text is never used, because it
- *    asks for two languages and names a model.
+ * 1. The brief ({@link STANDARD_BRIEF}), which the server owns. No library
+ *    prompt and no setting replaces it.
  * 2. The output rules ({@link outputRules}), which the server appends after
- *    either brief and after the catalogue of installed systems. A customised
- *    library prompt can therefore add to a draft but cannot remove the format
- *    rules.
+ *    the brief and after the catalogue of installed systems.
  *
  * The author's description is the user message and nothing else: it never
  * becomes part of the system message.
@@ -24,42 +20,11 @@
  * @module services/appGeneratorBrief
  */
 
-import { createHash } from 'node:crypto';
 import { DEFAULT_APP_CATEGORY } from '../../shared/appDefaults.js';
 
-/** The id of the library prompt an admin can change to steer drafts. */
-export const APP_GENERATOR_PROMPT_ID = 'app-generator';
-
 /**
- * The hash ({@link hashBriefPrompt}) of the `prompt` object of every version
- * of `server/defaults/prompts/app-generator.json` the repository history
- * gives, and of each such version after migration V231, which rewrote the
- * stored copy (it removed the `actions` block of the example). A library
- * prompt whose hash is listed here was never changed by an admin.
- *
- * When the shipped file changes, add the hash of its new `prompt` object; a
- * test fails until it is listed, so that an edit of the file cannot turn every
- * installation into "customised" unnoticed.
- */
-export const SHIPPED_BRIEF_HASHES = Object.freeze([
-  '1fbdc539d9dec02b54769184ef5fafdd6ce22c48b2c70c01b7de2113cf5796ce', // 2025-04-14 e7ab9d3
-  '2d72216e43f24c1e3f3c71069ec7009f3231a208c650e768908d57528a4732e1', // 2025-07-28 833f151
-  'f157c15798abb911868e05ccc91a87076f2e91ad8f1738efa8ed0afa90ce9b3e', // 2025-07-28 833f151, after V231
-  '74666b4670d567f4a2b191f7988823c182dec215cbdcc3e416711046a44b9c90', // 2025-08-07 45f9923
-  '68ba097f665b186b97efb4e3251fec88051deafb200e87366c1930134a331347', // 2025-08-07 45f9923, after V231
-  '1836f9f6f2fa025eb9547234d76196af6c39d12890295b8a4f80cc24fa4ca245', // 2026-06-16 9304a1e
-  'd608c9e772fe0cc2bb44b1b76799ca36bce80a642b2f37bc8964277861fff442', // 2026-06-16 9304a1e, after V231
-  '7ac3e605326691c135473533978b442b44db29c4d5007e5163c595b396e3d148', // 2026-10-19 76eb2de
-  'ee7927c1c5ae8aa636ee1daedd2a240fb70e1550c62a539cc42d1cde176c12f9', // 2026-10-19 76eb2de, after V231
-  'f2d138641a6c65b486d12daab8332cd599000bc3b85669e99270f0b46ff0aec5', // 2026-10-23 386db87
-  '81d8cda8a68c3a8243c178b3ee5e005e3f48ae8e70bd904a0d484b3485573177', // 2026-10-23 386db87, after V231
-  '5b5b88074810351ebb2ad82e3e20f26331e597af4707f087b37150cd15f95ab0' // 2026-11-07 950015c (current)
-]);
-
-/**
- * The brief the server uses unless an admin changed the library prompt. It
- * asks for one draft in plain words and names no model, no language pair and
- * no file format; the output rules that follow it fix the format.
+ * The brief of every draft. It asks for one draft in plain words and names no
+ * model, no language pair and no file format; the output rules that follow it fix the format.
  */
 export const STANDARD_BRIEF = [
   'You prepare the draft of an app for iHub, a portal where the people of an organization use AI apps.',
@@ -99,35 +64,6 @@ const SUGGESTED_ICONS = [
   'question-mark-circle'
 ];
 
-function isPlainObject(value) {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-}
-
-/** The texts of a localized prompt, per language, with line endings and outer blanks normalised. */
-function normalisedTexts(prompt) {
-  // Code-unit order, not localeCompare: the result is compared with the shipped
-  // texts, so it must not depend on the locale the server runs in.
-  return Object.keys(prompt)
-    .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
-    .map(language => [language, String(prompt[language]).replace(/\r\n?/g, '\n').trim()]);
-}
-
-/**
- * The hash that tells a shipped library prompt from a changed one: SHA-256
- * over the texts of the prompt's `prompt` object, in the order of their
- * language codes. Line endings and blanks at the ends of a text do not count,
- * so a prompt that was only opened and saved in the editor stays "shipped".
- *
- * @param {Object<string, string>} prompt - `prompt` of a prompt file.
- * @returns {string} 64 hexadecimal characters; empty for anything that is not an object.
- */
-export function hashBriefPrompt(prompt) {
-  if (!isPlainObject(prompt)) return '';
-  return createHash('sha256')
-    .update(JSON.stringify(normalisedTexts(prompt)))
-    .digest('hex');
-}
-
 /** English name of a language tag: `de` gives "German", an unknown tag itself. */
 export function languageName(language) {
   try {
@@ -137,48 +73,8 @@ export function languageName(language) {
   }
 }
 
-/** The text of a library prompt in a language, else the platform default, English or any language. */
-function textOf(prompt, language, defaultLanguage) {
-  const base = String(language || '').split('-')[0];
-  const candidates = [
-    prompt[language],
-    prompt[base],
-    prompt[defaultLanguage],
-    prompt.en,
-    ...Object.values(prompt)
-  ];
-  const text = candidates.find(candidate => typeof candidate === 'string' && candidate.trim());
-  return text ? text.trim() : '';
-}
-
 /**
- * Which brief a draft is prepared with.
- *
- * The library prompt `app-generator` is used when it exists, is enabled, has
- * text, and that text differs from every released version of the shipped file
- * ({@link SHIPPED_BRIEF_HASHES}): an admin customised it. In every other case
- * (no prompt, a disabled one, the shipped text) the server's own brief is
- * used.
- *
- * @param {object|null|undefined} libraryPrompt - The prompt `app-generator`, or nothing.
- * @param {string} language - The language of the draft.
- * @param {string} [defaultLanguage='en'] - The platform's default language.
- * @returns {{ brief: 'standard'|'customised', text: string }}
- *
- * @example
- * chooseBrief(null, 'de'); // → { brief: 'standard', text: STANDARD_BRIEF }
- */
-export function chooseBrief(libraryPrompt, language, defaultLanguage = 'en') {
-  const standard = { brief: 'standard', text: STANDARD_BRIEF };
-  if (!isPlainObject(libraryPrompt) || libraryPrompt.enabled === false) return standard;
-  if (!isPlainObject(libraryPrompt.prompt)) return standard;
-  if (SHIPPED_BRIEF_HASHES.includes(hashBriefPrompt(libraryPrompt.prompt))) return standard;
-  const text = textOf(libraryPrompt.prompt, language, defaultLanguage);
-  return text ? { brief: 'customised', text } : standard;
-}
-
-/**
- * The rules the server appends after either brief: the keys an answer may
+ * The rules the server appends after the brief: the keys an answer may
  * use, the categories of the installation, the one language of every text and
  * how an input field reaches the AI.
  *
@@ -226,34 +122,28 @@ export function outputRules({ language, categories = [], hasIntegrations = false
  * The two messages of a draft request.
  *
  * @param {object} options
- * @param {object|null} [options.libraryPrompt] - The library prompt `app-generator`, when there is one.
  * @param {string} options.description - What the author wrote. It is the user message, as it is.
  * @param {string} options.language - The language of the draft.
- * @param {string} [options.defaultLanguage='en'] - The platform's default language.
  * @param {string[]} [options.categories] - The category IDs of the installation.
  * @param {string} [options.integrationsBlock=''] - The catalogue of installed systems
  *   (`integrationsBlock` of `services/appGenerator.js`), empty when none is installed.
- * @returns {{ brief: 'standard'|'customised', messages: Array<{ role: string, content: string }> }}
+ * @returns {{ messages: Array<{ role: string, content: string }> }}
  */
 export function buildGeneratorMessages({
-  libraryPrompt = null,
   description,
   language,
-  defaultLanguage = 'en',
   categories = [],
   integrationsBlock = ''
 }) {
-  const { brief, text } = chooseBrief(libraryPrompt, language, defaultLanguage);
   // The rules come last, after the catalogue: what the server owns has the final word.
   const system = [
-    text,
+    STANDARD_BRIEF,
     integrationsBlock.trim(),
     outputRules({ language, categories, hasIntegrations: Boolean(integrationsBlock.trim()) })
   ]
     .filter(Boolean)
     .join('\n\n');
   return {
-    brief,
     messages: [
       { role: 'system', content: system },
       { role: 'user', content: description }

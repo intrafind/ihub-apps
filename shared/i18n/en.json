@@ -3807,7 +3807,6 @@
           "also": "Also in this draft",
           "inputFields": "Input fields: {{names}}",
           "fieldsLocked": "The instructions use these fields. You can remove them in the editor.",
-          "briefCustomised": "An administrator changed how drafts are prepared on this installation.",
           "suggestions": "The app could also use",
           "suggestionsHelp": "Nothing here is switched on unless you tick it.",
           "webSearch": "Web search: the app can search the internet.",
@@ -12153,6 +12152,7 @@
       },
       "conflict": "Someone else changed this app. Reload to see the changes.",
       "readOnly": {
+        "ownerBlocked": "An administrator blocked your apps. You can no longer change, share or delete them.",
         "ownerInactive": "The owner's account is inactive. Only an administrator can change this app.",
         "promoted": "This app became a company app on {{date}}. Administrators manage it now. You can no longer change it here.",
         "disabled": "An administrator switched this app off: {{reason}}",

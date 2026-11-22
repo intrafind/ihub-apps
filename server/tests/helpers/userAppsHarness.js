@@ -189,6 +189,34 @@ export const FEATURES = {
 };
 
 /**
+ * The company apps of the fixture that a publish stamped
+ * (`sourceUserAppId`), by app ID. {@link setConfig} applies them to every
+ * app list it installs, so a later `setConfig` keeps them; `reset()` clears
+ * them.
+ */
+const companyAppStamps = new Map();
+let installedApps = APPS;
+
+function withStamps(apps) {
+  return apps.map(app =>
+    companyAppStamps.has(app.id) ? { ...app, sourceUserAppId: companyAppStamps.get(app.id) } : app
+  );
+}
+
+/**
+ * Make the config app `appId` the company app of the personal app
+ * `userAppId`, as a publish writes it: a promoted record counts as promoted
+ * only while its company app carries its ID.
+ *
+ * @param {string} appId - A config app of the fixture, e.g. {@link ADMIN_APP}.
+ * @param {string} userAppId - The personal app's ID.
+ */
+export function stampCompanyApp(appId, userAppId) {
+  companyAppStamps.set(appId, userAppId);
+  configCache.setCacheEntry('config/apps.json', withStamps(installedApps));
+}
+
+/**
  * Put the fixture into the config cache.
  *
  * @param {Object} [options]
@@ -215,7 +243,8 @@ export function setConfig({
   configCache.setCacheEntry('config/features.json', features);
   configCache.setCacheEntry('config/groups.json', groups);
   configCache.setCacheEntry('config/models.json', MODELS);
-  configCache.setCacheEntry('config/apps.json', apps);
+  installedApps = apps;
+  configCache.setCacheEntry('config/apps.json', withStamps(apps));
   configCache.setCacheEntry('config/integrations.json', integrations);
   configCache.setCacheEntry('config/workflows.json', []);
   configCache.setCacheEntry('config/sources.json', []);
@@ -459,6 +488,7 @@ export async function startUserAppsHarness({ stubTurns = true } = {}) {
      * and nothing remembered from earlier tests.
      */
     async reset() {
+      companyAppStamps.clear();
       setConfig();
       turns.length = 0;
       magicCalls.length = 0;

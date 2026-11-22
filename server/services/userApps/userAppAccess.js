@@ -23,7 +23,9 @@
  *  - **Shares count only while the owner may hold and share personal apps.**
  *    When the owner lost `userApps` or `userAppSharing`, or an admin blocked
  *    the owner, members still see the app and can do nothing else
- *    (`suspended`). A blocked owner's app is chatted with by nobody.
+ *    (`suspended`). A blocked owner's app is chatted with by nobody, and
+ *    the blocked owner can no longer edit, share, delete, offer or publish
+ *    it; a full admin keeps every admin ability.
  *  - A **switched-off** app is chatted with by full admins only. A
  *    **promoted** app is read-only. An app whose **owner is inactive** is
  *    read-only for its editors.
@@ -250,11 +252,36 @@ export function openOffer(record, now = Date.now()) {
  * @param {Object|null|undefined} record - Stored personal app.
  * @param {Object} [options]
  * @param {boolean} [options.publishedAppExists=true] - Whether
- *   `publishedAs.appId` is still a config app (`configCache.getApps(true)`).
+ *   `publishedAs.appId` is still a config app (`configCache.getApps(true)`)
+ *   that carries the record's ID ({@link isCompanyAppOf}).
  * @returns {'active'|'promoted'}
  */
 export function effectiveUserAppState(record, { publishedAppExists = true } = {}) {
   return record?.state === 'promoted' && publishedAppExists !== false ? 'promoted' : 'active';
+}
+
+/**
+ * Whether `app`, a config app, is the company app of `record`: the publish
+ * stamped the record's ID into `sourceUserAppId`. An app file with the same
+ * ID that carries no stamp or another one (made by hand, or by a config
+ * import, under an ID the record still holds) is not; the record then counts
+ * as released, as if its company app were deleted.
+ *
+ * @param {Object|null|undefined} app - The config app under `publishedAs.appId`.
+ * @param {Object|null|undefined} record - Stored personal app.
+ * @returns {boolean}
+ *
+ * @example
+ * const company = findByIdCaseInsensitive(apps, record.publishedAs.appId);
+ * const exists = isCompanyAppOf(company, record);
+ */
+export function isCompanyAppOf(app, record) {
+  return (
+    Boolean(app) &&
+    typeof app.sourceUserAppId === 'string' &&
+    Boolean(record?.id) &&
+    app.sourceUserAppId === record.id
+  );
 }
 
 /** Whether a `users.json` record is a local account (it signs in with a password). */
@@ -529,7 +556,9 @@ export function userAppPermissions(
   const ownerGone = !isOwner && ownerInfo.active === false;
   const editorWorks = role === 'editor' && shareWorks && !ownerGone;
 
-  const canEdit = active && (isOwner || editorWorks);
+  // A blocked owner is locked out of their apps: no edit, no members, no
+  // delete (design 8.4). Their editors already lost the share above.
+  const canEdit = active && !blocked && (isOwner || editorWorks);
   const canUse = retired
     ? false
     : disabled
@@ -543,7 +572,9 @@ export function userAppPermissions(
     canUse,
     canEdit,
     canShare: canEdit && mayShareUserApps(user) && ownerInfo.mayShare === true,
-    canDelete: isOwner || admin,
+    // A full admin deletes whatever the block; the blocked owner does not:
+    // the admin may still want to look at what led to the block.
+    canDelete: admin || (isOwner && !blocked),
     // A blocked owner keeps the own row (design 5), but cannot hand the app
     // over: under a new owner the block would no longer apply (design 8.4).
     canOffer: active && (admin || (isOwner && !blocked)),

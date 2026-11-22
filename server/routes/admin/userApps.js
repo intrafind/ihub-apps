@@ -33,7 +33,7 @@ import { ServiceError } from '../../utils/ServiceError.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import { membersWithoutCompanyApp } from '../../services/userApps/publishUserApp.js';
 import { getUserAppRepository } from '../../services/userApps/UserAppRepository.js';
-import { lookupUserAppOwner } from '../../services/userApps/userAppAccess.js';
+import { isCompanyAppOf, lookupUserAppOwner } from '../../services/userApps/userAppAccess.js';
 import { isConfigAppId, userAppStanding } from '../../services/userApps/userAppResolution.js';
 import {
   changedUserAppSettingKeys,
@@ -142,9 +142,11 @@ async function viewExtras(context) {
  */
 function adminContext(record, settings) {
   const publishedId = record.state === 'promoted' ? record.publishedAs?.appId : null;
-  const company = publishedId
+  const found = publishedId
     ? findByIdCaseInsensitive(configCache.getApps(true)?.data || [], publishedId) || null
     : null;
+  // An app under that ID without the record's stamp is not its company app.
+  const company = isCompanyAppOf(found, record) ? found : null;
   return {
     owner: lookupUserAppOwner(record, { settings }),
     clash: isConfigAppId(record.id),

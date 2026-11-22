@@ -44,6 +44,7 @@ import {
   plainContent,
   setConfig,
   shape,
+  stampCompanyApp,
   startUserAppsHarness
 } from './helpers/userAppsHarness.js';
 
@@ -67,9 +68,10 @@ const sharedApp = (options = {}) =>
     ...options
   });
 
-/** Mark a stored app as published as `appId`. */
-const promote = (record, appId) =>
-  harness.repo().mutate(
+/** Mark a stored app as published as `appId`, and stamp that app with its ID. */
+const promote = (record, appId) => {
+  stampCompanyApp(appId, record.id);
+  return harness.repo().mutate(
     record.id,
     current => ({
       ...current,
@@ -78,6 +80,7 @@ const promote = (record, appId) =>
     }),
     { bumpRevision: false }
   );
+};
 
 describe('resolveAppForChat: an ID that is no personal app', () => {
   it('answers what getAppForRequest answers, and leaves the group check to the caller', async () => {
@@ -569,6 +572,7 @@ describe('GET /api/apps/{appId} for a personal app', () => {
 
   it('retired for the caller: the pointer to the company app, and nothing of the personal app', async () => {
     const record = await sharedApp();
+    stampCompanyApp(ADMIN_APP, record.id);
     await harness.repo().mutate(
       record.id,
       current => ({

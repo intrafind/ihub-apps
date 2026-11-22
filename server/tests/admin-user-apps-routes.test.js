@@ -35,6 +35,7 @@ const {
   member,
   plainContent,
   setConfig,
+  stampCompanyApp,
   shape,
   startUserAppsHarness
 } = await import('./helpers/userAppsHarness.js');
@@ -50,6 +51,12 @@ const { default: registerAdminUserAppRoutes, registerAdminUserAppViewExtension }
 const BASE = '/api/admin/user-apps';
 /** An app file that is not switched on: the company app of a published personal app. */
 const COMPANY_OFF = 'company-off';
+
+/** `record`, after making `appId` its company app (`sourceUserAppId`). */
+const stampedFor = (appId, record) => {
+  stampCompanyApp(appId, record.id);
+  return record;
+};
 
 let harness;
 let as;
@@ -295,14 +302,14 @@ describe('the list of personal apps', () => {
     const by = { id: 'anna', name: 'Anna Schmidt' };
     const waiting = await harness.createApp('anna', {
       change: r => ({
-        ...r,
+        ...stampedFor(COMPANY_OFF, r),
         state: 'promoted',
         publishedAs: { appId: COMPANY_OFF, at: '2026-11-19T08:00:00.000Z', by }
       })
     });
     const live = await harness.createApp('ben', {
       change: r => ({
-        ...r,
+        ...stampedFor(ADMIN_APP, r),
         state: 'promoted',
         publishedAs: { appId: ADMIN_APP, at: '2026-11-19T08:00:00.000Z', by }
       })
@@ -823,6 +830,16 @@ describe('switching off all apps of one person', () => {
       list.body.items.map(item => item.id),
       [record.id]
     );
+  });
+
+  it('a full admin still reads and deletes an app of a blocked owner', async () => {
+    const record = await sharedApp();
+    await block(['anna']);
+    const view = await as('root').get(`${BASE}/${record.id}`);
+    assert.equal(view.status, 200, view.text);
+    const removed = await as('root').delete(`${BASE}/${record.id}`);
+    assert.equal(removed.status, 204, removed.text);
+    assert.equal(await harness.repo().get(record.id), null);
   });
 
   it('is reversible', async () => {

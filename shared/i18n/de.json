@@ -4304,7 +4304,6 @@
           "also": "Außerdem in diesem Entwurf",
           "inputFields": "Eingabefelder: {{names}}",
           "fieldsLocked": "Die Anweisungen verwenden diese Felder. Entfernen können Sie sie im Editor.",
-          "briefCustomised": "Ein Administrator hat angepasst, wie Entwürfe auf dieser Installation vorbereitet werden.",
           "suggestions": "Die App könnte außerdem verwenden",
           "suggestionsHelp": "Nichts davon ist eingeschaltet, solange Sie es nicht ankreuzen.",
           "webSearch": "Websuche: Die App kann im Internet suchen.",
@@ -12152,6 +12151,7 @@
       },
       "conflict": "Jemand anderes hat diese App geändert. Laden Sie neu, um die Änderungen zu sehen.",
       "readOnly": {
+        "ownerBlocked": "Ein Administrator hat Ihre Apps gesperrt. Sie können sie nicht mehr ändern, teilen oder löschen.",
         "ownerInactive": "Das Konto des Besitzers ist inaktiv. Nur ein Administrator kann diese App ändern.",
         "promoted": "Diese App wurde am {{date}} zu einer Unternehmens-App. Administratoren verwalten sie jetzt. Sie können sie hier nicht mehr ändern.",
         "disabled": "Ein Administrator hat diese App abgeschaltet: {{reason}}",

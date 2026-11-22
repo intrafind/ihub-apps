@@ -732,7 +732,12 @@ Modifiers, applied after the table:
   principal no longer holds `userApps` or `userAppSharing`, or the owner is on the list
   `blockedOwners`, the members' rows above turn into "View: yes, everything else: no", with
   `suspended` set. The owner keeps the own row, except that a blocked owner cannot chat, publish
-  or offer the app to a new owner: under a new owner the block would no longer apply. For the
+  or offer the app to a new owner: under a new owner the block would no longer apply. A blocked
+  owner is also locked out of changing the app (decided by the owner, ticket #3897): no edit,
+  no members, and no delete either, so the app an admin is looking into stays as it is; the
+  routes answer 403 `PERMISSION_DENIED` with `details.reason: 'ownerBlocked'`, and the editor
+  shows the app read-only with "An administrator blocked your apps." A full admin keeps every
+  admin ability (read, delete, offer, take over). For the
   same reason, while the shares are suspended the receiver can accept only an offer a full admin
   made; an offer the owner made earlier waits until the shares count again. A receiver who can
   accept reads the full app, instructions included, also while the chat is closed to them (8.3).
@@ -898,13 +903,13 @@ The ceiling therefore sets the mode by who is chatting:
   `useNativeSearch: false` (`appConfigSchema.js:118`) the search runs as a tool of an installed
   engine, and every call is visible. Cost: a personal app has web search only where an engine
   is installed and granted.
-- **The owner runs `writes` only on content they saved.** The reason for `writes` is that the
-  owner reads their own instructions. A "Can edit" member can rewrite them, and after a
-  hand-over the content is the previous owner's. So the owner gets `writes` and the chat grant
-  only while the content is the owner's own: `updatedBy` of the record, which changes only when
-  the content changes, is the owner, or the owner accepted the app with exactly this content
-  (`contentConfirmedBy: { id, contentHash }`, written by the accept of 8.3, after the receiver
-  read it). Otherwise the owner is asked as everyone else is, until the owner saves the content.
+- **The owner runs `writes` whoever saved the content** (decided by the owner, ticket #3897).
+  Anyone allowed to change an app changes it, and the owner does not confirm an editor's
+  change. Trade-off: a change a "Can edit" member makes, and the content the owner took over by
+  accepting an offer, run under the owner's approval settings, chat grant included. An earlier
+  version gave the owner `writes` only while `updatedBy` was the owner or a
+  `contentConfirmedBy` stamp matched; that rule and the stamp are gone, and a stored
+  `contentConfirmedBy` is ignored.
 - An admin setting that is stricter than `writes` still wins for the owner
   (`server/utils/toolApproval.js:19-21`).
 
@@ -1139,7 +1144,10 @@ The header is required because an editor may have changed the app since the owne
      capabilities as ordinary app config: `websearch.enabled`, `upload`, `skillSettings` with
      `skills` as the explicit list of granted skill IDs (never `*`), `integrations` with the
      explicit `actions` of each binding, `features: { projects: false, userProjects: false }`
-     as the personal app had them, `toolApproval: { default: 'writes' }`.
+     as the personal app had them, `toolApproval: { default: 'writes' }`, and
+     `sourceUserAppId` with the ID of the personal app (decided by the owner, ticket #3897).
+     The record counts as promoted only while its company app carries this stamp; see
+     "Released by itself" below.
    - The ID is `uniqueAppId(slugifyAppId(name), isTaken)` (`shared/appId.js:73`, `:167`). The
      owner does not choose it. The app gets no category.
    - `enabled` follows the rule below.
@@ -1251,8 +1259,10 @@ what the owner's statement says. This differs from projects, where the owner tak
 out of the catalog (`server/routes/projectRoutes.js:1039-1047`). An admin can give it back:
 
 - **Released by itself.** When `publishedAs.appId` no longer exists in `getApps(true)`, because
-  an admin deleted the company app, the resolver treats the record as `active`, and the next
-  read of the app stores that (`state: 'active'`, `publishedAs: null`). Until then the ID
+  an admin deleted the company app, or the app under that ID does not carry the record's ID in
+  `sourceUserAppId` (it was made by hand or imported under an ID the record still holds), the
+  resolver treats the record as `active`, and the next read of the app stores that
+  (`state: 'active'`, `publishedAs: null`). Until then the ID
   stays taken: a publish or a take-over never hands out an ID that a personal app still holds
   as `publishedAs.appId` or `publishing.appId`, so an earlier record cannot end up pointing at
   somebody else's app. A content admin can therefore give an app back by deleting the copy.
@@ -1347,7 +1357,7 @@ accepts.
 | Read earlier content states | full admin | `GET /api/admin/user-apps/{appId}/revisions` | The last 20 states with who saved them (section 10). Audited. |
 | Chat with it | full admin | the normal chat route | Through the permission function (section 5). The first turn of each chat writes an audit entry. |
 | Switch off / on | full admin | `POST …/{appId}/_disable`, `_enable` | Nobody but a full admin can chat. Owner and members see the reason. The owner cannot duplicate it. |
-| Switch off all apps of one person | full admin | `PUT /api/admin/user-apps/_settings` (`blockedOwners`) | The person's apps stop for everyone, and the person cannot create new ones. Reversible. The admin user page has the button. |
+| Switch off all apps of one person | full admin | `PUT /api/admin/user-apps/_settings` (`blockedOwners`) | The person's apps stop for everyone, the person cannot create new ones, and cannot edit, share, delete, offer or publish the ones they own. Reversible. The admin user page has the button. |
 | Stop a whole group | full admin | the group page | Removing `userApps` or `userAppSharing` from a group stops the shares of its members' apps (section 5), within the limits of 6.2. |
 | Delete | full admin | `DELETE /api/admin/user-apps/{appId}` | Record and markers are removed. |
 | Offer to a new owner | full admin | `PUT /api/apps/{appId}/owner-offer` | 8.3. |

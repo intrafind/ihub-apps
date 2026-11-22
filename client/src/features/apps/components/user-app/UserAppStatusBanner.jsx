@@ -16,7 +16,7 @@ function dateText(value, language) {
  * Why a personal app cannot be changed by the person looking at it, above the
  * form of the editor: switched off by an administrator, now a company app
  * (or published and waiting for an administrator to switch it on),
- * the owner's account inactive, or a capability this editor may not use. It
+ * the caller's own apps blocked by an administrator, the owner's account inactive, or a capability this editor may not use. It
  * also says when the owner's shares do not count at the moment.
  *
  * Nothing is rendered when there is nothing to say (a member with "Can use"
@@ -46,6 +46,8 @@ function UserAppStatusBanner({ app, readOnly, capabilityName }) {
         : 'userApps.edit.readOnly.promoted',
       { date: dateText(app.publishedAs?.at, i18n.language) }
     );
+  } else if (readOnly?.reason === 'ownerBlocked') {
+    text = t('userApps.edit.readOnly.ownerBlocked');
   } else if (readOnly?.reason === 'ownerInactive') {
     text = t('userApps.edit.readOnly.ownerInactive');
   } else if (readOnly?.reason === 'capability') {

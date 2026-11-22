@@ -75,9 +75,8 @@ content admins can build apps, as before. The guide
 - A person can prepare 30 drafts per hour; failed drafts count. Each draft is a model call that
   counts against that person's usage limit. Every draft request is written to the audit log with
   the model and the token usage, without the description text.
-- **An unchanged "App Generator" prompt in the prompt library no longer steers drafts.** iHub
-  uses its own instructions for drafts until an administrator changes that prompt. A changed
-  prompt is named in the draft notice and in the audit entry.
+- Drafts always follow iHub's own instructions. The former "App Generator" prompt is gone from
+  the prompt library (see the breaking changes).
 - API, all additive: `POST /api/admin/apps/_generate` (prepare a draft),
   `GET /api/admin/app-templates`, the optional query parameter `origin` on
   `POST /api/admin/apps` (recorded in the audit entry), and `audience` plus `implicit` in the
@@ -121,7 +120,8 @@ for users and administrators.
   accepting; everyone with **Can edit** then gets **Can use**.
 - **For administrators.** The tab **Personal apps** under **Admin → Apps** lists every personal
   app. Full administrators can open, switch off, delete and take over an app, offer it to a new
-  owner, read its earlier versions and switch off all apps of one person. They cannot edit one.
+  owner, read its earlier versions and switch off all apps of one person, who then can no
+  longer change, share or delete them. They cannot edit one.
   Content admins have no access to personal apps.
 - **Owners from an identity provider.** A change of the owner's groups reaches a shared app at
   the owner's next visit, and at the latest after 30 days. When someone leaves, deactivate the

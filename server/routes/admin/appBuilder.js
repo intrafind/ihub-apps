@@ -101,7 +101,6 @@ export default function registerAdminAppBuilderRoutes(app, { llmClient } = {}) {
         ...(record.modelId ? { modelId: record.modelId } : {}),
         ...(record.usage ? { usage: record.usage } : {}),
         ...(request ? { descriptionLength: request.description.length } : {}),
-        ...(record.brief ? { brief: record.brief } : {}),
         ...extra
       }
     });
@@ -119,10 +118,8 @@ export default function registerAdminAppBuilderRoutes(app, { llmClient } = {}) {
    *
    *       The server decides everything about the model call. The model is the
    *       standard chat model among the models the caller may use. The brief is
-   *       the server's own (`brief: standard`) unless an admin changed the
-   *       library prompt `app-generator` (`brief: customised`); the server
-   *       appends its output rules in both cases. The call counts against the
-   *       caller's usage limit.
+   *       always the server's own, followed by its output rules. The call
+   *       counts against the caller's usage limit.
    *
    *       The answer of the model never reaches the caller as it is. The server
    *       builds the app from an allow-list (texts, input fields, conversation
@@ -163,7 +160,7 @@ export default function registerAdminAppBuilderRoutes(app, { llmClient } = {}) {
    *           application/json:
    *             schema:
    *               type: object
-   *               required: [app, suggestions, warnings, model, brief]
+   *               required: [app, suggestions, warnings, model]
    *               properties:
    *                 app:
    *                   $ref: '#/components/schemas/AdminApplication'
@@ -210,9 +207,6 @@ export default function registerAdminAppBuilderRoutes(app, { llmClient } = {}) {
    *                       type: string
    *                     name:
    *                       type: string
-   *                 brief:
-   *                   type: string
-   *                   enum: [standard, customised]
    *             example:
    *               app:
    *                 id: "email-summary"
@@ -227,7 +221,6 @@ export default function registerAdminAppBuilderRoutes(app, { llmClient } = {}) {
    *                 integrations: []
    *               warnings: []
    *               model: { id: "gemini-flash", name: "Gemini Flash" }
-   *               brief: "standard"
    *       400:
    *         description: The body is invalid (`VALIDATION_FAILED`), or the model refused the request (`INVALID_REQUEST`, `CONTEXT_WINDOW_EXCEEDED`)
    *       401:

@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * The app generator brief: the shipped example is a valid app, the installed
- * integrations the app may bind are listed in the prompt and limit the answer
- * schema, and the answer's `integrations` becomes the app's bindings.
+ * The app generator: the installed integrations the app may bind are described
+ * and listed in a catalogue, and the answer's `integrations` becomes the app's
+ * bindings.
  *
  * The list of integrations is a catalogue of data between two marks. Names and
  * descriptions come from installed definitions, so nothing in them may end the
@@ -12,18 +12,11 @@
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
 import {
-  buildAppGeneratorBrief,
   describeInstalledIntegrations,
   integrationsFromAnswer,
   integrationsBlock
 } from '../services/appGenerator.js';
-import { appConfigSchema } from '../validators/appConfigSchema.js';
-
-const shipped = JSON.parse(
-  fs.readFileSync(new URL('../defaults/prompts/app-generator.json', import.meta.url), 'utf8')
-);
 
 const resolved = [
   {
@@ -41,25 +34,7 @@ const resolved = [
   }
 ];
 
-describe('the shipped prompt', () => {
-  for (const lang of ['en', 'de']) {
-    it(`has an example app (${lang}) that the app schema accepts`, () => {
-      const example = shipped.prompt[lang].match(/```json\n([\s\S]*?)\n```/)[1];
-      const parsed = appConfigSchema.safeParse(JSON.parse(example));
-      assert.equal(parsed.success, true, JSON.stringify(parsed.error?.issues));
-    });
-  }
-
-  it('has no tools field in its answer schema, and the fields the wizard applies', () => {
-    assert.equal('tools' in shipped.outputSchema.properties, false);
-    assert.equal(shipped.outputSchema.required.includes('tools'), false);
-    for (const name of ['color', 'icon', 'prompt', 'variables', 'websearch']) {
-      assert.ok(shipped.outputSchema.properties[name], name);
-    }
-  });
-});
-
-describe('the brief', () => {
+describe('the installed integrations', () => {
   const integrations = describeInstalledIntegrations(resolved, 'en');
 
   it('describes the enabled installations', () => {
@@ -73,17 +48,14 @@ describe('the brief', () => {
     assert.deepEqual(integrations[0].actions, ['search', 'getContent']);
   });
 
-  it('lists them in the prompt', () => {
-    const brief = buildAppGeneratorBrief(shipped, 'de', 'en', integrations);
-    assert.match(brief.prompt, /INTEGRATIONS:/);
-    assert.match(brief.prompt, /- ifinder \(iFinder, search\)/);
-    assert.equal('outputSchema' in brief, false);
+  it('are listed in the catalogue', () => {
+    const block = integrationsBlock(integrations);
+    assert.match(block, /INTEGRATIONS:/);
+    assert.match(block, /- ifinder \(iFinder, search\)/);
   });
 
-  it('adds nothing when no integration is installed', () => {
+  it('give no catalogue when none is installed', () => {
     assert.equal(integrationsBlock([]), '');
-    const brief = buildAppGeneratorBrief(shipped, 'en', 'en', []);
-    assert.equal(brief.prompt, shipped.prompt.en);
   });
 });
 
@@ -165,12 +137,6 @@ describe('the catalogue of installed integrations', () => {
     const [line] = catalogueLines(integrationsBlock([entry({ actions })]));
     assert.ok(line.endsWith('action11, …'));
     assert.ok(!line.includes('action12'));
-  });
-
-  it('is part of the brief the old prompt route answers with', () => {
-    const brief = buildAppGeneratorBrief(shipped, 'en', 'en', [entry()]);
-    assert.ok(brief.prompt.startsWith(shipped.prompt.en));
-    assert.ok(brief.prompt.endsWith(CLOSE));
   });
 });
 

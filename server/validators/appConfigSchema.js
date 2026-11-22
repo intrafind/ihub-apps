@@ -738,7 +738,16 @@ const baseAppConfigSchema = z.object({
   allowInheritance: z.boolean().optional().prefault(false),
   parentId: z.string().optional(),
   inheritanceLevel: z.number().int().min(0).optional(),
-  overriddenFields: z.array(z.string()).optional()
+  overriddenFields: z.array(z.string()).optional(),
+
+  // The personal app this company app was published or taken over from
+  // (`uap_` and 32 hex characters), written by the publish. A promoted
+  // personal app counts as promoted only while its company app carries its
+  // ID here; an app made by hand under the same ID does not.
+  sourceUserAppId: z
+    .string()
+    .refine(isUserAppId, 'sourceUserAppId must be the ID of a personal app')
+    .optional()
 });
 
 // Export known app keys from base schema before adding refinements

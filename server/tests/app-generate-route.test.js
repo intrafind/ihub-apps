@@ -148,11 +148,6 @@ const EXISTING_APPS = [
   { id: 'taken-name', name: { en: 'Taken' }, description: { en: 'Taken' }, enabled: false }
 ];
 
-const shippedPrompt = () =>
-  JSON.parse(
-    fsSync.readFileSync(new URL('../defaults/prompts/app-generator.json', import.meta.url), 'utf8')
-  );
-
 function setConfig({ features = {}, prompts = [], models = MODELS, platform = PLATFORM } = {}) {
   configCache.setCacheEntry('config/platform.json', platform);
   configCache.setCacheEntry('config/features.json', features);
@@ -392,7 +387,7 @@ describe('the body of a draft request', () => {
     );
     assert.equal(JSON.stringify(call).includes('CALLER-MESSAGE'), false);
     assert.equal(JSON.stringify(call).includes('evil'), false);
-    assert.equal(res.body.brief, 'standard');
+    assert.equal('brief' in res.body, false);
     assert.equal(res.body.app.enabled, false);
   });
 
@@ -606,14 +601,14 @@ describe('closing the request before the answer', () => {
 // --- The answer ------------------------------------------------------------
 
 describe('the draft', () => {
-  it('has app, suggestions, warnings, model and brief, and nothing else', async () => {
+  it('has app, suggestions, warnings and model, and nothing else', async () => {
     const res = await generate('admin', {
       description: 'An app that summarizes emails.',
       language: 'en'
     });
     assert.equal(res.status, 200);
     assert.match(res.headers['content-type'], /application\/json/);
-    assert.deepEqual(Object.keys(res.body), ['app', 'suggestions', 'warnings', 'model', 'brief']);
+    assert.deepEqual(Object.keys(res.body), ['app', 'suggestions', 'warnings', 'model']);
     assert.deepEqual(res.body.app, {
       ...newAppDefaults('en'),
       id: 'email-summary',
@@ -628,7 +623,6 @@ describe('the draft', () => {
     assert.deepEqual(res.body.suggestions, { websearch: false, integrations: [] });
     assert.deepEqual(res.body.warnings, []);
     assert.deepEqual(res.body.model, { id: 'big-model', name: 'Big model' });
-    assert.equal(res.body.brief, 'standard');
     // The token usage is for the audit entry, not for the caller.
     assert.equal(JSON.stringify(res.body).includes('promptTokens'), false);
     assert.equal(appConfigSchema.safeParse(res.body.app).success, true);
@@ -845,27 +839,29 @@ describe('web search and connected systems are suggestions', () => {
 // --- The brief -------------------------------------------------------------
 
 describe('which brief the model gets', () => {
-  const customisedPrompt = () => {
-    const prompt = shippedPrompt();
-    prompt.prompt.en = `${prompt.prompt.en}\n9. Every app must sign its answers with "iHub".`;
-    return prompt;
-  };
+  /** A prompt with the id of the removed App Generator prompt, as an old installation may still hold. */
+  const leftoverPrompt = extra => ({
+    id: 'app-generator',
+    name: { en: 'App Generator' },
+    prompt: { en: 'Every app must sign its answers with "iHub".' },
+    category: 'system',
+    ...extra
+  });
 
   const CASES = [
-    ['a missing library prompt', []],
-    ['an unchanged library prompt', [shippedPrompt()]],
-    ['a disabled library prompt', [{ ...customisedPrompt(), enabled: false }]]
+    ['without any library prompt', []],
+    ['when a library prompt "app-generator" exists', [leftoverPrompt()]],
+    ['when that prompt is disabled', [leftoverPrompt({ enabled: false })]]
   ];
   for (const [name, prompts] of CASES) {
-    it(`uses the server brief for ${name}`, async () => {
+    it(`uses the server brief ${name}`, async () => {
       setConfig({ prompts });
       const res = await generate('admin', { description: 'An app', language: 'en' });
       assert.equal(res.status, 200);
-      assert.equal(res.body.brief, 'standard');
+      assert.equal('brief' in res.body, false);
       const system = systemOf(llm.calls[0]);
       assert.ok(system.startsWith(STANDARD_BRIEF));
-      assert.doesNotMatch(system, /both English and German/i);
-      assert.doesNotMatch(system, /gpt-4/i);
+      assert.doesNotMatch(system, /sign its answers/);
       assert.ok(
         system.endsWith(
           outputRules({
@@ -877,29 +873,6 @@ describe('which brief the model gets', () => {
       );
     });
   }
-
-  it('uses a library prompt with one changed sentence, and says so', async () => {
-    setConfig({ prompts: [customisedPrompt()] });
-    const res = await generate('admin', { description: 'An app', language: 'en' });
-    assert.equal(res.status, 200);
-    assert.equal(res.body.brief, 'customised');
-    const system = systemOf(llm.calls[0]);
-    assert.match(system, /Every app must sign its answers with "iHub"\./);
-    assert.equal(system.includes(STANDARD_BRIEF), false);
-    // The output rules follow in this case too.
-    assert.ok(system.indexOf('sign its answers') < system.indexOf('OUTPUT RULES'));
-    assert.ok(
-      system.endsWith(
-        outputRules({
-          language: 'en',
-          categories: ['writing', 'communication', 'utility'],
-          hasIntegrations: true
-        })
-      )
-    );
-    // Whatever the customised brief asks for, the app is built from the allow-list.
-    assert.equal(res.body.app.enabled, false);
-  });
 });
 
 // --- Errors ----------------------------------------------------------------
@@ -1087,7 +1060,7 @@ describe('the audit entry of a draft', () => {
   const DESCRIPTION = 'AUDIT-DESCRIPTION-55aa: an app that summarizes emails.';
   const ANSWER_MARK = 'AUDIT-ANSWER-77bb';
 
-  it('is one entry with action execute, the purpose, the model, the usage and the brief', async () => {
+  it('is one entry with action execute, the purpose, the model and the usage', async () => {
     llm.answer = answerWith({ ...DRAFT, system: `${ANSWER_MARK} You summarize.` });
     const res = await generate('builder', { description: DESCRIPTION, language: 'en' });
     assert.equal(res.status, 200);
@@ -1105,8 +1078,7 @@ describe('the audit entry of a draft', () => {
       purpose: 'app-generator',
       modelId: 'small-model',
       usage: USAGE,
-      descriptionLength: DESCRIPTION.length,
-      brief: 'standard'
+      descriptionLength: DESCRIPTION.length
     });
 
     // Neither the description nor the answer is on record.
@@ -1114,16 +1086,6 @@ describe('the audit entry of a draft', () => {
     assert.equal(text.includes('AUDIT-DESCRIPTION-55aa'), false);
     assert.equal(text.includes(ANSWER_MARK), false);
     assert.equal(text.includes('summarizes emails'), false);
-  });
-
-  it('names a customised brief', async () => {
-    const prompt = shippedPrompt();
-    prompt.prompt.de = `${prompt.prompt.de}\nNeu.`;
-    setConfig({ prompts: [prompt] });
-    await generate('admin', { description: DESCRIPTION });
-    const [entry] = await drainAudit();
-    assert.equal(entry.details.brief, 'customised');
-    assert.equal(entry.details.modelId, 'big-model');
   });
 
   it('records a failed draft as a failure, with what the call used and without texts', async () => {
@@ -1143,7 +1105,6 @@ describe('the audit entry of a draft', () => {
       // The model was called and paid for.
       usage: USAGE,
       descriptionLength: DESCRIPTION.length,
-      brief: 'standard',
       code: 'APP_GENERATOR_INVALID_ANSWER'
     });
     const text = JSON.stringify(entry);

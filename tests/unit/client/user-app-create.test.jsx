@@ -214,8 +214,7 @@ const DRAFT = {
     integrations: [{ id: 'jira-main', label: 'Jira', actions: ['searchIssues'] }]
   },
   warnings: [],
-  model: { id: 'gemini-flash' },
-  brief: 'default'
+  model: { id: 'gemini-flash' }
 };
 
 /**

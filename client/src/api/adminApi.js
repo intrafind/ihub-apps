@@ -228,7 +228,7 @@ export const APP_DRAFT_TIMEOUT_MS = 90000;
  *   platform's default language when absent.
  * @param {AbortSignal} [request.signal] - Aborting it cancels the request; the
  *   server then stops the model call.
- * @returns {Promise<{ app: Object, suggestions: Object, warnings: Object[], model: Object, brief: string }>}
+ * @returns {Promise<{ app: Object, suggestions: Object, warnings: Object[], model: Object }>}
  */
 export const generateAppDraft = async ({ description, language, signal }) => {
   const response = await makeAdminApiCall('/admin/apps/_generate', {

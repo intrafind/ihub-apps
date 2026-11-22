@@ -381,7 +381,7 @@ Go to **AI Workspace → Prompts**. Prompts and Global Variables are organized a
 
 **Global Variables** are key-value pairs injected into any system prompt that references `{{variableName}}`. They allow you to maintain shared values (company name, product names, URLs) in one place.
 
-The library entry **App Generator** steers the drafts of **New app** only after an administrator has changed it. While it is unchanged, switched off or missing, iHub uses its own instructions for drafts. A changed entry is named in the draft notice ("An administrator changed how drafts are prepared on this installation.") and in the audit entry of the draft.
+The drafts of **New app** always follow iHub's own instructions; no prompt in the library changes them.
 
 ---
 
