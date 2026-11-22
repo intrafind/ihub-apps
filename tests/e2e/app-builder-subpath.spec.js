@@ -47,6 +47,29 @@ function watchRequests(page, origin) {
       problems.push(
         `${request.method()} ${url.pathname} ignores the base path ${BASE} (${from}, referer ${request.headers().referer || 'none'})`
       );
+      // Which element holds that address, and what the page took for its base path.
+      page
+        .evaluate(pathname => {
+          const holders = [...document.querySelectorAll('[src],[href]')]
+            .filter(el => (el.getAttribute('src') || el.getAttribute('href')) === pathname)
+            .map(el => {
+              const chain = [];
+              for (let node = el; node && node.nodeType === 1 && chain.length < 5;) {
+                chain.push(
+                  node.tagName.toLowerCase() +
+                    (node.id ? `#${node.id}` : '') +
+                    (typeof node.className === 'string' && node.className
+                      ? `.${node.className.split(' ')[0]}`
+                      : '')
+                );
+                node = node.parentElement;
+              }
+              return chain.join(' < ');
+            });
+          return `holders: ${holders.join(' | ') || 'none in the document'}; __BASE_PATH__=${JSON.stringify(window.__BASE_PATH__)}; __SERVER_BASE_PATH__=${JSON.stringify(window.__SERVER_BASE_PATH__)}`;
+        }, url.pathname)
+        .then(found => problems.push(found))
+        .catch(error => problems.push(`could not inspect the page: ${error.message}`));
     }
   });
   page.on('response', response => {
