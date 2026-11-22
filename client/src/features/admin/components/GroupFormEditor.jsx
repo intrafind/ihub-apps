@@ -338,6 +338,56 @@ function GroupFormEditor({
                 <div className="col-span-6">
                   <div className="flex items-center">
                     <input
+                      id="group-permission-user-apps"
+                      type="checkbox"
+                      checked={group.permissions?.userApps || false}
+                      onChange={e => handlePermissionChange('userApps', e.target.checked)}
+                      aria-describedby="group-permission-user-apps-hint"
+                      className={CHECKBOX_CLASS}
+                    />
+                    <label
+                      htmlFor="group-permission-user-apps"
+                      className="ml-2 block text-sm text-gray-900 dark:text-gray-100"
+                    >
+                      {t('admin.userApps.groups.userApps')}
+                    </label>
+                  </div>
+                  <p
+                    id="group-permission-user-apps-hint"
+                    className="mt-1 text-xs text-gray-500 dark:text-gray-400"
+                  >
+                    {t('admin.userApps.groups.userAppsHint')}
+                  </p>
+                </div>
+
+                <div className="col-span-6">
+                  <div className="flex items-center">
+                    <input
+                      id="group-permission-user-app-sharing"
+                      type="checkbox"
+                      checked={group.permissions?.userAppSharing || false}
+                      onChange={e => handlePermissionChange('userAppSharing', e.target.checked)}
+                      aria-describedby="group-permission-user-app-sharing-hint"
+                      className={CHECKBOX_CLASS}
+                    />
+                    <label
+                      htmlFor="group-permission-user-app-sharing"
+                      className="ml-2 block text-sm text-gray-900 dark:text-gray-100"
+                    >
+                      {t('admin.userApps.groups.userAppSharing')}
+                    </label>
+                  </div>
+                  <p
+                    id="group-permission-user-app-sharing-hint"
+                    className="mt-1 text-xs text-gray-500 dark:text-gray-400"
+                  >
+                    {t('admin.userApps.groups.userAppSharingHint')}
+                  </p>
+                </div>
+
+                <div className="col-span-6">
+                  <div className="flex items-center">
+                    <input
                       type="checkbox"
                       checked={group.enabled !== false}
                       onChange={e => handleInputChange('enabled', e.target.checked)}

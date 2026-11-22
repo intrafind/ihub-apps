@@ -4,6 +4,8 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import useApps from '../../../shared/hooks/useApps';
+import { invalidateAppsCache } from '../../../shared/hooks/appsCache';
+import { invalidateUserAppsConfig, useUserAppsConfig } from '../../../shared/hooks/useUserApps';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../../utils/localizeContent';
@@ -13,6 +15,12 @@ import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import Icon from '../../../shared/components/Icon';
 import NextcloudSelectionBanner from '../../nextcloud-embed/components/NextcloudSelectionBanner';
 import PendingDocumentBanner from '../components/PendingDocumentBanner';
+import UserAppBadge, { isUserApp, userAppScope } from '../components/UserAppBadge';
+import MoreActionsMenu from '../../admin/components/MoreActionsMenu';
+import ConfirmDialog from '../../../shared/components/ConfirmDialog';
+import useRadioGroup from '../../../shared/hooks/useRadioGroup';
+import { deleteUserApp, duplicateUserApp, leaveUserApp } from '../../../api';
+import { userAppErrorMessage } from '../components/user-app/userAppErrors';
 import usePendingDocumentCheck from '../hooks/usePendingDocumentCheck';
 import {
   appCanTakeDocument,
@@ -20,6 +28,15 @@ import {
   readPendingDocument,
   withoutPendingDocument
 } from '../utils/pendingDocument';
+
+/** The scope chips of the apps page, in the order they are shown. */
+const SCOPES = ['all', 'mine', 'shared'];
+
+/**
+ * The category an app is filed under. Categories apply to admin apps only: a
+ * personal app has none and appears under "All" categories.
+ */
+const categoryOf = app => (isUserApp(app) ? null : app.category || 'utility');
 
 // Instead of fixed values, we'll calculate based on viewport
 function AppsList() {
@@ -76,6 +93,155 @@ function AppsList() {
   const [searchTerm, setSearchTerm] = useState('');
   const [displayCount, setDisplayCount] = useState(0);
   const [selectedCategory, setSelectedCategory] = useState('all');
+
+  // Personal apps. With the feature off (or for an anonymous viewer) `personal.enabled`
+  // is false, nothing is asked of the server and the page is the one it was.
+  const personal = useUserAppsConfig();
+  const personalOn = personal.enabled;
+  const canCreateUserApp = personalOn && personal.config?.canCreate === true;
+  const maxUserApps = Number(personal.config?.maxApps) || 0;
+  const userAppLimitReached =
+    canCreateUserApp && maxUserApps > 0 && Number(personal.config?.used) >= maxUserApps;
+  const [scope, setScope] = useState('all');
+  const activeScope = personalOn ? scope : 'all';
+  const scopeCounts = useMemo(() => {
+    const counts = { mine: 0, shared: 0 };
+    for (const app of apps) {
+      const appScope = userAppScope(app);
+      if (appScope) counts[appScope] += 1;
+    }
+    return counts;
+  }, [apps]);
+  const [pendingDelete, setPendingDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState(null);
+  const [actionError, setActionError] = useState(null);
+  // What an action of a tile did, for the status line screen readers announce.
+  const [actionStatus, setActionStatus] = useState('');
+  // Where the focus goes once the list shows the result of an action of a tile:
+  // `{ appId }` (the copy) or `{ scope: true }` (the selected scope chip).
+  const [focusAfterAction, setFocusAfterAction] = useState(null);
+  const appName = useCallback(
+    app => getLocalizedContent(app?.name, currentLanguage) || app?.id || '',
+    [currentLanguage]
+  );
+
+  const refreshUserApps = useCallback(() => {
+    invalidateAppsCache();
+    invalidateUserAppsConfig();
+  }, []);
+
+  const handleDuplicate = useCallback(
+    async app => {
+      setActionError(null);
+      setActionStatus('');
+      try {
+        const copy = await duplicateUserApp(app.id);
+        refreshUserApps();
+        setScope('mine');
+        setActionStatus(t('userApps.create.created', { name: appName(copy) }));
+        if (copy?.id) setFocusAfterAction({ appId: copy.id });
+      } catch (err) {
+        setActionError(userAppErrorMessage(err, t));
+      }
+    },
+    [refreshUserApps, t, appName]
+  );
+
+  const handleLeave = useCallback(
+    async app => {
+      setActionError(null);
+      setActionStatus('');
+      try {
+        await leaveUserApp(app.id);
+        refreshUserApps();
+        setActionStatus(t('userApps.list.status.left', { name: appName(app) }));
+        setFocusAfterAction({ scope: true });
+      } catch (err) {
+        setActionError(userAppErrorMessage(err, t));
+      }
+    },
+    [refreshUserApps, t, appName]
+  );
+
+  const handleDelete = useCallback(async () => {
+    if (!pendingDelete) return;
+    setDeleting(true);
+    setDeleteError(null);
+    setActionStatus('');
+    try {
+      await deleteUserApp(pendingDelete.id);
+      setActionStatus(t('userApps.list.status.deleted', { name: appName(pendingDelete) }));
+      setPendingDelete(null);
+      refreshUserApps();
+      setFocusAfterAction({ scope: true });
+    } catch (err) {
+      setDeleteError(userAppErrorMessage(err, t));
+    } finally {
+      setDeleting(false);
+    }
+  }, [pendingDelete, refreshUserApps, t, appName]);
+
+  /** The "⋯" entries of a personal tile: what the server says the caller may do. */
+  const userAppMenuItems = useCallback(
+    app => {
+      const permissions = app.permissions || {};
+      const items = [];
+      // The receiver of an offer answers it in the editor, read-only with the
+      // offer banner (design 11.7).
+      if (permissions.canAcceptOffer === true) {
+        items.push({
+          id: 'viewOffer',
+          label: t('userApps.list.menu.viewOffer'),
+          onSelect: () => navigate(`/apps/${encodeURIComponent(app.id)}/edit`)
+        });
+      }
+      if (permissions.canEdit === true) {
+        items.push({
+          id: 'edit',
+          label: t('userApps.list.menu.edit'),
+          onSelect: () => navigate(`/apps/${encodeURIComponent(app.id)}/edit`)
+        });
+      }
+      if (permissions.canShare === true) {
+        items.push({
+          id: 'share',
+          label: t('userApps.list.menu.share'),
+          onSelect: () => navigate(`/apps/${encodeURIComponent(app.id)}/edit?dialog=share`)
+        });
+      }
+      if (permissions.canUse === true && canCreateUserApp) {
+        items.push({
+          id: 'duplicate',
+          label: t('userApps.list.menu.duplicate'),
+          disabled: userAppLimitReached,
+          onSelect: () => void handleDuplicate(app)
+        });
+      }
+      if (permissions.canDelete === true) {
+        items.push({
+          id: 'delete',
+          label: t('userApps.list.menu.delete'),
+          destructive: true,
+          onSelect: () => {
+            setDeleteError(null);
+            setPendingDelete(app);
+          }
+        });
+      }
+      // Only a share that names the caller can be left; access through a group
+      // or through everyone cannot (design 11.5). The server says which.
+      if (permissions.canLeave === true) {
+        items.push({
+          id: 'leave',
+          label: t('userApps.list.menu.leave'),
+          onSelect: () => void handleLeave(app)
+        });
+      }
+      return items;
+    },
+    [t, navigate, canCreateUserApp, userAppLimitReached, handleDuplicate, handleLeave]
+  );
   const recentAppIds = useMemo(() => getRecentAppIds(), []);
   const [sortMethod, setSortMethod] = useState(sortConfig.default || 'relevance');
 
@@ -117,9 +283,14 @@ function AppsList() {
   }, [navigate, searchParams]);
 
   const openApp = useCallback(
-    appId => {
+    app => {
+      // An app offered to the caller opens where the offer is answered.
+      if (isUserApp(app) && app.permissions?.canAcceptOffer === true) {
+        navigate(`/apps/${encodeURIComponent(app.id)}/edit`);
+        return;
+      }
       const query = pendingDocumentQuery(documentForApp);
-      navigate(query ? `/apps/${appId}?${query}` : `/apps/${appId}`);
+      navigate(query ? `/apps/${app.id}?${query}` : `/apps/${app.id}`);
     },
     [navigate, documentForApp]
   );
@@ -131,7 +302,7 @@ function AppsList() {
     // If only one app exists, don't show categories
     if (apps.length <= 1) return [];
 
-    const usedCategories = new Set(apps.map(app => app.category || 'utility'));
+    const usedCategories = new Set(apps.map(categoryOf));
     const filteredCategories = categoriesConfig.list.filter(category => {
       if (category.id === 'all') return categoriesConfig.showAll;
       return usedCategories.has(category.id);
@@ -148,7 +319,7 @@ function AppsList() {
 
   useEffect(() => {
     if (selectedCategory !== 'all') {
-      const exists = apps.some(app => (app.category || 'utility') === selectedCategory);
+      const exists = apps.some(app => categoryOf(app) === selectedCategory);
       if (!exists) setSelectedCategory('all');
     }
   }, [apps, selectedCategory]);
@@ -274,6 +445,21 @@ function AppsList() {
     [] // eslint-disable-line @eslint-react/exhaustive-deps
   );
 
+  // Scope chip selection. The chips are a radiogroup: arrow keys move and select.
+  const handleScopeSelect = useCallback(
+    id => {
+      setScope(id);
+      setDisplayCount(calculateVisibleAppCount());
+    },
+    [calculateVisibleAppCount]
+  );
+
+  const scopeRadio = useRadioGroup({
+    ids: SCOPES,
+    selected: activeScope,
+    onSelect: handleScopeSelect
+  });
+
   // Memoized filtered apps to avoid recomputing on every render
   const filteredApps = useMemo(() => {
     return apps.filter(app => {
@@ -284,10 +470,17 @@ function AppsList() {
         // A pending document narrows the picker to apps that can take it
         if (restrictToDocumentApps && !documentApps.includes(app)) return false;
 
-        // Category filtering
-        if (categoriesConfig.enabled && selectedCategory !== 'all') {
-          const appCategory = app.category || 'utility'; // Default to 'utility' if no category
-          if (appCategory !== selectedCategory) {
+        // Scope chips (personal apps). "All" leaves out a personal app the caller
+        // cannot use right now; it stays listed under its own chip with its state.
+        if (activeScope === 'all') {
+          if (isUserApp(app) && app.permissions?.canUse !== true) return false;
+        } else if (userAppScope(app) !== activeScope) {
+          return false;
+        }
+
+        // Category filtering (admin apps; a personal app has no category)
+        if (categoriesConfig.enabled && activeScope === 'all' && selectedCategory !== 'all') {
+          if (categoryOf(app) !== selectedCategory) {
             return false;
           }
         }
@@ -329,7 +522,8 @@ function AppsList() {
     categoriesConfig.enabled,
     selectedCategory,
     restrictToDocumentApps,
-    documentApps
+    documentApps,
+    activeScope
   ]);
 
   // Memoized sorted apps to avoid recomputing on every render
@@ -423,6 +617,22 @@ function AppsList() {
   // Calculate whether there are more apps to load
   const hasMoreApps = displayedApps.length < sortedApps.length;
 
+  // After an action of a tile its trigger is gone or moved: the focus goes to
+  // the copy once the list shows it, or to the selected scope chip.
+  useEffect(() => {
+    if (!focusAfterAction || loading) return;
+    const root = containerRef.current;
+    const target = focusAfterAction.appId
+      ? [...(root?.querySelectorAll('[data-tile-id]') || [])].find(
+          tile => tile.dataset.tileId === focusAfterAction.appId
+        )
+      : root?.querySelector('[role="radiogroup"] [aria-checked="true"]');
+    if (!target) return;
+    target.focus();
+
+    setFocusAfterAction(null);
+  }, [focusAfterAction, displayedApps, loading]);
+
   if (loading) {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center">
@@ -445,8 +655,9 @@ function AppsList() {
     );
   }
 
-  // Always show debugging info when no apps are available
-  if (apps.length === 0) {
+  // Always show debugging info when no apps are available. With personal apps on,
+  // an empty installation still offers the chips and "New app".
+  if (apps.length === 0 && !personalOn) {
     const noAppsConfig = uiConfig?.errorPages?.noApps;
     return (
       <div className="text-center py-12">
@@ -503,6 +714,51 @@ function AppsList() {
           </p>
         </div>
 
+        {personalOn && (
+          <div className="mb-5 flex flex-col items-center gap-3">
+            <div
+              role="radiogroup"
+              aria-label={t('userApps.list.scope.label')}
+              className="flex flex-wrap justify-center gap-2"
+            >
+              {SCOPES.map(id => {
+                const selected = activeScope === id;
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    {...scopeRadio(id)}
+                    data-testid={`apps-scope-${id}`}
+                    className={`px-4 py-2 rounded-full text-sm font-semibold transition-all focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900 ${
+                      selected
+                        ? 'bg-indigo-600 text-white'
+                        : 'text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700'
+                    }`}
+                  >
+                    {id === 'all' && t('userApps.list.scope.all')}
+                    {id === 'mine' && `${t('userApps.list.scope.mine')} ${scopeCounts.mine}`}
+                    {id === 'shared' && `${t('userApps.list.scope.shared')} ${scopeCounts.shared}`}
+                  </button>
+                );
+              })}
+            </div>
+            {userAppLimitReached && (
+              <p id="user-app-limit" className="text-sm text-gray-700 dark:text-gray-300">
+                {t('userApps.list.limitReached', { max: maxUserApps })}
+              </p>
+            )}
+            {actionError && (
+              <p role="alert" className="text-sm text-red-700 dark:text-red-400">
+                {actionError}
+              </p>
+            )}
+            {/* Always mounted, so a screen reader announces each change. */}
+            <p role="status" data-testid="user-apps-status" className="sr-only">
+              {actionStatus}
+            </p>
+          </div>
+        )}
+
         {/* Search + sort */}
         {searchConfig.enabled && apps.length > 3 && (
           <div className="flex flex-col sm:flex-row items-stretch gap-3 mb-5 justify-center">
@@ -550,7 +806,7 @@ function AppsList() {
         )}
 
         {/* Category filter pills */}
-        {categoriesConfig.enabled && availableCategories.length > 0 && (
+        {categoriesConfig.enabled && activeScope === 'all' && availableCategories.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-7 justify-center">
             {availableCategories.map(category => (
               <button
@@ -572,7 +828,25 @@ function AppsList() {
           </div>
         )}
 
-        {displayedApps.length === 0 ? (
+        {displayedApps.length === 0 && activeScope !== 'all' && !searchTerm ? (
+          <div className="mx-auto max-w-xl py-12 text-center" data-testid="user-apps-empty">
+            <p className="text-gray-700 dark:text-gray-300">
+              {activeScope === 'mine'
+                ? t('userApps.list.empty.mine')
+                : t('userApps.list.empty.shared')}
+            </p>
+            {activeScope === 'mine' && canCreateUserApp && (
+              <>
+                <p className="mt-4 text-gray-700 dark:text-gray-300">
+                  {t('userApps.list.empty.mineHint')}
+                </p>
+                <p className="mt-4 text-sm text-gray-600 dark:text-gray-400">
+                  {t('userApps.create.limits')}
+                </p>
+              </>
+            )}
+          </div>
+        ) : displayedApps.length === 0 ? (
           <div className="text-center py-16">
             <Icon
               name="search"
@@ -593,7 +867,8 @@ function AppsList() {
             {/* Compact app rows grid */}
             <div
               ref={gridRef}
-              className="grid gap-3"
+              // Equal rows: a tile with a badge does not make its row taller than the others.
+              className="grid auto-rows-fr gap-3"
               style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}
               role="list"
               aria-label={t('apps.appsList', 'Apps list')}
@@ -602,6 +877,7 @@ function AppsList() {
                 const name = getLocalizedContent(app.name, currentLanguage) || app.id;
                 const desc = getLocalizedContent(app.description, currentLanguage) || '';
                 const isFav = isFavorite(app.id);
+                const menuItems = isUserApp(app) ? userAppMenuItems(app) : [];
                 const favLabel = isFav
                   ? t('pages.appsList.unfavorite', 'Remove from favorites')
                   : t('pages.appsList.favorite', 'Add to favorites');
@@ -615,7 +891,8 @@ function AppsList() {
                   >
                     <button
                       type="button"
-                      onClick={() => openApp(app.id)}
+                      onClick={() => openApp(app)}
+                      data-tile-id={app.id}
                       aria-label={name}
                       className="absolute inset-0 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
                     />
@@ -643,7 +920,19 @@ function AppsList() {
                       <span className="block text-[0.8125rem] text-gray-500 dark:text-gray-400 truncate leading-snug">
                         {desc}
                       </span>
+                      <UserAppBadge app={app} />
                     </span>
+                    {menuItems.length > 0 && (
+                      // Positioned without a z-index: above the full-tile button by
+                      // order, and no stacking context that would trap the open menu
+                      // under the trigger of the next tile.
+                      <span className="relative flex-none">
+                        <MoreActionsMenu
+                          items={menuItems}
+                          label={t('userApps.list.menu.label', { name })}
+                        />
+                      </span>
+                    )}
                     <button
                       type="button"
                       onClick={e => handleToggleFavorite(e, app.id)}
@@ -690,6 +979,21 @@ function AppsList() {
           </>
         )}
       </div>
+      <ConfirmDialog
+        isOpen={Boolean(pendingDelete)}
+        title={t('userApps.edit.delete.title', {
+          name: pendingDelete
+            ? getLocalizedContent(pendingDelete.name, currentLanguage) || pendingDelete.id
+            : ''
+        })}
+        message={t('userApps.edit.delete.body')}
+        confirmLabel={t('userApps.list.menu.delete')}
+        danger
+        busy={deleting}
+        error={deleteError}
+        onConfirm={handleDelete}
+        onDeny={() => setPendingDelete(null)}
+      />
     </div>
   );
 }

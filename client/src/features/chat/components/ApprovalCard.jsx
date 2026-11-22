@@ -59,7 +59,9 @@ export function formatApprovalArgs(args) {
  *   Called with the decision; without it the card is read-only (a surface that cannot answer).
  * @param {boolean} [props.disabled] - Buttons disabled (a turn is still running)
  * @param {boolean} [props.allowChatGrant=true] - Offer "Approve & allow for this chat"
- *   (not for an MCP App view's own call, which has no chat-wide grant)
+ *   (not for an MCP App view's own call, which has no chat-wide grant). The server can
+ *   withhold it too: an approval whose `grants` is an empty list (the event's
+ *   `displayData.grants: []`, sent for a personal app someone else owns) has no such button.
  * @returns {JSX.Element}
  */
 function ApprovalCard({ approval, onDecide = null, disabled = false, allowChatGrant = true }) {
@@ -87,6 +89,9 @@ function ApprovalCard({ approval, onDecide = null, disabled = false, allowChatGr
   const dataFlow = approval.dataFlow === 'external' ? 'external' : 'internal';
   const toolName = approval.toolName || approval.toolId;
   const integrationName = approval.integration?.name || null;
+  // The server decides whether this chat can hold a grant; without the field it can.
+  const chatGrantOffered =
+    allowChatGrant && !(Array.isArray(approval.grants) && approval.grants.length === 0);
   const decide = (decision, grant) =>
     onDecide?.({
       interactionId: approval.interactionId,
@@ -187,7 +192,7 @@ function ApprovalCard({ approval, onDecide = null, disabled = false, allowChatGr
           >
             {t('chat.toolApproval.approve', 'Approve')}
           </button>
-          {allowChatGrant && (
+          {chatGrantOffered && (
             <button
               type="button"
               disabled={disabled}

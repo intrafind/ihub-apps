@@ -47,7 +47,10 @@ const DARK_MODE_KEY = 'ih-dark-mode';
 /** Admin pages whose fields must meet 3:1. `minFields`: a page that measures fewer fails. */
 const STRICT_ROUTES = [
   { path: '/admin/apps/chat', minFields: 5 },
-  { path: '/admin/apps/new', minFields: 5 },
+  // "New app": the Start screen has one field, the description box (shown while a model is
+  // set up); a copy of an app opens on the Essentials screen with its three text fields.
+  { path: '/admin/apps/new', minFields: 1 },
+  { path: '/admin/apps/new?from=chat', minFields: 3 },
   { path: 'FIRST_MODEL', minFields: 3 },
   { path: '/admin/prompts/new', minFields: 3 },
   { path: '/admin/users/new', minFields: 3 },
@@ -256,6 +259,11 @@ for (const theme of THEMES) {
             .waitFor({ timeout: 15_000 })
             .catch(() => {});
         }
+
+        // The resting state is measured. A page that puts the focus into a field (a copy on
+        // "New app" selects its name) would otherwise be measured with that field's focus
+        // border, which is the accent colour inside a focus ring, not the field's boundary.
+        await page.evaluate(() => document.activeElement?.blur?.());
 
         const fields = await page.evaluate(measureFields);
         if (fields.length < route.minFields) {

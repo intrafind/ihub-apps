@@ -32,13 +32,19 @@ function DataTableKebabMenu({ items, label = 'More actions', row }) {
   }, []);
 
   // Position the fixed-position menu relative to the trigger, right-aligned and
-  // clamped to the viewport.
+  // clamped to the viewport on both axes.
   const updatePosition = useCallback(() => {
     const trigger = triggerRef.current;
     if (!trigger) return;
     const rect = trigger.getBoundingClientRect();
     const left = Math.max(8, Math.min(rect.right - MENU_WIDTH, window.innerWidth - MENU_WIDTH - 8));
-    setPosition({ top: rect.bottom + 4, left });
+    // Below the trigger; above it when the menu would end below the window (a
+    // row at the bottom of the page), so every entry stays reachable.
+    const height = menuRef.current?.offsetHeight || 0;
+    const below = rect.bottom + 4;
+    const fitsBelow = below + height <= window.innerHeight - 8;
+    const top = fitsBelow ? below : Math.max(8, rect.top - 4 - height);
+    setPosition({ top, left });
   }, []);
 
   useLayoutEffect(() => {

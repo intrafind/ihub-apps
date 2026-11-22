@@ -38,6 +38,8 @@ on:
   issues:
     types: [opened]
 
+permissions: {}
+
 jobs:
   summary:
     # not restricting it yet

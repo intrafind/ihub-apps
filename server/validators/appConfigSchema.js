@@ -15,6 +15,7 @@ import { ALL_INTEGRATIONS_KEY, ALL_INTEGRATIONS_OPTIONS } from '../../shared/app
 import { zHttpUrl, zSafeId } from './common.js';
 import { projectLinksSchema } from './projectSchema.js';
 import { FEATURE_IDS } from '../featureRegistry.js';
+import { isUserAppId } from '../../shared/userAppContent.js';
 
 // Localized string schema - matches client pattern for language codes
 const localizedStringSchema = z.record(
@@ -376,7 +377,18 @@ const thinkingSchema = z
   .object({
     enabled: z.boolean().optional().prefault(false),
     level: z
-      .enum(['minimal', 'low', 'medium', 'high', 'MINIMAL', 'LOW', 'MEDIUM', 'HIGH'])
+      .enum([
+        'minimal',
+        'low',
+        'medium',
+        'high',
+        'xhigh',
+        'MINIMAL',
+        'LOW',
+        'MEDIUM',
+        'HIGH',
+        'XHIGH'
+      ])
       .optional(),
     thoughts: z.boolean().optional().prefault(false)
   })
@@ -577,7 +589,10 @@ const baseAppConfigSchema = z.object({
       'ID must contain only lowercase alphanumeric characters, underscores, dots, and hyphens'
     )
     .min(1, 'ID cannot be empty')
-    .max(APP_ID_MAX_LENGTH, `ID cannot exceed ${APP_ID_MAX_LENGTH} characters`),
+    .max(APP_ID_MAX_LENGTH, `ID cannot exceed ${APP_ID_MAX_LENGTH} characters`)
+    // The shape the server mints for personal apps (`uap_` and 32 hex
+    // characters) belongs to them alone: an app file never gets it.
+    .refine(id => !isUserAppId(id), 'This ID is reserved for personal apps'),
   name: localizedStringSchema,
   description: localizedStringSchema,
   color: z.string().regex(HEX_COLOR_PATTERN, 'Color must be a valid hex code (e.g., #4F46E5)'),

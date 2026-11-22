@@ -25,6 +25,10 @@ on:
         - development
         - production
 
+# Least privilege by default; each job below declares the extra scopes it needs.
+permissions:
+  contents: read
+
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
@@ -191,10 +195,13 @@ jobs:
           push-to-registry: true
 
       - name: Test container startup
+        env:
+          # Passed through the environment, never interpolated into the script.
+          IMAGE_TAGS: ${{ steps.meta.outputs.tags }}
         run: |
           echo "Testing container startup..."
           # Use first tag from metadata instead of github.sha
-          IMAGE_TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n1)
+          IMAGE_TAG=$(echo "$IMAGE_TAGS" | head -n1)
           docker run --rm -d --name ihub-test \
             -e JWT_SECRET=test-secret \
             -e NODE_ENV=production \
