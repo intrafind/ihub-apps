@@ -10,9 +10,8 @@
  * links, fenced code blocks) — enough for the audit reports we produce
  * today.
  *
- * Mirrors the helpers in `features/admin/utils/artifactDownload.js`, but
- * works with content the caller already has (workflow outputs, chat
- * messages) instead of fetching by `runId`/`name` from the artifact API.
+ * Works with content the caller already has (workflow outputs, chat
+ * messages); nothing is fetched.
  *
  * @module shared/utils/markdownExports
  */

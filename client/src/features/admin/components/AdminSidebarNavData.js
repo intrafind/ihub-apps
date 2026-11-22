@@ -136,13 +136,6 @@ export function getAdminNavSections({ t, showAdminPage, featureFlags, badges = {
           visible: showAdminPage('workflows') && ff('workflows', false)
         },
         {
-          key: 'agents',
-          label: t('admin.nav.agents', 'Agents'),
-          href: '/admin/agents',
-          icon: CpuChipIcon,
-          visible: ff('agentFactory', false)
-        },
-        {
           key: 'marketplace',
           label: t('admin.nav.marketplace', 'Marketplace'),
           href: '/admin/marketplace',

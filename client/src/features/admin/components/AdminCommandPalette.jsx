@@ -15,7 +15,6 @@ const ADMIN_PAGES = [
   { label: 'Prompts', href: '/admin/prompts' },
   { label: 'Skills', href: '/admin/skills' },
   { label: 'Projects', href: '/admin/projects' },
-  { label: 'Agents', href: '/admin/agents' },
   { label: 'Marketplace', href: '/admin/marketplace' },
   { label: 'Users', href: '/admin/users' },
   { label: 'Groups', href: '/admin/groups' },

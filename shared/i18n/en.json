@@ -1050,33 +1050,6 @@
       },
       "resource": "voice settings"
     },
-    "agents": {
-      "memory": {
-        "builder": {
-          "title": "Build memory section from a tool",
-          "help": "Runs any registered tool with admin context and writes its (markdown) output to a named section of this profile's memory. Example: iFinder_discover with searchProfile builds a corpus map.",
-          "toolLabel": "Tool",
-          "pickToolPlaceholder": "— pick a tool —",
-          "sectionLabel": "Section heading",
-          "modeLabel": "Mode",
-          "modeReplace": "Replace section",
-          "modeAppend": "Append",
-          "paramsLabel": "Tool params (JSON)",
-          "run": "Run and write to memory",
-          "running": "Running…",
-          "pickTool": "Pick a tool first.",
-          "sectionRequired": "Section heading is required.",
-          "invalidJson": "Params must be valid JSON: {{msg}}",
-          "success": "Wrote section \"{{section}}\" (memory v{{version}}). The textarea below now shows the latest memory — edit and Save if you want to tweak it further."
-        }
-      },
-      "edit": {
-        "projects": "Projects",
-        "jsonInvalid": "The JSON is not valid. Fix it before you save or switch to the form.",
-        "skillsHelper": "Search and select skills to add to this agent. Click on selected skills to remove them.",
-        "hitlHint": "Users in any of these groups can approve human-checkpoint pauses for this profile. Pick a group or type its ID and press Enter or a comma."
-      }
-    },
     "providers": {
       "timeouts": {
         "title": "Timeouts for all providers",
@@ -2700,7 +2673,6 @@
       "tools": "Tools",
       "skills": "Skills",
       "workflows": "Workflows",
-      "agents": "Agents",
       "users": "Users",
       "groups": "Groups",
       "authentication": "Authentication",
@@ -7271,9 +7243,6 @@
       "conflict": "Someone else changed the artifact settings after you opened this page, so nothing was saved. Your edits are still here: load the current settings, then make your change again.",
       "reload": "Load the current settings",
       "reloadError": "The current settings could not be loaded."
-    },
-    "interactions": {
-      "whoAnswers": "You can read every entry. You answer an entry that names an approver group, and one of an agent run or of a workflow that a trigger started. Any other entry is answered by the person who started the run."
     }
   },
   "cloudStorage": {

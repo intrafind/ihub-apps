@@ -1521,33 +1521,6 @@
       },
       "resource": "Spracheinstellungen"
     },
-    "agents": {
-      "memory": {
-        "builder": {
-          "title": "Memory-Abschnitt aus Tool aufbauen",
-          "help": "Führt ein registriertes Tool mit Admin-Kontext aus und schreibt die (Markdown-)Ausgabe in einen benannten Abschnitt des Profil-Memorys. Beispiel: iFinder_discover mit searchProfile erzeugt eine Korpusübersicht.",
-          "toolLabel": "Tool",
-          "pickToolPlaceholder": "— Tool auswählen —",
-          "sectionLabel": "Abschnittsüberschrift",
-          "modeLabel": "Modus",
-          "modeReplace": "Abschnitt ersetzen",
-          "modeAppend": "Anhängen",
-          "paramsLabel": "Tool-Parameter (JSON)",
-          "run": "Ausführen und ins Memory schreiben",
-          "running": "Wird ausgeführt…",
-          "pickTool": "Bitte zuerst ein Tool auswählen.",
-          "sectionRequired": "Abschnittsüberschrift ist erforderlich.",
-          "invalidJson": "Parameter müssen gültiges JSON sein: {{msg}}",
-          "success": "Abschnitt \"{{section}}\" geschrieben (Memory v{{version}}). Die Textarea unten zeigt jetzt das aktuelle Memory — bei Bedarf bearbeiten und Speichern."
-        }
-      },
-      "edit": {
-        "projects": "Projekte",
-        "jsonInvalid": "Das JSON ist nicht gültig. Korrigieren Sie es, bevor Sie speichern oder zum Formular wechseln.",
-        "skillsHelper": "Suchen und wählen Sie Skills für diesen Agenten aus. Klicken Sie auf einen ausgewählten Skill, um ihn zu entfernen.",
-        "hitlHint": "Benutzer in einer dieser Gruppen können Freigaben für dieses Profil erteilen. Wählen Sie eine Gruppe aus oder geben Sie ihre ID ein und drücken Sie die Eingabetaste oder ein Komma."
-      }
-    },
     "providers": {
       "timeouts": {
         "title": "Timeouts für alle Provider",
@@ -3197,7 +3170,6 @@
       "tools": "Tools",
       "skills": "Skills",
       "workflows": "Workflows",
-      "agents": "Agenten",
       "users": "Benutzer",
       "groups": "Gruppen",
       "authentication": "Authentifizierung",
@@ -7768,9 +7740,6 @@
       "conflict": "Jemand anderes hat die Artefakt-Einstellungen geändert, nachdem Sie diese Seite geöffnet haben, daher wurde nichts gespeichert. Ihre Änderungen sind noch da: Laden Sie die aktuellen Einstellungen und nehmen Sie Ihre Änderung erneut vor.",
       "reload": "Aktuelle Einstellungen laden",
       "reloadError": "Die aktuellen Einstellungen konnten nicht geladen werden."
-    },
-    "interactions": {
-      "whoAnswers": "Sie können jeden Eintrag lesen. Sie beantworten einen Eintrag, der eine Gruppe für Freigaben nennt, und einen Eintrag eines Agentenlaufs oder eines Workflows, den ein Auslöser gestartet hat. Jeden anderen Eintrag beantwortet die Person, die den Lauf gestartet hat."
     }
   },
   "cloudStorage": {
