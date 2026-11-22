@@ -25,6 +25,10 @@ on:
     types: [created]
   workflow_dispatch:
 
+# Least privilege by default; the publish job below declares the scopes it needs.
+permissions:
+  contents: read
+
 jobs:
   build:
     name: Build plugin
@@ -79,7 +83,7 @@ jobs:
     if: github.event_name == 'release' && github.event.release.tag_name != ''
     runs-on: ubuntu-latest
     permissions:
-      contents: write  # softprops/action-gh-release
+      contents: write  # upload the tarball to the release (gh release upload)
       id-token: write
       attestations: write
     steps:
@@ -95,9 +99,10 @@ jobs:
         with:
           subject-path: ihub_chat.tar.gz
 
+      # Fails when the file is missing; replaces an asset of the same name that is already attached.
       - name: Attach to release
-        uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
-        with:
-          tag_name: ${{ github.event.release.tag_name }}
-          files: ihub_chat.tar.gz
-          fail_on_unmatched_files: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          TAG_NAME: ${{ github.event.release.tag_name }}
+        run: gh release upload "$TAG_NAME" ihub_chat.tar.gz --repo "$REPO" --clobber

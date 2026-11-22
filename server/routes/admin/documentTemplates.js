@@ -249,7 +249,12 @@ export default function registerAdminDocumentTemplatesRoutes(app) {
       }
       const data = await readTemplateAsset(template.id, name);
       const extension = name.split('.').pop();
-      res.setHeader('Content-Type', ASSET_TYPES[extension] || 'application/octet-stream');
+      // An own-property lookup: `extension` comes from a file name, and `constructor` or
+      // `__proto__` must not resolve to something on Object.prototype.
+      res.setHeader(
+        'Content-Type',
+        Object.hasOwn(ASSET_TYPES, extension) ? ASSET_TYPES[extension] : 'application/octet-stream'
+      );
       res.setHeader('X-Content-Type-Options', 'nosniff');
       res.setHeader('Cache-Control', 'no-store');
       // Only the logo is shown in the page; every other file downloads.
@@ -265,7 +270,9 @@ export default function registerAdminDocumentTemplatesRoutes(app) {
     adminAuth,
     handle('rendered', async (req, res) => {
       const format = req.params.format;
-      if (!SAMPLE_TYPES[format]) throw new ServiceError('BAD_REQUEST', 'Unknown sample format.');
+      if (!Object.hasOwn(SAMPLE_TYPES, format)) {
+        throw new ServiceError('BAD_REQUEST', 'Unknown sample format.');
+      }
       const template = await getTemplate(req.params.id, { includeDisabled: true });
       if (!template) throw new ServiceError('NOT_FOUND', 'Template not found.');
       const language = typeof req.body?.language === 'string' ? req.body.language : 'en';
