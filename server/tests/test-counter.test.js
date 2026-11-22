@@ -9,6 +9,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { WRITER_HEADER, createCounter, startCounter } from '../../tests/config/test-counter.mjs';
+import { byCodeUnit } from './golden/byCodeUnit.js';
 
 test('every write counts: two writes for one key are 2, never 1', () => {
   const counter = createCounter();
@@ -126,11 +127,16 @@ test('a hold makes reads wait until they are released, and says which ones wait'
   t.after(() => started.close());
   const json = async (method, pathname) =>
     (await fetch(`${started.url}${pathname}`, { method })).json();
-  /** A step of the event loop per try: the read has to reach the counter first. */
+  /**
+   * A step of the event loop per try: the read has to reach the counter first.
+   * The keys are compared in an order of their own: two reads sent at once
+   * arrive in whatever order their connections do.
+   */
   const waitingIs = async expected => {
+    const wanted = JSON.stringify([...expected].sort(byCodeUnit));
     for (let tries = 0; tries < 500; tries++) {
       const { waiting } = await json('GET', '/__counter/waiting');
-      if (JSON.stringify(waiting) === JSON.stringify(expected)) return;
+      if (JSON.stringify([...waiting].sort(byCodeUnit)) === wanted) return;
     }
     assert.fail(`the waiting reads never became ${JSON.stringify(expected)}`);
   };
@@ -151,7 +157,7 @@ test('a hold makes reads wait until they are released, and says which ones wait'
   const second = read('b');
   await waitingIs(['a', 'b']);
   assert.equal(answered, 0, 'neither read was answered while it was held');
-  assert.deepEqual(started.counter.waiting(), ['a', 'b']);
+  assert.deepEqual([...started.counter.waiting()].sort(byCodeUnit), ['a', 'b']);
 
   assert.deepEqual(await json('POST', '/__counter/release'), { released: 2 });
   assert.deepEqual(await first, { key: 'a', count: 1, values: [] });

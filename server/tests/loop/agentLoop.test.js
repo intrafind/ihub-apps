@@ -1440,6 +1440,70 @@ test(
 );
 
 test(
+  'readOnly mode: a seam that cannot say whether it takes a call over counts as one that does',
+  { timeout: 30_000 },
+  async () => {
+    const step = () => [
+      toolTurn([
+        { name: 'lookup', args: { key: 'a' } },
+        { name: 'lookup', args: { key: 'b' } }
+      ]),
+      textTurn('done')
+    ];
+    // A seam whose answer fails (a policy that cannot be resolved, an
+    // installation that cannot be read): nobody knows whether the call would
+    // be held, so it is never put beside another one.
+    const asked = [];
+    const broken = {
+      name: 'broken',
+      mayTakeOver(ctx, info) {
+        asked.push(info.call.id);
+        throw new Error('the policy of this tool cannot be read');
+      }
+    };
+    const serial = createLatch();
+    const { loop } = makeLoop(step());
+    const result = await loop.run({
+      model,
+      messages: baseMessages,
+      tools: [declaredRead],
+      policies: { tools: READ_ONLY_TOOLS },
+      seams: [broken],
+      executeTool: async call => {
+        serial.enter(call.id);
+        // Give a second call the chance to start, were it allowed to.
+        await new Promise(resolve => setImmediate(resolve));
+        serial.leave();
+        return { id: call.id };
+      }
+    });
+    assert.equal(result.status, 'completed', 'the failing answer does not fail the run');
+    assert.ok(asked.includes('call_1'), 'the seam was asked');
+    assert.equal(serial.maxInFlight, 1);
+    assert.deepEqual(serial.entered, ['call_1', 'call_2']);
+
+    // The same seam with an answer: the two reads share their batch. Without
+    // this half the serial run above would prove nothing about the failure.
+    const both = createLatch();
+    const { loop: answering } = makeLoop(step());
+    await answering.run({
+      model,
+      messages: baseMessages,
+      tools: [declaredRead],
+      policies: { tools: READ_ONLY_TOOLS },
+      seams: [{ name: 'answers', mayTakeOver: () => false }],
+      executeTool: async call => {
+        both.enter(call.id);
+        await both.reached(2);
+        both.leave();
+        return { id: call.id };
+      }
+    });
+    assert.equal(both.maxInFlight, 2);
+  }
+);
+
+test(
   'readOnly mode: a stop while a batch runs ends every call of it, and no model call follows',
   { timeout: 30_000 },
   async () => {

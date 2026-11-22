@@ -17,7 +17,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { startGoldenEnv } from './harness.js';
 import { harnessConfig, runChatTurn } from './harnessCases.js';
-import { observeEmittedEnvelopes } from '../../services/loop/RunStream.js';
+import { observeEmittedEnvelopes, projectLedgerEvent } from '../../services/loop/RunStream.js';
+import { chatToolPolicies } from '../../services/chat/ChatService.js';
+import { knownModelKeys, modelConfigSchema } from '../../validators/modelConfigSchema.js';
 import { abortChatRequest } from '../../sse.js';
 import { throttledRun } from '../../requestThrottler.js';
 import { rebuildRunActivity } from '../../services/chat/runActivity.js';
@@ -184,6 +186,23 @@ const toolResults = request =>
 
 const FLAG_ON = { parallelToolCalls: true };
 
+/**
+ * The ledger of a run with its `tool/call` events in the reverse order. Every
+ * place in the ledger keeps its `seq` and `ts`, as if the calls had been
+ * recorded in that order.
+ *
+ * @param {Object[]} events - The ledger events of one run, in order.
+ * @returns {Object[]}
+ */
+function withToolCallsReversed(events) {
+  const reversed = events.filter(event => event.type === 'tool/call').reverse();
+  return events.map(event => {
+    if (event.type !== 'tool/call') return event;
+    const { seq, ts } = event;
+    return { ...reversed.shift(), seq, ts };
+  });
+}
+
 test(
   'flag on: three read-only calls run in one batch, and the model gets them in call order',
   LATCH_TIMEOUT,
@@ -285,6 +304,48 @@ test(
       run.rebuiltActivity.toolActivity.items.map(item => item.id),
       ['call_1', 'call_2', 'call_3']
     );
+
+    // What a reload, a replay of the stream and the recovery of a chat read is the
+    // ledger, through `projectLedgerEvent`. Its frames carry the batch and the place
+    // as the ledger holds them ...
+    const ofRun = run.ledger.filter(event => event.runId === runId);
+    assert.deepEqual(
+      ofRun
+        .filter(event => event.type === 'tool/call')
+        .flatMap(event => projectLedgerEvent(event))
+        .map(frame => [
+          frame.type,
+          frame.data.callId,
+          frame.data.parallelGroup,
+          frame.data.callIndex
+        ]),
+      [
+        ['tool/started', 'call_1', 0, 0],
+        ['tool/started', 'call_2', 0, 1],
+        ['tool/started', 'call_3', 0, 2]
+      ]
+    );
+    // ... and the calls of a batch can reach the ledger in any order: each passes
+    // its pre-tool seams on its own, and a slower one is recorded later. The same
+    // ledger with the three calls recorded in reverse still gives the call order.
+    const rebuiltIds = async events =>
+      (await rebuildRunActivity({ readEvents: async () => events }, runId)).toolActivity.items.map(
+        item => item.id
+      );
+    const recordedInReverse = withToolCallsReversed(ofRun);
+    assert.deepEqual(
+      recordedInReverse.filter(event => event.type === 'tool/call').map(event => event.data.callId),
+      ['call_3', 'call_2', 'call_1']
+    );
+    assert.deepEqual(await rebuiltIds(recordedInReverse), ['call_1', 'call_2', 'call_3']);
+    // The order comes from the place the server recorded and from nothing else: the
+    // same ledger without it lists the calls as they were recorded.
+    const withoutPlace = recordedInReverse.map(event => {
+      if (event.type !== 'tool/call') return event;
+      const { callIndex: _place, ...data } = event.data;
+      return { ...event, data };
+    });
+    assert.deepEqual(await rebuiltIds(withoutPlace), ['call_3', 'call_2', 'call_1']);
   }
 );
 
@@ -516,5 +577,247 @@ test(
       toolResults(run.requests[1]).map(([id]) => id),
       ['call_1', 'call_2']
     );
+  }
+);
+
+// ── the policy itself ───────────────────────────────────────────────────────
+
+test('the tool policy of a chat: serial unless the feature is on and the model stays in', () => {
+  const app = { toolChoice: 'required' };
+  const serial = { parallel: false, choice: 'required' };
+  // Trusted reads only, never the mode `targets`, and at most four at once.
+  const sideBySide = {
+    parallel: true,
+    parallelMode: 'readOnly',
+    maxParallel: 4,
+    choice: 'required'
+  };
+
+  // Feature off, however the model is set: nothing names a mode or a cap.
+  for (const features of [{}, { parallelToolCalls: false }]) {
+    for (const model of [undefined, { id: 'm' }, { id: 'm', parallelToolCalls: true }]) {
+      assert.deepEqual(chatToolPolicies({ app, model, features }), serial);
+    }
+  }
+  // Feature on: every model that does not opt out.
+  for (const model of [undefined, { id: 'm' }, { id: 'm', parallelToolCalls: true }]) {
+    assert.deepEqual(chatToolPolicies({ app, model, features: FLAG_ON }), sideBySide);
+  }
+  // Only `false` is the opt-out.
+  assert.deepEqual(
+    chatToolPolicies({ app, model: { id: 'm', parallelToolCalls: false }, features: FLAG_ON }),
+    serial
+  );
+  // The app's tool choice is passed on as it is, also when the app sets none.
+  assert.deepEqual(chatToolPolicies({ app: {}, model: { id: 'm' }, features: {} }), {
+    parallel: false,
+    choice: undefined
+  });
+  assert.equal(chatToolPolicies({ app: null, model: null, features: FLAG_ON }).choice, undefined);
+});
+
+test('the opt-out of a model: stored by the model schema as a boolean, and read by the policy', () => {
+  const base = {
+    id: 'm',
+    modelId: 'm',
+    name: { en: 'M' },
+    description: { en: 'M' },
+    url: 'https://model.invalid/v1/chat/completions',
+    provider: 'openai',
+    contextWindow: 1000,
+    maxOutputTokens: 100
+  };
+  assert.ok(knownModelKeys.includes('parallelToolCalls'), 'the field is one of the model file');
+
+  // Absent, true and false pass, and come out as they went in.
+  const absent = modelConfigSchema.parse(base);
+  assert.equal('parallelToolCalls' in absent, false);
+  const stays = modelConfigSchema.parse({ ...base, parallelToolCalls: true });
+  assert.equal(stays.parallelToolCalls, true);
+  const optsOut = modelConfigSchema.parse({ ...base, parallelToolCalls: false });
+  assert.equal(optsOut.parallelToolCalls, false);
+
+  // Anything that is no boolean is refused, so a form or a file cannot store an
+  // opt-out the policy would not read as one.
+  for (const value of ['false', 'true', 0, 1, null, {}]) {
+    const result = modelConfigSchema.safeParse({ ...base, parallelToolCalls: value });
+    assert.equal(result.success, false, JSON.stringify(value));
+    assert.deepEqual(result.error.issues[0].path, ['parallelToolCalls']);
+  }
+
+  // What the schema stored is what decides.
+  const policyOf = model => chatToolPolicies({ app: {}, model, features: FLAG_ON }).parallel;
+  assert.equal(policyOf(absent), true);
+  assert.equal(policyOf(stays), true);
+  assert.equal(policyOf(optsOut), false);
+});
+
+test('flag on: a step of five reads runs four at once, then the fifth', LATCH_TIMEOUT, async () => {
+  const probe = createProbe();
+  const run = await runCase(
+    // No call returns before four have started. A lower cap never gets there
+    // (the test stops at its timeout); a higher one starts the fifth beside them.
+    caseConfig({ probe, features: FLAG_ON, hold: () => probe.whenStarted(4) }),
+    [
+      calls(
+        ['lookup', 'A-1'],
+        ['lookup', 'B-2'],
+        ['lookup', 'C-3'],
+        ['lookup', 'D-4'],
+        ['lookup', 'E-5']
+      ),
+      answer()
+    ]
+  );
+  assert.equal(probe.maxInFlight, 4);
+  assert.deepEqual(probe.started, ['A-1', 'B-2', 'C-3', 'D-4', 'E-5']);
+  assert.deepEqual(
+    run.ledger
+      .filter(event => event.type === 'tool/call')
+      .map(event => [event.data.callId, event.data.parallelGroup, event.data.callIndex]),
+    [
+      ['call_1', 0, 0],
+      ['call_2', 0, 1],
+      ['call_3', 0, 2],
+      ['call_4', 0, 3],
+      // Alone in the second batch: a group of one names no place.
+      ['call_5', 1, undefined]
+    ]
+  );
+  assert.deepEqual(
+    toolResults(run.requests[1]).map(([id]) => id),
+    ['call_1', 'call_2', 'call_3', 'call_4', 'call_5']
+  );
+});
+
+// ── an app that runs as a tool ──────────────────────────────────────────────
+
+/**
+ * Run the desk app the way another app, the MCP gateway or the A2A endpoint
+ * runs it: `ChatService.invokeAppInternal`, a run of the kind `subagent`.
+ *
+ * @param {Object} config - From {@link caseConfig}.
+ * @param {Object[]} script - The turns of the scripted model.
+ */
+async function runAsTool(config, script) {
+  const env = await startGoldenEnv(config);
+  try {
+    env.model = scriptedModel(script);
+    const result = await env.chatService.invokeAppInternal({
+      appId: 'desk',
+      user: env.principal({ id: 'golden-user', name: 'Golden User', groups: ['users'] }),
+      messages: [{ role: 'user', content: 'Look up the records.' }]
+    });
+    await env.settle();
+    const ledger = [...env.ledger];
+    return {
+      result,
+      kinds: ledger.filter(event => event.type === 'run/start').map(event => event.data.kind),
+      toolCalls: ledger
+        .filter(event => event.type === 'tool/call')
+        .map(event => [event.data.callId, event.data.callIndex]),
+      requests: env.model.requests
+    };
+  } finally {
+    await env.stop();
+  }
+}
+
+test(
+  'an app run as a tool, flag off: the calls run one at a time, as before',
+  LATCH_TIMEOUT,
+  async () => {
+    // Two reads, and two writes with different arguments (what the mode
+    // `targets` would put side by side).
+    for (const [tool, keys] of [
+      ['lookup', ['A-1', 'B-2']],
+      ['store', ['S-1', 'S-2']]
+    ]) {
+      const probe = createProbe();
+      const run = await runAsTool(caseConfig({ probe }), [
+        calls([tool, keys[0]], [tool, keys[1]]),
+        answer()
+      ]);
+      assert.deepEqual(run.kinds, ['subagent'], 'the run is the one of an app called as a tool');
+      assert.equal(run.result.status, 'ok');
+      assert.equal(probe.maxInFlight, 1, tool);
+      assert.deepEqual(probe.started, keys);
+      assert.deepEqual(probe.ended, keys);
+      assert.deepEqual(run.toolCalls, [
+        ['call_1', undefined],
+        ['call_2', undefined]
+      ]);
+    }
+  }
+);
+
+test(
+  'an app run as a tool, flag on: two reads overlap and the model gets them in call order',
+  LATCH_TIMEOUT,
+  async () => {
+    const probe = createProbe();
+    const run = await runAsTool(
+      caseConfig({ probe, features: FLAG_ON, hold: () => probe.whenStarted(2) }),
+      [calls(['lookup', 'A-1'], ['lookup', 'B-2']), answer()]
+    );
+    assert.deepEqual(run.kinds, ['subagent']);
+    assert.equal(probe.maxInFlight, 2);
+    assert.deepEqual(run.toolCalls, [
+      ['call_1', 0],
+      ['call_2', 1]
+    ]);
+    assert.deepEqual(toolResults(run.requests[1]), [
+      ['call_1', { key: 'A-1', value: 'record A-1' }],
+      ['call_2', { key: 'B-2', value: 'record B-2' }]
+    ]);
+    assert.equal(run.result.status, 'ok');
+    assert.equal(run.result.finalMessage.content, 'The records are open.');
+  }
+);
+
+test(
+  'an app run as a tool, flag on: a write in the step, or two writes, run one call at a time',
+  LATCH_TIMEOUT,
+  async () => {
+    for (const step of [
+      [
+        ['lookup', 'A-1'],
+        ['store', 'S-9'],
+        ['lookup', 'B-2']
+      ],
+      [
+        ['store', 'S-1'],
+        ['store', 'S-2']
+      ]
+    ]) {
+      const probe = createProbe();
+      const run = await runAsTool(caseConfig({ probe, features: FLAG_ON }), [
+        calls(...step),
+        answer()
+      ]);
+      const keys = step.map(([, key]) => key);
+      assert.equal(probe.maxInFlight, 1, keys.join(' '));
+      assert.deepEqual(probe.started, keys);
+      assert.deepEqual(probe.ended, keys);
+      assert.ok(
+        run.toolCalls.every(([, callIndex]) => callIndex === undefined),
+        'no call names a place in a batch'
+      );
+    }
+  }
+);
+
+test(
+  'an app run as a tool, flag on, its model opts out: the calls run one at a time',
+  LATCH_TIMEOUT,
+  async () => {
+    const probe = createProbe();
+    const run = await runAsTool(
+      caseConfig({ probe, features: FLAG_ON, model: { parallelToolCalls: false } }),
+      [calls(['lookup', 'A-1'], ['lookup', 'B-2']), answer()]
+    );
+    assert.deepEqual(run.kinds, ['subagent']);
+    assert.equal(probe.maxInFlight, 1);
+    assert.deepEqual(probe.started, ['A-1', 'B-2']);
   }
 );

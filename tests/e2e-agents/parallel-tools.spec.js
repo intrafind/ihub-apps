@@ -55,6 +55,11 @@ const CALL_ORDER = ['Read the counter', 'List scheduled tasks'];
 /** A counter key of this test only. */
 const key = name => `${name}-${unique('k').slice(-8)}`;
 
+/** Code-unit order of two keys: the same everywhere, whatever the locale. */
+const byCodeUnit = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+/** The keys in an order of their own, for a comparison that ignores the order they came in. */
+const inKeyOrder = keys => [...keys].sort(byCodeUnit);
+
 test.describe('Read-only tool calls side by side', () => {
   test.afterEach(async () => {
     // A failed test must leave no read waiting and no model call hanging.
@@ -88,10 +93,15 @@ test.describe('Read-only tool calls side by side', () => {
       );
       await sendMessage(page, message);
 
-      // Both reads reached the counter while neither was answered.
+      // Both reads reached the counter while neither was answered. Which one arrived
+      // first is not the server's to decide (two requests sent at once), so the two
+      // keys are compared as a set; the call order is checked on the model request below.
       await expect
-        .poll(() => counter.waiting(), { message: 'the reads that wait', timeout: 30_000 })
-        .toEqual([first, second]);
+        .poll(async () => inKeyOrder(await counter.waiting()), {
+          message: 'the reads that wait',
+          timeout: 30_000
+        })
+        .toEqual(inKeyOrder([first, second]));
       await expect(rows(page)).toHaveCount(2);
       await expect(runningRows(page)).toHaveCount(2);
 
