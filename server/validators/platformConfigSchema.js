@@ -1227,5 +1227,3 @@ export const platformConfigSchema = z
       .optional()
   })
   .passthrough();
-
-export const knownPlatformKeys = Object.keys(platformConfigSchema.shape);

@@ -46,5 +46,3 @@ export const groupConfigSchema = z
     enabled: z.boolean().prefault(true)
   })
   .passthrough();
-
-export const knownGroupKeys = Object.keys(groupConfigSchema.shape);

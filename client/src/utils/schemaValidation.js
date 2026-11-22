@@ -194,40 +194,6 @@ function getFieldSchema(schema, fieldPath) {
 }
 
 /**
- * Validate a single field against schema
- * @param {string} field - Field name
- * @param {any} value - Field value
- * @param {Object} schema - JSON Schema
- * @returns {string|null} Error message or null if valid
- */
-export function validateField(field, value, schema) {
-  if (!schema || !schema.properties || !schema.properties[field]) {
-    return null;
-  }
-
-  // Create a minimal schema for just this field
-  const fieldSchema = {
-    type: 'object',
-    properties: {
-      [field]: schema.properties[field]
-    }
-  };
-
-  // Add required constraint if applicable
-  if (schema.required && schema.required.includes(field)) {
-    fieldSchema.required = [field];
-  }
-
-  const result = validateWithSchema({ [field]: value }, fieldSchema);
-
-  if (!result.isValid && result.errors.length > 0) {
-    return result.errors[0].message;
-  }
-
-  return null;
-}
-
-/**
  * Get required fields from schema
  * @param {Object} schema - JSON Schema
  * @returns {Array} Array of required field names
