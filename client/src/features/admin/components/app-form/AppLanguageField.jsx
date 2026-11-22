@@ -26,6 +26,15 @@ export function useAppFormLanguage() {
 }
 
 /**
+ * Whether the texts of the form offer the machine translation. It calls an
+ * admin route, so a form that people without admin rights use (the editor of
+ * a personal app) sets false. Outside a provider the button is offered.
+ */
+const AppFormTranslateContext = createContext(true);
+
+export const AppFormTranslateProvider = AppFormTranslateContext.Provider;
+
+/**
  * A text of the app in its languages: `DynamicLanguageEditor` in the
  * one-language mode of the form it is rendered in.
  *
@@ -34,7 +43,10 @@ export function useAppFormLanguage() {
  */
 function AppLanguageField(props) {
   const primaryLanguage = useAppFormLanguage();
-  return <DynamicLanguageEditor primaryLanguage={primaryLanguage} {...props} />;
+  const translate = use(AppFormTranslateContext);
+  return (
+    <DynamicLanguageEditor primaryLanguage={primaryLanguage} translate={translate} {...props} />
+  );
 }
 
 export default AppLanguageField;

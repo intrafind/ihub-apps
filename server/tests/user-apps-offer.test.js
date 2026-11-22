@@ -164,6 +164,8 @@ describe('an offer', () => {
     }
     const sixth = await offer('anna', apps[5].id, 'dave');
     assert.deepEqual([sixth.status, sixth.body.code], [409, 'QUOTA_USER_APP_OFFERS']);
+    // The limit, for the sentence "You have 5 open offers. Withdraw one first."
+    assert.deepEqual(sixth.body.details, { max: 5 });
     assert.equal((await api.repo().get(apps[5].id)).pendingOwner, null);
     assert.equal((await offer('anna', apps[0].id, 'ben')).status, 200);
     // A withdrawn offer makes room.
@@ -206,6 +208,56 @@ describe('withdraw and decline', () => {
   });
 });
 
+describe('an offer to a person the app is already shared with', () => {
+  for (const [who, role] of [
+    ['ben', 'user'],
+    ['carol', 'editor']
+  ]) {
+    it(`"${role}": keeps the role of the share, sees the offer, and can accept it`, async () => {
+      const record = await sharedApp();
+      const offered = (await offer('anna', record.id, who)).body;
+
+      const seen = await read(who, record.id);
+      assert.equal(seen.status, 200, seen.text);
+      // The share still decides what they may do with the app.
+      assert.equal(seen.body.permissions.role, role);
+      assert.equal(seen.body.permissions.canEdit, role === 'editor');
+      assert.equal(seen.body.permissions.canAcceptOffer, true);
+      // The offer and what a receiver reads before answering: who offered it, and the members.
+      assert.equal(seen.body.pendingOwner.id, who);
+      assert.deepEqual(seen.body.pendingOwner.offeredBy, { id: 'anna', name: 'Anna Schmidt' });
+      assert.equal(seen.body.members.length, 2);
+
+      // Listed with the receiver's own apps, once, and not also as a shared app.
+      const mine = (await as(who).get('/api/apps?scope=mine')).body.items;
+      assert.deepEqual(
+        mine.map(item => item.id),
+        [record.id]
+      );
+      assert.equal(mine[0].pendingOwner.id, who);
+      const shared = (await as(who).get('/api/apps?scope=shared')).body.items;
+      assert.deepEqual(shared, []);
+      const both = (await as(who).get('/api/apps?scope=personal')).body.items;
+      assert.equal(both.filter(item => item.id === record.id).length, 1);
+
+      // A member the offer is not for does not read it.
+      const other = who === 'ben' ? 'carol' : 'ben';
+      assert.equal('pendingOwner' in (await read(other, record.id)).body, false);
+      assert.equal((await read(other, record.id)).body.permissions.canAcceptOffer, false);
+
+      const res = await accept(who, record.id, offered.revision);
+      assert.equal(res.status, 200, res.text);
+      assert.equal(res.body.owner.id, who);
+      assert.equal(res.body.permissions.isOwner, true);
+      // The new owner's own share is gone.
+      assert.equal(
+        res.body.members.some(entry => entry.id === who),
+        false
+      );
+    });
+  }
+});
+
 describe('an offer lapses after 30 days', () => {
   const lapsedOffer = async record =>
     api.repo().setOffer(
@@ -222,12 +274,30 @@ describe('an offer lapses after 30 days', () => {
     const offered = await lapsedOffer(record);
     assert.equal((await read('dave', record.id)).status, 404);
     assert.equal((await accept('dave', record.id, offered.revision)).status, 404);
-    assert.equal((await read('anna', record.id)).body.pendingOwner, null);
+    // A person who cannot see the app removes nothing.
+    assert.equal((await api.repo().get(record.id)).pendingOwner.id, 'dave');
+    const seen = await read('anna', record.id);
+    assert.equal(seen.body.pendingOwner, null);
     assert.equal(await api.repo().countOpenOffers('anna'), 0);
-    assert.equal((await api.repo().get(record.id)).owner.id, 'anna');
-    // The owner clears what is left of it, or replaces it.
-    assert.equal((await withdraw('anna', record.id)).status, 204);
-    assert.equal((await api.repo().get(record.id)).pendingOwner, null);
+    // The read removed what was left of it, without a new revision, and recorded it once.
+    const stored = await api.repo().get(record.id);
+    assert.equal(stored.owner.id, 'anna');
+    assert.equal(stored.pendingOwner, null);
+    assert.equal(stored.revision, offered.revision);
+    assert.equal(seen.body.revision, offered.revision);
+    await read('anna', record.id);
+    const lapsed = (await api.audit(record.id, { resource: 'userAppShare' })).filter(
+      entry => entry.details?.offer === 'lapsed'
+    );
+    assert.equal(lapsed.length, 1);
+    assert.deepEqual(
+      { from: lapsed[0].details.from, to: lapsed[0].details.to, action: lapsed[0].action },
+      { from: 'anna', to: 'dave', action: 'update' }
+    );
+    assert.equal(lapsed[0].details.revision, offered.revision);
+    assert.ok(lapsed[0].details.contentHash);
+    assert.equal((await withdraw('anna', record.id)).status, 404);
+    // A lapsed offer nobody read is replaced by a new one.
     await lapsedOffer(record);
     const again = await offer('anna', record.id, 'mallory');
     assert.equal(again.status, 200, again.text);

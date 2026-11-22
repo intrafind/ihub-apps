@@ -130,25 +130,38 @@ function localizedText(value, language) {
  * `FULL_VIEW_ROLES` get it as the ceiling computed it. A person with "Can
  * use" gets what the app asks for: granted, or missing with `youMayNot` when
  * it depends on them and `unavailable` otherwise. What the owner may or may
- * not do is not sent to them.
+ * not do is not sent to them. A connected system carries its display name
+ * (`name`, a text per language or a string) for every role.
  */
-function capabilitiesFor(capabilities, full) {
-  const list = Array.isArray(capabilities) ? capabilities : [];
+function capabilitiesFor(capabilities, full, bindings) {
+  const about = new Map((Array.isArray(bindings) ? bindings : []).map(entry => [entry.id, entry]));
+  const list = (Array.isArray(capabilities) ? capabilities : []).map(entry => ({
+    ...entry,
+    name: about.get(entry.id)?.name,
+    actions: about.get(entry.id)?.actions
+  }));
+  // The name of a connected system goes to every role: the notice names it.
+  const named = entry => (entry.name ? { name: entry.name } : {});
   if (full) {
     return list.map(entry => ({
       id: entry.id,
+      ...named(entry),
       requested: entry.requested === true,
       granted: entry.granted === true,
-      ...(entry.granted === true || !entry.reason ? {} : { reason: entry.reason })
+      ...(entry.granted === true || !entry.reason ? {} : { reason: entry.reason }),
+      // The functions the app stores for a connected system, so an editor can
+      // keep a binding that is withheld right now.
+      ...(Array.isArray(entry.actions) ? { actions: [...entry.actions] } : {})
     }));
   }
   return list
     .filter(entry => entry.requested === true || entry.granted === true)
     .map(entry =>
       entry.granted === true
-        ? { id: entry.id, granted: true }
+        ? { id: entry.id, ...named(entry), granted: true }
         : {
             id: entry.id,
+            ...named(entry),
             granted: false,
             reason: MEMBER_REASONS.includes(entry.reason) ? entry.reason : 'unavailable'
           }
@@ -195,7 +208,9 @@ export function userAppView(
   } = {}
 ) {
   const role = permissions?.role || null;
-  const full = FULL_VIEW_ROLES.includes(role);
+  // The receiver of an offer reads what an owner reads before they answer, also when the app
+  // reaches them only as "Can use".
+  const full = FULL_VIEW_ROLES.includes(role) || permissions?.canAcceptOffer === true;
   const state = effectiveUserAppState(record, { publishedAppExists });
   const view = {
     ...pick(effective?.app, APP_OBJECT_KEYS),
@@ -205,7 +220,7 @@ export function userAppView(
     owner: ownerView(record, owner),
     permissions: { ...permissions },
     sharedWith: sharedWithCounts(record),
-    capabilities: capabilitiesFor(effective?.capabilities, full),
+    capabilities: capabilitiesFor(effective?.capabilities, full, effective?.bindings),
     approval: {
       mode: effective?.approval?.mode || 'always',
       chatGrants: effective?.approval?.chatGrants === true
@@ -217,7 +232,13 @@ export function userAppView(
     updatedBy: person(record.updatedBy)
   };
   if (full) view.members = (record.members || []).map(memberView);
-  if (role === 'owner' || role === 'offered' || role === 'admin') {
+  // The receiver of an offer may already be a member; the offer reaches them all the same.
+  if (
+    role === 'owner' ||
+    role === 'offered' ||
+    role === 'admin' ||
+    permissions?.canAcceptOffer === true
+  ) {
     view.pendingOwner = offerView(record, now);
   }
   if (role === 'owner' && publish) view.publish = publish;
@@ -300,6 +321,8 @@ function requestedCapabilities(content) {
  * @param {boolean|null} [context.publishedAppEnabled=null] - Whether the
  *   company app of a promoted app is switched on; null when it is gone.
  * @param {boolean} [context.publishedAppExists=true]
+ * @param {number} [context.membersWithoutCompanyApp] - For a promoted app: how
+ *   many members shared by name cannot use the company app.
  * @param {number} [context.now] - Clock in milliseconds, for tests.
  * @returns {Object}
  */
@@ -310,6 +333,7 @@ export function adminUserAppListItem(
     clash = false,
     publishedAppEnabled = null,
     publishedAppExists = true,
+    membersWithoutCompanyApp,
     now = Date.now()
   } = {}
 ) {
@@ -345,6 +369,9 @@ export function adminUserAppListItem(
           }
         : null,
     sharedWith: sharedWithCounts(record),
+    ...(state === 'promoted' && membersWithoutCompanyApp !== undefined
+      ? { membersWithoutCompanyApp }
+      : {}),
     capabilities: requestedCapabilities(record.content),
     updatedAt: record.updatedAt || null,
     lastUsedAt: record.lastUsedAt || null

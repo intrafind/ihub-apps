@@ -24,7 +24,7 @@
 import configCache from '../configCache.js';
 import { requireFeature } from '../featureRegistry.js';
 import { authenticatedOnly } from '../middleware/authRequired.js';
-import { createAppGeneratorLimiter } from '../middleware/rateLimiting.js';
+import { appGeneratorLimiter } from '../middleware/rateLimiting.js';
 import { userAppAccessRequired } from '../middleware/userAppAccess.js';
 import { generateAppDraft } from '../services/appGenerator.js';
 import { loadAppTemplates } from '../services/appTemplates.js';
@@ -55,6 +55,7 @@ import { getLocalizedString } from '../utils/localize.js';
 import { ServiceError } from '../utils/ServiceError.js';
 import { LANGUAGE_CODE_PATTERN } from '../../shared/validationPatterns.js';
 import { parseDraftRequest } from './admin/appBuilder.js';
+import registerUserAppPublishRoutes from './userAppPublishRoutes.js';
 
 /** The feature that switches drafting with AI on and off (Admin → Features). */
 const GENERATOR_FEATURE = 'appGenerator';
@@ -64,11 +65,7 @@ const GENERATOR_FEATURE = 'appGenerator';
  * P12 REGISTRATION POINT (publish)
  * ---------------------------------------------------------------------------
  * `POST /api/apps/:appId/_publish` lives in `server/routes/userAppPublishRoutes.js`
- * (slice P12). To switch it on, replace `null` by that module's register
- * function:
- *
- *   import registerUserAppPublishRoutes from './userAppPublishRoutes.js';
- *   const PUBLISH_ROUTES = registerUserAppPublishRoutes;
+ * (slice P12). To switch it off, replace the register function by `null`.
  *
  * It is called as `PUBLISH_ROUTES(app, { gate, sendApp, auditStamp, service })`
  * before the other `:appId` routes: `gate` is the middleware list every user
@@ -80,7 +77,7 @@ const GENERATOR_FEATURE = 'appGenerator';
  *
  * @type {((app: import('express').Express, tools: Object) => void)|null}
  */
-const PUBLISH_ROUTES = null;
+const PUBLISH_ROUTES = registerUserAppPublishRoutes;
 
 /** A principal with resolved permissions, as the data routes build it. */
 function ensurePrincipal(req, _res, next) {
@@ -330,9 +327,9 @@ export default function registerUserAppRoutes(app, { llmClient, service: injecte
 
   // --- the AI draft ---------------------------------------------------------
 
-  // The draft limit of the admin route: the same limiter name and key, so both
-  // routes count against one budget per user across the cluster workers.
-  const draftLimiter = createAppGeneratorLimiter(configCache.getPlatform() || {});
+  // The draft limiter of the admin route, the same instance: both routes count
+  // against one budget per user.
+  const draftLimiter = appGeneratorLimiter(configCache.getPlatform() || {});
 
   /** Validates the body before the draft limit counts, so only real drafts are counted. */
   const readDraftRequest = (req, _res, next) => {
@@ -478,8 +475,15 @@ export default function registerUserAppRoutes(app, { llmClient, service: injecte
    *           application/json:
    *             schema:
    *               type: object
-   *               required: [users, groups, everyone]
+   *               required: [users, groups, everyone, allowed]
    *               properties:
+   *                 allowed:
+   *                   type: object
+   *                   description: The kinds of audience that can be picked
+   *                   properties:
+   *                     user: { type: boolean }
+   *                     group: { type: boolean }
+   *                     everyone: { type: boolean }
    *                 users:
    *                   type: array
    *                   items:

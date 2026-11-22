@@ -537,3 +537,25 @@ export function createAppGeneratorLimiter(platformConfig = {}) {
     }
   );
 }
+
+let sharedAppGeneratorLimiter = null;
+
+/**
+ * The one draft limiter of this process. The admin draft route and the draft route of personal
+ * apps both mount this instance, so a user has one budget of drafts for the two routes together,
+ * also on a server with a single worker, where every limiter instance counts for itself.
+ *
+ * The instance is created on the first call, so the header settings of later calls are ignored.
+ *
+ * @param {Object} platformConfig - Platform configuration object
+ * @returns {Function} Express rate limiter middleware
+ */
+export function appGeneratorLimiter(platformConfig = {}) {
+  sharedAppGeneratorLimiter ??= createAppGeneratorLimiter(platformConfig);
+  return sharedAppGeneratorLimiter;
+}
+
+/** Forget the shared draft limiter, so the next route registration counts from zero (tests). */
+export function resetAppGeneratorLimiter() {
+  sharedAppGeneratorLimiter = null;
+}

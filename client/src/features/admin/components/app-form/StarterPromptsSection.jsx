@@ -14,9 +14,11 @@ import AppLanguageField, { useAppFormLanguage } from './AppLanguageField';
  * @param {object} props
  * @param {object} props.app - The app as the editor holds it.
  * @param {function(object): void} props.onChange - Receives the changed app.
+ * @param {boolean} [props.showAutoSend=true] - Whether a starter can be sent automatically. A
+ *   starter of a personal app has a title and a message only, so its editor passes false.
  * @returns {JSX.Element}
  */
-function StarterPromptsSection({ app, onChange }) {
+function StarterPromptsSection({ app, onChange, showAutoSend = true }) {
   const { t } = useTranslation();
   const newTextLanguage = useAppFormLanguage() || 'en';
   const starters = app.starterPrompts || [];
@@ -31,12 +33,14 @@ function StarterPromptsSection({ app, onChange }) {
   const addStarter = () =>
     setStarters([
       ...starters,
-      {
-        title: { [newTextLanguage]: '' },
-        message: { [newTextLanguage]: '' },
-        variables: {},
-        autoSend: false
-      }
+      showAutoSend
+        ? {
+            title: { [newTextLanguage]: '' },
+            message: { [newTextLanguage]: '' },
+            variables: {},
+            autoSend: false
+          }
+        : { title: { [newTextLanguage]: '' }, message: { [newTextLanguage]: '' } }
     ]);
 
   return (
@@ -92,21 +96,23 @@ function StarterPromptsSection({ app, onChange }) {
                       name={`${fieldId}.message`}
                     />
 
-                    <div className="flex items-center">
-                      <input
-                        id={`${fieldId}.autoSend`}
-                        type="checkbox"
-                        checked={starter.autoSend || false}
-                        onChange={e => updateStarter(index, 'autoSend', e.target.checked)}
-                        className={CHECKBOX_CLASS}
-                      />
-                      <label
-                        htmlFor={`${fieldId}.autoSend`}
-                        className="ml-2 block text-sm text-gray-900 dark:text-gray-100"
-                      >
-                        {t('admin.apps.edit.autoSendPrompt')}
-                      </label>
-                    </div>
+                    {showAutoSend && (
+                      <div className="flex items-center">
+                        <input
+                          id={`${fieldId}.autoSend`}
+                          type="checkbox"
+                          checked={starter.autoSend || false}
+                          onChange={e => updateStarter(index, 'autoSend', e.target.checked)}
+                          className={CHECKBOX_CLASS}
+                        />
+                        <label
+                          htmlFor={`${fieldId}.autoSend`}
+                          className="ml-2 block text-sm text-gray-900 dark:text-gray-100"
+                        >
+                          {t('admin.apps.edit.autoSendPrompt')}
+                        </label>
+                      </div>
+                    )}
                   </div>
                 </div>
               );

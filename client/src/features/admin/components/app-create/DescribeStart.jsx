@@ -151,6 +151,8 @@ export function useDraftRequest({ generate, language, onDraft }) {
  * is the call of the API module.
  *
  * @param {object} props
+ * @param {object} [props.source] - What the create page offers. `source.copy.limits` is the
+ *   key of a line under the box that says what such an app cannot do; without it there is none.
  * @param {string} props.description - The text in the box.
  * @param {(text: string) => void} props.onDescriptionChange
  * @param {(result: object, description: string) => void} props.onDraft - Called with the body of
@@ -163,6 +165,7 @@ export function useDraftRequest({ generate, language, onDraft }) {
  * @returns {JSX.Element}
  */
 function DescribeStart({
+  source,
   description = '',
   onDescriptionChange,
   onDraft,
@@ -184,6 +187,11 @@ function DescribeStart({
   const fieldId = `${baseId}-description`;
   const helpId = `${baseId}-help`;
   const errorId = `${baseId}-error`;
+  const limitsId = `${baseId}-limits`;
+  const limitsKey = source?.copy?.limits || null;
+  const describedBy = [helpId, limitsKey ? limitsId : null, error ? errorId : null]
+    .filter(Boolean)
+    .join(' ');
 
   const handleChange = text => {
     clearInputError();
@@ -226,13 +234,18 @@ function DescribeStart({
           value={description}
           readOnly={pending}
           aria-invalid={error?.input ? 'true' : undefined}
-          aria-describedby={error ? `${helpId} ${errorId}` : helpId}
+          aria-describedby={describedBy}
           onChange={event => handleChange(event.target.value)}
           onKeyDown={handleKeyDown}
         />
         <p id={helpId} className={HELP_CLASS}>
           {t('admin.apps.create.start.help')}
         </p>
+        {limitsKey && (
+          <p id={limitsId} className={HELP_CLASS}>
+            {t(limitsKey)}
+          </p>
+        )}
       </div>
 
       <div className="flex flex-wrap items-center gap-2">

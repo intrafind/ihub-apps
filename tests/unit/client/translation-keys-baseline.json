@@ -21,7 +21,6 @@
     "admin.returnToLogin",
     "admin.skipToContent"
   ],
-  "features/admin/components/AdminSaveBar.jsx": ["admin.ui.save"],
   "features/admin/components/AdminShortcutsModal.jsx": [
     "admin.shortcuts.hint",
     "admin.shortcuts.title"

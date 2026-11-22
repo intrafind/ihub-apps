@@ -3,7 +3,7 @@
 
 import configCache from '../../configCache.js';
 import { contentAdminAuth } from '../../middleware/contentAdminAuth.js';
-import { createAppGeneratorLimiter } from '../../middleware/rateLimiting.js';
+import { appGeneratorLimiter } from '../../middleware/rateLimiting.js';
 import { requireFeature } from '../../featureRegistry.js';
 import { generateAppDraft } from '../../services/appGenerator.js';
 import { loadAppTemplates } from '../../services/appTemplates.js';
@@ -74,7 +74,7 @@ function codeOf(error) {
  * @param {{ complete: Function }} [dependencies.llmClient] - The model client of the draft.
  */
 export default function registerAdminAppBuilderRoutes(app, { llmClient } = {}) {
-  const draftLimiter = createAppGeneratorLimiter(configCache.getPlatform() || {});
+  const draftLimiter = appGeneratorLimiter(configCache.getPlatform() || {});
 
   /** Validates the body before the draft limit counts, so only real drafts are counted. */
   const readDraftRequest = (req, _res, next) => {

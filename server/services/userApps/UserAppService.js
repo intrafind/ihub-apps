@@ -96,7 +96,9 @@ function actorOf(user) {
  * @example
  * try { await repo.update(…); } catch (error) { throw asServiceError(error); }
  */
-export function asServiceError(error) {
+export function asServiceError(error, { max } = {}) {
+  // The limit that was reached, so the client can name it.
+  const limit = Number.isFinite(max) && max > 0 ? { details: { max } } : {};
   if (error instanceof ServiceError) return error;
   switch (error?.code) {
     case ACCESS_CHANGED:
@@ -109,11 +111,13 @@ export function asServiceError(error) {
       });
     case QUOTA_APPS:
       return new ServiceError('QUOTA_USER_APPS', 'The limit of personal apps is reached', {
-        cause: error
+        cause: error,
+        ...limit
       });
     case QUOTA_OFFERS:
       return new ServiceError('QUOTA_USER_APP_OFFERS', 'The limit of open offers is reached', {
-        cause: error
+        cause: error,
+        ...limit
       });
     case NO_OFFER:
       return new ServiceError('NOT_FOUND', NOT_FOUND_MESSAGE, { cause: error });
@@ -123,11 +127,11 @@ export function asServiceError(error) {
 }
 
 /** Run a repository call and translate what it throws. */
-async function stored(call) {
+async function stored(call, limit) {
   try {
     return await call();
   } catch (error) {
-    throw asServiceError(error);
+    throw asServiceError(error, limit);
   }
 }
 
@@ -300,15 +304,17 @@ export class UserAppService {
   }
 
   async _create(user, { content, language, origin, settings }) {
-    const record = await stored(() =>
-      this.repository.create({
-        owner: actorOf(user),
-        ownerPrincipal: userAppOwnerSnapshot(user),
-        content,
-        language,
-        origin,
-        limit: settings.limits.maxAppsPerUser
-      })
+    const record = await stored(
+      () =>
+        this.repository.create({
+          owner: actorOf(user),
+          ownerPrincipal: userAppOwnerSnapshot(user),
+          content,
+          language,
+          origin,
+          limit: settings.limits.maxAppsPerUser
+        }),
+      { max: settings.limits.maxAppsPerUser }
     );
     if (!record) {
       throw new ServiceError('USER_APPS_UNAVAILABLE', 'Personal apps are unavailable');
@@ -538,17 +544,19 @@ export class UserAppService {
       throw refuse('This user already owns the app');
     }
     const replaced = record.pendingOwner || null;
-    const saved = await stored(() =>
-      this.repository.setOffer(
-        record.id,
-        { id: String(ownerId), name: displayName({ ...target, id: ownerId }) },
-        {
-          actor: actorOf(user),
-          maxOpenOffers: context.settings.limits.maxOpenOffersPerUser,
-          expectedRevision,
-          authorize: context.authorize('offer')
-        }
-      )
+    const saved = await stored(
+      () =>
+        this.repository.setOffer(
+          record.id,
+          { id: String(ownerId), name: displayName({ ...target, id: ownerId }) },
+          {
+            actor: actorOf(user),
+            maxOpenOffers: context.settings.limits.maxOpenOffersPerUser,
+            expectedRevision,
+            authorize: context.authorize('offer')
+          }
+        ),
+      { max: context.settings.limits.maxOpenOffersPerUser }
     );
     if (!saved) throw new ServiceError('NOT_FOUND', NOT_FOUND_MESSAGE);
     return { record: saved, replaced, lapsed: Boolean(replaced) && !openOffer(record) };
@@ -621,15 +629,17 @@ export class UserAppService {
       throw new ServiceError('ETAG_MISMATCH', 'The app was changed by someone else');
     }
     this.assertMayCreate(user, context.settings);
-    const result = await stored(() =>
-      this.repository.acceptOffer(record.id, {
-        receiver: actorOf(user),
-        ownerPrincipal: userAppOwnerSnapshot(user),
-        expectedRevision,
-        limit: context.settings.limits.maxAppsPerUser,
-        // Judged again under the lock: switched off or published since the read.
-        authorize: loaded => loaded.state !== 'promoted' && !loaded.disabled
-      })
+    const result = await stored(
+      () =>
+        this.repository.acceptOffer(record.id, {
+          receiver: actorOf(user),
+          ownerPrincipal: userAppOwnerSnapshot(user),
+          expectedRevision,
+          limit: context.settings.limits.maxAppsPerUser,
+          // Judged again under the lock: switched off or published since the read.
+          authorize: loaded => loaded.state !== 'promoted' && !loaded.disabled
+        }),
+      { max: context.settings.limits.maxAppsPerUser }
     );
     if (!result) throw new ServiceError('NOT_FOUND', NOT_FOUND_MESSAGE);
     return result;
@@ -799,7 +809,18 @@ export class UserAppService {
         .sort((a, b) => a.name.localeCompare(b.name))
         .slice(0, LOOKUP_LIMIT);
     }
-    return { users, groups, everyone: allowed.everyone === true };
+    return {
+      users,
+      groups,
+      everyone: allowed.everyone === true,
+      // Which kinds of audience can be picked at all, so a dialog can leave out a search that
+      // would find nothing.
+      allowed: {
+        user: allowed.user === true,
+        group: allowed.group === true,
+        everyone: allowed.everyone === true
+      }
+    };
   }
 }
 

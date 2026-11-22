@@ -34,6 +34,10 @@ function languageName(language, uiLanguage) {
  * not go ahead.
  *
  * @param {object} props
+ * @param {object} [props.source] - What the create page offers (section 11.3 of the personal
+ *   apps plan): whether "More details" has the app ID and the category, and the keys of the
+ *   line above the buttons and of the submit button. Without a source the screen is the
+ *   admin screen.
  * @param {object} props.draft - The page's state with its actions (`useAppDraft`).
  * @param {object} props.form - Validation and the request (`useCreateSubmit`).
  * @param {React.ReactNode} [props.notice] - What stands above the fields for this start.
@@ -47,6 +51,7 @@ function languageName(language, uiLanguage) {
  * @returns {JSX.Element}
  */
 function EssentialsScreen({
+  source,
   draft,
   form,
   notice,
@@ -119,6 +124,7 @@ function EssentialsScreen({
     ];
   }
   const showSummary = form.submitted && (entries.length > 0 || Boolean(general));
+  const showDetails = source?.showAppId !== false || source?.showCategory !== false;
 
   return (
     <div className="space-y-6">
@@ -175,25 +181,28 @@ function EssentialsScreen({
           }
         />
 
-        <AppDetailsDisclosure
-          open={detailsOpen}
-          onToggle={() => setDetailsOpen(open => !open)}
-          appId={appId}
-          onIdChange={value => {
-            touch('id');
-            editId(value);
-          }}
-          idError={fieldMessages.id ?? null}
-          idAvailable={idTouched && idsKnown && !form.errors.id}
-          describedBy={summaryId}
-          category={state.draft?.category}
-          categories={categories}
-          onCategoryChange={category => {
-            touch('category');
-            editMeta('category', category);
-          }}
-          language={String(i18n.language || state.language).split('-')[0]}
-        />
+        {showDetails && (
+          <AppDetailsDisclosure
+            source={source}
+            open={detailsOpen}
+            onToggle={() => setDetailsOpen(open => !open)}
+            appId={appId}
+            onIdChange={value => {
+              touch('id');
+              editId(value);
+            }}
+            idError={fieldMessages.id ?? null}
+            idAvailable={idTouched && idsKnown && !form.errors.id}
+            describedBy={summaryId}
+            category={state.draft?.category}
+            categories={categories}
+            onCategoryChange={category => {
+              touch('category');
+              editMeta('category', category);
+            }}
+            language={String(i18n.language || state.language).split('-')[0]}
+          />
+        )}
 
         <div className="space-y-2 border-t border-gray-200 dark:border-gray-700 pt-4">
           {platformLanguage && state.language !== platformLanguage && (
@@ -204,9 +213,11 @@ function EssentialsScreen({
             </p>
           )}
           <p className="text-sm text-gray-700 dark:text-gray-300">
-            {UI_CREATES_PUBLISHED
-              ? t('admin.apps.create.essentials.audienceLive')
-              : t('admin.apps.create.essentials.audience')}
+            {source?.copy?.stateLine
+              ? t(source.copy.stateLine)
+              : UI_CREATES_PUBLISHED
+                ? t('admin.apps.create.essentials.audienceLive')
+                : t('admin.apps.create.essentials.audience')}
           </p>
           <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
             <button type="button" className={SECONDARY_BUTTON_CLASS} onClick={onCancel}>
@@ -217,7 +228,11 @@ function EssentialsScreen({
               className={`${PRIMARY_BUTTON_CLASS} aria-disabled:cursor-progress`}
               aria-disabled={form.submitting ? 'true' : undefined}
             >
-              {form.submitting ? t('admin.apps.create.submitting') : t('admin.apps.create.submit')}
+              {form.submitting
+                ? t('admin.apps.create.submitting')
+                : source?.copy?.submit
+                  ? t(source.copy.submit)
+                  : t('admin.apps.create.submit')}
             </button>
           </div>
         </div>

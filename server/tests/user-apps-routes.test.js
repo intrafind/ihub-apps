@@ -182,8 +182,8 @@ describe('GET /api/apps/_config', () => {
       enabled: true,
       canCreate: true,
       canShare: true,
-      // No publish route is registered (slice P12), whatever the setting says.
-      canPublish: false,
+      // She holds `userAppSharing`, and the harness has `sharing.allowPublish` on.
+      canPublish: true,
       maxApps: 20,
       used: 1,
       generator: true,
@@ -300,7 +300,8 @@ describe('GET /api/apps/_share-targets', () => {
   it('finds users from two characters, never the caller, never a deactivated account', async () => {
     const short = await as('anna').get('/api/apps/_share-targets?q=b');
     assert.equal(short.status, 200, short.text);
-    assert.deepEqual(Object.keys(short.body).sort(), ['everyone', 'groups', 'users']);
+    assert.deepEqual(Object.keys(short.body).sort(), ['allowed', 'everyone', 'groups', 'users']);
+    assert.deepEqual(short.body.allowed, { user: true, group: true, everyone: true });
     assert.deepEqual(short.body.users, []);
 
     const found = await as('anna').get('/api/apps/_share-targets?q=example.org');
@@ -326,7 +327,12 @@ describe('GET /api/apps/_share-targets', () => {
       userApps: { sharing: { allowEveryone: false, allowGroups: false, allowUsers: false } }
     });
     const off = await as('anna').get('/api/apps/_share-targets?q=ben');
-    assert.deepEqual(off.body, { users: [], groups: [], everyone: false });
+    assert.deepEqual(off.body, {
+      users: [],
+      groups: [],
+      everyone: false,
+      allowed: { user: false, group: false, everyone: false }
+    });
   });
 
   it('needs the permission to share, or an app to hand over', async () => {
@@ -518,6 +524,7 @@ describe('POST /api/apps', () => {
     assert.deepEqual(both.map(res => res.status).sort(), [201, 409]);
     const refused = both.find(res => res.status === 409);
     assert.equal(refused.body.code, 'QUOTA_USER_APPS');
+    assert.equal(typeof refused.body.details.max, 'number');
     assert.equal((await api.repo().listOwned('anna')).length, 2);
     // The limit is per person.
     assert.equal((await as('ben').post('/api/apps').send(createBody())).status, 201);
@@ -971,7 +978,8 @@ describe('the view per role', () => {
     'updatedBy'
   ];
   const EXPECTED = {
-    anna: [...COMMON, 'members', 'pendingOwner'],
+    // `publish`: what a publish would write, for an owner who may publish (9.1).
+    anna: [...COMMON, 'members', 'pendingOwner', 'publish'],
     carol: [...COMMON, 'members'],
     dave: [...COMMON, 'members', 'pendingOwner'],
     root: [...COMMON, 'members', 'pendingOwner'],
@@ -1147,6 +1155,36 @@ describe('POST /api/apps/_generate', () => {
     assert.equal(over.body.details.limiter, 'appGenerator');
     // Per user.
     assert.equal((await generate('carol')).status, 200);
+  });
+
+  it('shares one budget of drafts with the admin route, on a single worker too', async () => {
+    on();
+    // The admin route on an Express app of its own, registered after the user
+    // routes of this file: it mounts the same limiter instance.
+    const { default: express } = await import('express');
+    const { default: request } = await import('supertest');
+    const { default: registerAdminAppBuilderRoutes } =
+      await import('../routes/admin/appBuilder.js');
+    const { default: errorHandler } = await import('../middleware/errorHandler.js');
+    const admin = express();
+    admin.use(express.json());
+    admin.use((req, _res, next) => {
+      req.user = api.user('root');
+      next();
+    });
+    registerAdminAppBuilderRoutes(admin, {
+      llmClient: { complete: async () => ({ content: '{}', finishReason: 'stop', usage: null }) }
+    });
+    admin.use(errorHandler);
+
+    for (let index = 0; index < 30; index += 1) {
+      assert.equal((await generate('root')).status, 200);
+    }
+    const over = await request(admin)
+      .post('/api/admin/apps/_generate')
+      .send({ description: 'Summarize my mails', language: 'en' });
+    assert.equal(over.status, 429, over.text);
+    assert.equal(over.body.details.limiter, 'appGenerator');
   });
 });
 

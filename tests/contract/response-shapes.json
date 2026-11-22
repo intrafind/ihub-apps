@@ -4270,6 +4270,13 @@
       }
     }
   },
+  "GET /api/admin/user-apps/_waiting": {
+    "status": 200,
+    "shape": {
+      "items": [],
+      "nextCursor": "null"
+    }
+  },
   "GET /api/admin/user-skills": {
     "status": 200,
     "shape": {

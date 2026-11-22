@@ -31,6 +31,7 @@ import { updatePlatform } from '../../utils/platformConfigStore.js';
 import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
 import { ServiceError } from '../../utils/ServiceError.js';
 import { logAudit } from '../../services/AuditLogService.js';
+import { membersWithoutCompanyApp } from '../../services/userApps/publishUserApp.js';
 import { getUserAppRepository } from '../../services/userApps/UserAppRepository.js';
 import { lookupUserAppOwner } from '../../services/userApps/userAppAccess.js';
 import { isConfigAppId, userAppStanding } from '../../services/userApps/userAppResolution.js';
@@ -148,7 +149,10 @@ function adminContext(record, settings) {
     owner: lookupUserAppOwner(record, { settings }),
     clash: isConfigAppId(record.id),
     publishedAppExists: publishedId ? Boolean(company) : true,
-    publishedAppEnabled: company ? company.enabled !== false : null
+    publishedAppEnabled: company ? company.enabled !== false : null,
+    // For a published app: how many of the people it is shared with by name cannot use the
+    // company app, so an admin sees whom to grant it to.
+    ...(company ? { membersWithoutCompanyApp: membersWithoutCompanyApp(record) } : {})
   };
 }
 

@@ -5179,6 +5179,7 @@
         "title": "Header",
         "description": "The navigation links and the color of the classic top header."
       },
+      "save": "Save Changes",
       "saveBar": {
         "label": "Save changes",
         "saving": "Saving…",
@@ -7775,7 +7776,8 @@
     },
     "userApps": {
       "tab": "Personal apps",
-      "tabWaiting": "Personal apps · {{count}} waiting",
+      "tabWaiting_one": "Personal apps · {{count}} waiting",
+      "tabWaiting_other": "Personal apps · {{count}} waiting",
       "featureOff": "Personal apps are switched off. Switch them on under Features.",
       "featureOn": "Personal apps are switched on.",
       "filter": {
@@ -7783,12 +7785,17 @@
         "everyone": "Shared with everyone",
         "ownerInactive": "Owner inactive",
         "ownerStale": "Owner rights stale",
-        "waiting": "Published, not switched on"
+        "waiting": "Published, not switched on",
+        "label": "Show",
+        "clash": "ID clash",
+        "owner": "Owner: {{name}}",
+        "clearOwner": "Show all owners"
       },
       "waiting": {
         "row": "Published {{age}} ago, not switched on",
         "open": "Open company app",
-        "notice": "{{count}} apps published by users are not switched on yet."
+        "notice_one": "{{count}} app published by a user is not switched on yet.",
+        "notice_other": "{{count}} apps published by users are not switched on yet."
       },
       "takeOver": {
         "action": "Take over as app…",
@@ -7798,18 +7805,25 @@
         "plain": "The owner's rights could not be checked. The new app is created without web search, files, skills and connected systems.",
         "notPublished": "The app is created as \"Not published\". You test it and publish it in the app editor.",
         "owner": "{{owner}} can no longer change the personal app.",
-        "users": "{{count}} people use the personal app today. It keeps working for each of them until they can use the new app.",
-        "submit": "Take over"
+        "users_one": "{{count}} person uses the personal app today. It keeps working for this person until they can use the new app.",
+        "users_other": "{{count}} people use the personal app today. It keeps working for each of them until they can use the new app.",
+        "submit": "Take over",
+        "noCategory": "No category"
       },
-      "noAccess": "{{count}} of {{total}} members cannot use the company app.",
+      "noAccess_one": "{{count}} of {{total}} members cannot use the company app.",
+      "noAccess_other": "{{count}} of {{total}} members cannot use the company app.",
       "release": {
         "action": "Give back to the owner",
-        "published": "Unpublish or delete the company app first."
+        "published": "Unpublish or delete the company app first.",
+        "title": "Give \"{{name}}\" back to the owner?",
+        "body": "{{owner}} can change the personal app again. The company app stays."
       },
       "changed": "The app changed since you opened it. Check it again.",
       "disable": {
         "action": "Switch off",
-        "body": "Nobody can use the app while it is switched off. The owner sees your reason."
+        "body": "Nobody can use the app while it is switched off. The owner sees your reason.",
+        "title": "Switch off \"{{name}}\"?",
+        "reason": "Reason (the owner sees it)"
       },
       "enable": {
         "action": "Switch on"
@@ -7833,7 +7847,15 @@
         "max": "Apps per person",
         "mayUse": "Personal apps may use",
         "integrationsHelp": "A personal app can use the functions you tick here, for people whose groups may use that system. People who did not write the app are asked before every step.",
-        "blocked": "People whose apps are switched off"
+        "blocked": "People whose apps are switched off",
+        "none": "none",
+        "change": "Change",
+        "notAvailable": "Not available yet",
+        "maxHelp": "0 means no limit.",
+        "choose": "Choose…",
+        "noInstallations": "No connected system is installed.",
+        "noActions": "No functions",
+        "unblock": "Switch on again"
       },
       "groups": {
         "userApps": "Personal apps",
@@ -7844,7 +7866,37 @@
       "user": {
         "count": "Personal apps: {{count}} ({{shared}} shared)",
         "block": "Switch off all apps of this person",
-        "blockBody": "The person's apps stop for everyone, and the person cannot create new ones. You can undo this in the settings."
+        "blockBody": "The person's apps stop for everyone, and the person cannot create new ones. You can undo this in the settings.",
+        "blocked": "The apps of this person are switched off."
+      },
+      "capability": {
+        "model": "A chosen AI model",
+        "upload": "Files"
+      },
+      "empty": "No personal apps yet.",
+      "noMatch": "No personal app matches.",
+      "offer": {
+        "title": "Offer \"{{name}}\" to a new owner",
+        "body": "The person is asked to take the app over. Until they accept, nothing changes.",
+        "search": "Find a person"
+      },
+      "revision": {
+        "empty": "No earlier versions are stored.",
+        "item": "Version {{revision}}, saved {{date}} by {{name}}",
+        "instructions": "Instructions"
+      },
+      "shared": {
+        "none": "Only the owner",
+        "users_one": "{{count}} person",
+        "users_other": "{{count}} people",
+        "groups_one": "{{count}} group",
+        "groups_other": "{{count}} groups"
+      },
+      "table": {
+        "owner": "Owner",
+        "sharedWith": "Shared with",
+        "mayUse": "May use",
+        "lastUsed": "Last used"
       }
     }
   },
@@ -12024,7 +12076,8 @@
       "scope": {
         "all": "All",
         "mine": "My apps",
-        "shared": "Shared with me"
+        "shared": "Shared with me",
+        "label": "Which apps to show"
       },
       "badge": {
         "mine": "Mine",
@@ -12039,7 +12092,8 @@
         "share": "Share",
         "duplicate": "Duplicate",
         "delete": "Delete",
-        "leave": "Leave"
+        "leave": "Leave",
+        "label": "Actions for \"{{name}}\""
       },
       "limitReached": "You have {{max}} apps, which is the limit. Delete one to create a new one."
     },
@@ -12051,7 +12105,8 @@
     "edit": {
       "state": {
         "private": "Only you",
-        "shared": "Shared with {{count}} people",
+        "shared_one": "Shared with {{count}} person",
+        "shared_other": "Shared with {{count}} people",
         "everyone": "Shared with everyone",
         "promoted": "Now with the administrators",
         "offered": "Offered to {{owner}}",
@@ -12079,6 +12134,17 @@
       "delete": {
         "title": "Delete \"{{name}}\"?",
         "body": "The app is removed for you and for everyone you shared it with. Chats stay in the chat history and cannot be continued."
+      },
+      "breadcrumb": "Breadcrumb",
+      "reload": "Reload",
+      "steps": {
+        "share": "Share it (optional)"
+      },
+      "capability": {
+        "model": "The chosen AI model",
+        "upload": "File upload",
+        "webSearch": "Web search",
+        "skills": "Skills"
       }
     },
     "share": {
@@ -12114,6 +12180,28 @@
         "title": "This app is now a company app.",
         "open": "Open \"{{name}}\"",
         "chats": "Your earlier chats stay in your chat history."
+      },
+      "can": {
+        "model": "use the AI model {{model}}",
+        "upload": "take files from users",
+        "webSearch": "search the web",
+        "skills": "use the skills: {{list}}",
+        "skillsNone": "use skills",
+        "integration": "{{name}}: {{actions}}",
+        "none": "answer in the chat, and nothing else"
+      },
+      "tool": {
+        "webSearch": "web search",
+        "skills": "skills",
+        "integrations": "a connected system"
+      },
+      "droppedItem": "{{name}} ({{reason}})",
+      "reason": {
+        "offOnInstallation": "no longer allowed for personal apps",
+        "ownerMayNot": "the owner may not use it",
+        "youMayNot": "you may not use it",
+        "ownerInactive": "the owner's account is inactive",
+        "ownerStale": "the owner's rights are out of date"
       }
     },
     "transfer": {
@@ -12132,7 +12220,12 @@
       "decline": "Decline",
       "accept": "Take over",
       "changed": "The app was changed after you opened it. Read it again.",
-      "tooMany": "You have {{max}} open offers. Withdraw one first."
+      "tooMany": "You have {{max}} open offers. Withdraw one first.",
+      "pickHint": "Choose who should take the app over. You confirm in the next step.",
+      "search": "Search people",
+      "next": "Next",
+      "receivedMore": "{{count}} more…",
+      "showAll": "Show all"
     },
     "notice": {
       "ownedBy": "{{owner}} owns this app. Administrators have not checked it.",
@@ -12144,7 +12237,16 @@
       "unavailable": "Not available in this app right now: {{list}}.",
       "showInstructions": "Show instructions",
       "collapsed": "Personal app by {{owner}}",
-      "suspended": "This app is not available at the moment. Ask {{owner}} or an administrator."
+      "suspended": "This app is not available at the moment. Ask {{owner}} or an administrator.",
+      "capability": {
+        "model": "the preferred AI model",
+        "upload": "files you attach",
+        "webSearch": "web search",
+        "skills": "skills"
+      },
+      "expand": "Show details",
+      "collapse": "Show less",
+      "instructionsTitle": "Instructions of \"{{name}}\""
     }
   }
 }

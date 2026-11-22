@@ -100,6 +100,7 @@ import {
   resolveVariableValues
 } from '../../chat/utils/startForm';
 import SharedAppHeader from '../components/SharedAppHeader';
+import PersonalAppNotice from '../components/PersonalAppNotice';
 import AIDisclaimerBanner from '../../chat/components/AIDisclaimerBanner';
 import { recordAppUsage } from '../../../utils/recentApps';
 import { saveAppSettings, loadAppSettings } from '../../../utils/appSettings';
@@ -3253,6 +3254,8 @@ function AppChat({
             showEditAppButton={!embedded}
             onOpenCanvas={embedded ? () => openInNewTab(`/apps/${appId}/canvas`) : undefined}
           />
+
+          <PersonalAppNotice app={app} />
 
           {chatOrigin?.createdVia === 'scheduled-task' && (
             <ScheduledRunBanner origin={chatOrigin} onRunChanged={reloadScheduledRunChat} />

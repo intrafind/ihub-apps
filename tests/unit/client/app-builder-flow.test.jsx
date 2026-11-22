@@ -1676,7 +1676,12 @@ describe('apps list', () => {
       const unpublished = screen.getByText('Unfinished').closest('tr');
       expect(within(unpublished).getByText(off)).toBeInTheDocument();
 
-      fireEvent.click(within(unpublished).getByRole('button', { name: /more actions/i }));
+      // The row menu carries its name in the language of the page.
+      fireEvent.click(
+        within(unpublished).getByRole('button', {
+          name: lng === 'de' ? de.common.moreActions : /more actions/i
+        })
+      );
       await screen.findByRole('menuitem', { name: lng === 'de' ? 'Duplizieren' : 'Duplicate' });
       const page = document.body.textContent;
       const attributes = [...document.body.querySelectorAll('[title], [aria-label]')]

@@ -18,6 +18,8 @@ import { DISCLOSURE_BUTTON_CLASS, FIELD_ERROR_CLASS, INVALID_INPUT_CLASS } from 
  * changed after the app is created, which the help text says.
  *
  * @param {object} props
+ * @param {object} [props.source] - What the create page offers. `source.showAppId` and
+ *   `source.showCategory` say which of the two fields exist; without a source both do.
  * @param {boolean} props.open
  * @param {() => void} props.onToggle
  * @param {string} props.appId
@@ -33,6 +35,7 @@ import { DISCLOSURE_BUTTON_CLASS, FIELD_ERROR_CLASS, INVALID_INPUT_CLASS } from 
  * @returns {JSX.Element}
  */
 function AppDetailsDisclosure({
+  source,
   open,
   onToggle,
   appId,
@@ -72,44 +75,46 @@ function AppDetailsDisclosure({
       <div id={panelId}>
         {open && (
           <div className="mt-3 grid grid-cols-1 gap-5 sm:grid-cols-2">
-            <div>
-              <label htmlFor={idField} className={LABEL_CLASS}>
-                {t('admin.apps.create.essentials.id')}
-                <span aria-hidden="true"> *</span>
-              </label>
-              <input
-                id={idField}
-                type="text"
-                className={`${MONO_INPUT_CLASS} ${idError ? INVALID_INPUT_CLASS : ''}`}
-                value={appId}
-                maxLength={APP_ID_MAX_LENGTH + 20}
-                autoComplete="off"
-                autoCapitalize="off"
-                spellCheck={false}
-                aria-required="true"
-                aria-invalid={idError ? 'true' : undefined}
-                aria-describedby={describedIds.join(' ')}
-                onChange={event => onIdChange(event.target.value)}
-              />
-              {idMessage && (
-                <p id={`${idField}-error`} className={FIELD_ERROR_CLASS}>
-                  {idMessage}
+            {source?.showAppId !== false && (
+              <div>
+                <label htmlFor={idField} className={LABEL_CLASS}>
+                  {t('admin.apps.create.essentials.id')}
+                  <span aria-hidden="true"> *</span>
+                </label>
+                <input
+                  id={idField}
+                  type="text"
+                  className={`${MONO_INPUT_CLASS} ${idError ? INVALID_INPUT_CLASS : ''}`}
+                  value={appId}
+                  maxLength={APP_ID_MAX_LENGTH + 20}
+                  autoComplete="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  aria-required="true"
+                  aria-invalid={idError ? 'true' : undefined}
+                  aria-describedby={describedIds.join(' ')}
+                  onChange={event => onIdChange(event.target.value)}
+                />
+                {idMessage && (
+                  <p id={`${idField}-error`} className={FIELD_ERROR_CLASS}>
+                    {idMessage}
+                  </p>
+                )}
+                {idAvailable && !idError && (
+                  <p
+                    id={`${idField}-free`}
+                    role="status"
+                    className="mt-1 text-sm text-green-800 dark:text-green-300"
+                  >
+                    {t('admin.apps.create.essentials.idFree')}
+                  </p>
+                )}
+                <p id={`${idField}-help`} className={HELP_CLASS}>
+                  {t('admin.apps.create.essentials.idHelp')}
                 </p>
-              )}
-              {idAvailable && !idError && (
-                <p
-                  id={`${idField}-free`}
-                  role="status"
-                  className="mt-1 text-sm text-green-800 dark:text-green-300"
-                >
-                  {t('admin.apps.create.essentials.idFree')}
-                </p>
-              )}
-              <p id={`${idField}-help`} className={HELP_CLASS}>
-                {t('admin.apps.create.essentials.idHelp')}
-              </p>
-            </div>
-            {categories.length > 0 && (
+              </div>
+            )}
+            {source?.showCategory !== false && categories.length > 0 && (
               <div>
                 <label htmlFor={categoryField} className={LABEL_CLASS}>
                   {t('admin.apps.create.essentials.category')}

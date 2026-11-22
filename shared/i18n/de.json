@@ -5676,6 +5676,7 @@
         "title": "Kopfzeile",
         "description": "Die Navigationslinks und die Farbe der klassischen Kopfzeile."
       },
+      "save": "Änderungen speichern",
       "saveBar": {
         "label": "Änderungen speichern",
         "saving": "Speichern …",
@@ -8272,7 +8273,8 @@
     },
     "userApps": {
       "tab": "Persönliche Apps",
-      "tabWaiting": "Persönliche Apps · {{count}} warten",
+      "tabWaiting_one": "Persönliche Apps · {{count}} wartet",
+      "tabWaiting_other": "Persönliche Apps · {{count}} warten",
       "featureOff": "Persönliche Apps sind abgeschaltet. Schalten Sie sie unter „Features“ ein.",
       "featureOn": "Persönliche Apps sind eingeschaltet.",
       "filter": {
@@ -8280,12 +8282,17 @@
         "everyone": "Mit allen geteilt",
         "ownerInactive": "Besitzer inaktiv",
         "ownerStale": "Rechte des Besitzers veraltet",
-        "waiting": "Veröffentlicht, nicht freigeschaltet"
+        "waiting": "Veröffentlicht, nicht freigeschaltet",
+        "label": "Anzeigen",
+        "clash": "ID-Konflikt",
+        "owner": "Besitzer: {{name}}",
+        "clearOwner": "Alle Besitzer anzeigen"
       },
       "waiting": {
         "row": "Vor {{age}} veröffentlicht, nicht freigeschaltet",
         "open": "Unternehmens-App öffnen",
-        "notice": "{{count}} von Benutzern veröffentlichte Apps sind noch nicht freigeschaltet."
+        "notice_one": "{{count}} von einem Benutzer veröffentlichte App ist noch nicht freigeschaltet.",
+        "notice_other": "{{count}} von Benutzern veröffentlichte Apps sind noch nicht freigeschaltet."
       },
       "takeOver": {
         "action": "Als App übernehmen…",
@@ -8295,18 +8302,25 @@
         "plain": "Die Rechte des Besitzers konnten nicht geprüft werden. Die neue App wird ohne Websuche, Dateien, Skills und angebundene Systeme angelegt.",
         "notPublished": "Die App wird als „Nicht veröffentlicht“ angelegt. Sie testen und veröffentlichen sie im App-Editor.",
         "owner": "{{owner}} kann die persönliche App nicht mehr ändern.",
-        "users": "{{count}} Personen nutzen die persönliche App derzeit. Sie funktioniert für jede von ihnen weiter, bis sie die neue App nutzen kann.",
-        "submit": "Übernehmen"
+        "users_one": "{{count}} Person nutzt die persönliche App derzeit. Sie funktioniert für diese Person weiter, bis sie die neue App nutzen kann.",
+        "users_other": "{{count}} Personen nutzen die persönliche App derzeit. Sie funktioniert für jede von ihnen weiter, bis sie die neue App nutzen kann.",
+        "submit": "Übernehmen",
+        "noCategory": "Keine Kategorie"
       },
-      "noAccess": "{{count}} von {{total}} Mitgliedern können die Unternehmens-App nicht nutzen.",
+      "noAccess_one": "{{count}} von {{total}} Mitgliedern kann die Unternehmens-App nicht nutzen.",
+      "noAccess_other": "{{count}} von {{total}} Mitgliedern können die Unternehmens-App nicht nutzen.",
       "release": {
         "action": "An den Besitzer zurückgeben",
-        "published": "Nehmen Sie zuerst die Unternehmens-App zurück oder löschen Sie sie."
+        "published": "Nehmen Sie zuerst die Unternehmens-App zurück oder löschen Sie sie.",
+        "title": "„{{name}}“ an den Besitzer zurückgeben?",
+        "body": "{{owner}} kann die persönliche App wieder ändern. Die Unternehmens-App bleibt bestehen."
       },
       "changed": "Die App wurde geändert, seit Sie sie geöffnet haben. Prüfen Sie sie erneut.",
       "disable": {
         "action": "Abschalten",
-        "body": "Solange die App abgeschaltet ist, kann niemand sie nutzen. Der Besitzer sieht Ihre Begründung."
+        "body": "Solange die App abgeschaltet ist, kann niemand sie nutzen. Der Besitzer sieht Ihre Begründung.",
+        "title": "„{{name}}“ abschalten?",
+        "reason": "Begründung (der Besitzer sieht sie)"
       },
       "enable": {
         "action": "Einschalten"
@@ -8330,7 +8344,15 @@
         "max": "Apps pro Person",
         "mayUse": "Persönliche Apps dürfen nutzen",
         "integrationsHelp": "Eine persönliche App kann die hier angekreuzten Funktionen nutzen, für Personen, deren Gruppen das System nutzen dürfen. Wer die App nicht selbst geschrieben hat, wird vor jedem Schritt gefragt.",
-        "blocked": "Personen, deren Apps abgeschaltet sind"
+        "blocked": "Personen, deren Apps abgeschaltet sind",
+        "none": "keine",
+        "change": "Ändern",
+        "notAvailable": "Noch nicht verfügbar",
+        "maxHelp": "0 bedeutet keine Obergrenze.",
+        "choose": "Auswählen…",
+        "noInstallations": "Es ist kein angebundenes System installiert.",
+        "noActions": "Keine Funktionen",
+        "unblock": "Wieder einschalten"
       },
       "groups": {
         "userApps": "Persönliche Apps",
@@ -8341,7 +8363,37 @@
       "user": {
         "count": "Persönliche Apps: {{count}} ({{shared}} geteilt)",
         "block": "Alle Apps dieser Person abschalten",
-        "blockBody": "Die Apps dieser Person werden für alle angehalten, und die Person kann keine neuen erstellen. Sie können das in den Einstellungen rückgängig machen."
+        "blockBody": "Die Apps dieser Person werden für alle angehalten, und die Person kann keine neuen erstellen. Sie können das in den Einstellungen rückgängig machen.",
+        "blocked": "Die Apps dieser Person sind abgeschaltet."
+      },
+      "capability": {
+        "model": "Ein gewähltes KI-Modell",
+        "upload": "Dateien"
+      },
+      "empty": "Noch keine persönlichen Apps.",
+      "noMatch": "Keine persönliche App passt.",
+      "offer": {
+        "title": "„{{name}}“ einem neuen Besitzer anbieten",
+        "body": "Die Person wird gebeten, die App zu übernehmen. Bis sie annimmt, ändert sich nichts.",
+        "search": "Person suchen"
+      },
+      "revision": {
+        "empty": "Es sind keine früheren Versionen gespeichert.",
+        "item": "Version {{revision}}, gespeichert am {{date}} von {{name}}",
+        "instructions": "Anweisungen"
+      },
+      "shared": {
+        "none": "Nur der Besitzer",
+        "users_one": "{{count}} Person",
+        "users_other": "{{count}} Personen",
+        "groups_one": "{{count}} Gruppe",
+        "groups_other": "{{count}} Gruppen"
+      },
+      "table": {
+        "owner": "Besitzer",
+        "sharedWith": "Geteilt mit",
+        "mayUse": "Darf nutzen",
+        "lastUsed": "Zuletzt genutzt"
       }
     }
   },
@@ -12023,7 +12075,8 @@
       "scope": {
         "all": "Alle",
         "mine": "Meine Apps",
-        "shared": "Mit mir geteilt"
+        "shared": "Mit mir geteilt",
+        "label": "Angezeigte Apps"
       },
       "badge": {
         "mine": "Von mir",
@@ -12038,7 +12091,8 @@
         "share": "Teilen",
         "duplicate": "Duplizieren",
         "delete": "Löschen",
-        "leave": "Verlassen"
+        "leave": "Verlassen",
+        "label": "Aktionen für „{{name}}“"
       },
       "limitReached": "Sie haben {{max}} Apps, das ist die Obergrenze. Löschen Sie eine App, um eine neue zu erstellen."
     },
@@ -12050,7 +12104,8 @@
     "edit": {
       "state": {
         "private": "Nur Sie",
-        "shared": "Mit {{count}} Personen geteilt",
+        "shared_one": "Mit {{count}} Person geteilt",
+        "shared_other": "Mit {{count}} Personen geteilt",
         "everyone": "Mit allen geteilt",
         "promoted": "Jetzt bei den Administratoren",
         "offered": "{{owner}} angeboten",
@@ -12078,6 +12133,17 @@
       "delete": {
         "title": "„{{name}}“ löschen?",
         "body": "Die App wird für Sie und für alle entfernt, mit denen Sie sie geteilt haben. Chats bleiben im Chatverlauf und können nicht fortgesetzt werden."
+      },
+      "breadcrumb": "Brotkrumenpfad",
+      "reload": "Neu laden",
+      "steps": {
+        "share": "Teilen (optional)"
+      },
+      "capability": {
+        "model": "Das gewählte KI-Modell",
+        "upload": "Datei-Upload",
+        "webSearch": "Websuche",
+        "skills": "Skills"
       }
     },
     "share": {
@@ -12113,6 +12179,28 @@
         "title": "Diese App ist jetzt eine Unternehmens-App.",
         "open": "„{{name}}“ öffnen",
         "chats": "Ihre früheren Chats bleiben im Chatverlauf."
+      },
+      "can": {
+        "model": "das KI-Modell {{model}} nutzen",
+        "upload": "Dateien von Benutzern annehmen",
+        "webSearch": "im Web suchen",
+        "skills": "die Skills nutzen: {{list}}",
+        "skillsNone": "Skills nutzen",
+        "integration": "{{name}}: {{actions}}",
+        "none": "im Chat antworten, sonst nichts"
+      },
+      "tool": {
+        "webSearch": "die Websuche",
+        "skills": "Skills",
+        "integrations": "ein angebundenes System"
+      },
+      "droppedItem": "{{name}} ({{reason}})",
+      "reason": {
+        "offOnInstallation": "für persönliche Apps nicht mehr erlaubt",
+        "ownerMayNot": "der Besitzer darf es nicht nutzen",
+        "youMayNot": "Sie dürfen es nicht nutzen",
+        "ownerInactive": "das Konto des Besitzers ist inaktiv",
+        "ownerStale": "die Rechte des Besitzers sind veraltet"
       }
     },
     "transfer": {
@@ -12131,7 +12219,12 @@
       "decline": "Ablehnen",
       "accept": "Übernehmen",
       "changed": "Die App wurde geändert, nachdem Sie sie geöffnet haben. Lesen Sie sie erneut.",
-      "tooMany": "Sie haben {{max}} offene Angebote. Ziehen Sie zuerst eines zurück."
+      "tooMany": "Sie haben {{max}} offene Angebote. Ziehen Sie zuerst eines zurück.",
+      "pickHint": "Wählen Sie, wer die App übernehmen soll. Sie bestätigen im nächsten Schritt.",
+      "search": "Personen suchen",
+      "next": "Weiter",
+      "receivedMore": "{{count}} weitere…",
+      "showAll": "Alle anzeigen"
     },
     "notice": {
       "ownedBy": "Diese App gehört {{owner}}. Administratoren haben sie nicht geprüft.",
@@ -12143,7 +12236,16 @@
       "unavailable": "In dieser App derzeit nicht verfügbar: {{list}}.",
       "showInstructions": "Anweisungen anzeigen",
       "collapsed": "Persönliche App von {{owner}}",
-      "suspended": "Diese App ist im Moment nicht verfügbar. Wenden Sie sich an {{owner}} oder an einen Administrator."
+      "suspended": "Diese App ist im Moment nicht verfügbar. Wenden Sie sich an {{owner}} oder an einen Administrator.",
+      "capability": {
+        "model": "das bevorzugte KI-Modell",
+        "upload": "Dateien, die Sie anhängen",
+        "webSearch": "Websuche",
+        "skills": "Skills"
+      },
+      "expand": "Details anzeigen",
+      "collapse": "Weniger anzeigen",
+      "instructionsTitle": "Anweisungen von „{{name}}“"
     }
   }
 }

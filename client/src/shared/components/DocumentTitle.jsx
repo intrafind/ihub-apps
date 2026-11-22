@@ -8,6 +8,7 @@ import { useUIConfig } from '../contexts/UIConfigContext';
 import { getLocalizedContent } from '../../utils/localizeContent';
 import { resolveTranslationRefs } from '../../utils/translationRefs';
 import { fetchAppDetails } from '../../api';
+import { useUserAppsConfig } from '../hooks/useUserApps';
 import { getScreenTitle, subscribeScreenTitle } from '../utils/screenTitle';
 
 /**
@@ -30,9 +31,16 @@ function DocumentTitle() {
   const isAppPage = location.pathname.startsWith('/apps/');
   const appId = isAppPage ? location.pathname.split('/apps/')[1]?.split('/')[0] : null;
 
+  // `/apps/new` is the create page of personal apps for people who may create one, and the
+  // chat of an app with the ID `new` for everyone else. Nothing is asked while the feature is off.
+  const userApps = useUserAppsConfig({ enabled: appId === 'new' });
+  const isCreatePage =
+    appId === 'new' &&
+    (userApps.loading || (userApps.enabled && userApps.config?.canCreate === true));
+
   // Fetch app details when we're on an app page
   useEffect(() => {
-    if (isAppPage && appId) {
+    if (isAppPage && appId && !isCreatePage) {
       fetchAppDetails(appId)
         .then(appData => {
           setCurrentApp(appData);
@@ -43,7 +51,7 @@ function DocumentTitle() {
     } else {
       setCurrentApp(null);
     }
-  }, [isAppPage, appId]);
+  }, [isAppPage, appId, isCreatePage]);
 
   useEffect(() => {
     // Don't update title if UI config is still loading

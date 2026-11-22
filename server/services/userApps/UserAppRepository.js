@@ -923,11 +923,14 @@ export class UserAppRepository {
    * @param {string} appId
    * @param {Object} [options]
    * @param {(record: Object) => boolean} [options.authorize]
+   * @param {boolean} [options.bumpRevision=true] - False for an offer found lapsed on a read:
+   *   a lapsed offer already reads as none, so nothing a client holds changes, and an
+   *   `If-Match` of before the read stays valid.
    * @returns {Promise<{record: Object, offer: Object|null}|null>} The record
    *   and the offer that was removed (null when there was none).
    * @throws {StorageError} `USER_APP_ACCESS_CHANGED`.
    */
-  async clearOffer(appId, { authorize } = {}) {
+  async clearOffer(appId, { authorize, bumpRevision = true } = {}) {
     if (!this.isAvailable() || !isUserAppId(appId)) return null;
     return this._withLock(appId, async () => {
       const { record, etag } = await this._load(appId);
@@ -936,7 +939,11 @@ export class UserAppRepository {
       const offer = record.pendingOwner || null;
       if (!offer) return { record, offer: null };
       const stored = await this._write(
-        { ...record, pendingOwner: null, revision: (Number(record.revision) || 1) + 1 },
+        {
+          ...record,
+          pendingOwner: null,
+          revision: (Number(record.revision) || 1) + (bumpRevision ? 1 : 0)
+        },
         etag
       );
       await this._removeOfferMarkers(appId, offer);

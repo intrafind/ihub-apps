@@ -4,15 +4,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { fetchModels, fetchUIConfig } from '../../../api';
-import {
-  createAdminApp,
-  fetchAdminApp,
-  fetchAdminApps,
-  fetchAdminAppTemplates,
-  fetchAppStartTemplates,
-  generateAppDraft
-} from '../../../api/adminApi';
 import i18nService from '../../../services/i18nService';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import { useAuth } from '../../../shared/contexts/AuthContext';
@@ -40,6 +31,7 @@ import { useCreateResources } from '../components/app-create/useCreateResources'
 import { useCreateSubmit } from '../components/app-create/useCreateSubmit';
 import { useScreenTitle } from '../components/app-create/useScreenTitle';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import { adminAppSource } from '../utils/adminAppSource';
 import { appCategoryOptions, contentLanguage } from '../utils/appDraft';
 
 /** Where the page lives and where it leads. Nothing below this file names a path. */
@@ -48,9 +40,8 @@ const APPS_PATH = '/admin/apps';
 const MODELS_PATH = '/admin/models';
 const MARKETPLACE_PATH = '/admin/marketplace';
 
-// A fresh list: a model that was connected a minute ago must be found.
-const loadModels = () => fetchModels({ skipCache: true });
-const loadUiConfig = () => fetchUIConfig();
+// Every request of the page and what the screens offer (section 11.3 of the personal apps plan).
+const source = adminAppSource;
 // The UI holds its own language; "(copy)" in another language of a name is loaded.
 const loadLanguage = language => i18nService.loadFullTranslations(language);
 
@@ -75,13 +66,13 @@ function AdminAppCreatePage() {
   const featureFlags = useFeatureFlags();
 
   const prepareCopy = useCallback(app => loadCopyLanguages(app, { i18n, loadLanguage }), [i18n]);
-  const copy = useCopySource({ fetchApp: fetchAdminApp, prepare: prepareCopy });
+  const copy = useCopySource({ fetchApp: source.fetchApp, prepare: prepareCopy });
   const draft = useAppDraft({ restore: !copy.requested });
   const { state, begin, describe, deriveId, setExtras, back, reset, forget } = draft;
   const resources = useCreateResources({
-    fetchModels: loadModels,
-    fetchApps: fetchAdminApps,
-    fetchUiConfig: loadUiConfig
+    fetchModels: source.fetchModels,
+    fetchApps: source.fetchApps,
+    fetchUiConfig: source.fetchUiConfig
   });
   const { isTaken, nameExists, markTaken, appsReady } = resources;
 
@@ -114,7 +105,7 @@ function AdminAppCreatePage() {
     deriveId,
     isTaken,
     markTaken,
-    createApp: createAdminApp,
+    createApp: source.createApp,
     onCreated,
     labelOf,
     detailOf
@@ -202,13 +193,15 @@ function AdminAppCreatePage() {
   } else if (state.screen === 'essentials') {
     screen = (
       <EssentialsScreen
+        source={source}
         draft={draft}
         form={form}
         notice={
           <EssentialsNotice
+            source={source}
             state={state}
             language={language}
-            generate={generateAppDraft}
+            generate={source.generateDraft}
             onDescriptionChange={describe}
             onExtrasChange={setExtras}
             onDraft={handleDraft}
@@ -228,8 +221,10 @@ function AdminAppCreatePage() {
   } else {
     screen = (
       <StartScreen
+        source={source}
         describe={
           <DescribeSlot
+            source={source}
             enabled={featureFlags.isEnabled('appGenerator', true)}
             models={resources.models}
             modelSetupHref={isFullAdmin ? MODELS_PATH : null}
@@ -237,11 +232,11 @@ function AdminAppCreatePage() {
             description={state.description}
             onDescriptionChange={describe}
             onDraft={handleDraft}
-            generate={generateAppDraft}
+            generate={source.generateDraft}
           />
         }
-        fetchTemplates={fetchAppStartTemplates}
-        fetchExistingApps={fetchAdminAppTemplates}
+        fetchTemplates={source.fetchTemplates}
+        fetchExistingApps={source.fetchExistingApps}
         language={language}
         onPickTemplate={template => open(beginTemplate(template, { language, isTaken }))}
         onStartBlank={() => open(beginBlank({ language }))}

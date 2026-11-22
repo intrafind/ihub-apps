@@ -42,8 +42,9 @@ function TargetIcon({ type }) {
  *   Saves the share list; defaults to the prompt shares.
  * @param {(error: Error, t: Function) => string} [props.errorMessage] - Turns a
  *   failed call into a message; defaults to the prompt wording.
- * @param {{title?: string, private?: string, help?: string}} [props.labels] -
- *   Texts that name the kind of item; each defaults to the prompt text.
+ * @param {{title?: string, private?: string, help?: string, canUse?: string, canEdit?: string,
+ *   everyone?: string}} [props.labels] - Texts that name the kind of item and its roles; each
+ *   defaults to the prompt text.
  */
 function PromptShareDialog({
   prompt,
@@ -121,7 +122,9 @@ function PromptShareDialog({
   };
 
   const describe = share => {
-    if (share.type === 'everyone') return t('prompts.share.everyone', 'Everyone signed in');
+    if (share.type === 'everyone') {
+      return labels.everyone || t('prompts.share.everyone', 'Everyone signed in');
+    }
     return share.name || share.id;
   };
 
@@ -257,8 +260,12 @@ function PromptShareDialog({
                       aria-label={t('prompts.share.permission', 'Permission')}
                       onChange={e => setPermission(key, e.target.value)}
                     >
-                      <option value="use">{t('prompts.share.canUse', 'Can use')}</option>
-                      <option value="edit">{t('prompts.share.canEdit', 'Can edit')}</option>
+                      <option value="use">
+                        {labels.canUse || t('prompts.share.canUse', 'Can use')}
+                      </option>
+                      <option value="edit">
+                        {labels.canEdit || t('prompts.share.canEdit', 'Can edit')}
+                      </option>
                     </select>
                     <button
                       type="button"

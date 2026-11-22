@@ -236,6 +236,9 @@ function evaluate(content, { runner, owner, settings, catalog, ownerState, stric
       id: binding.id,
       requested: true,
       actions,
+      // What the app stores and how the system is called, for the views.
+      storedActions: binding.actions,
+      name: installation?.name ?? null,
       reason: decide({
         installation:
           features.integrations !== false &&
@@ -323,7 +326,8 @@ export function isRunnerOwner(record, runner) {
  * @param {Object} context.catalog - What the caller looked up; see the module description.
  * @param {number} [context.now] - Clock in milliseconds, for the age of the owner snapshot.
  * @returns {{app: Object, capabilities: Array<{id: string, requested: boolean, granted: boolean,
- *   reason?: string}>, approval: {mode: 'writes'|'always', chatGrants: boolean}}}
+ *   reason?: string}>, bindings: Array<{id: string, name: Object|string|null, actions: string[]}>,
+ *   approval: {mode: 'writes'|'always', chatGrants: boolean}}}
  *   `app` passes `appConfigSchema` and has only keys of `USER_APP_RUN_KEYS`.
  *   `capabilities` lists `model`, `upload`, `webSearch`, `skills` and one
  *   `integration:<installationId>` per binding.
@@ -405,6 +409,13 @@ export function effectiveUserApp(record, { runner, owner, settings, catalog, now
         capabilityEntry(integrationCapabilityId(binding.id), binding)
       )
     ],
+    // Per connected system the app asks for: its display name and the
+    // functions the app stores, granted or not. For the views only.
+    bindings: decided.bindings.map(binding => ({
+      id: integrationCapabilityId(binding.id),
+      name: binding.name,
+      actions: [...binding.storedActions]
+    })),
     approval: { mode: runnerIsOwner ? 'writes' : 'always', chatGrants: runnerIsOwner }
   };
 }

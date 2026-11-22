@@ -23,6 +23,9 @@ import TemplateGallery from './TemplateGallery';
  * the caller hands over where it leads.
  *
  * @param {object} props
+ * @param {object} [props.source] - What the create page offers (section 11.3 of the
+ *   personal apps plan). `source.starts` says which starts are shown; without a
+ *   source every start is.
  * @param {React.ReactNode} props.describe - The description box, or what
  *   stands in its place (no model, drafting switched off).
  * @param {() => Promise<object[]>} props.fetchTemplates - The templates.
@@ -37,6 +40,7 @@ import TemplateGallery from './TemplateGallery';
  * @returns {JSX.Element}
  */
 function StartScreen({
+  source,
   describe,
   fetchTemplates,
   fetchExistingApps,
@@ -51,6 +55,9 @@ function StartScreen({
   const otherId = useId();
   const [otherOpen, setOtherOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const offers = start => source?.starts?.[start] !== false;
+  const showMarketplace = offers('marketplace') && Boolean(marketplaceHref);
+  const otherStarts = offers('copy') || offers('link') || showMarketplace;
 
   return (
     <div className="space-y-6">
@@ -62,73 +69,89 @@ function StartScreen({
         <span className="h-px flex-1 bg-gray-200 dark:bg-gray-700" aria-hidden="true" />
       </p>
 
-      <TemplateGallery
-        fetchTemplates={fetchTemplates}
-        language={language}
-        onPick={onPickTemplate}
-      />
+      {offers('templates') && (
+        <TemplateGallery
+          fetchTemplates={fetchTemplates}
+          language={language}
+          onPick={onPickTemplate}
+        />
+      )}
 
-      <div>
-        <button
-          type="button"
-          className={`${SECONDARY_BUTTON_CLASS} w-full sm:w-auto`}
-          onClick={onStartBlank}
-        >
-          {t('admin.apps.create.start.blank')}
-        </button>
-      </div>
-
-      <div>
-        <button
-          type="button"
-          className={DISCLOSURE_BUTTON_CLASS}
-          aria-expanded={otherOpen}
-          aria-controls={otherId}
-          onClick={() => setOtherOpen(open => !open)}
-        >
-          <Icon name={otherOpen ? 'chevron-down' : 'chevron-right'} size="sm" aria-hidden="true" />
-          {t('admin.apps.create.start.other')}
-        </button>
-        <div id={otherId}>
-          {otherOpen && (
-            <ul className="mt-3 space-y-3 pl-5">
-              <li>
-                <button
-                  type="button"
-                  className={LINK_BUTTON_CLASS}
-                  onClick={() => setPickerOpen(true)}
-                >
-                  {t('admin.apps.create.start.copy')}
-                </button>
-              </li>
-              <li>
-                <button type="button" className={LINK_BUTTON_CLASS} onClick={onStartLink}>
-                  {t('admin.apps.create.start.link.action')}
-                </button>
-                <p className={HELP_CLASS}>{t('admin.apps.create.start.link.help')}</p>
-              </li>
-              {marketplaceHref && (
-                <li>
-                  <Link to={marketplaceHref} className={LINK_BUTTON_CLASS}>
-                    {t('admin.apps.create.start.marketplace')}
-                  </Link>
-                </li>
-              )}
-            </ul>
-          )}
+      {offers('empty') && (
+        <div>
+          <button
+            type="button"
+            className={`${SECONDARY_BUTTON_CLASS} w-full sm:w-auto`}
+            onClick={onStartBlank}
+          >
+            {t('admin.apps.create.start.blank')}
+          </button>
         </div>
-      </div>
+      )}
 
-      <ExistingAppPicker
-        isOpen={pickerOpen}
-        onClose={() => setPickerOpen(false)}
-        fetchApps={fetchExistingApps}
-        language={language}
-        onPick={app => {
-          setPickerOpen(false);
-          onPickExisting(app);
-        }}
-      />
+      {otherStarts && (
+        <div>
+          <button
+            type="button"
+            className={DISCLOSURE_BUTTON_CLASS}
+            aria-expanded={otherOpen}
+            aria-controls={otherId}
+            onClick={() => setOtherOpen(open => !open)}
+          >
+            <Icon
+              name={otherOpen ? 'chevron-down' : 'chevron-right'}
+              size="sm"
+              aria-hidden="true"
+            />
+            {t('admin.apps.create.start.other')}
+          </button>
+          <div id={otherId}>
+            {otherOpen && (
+              <ul className="mt-3 space-y-3 pl-5">
+                {offers('copy') && (
+                  <li>
+                    <button
+                      type="button"
+                      className={LINK_BUTTON_CLASS}
+                      onClick={() => setPickerOpen(true)}
+                    >
+                      {t('admin.apps.create.start.copy')}
+                    </button>
+                  </li>
+                )}
+                {offers('link') && (
+                  <li>
+                    <button type="button" className={LINK_BUTTON_CLASS} onClick={onStartLink}>
+                      {t('admin.apps.create.start.link.action')}
+                    </button>
+                    <p className={HELP_CLASS}>{t('admin.apps.create.start.link.help')}</p>
+                  </li>
+                )}
+                {showMarketplace && (
+                  <li>
+                    <Link to={marketplaceHref} className={LINK_BUTTON_CLASS}>
+                      {t('admin.apps.create.start.marketplace')}
+                    </Link>
+                  </li>
+                )}
+              </ul>
+            )}
+          </div>
+        </div>
+      )}
+
+      {offers('copy') && (
+        <ExistingAppPicker
+          isOpen={pickerOpen}
+          onClose={() => setPickerOpen(false)}
+          fetchApps={fetchExistingApps}
+          language={language}
+          onPick={app => {
+            setPickerOpen(false);
+            onPickExisting(app);
+          }}
+        />
+      )}
     </div>
   );
 }

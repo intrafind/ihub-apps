@@ -315,6 +315,14 @@ describe('the list of personal apps', () => {
       })
     });
     assert.deepEqual(ids(await list('?state=promoted')), [waiting.id, live.id].sort());
+    // A published app says how many named members cannot use the company app; another app
+    // does not carry the field.
+    const { items } = await list('?limit=200');
+    const itemOf = id => items.find(entry => entry.id === id);
+    assert.equal(typeof itemOf(waiting.id).membersWithoutCompanyApp, 'number');
+    assert.equal(typeof itemOf(live.id).membersWithoutCompanyApp, 'number');
+    assert.equal('membersWithoutCompanyApp' in itemOf(active.id), false);
+    assert.equal('membersWithoutCompanyApp' in itemOf(orphan.id), false);
     assert.deepEqual(ids(await list('?state=active')), [active.id, orphan.id].sort());
     assert.deepEqual(ids(await list('?waiting=true')), [waiting.id]);
     assert.equal((await list('?waiting=false')).items.length, 3);

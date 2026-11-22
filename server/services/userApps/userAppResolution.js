@@ -24,6 +24,7 @@ import { canUserAccessResource, isAdmin } from '../../utils/authorization.js';
 import logger from '../../utils/logger.js';
 import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
 import { logAudit } from '../AuditLogService.js';
+import installedIntegrationService from '../integrations/InstalledIntegrationService.js';
 import { isWebSearchAvailableTo } from '../tools/webSearchResolver.js';
 import { isUserAppId } from '../../../shared/userAppContent.js';
 import { MAX_SHARED_LISTED, getUserAppRepository } from './UserAppRepository.js';
@@ -35,7 +36,8 @@ import {
   ownerLookupFromRequest,
   ownerSnapshotNeedsRefresh,
   principalMemberKeys,
-  userAppPermissions
+  userAppPermissions,
+  openOffer
 } from './userAppAccess.js';
 import { currentUserAppSettings, isUserAppsEnabled } from './userAppSettings.js';
 import { reducedUserAppView, retiredUserAppView, userAppEtag, userAppView } from './userAppView.js';
@@ -156,6 +158,7 @@ export async function userAppCatalog({ owner, runner }) {
     }
   };
   const runnerSearch = webSearchFor(runner);
+  const installationNames = await installationDisplayNames();
   return {
     models: (configCache.getModels(true)?.data || []).map(model => ({
       id: model.id,
@@ -165,7 +168,8 @@ export async function userAppCatalog({ owner, runner }) {
     installations: (configCache.getIntegrations()?.data?.installed || []).map(instance => ({
       id: instance.id,
       definition: instance.definition,
-      enabled: instance.enabled !== false
+      enabled: instance.enabled !== false,
+      name: installationNames.get(instance.id) ?? null
     })),
     features: {
       skills: isFeatureEnabled('skills', features),
@@ -174,6 +178,33 @@ export async function userAppCatalog({ owner, runner }) {
     webSearch: { owner: same ? runnerSearch : webSearchFor(owner), runner: runnerSearch },
     skills: { owner: same ? runnerSkills : await grantedSkillIds(owner), runner: runnerSkills }
   };
+}
+
+/**
+ * The display name of every installation: the label an admin gave it, else the
+ * name of its definition. A text per language or a plain string, as stored;
+ * the client picks the language. A definition that cannot be read gives no name.
+ *
+ * @returns {Promise<Map<string, Object|string>>}
+ */
+async function installationDisplayNames() {
+  const names = new Map();
+  const installed = configCache.getIntegrations()?.data?.installed || [];
+  if (installed.length === 0) return names;
+  try {
+    await installedIntegrationService.registry.ensureLoaded();
+    for (const instance of installed) {
+      const definition = installedIntegrationService.registry.get(instance.definition)?.definition;
+      const name = instance.label || definition?.name;
+      if (name) names.set(instance.id, name);
+    }
+  } catch (error) {
+    logger.warn('Could not read the names of the connected systems', {
+      component: COMPONENT,
+      error: error.message
+    });
+  }
+  return names;
 }
 
 /** What a view may add to the context of `userAppView`; see {@link registerUserAppViewExtension}. */
@@ -242,7 +273,48 @@ async function withCeiling(record, user, standing, catalogs) {
   return { status: 'ok', record, effective, ...standing };
 }
 
-async function inspect(appId, user, { repository, catalogs }) {
+/**
+ * Remove an offer that lapsed, and record it (design section 10, "lapsed on
+ * read"). The revision stays: a lapsed offer already reads as none. Never
+ * throws; an offer that was answered or replaced meanwhile is left alone.
+ *
+ * @returns {Promise<Object|null>} The record without the offer, or null when nothing was removed.
+ */
+async function removeLapsedOffer(repo, record, { req, user }) {
+  try {
+    const cleared = await repo.clearOffer(record.id, {
+      bumpRevision: false,
+      authorize: loaded => Boolean(loaded.pendingOwner) && !openOffer(loaded)
+    });
+    if (!cleared?.offer) return null;
+    logAudit({
+      req,
+      ...(req ? {} : { actor: user }),
+      action: 'update',
+      resource: 'userAppShare',
+      resourceId: record.id,
+      summary: `The offer of a personal app to ${cleared.offer.name || cleared.offer.id} lapsed`,
+      details: {
+        offer: 'lapsed',
+        from: cleared.record.owner?.id ?? null,
+        to: cleared.offer.id,
+        by: user?.id ?? null,
+        revision: Number(cleared.record.revision) || 1,
+        contentHash: cleared.record.contentHash || null
+      }
+    });
+    return cleared.record;
+  } catch (error) {
+    logger.debug('A lapsed offer of a personal app was not removed', {
+      component: COMPONENT,
+      appId: record.id,
+      error: error.message
+    });
+    return null;
+  }
+}
+
+async function inspect(appId, user, { req, repository, catalogs }) {
   if (!isUserAppId(appId)) return { status: 'notPersonal' };
   const repo = repository || getUserAppRepository();
 
@@ -276,8 +348,18 @@ async function inspect(appId, user, { repository, catalogs }) {
   }
   if (!record) return { status: 'notFound' };
 
-  const standing = userAppStanding(record, user);
+  let standing = userAppStanding(record, user);
   if (!standing.permissions.canView) return { status: 'notFound' };
+
+  // An offer nobody answered in time is removed when the app is next read.
+  if (record.pendingOwner && !openOffer(record)) {
+    const cleared = await removeLapsedOffer(repo, record, { req, user });
+    if (cleared) {
+      record = cleared;
+      standing = userAppStanding(record, user);
+      if (!standing.permissions.canView) return { status: 'notFound' };
+    }
+  }
 
   // A request of the owner keeps the stored snapshot of their groups fresh.
   if (standing.permissions.isOwner && ownerSnapshotNeedsRefresh(record, user)) {
@@ -314,7 +396,7 @@ export function inspectUserApp(appId, user, { req, repository, catalogs } = {}) 
   const memo = memoOf(req);
   const key = String(appId);
   if (memo?.has(key)) return memo.get(key);
-  const pending = inspect(appId, user, { repository, catalogs });
+  const pending = inspect(appId, user, { req, repository, catalogs });
   memo?.set(key, pending);
   return pending;
 }
@@ -522,7 +604,10 @@ export async function listUserAppsFor(user, scope, { repository } = {}) {
   for (const record of reached) {
     const state = await describe(record);
     if (!state) continue;
-    const offered = state.permissions.role === 'offered';
+    // An offer to a person the app is already shared with: they keep the role of the share, and
+    // the app is listed with their own apps, where the offer is answered.
+    const offered =
+      state.permissions.role === 'offered' || state.permissions.canAcceptOffer === true;
     if (offered ? !wantsMine : !wantsShared) continue;
     if (!offered && state.retired) continue;
     const item = state.permissions.canUse ? fullView(state, user) : reducedView(state);

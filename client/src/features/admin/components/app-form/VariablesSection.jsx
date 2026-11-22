@@ -35,9 +35,11 @@ function textIn(value, language) {
  * @param {object} props
  * @param {object} props.app - The app as the editor holds it.
  * @param {function(object): void} props.onChange - Receives the changed app.
+ * @param {boolean} [props.showStartOptions=true] - Whether the start form and the pinned
+ *   panel can be set. A personal app stores neither, so its editor passes false.
  * @returns {JSX.Element}
  */
-function VariablesSection({ app, onChange }) {
+function VariablesSection({ app, onChange, showStartOptions = true }) {
   const { t } = useTranslation();
   const formLanguage = useAppFormLanguage();
   const newTextLanguage = formLanguage || 'en';
@@ -162,66 +164,70 @@ function VariablesSection({ app, onChange }) {
               {t('admin.apps.edit.addVariable')}
             </button>
 
-            <div className="border-t border-gray-200 dark:border-gray-600 pt-4">
-              <div className="flex items-center">
-                <input
-                  id="app-start-form-enabled"
-                  type="checkbox"
-                  checked={app.startForm?.enabled === true}
-                  onChange={e => handleStartFormChange('enabled', e.target.checked)}
-                  aria-describedby="app-start-form-help"
-                  className={CHECKBOX_CLASS}
-                />
-                <label
-                  htmlFor="app-start-form-enabled"
-                  className="ml-2 block text-sm text-gray-900 dark:text-gray-100"
-                >
-                  {t('admin.apps.edit.startForm')}
-                </label>
-              </div>
-              <p id="app-start-form-help" className={`${HELP_CLASS} ml-6`}>
-                {t('admin.apps.edit.startFormHelp')}
-              </p>
-              {app.startForm?.enabled === true && (
-                <div className="mt-3 ml-6">
-                  <AppLanguageField
-                    label={t('admin.apps.edit.startFormSubmitLabel')}
-                    value={app.startForm?.submitLabel || {}}
-                    onChange={value => handleStartFormChange('submitLabel', value)}
-                    placeholder={{ en: 'Start', de: 'Starten' }}
-                    name="startForm.submitLabel"
-                  />
+            {showStartOptions && (
+              <>
+                <div className="border-t border-gray-200 dark:border-gray-600 pt-4">
+                  <div className="flex items-center">
+                    <input
+                      id="app-start-form-enabled"
+                      type="checkbox"
+                      checked={app.startForm?.enabled === true}
+                      onChange={e => handleStartFormChange('enabled', e.target.checked)}
+                      aria-describedby="app-start-form-help"
+                      className={CHECKBOX_CLASS}
+                    />
+                    <label
+                      htmlFor="app-start-form-enabled"
+                      className="ml-2 block text-sm text-gray-900 dark:text-gray-100"
+                    >
+                      {t('admin.apps.edit.startForm')}
+                    </label>
+                  </div>
+                  <p id="app-start-form-help" className={`${HELP_CLASS} ml-6`}>
+                    {t('admin.apps.edit.startFormHelp')}
+                  </p>
+                  {app.startForm?.enabled === true && (
+                    <div className="mt-3 ml-6">
+                      <AppLanguageField
+                        label={t('admin.apps.edit.startFormSubmitLabel')}
+                        value={app.startForm?.submitLabel || {}}
+                        onChange={value => handleStartFormChange('submitLabel', value)}
+                        placeholder={{ en: 'Start', de: 'Starten' }}
+                        name="startForm.submitLabel"
+                      />
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
 
-            {app.startForm?.enabled !== true && (
-              <div className="border-t border-gray-200 dark:border-gray-600 pt-4">
-                <div className="flex items-center">
-                  <input
-                    id="app-variables-panel-pinned"
-                    type="checkbox"
-                    checked={app.variablesPanel?.pinned !== false}
-                    onChange={e =>
-                      onChange({
-                        ...app,
-                        variablesPanel: { ...app.variablesPanel, pinned: e.target.checked }
-                      })
-                    }
-                    aria-describedby="app-variables-panel-help"
-                    className={CHECKBOX_CLASS}
-                  />
-                  <label
-                    htmlFor="app-variables-panel-pinned"
-                    className="ml-2 block text-sm text-gray-900 dark:text-gray-100"
-                  >
-                    {t('admin.apps.edit.variablesPanelPinned')}
-                  </label>
-                </div>
-                <p id="app-variables-panel-help" className={`${HELP_CLASS} ml-6`}>
-                  {t('admin.apps.edit.variablesPanelPinnedHelp')}
-                </p>
-              </div>
+                {app.startForm?.enabled !== true && (
+                  <div className="border-t border-gray-200 dark:border-gray-600 pt-4">
+                    <div className="flex items-center">
+                      <input
+                        id="app-variables-panel-pinned"
+                        type="checkbox"
+                        checked={app.variablesPanel?.pinned !== false}
+                        onChange={e =>
+                          onChange({
+                            ...app,
+                            variablesPanel: { ...app.variablesPanel, pinned: e.target.checked }
+                          })
+                        }
+                        aria-describedby="app-variables-panel-help"
+                        className={CHECKBOX_CLASS}
+                      />
+                      <label
+                        htmlFor="app-variables-panel-pinned"
+                        className="ml-2 block text-sm text-gray-900 dark:text-gray-100"
+                      >
+                        {t('admin.apps.edit.variablesPanelPinned')}
+                      </label>
+                    </div>
+                    <p id="app-variables-panel-help" className={`${HELP_CLASS} ml-6`}>
+                      {t('admin.apps.edit.variablesPanelPinnedHelp')}
+                    </p>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>

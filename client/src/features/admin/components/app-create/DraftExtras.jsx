@@ -63,6 +63,8 @@ function Option({ checked, onChange, children, ...rest }) {
  * of the API module.
  *
  * @param {object} props
+ * @param {object} [props.source] - What the create page offers. `source.suggestions` says
+ *   whether web search and connected systems may be offered; without a source both may.
  * @param {{ app: object, suggestions?: { websearch?: boolean, integrations?: Array<{ id: string, label?: string, actions?: string[] }> }, warnings?: Array<{ code: string }>, brief?: string }} props.result
  *   The body of `POST /api/admin/apps/_generate` the current draft came from.
  * @param {object} [props.draft] - The draft as the author edited it. Its instructions decide
@@ -83,6 +85,7 @@ function Option({ checked, onChange, children, ...rest }) {
  * @returns {JSX.Element}
  */
 function DraftExtras({
+  source,
   result,
   draft,
   description = '',
@@ -144,10 +147,12 @@ function DraftExtras({
     variablesUsedInInstructions({ system: (draft ?? result?.app)?.system, variables: fields })
       .length > 0;
 
-  const webSearchOffered = result?.suggestions?.websearch === true;
-  const systems = Array.isArray(result?.suggestions?.integrations)
-    ? result.suggestions.integrations.filter(system => typeof system?.id === 'string')
-    : [];
+  const webSearchOffered =
+    source?.suggestions?.webSearch !== false && result?.suggestions?.websearch === true;
+  const systems =
+    source?.suggestions?.integrations !== false && Array.isArray(result?.suggestions?.integrations)
+      ? result.suggestions.integrations.filter(system => typeof system?.id === 'string')
+      : [];
   const leftOut = Array.isArray(result?.warnings) && result.warnings.some(isLeftOut);
 
   const hasEdits =

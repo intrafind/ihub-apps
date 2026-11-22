@@ -58,6 +58,7 @@ function CreateNotices({ state, copy, onStartOver }) {
  * start and a link app have no notice.
  *
  * @param {object} props
+ * @param {object} [props.source] - What the create page offers; handed on to the draft notice.
  * @param {object} props.state - The page's state (`useAppDraft`).
  * @param {string} props.language - The content language of a new draft.
  * @param {(request: object) => Promise<object>} props.generate - The draft request.
@@ -69,6 +70,7 @@ function CreateNotices({ state, copy, onStartOver }) {
  * @returns {JSX.Element|null}
  */
 export function EssentialsNotice({
+  source,
   state,
   language,
   generate,
@@ -82,6 +84,7 @@ export function EssentialsNotice({
   if (state.start === 'generated' && state.generated) {
     return (
       <DraftExtras
+        source={source}
         result={state.generated}
         draft={state.draft}
         description={state.description}

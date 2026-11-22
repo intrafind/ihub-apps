@@ -315,6 +315,37 @@ describe('what owner, "Can edit", the receiver and a full admin are told', () =>
     }
   });
 
+  it('a connected system has its name for every role, and its stored functions for these four', () => {
+    const bindings = [
+      { id: 'integration:jira', name: { en: 'Jira', de: 'Jira DE' }, actions: ['search', 'read'] }
+    ];
+    const jira = role =>
+      viewFor(role, record(), { effective: { ...effective(), bindings } }).capabilities.find(
+        entry => entry.id === 'integration:jira'
+      );
+    for (const role of ['owner', 'editor', 'offered', 'admin']) {
+      assert.deepEqual(
+        jira(role),
+        {
+          id: 'integration:jira',
+          name: { en: 'Jira', de: 'Jira DE' },
+          requested: true,
+          granted: false,
+          reason: 'ownerMayNot',
+          actions: ['search', 'read']
+        },
+        role
+      );
+    }
+    // "Can use": the name for the notice, and neither the functions nor the owner's reason.
+    assert.deepEqual(jira('user'), {
+      id: 'integration:jira',
+      name: { en: 'Jira', de: 'Jira DE' },
+      granted: false,
+      reason: 'unavailable'
+    });
+  });
+
   it('the open offer goes to owner, receiver and full admin; a lapsed one reads as none', () => {
     assert.deepEqual(viewFor('owner').pendingOwner, {
       id: 'dave',

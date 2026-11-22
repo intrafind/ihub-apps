@@ -43,6 +43,7 @@ const { enhanceUserWithPermissions } = await import('../utils/authorization.js')
 const { default: registerAdminAppBuilderRoutes, parseDraftRequest } =
   await import('../routes/admin/appBuilder.js');
 const { default: errorHandler } = await import('../middleware/errorHandler.js');
+const { resetAppGeneratorLimiter } = await import('../middleware/rateLimiting.js');
 const { flushAuditLog } = await import('../services/AuditLogService.js');
 const { LLMError } = await import('../services/loop/contracts/errors.js');
 const { auditEntrySchema } = await import('../validators/auditEntrySchema.js');
@@ -224,6 +225,8 @@ const answerWith = (value, extra = {}) => ({
  * @param {Function} [before] - A middleware that runs after the body is read and before the routes.
  */
 function buildServer(before) {
+  // The routes mount the one draft limiter of the process; a new server gets a new one.
+  resetAppGeneratorLimiter();
   const api = express();
   api.use(express.json());
   // The principal comes from a header the test sets, never from the body.

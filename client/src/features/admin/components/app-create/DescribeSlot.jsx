@@ -20,6 +20,7 @@ import NoModelNotice from './NoModelNotice';
  * notice a moment later would be worse than a short gap.
  *
  * @param {object} props
+ * @param {object} [props.source] - What the create page offers; handed on to the description box.
  * @param {boolean} props.enabled - Whether drafting with AI is switched on.
  * @param {object[]|null|undefined} props.models - The models the author may
  *   use; `undefined` while loading, `null` when the list could not be loaded.
@@ -33,6 +34,7 @@ import NoModelNotice from './NoModelNotice';
  * @returns {JSX.Element|null}
  */
 function DescribeSlot({
+  source,
   enabled,
   models,
   modelSetupHref = null,
@@ -57,6 +59,7 @@ function DescribeSlot({
   if (Array.isArray(models) && !model) return <NoModelNotice setupHref={modelSetupHref} />;
   return (
     <DescribeStart
+      source={source}
       description={description}
       onDescriptionChange={onDescriptionChange}
       onDraft={onDraft}

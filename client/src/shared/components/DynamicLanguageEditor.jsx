@@ -115,6 +115,9 @@ const DynamicLanguageEditor = ({
   // language shows no language code, and `required` and the lock on the
   // remove button follow that language instead of `en`.
   primaryLanguage = undefined,
+  // The "Translate" button calls an admin route; a form for people without
+  // admin rights passes false.
+  translate = true,
   help = undefined // Optional help line under the label
 }) => {
   const { t, i18n } = useTranslation();
@@ -535,14 +538,16 @@ const DynamicLanguageEditor = ({
                 />
               </div>
               <div className="flex items-center space-x-1 mt-2">
-                <button
-                  type="button"
-                  onClick={() => handleTranslate(lang)}
-                  className="p-1 text-indigo-500 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
-                  title={t('admin.translateField', 'Translate')}
-                >
-                  <Icon name="globe" className="w-4 h-4" />
-                </button>
+                {translate && (
+                  <button
+                    type="button"
+                    onClick={() => handleTranslate(lang)}
+                    className="p-1 text-indigo-500 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+                    title={t('admin.translateField', 'Translate')}
+                  >
+                    <Icon name="globe" className="w-4 h-4" />
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => handleRemoveLanguage(lang)}
