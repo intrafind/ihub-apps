@@ -22,6 +22,14 @@
  *
  * - `GET /__counter` answers `{ total, counters: { <key>: { count, values } } }`.
  * - `POST /__counter/reset` sets everything to zero and answers `{ total: 0, counters: {} }`.
+ *   It also ends a hold and answers the reads that waited.
+ * - `POST /__counter/hold` makes every read wait from now on: a read (`GET /count/<key>`)
+ *   is not answered until it is released. `GET /__counter/waiting` answers
+ *   `{ holding, waiting: [<key>, …] }`, the keys of the reads that wait, in the order
+ *   they arrived. `POST /__counter/release` answers the reads that wait now and keeps
+ *   holding the ones that come later; it answers `{ released: <count> }`. A test of
+ *   "these two calls ran at the same time" reads the waiting list: two keys in it were
+ *   in flight together, with no timer involved. Writes are never held.
  *
  * Every write is counted, also two writes for one tool call: a double write
  * shows as a count of 2. The counter never deduplicates.
@@ -67,6 +75,9 @@ function readBody(req) {
  *   writers: (key: string) => string[],
  *   snapshot: () => {total: number, counters: Record<string, {count: number, values: string[]}>},
  *   reset: () => void,
+ *   hold: () => void,
+ *   waiting: () => string[],
+ *   release: () => number,
  *   handle: (req: http.IncomingMessage, res: http.ServerResponse) => Promise<boolean>
  * }} `handle` answers the request when it is one of the counter's and resolves to
  *   whether it did, so another server can serve the counter next to its own paths.
@@ -106,9 +117,21 @@ export function createCounter() {
     }
     return { total, counters: all };
   };
+  /** Whether reads wait, and the reads that do: the key and how to answer it. */
+  let holding = false;
+  /** @type {Array<{key: string, answer: () => void}>} */
+  let held = [];
+  const release = () => {
+    const waited = held;
+    held = [];
+    for (const read of waited) read.answer();
+    return waited.length;
+  };
   const reset = () => {
     counters.clear();
     writersOf.clear();
+    holding = false;
+    release();
   };
 
   const answer = (res, status, payload) => {
@@ -127,6 +150,19 @@ export function createCounter() {
       answer(res, 200, snapshot());
       return true;
     }
+    if (pathname === '/__counter/hold' && req.method === 'POST') {
+      holding = true;
+      answer(res, 200, { holding, waiting: held.map(read => read.key) });
+      return true;
+    }
+    if (pathname === '/__counter/waiting' && req.method === 'GET') {
+      answer(res, 200, { holding, waiting: held.map(read => read.key) });
+      return true;
+    }
+    if (pathname === '/__counter/release' && req.method === 'POST') {
+      answer(res, 200, { released: release() });
+      return true;
+    }
     if (!pathname.startsWith('/count/')) return false;
 
     let key;
@@ -142,7 +178,18 @@ export function createCounter() {
       return true;
     }
     if (req.method === 'GET') {
-      answer(res, 200, read(key));
+      // Answered with the count at the time of the release: the read "takes" that long.
+      const respond = () => answer(res, 200, read(key));
+      if (holding) {
+        const waitingRead = { key, answer: respond };
+        held.push(waitingRead);
+        // A caller that gave up is not waiting any more.
+        res.on('close', () => {
+          held = held.filter(entryOf => entryOf !== waitingRead);
+        });
+      } else {
+        respond();
+      }
       return true;
     }
     if (req.method === 'POST') {
@@ -168,6 +215,11 @@ export function createCounter() {
     writers: key => [...(writersOf.get(key) || [])],
     snapshot,
     reset,
+    hold: () => {
+      holding = true;
+    },
+    waiting: () => held.map(read => read.key),
+    release,
     handle
   };
 }

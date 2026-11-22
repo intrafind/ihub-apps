@@ -24,7 +24,10 @@
  *      settings;
  *    - `GET /__counter` answers `{ total, counters: { <key>: { count, values } } }`:
  *      what the tool `e2e_counter_write` wrote, counted here and not in the server;
- *    - `POST /__counter/reset` sets the counter to zero.
+ *    - `POST /__counter/reset` sets the counter to zero;
+ *    - `POST /__counter/hold`, `GET /__counter/waiting` and `POST /__counter/release`
+ *      make the reads of the tool `e2e_counter_read` wait until a spec lets them go
+ *      (`test-counter.mjs`).
  *
  * ## The server runs as a test server
  *

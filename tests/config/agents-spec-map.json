@@ -20,6 +20,18 @@
         "tests/e2e-agents/helpers.mjs"
       ],
       "specs": "*"
+    },
+    {
+      "paths": [
+        "server/services/loop/segmentPlanner.js",
+        "server/services/loop/AgentLoop.js",
+        "server/utils/toolApproval.js",
+        "server/services/integrations/integrationTools.js",
+        "server/defaults/tools/",
+        "shared/run/runReducer.js",
+        "shared/run/toolActivity.js"
+      ],
+      "specs": ["parallel-tools.spec.js"]
     }
   ],
   "overlays": {

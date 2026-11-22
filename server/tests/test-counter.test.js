@@ -120,3 +120,67 @@ test('handle() leaves a request that is not the counter’s to the server around
   const handled = await counter.handle({ url: '/__status', method: 'GET' }, {});
   assert.equal(handled, false);
 });
+
+test('a hold makes reads wait until they are released, and says which ones wait', async t => {
+  const started = await startCounter();
+  t.after(() => started.close());
+  const json = async (method, pathname) =>
+    (await fetch(`${started.url}${pathname}`, { method })).json();
+  /** A step of the event loop per try: the read has to reach the counter first. */
+  const waitingIs = async expected => {
+    for (let tries = 0; tries < 500; tries++) {
+      const { waiting } = await json('GET', '/__counter/waiting');
+      if (JSON.stringify(waiting) === JSON.stringify(expected)) return;
+    }
+    assert.fail(`the waiting reads never became ${JSON.stringify(expected)}`);
+  };
+
+  assert.deepEqual(await json('GET', '/__counter/waiting'), { holding: false, waiting: [] });
+  assert.deepEqual(await json('POST', '/__counter/hold'), { holding: true, waiting: [] });
+
+  // Writes are never held.
+  assert.deepEqual(await json('POST', '/count/a'), { key: 'a', count: 1 });
+
+  let answered = 0;
+  const read = key =>
+    json('GET', `/count/${key}`).then(body => {
+      answered += 1;
+      return body;
+    });
+  const first = read('a');
+  const second = read('b');
+  await waitingIs(['a', 'b']);
+  assert.equal(answered, 0, 'neither read was answered while it was held');
+  assert.deepEqual(started.counter.waiting(), ['a', 'b']);
+
+  assert.deepEqual(await json('POST', '/__counter/release'), { released: 2 });
+  assert.deepEqual(await first, { key: 'a', count: 1, values: [] });
+  assert.deepEqual(await second, { key: 'b', count: 0, values: [] });
+
+  // The hold stays: the next read waits again, until a reset ends the hold.
+  const third = read('a');
+  await waitingIs(['a']);
+  assert.deepEqual(await json('POST', '/__counter/reset'), { total: 0, counters: {} });
+  assert.deepEqual(await third, { key: 'a', count: 0, values: [] });
+  assert.deepEqual(await json('GET', '/__counter/waiting'), { holding: false, waiting: [] });
+  assert.deepEqual(await read('a'), { key: 'a', count: 0, values: [] });
+});
+
+test('a held read whose caller gave up is not waiting any more', async t => {
+  const started = await startCounter();
+  t.after(() => started.close());
+  started.counter.hold();
+  const gaveUp = new AbortController();
+  const read = fetch(`${started.url}/count/gone`, { signal: gaveUp.signal }).catch(() => null);
+  for (let tries = 0; tries < 500 && started.counter.waiting().length === 0; tries++) {
+    await (await fetch(`${started.url}/__counter/waiting`)).json();
+  }
+  assert.deepEqual(started.counter.waiting(), ['gone']);
+  gaveUp.abort();
+  await read;
+  for (let tries = 0; tries < 500 && started.counter.waiting().length > 0; tries++) {
+    await (await fetch(`${started.url}/__counter/waiting`)).json();
+  }
+  assert.deepEqual(started.counter.waiting(), []);
+  assert.equal(started.counter.release(), 0);
+});

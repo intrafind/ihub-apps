@@ -232,10 +232,39 @@ export const counter = {
   async count(key) {
     return (await counter.read()).counters[key]?.count ?? 0;
   },
-  /** Set every counter to zero. */
+  /** Set every counter to zero. Ends a hold and answers the reads that waited. */
   async reset() {
     const res = await fetch(`${CONTROL}/__counter/reset`, { method: 'POST' });
     if (!res.ok) throw new Error(`reset of the test counter: ${res.status}`);
+  },
+  /**
+   * Make every read of the counter (`e2e_counter_read`) wait until it is released:
+   * a tool call that reads stays "running" for as long as the spec needs it to.
+   */
+  async hold() {
+    const res = await fetch(`${CONTROL}/__counter/hold`, { method: 'POST' });
+    if (!res.ok) throw new Error(`hold of the test counter: ${res.status}`);
+  },
+  /**
+   * The keys of the reads that wait, in the order they arrived. Two keys in the
+   * list were read at the same time.
+   *
+   * @returns {Promise<string[]>}
+   */
+  async waiting() {
+    const res = await fetch(`${CONTROL}/__counter/waiting`);
+    if (!res.ok) throw new Error(`the waiting reads of the test counter: ${res.status}`);
+    return (await res.json()).waiting;
+  },
+  /**
+   * Answer the reads that wait now; later reads wait again.
+   *
+   * @returns {Promise<number>} How many were answered
+   */
+  async release() {
+    const res = await fetch(`${CONTROL}/__counter/release`, { method: 'POST' });
+    if (!res.ok) throw new Error(`release of the test counter: ${res.status}`);
+    return (await res.json()).released;
   }
 };
 
