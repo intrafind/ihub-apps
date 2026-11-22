@@ -54,7 +54,7 @@ export const GROUP_DEFAULTS = Object.freeze({
   anonymous: false
 });
 
-export const GROUP_PERMISSIONS = Object.freeze(['userApps', 'userAppSharing']);
+const GROUP_PERMISSIONS = Object.freeze(['userApps', 'userAppSharing']);
 
 export async function precondition(ctx) {
   return (

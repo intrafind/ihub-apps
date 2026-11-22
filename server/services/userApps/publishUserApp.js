@@ -46,7 +46,7 @@ const COMPONENT = 'UserAppPublish';
 const MAX_ID_ATTEMPTS = 20;
 
 /** Most published apps `GET /api/admin/user-apps/_waiting` returns. */
-export const MAX_WAITING_LISTED = 200;
+const MAX_WAITING_LISTED = 200;
 
 /** The content keys a published app takes over as they are. */
 const COPIED_TEXT_KEYS = Object.freeze([
@@ -272,7 +272,7 @@ async function takenAppIds(record, repo) {
  * @param {Set<string>} [taken] - IDs in use, lower case.
  * @returns {string}
  */
-export function suggestedAppId(record, taken = configAppIds()) {
+function suggestedAppId(record, taken = configAppIds()) {
   return uniqueAppId(slugifyAppId(userAppName(record)), id => taken.has(id));
 }
 
@@ -301,7 +301,7 @@ async function effectiveFor(record, { runner, settings }) {
  *   capabilities: Object[], dropped: Object[], plain: boolean}} `waitsFor`
  *   says why the app starts switched off; null when it is visible at once.
  */
-export function publishPreview(record, { effective, settings }) {
+function publishPreview(record, { effective, settings }) {
   const projected = projectCapabilities(effective, {
     nameOf: id => installationName(id, record?.language)
   });

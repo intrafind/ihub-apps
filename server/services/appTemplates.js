@@ -58,7 +58,7 @@ export const APP_TEMPLATE_KEYS = Object.freeze([
 ]);
 
 /** The languages every text of a template is written in. */
-export const APP_TEMPLATE_LANGUAGES = Object.freeze(['en', 'de']);
+const APP_TEMPLATE_LANGUAGES = Object.freeze(['en', 'de']);
 
 function isPlainObject(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);

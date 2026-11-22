@@ -321,7 +321,7 @@ export function isRunnerOwner(record, runner) {
  * @param {Object} record - Stored personal app.
  * @returns {boolean}
  */
-export function ownerWroteContent(record) {
+function ownerWroteContent(record) {
   const ownerId = String(record?.owner?.id ?? '');
   const savedBy = record?.updatedBy?.id;
   if (savedBy === undefined || savedBy === null) return true;

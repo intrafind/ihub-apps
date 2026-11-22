@@ -53,7 +53,7 @@ import { USER_APP_STATES, isUserAppId } from '../../../shared/userAppContent.js'
 const COMPONENT = 'AdminUserApps';
 
 /** The audit resource ID of a settings change (design 3.1 and 10). */
-export const USER_APP_SETTINGS_AUDIT_ID = 'user-apps';
+const USER_APP_SETTINGS_AUDIT_ID = 'user-apps';
 
 /** Most apps one page of the list holds. */
 const MAX_LIST_LIMIT = 200;

@@ -35,7 +35,7 @@ export const USER_APPS_FEATURE = 'userApps';
 export { ADMIN_ENABLES_VALUES, FORBIDDEN_INSTALLATION_ID };
 
 /** The app ID that the client route `/apps/new` shadows while the feature is on. */
-export const SHADOWED_APP_ID = 'new';
+const SHADOWED_APP_ID = 'new';
 
 /** Built-in `platform.userApps` values. */
 export const DEFAULT_USER_APP_SETTINGS = Object.freeze({

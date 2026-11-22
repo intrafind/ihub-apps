@@ -64,7 +64,7 @@ const ROLE_RANK = { user: 1, editor: 2 };
 export const OFFER_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 /** The age after which a request of the owner rewrites the owner snapshot whatever it holds. */
-export const OWNER_SNAPSHOT_REFRESH_MS = 24 * 60 * 60 * 1000;
+const OWNER_SNAPSHOT_REFRESH_MS = 24 * 60 * 60 * 1000;
 
 /** The access levels a route can require. */
 export const USER_APP_ACCESS_LEVELS = Object.freeze([

@@ -522,7 +522,7 @@ export function createProvenanceVerifyLimiter(platformConfig = {}) {
  * @param {Object} platformConfig - Platform configuration object
  * @returns {Function} Express rate limiter middleware
  */
-export function createAppGeneratorLimiter(platformConfig = {}) {
+function createAppGeneratorLimiter(platformConfig = {}) {
   const { standardHeaders = true, legacyHeaders = false } =
     platformConfig?.rateLimit?.default || {};
   return createRateLimiter(

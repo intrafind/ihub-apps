@@ -79,7 +79,7 @@ export const USER_APP_SHARES_NAMESPACE = RUNTIME_NAMESPACES.userAppShares;
 export const USER_APP_REVISIONS_NAMESPACE = RUNTIME_NAMESPACES.userAppRevisions;
 
 /** Schema version stamped on every document written here. */
-export const USER_APP_VERSION = 1;
+const USER_APP_VERSION = 1;
 
 /** Content states kept per app. */
 export const MAX_CONTENT_STATES = 20;
@@ -88,7 +88,7 @@ export const MAX_CONTENT_STATES = 20;
 export const DELETED_STATE_TTL_MS = 90 * 24 * 60 * 60 * 1000;
 
 /** `lastUsedAt` is rewritten at most this often per app. */
-export const LAST_USED_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const LAST_USED_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 /** Most shared apps one listing returns. */
 export const MAX_SHARED_LISTED = 200;
@@ -183,7 +183,7 @@ export function shareMarkerKey(appId, targetKey) {
  * @param {string} receiverId
  * @returns {string}
  */
-export function offerMarkerKey(appId, receiverId) {
+function offerMarkerKey(appId, receiverId) {
   return `${appId}.${digest(`offer:${receiverId}`)}`;
 }
 

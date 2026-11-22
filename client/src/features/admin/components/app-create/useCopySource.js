@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 /** The query parameter that names the app to copy: `?from=<id>`. */
-export const COPY_SOURCE_PARAM = 'from';
+const COPY_SOURCE_PARAM = 'from';
 
 /**
  * The app a copy starts from: the one the URL names (`?from=<id>`, the

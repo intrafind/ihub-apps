@@ -103,7 +103,7 @@ async function loadRecord(req) {
  * @param {{record: Object, user: Object, settings: Object}} context
  * @returns {Promise<{membersWithoutCompanyApp?: number, takeOverPreview?: Object}>}
  */
-export async function adminUserAppViewExtras({ record, user, settings }) {
+async function adminUserAppViewExtras({ record, user, settings }) {
   const company = companyAppOf(record);
   const state = effectiveUserAppState(record, { publishedAppExists: company.exists });
   if (state === 'promoted') return { membersWithoutCompanyApp: membersWithoutCompanyApp(record) };

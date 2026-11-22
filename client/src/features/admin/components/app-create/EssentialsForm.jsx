@@ -15,7 +15,7 @@ import FormField from './FormField';
 import LinkFields from './LinkFields';
 
 /** The three tips behind "Tips for good instructions". */
-export const INSTRUCTION_TIP_KEYS = Object.freeze([
+const INSTRUCTION_TIP_KEYS = Object.freeze([
   'admin.apps.create.essentials.tips.role',
   'admin.apps.create.essentials.tips.form',
   'admin.apps.create.essentials.tips.limits'

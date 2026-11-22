@@ -102,7 +102,7 @@ function PublishDialog({
  * @param {() => void} props.onCancel
  * @returns {JSX.Element|null}
  */
-export function UnpublishDialog({ isOpen, name, busy = false, error = null, onConfirm, onCancel }) {
+function UnpublishDialog({ isOpen, name, busy = false, error = null, onConfirm, onCancel }) {
   const { t } = useTranslation();
   return (
     <ConfirmDialog

@@ -18,7 +18,7 @@
 export const COPY_NAME_KEY = 'admin.apps.create.copy.nameSuffix';
 
 /** How long a copy waits for the texts of another language. */
-export const COPY_LANGUAGES_WAIT_MS = 3000;
+const COPY_LANGUAGES_WAIT_MS = 3000;
 
 /**
  * The languages of an app's name whose "(copy)" text the UI does not hold yet.

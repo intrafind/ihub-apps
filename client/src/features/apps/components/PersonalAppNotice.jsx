@@ -100,7 +100,7 @@ export function personalAppNoticeLines(app, t, language) {
  * @returns {{system: string, template: string, options: Array<{key: string,
  *   variable: string, label: string, value: string}>}}
  */
-export function personalAppInstructions(app, language) {
+function personalAppInstructions(app, language) {
   const options = [];
   for (const variable of Array.isArray(app?.variables) ? app.variables : []) {
     const variableLabel = getLocalizedContent(variable?.label, language) || variable?.name || '';

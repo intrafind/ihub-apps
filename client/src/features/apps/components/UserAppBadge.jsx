@@ -14,7 +14,7 @@ export const isUserApp = app => app?.ownership === 'user';
  * @param {Object} app - A personal app as the server answers it.
  * @returns {boolean}
  */
-export const isOfferedToCaller = app =>
+const isOfferedToCaller = app =>
   app?.permissions?.role === 'offered' || app?.permissions?.canAcceptOffer === true;
 
 /**

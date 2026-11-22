@@ -8,7 +8,7 @@ import NotFound from '../../../pages/error/NotFound';
 import { useUserAppsConfig } from '../../../shared/hooks/useUserApps';
 
 /** The path segment of the create page. `shared/appId.js` reserves it as an app ID. */
-export const USER_APP_CREATE_SEGMENT = 'new';
+const USER_APP_CREATE_SEGMENT = 'new';
 
 function RouteLoading() {
   return (
@@ -39,7 +39,7 @@ function RouteLoading() {
  * @returns {{state: 'loading'|'page'|'fallback'}} `fallback`: the chat for
  *   `create`, the 404 page for `edit`.
  */
-export function useUserAppsRouteState({ page, appId }) {
+function useUserAppsRouteState({ page, appId }) {
   const concerned = page === 'edit' || (page === 'create' && appId === USER_APP_CREATE_SEGMENT);
   // The configuration is only needed to decide about "New app".
   const { enabled, config, loading } = useUserAppsConfig({

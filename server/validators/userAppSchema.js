@@ -289,7 +289,7 @@ export function mergeUserAppContent(content, patch) {
 }
 
 /** One member of the body of `PUT /api/apps/{appId}/members`. */
-export const userAppMemberSchema = z
+const userAppMemberSchema = z
   .object({
     type: z.enum(USER_APP_MEMBER_TYPES),
     id: z.string().trim().min(1).max(200).nullable().optional(),

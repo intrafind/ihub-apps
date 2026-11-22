@@ -146,7 +146,7 @@ function appName(record) {
  * @param {number} [status=200]
  * @returns {Promise<void>}
  */
-export async function sendUserApp(res, record, user, status = 200) {
+async function sendUserApp(res, record, user, status = 200) {
   const { body, etag } = await userAppResponse(record, user);
   res.setHeader('ETag', etag);
   res.setHeader('Cache-Control', 'no-store');
@@ -215,7 +215,7 @@ const ADMIN_ONLY_DRAFT_KEYS = ['id', 'category', 'order', 'enabled'];
  * @param {Object} draft - The result of `generateAppDraft`.
  * @returns {Object}
  */
-export function personalDraft(draft) {
+function personalDraft(draft) {
   if (!draft?.app || typeof draft.app !== 'object') return draft;
   const app = { ...draft.app };
   for (const key of ADMIN_ONLY_DRAFT_KEYS) delete app[key];

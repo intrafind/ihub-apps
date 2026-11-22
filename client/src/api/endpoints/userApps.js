@@ -95,7 +95,7 @@ export const fetchUserAppTemplates = async () => {
 };
 
 /** How long a draft request may take: the server gives the model 80 seconds. */
-export const USER_APP_DRAFT_TIMEOUT_MS = 90000;
+const USER_APP_DRAFT_TIMEOUT_MS = 90000;
 
 /**
  * Draft an app from a description. Request and response are those of the
