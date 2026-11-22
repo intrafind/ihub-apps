@@ -14,6 +14,7 @@ import './OfficeChatPanel.css';
 import SettingsDialog from './settings-dialog';
 import AppListPanel from '../../../shared/components/AppListPanel';
 import { AiAcknowledgementProvider } from '../../../shared/contexts/AiAcknowledgementContext';
+import { AnnouncerProvider } from '../../../shared/announce/AnnouncerProvider';
 import useAiNoticeMenuItem from '../hooks/useAiNoticeMenuItem';
 import { canConfirmExternalOpen, openExternalUrlSettled } from '../../../utils/externalNavigation';
 import { officeLocale } from '../utilities/officeLocale';
@@ -534,20 +535,23 @@ const OfficeApp = () => {
   // extension's side panel, so one provider covers all three. Not while signed
   // out (the login screen wins, and a 401 would read as an expired session).
   // The dialog is slate like the pane; the policy opens through the host's own
-  // API because `window.open` is a silent no-op here.
+  // API because `window.open` is a silent no-op here. The pane's one polite
+  // live region (`AnnouncerProvider`) sits around it, for the same three.
   const withAcknowledgement = content => (
-    <AiAcknowledgementProvider
-      active={!!authData}
-      viewerKey={authData ? `office:${authData.user?.id ?? authData.user?.username ?? ''}` : ''}
-      anonymous={false}
-      tone="slate"
-      compact
-      openPolicy={openExternalUrlSettled}
-      showPolicyAddress={!canConfirmExternalOpen()}
-      appUrl={config?.baseUrl}
-    >
-      {content}
-    </AiAcknowledgementProvider>
+    <AnnouncerProvider>
+      <AiAcknowledgementProvider
+        active={!!authData}
+        viewerKey={authData ? `office:${authData.user?.id ?? authData.user?.username ?? ''}` : ''}
+        anonymous={false}
+        tone="slate"
+        compact
+        openPolicy={openExternalUrlSettled}
+        showPolicyAddress={!canConfirmExternalOpen()}
+        appUrl={config?.baseUrl}
+      >
+        {content}
+      </AiAcknowledgementProvider>
+    </AnnouncerProvider>
   );
 
   if (popoutOpen) {

@@ -11390,5 +11390,9 @@
     "loadFailed": "The notice could not be loaded. Check your connection and try again.",
     "cookieBlocked": "Your browser blocks cookies in this frame, so the confirmation cannot be kept here. Open iHub in its own tab to confirm.",
     "openInBrowser": "Open iHub in the browser"
+  },
+  "toast": {
+    "region": "Notifications",
+    "close": "Close notification: {{text}}"
   }
 }

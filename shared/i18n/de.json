@@ -11389,5 +11389,9 @@
     "loadFailed": "Der Hinweis konnte nicht geladen werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
     "cookieBlocked": "Ihr Browser blockiert Cookies in diesem Frame, daher kann die Bestätigung hier nicht gespeichert werden. Öffnen Sie iHub in einem eigenen Tab, um zu bestätigen.",
     "openInBrowser": "iHub im Browser öffnen"
+  },
+  "toast": {
+    "region": "Benachrichtigungen",
+    "close": "Benachrichtigung schließen: {{text}}"
   }
 }

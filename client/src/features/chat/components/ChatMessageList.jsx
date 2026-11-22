@@ -282,12 +282,13 @@ function MessageLog({
 }
 
 /**
- * A reusable component to display chat messages: the log, and beside it the
- * announcer that tells a screen reader what the turn is doing (#3534). The
- * announcer is a sibling of the log, not inside it: the activity list in the
- * log is silent, because a clock inside a live region is read every second,
- * and a live region inside another one is read as part of it. Every host (chat
- * page, embed, Office pane) gets both.
+ * A reusable component to display chat messages: the log, and the announcer
+ * that tells a screen reader what the turn is doing (#3534). The announcer
+ * speaks through the page's one live region (`AnnouncerProvider`, outside the
+ * log), not from inside the log: the activity list in the log is silent,
+ * because a clock inside a live region is read every second, and a live region
+ * inside another one is read as part of it. Every host (chat page, shared chat,
+ * Office pane, extension) mounts an `AnnouncerProvider`.
  *
  * @param {Object} props - see `MessageLog`; `messages` is also what the announcer follows
  * @param {string} [props.announceLabel] - said before each announcement, for a

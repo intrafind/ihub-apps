@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import ChatMessageList from '../components/ChatMessageList';
+import { AnnouncerProvider } from '../../../shared/announce/AnnouncerProvider';
 import { ArtifactFetchContext } from '../contexts/ArtifactFetchContext';
 import { ArtifactProvenanceFetchContext } from '../contexts/ArtifactProvenanceFetchContext';
 import { transformStoredMessage } from '../hooks/useChatMessages';
@@ -503,15 +504,18 @@ export default function SharedChatPage() {
               <ArtifactFetchContext.Provider value={fetchArtifact}>
                 <ArtifactProvenanceFetchContext.Provider value={fetchArtifactProvenance}>
                   <div className="flex-1 flex flex-col min-h-0">
-                    <ChatMessageList
-                      messages={messages}
-                      editable={false}
-                      readOnly
-                      appId={share.appId || undefined}
-                      chatId={share.id}
-                      app={null}
-                      models={[]}
-                    />
+                    {/* Outside the app shell: the page's own live region. */}
+                    <AnnouncerProvider>
+                      <ChatMessageList
+                        messages={messages}
+                        editable={false}
+                        readOnly
+                        appId={share.appId || undefined}
+                        chatId={share.id}
+                        app={null}
+                        models={[]}
+                      />
+                    </AnnouncerProvider>
                   </div>
                 </ArtifactProvenanceFetchContext.Provider>
               </ArtifactFetchContext.Provider>
