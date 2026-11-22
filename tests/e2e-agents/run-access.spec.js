@@ -50,6 +50,15 @@ test.describe('Run access by intent', () => {
           { message: 'the chat names the run that is writing its answer', timeout: 20_000 }
         )
         .toBeTruthy();
+      // Wait for the model call itself: a message that arrives before the first
+      // model call is read at that step, and the model would then get it instead of
+      // the hang (the chat names its run before the model is asked).
+      await expect
+        .poll(async () => (await stub.stats()).hanging, {
+          message: `the hang ${key} reaches the model stub`,
+          timeout: 20_000
+        })
+        .toContain(key);
 
       const steer = { kind: 'steer', message: 'Use the newer report' };
       for (const [who, api] of [
