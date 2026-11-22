@@ -32,6 +32,19 @@ const hasText = value => typeof value === 'string' && value.trim() !== '';
 const isPlainObject = value => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 
 /**
+ * The text of a field that a user gets when their own language has none: the
+ * runtime's order (`getLocalizedContent`), English first, then the first
+ * language that has text.
+ *
+ * @param {Object<string, string>} text - A text by language.
+ * @returns {string} Empty when no language has text.
+ */
+function shownText(text) {
+  if (hasText(text.en)) return text.en;
+  return Object.values(text).find(hasText) ?? '';
+}
+
+/**
  * The model that would prepare a draft: the standard chat model, else the
  * first chat model, among the models the list holds. This is the server's
  * rule (`selectGuideModel`, `server/utils/appUsageGuide.js`) applied to
@@ -122,7 +135,8 @@ export function beginTemplate(template, { language, isTaken }) {
  * A copy of an existing app. Every language of the source is kept. The screen
  * edits the language of the source that fits the author best
  * (`primaryLanguageOf`), so a German-only app is edited in German by an author
- * with an English UI.
+ * with an English UI. That language is chosen by the name; a description or
+ * instructions the source lacks in it start from the text of another language.
  *
  * @param {object} app - The source, as stored.
  * @param {object} options
@@ -144,6 +158,15 @@ export function beginCopy(app, { uiLanguage, platformDefault, isTaken, copyLabel
   const draft = draftFromExistingApp(source, { isTaken, copyLabel, language });
   for (const field of ['name', 'description']) {
     if (!isPlainObject(draft[field])) draft[field] = { [language]: '' };
+  }
+  // A text that the source has only in other languages is shown as the text a
+  // user with this language gets, not as an empty field. The field does not
+  // count as edited, so its other languages are sent along untouched.
+  for (const field of TEXT_FIELDS) {
+    const text = draft[field];
+    if (!isPlainObject(text) || hasText(text[language])) continue;
+    const shown = shownText(text);
+    if (shown !== '') draft[field] = { ...text, [language]: shown };
   }
   const instructions = isPlainObject(source.system) ? Object.values(source.system) : [];
   return {

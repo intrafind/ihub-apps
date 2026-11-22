@@ -30,7 +30,9 @@ import ChatBehaviourSection from './app-form/ChatBehaviourSection';
 import EditorGroup from './app-form/EditorGroup';
 import { AppFormLanguageProvider } from './app-form/AppLanguageField';
 import { useEditorGroups } from './app-form/useEditorGroups';
-import { validateWithSchema, errorsToFieldErrors } from '../../../utils/schemaValidation';
+import { validateWithSchema } from '../../../utils/schemaValidation';
+import { languageNamer } from '../../../shared/utils/languageName';
+import { listFieldLabel, schemaErrorMessage } from './app-form/validationText';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 import AdminFormErrorSummary from './AdminFormErrorSummary';
 import { FormValidationProvider } from '../../../shared/contexts/formValidationContext';
@@ -129,8 +131,12 @@ function AppForm({
     // Use schema validation if available
     if (jsonSchema) {
       const validation = validateWithSchema(appData, jsonSchema);
-      if (!validation.isValid) {
-        errors = errorsToFieldErrors(validation.errors);
+      // The schema's own sentences are English and name the field by its
+      // path; the form says each violated rule in the author's language.
+      for (const error of validation.errors) {
+        if (error.field && !errors[error.field]) {
+          errors[error.field] = schemaErrorMessage(error, t, appData);
+        }
       }
     } else {
       // Fallback to manual validation if no schema
@@ -220,8 +226,27 @@ function AppForm({
     prompt: t('admin.apps.edit.prompt'),
     messagePlaceholder: t('admin.apps.edit.messagePlaceholder'),
     variables: t('admin.apps.edit.variables'),
-    starterPrompts: t('admin.apps.edit.starterPrompts')
+    starterPrompts: t('admin.apps.edit.starterPrompts'),
+    type: t('admin.apps.edit.appType'),
+    order: t('admin.apps.edit.order'),
+    category: t('admin.apps.edit.category'),
+    preferredModel: t('admin.apps.edit.preferredModel'),
+    allowedModels: t('admin.apps.edit.allowedModels'),
+    preferredOutputFormat: t('admin.apps.edit.outputFormat'),
+    iframeConfig: t('admin.apps.edit.iframeConfig'),
+    'iframeConfig.url': t('admin.apps.edit.iframeUrl'),
+    redirectConfig: t('admin.apps.edit.redirectConfig'),
+    'redirectConfig.url': t('admin.apps.edit.redirectUrl'),
+    'startForm.submitLabel': t('admin.apps.edit.startFormSubmitLabel')
   };
+  // A field of an input field or a conversation starter is named in the
+  // editor's words ("Input field 1, Placeholder"), not by its path.
+  const nameLanguage = languageNamer(currentLanguage);
+  const summaryErrors = Object.entries(validationErrors).map(([field, message]) => ({
+    field,
+    message,
+    label: listFieldLabel(field, t, nameLanguage)
+  }));
 
   /**
    * A link of the error summary leads to a field. Its group has to be open
@@ -246,7 +271,7 @@ function AppForm({
         <div className="app-form-editor space-y-4">
           <div onClickCapture={openGroupsWithErrors}>
             <AdminFormErrorSummary
-              errors={validationErrors}
+              errors={summaryErrors}
               labels={errorLabels}
               title={t('admin.apps.edit.fixErrors')}
             />

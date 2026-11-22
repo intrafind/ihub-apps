@@ -38,8 +38,8 @@ function ProjectsConfigSection({ app, onChange, t }) {
 
   return (
     <div className="bg-white dark:bg-gray-800 shadow-sm px-4 py-5 sm:rounded-lg sm:p-6">
-      <div className="md:grid md:grid-cols-3 md:gap-6">
-        <div className="md:col-span-1">
+      <div className="form-cols:grid form-cols:grid-cols-3 form-cols:gap-6">
+        <div className="form-cols:col-span-1">
           <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
             {t('admin.apps.edit.projects', 'Projects')}
           </h3>
@@ -53,7 +53,7 @@ function ProjectsConfigSection({ app, onChange, t }) {
         {/* `min-w-0` here and on the fieldset: both would otherwise grow to
             their content's width, so a long project description overflowed
             the card instead of being truncated. */}
-        <div className="mt-5 md:col-span-2 md:mt-0 space-y-4 min-w-0">
+        <div className="mt-5 form-cols:col-span-2 form-cols:mt-0 space-y-4 min-w-0">
           <div>
             <div className="flex items-center">
               <input

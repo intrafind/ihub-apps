@@ -957,6 +957,61 @@ describe('DraftExtras: the draft notice of the Essentials screen', () => {
       expect(screen.getByLabelText(TEXT.essentials.name)).toHaveValue('Second draft');
     });
 
+    it('asks before a draft replaces what the author changed while it was prepared', async () => {
+      const { generate, calls } = await renderWithDraft();
+      // Untouched draft: no question at the click.
+      fireEvent.click(regenerateButton());
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+      expect(generate).toHaveBeenCalledTimes(2);
+      type(screen.getByLabelText(TEXT.essentials.name), 'My corrected name');
+
+      const next = draftResult();
+      next.app.name = { en: 'Second draft' };
+      await settle(() => calls[1].resolve(next));
+      let dialog = screen.getByRole('alertdialog');
+      expect(dialog).toHaveTextContent(TEXT.draft.arrived.body);
+      expect(screen.getByLabelText(TEXT.essentials.name)).toHaveValue('My corrected name');
+
+      fireEvent.click(within(dialog).getByRole('button', { name: TEXT.draft.arrived.keep }));
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+      expect(screen.getByLabelText(TEXT.essentials.name)).toHaveValue('My corrected name');
+
+      // The same again, and this time the author takes the new draft.
+      fireEvent.click(regenerateButton());
+      fireEvent.click(
+        within(screen.getByRole('alertdialog')).getByRole('button', { name: TEXT.draft.regenerate })
+      );
+      type(screen.getByLabelText(TEXT.essentials.name), 'Another name');
+      await settle(() => calls[2].resolve(next));
+      dialog = screen.getByRole('alertdialog');
+      fireEvent.click(within(dialog).getByRole('button', { name: TEXT.draft.arrived.use }));
+      expect(screen.getByLabelText(TEXT.essentials.name)).toHaveValue('Second draft');
+    });
+
+    it('a create request cancels the draft request, so no late draft replaces the screen', async () => {
+      const { generate, calls } = manualGenerate();
+      const onDraft = jest.fn();
+      const props = {
+        result: draftResult(),
+        description: DESCRIPTION,
+        onDescriptionChange: () => {},
+        onExtrasChange: () => {},
+        onDraft,
+        generate,
+        language: 'en'
+      };
+      const { rerender } = render(<DraftExtras {...props} />);
+      fireEvent.click(regenerateButton());
+      expect(calls[0].request.signal.aborted).toBe(false);
+      rerender(<DraftExtras {...props} creating />);
+      expect(calls[0].request.signal.aborted).toBe(true);
+      await settle(() => calls[0].resolve(draftResult()));
+      expect(onDraft).not.toHaveBeenCalled();
+      // And none is started while the app is being created.
+      fireEvent.click(regenerateButton());
+      expect(generate).toHaveBeenCalledTimes(1);
+    });
+
     it.each([
       ['a flag', true, true],
       ['a list of fields', ['system'], true],

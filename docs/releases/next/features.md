@@ -37,8 +37,10 @@ content admins can build apps, as before. The guide
   `POST /api/admin/apps` without `enabled` still creates a published app, and an uploaded file
   keeps its `enabled` value.
 - **Publish** in the editor header opens a confirmation that says who will see the app, for
-  example "Everyone who signs in can use this app." **Unpublish** is under **More**. Neither
-  depends on the form being valid.
+  example "Everyone who signs in can use this app." **Unpublish** is under **More**. Publish
+  saves unsaved changes first; if that save fails, for example because a field has an error,
+  nothing is published. Unpublish does not save the form, so it also works while a field has an
+  error.
 - The status reads **Published** / **Not published** instead of Enabled / Disabled. The
   **Enabled** checkbox is gone from the form.
 - **"Publish all" now also publishes unfinished apps.** An app that is not published may have

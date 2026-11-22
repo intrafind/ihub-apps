@@ -127,14 +127,16 @@ function AdminAppCreatePage() {
     []
   );
 
-  /** Opens the Essentials screen with what a start prepared. */
+  // Opens Essentials with a start. A copy that was asked for ends here; it cannot arrive late.
+  const { dismiss: dismissCopy } = copy;
   const open = useCallback(
     start => {
       restart();
       begin(start);
       arrive(start.start);
+      dismissCopy();
     },
-    [restart, begin, arrive]
+    [restart, begin, arrive, dismissCopy]
   );
 
   // "Duplicate", a cold load of `?from=<id>` and a pick from the list: the
@@ -150,7 +152,6 @@ function AdminAppCreatePage() {
         copyLabel: copyLabelWith(t)
       })
     );
-    copy.done();
     // Once per loaded source: later changes of the helpers must not reopen the copy.
     // eslint-disable-next-line @eslint-react/exhaustive-deps
   }, [copySource, appsReady]);
@@ -211,6 +212,7 @@ function AdminAppCreatePage() {
             onDescriptionChange={describe}
             onExtrasChange={setExtras}
             onDraft={handleDraft}
+            creating={form.submitting}
             onStartOver={startOver}
           />
         }

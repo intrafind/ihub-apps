@@ -45,9 +45,9 @@ export function useCreateResources({ fetchModels, fetchApps, fetchUiConfig }) {
         .then(fetcher)
         .then(value => current && apply(value))
         .catch(() => current && apply(fallback));
-    load(fetchModels, value => setModels(Array.isArray(value) ? value : null), null);
-    load(fetchApps, value => setApps(Array.isArray(value) ? value : null), null);
-    load(fetchUiConfig, value => setUiConfig(value || null), null);
+    void load(fetchModels, value => setModels(Array.isArray(value) ? value : null), null);
+    void load(fetchApps, value => setApps(Array.isArray(value) ? value : null), null);
+    void load(fetchUiConfig, value => setUiConfig(value || null), null);
     return () => {
       current = false;
     };

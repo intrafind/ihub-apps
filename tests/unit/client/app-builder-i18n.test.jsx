@@ -74,7 +74,12 @@ const KEY_SOURCES = [
   APP_EDITOR,
   CREATE_PAGE,
   path.join(ADMIN, 'pages/AdminAppEditPage.jsx'),
-  path.join(ADMIN, 'pages/AdminAppsPage.jsx')
+  path.join(ADMIN, 'pages/AdminAppsPage.jsx'),
+  // Parts of the editor and of the app list that live outside those directories.
+  path.join(ADMIN, 'components/MimeTypeSelector.jsx'),
+  path.join(ADMIN, 'components/ResourceSelector.jsx'),
+  path.join(ADMIN, 'components/AdminFormErrorSummary.jsx'),
+  path.join(SRC, 'features/apps/components/AppDetailsPopup.jsx')
 ];
 
 const relative = file => path.relative(SRC, file).split(path.sep).join('/');

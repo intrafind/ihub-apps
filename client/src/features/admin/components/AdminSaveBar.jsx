@@ -1,7 +1,9 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
+import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useStickyBarSpace } from '../hooks/useStickyBarSpace';
 import { PRIMARY_BUTTON_CLASS, SECONDARY_BUTTON_CLASS } from './formStyles';
 
 const ACTION_CLASS =
@@ -16,6 +18,10 @@ const ACTION_CLASS =
  * attention.") and one action that belongs to it ("Show"). Both are left out
  * while a save runs.
  *
+ * The bar lies over the bottom of the page's scroll area. While it is shown it
+ * reserves its height there (`useStickyBarSpace`), so a field reached with Tab
+ * is scrolled to above the bar and not under it.
+ *
  * @param {Object} props
  * @param {boolean} props.dirty - There are unsaved changes
  * @param {boolean} props.saving - A save is running
@@ -28,9 +34,13 @@ const ACTION_CLASS =
  */
 export default function AdminSaveBar({ dirty, saving, onSave, onDiscard, message, action }) {
   const { t } = useTranslation();
-  if (!dirty && !saving) return null;
+  const barRef = useRef(null);
+  const shown = Boolean(dirty || saving);
+  useStickyBarSpace(barRef, shown);
+  if (!shown) return null;
   return (
     <div
+      ref={barRef}
       className="sticky bottom-0 left-0 right-0 z-30 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm border-t border-gray-200 dark:border-gray-700 shadow-lg"
       role="region"
       aria-label={t('admin.ui.saveBar.label', 'Save changes')}

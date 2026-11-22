@@ -236,6 +236,37 @@ describe('what each start hands to the Essentials screen', () => {
     ).toBe(true);
   });
 
+  it('copy: a text the source lacks in the edited language starts from the text users get', () => {
+    // The shape of the shipped app `idea-coach`: instructions in English only.
+    const source = {
+      ...SOURCE_APP,
+      description: { fr: 'Répond aux questions.', de: '' },
+      system: { en: 'You answer questions about travel.' }
+    };
+    const start = beginCopy(source, { uiLanguage: 'de-DE', platformDefault: 'en' });
+    expect(start.language).toBe('de');
+    expect(start.draft.system).toEqual({
+      en: 'You answer questions about travel.',
+      de: 'You answer questions about travel.'
+    });
+    // No English text: the first language that has one.
+    expect(start.draft.description.de).toBe('Répond aux questions.');
+
+    let state = begun(start);
+    expect(state.edited).toEqual([]);
+    expect(validateDraft(state.draft, { language: state.language, isTaken: () => false })).toEqual(
+      {}
+    );
+    // Untouched, the copy keeps the source's own text.
+    expect(fieldsLosingLanguages(state)).toEqual([]);
+    expect(payloadFromState(state).system.en).toBe('You answer questions about travel.');
+
+    // Rewritten, the text the author saw is replaced in every language.
+    state = draftReducer(state, { type: 'text', field: 'system', value: 'Neu.' });
+    expect(fieldsLosingLanguages(state)).toEqual(['system']);
+    expect(payloadFromState(state).system).toEqual({ de: 'Neu.' });
+  });
+
   it("AI draft: the server's app as it is, with the answer kept beside it", () => {
     const result = {
       app: { ...newAppDefaults('de'), id: 'x', name: { de: 'X' } },

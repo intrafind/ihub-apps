@@ -3876,7 +3876,8 @@
         },
         "access": {
           "everyoneSignedIn": "Alle, die sich anmelden",
-          "everyone": "Alle, auch Personen, die nicht angemeldet sind"
+          "everyone": "Alle, auch Personen, die nicht angemeldet sind",
+          "notSignedIn": "Personen, die nicht angemeldet sind"
         },
         "liveHint": "Benutzer erhalten die Änderung, sobald Sie speichern.",
         "fieldsNeedAttention_one": "1 Feld benötigt Ihre Aufmerksamkeit.",
@@ -3886,6 +3887,7 @@
         "expandAll": "Alle aufklappen",
         "collapseAll": "Alle zuklappen",
         "jump": "Zu Abschnitt springen",
+        "jumpGo": "Los",
         "groups": {
           "basics": "Grundlagen",
           "instructions": "Anweisungen und Eingaben",
@@ -3944,7 +3946,25 @@
           "iconRequired": "Das Symbol ist erforderlich",
           "idInvalid": "Die App-ID darf nur Buchstaben, Ziffern, Bindestriche und Unterstriche enthalten",
           "idRequired": "Die App-ID ist erforderlich",
-          "nameRequired": "Der App-Name ist erforderlich"
+          "nameRequired": "Der App-Name ist erforderlich",
+          "empty": "Dieses Feld ist leer. Geben Sie einen Text ein.",
+          "required": "Diese Angabe fehlt. Füllen Sie sie aus.",
+          "minLength_one": "Dieser Text ist zu kurz. Geben Sie mindestens {{count}} Zeichen ein.",
+          "minLength_other": "Dieser Text ist zu kurz. Geben Sie mindestens {{count}} Zeichen ein.",
+          "maxLength_one": "Dieser Text ist zu lang. Kürzen Sie ihn auf {{count}} Zeichen.",
+          "maxLength_other": "Dieser Text ist zu lang. Kürzen Sie ihn auf {{count}} Zeichen.",
+          "minimum": "Diese Zahl ist zu klein. Geben Sie eine Zahl ein, die mindestens {{limit}} ist.",
+          "maximum": "Diese Zahl ist zu groß. Geben Sie eine Zahl ein, die höchstens {{limit}} ist.",
+          "exclusiveMinimum": "Diese Zahl ist zu klein. Geben Sie eine Zahl ein, die größer als {{limit}} ist.",
+          "exclusiveMaximum": "Diese Zahl ist zu groß. Geben Sie eine Zahl ein, die kleiner als {{limit}} ist.",
+          "pattern": "Diese Eingabe hat nicht die erforderliche Form. Prüfen Sie sie auf unzulässige Zeichen.",
+          "uri": "Das ist keine vollständige Webadresse. Geben Sie eine ein, die mit https:// oder http:// beginnt.",
+          "email": "Das ist keine E-Mail-Adresse. Geben Sie eine wie name@example.com ein.",
+          "enum": "Dieser Wert wird nicht angeboten. Wählen Sie einen dieser Werte: {{values}}.",
+          "uniqueItems": "Diese Liste enthält einen Eintrag doppelt. Entfernen Sie das Duplikat.",
+          "type": "Dieser Wert hat die falsche Art (zum Beispiel ein Text, wo eine Zahl stehen muss). Korrigieren Sie ihn.",
+          "invalid": "Dieser Wert ist ungültig. Prüfen Sie ihn.",
+          "variableName": "Dieser Platzhalter ist nicht zulässig. Beginnen Sie mit einem Buchstaben oder Unterstrich und verwenden Sie nur Buchstaben, Ziffern, Bindestriche und Unterstriche."
         },
         "groupChanged": "geändert",
         "settings": "Was Benutzer ändern können",
@@ -4089,7 +4109,18 @@
         "modelDesc": "Welches KI-Modell in dieser App antwortet und in welchem Format.",
         "chatBehaviour": "Chat-Verhalten",
         "chatBehaviourDesc": "Wie ein Chat mit dieser App beginnt und ob er gespeichert wird.",
-        "standardModel": "Standardmodell"
+        "standardModel": "Standardmodell",
+        "loadingFormats": "Die verfügbaren Formate werden geladen...",
+        "categoryNotFound": "Diese Dateiart ist in dieser Installation nicht eingerichtet.",
+        "useEntireCategory": "Gesamte Kategorie „{{category}}“ verwenden",
+        "selectIndividualFormats": "Oder wählen Sie einzelne Formate:",
+        "errorLabel": {
+          "variable": "Eingabefeld {{number}}",
+          "starterPrompt": "Einstiegsfrage {{number}}",
+          "option": "Option {{number}}",
+          "part": "{{parent}}, {{field}}",
+          "language": "{{field}} — {{language}}"
+        }
       },
       "reorder": "Reihenfolge",
       "reorderHelp": "Ziehen Sie eine Zeile oder nutzen Sie die Pfeile, um die Reihenfolge festzulegen, in der Apps für Benutzer erscheinen – in der App-Übersicht, auf der Startseite und in der Seitenleiste. Es werden immer alle Apps aufgelistet, Suche und Filter gelten hier nicht. Gespeichert wird erst mit „Reihenfolge speichern“.",
@@ -4280,7 +4311,13 @@
           "systemAll": "{{name}}: alle Funktionen",
           "leftOut": "Einige Teile der Antwort ließen sich nicht verwenden und wurden weggelassen.",
           "regenerate": "Neuen Entwurf vorbereiten",
-          "regenerateWarning": "Ein neuer Entwurf ersetzt den aktuellen, auch Ihre Änderungen."
+          "regenerateWarning": "Ein neuer Entwurf ersetzt den aktuellen, auch Ihre Änderungen.",
+          "arrived": {
+            "title": "Der neue Entwurf ist fertig",
+            "body": "Sie haben den aktuellen Entwurf geändert, während der neue vorbereitet wurde. Der neue Entwurf ersetzt ihn, auch Ihre Änderungen.",
+            "use": "Neuen Entwurf verwenden",
+            "keep": "Meine Änderungen behalten"
+          }
         },
         "link": {
           "url": "Adresse der Website",
@@ -4379,7 +4416,19 @@
         "order": "Reihenfolge",
         "status": "Status"
       },
-      "uploading": "Wird hochgeladen..."
+      "uploading": "Wird hochgeladen...",
+      "details": {
+        "status": "Status",
+        "description": "Kurzbeschreibung",
+        "systemInstructions": "Anweisungen",
+        "technicalDetails": "Details",
+        "model": "KI-Modell",
+        "order": "Position in der App-Liste",
+        "variables": "Eingabefelder",
+        "starterPrompts": "Einstiegsfragen",
+        "editApp": "App bearbeiten",
+        "close": "Schließen"
+      }
     },
     "features": {
       "title": "Funktionen",
@@ -8208,6 +8257,18 @@
       "conflict": "Jemand anderes hat die Artefakt-Einstellungen geändert, nachdem Sie diese Seite geöffnet haben, daher wurde nichts gespeichert. Ihre Änderungen sind noch da: Laden Sie die aktuellen Einstellungen und nehmen Sie Ihre Änderung erneut vor.",
       "reload": "Aktuelle Einstellungen laden",
       "reloadError": "Die aktuellen Einstellungen konnten nicht geladen werden."
+    },
+    "formErrors": {
+      "title": "Bitte beheben Sie die folgenden Fehler",
+      "count_one": "({{count}} Fehler)",
+      "count_other": "({{count}} Fehler)"
+    },
+    "resourceSelector": {
+      "placeholder": "Suchen und auswählen...",
+      "noneSelected": "Nichts ausgewählt",
+      "all": "Alle (*)",
+      "noMatches": "Zu Ihrer Suche passt kein Eintrag.",
+      "startTyping": "Tippen Sie, um zu suchen."
     }
   },
   "cloudStorage": {

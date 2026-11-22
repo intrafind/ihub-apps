@@ -198,7 +198,7 @@ function DescribeStart({
   const handleKeyDown = event => {
     if (event.key !== 'Enter' || !(event.ctrlKey || event.metaKey)) return;
     event.preventDefault();
-    start(description);
+    void start(description);
   };
 
   const handleCancel = () => {

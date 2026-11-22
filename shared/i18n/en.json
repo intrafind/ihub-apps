@@ -3379,7 +3379,8 @@
         },
         "access": {
           "everyoneSignedIn": "Everyone who signs in",
-          "everyone": "Everyone, including people who are not signed in"
+          "everyone": "Everyone, including people who are not signed in",
+          "notSignedIn": "People who are not signed in"
         },
         "liveHint": "Users get the change as soon as you save.",
         "fieldsNeedAttention_one": "1 field needs your attention.",
@@ -3389,6 +3390,7 @@
         "expandAll": "Expand all",
         "collapseAll": "Collapse all",
         "jump": "Jump to section",
+        "jumpGo": "Go",
         "groups": {
           "basics": "Basics",
           "instructions": "Instructions and inputs",
@@ -3447,7 +3449,25 @@
           "iconRequired": "Icon is required",
           "idInvalid": "App ID can only contain letters, numbers, hyphens, and underscores",
           "idRequired": "App ID is required",
-          "nameRequired": "App name is required"
+          "nameRequired": "App name is required",
+          "empty": "This field is empty. Enter a text.",
+          "required": "This entry is missing. Fill it in.",
+          "minLength_one": "This text is too short. Enter at least {{count}} character.",
+          "minLength_other": "This text is too short. Enter at least {{count}} characters.",
+          "maxLength_one": "This text is too long. Shorten it to {{count}} character.",
+          "maxLength_other": "This text is too long. Shorten it to {{count}} characters.",
+          "minimum": "This number is too small. Enter a number that is at least {{limit}}.",
+          "maximum": "This number is too large. Enter a number that is at most {{limit}}.",
+          "exclusiveMinimum": "This number is too small. Enter a number greater than {{limit}}.",
+          "exclusiveMaximum": "This number is too large. Enter a number less than {{limit}}.",
+          "pattern": "This entry does not have the required form. Check it for characters that are not allowed.",
+          "uri": "This is not a complete web address. Enter one that starts with https:// or http://.",
+          "email": "This is not an e-mail address. Enter one like name@example.com.",
+          "enum": "This value is not offered. Choose one of: {{values}}.",
+          "uniqueItems": "This list contains an entry twice. Remove the duplicate.",
+          "type": "This value has the wrong kind (for example a text where a number belongs). Correct it.",
+          "invalid": "This value is not valid. Check it.",
+          "variableName": "This placeholder is not allowed. Start with a letter or an underscore, and use only letters, digits, hyphens and underscores."
         },
         "groupChanged": "changed",
         "settings": "What users can change",
@@ -3592,7 +3612,18 @@
         "modelDesc": "Which AI model answers in this app, and in which format.",
         "chatBehaviour": "Chat behavior",
         "chatBehaviourDesc": "How a chat with this app starts and whether it is stored.",
-        "standardModel": "Standard model"
+        "standardModel": "Standard model",
+        "loadingFormats": "Loading the available formats...",
+        "categoryNotFound": "This kind of file is not set up on this installation.",
+        "useEntireCategory": "Use the entire {{category}} category",
+        "selectIndividualFormats": "Or select individual formats:",
+        "errorLabel": {
+          "variable": "Input field {{number}}",
+          "starterPrompt": "Conversation starter {{number}}",
+          "option": "Option {{number}}",
+          "part": "{{parent}}, {{field}}",
+          "language": "{{field}} — {{language}}"
+        }
       },
       "reorder": "Reorder",
       "reorderHelp": "Drag a row or use the arrows to set the order apps appear in for users — in the apps browser, on the start page and in the sidebar. Every app is listed, so search and filters do not apply here. Nothing is saved until you choose \"Save order\".",
@@ -3783,7 +3814,13 @@
           "systemAll": "{{name}}: all functions",
           "leftOut": "Some parts of the answer could not be used and were left out.",
           "regenerate": "Prepare a new draft",
-          "regenerateWarning": "A new draft replaces the current one, including your changes."
+          "regenerateWarning": "A new draft replaces the current one, including your changes.",
+          "arrived": {
+            "title": "The new draft is ready",
+            "body": "You changed the current draft while the new one was being prepared. The new draft replaces it, including your changes.",
+            "use": "Use the new draft",
+            "keep": "Keep my changes"
+          }
         },
         "link": {
           "url": "Website address",
@@ -3882,7 +3919,19 @@
         "order": "Order",
         "status": "Status"
       },
-      "uploading": "Uploading..."
+      "uploading": "Uploading...",
+      "details": {
+        "status": "Status",
+        "description": "Short description",
+        "systemInstructions": "Instructions",
+        "technicalDetails": "Details",
+        "model": "AI model",
+        "order": "Position in the app list",
+        "variables": "Input fields",
+        "starterPrompts": "Conversation starters",
+        "editApp": "Edit app",
+        "close": "Close"
+      }
     },
     "features": {
       "title": "Features",
@@ -7711,6 +7760,18 @@
       "conflict": "Someone else changed the artifact settings after you opened this page, so nothing was saved. Your edits are still here: load the current settings, then make your change again.",
       "reload": "Load the current settings",
       "reloadError": "The current settings could not be loaded."
+    },
+    "formErrors": {
+      "title": "Please fix the following errors",
+      "count_one": "({{count}} error)",
+      "count_other": "({{count}} errors)"
+    },
+    "resourceSelector": {
+      "placeholder": "Search and select...",
+      "noneSelected": "Nothing selected",
+      "all": "All (*)",
+      "noMatches": "Nothing matches your search.",
+      "startTyping": "Type to search."
     }
   },
   "cloudStorage": {

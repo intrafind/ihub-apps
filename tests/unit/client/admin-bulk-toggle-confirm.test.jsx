@@ -152,6 +152,47 @@ describe('Apps: Publish all / Unpublish all', () => {
     expect(screen.queryByText('Not published')).not.toBeInTheDocument();
   });
 
+  it('sends a large installation in several requests, none with a long path', async () => {
+    mockApi.toggleApps.mockResolvedValue({});
+    const id = index => `app-with-a-rather-long-id-${String(index).padStart(3, '0')}`;
+    await renderApps(Array.from({ length: 120 }, (_, i) => app(id(i), false)));
+    fireEvent.click(screen.getByRole('button', { name: 'Publish all' }));
+    const dialog = screen.getByRole('alertdialog', { name: 'Publish all' });
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Publish all' }));
+    });
+    const sent = mockApi.toggleApps.mock.calls.map(call => call[0]);
+    expect(sent.length).toBeGreaterThan(1);
+    expect(sent.flat()).toEqual(Array.from({ length: 120 }, (_, i) => id(i)));
+    for (const part of sent) expect(part.join(',').length).toBeLessThanOrEqual(2000);
+    expect(screen.queryByText('Not published')).not.toBeInTheDocument();
+  });
+
+  it('when a later request fails, the rows of the earlier ones show the new state', async () => {
+    mockApi.toggleApps.mockResolvedValueOnce({}).mockRejectedValueOnce(new Error('refused'));
+    await renderApps(
+      Array.from({ length: 60 }, (_, i) => app(`n${String(i).padStart(2, '0')}`, false))
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Publish all' }));
+    const dialog = screen.getByRole('alertdialog', { name: 'Publish all' });
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Publish all' }));
+    });
+    expect(mockApi.toggleApps).toHaveBeenCalledTimes(2);
+    // The dialog stays open with the failure; the list already matches the server.
+    fireEvent.click(
+      within(screen.getByRole('alertdialog', { name: 'Publish all' })).getByRole('button', {
+        name: 'Cancel'
+      })
+    );
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'App n4' } });
+    await screen.findByText('App n40');
+    expect(screen.queryByText('Not published')).not.toBeInTheDocument();
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'App n5' } });
+    await screen.findByText('App n50');
+    expect(screen.getAllByText('Not published')).toHaveLength(10);
+  });
+
   it('names every app, not only the first five', async () => {
     await renderApps(Array.from({ length: 8 }, (_, i) => app(`n${i}`, false)));
     fireEvent.click(screen.getByRole('button', { name: 'Publish all' }));

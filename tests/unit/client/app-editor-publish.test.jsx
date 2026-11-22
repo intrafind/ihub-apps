@@ -21,7 +21,7 @@
  */
 
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import i18next from 'i18next';
 import en from '../../../shared/i18n/en.json';
@@ -186,6 +186,21 @@ describe('publishing an app', () => {
     expect(server.state.app.enabled).toBe(true);
   });
 
+  test('the focus goes to the heading when "Publish" leaves the page, not to <body>', async () => {
+    await renderEditor();
+    const publish = screen.getByRole('button', { name: TEXT.publish.action });
+    publish.focus();
+    const dialog = await askPublish();
+    confirmIn(dialog, TEXT.publish.action);
+    await waitFor(() => expect(status()).toHaveTextContent(en.admin.apps.status.published));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+    // After the dialog gave the focus back: the button is gone, the heading has it.
+    await act(async () => {});
+    expect(publish).not.toBeInTheDocument();
+    expect(document.activeElement).not.toBe(document.body);
+    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1 }));
+  });
+
   test('the form state follows the toggle, and the page is not dirty because of it', async () => {
     await renderEditor();
     confirmIn(await askPublish(), TEXT.publish.action);
@@ -221,6 +236,36 @@ describe('publishing an app', () => {
       enabled: true
     });
     expect(saveBar()).not.toBeInTheDocument();
+  });
+
+  test('while a save is running, Publish waits for it and then sends the toggle', async () => {
+    await renderEditor();
+    // A slow connection: the PUT answers when the test lets it.
+    let finishSave;
+    const request = server.request;
+    mockRequest.mockImplementation(async config => {
+      if (config.method?.toUpperCase() === 'PUT' && config.url === APP_URL) {
+        await new Promise(resolve => {
+          finishSave = resolve;
+        });
+      }
+      return request(config);
+    });
+    editName('Summary in plain words');
+    fireEvent.click(within(saveBar()).getByRole('button', { name: 'Save Changes' }));
+    await waitFor(() => expect(finishSave).toBeInstanceOf(Function));
+
+    confirmIn(await askPublish(), TEXT.publish.action);
+    // Nothing is published before the save is through, and no second save is sent.
+    await act(async () => {});
+    expect(requests('POST', TOGGLE_URL)).toHaveLength(0);
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+
+    await act(async () => finishSave());
+    await waitFor(() => expect(status()).toHaveTextContent(en.admin.apps.status.published));
+    const writes = server.writes().map(call => `${call.method} ${call.url}`);
+    expect(writes).toEqual([`PUT ${APP_URL}`, `POST ${TOGGLE_URL}`]);
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
   });
 
   test('when the save fails, no toggle is sent and the dialog closes', async () => {

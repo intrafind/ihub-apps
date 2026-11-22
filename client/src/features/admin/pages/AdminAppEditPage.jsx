@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import DualModeEditor from '../../../shared/components/DualModeEditor';
@@ -47,6 +47,9 @@ const APPS_PATH = '/admin/apps';
 const NEW_APP_PATH = '/admin/apps/new';
 const MODELS_PATH = '/admin/models';
 const GUIDE_PATH = '/admin/docs/app-quickstart.md';
+/** The one group the page renders itself; the form renders the others. */
+const ACCESS_GROUP = 'access';
+const NO_ERRORS = Object.freeze([]);
 const CONTENT_CLASS = 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8';
 
 const openApp = appId =>
@@ -91,11 +94,15 @@ function AdminAppEditPage() {
   // Bumped whenever the test has to start over: after a save, after access changed.
   const [testRun, setTestRun] = useState(0);
   const [toast, showToast] = useEditorToast();
+  // Where the focus goes when its control leaves the page (Publish, "Hide these steps").
+  const headingRef = useRef(null);
+  const editorRef = useRef(null);
 
   const published = savedApp?.enabled !== false;
   // In the reader's language, else in one the app has: a German-only name shows in an English UI.
   const appName = getLocalizedContent(app?.name, uiLanguage) || appId;
-  const noModel = Array.isArray(models) && models.length === 0 && (app?.type || 'chat') === 'chat';
+  const isChat = (app?.type || 'chat') === 'chat';
+  const noModel = Array.isArray(models) && models.length === 0 && isChat;
   const formMode = editingMode === 'form';
   const describeError = error => apiErrorMessage(error, t, t('admin.apps.errorTitle'));
 
@@ -103,7 +110,14 @@ function AdminAppEditPage() {
     () => ({ models: models || [], language: i18n.language, access: access.view }),
     [models, i18n.language, access.view]
   );
-  const groups = useEditorGroups({ app, errors: validationState.errors, extra: groupsExtra });
+  // The JSON editor reports its markers, warnings included, and none of them
+  // names a field: only the form's errors are counted and booked on a group.
+  const groups = useEditorGroups({
+    app,
+    errors: formMode ? validationState.errors : NO_ERRORS,
+    extra: groupsExtra,
+    view: editingMode
+  });
 
   /** Opens the group of the first field that needs attention and moves the focus to it. */
   const showFirstError = () => {
@@ -132,7 +146,12 @@ function AdminAppEditPage() {
     setPublished,
     saveFirst: save,
     // The toggle changed the stored flag only; it is not an edit of the form.
-    onChanged: enabled => editor.applySaved({ enabled }),
+    onChanged: enabled => {
+      editor.applySaved({ enabled });
+      // "Publish" is gone once the app is published. The focus moves before the
+      // dialog closes, which then leaves it there instead of dropping it on <body>.
+      if (enabled) headingRef.current?.focus();
+    },
     describeError,
     // Groups may have changed since the page loaded; say who sees the app now.
     onAskPublish: refreshAccess
@@ -149,8 +168,16 @@ function AdminAppEditPage() {
     }
   });
 
-  /** Where a link leads: to a group of the editor, or to the test chat. */
-  const openGroup = id => groups.open(id, { focus: true });
+  /**
+   * Where a link leads: to a group of the editor, or to the test chat. A group
+   * of the form is not on the page while the JSON editor is, so the editor is
+   * asked for the form first (it confirms with unsaved changes); the focus
+   * follows once the group is rendered.
+   */
+  const openGroup = id => {
+    if (!formMode && id !== ACCESS_GROUP) editorRef.current?.switchMode('form');
+    groups.open(id, { focus: true });
+  };
   const showTest = () => {
     setTestOpen(true);
     setTestFocus(token => token + 1);
@@ -167,7 +194,11 @@ function AdminAppEditPage() {
     <div className={testOpen ? 'lg:flex lg:h-full' : undefined}>
       {/* The form's scroll column. The save bar is its last child, so it never
           runs under the test panel. */}
-      <div className={testOpen ? 'lg:flex-1 lg:min-w-0 lg:overflow-y-auto' : undefined}>
+      <div
+        className={testOpen ? 'lg:flex-1 lg:min-w-0 lg:overflow-y-auto' : undefined}
+        // Beside the test chat the form's cards are one column (`form-cols:` in tailwind.css).
+        data-form-narrow={testOpen ? '' : undefined}
+      >
         {/* An app that did not load shows the error, with Retry, in place of the editor. */}
         <AdminEditPageShell
           loading={loading}
@@ -208,6 +239,7 @@ function AdminAppEditPage() {
             onHistory={() => setHistoryOpen(true)}
             onDownload={() => downloadApp(app)}
             onDuplicate={() => navigate(`${NEW_APP_PATH}?from=${encodeURIComponent(appId)}`)}
+            headingRef={headingRef}
           />
 
           <EditorSaveError message={saveError} />
@@ -217,8 +249,14 @@ function AdminAppEditPage() {
               onOpenGroup={openGroup}
               onTest={showTest}
               onPublish={publishing.askPublish}
-              onDismiss={arrival.dismissSteps}
+              onDismiss={() => {
+                // The card goes, and with it the button that has the focus.
+                headingRef.current?.focus();
+                arrival.dismissSteps();
+              }}
               published={published}
+              groupIds={groups.groups.map(group => group.id)}
+              canTest={isChat}
               focusHeading={arrival.focusSteps}
               guideHref={isFullAdmin ? buildPath(GUIDE_PATH) : null}
             />
@@ -235,13 +273,14 @@ function AdminAppEditPage() {
                 formProps={{ availableModels: models || [], uiConfig, jsonSchema, groups }}
                 jsonSchema={jsonSchema}
                 defaultMode={editingMode}
+                controlRef={editorRef}
                 onModeChange={setEditingMode}
                 onValidationChange={setValidationState}
                 className="mb-6"
               />
 
               {/* Which groups may use this app (groups.json); saved on its own. */}
-              <EditorGroup id="access" groups={groups}>
+              <EditorGroup id={ACCESS_GROUP} groups={groups}>
                 <ContentAccessSection
                   resourceType="apps"
                   resourceId={appId}
@@ -258,6 +297,11 @@ function AdminAppEditPage() {
           onSave={() => void save()}
           onDiscard={editor.discard}
           errorCount={groups.totalErrors}
+          invalidMessage={
+            !formMode && !validationState.isValid
+              ? t('admin.apps.edit.validationErrorsExist')
+              : null
+          }
           published={published}
           onShowFirstError={formMode && groups.firstErrorField ? showFirstError : null}
         />

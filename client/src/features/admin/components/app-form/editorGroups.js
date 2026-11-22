@@ -160,10 +160,28 @@ const SUMMARIES = {
   access(_app, t, { access }) {
     if (typeof access === 'string') return access;
     if (!isPlainObject(access)) return '';
-    if (access.audience?.anonymous) return t('admin.apps.edit.access.everyone');
-    if (access.audience?.allSignedIn) return t('admin.apps.edit.access.everyoneSignedIn');
+    // The two facts of `audience` are independent (see `audienceText`): open to
+    // people who are not signed in does not say that every signed-in user has it.
+    const anonymous = access.audience?.anonymous === true;
+    if (access.audience?.allSignedIn === true) {
+      return t(
+        anonymous ? 'admin.apps.edit.access.everyone' : 'admin.apps.edit.access.everyoneSignedIn'
+      );
+    }
     const rows = Array.isArray(access.groups) ? access.groups : [];
     const count = rows.filter(row => row?.effective && !row.implicit).length;
+    if (anonymous) {
+      return [
+        t('admin.apps.edit.access.notSignedIn'),
+        count > 0 &&
+          t(
+            access.scope === 'membership'
+              ? 'admin.apps.edit.summary.ownGroups'
+              : 'admin.apps.edit.summary.groups',
+            { count }
+          )
+      ];
+    }
     // A content admin sees only the groups they manage, so the line says so.
     if (access.scope === 'membership') {
       return count > 0

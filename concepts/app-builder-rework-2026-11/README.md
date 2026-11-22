@@ -2659,6 +2659,25 @@ message.
 - `tests/e2e/app-builder.spec.js` is also collected by the default Playwright config and skips
   itself there (22 skipped tests in a full run of the default config).
 
+**After the review.** The fixes of the review were in the working tree, uncommitted (83 changed
+or new files on top of `1f298ed`), when the following part of the gate ran again on 2026-11-22
+in the same environment. No run needed a change, and nothing outside the known red results
+failed.
+
+| Command | Result |
+|---|---|
+| `npm run lint:fix && npm run format:fix` | Passed: 0 errors, 541 warnings. Prettier rewrote no file, and the list of `git status` was the same before and after. |
+| `npm run test:quick` | **Red, the known failure only.** Config-access check passed. Jest, `tests/unit`: 563 suites and 8724 tests passed. Server tests, `node:test` group: 8530 of 8533 tests passed, 2 skipped, 1 failed ("replaces a thread that crashed"). Server tests, Jest group: 315 suites and 4440 tests passed. Run separately afterwards: `test:token-stats`, `test:export-formats` and `test:feature-flags` passed. |
+| `env -u STAAN_API_KEY npm run check:response-shapes` | Passed: 352 routes, all answers match. |
+| `npm run test:e2e:authz` | Passed: 21 tests. |
+| `env -u STAAN_API_KEY npm run test:e2e:app-builder -- --project=chromium --retries=0` | Passed: 22 tests in 3.4 minutes. |
+| `E2E_FRESH_CONTENTS=1 npm run test:a11y -- --project=chromium --reporter=list` | Passed: 94 tests in 3.7 minutes. |
+| `timeout 10s node server/server.js` | The server started, listened, and was stopped by the timeout. The log has no entry of level error. |
+
+Not repeated after the review: the integration tests, `test:boot`, the API documents, the
+guideline and security checks, the route crawl, the four admin specs, the subpath run,
+`check-a11y-diff.js` and `reuse lint`. No server was left running.
+
 ### 14.2 Verified in code while planning
 
 

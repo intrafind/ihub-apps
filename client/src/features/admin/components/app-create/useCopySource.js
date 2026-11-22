@@ -12,9 +12,14 @@ export const COPY_SOURCE_PARAM = 'from';
  * target of "Duplicate"), or one the author picked from the list.
  *
  * The app named in the URL is loaded through the caller's `fetchApp`. Once
- * the page has opened the copy it calls `done()`, which takes the parameter
- * out of the URL: a reload then brings back the author's draft instead of a
- * fresh copy, and "Back" leads to a Start screen that copies nothing.
+ * the page opens a start (the copy itself, or any other) it calls
+ * `dismiss()`, which takes the parameter out of the URL and ends the copy: a
+ * reload then brings back the author's draft instead of a fresh copy, "Back"
+ * leads to a Start screen that copies nothing, and a source that is still
+ * loading can no longer replace what the author started instead.
+ *
+ * A source that could not be loaded leaves the URL too. Its ID is kept for
+ * `retry()`, so a reload brings back what the author typed meanwhile.
  *
  * @param {object} options
  * @param {(id: string) => Promise<object>} options.fetchApp - One app, as stored.
@@ -27,7 +32,7 @@ export const COPY_SOURCE_PARAM = 'from';
  *   status: 'idle'|'loading'|'gone'|'failed',
  *   source: object|null,
  *   use: (app: object) => void,
- *   done: () => void,
+ *   dismiss: () => void,
  *   retry: () => void
  * }} `requested`: the page was opened with a source in its URL. `gone`: that
  *   app does not exist. `failed`: it could not be loaded; `retry()` tries again.
@@ -36,11 +41,23 @@ export function useCopySource({ fetchApp, prepare }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const fromId = searchParams.get(COPY_SOURCE_PARAM);
   const [requested] = useState(Boolean(fromId));
+  // The app to load. It outlives the URL parameter, which a failed load drops.
+  const [targetId, setTargetId] = useState(fromId);
+  const [seenFromId, setSeenFromId] = useState(fromId);
   const [status, setStatus] = useState(fromId ? 'loading' : 'idle');
   const [source, setSource] = useState(null);
   const [attempt, setAttempt] = useState(0);
   // Counts the picks, so a pick that is still being prepared cannot replace a later one.
   const pickRef = useRef(0);
+
+  // A source named in the URL while the page is open ("Duplicate" from another place).
+  if (fromId !== seenFromId) {
+    setSeenFromId(fromId);
+    if (fromId) {
+      setTargetId(fromId);
+      setStatus('loading');
+    }
+  }
 
   /**
    * The caller's preparation for an app: a promise that never rejects, or
@@ -71,9 +88,9 @@ export function useCopySource({ fetchApp, prepare }) {
   }, [setSearchParams]);
 
   useEffect(() => {
-    if (!fromId) return undefined;
+    if (!targetId) return undefined;
     let current = true;
-    fetchApp(fromId)
+    fetchApp(targetId)
       .then(app => preparing(app)?.then(() => app) ?? app)
       .then(app => {
         if (current) setSource(app);
@@ -84,14 +101,16 @@ export function useCopySource({ fetchApp, prepare }) {
         // An ID that names no app, or that cannot be an ID at all.
         const gone = code === 404 || code === 400;
         setStatus(gone ? 'gone' : 'failed');
-        if (gone) dropParam();
+        if (gone) setTargetId(null);
+        // Either way the URL no longer asks for a copy: a reload restores the author's draft.
+        dropParam();
       });
     return () => {
       current = false;
     };
     // `dropParam` changes with the URL it rewrites; the request must not repeat for that.
     // eslint-disable-next-line @eslint-react/exhaustive-deps
-  }, [fromId, attempt, fetchApp, preparing]);
+  }, [targetId, attempt, fetchApp, preparing]);
 
   const use = useCallback(
     app => {
@@ -109,7 +128,10 @@ export function useCopySource({ fetchApp, prepare }) {
     [preparing]
   );
 
-  const done = useCallback(() => {
+  const dismiss = useCallback(() => {
+    // A pick that is still being prepared, or a load that is still running, is dropped.
+    pickRef.current += 1;
+    setTargetId(null);
     setSource(null);
     setStatus('idle');
     if (fromId) dropParam();
@@ -120,7 +142,7 @@ export function useCopySource({ fetchApp, prepare }) {
     setAttempt(count => count + 1);
   }, []);
 
-  return { requested, status, source, use, done, retry };
+  return { requested, status, source, use, dismiss, retry };
 }
 
 export default useCopySource;

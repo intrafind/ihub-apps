@@ -620,12 +620,18 @@ test.describe('Accessibility — the New app page', () => {
     test.setTimeout(150_000);
     await openStart(page);
     const description = page.getByRole('textbox', { name: 'Your description' });
-    // The box is there when a model is: the suite's own server has the stub
-    // model (tests/config/e2e-llm-stub.mjs), a reused dev server may have none.
-    test.skip(
-      !(await description.isVisible()),
-      'No AI model on this server, so the page offers no draft'
-    );
+    // The box is there when a model is. In CI the suite's own server has the stub
+    // model (tests/config/e2e-llm-stub.mjs), so a missing box is a failure there
+    // and not a skip, which the workflow would report as green. A reused dev
+    // server may have no model.
+    if (process.env.CI) {
+      await expect(description).toBeVisible();
+    } else {
+      test.skip(
+        !(await description.isVisible()),
+        'No AI model on this server, so the page offers no draft'
+      );
+    }
     const prepare = page.getByRole('button', { name: 'Prepare draft' });
 
     // The stub answers a plain description with a sentence, which is no draft.
@@ -673,6 +679,78 @@ test.describe('Accessibility — the app editor', () => {
       KNOWN_APP_EDITOR_VIOLATIONS
     );
   });
+
+  // "Create a link app" ends in an editor with two groups, whose configuration
+  // card (the website address and how it opens) no chat app shows. Held at zero.
+  for (const [kind, appId] of [
+    ['a link app', 'external-website-intrafind'],
+    ['an embedded website', 'embedded-website-wikipedia']
+  ]) {
+    test(`has no critical or serious violations in the editor of ${kind}`, async ({ page }) => {
+      test.setTimeout(150_000);
+      await gotoSettled(page, `/admin/apps/${appId}`);
+      const headers = page.locator('[id^="app-group-"][id$="-header"]');
+      await expect(headers).toHaveCount(2);
+      await page.getByRole('button', { name: 'Expand all' }).click();
+      await expect(
+        page.locator('[id^="app-group-"][id$="-header"][aria-expanded="true"]')
+      ).toHaveCount(2);
+      await expect(page.getByTestId('content-access-section')).toBeVisible();
+      await page.waitForLoadState('networkidle');
+      // Every control of the card has a name of its own, not its placeholder.
+      await expect(page.getByRole('textbox', { name: /^(Redirect URL|Iframe URL)/ })).toBeVisible();
+      await expectNoBlockingViolations(page, `App editor — ${kind}, every group expanded`);
+    });
+  }
+
+  // WCAG 2.2, 2.4.11 Focus Not Obscured: the save bar sticks to the bottom of
+  // the form's scroll area, which is where a browser scrolls a newly focused
+  // control to. The bar reserves its height there, so no control reached with
+  // Tab lies entirely under it; on a phone the bar wraps to several rows.
+  for (const viewport of [
+    { width: 1440, height: 800 },
+    { width: 360, height: 640 }
+  ]) {
+    test(`the save bar covers no focused field at ${viewport.width}px`, async ({ page }) => {
+      test.setTimeout(150_000);
+      await page.setViewportSize(viewport);
+      await gotoSettled(page, '/admin/apps/chat');
+      await page.getByRole('button', { name: 'Expand all' }).click();
+      await expect(page.getByTestId('content-access-section')).toBeVisible();
+      await page.waitForLoadState('networkidle');
+
+      const name = page.locator('[data-field="name"] input').first();
+      await name.fill('A name that was changed');
+      const bar = page.getByRole('region', { name: 'Save changes' });
+      await expect(bar).toBeVisible();
+
+      const covered = [];
+      let reached = 0;
+      for (let step = 0; step < 160; step += 1) {
+        await page.keyboard.press('Tab');
+        const state = await page.evaluate(() => {
+          const active = document.activeElement;
+          const region = document.querySelector('[role="region"][aria-label="Save changes"]');
+          if (!active || active === document.body || !region) return null;
+          if (region.contains(active)) return { inBar: true };
+          const rect = active.getBoundingClientRect();
+          const barTop = region.getBoundingClientRect().top;
+          return {
+            inBar: false,
+            hidden: rect.height > 0 && rect.top >= barTop - 1,
+            what: `${active.tagName.toLowerCase()}#${active.id || active.name || '?'}`
+          };
+        });
+        if (!state) continue;
+        // The bar's own buttons come after the form: every field was passed.
+        if (state.inBar) break;
+        reached += 1;
+        if (state.hidden) covered.push(state.what);
+      }
+      expect(reached).toBeGreaterThan(40);
+      expect(covered, 'controls that got the focus entirely under the save bar').toEqual([]);
+    });
+  }
 
   test('has no critical or serious violations with the test panel open', async ({ page }) => {
     test.setTimeout(150_000);

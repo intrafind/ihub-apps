@@ -465,13 +465,46 @@ describe('the save bar', () => {
     fireEvent.click(screen.getByRole('button', { name: 'report one error' }));
     fireEvent.click(screen.getByRole('button', { name: 'JSON mode' }));
 
-    expect(saveBar()).toHaveTextContent('1 field needs your attention.');
+    // The JSON editor names no field, so the bar counts none; it says why Save will not go through.
+    expect(saveBar()).toHaveTextContent(TEXT.validationErrorsExist);
+    expect(saveBar()).not.toHaveTextContent(/needs? your attention/);
     expect(within(saveBar()).queryByRole('button', { name: TEXT.showFirstError })).toBeNull();
     expect(screen.queryByTestId('group-nav')).not.toBeInTheDocument();
 
     fireEvent.click(saveButton());
     expect(await screen.findByRole('alert')).toHaveTextContent(TEXT.validationErrorsExist);
     expect(server.writes()).toEqual([]);
+  });
+
+  test('a warning of the JSON editor is not a field that needs attention, and Save goes through', async () => {
+    await renderEditor();
+    editName('Chat 2');
+    fireEvent.click(screen.getByRole('button', { name: 'JSON mode' }));
+    fireEvent.click(screen.getByRole('button', { name: 'report a JSON warning' }));
+
+    expect(saveBar()).not.toHaveTextContent(/needs? your attention/);
+    expect(saveBar()).not.toHaveTextContent(TEXT.validationErrorsExist);
+    expect(saveBar()).toHaveTextContent(TEXT.liveHint);
+
+    fireEvent.click(saveButton());
+    await waitFor(() => expect(puts()).toHaveLength(1));
+
+    // Back in the form no group was opened or marked for it.
+    fireEvent.click(screen.getByRole('button', { name: 'Form mode' }));
+    expect(screen.getByTestId('group-nav')).toBeInTheDocument();
+  });
+
+  test('beside the open test chat the form is marked as narrow, so its cards are one column', async () => {
+    wideWindow();
+    await renderEditor();
+    const column = () => screen.getByTestId('app-form').closest('[data-form-narrow]');
+    expect(column()).toBeNull();
+
+    fireEvent.click(testButton());
+    expect(column()).not.toBeNull();
+
+    fireEvent.click(testButton());
+    expect(column()).toBeNull();
   });
 });
 
@@ -608,8 +641,12 @@ describe('arriving from "Create and test"', () => {
 
   test('"Hide these steps" is remembered for this app', async () => {
     const first = await renderEditor({ app: NEW_APP, path: CREATED });
-    fireEvent.click(await screen.findByRole('button', { name: DONE.dismiss }));
+    const dismiss = await screen.findByRole('button', { name: DONE.dismiss });
+    dismiss.focus();
+    fireEvent.click(dismiss);
     expect(screen.queryByRole('heading', { name: DONE.heading })).not.toBeInTheDocument();
+    // The button went with the card; the focus is on the page's heading, not on <body>.
+    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1 }));
     first.unmount();
 
     await renderEditor({ app: NEW_APP });
@@ -663,6 +700,47 @@ describe('arriving from "Create and test"', () => {
     fireEvent.click(screen.getByRole('button', { name: DONE.steps.starters }));
     expect(header).toHaveAttribute('aria-expanded', 'true');
     await waitFor(() => expect(header).toHaveFocus());
+  });
+
+  test('from the JSON editor a step of the form brings the form back and then focuses its group', async () => {
+    wideWindow();
+    await renderEditor({ app: NEW_APP, path: CREATED });
+    await screen.findByText('App "Plain-language summary" created');
+    fireEvent.click(screen.getByRole('button', { name: 'JSON mode' }));
+    expect(screen.queryByRole('button', { name: 'group:instructions' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: DONE.steps.inputFields }));
+
+    const header = await screen.findByRole('button', { name: 'group:instructions' });
+    expect(screen.getByTestId('group-nav')).toBeInTheDocument();
+    expect(header).toHaveAttribute('aria-expanded', 'true');
+    await waitFor(() => expect(header).toHaveFocus());
+  });
+
+  test('from the JSON editor the step for access stays in the JSON editor', async () => {
+    wideWindow();
+    await renderEditor({ app: NEW_APP, path: CREATED });
+    await screen.findByText('App "Plain-language summary" created');
+    fireEvent.click(screen.getByRole('button', { name: 'JSON mode' }));
+
+    fireEvent.click(screen.getByRole('button', { name: DONE.steps.access }));
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'group:access' })).toHaveFocus());
+    expect(screen.queryByTestId('group-nav')).not.toBeInTheDocument();
+  });
+
+  test('a link app is offered only the steps it has: no test, no input fields, no starters', async () => {
+    await renderEditor({
+      app: { ...NEW_APP, type: 'redirect', redirectConfig: { url: 'https://example.com' } },
+      path: CREATED
+    });
+    await screen.findByText('App "Plain-language summary" created');
+
+    const steps = screen.getByRole('heading', { name: DONE.heading }).closest('section');
+    const offered = within(steps)
+      .getAllByRole('listitem')
+      .map(item => item.textContent);
+    expect(offered).toEqual([DONE.steps.access, DONE.steps.publish]);
   });
 
   test('the step "Check who can use the app" opens that group and focuses it', async () => {

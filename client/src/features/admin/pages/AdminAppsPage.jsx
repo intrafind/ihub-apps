@@ -25,7 +25,7 @@ import { buildPath } from '../../../utils/runtimeBasePath';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import { useConfirmAction } from '../hooks/useConfirmAction';
-import { buildBulkToggleConfirm } from '../utils/bulkToggleConfirm';
+import { buildBulkToggleConfirm, chunkIdsForPath } from '../utils/bulkToggleConfirm';
 import { deleteConfirmText } from '../utils/confirmText';
 import ReorderableList from '../components/ReorderableList';
 import { DataTable, SearchInput, FilterSelect } from '../components/data-table';
@@ -376,10 +376,15 @@ function AdminAppsPage() {
     requestConfirm({
       ...confirmation,
       action: async () => {
-        await toggleApps(ids, publish);
-        setApps(prev =>
-          prev.map(app => (ids.includes(app.id) ? { ...app, enabled: publish } : app))
-        );
+        // One request per part: every ID in one path is too long for a large
+        // installation. The list follows each part, so it matches the server
+        // when a later part fails.
+        for (const part of chunkIdsForPath(ids)) {
+          await toggleApps(part, publish);
+          setApps(prev =>
+            prev.map(app => (part.includes(app.id) ? { ...app, enabled: publish } : app))
+          );
+        }
       }
     });
   };

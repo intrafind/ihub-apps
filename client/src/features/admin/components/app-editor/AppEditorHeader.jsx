@@ -29,6 +29,9 @@ const DOT_CLASS = {
  * state at a time. The component knows no path and makes no request; every
  * action is a callback.
  *
+ * The heading can take the focus (`headingRef`): "Publish" leaves the page
+ * once the app is published, and the focus needs a place that stays.
+ *
  * @param {object} props
  * @param {string} props.appId - The app's ID; it cannot be changed here.
  * @param {string} props.name - The name in the reader's language.
@@ -44,6 +47,8 @@ const DOT_CLASS = {
  * @param {() => void} props.onHistory
  * @param {() => void} props.onDownload
  * @param {() => void} props.onDuplicate
+ * @param {{ current: HTMLElement|null }} [props.headingRef] - The heading, for a focus
+ *   that lost its control.
  * @returns {JSX.Element}
  */
 function AppEditorHeader({
@@ -60,7 +65,8 @@ function AppEditorHeader({
   openAppDisabled = false,
   onHistory,
   onDownload,
-  onDuplicate
+  onDuplicate,
+  headingRef
 }) {
   const { t } = useTranslation();
   const tone = published ? 'published' : 'notPublished';
@@ -91,7 +97,11 @@ function AppEditorHeader({
         </span>
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100 break-words">
+            <h1
+              ref={headingRef}
+              tabIndex={-1}
+              className="rounded-sm text-2xl font-semibold text-gray-900 dark:text-gray-100 break-words focus:outline-hidden focus-visible:ring-2 focus-visible:ring-admin-accent dark:focus-visible:ring-admin-accent-fg-dark"
+            >
               {name || appId}
             </h1>
             <span

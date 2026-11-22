@@ -84,7 +84,9 @@ export function validateWithSchema(data, schema) {
  * Format Ajv validation errors into user-friendly messages
  * @param {Array} ajvErrors - Raw Ajv errors
  * @param {Object} schema - JSON Schema for additional context
- * @returns {Array} Formatted error objects
+ * @returns {Array<{field: string, message: string, keyword: string, params: object, severity: string}>}
+ *   One entry per field. `message` is an English sentence; `keyword` and
+ *   `params` name the violated rule (Ajv), for a translated one.
  */
 function formatValidationErrors(ajvErrors, schema) {
   if (!ajvErrors || !Array.isArray(ajvErrors)) return [];
@@ -152,13 +154,16 @@ function formatValidationErrors(ajvErrors, schema) {
         formattedMessage = message || `${fieldTitle} is invalid`;
     }
 
-    errors[field] = formattedMessage;
+    errors[field] = { message: formattedMessage, keyword, params: params || {} };
   });
 
-  // Convert to array format for consistency
-  return Object.entries(errors).map(([field, message]) => ({
+  // Convert to array format for consistency. `keyword` and `params` are Ajv's:
+  // a caller with translations builds its own sentence from them.
+  return Object.entries(errors).map(([field, error]) => ({
     field,
-    message,
+    message: error.message,
+    keyword: error.keyword,
+    params: error.params,
     severity: 'error'
   }));
 }

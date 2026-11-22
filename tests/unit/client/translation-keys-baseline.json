@@ -197,12 +197,6 @@
     "admin.ui.header.samePage",
     "admin.ui.remove"
   ],
-  "features/admin/components/MimeTypeSelector.jsx": [
-    "admin.apps.edit.categoryNotFound",
-    "admin.apps.edit.loadingFormats",
-    "admin.apps.edit.selectIndividualFormats",
-    "admin.apps.edit.useEntireCategory"
-  ],
   "features/admin/components/ModelFormEditor.jsx": [
     "admin.models.actions.addTtsVoiceLanguage",
     "admin.models.edit.fixErrors",
@@ -1043,18 +1037,6 @@
     "admin.agents.runs.title",
     "admin.agents.title",
     "admin.title"
-  ],
-  "features/apps/components/AppDetailsPopup.jsx": [
-    "admin.apps.details.close",
-    "admin.apps.details.description",
-    "admin.apps.details.editApp",
-    "admin.apps.details.model",
-    "admin.apps.details.order",
-    "admin.apps.details.starterPrompts",
-    "admin.apps.details.status",
-    "admin.apps.details.systemInstructions",
-    "admin.apps.details.technicalDetails",
-    "admin.apps.details.variables"
   ],
   "features/apps/components/SearchableAppsSelector.jsx": [
     "admin.prompts.edit.noAppsFound",

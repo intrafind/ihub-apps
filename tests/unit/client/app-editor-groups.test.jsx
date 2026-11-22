@@ -308,6 +308,25 @@ describe('groupSummary', () => {
         ]
       })
     ).toBe('2 groups');
+    // Open to people who are not signed in says nothing about signed-in users:
+    // where the group of signed-in users does not inherit, only the groups count.
+    expect(
+      summary({
+        scope: 'all',
+        audience: { anonymous: true, allSignedIn: false },
+        groups: [row('sales')]
+      })
+    ).toBe('People who are not signed in · 1 group');
+    expect(
+      summary({ scope: 'all', audience: { anonymous: true, allSignedIn: false }, groups: [] })
+    ).toBe('People who are not signed in');
+    expect(
+      summary({
+        scope: 'membership',
+        audience: { anonymous: true, allSignedIn: false },
+        groups: [row('sales')]
+      })
+    ).toBe('People who are not signed in · 1 of the groups you manage');
     expect(summary({ scope: 'all', audience: {}, groups: [row('users')] })).toBe('1 group');
     expect(summary({ scope: 'all', audience: {}, groups: [] })).toBe('No group yet');
     expect(summary({ scope: 'membership', audience: {}, groups: [row('sales')] })).toBe(
@@ -770,11 +789,29 @@ describe('EditorGroup and EditorGroupNav', () => {
       'What users can change (changed)',
       'Who can use this app'
     ]);
+    // Choosing an option moves nothing: an arrow key on a closed select chooses one.
+    select.focus();
+    fireEvent.change(select, { target: { value: 'chat' } });
     fireEvent.change(select, { target: { value: 'userSettings' } });
+    expect(select).toHaveValue('userSettings');
+    expect(document.activeElement).toBe(select);
+    expect(groupParts('chat').header).toHaveAttribute('aria-expanded', 'false');
+    expect(groupParts('userSettings').header).toHaveAttribute('aria-expanded', 'false');
+
+    fireEvent.click(within(select.parentElement).getByRole('button', { name: 'Go' }));
     expect(groupParts('userSettings').header).toHaveAttribute('aria-expanded', 'true');
     expect(document.activeElement).toBe(groupParts('userSettings').header);
     // The select is a menu: it shows its label again.
     expect(select).toHaveValue('');
+
+    // Enter in the select does the same; without a choice neither does anything.
+    select.focus();
+    fireEvent.keyDown(select, { key: 'Enter' });
+    fireEvent.click(within(select.parentElement).getByRole('button', { name: 'Go' }));
+    expect(document.activeElement).toBe(select);
+    fireEvent.change(select, { target: { value: 'access' } });
+    fireEvent.keyDown(select, { key: 'Enter' });
+    expect(document.activeElement).toBe(groupParts('access').header);
   });
 
   it('expands and collapses all groups', () => {
@@ -906,6 +943,35 @@ describe('the form in its groups', () => {
     expect(document.activeElement).toBe(
       document.querySelector('select[name="preferredOutputFormat"]')
     );
+  });
+
+  it('moves the focus into the empty required text, not to "Add a translation"', async () => {
+    const { probe } = await renderForm(loaded(fresh()), { jsonSchema });
+    for (const [label, field] of [
+      [/^Name/, 'name'],
+      [/^Short description/, 'description'],
+      [/^Instructions/, 'system']
+    ]) {
+      const input = screen.getByLabelText(label);
+      fireEvent.change(input, { target: { value: '' } });
+      expect(probe.validation.errors.map(error => error.field)).toContain(field);
+      act(() => probe.groups.open(groupOfField(field), { focus: field }));
+      expect(document.activeElement).toBe(screen.getByLabelText(label));
+      expect(document.activeElement.tagName).not.toBe('BUTTON');
+    }
+  });
+
+  it('moves the focus into the text also while a translation is being added', async () => {
+    const { probe } = await renderForm(loaded(fresh()), { jsonSchema });
+    const input = screen.getByLabelText(/^Name/);
+    // The row for a new language puts a select and a code input before the text.
+    const addTranslation = within(input.closest('[data-field="name"]')).getByRole('button', {
+      name: 'Add a translation'
+    });
+    fireEvent.click(addTranslation);
+    fireEvent.change(input, { target: { value: '' } });
+    act(() => probe.groups.open(groupOfField('name'), { focus: 'name' }));
+    expect(document.activeElement).toBe(input);
   });
 
   it('asks for instructions that were emptied, as an error of the form', async () => {
@@ -1120,8 +1186,86 @@ describe('the form in its groups', () => {
     const links = within(document.querySelector('.app-form-editor [aria-live]'))
       .getAllByRole('button')
       .map(link => link.textContent);
-    expect(links).toHaveLength(2);
-    for (const link of links) expect(link).toMatch(/^Input fields — /);
+    expect(links.sort()).toEqual([
+      'Input field 1, Field name — English',
+      'Input field 1, Placeholder'
+    ]);
+  });
+
+  it('says in German what is wrong with a new input field and a new conversation starter', async () => {
+    setUiLanguage('de');
+    const { probe } = await renderForm(loaded(fresh('de')), { jsonSchema });
+    const instructions = within(groupParts('instructions').panel);
+    fireEvent.click(instructions.getByRole('button', { name: 'Eingabefeld hinzufügen' }));
+    fireEvent.click(instructions.getByRole('button', { name: 'Einstiegsfrage hinzufügen' }));
+
+    const fields = probe.validation.errors.map(error => error.field).sort();
+    expect(fields).toEqual([
+      'starterPrompts.0.message.de',
+      'starterPrompts.0.title.de',
+      'variables.0.label.de',
+      'variables.0.name'
+    ]);
+    const summary = within(document.querySelector('.app-form-editor [aria-live]'));
+    expect(summary.getByRole('heading')).toHaveTextContent(
+      /^Bitte beheben Sie die folgenden Fehler\s*\(4 Fehler\)$/
+    );
+    const entries = summary.getAllByRole('listitem').map(item => item.textContent);
+    expect(entries.sort()).toEqual([
+      'Eingabefeld 1, Feldname — Deutsch: Dieses Feld ist leer. Geben Sie einen Text ein.',
+      'Eingabefeld 1, Platzhalter: Dieses Feld ist leer. Geben Sie einen Text ein.',
+      'Einstiegsfrage 1, Nachricht — Deutsch: Dieses Feld ist leer. Geben Sie einen Text ein.',
+      'Einstiegsfrage 1, Text der Schaltfläche — Deutsch: Dieses Feld ist leer. Geben Sie einen Text ein.'
+    ]);
+    // No sentence of the schema validator and no path of a field, anywhere in the form.
+    for (const { field, message } of probe.validation.errors) {
+      expect(message).not.toMatch(/must be|is invalid|is required|Please enter/);
+      expect(message).not.toContain(field);
+    }
+    const text = document.querySelector('.app-form-editor').textContent;
+    expect(text).not.toMatch(/must be at least|format is invalid|\berrors?\)/);
+    expect(text).not.toMatch(/variables\.0|starterPrompts\.0/);
+  });
+
+  it('names a field, a language and the rule in the reader\u2019s language', async () => {
+    setUiLanguage('de');
+    const { probe } = await renderForm(
+      { ...loaded(fresh('de')), name: { de: 'Einfache Sprache', fr: '' }, order: -1 },
+      { jsonSchema }
+    );
+    expect(probe.validation.errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          field: 'name.fr',
+          message: 'Dieses Feld ist leer. Geben Sie einen Text ein.'
+        }),
+        expect.objectContaining({
+          field: 'order',
+          message: 'Diese Zahl ist zu klein. Geben Sie eine Zahl ein, die mindestens 0 ist.'
+        })
+      ])
+    );
+    const links = within(document.querySelector('.app-form-editor [aria-live]'))
+      .getAllByRole('button')
+      .map(link => link.textContent);
+    expect(links).toEqual(
+      expect.arrayContaining(['Name — Französisch', 'Position in der App-Liste'])
+    );
+  });
+
+  it('says what a placeholder may contain when it has other characters', async () => {
+    const app = loaded(fresh());
+    const { probe } = await renderForm(
+      { ...app, variables: [{ name: '1 tone', label: { en: 'Tone' }, type: 'string' }] },
+      { jsonSchema }
+    );
+    expect(probe.validation.errors).toEqual([
+      expect.objectContaining({
+        field: 'variables.0.name',
+        message:
+          'This placeholder is not allowed. Start with a letter or an underscore, and use only letters, digits, hyphens and underscores.'
+      })
+    ]);
   });
 
   it('says so when an app has no input fields', async () => {

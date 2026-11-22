@@ -246,7 +246,7 @@ The settings are sorted into groups. **Basics** and **Instructions and inputs** 
 others are collapsed and show a one-line summary of their settings, with the marker **changed**
 when they differ from the defaults. A group opens when you click it, when one of its fields has
 an error, or with **Expand all**. The index on the left jumps to a group; on a narrow window it is
-the **Jump to section** list.
+the **Jump to section** list: choose a group and press **Go**.
 
 | Group | Settings (JSON name) |
 | --- | --- |

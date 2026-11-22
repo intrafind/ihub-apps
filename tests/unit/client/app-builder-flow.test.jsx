@@ -52,8 +52,15 @@ jest.mock('../../../client/src/api/adminApi', () => ({
 
 const mockGeneral = { fetchModels: jest.fn(), fetchUIConfig: jest.fn() };
 jest.mock('../../../client/src/api', () => ({
+  fetchAppDetails: jest.fn(),
   fetchModels: (...args) => mockGeneral.fetchModels(...args),
   fetchUIConfig: (...args) => mockGeneral.fetchUIConfig(...args)
+}));
+
+// The UI configuration as the app-wide `DocumentTitle` reads it.
+const mockUi = { uiConfig: {}, isLoading: false };
+jest.mock('../../../client/src/shared/contexts/UIConfigContext', () => ({
+  useUIConfig: () => ({ uiConfig: mockUi.uiConfig, isLoading: mockUi.isLoading })
 }));
 jest.mock('../../../client/src/api/integrationsAdminApi', () => ({
   fetchInstalledIntegrations: jest.fn().mockResolvedValue({ items: [] })
@@ -98,6 +105,7 @@ jest.mock('react-i18next', () => ({
 const AdminAppCreatePage =
   require('../../../client/src/features/admin/pages/AdminAppCreatePage').default;
 const AdminAppsPage = require('../../../client/src/features/admin/pages/AdminAppsPage').default;
+const DocumentTitle = require('../../../client/src/shared/components/DocumentTitle').default;
 const {
   APP_DRAFT_STORAGE_KEY
 } = require('../../../client/src/features/admin/components/app-create/useAppDraft');
@@ -170,7 +178,9 @@ function apiProblem(status, data) {
 beforeEach(async () => {
   jest.clearAllMocks();
   window.sessionStorage.clear();
-  document.title = 'Admin | iHub Apps';
+  document.title = 'iHub Apps';
+  mockUi.uiConfig = {};
+  mockUi.isLoading = false;
   await mockI18n.changeLanguage('en');
   mockEnv.platformConfig = { defaultLanguage: 'en', featuresMap: {} };
   mockEnv.user = { id: 'admin', isAdmin: true, permissions: { adminAccess: true } };
@@ -225,9 +235,10 @@ function Where({ label }) {
   );
 }
 
-function renderCreate(url = '/admin/apps/new') {
-  return render(
+function createTree(url = '/admin/apps/new') {
+  return (
     <MemoryRouter initialEntries={[url]}>
+      <DocumentTitle />
       <Routes>
         <Route path="/admin/apps" element={<Where label="LIST" />} />
         <Route
@@ -246,6 +257,8 @@ function renderCreate(url = '/admin/apps/new') {
     </MemoryRouter>
   );
 }
+
+const renderCreate = url => render(createTree(url));
 
 const where = () => screen.getByTestId('where').textContent;
 const type = (element, value) => fireEvent.change(element, { target: { value } });
@@ -322,6 +335,33 @@ describe('Start screen', () => {
     expect(heading()).toHaveTextContent(CREATE.essentials.heading.blank);
     expect(heading()).toHaveFocus();
     expect(document.title).toBe('Describe your app | Admin | iHub Apps');
+  });
+
+  it('keeps the screen in the title when the UI configuration arrives after the page', async () => {
+    mockUi.isLoading = true;
+    const view = renderCreate();
+    await startSettled();
+    // Nothing writes a half title while the configuration loads.
+    expect(document.title).toBe('iHub Apps');
+
+    mockUi.isLoading = false;
+    mockUi.uiConfig = { title: { en: 'Acme AI' } };
+    view.rerender(createTree());
+    expect(document.title).toBe('New app | Admin | Acme AI');
+
+    // A later change of the configuration keeps the screen's name, too.
+    mockUi.uiConfig = { title: { en: 'Acme Assistants' } };
+    view.rerender(createTree());
+    expect(document.title).toBe('New app | Admin | Acme Assistants');
+
+    // Leaving the page takes the name out of the title.
+    view.unmount();
+    render(
+      <MemoryRouter initialEntries={['/admin/apps']}>
+        <DocumentTitle />
+      </MemoryRouter>
+    );
+    expect(document.title).toBe('Admin | Acme Assistants');
   });
 
   it('shows a template with its badge, and no badge for a template without input fields', async () => {
@@ -720,6 +760,35 @@ describe('copy start (?from=<id>)', () => {
     ).toBeInTheDocument();
   });
 
+  it('a copy that could not be loaded leaves the URL, and another start ends it', async () => {
+    mockApi.fetchAdminApp.mockRejectedValueOnce(apiProblem(500, { code: 'INTERNAL_ERROR' }));
+    const first = renderCreate(`/admin/apps/new?from=${TRAVEL_APP.id}`);
+    expect(await screen.findByText(CREATE.copy.loadError, { exact: false })).toBeInTheDocument();
+    await waitFor(() => expect(where()).toBe('NEW:/admin/apps/new'));
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Start empty' }));
+    type(nameField(), 'My own app');
+    // No stale "Try again" above a draft it would replace.
+    expect(screen.queryByText(CREATE.copy.loadError, { exact: false })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: CREATE.retry })).not.toBeInTheDocument();
+    expect(mockApi.fetchAdminApp).toHaveBeenCalledTimes(1);
+
+    // A reload brings the typed draft back, not the copy.
+    first.unmount();
+    renderCreate('/admin/apps/new');
+    expect(await screen.findByText(CREATE.restored, { exact: false })).toBeInTheDocument();
+    expect(nameField()).toHaveValue('My own app');
+  });
+
+  it('"no longer exists" is said on the Start screen only', async () => {
+    renderCreate('/admin/apps/new?from=deleted-app');
+    expect(await screen.findByText(CREATE.copy.sourceGone)).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: 'Start empty' }));
+    // The sentence is about the start the author did not get, not about this draft.
+    expect(screen.queryByText(CREATE.copy.sourceGone)).not.toBeInTheDocument();
+    expect(heading()).toHaveTextContent(CREATE.essentials.heading.blank);
+  });
+
   it('"Copy an existing app" lists the apps in a searchable dialog and copies the pick', async () => {
     await openStart();
     fireEvent.click(screen.getByRole('button', { name: CREATE.start.other }));
@@ -880,6 +949,91 @@ describe('describe start', () => {
       'An assistant that drafts replies.'
     );
     await startSettled();
+  });
+
+  // The notice is wired by the page (EssentialsNotice): what the author changed
+  // and the draft as edited come from the page's state, not from the notice.
+  const DESCRIPTION = 'An assistant that drafts replies.';
+  const WITH_FIELD = {
+    ...RESULT,
+    app: {
+      ...RESULT.app,
+      variables: [{ name: 'tone', label: { en: 'Tone' }, type: 'string', required: false }]
+    }
+  };
+  const regenerateButton = () => screen.getByRole('button', { name: CREATE.draft.regenerate });
+  const fieldsCheckbox = () =>
+    screen.getByRole('checkbox', { name: CREATE.draft.inputFields.replace('{{names}}', 'Tone') });
+
+  async function openDraft(result = RESULT) {
+    mockApi.generateAppDraft.mockResolvedValue(result);
+    await openStart();
+    type(await screen.findByLabelText(CREATE.start.label), DESCRIPTION);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: CREATE.start.generate }));
+    });
+    expect(heading()).toHaveTextContent(CREATE.essentials.heading.draft);
+  }
+
+  it('"Prepare a new draft" from an untouched draft does not ask', async () => {
+    await openDraft();
+    type(screen.getByLabelText(CREATE.start.label), `${DESCRIPTION} In a friendly tone.`);
+    await act(async () => {
+      fireEvent.click(regenerateButton());
+    });
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(mockApi.generateAppDraft).toHaveBeenCalledTimes(2);
+    expect(mockApi.generateAppDraft.mock.calls[1][0].description).toBe(
+      `${DESCRIPTION} In a friendly tone.`
+    );
+  });
+
+  it('"Prepare a new draft" asks first when the author changed a field of the draft', async () => {
+    await openDraft();
+    type(nameField(), 'Customer reply helper');
+    type(screen.getByLabelText(CREATE.start.label), `${DESCRIPTION} In a friendly tone.`);
+    await act(async () => {
+      fireEvent.click(regenerateButton());
+    });
+    const dialog = screen.getByRole('alertdialog');
+    expect(dialog).toHaveTextContent(CREATE.draft.regenerateWarning);
+    expect(mockApi.generateAppDraft).toHaveBeenCalledTimes(1);
+    expect(nameField()).toHaveValue('Customer reply helper');
+
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole('button', { name: CREATE.draft.regenerate }));
+    });
+    expect(mockApi.generateAppDraft).toHaveBeenCalledTimes(2);
+    expect(nameField()).toHaveValue('Reply helper');
+  });
+
+  it('locks the input fields while the edited instructions use one of them', async () => {
+    await openDraft(WITH_FIELD);
+    expect(fieldsCheckbox()).toBeChecked();
+    expect(fieldsCheckbox()).toBeEnabled();
+    expect(screen.queryByText(CREATE.draft.fieldsLocked)).not.toBeInTheDocument();
+
+    type(instructionsField(), 'You draft replies in a {{tone}} tone.');
+    expect(fieldsCheckbox()).toBeDisabled();
+    expect(fieldsCheckbox()).toHaveAccessibleDescription(CREATE.draft.fieldsLocked);
+
+    type(instructionsField(), 'You draft replies to customer emails.');
+    expect(fieldsCheckbox()).toBeEnabled();
+    expect(screen.queryByText(CREATE.draft.fieldsLocked)).not.toBeInTheDocument();
+  });
+
+  it('creates the app with the input fields, and without them when unticked', async () => {
+    await openDraft(WITH_FIELD);
+    fireEvent.click(fieldsCheckbox());
+    expect(fieldsCheckbox()).not.toBeChecked();
+    await submit();
+    expect(lastPayload().variables ?? []).toEqual([]);
+  });
+
+  it('keeps the input fields of the draft unless the author unticks them', async () => {
+    await openDraft(WITH_FIELD);
+    await submit();
+    expect(lastPayload().variables.map(variable => variable.name)).toEqual(['tone']);
   });
 });
 

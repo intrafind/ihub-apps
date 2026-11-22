@@ -4,6 +4,7 @@
 import { useId, useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from './Icon';
+import { placeIconList } from '../utils/iconListPlacement';
 
 // Get all available icons from the Icon component
 // This list should match the iconMap in Icon.jsx
@@ -72,9 +73,17 @@ const AVAILABLE_ICONS = [
   'warning'
 ].sort();
 
+/** The list's classes per placement (`placeIconList`). */
+const LIST_PLACEMENT_CLASS = {
+  fit: 'left-0 w-full',
+  'wide-start': 'left-0 w-full min-w-[24rem]',
+  'wide-end': 'right-0 w-full min-w-[24rem]'
+};
+
 /**
  * IconPicker - A searchable icon picker component. The list opens below the
- * button; Escape and a click outside close it.
+ * button; Escape, a click outside, and the keyboard focus leaving the picker
+ * close it.
  *
  * @param {Object} props
  * @param {string} props.value - Currently selected icon name
@@ -88,6 +97,7 @@ function IconPicker({ value, onChange, className = '', error, id, labelledBy }) 
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [placement, setPlacement] = useState('fit');
   const dropdownRef = useRef(null);
   const searchInputRef = useRef(null);
   const triggerRef = useRef(null);
@@ -111,9 +121,10 @@ function IconPicker({ value, onChange, className = '', error, id, labelledBy }) 
     let focusTimer;
     if (isOpen) {
       document.addEventListener('mousedown', handleClickOutside);
-      // Focus search input when dropdown opens
+      // Focus search input when dropdown opens. The list is below the button
+      // the author just used; the focus must not scroll a container sideways.
       focusTimer = setTimeout(() => {
-        searchInputRef.current?.focus();
+        searchInputRef.current?.focus({ preventScroll: true });
       }, 100);
     }
 
@@ -143,16 +154,35 @@ function IconPicker({ value, onChange, className = '', error, id, labelledBy }) 
     triggerRef.current?.focus();
   };
 
+  // Tab out of the picker closes the list: left open, it lies over the control
+  // that has the focus next, and Escape no longer reaches it from there. The
+  // focus stays where the author moved it. A blur without a next element (a
+  // click on something that takes no focus) is left to the click handlers.
+  const handleBlur = event => {
+    const next = event.relatedTarget;
+    if (isOpen && next && !event.currentTarget.contains(next)) close();
+  };
+
   return (
-    // The key handler only catches Escape from the controls inside.
+    // The handlers only catch Escape and a leaving focus from the controls inside.
     // eslint-disable-next-line jsx-a11y/no-static-element-interactions
-    <div className={`relative ${className}`} ref={dropdownRef} onKeyDown={handleKeyDown}>
+    <div
+      className={`relative ${className}`}
+      ref={dropdownRef}
+      onKeyDown={handleKeyDown}
+      onBlur={handleBlur}
+    >
       {/* Selected Icon Display / Trigger Button */}
       <button
         ref={triggerRef}
         id={triggerId}
         type="button"
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => {
+          // Measured at the moment the list opens: the room beside the button
+          // changes with the window and with panels that open beside the form.
+          if (!isOpen) setPlacement(placeIconList(triggerRef.current));
+          setIsOpen(!isOpen);
+        }}
         aria-haspopup="true"
         aria-expanded={isOpen}
         aria-controls={isOpen ? listId : undefined}
@@ -191,7 +221,8 @@ function IconPicker({ value, onChange, className = '', error, id, labelledBy }) 
       {isOpen && (
         <div
           id={listId}
-          className="absolute z-50 mt-1 w-full sm:min-w-[24rem] bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-96 overflow-hidden"
+          data-placement={placement}
+          className={`absolute z-50 mt-1 ${LIST_PLACEMENT_CLASS[placement]} bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-96 overflow-hidden`}
         >
           {/* Search Input */}
           <div className="p-2 border-b border-gray-200 dark:border-gray-700">

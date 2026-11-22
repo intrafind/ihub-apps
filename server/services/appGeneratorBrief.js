@@ -105,8 +105,10 @@ function isPlainObject(value) {
 
 /** The texts of a localized prompt, per language, with line endings and outer blanks normalised. */
 function normalisedTexts(prompt) {
+  // Code-unit order, not localeCompare: the result is compared with the shipped
+  // texts, so it must not depend on the locale the server runs in.
   return Object.keys(prompt)
-    .sort()
+    .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
     .map(language => [language, String(prompt[language]).replace(/\r\n?/g, '\n').trim()]);
 }
 

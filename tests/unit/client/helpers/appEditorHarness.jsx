@@ -16,6 +16,7 @@
  *   require('./helpers/appEditorHarness').MockDualModeEditor
  * );
  */
+const React = require('react');
 const {
   groupDomIds
 } = require('../../../../client/src/features/admin/components/app-form/editorGroups');
@@ -136,8 +137,22 @@ function MockEditorGroupNav({ groups, compact }) {
  * form's group "Instructions and inputs", a switch to the JSON mode, and two
  * buttons that report validation the way the form does.
  */
-function MockDualModeEditor({ value, onChange, onValidationChange, onModeChange, formProps }) {
+function MockDualModeEditor({
+  value,
+  onChange,
+  onValidationChange,
+  onModeChange,
+  formProps,
+  controlRef
+}) {
   const groups = formProps?.groups;
+  // As in the editor: the form and its groups are on the page in form mode only.
+  const [mode, setMode] = React.useState('form');
+  const switchMode = next => {
+    setMode(next);
+    onModeChange(next);
+  };
+  React.useImperativeHandle(controlRef, () => ({ switchMode }));
   const nameLanguage = Object.keys(value?.name || {})[0] || 'en';
   return (
     <div data-testid="app-form">
@@ -149,7 +164,7 @@ function MockDualModeEditor({ value, onChange, onValidationChange, onModeChange,
           onChange({ ...value, name: { ...value.name, [nameLanguage]: event.target.value } })
         }
       />
-      {groups && (
+      {groups && mode === 'form' && (
         <MockEditorGroup id="instructions" groups={groups}>
           <textarea
             id="system"
@@ -187,8 +202,24 @@ function MockDualModeEditor({ value, onChange, onValidationChange, onModeChange,
       <button type="button" onClick={() => onValidationChange({ isValid: true, errors: [] })}>
         report valid
       </button>
-      <button type="button" onClick={() => onModeChange('json')}>
+      <button
+        type="button"
+        onClick={() =>
+          // What the JSON editor reports for a schema violation: a marker
+          // without a field, and a document that can still be saved.
+          onValidationChange({
+            isValid: true,
+            errors: [{ message: 'Value is not accepted.', line: 4, severity: 'warning' }]
+          })
+        }
+      >
+        report a JSON warning
+      </button>
+      <button type="button" onClick={() => switchMode('json')}>
         JSON mode
+      </button>
+      <button type="button" onClick={() => switchMode('form')}>
+        Form mode
       </button>
     </div>
   );

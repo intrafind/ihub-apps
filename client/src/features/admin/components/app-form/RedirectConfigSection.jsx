@@ -4,12 +4,14 @@ import { CHECKBOX_CLASS } from '../formStyles';
 
 /**
  * Redirect Configuration card — only rendered for apps with type 'redirect'.
+ * Every control is tied to its label by `id`, so it has a name for a screen
+ * reader and the label is a click target.
  */
 function RedirectConfigSection({ app, onChange, t }) {
   return (
     <div className="bg-white dark:bg-gray-800 shadow-sm px-4 py-5 sm:rounded-lg sm:p-6">
-      <div className="md:grid md:grid-cols-3 md:gap-6">
-        <div className="md:col-span-1">
+      <div className="form-cols:grid form-cols:grid-cols-3 form-cols:gap-6">
+        <div className="form-cols:col-span-1">
           <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
             {t('admin.apps.edit.redirectConfig', 'Redirect Configuration')}
           </h3>
@@ -17,15 +19,22 @@ function RedirectConfigSection({ app, onChange, t }) {
             {t('admin.apps.edit.redirectConfigDesc', 'Configure the redirect behavior')}
           </p>
         </div>
-        <div className="mt-5 md:col-span-2 md:mt-0">
+        <div className="mt-5 form-cols:col-span-2 form-cols:mt-0">
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              <label
+                htmlFor="app-redirect-url"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+              >
                 {t('admin.apps.edit.redirectUrl', 'Redirect URL')}
-                <span className="text-red-500 ml-1">*</span>
+                <span className="text-red-500 ml-1" aria-hidden="true">
+                  *
+                </span>
               </label>
               <input
+                id="app-redirect-url"
                 type="url"
+                aria-required="true"
                 value={app.redirectConfig?.url || ''}
                 onChange={e =>
                   onChange('redirectConfig', {
@@ -39,6 +48,7 @@ function RedirectConfigSection({ app, onChange, t }) {
             </div>
             <div className="flex items-center">
               <input
+                id="app-redirect-new-tab"
                 type="checkbox"
                 checked={app.redirectConfig?.openInNewTab !== false}
                 onChange={e =>
@@ -49,12 +59,16 @@ function RedirectConfigSection({ app, onChange, t }) {
                 }
                 className={CHECKBOX_CLASS}
               />
-              <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
+              <label
+                htmlFor="app-redirect-new-tab"
+                className="ml-2 block text-sm text-gray-900 dark:text-gray-100"
+              >
                 {t('admin.apps.edit.openInNewTab', 'Open in New Tab')}
               </label>
             </div>
             <div className="flex items-center">
               <input
+                id="app-redirect-warning"
                 type="checkbox"
                 checked={app.redirectConfig?.showWarning !== false}
                 onChange={e =>
@@ -65,7 +79,10 @@ function RedirectConfigSection({ app, onChange, t }) {
                 }
                 className={CHECKBOX_CLASS}
               />
-              <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
+              <label
+                htmlFor="app-redirect-warning"
+                className="ml-2 block text-sm text-gray-900 dark:text-gray-100"
+              >
                 {t('admin.apps.edit.showWarning', 'Show Warning Before Redirect')}
               </label>
             </div>

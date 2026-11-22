@@ -27,6 +27,7 @@ import {
 
 const NO_ERRORS = Object.freeze([]);
 const FOCUSABLE = 'input, textarea, select, button, [tabindex]';
+const FORM_CONTROL = 'input:not([type="hidden"]), textarea, select';
 
 /** The group the URL hash names, or null. */
 function groupFromHash() {
@@ -45,6 +46,24 @@ function initialOpenState() {
 const allGroups = open => Object.fromEntries(EDITOR_GROUPS.map(group => [group.id, open]));
 
 /**
+ * The control to focus inside the wrapper of a field: the field's own control
+ * that is marked invalid, else its first own control, else the first form
+ * control, else the first button. A text in several languages has an "Add a
+ * translation" button before its inputs, and, while a language is being added,
+ * a select and a code input; the focus belongs in the text, which carries the
+ * error. Its inputs name their path in `data-field`.
+ */
+function controlInside(wrapper) {
+  return (
+    wrapper.querySelector(`:is(${FORM_CONTROL})[data-field][aria-invalid="true"]`) ||
+    wrapper.querySelector(`:is(${FORM_CONTROL})[data-field]`) ||
+    wrapper.querySelector(`:is(${FORM_CONTROL})[aria-invalid="true"]`) ||
+    wrapper.querySelector(FORM_CONTROL) ||
+    wrapper.querySelector(FOCUSABLE)
+  );
+}
+
+/**
  * The control of a field, found like the error summary finds it: by `id`,
  * `name` or `data-field`, for the path and then for each parent path
  * (`description.en`, then `description`).
@@ -57,7 +76,7 @@ function findFieldControl(path) {
     const element =
       document.getElementById(candidate) ||
       document.querySelector(`[name="${quoted}"], [data-field="${quoted}"]`);
-    if (element) return element.matches(FOCUSABLE) ? element : element.querySelector(FOCUSABLE);
+    if (element) return element.matches(FOCUSABLE) ? element : controlInside(element);
   }
   return null;
 }
@@ -110,6 +129,9 @@ function locateErrors(errors) {
  *   form reports through `onValidationChange`.
  * @param {object} [options.extra] - What `groupSummary` needs beyond the app
  *   (`models`, `language`, `access`); see there.
+ * @param {string} [options.view] - What decides which groups are rendered beyond
+ *   the app, such as the editor's mode (`'form'`, `'json'`). A focus request
+ *   whose group is not rendered waits, and is tried again when this changes.
  * @returns {{
  *   isOpen: function(string): boolean,
  *   toggle: function(string): void,
@@ -135,7 +157,7 @@ function locateErrors(errors) {
  * const groups = useEditorGroups({ app, errors: validationState.errors });
  * groups.open(groupOfField(groups.firstErrorField), { focus: groups.firstErrorField });
  */
-export function useEditorGroups({ app = null, errors, extra } = {}) {
+export function useEditorGroups({ app = null, errors, extra, view } = {}) {
   const [openIds, setOpenIds] = useState(initialOpenState);
   // A URL that names a group also moves the focus there, once the group is rendered.
   const [focusRequest, setFocusRequest] = useState(() => {
@@ -176,12 +198,14 @@ export function useEditorGroups({ app = null, errors, extra } = {}) {
   const collapseAll = useCallback(() => setOpenIds(allGroups(false)), []);
 
   // After the commit, so that the group is no longer hidden when it gets the
-  // focus. A request made before the app is loaded waits for it.
+  // focus. A request made before the app is loaded waits for it, and one for
+  // a group the current view does not render (the JSON editor) for the view
+  // that does.
   const loaded = Boolean(app);
   useEffect(() => {
     if (!focusRequest || handledRequestRef.current === focusRequest) return;
     if (moveFocus(focusRequest)) handledRequestRef.current = focusRequest;
-  }, [focusRequest, loaded]);
+  }, [focusRequest, loaded, view]);
 
   // A hash the author types or a plain link sets. A router link that only
   // changes the hash fires no event; in-app links call `open` instead.

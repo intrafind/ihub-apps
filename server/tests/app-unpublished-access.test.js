@@ -80,7 +80,7 @@ const GATED = 'app-unpublished-gated';
 const CALLER = 'app-caller';
 const UNKNOWN = 'app-does-not-exist';
 /** The marker of the unpublished app's texts: never in an answer to someone who may not get it. */
-const SECRET = 'UNPUBLISHED-SECRET-41c7';
+const SECRET = 'unpublished-test-marker-41c7';
 
 const MODELS = [
   {

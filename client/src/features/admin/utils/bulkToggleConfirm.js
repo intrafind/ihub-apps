@@ -165,3 +165,37 @@ export function buildBulkToggleConfirm({
 }
 
 export default buildBulkToggleConfirm;
+
+/** How many IDs, and how many characters of IDs, one request path carries at most. */
+const PATH_ID_LIMIT = 50;
+const PATH_ID_CHARS = 2000;
+
+/**
+ * Splits a list of IDs into parts that each fit into one request path
+ * (`/admin/apps/a,b,c/_toggle`). A path with every ID of a large installation
+ * exceeds what a reverse proxy (8 KB by default) and Node (16 KB) accept, and
+ * the whole request is then refused.
+ *
+ * @param {string[]} ids
+ * @param {{ maxIds?: number, maxChars?: number }} [limits]
+ * @returns {string[][]} The IDs in their order, in parts of at most `maxIds`
+ *   IDs and `maxChars` characters when joined with commas. An ID longer than
+ *   `maxChars` is a part of its own.
+ */
+export function chunkIdsForPath(ids, { maxIds = PATH_ID_LIMIT, maxChars = PATH_ID_CHARS } = {}) {
+  const parts = [];
+  let part = [];
+  let chars = 0;
+  for (const id of Array.isArray(ids) ? ids : []) {
+    const length = encodeURIComponent(String(id)).length + 1;
+    if (part.length > 0 && (part.length >= maxIds || chars + length > maxChars + 1)) {
+      parts.push(part);
+      part = [];
+      chars = 0;
+    }
+    part.push(id);
+    chars += length;
+  }
+  if (part.length > 0) parts.push(part);
+  return parts;
+}

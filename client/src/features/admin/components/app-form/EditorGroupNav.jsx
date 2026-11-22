@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useId } from 'react';
+import { useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { INPUT_CLASS, SECONDARY_BUTTON_CLASS } from '../formStyles';
 
@@ -12,12 +12,12 @@ import { INPUT_CLASS, SECONDARY_BUTTON_CLASS } from '../formStyles';
 const LAYOUT = {
   wide: {
     nav: 'mb-6 flex flex-wrap items-center gap-3 lg:sticky lg:top-4 lg:mb-0 lg:block',
-    select: 'min-w-0 flex-1 lg:hidden',
+    select: 'flex min-w-0 flex-1 items-center gap-2 lg:hidden',
     list: 'hidden lg:mt-3 lg:block'
   },
   compact: {
     nav: 'mb-6 flex flex-wrap items-center gap-3 2xl:sticky 2xl:top-4 2xl:mb-0 2xl:block',
-    select: 'min-w-0 flex-1 2xl:hidden',
+    select: 'flex min-w-0 flex-1 items-center gap-2 2xl:hidden',
     list: 'hidden 2xl:mt-3 2xl:block'
   }
 };
@@ -37,7 +37,10 @@ const ERROR_COUNT_CLASS =
  * focus to its header.
  *
  * On a narrow window the entries are a "Jump to section" select above the
- * form.
+ * form, with a "Go" button. Choosing an option moves nothing: on Windows and
+ * Linux every arrow key on a closed select changes its value, and a focus
+ * that left with the first key press would make the later sections
+ * unreachable. "Go", or Enter in the select, opens the chosen group.
  *
  * @param {object} props
  * @param {object} props.groups - The state of `useEditorGroups`.
@@ -52,6 +55,14 @@ function EditorGroupNav({ groups, compact = false }) {
   const layout = compact ? LAYOUT.compact : LAYOUT.wide;
   const jumpLabel = t('admin.apps.edit.jump');
   const openGroup = id => groups.open(id, { focus: true });
+  // The section chosen in the select, until "Go".
+  const [target, setTarget] = useState('');
+  const goToTarget = () => {
+    if (!target) return;
+    openGroup(target);
+    // The select is a menu: it shows its label again.
+    setTarget('');
+  };
 
   const entries = groups.groups.map(group => ({
     id: group.id,
@@ -79,11 +90,14 @@ function EditorGroupNav({ groups, compact = false }) {
         </label>
         <select
           id={selectId}
-          value=""
-          onChange={event => {
-            if (event.target.value) openGroup(event.target.value);
+          value={target}
+          onChange={event => setTarget(event.target.value)}
+          onKeyDown={event => {
+            if (event.key !== 'Enter' || !target) return;
+            event.preventDefault();
+            goToTarget();
           }}
-          className={INPUT_CLASS}
+          className={`${INPUT_CLASS} min-w-0 flex-1`}
         >
           <option value="">{jumpLabel}</option>
           {entries.map(entry => (
@@ -92,6 +106,9 @@ function EditorGroupNav({ groups, compact = false }) {
             </option>
           ))}
         </select>
+        <button type="button" onClick={goToTarget} className={SECONDARY_BUTTON_CLASS}>
+          {t('admin.apps.edit.jumpGo')}
+        </button>
       </div>
 
       <button

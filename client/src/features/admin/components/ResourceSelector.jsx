@@ -28,10 +28,10 @@ function ResourceSelector({
   selectedResources,
   onSelectionChange,
   allowWildcard = true,
-  placeholder = 'Search and select...',
-  emptyMessage = 'No items selected'
+  placeholder,
+  emptyMessage
 }) {
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
   // Localized names are stored under base languages, so `de-DE` reads `de`.
   const uiLanguage = i18n.language?.split('-')[0] || undefined;
   const [searchTerm, setSearchTerm] = useState('');
@@ -63,7 +63,7 @@ function ResourceSelector({
 
   // Get display names for selected resources
   const selectedResourcesWithNames = useMemo(() => {
-    if (isWildcard) return [{ id: '*', name: 'All (*)', isWildcard: true }];
+    if (isWildcard) return [{ id: '*', name: t('admin.resourceSelector.all'), isWildcard: true }];
 
     return selectedResources
       .map(id => {
@@ -71,7 +71,7 @@ function ResourceSelector({
         return resource ? { id, name: resource.name, isWildcard: false } : null;
       })
       .filter(Boolean);
-  }, [selectedResources, namedResources, isWildcard]);
+  }, [selectedResources, namedResources, isWildcard, t]);
 
   const handleWildcardToggle = checked => {
     if (checked) {
@@ -156,7 +156,9 @@ function ResourceSelector({
             ))}
           </div>
         ) : (
-          <p className="text-sm text-gray-500 dark:text-gray-400 italic">{emptyMessage}</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400 italic">
+            {emptyMessage ?? t('admin.resourceSelector.noneSelected')}
+          </p>
         )}
       </div>
 
@@ -171,7 +173,7 @@ function ResourceSelector({
               onChange={e => setSearchTerm(e.target.value)}
               onFocus={handleSearchFocus}
               onBlur={handleSearchBlur}
-              placeholder={placeholder}
+              placeholder={placeholder ?? t('admin.resourceSelector.placeholder')}
               className="w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-md shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-admin-accent focus:border-admin-accent sm:text-sm placeholder-gray-500 dark:placeholder-gray-300"
             />
             <Icon
@@ -204,7 +206,9 @@ function ResourceSelector({
                 ))
               ) : (
                 <div className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">
-                  {searchTerm ? 'No matching items found' : 'Start typing to search...'}
+                  {searchTerm
+                    ? t('admin.resourceSelector.noMatches')
+                    : t('admin.resourceSelector.startTyping')}
                 </div>
               )}
             </div>

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useImperativeHandle, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import MonacoJsonEditor from './MonacoJsonEditor';
 import Icon from './Icon';
@@ -30,6 +30,9 @@ import ConfirmDialog from './ConfirmDialog';
  * @param {Object} [props.savedValue] - The value as it is stored. When given, "Unsaved changes"
  *   compares with it and Reset goes back to it, so both follow a save made outside the editor.
  *   Without it they refer to the value the editor was mounted with, or last switched modes with.
+ * @param {React.RefObject} [props.controlRef] - Receives `{ switchMode(mode) }`, for a caller
+ *   that has to bring the editor into a mode itself (a link to a field of the form). It is
+ *   the click on the mode button: with unsaved changes the editor asks first.
  * @returns {React.Component} DualModeEditor component
  */
 const DualModeEditor = ({
@@ -46,7 +49,8 @@ const DualModeEditor = ({
   description: _description,
   showValidationSummary = true,
   className = '',
-  savedValue
+  savedValue,
+  controlRef
 }) => {
   const { t } = useTranslation();
   const { isDark } = useDarkMode();
@@ -93,6 +97,8 @@ const DualModeEditor = ({
       onModeChange(newMode);
     }
   };
+
+  useImperativeHandle(controlRef, () => ({ switchMode: handleModeSwitch }));
 
   /**
    * Handle data changes from form or JSON editor

@@ -8,8 +8,9 @@ import { LINK_BUTTON_CLASS } from './createStyles';
 import DraftExtras from './DraftExtras';
 
 /**
- * What the page says above either screen: that a draft came back after a
- * reload, and that the app to copy is gone or could not be loaded.
+ * What the page says above its screens: that a draft came back after a
+ * reload (either screen), and that the app to copy is gone or could not be
+ * loaded (Start screen only, where the author can still choose a start).
  *
  * @param {object} props
  * @param {object} props.state - The page's state (`useAppDraft`).
@@ -19,7 +20,10 @@ import DraftExtras from './DraftExtras';
  */
 function CreateNotices({ state, copy, onStartOver }) {
   const { t } = useTranslation();
-  const copyProblem = copy.status === 'gone' || copy.status === 'failed';
+  const copyProblem =
+    state.screen === 'start' && (copy.status === 'gone' || copy.status === 'failed')
+      ? copy.status
+      : null;
   if (!state.restored && !copyProblem) return null;
   return (
     <div className="mb-6 space-y-3">
@@ -31,12 +35,12 @@ function CreateNotices({ state, copy, onStartOver }) {
           </button>
         </p>
       )}
-      {copy.status === 'gone' && (
+      {copyProblem === 'gone' && (
         <p role="alert" className={CALLOUT_CLASS.warning}>
           {t('admin.apps.create.copy.sourceGone')}
         </p>
       )}
-      {copy.status === 'failed' && (
+      {copyProblem === 'failed' && (
         <p role="alert" className={CALLOUT_CLASS.warning}>
           {t('admin.apps.create.copy.loadError')}{' '}
           <button type="button" className={LINK_BUTTON_CLASS} onClick={copy.retry}>
@@ -60,6 +64,7 @@ function CreateNotices({ state, copy, onStartOver }) {
  * @param {(text: string) => void} props.onDescriptionChange
  * @param {(extras: object) => void} props.onExtrasChange
  * @param {(result: object, description: string) => void} props.onDraft
+ * @param {boolean} [props.creating] - The create request runs.
  * @param {() => void} props.onStartOver
  * @returns {JSX.Element|null}
  */
@@ -70,6 +75,7 @@ export function EssentialsNotice({
   onDescriptionChange,
   onExtrasChange,
   onDraft,
+  creating,
   onStartOver
 }) {
   const { t } = useTranslation();
@@ -86,6 +92,7 @@ export function EssentialsNotice({
         generate={generate}
         language={language}
         edited={state.edited}
+        creating={creating}
         onStartOver={onStartOver}
       />
     );

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import ConfirmDialog from '../../../../shared/components/ConfirmDialog';
 import Icon from '../../../../shared/components/Icon';
@@ -21,6 +21,9 @@ const isLeftOut = warning =>
 /** The label of an input field in the content language, else in any language, else its name. */
 const labelOf = (field, language) =>
   getLocalizedContent(field?.label, language, language) || field?.name;
+
+/** A draft as text, to tell whether the author changed it. */
+const snapshot = draft => JSON.stringify(draft ?? null);
 
 /** One checkbox row of the notice. */
 function Option({ checked, onChange, children, ...rest }) {
@@ -48,6 +51,12 @@ function Option({ checked, onChange, children, ...rest }) {
  *   while the instructions use one of the fields.
  * - Web search and connected systems are suggestions and start unticked.
  *
+ * A request can run for a long time, and the fields below stay editable
+ * meanwhile. An answer that arrives after the author changed the draft is
+ * held back until the author chose between it and those changes. A create
+ * request that starts meanwhile cancels the draft request: the author decided
+ * for the draft on the screen.
+ *
  * The component changes no draft. It reports what is ticked as `extras`, in
  * the shape `draftFromGenerated(result, extras)` takes, and hands a new
  * answer to `onDraft`. It makes no request of its own: `generate` is the call
@@ -69,6 +78,7 @@ function Option({ checked, onChange, children, ...rest }) {
  * @param {string} [props.language] - The content language of the draft; the UI language when absent.
  * @param {boolean|string[]|Set<string>} [props.edited=false] - Whether the author changed a
  *   field of the draft. If so, "Prepare a new draft" asks first.
+ * @param {boolean} [props.creating=false] - The create request runs; a draft request is cancelled.
  * @param {() => void} [props.onStartOver] - Shows "Start over" when given.
  * @returns {JSX.Element}
  */
@@ -83,23 +93,38 @@ function DraftExtras({
   generate,
   language,
   edited = false,
+  creating = false,
   onStartOver
 }) {
   const { t, i18n } = useTranslation();
   const baseId = useId();
   const contentLanguage = language ?? i18n?.language;
   const [confirming, setConfirming] = useState(false);
+  // An answer that waits for the author's choice: `{ next, sent }`, or null.
+  const [held, setHeld] = useState(null);
   const [arrived, setArrived] = useState(false);
   const regenerateRef = useRef(null);
+  // The draft now, and the draft the running request was started from.
+  const draftRef = useRef(draft);
+  const sentFromRef = useRef(null);
+  useEffect(() => {
+    draftRef.current = draft;
+  });
 
   const { pending, error, start, cancel, clearInputError } = useDraftRequest({
     generate,
     language: contentLanguage,
     onDraft: (next, sent) => {
       setArrived(true);
-      onDraft(next, sent);
+      // What the author changed while waiting is not replaced without asking.
+      if (snapshot(draftRef.current) !== sentFromRef.current) setHeld({ next, sent });
+      else onDraft(next, sent);
     }
   });
+
+  useEffect(() => {
+    if (creating) cancel();
+  }, [creating, cancel]);
 
   const introId = `${baseId}-intro`;
   const fieldId = `${baseId}-description`;
@@ -142,11 +167,12 @@ function DraftExtras({
 
   const begin = () => {
     setArrived(false);
-    start(description);
+    sentFromRef.current = snapshot(draftRef.current);
+    void start(description);
   };
 
   const handleRegenerate = () => {
-    if (pending) return;
+    if (pending || creating) return;
     // A description that cannot be sent is reported first; nothing would be replaced.
     if (hasEdits && !descriptionProblem(description)) setConfirming(true);
     else begin();
@@ -290,6 +316,18 @@ function DraftExtras({
           begin();
         }}
         onDeny={() => setConfirming(false)}
+      />
+      <ConfirmDialog
+        isOpen={held !== null}
+        title={t('admin.apps.create.draft.arrived.title')}
+        message={t('admin.apps.create.draft.arrived.body')}
+        confirmLabel={t('admin.apps.create.draft.arrived.use')}
+        denyLabel={t('admin.apps.create.draft.arrived.keep')}
+        onConfirm={() => {
+          setHeld(null);
+          onDraft(held.next, held.sent);
+        }}
+        onDeny={() => setHeld(null)}
       />
     </section>
   );

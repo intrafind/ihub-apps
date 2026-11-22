@@ -24,6 +24,11 @@ const LINK_CLASS =
  * @param {() => void} props.onPublish - "Publish".
  * @param {() => void} props.onDismiss - "Hide these steps".
  * @param {boolean} [props.published=false] - The app is published; "Publish" is then left out.
+ * @param {string[]|null} [props.groupIds] - The editor groups this app has. A step that
+ *   opens another group is left out (a link app has no instructions). Without it every
+ *   step is shown.
+ * @param {boolean} [props.canTest=true] - The app can be tried in the test chat; "Test it"
+ *   is left out for an app that cannot (a link app).
  * @param {boolean} [props.focusHeading=false] - Move the focus to the heading when the card
  *   appears (the author just arrived from creating the app).
  * @param {string|null} [props.guideHref] - The guide "Build your first app", for someone who
@@ -36,6 +41,8 @@ function NextStepsCard({
   onPublish,
   onDismiss,
   published = false,
+  groupIds = null,
+  canTest = true,
   focusHeading = false,
   guideHref = null
 }) {
@@ -47,7 +54,11 @@ function NextStepsCard({
     if (focusHeading) headingRef.current?.focus();
   }, [focusHeading]);
 
-  const steps = NEXT_STEPS.filter(step => !(published && step.id === 'publish'));
+  const steps = NEXT_STEPS.filter(step => {
+    if (step.group) return !groupIds || groupIds.includes(step.group);
+    if (step.id === 'publish') return !published;
+    return canTest;
+  });
   const choose = step => {
     if (step.group) onOpenGroup(step.group);
     else if (step.id === 'publish') onPublish();
