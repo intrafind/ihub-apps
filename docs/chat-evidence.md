@@ -79,6 +79,9 @@ Answers stored before the release, or while the switch was off, have no record. 
     "args": "sha256:…", "result": "sha256:…",
     "resultSource": "spill" | "message" | "preview", "partial": true,
     "resultBytes": 12345, "error": { … }, "durationMs": 120, "startedAt": "…", "endedAt": "…" } ],
+  "steers": [ {                                // messages the person sent while the answer was written
+    "id": "…", "step": 2, "by": "…",             // read at this step; by: the sender as the ledger records them
+    "sentAt": "…", "readAt": "…", "content": "sha256:…" } ],
   "errors": [ { "step": 2, "code": "…", "message": "…" } ],
   "knowledge": [ { "projectId": "…", "mode": "loaded", "documents": 3 } ],
   "truncated": [ { "sha256": "…", "bytes": 20000000, "truncated": true } ],
@@ -106,6 +109,15 @@ Answers stored before the release, or while the switch was off, have no record. 
 - Tool labels (`title`, `integration`, `activityKind`, `activityOrigin`) are copied from the
   `tool/call` event; the record never infers them. Records written before the old
   `activityScope` was removed still carry it.
+- `steers` lists every message the person sent into the running answer that the answer read
+  (`POST /api/runs/{runId}/human-events`, `kind: 'steer'`; see
+  [Run ledger, Human events](run-ledger.md#human-events)): its id, the step it was read at, the
+  sender in the run's identity mode (a pseudonym in that mode), when it was sent and read, and
+  what the person wrote. It is built from the journal's `message/user { synthetic: 'steer' }`
+  events; a workflow's answer to a question and the loop's own nudges carry no id and are not in
+  it. The message is in the calls' messages too, as the model read it (behind the `[steer]`
+  marker). A message that was removed, dropped or sent as the next turn is not read in this
+  answer and is not listed; one sent as the next turn is the question of the next answer.
 - `knowledge` is phase 1: which projects the turn reached and how. The passages themselves are in
   the system prompt.
 - `content` maps every `sha256:` item the record names to the answer whose pack holds it (for a

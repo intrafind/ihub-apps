@@ -838,7 +838,7 @@ with the other public API prefixes (500 requests/minute/IP by default).
 | Method & path            | Purpose                                                                    |
 | ------------------------ | -------------------------------------------------------------------------- |
 | `GET /api/chats`         | The caller's kept chats, most recent activity first. `?limit` (default 30, max 100) and `?cursor` |
-| `GET /api/chats/:chatId` | `{ chat, messages, version }` — the transcript, and clears `hasUnseenActivity` |
+| `GET /api/chats/:chatId` | `{ chat, messages, version }` — the transcript, and clears `hasUnseenActivity`. With the feature `steering` on also `pending` and `maySteer`, see [Messages for the running answer](#messages-for-the-running-answer) |
 | `GET /api/chats/:chatId/artifacts` | What this chat's turns produced, newest first, as descriptors |
 | `GET /api/chats/:chatId/artifacts/:artifactId` | The bytes of one artifact, as its own media type |
 | `GET /api/chats/:chatId/artifacts/:artifactId/provenance` | What the provider embedded in a generated image (its Content Credentials); `404` when no record was kept |
@@ -862,6 +862,43 @@ and `PATCH { temporary: false }` answer `503` with
 tell "not configured" from "not found" and hide the history. Reading, the
 artifacts, `DELETE` and every other `PATCH` (rename, projects) answer as long as
 storage is up: they are what temporary chats need.
+
+## Messages for the running answer
+
+While an answer is written, its owner can send messages into it
+(`POST /api/runs/{runId}/human-events`, `kind: 'steer'`; see
+[Run ledger, Human events](run-ledger.md#human-events)). The chat stores and lists them like this:
+
+- **Read at a step.** A message the answer read is stored as a user message of the answer's run,
+  between its question and its answer: `{ role: 'user', content, steer: true, runId,
+  appliedAtStep, steerId }`. It follows the chat's retention and deletion, an edit or a
+  regenerate before it removes it like any message, and later turns read it as the model read it
+  then, behind the `[steer]` marker.
+- **Left over.** A message the answer did not read before it ended (one sent during its last model
+  call, every message sent with `mode: 'afterwards'`) becomes the next turn. The server takes it
+  where the answer lets go of the chat, under the chat lock and only while that answer still holds
+  the chat, and claims the chat for the next turn in the same write: of two server processes and
+  two requests exactly one has it, and the client never sends it again. Several steers the answer
+  did not read are one question; a send-afterwards message is a question of its own, and what was
+  queued behind it waits in the next turn. The next turn runs with the chat's settings and is
+  told on the chat's stream (`GET /api/apps/{appId}/chat/{chatId}`), as a turn without a stream of
+  its own.
+- **Dropped.** Nothing is started, and the client is told `steer/dropped` with the reason, when the
+  answer stopped for a question or an approval (`run_paused`), was stopped (`run_stopped`), failed
+  (`run_failed`), was replaced by a newer message (`superseded`), or ran in a temporary or guest
+  chat (`temporary_chat`): the server starts no turn of its own in a chat that ends when its reader
+  leaves. The frame carries the text, so the client can give it back to the person. Until the
+  chat input offers the feature, nothing in the chat shows a dropped message.
+- **Read model.** With the feature `steering` (Admin → Features, preview, off by default) on,
+  `GET /api/chats/:chatId` also answers `pending`, the messages that wait for the chat's running
+  answer, oldest first, each `{ id, kind: 'steer' | 'send_after', text, labelKey, actions }`
+  (`actions` is `['remove']` for the owner and empty for anybody else who may read the chat, such
+  as an admin), and `maySteer`, true for the chat's owner. A client that attaches again rebuilds
+  what waits from `pending` alone. With the feature off neither field is sent; a client reads that
+  as nothing pending and `maySteer: false`. The run routes work either way.
+- **Lost on a restart.** The queue is held in the memory of the server process that runs the
+  answer. A restart of that process loses what waits; `pending` is empty afterwards and no frame
+  says so.
 
 ## What a turn produced
 

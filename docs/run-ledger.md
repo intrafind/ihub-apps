@@ -240,6 +240,7 @@ window, not the history.
 | `GET /api/runs/:runId/interactions`                       | owner or admin            | Interactions of a run                                          |
 | `POST /api/runs/:runId/interactions/:interactionId/answer`| owner, or approver group  | Answer a question / approval / review                          |
 | `POST /api/runs/:runId/human-events`                      | owner; `stop` also admin (audited) | Deliver a `steer`, `stop` or `feedback` event into the run |
+| `DELETE /api/runs/:runId/human-events/:id`                | owner                     | Remove a queued message before the answer reads it: `204`, `409 STEER_ALREADY_APPLIED` once read or sent as the next turn |
 | `GET /api/interactions/pending`                           | authenticated             | Queue of interactions the caller may see: their own, those of their approver groups, and for an admin all of them. An admin sees more than an admin may answer |
 
 ### Who may do what with a run
@@ -257,6 +258,7 @@ are not covered; see [Routes with their own check](#routes-with-their-own-check)
 | rate an answer (`feedback`)                      | yes   | no                         | no                                    |
 | answer a question or an approval                 | yes   | only for a run that belongs to no person | no                      |
 | send a message into the running answer (`steer`) | yes   | no                         | no                                    |
+| remove such a message before it is read          | yes   | no                         | no                                    |
 
 A refusal is `403 FORBIDDEN`; for a `steer` it is `403 RUN_STEER_FORBIDDEN`. A run nobody recorded
 is `404 NOT_FOUND` for every caller.
@@ -361,7 +363,7 @@ neither do admin rights.
 
 | `kind`     | Body                                      | Effect                                                                                       |
 | ---------- | ----------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `steer`    | `{ message }`                             | Delivered into the running loop at its next step boundary as a `[steer]`-marked user message (queued on the worker that owns the run, relayed there in a cluster; `effect: steer_queued` / `steer_relayed`); without an active loop it is recorded only |
+| `steer`    | `{ message, mode? }`                      | A message into the running answer, with an `id` minted by the route. `mode: 'steer'` (default): read at the next step boundary as a `[steer]`-marked user message; `mode: 'afterwards'`: sent as the next turn when the answer ends. Queued on the worker that owns the run, which is asked over the cluster bus (`effect: steer_queued` / `steer_relayed`). The answer is `{ runId, seq, id, effect }`; without an active loop the event is recorded only and the answer has neither `id` nor `effect` |
 | `stop`     | –                                         | Aborts the run: a chat run's active model call (and any workflow it launched), or the engine cancels the execution (relayed to the worker running it in a cluster). Only the run currently producing on its chat is aborted; a `stop` on a run that has ended, or that is no longer bound to the chat's stream, is recorded without a side effect |
 | `feedback` | `{ rating?, message?, messageId? }`       | Recorded; the chat feedback form sends the same event through `POST /api/feedback` (`runId`) |
 
@@ -378,6 +380,39 @@ an admin (see [Who may do what with a run](#who-may-do-what-with-a-run)). Three 
   address for a caller who is not signed in) and is shared by the server processes of one
   server (`WORKERS`); several servers behind a load balancer each keep their own count.
 - **Only the owner.** Anyone else, an admin included, gets `403 RUN_STEER_FORBIDDEN`.
+
+What becomes of a `steer` (`services/loop/steering.js`):
+
+- **Its id.** The route mints it before the message is relayed, records it on the event
+  (`human/event { kind: 'steer', steerId, mode }`) and answers it. The status stays `200`, as the
+  route always answered: the event is recorded whether or not a running answer took it.
+- **Read.** The loop reads waiting steers before each model call, after every tool call of the
+  previous step has its result, so a message never lands between a call and its result or inside
+  a batch of calls that ran side by side. The journal records it as
+  `message/user { synthetic: 'steer', steerId, text, by, at, step }`, and the chat stream is told
+  `steer/applied { id, step }` ([Streaming Events](streaming-events.md#messages-for-the-running-answer)).
+  The person's origin is metadata on the message (`_origin: 'person'`, `_steerId`); the marker is
+  rendered from it. The literal `[steer]` in a tool result, an uploaded file or a host item (an
+  email, a page) is rewritten to `(steer)` before the model reads it (`shared/steerMarker.js`),
+  so no other text poses as the person. A workflow's answer to a question carries no id and is
+  never reported as a message of the person.
+- **Removed.** `DELETE /api/runs/:runId/human-events/:id` removes a waiting message of the
+  caller's own: `204`, and it is never read; the removal is recorded as
+  `human/event { kind: 'steer', steerId, removed: true }`. A message already read, or sent as the
+  next turn, answers `409 STEER_ALREADY_APPLIED`; one that does not wait (removed, dropped, never
+  queued, or of another run) `404`. Only the queue of the named run is searched, and only a
+  message the caller sent. In a cluster the worker that runs the answer is asked over the bus;
+  when it does not answer, `503` (try again). The owner's right decides, as for sending: another
+  user and an admin get `403 RUN_STEER_FORBIDDEN`.
+- **Left over.** What waits when the answer ends is taken in one step with the release of the
+  chat, under the chat lock: it becomes the next turn of a kept chat, or is dropped with a reason
+  (see [Chat persistence, Messages for the running answer](chat-persistence.md#messages-for-the-running-answer)).
+  A message sent after that answers without `id` (no running answer took it); the client sends it
+  as a new message.
+- **Lifetime.** A steer waits at most 10 minutes, a send-afterwards message at most 2 hours, and at
+  most 20 messages wait per run (the oldest is dropped beyond that). Every drop is told
+  (`steer/dropped`). The queue is in the memory of the worker that runs the answer: a restart
+  loses it.
 
 The chat stop button records a `stop` event on the run bound to the chat
 stream; answers are recorded as `interaction/answered`, not as human events.
