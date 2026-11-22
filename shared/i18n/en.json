@@ -7772,6 +7772,80 @@
       "all": "All (*)",
       "noMatches": "Nothing matches your search.",
       "startTyping": "Type to search."
+    },
+    "userApps": {
+      "tab": "Personal apps",
+      "tabWaiting": "Personal apps · {{count}} waiting",
+      "featureOff": "Personal apps are switched off. Switch them on under Features.",
+      "featureOn": "Personal apps are switched on.",
+      "filter": {
+        "all": "All",
+        "everyone": "Shared with everyone",
+        "ownerInactive": "Owner inactive",
+        "ownerStale": "Owner rights stale",
+        "waiting": "Published, not switched on"
+      },
+      "waiting": {
+        "row": "Published {{age}} ago, not switched on",
+        "open": "Open company app",
+        "notice": "{{count}} apps published by users are not switched on yet."
+      },
+      "takeOver": {
+        "action": "Take over as app…",
+        "title": "Take over \"{{name}}\" as an app?",
+        "willUse": "The new app will be able to:",
+        "dropped": "Not taken over: {{list}}",
+        "plain": "The owner's rights could not be checked. The new app is created without web search, files, skills and connected systems.",
+        "notPublished": "The app is created as \"Not published\". You test it and publish it in the app editor.",
+        "owner": "{{owner}} can no longer change the personal app.",
+        "users": "{{count}} people use the personal app today. It keeps working for each of them until they can use the new app.",
+        "submit": "Take over"
+      },
+      "noAccess": "{{count}} of {{total}} members cannot use the company app.",
+      "release": {
+        "action": "Give back to the owner",
+        "published": "Unpublish or delete the company app first."
+      },
+      "changed": "The app changed since you opened it. Check it again.",
+      "disable": {
+        "action": "Switch off",
+        "body": "Nobody can use the app while it is switched off. The owner sees your reason."
+      },
+      "enable": {
+        "action": "Switch on"
+      },
+      "offerOwner": "Offer to a new owner",
+      "revisions": "Earlier versions",
+      "clash": "ID clash: an app file has the same ID. Rename the file or delete this app.",
+      "settings": {
+        "title": "Personal app settings",
+        "shareWith": "Users may share their apps with",
+        "allowUsers": "Specific users",
+        "allowGroups": "Groups",
+        "allowEveryone": "Everyone signed in",
+        "allowPublish": "Publishing as a company app",
+        "allowPublishHelp": "Owners publish an app with one click. It becomes an app that administrators manage. An app with web search, skills or a connected system stays switched off until an administrator switches it on.",
+        "adminEnablesAlways": "Every published app stays switched off until an administrator switches it on",
+        "permissionHint": "Users also need the \"userAppSharing\" permission of their group.",
+        "groupsCreate": "Groups with \"Personal apps\": {{list}}",
+        "groupsShare": "Groups with \"Sharing personal apps\": {{list}}",
+        "limits": "Limits of personal apps",
+        "max": "Apps per person",
+        "mayUse": "Personal apps may use",
+        "integrationsHelp": "A personal app can use the functions you tick here, for people whose groups may use that system. People who did not write the app are asked before every step.",
+        "blocked": "People whose apps are switched off"
+      },
+      "groups": {
+        "userApps": "Personal apps",
+        "userAppSharing": "Sharing personal apps",
+        "userAppsHint": "Allow members to create apps of their own (needs the Personal apps feature). Inherited by groups that inherit this one.",
+        "userAppSharingHint": "Allow members to share the apps they own or edit, and to publish the apps they own."
+      },
+      "user": {
+        "count": "Personal apps: {{count}} ({{shared}} shared)",
+        "block": "Switch off all apps of this person",
+        "blockBody": "The person's apps stop for everyone, and the person cannot create new ones. You can undo this in the settings."
+      }
     }
   },
   "cloudStorage": {
@@ -11803,7 +11877,13 @@
     "ADMIN_CHECK_FAILED": "Could not verify that an administrator keeps access, so nothing was changed. Please try again.",
     "PRECONDITION_FAILED": "This configuration was changed after you opened it (by another administrator, another tab or a script). Nothing was saved, and your changes are still on the page. Reload to see the current version, then apply your changes again.",
     "APP_GENERATOR_NO_MODEL": "No AI model is available to you, so a draft cannot be prepared.",
-    "APP_GENERATOR_INVALID_ANSWER": "The AI's draft could not be used."
+    "APP_GENERATOR_INVALID_ANSWER": "The AI's draft could not be used.",
+    "USER_APPS_DISABLED": "Personal apps are switched off on this installation.",
+    "USER_APPS_UNAVAILABLE": "Personal apps are not available right now. Try again later.",
+    "QUOTA_USER_APPS": "The limit of personal apps is reached.",
+    "QUOTA_USER_APP_OFFERS": "Too many open offers.",
+    "USER_APP_CAPABILITY_DENIED": "The app cannot use this. Remove it and save again.",
+    "USER_APP_ACCESS_CHANGED": "Your access to this app changed. Reload the page."
   },
   "workspace": {
     "backTo": "Back to {{name}}",
@@ -11937,5 +12017,134 @@
     "loadFailed": "The notice could not be loaded. Check your connection and try again.",
     "cookieBlocked": "Your browser blocks cookies in this frame, so the confirmation cannot be kept here. Open iHub in its own tab to confirm.",
     "openInBrowser": "Open iHub in the browser"
+  },
+  "userApps": {
+    "list": {
+      "new": "New app",
+      "scope": {
+        "all": "All",
+        "mine": "My apps",
+        "shared": "Shared with me"
+      },
+      "badge": {
+        "mine": "Mine",
+        "offered": "Offered to you"
+      },
+      "empty": {
+        "mine": "You have no apps of your own yet. An app is an assistant for one task, for example \"Write a job ad from my notes\".",
+        "shared": "Nobody has shared an app with you yet."
+      },
+      "menu": {
+        "edit": "Edit",
+        "share": "Share",
+        "duplicate": "Duplicate",
+        "delete": "Delete",
+        "leave": "Leave"
+      },
+      "limitReached": "You have {{max}} apps, which is the limit. Delete one to create a new one."
+    },
+    "create": {
+      "stateLine": "Only you can see the app until you share it.",
+      "limits": "An app of your own cannot use a document collection yet. It can work with text you paste or a file a user attaches.",
+      "created": "App \"{{name}}\" created"
+    },
+    "edit": {
+      "state": {
+        "private": "Only you",
+        "shared": "Shared with {{count}} people",
+        "everyone": "Shared with everyone",
+        "promoted": "Now with the administrators",
+        "offered": "Offered to {{owner}}",
+        "disabled": "Switched off by an administrator"
+      },
+      "extras": {
+        "title": "What the app may use",
+        "model": "AI model",
+        "upload": "Users can attach files",
+        "webSearch": "Web search",
+        "webSearchHelp": "Each person switches web search on in their chat. Other people are asked before every search and every page the app opens.",
+        "skills": "Skills",
+        "integrations": "Connected systems",
+        "approvalHelp": "When someone else uses your app, it asks them before every step in a connected system. In your own chats it asks before it changes something.",
+        "gone": "{{capability}} is no longer available for your apps. The app runs without it.",
+        "remove": "Remove"
+      },
+      "conflict": "Someone else changed this app. Reload to see the changes.",
+      "readOnly": {
+        "ownerInactive": "The owner's account is inactive. Only an administrator can change this app.",
+        "promoted": "This app became a company app on {{date}}. Administrators manage it now. You can no longer change it here.",
+        "disabled": "An administrator switched this app off: {{reason}}",
+        "capability": "This app uses {{capability}}, which you may not use. You can use the app but not change it."
+      },
+      "delete": {
+        "title": "Delete \"{{name}}\"?",
+        "body": "The app is removed for you and for everyone you shared it with. Chats stay in the chat history and cannot be continued."
+      }
+    },
+    "share": {
+      "title": "Share \"{{name}}\"",
+      "help": "People you share with can use the app and read its instructions. The app can do for them only what you and they are both allowed to do. Before it searches the web or uses a connected system for them, it asks them.",
+      "private": "Not shared. Only you can use this app.",
+      "role": {
+        "user": "Can use",
+        "editor": "Can edit"
+      },
+      "everyone": "Everyone signed in",
+      "copyLink": "Copy link",
+      "linkCopied": "Link copied",
+      "notAllowed": "You cannot share apps. Ask an administrator."
+    },
+    "publish": {
+      "action": "Publish",
+      "titleNow": "Publish \"{{name}}\" for everyone?",
+      "titleLater": "Publish \"{{name}}\"?",
+      "bodyNow": "The app becomes a company app. Everyone who may use the company's apps sees it right away.",
+      "bodyLaterTools": "The app becomes a company app. Because it uses {{list}}, an administrator checks it and switches it on.",
+      "bodyLaterAlways": "The app becomes a company app. An administrator checks it and switches it on.",
+      "willUse": "The company app will be able to:",
+      "dropped": "Not taken over: {{list}}",
+      "plain": "Your rights could not be checked. The company app is created without web search, files, skills and connected systems.",
+      "managed": "From now on administrators manage the app. You can no longer change it, and you cannot take it back.",
+      "membersNow": "People you shared it with are sent to the company app.",
+      "membersLater": "Your app keeps working for you and the people you shared it with until they can use the company app.",
+      "submit": "Publish",
+      "waiting": "Published on {{date}}. An administrator has not switched the company app on yet. Your app keeps working until then.",
+      "changed": "Someone else changed this app. Reload and check it before you publish.",
+      "retired": {
+        "title": "This app is now a company app.",
+        "open": "Open \"{{name}}\"",
+        "chats": "Your earlier chats stay in your chat history."
+      }
+    },
+    "transfer": {
+      "action": "Hand over",
+      "title": "Hand over \"{{name}}\" to {{owner}}?",
+      "line1": "{{owner}} is asked to take the app over. Until {{owner}} accepts, you stay the owner and nothing changes.",
+      "line2": "After that, {{owner}} can change, share and delete the app. Everyone with \"Can edit\" gets \"Can use\".",
+      "line3": "You keep no access unless {{owner}} shares it with you.",
+      "submit": "Ask {{owner}}",
+      "withdraw": "Withdraw",
+      "received": "{{from}} wants to hand this app over to you.",
+      "receivedDuty": "As the owner you answer for what it does. Read the instructions below.",
+      "receivedMembers": "It is shared with: {{list}}",
+      "receivedEditors": "People with \"Can edit\" will only be able to use it.",
+      "try": "Try it",
+      "decline": "Decline",
+      "accept": "Take over",
+      "changed": "The app was changed after you opened it. Read it again.",
+      "tooMany": "You have {{max}} open offers. Withdraw one first."
+    },
+    "notice": {
+      "ownedBy": "{{owner}} owns this app. Administrators have not checked it.",
+      "mayUse": "It may use: {{list}}.",
+      "switchOn": "you switch it on in the chat",
+      "asksFirst": "It asks you before every search and every page it opens.",
+      "asksFirstSystems": "It asks you before every step in a connected system.",
+      "notForYou": "Not available to you here: {{list}}.",
+      "unavailable": "Not available in this app right now: {{list}}.",
+      "showInstructions": "Show instructions",
+      "collapsed": "Personal app by {{owner}}",
+      "suspended": "This app is not available at the moment. Ask {{owner}} or an administrator."
+    }
   }
 }

@@ -19,6 +19,7 @@
  * @module services/chat/transcriptionTurn
  */
 import configCache from '../../configCache.js';
+import { isUnresolvedUserAppId, resolveAppForChat } from '../userApps/resolveApp.js';
 import logger from '../../utils/logger.js';
 import runLog from '../loop/RunLog.js';
 import { resolvePrincipal } from '../loop/runIdentity.js';
@@ -86,7 +87,12 @@ export async function beginTranscriptionTurn({
 }) {
   if (!chatId || !appId || !isPersistableChatId(chatId)) return { ok: true, turn: null };
   if (!storage?.stored || !repository) return { ok: true, turn: null };
-  if (!appPermitted(user, appId)) return { ok: false, code: 'not-permitted' };
+  // The app of the turn, decided for this user. A personal app (feature
+  // `userApps`) is granted by its owner and its shares, not by the group
+  // permission; one the user cannot use is refused like an app they may not.
+  const found = await resolveAppForChat(appId, user);
+  if (isUnresolvedUserAppId(appId, found)) return { ok: false, code: 'not-permitted' };
+  if (!found?.userApp && !appPermitted(user, appId)) return { ok: false, code: 'not-permitted' };
   const access = await authorizeChat(chatId, user, { repository, intent: 'write' });
   if (!access.ok) return { ok: false, code: 'not-permitted' };
   // The container project, checked against the caller's access the way the
@@ -95,7 +101,7 @@ export async function beginTranscriptionTurn({
   const chatProjects = await resolveChatProjects({
     req: { user },
     chat: access.chat,
-    app: configCache.getAppForRequest(appId, user),
+    app: found?.app || null,
     projectId
   });
   if (!chatProjects.ok) {

@@ -764,10 +764,21 @@ describe('RequestBuilder.prepareChatRequest', () => {
       route.match(/\bresolvedApp\b.*/g).filter(line => !line.includes('`')),
       ['resolvedApp: requestApp']
     );
+    // The route asks the resolver of personal apps (increment 2), which hands
+    // an admin app to `getAppForRequest` unchanged: nothing of the request
+    // but the path's id and the signed-in user decides.
+    assert.equal(route.match(/const requestApp = (.*);/)?.[1], 'appForChat?.app ?? null');
     assert.equal(
-      route.match(/const requestApp = (.*);/)?.[1],
-      'configCache.getAppForRequest(appId, req.user)'
+      route.match(/const appForChat = (.*);/)?.[1],
+      'await resolveAppForChat(appId, req.user, { req })'
     );
+    const resolver = fsSync.readFileSync(
+      path.join(repoRoot, 'server/services/userApps/resolveApp.js'),
+      'utf8'
+    );
+    assert.deepEqual(resolver.match(/configCache\.getAppForRequest\((.*?)\)/g), [
+      'configCache.getAppForRequest(appId, user)'
+    ]);
   });
 });
 

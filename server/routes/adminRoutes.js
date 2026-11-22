@@ -15,6 +15,7 @@ import registerAdminModelsRoutes from './admin/models.js';
 import registerAdminProvidersRoutes from './admin/providers.js';
 import registerAdminPromptsRoutes from './admin/prompts.js';
 import registerAdminProjectsRoutes from './admin/projects.js';
+import registerAdminUserAppRoutes from './admin/userApps.js';
 import registerAdminGroupRoutes from './admin/groups.js';
 import registerAdminContentAccessRoutes from './admin/contentAccess.js';
 import registerAdminTranslateRoute from './admin/translate.js';
@@ -87,6 +88,11 @@ export default async function registerAdminRoutes(app) {
   registerAdminProvidersRoutes(app);
   registerAdminPromptsRoutes(app);
   registerAdminProjectsRoutes(app);
+  // P12 REGISTRATION POINT (personal apps, publish): import
+  // `registerAdminUserAppPublishRoutes` from './admin/userAppPublish.js' and
+  // call it on this line, before the routes below, so that `_waiting`,
+  // `_promote` and `_release` are matched first.
+  registerAdminUserAppRoutes(app);
   registerAdminGroupRoutes(app);
   registerAdminContentAccessRoutes(app);
   registerAdminTranslateRoute(app);

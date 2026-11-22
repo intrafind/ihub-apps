@@ -13,6 +13,7 @@ import { buildServerPath } from '../../utils/basePath.js';
 import { ServiceError } from '../../utils/ServiceError.js';
 import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
 import { canUserAccessResource } from '../../utils/authorization.js';
+import { isUnresolvedUserAppId, resolveAppForChat } from '../../services/userApps/resolveApp.js';
 
 /** The `config` block of an app's preferred model, or an empty object. */
 function preferredModelConfig(app) {
@@ -78,14 +79,22 @@ export default function registerConversationRoutes(app) {
       const { appId, conversationId } = req.params;
       const user = req.user;
 
-      const appConfig = configCache.getAppForRequest(appId, user);
+      const found = await resolveAppForChat(appId, user, { req });
+      const appConfig = found?.app || null;
       // This route has never checked the group permission of a published app,
       // and still does not. An app that is not published exists only for a
       // content admin whose groups grant it, as in the chat: for anyone else
       // the answer is the one an unknown id gets.
       const hidden =
-        appConfig?.enabled === false && !canUserAccessResource(user, 'apps', appConfig.id);
-      if (!appConfig || hidden) {
+        !found?.userApp &&
+        appConfig?.enabled === false &&
+        !canUserAccessResource(user, 'apps', appConfig.id);
+      // A personal app the caller can no longer use (deleted, unshared,
+      // switched off): the conversation is still the caller's own, and
+      // deleting it stays possible. Nothing of the app is read for it; the
+      // address comes from the installation's own settings.
+      const ownConversationOnly = isUnresolvedUserAppId(appId, found);
+      if ((!appConfig && !ownConversationOnly) || hidden) {
         throw new ServiceError('NOT_FOUND', 'App not found');
       }
 

@@ -129,6 +129,17 @@ export const featureRegistry = [
     preview: true
   },
   {
+    id: 'userApps',
+    name: { en: 'Personal apps', de: 'Persönliche Apps' },
+    description: {
+      en: 'Apps users build themselves, share with roles and publish',
+      de: 'Apps, die Benutzer selbst erstellen, mit Rollen teilen und veröffentlichen'
+    },
+    category: 'preview',
+    default: false,
+    preview: true
+  },
+  {
     id: 'compareMode',
     name: { en: 'Compare Mode', de: 'Vergleichsmodus' },
     description: {

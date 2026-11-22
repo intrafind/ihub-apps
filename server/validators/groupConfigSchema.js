@@ -32,7 +32,11 @@ export const groupConfigSchema = z
         // May create projects of their own (feature `userProjects`, #1036).
         projects: z.boolean().prefault(false),
         // May add members to the projects they own or edit.
-        projectSharing: z.boolean().prefault(false)
+        projectSharing: z.boolean().prefault(false),
+        // May create personal apps (feature `userApps`).
+        userApps: z.boolean().prefault(false),
+        // May add members to the personal apps they own or edit, and publish the ones they own.
+        userAppSharing: z.boolean().prefault(false)
       })
       .prefault({}),
     mappings: z.array(z.string()).prefault([]),

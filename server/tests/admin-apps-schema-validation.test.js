@@ -166,6 +166,25 @@ describe('POST /api/admin/apps', () => {
     expect(res.status).toBe(400);
     expect(res.body.detail).toBe('Missing required fields');
   });
+
+  // The shape `uap_` plus 32 hex characters belongs to personal apps: no write
+  // path may create an app file with it.
+  test('refuses an ID of the shape reserved for personal apps and stores nothing', async () => {
+    const personalId = 'uap_3f9c2a0b1d4e5f60718293a4b5c6d7e8';
+    const res = await request(app).post('/api/admin/apps').send(chatApp(personalId));
+
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('VALIDATION_FAILED');
+    expect(res.body.detail).toContain('id: This ID is reserved for personal apps');
+    expect(store[`apps/${personalId}.json`]).toBeUndefined();
+  });
+
+  test('accepts an ID that only starts with the prefix of personal apps', async () => {
+    const res = await request(app).post('/api/admin/apps').send(chatApp('uap_helper'));
+
+    expect(res.status).toBe(201);
+    expect(store['apps/uap_helper.json']).toEqual(chatApp('uap_helper'));
+  });
 });
 
 describe('POST /api/admin/apps?origin=', () => {

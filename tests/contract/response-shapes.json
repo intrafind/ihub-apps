@@ -1292,6 +1292,30 @@
         "feedbackRetentionDays": "number",
         "monthlyRetentionDays": "number"
       },
+      "userApps": {
+        "blockedOwners": [],
+        "capabilities": {
+          "integrations": [],
+          "modelChoice": "boolean",
+          "skills": "boolean",
+          "upload": "boolean",
+          "webSearch": "boolean"
+        },
+        "limits": {
+          "maxAppsPerUser": "number",
+          "maxOpenOffersPerUser": "number",
+          "ownerSnapshotMaxAgeDays": "number"
+        },
+        "publishing": {
+          "adminEnables": "string"
+        },
+        "sharing": {
+          "allowEveryone": "boolean",
+          "allowGroups": "boolean",
+          "allowPublish": "boolean",
+          "allowUsers": "boolean"
+        }
+      },
       "userPrompts": {
         "enabled": "boolean",
         "maxPromptsPerUser": "number",
@@ -3376,6 +3400,7 @@
           "uploads": "object",
           "usageLimits": "object",
           "usageTracking": "object",
+          "userApps": "object",
           "userPrompts": "object",
           "userSkills": "object",
           "webSearch": "object",
@@ -4205,6 +4230,46 @@
       }
     }
   },
+  "GET /api/admin/user-apps": {
+    "status": 200,
+    "shape": {
+      "items": [],
+      "nextCursor": "null"
+    }
+  },
+  "GET /api/admin/user-apps/:appId": {
+    "skipped": "its parent list has no entry in the seed"
+  },
+  "GET /api/admin/user-apps/:appId/revisions": {
+    "skipped": "its parent list has no entry in the seed"
+  },
+  "GET /api/admin/user-apps/_settings": {
+    "status": 200,
+    "shape": {
+      "blockedOwners": [],
+      "capabilities": {
+        "integrations": [],
+        "modelChoice": "boolean",
+        "skills": "boolean",
+        "upload": "boolean",
+        "webSearch": "boolean"
+      },
+      "limits": {
+        "maxAppsPerUser": "number",
+        "maxOpenOffersPerUser": "number",
+        "ownerSnapshotMaxAgeDays": "number"
+      },
+      "publishing": {
+        "adminEnables": "string"
+      },
+      "sharing": {
+        "allowEveryone": "boolean",
+        "allowGroups": "boolean",
+        "allowPublish": "boolean",
+        "allowUsers": "boolean"
+      }
+    }
+  },
   "GET /api/admin/user-skills": {
     "status": 200,
     "shape": {
@@ -4438,6 +4503,47 @@
   "GET /api/apps/:appId/chat/:chatId/status": {
     "skipped": "its parent path is not a readable list"
   },
+  "GET /api/apps/_config": {
+    "status": 200,
+    "shape": {
+      "userApps": {
+        "canCreate": "boolean",
+        "canPublish": "boolean",
+        "canShare": "boolean",
+        "capabilities": {
+          "integrations": [],
+          "modelChoice": "boolean",
+          "skills": "boolean",
+          "upload": "boolean",
+          "webSearch": "boolean"
+        },
+        "enabled": "boolean",
+        "generator": "boolean",
+        "maxApps": "number",
+        "used": "number"
+      }
+    }
+  },
+  "GET /api/apps/_share-targets": {
+    "status": 403,
+    "shape": {
+      "code": "string",
+      "detail": "string",
+      "status": "number",
+      "title": "string",
+      "type": "string"
+    }
+  },
+  "GET /api/apps/_templates": {
+    "status": 403,
+    "shape": {
+      "code": "string",
+      "detail": "string",
+      "status": "number",
+      "title": "string",
+      "type": "string"
+    }
+  },
   "GET /api/artifact-libraries": {
     "status": 200,
     "shape": {
@@ -4538,6 +4644,8 @@
           "prompts": "object",
           "scheduledTasks": "boolean",
           "skills": "object",
+          "userAppSharing": "boolean",
+          "userApps": "boolean",
           "workflows": "object"
         },
         "username": "string"
@@ -4570,6 +4678,8 @@
           "prompts": "object",
           "scheduledTasks": "boolean",
           "skills": "object",
+          "userAppSharing": "boolean",
+          "userApps": "boolean",
           "workflows": "object"
         },
         "username": "string"

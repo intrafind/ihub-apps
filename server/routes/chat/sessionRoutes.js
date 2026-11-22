@@ -39,6 +39,11 @@ import { dropRun } from '../../services/loop/partialRunState.js';
 import { authorizeInteraction } from '../../services/loop/runAccess.js';
 import interactionService from '../../services/loop/InteractionService.js';
 import { prepareChatApproval } from '../../services/chat/chatToolApproval.js';
+import {
+  isUnresolvedUserAppId,
+  noteUserAppRun,
+  resolveAppForChat
+} from '../../services/userApps/resolveApp.js';
 import { prepareConnectResume } from '../../services/chat/chatConnectResume.js';
 import { getIntegrationConnectionService } from '../../services/integrations/auth/IntegrationConnectionService.js';
 import { SSE_V2_EVENTS, RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
@@ -1093,13 +1098,29 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           }
         }
         // The app this turn runs, decided once for the request from the
-        // signed-in user and never from the body (`getAppForRequest`): the
-        // published app, or one that is not published yet when a content
-        // admin tries it. For everyone else such an app is null here, as an
-        // unknown id is, and the request builder below answers APP_NOT_FOUND.
+        // signed-in user and never from the body (`resolveAppForChat`, which
+        // asks `getAppForRequest` for an admin app): the published app, or
+        // one that is not published yet when a content admin tries it. For
+        // everyone else such an app is null here, as an unknown id is, and
+        // the request builder below answers APP_NOT_FOUND.
         // Ids match regardless of case, as the request builder matches them: a
         // missed app would skip its `userProjects` gate.
-        const requestApp = configCache.getAppForRequest(appId, req.user);
+        // A personal app (feature `userApps`) comes from its store with what
+        // the ceiling grants this caller; `personalApp` then says how tool
+        // calls are approved in it.
+        const appForChat = await resolveAppForChat(appId, req.user, { req });
+        // A personal-shaped id that did not resolve is refused here. It must
+        // not fall through to the lookup of the request builder, which would
+        // find a config app that was given the id of a personal app.
+        if (isUnresolvedUserAppId(appId, appForChat)) {
+          throw new ServiceError('NOT_FOUND', 'App not found');
+        }
+        const requestApp = appForChat?.app ?? null;
+        const personalApp = appForChat?.userApp ?? null;
+        // Whoever did not write a personal app cannot allow a tool for the
+        // whole chat: its instructions could repeat the tool with any
+        // arguments (design 6.3). Every other chat keeps the grant.
+        const chatGrants = personalApp ? personalApp.approval.chatGrants === true : true;
         const chatProjects = await resolveChatProjects({
           req,
           chat: access.chat,
@@ -1225,7 +1246,8 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           user: req.user,
           chat: access.chat || null,
           lastMessage: messages[0],
-          repository
+          repository,
+          chatGrants
         });
         if (approvals.refusal) {
           throw refusal(approvals.refusal.status, approvals.refusal.message, {
@@ -1257,7 +1279,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             code: connectResumePrep.refusal.code
           });
         }
-        toolApproval = { grants: approvals.grants, resume: null };
+        toolApproval = { grants: approvals.grants, resume: null, chatGrants };
         /**
          * Answer the approval once the turn can run. Returns a refusal to send
          * instead of running the turn, or null. A turn refused after this
@@ -1721,6 +1743,10 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           preparedPromptMessage?.hostContext ||
           renderMcpAppContext(mcpAppContext)
         );
+        // The turn runs a personal app: note its use, and which revision of
+        // its instructions this chat ran with (one audit entry per chat and
+        // revision).
+        if (personalApp) await noteUserAppRun({ req, chatId, userApp: personalApp });
         const outcome = await processChatRequest({
           prep: prep.data,
           buildLogData,

@@ -12,6 +12,7 @@
  */
 
 import { APP_ID_MAX_LENGTH, APP_ID_PATTERN, UNSAFE_ID_NAMES } from './validationPatterns.js';
+import { isUserAppId } from './userAppContent.js';
 
 /**
  * IDs the admin API cannot address, because a route of the same name sits
@@ -22,11 +23,13 @@ export const RESERVED_APP_IDS = ['new', 'templates', 'integration-status'];
 
 /**
  * Whether an ID has the right characters but can never be an app: a
- * {@link RESERVED_APP_IDS reserved} name, or a name the server refuses for
- * every ID (`constructor`, `prototype`; `__proto__` also starts with `_`).
+ * {@link RESERVED_APP_IDS reserved} name, a name the server refuses for
+ * every ID (`constructor`, `prototype`; `__proto__` also starts with `_`), or
+ * an ID of the shape the server mints for personal apps (`uap_` and 32 hex
+ * characters, `shared/userAppContent.js`).
  */
 function isReservedName(id) {
-  return RESERVED_APP_IDS.includes(id) || UNSAFE_ID_NAMES.includes(id);
+  return RESERVED_APP_IDS.includes(id) || UNSAFE_ID_NAMES.includes(id) || isUserAppId(id);
 }
 
 /** The ID of an app whose name yields no usable character. */
@@ -116,8 +119,10 @@ export function slugifyAppId(text) {
  * - `format`: a character outside lowercase letters, digits, `.`, `_`, `-`;
  *   two dots in a row (`a..b`); or a lone `.`.
  * - `reserved`: one of {@link RESERVED_APP_IDS}; `constructor` or `prototype`;
- *   or a leading `_`, which is the prefix of the action routes (`_generate`,
- *   `_reorder`, `_toggle`).
+ *   a leading `_`, which is the prefix of the action routes (`_generate`,
+ *   `_reorder`, `_toggle`); or the shape of a personal app ID (`uap_` and 32
+ *   hex characters), which only the server mints. `uap_helper` is not that
+ *   shape.
  *
  * An ID without a problem also passes the server's `assertValidId`, so the
  * create route does not answer 400 for an ID this check accepted.
@@ -144,8 +149,8 @@ export function appIdProblem(id) {
 
 /**
  * Whether a string can be the ID of a new app: it matches `APP_ID_PATTERN`,
- * has at most 50 characters, has no `..`, is not reserved and does not start
- * with `_`.
+ * has at most 50 characters, has no `..`, is not reserved, does not start
+ * with `_` and does not have the shape of a personal app ID.
  *
  * @param {unknown} id
  * @returns {boolean}

@@ -50,6 +50,9 @@ import {
 } from '../../shared/appPlaceholders.js';
 import { CONTENT_VARIABLE } from '../../shared/promptVariables.js';
 import { HEX_COLOR_PATTERN, VARIABLE_NAME_PATTERN } from '../../shared/validationPatterns.js';
+import { USER_APP_ICON_PATTERN, USER_APP_LIMITS } from '../../shared/userAppContent.js';
+import { isFeatureEnabled } from '../featureRegistry.js';
+import { isWebSearchAvailableTo } from './tools/webSearchResolver.js';
 
 export { integrationsFromAnswer } from '../../shared/appGenerator.js';
 
@@ -72,29 +75,38 @@ const CATALOGUE_CLOSE = 'INSTALLED_SYSTEMS>>>';
 export const GENERATOR_MAX_TOKENS = 4096;
 export const GENERATOR_TIMEOUT_MS = 80_000;
 
-/** The limits of a generated draft. They are tighter than the app schema. */
-export const DRAFT_LIMITS = Object.freeze({
-  name: 100,
-  description: 500,
-  system: 8000,
-  prompt: 4000,
-  messagePlaceholder: 200,
-  variables: 8,
-  variableLabel: 80,
-  variableDefault: 200,
-  options: 20,
-  optionValue: 200,
-  optionLabel: 100,
-  starterPrompts: 4,
-  starterTitle: 80,
-  starterMessage: 500
-});
+/** The limits a draft shares with a personal app, by name (`shared/userAppContent.js`). */
+const DRAFT_LIMIT_KEYS = [
+  'name',
+  'description',
+  'system',
+  'prompt',
+  'messagePlaceholder',
+  'variables',
+  'variableLabel',
+  'variableDefault',
+  'options',
+  'optionValue',
+  'optionLabel',
+  'starterPrompts',
+  'starterTitle',
+  'starterMessage'
+];
+
+/**
+ * The limits of a generated draft. They are tighter than the app schema, and
+ * they are the caps of a personal app (`USER_APP_LIMITS`), so a draft always
+ * fits into one.
+ */
+export const DRAFT_LIMITS = Object.freeze(
+  Object.fromEntries(DRAFT_LIMIT_KEYS.map(key => [key, USER_APP_LIMITS[key]]))
+);
 
 /** The types of an input field the app schema knows. */
 const VARIABLE_TYPES = ['string', 'text', 'number', 'boolean', 'date', 'select'];
 
 /** An icon name: what the icon set uses, and nothing that could be a path. */
-const ICON_PATTERN = /^[a-z0-9-]{1,40}$/;
+const ICON_PATTERN = USER_APP_ICON_PATTERN;
 
 /** Keys of the answer that are read (or deliberately not read) without a warning. */
 const HANDLED_KEYS = new Set([
@@ -417,13 +429,26 @@ function firstSentence(text) {
  * @param {((id: string) => boolean)|Iterable<string>} [options.isTaken] - The app IDs in use.
  * @param {string} [options.description] - What the author wrote; the source of
  *   a short description the answer lacks.
+ * @param {{ webSearch: boolean }|null} [options.personal] - Set for the draft of a
+ *   personal app: web search is suggested only when `webSearch` is true, and
+ *   every suggested integration names its actions (the picked ones, or all of
+ *   `installed[].actions` when the answer names none), because a personal app
+ *   cannot store a binding without them. An integration without actions is
+ *   not suggested.
  * @returns {{ app: object, suggestions: { websearch: boolean, integrations: Array<{ id: string, label: string, actions: string[] }> }, warnings: Array<{ code: string, field: string }> }}
  * @throws {ServiceError} `APP_GENERATOR_INVALID_ANSWER` with `details.reason`
  *   `incomplete` when the answer is no object or lacks a name or instructions.
  */
 export function sanitizeGeneratedApp(
   raw,
-  { language = 'en', categories = [], installed = [], isTaken, description = '' } = {}
+  {
+    language = 'en',
+    categories = [],
+    installed = [],
+    isTaken,
+    description = '',
+    personal = null
+  } = {}
 ) {
   if (!isPlainObject(raw)) {
     throw invalidAnswer('incomplete', 'The answer of the model is not an app');
@@ -534,7 +559,9 @@ export function sanitizeGeneratedApp(
   app.allowEmptyContent = placeholdersIn(app.prompt?.[lang]).some(used => fieldNames.has(used));
 
   // Proposed, never set.
-  const websearch = raw.websearch === true || raw.websearch?.enabled === true;
+  const websearch =
+    (raw.websearch === true || raw.websearch?.enabled === true) &&
+    (!personal || personal.webSearch === true);
   const usable = (Array.isArray(installed) ? installed : []).filter(entry => entry?.id);
   const picked = integrationsFromAnswer(raw.integrations, usable) || {};
   const integrations = usable
@@ -542,8 +569,17 @@ export function sanitizeGeneratedApp(
     .map(entry => ({
       id: entry.id,
       label: typeof entry.label === 'string' && entry.label ? entry.label : entry.id,
-      actions: picked[entry.id].actions || []
-    }));
+      // A personal app names its actions: "all functions" becomes the list the admin allowed.
+      actions:
+        picked[entry.id].actions || (personal && Array.isArray(entry.actions) ? entry.actions : [])
+    }))
+    .filter(entry => !personal || entry.actions.length > 0)
+    .slice(0, personal ? USER_APP_LIMITS.integrations : undefined)
+    .map(entry =>
+      personal
+        ? { ...entry, actions: entry.actions.slice(0, USER_APP_LIMITS.integrationActions) }
+        : entry
+    );
 
   const ignored = Object.keys(raw).filter(key => !HANDLED_KEYS.has(key));
   for (const key of ignored.slice(0, MAX_IGNORED_KEYS)) {
@@ -707,20 +743,45 @@ function appCategoryIds() {
  * The enabled installations the caller's groups grant, as the brief describes
  * them. A draft does not depend on them: when they cannot be read, the draft
  * is prepared without suggestions for connected systems.
+ *
+ * For a personal app (`personal` set) the list holds only the installations an
+ * admin allowed for personal apps, each with only the allowed actions, and
+ * nothing while the feature `integrations` is off.
  */
-async function installationsFor(user, language) {
+async function installationsFor(user, language, personal = null) {
   try {
+    if (personal && !isFeatureEnabled('integrations', configCache.getFeatures() || {})) return [];
     const resolved = await installedIntegrationService.resolveAllEnabled(language);
-    return describeInstalledIntegrations(
+    const described = describeInstalledIntegrations(
       resolved.filter(entry => mayUseIntegration(entry.instance, user)),
       language
     );
+    if (!personal) return described;
+    const allowed = new Map(
+      (personal.settings?.capabilities?.integrations || []).map(entry => [entry.id, entry.actions])
+    );
+    return described
+      .filter(entry => allowed.has(entry.id))
+      .map(entry => ({
+        ...entry,
+        actions: entry.actions.filter(name => allowed.get(entry.id).includes(name))
+      }))
+      .filter(entry => entry.actions.length > 0);
   } catch (error) {
     logger.warn('Could not list the installed integrations for an app draft', {
       component: COMPONENT,
       error: error.message
     });
     return [];
+  }
+}
+
+/** Whether a search engine is available to the caller; a failed lookup reads as no. */
+function searchFor(user) {
+  try {
+    return isWebSearchAvailableTo(user) === true;
+  } catch {
+    return false;
   }
 }
 
@@ -742,6 +803,13 @@ async function installationsFor(user, language) {
  * @param {object} [params.record] - Receives what the call used, as far as it
  *   got: `modelId`, `brief` and, after the model answered, `usage`. The route
  *   writes it into the audit entry, also when the draft fails.
+ * @param {{ settings: object }|null} [params.personal] - Set for the draft of a
+ *   personal app (`POST /api/apps/_generate`), with the effective
+ *   `platform.userApps` settings (`userAppSettings()`). The draft then suggests
+ *   only what personal apps may use on this installation and the caller may
+ *   use: web search when `capabilities.webSearch` is on and a search engine is
+ *   available to the caller; installations from `capabilities.integrations`,
+ *   each with named actions from that list.
  * @returns {Promise<{ app: object, suggestions: object, warnings: object[], model: { id: string, name: string }, brief: 'standard'|'customised' }>}
  * @throws {ServiceError} `ABORTED` (499) when the signal is aborted before
  *   the model is called; `APP_GENERATOR_NO_MODEL` (503) without a usable
@@ -754,7 +822,8 @@ export async function generateAppDraft({
   user,
   signal,
   llmClient = defaultLlmClient,
-  record = {}
+  record = {},
+  personal = null
 }) {
   const model = selectGuideModel(configCache.getModels().data, candidate =>
     canUserAccessResource(user, 'models', candidate.id)
@@ -774,7 +843,7 @@ export async function generateAppDraft({
       prompt => prompt?.id === APP_GENERATOR_PROMPT_ID
     ) || null;
   const categories = appCategoryIds();
-  const installed = await installationsFor(user, language);
+  const installed = await installationsFor(user, language, personal);
   const { brief, messages } = buildGeneratorMessages({
     libraryPrompt,
     description,
@@ -814,7 +883,10 @@ export async function generateAppDraft({
     categories,
     installed,
     isTaken: id => existing.has(id),
-    description
+    description,
+    personal: personal
+      ? { webSearch: personal.settings?.capabilities?.webSearch === true && searchFor(user) }
+      : null
   });
 
   const checked = appConfigSchema.safeParse(draft.app);

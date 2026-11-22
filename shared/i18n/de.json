@@ -8269,6 +8269,80 @@
       "all": "Alle (*)",
       "noMatches": "Zu Ihrer Suche passt kein Eintrag.",
       "startTyping": "Tippen Sie, um zu suchen."
+    },
+    "userApps": {
+      "tab": "Persönliche Apps",
+      "tabWaiting": "Persönliche Apps · {{count}} warten",
+      "featureOff": "Persönliche Apps sind abgeschaltet. Schalten Sie sie unter „Features“ ein.",
+      "featureOn": "Persönliche Apps sind eingeschaltet.",
+      "filter": {
+        "all": "Alle",
+        "everyone": "Mit allen geteilt",
+        "ownerInactive": "Besitzer inaktiv",
+        "ownerStale": "Rechte des Besitzers veraltet",
+        "waiting": "Veröffentlicht, nicht freigeschaltet"
+      },
+      "waiting": {
+        "row": "Vor {{age}} veröffentlicht, nicht freigeschaltet",
+        "open": "Unternehmens-App öffnen",
+        "notice": "{{count}} von Benutzern veröffentlichte Apps sind noch nicht freigeschaltet."
+      },
+      "takeOver": {
+        "action": "Als App übernehmen…",
+        "title": "„{{name}}“ als App übernehmen?",
+        "willUse": "Die neue App kann:",
+        "dropped": "Nicht übernommen: {{list}}",
+        "plain": "Die Rechte des Besitzers konnten nicht geprüft werden. Die neue App wird ohne Websuche, Dateien, Skills und angebundene Systeme angelegt.",
+        "notPublished": "Die App wird als „Nicht veröffentlicht“ angelegt. Sie testen und veröffentlichen sie im App-Editor.",
+        "owner": "{{owner}} kann die persönliche App nicht mehr ändern.",
+        "users": "{{count}} Personen nutzen die persönliche App derzeit. Sie funktioniert für jede von ihnen weiter, bis sie die neue App nutzen kann.",
+        "submit": "Übernehmen"
+      },
+      "noAccess": "{{count}} von {{total}} Mitgliedern können die Unternehmens-App nicht nutzen.",
+      "release": {
+        "action": "An den Besitzer zurückgeben",
+        "published": "Nehmen Sie zuerst die Unternehmens-App zurück oder löschen Sie sie."
+      },
+      "changed": "Die App wurde geändert, seit Sie sie geöffnet haben. Prüfen Sie sie erneut.",
+      "disable": {
+        "action": "Abschalten",
+        "body": "Solange die App abgeschaltet ist, kann niemand sie nutzen. Der Besitzer sieht Ihre Begründung."
+      },
+      "enable": {
+        "action": "Einschalten"
+      },
+      "offerOwner": "Neuem Besitzer anbieten",
+      "revisions": "Frühere Versionen",
+      "clash": "ID-Konflikt: Eine App-Datei hat dieselbe ID. Benennen Sie die Datei um oder löschen Sie diese App.",
+      "settings": {
+        "title": "Einstellungen für persönliche Apps",
+        "shareWith": "Benutzer dürfen ihre Apps teilen mit",
+        "allowUsers": "Bestimmten Benutzern",
+        "allowGroups": "Gruppen",
+        "allowEveryone": "Allen angemeldeten Benutzern",
+        "allowPublish": "Veröffentlichen als Unternehmens-App",
+        "allowPublishHelp": "Besitzer veröffentlichen eine App mit einem Klick. Sie wird zu einer App, die Administratoren verwalten. Eine App mit Websuche, Skills oder einem angebundenen System bleibt abgeschaltet, bis ein Administrator sie freischaltet.",
+        "adminEnablesAlways": "Jede veröffentlichte App bleibt abgeschaltet, bis ein Administrator sie freischaltet",
+        "permissionHint": "Benutzer benötigen außerdem die Berechtigung „userAppSharing“ ihrer Gruppe.",
+        "groupsCreate": "Gruppen mit „Persönliche Apps“: {{list}}",
+        "groupsShare": "Gruppen mit „Persönliche Apps teilen“: {{list}}",
+        "limits": "Grenzen für persönliche Apps",
+        "max": "Apps pro Person",
+        "mayUse": "Persönliche Apps dürfen nutzen",
+        "integrationsHelp": "Eine persönliche App kann die hier angekreuzten Funktionen nutzen, für Personen, deren Gruppen das System nutzen dürfen. Wer die App nicht selbst geschrieben hat, wird vor jedem Schritt gefragt.",
+        "blocked": "Personen, deren Apps abgeschaltet sind"
+      },
+      "groups": {
+        "userApps": "Persönliche Apps",
+        "userAppSharing": "Persönliche Apps teilen",
+        "userAppsHint": "Mitglieder dürfen eigene Apps erstellen (benötigt das Feature „Persönliche Apps“). Wird an Gruppen vererbt, die von dieser erben.",
+        "userAppSharingHint": "Mitglieder dürfen Apps teilen, die ihnen gehören oder die sie bearbeiten, und eigene Apps veröffentlichen."
+      },
+      "user": {
+        "count": "Persönliche Apps: {{count}} ({{shared}} geteilt)",
+        "block": "Alle Apps dieser Person abschalten",
+        "blockBody": "Die Apps dieser Person werden für alle angehalten, und die Person kann keine neuen erstellen. Sie können das in den Einstellungen rückgängig machen."
+      }
     }
   },
   "cloudStorage": {
@@ -11802,7 +11876,13 @@
     "ADMIN_CHECK_FAILED": "Es konnte nicht geprüft werden, ob ein Administrator Zugriff behält, daher wurde nichts geändert. Bitte versuchen Sie es erneut.",
     "PRECONDITION_FAILED": "Diese Konfiguration wurde geändert, nachdem Sie sie geöffnet haben (von einem anderen Administrator, in einem anderen Tab oder durch ein Skript). Es wurde nichts gespeichert, Ihre Änderungen sind noch auf der Seite. Laden Sie neu, um den aktuellen Stand zu sehen, und übernehmen Sie Ihre Änderungen dann erneut.",
     "APP_GENERATOR_NO_MODEL": "Ihnen steht kein KI-Modell zur Verfügung, daher kann kein Entwurf vorbereitet werden.",
-    "APP_GENERATOR_INVALID_ANSWER": "Der Entwurf der KI ließ sich nicht verwenden."
+    "APP_GENERATOR_INVALID_ANSWER": "Der Entwurf der KI ließ sich nicht verwenden.",
+    "USER_APPS_DISABLED": "Persönliche Apps sind auf dieser Installation abgeschaltet.",
+    "USER_APPS_UNAVAILABLE": "Persönliche Apps sind gerade nicht verfügbar. Versuchen Sie es später erneut.",
+    "QUOTA_USER_APPS": "Die Obergrenze für persönliche Apps ist erreicht.",
+    "QUOTA_USER_APP_OFFERS": "Zu viele offene Angebote.",
+    "USER_APP_CAPABILITY_DENIED": "Die App kann das nicht nutzen. Entfernen Sie es und speichern Sie erneut.",
+    "USER_APP_ACCESS_CHANGED": "Ihr Zugriff auf diese App hat sich geändert. Laden Sie die Seite neu."
   },
   "workspace": {
     "backTo": "Zurück zu {{name}}",
@@ -11936,5 +12016,134 @@
     "loadFailed": "Der Hinweis konnte nicht geladen werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
     "cookieBlocked": "Ihr Browser blockiert Cookies in diesem Frame, daher kann die Bestätigung hier nicht gespeichert werden. Öffnen Sie iHub in einem eigenen Tab, um zu bestätigen.",
     "openInBrowser": "iHub im Browser öffnen"
+  },
+  "userApps": {
+    "list": {
+      "new": "Neue App",
+      "scope": {
+        "all": "Alle",
+        "mine": "Meine Apps",
+        "shared": "Mit mir geteilt"
+      },
+      "badge": {
+        "mine": "Von mir",
+        "offered": "Ihnen angeboten"
+      },
+      "empty": {
+        "mine": "Sie haben noch keine eigenen Apps. Eine App ist ein Assistent für eine Aufgabe, zum Beispiel „Stellenanzeige aus meinen Notizen schreiben“.",
+        "shared": "Bisher hat niemand eine App mit Ihnen geteilt."
+      },
+      "menu": {
+        "edit": "Bearbeiten",
+        "share": "Teilen",
+        "duplicate": "Duplizieren",
+        "delete": "Löschen",
+        "leave": "Verlassen"
+      },
+      "limitReached": "Sie haben {{max}} Apps, das ist die Obergrenze. Löschen Sie eine App, um eine neue zu erstellen."
+    },
+    "create": {
+      "stateLine": "Nur Sie sehen die App, bis Sie sie teilen.",
+      "limits": "Eine eigene App kann noch keine Dokumentensammlung nutzen. Sie kann mit eingefügtem Text oder mit einer Datei arbeiten, die ein Benutzer anhängt.",
+      "created": "App „{{name}}“ erstellt"
+    },
+    "edit": {
+      "state": {
+        "private": "Nur Sie",
+        "shared": "Mit {{count}} Personen geteilt",
+        "everyone": "Mit allen geteilt",
+        "promoted": "Jetzt bei den Administratoren",
+        "offered": "{{owner}} angeboten",
+        "disabled": "Von einem Administrator abgeschaltet"
+      },
+      "extras": {
+        "title": "Was die App nutzen darf",
+        "model": "KI-Modell",
+        "upload": "Benutzer können Dateien anhängen",
+        "webSearch": "Websuche",
+        "webSearchHelp": "Jede Person schaltet die Websuche in ihrem Chat selbst ein. Andere Personen werden vor jeder Suche und vor jeder Seite gefragt, die die App öffnet.",
+        "skills": "Skills",
+        "integrations": "Angebundene Systeme",
+        "approvalHelp": "Wenn jemand anderes Ihre App nutzt, fragt sie diese Person vor jedem Schritt in einem angebundenen System. In Ihren eigenen Chats fragt sie, bevor sie etwas ändert.",
+        "gone": "{{capability}} steht für Ihre Apps nicht mehr zur Verfügung. Die App läuft ohne.",
+        "remove": "Entfernen"
+      },
+      "conflict": "Jemand anderes hat diese App geändert. Laden Sie neu, um die Änderungen zu sehen.",
+      "readOnly": {
+        "ownerInactive": "Das Konto des Besitzers ist inaktiv. Nur ein Administrator kann diese App ändern.",
+        "promoted": "Diese App wurde am {{date}} zu einer Unternehmens-App. Administratoren verwalten sie jetzt. Sie können sie hier nicht mehr ändern.",
+        "disabled": "Ein Administrator hat diese App abgeschaltet: {{reason}}",
+        "capability": "Diese App nutzt {{capability}}. Das dürfen Sie nicht nutzen. Sie können die App verwenden, aber nicht ändern."
+      },
+      "delete": {
+        "title": "„{{name}}“ löschen?",
+        "body": "Die App wird für Sie und für alle entfernt, mit denen Sie sie geteilt haben. Chats bleiben im Chatverlauf und können nicht fortgesetzt werden."
+      }
+    },
+    "share": {
+      "title": "„{{name}}“ teilen",
+      "help": "Personen, mit denen Sie teilen, können die App nutzen und ihre Anweisungen lesen. Die App kann für sie nur tun, was Sie und diese Personen beide dürfen. Bevor sie für diese Personen im Web sucht oder ein angebundenes System nutzt, fragt sie nach.",
+      "private": "Nicht geteilt. Nur Sie können diese App nutzen.",
+      "role": {
+        "user": "Kann nutzen",
+        "editor": "Kann bearbeiten"
+      },
+      "everyone": "Alle angemeldeten Benutzer",
+      "copyLink": "Link kopieren",
+      "linkCopied": "Link kopiert",
+      "notAllowed": "Sie können keine Apps teilen. Wenden Sie sich an einen Administrator."
+    },
+    "publish": {
+      "action": "Veröffentlichen",
+      "titleNow": "„{{name}}“ für alle veröffentlichen?",
+      "titleLater": "„{{name}}“ veröffentlichen?",
+      "bodyNow": "Die App wird zu einer Unternehmens-App. Alle, die die Apps des Unternehmens nutzen dürfen, sehen sie sofort.",
+      "bodyLaterTools": "Die App wird zu einer Unternehmens-App. Weil sie {{list}} nutzt, prüft ein Administrator sie und schaltet sie frei.",
+      "bodyLaterAlways": "Die App wird zu einer Unternehmens-App. Ein Administrator prüft sie und schaltet sie frei.",
+      "willUse": "Die Unternehmens-App kann:",
+      "dropped": "Nicht übernommen: {{list}}",
+      "plain": "Ihre Rechte konnten nicht geprüft werden. Die Unternehmens-App wird ohne Websuche, Dateien, Skills und angebundene Systeme angelegt.",
+      "managed": "Ab jetzt verwalten Administratoren die App. Sie können sie nicht mehr ändern und nicht zurücknehmen.",
+      "membersNow": "Personen, mit denen Sie die App geteilt haben, werden zur Unternehmens-App geleitet.",
+      "membersLater": "Ihre App funktioniert für Sie und die Personen, mit denen Sie sie geteilt haben, weiter, bis diese die Unternehmens-App nutzen können.",
+      "submit": "Veröffentlichen",
+      "waiting": "Veröffentlicht am {{date}}. Ein Administrator hat die Unternehmens-App noch nicht freigeschaltet. Ihre App funktioniert bis dahin weiter.",
+      "changed": "Jemand anderes hat diese App geändert. Laden Sie neu und prüfen Sie sie, bevor Sie veröffentlichen.",
+      "retired": {
+        "title": "Diese App ist jetzt eine Unternehmens-App.",
+        "open": "„{{name}}“ öffnen",
+        "chats": "Ihre früheren Chats bleiben im Chatverlauf."
+      }
+    },
+    "transfer": {
+      "action": "Übergeben",
+      "title": "„{{name}}“ an {{owner}} übergeben?",
+      "line1": "{{owner}} wird gebeten, die App zu übernehmen. Bis {{owner}} zustimmt, bleiben Sie Besitzer und nichts ändert sich.",
+      "line2": "Danach kann {{owner}} die App ändern, teilen und löschen. Alle mit „Kann bearbeiten“ erhalten „Kann nutzen“.",
+      "line3": "Sie behalten keinen Zugriff, außer {{owner}} teilt die App mit Ihnen.",
+      "submit": "{{owner}} fragen",
+      "withdraw": "Zurückziehen",
+      "received": "{{from}} möchte Ihnen diese App übergeben.",
+      "receivedDuty": "Als Besitzer verantworten Sie, was die App tut. Lesen Sie die Anweisungen unten.",
+      "receivedMembers": "Sie ist geteilt mit: {{list}}",
+      "receivedEditors": "Personen mit „Kann bearbeiten“ können sie danach nur noch nutzen.",
+      "try": "Ausprobieren",
+      "decline": "Ablehnen",
+      "accept": "Übernehmen",
+      "changed": "Die App wurde geändert, nachdem Sie sie geöffnet haben. Lesen Sie sie erneut.",
+      "tooMany": "Sie haben {{max}} offene Angebote. Ziehen Sie zuerst eines zurück."
+    },
+    "notice": {
+      "ownedBy": "Diese App gehört {{owner}}. Administratoren haben sie nicht geprüft.",
+      "mayUse": "Sie darf nutzen: {{list}}.",
+      "switchOn": "Sie schalten es im Chat ein",
+      "asksFirst": "Sie fragt Sie vor jeder Suche und vor jeder Seite, die sie öffnet.",
+      "asksFirstSystems": "Sie fragt Sie vor jedem Schritt in einem angebundenen System.",
+      "notForYou": "Für Sie hier nicht verfügbar: {{list}}.",
+      "unavailable": "In dieser App derzeit nicht verfügbar: {{list}}.",
+      "showInstructions": "Anweisungen anzeigen",
+      "collapsed": "Persönliche App von {{owner}}",
+      "suspended": "Diese App ist im Moment nicht verfügbar. Wenden Sie sich an {{owner}} oder an einen Administrator."
+    }
   }
 }
