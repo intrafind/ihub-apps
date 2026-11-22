@@ -508,6 +508,65 @@ describe('e2e model stub', () => {
     });
   });
 
+  describe('a script past a message the person sent into the running answer', () => {
+    const toolMessage = (id, name) => ({
+      role: 'assistant',
+      content: null,
+      tool_calls: [{ id, type: 'function', function: { name, arguments: '{}' } }]
+    });
+    const result = id => ({ role: 'tool', tool_call_id: id, content: 'ok' });
+    const steer = text =>
+      user(`[steer] Mid-run instruction from the person running this task: ${text}`);
+    const question = 'e2e-script:steer-two-steps hold=k-3 tool=e2e_counter_read args={"key":"k-3"}';
+
+    test('steer-two-steps holds the call, calls it again after the message, then answers', () => {
+      const first = planFor({ messages: [user(question)] });
+      assert.equal(first.hangKey, 'k-3');
+      assert.equal(first.toolCalls[0].name, 'e2e_counter_read');
+
+      const second = planFor({
+        messages: [
+          user(question),
+          toolMessage('c1', 'e2e_counter_read'),
+          result('c1'),
+          steer('Use 2025')
+        ]
+      });
+      assert.equal(second.hangKey, undefined);
+      assert.equal(second.toolCalls.length, 1);
+      assert.deepEqual(JSON.parse(second.toolCalls[0].arguments), { key: 'k-3' });
+
+      const third = planFor({
+        messages: [
+          user(question),
+          toolMessage('c1', 'e2e_counter_read'),
+          result('c1'),
+          steer('Use 2025'),
+          toolMessage('c2', 'e2e_counter_read'),
+          result('c2')
+        ]
+      });
+      assert.equal(third.content, 'E2E script steer-two-steps: done');
+    });
+
+    test('any other script answers such a message with the default reply', () => {
+      const held = 'e2e-script:hold-then-call hold=k-4 tool=e2e_counter_read args={}';
+      assert.equal(
+        planFor({
+          messages: [user(held), toolMessage('c1', 'e2e_counter_read'), result('c1'), steer('x')]
+        }),
+        null
+      );
+      // A plain message after the script is not a message sent into the answer.
+      assert.equal(
+        planFor({
+          messages: [user(question), assistant('x'), user('Use 2025')]
+        }),
+        null
+      );
+    });
+  });
+
   describe('what the stub was sent', () => {
     test('lists the requests, all or the ones with a marker text', async () => {
       await post({ messages: [user('first question')] });

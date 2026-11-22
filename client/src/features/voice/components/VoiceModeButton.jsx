@@ -36,12 +36,22 @@ export function VoiceWaveIcon({ active = false, className = 'h-5 w-5' }) {
  * @param {() => void} props.onClick
  * @param {boolean} [props.active] - Voice mode is open.
  * @param {boolean} [props.disabled]
+ * @param {string|null} [props.disabledReason] - Why it is off: its title while disabled.
+ * @param {string} [props.disabledReasonId] - The element that says why: its
+ *   accessible description while disabled.
  */
-export default function VoiceModeButton({ onClick, active = false, disabled = false }) {
+export default function VoiceModeButton({
+  onClick,
+  active = false,
+  disabled = false,
+  disabledReason = null,
+  disabledReasonId
+}) {
   const { t } = useTranslation();
   const label = active
     ? t('voiceMode.button.end', 'End voice mode')
     : t('voiceMode.button.start', 'Start voice mode');
+  const reason = disabled ? disabledReason : null;
   return (
     <button
       type="button"
@@ -49,7 +59,8 @@ export default function VoiceModeButton({ onClick, active = false, disabled = fa
       disabled={disabled}
       aria-pressed={active}
       aria-label={label}
-      title={label}
+      aria-describedby={reason && disabledReasonId ? disabledReasonId : undefined}
+      title={reason || label}
       data-testid="voice-mode-button"
       className={`flex shrink-0 items-center justify-center rounded-lg p-2 transition-colors disabled:cursor-not-allowed disabled:opacity-50 sm:p-2.5 ${
         active

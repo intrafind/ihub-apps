@@ -25,10 +25,14 @@ import { ADMIN, OTHER, TOOLS_APP, USER } from '../config/agents-scenario.mjs';
  *   Enter never stops the run;
  * - a message typed during the run waits as an item of the strip, is read at the
  *   next step and appears in the answer, in the same place after a reload;
+ * - a message read at a later step stands between the calls of the steps before
+ *   it and of its step, live and after a reload;
+ * - a message that waited when the answer was stopped comes back as a notice, and
+ *   "Copy to input" puts its text back into the composer;
  * - "Send after this answer" becomes the next turn and leaves the running answer
  *   as it is;
- * - the strip works by keyboard with four items at 320 px in German, and a
- *   removed item is never read;
+ * - the strip works by keyboard with four items at 320 px in German, the page
+ *   keeps one announcer region, and a removed item is never read;
  * - only the chat's owner sends into the run;
  * - the states pass axe (WCAG 2.2 AA, critical and serious).
  *
@@ -183,6 +187,73 @@ test.describe('A message while iHub is working', () => {
   );
 
   test(
+    'a message read at the second step stands between the calls of the first and the second step, live and after a reload',
+    { tag: '@gate' },
+    async ({ page }) => {
+      await signInPage(page, USER);
+      await openApp(page, TOOLS_APP);
+      const key = `steps-${crypto.randomUUID().slice(0, 8)}`;
+      // Step 1: a call held until the release; step 2: the same call; then the answer.
+      const question = `e2e-script:steer-two-steps hold=${key} tool=e2e_counter_read args=${JSON.stringify({ key })}`;
+      await startHeldTurn(page, question, key);
+
+      const message = unique('Use the 2025 numbers');
+      await typeAndEnter(page, message);
+      await expect(pendingItems(page)).toHaveCount(1);
+      await stub.release(key);
+      const done = shown(page, 'E2E script steer-two-steps: done');
+      await expect(done).toBeVisible({ timeout: 30_000 });
+      await expect(applied(page)).toHaveCount(1);
+      await expect(applied(page).first()).toContainText(message);
+
+      // A row of the activity list: after the call of step 1, before the call of step 2.
+      const position = () =>
+        applied(page)
+          .first()
+          .evaluate(node => {
+            const rows = [...node.parentElement.children];
+            return { list: node.parentElement.tagName, at: rows.indexOf(node), rows: rows.length };
+          });
+      expect(await position()).toEqual({ list: 'OL', at: 1, rows: 3 });
+      await page.reload();
+      await expect(done).toBeVisible({ timeout: 15_000 });
+      await expect(applied(page)).toHaveCount(1);
+      expect(await position()).toEqual({ list: 'OL', at: 1, rows: 3 });
+    }
+  );
+
+  test(
+    'after Stop answer, a message that waited comes back as a notice, and Copy to input puts it back',
+    { tag: '@gate' },
+    async ({ page }) => {
+      await signInPage(page, USER);
+      await openApp(page, TOOLS_APP);
+      const key = `stop-${crypto.randomUUID().slice(0, 8)}`;
+      await startHeldTurn(page, `e2e-hang:${key}`, key);
+
+      const message = unique('Use the 2025 numbers, not 2024');
+      await typeAndEnter(page, message);
+      await expect(pendingItems(page)).toHaveCount(1);
+      await visible(page.getByRole('button', { name: 'Stop answer' })).click();
+
+      const notice = visible(page.getByTestId('dropped-message'));
+      await expect(notice).toHaveCount(1, { timeout: 15_000 });
+      await expect(notice).toContainText(`Not delivered: ${message}`);
+      await expect(notice).toContainText('The answer was stopped.');
+      await expect(pendingItems(page)).toHaveCount(0);
+      await expect(announcer(page)).toHaveText('Your message was not delivered');
+      await expectAccessible(page, 'a message that was not delivered');
+
+      const input = composer(page);
+      await input.fill('Draft');
+      await notice.getByRole('button', { name: `Copy to input: ${message}` }).click();
+      await expect(input).toHaveValue(`Draft\n${message}`);
+      await expect(input).toBeFocused();
+      await expect(visible(page.getByTestId('dropped-message'))).toHaveCount(0);
+    }
+  );
+
+  test(
     '"Send after this answer" becomes the next turn and leaves the running answer as it is',
     { tag: ['@gate', '@matrix'] },
     async ({ page }) => {
@@ -280,6 +351,22 @@ test.describe('A message while iHub is working', () => {
       expect(widths.page).toBeLessThanOrEqual(widths.viewport);
       expect(widths.strip[0]).toBeLessThanOrEqual(widths.strip[1]);
       expect(widths.rightmost).toBeLessThanOrEqual(widths.viewport);
+      // One announcer region for the page, though the chat renders its list and
+      // composer twice (narrow and wide), and no live region of its own in either
+      // composer copy (what it says goes through the announcer); the shell itself
+      // does not scroll.
+      const shell = await page.evaluate(() => ({
+        announcers: document.querySelectorAll('[aria-live="polite"][data-testid="announcer"]')
+          .length,
+        inComposers: [...document.querySelectorAll('form [aria-live]')].filter(
+          node => node.getAttribute('aria-live') !== 'off'
+        ).length,
+        height: document.documentElement.scrollHeight,
+        viewport: window.innerHeight
+      }));
+      expect(shell.announcers).toBe(1);
+      expect(shell.inComposers).toBe(0);
+      expect(shell.height).toBeLessThanOrEqual(shell.viewport);
 
       // Shift+Tab from the disclosure reaches the fourth item's remove button.
       await page.keyboard.press('Shift+Tab');

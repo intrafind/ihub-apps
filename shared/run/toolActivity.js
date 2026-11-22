@@ -522,7 +522,7 @@ function callsInOrder(run) {
  * rows among the calls); null for a call with its own UI or one the server
  * runs elsewhere (clarifications, workflows launched from the chat).
  */
-function callRow(run, { tool, stream }, finished) {
+function callRow(run, { tool, stream }, finished, stepped = false) {
   const toolId = tool?.toolId ?? stream.toolId;
   if ((tool?.execution && tool.execution !== 'server') || HIDDEN_TOOL_IDS.has(toolId)) {
     return null;
@@ -580,9 +580,29 @@ function callRow(run, { tool, stream }, finished) {
       ...(Number.isInteger(tool?.parallelGroup) && Number.isInteger(tool?.callIndex)
         ? { batch: `${tool.step}:${tool.parallelGroup}` }
         : {}),
+      // The step the call ran in (`tool/started`), where the turn read a message
+      // the person sent at a step: the chat places that message among the rows by
+      // it. A turn that read none keeps its rows as they always were.
+      ...(stepped && Number.isInteger(tool?.step ?? stream?.step)
+        ? { step: tool?.step ?? stream?.step }
+        : {}),
       ...(stream ? streamFields(stream, status) : {})
     }
   };
+}
+
+/**
+ * Whether the turn read a message the person sent while it ran, at one of its
+ * steps (`steer/applied` with `step`, folded by the run reducer).
+ *
+ * @param {Object} run - RunState
+ * @returns {boolean}
+ */
+function readMessageAtStep(run) {
+  const steers = run.steers || {};
+  return (run.steerOrder || []).some(
+    id => steers[id]?.status === 'applied' && Number.isInteger(steers[id].step)
+  );
 }
 
 /** The row of a provider-run web search (no tool call of ours), or null without queries. */
@@ -668,8 +688,9 @@ function readingOf(run, items, finished) {
 export function buildToolActivity(run) {
   if (!run) return null;
   const finished = ['completed', 'aborted', 'error', 'budget_exhausted'].includes(run.status);
+  const stepped = readMessageAtStep(run);
   const toolRows = callsInOrder(run)
-    .map(call => callRow(run, call, finished))
+    .map(call => callRow(run, call, finished, stepped))
     .filter(Boolean);
   const placed = mergeSkillRows(
     mergeSkillRows(toolRows, skillRows(run)),

@@ -69,23 +69,6 @@ const formatElapsed = seconds => {
 };
 
 /**
- * A control that is off while a turn runs with `whileRunning` says why on
- * hover; otherwise it is rendered as it is (no wrapper in the toolbar's order).
- */
-function WhileRunningReason({ show, children }) {
-  const { t } = useTranslation();
-  if (!show) return children;
-  return (
-    <span
-      className="contents"
-      title={t('chat.steer.availableAfter', 'Available when the answer is finished')}
-    >
-      {children}
-    </span>
-  );
-}
-
-/**
  * Chat input component following Claude's design
  * Two-line layout:
  * - Top line: User input (auto-expanding textarea)
@@ -284,6 +267,12 @@ function ChatInput({
   if (sendMenuOpen && !steering) setSendMenuOpen(false);
   const sendMenuId = useId();
   const steerHintId = useId();
+  // Why attach, the model selector and voice mode are off while a turn runs with
+  // `whileRunning`: on each control as its title and its accessible description.
+  const availableAfterId = useId();
+  const availableAfter = steering
+    ? t('chat.steer.availableAfter', 'Available when the answer is finished')
+    : null;
   const sendMenuButtonRef = useRef(null);
   const sendAfterItemRef = useRef(null);
   const sendMenuRef = useRef(null);
@@ -1100,6 +1089,11 @@ function ChatInput({
               {sendHint}
             </span>
             {steering && (
+              <span id={availableAfterId} className="sr-only">
+                {availableAfter}
+              </span>
+            )}
+            {steering && (
               <span id={steerHintId} className="sr-only">
                 {t(
                   'chat.steer.hint',
@@ -1215,12 +1209,9 @@ function ChatInput({
                 type="button"
                 onClick={handleAttachFile}
                 disabled={isInputDisabled || isProcessing}
-                title={
-                  steering
-                    ? t('chat.steer.availableAfter', 'Available when the answer is finished')
-                    : t('chatActions.attachFile', 'Attach File')
-                }
+                title={availableAfter || t('chatActions.attachFile', 'Attach File')}
                 aria-label={t('chatActions.attachFile', 'Attach File')}
+                aria-describedby={steering ? availableAfterId : undefined}
                 className="hidden md:flex p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
               >
                 <Icon name="paper-clip" size="md" />
@@ -1332,39 +1323,39 @@ function ChatInput({
 
             {/* Model Selector */}
             {showModelSelector && models && models.length > 0 && onModelChange && (
-              <WhileRunningReason show={steering}>
-                <ModelSelector
-                  app={app}
-                  models={models}
-                  selectedModel={selectedModel}
-                  onModelChange={onModelChange}
-                  currentLanguage={currentLanguage}
-                  // An unacknowledged alert hint blocks sending, not switching:
-                  // picking another model is the way out of it (#3811).
-                  disabled={disabled || clarificationPending || isProcessing}
-                  // Not `oneLine`: the toolbar, and with it Send, keeps its
-                  // place when the composer is expanded and collapsed. Its
-                  // height matches the one-line text row.
-                  compact={startsOneLine}
-                />
-              </WhileRunningReason>
+              <ModelSelector
+                app={app}
+                models={models}
+                selectedModel={selectedModel}
+                onModelChange={onModelChange}
+                currentLanguage={currentLanguage}
+                // An unacknowledged alert hint blocks sending, not switching:
+                // picking another model is the way out of it (#3811).
+                disabled={disabled || clarificationPending || isProcessing}
+                disabledReason={availableAfter}
+                disabledReasonId={steering ? availableAfterId : undefined}
+                // Not `oneLine`: the toolbar, and with it Send, keeps its
+                // place when the composer is expanded and collapsed. Its
+                // height matches the one-line text row.
+                compact={startsOneLine}
+              />
             )}
 
             {/* Voice mode: a hands-free spoken conversation. Right next to Send;
                 not while a turn streams or a recording runs. */}
             {onVoiceMode && (
-              <WhileRunningReason show={steering}>
-                <VoiceModeButton
-                  onClick={onVoiceMode}
-                  active={voiceModeActive}
-                  disabled={
-                    disabled ||
-                    requiresAlertAcknowledgment ||
-                    isRecordingTranscription ||
-                    (isProcessing && !voiceModeActive)
-                  }
-                />
-              </WhileRunningReason>
+              <VoiceModeButton
+                onClick={onVoiceMode}
+                active={voiceModeActive}
+                disabled={
+                  disabled ||
+                  requiresAlertAcknowledgment ||
+                  isRecordingTranscription ||
+                  (isProcessing && !voiceModeActive)
+                }
+                disabledReason={availableAfter}
+                disabledReasonId={steering ? availableAfterId : undefined}
+              />
             )}
 
             {steering ? (
@@ -1450,7 +1441,7 @@ function ChatInput({
                       >
                         <span>{t('chat.steer.sendAfter', 'Send after this answer')}</span>
                         <kbd className="font-sans text-xs text-gray-600 dark:text-gray-400">
-                          Alt + Enter
+                          {t('chat.steer.sendAfterShortcut', 'Alt+Enter')}
                         </kbd>
                       </button>
                     </div>

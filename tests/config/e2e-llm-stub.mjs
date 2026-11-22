@@ -65,7 +65,8 @@
  */
 
 import http from 'node:http';
-import { E2E_SCRIPTS } from './e2e-scripts.mjs';
+import { E2E_SCRIPTS, SCRIPTS_THROUGH_STEERS } from './e2e-scripts.mjs';
+import { STEER_MARKER } from '../../shared/steerMarker.js';
 
 export const STUB_MODEL_ID = 'e2e-stub-model';
 /** The model id of the second stub model, the one that is offered tools. */
@@ -263,7 +264,9 @@ export function planFor(body, scripts = E2E_SCRIPTS) {
   const messages = Array.isArray(body?.messages) ? body.messages : [];
   const lastUserIndex = messages.findLastIndex(message => message.role === 'user');
   if (lastUserIndex < 0) return null;
-  const marker = parseMarker(textOf(messages[lastUserIndex].content));
+  const marker =
+    parseMarker(textOf(messages[lastUserIndex].content)) ||
+    scriptBeforeSteer(messages, lastUserIndex, scripts);
   if (!marker) return null;
   const assistantCount = messages.filter(message => message.role === 'assistant').length;
 
@@ -300,6 +303,31 @@ export function planFor(body, scripts = E2E_SCRIPTS) {
     ...(Number.isFinite(turn.slowMs) && { slowMs: turn.slowMs }),
     ...(turn.hangKey && { hangKey: String(turn.hangKey) })
   };
+}
+
+/**
+ * The script a request goes on with when its last user message is one the
+ * person sent into the running answer (`[steer] …`): the script the user
+ * message before it named, if that script goes on past such a message
+ * (`SCRIPTS_THROUGH_STEERS` of e2e-scripts.mjs, and only with the default
+ * scripts). Null otherwise: the request gets the default reply.
+ *
+ * @param {Array<Object>} messages - The request's messages
+ * @param {number} lastUserIndex - The index of the last user message
+ * @param {Record<string, Array<Object|Function>>} scripts
+ * @returns {{kind: 'script', name: string}|null}
+ */
+function scriptBeforeSteer(messages, lastUserIndex, scripts) {
+  if (scripts !== E2E_SCRIPTS) return null;
+  if (!textOf(messages[lastUserIndex].content).startsWith(STEER_MARKER)) return null;
+  for (let i = lastUserIndex - 1; i >= 0; i--) {
+    if (messages[i].role !== 'user') continue;
+    const text = textOf(messages[i].content);
+    if (text.startsWith(STEER_MARKER)) continue;
+    const marker = parseMarker(text);
+    return marker?.kind === 'script' && SCRIPTS_THROUGH_STEERS.has(marker.name) ? marker : null;
+  }
+  return null;
 }
 
 /** The fields every answer of the stub starts with. */

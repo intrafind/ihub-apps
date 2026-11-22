@@ -25,7 +25,7 @@ The page lists only what you can find in the product today. A feature that is ad
 | Stop answer                 | Antwort stoppen                       | The button that stops the answer iHub is writing. Enter never stops an answer.                                                                                                                               | The chat input while an answer is written, `/apps`                                                                                                                 |
 | Send after this answer      | Nach dieser Antwort senden            | Sends a message as the next message once the answer that is written is done, instead of into it.                                                                                                             | **More ways to send** next to **Send** in a chat while an answer is written, `/apps`                                                                               |
 
-Which of the last three fits a use case is the subject of [App, workflow or scheduled task: when to use which](concepts.md#app-workflow-or-scheduled-task-when-to-use-which). The pages behind the terms: [Apps](apps.md), [Workflows](workflows.md), [Scheduled Tasks](scheduled-tasks.md), [Chat Persistence](chat-persistence.md).
+Which of app, workflow and scheduled task fits a use case is the subject of [App, workflow or scheduled task: when to use which](concepts.md#app-workflow-or-scheduled-task-when-to-use-which). The pages behind the terms: [Apps](apps.md), [Workflows](workflows.md), [Scheduled Tasks](scheduled-tasks.md), [Chat Persistence](chat-persistence.md).
 
 Two things to know about the words as they stand today:
 

@@ -83,6 +83,8 @@ import { ensureTokenizer, estimateTokensSync } from '../../../shared/utils/token
 import ChatInput from '../../chat/components/ChatInput';
 import PendingWorkStrip from '../../chat/components/PendingWorkStrip';
 import DroppedMessageNotices from '../../chat/components/DroppedMessageNotices';
+import { notSentText } from '../../chat/hooks/useRunSteering';
+import { composerWhileRunning, withCopiedText } from '../../chat/composerWhileRunning';
 import { useToasts } from '../../../shared/components/ToastHost';
 import FloatingComposer from '../../chat/components/FloatingComposer';
 import ChatMessageList from '../../chat/components/ChatMessageList';
@@ -2966,9 +2968,7 @@ function AppChat({
       id: `steer-not-sent-${Date.now()}`,
       tone: result.error ? 'danger' : 'info',
       text: result.error
-        ? t('chat.steer.notSent', 'Not sent: {{reason}}', {
-            reason: result.error.message || ''
-          })
+        ? notSentText(t, result.error)
         : t(
             'chat.steer.answerFinished',
             'Not sent. The answer had already finished: press Send to send it as a new message.'
@@ -2978,8 +2978,17 @@ function AppChat({
 
   // Offered where the server says so, in the chat page only: not in a comparison,
   // not while a recording is transcribed.
-  const steerOffered =
-    steeringEnabled && steering.maySteer === true && !compareModeActive && !isTranscribing;
+  const whileRunning = composerWhileRunning({
+    steeringEnabled,
+    maySteer: steering.maySteer,
+    compareModeActive,
+    isTranscribing,
+    runningRunId,
+    clarificationPending,
+    full: steering.full,
+    onSteer: text => void handleSteer(text, 'steer'),
+    onSendAfter: text => void handleSteer(text, 'afterwards')
+  });
 
   // What waits for the running answer and what was not delivered, inside the composer.
   const pendingWork =
@@ -2999,7 +3008,7 @@ function AppChat({
         <DroppedMessageNotices
           items={steering.dropped}
           onCopy={item => {
-            setInput(current => (current ? `${current}\n${item.text}` : item.text));
+            setInput(current => withCopiedText(current, item.text));
             steering.dismissDropped(item.id);
             setTimeout(() => inputRef.current?.focus(), 0);
           }}
@@ -3125,17 +3134,7 @@ function AppChat({
       onRemoveQuote: () => setWorkspaceQuote(null),
       // A message while iHub is working (#3191): only here, and only when the
       // server says this person may send into the running answer.
-      whileRunning: steerOffered
-        ? {
-            enabled: true,
-            // Until the turn's run has started there is nothing to send into.
-            ready: Boolean(runningRunId),
-            blockedReason: clarificationPending ? 'question' : null,
-            full: steering.full,
-            onSteer: text => void handleSteer(text, 'steer'),
-            onSendAfter: text => void handleSteer(text, 'afterwards')
-          }
-        : null,
+      whileRunning,
       pendingWork
     };
 

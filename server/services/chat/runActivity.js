@@ -167,6 +167,13 @@ function slim(envelope) {
       return data?.progress?.replay ? null : envelope;
     case SSE_V2_EVENTS.META:
       return envelope;
+    // A message the person sent that the turn read at a step: the stored
+    // activity then keeps the step of each call, so the chat places the stored
+    // message among the rows as it did live. The text is stored as the message.
+    case SSE_V2_EVENTS.STEER_APPLIED:
+      return Number.isInteger(data?.step) && typeof data?.id === 'string'
+        ? { ...envelope, data: { id: data.id, kind: 'steer', step: data.step } }
+        : null;
     case SSE_V2_EVENTS.RUN_STARTED:
     case SSE_V2_EVENTS.RUN_ENDED:
     case SSE_V2_EVENTS.RUN_PAUSED:
@@ -402,6 +409,10 @@ function boundToolItem(item) {
       .filter(Boolean),
     error: text(item.error),
     durationMs: Number.isFinite(item.durationMs) ? item.durationMs : null,
+    // The step of the call, kept only for a turn that read a message at a step
+    // (see `shared/run/toolActivity`): where the chat places that message.
+    // (A compaction row keeps its step among its own fields.)
+    step: item.kind === 'compaction' ? undefined : integer(item.step),
     ...(item.kind === 'compaction' ? boundCompactionFields(item) : {})
   });
 }

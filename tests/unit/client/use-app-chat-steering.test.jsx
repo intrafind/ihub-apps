@@ -15,7 +15,11 @@ import { renderHook, act } from '@testing-library/react';
  * - the stream stays open past the answer's `run/ended` while a message sent
  *   into it waits for its frame, and closes once none waits;
  * - `steer/applied` with `nextRunId` places the next turn's question and answer
- *   at once and follows that turn on the chat's stream;
+ *   at once; the chat's stream follows that turn itself (no second stream), and
+ *   it is re-attached to only when its start does not come before the hold ends;
+ * - a held stream lets go after `TURN_END_HOLD_MS` or on a stream error;
+ * - the run a message goes to is never the one of an earlier, broken or paused turn;
+ * - after Stop answer, a message that waited comes back as a notice;
  * - `steer/dropped` gives the text back; a frame of a run the page does not
  *   show changes no message.
  */
@@ -68,6 +72,7 @@ jest.mock('../../../client/src/shared/utils/openSseStream', () => {
 });
 
 const useAppChat = require('../../../client/src/features/chat/hooks/useAppChat').default;
+const { TURN_END_HOLD_MS } = require('../../../client/src/shared/hooks/useEventSource');
 const { sendHumanEvent, fetchChat } = require('../../../client/src/api');
 
 const RUN = 'chat-run-1';
@@ -191,7 +196,28 @@ test('without a message waiting, the stream closes at the end of the answer as b
   expect(mockSignals.at(-1).aborted).toBe(true);
 });
 
-test('a message sent as the next turn gets its question and answer at once, and its turn is followed', async () => {
+/** Send a message "afterwards" and end the answer with it left over as the next turn. */
+async function leaveNextTurn(result, emit) {
+  sendHumanEvent.mockResolvedValue({ runId: RUN, seq: 4, id: 'later-1', effect: 'steer_queued' });
+  await act(async () => {
+    await result.current.steering.send(RUN, 'Then a summary', 'afterwards');
+  });
+  await act(async () => {
+    emit('step/delta', frame(RUN, 'step/delta', { step: 0, kind: 'text', content: 'The report.' }));
+    emit('run/ended', frame(RUN, 'run/ended', { status: 'completed', finishReason: 'stop' }));
+    emit(
+      'steer/applied',
+      frame(RUN, 'steer/applied', {
+        id: 'later-1',
+        kind: 'send_after',
+        text: 'Then a summary',
+        nextRunId: 'chat-run-2'
+      })
+    );
+  });
+}
+
+test('a message sent as the next turn gets its question and answer at once, and the chat stream follows its turn', async () => {
   jest.useFakeTimers();
   try {
     const { result } = renderHook(() => useAppChat({ appId: 'app', chatId: 'chat-1' }));
@@ -241,30 +267,244 @@ test('a message sent as the next turn gets its question and answer at once, and 
     await act(async () => {
       await Promise.resolve();
     });
-    expect(mockOpenCalls.at(-1)).toContain('resumeRun=chat-run-2');
+    // The chat's GET stream carries the next turn: no second stream is opened.
+    const opened = mockOpenCalls.length;
+    expect(mockOpenCalls.some(url => url.includes('resumeRun='))).toBe(false);
+    expect(mockSignals.at(-1).aborted).toBe(false);
     expect(result.current.processing).toBe(true);
 
-    // The next turn's frames arrive on the chat's stream, into its own answer.
-    const follow = mockEmitters.at(-1);
-    fetchChat.mockResolvedValue({
-      chat: { status: 'running', activeRunId: 'chat-run-2' },
-      messages: [],
-      pending: [],
-      maySteer: true
-    });
+    // The next turn's frames arrive on the same stream, into its own answer, once.
     await act(async () => {
-      follow('stream/connected', frame('chat-1', 'stream/connected', {}));
-      follow(
+      emit(
         'run/started',
         frame('chat-run-2', 'run/started', { kind: 'chat', refs: { messageId: 'later-1' } })
       );
-      follow(
+      emit(
         'step/delta',
         frame('chat-run-2', 'step/delta', { step: 0, kind: 'text', content: 'Summary.' })
       );
     });
+    expect(result.current.runningRunId).toBe('chat-run-2');
     expect(result.current.messages.find(m => m.id === 'later-1').content).toBe('Summary.');
     expect(result.current.messages.find(m => m.id === exchangeId).content).toBe('The report.');
+
+    // Past the time the switch may take, nothing is re-attached to either.
+    await act(async () => {
+      jest.advanceTimersByTime(TURN_END_HOLD_MS + 1000);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(mockOpenCalls).toHaveLength(opened);
+    expect(result.current.messages.find(m => m.id === 'later-1').content).toBe('Summary.');
+
+    // Its end closes the stream, and the transcript is read.
+    fetchChat.mockClear();
+    await act(async () => {
+      emit(
+        'run/ended',
+        frame('chat-run-2', 'run/ended', { status: 'completed', finishReason: 'stop' })
+      );
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(mockSignals.at(-1).aborted).toBe(true);
+    expect(result.current.processing).toBe(false);
+    expect(fetchChat).toHaveBeenCalledWith('chat-1');
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
+test('a next turn whose start never comes on the chat stream is re-attached to once the hold ends', async () => {
+  jest.useFakeTimers();
+  try {
+    const { result } = renderHook(() => useAppChat({ appId: 'app', chatId: 'chat-1' }));
+    const { emit } = await startTurn(result);
+    await leaveNextTurn(result, emit);
+    await act(async () => {
+      jest.advanceTimersByTime(1);
+    });
+    const held = mockSignals.at(-1);
+    expect(held.aborted).toBe(false);
+
+    await act(async () => {
+      jest.advanceTimersByTime(TURN_END_HOLD_MS);
+    });
+    // The hold ended without the next turn: the stream let go.
+    expect(held.aborted).toBe(true);
+    await act(async () => {
+      jest.advanceTimersByTime(1000);
+    });
+    for (let i = 0; i < 5; i++) {
+      await act(async () => {
+        await Promise.resolve();
+      });
+    }
+    expect(mockOpenCalls.at(-1)).toContain('resumeRun=chat-run-2');
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
+test('two left-over messages with the same text are both in the next question', async () => {
+  jest.useFakeTimers();
+  try {
+    const { result } = renderHook(() => useAppChat({ appId: 'app', chatId: 'chat-1' }));
+    const { emit } = await startTurn(result);
+    await act(async () => {
+      emit('run/ended', frame(RUN, 'run/ended', { status: 'completed', finishReason: 'stop' }));
+    });
+    await act(async () => {
+      for (const id of ['twice-1', 'twice-2']) {
+        emit(
+          'steer/applied',
+          frame(RUN, 'steer/applied', {
+            id,
+            kind: 'steer',
+            text: 'Also include Q4',
+            nextRunId: 'chat-run-2'
+          })
+        );
+      }
+      // A frame told twice (two server processes) is one message.
+      emit(
+        'steer/applied',
+        frame(RUN, 'steer/applied', {
+          id: 'twice-2',
+          kind: 'steer',
+          text: 'Also include Q4',
+          nextRunId: 'chat-run-2'
+        })
+      );
+    });
+    const question = result.current.messages.filter(m => m.role === 'user').at(-1);
+    expect(question.content).toBe('Also include Q4\n\nAlso include Q4');
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
+test('a held stream whose frame never comes lets go after the hold', async () => {
+  jest.useFakeTimers();
+  try {
+    const { result } = renderHook(() => useAppChat({ appId: 'app', chatId: 'chat-1' }));
+    const { emit } = await startTurn(result);
+    sendHumanEvent.mockResolvedValue({ runId: RUN, seq: 4, id: 'steer-h', effect: 'steer_queued' });
+    await act(async () => {
+      await result.current.steering.send(RUN, 'Shorter please');
+    });
+    await act(async () => {
+      emit('run/ended', frame(RUN, 'run/ended', { status: 'completed', finishReason: 'stop' }));
+    });
+    const signal = mockSignals.at(-1);
+    expect(signal.aborted).toBe(false);
+
+    await act(async () => {
+      jest.advanceTimersByTime(TURN_END_HOLD_MS - 1);
+    });
+    expect(signal.aborted).toBe(false);
+    await act(async () => {
+      jest.advanceTimersByTime(1);
+    });
+    expect(signal.aborted).toBe(true);
+    expect(result.current.processing).toBe(false);
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
+test('a stream error while the stream is held lets go of it at once', async () => {
+  const { result } = renderHook(() => useAppChat({ appId: 'app', chatId: 'chat-1' }));
+  const { emit } = await startTurn(result);
+  sendHumanEvent.mockResolvedValue({ runId: RUN, seq: 4, id: 'steer-e', effect: 'steer_queued' });
+  await act(async () => {
+    await result.current.steering.send(RUN, 'Shorter please');
+  });
+  await act(async () => {
+    emit('run/ended', frame(RUN, 'run/ended', { status: 'completed', finishReason: 'stop' }));
+  });
+  const signal = mockSignals.at(-1);
+  expect(signal.aborted).toBe(false);
+  await act(async () => {
+    emit('stream/error', frame(RUN, 'stream/error', { code: 'X', message: 'gone' }));
+  });
+  expect(signal.aborted).toBe(true);
+  expect(result.current.processing).toBe(false);
+});
+
+test('the run to send into is not the one of an earlier turn', async () => {
+  const { result } = renderHook(() => useAppChat({ appId: 'app', chatId: 'chat-1' }));
+  const { emit } = await startTurn(result);
+  expect(result.current.runningRunId).toBe(RUN);
+
+  // The stream breaks without the turn's end.
+  await act(async () => {
+    emit('stream/error', frame(RUN, 'stream/error', { code: 'X', message: 'gone' }));
+  });
+  expect(result.current.runningRunId).toBeNull();
+
+  // A turn paused for the person: nothing to send into until it goes on.
+  const second = await startTurn(result);
+  expect(result.current.runningRunId).toBe(RUN);
+  await act(async () => {
+    second.emit('run/paused', frame(RUN, 'run/paused', { reason: 'question' }));
+  });
+  expect(result.current.runningRunId).toBeNull();
+
+  // A new message: until its run starts, there is no run to send into.
+  await act(async () => {
+    second.emit('run/resumed', frame(RUN, 'run/resumed', {}));
+  });
+  expect(result.current.runningRunId).toBe(RUN);
+  act(() => {
+    result.current.sendMessage({
+      displayMessage: { content: 'Next question' },
+      apiMessage: { content: 'Next question' },
+      params: {}
+    });
+  });
+  expect(result.current.runningRunId).toBeNull();
+});
+
+test('after Stop answer, a message that waited comes back as a notice with its text', async () => {
+  jest.useFakeTimers();
+  try {
+    const { result } = renderHook(() => useAppChat({ appId: 'app', chatId: 'chat-1' }));
+    await startTurn(result);
+    sendHumanEvent
+      .mockResolvedValueOnce({ runId: RUN, seq: 4, id: 'steer-s1', effect: 'steer_queued' })
+      .mockResolvedValueOnce({ runId: RUN, seq: 5, id: 'steer-s2', effect: 'steer_queued' });
+    await act(async () => {
+      await result.current.steering.send(RUN, 'Use the 2025 numbers, not 2024');
+      await result.current.steering.send(RUN, 'Read before the stop');
+    });
+    // The stopped answer's frames never arrive; the chat lists nothing that
+    // waits any more, and has the second message as read.
+    fetchChat.mockResolvedValue({
+      chat: { status: 'active' },
+      messages: [{ role: 'user', steer: true, runId: RUN, steerId: 'steer-s2', content: 'x' }],
+      pending: [],
+      maySteer: true
+    });
+    await act(async () => {
+      result.current.cancelGeneration();
+    });
+    expect(result.current.steering.dropped).toEqual([]);
+    await act(async () => {
+      jest.advanceTimersByTime(3000);
+    });
+    for (let i = 0; i < 3; i++) {
+      await act(async () => {
+        await Promise.resolve();
+      });
+    }
+    expect(fetchChat).toHaveBeenCalledWith('chat-1');
+    expect(result.current.steering.items).toEqual([]);
+    expect(result.current.steering.dropped).toEqual([
+      { id: 'steer-s1', text: 'Use the 2025 numbers, not 2024', reason: 'run_stopped' }
+    ]);
   } finally {
     jest.useRealTimers();
   }
@@ -293,4 +533,38 @@ test('a message already read cannot be removed: it leaves the list and a toast s
   expect(removeHumanEvent).toHaveBeenCalledWith(RUN, 'steer-3');
   expect(result.current.steering.items).toEqual([]);
   expect(document.body).toHaveTextContent('Already read by iHub');
+});
+
+test('a message that no longer waits when it is removed (404) leaves the list as removed', async () => {
+  const { waitFor } = require('@testing-library/react');
+  const { ToastProvider } = require('../../../client/src/shared/components/ToastHost');
+  const { AnnouncerProvider } = require('../../../client/src/shared/announce/AnnouncerProvider');
+  const { removeHumanEvent } = require('../../../client/src/api');
+  const wrapper = ({ children }) => (
+    <AnnouncerProvider>
+      <ToastProvider>{children}</ToastProvider>
+    </AnnouncerProvider>
+  );
+  const { result } = renderHook(() => useAppChat({ appId: 'app', chatId: 'chat-1' }), {
+    wrapper
+  });
+  await startTurn(result);
+  sendHumanEvent.mockResolvedValue({ runId: RUN, seq: 4, id: 'steer-4', effect: 'steer_queued' });
+  await act(async () => {
+    await result.current.steering.send(RUN, 'Gone already');
+  });
+  removeHumanEvent.mockRejectedValueOnce(Object.assign(new Error('gone'), { status: 404 }));
+  await act(async () => {
+    await result.current.steering.remove(result.current.steering.items[0]);
+  });
+  expect(result.current.steering.items).toEqual([]);
+  expect(result.current.steering.dropped).toEqual([]);
+  // After the announcement of the send (the announcer keeps a gap between two).
+  await waitFor(
+    () =>
+      expect(document.querySelector('[data-testid="announcer"]')).toHaveTextContent(
+        'Your message was removed'
+      ),
+    { timeout: 4000 }
+  );
 });

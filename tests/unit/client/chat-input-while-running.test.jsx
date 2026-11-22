@@ -219,6 +219,62 @@ describe('the composer while iHub is working', () => {
     expect(onSubmit).toHaveBeenCalledTimes(1);
   });
 
+  test('the model selector and voice mode say why they are off, as title and description', () => {
+    render(
+      <Composer
+        isProcessing
+        whileRunning={whileRunning()}
+        showModelSelector
+        models={[
+          { id: 'm1', name: { en: 'Model One' } },
+          { id: 'm2', name: { en: 'Model Two' } }
+        ]}
+        selectedModel="m1"
+        onModelChange={jest.fn()}
+        onVoiceMode={jest.fn()}
+      />
+    );
+    const reason = 'Available when the answer is finished';
+    const voice = screen.getByTestId('voice-mode-button');
+    expect(voice).toBeDisabled();
+    expect(voice).toHaveAttribute('title', reason);
+    expect(voice).toHaveAccessibleDescription(reason);
+    const model = screen.getByRole('button', { name: /Model One/ });
+    expect(model).toBeDisabled();
+    expect(model).toHaveAttribute('title', reason);
+    expect(model).toHaveAccessibleDescription(reason);
+  });
+
+  test('outside a run the same controls keep their own title and no description', () => {
+    render(
+      <Composer
+        whileRunning={whileRunning()}
+        showModelSelector
+        models={[
+          { id: 'm1', name: { en: 'Model One' } },
+          { id: 'm2', name: { en: 'Model Two' } }
+        ]}
+        selectedModel="m1"
+        onModelChange={jest.fn()}
+        onVoiceMode={jest.fn()}
+      />
+    );
+    const voice = screen.getByTestId('voice-mode-button');
+    expect(voice).toHaveAttribute('title', 'Start voice mode');
+    expect(voice).not.toHaveAttribute('aria-describedby');
+    const model = screen.getByRole('button', { name: /Model One/ });
+    expect(model).toHaveAttribute('title', 'Select Model');
+    expect(model).not.toHaveAttribute('aria-describedby');
+  });
+
+  test('the shortcut of "Send after this answer" is a translated text', () => {
+    render(<Composer initial="x" isProcessing whileRunning={whileRunning()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'More ways to send' }));
+    const item = screen.getByRole('menuitem', { name: /Send after this answer/ });
+    expect(item).toHaveAttribute('aria-keyshortcuts', 'Alt+Enter');
+    expect(item.querySelector('kbd')).toHaveTextContent('Alt+Enter');
+  });
+
   test('renders what waits in the chat inside the composer, above the text', () => {
     render(
       <Composer

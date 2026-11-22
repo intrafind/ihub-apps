@@ -119,9 +119,9 @@ in the form again. The values stay with the chat, so they are still there when y
 
 #### While iHub is working
 
-While an answer is written, the input shows **Stop answer** and **Send** as two buttons. Where
-your administrator switched on **Messages while iHub is working** (a preview), you can keep
-typing:
+Where your administrator switched on **Messages while iHub is working** (a preview), the input
+stays open while an answer is written, shows **Stop answer** and **Send** as two buttons, and you
+can keep typing:
 
 - **Enter** or **Send** hands your message to the running answer, for example "use the 2025
   numbers instead". iHub reads it at its next step: before it asks the model again, after a search
@@ -133,8 +133,8 @@ typing:
 - Above the input a list shows what waits: *Will be read at the next step* or *Will be sent as the
   next message*. **×** removes a message until iHub has read it; one that was read already stays,
   and a notice says *Already read by iHub*. At most 20 messages wait.
-- A message iHub read appears inside the answer, captioned *Sent while iHub was working*, the same
-  way after a reload.
+- A message iHub read appears inside the answer, among the steps of its activity at the step where
+  iHub read it, captioned *Sent while iHub was working*, the same way after a reload.
 - A message iHub could not take (the answer was stopped, ended with an error or asked you
   something first; in a temporary chat, where nothing is sent on its own) comes back as a notice
   with **Copy to input**. A message the answer ended before reading is sent as your next message.

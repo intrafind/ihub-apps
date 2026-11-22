@@ -63,6 +63,82 @@ function pendingItemOf(item) {
 }
 
 /**
+ * What became of the messages of an answer that ended, as far as the chat's
+ * read model tells: the ones it no longer lists (`gone`), and of those the ones
+ * the stored chat does not have as read (a message with their `steerId`), which
+ * were dropped with `ended.reason` and give their text back.
+ *
+ * @param {Object} params
+ * @param {Array<Object>} params.items - What the strip lists now
+ * @param {Array<Object>} params.listed - What `pending[]` lists
+ * @param {Object} params.readModel - The body of `GET /api/chats/:chatId`
+ * @param {{runId: string, reason: string}} params.ended
+ * @param {Set<string>} params.settled - Ids already done with
+ * @returns {{gone: string[], notDelivered: Array<{id: string, text: string, reason: string|null}>}}
+ */
+export function goneAfterEnd({ items, listed, readModel, ended, settled }) {
+  const listedIds = new Set(listed.map(item => item.id));
+  const read = new Set(
+    (Array.isArray(readModel?.messages) ? readModel.messages : [])
+      .filter(message => message?.steer === true && typeof message.steerId === 'string')
+      .map(message => message.steerId)
+  );
+  const lost = items.filter(
+    item =>
+      item.runId === ended.runId &&
+      !item.sending &&
+      !listedIds.has(item.id) &&
+      !settled.has(item.id)
+  );
+  return {
+    gone: lost.map(item => item.id),
+    notDelivered: lost
+      .filter(item => !read.has(item.id) && item.text)
+      .map(item => ({ id: item.id, text: item.text, reason: ended.reason || null }))
+  };
+}
+
+/**
+ * Why a message for the running answer was not sent, in the person's language,
+ * by the problem code or status of the refusal (`POST /api/runs/{runId}/human-events`).
+ * The server's `detail` is English and is never shown; a refusal this client
+ * does not know gets the general text.
+ *
+ * @param {Function} t
+ * @param {{status?: number, code?: string}|null|undefined} error
+ * @returns {string}
+ */
+export function notSentText(t, error) {
+  const code = error?.code;
+  const status = error?.status;
+  if (code === 'RUN_STEER_FORBIDDEN' || status === 403) {
+    return t(
+      'chat.steer.notSentForbidden',
+      'Not sent: only the person this answer is written for can add a message to it.'
+    );
+  }
+  if (code === 'RUN_NOT_ACTIVE') {
+    return t('chat.steer.notSentApproval', 'Not sent: answer the approval above first.');
+  }
+  if (status === 400) {
+    return t(
+      'chat.steer.notSentInvalid',
+      'Not sent: the message could not be taken. Shorten it and try again.'
+    );
+  }
+  if (status === 429) {
+    return t(
+      'chat.steer.notSentTooMany',
+      'Not sent: too many messages in a short time. Please wait a moment.'
+    );
+  }
+  if (status === 503) {
+    return t('chat.steer.notSentBusy', 'Not sent: iHub is busy. Please try again in a moment.');
+  }
+  return t('chat.steer.notSentRetry', 'Not sent. Please try again.');
+}
+
+/**
  * The messages the person sends into the running answer of a chat (#3191):
  * what waits, what was not delivered, and whether the person may send at all.
  *
@@ -138,31 +214,65 @@ function useRunSteering({ chatId }) {
    * Take what the chat's read model says: `maySteer` (absent: the feature is
    * off, read as false) and `pending[]`. Messages being sent stay.
    *
+   * With `ended`, the answer `ended.runId` is over and the caller knows what
+   * became of what still waited for it (`ended.reason`, one of
+   * `STEER_DROP_REASONS`): a message of that answer that `pending[]` no longer
+   * lists and that the stored chat does not have as read (a message with its
+   * `steerId`) was dropped with that reason. Its frame did not reach this page
+   * (a stopped answer's stream closes at once), so its text comes back as a
+   * notice instead of going silently.
+   *
    * @param {Object|null} readModel - The body of `GET /api/chats/:chatId`
+   * @param {Object} [options]
+   * @param {{runId: string, reason: string}} [options.ended]
    */
   const adopt = useCallback(
-    readModel => {
+    (readModel, { ended = null } = {}) => {
       if (!readModel || typeof readModel !== 'object') return;
       setMaySteer(readModel.maySteer === true);
       const listed = (Array.isArray(readModel.pending) ? readModel.pending : [])
-        .map(pendingItemOf)
+        .map(item => pendingItemOf(item))
         .filter(item => item && !settledRef.current.has(item.id));
+      if (ended?.runId) {
+        const { gone, notDelivered } = goneAfterEnd({
+          items: itemsRef.current,
+          listed,
+          readModel,
+          ended,
+          settled: settledRef.current
+        });
+        for (const id of gone) settledRef.current.add(id);
+        if (notDelivered.length > 0) {
+          setDropped(list => [
+            ...list,
+            ...notDelivered.filter(entry => !list.some(known => known.id === entry.id))
+          ]);
+          announce(t('chat.steer.announceDropped', 'Your message was not delivered'));
+        }
+      }
       updateItems(list => [...listed, ...list.filter(item => item.sending)]);
     },
-    [updateItems]
+    [announce, updateItems, t]
   );
 
-  /** Ask the chat's read model again. */
-  const refresh = useCallback(async () => {
-    const requested = chatRef.current;
-    if (!requested) return;
-    try {
-      const body = await fetchChat(requested);
-      if (chatRef.current === requested) adopt(body);
-    } catch {
-      // What is listed stays; the next frame or read corrects it.
-    }
-  }, [adopt]);
+  /**
+   * Ask the chat's read model again.
+   *
+   * @param {Object} [options] - See {@link adopt}
+   */
+  const refresh = useCallback(
+    async (options = {}) => {
+      const requested = chatRef.current;
+      if (!requested) return;
+      try {
+        const body = await fetchChat(requested);
+        if (chatRef.current === requested) adopt(body, options);
+      } catch {
+        // What is listed stays; the next frame or read corrects it.
+      }
+    },
+    [adopt]
+  );
 
   /**
    * Send a message into the running answer: read at its next step, or with
@@ -246,8 +356,10 @@ function useRunSteering({ chatId }) {
             icon: 'chat-bubble-left'
           });
         } else if (error?.status === 404) {
-          // It no longer waits: the frame that said so did not reach this page.
+          // It no longer waits (the frame that said so did not reach this page):
+          // it will not be read, which is what the person asked for.
           settle(item.id);
+          announce(t('chat.steer.announceRemoved', 'Your message was removed'));
         } else {
           showToast({
             id: `steer-remove-${item.id}`,
@@ -334,16 +446,21 @@ function useRunSteering({ chatId }) {
   /**
    * The answer `runId` ended: when messages sent into it are still listed a
    * moment later (their frame did not reach this page), ask the read model.
+   * With `reason` (the person stopped the answer: `run_stopped`), what the read
+   * model no longer lists was dropped for it and comes back as a notice.
    *
    * @param {string} runId
+   * @param {Object} [options]
+   * @param {string} [options.reason] - What became of what still waited, when the caller knows.
    */
   const checkAfterEnd = useCallback(
-    runId => {
+    (runId, { reason = null } = {}) => {
       if (!hasWaitingFor(runId)) return;
       const requested = chatRef.current;
       const timer = setTimeout(() => {
         timersRef.current.delete(timer);
-        if (chatRef.current === requested && hasWaitingFor(runId)) void refresh();
+        if (chatRef.current !== requested || !hasWaitingFor(runId)) return;
+        void refresh(reason ? { ended: { runId, reason } } : {});
       }, SETTLE_CHECK_MS);
       timersRef.current.add(timer);
     },
