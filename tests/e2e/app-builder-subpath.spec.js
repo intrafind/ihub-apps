@@ -41,7 +41,12 @@ function watchRequests(page, origin) {
     const url = new URL(request.url());
     if (url.origin !== origin || !BASE) return;
     if (url.pathname !== BASE && !url.pathname.startsWith(`${BASE}/`)) {
-      problems.push(`${request.method()} ${url.pathname} ignores the base path ${BASE}`);
+      // The resource type and the document say which element asked: the run in CI
+      // reported a logo request outside the prefix that no local run shows.
+      const from = `${request.resourceType()} from ${new URL(request.frame().url()).pathname}`;
+      problems.push(
+        `${request.method()} ${url.pathname} ignores the base path ${BASE} (${from}, referer ${request.headers().referer || 'none'})`
+      );
     }
   });
   page.on('response', response => {
