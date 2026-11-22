@@ -239,6 +239,7 @@ function PersonalAppNotice({ app }) {
         {/* A text child: React escapes it, so instructions can never become markup. */}
         <pre
           data-testid="personal-app-instructions"
+          // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- scrollable region must be keyboard reachable
           tabIndex={0}
           className="max-h-[70vh] overflow-auto whitespace-pre-wrap break-words p-4 font-sans text-sm text-gray-800 dark:text-gray-200"
         >
