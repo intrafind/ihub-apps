@@ -288,6 +288,16 @@ const COMPANY_APPS = [
     name: { en: 'Old bot' },
     description: { en: 'Switched off.' },
     system: { en: 'You are old.' }
+  },
+  {
+    id: 'ask-documents',
+    type: 'chat',
+    enabled: true,
+    name: { en: 'Ask the documents' },
+    description: { en: 'Answers from the iAssistant.' },
+    system: { en: 'You answer from the documents.' },
+    iassistant: { assistantId: 'hr' },
+    integrations: { iassistant: {} }
   }
 ];
 
@@ -849,9 +859,11 @@ describe('copying an existing app', () => {
     expect(listed).toHaveLength(2);
     expect(listed[0]).toContain('FAQ bot');
     expect(listed[1]).toContain('Meeting notes');
-    // A link app, a website in a frame, a switched-off app, a reduced body, a
-    // retired app and an open offer cannot become a personal app of this person.
+    // An iAssistant app, a link app, a website in a frame, a switched-off app, a
+    // reduced body, a retired app and an open offer cannot become a personal app
+    // of this person.
     for (const name of [
+      'Ask the documents',
       'Intranet',
       'Wiki in a frame',
       'Old bot',
@@ -1017,6 +1029,15 @@ describe('which apps a personal app can be copied from', () => {
     expect(isCopyableAsUserApp({ id: 'plain', name: { en: 'Plain' } })).toBe(true);
     expect(isCopyableAsUserApp(null)).toBe(false);
     expect(isCopyableAsUserApp({ name: { en: 'No ID' } })).toBe(false);
+  });
+
+  it('leaves out apps connected to the iAssistant, by settings or by binding', () => {
+    const chat = { id: 'ask', type: 'chat', name: { en: 'Ask' }, system: { en: 'Hi' } };
+    expect(isCopyableAsUserApp(chat)).toBe(true);
+    expect(isCopyableAsUserApp({ ...chat, iassistant: { assistantId: 'hr' } })).toBe(false);
+    expect(isCopyableAsUserApp({ ...chat, integrations: { iassistant: {} } })).toBe(false);
+    expect(isCopyableAsUserApp({ ...chat, integrations: ['iassistant'] })).toBe(false);
+    expect(isCopyableAsUserApp({ ...chat, integrations: { 'jira-main': {} } })).toBe(true);
   });
 
   it('lists an app once', () => {

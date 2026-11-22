@@ -98,7 +98,8 @@ describes them. The differences for a personal app:
   empty**. Link apps and the Marketplace are not offered.
 - **Copy an existing app** lists the apps the person has access to: the company apps they may
   use, and the personal apps they own or that are shared with them. Left out are apps a personal
-  app cannot become (link apps, websites shown inside iHub, apps that are switched off) and apps
+  app cannot become (link apps, websites shown inside iHub, apps connected to the iAssistant,
+  apps that are switched off) and apps
   whose content the person cannot read (a personal app that is switched off or whose sharing is
   suspended, an app that was published and is now a company app for them, an app only offered
   to them). The copy takes the texts in every language, the icon, the colour, the message

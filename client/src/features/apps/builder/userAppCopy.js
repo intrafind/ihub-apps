@@ -11,7 +11,9 @@
  * app can become it and the person can read its content:
  *
  * - a company app that is a chat app and switched on (a link app or a
- *   website shown inside iHub has no personal form);
+ *   website shown inside iHub has no personal form), and that is not
+ *   connected to the iAssistant (a copy would lose the connection and answer
+ *   without the documents the original searches);
  * - a personal app the person may use, sent with its instructions: a reduced
  *   body (switched off, shares suspended), an app retired for the person and
  *   an open offer are left out.
@@ -52,6 +54,24 @@ export function isPersonalApp(app) {
 }
 
 /**
+ * Whether an app is connected to the iAssistant: it carries `iassistant`
+ * settings or binds the integration `iassistant`.
+ *
+ * @param {object} app
+ * @returns {boolean}
+ */
+export function usesIAssistant(app) {
+  if (isPlainObject(app?.iassistant)) return true;
+  const integrations = app?.integrations;
+  if (Array.isArray(integrations)) {
+    return integrations.some(
+      entry => entry === 'iassistant' || (isPlainObject(entry) && entry.id === 'iassistant')
+    );
+  }
+  return isPlainObject(integrations) && Object.hasOwn(integrations, 'iassistant');
+}
+
+/**
  * Whether a person can copy an app into an app of their own.
  *
  * @param {object|null|undefined} app - An app as `GET /api/apps` or
@@ -61,6 +81,7 @@ export function isPersonalApp(app) {
  * @example
  * isCopyableAsUserApp({ id: 'faq', type: 'chat', enabled: true }); // → true
  * isCopyableAsUserApp({ id: 'intranet', type: 'redirect' }); // → false
+ * isCopyableAsUserApp({ id: 'ask', type: 'chat', iassistant: {} }); // → false (iAssistant)
  * isCopyableAsUserApp({ id: 'uap_…', ownership: 'user', name: { en: 'X' } }); // → false (reduced)
  */
 export function isCopyableAsUserApp(app) {
@@ -74,7 +95,7 @@ export function isCopyableAsUserApp(app) {
       app.permissions?.canUse === true
     );
   }
-  return (app.type ?? 'chat') === 'chat' && app.enabled !== false;
+  return (app.type ?? 'chat') === 'chat' && app.enabled !== false && !usesIAssistant(app);
 }
 
 /**
