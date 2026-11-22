@@ -51,7 +51,7 @@ const CSS_REMOTE_RE = /(?:@import\s+(?:url\()?|\burl\()\s*["']?((?:https?:)?\/\/
 // Inline classic scripts, for the syntax check. `src` scripts and non-JS types
 // (JSON data, templates, text/babel) are skipped; modules too, since `vm`
 // compiles classic scripts only.
-const INLINE_SCRIPT_RE = /<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi;
+const INLINE_SCRIPT_RE = /<script\b([^>]*)>([\s\S]*?)<\/script(?=[\s/>])[^>]{0,256}>/gi;
 const JS_TYPE_RE = /^(?:text|application)\/(?:javascript|ecmascript)$/i;
 // An <a> whose target cannot work in the sandboxed preview: an empty or bare "#",
 // "javascript:", an absolute or root-relative URL, or a relative file path. Only
@@ -167,9 +167,10 @@ function countOf(re, text) {
  * that opens `<html>` and closes neither `<body>` nor `<html>`.
  */
 function looksTruncated(text, format) {
-  if (format === 'svg') return /<svg\b/i.test(text) && !/<\/svg\s*>/i.test(text);
-  if (countOf(/<script\b/gi, text) > countOf(/<\/script\s*>/gi, text)) return true;
-  if (countOf(/<style\b/gi, text) > countOf(/<\/style\s*>/gi, text)) return true;
+  if (format === 'svg') return /<svg\b/i.test(text) && !/<\/svg(?=[\s/>])[^>]{0,256}>/i.test(text);
+  if (countOf(/<script\b/gi, text) > countOf(/<\/script(?=[\s/>])[^>]{0,256}>/gi, text))
+    return true;
+  if (countOf(/<style\b/gi, text) > countOf(/<\/style(?=[\s/>])[^>]{0,256}>/gi, text)) return true;
   return /<html\b/i.test(text) && !/<\/body\s*>/i.test(text) && !/<\/html\s*>/i.test(text);
 }
 

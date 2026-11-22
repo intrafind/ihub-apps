@@ -6,6 +6,7 @@ import express from 'express';
 import { ServiceError } from '../../utils/ServiceError.js';
 import { createReadStream } from 'node:fs';
 import { authRequired } from '../../middleware/authRequired.js';
+import { buildContentDisposition } from '../../utils/safeContentDisposition.js';
 import {
   canAccessJob,
   cancelJobAnywhere,
@@ -165,7 +166,8 @@ router.get('/jobs/:jobId/download', authRequired, downloadLimiter, async (req, r
   }
 
   res.setHeader('Content-Type', job.resultContentType || 'application/octet-stream');
-  res.setHeader('Content-Disposition', `attachment; filename="${job.resultFilename || 'result'}"`);
+  res.setHeader('Content-Disposition', buildContentDisposition(job.resultFilename || 'result'));
+  res.setHeader('X-Content-Type-Options', 'nosniff');
   if (found.local) {
     res.setHeader('Content-Length', job.result.length);
     res.send(job.result);

@@ -177,6 +177,19 @@ export function sanitizeLanguageCode(lang, fallback = 'en') {
 }
 
 /**
+ * A path argument the boundary checks can work on: a non-empty string without a
+ * NUL byte (which the OS would read as the end of the path, so `a.json\0.png`
+ * could pass a suffix check yet open `a.json`). Applies to the base as well as
+ * to the path, since callers build bases from stored ids.
+ *
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+function isUsablePathInput(value) {
+  return typeof value === 'string' && value.length > 0 && !value.includes('\0');
+}
+
+/**
  * Validates that a resolved file path stays within the expected base directory.
  * Prevents path traversal by ensuring the canonical path starts with the canonical base.
  *
@@ -185,7 +198,7 @@ export function sanitizeLanguageCode(lang, fallback = 'en') {
  * @returns {Promise<string|null>} - The resolved absolute path if safe, null if traversal detected
  */
 export async function resolveAndValidatePath(filePath, baseDir) {
-  if (!filePath || typeof filePath !== 'string') {
+  if (!isUsablePathInput(filePath) || !isUsablePathInput(baseDir)) {
     return null;
   }
 
@@ -264,7 +277,7 @@ export function validateLanguageKeys(obj) {
  * @returns {Promise<string|null>} - The real resolved path if safe, null if traversal detected or target missing
  */
 export async function resolveAndValidateRealPath(filePath, baseDir) {
-  if (!filePath || typeof filePath !== 'string') {
+  if (!isUsablePathInput(filePath) || !isUsablePathInput(baseDir)) {
     return null;
   }
 
