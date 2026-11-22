@@ -12,7 +12,8 @@ script in the context of the signed-in user.
 
 ## MCP Gateway and A2A Endpoints Follow the API Rate Limit
 
-The MCP gateway (`/mcp`), the A2A routes (`/a2a`) and the MCP OAuth callback had no request limit.
+The MCP gateway (`/mcp`), the A2A routes (`/a2a`), the MCP OAuth callback and the OAuth client
+metadata document had no request limit.
 They now count against `rateLimit.publicApi`, per signed-in user or OAuth client, so many people
 behind one proxy or one hosted MCP client do not share a bucket.
 
