@@ -46,9 +46,34 @@
         "client/src/features/chat/components/RunAnnouncer.jsx"
       ],
       "specs": ["focus-policy.spec.js"]
+    },
+    {
+      "paths": [
+        "client/src/features/chat/components/ChatInput.jsx",
+        "client/src/features/chat/components/PendingWorkStrip.jsx",
+        "client/src/features/chat/components/AppliedMessages.jsx",
+        "client/src/features/chat/components/DroppedMessageNotices.jsx",
+        "client/src/features/chat/components/ChatMessage.jsx",
+        "client/src/features/chat/hooks/useAppChat.js",
+        "client/src/features/chat/hooks/useRunSteering.js",
+        "client/src/features/chat/hooks/useChatMessages.js",
+        "client/src/features/chat/runToMessage.js",
+        "client/src/features/apps/pages/AppChat.jsx",
+        "client/src/shared/hooks/useEventSource.js",
+        "shared/run/runReducer.js",
+        "server/services/loop/steering.js",
+        "server/services/chat/chatSteering.js",
+        "server/services/chat/chatTurnStart.js",
+        "server/routes/runs.js"
+      ],
+      "specs": ["steer.spec.js"]
     }
   ],
   "overlays": {
-    "chat-post-stream": { "features": { "chatPostStream": true } }
+    "chat-post-stream": {
+      "features": {
+        "chatPostStream": true
+      }
+    }
   }
 }
