@@ -4,7 +4,7 @@
       "id": "fail-open-removal",
       "title": "An app call by a principal without resolved permissions is refused",
       "state": "proposed",
-      "decision": "Proposed: unify to refusal. Today a caller without a permissions object may call any app as a tool (appToolsGateway.js). The run service resolves a grant for every caller and refuses a caller that has none. No option to keep the old behaviour: it is a security weakness.",
+      "decision": "Unify to refusal. Before, isAppInvocationAllowed (appToolsGateway.js) let every caller through that carried no permissions object, so such a caller could call an app no group grants. Now the gateway fails closed, and the run service refuses any run whose context has no principal with resolved permissions (no run context can be built for one) and any app the principal may not open, with an entry in the audit log. In the golden the caller gets the refusal a user who may not open the app gets (\"You do not have permission to access app restricted\"); no run starts, so the record has no ledger, model request, offered tool or usage record any more, and the case title says what it pins now. No option to keep the old behaviour: it is a security weakness.",
       "goldens": ["app-as-tool/user-without-permissions.json"],
       "parts": [
         "ledger",
@@ -191,9 +191,9 @@
     },
     {
       "id": "app-as-tool-display-fields",
-      "title": "The tool row of an app call has the display fields of a sub-agent",
+      "title": "The tool row of an app call is titled with the name of the app",
       "state": "proposed",
-      "decision": "Proposed: unify to the display fields a sub-agent has. Today the row of app__<id> has the title \"App: <name of the app>\" (in the golden: \"App: Claims specialist\") and the activity kind of an ordinary tool call (tool). It gets the localized name of the app alone as its title and the activity kind of a sub-agent, both decided on the server.",
+      "decision": "Unify to the title a sub-agent has, decided on the server: the row of app__<id> is titled with the localized name of the app alone (in the golden \"Claims specialist\" instead of \"App: Claims specialist\"), on tool/started and on the ledger's tool/call. The tool definition carries the name for that (appName), so the tool definitions the ledger records gain the field and their hash (toolSchemasHash) changes; what the model is sent does not change (modelRequests and toolSchemas are the same). The activity kind stays tool: the chat has no sub-agent row yet, and the pull request that adds it gives the app call that kind.",
       "goldens": ["app-as-tool/ok.json"],
       "parts": ["envelopes", "ledger"],
       "pr": "run-service-headless",

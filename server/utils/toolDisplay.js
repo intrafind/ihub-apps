@@ -96,6 +96,9 @@ export function toolDisplayOf(toolDef) {
     title = text(toolDef._mcp.title) || text(toolDef._mcp.originalName);
   } else if (toolDef._a2a) {
     title = text(toolDef._a2a.skillName);
+  } else if (toolDef.isAppAsTool === true) {
+    // An app called as a tool: the app's localized name alone, not "App: <name>".
+    title = text(toolDef.appName);
   }
 
   // Any other tool: its configured (localized) name, when it says more than its id.

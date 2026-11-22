@@ -592,8 +592,8 @@ export async function settleToolOutputs(outcome, params) {
 }
 
 /**
- * Seam for runs without a client (`ChatService.invokeAppInternal`: the MCP and
- * A2A gateways): the same lift as the chat's tool seam, collecting what the
+ * Seam for runs without a client (`services/run/hosts/HeadlessHost.js`: an app
+ * called as a tool, the MCP and A2A gateways): the same lift as the chat's tool seam, collecting what the
  * run's tools produced instead of streaming it.
  *
  * @param {Object} params

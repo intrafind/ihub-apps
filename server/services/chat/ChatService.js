@@ -7,8 +7,9 @@
  * `prepareChatRequest` resolves app, model, messages and tools
  * (`RequestBuilder`); `runTurn` runs the turn through `AgentLoop` and projects
  * it onto SSE v2 frames via `chatChannel` / `chatSeams` (one run per turn,
- * `run/started` … `run/ended`); `invokeAppInternal` runs an app headlessly
- * (app-as-tool gateway, MCP) and returns the assembled answer. There is no
+ * `run/started` … `run/ended`). An app that runs without a client (called as
+ * a tool, through the MCP gateway or by an A2A agent) runs on the run service
+ * (`services/run/RunService.js`), which prepares it here. There is no
  * chat-specific model loop any more: budgets, tool execution, argument
  * repair, compaction and abort handling are the loop's.
  *
@@ -21,7 +22,6 @@ import { logInteraction as defaultLogInteraction } from '../../utils.js';
 import { ToolRunner } from '../run/ToolRunner.js';
 import configCache from '../../configCache.js';
 import { isFeatureEnabled } from '../../featureRegistry.js';
-import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
 import {
   abortChatRequest,
   activeRequests,
@@ -43,7 +43,6 @@ import {
   RUN_LOG_EVENTS,
   SSE_V2_EVENTS
 } from '../../../shared/runEvents.js';
-import { storedSourceSet } from '../../../shared/sources/index.js';
 import {
   answerBasisOf,
   boundCarriedBasis,
@@ -66,7 +65,6 @@ import { chatSteerSeam, createLeftover } from './chatSteering.js';
 import { discardRunActivity, recordRunActivity } from './runActivity.js';
 import { createPageReadGate, resolveMaxPageReads } from './pageReadLimit.js';
 import { createTurnSkillLog } from './turnSkillLog.js';
-import { headlessToolOutputSeam } from './toolOutputFiles.js';
 import {
   admitTurnProjects,
   materializeAssistantTurn,
@@ -119,10 +117,10 @@ export const CHAT_MAX_TOOL_ROUNDS = 50;
  * replays a dead run and spins on an empty placeholder. There is nobody left
  * to press Stop.
  *
- * `invokeAppInternal`, the other path that runs without a client, already
- * carries a deadline for the same reason; this is the chat path's.
+ * An app run without a client on the run service (`services/run/RunService.js`)
+ * already carries a deadline for the same reason; this is the chat path's.
  *
- * Half an hour rather than `invokeAppInternal`'s three minutes: a durable turn
+ * Half an hour rather than that run's three minutes: a durable turn
  * is meant to be waited out across a commute, and killing a legitimate long
  * agentic turn is a worse failure than a wedged one taking thirty minutes to
  * clear. When it does fire, the loop aborts with a budget error, the turn is
@@ -226,9 +224,6 @@ export function chatCompactionModel({ model, user, platform = configCache.getPla
   if (!modelId || modelId === model?.id) return model;
   return resolveTitleModel({ configuredId: modelId, chatModel: model, user }) || model;
 }
-/** Aggregate bound on the tool output an app invocation retains for its caller. */
-export const APP_INVOKE_COLLECT_CAP_BYTES = 256 * 1024;
-
 /**
  * Cap on tracked chatIds in the clarification counter. The service is a
  * process-wide singleton with no "conversation ended" signal, so the map is
@@ -2021,295 +2016,6 @@ class ChatService {
       answerBasis,
       ...(structuredOutput ? { structuredOutput } : {})
     };
-  }
-
-  // ── headless app invocation (app-as-tool gateway, MCP) ─────────────────
-
-  /**
-   * Run an app to completion without a client: the app-as-tool gateway and
-   * the MCP `tools/call` surface. Tools execute server-side; interactive tools
-   * are refused (no user to answer); passthrough output becomes the answer.
-   *
-   * @param {Object} opts
-   * @param {string} opts.appId
-   * @param {Object} opts.user - acting principal (must include groups)
-   * @param {Array<Object>} [opts.messages] - chat messages `[{ role, content }]`
-   * @param {Object} [opts.variables] - app variables (attached to the last user message)
-   * @param {string} [opts.modelOverride]
-   * @param {AbortSignal} [opts.abortSignal]
-   * @param {string} [opts.runId] - the CALLER's run/execution id (namespaces the synthetic
-   *   chatId and becomes the parent of this run in the ledger)
-   * @param {string} [opts.language='en']
-   * @param {number} [opts.timeoutMs=120000] - hard timeout per model call
-   * @param {number} [opts.maxWallClockMs=180000] - deadline for the whole invocation
-   * @param {string} [opts.chatId] - chat id of the invocation, when the caller already stored
-   *   files under it (the MCP and A2A gateways); defaults to a synthetic `agent:` id
-   * @param {(text: string, info: {step: number}) => void} [opts.onTextDelta] - called with
-   *   each streamed text fragment of the model's answer (every step; the final
-   *   answer is `finalMessage.content`)
-   * @returns {Promise<Object>} `{ status: 'ok'|'error', runId, finalMessage, toolCalls, sources, usage,
-   *   finishReason, generatedFiles, images, error? }` — `generatedFiles` are the files the app's tools
-   *   produced (`{ id, name, mimeType, bytes, data }`, `data` base64) and `images` the pictures
-   *   (`{ mimeType, data, name? }`)
-   */
-  async invokeAppInternal({
-    appId,
-    user,
-    messages = [],
-    variables = {},
-    modelOverride,
-    abortSignal,
-    runId: parentRunId,
-    language = 'en',
-    timeoutMs = 120_000,
-    maxWallClockMs = 180_000,
-    onTextDelta = null,
-    chatId: callerChatId = null
-  }) {
-    if (!appId) throw new Error('appId is required');
-    const chatId =
-      typeof callerChatId === 'string' && callerChatId
-        ? callerChatId
-        : `agent:${parentRunId || 'no-run'}:${uuidv4().slice(0, 8)}`;
-    const runId = newRunId('subagent');
-    const startedAt = Date.now();
-    const buildLogData = (streaming, extra = {}) => ({
-      appId,
-      user: user || null,
-      userSessionId: chatId,
-      sessionId: chatId,
-      ...extra
-    });
-    const collected = { toolCalls: [] };
-    // Files and pictures the app's tools produced, handed back to the caller.
-    const generatedFiles = [];
-    const generatedImages = [];
-
-    try {
-      const { data: knownApps = [] } = configCache.getApps();
-      const appPrompt = findByIdCaseInsensitive(knownApps, appId)?.prompt || null;
-
-      const prepResult = await this.prepareChatRequest({
-        appId,
-        modelId: modelOverride,
-        messages: withAppPrompt(messages, variables, appPrompt),
-        language,
-        user,
-        chatId
-      });
-      if (!prepResult.success) {
-        return {
-          status: 'error',
-          runId,
-          error: prepResult.error,
-          finalMessage: null,
-          toolCalls: []
-        };
-      }
-      const {
-        app,
-        model,
-        llmMessages,
-        tools = [],
-        toolSearch = null,
-        maxTokens,
-        responseFormat,
-        responseSchema,
-        llmOptions = {},
-        userFileData
-      } = prepResult.data;
-
-      // What is retained is what the model saw — the loop's bounded (spilled)
-      // tool message, not the raw result — under an aggregate cap, so a chatty
-      // tool cannot grow this collector without bound.
-      let collectedBytes = 0;
-      const collector = {
-        name: 'app-invoke-collector',
-        postTool(ctx, info, outcome) {
-          const content = outcome.message?.content ?? null;
-          const bytes = Buffer.byteLength(
-            typeof content === 'string' ? content : JSON.stringify(content),
-            'utf8'
-          );
-          const kept = collectedBytes + bytes <= APP_INVOKE_COLLECT_CAP_BYTES;
-          if (kept) collectedBytes += bytes;
-          collected.toolCalls.push({
-            toolName: info.toolId,
-            toolInput: info.args,
-            toolOutput: kept ? content : { truncated: true, bytes }
-          });
-        },
-        onChunk(ctx, chunk) {
-          // A caller that streams (the A2A endpoint) gets the model's text as
-          // it arrives; the assembled answer is still what `finalMessage` holds.
-          if (typeof onTextDelta === 'function') {
-            for (const text of chunk.content || []) {
-              if (text) onTextDelta(text, { step: ctx.iteration });
-            }
-          }
-        }
-      };
-
-      await this._startLedgerRun({
-        runId,
-        kind: 'subagent',
-        user,
-        refs: { chatId, appId: app.id, ...(parentRunId ? { executionId: parentRunId } : {}) },
-        model,
-        language,
-        parentRunId: parentRunId && isValidRunId(parentRunId) ? parentRunId : undefined
-      });
-
-      const pageReads = createPageReadGate(resolveMaxPageReads(app));
-      const turnSkills = createTurnSkillLog();
-      const result = await this.agentLoop.run({
-        runId,
-        kind: 'subagent',
-        model,
-        messages: llmMessages,
-        tools: markInteractiveTools(tools),
-        toolSearch,
-        toolExecution: 'server',
-        policies: {
-          budgets: { maxToolRounds: CHAT_MAX_TOOL_ROUNDS, maxWallClockMs },
-          tools: chatToolPolicies({ app, model }),
-          context: chatContextPolicies(model)
-        },
-        summaryModel: chatCompactionModel({ model, user }),
-        options: { maxTokens, responseFormat, responseSchema, ...llmOptions },
-        language,
-        signal: abortSignal,
-        timeoutMs,
-        refs: { chatId, appId: app.id, userId: user?.id, executionId: parentRunId },
-        seams: [
-          // Nobody can approve inside an app invoked as a tool, over MCP or
-          // A2A: a gated call is refused with APPROVAL_REQUIRED_NO_USER (#2945).
-          approvalSeam(
-            chatApprovalOptions({
-              chatId,
-              app,
-              platform: configCache.getPlatform?.() || null,
-              headless: true,
-              buildLogData,
-              logInteraction: this.logInteraction
-            })
-          ),
-          questionSeam(
-            chatQuestionOptions({
-              chatId,
-              appId: app.id,
-              buildLogData,
-              logInteraction: this.logInteraction,
-              headless: true,
-              getCount: () => 0,
-              incrementCount: () => 1
-            })
-          ),
-          passthroughSeam(
-            chatPassthroughOptions({
-              chatId,
-              user,
-              app,
-              userFileData,
-              streaming: false,
-              buildLogData,
-              logInteraction: this.logInteraction,
-              toolRunner: this.toolRunner,
-              origin: 'subagent'
-            })
-          ),
-          imageLiftSeam,
-          headlessToolOutputSeam({ chatId, user, generatedFiles, generatedImages }),
-          collector
-        ],
-        executeTool: (call, { toolId, toolDef, args, signal }) =>
-          this.toolRunner.execute(call, {
-            toolId,
-            toolDef,
-            args,
-            signal,
-            toolContext: {
-              origin: 'subagent',
-              // The headless approval seam above refuses a gated call.
-              approval: 'seam',
-              principal: user,
-              chatId,
-              appConfig: app,
-              language,
-              integrationScopes: {},
-              turnSkills,
-              pageReads
-            }
-          })
-      });
-
-      if (result.status === 'error' || result.status === 'aborted') {
-        this._endLedgerRun(runId, {
-          status: result.status,
-          finishReason: result.finishReason,
-          usage: result.usage,
-          error: result.error,
-          startedAt
-        });
-        return {
-          status: 'error',
-          runId,
-          error: {
-            message: result.error?.message || `App invocation ${result.status}`,
-            code: result.error?.code
-          },
-          finalMessage: null,
-          toolCalls: collected.toolCalls
-        };
-      }
-      // One place for MCP, A2A and the app-as-tool gateway: the provenance of
-      // the answer this invocation returns (null for an answer without text).
-      const provenance = await recordTextOutput({
-        text: result.content || '',
-        finalText: result.answerText,
-        model: { id: model.id },
-        modelConfig: model,
-        marking: result.marking?.text,
-        user
-      });
-      this._endLedgerRun(runId, {
-        status: result.status,
-        finishReason: result.finishReason,
-        usage: result.usage,
-        provenance,
-        startedAt
-      });
-      return {
-        status: 'ok',
-        runId,
-        finalMessage: { role: 'assistant', content: result.content || '' },
-        ...(provenance ? { provenance } : {}),
-        toolCalls: collected.toolCalls,
-        // What the app found, stored as its source set (no supports: those
-        // place markers in the app's own answer text).
-        sources: storedSourceSet(result.sources),
-        usage: result.usage,
-        finishReason: result.finishReason,
-        model: model.id,
-        generatedFiles,
-        images: [...(result.images || []), ...generatedImages]
-      };
-    } catch (error) {
-      logger.error('invokeAppInternal failed', {
-        component: COMPONENT,
-        appId,
-        runId,
-        parentRunId,
-        error: error.message
-      });
-      return {
-        status: 'error',
-        runId,
-        error: { message: error.message },
-        finalMessage: null,
-        toolCalls: collected.toolCalls
-      };
-    }
   }
 }
 

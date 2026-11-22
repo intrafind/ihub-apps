@@ -1,365 +1,268 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { jest } from '@jest/globals';
-
 /**
- * Tests for the shared App Tools Gateway (`services/chat/appToolsGateway.js`)
- * and its wiring into the chat-app tool pipeline (`services/tools/appTools.js`):
+ * The App Tools Gateway (`services/chat/appToolsGateway.js`) and its wiring
+ * into the chat-app tool pipeline (`services/tools/appTools.js`), on the real
+ * run service: nothing is replaced but the model (`helpers/appRunEnv.js`).
  *
- *  - synthetic `app__<id>` descriptor generation (incl. permission filtering)
- *  - invokeAppTool guard rails: nesting, feature flag, user permissions
- *  - slim result shaping around ChatService.invokeAppInternal
- *  - getToolsForApp surfacing `app.apps` as tools (feature-gated, self-call
- *    filtered, suppressed for nested principals)
+ *  - synthetic `app__<id>` descriptors (permission filtering, the display name)
+ *  - invokeAppTool guard rails: nesting, feature flag, permissions (fail closed)
+ *  - the slim result of the run, with the app's sources as the tool-result envelope
+ *  - getToolsForApp surfacing `app.apps` as tools
  *  - runTool dispatch of the `app__` prefix
+ *
+ * Run: node --test server/tests/appToolsGateway.test.js
  */
+import { after, before, beforeEach, describe, it, mock } from 'node:test';
+import assert from 'node:assert/strict';
+// The environment first: it isolates the contents directory before the server loads.
+import { startAppRunEnv, USAGE } from './helpers/appRunEnv.js';
+import { turn } from './helpers/scriptedModel.js';
+import {
+  getAppAsTools,
+  invokeAppTool,
+  isAppInvocationAllowed
+} from '../services/chat/appToolsGateway.js';
+import { getToolsForApp } from '../services/tools/appTools.js';
+import { runTool } from '../services/tools/runTool.js';
+import { toolDisplayOf } from '../utils/toolDisplay.js';
+import { RUN_LOG_EVENTS } from '../../shared/runEvents.js';
 
-const appsFixture = [
-  {
-    id: 'concierge',
-    name: { en: 'Concierge' },
-    description: { en: 'Routes requests to specialist bots' },
-    apps: ['specialist', 'hidden-app', 'concierge', 'missing-app', 'disabled-app'],
-    enabled: true
-  },
-  {
-    id: 'specialist',
-    name: { en: 'Specialist' },
-    description: { en: 'Answers domain questions' },
-    enabled: true,
-    variables: [{ name: 'tone', type: 'string', label: { en: 'Tone of the answer' } }]
-  },
-  {
-    id: 'hidden-app',
-    name: { en: 'Hidden' },
-    description: { en: 'Restricted app' },
-    enabled: true
-  },
-  {
-    id: 'disabled-app',
-    name: { en: 'Disabled' },
-    description: { en: 'Turned off' },
-    enabled: false
-  }
-];
+let env;
+let restricted;
+let everything;
 
-// Mutable feature config the mocked configCache serves.
-const featuresConfig = { value: { appAsTool: true } };
-
-const invokeAppInternalMock = jest.fn();
-
-jest.unstable_mockModule('../configCache.js', () => ({
-  default: {
-    getApps: () => ({ data: appsFixture }),
-    getFeatures: () => featuresConfig.value,
-    // No fixture app needs an integration, so an empty installation list is enough.
-    getIntegrationContext: () => ({ platform: {}, installedIntegrations: [] }),
-    getModels: () => ({ data: [] }),
-    getPlatform: () => ({}),
-    getSources: () => ({ data: [] }),
-    getWorkflowById: () => null
-  }
-}));
-
-jest.unstable_mockModule('../services/chat/ChatService.js', () => ({
-  default: class ChatServiceMock {
-    async invokeAppInternal(opts) {
-      return invokeAppInternalMock(opts);
-    }
-  }
-}));
-
-jest.unstable_mockModule('../services/mcp/McpClientManager.js', () => ({
-  default: { listAllTools: async () => [], callTool: async () => ({}) }
-}));
-
-jest.unstable_mockModule('../sources/index.js', () => ({
-  createSourceManager: () => ({ generateTools: () => [], getToolFunction: () => null })
-}));
-
-jest.unstable_mockModule('../services/skillLoader.js', () => ({
-  // skillAccess.js link-checks every name it imports, so the mock names them all.
-  disablesModelInvocation: () => false,
-  getSkillContent: async () => null,
-  getSkillResource: async () => null
-}));
-
-jest.unstable_mockModule('../actionTracker.js', () => ({
-  actionTracker: { trackSkillActivation: () => {}, emit: () => {} }
-}));
-
-jest.unstable_mockModule('../utils/logger.js', () => ({
-  default: { error: () => {}, warn: () => {}, info: () => {}, debug: () => {} }
-}));
-
-const { getAppAsTools, invokeAppTool, isAppInvocationAllowed } =
-  await import('../services/chat/appToolsGateway.js');
-const { getToolsForApp } = await import('../services/tools/appTools.js');
-const { runTool } = await import('../services/tools/runTool.js');
-
-const wildcardUser = () => ({ id: 'u-admin', permissions: { apps: new Set(['*']) } });
-const restrictedUser = () => ({
-  id: 'u-restricted',
-  permissions: { apps: new Set(['concierge', 'specialist']) }
+before(async () => {
+  env = await startAppRunEnv();
+  restricted = env.user('u-restricted', ['users']);
+  everything = env.user('u-everything', ['everything']);
 });
-const bareAgent = () => ({ id: 'agent:helper', isAgent: true });
 
-beforeEach(() => {
-  featuresConfig.value = { appAsTool: true };
-  invokeAppInternalMock.mockReset();
-  invokeAppInternalMock.mockResolvedValue({
-    status: 'ok',
-    finalMessage: { role: 'assistant', content: '  the specialist answer  ' },
-    toolCalls: [],
-    sources: null,
-    usage: { promptTokens: 11, completionTokens: 7 },
-    finishReason: 'stop'
+after(async () => {
+  await env?.stop();
+});
+
+beforeEach(() => env.reset());
+
+const runStarts = () => env.ledger.filter(event => event.type === RUN_LOG_EVENTS.RUN_START);
+
+const call = (overrides = {}) =>
+  invokeAppTool({
+    toolId: 'app__specialist',
+    args: { message: 'How do I file a claim?' },
+    user: restricted,
+    chatId: 'chat-1',
+    language: 'en',
+    callerAppId: 'concierge',
+    ...overrides
   });
-});
 
 describe('isAppInvocationAllowed', () => {
-  it('enforces permissions for principals that carry them', () => {
-    expect(isAppInvocationAllowed(restrictedUser(), 'specialist')).toBe(true);
-    expect(isAppInvocationAllowed(restrictedUser(), 'hidden-app')).toBe(false);
-    expect(isAppInvocationAllowed(wildcardUser(), 'hidden-app')).toBe(true);
+  it('enforces the permissions of a principal that carries them', () => {
+    assert.equal(isAppInvocationAllowed(restricted, 'specialist'), true);
+    assert.equal(isAppInvocationAllowed(restricted, 'restricted'), false);
+    assert.equal(isAppInvocationAllowed(everything, 'restricted'), true);
   });
 
-  it('passes bare principals without a permissions object (agents)', () => {
-    expect(isAppInvocationAllowed(bareAgent(), 'hidden-app')).toBe(true);
-    expect(isAppInvocationAllowed(null, 'hidden-app')).toBe(true);
+  it('fails closed for a principal without resolved permissions', () => {
+    assert.equal(
+      isAppInvocationAllowed({ id: 'agent:helper', isAgent: true }, 'specialist'),
+      false
+    );
+    assert.equal(isAppInvocationAllowed({ id: 'bare', groups: ['users'] }, 'specialist'), false);
+    assert.equal(isAppInvocationAllowed(null, 'specialist'), false);
+    assert.equal(isAppInvocationAllowed(undefined, 'specialist'), false);
   });
 });
 
 describe('getAppAsTools', () => {
   it('builds descriptors for known enabled apps and derives parameters from variables', async () => {
-    const tools = await getAppAsTools(['specialist', 'missing-app', 'disabled-app'], 'en');
-    expect(tools).toHaveLength(1);
+    const tools = await getAppAsTools(['specialist', 'missing', 'disabled'], 'en', {
+      user: restricted
+    });
+    assert.equal(tools.length, 1);
     const [tool] = tools;
-    expect(tool.id).toBe('app__specialist');
-    expect(tool.isAppAsTool).toBe(true);
-    expect(tool.name).toBe('App: Specialist');
-    expect(tool.description).toBe('Answers domain questions');
-    expect(tool.parameters.required).toEqual(['message']);
-    expect(Object.keys(tool.parameters.properties)).toEqual(
-      expect.arrayContaining(['message', 'tone'])
-    );
+    assert.equal(tool.id, 'app__specialist');
+    assert.equal(tool.isAppAsTool, true);
+    assert.equal(tool.name, 'App: Claims specialist');
+    assert.equal(tool.appName, 'Claims specialist');
+    assert.equal(tool.description, 'Answers claims questions');
+    assert.deepEqual(tool.parameters.required, ['message']);
+    assert.deepEqual(Object.keys(tool.parameters.properties), ['message', 'tone']);
+  });
+
+  it('titles the row of the call with the localized name of the app alone', async () => {
+    const [en] = await getAppAsTools(['specialist'], 'en', { user: restricted });
+    const [de] = await getAppAsTools(['specialist'], 'de', { user: restricted });
+    assert.equal(toolDisplayOf(en).title, 'Claims specialist');
+    assert.equal(toolDisplayOf(de).title, 'Schadensspezialist');
   });
 
   it('omits apps the calling user may not access', async () => {
-    const tools = await getAppAsTools(['specialist', 'hidden-app'], 'en', {
-      user: restrictedUser()
-    });
-    expect(tools.map(t => t.id)).toEqual(['app__specialist']);
+    const tools = await getAppAsTools(['specialist', 'restricted'], 'en', { user: restricted });
+    assert.deepEqual(
+      tools.map(t => t.id),
+      ['app__specialist']
+    );
   });
 
-  it('keeps all apps for principals without permissions (agents)', async () => {
-    const tools = await getAppAsTools(['specialist', 'hidden-app'], 'en', { user: bareAgent() });
-    expect(tools.map(t => t.id)).toEqual(['app__specialist', 'app__hidden-app']);
+  it('offers nothing to a principal without resolved permissions', async () => {
+    for (const user of [{ id: 'agent:helper', isAgent: true }, null]) {
+      assert.deepEqual(await getAppAsTools(['specialist', 'restricted'], 'en', { user }), []);
+    }
   });
 });
 
 describe('invokeAppTool', () => {
-  it('invokes the app through ChatService with a nested-marked principal', async () => {
-    const result = await invokeAppTool({
-      toolId: 'app__specialist',
-      args: { message: 'How do I file a claim?', tone: 'formal' },
-      user: restrictedUser(),
-      chatId: 'chat-1',
-      language: 'de',
-      callerAppId: 'concierge'
-    });
-
-    expect(invokeAppInternalMock).toHaveBeenCalledTimes(1);
-    const call = invokeAppInternalMock.mock.calls[0][0];
-    expect(call.appId).toBe('specialist');
-    expect(call.language).toBe('de');
-    expect(call.messages).toEqual([{ role: 'user', content: 'How do I file a claim?' }]);
-    expect(call.variables).toEqual({ tone: 'formal' });
-    expect(call.user.isInvokedViaAppAsTool).toBe(true);
-    expect(call.user.id).toBe('u-restricted');
-
-    // Slim payload: trimmed content, no empty sources key, usage passed through.
-    expect(result).toEqual({
+  it('runs the app on the run service as the caller, one level deep, and returns a slim payload', async t => {
+    const model = env.script(t, [turn.text('  the specialist answer  ', { usage: USAGE })]);
+    const result = await call({ args: { message: 'How do I file a claim?', tone: 'formal' } });
+    assert.deepEqual(result, {
       content: 'the specialist answer',
-      usage: { promptTokens: 11, completionTokens: 7 },
+      usage: { promptTokens: 11, completionTokens: 7, totalTokens: 18, source: 'provider' },
       finishReason: 'stop'
     });
+    const { messages, tools } = model.requests[0].body;
+    assert.equal(messages.at(-1).content, 'How do I file a claim?');
+    // Nested: the callee is offered no app tools of its own.
+    assert.ok((tools || []).every(tool => !tool.function.name.startsWith('app__')));
+    const [start] = runStarts();
+    assert.equal(start.data.kind, 'subagent');
+    assert.equal(start.data.principal.id, 'u-restricted');
+    assert.equal(start.data.refs.appId, 'specialist');
   });
 
-  it('hands the app’s sources to the caller as the tool-result envelope, without passages', async () => {
-    invokeAppInternalMock.mockResolvedValueOnce({
-      status: 'ok',
-      finalMessage: { role: 'assistant', content: 'answer' },
-      toolCalls: [],
-      sources: {
-        items: [
-          {
-            id: 'ifinder:doc-1',
-            provider: 'ifinder',
-            kind: 'document',
-            title: 'Policy',
-            snippet: 'long excerpt',
-            passages: [{ text: 'a long passage' }],
-            ref: { id: 'doc-1', scope: 'hr' },
-            private: true
-          },
-          {
-            id: 'url:example.com',
-            provider: 'web',
-            kind: 'page',
-            url: 'https://example.com/',
-            private: false
-          }
-        ],
-        queries: ['policy']
-      }
+  it('keeps the context handed beside the arguments out of what the app reads (#3925)', async t => {
+    const model = env.script(t, [turn.text('ok', { usage: USAGE })]);
+    // What the tool runner hands the gateway for a chat turn's call: the model's
+    // arguments, and the chat's context beside them.
+    await call({
+      args: { message: 'How do I file a claim?', tone: 'formal' },
+      integrationScopes: {},
+      clientTimezone: 'Europe/Berlin'
     });
-    const result = await invokeAppTool({
-      toolId: 'app__specialist',
-      args: { message: 'hi' },
-      user: wildcardUser(),
-      chatId: 'chat-1'
-    });
-    expect(result.sources).toEqual([
-      {
-        id: 'ifinder:doc-1',
-        provider: 'ifinder',
-        kind: 'document',
-        title: 'Policy',
-        ref: { id: 'doc-1', scope: 'hr' },
-        private: true
-      },
-      {
-        id: 'url:example.com',
-        provider: 'web',
-        kind: 'page',
-        url: 'https://example.com/',
-        private: false
-      }
+    const { messages } = model.requests[0].body;
+    assert.equal(messages.at(-1).content, 'How do I file a claim?');
+    assert.doesNotMatch(JSON.stringify(messages), /integrationScopes|turnSkills|Europe\/Berlin/);
+  });
+
+  it('hands the app’s sources to the caller as the tool-result envelope, without passages', async t => {
+    env.script(t, [
+      turn.toolCalls([{ name: 'lookup', args: { key: 'A-1' } }], { usage: USAGE }),
+      turn.text('Record A-1 is open.', { usage: USAGE })
     ]);
+    const result = await call({ user: everything });
+    assert.equal(result.content, 'Record A-1 is open.');
+    assert.equal(result.sources.length, 1);
+    const [source] = result.sources;
+    assert.equal(source.title, 'Record A-1');
+    assert.equal(source.private, true);
+    assert.equal('passages' in source, false);
+    assert.equal('snippet' in source, false);
   });
 
-  it('rejects nested app-to-app calls', async () => {
-    const nestedUser = { ...wildcardUser(), isInvokedViaAppAsTool: true };
-    const result = await invokeAppTool({
-      toolId: 'app__specialist',
-      args: { message: 'hi' },
-      user: nestedUser,
-      chatId: 'chat-1'
-    });
-    expect(result.error).toBe(true);
-    expect(result.message).toMatch(/nested/i);
-    expect(invokeAppInternalMock).not.toHaveBeenCalled();
+  it('rejects nested app-to-app calls', async t => {
+    env.script(t, []);
+    const result = await call({ user: { ...everything, isInvokedViaAppAsTool: true } });
+    assert.equal(result.error, true);
+    assert.match(result.message, /nested/i);
+    assert.equal(runStarts().length, 0);
   });
 
-  it('rejects when the appAsTool feature is disabled', async () => {
-    featuresConfig.value = { appAsTool: false };
-    const result = await invokeAppTool({
-      toolId: 'app__specialist',
-      args: { message: 'hi' },
-      user: wildcardUser(),
-      chatId: 'chat-1'
-    });
-    expect(result.error).toBe(true);
-    expect(result.message).toMatch(/appAsTool/);
-    expect(invokeAppInternalMock).not.toHaveBeenCalled();
+  it('rejects when the appAsTool feature is disabled', async t => {
+    env.script(t, []);
+    const features = env.configCache.getFeatures();
+    mock.method(env.configCache, 'getFeatures', () => ({ ...features, appAsTool: false }));
+    t.after(() => mock.restoreAll());
+    const result = await call({ user: everything });
+    assert.equal(result.error, true);
+    assert.match(result.message, /appAsTool/);
+    assert.equal(runStarts().length, 0);
   });
 
-  it('rejects apps the calling user may not access', async () => {
-    const result = await invokeAppTool({
-      toolId: 'app__hidden-app',
-      args: { message: 'hi' },
-      user: restrictedUser(),
-      chatId: 'chat-1'
+  it('rejects apps the calling user may not access, and every app for a bare principal', async t => {
+    env.script(t, []);
+    const denied = await call({ toolId: 'app__restricted' });
+    assert.deepEqual(denied, {
+      error: true,
+      message: 'You do not have permission to access app restricted'
     });
-    expect(result.error).toBe(true);
-    expect(result.message).toMatch(/permission/);
-    expect(invokeAppInternalMock).not.toHaveBeenCalled();
+    const bare = await call({ user: { id: 'bare', groups: ['users'] } });
+    assert.deepEqual(bare, {
+      error: true,
+      message: 'You do not have permission to access app specialist'
+    });
+    assert.equal(runStarts().length, 0);
   });
 
-  it('reports unknown and disabled apps as tool errors', async () => {
-    const missing = await invokeAppTool({
-      toolId: 'app__missing-app',
-      args: { message: 'hi' },
-      user: wildcardUser(),
-      chatId: 'chat-1'
-    });
-    expect(missing.error).toBe(true);
-
-    const disabled = await invokeAppTool({
-      toolId: 'app__disabled-app',
-      args: { message: 'hi' },
-      user: wildcardUser(),
-      chatId: 'chat-1'
-    });
-    expect(disabled.error).toBe(true);
-    expect(invokeAppInternalMock).not.toHaveBeenCalled();
+  it('reports unknown and disabled apps as tool errors', async t => {
+    env.script(t, []);
+    const missing = await call({ toolId: 'app__missing', user: everything });
+    assert.deepEqual(missing, { error: true, message: 'App missing not found' });
+    const disabled = await call({ toolId: 'app__disabled', user: everything });
+    assert.deepEqual(disabled, { error: true, message: 'App disabled is disabled' });
+    assert.equal(runStarts().length, 0);
   });
 
-  it('surfaces callee pipeline errors as slim error payloads', async () => {
-    invokeAppInternalMock.mockResolvedValueOnce({
-      status: 'error',
-      error: { message: 'model exploded' },
-      finalMessage: null,
-      toolCalls: []
+  it('surfaces a failed run as a slim error payload', async t => {
+    env.script(t, [turn.error(400, { error: { message: 'model exploded', code: 'bad_request' } })]);
+    const result = await call();
+    assert.deepEqual(result, {
+      error: true,
+      message: 'Invalid request sent to openai API. Please check your input and try again.'
     });
-    const result = await invokeAppTool({
-      toolId: 'app__specialist',
-      args: { message: 'hi' },
-      user: wildcardUser(),
-      chatId: 'chat-1'
-    });
-    expect(result).toEqual({ error: true, message: 'model exploded' });
   });
 });
 
 describe('getToolsForApp (app.apps wiring)', () => {
-  const conciergeApp = appsFixture[0];
+  const concierge = () => env.configCache.getApps().data.find(app => app.id === 'concierge');
 
-  it('surfaces configured apps as app__ tools, excluding self-references', async () => {
-    const tools = await getToolsForApp(conciergeApp, 'en', { user: wildcardUser() });
-    const appToolIds = tools.filter(t => t.isAppAsTool).map(t => t.id);
-    // 'concierge' (self), 'missing-app' and 'disabled-app' are dropped.
-    expect(appToolIds).toEqual(['app__specialist', 'app__hidden-app']);
+  it('surfaces configured apps as app__ tools, excluding itself, unknown and disabled apps', async () => {
+    const tools = await getToolsForApp(concierge(), 'en', { user: everything });
+    assert.deepEqual(
+      tools.filter(t => t.isAppAsTool).map(t => t.id),
+      ['app__specialist', 'app__restricted']
+    );
   });
 
   it('filters app tools by the calling user permissions', async () => {
-    const tools = await getToolsForApp(conciergeApp, 'en', { user: restrictedUser() });
-    const appToolIds = tools.filter(t => t.isAppAsTool).map(t => t.id);
-    expect(appToolIds).toEqual(['app__specialist']);
+    const tools = await getToolsForApp(concierge(), 'en', { user: restricted });
+    assert.deepEqual(
+      tools.filter(t => t.isAppAsTool).map(t => t.id),
+      ['app__specialist']
+    );
   });
 
-  it('generates no app tools when the feature is disabled', async () => {
-    featuresConfig.value = { appAsTool: false };
-    const tools = await getToolsForApp(conciergeApp, 'en', { user: wildcardUser() });
-    expect(tools.filter(t => t.isAppAsTool)).toHaveLength(0);
+  it('generates no app tools when the feature is disabled', async t => {
+    const features = env.configCache.getFeatures();
+    mock.method(env.configCache, 'getFeatures', () => ({ ...features, appAsTool: false }));
+    t.after(() => mock.restoreAll());
+    const tools = await getToolsForApp(concierge(), 'en', { user: everything });
+    assert.equal(tools.filter(t => t.isAppAsTool).length, 0);
   });
 
   it('generates no app tools for principals already serving an app-as-tool call', async () => {
-    const nestedUser = { ...wildcardUser(), isInvokedViaAppAsTool: true };
-    const tools = await getToolsForApp(conciergeApp, 'en', { user: nestedUser });
-    expect(tools.filter(t => t.isAppAsTool)).toHaveLength(0);
+    const nested = { ...everything, isInvokedViaAppAsTool: true };
+    const tools = await getToolsForApp(concierge(), 'en', { user: nested });
+    assert.equal(tools.filter(t => t.isAppAsTool).length, 0);
   });
 });
 
 describe('runTool (app__ dispatch)', () => {
-  it('routes app__ tool ids through the gateway, separating args from context', async () => {
+  it('routes app__ tool ids through the gateway, separating args from context', async t => {
+    const model = env.script(t, [turn.text('the specialist answer', { usage: USAGE })]);
     const result = await runTool('app__specialist', {
       message: 'Summarize the incident',
       tone: 'brief',
       chatId: 'chat-9',
-      user: wildcardUser(),
+      user: restricted,
       appConfig: { id: 'concierge' },
       language: 'en'
     });
-
-    expect(invokeAppInternalMock).toHaveBeenCalledTimes(1);
-    const call = invokeAppInternalMock.mock.calls[0][0];
-    expect(call.appId).toBe('specialist');
-    expect(call.messages).toEqual([{ role: 'user', content: 'Summarize the incident' }]);
-    // Context params must not leak into the callee's variables.
-    expect(call.variables).toEqual({ tone: 'brief' });
-    expect(result.content).toBe('the specialist answer');
+    assert.equal(result.content, 'the specialist answer');
+    const { messages } = model.requests[0].body;
+    assert.equal(messages.at(-1).content, 'Summarize the incident');
+    assert.doesNotMatch(JSON.stringify(messages), /chat-9/);
   });
 });

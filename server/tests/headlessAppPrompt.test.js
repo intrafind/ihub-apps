@@ -11,8 +11,8 @@ import { jest } from '@jest/globals';
  * every declared app variable was dropped — a translator invoked over MCP with
  * `language: "German"` answered in whatever language it felt like.
  *
- * These tests pin the message shape `ChatService.invokeAppInternal` hands to
- * the prompt pipeline, then run that shape through the real PromptService to
+ * These tests pin the message shape a headless run (`services/run/assemble/fromApp.js`)
+ * hands to the prompt pipeline, then run that shape through the real PromptService to
  * prove the variable actually reaches the model.
  */
 
@@ -91,7 +91,7 @@ describe('headless invocation reaches the model with its variables', () => {
       variables: [{ name: 'language', type: 'string', required: true }]
     };
 
-    // Exactly what invokeAppInternal now builds for an MCP tools/call of
+    // Exactly what the run service now builds for an MCP tools/call of
     // translator({ message: 'The quick brown fox.', language: 'German' }).
     const messages = withAppPrompt(
       [{ role: 'user', content: 'The quick brown fox.' }],

@@ -260,8 +260,8 @@ export const appAsToolCases = [
   gatewayCase({
     name: 'user-without-permissions',
     title:
-      'FAIL-OPEN, current behaviour: a principal without a permissions object may call an app no group grants.',
-    script: () => [turn.text('the restricted answer', { usage: usage(11, 7) })],
+      'A principal without a permissions object cannot call an app: nothing runs on its behalf (row fail-open-removal).',
+    script: () => [],
     overrides: () => ({
       toolId: 'app__restricted',
       user: { id: 'no-permissions', groups: ['users'] }

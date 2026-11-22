@@ -42,6 +42,7 @@ const SEARCHED = [
   'scriptedModel.test.js',
   'fakeClock.test.js',
   'appToolsGateway.characterization.test.js',
+  'appToolsGateway.test.js',
   'run-server-tests-runner.test.js',
   'killPoint.test.js',
   'killPoint-inventory.test.js',

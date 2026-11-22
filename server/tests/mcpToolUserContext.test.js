@@ -106,9 +106,11 @@ describe('MCP gateway native tool calls carry user context', () => {
     discoverIntegrationTools.mockReset();
   });
 
+  // As `mcpAuth` builds it: with resolved permissions (a caller without them runs nothing).
   const user = {
     id: 'alice',
-    scopes: [MCP_SCOPES.TOOLS_READ, MCP_SCOPES.TOOLS_CALL]
+    scopes: [MCP_SCOPES.TOOLS_READ, MCP_SCOPES.TOOLS_CALL],
+    permissions: { apps: new Set(), integrations: new Set(['*']) }
   };
 
   it('lists the iFinder function tool with its real parameter schema', async () => {
@@ -149,6 +151,15 @@ describe('MCP gateway native tool calls carry user context', () => {
     expect(calledParams.user).toBe(user);
     expect(calledParams.user.id).toBe('alice');
   });
+
+  it('runs nothing for a caller without resolved permissions', async () => {
+    const bare = { id: 'alice', scopes: user.scopes };
+    const client = await connectGateway(bare);
+    const result = await client.callTool({ name: 'iFinder_search', arguments: { query: 'x' } });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toBe('access_denied: tool not permitted for this caller');
+    expect(runTool).not.toHaveBeenCalled();
+  });
 });
 
 describe('MCP gateway tools/call of a tool that needs approval', () => {
@@ -157,9 +168,11 @@ describe('MCP gateway tools/call of a tool that needs approval', () => {
     discoverIntegrationTools.mockReset();
   });
 
+  // As `mcpAuth` builds it: with resolved permissions (a caller without them runs nothing).
   const user = {
     id: 'alice',
-    scopes: [MCP_SCOPES.TOOLS_READ, MCP_SCOPES.TOOLS_CALL]
+    scopes: [MCP_SCOPES.TOOLS_READ, MCP_SCOPES.TOOLS_CALL],
+    permissions: { apps: new Set(), integrations: new Set(['*']) }
   };
   const refused = result => {
     expect(result.isError).toBe(true);

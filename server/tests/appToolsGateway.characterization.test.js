@@ -6,9 +6,8 @@
  * calls another as the tool `app__<id>`, pinned before the run service
  * (#3772) moves the code.
  *
- * `appToolsGateway.test.js` tests the gateway with `ChatService` and the config
- * cache replaced. This file replaces nothing but the model: the gateway, the
- * real `ChatService.invokeAppInternal`, the agent loop, the approval and
+ * This file replaces nothing but the model: the gateway, the run service
+ * (`services/run/RunService.js`) with its headless host, the agent loop, the approval and
  * question seams, the run ledger and the usage recorder run as in the product,
  * on the environment of the golden harness (real storage in a temporary
  * directory, a scripted model).
@@ -521,26 +520,30 @@ test('a user with resolved permissions cannot call an app the user may not open'
   assert.equal(eventsOf(RUN_LOG_EVENTS.RUN_START).length, 0);
 });
 
-test('FAIL-OPEN, current behaviour: a principal without a permissions object may call any app', async t => {
-  // `isAppInvocationAllowed` lets every principal through that carries no `permissions`
-  // (appToolsGateway.js), on the assumption that only operator-configured agent principals
-  // look like that. Nothing enforces the assumption: the same call that is refused for a
-  // user above runs here. This is a known weakness, pinned so that its removal is a
-  // decision: the row "fail-open removal" of the difference list
-  // (server/tests/golden/differences.json) changes this test.
-  script(t, [turn.text('the restricted answer', { usage: USAGE })]);
+test('a principal without a permissions object cannot call an app (row fail-open-removal)', async t => {
+  // Before the run service, `isAppInvocationAllowed` let every principal through that carried
+  // no `permissions` (appToolsGateway.js), and this call ran. The row "fail-open-removal" of the
+  // difference list (server/tests/golden/differences.json) decided the refusal: the gateway
+  // fails closed, and no run starts.
+  script(t, []);
   const bare = { id: 'no-permissions', groups: ['users'] };
-  const result = await call({ toolId: 'app__restricted', user: bare });
-  assert.equal(result.content, 'the restricted answer');
-  assert.equal(result.error, undefined);
-  const [start] = eventsOf(RUN_LOG_EVENTS.RUN_START);
-  assert.equal(start.data.refs.appId, 'restricted');
-  assert.equal(start.data.principal.id, 'no-permissions');
+  assert.deepEqual(await call({ toolId: 'app__restricted', user: bare }), {
+    error: true,
+    message: 'You do not have permission to access app restricted'
+  });
+  // Not even an app the group grants: without resolved permissions nothing is granted.
+  assert.deepEqual(await call({ user: bare }), {
+    error: true,
+    message: 'You do not have permission to access app specialist'
+  });
+  assert.equal(eventsOf(RUN_LOG_EVENTS.RUN_START).length, 0);
 });
 
-test('FAIL-OPEN, current behaviour: a call without any principal runs as well', async t => {
-  script(t, [turn.text('answered for nobody', { usage: USAGE })]);
-  const result = await call({ toolId: 'app__restricted', user: null });
-  assert.equal(result.content, 'answered for nobody');
-  assert.equal(result.error, undefined);
+test('a call without any principal is refused as well (row fail-open-removal)', async t => {
+  script(t, []);
+  assert.deepEqual(await call({ toolId: 'app__restricted', user: null }), {
+    error: true,
+    message: 'You do not have permission to access app restricted'
+  });
+  assert.equal(eventsOf(RUN_LOG_EVENTS.RUN_START).length, 0);
 });

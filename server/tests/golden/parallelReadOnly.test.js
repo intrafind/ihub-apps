@@ -19,6 +19,9 @@ import { startGoldenEnv } from './harness.js';
 import { harnessConfig, runChatTurn } from './harnessCases.js';
 import { observeEmittedEnvelopes, projectLedgerEvent } from '../../services/loop/RunStream.js';
 import { chatToolPolicies } from '../../services/chat/ChatService.js';
+import { RunService, appRunSpec } from '../../services/run/RunService.js';
+import { HeadlessHost } from '../../services/run/hosts/HeadlessHost.js';
+import { requestRunContext } from '../../services/run/principalResolver.js';
 import { knownModelKeys, modelConfigSchema } from '../../validators/modelConfigSchema.js';
 import { abortChatRequest } from '../../sse.js';
 import { throttledRun } from '../../requestThrottler.js';
@@ -694,7 +697,7 @@ test('flag on: a step of five reads runs four at once, then the fifth', LATCH_TI
 
 /**
  * Run the desk app the way another app, the MCP gateway or the A2A endpoint
- * runs it: `ChatService.invokeAppInternal`, a run of the kind `subagent`.
+ * runs it: on the run service with a headless host, a run of the kind `subagent`.
  *
  * @param {Object} config - From {@link caseConfig}.
  * @param {Object[]} script - The turns of the scripted model.
@@ -703,11 +706,17 @@ async function runAsTool(config, script) {
   const env = await startGoldenEnv(config);
   try {
     env.model = scriptedModel(script);
-    const result = await env.chatService.invokeAppInternal({
-      appId: 'desk',
-      user: env.principal({ id: 'golden-user', name: 'Golden User', groups: ['users'] }),
-      messages: [{ role: 'user', content: 'Look up the records.' }]
-    });
+    const { context } = requestRunContext(
+      env.principal({ id: 'golden-user', name: 'Golden User', groups: ['users'] })
+    );
+    const result = await new RunService({ chatService: env.chatService }).run(
+      appRunSpec({
+        context,
+        appId: 'desk',
+        messages: [{ role: 'user', content: 'Look up the records.' }]
+      }),
+      new HeadlessHost()
+    );
     await env.settle();
     const ledger = [...env.ledger];
     return {

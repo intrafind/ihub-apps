@@ -968,6 +968,8 @@ export function approvalRefusalPayload(outcome, toolName) {
  * @param {Object} options
  * @param {import('../run/ToolRunner.js').ToolRunner} options.toolRunner
  * @param {'chat'|'subagent'} [options.origin='chat'] - the run kind, for the runner's log
+ * @param {Readonly<Object>} [options.run] - the run context of a run on the run service: the
+ *   runner then checks the call against its grant (`services/run/RunContext.js`)
  */
 export function chatPassthroughOptions({
   chatId,
@@ -980,7 +982,8 @@ export function chatPassthroughOptions({
   buildLogData,
   logInteraction,
   toolRunner,
-  origin = 'chat'
+  origin = 'chat',
+  run = null
 }) {
   return {
     execute: (info, ctx) =>
@@ -999,7 +1002,8 @@ export function chatPassthroughOptions({
           appConfig: app,
           integrationScopes,
           fileData: userFileData,
-          chatStored
+          chatStored,
+          ...(run ? { run } : {})
         }
       }),
     onChunk(text, info, ctx) {
