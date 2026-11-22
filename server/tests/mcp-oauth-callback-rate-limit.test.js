@@ -75,6 +75,18 @@ describe('MCP OAuth rate limits', () => {
     expect(blocked.body.code).toBe('RATE_LIMITED');
   });
 
+  it('counts both anonymous routes against one budget per address', async () => {
+    state.connection = { config: { id: 'okta', enabled: true } };
+    const app = buildApp();
+    const metadata = () => request(app).get('/api/mcp/oauth/client-metadata/okta');
+    const callback = () => request(app).get('/api/mcp/oauth/callback/okta?code=x&state=y');
+    expect((await metadata()).status).toBe(200);
+    expect((await callback()).status).toBe(204);
+    // The budget is two: one request on each route used it up.
+    expect((await metadata()).status).toBe(429);
+    expect((await callback()).status).toBe(429);
+  });
+
   it('answers callback requests within the budget and then refuses with 429', async () => {
     const app = buildApp();
     const callback = () => request(app).get('/api/mcp/oauth/callback/okta?code=x&state=y');
