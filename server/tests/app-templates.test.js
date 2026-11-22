@@ -57,17 +57,10 @@ const INFORMAL_IMPERATIVE =
 const NUTZER = /(?<!Be)nutzer/i;
 
 describe('the list of templates', () => {
-  it('names six templates, in the order of the gallery', () => {
+  it('names five templates, in the order of the gallery', () => {
     assert.deepEqual(
       [...APP_TEMPLATE_IDS],
-      [
-        'summarizer',
-        'translator',
-        'email-composer',
-        'plain-language',
-        'meeting-minutes',
-        'idea-coach'
-      ]
+      ['summarizer', 'translator', 'email-composer', 'plain-language', 'meeting-minutes']
     );
   });
 
@@ -192,7 +185,6 @@ describe('what the plan says each template is', () => {
     assert.deepEqual(fields('email-composer'), ['tone']);
     assert.deepEqual(fields('plain-language'), ['reading_level']);
     assert.deepEqual(fields('meeting-minutes'), []);
-    assert.deepEqual(fields('idea-coach'), []);
   });
 
   it('makes every input field a dropdown', () => {
@@ -202,14 +194,10 @@ describe('what the plan says each template is', () => {
       }
     }
   });
-
-  it('gives the idea coach three conversation starters', () => {
-    assert.equal(read('idea-coach').starterPrompts.length, 3);
-  });
 });
 
 describe('loadAppTemplates', () => {
-  it('returns the six templates as list items, in order', async () => {
+  it('returns the five templates as list items, in order', async () => {
     const items = await loadAppTemplates();
     assert.deepEqual(
       items.map(item => item.id),
@@ -251,7 +239,7 @@ describe('loadAppTemplates', () => {
     first[0].app.system.en = 'changed';
     first.pop();
     const second = await loadAppTemplates();
-    assert.equal(second.length, 6);
+    assert.equal(second.length, 5);
     assert.notEqual(second[0].name.en, 'changed');
     assert.notEqual(second[0].app.system.en, 'changed');
   });
@@ -269,7 +257,6 @@ describe('loadAppTemplates', () => {
       write('email-composer', '{ not json');
       write('plain-language', { ...read('plain-language'), upload: { enabled: true } });
       write('meeting-minutes', { ...read('meeting-minutes'), id: 'other-id' });
-      write('idea-coach', { ...read('idea-coach'), system: { en: 'English only.' } });
 
       const items = await loadAppTemplates({ dir });
       assert.deepEqual(

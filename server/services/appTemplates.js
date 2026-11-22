@@ -37,8 +37,7 @@ export const APP_TEMPLATE_IDS = Object.freeze([
   'translator',
   'email-composer',
   'plain-language',
-  'meeting-minutes',
-  'idea-coach'
+  'meeting-minutes'
 ]);
 
 /** The only keys a template file may hold. */

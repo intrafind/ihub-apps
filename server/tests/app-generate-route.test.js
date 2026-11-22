@@ -1210,13 +1210,13 @@ describe('the audit entry of a draft', () => {
 // --- Templates -------------------------------------------------------------
 
 describe('GET /api/admin/app-templates', () => {
-  it('lists the six templates as { items, nextCursor }', async () => {
+  it('lists the five templates as { items, nextCursor }', async () => {
     for (const who of ['builder', 'admin']) {
       const res = await request(api).get(URL_TEMPLATES).set('x-test-principal', who);
       assert.equal(res.status, 200);
       assert.deepEqual(Object.keys(res.body), ['items', 'nextCursor']);
       assert.equal(res.body.nextCursor, null);
-      assert.equal(res.body.items.length, 6);
+      assert.equal(res.body.items.length, 5);
       assert.deepEqual(
         res.body.items.map(item => item.id),
         [...APP_TEMPLATE_IDS]

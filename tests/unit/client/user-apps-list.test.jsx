@@ -341,28 +341,41 @@ describe('with the feature on', () => {
     expect(screen.getByTestId('apps-scope-all')).toHaveAttribute('aria-checked', 'true');
   });
 
-  test('"New app" appears only with canCreate and opens /apps/new', async () => {
+  test('the page has no "New app" button above the list: the sidebar\'s Create menu has it', async () => {
+    renderList();
+    await screen.findByRole('radiogroup');
+    expect(screen.queryByTestId('user-app-new')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'New app' })).not.toBeInTheDocument();
+  });
+
+  test('at the limit the page says why', async () => {
+    mockApi.fetchUserAppsConfig.mockResolvedValue({ ...CONFIG, maxApps: 4, used: 4 });
+    renderList();
+    expect(
+      await screen.findByText(
+        'You have 4 apps, which is the limit. Delete one to create a new one.'
+      )
+    ).toBeInTheDocument();
+  });
+
+  test('the "New app" of an empty "My apps" opens /apps/new, and at the limit does nothing', async () => {
+    mockApi.fetchUserApps.mockResolvedValue([SHARED]);
     const first = renderList();
-    fireEvent.click(await screen.findByTestId('user-app-new'));
+    fireEvent.click(await screen.findByTestId('apps-scope-mine'));
+    fireEvent.click(
+      within(await screen.findByTestId('user-apps-empty')).getByRole('button', { name: 'New app' })
+    );
     expect(await screen.findByTestId('location')).toHaveTextContent('/apps/new');
     first.unmount();
 
     invalidateUserAppsConfig();
-    mockApi.fetchUserAppsConfig.mockResolvedValue({ ...CONFIG, canCreate: false });
+    mockApi.fetchUserAppsConfig.mockResolvedValue({ ...CONFIG, maxApps: 1, used: 1 });
     renderList();
-    await screen.findByRole('radiogroup');
-    await waitFor(() => expect(mockApi.fetchUserAppsConfig).toHaveBeenCalledTimes(2));
-    expect(screen.queryByTestId('user-app-new')).not.toBeInTheDocument();
-  });
-
-  test('at the limit "New app" does nothing and the page says why', async () => {
-    mockApi.fetchUserAppsConfig.mockResolvedValue({ ...CONFIG, maxApps: 4, used: 4 });
-    renderList();
-    const button = await screen.findByTestId('user-app-new');
+    fireEvent.click(await screen.findByTestId('apps-scope-mine'));
+    const button = within(await screen.findByTestId('user-apps-empty')).getByRole('button', {
+      name: 'New app'
+    });
     expect(button).toHaveAttribute('aria-disabled', 'true');
-    expect(
-      screen.getByText('You have 4 apps, which is the limit. Delete one to create a new one.')
-    ).toBeInTheDocument();
     fireEvent.click(button);
     expect(screen.queryByTestId('location')).not.toBeInTheDocument();
   });
@@ -392,7 +405,9 @@ describe('with the feature on', () => {
     mockApi.fetchUserApps.mockResolvedValue([]);
     renderList();
     expect(await screen.findByRole('radiogroup')).toBeInTheDocument();
-    expect(await screen.findByTestId('user-app-new')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('apps-scope-mine'));
+    const empty = await screen.findByTestId('user-apps-empty');
+    expect(within(empty).getByRole('button', { name: 'New app' })).toBeInTheDocument();
   });
 
   test('a personal app has no category: it is not filed under "utility"', async () => {

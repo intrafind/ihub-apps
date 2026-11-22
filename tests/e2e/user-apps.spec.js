@@ -442,7 +442,13 @@ test.describe('Personal apps', () => {
     await expect(page.getByTestId('apps-scope-mine')).toHaveText(
       new RegExp(`^${tr('userApps.list.scope.mine')}`)
     );
-    await page.getByTestId('user-app-new').click();
+    // "New app" lives in the sidebar's Create menu.
+    await page
+      .getByRole('button', { name: tr('sidebar.create.label'), exact: true })
+      .filter({ visible: true })
+      .first()
+      .click();
+    await page.getByTestId('sidebar-create-app').filter({ visible: true }).click();
     await expect(page).toHaveURL(/\/apps\/new$/);
     const describe = page.getByRole('textbox', { name: tr('admin.apps.create.start.label') });
     await describe.fill('An assistant that rewrites a text in a friendlier tone. e2e-app-json');

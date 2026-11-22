@@ -829,7 +829,6 @@ test.describe('Accessibility — personal apps', () => {
     await gotoSettled(page, '/apps');
     const chips = page.getByRole('radiogroup', { name: 'Which apps to show' });
     await expect(chips.getByRole('radio')).toHaveCount(3);
-    await expect(page.getByTestId('user-app-new')).toBeVisible();
     await expectNoBlockingViolations(page, 'Apps page — with personal apps');
 
     await page.getByTestId('apps-scope-mine').click();

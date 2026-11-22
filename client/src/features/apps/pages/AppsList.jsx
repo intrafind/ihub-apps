@@ -742,21 +742,6 @@ function AppsList() {
                 );
               })}
             </div>
-            {canCreateUserApp && (
-              <button
-                type="button"
-                data-testid="user-app-new"
-                aria-disabled={userAppLimitReached}
-                aria-describedby={userAppLimitReached ? 'user-app-limit' : undefined}
-                onClick={() => {
-                  if (!userAppLimitReached) navigate('/apps/new');
-                }}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 aria-disabled:cursor-not-allowed aria-disabled:opacity-60 dark:focus-visible:ring-offset-gray-900"
-              >
-                <Icon name="plus" size="sm" aria-hidden="true" />
-                {t('userApps.list.new')}
-              </button>
-            )}
             {userAppLimitReached && (
               <p id="user-app-limit" className="text-sm text-gray-700 dark:text-gray-300">
                 {t('userApps.list.limitReached', { max: maxUserApps })}

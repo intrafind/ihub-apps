@@ -10,7 +10,7 @@ content admins can build apps, as before. The guide
 
 ### Creating
 
-- **Start** offers a description box, six templates with **Copy an existing app** as the last
+- **Start** offers a description box, five templates with **Copy an existing app** as the last
   card, **Start empty** and, under **Other ways to start**, **Create a link app** and the
   Marketplace.
 - **Describe the app and get a draft.** An AI model prepares the name, the short description, the
@@ -95,8 +95,7 @@ for users and administrators.
   upgrade gives it, and **Sharing personal apps**, to the built-in groups of signed-in users
   (`admins`, `users`, `authenticated`); other groups of your own get neither. A person can own 20
   personal apps. Anonymous visitors, OAuth clients and agents cannot hold one.
-- **Creating and editing.** **New app** on the apps page, or **App** in the sidebar's
-  **Create** menu, opens the two steps of the admin app builder, without App ID and category. A
+- **Creating and editing.** **App** in the sidebar's **Create** menu (+) opens the two steps of the admin app builder, without App ID and category. A
   personal app holds texts, input fields, conversation starters and a few switches. Website apps, HTML answers, custom answer views, linked projects,
   workflows and apps as tools cannot be stored in one.
 - **Interactive chat only.** Scheduled tasks, workflows, apps as tools, the inference API, MCP
