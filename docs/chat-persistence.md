@@ -871,7 +871,9 @@ While an answer is written, its owner can send messages into it
 
 - **Read at a step.** A message the answer read is stored as a user message of the answer's run,
   between its question and its answer: `{ role: 'user', content, steer: true, runId,
-  appliedAtStep, steerId }`. It follows the chat's retention and deletion, an edit or a
+  appliedAtStep, steerId, activityKind: 'user_message' }`. `activityKind` is the row the message
+  makes in the activity list at step `appliedAtStep`, decided by the server as in the live
+  `steer/applied` frame, so a reloaded chat draws the same row. It follows the chat's retention and deletion, an edit or a
   regenerate before it removes it like any message, and later turns read it as the model read it
   then, behind the `[steer]` marker.
 - **Left over.** A message the answer did not read before it ended (one sent during its last model
@@ -880,9 +882,12 @@ While an answer is written, its owner can send messages into it
   the chat, and claims the chat for the next turn in the same write: of two server processes and
   two requests exactly one has it, and the client never sends it again. Several steers the answer
   did not read are one question; a send-afterwards message is a question of its own, and what was
-  queued behind it waits in the next turn. The next turn runs with the chat's settings and is
-  told on the chat's stream (`GET /api/apps/{appId}/chat/{chatId}`), as a turn without a stream of
-  its own.
+  queued behind it waits in the next turn, still removable under the run it was sent to. The next
+  turn runs with the chat's settings and is told on the chat's stream
+  (`GET /api/apps/{appId}/chat/{chatId}`), as a turn without a stream of its own. It never
+  replaces a newer message: when the person sent one while the next turn was being prepared, the
+  next turn yields (checked before it would replace anything and again under the chat lock when
+  its question is stored), and its messages are dropped with `superseded`.
 - **Dropped.** Nothing is started, and the client is told `steer/dropped` with the reason, when the
   answer stopped for a question or an approval (`run_paused`), was stopped (`run_stopped`), failed
   (`run_failed`), was replaced by a newer message (`superseded`), or ran in a temporary or guest
@@ -891,8 +896,9 @@ While an answer is written, its owner can send messages into it
   chat input offers the feature, nothing in the chat shows a dropped message.
 - **Read model.** With the feature `steering` (Admin → Features, preview, off by default) on,
   `GET /api/chats/:chatId` also answers `pending`, the messages that wait for the chat's running
-  answer, oldest first, each `{ id, kind: 'steer' | 'send_after', text, labelKey, actions }`
-  (`actions` is `['remove']` for the owner and empty for anybody else who may read the chat, such
+  answer, oldest first, each `{ id, runId, kind: 'steer' | 'send_after', text, labelKey, actions }`
+  (`runId` is the run the removal names: the one the message was sent to, also when it waits in
+  the next turn's run since; `actions` is `['remove']` for the owner and empty for anybody else who may read the chat, such
   as an admin), and `maySteer`, true for the chat's owner. A client that attaches again rebuilds
   what waits from `pending` alone. With the feature off neither field is sent; a client reads that
   as nothing pending and `maySteer: false`. The run routes work either way.

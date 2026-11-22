@@ -152,11 +152,13 @@ Built-in seams live in `server/services/loop/seams/`:
   marker; the ledger records it as `message/user { synthetic: 'steer', steerId, text, by }` and
   the seams are told (`onSteerApplied`). The marker is rendered from the message's metadata
   (`_origin: 'person'`, `_steerId`); the literal `[steer]` in a tool result is rewritten to
-  `(steer)` before the model reads it. A workflow answer carries `_steer` but no `_steerId`, so it
+  `(steer)` before the model reads it, and so is a workflow's answer to a question
+  (`questionPause.answeredToolContent`). A workflow answer carries `_steer` but no `_steerId`, so it
   is never reported as a message of the person. A queued message can be removed until it is read
   (`DELETE /api/runs/:runId/human-events/:id`); a `mode: 'afterwards'` message is not read at a
   step, and what waits when the run ends is the leftover its surface sends as the next turn or
-  drops (see [Run ledger, Human events](run-ledger.md#human-events)).
+  drops; a run that is not a chat turn drops it when its `run/end` is recorded (see
+  [Run ledger, Human events](run-ledger.md#human-events)).
 - `passthroughSeam` — `passthrough: true` tools stream their own answer to the
   user and end the turn.
 - `imageLiftSeam` — image payloads in tool results become `message.imageData`.

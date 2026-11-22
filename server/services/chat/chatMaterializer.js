@@ -273,6 +273,9 @@ function failedError(info) {
  *   when that is not the message itself (an `@workflow` turn: the text without the mention)
  * @param {boolean} [params.temporary] - create the chat as a temporary one
  *   (`chatPersistence.resolveChatStorage`); a chat that already exists keeps what it is
+ * @param {boolean} [params.onlyWhileClaimed] - the chat was claimed for `runId` before
+ *   the turn started (a next turn made of an answer's leftover): write nothing unless
+ *   `runId` still holds it, checked under the chat lock
  * @returns {Promise<Object|null>} the stored message, or null when nothing was written
  */
 export async function materializeUserTurn(params) {
@@ -288,7 +291,8 @@ export async function materializeUserTurn(params) {
  *
  * @param {Parameters<typeof materializeUserTurn>[0]} params
  * @returns {Promise<{message: Object|null, refusal: {code: string, message: string}|null,
- *   chatStored: boolean}>} `chatStored`: the chat is in the store
+ *   chatStored: boolean, superseded?: true}>} `chatStored`: the chat is in the store;
+ *   `superseded`: `onlyWhileClaimed` found another run holding the chat (nothing written)
  */
 export async function settleUserTurn({
   repository,
@@ -311,11 +315,15 @@ export async function settleUserTurn({
   origin = null,
   titleText = null,
   temporary = false,
-  silent = false
+  silent = false,
+  onlyWhileClaimed = false
 }) {
   // `chatStored`: the chat exists in the store, so what the turn produces can
   // be stored under it while it runs (a generated file, `storeGeneratedFilesNow`).
   const none = { message: null, refusal: null, chatStored: false };
+  // A turn the chat was claimed for already writes only while that claim
+  // holds, checked under the chat lock (`ChatService.runTurn`, `claimed`).
+  const claim = onlyWhileClaimed ? { expectedActiveRunId: runId } : {};
   if (!repository) return none;
   let chatStored = false;
   const text = typeof content === 'string' ? content : '';
@@ -370,7 +378,8 @@ export async function settleUserTurn({
     // chat lock and one chat write instead of two of each.
     const coalesced = !(projects && typeof projects === 'object');
     if (!coalesced) {
-      const applied = await repository.updateChatProjects(chatId, projects, turnPatch);
+      const applied = await repository.updateChatProjects(chatId, projects, turnPatch, claim);
+      if (applied?.superseded) return { ...none, chatStored, superseded: true };
       if (applied?.conflict) {
         logRefusal(chatId, runId, applied.chat);
         return { message: null, refusal: projectRefusal(applied.chat) };
@@ -410,6 +419,7 @@ export async function settleUserTurn({
       appended = await repository.appendMessage(chatId, userMessage, {
         ...(replaceFromMessageId ? { replaceFromMessageId } : {}),
         ...(preparedProjectId !== undefined ? { expectedProjectId: preparedProjectId } : {}),
+        ...claim,
         ...(coalesced ? { chatPatch: turnPatch } : {})
       });
     } catch (appendError) {
@@ -419,6 +429,7 @@ export async function settleUserTurn({
       if (coalesced) await repository.updateChat(chatId, turnPatch).catch(() => {});
       throw appendError;
     }
+    if (appended?.superseded) return { ...none, chatStored, superseded: true };
     if (coalesced) stored = appended?.chat ?? null;
     if (appended?.conflict) {
       // The container changed between this turn's patch and its question (a

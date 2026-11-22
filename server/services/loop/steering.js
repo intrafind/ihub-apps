@@ -21,7 +21,9 @@
  * When the answer ends, whatever is still queued (a steer that came after the
  * last model call, every `afterwards` message) is the leftover: the chat turn
  * takes it in one step under the chat lock ({@link closeSteering}) and sends
- * it as the next turn, or drops it (`services/chat/chatSteering.js`). A queued
+ * it as the next turn, or drops it (`services/chat/chatSteering.js`). A run
+ * that is not a chat turn has no next turn: its leftover is dropped when its
+ * `run/end` is recorded ({@link dropLeftoverAtRunEnd}). A queued
  * message is removed with {@link cancelSteer} until it is read; once read, or
  * sent as the next turn, it is settled and cannot be removed any more.
  *
@@ -86,13 +88,25 @@ const SWEEP_ABOVE = 1000;
  * @property {string|null} by - The sender's actor id, in the run's identity mode.
  * @property {string} at - When it was sent.
  * @property {string|null} chatId - The chat whose stream is told about it.
+ * @property {string|null} [originRunId] - The run it was sent to, when it moved to the
+ *   next turn's run since ({@link moveSteers}): the run the caller removes it under.
  * @property {number} expiresAt
  */
 
 /** @type {Map<string, QueuedSteer[]>} run id → queued messages, oldest first */
 const queues = new Map();
-/** @type {Map<string, {outcome: 'applied'|'sent'|'removed'|'dropped', at: number}>} `<runId>:<id>` */
+/**
+ * What became of a message that left its run's queue. `taken`: the answer ended
+ * and its leftover is being decided (settled again as `sent`, `moved` or
+ * `dropped` a moment later); `moved`: it waits in the queue of the next turn's
+ * run `to`.
+ *
+ * @type {Map<string, {outcome: 'applied'|'sent'|'removed'|'dropped'|'taken'|'moved', at: number, to?: string}>}
+ *   `<runId>:<id>`
+ */
 const settled = new Map();
+/** How many moves a removal follows; each move is to a new run, so a few suffice. */
+const MAX_MOVES_FOLLOWED = 8;
 /** @type {Map<string, number>} run id → when its leftover was taken */
 const closed = new Map();
 
@@ -113,8 +127,8 @@ export function newSteerId() {
 
 const settledKey = (runId, id) => `${runId}:${id}`;
 
-function settle(runId, id, outcome, now) {
-  settled.set(settledKey(runId, id), { outcome, at: now });
+function settle(runId, id, outcome, now, to = undefined) {
+  settled.set(settledKey(runId, id), { outcome, at: now, ...(to ? { to } : {}) });
 }
 
 /**
@@ -204,6 +218,7 @@ function isClosed(runId, now) {
  * @param {string|null} [steer.by]
  * @param {string} [steer.at]
  * @param {string|null} [steer.chatId]
+ * @param {string|null} [steer.originRunId] - see {@link QueuedSteer}
  * @param {Object} [options]
  * @param {number} [options.now]
  * @returns {boolean} whether the message was queued: false for a blank one, an
@@ -225,6 +240,9 @@ export function enqueueSteer(runId, steer = {}, { now = Date.now() } = {}) {
     by: steer.by ?? null,
     at: steer.at || new Date(now).toISOString(),
     chatId: typeof steer.chatId === 'string' && steer.chatId ? steer.chatId : null,
+    ...(typeof steer.originRunId === 'string' && steer.originRunId
+      ? { originRunId: steer.originRunId }
+      : {}),
     expiresAt: now + (mode === 'afterwards' ? SEND_AFTER_TTL_MS : STEER_TTL_MS)
   };
   live.push(entry);
@@ -256,17 +274,21 @@ export function takeSteers(runId, { now = Date.now() } = {}) {
 }
 
 /**
- * The messages still queued for a run in this process, oldest first.
+ * The messages still queued for a run in this process, oldest first. `runId`
+ * of an item is the run a removal names: the one it was sent to, also after it
+ * moved to the next turn's run.
  *
  * @param {string} runId
  * @param {Object} [options]
  * @param {number} [options.now]
- * @returns {Array<{id: string, kind: 'steer'|'send_after', text: string, at: string, chatId: string|null}>}
+ * @returns {Array<{id: string, runId: string, kind: 'steer'|'send_after', text: string,
+ *   at: string, chatId: string|null}>}
  */
 export function pendingSteers(runId, { now = Date.now() } = {}) {
   if (!runId) return [];
   return pruneExpired(runId, now).map(entry => ({
     id: entry.id,
+    runId: entry.originRunId || runId,
     kind: pendingKindOf(entry.mode),
     text: entry.message,
     at: entry.at,
@@ -277,18 +299,36 @@ export function pendingSteers(runId, { now = Date.now() } = {}) {
 /**
  * Remove a queued message of a run in this process.
  *
- * Only the queue of `runId` is searched: an id of another run is unknown here.
- * A message somebody else sent is unknown too (`by` differs).
+ * Only the queue of `runId` is searched, and the queue of the next turn's run a
+ * message of it moved to: an id of another run is unknown here. A message
+ * somebody else sent is unknown too (`by` differs).
  *
  * @param {string} runId
  * @param {string} id
  * @param {Object} [options]
  * @param {string|null} [options.by] - The caller's actor id; compared when given.
  * @param {number} [options.now]
- * @returns {'removed'|'applied'|'unknown'} `applied`: read at a step or sent
- *   as the next turn, too late to remove
+ * @returns {'removed'|'applied'|'unavailable'|'unknown'} `applied`: read at a
+ *   step or sent as the next turn, too late to remove; `unavailable`: the answer
+ *   is ending and what becomes of the message is being decided, ask again
  */
 export function cancelQueuedSteer(runId, id, { by, now = Date.now() } = {}) {
+  let current = runId;
+  for (let moves = 0; moves <= MAX_MOVES_FOLLOWED; moves++) {
+    const result = cancelInQueue(current, id, by, now);
+    if (result !== 'moved') return result;
+    current = settled.get(settledKey(current, id)).to;
+  }
+  return 'unknown';
+}
+
+/**
+ * {@link cancelQueuedSteer} on one run's queue; `moved` when the message moved
+ * on to the next turn's run.
+ *
+ * @returns {'removed'|'applied'|'unavailable'|'unknown'|'moved'}
+ */
+function cancelInQueue(runId, id, by, now) {
   const live = pruneExpired(runId, now);
   const entry = live.find(candidate => candidate.id === id);
   if (entry) {
@@ -300,7 +340,10 @@ export function cancelQueuedSteer(runId, id, { by, now = Date.now() } = {}) {
     return 'removed';
   }
   const outcome = settled.get(settledKey(runId, id))?.outcome;
-  return outcome === 'applied' || outcome === 'sent' ? 'applied' : 'unknown';
+  if (outcome === 'applied' || outcome === 'sent') return 'applied';
+  if (outcome === 'taken') return 'unavailable';
+  if (outcome === 'moved') return 'moved';
+  return 'unknown';
 }
 
 /**
@@ -308,7 +351,9 @@ export function cancelQueuedSteer(runId, id, { by, now = Date.now() } = {}) {
  * refuse new ones until the run is opened again ({@link openSteering}).
  * Synchronous, so of a message queued and the end of the answer exactly one
  * comes first. The caller settles what it took ({@link settleSent},
- * {@link dropSteers}).
+ * {@link moveSteers}, {@link dropSteers}); until then a removal of a taken
+ * message is answered `unavailable` (ask again), never `unknown`: it is not
+ * gone, it may still be sent.
  *
  * @param {string} runId
  * @param {Object} [options]
@@ -320,6 +365,7 @@ export function closeSteering(runId, { now = Date.now() } = {}) {
   const live = pruneExpired(runId, now);
   queues.delete(runId);
   closed.set(runId, now);
+  for (const entry of live) settle(runId, entry.id, 'taken', now);
   return live;
 }
 
@@ -348,6 +394,25 @@ export function settleSent(runId, entries, nextRunId, { now = Date.now() } = {})
   for (const entry of entries) {
     settle(runId, entry.id, 'sent', now);
     tell(runId, entry, SSE_V2_EVENTS.STEER_APPLIED, { nextRunId });
+  }
+}
+
+/**
+ * Move messages taken at the end of an answer into the queue of the next
+ * turn's run, where a steer is read at its first step. Each stays removable
+ * under the run it was sent to: a removal there follows it
+ * ({@link cancelQueuedSteer}), and the chat read model names that run.
+ *
+ * @param {string} runId - The run whose answer ended.
+ * @param {QueuedSteer[]} entries
+ * @param {string} nextRunId - The run of the next turn.
+ * @param {Object} [options]
+ * @param {number} [options.now]
+ */
+export function moveSteers(runId, entries, nextRunId, { now = Date.now() } = {}) {
+  for (const entry of entries) {
+    settle(runId, entry.id, 'moved', now, nextRunId);
+    enqueueSteer(nextRunId, { ...entry, originRunId: entry.originRunId || runId }, { now });
   }
 }
 
@@ -413,7 +478,8 @@ export async function steerRun(runId, steer, { runLog = defaultRunLog, bus = def
  * @param {Object} [options.runLog]
  * @param {Object} [options.bus]
  * @returns {Promise<'removed'|'applied'|'unknown'|'unavailable'>} `unavailable`:
- *   the worker that holds the run did not answer
+ *   the worker that holds the run did not answer, or the answer is ending and
+ *   what becomes of the message is being decided
  */
 export async function cancelSteer(
   runId,
@@ -426,7 +492,7 @@ export async function cancelSteer(
   if (!bus.hasRemote(RUN_PRESENCE_KIND, runId)) return 'unknown';
   const reply = await bus.request(STEER_CANCEL_CHANNEL, { runId, id, by }, routeOf(runId));
   if (!reply) return 'unavailable';
-  return ['removed', 'applied'].includes(reply.result) ? reply.result : 'unknown';
+  return ['removed', 'applied', 'unavailable'].includes(reply.result) ? reply.result : 'unknown';
 }
 
 /**
@@ -436,7 +502,8 @@ export async function cancelSteer(
  * @param {Object} [options]
  * @param {Object} [options.runLog]
  * @param {Object} [options.bus]
- * @returns {Promise<Array<{id: string, kind: string, text: string, at: string, chatId: string|null}>>}
+ * @returns {Promise<Array<{id: string, runId: string, kind: string, text: string, at: string,
+ *   chatId: string|null}>>} `runId`: see {@link pendingSteers}
  */
 export async function listPendingSteers(runId, { runLog = defaultRunLog, bus = defaultBus } = {}) {
   if (typeof runId !== 'string' || !runId) return [];
@@ -469,6 +536,34 @@ respond(STEER_CANCEL_CHANNEL, payload => {
   });
   return { result };
 });
+
+/**
+ * Why the messages a run did not read are dropped when it ends.
+ *
+ * @param {string} status - The run's `run/end` status (`RUN_STATUSES`).
+ * @returns {string} one of `STEER_DROP_REASONS`
+ */
+export function endDropReasonOf(status) {
+  if (status === 'paused') return 'run_paused';
+  if (status === 'aborted') return 'run_stopped';
+  if (status === 'error') return 'run_failed';
+  return 'run_ended';
+}
+
+/**
+ * A run that is not a chat turn (a workflow, an agent, an API run) has no next
+ * turn its leftover could become: what it did not read when it ends is dropped
+ * with a reason, never left to expire unseen. A chat turn decides its leftover
+ * where it lets go of its chat (`services/chat/chatSteering.js`).
+ *
+ * @param {{runId: string, kind: string, status: string}} end
+ */
+export function dropLeftoverAtRunEnd({ runId, kind, status }) {
+  if (kind === 'chat' || !queues.has(runId)) return;
+  dropSteers(runId, closeSteering(runId), endDropReasonOf(status));
+}
+
+defaultRunLog.onRunEnd(dropLeftoverAtRunEnd);
 
 respond(STEER_PENDING_CHANNEL, payload => {
   if (!isRunPayload(payload) || !defaultRunLog.getRunMeta(payload.runId)?.owned) return undefined;

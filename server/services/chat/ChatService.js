@@ -316,6 +316,22 @@ function clientConnectedOf(persist, chatId) {
   return hasChatClient(chatId);
 }
 
+/**
+ * Whether a chat claimed for `runId` before its turn started is no longer
+ * claimed for it, or another turn is in flight on it: the turn then yields
+ * (`ChatService.runTurn`, `claimed`). Read right before the turn registers.
+ *
+ * @param {Object|null|undefined} repository
+ * @param {string} chatId
+ * @param {string} runId
+ * @returns {Promise<boolean>}
+ */
+async function claimLost(repository, chatId, runId) {
+  if (!repository) return false;
+  const current = await repository.getChat(chatId).catch(() => null);
+  return current?.activeRunId !== runId || hasActiveChatRequest(chatId);
+}
+
 class ChatService {
   /**
    * @param {Object} [options]
@@ -455,6 +471,30 @@ class ChatService {
         error: err.message
       });
     }
+  }
+
+  /**
+   * The answer of a turn the chat was claimed for that yielded to a newer turn
+   * (`runTurn`, `claimed`).
+   *
+   * @param {string} chatId
+   * @param {string} runId
+   * @returns {Object}
+   */
+  _yieldedTurn(chatId, runId) {
+    logger.info('Next turn made of messages sent while answering yields to a newer turn', {
+      component: COMPONENT,
+      chatId,
+      runId
+    });
+    return {
+      runId,
+      status: 'superseded',
+      superseded: true,
+      content: '',
+      finishReason: 'aborted',
+      knowledgeSources: []
+    };
   }
 
   _endLedgerRun(
@@ -610,6 +650,12 @@ class ChatService {
    *   sent into this answer and the answer did not read as the next turn of a kept chat
    *   (the chat route does, `chatTurnStart.js`): the chat is claimed for that turn when this
    *   one lets go of it, and the result names it (`leftover`). Otherwise they are dropped.
+   * @param {boolean} [params.claimed=false] - The chat was claimed for `runId` before this
+   *   turn started (a next turn made of an answer's leftover, `chatTurnStart.js`). The turn
+   *   then yields to any newer one: it runs only while that claim holds and no other turn
+   *   is in flight on the chat, checked before it would supersede anything and again under
+   *   the chat lock when its question is stored. A turn that yields stores nothing and
+   *   answers `{ status: 'superseded', superseded: true }`.
    * @returns {Promise<Object>} `{ runId, status, content, finishReason, usage, messages, knowledgeSources,
    *   pendingInteraction?, toolName?, error?, errorInfo?, structuredOutput?, refusal?, leftover? }`
    */
@@ -641,7 +687,8 @@ class ChatService {
     outputId = undefined,
     priorContext = null,
     promptResent = false,
-    startsLeftover = false
+    startsLeftover = false,
+    claimed = false
   }) {
     const {
       app,
@@ -696,6 +743,15 @@ class ChatService {
           knowledgeSources: []
         };
       }
+    }
+
+    // A turn the chat was claimed for already never supersedes a newer one: a
+    // message the person sent while it was being prepared wins. Checked right
+    // before the turn registers, with nothing awaited in between, so a newer
+    // turn on this worker either registered first (this one yields) or comes
+    // after and supersedes this one.
+    if (claimed && (await claimLost(persistence?.repository, chatId, runId))) {
+      return this._yieldedTurn(chatId, runId);
     }
 
     const controller = new AbortController();
@@ -833,10 +889,27 @@ class ChatService {
         projects: persist.projects,
         projectId: persist.projectId,
         origin: persist.origin,
-        temporary: persist.temporary === true
+        temporary: persist.temporary === true,
+        onlyWhileClaimed: claimed === true
       });
       const { refusal } = settled;
       chatStored = settled.chatStored === true;
+      // Claimed for this turn before it started, and taken by a newer turn on
+      // another worker since: nothing of it was stored, and nothing was told
+      // (`run/started` comes after this), so the newer turn's stream stays its own.
+      if (settled.superseded) {
+        discardRunActivity(runId);
+        this._endLedgerRun(runId, {
+          status: 'aborted',
+          finishReason: 'aborted',
+          usage: carriedUsage,
+          cause: abortCause('superseded', { via: 'ChatService.runTurn' }),
+          startedAt
+        });
+        if (stream !== NO_STREAM) unbindStreamRun(chatId, runId);
+        if (activeRequests.get(chatId) === controller) activeRequests.delete(chatId);
+        return this._yieldedTurn(chatId, runId);
+      }
       // The chat's container changed under this turn (a first turn that
       // raced it opened the chat in another project): nothing of it was
       // stored, and it ends here, before the model is called.

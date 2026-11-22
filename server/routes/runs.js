@@ -532,7 +532,9 @@ export default function registerRunRoutes(app) {
    *       `DELETE /api/runs/{runId}/human-events/{id}`) when a running answer took
    *       it; without `id` and `effect` no answer is running any more, and the
    *       client sends the text as a new message. A steer the answer did not read
-   *       before it ended is sent as the next turn by the server.
+   *       before it ended is sent as the next turn by the server. Only a chat
+   *       answer takes `mode: 'afterwards'` (400 otherwise); a workflow, agent or
+   *       API run drops what it did not read when it ends (`steer/dropped`).
    *     tags:
    *       - Runs
    *     security:
@@ -582,7 +584,7 @@ export default function registerRunRoutes(app) {
    *                 id: { type: string, description: 'A steer a running answer took' }
    *                 effect: { type: string }
    *       400:
-   *         description: Invalid body
+   *         description: "Invalid body, or `mode: 'afterwards'` for a run that is not a chat answer"
    *       403:
    *         description: >-
    *           Not the run's owner. `RUN_STEER_FORBIDDEN` for a `steer`, `FORBIDDEN` for the
@@ -618,6 +620,19 @@ export default function registerRunRoutes(app) {
       throw new ServiceError(
         'RUN_NOT_ACTIVE',
         'This run waits for an approval; answer the approval before sending a message'
+      );
+    }
+    const chatId = auth.meta?.refs?.chatId || runLog.getRunMeta(runId)?.refs?.chatId || null;
+    // Only a chat turn has a next turn to send a message with afterwards; a
+    // workflow, an agent or an API run would hold it until it expired unseen.
+    if (
+      kind === 'steer' &&
+      mode === 'afterwards' &&
+      !(chatId && (auth.meta?.kind || 'chat') === 'chat')
+    ) {
+      throw new ServiceError(
+        'BAD_REQUEST',
+        "Only a chat answer takes a message to send afterwards; send it with mode 'steer'"
       );
     }
     // A message into the running answer gets its id here, before it is relayed
@@ -682,7 +697,7 @@ export default function registerRunRoutes(app) {
         message,
         by,
         at,
-        chatId: auth.meta?.refs?.chatId || runLog.getRunMeta(runId)?.refs?.chatId || null
+        chatId
       });
       effect = routed ? `steer_${routed}` : null;
       id = routed ? steer.id : null;
@@ -708,7 +723,10 @@ export default function registerRunRoutes(app) {
    *       or sent as the next turn, cannot be removed (409 `STEER_ALREADY_APPLIED`).
    *       Only the run's owner removes a message, as only the owner sends one; for a
    *       run of an anonymous visitor the owner is the browser session that owns
-   *       its chat. In a cluster the worker that runs the answer is asked.
+   *       its chat. In a cluster the worker that runs the answer is asked. A message
+   *       that waits in the next turn's run (it was queued behind the message sent as
+   *       that turn) is removed under the run it was sent to, as the chat's `pending[]`
+   *       names it (`runId`).
    *     tags:
    *       - Runs
    *     security:
@@ -738,7 +756,9 @@ export default function registerRunRoutes(app) {
    *       409:
    *         description: '`STEER_ALREADY_APPLIED`: the answer already read it or sent it as the next turn'
    *       503:
-   *         description: The server process that runs the answer did not answer; try again
+   *         description: >-
+   *           The server process that runs the answer did not answer, or the answer is
+   *           ending and what becomes of the message is being decided; try again
    */
   app.delete(
     buildServerPath('/api/runs/:runId/human-events/:id'),
@@ -754,7 +774,10 @@ export default function registerRunRoutes(app) {
       });
       const result = await cancelSteer(runId, id, { by });
       if (result === 'applied') {
-        throw new ServiceError('STEER_ALREADY_APPLIED', 'iHub has already read this message');
+        throw new ServiceError(
+          'STEER_ALREADY_APPLIED',
+          'iHub has already read or sent this message, so it can no longer be removed'
+        );
       }
       if (result === 'unavailable') {
         throw new ServiceError(

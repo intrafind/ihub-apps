@@ -1138,12 +1138,13 @@ export async function prepareTurn(request, { user, getLocalizedError, settleClar
  * How a turn ended.
  *
  * @typedef {Object} TurnOutcome
- * @property {'ran'|'failed'|'refused'|'abandoned'} status - `ran`: the turn ran to
- *   its end, whatever that end was; its run told it. `failed`: the model request
+ * @property {'ran'|'failed'|'refused'|'abandoned'|'superseded'} status - `ran`: the turn
+ *   ran to its end, whatever that end was; its run told it. `failed`: the model request
  *   could not be built, or the turn threw after its stream was open. `refused`:
  *   the approval, the connect or the chat's container refused the turn when it
  *   was about to run. `abandoned`: the reader of a temporary chat left before
- *   the turn started.
+ *   the turn started. `superseded`: a next turn made of an answer's leftover found
+ *   a newer turn holding the chat and yielded to it; nothing of it was stored.
  * @property {boolean} told - The outcome was told on the sink's own stream;
  *   nothing is left to answer.
  * @property {{message: string, code?: string}} [error] - `failed`: the localized
@@ -1460,8 +1461,14 @@ async function runModelTurn(run) {
     ...(turn.clientTimezone ? { clientTimezone: turn.clientTimezone } : {}),
     priorContext: historyFilesOmitted ? null : turn.priorContext,
     promptResent: turn.resendsHistory && !historyFilesOmitted && !turnOnlyContext,
-    startsLeftover: Boolean(host.leftover)
+    startsLeftover: Boolean(host.leftover),
+    // A next turn made of a leftover runs as the run the chat was claimed for,
+    // and yields to a newer turn instead of superseding it.
+    claimed: Boolean(host.runId)
   });
+  // Claimed for this turn, but a newer turn took the chat first: nothing of it
+  // was stored or told.
+  if (result?.superseded) return { status: 'superseded', told: false, result };
   // Refused at persistence: the chat's container changed under the
   // turn (`settleUserTurn`), and nothing of it was stored.
   if (result?.refusal) {
@@ -1544,16 +1551,42 @@ function leftoverTurnRequest(previous, first, text) {
 }
 
 /**
+ * Whether the next turn stored its question: then its run started, and what
+ * it was made of is already the chat's question (told `steer/applied` with
+ * `nextRunId`), whatever became of the run afterwards.
+ *
+ * @param {string} chatId
+ * @param {string} runId - The next turn's run.
+ * @returns {Promise<boolean>} true as well when the chat cannot be read: a text
+ *   given back that is stored already is sent twice, a text kept that is not is lost
+ *   only from the composer
+ */
+async function questionStored(chatId, runId) {
+  try {
+    const { messages } = await getChatRepository().getMessages(chatId);
+    return messages.some(message => message.role === 'user' && message.runId === runId);
+  } catch {
+    return true;
+  }
+}
+
+/**
  * A next turn that could not start: its messages are dropped (the client gives
- * their text back) and the chat it was claimed for is let go of.
+ * their text back) and the chat it was claimed for is let go of. A turn that
+ * stored its question before it failed keeps it: its messages stay sent, and
+ * its run let go of the chat itself.
  *
  * @param {PreparedTurn} previous
  * @param {{runId: string, fromRunId: string}} leftover
  * @param {Object[]} first - The messages that were to be the turn's question.
+ * @param {string} [reason='not_started'] - one of `STEER_DROP_REASONS`
  */
-async function abandonLeftoverTurn(previous, leftover, first) {
-  dropSteers(leftover.fromRunId, first, 'not_started');
-  dropSteers(leftover.runId, closeSteering(leftover.runId), 'not_started');
+async function abandonLeftoverTurn(previous, leftover, first, reason = 'not_started') {
+  const stored = await questionStored(previous.chatId, leftover.runId);
+  if (!stored) dropSteers(leftover.fromRunId, first, reason);
+  dropSteers(leftover.runId, closeSteering(leftover.runId), reason);
+  if (stored) return;
+  // Let go of only while the next turn's run still holds it: a newer turn's claim stays.
   await getChatRepository()
     .releaseRun(previous.chatId, leftover.runId, { activeRunId: null, status: 'active' })
     .catch(error =>
@@ -1571,7 +1604,10 @@ async function abandonLeftoverTurn(previous, leftover, first) {
  * claimed for. The turn that left it already told which messages are the
  * question and queued the rest in the new run (`chatSteering.createLeftover`).
  * A turn that cannot start lets go of the chat and drops its messages, so the
- * client gives their text back.
+ * client gives their text back. A turn that finds a newer one holding the chat
+ * (a message the person sent while this one was prepared) yields to it and never
+ * supersedes it (`ChatService.runTurn`, `claimed`); its messages are dropped as
+ * `superseded`.
  *
  * The host is the one of the turn that left the messages: the same chat
  * service, localized errors, model timeout and clarification settling.
@@ -1612,6 +1648,12 @@ async function startLeftoverTurn(previous, leftover, host) {
       runId: leftover.runId,
       leftover: host.leftover
     });
+    // A newer message took the chat while this turn was being prepared: it
+    // wins, and the text of this one is given back.
+    if (outcome.status === 'superseded') {
+      await abandonLeftoverTurn(previous, leftover, first, 'superseded');
+      return outcome;
+    }
     // Refused or failed before its run stored the question: the run told the
     // stream; the chat is let go of and the text given back.
     if (outcome.status !== 'ran') await abandonLeftoverTurn(previous, leftover, first);

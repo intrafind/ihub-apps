@@ -9,7 +9,10 @@
  * - **Read at a step.** {@link chatSteerSeam} tells the chat stream
  *   (`steer/applied { id, step, activityKind: 'user_message' }`) and stores the
  *   message as a user message of the turn's run: `steer: true`, `runId`,
- *   `appliedAtStep`, `steerId`. The answer is stored after it (the answer goes
+ *   `appliedAtStep`, `steerId`, and the activity row the server decided
+ *   (`activityKind: 'user_message'`, `server/utils/toolDisplay.js`), so a client
+ *   draws the row at that step from the stored turn as it did live. The answer is
+ *   stored after it (the answer goes
  *   after the last message of its run), so the stored chat says where the
  *   message was read, and it follows the chat's retention and deletion.
  * - **The leftover.** When the answer ends, the turn lets go of the chat under
@@ -32,8 +35,8 @@ import { newRunId } from '../loop/RunLog.js';
 import {
   closeSteering,
   dropSteers,
-  enqueueSteer,
   listPendingSteers,
+  moveSteers,
   settleSent
 } from '../loop/steering.js';
 import { SSE_V2_EVENTS } from '../../../shared/runEvents.js';
@@ -81,7 +84,9 @@ export function chatSteerSeam({ chatId, runId, stream, repository = null }) {
           runId,
           steer: true,
           appliedAtStep: applied.step,
-          steerId: applied.id
+          steerId: applied.id,
+          // The activity row at that step, as the live frame said it.
+          ...appliedMessageDisplayOf()
         });
       } catch (error) {
         // The model read it; only the stored chat misses it.
@@ -176,11 +181,11 @@ export function createLeftover({ runId, startsNextTurn = false }) {
       if (!state.nextRunId) return null;
       // Told now, while the answer's own stream is still open: the first
       // messages are the next turn's question, the rest wait in its queue
-      // (a steer is read at its first step). A next turn that cannot start
-      // drops them again (`not_started`).
+      // (a steer is read at its first step), removable under this run's id.
+      // A next turn that cannot start drops them again (`not_started`).
       const { first, rest, text } = splitLeftover(state.entries);
       settleSent(runId, first, state.nextRunId);
-      for (const entry of rest) enqueueSteer(state.nextRunId, entry);
+      moveSteers(runId, rest, state.nextRunId);
       return { runId: state.nextRunId, fromRunId: runId, first, text };
     }
   };
@@ -214,7 +219,9 @@ export function splitLeftover(entries) {
  * What the chat read model says about messages for the running answer.
  *
  * Only for a reader who may read the chat (the caller checked). The items are
- * those of the chat's active run; a reader who is not the owner (an admin, a
+ * those of the chat's active run; each names the run a removal goes to
+ * (`runId`: the run it was sent to, also when it waits in the next turn's run
+ * since). A reader who is not the owner (an admin, a
  * project member) sees them without actions, and `maySteer` is true only for
  * the owner while the feature is on. With the feature off neither field is
  * part of the read model: a client reads that as nothing pending and
@@ -234,6 +241,7 @@ export async function chatPendingView(chat, { owner, features = configCache.getF
     .filter(item => !item.chatId || item.chatId === chat.id)
     .map(item => ({
       id: item.id,
+      runId: item.runId || runId,
       kind: item.kind,
       text: item.text,
       labelKey: LABEL_KEYS[item.kind] || LABEL_KEYS.steer,

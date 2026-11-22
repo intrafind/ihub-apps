@@ -194,10 +194,12 @@ const OPTIONAL_MESSAGE_FIELDS = [
   'transcription',
   // A message the person sent while the answer of its run was written, and read
   // at a step of it (see services/chat/chatSteering.js): `steer: true`, the
-  // step it was read at and its id as the route minted it.
+  // step it was read at, its id as the route minted it, and the activity row
+  // the server decided for it (`activityKind`, server/utils/toolDisplay.js).
   'steer',
   'appliedAtStep',
-  'steerId'
+  'steerId',
+  'activityKind'
 ];
 
 /**
@@ -1614,11 +1616,15 @@ export class ChatRepository {
    * @param {string} chatId - Chat id.
    * @param {import('../knowledge/chatProjects.js').ProjectPatch} projects
    * @param {Object} [patch] - Further fields to apply with the projects.
-   * @returns {Promise<{chat: Object|null, conflict: boolean}>} The chat as it
-   *   stands (null when it does not exist or cannot be stored) and whether the
-   *   project fields were refused.
+   * @param {Object} [options]
+   * @param {string} [options.expectedActiveRunId] - Write nothing unless this run
+   *   still holds the chat (`activeRunId`), checked under the chat lock; omitted,
+   *   it is not checked (see {@link ChatRepository#appendMessage}).
+   * @returns {Promise<{chat: Object|null, conflict: boolean, superseded?: true}>} The chat
+   *   as it stands (null when it does not exist or cannot be stored), whether the
+   *   project fields were refused, and `superseded` when another run holds the chat.
    */
-  updateChatProjects(chatId, projects, patch = {}) {
+  updateChatProjects(chatId, projects, patch = {}, { expectedActiveRunId } = {}) {
     if (!this._usable(chatId, 'updateChatProjects')) return { chat: null, conflict: false };
     const {
       claimContainer = null,
@@ -1631,6 +1637,9 @@ export class ChatRepository {
     return this._withChatLock(chatId, async () => {
       const { chat: existing, etag } = await this._loadChat(chatId);
       if (!existing) return { chat: null, conflict: false };
+      if (expectedActiveRunId !== undefined && existing.activeRunId !== expectedActiveRunId) {
+        return { chat: existing, conflict: false, superseded: true };
+      }
       if (chatProjectConflict(existing, { claimContainer, expectedContainer })) {
         return { chat: existing, conflict: true };
       }
@@ -2058,6 +2067,11 @@ export class ChatRepository {
    *   checked under the chat lock: a question is stored only in the container
    *   its turn was prepared for, never in one a racing turn claimed since.
    *   Omitted, the container is not checked.
+   * @param {string} [options.expectedActiveRunId] - Write nothing unless this run
+   *   still holds the chat (`activeRunId`) when the message is written, checked
+   *   under the chat lock: a turn the chat was claimed for before it started (a
+   *   next turn made of an answer's leftover, `chatSteering.js`) never takes the
+   *   chat back from a newer turn. Omitted, it is not checked.
    * @param {Object|null} [options.chatPatch=null] - Further chat fields to set
    *   in the same chat write as the append ({@link ChatRepository#updateChat}
    *   in one lock instead of two). Applied only when the message is written.
@@ -2068,11 +2082,12 @@ export class ChatRepository {
    *   lock). Nothing is released when the message is not written; the caller
    *   releases separately then.
    * @returns {Promise<{message: Object|null, messages: Object[], chat?: Object,
-   *   released?: boolean, skipped?: true, conflict?: true}|null>}
+   *   released?: boolean, skipped?: true, conflict?: true, superseded?: true}|null>}
    *   Null when the chat does not exist or cannot be stored; `skipped` when
    *   `unlessAnswered` found the run answered (`message` is that answer), or
    *   `supersedeMessageId` is gone (`message` is the run's answer, if any);
-   *   `conflict` when the chat is not in `expectedProjectId` (nothing written).
+   *   `conflict` when the chat is not in `expectedProjectId`, `superseded` when
+   *   another run than `expectedActiveRunId` holds it (nothing written either way).
    *   When the message was written, `chat` is the stored chat and `released`
    *   whether `release.patch` was applied.
    * @throws {StorageError} Code `UNKNOWN_MESSAGE` when `replaceFromMessageId`
@@ -2087,6 +2102,7 @@ export class ChatRepository {
       unlessAnswered = false,
       supersedeMessageId = null,
       expectedProjectId,
+      expectedActiveRunId,
       chatPatch = null,
       release = null
     } = {}
@@ -2110,6 +2126,9 @@ export class ChatRepository {
 
       const { stored, etag: messagesEtag } = await this._loadMessages(chatId);
       let messages = stored.messages;
+      if (expectedActiveRunId !== undefined && storedChat.activeRunId !== expectedActiveRunId) {
+        return { message: null, messages, superseded: true };
+      }
       if (chatProjectConflict(storedChat, { expectedContainer: expectedProjectId })) {
         return { message: null, messages, conflict: true };
       }

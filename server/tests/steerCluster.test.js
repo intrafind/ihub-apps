@@ -43,7 +43,8 @@ async function runPrimary() {
       const timer = setTimeout(() => reject(new Error(`no answer to ${request.step}`)), 10000);
       pending.set(id, msg => {
         clearTimeout(timer);
-        resolve(msg);
+        if (msg.error) reject(new Error(`${request.step}: ${msg.error}`));
+        else resolve(msg);
       });
       worker.send({ ...request, id });
     });
@@ -144,6 +145,10 @@ async function runPrimary() {
       });
       const { leftover } = await ask(owner, { step: 'close', runId });
       assert.deepStrictEqual(leftover, [['m-4', 'afterwards']]);
+      // Taken by the end of the answer, not settled yet: the owner tells the
+      // other worker to ask again (the route answers 503), never "unknown".
+      const { result } = await ask(other, { step: 'cancel', runId, steerId: 'm-4', by: 'alice' });
+      assert.strictEqual(result, 'unavailable');
       const { routed } = await ask(other, {
         step: 'steer',
         runId,
@@ -173,8 +178,14 @@ async function runWorker() {
   const { hasRemote } = await import('../clusterBus.js');
   const steering = await import('../services/loop/steering.js');
 
-  process.on('message', async msg => {
+  process.on('message', msg => {
     if (!msg?.step) return;
+    answer(msg).catch(error =>
+      process.send({ testReply: true, id: msg.id, error: error.message || String(error) })
+    );
+  });
+
+  async function answer(msg) {
     const reply = extra => process.send({ testReply: true, id: msg.id, ...extra });
     switch (msg.step) {
       case 'ready':
@@ -223,5 +234,5 @@ async function runWorker() {
       default:
         return reply({});
     }
-  });
+  }
 }

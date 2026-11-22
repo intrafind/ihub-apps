@@ -18,6 +18,7 @@
  *
  * @module services/workflow/questionPause
  */
+import { neutraliseSteerMarker } from '../../../shared/steerMarker.js';
 
 function localizedName(node, language) {
   if (!node) return '';
@@ -155,7 +156,15 @@ export function resumeApprovalPlan(pausedLoop, answer) {
   return { messages, resume: null };
 }
 
-/** The `ask_user` tool result the model sees once the human answered. */
+/**
+ * The `ask_user` tool result the model sees once the human answered.
+ *
+ * The answerer may be another person than the run's (an approver group, an
+ * admin for a run of no person), and the answer reaches the model without
+ * passing the loop's tool-result path: the marker of a message the run's
+ * person sent into the running answer is neutralised here
+ * (`shared/steerMarker.js`), so an answer never poses as such a message.
+ */
 export function answeredToolContent(answer = {}) {
   if (answer.skipped) {
     return JSON.stringify({
@@ -163,7 +172,9 @@ export function answeredToolContent(answer = {}) {
       message: 'The user skipped this question. Proceed with the available information.'
     });
   }
-  return JSON.stringify({ status: 'answered', answer: answer.value ?? null });
+  return neutraliseSteerMarker(
+    JSON.stringify({ status: 'answered', answer: answer.value ?? null })
+  );
 }
 
 /**

@@ -212,6 +212,8 @@ test('a message read at a step is told, stored with its turn and listed in the e
   );
   assert.equal(messages[1].runId, runId);
   assert.equal(messages[1].steerId, 'steer-a');
+  // The activity row at its step, as the server decided it live.
+  assert.equal(messages[1].activityKind, 'user_message');
 
   // The evidence record names the message, its sender and its step.
   await env.settle();
@@ -548,6 +550,7 @@ test('the chat read model lists what waits for its reader, with actions for the 
   assert.deepEqual(owner.pending, [
     {
       id: 'p1',
+      runId,
       kind: 'steer',
       text: 'Use EUR',
       labelKey: 'chat.pending.steer',
@@ -555,6 +558,7 @@ test('the chat read model lists what waits for its reader, with actions for the 
     },
     {
       id: 'p2',
+      runId,
       kind: 'send_after',
       text: 'Then this',
       labelKey: 'chat.pending.sendAfter',
@@ -574,4 +578,253 @@ test('the chat read model lists what waits for its reader, with actions for the 
     { owner: true, features: on }
   );
   assert.deepEqual(idle, { pending: [], maySteer: true });
+});
+
+/** A gate a test opens when it wants the held step to go on. */
+function gate() {
+  let open;
+  const opened = new Promise(resolve => {
+    open = resolve;
+  });
+  return { opened, open };
+}
+
+test('a newer message sent while the next turn is prepared wins: the next turn yields and gives its text back', async t => {
+  const chatId = crypto.randomUUID();
+  const held = gate();
+  const reached = gate();
+  let nextTurn = null;
+  let yielded = null;
+  const model = script(
+    t,
+    [turn.text('Records are kept for ten years.'), turn.text('Invoices: eight years.')],
+    {
+      onRequest: async () => {
+        if (model.calls === 1) await sendNow(chatId, { id: 'late', message: 'In EUR?' });
+        if (model.calls === 2) {
+          // The newer turn is in flight: now the next turn goes on, and must
+          // yield to it rather than abort it.
+          held.open();
+          yielded = await nextTurn;
+        }
+      }
+    }
+  );
+  const prepared = await prepareTurn(turnRequest(chatId), {
+    user,
+    getLocalizedError,
+    settleClarifications
+  });
+  const outcome = await runPreparedTurn(prepared.turn, {
+    chatService: env.chatService,
+    getLocalizedError,
+    timeoutMs: 5000,
+    leftover: {
+      settleClarifications: async () => {
+        reached.open();
+        await held.opened;
+        return null;
+      }
+    }
+  });
+  assert.ok(outcome.nextTurn, 'a next turn was started');
+  nextTurn = outcome.nextTurn;
+  await reached.opened;
+  const nextRun = outcome.result.leftover.runId;
+  assert.equal((await getChatRepository().getChat(chatId)).activeRunId, nextRun, 'claimed');
+
+  // The person sends a message of their own meanwhile (the POST of the late
+  // steer answered without an id, so the client sent it as a new message).
+  const newer = await chatTurn(chatId, {
+    overrides: {
+      messageId: 'msg-2',
+      message: { role: 'user', content: 'How long for invoices?', messageId: 'msg-2' }
+    },
+    leftover: false
+  });
+  assert.equal(newer.status, 'ran');
+  assert.equal(newer.result.status, 'completed', 'the newer turn was not aborted');
+  assert.equal(yielded?.status, 'superseded');
+  assert.equal(model.calls, 2, 'the next turn never called the model');
+
+  const { messages } = await getChatRepository().getMessages(chatId);
+  assert.deepEqual(
+    messages.map(m => [m.role, m.content]),
+    [
+      ['user', 'What is the retention period?'],
+      ['assistant', 'Records are kept for ten years.'],
+      ['user', 'How long for invoices?'],
+      ['assistant', 'Invoices: eight years.']
+    ]
+  );
+  assert.equal(
+    messages.some(m => m.runId === nextRun),
+    false,
+    'nothing of the next turn stored'
+  );
+  assert.deepEqual(
+    steerFrames(chatId).map(f => [f.type, f.id, f.nextRunId ?? f.reason ?? null]),
+    [
+      ['steer/queued', 'late', null],
+      ['steer/applied', 'late', nextRun],
+      ['steer/dropped', 'late', 'superseded']
+    ]
+  );
+  const chat = await getChatRepository().getChat(chatId);
+  assert.equal(chat.activeRunId, null);
+  assert.equal(chat.status, 'active');
+});
+
+test('the next turn stores its question only while the chat is still claimed for it', async () => {
+  const { settleUserTurn } = await import('../services/chat/chatMaterializer.js');
+  const repository = getChatRepository();
+  const chatId = crypto.randomUUID();
+  const claimedFor = `chat-${crypto.randomUUID()}`;
+  const newer = `chat-${crypto.randomUUID()}`;
+  await repository.ensureChat({
+    chatId,
+    ownerId: 'u1',
+    identityMode: 'default',
+    appId: 'desk',
+    title: 'Claimed',
+    origin: { createdVia: 'ui' }
+  });
+  // A newer turn on another worker took the chat after it was claimed.
+  await repository.updateChat(chatId, { activeRunId: newer, status: 'running' });
+  const base = {
+    repository,
+    chatId,
+    ownerId: 'u1',
+    identityMode: 'default',
+    appId: 'desk',
+    content: 'In EUR?',
+    onlyWhileClaimed: true
+  };
+  const refused = await settleUserTurn({ ...base, runId: claimedFor });
+  assert.equal(refused.superseded, true);
+  assert.equal(refused.message, null);
+  let chat = await repository.getChat(chatId);
+  assert.equal(chat.activeRunId, newer, 'the newer turn keeps the chat');
+  assert.deepEqual((await repository.getMessages(chatId)).messages, []);
+
+  // With projects the claim is checked in the same lock as well.
+  const withProjects = await settleUserTurn({
+    ...base,
+    runId: claimedFor,
+    projects: { expectedContainer: null }
+  });
+  assert.equal(withProjects.superseded, true);
+
+  // Still claimed: stored, and the chat stays with the run.
+  await repository.updateChat(chatId, { activeRunId: claimedFor });
+  const stored = await settleUserTurn({ ...base, runId: claimedFor });
+  assert.equal(stored.superseded, undefined);
+  assert.equal(stored.message.content, 'In EUR?');
+  chat = await repository.getChat(chatId);
+  assert.equal(chat.activeRunId, claimedFor);
+});
+
+test('a next turn that stored its question and then failed keeps its message sent', async t => {
+  const chatId = crypto.randomUUID();
+  let firstRun = null;
+  const model = script(t, [turn.text('Ten years.'), turn.text('In EUR: ten years.')], {
+    onRequest: async () => {
+      if (model.calls === 1) firstRun = await sendNow(chatId, { id: 'kept', message: 'In EUR?' });
+    }
+  });
+  // The chat service of the next turn throws after the turn ran and stored
+  // its question (the bug path of `ChatService.runTurn`).
+  const failing = Object.create(env.chatService, {
+    runTurn: {
+      value: async params => {
+        const result = await env.chatService.runTurn(params);
+        if (params.claimed) throw new Error('the turn failed after storing its question');
+        return result;
+      }
+    }
+  });
+  const prepared = await prepareTurn(turnRequest(chatId), {
+    user,
+    getLocalizedError,
+    settleClarifications
+  });
+  const outcome = await runPreparedTurn(prepared.turn, {
+    chatService: failing,
+    getLocalizedError,
+    timeoutMs: 5000,
+    leftover: { settleClarifications }
+  });
+  assert.equal(await outcome.nextTurn, null);
+  const nextRun = outcome.result.leftover.runId;
+  const { messages } = await getChatRepository().getMessages(chatId);
+  assert.ok(
+    messages.some(m => m.role === 'user' && m.runId === nextRun && m.content === 'In EUR?'),
+    'the question is stored'
+  );
+  assert.deepEqual(
+    steerFrames(chatId).map(f => [f.type, f.id]),
+    [
+      ['steer/queued', 'kept'],
+      ['steer/applied', 'kept']
+    ],
+    'never told dropped: the client does not give the text back'
+  );
+  const { cancelQueuedSteer } = await import('../services/loop/steering.js');
+  assert.equal(
+    cancelQueuedSteer(firstRun, 'kept', { by: 'u1' }),
+    'applied',
+    'a removal answers 409'
+  );
+});
+
+test('a message queued behind the next turn’s question is removed under the run it was sent to, before that turn starts', async t => {
+  const chatId = crypto.randomUUID();
+  let firstRun = null;
+  const model = script(t, [turn.text('Ten years.'), turn.text('Summary: ten years.')], {
+    onRequest: async () => {
+      if (model.calls !== 1) return;
+      firstRun = await sendNow(chatId, { id: 'after', mode: 'afterwards', message: 'Summarise' });
+      await sendNow(chatId, { id: 'behind', message: 'One line' });
+    }
+  });
+  const held = gate();
+  const reached = gate();
+  const prepared = await prepareTurn(turnRequest(chatId), {
+    user,
+    getLocalizedError,
+    settleClarifications
+  });
+  const outcome = await runPreparedTurn(prepared.turn, {
+    chatService: env.chatService,
+    getLocalizedError,
+    timeoutMs: 5000,
+    leftover: {
+      settleClarifications: async () => {
+        reached.open();
+        await held.opened;
+        return null;
+      }
+    }
+  });
+  await reached.opened;
+  const nextRun = outcome.result.leftover.runId;
+  // The chat read model names the run the client removes it under.
+  const chat = await getChatRepository().getChat(chatId);
+  const view = await chatPendingView(chat, { owner: true, features: { steering: true } });
+  assert.deepEqual(
+    view.pending.map(p => [p.id, p.runId]),
+    [['behind', firstRun]]
+  );
+  const { cancelSteer } = await import('../services/loop/steering.js');
+  assert.equal(await cancelSteer(firstRun, 'behind', { by: 'u1' }), 'removed');
+  held.open();
+  const next = await outcome.nextTurn;
+  assert.equal(next.status, 'ran');
+  assert.equal(
+    userText(model.requests[1]).some(text => text.includes('One line')),
+    false,
+    'the removed message is never read'
+  );
+  assert.equal(userText(model.requests[1]).at(-1), 'Summarise');
+  assert.notEqual(nextRun, firstRun);
 });

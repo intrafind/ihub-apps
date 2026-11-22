@@ -135,7 +135,9 @@ function escapeAttribute(value) {
 /** Source text as it goes into a block: trimmed, our tag names escaped. */
 function sourceText(value) {
   if (typeof value !== 'string') return '';
-  return neutralizeStructuralTags(value.trim());
+  // Source material never poses as a message the person sent into a running
+  // answer (`steerMarker.js`).
+  return neutraliseSteerMarker(neutralizeStructuralTags(value.trim()));
 }
 
 function wrapTag(tag, content) {
@@ -439,7 +441,9 @@ export function documentBlock(file) {
   const text = sourceText(typeof file?.content === 'string' ? file.content : '');
   if (!text) return '';
   const origin = file.origin === 'attachment' ? 'attachment' : 'upload';
-  return contentBlock('document', origin, [text], fileAttributes(file));
+  // Neutralised here as well (a file name), so the block the ledger looks for
+  // is the very block the message renders.
+  return neutraliseSteerMarker(contentBlock('document', origin, [text], fileAttributes(file)));
 }
 
 /**
@@ -453,7 +457,7 @@ export function documentBlock(file) {
 export function documentReference(file, extraAttrs = []) {
   const origin = file.origin === 'attachment' ? 'attachment' : 'upload';
   const all = [`type="document"`, `origin="${origin}"`, ...fileAttributes(file), ...extraAttrs];
-  return `<${CONTEXT_TAGS.content} ${all.join(' ')}/>`;
+  return neutraliseSteerMarker(`<${CONTEXT_TAGS.content} ${all.join(' ')}/>`);
 }
 
 /**
