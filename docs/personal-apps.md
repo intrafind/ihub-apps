@@ -20,7 +20,7 @@ Personal apps and the apps administrators manage are two kinds behind one app li
 
 |                  | Company apps                                                       | Personal apps                                                              |
 | ---------------- | ------------------------------------------------------------------ | -------------------------------------------------------------------------- |
-| Created by       | Administrators and content admins, under **Admin → Apps**          | Users, with **New app** on the apps page                                   |
+| Created by       | Administrators and content admins, under **Admin → Apps**          | Users, with **New app** on the apps page or **+ → App** in the sidebar     |
 | Used by          | Everyone whose groups may use the app                              | The owner and the people it is shared with                                 |
 | Stored as        | Configuration, `contents/apps/<id>.json`                           | Runtime data in the storage provider, never in `contents/apps/`            |
 | ID               | Chosen by the admin or derived from the name                       | Minted by the server: `uap_` followed by 32 hex characters                 |
@@ -52,7 +52,8 @@ section for administrators starts at [Switching personal apps on](#switching-per
 
 ## Who can build one
 
-A user sees **New app** on the apps page when all of the following hold:
+A user sees **New app** on the apps page, and the entry **App** in the **Create** menu (+) of
+the sidebar, when all of the following hold:
 
 - the feature **Personal apps** is switched on,
 - one of the user's groups has the permission **Personal apps** (`userApps`),
@@ -88,8 +89,10 @@ the saved app.
 
 ## Creating an app
 
-**New app** opens the same two steps that administrators use under **Admin → Apps**; the guide
-[Build your first app](app-quickstart.md) describes them. The differences for a personal app:
+**New app** on the apps page, **App** in the sidebar's **Create** menu (+, between **New chat**
+and the search) and the button under an empty **My apps** filter open the same two steps that
+administrators use under **Admin → Apps**; the guide [Build your first app](app-quickstart.md)
+describes them. The differences for a personal app:
 
 - The starts are the description box, the templates and **Start empty**. Copying an existing
   app, link apps and the Marketplace are not offered.

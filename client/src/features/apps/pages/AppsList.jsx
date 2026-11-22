@@ -890,7 +890,8 @@ function AppsList() {
             {/* Compact app rows grid */}
             <div
               ref={gridRef}
-              className="grid gap-3"
+              // Equal rows: a tile with a badge does not make its row taller than the others.
+              className="grid auto-rows-fr gap-3"
               style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}
               role="list"
               aria-label={t('apps.appsList', 'Apps list')}

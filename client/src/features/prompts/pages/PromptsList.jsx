@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { fetchPrompts, fetchSkills, fetchUserSkills } from '../../../api';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import Icon from '../../../shared/components/Icon';
@@ -24,6 +24,7 @@ import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
+import { CREATE_INTENT } from '../../../utils/createIntent';
 
 const ITEMS_PER_PAGE = 9;
 
@@ -255,6 +256,32 @@ function PromptsList() {
   // "Create skill with AI": a chat with the global skill-builder skill, where
   // the user describes the skill and saves the drafted SKILL.md as a skill.
   const skillBuilder = useSkillBuilder({ enabled: userSkillsEnabled, globalSkills });
+
+  // The sidebar's "Create → Prompt / Skill" lands here with `state.create`:
+  // open that editor (when this viewer may create one), then drop the request
+  // so a reload or a step back does not open it again.
+  const location = useLocation();
+  const navigate = useNavigate();
+  const createRequest = location.state?.create;
+  const openPromptEditor = actions.create;
+  const openSkillEditor = skillActions.create;
+  useEffect(() => {
+    if (createRequest !== CREATE_INTENT.prompt && createRequest !== CREATE_INTENT.skill) return;
+    if (!platformConfig) return;
+    if (createRequest === CREATE_INTENT.prompt && userPromptsEnabled) openPromptEditor();
+    if (createRequest === CREATE_INTENT.skill && userSkillsEnabled) openSkillEditor();
+    navigate(`${location.pathname}${location.search}`, { replace: true, state: null });
+  }, [
+    createRequest,
+    platformConfig,
+    userPromptsEnabled,
+    userSkillsEnabled,
+    openPromptEditor,
+    openSkillEditor,
+    navigate,
+    location.pathname,
+    location.search
+  ]);
 
   const prompts = useMemo(
     () =>

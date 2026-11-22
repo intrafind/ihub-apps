@@ -10,8 +10,9 @@ content admins can build apps, as before. The guide
 
 ### Creating
 
-- **Start** offers a description box, six templates, **Start empty** and, under
-  **Other ways to start**, **Copy an existing app**, **Create a link app** and the Marketplace.
+- **Start** offers a description box, six templates with **Copy an existing app** as the last
+  card, **Start empty** and, under **Other ways to start**, **Create a link app** and the
+  Marketplace.
 - **Describe the app and get a draft.** An AI model prepares the name, the short description, the
   instructions and, where useful, input fields and conversation starters. The page names the
   model the description is sent to.
@@ -94,9 +95,9 @@ for users and administrators.
   upgrade gives it, and **Sharing personal apps**, to the built-in groups of signed-in users
   (`admins`, `users`, `authenticated`); other groups of your own get neither. A person can own 20
   personal apps. Anonymous visitors, OAuth clients and agents cannot hold one.
-- **Creating and editing.** **New app** on the apps page opens the two steps of the admin app
-  builder, without App ID and category. A personal app holds texts, input fields, conversation
-  starters and a few switches. Website apps, HTML answers, custom answer views, linked projects,
+- **Creating and editing.** **New app** on the apps page, or **App** in the sidebar's
+  **Create** menu, opens the two steps of the admin app builder, without App ID and category. A
+  personal app holds texts, input fields, conversation starters and a few switches. Website apps, HTML answers, custom answer views, linked projects,
   workflows and apps as tools cannot be stored in one.
 - **Interactive chat only.** Scheduled tasks, workflows, apps as tools, the inference API, MCP
   and A2A do not see personal apps. A personal API key runs only the apps of its own user. A
@@ -130,3 +131,19 @@ for users and administrators.
 - New settings block `userApps` in `platform.json`, new group permissions `userApps` and
   `userAppSharing`, new API under `/api/apps` and `/api/admin/user-apps`. `GET /api/apps`
   without the new parameter `scope` is unchanged.
+
+## Sidebar: Create Projects, Prompts, Skills and More from the + Button
+
+The sidebar has a **Create** button (+) between **New chat** and the search, in the expanded
+sidebar and in the collapsed icon rail. It opens a short menu of what the user may create, so a
+new project or prompt no longer starts with finding the right page.
+
+- The entries are **App** (a personal app), **Project**, **Skill**, **Prompt** and **Scheduled
+  task**. Each one shows only when the user could create it on its own page: the feature or
+  setting is on, the user is signed in, and, for apps and scheduled tasks, the user's groups
+  have the permission. **Project** is also hidden once the user has reached the project limit.
+  When the user may create none of these, the button is not shown, so anonymous visitors do not
+  see it.
+- **Project**, **Skill** and **Prompt** open the create dialog of the projects page or the
+  library; **App** and **Scheduled task** open their create pages.
+- The menu works with the keyboard: the arrow keys move through it and Escape closes it.

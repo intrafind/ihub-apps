@@ -391,9 +391,12 @@ describe('the Start screen of a personal app', () => {
         />
       </MemoryRouter>
     );
-    const other = await screen.findByRole('button', { name: CREATE.start.other });
+    // Copying is a card in the templates grid, shown even when there are no templates.
+    expect(
+      await screen.findByRole('button', { name: new RegExp(`^${CREATE.start.copy}`) })
+    ).toBeInTheDocument();
+    const other = screen.getByRole('button', { name: CREATE.start.other });
     fireEvent.click(other);
-    expect(screen.getByRole('button', { name: CREATE.start.copy })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: CREATE.start.link.action })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: CREATE.start.marketplace })).toBeInTheDocument();
   });

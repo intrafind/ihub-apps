@@ -204,10 +204,11 @@ palette, from the last step of the setup wizard and from **Duplicate**.
   when no AI model is available to you (a notice says so) or when the feature
   **App Drafts with AI** is switched off.
 - **Templates.** Six short starting points, such as **Text Summarizer** or **Email Composer**.
+  The last card, **Copy an existing app**, lists the published apps to copy one.
 - **Start empty.**
-- **Other ways to start:** **Copy an existing app** (lists the published apps),
-  **Create a link app** (a link to a website, or a website shown inside iHub) and, for
-  administrators with the Marketplace switched on, **More apps in the Marketplace**.
+- **Other ways to start:** **Create a link app** (a link to a website, or a website shown inside
+  iHub) and, for administrators with the Marketplace switched on, **More apps in the
+  Marketplace**.
 
 **Step 2, Essentials,** is one form for every start: **Name**, **Short description**
 (`description`) and **Instructions** (`system`), plus icon and color. **More details** holds the

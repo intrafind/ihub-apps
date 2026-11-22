@@ -45,7 +45,8 @@ and platform settings stay with administrators.
 
 When an administrator has switched on the preview feature **Personal apps**, users without any
 admin right can build apps too. They click **New app** on the apps page and get the two steps
-described below, without the **App ID**, the category and **Other ways to start**. Such an app
+described below, without the **App ID**, the category, **Copy an existing app** and
+**Other ways to start**. Such an app
 belongs to its author, who can share it, publish it as a company app and hand it over. It can
 use less than an app built here: for example, it cannot answer from a project.
 [Personal apps](personal-apps.md) describes what users can do and what administrators set up.
@@ -114,9 +115,9 @@ You do not have to describe the app. On the first screen you can also choose:
 
 - a **template**, for example **Text Summarizer** or **Email Composer**. The badge
   **Input fields** marks templates that ask users for something.
+- **Copy an existing app**, the last card after the templates, which lists the published apps. A
+  copy is described under [Duplicate an app](#duplicate-an-app).
 - **Start empty**, where you type the name, the short description and the instructions yourself.
-- **Other ways to start → Copy an existing app**, which lists the published apps. A copy is
-  described under [Duplicate an app](#duplicate-an-app).
 - **Other ways to start → Create a link app**, for a link to a website or a page shown inside
   iHub. It asks for a website address instead of instructions.
 - **Other ways to start → More apps in the Marketplace**, which administrators see when the

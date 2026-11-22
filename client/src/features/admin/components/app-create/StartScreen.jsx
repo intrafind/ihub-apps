@@ -6,17 +6,22 @@ import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../../shared/components/Icon';
 import { HELP_CLASS, SECONDARY_BUTTON_CLASS } from '../formStyles';
-import { DISCLOSURE_BUTTON_CLASS, LINK_BUTTON_CLASS } from './createStyles';
+import { CARD_GRID_CLASS, DISCLOSURE_BUTTON_CLASS, LINK_BUTTON_CLASS } from './createStyles';
+import AppPickCard from './AppPickCard';
 import ExistingAppPicker from './ExistingAppPicker';
 import TemplateGallery from './TemplateGallery';
+
+/** The colour of the "Copy an existing app" card: a quiet grey beside the templates' colours. */
+const COPY_CARD_COLOR = '#475569';
 
 /**
  * Screen 1 of "New app": the ways to start.
  *
  * It shows what a newcomer needs and nothing else: the description box (the
- * caller's `describe` slot), the templates and "Start empty". The three
- * starts few people need sit under one collapsed line, "Other ways to start":
- * copy an existing app, create a link app, and the Marketplace.
+ * caller's `describe` slot), the templates with "Copy an existing app" as the
+ * last card, and "Start empty". The two starts few people need sit under one
+ * collapsed line, "Other ways to start": create a link app, and the
+ * Marketplace.
  *
  * The screen makes no request of its own and names no path: the lists come
  * from the caller's functions, and the Marketplace link is shown only when
@@ -57,7 +62,19 @@ function StartScreen({
   const [pickerOpen, setPickerOpen] = useState(false);
   const offers = start => source?.starts?.[start] !== false;
   const showMarketplace = offers('marketplace') && Boolean(marketplaceHref);
-  const otherStarts = offers('copy') || offers('link') || showMarketplace;
+  const otherStarts = offers('link') || showMarketplace;
+  // The card that opens the copy dialog; the dialog gives the focus back to it when it closes.
+  const copyCard = offers('copy') ? (
+    <li className="flex">
+      <AppPickCard
+        name={t('admin.apps.create.start.copy')}
+        description={t('admin.apps.create.start.copyHelp')}
+        icon="document-duplicate"
+        color={COPY_CARD_COLOR}
+        onPick={() => setPickerOpen(true)}
+      />
+    </li>
+  ) : null;
 
   return (
     <div className="space-y-6">
@@ -69,12 +86,15 @@ function StartScreen({
         <span className="h-px flex-1 bg-gray-200 dark:bg-gray-700" aria-hidden="true" />
       </p>
 
-      {offers('templates') && (
+      {offers('templates') ? (
         <TemplateGallery
           fetchTemplates={fetchTemplates}
           language={language}
           onPick={onPickTemplate}
+          trailing={copyCard}
         />
+      ) : (
+        copyCard && <ul className={CARD_GRID_CLASS}>{copyCard}</ul>
       )}
 
       {offers('empty') && (
@@ -108,17 +128,6 @@ function StartScreen({
           <div id={otherId}>
             {otherOpen && (
               <ul className="mt-3 space-y-3 pl-5">
-                {offers('copy') && (
-                  <li>
-                    <button
-                      type="button"
-                      className={LINK_BUTTON_CLASS}
-                      onClick={() => setPickerOpen(true)}
-                    >
-                      {t('admin.apps.create.start.copy')}
-                    </button>
-                  </li>
-                )}
                 {offers('link') && (
                   <li>
                     <button type="button" className={LINK_BUTTON_CLASS} onClick={onStartLink}>

@@ -14,18 +14,13 @@ const CLOSE_BUTTON_CLASS =
   'rounded-md p-1 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-admin-accent dark:focus-visible:ring-admin-accent-fg-dark';
 
 /** The list inside the open dialog: it loads when the dialog opens. */
-function PickerBody({ fetchApps, language, onPick, onClose, headingId }) {
+function PickerBody({ fetchApps, language, onPick, onClose, headingId, searchRef }) {
   const { t } = useTranslation();
   const searchId = useId();
-  const searchRef = useRef(null);
   const [apps, setApps] = useState(null);
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [query, setQuery] = useState('');
-
-  useEffect(() => {
-    searchRef.current?.focus();
-  }, []);
 
   useEffect(() => {
     let current = true;
@@ -89,9 +84,9 @@ function PickerBody({ fetchApps, language, onPick, onClose, headingId }) {
     );
   } else {
     content = (
-      <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <ul className="grid auto-rows-fr grid-cols-1 gap-3 sm:grid-cols-2">
         {shown.map(app => (
-          <li key={app.id}>
+          <li key={app.id} className="flex">
             <AppPickCard
               name={nameOf(app)}
               description={descriptionOf(app)}
@@ -152,9 +147,21 @@ function PickerBody({ fetchApps, language, onPick, onClose, headingId }) {
  */
 function ExistingAppPicker({ isOpen, onClose, fetchApps, language, onPick }) {
   const headingId = useId();
+  // The modal's focus trap puts the focus on the search field. It notes the
+  // element that had the focus first, so closing gives the focus back to the
+  // button that opened the dialog. Focusing the field from the body instead
+  // would run before the trap and make the field the element to go back to.
+  const searchRef = useRef(null);
   return (
-    <Modal isOpen={isOpen} onClose={onClose} labelledBy={headingId} maxWidthClassName="max-w-2xl">
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      labelledBy={headingId}
+      maxWidthClassName="max-w-2xl"
+      initialFocusRef={searchRef}
+    >
       <PickerBody
+        searchRef={searchRef}
         fetchApps={fetchApps}
         language={language}
         onPick={onPick}

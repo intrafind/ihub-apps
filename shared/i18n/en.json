@@ -3724,6 +3724,7 @@
             "inputFields": "Input fields"
           },
           "copy": "Copy an existing app",
+          "copyHelp": "Start from a copy of an app that already exists.",
           "blank": "Start empty",
           "other": "Other ways to start",
           "link": {
@@ -9627,7 +9628,16 @@
     "chatsUnavailable": "Chats could not be loaded",
     "unseenBadge": "{{count}} new",
     "tasks": "Scheduled tasks",
-    "projects": "Projects"
+    "projects": "Projects",
+    "create": {
+      "label": "Create",
+      "menu": "Create new",
+      "app": "App",
+      "project": "Project",
+      "skill": "Skill",
+      "prompt": "Prompt",
+      "task": "Scheduled task"
+    }
   },
   "chatHistory": {
     "title": "Your chats",

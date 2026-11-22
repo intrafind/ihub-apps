@@ -136,6 +136,14 @@ On regular pages the top header is replaced by a collapsible left sidebar (284 p
   `header.tagline`,
 - a **New chat** button that leads to the [start page](#start-page-configuration) and a search
   over the user's apps,
+- between the two a **Create** button (+) with a menu of what the user may create: **App** (a
+  [personal app](personal-apps.md), `/apps/new`), **Project** (opens the create dialog of
+  `/projects`), **Skill** and **Prompt** (open the editor of the library at `/prompts`) and
+  **Scheduled task** (`/tasks/new`). Each entry follows the rules of its own page — the feature
+  or setting is on, the user is signed in, and, for apps and scheduled tasks, the user's groups
+  have the permission; **Project** is also hidden once the user has reached the project limit —
+  and the button is hidden when no entry is left, for example for anonymous visitors. Workflows and agents have no entry:
+  only administrators create them, under **Admin**,
 - the configured `header.links` — entries pointing to `/` and `/apps` are represented by the
   dedicated **Home** and **Browse all apps** buttons and are not repeated; `/pages/*` links honour
   the page's `authRequired` / `allowedGroups`, and links to feature-gated routes disappear with

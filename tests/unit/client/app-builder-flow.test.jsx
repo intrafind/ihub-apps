@@ -298,6 +298,9 @@ function fillEssentials({ name = 'Plain-language summary' } = {}) {
   type(instructionsField(), 'You rewrite texts in plain language.');
 }
 
+/** The card that opens the copy dialog: its name, then its description. */
+const COPY_CARD = new RegExp(`^${CREATE.start.copy}`);
+
 const lastPayload = () => mockApi.createAdminApp.mock.calls.at(-1)[0];
 const lastOrigin = () => mockApi.createAdminApp.mock.calls.at(-1)[1];
 
@@ -310,17 +313,65 @@ describe('Start screen', () => {
     expect(screen.getByRole('button', { name: /Email Composer/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Start empty' })).toBeInTheDocument();
 
+    // Copying is the last card of the templates grid, not under "Other ways to start".
+    const cards = within(screen.getByRole('region', { name: CREATE.start.templates.heading }))
+      .getAllByRole('button')
+      .map(card => card.textContent);
+    expect(cards.at(-1)).toBe(`${CREATE.start.copy}${CREATE.start.copyHelp}`);
+
     const other = screen.getByRole('button', { name: CREATE.start.other });
     expect(other).toHaveAttribute('aria-expanded', 'false');
-    expect(screen.queryByText(CREATE.start.copy)).not.toBeInTheDocument();
     expect(screen.queryByText(CREATE.start.link.action)).not.toBeInTheDocument();
     expect(screen.queryByText(CREATE.start.marketplace)).not.toBeInTheDocument();
 
     fireEvent.click(other);
     expect(other).toHaveAttribute('aria-expanded', 'true');
-    expect(screen.getByRole('button', { name: CREATE.start.copy })).toBeInTheDocument();
+    expect(screen.getAllByText(CREATE.start.copy)).toHaveLength(1);
     expect(screen.getByRole('button', { name: CREATE.start.link.action })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: CREATE.start.marketplace })).toBeInTheDocument();
+  });
+
+  it('opens the copy dialog from its card, and gives the focus back to the card on close', async () => {
+    await openStart();
+    const card = screen.getByRole('button', { name: COPY_CARD });
+    card.focus();
+    fireEvent.click(card);
+    const dialog = await screen.findByRole('dialog', { name: CREATE.copy.heading });
+    expect(within(dialog).getByLabelText(CREATE.copy.search)).toHaveFocus();
+    expect(
+      await within(dialog).findByRole('button', { name: /Travel policy/ })
+    ).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    await waitFor(() => expect(card).toHaveFocus());
+  });
+
+  it('shows the copy card when the templates cannot be loaded', async () => {
+    mockApi.fetchAppStartTemplates.mockRejectedValueOnce(new Error('boom'));
+    renderCreate();
+    expect(
+      await screen.findByText(CREATE.start.templates.loadError, { exact: false })
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: COPY_CARD })).toBeInTheDocument();
+  });
+
+  it('shows the copy card without a Templates heading when there are no templates', async () => {
+    mockApi.fetchAppStartTemplates.mockResolvedValue([]);
+    renderCreate();
+    await screen.findByRole('button', { name: 'Start empty' });
+    // The heading is there while the templates load, and goes once the list is empty.
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('heading', { name: CREATE.start.templates.heading })
+      ).not.toBeInTheDocument()
+    );
+    expect(screen.getByRole('button', { name: COPY_CARD })).toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: CREATE.start.templates.heading })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('region', { name: CREATE.start.templates.heading })
+    ).not.toBeInTheDocument();
   });
 
   it('names the step in a nav with aria-current, and the screen in the document title', async () => {
@@ -673,8 +724,7 @@ describe('copy start (?from=<id>)', () => {
     it('does the same for an app picked from the list', async () => {
       mockLanguages.load.mockImplementation(loadGerman);
       await openStart();
-      fireEvent.click(screen.getByRole('button', { name: CREATE.start.other }));
-      fireEvent.click(screen.getByRole('button', { name: CREATE.start.copy }));
+      fireEvent.click(screen.getByRole('button', { name: COPY_CARD }));
       const dialog = await screen.findByRole('dialog', { name: CREATE.copy.heading });
       fireEvent.click(await within(dialog).findByRole('button', { name: /Travel policy/ }));
       await screen.findByRole('heading', { level: 1, name: CREATE.essentials.heading.copy });
@@ -791,8 +841,7 @@ describe('copy start (?from=<id>)', () => {
 
   it('"Copy an existing app" lists the apps in a searchable dialog and copies the pick', async () => {
     await openStart();
-    fireEvent.click(screen.getByRole('button', { name: CREATE.start.other }));
-    fireEvent.click(screen.getByRole('button', { name: CREATE.start.copy }));
+    fireEvent.click(screen.getByRole('button', { name: COPY_CARD }));
     const dialog = await screen.findByRole('dialog', { name: CREATE.copy.heading });
     const card = await within(dialog).findByRole('button', { name: /Travel policy/ });
     expect(card).not.toHaveTextContent('travel-policy');
@@ -812,8 +861,7 @@ describe('copy start (?from=<id>)', () => {
   it('says when there is no app to copy', async () => {
     mockApi.fetchAdminAppTemplates.mockResolvedValue([]);
     await openStart();
-    fireEvent.click(screen.getByRole('button', { name: CREATE.start.other }));
-    fireEvent.click(screen.getByRole('button', { name: CREATE.start.copy }));
+    fireEvent.click(screen.getByRole('button', { name: COPY_CARD }));
     expect(await screen.findByText(CREATE.copy.none)).toBeInTheDocument();
   });
 });
