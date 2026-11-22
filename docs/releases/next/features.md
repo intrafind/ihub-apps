@@ -13,6 +13,7 @@ Changes to the preview feature **Personal apps** since 5.7.4:
 - **A published app remembers its personal app.** The company app that publishing writes records
   the personal app it came from (`sourceUserAppId`). Only a company app with that entry counts as
   the published version of the personal app; if the file is replaced by another app, the
-  personal app becomes editable again.
+  personal app becomes editable again. Apps published with 5.7.4 get the entry on the first
+  start after the update, so they stay published.
 - **Copy an existing app** on the personal **New app** page no longer lists apps connected to
   the iAssistant, because a copy would lose the connection.

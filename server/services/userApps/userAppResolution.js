@@ -29,6 +29,7 @@ import installedIntegrationService from '../integrations/InstalledIntegrationSer
 import { isWebSearchAvailableTo } from '../tools/webSearchResolver.js';
 import { isUserAppId } from '../../../shared/userAppContent.js';
 import { MAX_SHARED_LISTED, getUserAppRepository } from './UserAppRepository.js';
+import { companyAppStampsSettled } from './companyAppStamps.js';
 import { effectiveUserApp, isRunnerOwner } from './ceiling.js';
 import {
   canHoldUserApps,
@@ -372,6 +373,9 @@ async function storeRelease(repo, record) {
 
 async function inspect(appId, user, { req, repository, catalogs }) {
   if (!isUserAppId(appId)) return { status: 'notPersonal' };
+  // Whether a promoted record is released depends on the stamp of its company
+  // app; the upgrade pass that stamps the apps of 5.7.4 comes first.
+  await companyAppStampsSettled();
   const repo = repository || getUserAppRepository();
 
   // A config app has the ID: the file was placed by hand or by an import.

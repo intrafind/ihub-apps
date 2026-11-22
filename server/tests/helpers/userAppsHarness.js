@@ -35,7 +35,10 @@ import ChatService from '../../services/chat/ChatService.js';
 import { getChatRepository } from '../../services/chat/ChatRepository.js';
 import { resolveChatOwner } from '../../services/chat/chatOwner.js';
 import { getUserAppRepository } from '../../services/userApps/UserAppRepository.js';
-import { userAppOwnerSnapshot } from '../../services/userApps/userAppAccess.js';
+import {
+  setCompanyAppStampsChecked,
+  userAppOwnerSnapshot
+} from '../../services/userApps/userAppAccess.js';
 import { resetUserAppRunMemory } from '../../services/userApps/userAppResolution.js';
 import { userAppContentSchema } from '../../validators/userAppSchema.js';
 import registerGeneralRoutes from '../../routes/generalRoutes.js';
@@ -360,6 +363,10 @@ export async function startUserAppsHarness({ stubTurns = true } = {}) {
     storage: { provider: 'filesystem', filesystem: { baseDir, flushIntervalMs: 25 } }
   });
   setConfig();
+  // An installation after the upgrade pass of the company app stamps
+  // (`companyAppStamps.js`): only a stamped company app keeps its record
+  // promoted. A test of the pass itself switches this back.
+  setCompanyAppStampsChecked(true);
   await configCache.loadAndCacheLocale('en');
   const ledger = await captureRunLog();
 
@@ -489,6 +496,7 @@ export async function startUserAppsHarness({ stubTurns = true } = {}) {
      */
     async reset() {
       companyAppStamps.clear();
+      setCompanyAppStampsChecked(true);
       setConfig();
       turns.length = 0;
       magicCalls.length = 0;

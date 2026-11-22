@@ -1266,6 +1266,11 @@ out of the catalog (`server/routes/projectRoutes.js:1039-1047`). An admin can gi
   stays taken: a publish or a take-over never hands out an ID that a personal app still holds
   as `publishedAs.appId` or `publishing.appId`, so an earlier record cannot end up pointing at
   somebody else's app. A content admin can therefore give an app back by deleting the copy.
+  Company apps published with 5.7.4 carry no stamp: a one-time pass at the first start after
+  the update writes the record's ID into them (`server/services/userApps/companyAppStamps.js`,
+  marker `user-app-company-app-stamps` in `runtime-imports`; an app ID two records claim is
+  stamped for neither), and until that pass has completed an app without any stamp still counts
+  as the record's, so no record is released for a stamp not yet written.
 - **Release.** `POST /api/admin/user-apps/{appId}/_release`, for full admins. It sets
   `state: 'active'` and clears `publishedAs`, and the company app stays. The owner can edit
   again. It answers 409 `CONFLICT` with `details.reason: 'published'` while the company app is

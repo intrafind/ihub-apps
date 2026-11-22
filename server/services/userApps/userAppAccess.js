@@ -261,11 +261,46 @@ export function effectiveUserAppState(record, { publishedAppExists = true } = {}
 }
 
 /**
+ * Whether the one-time upgrade pass that stamps the company apps of 5.7.4
+ * (`companyAppStamps.js`) has completed on this installation and this
+ * process has reloaded the apps since. Until then an app file without any
+ * stamp still counts as the company app of the record that points at it.
+ */
+let companyAppStampsChecked = false;
+
+/**
+ * Record whether the upgrade pass of the company app stamps has completed
+ * (see {@link isCompanyAppOf}). Called by `companyAppStamps.js` once the pass
+ * and the reload of the apps are done, and by tests.
+ *
+ * @param {boolean} checked - True once every company app of an earlier
+ *   version carries the ID of its personal app.
+ */
+export function setCompanyAppStampsChecked(checked) {
+  companyAppStampsChecked = checked === true;
+}
+
+/**
+ * Whether the strict rule of {@link isCompanyAppOf} applies in this process.
+ *
+ * @returns {boolean}
+ */
+export function areCompanyAppStampsChecked() {
+  return companyAppStampsChecked;
+}
+
+/**
  * Whether `app`, a config app, is the company app of `record`: the publish
  * stamped the record's ID into `sourceUserAppId`. An app file with the same
  * ID that carries no stamp or another one (made by hand, or by a config
  * import, under an ID the record still holds) is not; the record then counts
  * as released, as if its company app were deleted.
+ *
+ * Apps published with 5.7.4 carry no stamp. Until the upgrade pass has
+ * stamped them ({@link areCompanyAppStampsChecked}), an app without any
+ * stamp still counts as the record's, as it did in 5.7.4, so no record is
+ * released for a stamp the pass has not written yet. An app with another
+ * record's stamp never counts.
  *
  * @param {Object|null|undefined} app - The config app under `publishedAs.appId`.
  * @param {Object|null|undefined} record - Stored personal app.
@@ -276,12 +311,10 @@ export function effectiveUserAppState(record, { publishedAppExists = true } = {}
  * const exists = isCompanyAppOf(company, record);
  */
 export function isCompanyAppOf(app, record) {
-  return (
-    Boolean(app) &&
-    typeof app.sourceUserAppId === 'string' &&
-    Boolean(record?.id) &&
-    app.sourceUserAppId === record.id
-  );
+  if (!app || !record?.id) return false;
+  const stamp = app.sourceUserAppId;
+  if (stamp === undefined || stamp === null) return !companyAppStampsChecked;
+  return typeof stamp === 'string' && stamp === record.id;
 }
 
 /** Whether a `users.json` record is a local account (it signs in with a password). */
