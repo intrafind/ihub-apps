@@ -343,6 +343,7 @@ graph TB
 
 #### Component Responsibilities
 
+- **`chatTurnStart.js`**: The start of a chat turn from plain data: `prepareTurn()` checks and assembles a turn, `runPreparedTurn()` runs it (see [Chat Request Flow](#chat-request-flow))
 - **`ChatService.js`**: One chat turn. `prepareChatRequest()` delegates to `RequestBuilder`; `runTurn()` runs the turn as one run on the chat's SSE v2 stream (`run/started` … `run/ended`, see [Streaming Events](streaming-events.md)) on `AgentLoop` with the chat seams and channel; `invokeAppInternal()` runs an app headlessly for the app-as-tool gateway and MCP `tools/call`
 - **`RequestBuilder.js`**: Resolves app, model, messages, tools and model options for the turn (templates, variables, uploads, skills, sources)
 - **`chatChannel.js`**: Projects the loop's streamed chunks onto SSE v2 frames — `step/delta` (text, thinking, image), `tool/progress` (grounding, citations, search status) and `meta` (conversation title / ids)
@@ -356,10 +357,12 @@ graph TB
 
 #### Chat Request Flow
 
+The route (`server/routes/chat/sessionRoutes.js`) does the HTTP part of a chat turn and nothing else: it reads the `Accept` header, builds a `TurnRequest` from the request, and answers. A `TurnRequest` is plain data: the chat, the app, who sends the message, the message with its uploads, and what the sender chose for this turn (model, style, output format, integration scopes, language). The turn starts in `server/services/chat/chatTurnStart.js`, which reads no request and writes no response. `prepareTurn(turnRequest, { user, … })` does everything that can refuse the turn before anything is sent to the reader: it checks who may write to the chat, settles pending questions, reads the uploads into the chat's file store, and assembles the history and what the turn stores. It returns a prepared turn, a refusal (a status and a code of `shared/apiErrors.js`, which the route throws as a `ServiceError`), or the answer of a workflow that the message mentioned. `runPreparedTurn(turn, { sink, … })` runs the prepared turn: it opens the reader's stream, makes the two `ChatService` calls of the diagram below, and releases the chat however the turn ended. The `sink` says where the turn is told. The route passes one that opens the stream of the `POST` when the client asked for `text/event-stream`, and otherwise one that answers the `POST` with JSON while the frames go to the chat's `GET` stream. Both functions run their steps in a fixed order, because the order decides which refusal a request gets. The chat route is the only caller today.
+
 ```mermaid
 sequenceDiagram
     participant Client
-    participant Routes as sessionRoutes
+    participant Routes as sessionRoutes / chatTurnStart
     participant ChatService
     participant RequestBuilder
     participant Loop as AgentLoop
