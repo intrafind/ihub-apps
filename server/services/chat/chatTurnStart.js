@@ -322,7 +322,7 @@ export function messageAttachments(message) {
  * @property {string} origin - What started the turn.
  * @property {string} [sessionId] - The sender's browser session, for the logs.
  * @property {() => boolean} audited - Whether the turn wrote an audit entry of its own
- *   (a call resumed after a connect). The request-level audit of a caller then adds none.
+ *   (a call resumed after a connect). The caller is told through its sink (`TurnSink.audited`).
  */
 
 /**
@@ -1109,6 +1109,10 @@ export async function prepareTurn(request, { user, getLocalizedError, settleClar
  *   turn that was not told on a stream of the sink, before the turn lets go of
  *   the chat (its durable mark, an approval or a connect to put back). A
  *   caller that answers a request does so here.
+ * @property {() => void} [audited] - Called as soon as the turn wrote an audit
+ *   entry of its own (a call resumed after a connect), before anything is
+ *   answered. A caller whose request is audited marks the request here, so
+ *   that the request-level audit adds no second entry.
  */
 
 /**
@@ -1291,7 +1295,14 @@ async function buildModelRequest(run) {
 async function takeResumedCall(run) {
   const { turn } = run;
   if (!turn.commitConnectResume) return null;
-  const committed = await turn.commitConnectResume();
+  let committed;
+  try {
+    committed = await turn.commitConnectResume();
+  } finally {
+    // The call that was taken is audited (`connection.resume`). The caller hears
+    // of it now, however the taking went on, and before anything is answered.
+    if (turn.audited()) run.sink?.audited?.();
+  }
   if (committed.refusal) {
     emitFailedRun(turn.chatId, {
       runId: run.runId,

@@ -907,16 +907,22 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
       const sink = wantsEventStream(req)
         ? { open: turn => openChatPostStream({ req, res, ...turn }) }
         : { answer: outcome => answerTurnAsJson(res, chatId, outcome) };
-      let prepared = null;
+      // An audit entry the turn writes stands for this request (`auditLogger`).
+      sink.audited = () => {
+        req._auditLogged = true;
+      };
       try {
-        prepared = await prepareTurn(turnRequestOf(req), {
+        const prepared = await prepareTurn(turnRequestOf(req), {
           user: req.user,
           getLocalizedError,
           settleClarifications: settleChatClarifications
         });
         if (prepared.refusal) throw refusalError(prepared.refusal);
         // An `@workflow` mention: the workflow took the message and runs on the GET stream.
-        if (prepared.answer) return res.json(prepared.answer);
+        if (prepared.answer) {
+          res.json(prepared.answer);
+          return;
+        }
 
         const outcome = await runPreparedTurn(prepared.turn, {
           sink,
@@ -933,9 +939,6 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
         if (!expected) logger.error('Error in app chat', { component: 'sessionRoutes', error });
         // A refusal and a failing model call are answered as they are.
         throw error;
-      } finally {
-        // An audit entry the turn wrote stands for this request (`auditLogger`).
-        if (prepared?.turn?.audited()) req._auditLogged = true;
       }
     }
   );

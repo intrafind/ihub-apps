@@ -452,6 +452,69 @@ test('a failure after the commit point is a frame on the stream of the caller, a
   assert.equal(isChatDurable(plain.turn.chatId), false);
 });
 
+test('a turn that wrote an audit entry of its own tells its caller at once, before it runs and before it is answered', async () => {
+  // A call resumed after a connect is audited when it is taken off the chat. The
+  // request-level audit of a caller reads its mark when the response is finished, so
+  // the caller hears of the entry at the commit and not after the turn.
+  const order = [];
+  const service = Object.create(env.chatService);
+  service.runTurn = async ({ connectResume }) => {
+    order.push('run');
+    connectResume.started = true;
+    return { runId: 'run-1', status: 'completed' };
+  };
+  const prepared = await prepareTurn(turnRequest(), host());
+  let written = false;
+  const resumed = {
+    ...prepared.turn,
+    commitConnectResume: async () => {
+      written = true;
+      order.push('taken');
+      return { resume: { calls: [] }, refusal: null, restore: async () => order.push('put back') };
+    },
+    audited: () => written
+  };
+  const outcome = await runPreparedTurn(
+    resumed,
+    runHost({
+      chatService: service,
+      sink: { audited: () => order.push('audited'), answer: () => order.push('answered') }
+    })
+  );
+  assert.equal(outcome.status, 'ran');
+  // The call ran, so it is not put back.
+  assert.deepEqual(order, ['taken', 'audited', 'run', 'answered']);
+
+  // A turn without an entry of its own tells nothing.
+  const plain = await prepareTurn(turnRequest(), host());
+  assert.equal(plain.turn.audited(), false);
+  const told = [];
+  await runPreparedTurn(
+    { ...plain.turn, commitConnectResume: async () => ({ resume: { calls: [] }, restore: null }) },
+    runHost({ chatService: service, sink: { audited: () => told.push('audited') } })
+  );
+  assert.deepEqual(told, []);
+
+  // An entry that was written is told also when the taking fails afterwards.
+  const failing = await prepareTurn(turnRequest(), host());
+  const late = [];
+  await assert.rejects(
+    () =>
+      runPreparedTurn(
+        {
+          ...failing.turn,
+          commitConnectResume: async () => {
+            throw new Error('the store went away');
+          },
+          audited: () => true
+        },
+        runHost({ chatService: service, sink: { audited: () => late.push('audited') } })
+      ),
+    /the store went away/
+  );
+  assert.deepEqual(late, ['audited']);
+});
+
 /** What `turnRequestOf` reads of a request: no Express, a plain object. */
 function chatPost(body, headers = {}) {
   return {
