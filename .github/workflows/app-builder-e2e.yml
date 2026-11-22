@@ -86,6 +86,11 @@ jobs:
 
       - name: Build the client
         # The subpath server serves the production build (tests/config/subpath-server.mjs).
+        # A production build. With the job's NODE_ENV=development Vite builds with
+        # `import.meta.env.DEV`, and the client then asks for assets at the root
+        # instead of under the prefix (buildAssetUrl in runtimeBasePath.js).
+        env:
+          NODE_ENV: production
         run: npm run build
         working-directory: client
 
