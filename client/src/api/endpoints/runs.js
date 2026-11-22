@@ -68,14 +68,36 @@ export const fetchPendingInteractions = async (options = {}) => {
 };
 
 /**
- * Deliver a human event into a run. `stop` aborts the run.
+ * Deliver a human event into a run. `stop` aborts the run. A `steer` is a
+ * message into the running answer: read at its next step, or with
+ * `mode: 'afterwards'` sent as the next message once the answer is done.
  * @param {string} runId
- * @param {{ kind: 'steer'|'stop'|'feedback', message?: string, messageId?: string, rating?: number|string }} event
- * @returns {Promise<{ success: boolean, runId: string, seq: number|null, effect?: string }>} the response body
+ * @param {{ kind: 'steer'|'stop'|'feedback', message?: string, mode?: 'steer'|'afterwards', messageId?: string, rating?: number|string }} event
+ * @returns {Promise<{ runId: string, seq: number|null, id?: string, effect?: string }>} the
+ *   response body; a `steer` without `id` found no answer running to take it
  */
 export const sendHumanEvent = async (runId, event) => {
   return handleApiResponse(
     () => apiClient.post(`/runs/${encodeURIComponent(runId)}/human-events`, event),
+    null,
+    null,
+    false
+  );
+};
+
+/**
+ * Remove a message sent into the running answer (`sendHumanEvent`, `kind: 'steer'`)
+ * before the answer reads it. Rejects with the problem's `status` and `code`:
+ * 409 `STEER_ALREADY_APPLIED` once it was read or sent as the next message, 404
+ * when it no longer waits, 503 when it cannot be decided right now.
+ * @param {string} runId - The run it was sent to (`pending[].runId`)
+ * @param {string} id - The id the POST answered with
+ * @returns {Promise<void>}
+ */
+export const removeHumanEvent = async (runId, id) => {
+  return handleApiResponse(
+    () =>
+      apiClient.delete(`/runs/${encodeURIComponent(runId)}/human-events/${encodeURIComponent(id)}`),
     null,
     null,
     false
