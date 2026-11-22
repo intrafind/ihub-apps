@@ -895,7 +895,8 @@
           "keyless": "No subscription key: keyless mode. Browsers connect straight to the host, so verify it with the live dictation test below.",
           "notConfigured": "Neither a subscription key nor a host is set. Azure cloud needs a key and region; an on-prem container needs a host.",
           "invalidKey": "Azure rejected the key (HTTP 401): it is invalid or belongs to a different region.",
-          "tokenFailed": "Token request failed: {{detail}}"
+          "tokenFailed": "Token request failed: {{detail}}",
+          "noResponse": "No response"
         }
       },
       "notEnabled": "not enabled",
@@ -1034,7 +1035,8 @@
           "shapeHelp": "When on, the raw tool output is passed through an LLM call using the prompt below. The LLM's reply is written to memory instead of the raw JSON, so the agent sees a compact, filterable index rather than a verbose payload.",
           "hideShapePrompt": "Hide shaper prompt",
           "showShapePrompt": "Edit shaper prompt",
-          "shapePromptPlaceholder": "Prompt used to format the tool result. Use {TOOL_RESULT} where the raw output should be inserted."
+          "shapePromptPlaceholder": "Prompt used to format the tool result. Use {TOOL_RESULT} where the raw output should be inserted.",
+          "sectionPlaceholder": "iFinder corpus map"
         },
         "crumb": "Memory",
         "title": "Memory — {{profileId}}",
@@ -1064,7 +1066,7 @@
         "maxIterations": "Max tool-call iterations per step",
         "capabilities": "Capabilities (task executors)",
         "capabilitiesHint": "What each planned task can use: installed integrations, platform tools, web search, apps and knowledge sources. Memory tools are auto-attached. Inbox and artifact lifecycle are owned by the runtime now, NOT exposed as LLM tools (add them as platform tools only as an opt-in escape hatch).",
-        "apps": "iHub Apps (App-as-tool)",
+        "apps": "$t(product.name) (App-as-tool)",
         "appsHint": "Apps the agent can invoke as synthetic tools (app__<id>). Requires the features.appAsTool flag to be ON.",
         "skills": "Skills (instructional knowledge)",
         "skillsHint": "Skills describe HOW to do something (e.g. \"for person research, do these steps\"). The planner sees the list and can pre-activate skills via the plan JSON; task workers can also activate them mid-run via the activate_skill tool. The runtime injects activated skill bodies into the system prompt so the agent follows them.",
@@ -1137,7 +1139,9 @@
         "hitl": "HITL approver groups",
         "serviceAccount": "Service account groups",
         "serviceAccountHint": "Groups the agent principal (agent:<id>) belongs to. These determine which apps/tools/models the agent can access via the standard group permission system.",
-        "noApps": "No chat-type apps available."
+        "noApps": "No chat-type apps available.",
+        "groundingWarningTitle": "⚠ App tools won’t run on this profile.",
+        "groundingWarning": "{{model}} (Google) uses native grounding when webSearch is configured, and Google models can’t combine native grounding with function calling. To use apps: turn off webSearch for this agent, or pick a non-Google model."
       },
       "approvals": {
         "defaultMessage": "Approval requested",
@@ -1209,9 +1213,66 @@
         "cancelTitle": "Cancel run",
         "cancelMessage": "Cancel this run? In-flight LLM calls won't be billed for completed turns.",
         "confirmCancel": "Cancel run",
-        "keepRunning": "Keep running"
+        "keepRunning": "Keep running",
+        "col": {
+          "runId": "Run ID",
+          "profile": "Profile",
+          "started": "Started"
+        },
+        "pageTitle": "Agent Runs",
+        "empty": "No runs yet.",
+        "pageTitleFor": "Agent Runs — {{profileId}}"
       },
-      "pendingApprovals": "Pending Approvals"
+      "pendingApprovals": "Pending Approvals",
+      "runDetail": {
+        "triggeredBy": "triggered by",
+        "total": "total",
+        "live": "Live",
+        "reconnecting": "Reconnecting…",
+        "disconnected": "Disconnected",
+        "back": "Back",
+        "inboxEmptyTitle": "No work to do.",
+        "inboxEmpty": "The inbox was empty when this run started, so the planner and synthesizer were skipped. The next trigger will pick up new items.",
+        "reviewFailedTitle": "Review not passed.",
+        "reviewFailed": "The adversarial verifier still found gaps after every revision, so this run did not pass review. The deliverable below is preserved for inspection and the inbox item was left open.",
+        "lastReview": "Last review: {{feedback}}",
+        "node": "node: {{id}}",
+        "awaitingApproval": "⏸ Awaiting approval",
+        "approve": "Approve",
+        "reject": "Reject",
+        "statusLabel": "Status:",
+        "currentNodes": "Current nodes:",
+        "completed": "Completed:",
+        "inputSummed": "Input is summed across each step's agent iterations, not a single prompt.",
+        "inboxItem": "Inbox item",
+        "inboxId": "inbox: {{id}}",
+        "line": "line {{line}}",
+        "steps": "Steps ({{count}})",
+        "noSteps": "No steps yet.",
+        "colStep": "Step",
+        "colSource": "Source",
+        "colTokens": "Tokens (in/out)",
+        "artifacts": "Artifacts ({{count}})",
+        "noArtifacts": "No artifacts produced.",
+        "openViewer": "Open viewer",
+        "bytes": "{{count}} bytes",
+        "citations": "Citations ({{count}})",
+        "citationsHelp": "URLs the agent actually consulted during this run, captured from every search / extract tool call. The synthesizer cites these by number in the final report. Distinct from the projects linked to the profile — citations are what was visited, projects are what could be queried.",
+        "showLess": "Show less",
+        "showAllCitations": "Show all {{count}} citations",
+        "activatedSkills": "Activated skills ({{count}})",
+        "activatedSkillsHelp": "Skills loaded into the agent's context during this run. The full SKILL.md body of each activated skill is folded into the system prompt of every subsequent prompt node.",
+        "childRuns": "Child runs ({{count}})",
+        "childRunsHelp": "Sub-workflow executions spawned by this run (one per planner decomposition). Open one to see its per-task LLM history.",
+        "toolIssues": "Tool issues ({{count}})",
+        "toolIssuesHelp": "The agent attempted to call tools it does not have access to. Each attempt was returned to the model as a tool-error so it can self-correct.",
+        "runFailed_one": "Run failed ({{count}} error)",
+        "runFailed_other": "Run failed ({{count}} errors)",
+        "markedDone": "marked done",
+        "plannerReasoning": "Planner reasoning: {{reasoning}}",
+        "availableTools": "available: {{tools}}",
+        "none": "(none)"
+      }
     },
     "providers": {
       "timeouts": {
@@ -1303,7 +1364,8 @@
         "saving": "Creating...",
         "llmHelp": "An LLM provider holds one API key for all of its models. Link models to it in the model editor, or import them from its endpoint.",
         "nameRequired": "Provider name is required",
-        "subtitle": "Create an LLM provider for your own endpoint, a web search provider, or a generic API key"
+        "subtitle": "Create an LLM provider for your own endpoint, a web search provider, or a generic API key",
+        "idRequired": "Provider ID is required"
       },
       "info": {
         "title": "API Key Priority",
@@ -1509,7 +1571,8 @@
         "configuration": "Configuration",
         "configurationDesc": "Advanced configuration options for the model",
         "resource": "model \"{{id}}\"",
-        "fixErrors": "Please fix the following errors"
+        "fixErrors": "Please fix the following errors",
+        "history": "History"
       },
       "fields": {
         "id": "Model ID",
@@ -1635,7 +1698,8 @@
         "sampling": "Sampling",
         "marking": "Output marking",
         "imageMarking": "Image marking",
-        "thinking": "Reasoning"
+        "thinking": "Reasoning",
+        "options": "Options"
       },
       "errors": {
         "invalidJson": "Invalid JSON"
@@ -1818,7 +1882,16 @@
         "preview": "Preview"
       },
       "toggle": "Toggle enabled",
-      "statusLabel": "Status"
+      "statusLabel": "Status",
+      "aspectRatio": {
+        "r1x1": "1:1 (Square)",
+        "r16x9": "16:9 (Landscape)",
+        "r9x16": "9:16 (Portrait)",
+        "r21x9": "21:9 (Ultrawide)"
+      },
+      "downloadError": "Failed to download model config: {{error}}",
+      "uploadExists": "Model with ID \"{{id}}\" already exists",
+      "uploadError": "Failed to upload model config: {{error}}"
     },
     "auth": {
       "configuration": "Authentication Configuration",
@@ -2140,7 +2213,11 @@
         "postLogoutUriPlaceholder": "https://yourapp.com/logged-out",
         "trustedClient": "Trusted client (skip consent screen)",
         "deleteTitle": "Delete OAuth Client",
-        "badgeAuthCode": "auth-code"
+        "badgeAuthCode": "auth-code",
+        "editSubtitle": "Configure client credentials and permissions for external API access",
+        "tokenExpirationHelp": "Default: 60 minutes, Maximum: 1440 minutes (24 hours)",
+        "getStarted": "Get started by creating a new OAuth client.",
+        "tokenError": "Failed to generate token: {{error}}"
       },
       "ldap": {
         "title": "LDAP Authentication Settings",
@@ -2214,7 +2291,14 @@
         "trustedProxiesHelp": "Addresses or subnets the proxy connects from, comma-separated (for example loopback, 10.0.0.5 or 10.0.0.0/8). The headers are used only on connections from these addresses. The default, loopback, covers a proxy on the same host or in the same pod; if other local processes (such as a service-mesh sidecar) forward traffic to iHub, set a shared secret as well.",
         "sharedSecretHeaderLabel": "Shared Secret Header",
         "sharedSecretLabel": "Shared Secret",
-        "sharedSecretHelp": "A secret the proxy sends in the shared secret header. When set, the headers are used only on requests that carry it. Together with trusted proxies, both must match: for a proxy elsewhere, add its address above or clear the list to rely on the secret alone."
+        "sharedSecretHelp": "A secret the proxy sends in the shared secret header. When set, the headers are used only on requests that carry it. Together with trusted proxies, both must match: for a proxy elsewhere, add its address above or clear the list to rely on the secret alone.",
+        "settingsTitle": "Proxy/JWT Authentication Settings",
+        "settingsHelp": "Configure header-based authentication from reverse proxy and/or JWT token validation for pure JWT authentication.",
+        "userHeader": "User Header",
+        "groupsHeader": "Groups Header",
+        "selfSignupHelp": "Allow new users to register automatically through proxy authentication. If disabled, new users must be added manually by administrators.",
+        "ldapLookupNone": "None (use header/JWT groups only)",
+        "ldapLookupHelp": "When set, look up the authenticated user's group memberships in the selected LDAP provider and merge them with the groups supplied via the groups header and JWT claim. The LDAP provider must have admin credentials and group search configured."
       },
       "resource": "authentication settings",
       "subtitle": "Configure multiple authentication methods and user access settings. Enable dual authentication for maximum flexibility.",
@@ -2227,7 +2311,95 @@
       "debugMovedHelp": "All authentication debug settings (OIDC/LDAP/NTLM tracing, token masking, raw data) now live in one place: Platform → Logging → Authentication Debug Logging.",
       "oidc": {
         "clientSecret": "Client Secret",
-        "clientSecretHelp": "Select a stored credential profile holding the OIDC client secret."
+        "clientSecretHelp": "Select a stored credential profile holding the OIDC client secret.",
+        "title": "OIDC Authentication Settings",
+        "selfSignupHelp": "Allow new users to register automatically through OIDC authentication. If disabled, new users must be added manually by administrators.",
+        "providerNumber": "Provider {{n}}",
+        "providerName": "Provider Name",
+        "displayName": "Display Name",
+        "clientId": "Client ID",
+        "authorizationUrl": "Authorization URL",
+        "tokenUrl": "Token URL",
+        "userInfoUrl": "User Info URL",
+        "autoCallback": "Auto-generated: {{url}}",
+        "groupsAttribute": "Groups Attribute",
+        "scope": "Scope (comma-separated)",
+        "pkce": "Enable PKCE",
+        "autoRedirect": "Auto-redirect",
+        "autoRedirectHelp": "Automatically redirect users to this provider when it's the only auth method enabled"
+      },
+      "mode": {
+        "title": "Primary Authentication Mode",
+        "help": "Select the primary authentication mode for default behavior and routing.",
+        "proxy": "Proxy Mode",
+        "proxyDesc": "Authentication via reverse proxy or JWT tokens",
+        "local": "Local Mode",
+        "localDesc": "Built-in username/password authentication",
+        "oidc": "OIDC Mode",
+        "oidcDesc": "OpenID Connect with external providers",
+        "ldap": "LDAP Mode",
+        "ldapDesc": "LDAP/Active Directory authentication",
+        "ntlm": "NTLM Mode",
+        "ntlmDesc": "Windows Integrated Authentication (NTLM/Kerberos)",
+        "anonymous": "Anonymous Mode",
+        "anonymousDesc": "No authentication required (default)"
+      },
+      "methodsHelp": "Enable multiple authentication methods simultaneously. Users can choose their preferred login method.",
+      "methodNames": {
+        "proxy": "Proxy/JWT Authentication",
+        "proxyDesc": "Headers or JWT tokens from reverse proxy",
+        "local": "Local Authentication",
+        "oidc": "OIDC Authentication",
+        "oidcDesc": "OpenID Connect providers (Google, etc.)",
+        "ldap": "LDAP Authentication",
+        "ldapDesc": "LDAP/Active Directory authentication with multiple providers",
+        "ntlm": "NTLM Authentication",
+        "ntlmDesc": "Windows Integrated Authentication (NTLM)",
+        "anonymousDesc": "Allow users to access without authentication"
+      },
+      "allowSelfSignup": "Allow Self-Signup",
+      "ldapGroupLookup": {
+        "provider": "LDAP Group Lookup Provider",
+        "cacheTtl": "LDAP Group Cache TTL (seconds)",
+        "cacheTtlHelp": "How long to cache LDAP group results per user. Set to 0 to disable caching."
+      },
+      "jwt": {
+        "help": "Configure JWT token validation for pure JWT authentication (no headers required)",
+        "addProvider": "Add Provider",
+        "provider": "JWT Provider",
+        "namePlaceholder": "Provider name",
+        "headerPlaceholder": "Header name",
+        "issuerPlaceholder": "Issuer URL",
+        "audiencePlaceholder": "Audience",
+        "jwkPlaceholder": "JWK URL"
+      },
+      "local": {
+        "jwtSecretHelp": "Use the environment variable {{name}} for security",
+        "title": "Local Authentication Settings",
+        "usersFile": "Users File Path",
+        "jwtSecret": "JWT Secret",
+        "showDemoAccounts": "Show Demo Accounts in Login Form",
+        "showDemoAccountsHelp": "Display demo account credentials on the login form for development/testing",
+        "lockout": "Lock accounts after repeated failed sign-ins",
+        "lockoutHelp": "While an account is locked, sign-in is refused without checking the password",
+        "lockoutMaxAttempts": "Failed Sign-ins Before Lockout",
+        "lockoutDuration": "Lockout Duration (minutes)"
+      },
+      "sessionTimeout": "Session Timeout (minutes)",
+      "ntlm": {
+        "title": "NTLM Authentication Settings",
+        "help": "Configure Windows Integrated Authentication (NTLM) for domain users.",
+        "domain": "Domain Name",
+        "domainHelp": "Windows domain name (e.g., EXAMPLE, MUC)",
+        "domainController": "Domain Controller URL",
+        "domainControllerHelp": "LDAP URL of the domain controller that checks the sign-in (e.g., ldaps://dc.example.com:636, or ldap://dc.example.com:389 for an unencrypted connection)",
+        "sessionTimeoutHelp": "JWT token expiration time",
+        "debug": "Enable Debug Logging",
+        "debugHelp": "Log detailed NTLM authentication information",
+        "selfSigned": "Allow self-signed / internal CA certificates (ldaps://)",
+        "selfSignedHelp": "Enable when the domain controller uses a certificate from a private or internal CA. Required for most on-premise ldaps:// setups.",
+        "ldapLookupNone": "None (default groups only)",
+        "ldapLookupHelp": "NTLM sign-in returns no groups. To give NTLM users their directory groups, pick an LDAP provider with admin credentials and group search configured; without one, NTLM users get only the default groups."
       }
     },
     "officeIntegration": {
@@ -2718,7 +2890,8 @@
         "never": "Never",
         "lastModified": "Last Modified",
         "connections": "Connected applications",
-        "manageConnections": "Manage"
+        "manageConnections": "Manage",
+        "notFound": "User not found"
       },
       "edit": {
         "createTitle": "Create New User",
@@ -2814,7 +2987,43 @@
       "password": "Password",
       "newPassword": "New Password",
       "confirmPassword": "Confirm Password",
-      "deleteTitle": "Delete User"
+      "deleteTitle": "Delete User",
+      "list": {
+        "noGroups": "No groups",
+        "never": "Never",
+        "deleted": "User deleted.",
+        "colUser": "User",
+        "colAuthMethod": "Auth Method",
+        "colLastActive": "Last Active",
+        "viewUser": "View user",
+        "editUser": "Edit user",
+        "deleteUser": "Delete user",
+        "title": "User Management",
+        "subtitle": "Manage local authentication users and their permissions",
+        "addUser": "Add User",
+        "searchPlaceholder": "Search by ID, name, email, group, or auth method…",
+        "allMethods": "All Methods",
+        "allGroups": "All Groups",
+        "allStatus": "All Statuses",
+        "anyTime": "Any Time",
+        "last7": "Last 7 days",
+        "last30": "Last 30 days",
+        "last90": "Last 90 days",
+        "daysAgo_one": "{{count}} day ago",
+        "daysAgo_other": "{{count}} days ago",
+        "enabled": "User enabled.",
+        "disabled": "User disabled.",
+        "loadError": "Failed to load users: {{error}}",
+        "deleteError": "Failed to delete user: {{error}}",
+        "statusError": "Failed to update user status: {{error}}"
+      },
+      "form": {
+        "usernamePlaceholder": "Enter username",
+        "emailPlaceholder": "Enter email address",
+        "fullNamePlaceholder": "Enter full name",
+        "enabledHelp": "Disabled users cannot log in or access the system",
+        "passwordHelp": "Password must be at least 6 characters long and should contain a mix of letters, numbers, and special characters."
+      }
     },
     "logging": {
       "loadError": "Failed to load logging configuration",
@@ -3066,7 +3275,8 @@
       "referenceTitle": "Reference",
       "refEnvHint": "Standard OTEL_* environment variables (OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_SERVICE_NAME, ...) are honored at startup.",
       "refMetricsHint": "Custom iHub metrics: ihub.app.usage, ihub.prompt.usage, ihub.errors, ihub.conversations, ihub.active.users, ihub.active.chats.",
-      "resource": "telemetry settings"
+      "resource": "telemetry settings",
+      "genAiConventions": "OpenTelemetry Gen-AI semantic conventions:"
     },
     "systemResources": {
       "title": "System resources",
@@ -3366,6 +3576,16 @@
       "versionPolicy": {
         "pinned": "Pinned to {{pin}}",
         "offered": "offered here: v{{version}}"
+      },
+      "registry": {
+        "auth": {
+          "token": "Token",
+          "username": "Username",
+          "password": "Password",
+          "headerName": "Header Name",
+          "headerValue": "Header Value"
+        },
+        "namePlaceholder": "My Registry"
       }
     },
     "apps": {
@@ -3916,7 +4136,8 @@
           "option": "Option {{number}}",
           "part": "{{parent}}, {{field}}",
           "language": "{{field}} — {{language}}"
-        }
+        },
+        "magicPromptInstructionsPlaceholder": "Enter instructions for the magic prompt feature…"
       },
       "reorder": "Reorder",
       "reorderHelp": "Drag a row or use the arrows to set the order apps appear in for users — in the apps browser, on the start page and in the sidebar. Every app is listed, so search and filters do not apply here. Nothing is saved until you choose \"Save order\".",
@@ -4225,7 +4446,10 @@
         "starterPrompts": "Conversation starters",
         "editApp": "Edit app",
         "close": "Close"
-      }
+      },
+      "downloadError": "Failed to download app config: {{error}}",
+      "uploadExists": "App with ID \"{{id}}\" already exists",
+      "uploadError": "Failed to upload app config: {{error}}"
     },
     "features": {
       "title": "Features",
@@ -5532,7 +5756,10 @@
         "url": "URL",
         "copyUrl": "Copy URL",
         "delete": "Delete asset",
-        "uploadedColumn": "Uploaded"
+        "uploadedColumn": "Uploaded",
+        "invalidType": "Invalid file type. Only SVG, PNG, JPG, and ICO files are allowed.",
+        "tooLarge": "The file must be smaller than 2 MB",
+        "copyFailed": "Failed to copy to clipboard"
       },
       "footer": {
         "title": "Footer",
@@ -5569,7 +5796,8 @@
         "disclaimerTitle": "Disclaimer Title",
         "disclaimerText": "Disclaimer Text",
         "disclaimerVersion": "Disclaimer Version",
-        "disclaimerUpdated": "Last Updated"
+        "disclaimerUpdated": "Last Updated",
+        "appsListLogoAlt": "Apps List Logo"
       },
       "nameField": {
         "follow": "Use the product name (default)",
@@ -5619,7 +5847,16 @@
         "required": "required",
         "liveNote": "PWA is active",
         "manifestNote": "Manifest is live at",
-        "swNote": "Service worker is registered at /sw.js using a network-first strategy."
+        "swNote": "Service worker is registered at /sw.js using a network-first strategy.",
+        "icon192": "192×192 Icon",
+        "icon192Hint": "Required for Android home screen. Upload via Assets tab, paste URL here.",
+        "icon512": "512×512 Icon",
+        "icon512Hint": "Required for splash screen. Should be a high-resolution version of your logo.",
+        "iconApple": "Apple Touch Icon",
+        "iconAppleHint": "Used by iOS Safari when saving to home screen (180×180 recommended).",
+        "iconPreview": "{{label}} preview",
+        "shortNameMax": "(max 15 chars)",
+        "descriptionPlaceholder": "AI-powered applications platform"
       },
       "linkTarget": "Open link in",
       "styles": {
@@ -5641,7 +5878,15 @@
         "addVariable": "Add Variable",
         "noVariables": "No CSS variables defined",
         "addFirstVariable": "Click \"Add Variable\" to get started",
-        "generatedCss": "Generated CSS"
+        "generatedCss": "Generated CSS",
+        "sectionsLabel": "Style sections",
+        "preview": {
+          "lightMode": "Light Mode",
+          "darkMode": "Dark Mode",
+          "primaryButton": "Primary Button",
+          "accentButton": "Accent Button",
+          "mutedText": "This is muted text."
+        }
       },
       "resource": "UI settings",
       "title": "UI Customization",
@@ -5724,7 +5969,8 @@
       "validation": {
         "idRequired": "Group ID is required",
         "idInvalid": "Group ID can only contain letters, numbers, hyphens, and underscores",
-        "nameRequired": "Group name is required"
+        "nameRequired": "Group name is required",
+        "idAndNameRequired": "Group ID and name are required"
       },
       "edit": {
         "noGroupData": "No group data available",
@@ -5765,7 +6011,33 @@
       "noGroupsFound": "No groups found",
       "createFirstGroup": "Create your first group to get started",
       "count_one": "{{count}} group",
-      "count_other": "{{count}} groups"
+      "count_other": "{{count}} groups",
+      "list": {
+        "allApps": "All Apps (*)",
+        "deleted": "Group deleted.",
+        "addGroup": "Add Group",
+        "more": "+{{count}} more",
+        "loadError": "Failed to load groups: {{error}}"
+      },
+      "form": {
+        "idPlaceholder": "Enter unique group ID",
+        "namePlaceholder": "Enter group display name",
+        "descriptionPlaceholder": "Enter group description",
+        "adminAccessHelp": "Allow members of this group to access administrative functions",
+        "permissionsHelp": "Configure which apps, models, and prompts members of this group can access",
+        "searchApps": "Search apps to add…",
+        "noApps": "No apps selected – users won’t see any apps",
+        "searchModels": "Search models to add…",
+        "noModels": "No models selected – users can’t use any AI models",
+        "searchPrompts": "Search prompts to add…",
+        "noPrompts": "No prompts selected – users can’t access any prompt templates",
+        "searchWorkflows": "Search workflows to add…",
+        "noWorkflows": "No workflows selected – users can’t run any workflows",
+        "searchSkills": "Search skills to add…",
+        "noSkills": "No skills selected – users can’t use any agent skills",
+        "allWildcard": "All (*)",
+        "allWildcardFor": "{{label}}: All (*)"
+      }
     },
     "contentAccess": {
       "title": "Group access",
@@ -5999,7 +6271,8 @@
         "unavailable": "Feedback statistics are not available.",
         "range": "Ratings of the last 90 days."
       },
-      "resource": "feedback settings"
+      "resource": "feedback settings",
+      "tabsLabel": "Feedback sections"
     },
     "usage": {
       "reviewFeedback": "Review feedback",
@@ -6259,6 +6532,18 @@
         "userFeedbackActivity": "User Feedback Activity",
         "feedbackByApplication": "Feedback by Application",
         "feedbackByModel": "Feedback by Model"
+      },
+      "feedback": {
+        "averageRating_one": "Average Rating ({{count}} rating)",
+        "averageRating_other": "Average Rating ({{count}} ratings)",
+        "totalResponses_one": "Total feedback: {{count}} response",
+        "totalResponses_other": "Total feedback: {{count}} responses",
+        "responses_one": "{{count}} response",
+        "responses_other": "{{count}} responses",
+        "user": "User: {{id}}",
+        "app": "App: {{id}}",
+        "model": "Model: {{id}}",
+        "noRatings": "No user ratings have been submitted yet."
       }
     },
     "localization": {
@@ -6341,14 +6626,15 @@
         "backToList": "Back to Prompts",
         "createTitle": "Create New Prompt",
         "editTitle": "Edit Prompt",
-        "createDesc": "Create a new prompt for your iHub Apps",
+        "createDesc": "Create a new prompt for your $t(product.name)",
         "editDesc": "Edit the prompt details and configuration",
         "history": "History",
         "cancel": "Cancel",
         "save": "Save Prompt",
         "saving": "Saving...",
         "searchApps": "Search apps...",
-        "noAppsFound": "No apps found"
+        "noAppsFound": "No apps found",
+        "variableDefaultPlaceholder": "Default value"
       },
       "userPrompts": {
         "allowEveryone": "Everyone signed in",
@@ -6431,7 +6717,7 @@
       "download": "Download Config",
       "loadError": "Error loading prompts",
       "title": "Prompt Management",
-      "subtitle": "Create, edit, and manage prompts for your iHub Apps",
+      "subtitle": "Create, edit, and manage prompts for your $t(product.name)",
       "createNew": "Create New Prompt",
       "uploading": "Uploading...",
       "uploadConfig": "Upload Config",
@@ -6446,7 +6732,10 @@
         "enabled": "Enabled",
         "disabled": "Disabled"
       },
-      "uploadConfigTitle": "Upload Prompt Config"
+      "uploadConfigTitle": "Upload Prompt Config",
+      "downloadError": "Failed to download prompt config: {{error}}",
+      "uploadExists": "Prompt with ID \"{{id}}\" already exists",
+      "uploadError": "Failed to upload prompt config: {{error}}"
     },
     "skills": {
       "delete": "Delete",
@@ -6556,7 +6845,8 @@
       "noSkills": "No skills found",
       "noSkillsDescription": "Get started by importing a skill package.",
       "importSkillTitle": "Import Skill (.zip)",
-      "exportTitle": "Export Skill"
+      "exportTitle": "Export Skill",
+      "exportError": "Failed to export skill: {{error}}"
     },
     "scheduledTasks": {
       "saved": "Settings saved",
@@ -6863,7 +7153,7 @@
       "delete": "Delete",
       "loadError": "Error loading workflows",
       "title": "Workflow Management",
-      "subtitle": "Create, edit, and manage agentic workflows for your iHub Apps",
+      "subtitle": "Create, edit, and manage agentic workflows for your $t(product.name)",
       "viewExecutions": "View Executions",
       "uploading": "Uploading...",
       "uploadConfig": "Upload Config",
@@ -6874,7 +7164,10 @@
       "filterDisabled": "Disabled Only",
       "noWorkflows": "No workflows found",
       "noWorkflowsDescription": "Get started by creating a new workflow.",
-      "uploadConfigTitle": "Upload Workflow Config"
+      "uploadConfigTitle": "Upload Workflow Config",
+      "downloadError": "Failed to download workflow config: {{error}}",
+      "uploadExists": "Workflow with ID \"{{id}}\" already exists",
+      "uploadError": "Failed to upload workflow config: {{error}}"
     },
     "projects": {
       "knowledgeModes": {
@@ -7345,7 +7638,12 @@
         "slideFooter": "Slide footer",
         "slideNumbers": "Slide numbers",
         "preview": "Preview",
-        "previewHelp": "Sample documents with the saved template. Pending changes are saved first."
+        "previewHelp": "Sample documents with the saved template. Pending changes are saved first.",
+        "themes": {
+          "default": "Default",
+          "professional": "Professional",
+          "minimal": "Minimal"
+        }
       },
       "files": {
         "uploaded": "\"{{name}}\" uploaded.",
@@ -7512,7 +7810,7 @@
       "test": "Test",
       "edit": "Edit",
       "editTitle": "Edit Short Link",
-      "paramsJson": "Parameters (JSON)"
+      "paramsJson": "Params (JSON)"
     },
     "toolApproval": {
       "mode": {
@@ -8331,7 +8629,9 @@
       "actions": "Actions",
       "viewJson": "JSON",
       "viewForm": "Form",
-      "viewRaw": "Raw"
+      "viewRaw": "Raw",
+      "selectJsonFile": "Please select a JSON file",
+      "invalidJsonFile": "Invalid JSON file format"
     },
     "confirm": {
       "deleteTitle": "Delete {{type}} \"{{name}}\"?",
@@ -8657,7 +8957,13 @@
       "description": "Generated files: storage, size limits, and what HTML artifacts may load",
       "conflict": "Someone else changed the artifact settings after you opened this page, so nothing was saved. Your edits are still here: load the current settings, then make your change again.",
       "reload": "Load the current settings",
-      "reloadError": "The current settings could not be loaded."
+      "reloadError": "The current settings could not be loaded.",
+      "viewer": {
+        "openRaw": "Open raw",
+        "raw": "raw",
+        "loading": "Loading…"
+      },
+      "downloadAs": "Download as…"
     },
     "formErrors": {
       "title": "Please fix the following errors",
@@ -8814,7 +9120,11 @@
       "searching": "Searching...",
       "navigate": "navigate",
       "select": "select",
-      "close": "close"
+      "close": "close",
+      "actionNewApp": "New app",
+      "actionViewAuditLog": "View Audit Log",
+      "actionRunBackup": "Run Backup",
+      "actionCheckUpdates": "Check for Updates"
     },
     "skipToContent": "Skip to content",
     "checkingAuth": "Checking authentication...",
@@ -8825,7 +9135,21 @@
     "returnToLogin": "← Return to login",
     "shortcuts": {
       "title": "Keyboard Shortcuts",
-      "hint": "Shortcuts are disabled when typing in inputs"
+      "hint": "Shortcuts are disabled when typing in inputs",
+      "goApps": "Go to Apps",
+      "goModels": "Go to Models",
+      "goPrompts": "Go to Prompts",
+      "goUsers": "Go to Users",
+      "goGroups": "Go to Groups",
+      "goProjects": "Go to Projects",
+      "goAuditLog": "Go to Audit Log",
+      "openPalette": "Open command palette",
+      "save": "Save (in the app editor)",
+      "toggleCheatsheet": "Toggle this cheatsheet",
+      "closeDialogs": "Close dialogs / palette",
+      "then": "then",
+      "navigation": "Navigation",
+      "actions": "Actions"
     },
     "changeHistory": {
       "noDiffData": "No diff data available.",
@@ -8864,7 +9188,30 @@
       "variableValue": "Variable Value",
       "noCustomVariables": "No custom variables defined yet. Click \"Add Variable\" to create one.",
       "usageExample": "Usage Example",
-      "usageExampleText": "Once you create a custom variable like {{company}}, you can use it in app system prompts, the global context above, or in any app prompt template. The variable will be replaced with its value automatically."
+      "usageExampleText": "Once you create a custom variable like {{company}}, you can use it in app system prompts, the global context above, or in any app prompt template. The variable will be replaced with its value automatically.",
+      "builtIn": {
+        "year": "Current year",
+        "month": "Current month (zero-padded)",
+        "date": "Localized full date",
+        "time": "Localized time",
+        "day_of_week": "Localized day of week",
+        "timezone": "User's timezone",
+        "locale": "Current language/locale",
+        "user_name": "Authenticated user's display name",
+        "user_email": "Authenticated user's email",
+        "model_name": "Current model being used",
+        "tone": "Selected tone/style setting",
+        "location": "User's location (if configured)",
+        "platform_context": "The processed global context"
+      },
+      "globalContextPlaceholder": "e.g., Current date: {{date}}. Company: {{company}}. User: {{user_name}}",
+      "variableKeyPlaceholder": "e.g., company, department, region",
+      "variableValuePlaceholder": "e.g., We are a leading provider of AI solutions…",
+      "errors": {
+        "keyRequired": "Variable key is required",
+        "keyReserved": "This variable name is reserved for built-in variables",
+        "keyExists": "A custom variable with this key already exists"
+      }
     },
     "dashboard": {
       "feedbackOverview": "Feedback Overview"
@@ -8920,6 +9267,27 @@
       "noExecutions": "No executions found",
       "noExecutionsFiltered": "No executions match the current filters. Try adjusting your search criteria.",
       "noExecutionsYet": "No workflow executions have been recorded yet."
+    },
+    "breadcrumbLabel": "Breadcrumb",
+    "breadcrumbs": {
+      "newAgent": "New Agent",
+      "inboxes": "Inboxes",
+      "newGroup": "New Group",
+      "newModel": "New Model",
+      "newClient": "New Client",
+      "newPage": "New Page",
+      "newPrompt": "New Prompt",
+      "newShortLink": "New Short Link",
+      "newUser": "New User",
+      "newWorkflow": "New Workflow"
+    },
+    "dataTable": {
+      "moreActions": "More actions",
+      "clearSearch": "Clear search",
+      "search": "Search…"
+    },
+    "integrationPages": {
+      "oauthClientId": "OAuth Client ID:"
     }
   },
   "cloudStorage": {

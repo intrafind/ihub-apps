@@ -153,7 +153,7 @@ function BrandImages({ config, onUpdate, t }) {
         value={header.logo?.alt || {}}
         onChange={alt => onUpdate('header', { logo: { ...header.logo, alt } })}
         type="text"
-        placeholder={{ en: 'Logo alt text (en)', de: 'Logo alt text (de)' }}
+        placeholder={{ en: 'Logo alt text', de: 'Alternativtext des Logos' }}
       />
 
       {/* Favicon Configuration */}

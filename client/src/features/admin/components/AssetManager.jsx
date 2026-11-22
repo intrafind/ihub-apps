@@ -60,13 +60,18 @@ function AssetManager({ t }) {
       'image/vnd.microsoft.icon'
     ];
     if (!allowedTypes.includes(file.type)) {
-      setError('Invalid file type. Only SVG, PNG, JPG, and ICO files are allowed.');
+      setError(
+        t(
+          'admin.ui.assets.invalidType',
+          'Invalid file type. Only SVG, PNG, JPG, and ICO files are allowed.'
+        )
+      );
       return;
     }
 
     // Validate file size (2MB limit)
     if (file.size > 2 * 1024 * 1024) {
-      setError('File size must be less than 2MB');
+      setError(t('admin.ui.assets.tooLarge', 'The file must be smaller than 2 MB'));
       return;
     }
 
@@ -139,7 +144,7 @@ function AssetManager({ t }) {
         setTimeout(() => setSuccessMessage(''), 2000);
       })
       .catch(() => {
-        setError('Failed to copy to clipboard');
+        setError(t('admin.ui.assets.copyFailed', 'Failed to copy to clipboard'));
       });
   };
 

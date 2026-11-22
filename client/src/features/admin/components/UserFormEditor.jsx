@@ -193,7 +193,7 @@ function UserFormEditor({
                     className={`${INPUT_CLASS} mt-1 block ${
                       validationErrors.username ? 'border-red-500 dark:border-red-400' : ''
                     }`}
-                    placeholder="Enter username"
+                    placeholder={t('admin.users.form.usernamePlaceholder', 'Enter username')}
                   />
                   {validationErrors.username && (
                     <p className="mt-1 text-sm text-red-600 dark:text-red-400">
@@ -225,7 +225,7 @@ function UserFormEditor({
                     className={`${INPUT_CLASS} mt-1 block ${
                       validationErrors.email ? 'border-red-500 dark:border-red-400' : ''
                     }`}
-                    placeholder="Enter email address"
+                    placeholder={t('admin.users.form.emailPlaceholder', 'Enter email address')}
                   />
                   {validationErrors.email && (
                     <p className="mt-1 text-sm text-red-600 dark:text-red-400">
@@ -243,7 +243,7 @@ function UserFormEditor({
                     value={user.fullName || ''}
                     onChange={e => handleInputChange('fullName', e.target.value)}
                     className={`${INPUT_CLASS} mt-1 block`}
-                    placeholder="Enter full name"
+                    placeholder={t('admin.users.form.fullNamePlaceholder', 'Enter full name')}
                   />
                 </div>
 
@@ -268,7 +268,10 @@ function UserFormEditor({
                     </label>
                   </div>
                   <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                    Disabled users cannot log in or access the system
+                    {t(
+                      'admin.users.form.enabledHelp',
+                      'Disabled users cannot log in or access the system'
+                    )}
                   </p>
                   {isSelf && (
                     <p
@@ -415,7 +418,7 @@ function UserFormEditor({
                       className={`${INPUT_CLASS} mt-1 block ${
                         validationErrors.confirmPassword ? 'border-red-500 dark:border-red-400' : ''
                       }`}
-                      placeholder="Confirm password"
+                      placeholder={t('admin.users.confirmPassword', 'Confirm Password')}
                     />
                     {validationErrors.confirmPassword && (
                       <p className="mt-1 text-sm text-red-600 dark:text-red-400">
@@ -426,8 +429,10 @@ function UserFormEditor({
 
                   <div className="col-span-6">
                     <p className="text-xs text-gray-500 dark:text-gray-400">
-                      Password must be at least 6 characters long and should contain a mix of
-                      letters, numbers, and special characters.
+                      {t(
+                        'admin.users.form.passwordHelp',
+                        'Password must be at least 6 characters long and should contain a mix of letters, numbers, and special characters.'
+                      )}
                     </p>
                   </div>
                 </div>

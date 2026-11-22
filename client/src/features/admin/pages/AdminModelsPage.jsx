@@ -308,7 +308,11 @@ function AdminModelsPage() {
       link.remove();
       URL.revokeObjectURL(url);
     } catch (err) {
-      setError(`Failed to download model config: ${getAdminApiErrorMessage(err)}`);
+      setError(
+        t('admin.models.downloadError', 'Failed to download model config: {{error}}', {
+          error: getAdminApiErrorMessage(err)
+        })
+      );
     }
   };
 
@@ -316,7 +320,7 @@ function AdminModelsPage() {
     const file = event.target.files[0];
     if (!file) return;
     if (!file.name.endsWith('.json')) {
-      setError('Please select a JSON file');
+      setError(t('admin.common.selectJsonFile', 'Please select a JSON file'));
       return;
     }
     setUploading(true);
@@ -339,11 +343,19 @@ function AdminModelsPage() {
       event.target.value = '';
     } catch (err) {
       if (getAdminApiErrorMessage(err).includes('already exists')) {
-        setError(`Model with ID "${modelConfig?.id || 'unknown'}" already exists`);
+        setError(
+          t('admin.models.uploadExists', 'Model with ID "{{id}}" already exists', {
+            id: modelConfig?.id || 'unknown'
+          })
+        );
       } else if (err instanceof SyntaxError) {
-        setError('Invalid JSON file format');
+        setError(t('admin.common.invalidJsonFile', 'Invalid JSON file format'));
       } else {
-        setError(`Failed to upload model config: ${getAdminApiErrorMessage(err)}`);
+        setError(
+          t('admin.models.uploadError', 'Failed to upload model config: {{error}}', {
+            error: getAdminApiErrorMessage(err)
+          })
+        );
       }
     } finally {
       setUploading(false);

@@ -1366,7 +1366,8 @@
           "keyless": "Kein Abonnementschlüssel: schlüsselloser Modus. Browser verbinden sich direkt mit dem Host – prüfen Sie ihn mit dem Live-Diktiertest unten.",
           "notConfigured": "Weder ein Abonnementschlüssel noch ein Host ist festgelegt. Die Azure-Cloud benötigt Schlüssel und Region, ein On-Premises-Container einen Host.",
           "invalidKey": "Azure hat den Schlüssel abgelehnt (HTTP 401): Er ist ungültig oder gehört zu einer anderen Region.",
-          "tokenFailed": "Token-Anfrage fehlgeschlagen: {{detail}}"
+          "tokenFailed": "Token-Anfrage fehlgeschlagen: {{detail}}",
+          "noResponse": "Keine Antwort"
         }
       },
       "notEnabled": "nicht aktiviert",
@@ -1505,7 +1506,8 @@
           "shapeHelp": "Wenn aktiv, wird die rohe Tool-Ausgabe mit dem Prompt unten durch einen LLM-Aufruf geschickt. Ins Memory geschrieben wird die Antwort des LLM statt des rohen JSON, sodass der Agent einen kompakten, filterbaren Index statt umfangreicher Rohdaten sieht.",
           "hideShapePrompt": "Aufbereitungs-Prompt ausblenden",
           "showShapePrompt": "Aufbereitungs-Prompt bearbeiten",
-          "shapePromptPlaceholder": "Prompt zum Aufbereiten des Tool-Ergebnisses. Verwenden Sie {TOOL_RESULT} an der Stelle, an der die rohe Ausgabe eingefügt werden soll."
+          "shapePromptPlaceholder": "Prompt zum Aufbereiten des Tool-Ergebnisses. Verwenden Sie {TOOL_RESULT} an der Stelle, an der die rohe Ausgabe eingefügt werden soll.",
+          "sectionPlaceholder": "iFinder-Korpusübersicht"
         },
         "crumb": "Memory",
         "title": "Memory – {{profileId}}",
@@ -1535,7 +1537,7 @@
         "maxIterations": "Maximale Tool-Aufruf-Iterationen pro Schritt",
         "capabilities": "Fähigkeiten (Aufgabenausführung)",
         "capabilitiesHint": "Was jede geplante Aufgabe nutzen kann: installierte Integrationen, Plattform-Tools, Websuche, Apps und Wissensquellen. Memory-Tools werden automatisch hinzugefügt. Posteingang und Artefakt-Lebenszyklus verwaltet jetzt die Laufzeitumgebung; sie werden NICHT als LLM-Tools bereitgestellt (fügen Sie sie nur als bewusste Ausnahme als Plattform-Tools hinzu).",
-        "apps": "iHub-Apps (App als Tool)",
+        "apps": "$t(product.name) (App als Tool)",
         "appsHint": "Apps, die der Agent als synthetische Tools (app__<id>) aufrufen kann. Erfordert die aktivierte Funktion features.appAsTool.",
         "skills": "Skills (Anleitungswissen)",
         "skillsHint": "Skills beschreiben, WIE etwas zu tun ist (z. B. „für eine Personenrecherche folgende Schritte ausführen“). Der Planer sieht die Liste und kann Skills über das Plan-JSON vorab aktivieren; Aufgaben-Worker können sie auch während des Laufs über das Tool activate_skill aktivieren. Die Laufzeitumgebung fügt die Inhalte aktivierter Skills in den System-Prompt ein, damit der Agent ihnen folgt.",
@@ -1608,7 +1610,9 @@
         "hitl": "Freigabegruppen (Human in the Loop)",
         "serviceAccount": "Gruppen des Dienstkontos",
         "serviceAccountHint": "Gruppen, denen der Agent-Principal (agent:<id>) angehört. Sie bestimmen über das normale Gruppenberechtigungssystem, auf welche Apps, Tools und Modelle der Agent zugreifen kann.",
-        "noApps": "Keine Chat-Apps verfügbar."
+        "noApps": "Keine Chat-Apps verfügbar.",
+        "groundingWarningTitle": "⚠ App-Tools laufen mit diesem Profil nicht.",
+        "groundingWarning": "{{model}} (Google) nutzt natives Grounding, wenn webSearch konfiguriert ist, und Google-Modelle können natives Grounding nicht mit Function Calling kombinieren. Um Apps zu nutzen, schalten Sie webSearch für diesen Agenten aus oder wählen Sie ein Modell, das nicht von Google stammt."
       },
       "approvals": {
         "defaultMessage": "Freigabe angefordert",
@@ -1681,7 +1685,64 @@
         "cancelTitle": "Lauf abbrechen",
         "cancelMessage": "Diesen Lauf abbrechen? Laufende LLM-Aufrufe werden für abgeschlossene Durchgänge nicht berechnet.",
         "confirmCancel": "Lauf abbrechen",
-        "keepRunning": "Weiterlaufen lassen"
+        "keepRunning": "Weiterlaufen lassen",
+        "col": {
+          "runId": "Lauf-ID",
+          "profile": "Profil",
+          "started": "Gestartet"
+        },
+        "pageTitle": "Agentenläufe",
+        "empty": "Noch keine Läufe.",
+        "pageTitleFor": "Agentenläufe – {{profileId}}"
+      },
+      "runDetail": {
+        "triggeredBy": "ausgelöst von",
+        "total": "gesamt",
+        "live": "Live",
+        "reconnecting": "Verbindung wird wiederhergestellt…",
+        "disconnected": "Getrennt",
+        "back": "Zurück",
+        "inboxEmptyTitle": "Nichts zu tun.",
+        "inboxEmpty": "Der Posteingang war beim Start dieses Laufs leer, daher wurden Planer und Synthese übersprungen. Der nächste Auslöser übernimmt neue Einträge.",
+        "reviewFailedTitle": "Prüfung nicht bestanden.",
+        "reviewFailed": "Der kritische Prüfer fand auch nach jeder Überarbeitung noch Lücken, daher hat dieser Lauf die Prüfung nicht bestanden. Das Ergebnis unten bleibt zur Ansicht erhalten, und der Posteingangseintrag bleibt offen.",
+        "lastReview": "Letzte Prüfung: {{feedback}}",
+        "node": "Knoten: {{id}}",
+        "awaitingApproval": "⏸ Wartet auf Freigabe",
+        "approve": "Freigeben",
+        "reject": "Ablehnen",
+        "statusLabel": "Status:",
+        "currentNodes": "Aktuelle Knoten:",
+        "completed": "Abgeschlossen:",
+        "inputSummed": "Die Eingabe ist über alle Agenten-Iterationen eines Schritts summiert, nicht ein einzelner Prompt.",
+        "inboxItem": "Posteingangseintrag",
+        "inboxId": "Posteingang: {{id}}",
+        "line": "Zeile {{line}}",
+        "steps": "Schritte ({{count}})",
+        "noSteps": "Noch keine Schritte.",
+        "colStep": "Schritt",
+        "colSource": "Quelle",
+        "colTokens": "Tokens (ein/aus)",
+        "artifacts": "Artefakte ({{count}})",
+        "noArtifacts": "Keine Artefakte erzeugt.",
+        "openViewer": "Anzeige öffnen",
+        "bytes": "{{count}} Byte",
+        "citations": "Quellen ({{count}})",
+        "citationsHelp": "URLs, die der Agent in diesem Lauf tatsächlich aufgerufen hat, erfasst aus jedem Such- und Extraktions-Tool-Aufruf. Die Synthese zitiert sie im Abschlussbericht mit Nummer. Nicht zu verwechseln mit den Projekten des Profils – Quellen wurden besucht, Projekte hätten abgefragt werden können.",
+        "showLess": "Weniger anzeigen",
+        "showAllCitations": "Alle {{count}} Quellen anzeigen",
+        "activatedSkills": "Aktivierte Skills ({{count}})",
+        "activatedSkillsHelp": "Skills, die in diesem Lauf in den Kontext des Agenten geladen wurden. Der vollständige SKILL.md-Inhalt jedes aktivierten Skills wird in den System-Prompt aller folgenden Prompt-Knoten übernommen.",
+        "childRuns": "Untergeordnete Läufe ({{count}})",
+        "childRunsHelp": "Sub-Workflow-Ausführungen, die dieser Lauf gestartet hat (eine je Zerlegung durch den Planer). Öffnen Sie eine, um den LLM-Verlauf je Aufgabe zu sehen.",
+        "toolIssues": "Tool-Probleme ({{count}})",
+        "toolIssuesHelp": "Der Agent hat versucht, Tools aufzurufen, auf die er keinen Zugriff hat. Jeder Versuch wurde dem Modell als Tool-Fehler zurückgegeben, damit es sich selbst korrigieren kann.",
+        "runFailed_one": "Lauf fehlgeschlagen ({{count}} Fehler)",
+        "runFailed_other": "Lauf fehlgeschlagen ({{count}} Fehler)",
+        "markedDone": "als erledigt markiert",
+        "plannerReasoning": "Begründung des Planers: {{reasoning}}",
+        "availableTools": "verfügbar: {{tools}}",
+        "none": "(keine)"
       }
     },
     "providers": {
@@ -1774,7 +1835,8 @@
         "saving": "Wird erstellt...",
         "llmHelp": "Ein LLM-Anbieter hält einen API-Schlüssel für alle seine Modelle. Verknüpfen Sie Modelle im Modell-Editor mit ihm oder importieren Sie sie von seinem Endpunkt.",
         "nameRequired": "Der Name des Anbieters ist erforderlich",
-        "subtitle": "Legen Sie einen LLM-Anbieter für einen eigenen Endpunkt, einen Websuche-Anbieter oder einen allgemeinen API-Schlüssel an"
+        "subtitle": "Legen Sie einen LLM-Anbieter für einen eigenen Endpunkt, einen Websuche-Anbieter oder einen allgemeinen API-Schlüssel an",
+        "idRequired": "Die Anbieter-ID ist erforderlich"
       },
       "info": {
         "title": "API-Schlüssel-Priorität",
@@ -1980,7 +2042,8 @@
         "configuration": "Konfiguration",
         "configurationDesc": "Erweiterte Konfigurationsoptionen für das Modell",
         "resource": "Modell „{{id}}“",
-        "fixErrors": "Bitte beheben Sie die folgenden Fehler"
+        "fixErrors": "Bitte beheben Sie die folgenden Fehler",
+        "history": "Verlauf"
       },
       "fields": {
         "id": "Modell-ID",
@@ -2106,7 +2169,8 @@
         "sampling": "Sampling",
         "marking": "Ausgabekennzeichnung",
         "imageMarking": "Bildkennzeichnung",
-        "thinking": "Reasoning"
+        "thinking": "Reasoning",
+        "options": "Optionen"
       },
       "errors": {
         "invalidJson": "Ungültiges JSON"
@@ -2289,7 +2353,16 @@
         "preview": "Vorschau"
       },
       "toggle": "Aktivierung umschalten",
-      "statusLabel": "Status"
+      "statusLabel": "Status",
+      "aspectRatio": {
+        "r1x1": "1:1 (Quadrat)",
+        "r16x9": "16:9 (Querformat)",
+        "r9x16": "9:16 (Hochformat)",
+        "r21x9": "21:9 (Ultrabreit)"
+      },
+      "downloadError": "Die Konfiguration konnte nicht heruntergeladen werden: {{error}}",
+      "uploadExists": "Ein Modell mit der ID „{{id}}“ existiert bereits",
+      "uploadError": "Die Konfiguration konnte nicht hochgeladen werden: {{error}}"
     },
     "chat": {
       "title": "Chat",
@@ -2637,7 +2710,11 @@
         "postLogoutUriPlaceholder": "https://yourapp.com/logged-out",
         "trustedClient": "Vertrauenswürdiger Client (Zustimmungsseite überspringen)",
         "deleteTitle": "OAuth-Client löschen",
-        "badgeAuthCode": "auth-code"
+        "badgeAuthCode": "auth-code",
+        "editSubtitle": "Konfigurieren Sie Zugangsdaten und Berechtigungen des Clients für den externen API-Zugriff",
+        "tokenExpirationHelp": "Standard: 60 Minuten, Maximum: 1440 Minuten (24 Stunden)",
+        "getStarted": "Legen Sie zunächst einen neuen OAuth-Client an.",
+        "tokenError": "Das Token konnte nicht erzeugt werden: {{error}}"
       },
       "ldap": {
         "title": "LDAP-Authentifizierungseinstellungen",
@@ -2711,7 +2788,14 @@
         "trustedProxiesHelp": "Adressen oder Subnetze, von denen der Proxy sich verbindet, durch Kommas getrennt (zum Beispiel loopback, 10.0.0.5 oder 10.0.0.0/8). Die Header werden nur bei Verbindungen von diesen Adressen verwendet. Der Standardwert loopback deckt einen Proxy auf demselben Host oder im selben Pod ab; wenn andere lokale Prozesse (etwa ein Service-Mesh-Sidecar) Datenverkehr an iHub weiterleiten, setzen Sie zusätzlich ein gemeinsames Geheimnis.",
         "sharedSecretHeaderLabel": "Header für das gemeinsame Geheimnis",
         "sharedSecretLabel": "Gemeinsames Geheimnis",
-        "sharedSecretHelp": "Ein Geheimnis, das der Proxy im Header für das gemeinsame Geheimnis sendet. Ist es gesetzt, werden die Header nur bei Anfragen verwendet, die es enthalten. Zusammen mit vertrauenswürdigen Proxys müssen beide zutreffen: Für einen Proxy an anderer Stelle tragen Sie oben seine Adresse ein oder leeren die Liste, um sich allein auf das Geheimnis zu verlassen."
+        "sharedSecretHelp": "Ein Geheimnis, das der Proxy im Header für das gemeinsame Geheimnis sendet. Ist es gesetzt, werden die Header nur bei Anfragen verwendet, die es enthalten. Zusammen mit vertrauenswürdigen Proxys müssen beide zutreffen: Für einen Proxy an anderer Stelle tragen Sie oben seine Adresse ein oder leeren die Liste, um sich allein auf das Geheimnis zu verlassen.",
+        "settingsTitle": "Einstellungen der Proxy-/JWT-Authentifizierung",
+        "settingsHelp": "Konfigurieren Sie die Header-basierte Authentifizierung über einen Reverse Proxy und/oder die Prüfung von JWT-Tokens für reine JWT-Authentifizierung.",
+        "userHeader": "Benutzer-Header",
+        "groupsHeader": "Gruppen-Header",
+        "selfSignupHelp": "Neue Benutzer werden bei der Anmeldung über den Proxy automatisch registriert. Wenn deaktiviert, müssen Administratoren neue Benutzer manuell anlegen.",
+        "ldapLookupNone": "Keiner (nur Gruppen aus Header/JWT verwenden)",
+        "ldapLookupHelp": "Wenn gesetzt, werden die Gruppenmitgliedschaften des angemeldeten Benutzers beim gewählten LDAP-Anbieter nachgeschlagen und mit den Gruppen aus dem Gruppen-Header und dem JWT-Claim zusammengeführt. Der LDAP-Anbieter benötigt Administrator-Zugangsdaten und eine konfigurierte Gruppensuche."
       },
       "resource": "Authentifizierungseinstellungen",
       "subtitle": "Konfigurieren Sie mehrere Anmeldemethoden und den Benutzerzugriff. Aktivieren Sie mehrere Methoden gleichzeitig für maximale Flexibilität.",
@@ -2724,7 +2808,95 @@
       "debugMovedHelp": "Alle Debug-Einstellungen der Authentifizierung (OIDC-/LDAP-/NTLM-Tracing, Token-Maskierung, Rohdaten) befinden sich jetzt an einer Stelle: Plattform → Logging → Debug-Protokollierung der Authentifizierung.",
       "oidc": {
         "clientSecret": "Client-Secret",
-        "clientSecretHelp": "Wählen Sie ein gespeichertes Zugangsdatenprofil mit dem OIDC-Client-Secret aus."
+        "clientSecretHelp": "Wählen Sie ein gespeichertes Zugangsdatenprofil mit dem OIDC-Client-Secret aus.",
+        "title": "Einstellungen der OIDC-Authentifizierung",
+        "selfSignupHelp": "Neue Benutzer werden bei der Anmeldung über OIDC automatisch registriert. Wenn deaktiviert, müssen Administratoren neue Benutzer manuell anlegen.",
+        "providerNumber": "Anbieter {{n}}",
+        "providerName": "Name des Anbieters",
+        "displayName": "Anzeigename",
+        "clientId": "Client-ID",
+        "authorizationUrl": "Autorisierungs-URL",
+        "tokenUrl": "Token-URL",
+        "userInfoUrl": "User-Info-URL",
+        "autoCallback": "Automatisch erzeugt: {{url}}",
+        "groupsAttribute": "Gruppenattribut",
+        "scope": "Scope (kommagetrennt)",
+        "pkce": "PKCE aktivieren",
+        "autoRedirect": "Automatische Weiterleitung",
+        "autoRedirectHelp": "Benutzer automatisch zu diesem Anbieter weiterleiten, wenn er die einzige aktivierte Anmeldemethode ist"
+      },
+      "mode": {
+        "title": "Primäre Authentifizierungsmethode",
+        "help": "Wählen Sie die primäre Authentifizierungsmethode für das Standardverhalten und die Weiterleitung.",
+        "proxy": "Proxy-Modus",
+        "proxyDesc": "Authentifizierung über Reverse Proxy oder JWT-Tokens",
+        "local": "Lokaler Modus",
+        "localDesc": "Eingebaute Anmeldung mit Benutzername und Passwort",
+        "oidc": "OIDC-Modus",
+        "oidcDesc": "OpenID Connect mit externen Anbietern",
+        "ldap": "LDAP-Modus",
+        "ldapDesc": "Authentifizierung über LDAP/Active Directory",
+        "ntlm": "NTLM-Modus",
+        "ntlmDesc": "Integrierte Windows-Authentifizierung (NTLM/Kerberos)",
+        "anonymous": "Anonymer Modus",
+        "anonymousDesc": "Keine Anmeldung erforderlich (Standard)"
+      },
+      "methodsHelp": "Aktivieren Sie mehrere Authentifizierungsmethoden gleichzeitig. Benutzer können ihre bevorzugte Anmeldemethode wählen.",
+      "methodNames": {
+        "proxy": "Proxy-/JWT-Authentifizierung",
+        "proxyDesc": "Header oder JWT-Tokens vom Reverse Proxy",
+        "local": "Lokale Authentifizierung",
+        "oidc": "OIDC-Authentifizierung",
+        "oidcDesc": "OpenID-Connect-Anbieter (Google usw.)",
+        "ldap": "LDAP-Authentifizierung",
+        "ldapDesc": "Authentifizierung über LDAP/Active Directory mit mehreren Anbietern",
+        "ntlm": "NTLM-Authentifizierung",
+        "ntlmDesc": "Integrierte Windows-Authentifizierung (NTLM)",
+        "anonymousDesc": "Benutzern den Zugriff ohne Anmeldung erlauben"
+      },
+      "allowSelfSignup": "Selbstregistrierung erlauben",
+      "ldapGroupLookup": {
+        "provider": "LDAP-Anbieter für die Gruppensuche",
+        "cacheTtl": "Cache-Dauer der LDAP-Gruppen (Sekunden)",
+        "cacheTtlHelp": "Wie lange die LDAP-Gruppen je Benutzer zwischengespeichert werden. 0 schaltet den Cache aus."
+      },
+      "jwt": {
+        "help": "Konfigurieren Sie die Prüfung von JWT-Tokens für reine JWT-Authentifizierung (keine Header erforderlich)",
+        "addProvider": "Anbieter hinzufügen",
+        "provider": "JWT-Anbieter",
+        "namePlaceholder": "Name des Anbieters",
+        "headerPlaceholder": "Header-Name",
+        "issuerPlaceholder": "Issuer-URL",
+        "audiencePlaceholder": "Audience",
+        "jwkPlaceholder": "JWK-URL"
+      },
+      "local": {
+        "jwtSecretHelp": "Verwenden Sie aus Sicherheitsgründen die Umgebungsvariable {{name}}",
+        "title": "Einstellungen der lokalen Authentifizierung",
+        "usersFile": "Pfad der Benutzerdatei",
+        "jwtSecret": "JWT-Secret",
+        "showDemoAccounts": "Demo-Konten im Anmeldeformular anzeigen",
+        "showDemoAccountsHelp": "Zeigt die Zugangsdaten der Demo-Konten im Anmeldeformular an (für Entwicklung und Tests)",
+        "lockout": "Konten nach wiederholt fehlgeschlagenen Anmeldungen sperren",
+        "lockoutHelp": "Solange ein Konto gesperrt ist, wird die Anmeldung abgelehnt, ohne das Passwort zu prüfen",
+        "lockoutMaxAttempts": "Fehlgeschlagene Anmeldungen bis zur Sperre",
+        "lockoutDuration": "Dauer der Sperre (Minuten)"
+      },
+      "sessionTimeout": "Sitzungsdauer (Minuten)",
+      "ntlm": {
+        "title": "Einstellungen der NTLM-Authentifizierung",
+        "help": "Konfigurieren Sie die integrierte Windows-Authentifizierung (NTLM) für Domänenbenutzer.",
+        "domain": "Domänenname",
+        "domainHelp": "Name der Windows-Domäne (z. B. EXAMPLE, MUC)",
+        "domainController": "URL des Domänencontrollers",
+        "domainControllerHelp": "LDAP-URL des Domänencontrollers, der die Anmeldung prüft (z. B. ldaps://dc.example.com:636 oder ldap://dc.example.com:389 für eine unverschlüsselte Verbindung)",
+        "sessionTimeoutHelp": "Ablaufzeit des JWT-Tokens",
+        "debug": "Debug-Protokollierung aktivieren",
+        "debugHelp": "Detaillierte Informationen zur NTLM-Authentifizierung protokollieren",
+        "selfSigned": "Selbstsignierte Zertifikate / Zertifikate einer internen CA erlauben (ldaps://)",
+        "selfSignedHelp": "Aktivieren Sie dies, wenn der Domänencontroller ein Zertifikat einer privaten oder internen CA verwendet. Für die meisten lokalen ldaps://-Installationen erforderlich.",
+        "ldapLookupNone": "Keiner (nur Standardgruppen)",
+        "ldapLookupHelp": "Die NTLM-Anmeldung liefert keine Gruppen. Damit NTLM-Benutzer ihre Verzeichnisgruppen erhalten, wählen Sie einen LDAP-Anbieter mit Administrator-Zugangsdaten und konfigurierter Gruppensuche; ohne ihn erhalten NTLM-Benutzer nur die Standardgruppen."
       }
     },
     "officeIntegration": {
@@ -3215,7 +3387,8 @@
         "never": "Nie",
         "lastModified": "Zuletzt geändert",
         "connections": "Verbundene Anwendungen",
-        "manageConnections": "Verwalten"
+        "manageConnections": "Verwalten",
+        "notFound": "Benutzer nicht gefunden"
       },
       "edit": {
         "createTitle": "Neuen Benutzer erstellen",
@@ -3311,7 +3484,43 @@
       "password": "Passwort",
       "newPassword": "Neues Passwort",
       "confirmPassword": "Passwort bestätigen",
-      "deleteTitle": "Benutzer löschen"
+      "deleteTitle": "Benutzer löschen",
+      "list": {
+        "noGroups": "Keine Gruppen",
+        "never": "Nie",
+        "deleted": "Benutzer gelöscht.",
+        "colUser": "Benutzer",
+        "colAuthMethod": "Anmeldemethode",
+        "colLastActive": "Zuletzt aktiv",
+        "viewUser": "Benutzer anzeigen",
+        "editUser": "Benutzer bearbeiten",
+        "deleteUser": "Benutzer löschen",
+        "title": "Benutzerverwaltung",
+        "subtitle": "Verwalten Sie lokale Benutzer und ihre Berechtigungen",
+        "addUser": "Benutzer hinzufügen",
+        "searchPlaceholder": "Nach ID, Name, E-Mail, Gruppe oder Anmeldemethode suchen…",
+        "allMethods": "Alle Methoden",
+        "allGroups": "Alle Gruppen",
+        "allStatus": "Alle Status",
+        "anyTime": "Beliebig",
+        "last7": "Letzte 7 Tage",
+        "last30": "Letzte 30 Tage",
+        "last90": "Letzte 90 Tage",
+        "daysAgo_one": "vor {{count}} Tag",
+        "daysAgo_other": "vor {{count}} Tagen",
+        "enabled": "Benutzer aktiviert.",
+        "disabled": "Benutzer deaktiviert.",
+        "loadError": "Die Benutzer konnten nicht geladen werden: {{error}}",
+        "deleteError": "Der Benutzer konnte nicht gelöscht werden: {{error}}",
+        "statusError": "Der Status des Benutzers konnte nicht geändert werden: {{error}}"
+      },
+      "form": {
+        "usernamePlaceholder": "Benutzernamen eingeben",
+        "emailPlaceholder": "E-Mail-Adresse eingeben",
+        "fullNamePlaceholder": "Vollständigen Namen eingeben",
+        "enabledHelp": "Deaktivierte Benutzer können sich nicht anmelden und nicht auf das System zugreifen",
+        "passwordHelp": "Das Passwort muss mindestens 6 Zeichen lang sein und sollte Buchstaben, Ziffern und Sonderzeichen mischen."
+      }
     },
     "logging": {
       "loadError": "Fehler beim Laden der Logging-Konfiguration",
@@ -3563,7 +3772,8 @@
       "referenceTitle": "Referenz",
       "refEnvHint": "Standard-OTEL_*-Umgebungsvariablen (OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_SERVICE_NAME, ...) werden beim Start berücksichtigt.",
       "refMetricsHint": "Eigene iHub-Metriken: ihub.app.usage, ihub.prompt.usage, ihub.errors, ihub.conversations, ihub.active.users, ihub.active.chats.",
-      "resource": "Telemetrie-Einstellungen"
+      "resource": "Telemetrie-Einstellungen",
+      "genAiConventions": "Semantische Konventionen von OpenTelemetry für Gen-AI:"
     },
     "systemResources": {
       "title": "Systemressourcen",
@@ -3863,6 +4073,16 @@
       "versionPolicy": {
         "pinned": "Festgelegt auf {{pin}}",
         "offered": "hier angeboten: v{{version}}"
+      },
+      "registry": {
+        "auth": {
+          "token": "Token",
+          "username": "Benutzername",
+          "password": "Passwort",
+          "headerName": "Header-Name",
+          "headerValue": "Header-Wert"
+        },
+        "namePlaceholder": "Meine Registry"
       }
     },
     "apps": {
@@ -4413,7 +4633,8 @@
           "option": "Option {{number}}",
           "part": "{{parent}}, {{field}}",
           "language": "{{field}} — {{language}}"
-        }
+        },
+        "magicPromptInstructionsPlaceholder": "Anweisungen für die Funktion „Magic Prompt“ eingeben…"
       },
       "reorder": "Reihenfolge",
       "reorderHelp": "Ziehen Sie eine Zeile oder nutzen Sie die Pfeile, um die Reihenfolge festzulegen, in der Apps für Benutzer erscheinen – in der App-Übersicht, auf der Startseite und in der Seitenleiste. Es werden immer alle Apps aufgelistet, Suche und Filter gelten hier nicht. Gespeichert wird erst mit „Reihenfolge speichern“.",
@@ -4722,7 +4943,10 @@
         "starterPrompts": "Einstiegsfragen",
         "editApp": "App bearbeiten",
         "close": "Schließen"
-      }
+      },
+      "downloadError": "Die Konfiguration konnte nicht heruntergeladen werden: {{error}}",
+      "uploadExists": "Eine App mit der ID „{{id}}“ existiert bereits",
+      "uploadError": "Die Konfiguration konnte nicht hochgeladen werden: {{error}}"
     },
     "features": {
       "title": "Funktionen",
@@ -6029,7 +6253,10 @@
         "url": "URL",
         "copyUrl": "URL kopieren",
         "delete": "Asset löschen",
-        "uploadedColumn": "Hochgeladen"
+        "uploadedColumn": "Hochgeladen",
+        "invalidType": "Ungültiger Dateityp. Nur SVG-, PNG-, JPG- und ICO-Dateien sind erlaubt.",
+        "tooLarge": "Die Datei muss kleiner als 2 MB sein",
+        "copyFailed": "Kopieren in die Zwischenablage fehlgeschlagen"
       },
       "footer": {
         "title": "Fußzeile",
@@ -6066,7 +6293,8 @@
         "disclaimerTitle": "Titel des Hinweises",
         "disclaimerText": "Text des Hinweises",
         "disclaimerVersion": "Version des Hinweises",
-        "disclaimerUpdated": "Zuletzt aktualisiert"
+        "disclaimerUpdated": "Zuletzt aktualisiert",
+        "appsListLogoAlt": "Logo der App-Liste"
       },
       "nameField": {
         "follow": "Produktnamen verwenden (Standard)",
@@ -6116,7 +6344,16 @@
         "required": "erforderlich",
         "liveNote": "PWA ist aktiv",
         "manifestNote": "Das Manifest ist erreichbar unter",
-        "swNote": "Der Service Worker ist unter /sw.js registriert und nutzt die Strategie „Network First“."
+        "swNote": "Der Service Worker ist unter /sw.js registriert und nutzt die Strategie „Network First“.",
+        "icon192": "Symbol 192×192",
+        "icon192Hint": "Erforderlich für den Startbildschirm unter Android. Im Tab „Assets“ hochladen und die URL hier einfügen.",
+        "icon512": "Symbol 512×512",
+        "icon512Hint": "Erforderlich für den Startbildschirm beim Öffnen. Sollte eine hochauflösende Version Ihres Logos sein.",
+        "iconApple": "Apple-Touch-Symbol",
+        "iconAppleHint": "Wird von Safari unter iOS beim Ablegen auf dem Startbildschirm verwendet (180×180 empfohlen).",
+        "iconPreview": "Vorschau: {{label}}",
+        "shortNameMax": "(max. 15 Zeichen)",
+        "descriptionPlaceholder": "Plattform für KI-gestützte Anwendungen"
       },
       "linkTarget": "Link öffnen in",
       "styles": {
@@ -6138,7 +6375,15 @@
         "addVariable": "Variable hinzufügen",
         "noVariables": "Keine CSS-Variablen definiert",
         "addFirstVariable": "Klicken Sie auf „Variable hinzufügen“, um zu beginnen",
-        "generatedCss": "Erzeugtes CSS"
+        "generatedCss": "Erzeugtes CSS",
+        "sectionsLabel": "Stilbereiche",
+        "preview": {
+          "lightMode": "Heller Modus",
+          "darkMode": "Dunkler Modus",
+          "primaryButton": "Primäre Schaltfläche",
+          "accentButton": "Akzent-Schaltfläche",
+          "mutedText": "Dies ist gedämpfter Text."
+        }
       },
       "resource": "UI-Einstellungen",
       "title": "UI-Anpassung",
@@ -6221,7 +6466,8 @@
       "validation": {
         "idRequired": "Die Gruppen-ID ist erforderlich",
         "idInvalid": "Die Gruppen-ID darf nur Buchstaben, Ziffern, Bindestriche und Unterstriche enthalten",
-        "nameRequired": "Der Gruppenname ist erforderlich"
+        "nameRequired": "Der Gruppenname ist erforderlich",
+        "idAndNameRequired": "Gruppen-ID und Name sind erforderlich"
       },
       "edit": {
         "noGroupData": "Keine Gruppendaten verfügbar",
@@ -6262,7 +6508,33 @@
       "noGroupsFound": "Keine Gruppen gefunden",
       "createFirstGroup": "Legen Sie Ihre erste Gruppe an, um zu beginnen",
       "count_one": "{{count}} Gruppe",
-      "count_other": "{{count}} Gruppen"
+      "count_other": "{{count}} Gruppen",
+      "list": {
+        "allApps": "Alle Apps (*)",
+        "deleted": "Gruppe gelöscht.",
+        "addGroup": "Gruppe hinzufügen",
+        "more": "+{{count}} weitere",
+        "loadError": "Die Gruppen konnten nicht geladen werden: {{error}}"
+      },
+      "form": {
+        "idPlaceholder": "Eindeutige Gruppen-ID eingeben",
+        "namePlaceholder": "Anzeigenamen der Gruppe eingeben",
+        "descriptionPlaceholder": "Beschreibung der Gruppe eingeben",
+        "adminAccessHelp": "Mitglieder dieser Gruppe dürfen administrative Funktionen nutzen",
+        "permissionsHelp": "Legen Sie fest, auf welche Apps, Modelle und Prompts Mitglieder dieser Gruppe zugreifen dürfen",
+        "searchApps": "Apps zum Hinzufügen suchen…",
+        "noApps": "Keine Apps ausgewählt – Benutzer sehen keine Apps",
+        "searchModels": "Modelle zum Hinzufügen suchen…",
+        "noModels": "Keine Modelle ausgewählt – Benutzer können keine KI-Modelle verwenden",
+        "searchPrompts": "Prompts zum Hinzufügen suchen…",
+        "noPrompts": "Keine Prompts ausgewählt – Benutzer haben keinen Zugriff auf Prompt-Vorlagen",
+        "searchWorkflows": "Workflows zum Hinzufügen suchen…",
+        "noWorkflows": "Keine Workflows ausgewählt – Benutzer können keine Workflows ausführen",
+        "searchSkills": "Skills zum Hinzufügen suchen…",
+        "noSkills": "Keine Skills ausgewählt – Benutzer können keine Agenten-Skills verwenden",
+        "allWildcard": "Alle (*)",
+        "allWildcardFor": "{{label}}: Alle (*)"
+      }
     },
     "contentAccess": {
       "title": "Gruppenzugriff",
@@ -6496,7 +6768,8 @@
         "unavailable": "Feedback-Statistiken sind nicht verfügbar.",
         "range": "Bewertungen der letzten 90 Tage."
       },
-      "resource": "Feedback-Einstellungen"
+      "resource": "Feedback-Einstellungen",
+      "tabsLabel": "Feedback-Bereiche"
     },
     "usage": {
       "reviewFeedback": "Feedback ansehen",
@@ -6756,6 +7029,18 @@
         "userFeedbackActivity": "Feedback-Aktivität der Benutzer",
         "feedbackByApplication": "Feedback nach App",
         "feedbackByModel": "Feedback nach Modell"
+      },
+      "feedback": {
+        "averageRating_one": "Durchschnittliche Bewertung ({{count}} Bewertung)",
+        "averageRating_other": "Durchschnittliche Bewertung ({{count}} Bewertungen)",
+        "totalResponses_one": "Feedback insgesamt: {{count}} Antwort",
+        "totalResponses_other": "Feedback insgesamt: {{count}} Antworten",
+        "responses_one": "{{count}} Antwort",
+        "responses_other": "{{count}} Antworten",
+        "user": "Benutzer: {{id}}",
+        "app": "App: {{id}}",
+        "model": "Modell: {{id}}",
+        "noRatings": "Es wurden noch keine Bewertungen von Benutzern abgegeben."
       }
     },
     "localization": {
@@ -6838,14 +7123,15 @@
         "backToList": "Zurück zu den Prompts",
         "createTitle": "Neuen Prompt anlegen",
         "editTitle": "Prompt bearbeiten",
-        "createDesc": "Legen Sie einen neuen Prompt für Ihre iHub Apps an",
+        "createDesc": "Legen Sie einen neuen Prompt für Ihre $t(product.name) an",
         "editDesc": "Bearbeiten Sie Details und Konfiguration des Prompts",
         "history": "Verlauf",
         "cancel": "Abbrechen",
         "save": "Prompt speichern",
         "saving": "Wird gespeichert…",
         "searchApps": "Apps suchen…",
-        "noAppsFound": "Keine Apps gefunden"
+        "noAppsFound": "Keine Apps gefunden",
+        "variableDefaultPlaceholder": "Standardwert"
       },
       "userPrompts": {
         "allowEveryone": "Alle angemeldeten Nutzer",
@@ -6928,7 +7214,7 @@
       "download": "Konfiguration herunterladen",
       "loadError": "Fehler beim Laden der Prompts",
       "title": "Prompt-Verwaltung",
-      "subtitle": "Prompts für Ihre iHub Apps anlegen, bearbeiten und verwalten",
+      "subtitle": "Prompts für Ihre $t(product.name) anlegen, bearbeiten und verwalten",
       "createNew": "Neuen Prompt anlegen",
       "uploading": "Wird hochgeladen…",
       "uploadConfig": "Konfiguration hochladen",
@@ -6943,7 +7229,10 @@
         "enabled": "Aktiviert",
         "disabled": "Deaktiviert"
       },
-      "uploadConfigTitle": "Prompt-Konfiguration hochladen"
+      "uploadConfigTitle": "Prompt-Konfiguration hochladen",
+      "downloadError": "Die Konfiguration konnte nicht heruntergeladen werden: {{error}}",
+      "uploadExists": "Ein Prompt mit der ID „{{id}}“ existiert bereits",
+      "uploadError": "Die Konfiguration konnte nicht hochgeladen werden: {{error}}"
     },
     "skills": {
       "delete": "Löschen",
@@ -7053,7 +7342,8 @@
       "noSkills": "Keine Skills gefunden",
       "noSkillsDescription": "Importieren Sie zunächst ein Skill-Paket.",
       "importSkillTitle": "Skill importieren (.zip)",
-      "exportTitle": "Skill exportieren"
+      "exportTitle": "Skill exportieren",
+      "exportError": "Der Skill konnte nicht exportiert werden: {{error}}"
     },
     "scheduledTasks": {
       "all": "Alle",
@@ -7360,7 +7650,7 @@
       "delete": "Löschen",
       "loadError": "Fehler beim Laden der Workflows",
       "title": "Workflow-Verwaltung",
-      "subtitle": "Agentische Workflows für Ihre iHub Apps anlegen, bearbeiten und verwalten",
+      "subtitle": "Agentische Workflows für Ihre $t(product.name) anlegen, bearbeiten und verwalten",
       "viewExecutions": "Ausführungen anzeigen",
       "uploading": "Wird hochgeladen…",
       "uploadConfig": "Konfiguration hochladen",
@@ -7371,7 +7661,10 @@
       "filterDisabled": "Nur deaktivierte",
       "noWorkflows": "Keine Workflows gefunden",
       "noWorkflowsDescription": "Legen Sie zunächst einen neuen Workflow an.",
-      "uploadConfigTitle": "Workflow-Konfiguration hochladen"
+      "uploadConfigTitle": "Workflow-Konfiguration hochladen",
+      "downloadError": "Die Konfiguration konnte nicht heruntergeladen werden: {{error}}",
+      "uploadExists": "Ein Workflow mit der ID „{{id}}“ existiert bereits",
+      "uploadError": "Die Konfiguration konnte nicht hochgeladen werden: {{error}}"
     },
     "projects": {
       "knowledgeModes": {
@@ -7842,7 +8135,12 @@
         "slideFooter": "Fußzeile der Folien",
         "slideNumbers": "Foliennummern",
         "preview": "Vorschau",
-        "previewHelp": "Beispieldokumente mit der gespeicherten Vorlage. Offene Änderungen werden vorher gespeichert."
+        "previewHelp": "Beispieldokumente mit der gespeicherten Vorlage. Offene Änderungen werden vorher gespeichert.",
+        "themes": {
+          "default": "Standard",
+          "professional": "Professionell",
+          "minimal": "Minimal"
+        }
       },
       "files": {
         "uploaded": "„{{name}}“ hochgeladen.",
@@ -8828,7 +9126,9 @@
       "actions": "Aktionen",
       "viewJson": "JSON",
       "viewForm": "Formular",
-      "viewRaw": "Rohtext"
+      "viewRaw": "Rohtext",
+      "selectJsonFile": "Bitte wählen Sie eine JSON-Datei aus",
+      "invalidJsonFile": "Ungültiges JSON-Dateiformat"
     },
     "confirm": {
       "deleteTitle": "{{type}} „{{name}}“ löschen?",
@@ -9154,7 +9454,13 @@
       "description": "Erzeugte Dateien: Speicherung, Größengrenzen und was HTML-Artefakte laden dürfen",
       "conflict": "Jemand anderes hat die Artefakt-Einstellungen geändert, nachdem Sie diese Seite geöffnet haben, daher wurde nichts gespeichert. Ihre Änderungen sind noch da: Laden Sie die aktuellen Einstellungen und nehmen Sie Ihre Änderung erneut vor.",
       "reload": "Aktuelle Einstellungen laden",
-      "reloadError": "Die aktuellen Einstellungen konnten nicht geladen werden."
+      "reloadError": "Die aktuellen Einstellungen konnten nicht geladen werden.",
+      "viewer": {
+        "openRaw": "Rohdatei öffnen",
+        "raw": "roh",
+        "loading": "Wird geladen…"
+      },
+      "downloadAs": "Herunterladen als…"
     },
     "formErrors": {
       "title": "Bitte beheben Sie die folgenden Fehler",
@@ -9311,7 +9617,11 @@
       "searching": "Suche läuft…",
       "navigate": "navigieren",
       "select": "auswählen",
-      "close": "schließen"
+      "close": "schließen",
+      "actionNewApp": "Neue App",
+      "actionViewAuditLog": "Audit-Log anzeigen",
+      "actionRunBackup": "Backup ausführen",
+      "actionCheckUpdates": "Nach Updates suchen"
     },
     "skipToContent": "Zum Inhalt springen",
     "checkingAuth": "Anmeldung wird geprüft…",
@@ -9322,7 +9632,21 @@
     "returnToLogin": "← Zurück zur Anmeldung",
     "shortcuts": {
       "title": "Tastenkürzel",
-      "hint": "Tastenkürzel sind während der Eingabe in Feldern deaktiviert"
+      "hint": "Tastenkürzel sind während der Eingabe in Feldern deaktiviert",
+      "goApps": "Zu den Apps",
+      "goModels": "Zu den Modellen",
+      "goPrompts": "Zu den Prompts",
+      "goUsers": "Zu den Benutzern",
+      "goGroups": "Zu den Gruppen",
+      "goProjects": "Zu den Projekten",
+      "goAuditLog": "Zum Audit-Log",
+      "openPalette": "Befehlspalette öffnen",
+      "save": "Speichern (im App-Editor)",
+      "toggleCheatsheet": "Diese Übersicht ein-/ausblenden",
+      "closeDialogs": "Dialoge / Palette schließen",
+      "then": "dann",
+      "navigation": "Navigation",
+      "actions": "Aktionen"
     },
     "changeHistory": {
       "noDiffData": "Keine Vergleichsdaten verfügbar.",
@@ -9361,7 +9685,30 @@
       "variableValue": "Variablenwert",
       "noCustomVariables": "Noch keine eigenen Variablen definiert. Klicken Sie auf „Variable hinzufügen“, um eine anzulegen.",
       "usageExample": "Anwendungsbeispiel",
-      "usageExampleText": "Sobald Sie eine eigene Variable wie {{company}} angelegt haben, können Sie sie in System-Prompts von Apps, im globalen Kontext oben oder in jeder Prompt-Vorlage einer App verwenden. Die Variable wird automatisch durch ihren Wert ersetzt."
+      "usageExampleText": "Sobald Sie eine eigene Variable wie {{company}} angelegt haben, können Sie sie in System-Prompts von Apps, im globalen Kontext oben oder in jeder Prompt-Vorlage einer App verwenden. Die Variable wird automatisch durch ihren Wert ersetzt.",
+      "builtIn": {
+        "year": "Aktuelles Jahr",
+        "month": "Aktueller Monat (zweistellig)",
+        "date": "Vollständiges Datum im lokalen Format",
+        "time": "Uhrzeit im lokalen Format",
+        "day_of_week": "Wochentag in der jeweiligen Sprache",
+        "timezone": "Zeitzone des Benutzers",
+        "locale": "Aktuelle Sprache/Locale",
+        "user_name": "Anzeigename des angemeldeten Benutzers",
+        "user_email": "E-Mail-Adresse des angemeldeten Benutzers",
+        "model_name": "Aktuell verwendetes Modell",
+        "tone": "Gewählter Ton/Stil",
+        "location": "Standort des Benutzers (falls konfiguriert)",
+        "platform_context": "Der verarbeitete globale Kontext"
+      },
+      "globalContextPlaceholder": "z. B. Aktuelles Datum: {{date}}. Unternehmen: {{company}}. Benutzer: {{user_name}}",
+      "variableKeyPlaceholder": "z. B. company, department, region",
+      "variableValuePlaceholder": "z. B. Wir sind ein führender Anbieter von KI-Lösungen…",
+      "errors": {
+        "keyRequired": "Der Variablenschlüssel ist erforderlich",
+        "keyReserved": "Dieser Variablenname ist für eingebaute Variablen reserviert",
+        "keyExists": "Eine eigene Variable mit diesem Schlüssel existiert bereits"
+      }
     },
     "dashboard": {
       "feedbackOverview": "Feedback-Übersicht"
@@ -9417,6 +9764,27 @@
       "noExecutions": "Keine Ausführungen gefunden",
       "noExecutionsFiltered": "Keine Ausführung entspricht den aktuellen Filtern. Passen Sie Ihre Suchkriterien an.",
       "noExecutionsYet": "Es wurden noch keine Workflow-Ausführungen aufgezeichnet."
+    },
+    "breadcrumbLabel": "Brotkrumennavigation",
+    "breadcrumbs": {
+      "newAgent": "Neuer Agent",
+      "inboxes": "Posteingänge",
+      "newGroup": "Neue Gruppe",
+      "newModel": "Neues Modell",
+      "newClient": "Neuer Client",
+      "newPage": "Neue Seite",
+      "newPrompt": "Neuer Prompt",
+      "newShortLink": "Neuer Kurzlink",
+      "newUser": "Neuer Benutzer",
+      "newWorkflow": "Neuer Workflow"
+    },
+    "dataTable": {
+      "moreActions": "Weitere Aktionen",
+      "clearSearch": "Suche leeren",
+      "search": "Suchen…"
+    },
+    "integrationPages": {
+      "oauthClientId": "OAuth-Client-ID:"
     }
   },
   "cloudStorage": {

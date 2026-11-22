@@ -148,7 +148,9 @@ function AdminSkillsPage() {
     try {
       await exportSkill(skillName);
     } catch (err) {
-      setError(`Failed to export skill: ${err.message}`);
+      setError(
+        t('admin.skills.exportError', 'Failed to export skill: {{error}}', { error: err.message })
+      );
     }
   };
 

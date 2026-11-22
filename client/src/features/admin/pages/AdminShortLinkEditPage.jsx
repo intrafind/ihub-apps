@@ -190,9 +190,13 @@ function AdminShortLinkEditPage() {
       <div className="max-w-2xl mx-auto p-6 space-y-6">
         <AdminBreadcrumb
           crumbs={[
-            { label: 'Admin', href: '/admin' },
-            { label: 'Short Links', href: '/admin/shortlinks' },
-            { label: isNew ? 'New Short Link' : (link?.code ?? code) }
+            { label: t('documentTitle.admin', 'Admin'), href: '/admin' },
+            { label: t('admin.nav.shortlinks', 'Short Links'), href: '/admin/shortlinks' },
+            {
+              label: isNew
+                ? t('admin.breadcrumbs.newShortLink', 'New Short Link')
+                : (link?.code ?? code)
+            }
           ]}
         />
         <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
@@ -328,7 +332,7 @@ function AdminShortLinkEditPage() {
               htmlFor="shortlink-params"
               className="block text-sm font-medium text-gray-700 dark:text-gray-300"
             >
-              {t('admin.shortlinks.paramsJson', 'Parameters (JSON)')}
+              {t('admin.shortlinks.paramsJson', 'Params (JSON)')}
             </label>
             <textarea
               rows="4"

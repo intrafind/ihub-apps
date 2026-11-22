@@ -58,7 +58,9 @@ function FeedbackCard({ data }) {
           </div>
           <div className="text-center">
             <div className="text-sm text-amber-700 dark:text-amber-400 font-medium">
-              Average Rating ({totalStarRatings} ratings)
+              {t('admin.usage.feedback.averageRating', 'Average Rating ({{count}} ratings)', {
+                count: totalStarRatings
+              })}
             </div>
           </div>
 
@@ -91,13 +93,19 @@ function FeedbackCard({ data }) {
           >
             <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
           </svg>
-          <div className="text-lg font-medium mb-2">No feedback available</div>
-          <div className="text-sm">No user ratings have been submitted yet.</div>
+          <div className="text-lg font-medium mb-2">
+            {t('admin.usage.noFeedback', 'No feedback available')}
+          </div>
+          <div className="text-sm">
+            {t('admin.usage.feedback.noRatings', 'No user ratings have been submitted yet.')}
+          </div>
         </div>
       )}
 
       <div className="text-center text-sm text-gray-600 dark:text-gray-400 mt-4">
-        Total feedback: {totalStarRatings} responses
+        {t('admin.usage.feedback.totalResponses', 'Total feedback: {{count}} responses', {
+          count: totalStarRatings
+        })}
       </div>
     </div>
   );
@@ -197,9 +205,19 @@ function FeedbackEntriesCard() {
                     </div>
                   </div>
                   <div className="text-right text-xs text-gray-500 dark:text-gray-400 space-y-1">
-                    {entry.userId && <div>User: {entry.userId}</div>}
-                    {entry.appId && <div>App: {entry.appId}</div>}
-                    {entry.modelId && <div>Model: {entry.modelId}</div>}
+                    {entry.userId && (
+                      <div>
+                        {t('admin.usage.feedback.user', 'User: {{id}}', { id: entry.userId })}
+                      </div>
+                    )}
+                    {entry.appId && (
+                      <div>{t('admin.usage.feedback.app', 'App: {{id}}', { id: entry.appId })}</div>
+                    )}
+                    {entry.modelId && (
+                      <div>
+                        {t('admin.usage.feedback.model', 'Model: {{id}}', { id: entry.modelId })}
+                      </div>
+                    )}
                   </div>
                 </div>
                 {entry.comment && entry.comment.trim() && (
@@ -275,7 +293,9 @@ export function FeedbackReview({ feedback }) {
                       {user.replace('session-', '')}
                     </span>
                     <span className="text-sm text-gray-600 dark:text-gray-400">
-                      {totalUserFeedback} responses
+                      {t('admin.usage.feedback.responses', '{{count}} responses', {
+                        count: totalUserFeedback
+                      })}
                     </span>
                   </div>
                   {totalUserFeedback > 0 && (
@@ -326,7 +346,9 @@ export function FeedbackReview({ feedback }) {
                       {app.replace('-', ' ')}
                     </span>
                     <span className="text-sm text-gray-600 dark:text-gray-400">
-                      {totalAppFeedback} responses
+                      {t('admin.usage.feedback.responses', '{{count}} responses', {
+                        count: totalAppFeedback
+                      })}
                     </span>
                   </div>
                   {totalAppFeedback > 0 && (
@@ -372,7 +394,9 @@ export function FeedbackReview({ feedback }) {
                   <div className="flex justify-between items-center mb-2">
                     <span className="font-medium text-gray-900 dark:text-gray-100">{model}</span>
                     <span className="text-sm text-gray-600 dark:text-gray-400">
-                      {totalModelFeedback} responses
+                      {t('admin.usage.feedback.responses', '{{count}} responses', {
+                        count: totalModelFeedback
+                      })}
                     </span>
                   </div>
                   {totalModelFeedback > 0 && (

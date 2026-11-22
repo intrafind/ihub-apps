@@ -1339,7 +1339,7 @@ function ModelFormEditor({
                 <div className="col-span-6">
                   <fieldset>
                     <legend className="text-base font-medium text-gray-900 dark:text-gray-100">
-                      Options
+                      {t('admin.models.sections.options', 'Options')}
                     </legend>
                     <div className="mt-4 space-y-4">
                       <div className="flex items-start">
@@ -2234,16 +2234,24 @@ function ModelFormEditor({
                             }
                             className="mt-1 block w-full py-2 px-3 border border-admin-control-border dark:border-admin-control-border-dark bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-xs focus:outline-hidden focus:ring-admin-accent focus:border-admin-accent sm:text-sm"
                           >
-                            <option value="1:1">1:1 (Square)</option>
-                            <option value="16:9">16:9 (Landscape)</option>
-                            <option value="9:16">9:16 (Portrait)</option>
+                            <option value="1:1">
+                              {t('admin.models.aspectRatio.r1x1', '1:1 (Square)')}
+                            </option>
+                            <option value="16:9">
+                              {t('admin.models.aspectRatio.r16x9', '16:9 (Landscape)')}
+                            </option>
+                            <option value="9:16">
+                              {t('admin.models.aspectRatio.r9x16', '9:16 (Portrait)')}
+                            </option>
                             <option value="5:4">5:4</option>
                             <option value="4:5">4:5</option>
                             <option value="3:2">3:2</option>
                             <option value="2:3">2:3</option>
                             <option value="3:4">3:4</option>
                             <option value="4:3">4:3</option>
-                            <option value="21:9">21:9 (Ultrawide)</option>
+                            <option value="21:9">
+                              {t('admin.models.aspectRatio.r21x9', '21:9 (Ultrawide)')}
+                            </option>
                           </select>
                         </div>
 
