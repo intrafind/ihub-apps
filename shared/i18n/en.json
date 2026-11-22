@@ -12089,7 +12089,6 @@
   },
   "userApps": {
     "list": {
-      "new": "New app",
       "scope": {
         "all": "All",
         "mine": "My apps",
@@ -12102,6 +12101,7 @@
       },
       "empty": {
         "mine": "You have no apps of your own yet. An app is an assistant for one task, for example \"Write a job ad from my notes\".",
+        "mineHint": "To create one, open + in the sidebar and choose App.",
         "shared": "Nobody has shared an app with you yet."
       },
       "menu": {
@@ -12122,7 +12122,9 @@
     "create": {
       "stateLine": "Only you can see the app until you share it.",
       "limits": "An app of your own cannot use a document collection yet. It can work with text you paste or a file a user attaches.",
-      "created": "App \"{{name}}\" created"
+      "created": "App \"{{name}}\" created",
+      "copyNote": "Copied from \"{{name}}\". The texts, input fields and conversation starters are copied. Who the app is shared with is not copied, and what apps of your own may not use is left out.",
+      "copyUnsupported": "This app cannot be copied into an app of your own."
     },
     "edit": {
       "state": {

@@ -89,13 +89,24 @@ the saved app.
 
 ## Creating an app
 
-**App** in the sidebar's **Create** menu (+, between **New chat** and the search) and the button
-**New app** under an empty **My apps** filter open the same two steps that
+**App** in the sidebar's **Create** menu (+, between **New chat** and the search) opens the same
+two steps that
 administrators use under **Admin → Apps**; the guide [Build your first app](app-quickstart.md)
 describes them. The differences for a personal app:
 
-- The starts are the description box, the templates and **Start empty**. Copying an existing
-  app, link apps and the Marketplace are not offered.
+- The starts are the description box, the templates, **Copy an existing app** and **Start
+  empty**. Link apps and the Marketplace are not offered.
+- **Copy an existing app** lists the apps the person has access to: the company apps they may
+  use, and the personal apps they own or that are shared with them. Left out are apps a personal
+  app cannot become (link apps, websites shown inside iHub, apps that are switched off) and apps
+  whose content the person cannot read (a personal app that is switched off or whose sharing is
+  suspended, an app that was published and is now a company app for them, an app only offered
+  to them). The copy takes the texts in every language, the icon, the colour, the message
+  template, the input fields, the conversation starters, the preferred model and the switches
+  for files, web search, skills and connected systems. Of these it keeps only what personal apps
+  may use on this installation and what the person may use; the server checks again on create.
+  The source's ID, owner, members, sharing and publishing state and every setting only a company
+  app has stay behind. A link `/apps/new?from=<appId>` opens the copy of that app directly.
 - There is no **App ID** and no category. The server mints the ID.
 - The description box and **Prepare draft** need the feature **App Drafts with AI**. A draft
   suggests web search or a connected system only when personal apps may use it on this

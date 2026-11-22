@@ -341,7 +341,7 @@ describe('with the feature on', () => {
     expect(screen.getByTestId('apps-scope-all')).toHaveAttribute('aria-checked', 'true');
   });
 
-  test('the page has no "New app" button above the list: the sidebar\'s Create menu has it', async () => {
+  test('the page has no "New app" button: the sidebar\'s Create menu has it', async () => {
     renderList();
     await screen.findByRole('radiogroup');
     expect(screen.queryByTestId('user-app-new')).not.toBeInTheDocument();
@@ -358,36 +358,15 @@ describe('with the feature on', () => {
     ).toBeInTheDocument();
   });
 
-  test('the "New app" of an empty "My apps" opens /apps/new, and at the limit does nothing', async () => {
-    mockApi.fetchUserApps.mockResolvedValue([SHARED]);
-    const first = renderList();
-    fireEvent.click(await screen.findByTestId('apps-scope-mine'));
-    fireEvent.click(
-      within(await screen.findByTestId('user-apps-empty')).getByRole('button', { name: 'New app' })
-    );
-    expect(await screen.findByTestId('location')).toHaveTextContent('/apps/new');
-    first.unmount();
-
-    invalidateUserAppsConfig();
-    mockApi.fetchUserAppsConfig.mockResolvedValue({ ...CONFIG, maxApps: 1, used: 1 });
-    renderList();
-    fireEvent.click(await screen.findByTestId('apps-scope-mine'));
-    const button = within(await screen.findByTestId('user-apps-empty')).getByRole('button', {
-      name: 'New app'
-    });
-    expect(button).toHaveAttribute('aria-disabled', 'true');
-    fireEvent.click(button);
-    expect(screen.queryByTestId('location')).not.toBeInTheDocument();
-  });
-
-  test('an empty "My apps" explains what an app is, offers "New app" and names the limit of personal apps', async () => {
+  test('an empty "My apps" explains what an app is, points to the Create menu and names the limit of personal apps', async () => {
     mockApi.fetchUserApps.mockResolvedValue([SHARED]);
     renderList();
     fireEvent.click(await screen.findByTestId('apps-scope-mine'));
 
     const empty = await screen.findByTestId('user-apps-empty');
     expect(empty).toHaveTextContent('You have no apps of your own yet.');
-    expect(within(empty).getByRole('button', { name: 'New app' })).toBeInTheDocument();
+    expect(empty).toHaveTextContent('To create one, open + in the sidebar and choose App.');
+    expect(within(empty).queryByRole('button')).not.toBeInTheDocument();
     expect(empty).toHaveTextContent('An app of your own cannot use a document collection yet.');
   });
 
@@ -400,14 +379,14 @@ describe('with the feature on', () => {
     expect(within(empty).queryByRole('button')).not.toBeInTheDocument();
   });
 
-  test('an installation without admin apps still offers the chips and "New app"', async () => {
+  test('an installation without admin apps still offers the chips and the way to create an app', async () => {
     mockApi.fetchApps.mockResolvedValue([]);
     mockApi.fetchUserApps.mockResolvedValue([]);
     renderList();
     expect(await screen.findByRole('radiogroup')).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('apps-scope-mine'));
     const empty = await screen.findByTestId('user-apps-empty');
-    expect(within(empty).getByRole('button', { name: 'New app' })).toBeInTheDocument();
+    expect(empty).toHaveTextContent('To create one, open + in the sidebar and choose App.');
   });
 
   test('a personal app has no category: it is not filed under "utility"', async () => {

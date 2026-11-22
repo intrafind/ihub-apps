@@ -1719,9 +1719,19 @@ prop, `source`, and no second code path:
 
 - `adminAppSource.js` is the default and reproduces increment 1. `AdminAppCreatePage.jsx`
   passes it. The tests of increment 1 stay green without change.
-- `userAppSource.js` calls the routes of 9.1. It offers the starts *describe*, *templates* and
-  *empty*. It hides "Other ways to start" (copy, link app, marketplace), the App ID and the
+- `userAppSource.js` calls the routes of 9.1. It offers the starts *describe*, *templates*,
+  *copy* and *empty*. It hides "Other ways to start" (link app, marketplace), the App ID and the
   category.
+- **Changed on 2026-11-22, on the owner's request: a personal app can be a copy.** This plan
+  first left the copy start out. The personal page now offers "Copy an existing app" and
+  `?from=<appId>` like the admin page. The dialog lists what `GET /api/apps` (company apps the
+  person may use) and `GET /api/apps?scope=personal` (owned and shared personal apps) return,
+  without link and iframe apps, switched-off apps, reduced bodies (no `system`), retired apps
+  and open offers (`client/src/features/apps/builder/userAppCopy.js`). The copy goes through
+  `pickUserAppContent`, so it takes only the content keys of P4; `limitToAllowed` removes what
+  the installation does not allow in an app of this person, and the server checks on create.
+  The body carries `origin: 'copy'`, which `USER_APP_ORIGINS` already had. A personal copy
+  always needs instructions, also when the source has none. No admin route is called.
 - **`refineDraft`** is the call behind "Change the draft" of the builder plan (03, phase 1,
   slice R2). The screens show that control only when the source has the member. The admin
   source gets it from R2. The personal source leaves it out until the personal refine route
@@ -2481,7 +2491,7 @@ The admin routes are covered by `scripts/audit-admin-endpoints.js`
 | `user-app-content.test.jsx` | `pickUserAppContent`, `isUserAppId`, the caps; `isValidAppId` refuses the personal shape. |
 | `user-apps-i18n.test.jsx` | Every key of section 12 exists in `en.json` and `de.json`, including keys picked from a map (state, reason, capability). |
 | `user-apps-list.test.jsx` | Chips and button appear only with the feature; the merged list; tile badges; the "My apps" states, including "Offered to you". |
-| `user-app-create.test.jsx` | The personal source hides copy, link, marketplace, ID and category; the line about document collections is shown; no "Change the draft" control without `refineDraft`; create posts the allow-listed body; no file in `app-create/` imports `adminApi`. `app-builder-flow.test.jsx` of increment 1 passes unchanged. |
+| `user-app-create.test.jsx` | The personal source hides link, marketplace, ID and category, and offers the copy start with only allowed apps and fields (11.3); the line about document collections is shown; no "Change the draft" control without `refineDraft`; create posts the allow-listed body; no file in `app-create/` imports `adminApi`. `app-builder-flow.test.jsx` of increment 1 passes unchanged. |
 | `user-app-edit.test.jsx` | Only allowed capabilities and actions are offered; a stale capability shows "Remove"; 409 `ETAG_MISMATCH` shows the conflict line and keeps the input; each read-only banner, including the one for an editor who may not use a capability; no Translate button and no "Improve with AI" button; no request to `/api/admin/*` during a full edit and save. |
 | `user-app-share.test.jsx`, `transfer-owner-dialog.test.jsx` | Member mapping; "everyone" only when allowed; "Copy link"; the offer dialog, the receiver's banner with the member list, accept sends `If-Match`; the shared dialog with project props renders as `project-page.test.jsx` expects. |
 | `user-app-notice.test.jsx` | One case per line of 11.8, built from `capabilities` and `approval`. The approval card shows no "Allow for this chat" when `displayData.grants` is empty. |
@@ -2858,7 +2868,7 @@ what was argued for and not chosen.
 | Admins never edit a personal app | "Prompt admins may do everything" (the prompt library's rule) | Projects' rule. An edit by an admin under the owner's name would blur who wrote the instructions. |
 | The built-in groups get the permissions | Only `admins`, so the admin picks a pilot group | Projects' rule, and the feature flag is the master switch. The on-prem admin preferred the pilot default; the settings panel names the groups as a compromise. |
 | Stored content states for the audit trail, no restore | No stored states (the first version); or versions with restore, as prompts and skills | Without states nothing shows what ran. Restore is a user feature with its own screens. |
-| No knowledge, no scheduled tasks, no copy of company apps | Include one of them | Each is a design of its own; none is needed for the owner's statements. |
+| No knowledge, no scheduled tasks, no copy of company apps | Include one of them | Each is a design of its own; none is needed for the owner's statements. The copy was added later on the owner's request (11.3). |
 | `/api/apps` for both kinds, `scope` on the list | A separate collection `/api/user-apps` | The chat and the read route are at `/api/apps/{appId}` already. |
 | `/apps/new` and `/apps/:appId/edit` | A new top-level route `my-apps` | No change to the known-routes lists; the pattern of tasks. Cost: the `new` collision. |
 | The create screens stay in `features/admin/components/app-create/` | Move them to `features/apps/` | Increment 1 is writing them now; a move would conflict with every open change. Cross-feature imports of dialogs exist already. |
@@ -3109,8 +3119,9 @@ This paragraph binds this document. The builder plan has to say the same.
 **P7 Client: create**
 - A user without admin rights reaches a test answer in two clicks after "New app" with the
   describe start, and with a template.
-- The personal page shows no copy, link or marketplace start, no App ID, no category and no
-  "Change the draft" control. It shows the line about document collections.
+- The personal page shows no link or marketplace start, no App ID, no category and no
+  "Change the draft" control. It shows the line about document collections. (It offers the copy
+  start since 2026-11-22, see 11.3.)
 - The flow test of increment 1 passes unchanged. No file in `app-create/` imports `adminApi`.
 
 **P8 Client: editor, share, hand over**

@@ -12088,7 +12088,6 @@
   },
   "userApps": {
     "list": {
-      "new": "Neue App",
       "scope": {
         "all": "Alle",
         "mine": "Meine Apps",
@@ -12101,6 +12100,7 @@
       },
       "empty": {
         "mine": "Sie haben noch keine eigenen Apps. Eine App ist ein Assistent für eine Aufgabe, zum Beispiel „Stellenanzeige aus meinen Notizen schreiben“.",
+        "mineHint": "Um eine zu erstellen, öffnen Sie + in der Seitenleiste und wählen Sie App.",
         "shared": "Bisher hat niemand eine App mit Ihnen geteilt."
       },
       "menu": {
@@ -12121,7 +12121,9 @@
     "create": {
       "stateLine": "Nur Sie sehen die App, bis Sie sie teilen.",
       "limits": "Eine eigene App kann noch keine Dokumentensammlung nutzen. Sie kann mit eingefügtem Text oder mit einer Datei arbeiten, die ein Benutzer anhängt.",
-      "created": "App „{{name}}“ erstellt"
+      "created": "App „{{name}}“ erstellt",
+      "copyNote": "Kopiert von „{{name}}“. Die Texte, Eingabefelder und Gesprächseinstiege werden übernommen. Mit wem die App geteilt ist, wird nicht übernommen, und was eigene Apps nicht nutzen dürfen, entfällt.",
+      "copyUnsupported": "Diese App kann nicht in eine eigene App kopiert werden."
     },
     "edit": {
       "state": {

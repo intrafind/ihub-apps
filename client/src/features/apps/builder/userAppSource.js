@@ -7,10 +7,13 @@
  * API, the starts it offers and the texts that differ from the admin page
  * (`features/admin/utils/adminAppSource.js`).
  *
- * A personal app has no ID to choose and no category, cannot be a copy of a
- * company app or a link app, and does not come from the Marketplace. This
- * source has no `refineDraft`, so the screens show no "Change the draft"
- * control and a person without admin rights never calls an admin route.
+ * A personal app has no ID to choose and no category, cannot be a link app,
+ * and does not come from the Marketplace. It can be a copy of an app the
+ * person has access to: a company app they may use, or a personal app they
+ * own or that is shared with them (`userAppCopy.js` says which apps qualify
+ * and what the copy takes). This source has no `refineDraft`, so the screens
+ * show no "Change the draft" control, and a person without admin rights never
+ * calls an admin route: the copy lists and loads apps through the user API.
  *
  * The calls reject with the request's own error (`error.response` holds the
  * status and the problem body), because that is what the create screens read.
@@ -22,12 +25,21 @@
 
 import {
   createUserApp,
+  fetchApps,
   fetchModels,
+  fetchUserApp,
+  fetchUserApps,
   fetchUserAppsConfig,
   fetchUserAppTemplates,
   generateUserApp
 } from '../../../api';
 import { pickUserAppContent, USER_APP_ORIGINS } from '../../../../../shared/userAppContent.js';
+import {
+  copyableApps,
+  copySourceOf,
+  isCopyableAsUserApp,
+  notCopyableError
+} from './userAppCopy.js';
 
 /**
  * The answers to a create request that are about the installation or the
@@ -187,6 +199,42 @@ const createApp = async (draft, options = {}) => {
   }
 };
 
+/**
+ * The apps the person can copy into an app of their own: the company apps of
+ * `GET /api/apps` and the personal apps of `GET /api/apps?scope=personal`,
+ * without those a personal app cannot become (`copyableApps`). The personal
+ * apps are a second request; when it fails, the company apps are still
+ * offered.
+ *
+ * Each item is already what the copy starts from (`copySourceOf`): the
+ * create screens hand a picked item to the copy as it is.
+ *
+ * @returns {Promise<object[]>}
+ */
+const fetchExistingApps = async () => {
+  const [companyApps, personalApps] = await Promise.all([
+    plain(() => fetchApps()),
+    plain(() => fetchUserApps({ scope: 'personal' })).catch(() => [])
+  ]);
+  return copyableApps(companyApps, personalApps).map(copySourceOf);
+};
+
+/**
+ * The app a copy starts from (`GET /api/apps/{appId}`, which answers company
+ * and personal apps alike, with the ID encoded for the URL). It resolves with
+ * what a personal app may hold (`copySourceOf`) and rejects with
+ * `code: 'APP_NOT_COPYABLE'` for an app a personal app cannot become, or
+ * whose content the person cannot read.
+ *
+ * @param {string} appId
+ * @returns {Promise<object>}
+ */
+const fetchApp = async appId => {
+  const app = await plain(() => fetchUserApp(appId));
+  if (!isCopyableAsUserApp(app)) throw notCopyableError(appId);
+  return copySourceOf(app);
+};
+
 /** The source of the personal create page; the shape is that of `adminAppSource`. */
 export const userAppSource = Object.freeze({
   kind: 'personal',
@@ -196,11 +244,13 @@ export const userAppSource = Object.freeze({
   // A fresh list: a model that was connected a minute ago must be found.
   fetchModels: () => fetchModels({ skipCache: true }),
   createApp,
+  fetchApp,
+  fetchExistingApps,
   starts: Object.freeze({
     describe: true,
     templates: true,
     empty: true,
-    copy: false,
+    copy: true,
     link: false,
     marketplace: false
   }),
@@ -213,7 +263,10 @@ export const userAppSource = Object.freeze({
     submit: 'admin.apps.create.submit',
     limits: 'userApps.create.limits',
     // Every member of a personal app can read its instructions (design 6.4).
-    instructionsHelp: 'userApps.edit.instructionsDesc'
+    instructionsHelp: 'userApps.edit.instructionsDesc',
+    // What a copy takes differs from the admin copy: no sharing, no company-only settings.
+    copyNote: 'userApps.create.copyNote',
+    copyUnsupported: 'userApps.create.copyUnsupported'
   })
 });
 

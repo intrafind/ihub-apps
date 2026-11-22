@@ -837,17 +837,9 @@ function AppsList() {
             </p>
             {activeScope === 'mine' && canCreateUserApp && (
               <>
-                <button
-                  type="button"
-                  aria-disabled={userAppLimitReached}
-                  onClick={() => {
-                    if (!userAppLimitReached) navigate('/apps/new');
-                  }}
-                  className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 aria-disabled:cursor-not-allowed aria-disabled:opacity-60 dark:focus-visible:ring-offset-gray-900"
-                >
-                  <Icon name="plus" size="sm" aria-hidden="true" />
-                  {t('userApps.list.new')}
-                </button>
+                <p className="mt-4 text-gray-700 dark:text-gray-300">
+                  {t('userApps.list.empty.mineHint')}
+                </p>
                 <p className="mt-4 text-sm text-gray-600 dark:text-gray-400">
                   {t('userApps.create.limits')}
                 </p>

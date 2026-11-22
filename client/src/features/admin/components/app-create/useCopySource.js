@@ -8,6 +8,13 @@ import { useSearchParams } from 'react-router-dom';
 const COPY_SOURCE_PARAM = 'from';
 
 /**
+ * The `code` a caller's `fetchApp` rejects with for an app that exists but
+ * cannot be copied on this page (the personal page: a link app, an app whose
+ * content the person cannot read).
+ */
+export const APP_NOT_COPYABLE = 'APP_NOT_COPYABLE';
+
+/**
  * The app a copy starts from: the one the URL names (`?from=<id>`, the
  * target of "Duplicate"), or one the author picked from the list.
  *
@@ -29,13 +36,15 @@ const COPY_SOURCE_PARAM = 'from';
  *   for it. It must be stable; a failure does not stop the copy.
  * @returns {{
  *   requested: boolean,
- *   status: 'idle'|'loading'|'gone'|'failed',
+ *   status: 'idle'|'loading'|'gone'|'unsupported'|'failed',
  *   source: object|null,
  *   use: (app: object) => void,
  *   dismiss: () => void,
  *   retry: () => void
  * }} `requested`: the page was opened with a source in its URL. `gone`: that
- *   app does not exist. `failed`: it could not be loaded; `retry()` tries again.
+ *   app does not exist. `unsupported`: it exists and cannot be copied here
+ *   (`fetchApp` rejected with `code: APP_NOT_COPYABLE`). `failed`: it could not
+ *   be loaded; `retry()` tries again.
  */
 export function useCopySource({ fetchApp, prepare }) {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -100,8 +109,10 @@ export function useCopySource({ fetchApp, prepare }) {
         const code = error?.response?.status;
         // An ID that names no app, or that cannot be an ID at all.
         const gone = code === 404 || code === 400;
-        setStatus(gone ? 'gone' : 'failed');
-        if (gone) setTargetId(null);
+        const unsupported = error?.code === APP_NOT_COPYABLE;
+        setStatus(unsupported ? 'unsupported' : gone ? 'gone' : 'failed');
+        // Trying again cannot change either answer.
+        if (gone || unsupported) setTargetId(null);
         // Either way the URL no longer asks for a copy: a reload restores the author's draft.
         dropParam();
       });

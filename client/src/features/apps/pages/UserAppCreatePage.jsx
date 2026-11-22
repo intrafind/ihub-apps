@@ -8,7 +8,9 @@ import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import { invalidateAppsCache } from '../../../shared/hooks/appsCache';
 import { invalidateUserAppsConfig } from '../../../shared/hooks/useUserApps';
+import i18nService from '../../../services/i18nService';
 import { apiErrorMessage } from '../../../utils/apiErrorMessage';
+import { copyLabelWith, loadCopyLanguages } from '../../admin/components/app-create/copyLanguages';
 import CreateHeader from '../../admin/components/app-create/CreateHeader';
 import CreateNotices, { EssentialsNotice } from '../../admin/components/app-create/CreateNotices';
 import DescribeSlot from '../../admin/components/app-create/DescribeSlot';
@@ -16,12 +18,14 @@ import EssentialsScreen from '../../admin/components/app-create/EssentialsScreen
 import StartScreen from '../../admin/components/app-create/StartScreen';
 import {
   beginBlank,
+  beginCopy,
   beginGenerated,
   beginTemplate
 } from '../../admin/components/app-create/createFlow';
 import { FIELD_LABEL_KEYS, HEADING_KEYS } from '../../admin/components/app-create/createKeys';
 import { LINK_BUTTON_CLASS } from '../../admin/components/app-create/createStyles';
 import { useAppDraft } from '../../admin/components/app-create/useAppDraft';
+import { useCopySource } from '../../admin/components/app-create/useCopySource';
 import { useCreateResources } from '../../admin/components/app-create/useCreateResources';
 import { useCreateSubmit } from '../../admin/components/app-create/useCreateSubmit';
 import { useScreenTitle } from '../../admin/components/app-create/useScreenTitle';
@@ -48,13 +52,15 @@ const UNSENT_APP_ID = 'personal-app';
 const noApps = async () => [];
 const noUiConfig = async () => null;
 const neverTaken = () => false;
-const NO_COPY = Object.freeze({ status: 'idle', retry: () => {} });
 const nothing = () => {};
+// The UI holds its own language; "(copy)" in another language of a name is loaded.
+const loadLanguage = language => i18nService.loadFullTranslations(language);
 
 /**
  * "New app" for a person's own app (`/apps/new`): the two screens of the admin
  * page, Start and Essentials, with the personal source. It offers the
- * description box, the templates and "Start empty"; it has no copy, link or
+ * description box, the templates, "Copy an existing app" (an app the person
+ * has access to, also as `?from=<id>`) and "Start empty"; it has no link or
  * Marketplace start, no app ID and no category. The app is created with one
  * request and opened in its editor.
  *
@@ -91,7 +97,9 @@ function UserAppCreatePage({ source = userAppSource }) {
     // eslint-disable-next-line @eslint-react/exhaustive-deps
   }, [fetchConfig]);
 
-  const draft = useAppDraft({ storageKey: USER_APP_DRAFT_STORAGE_KEY });
+  const prepareCopy = useCallback(app => loadCopyLanguages(app, { i18n, loadLanguage }), [i18n]);
+  const copy = useCopySource({ fetchApp: source.fetchApp, prepare: prepareCopy });
+  const draft = useAppDraft({ storageKey: USER_APP_DRAFT_STORAGE_KEY, restore: !copy.requested });
   const { state, begin, describe, deriveId, setExtras, back, reset, forget } = draft;
   const resources = useCreateResources({
     fetchModels: source.fetchModels,
@@ -154,21 +162,43 @@ function UserAppCreatePage({ source = userAppSource }) {
     start => setArrival(current => ({ start, nonce: (current?.nonce ?? 0) + 1 })),
     []
   );
+  // Opens Essentials with a start. A copy that was asked for ends here; it cannot arrive late.
+  const { dismiss: dismissCopy } = copy;
   const open = useCallback(
     start => {
       restart();
       begin(start);
       arrive(start.start);
+      dismissCopy();
     },
-    [restart, begin, arrive]
+    [restart, begin, arrive, dismissCopy]
   );
 
-  // The focus follows the screen: to the name of a template (with the text
-  // selected, ready to be replaced), else to the heading.
+  // A cold load of `?from=<id>` and a pick from the list: the copy opens once
+  // the source is there. The source holds only what a personal app may hold
+  // (`userAppCopy.js`). A personal app cannot be saved without instructions,
+  // so a source without them does not make them optional, as it does for an
+  // admin copy.
+  const copySource = copy.source;
+  useEffect(() => {
+    if (!copySource) return;
+    const start = beginCopy(copySource, {
+      uiLanguage: i18n.language,
+      platformDefault: platformLanguage,
+      isTaken: neverTaken,
+      copyLabel: copyLabelWith(t)
+    });
+    open({ ...start, source: { ...start.source, noInstructions: false } });
+    // Once per loaded source: later changes of the helpers must not reopen the copy.
+    // eslint-disable-next-line @eslint-react/exhaustive-deps
+  }, [copySource]);
+
+  // The focus follows the screen: to the name of a template or a copy (with
+  // the text selected, ready to be replaced), else to the heading.
   useEffect(() => {
     if (!arrival) return;
     const name = nameRef.current;
-    if (arrival.start === 'template' && name) {
+    if ((arrival.start === 'template' || arrival.start === 'copy') && name) {
       name.focus();
       name.select();
     } else {
@@ -207,7 +237,7 @@ function UserAppCreatePage({ source = userAppSource }) {
   const atLimit = maxApps > 0 && Number(config?.used) >= maxApps;
 
   let screen;
-  if (config === undefined) {
+  if (config === undefined || copy.status === 'loading') {
     screen = (
       <p role="status" className="text-sm text-gray-600 dark:text-gray-400">
         {t('admin.apps.loading')}
@@ -270,11 +300,11 @@ function UserAppCreatePage({ source = userAppSource }) {
           )
         }
         fetchTemplates={source.fetchTemplates}
-        fetchExistingApps={noApps}
+        fetchExistingApps={source.fetchExistingApps}
         language={language}
         onPickTemplate={template => open(beginTemplate(template, { language }))}
         onStartBlank={() => open(beginBlank({ language }))}
-        onPickExisting={nothing}
+        onPickExisting={copy.use}
         onStartLink={nothing}
       />
     );
@@ -288,10 +318,14 @@ function UserAppCreatePage({ source = userAppSource }) {
           screen={state.screen}
           headingRef={headingRef}
           onBack={
-            state.screen === 'essentials' && !atLimit ? () => askBeforeLeaving('back') : undefined
+            state.screen === 'essentials' && !atLimit && copy.status !== 'loading'
+              ? () => askBeforeLeaving('back')
+              : undefined
           }
         />
-        {!atLimit && <CreateNotices state={state} copy={NO_COPY} onStartOver={startOver} />}
+        {!atLimit && (
+          <CreateNotices source={source} state={state} copy={copy} onStartOver={startOver} />
+        )}
         {screen}
       </div>
 

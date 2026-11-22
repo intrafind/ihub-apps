@@ -17,7 +17,7 @@
 import '@testing-library/jest-dom';
 import fs from 'node:fs';
 import path from 'node:path';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import i18next from 'i18next';
 import en from '../../../shared/i18n/en.json';
@@ -27,6 +27,9 @@ import summarizerTemplate from '../../../server/appTemplates/summarizer.json';
 import { USER_APP_CONTENT_KEYS } from '../../../shared/userAppContent.js';
 
 const mockApi = {
+  fetchApps: jest.fn(),
+  fetchUserApps: jest.fn(),
+  fetchUserApp: jest.fn(),
   fetchModels: jest.fn(),
   fetchUserAppsConfig: jest.fn(),
   fetchUserAppTemplates: jest.fn(),
@@ -47,6 +50,9 @@ jest.mock('../../../client/src/shared/hooks/useUserApps', () => ({
 }));
 
 jest.mock('../../../client/src/api', () => ({
+  fetchApps: (...args) => mockApi.fetchApps(...args),
+  fetchUserApps: (...args) => mockApi.fetchUserApps(...args),
+  fetchUserApp: (...args) => mockApi.fetchUserApp(...args),
   fetchModels: (...args) => mockApi.fetchModels(...args),
   fetchUserAppsConfig: (...args) => mockApi.fetchUserAppsConfig(...args),
   fetchUserAppTemplates: (...args) => mockApi.fetchUserAppTemplates(...args),
@@ -77,6 +83,12 @@ jest.mock('../../../client/src/api/adminApi', () => {
     }
   );
 });
+
+// The loader of another language's texts: the real one fetches them from the server.
+jest.mock('../../../client/src/services/i18nService', () => ({
+  __esModule: true,
+  default: { loadFullTranslations: () => Promise.resolve() }
+}));
 
 const mockEnv = { platformConfig: {} };
 jest.mock('../../../client/src/shared/contexts/PlatformConfigContext', () => ({
@@ -206,6 +218,141 @@ const DRAFT = {
   brief: 'default'
 };
 
+/**
+ * `GET /api/apps`: the company apps the person may use. A chat app with
+ * settings only a company app has, a link app, a website shown inside iHub
+ * and an app that is switched off.
+ */
+const COMPANY_APPS = [
+  {
+    id: 'faq-bot',
+    type: 'chat',
+    enabled: true,
+    order: 3,
+    category: 'hr',
+    name: { en: 'FAQ bot', de: 'FAQ-Bot' },
+    description: { en: 'Answers HR questions.', de: 'Beantwortet Personalfragen.' },
+    system: { en: 'You answer HR questions.', de: 'Sie beantworten Personalfragen.' },
+    icon: 'question-mark-circle',
+    color: '#0EA5E9',
+    preferredModel: 'gemini-flash',
+    allowedModels: ['gemini-flash'],
+    tokenLimit: 4000,
+    greeting: { en: { title: 'Hi', subtitle: 'Ask me' } },
+    settings: { enabled: false },
+    requiredFeatures: ['userApps'],
+    websearch: { enabled: true },
+    upload: { enabled: true },
+    skillSettings: { enabled: true },
+    integrations: {
+      'jira-main': { actions: ['searchIssues', 'deleteIssue'] },
+      'type:storage': { required: false }
+    },
+    variables: [
+      {
+        name: 'topic',
+        label: { en: 'Topic' },
+        type: 'string',
+        required: false,
+        description: { en: 'Only company apps describe a field' }
+      }
+    ],
+    starterPrompts: [
+      {
+        title: { en: 'Leave' },
+        message: { en: 'How many days of leave do I have?' },
+        autoSend: true
+      }
+    ]
+  },
+  {
+    id: 'intranet',
+    type: 'redirect',
+    enabled: true,
+    name: { en: 'Intranet' },
+    description: { en: 'Opens the intranet.' },
+    redirectConfig: { url: 'https://intranet.example.com' }
+  },
+  {
+    id: 'wiki-frame',
+    type: 'iframe',
+    enabled: true,
+    name: { en: 'Wiki in a frame' },
+    description: { en: 'Shows the wiki.' },
+    iframeConfig: { url: 'https://wiki.example.com' }
+  },
+  {
+    id: 'old-bot',
+    type: 'chat',
+    enabled: false,
+    name: { en: 'Old bot' },
+    description: { en: 'Switched off.' },
+    system: { en: 'You are old.' }
+  }
+];
+
+const OWNED_ID = 'uap_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+const REDUCED_ID = 'uap_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+const RETIRED_ID = 'uap_cccccccccccccccccccccccccccccccc';
+const OFFERED_ID = 'uap_dddddddddddddddddddddddddddddddd';
+
+/** `GET /api/apps?scope=personal`, in the shapes of `userAppView` and its reduced forms. */
+const PERSONAL_APPS = [
+  {
+    id: OWNED_ID,
+    type: 'chat',
+    enabled: true,
+    ownership: 'user',
+    language: 'en',
+    name: { en: 'Meeting notes' },
+    description: { en: 'Turns notes into minutes.' },
+    system: { en: 'You turn notes into minutes.' },
+    icon: 'document-text',
+    color: '#16A34A',
+    owner: { id: 'u-1', name: 'Ada' },
+    permissions: { role: 'owner', canUse: true, canEdit: true },
+    members: [{ type: 'user', id: 'u-2', role: 'editor' }],
+    sharedWith: { users: 1, groups: 0, everyone: false },
+    capabilities: [{ id: 'webSearch', requested: true, granted: true }],
+    approval: { mode: 'always', chatGrants: false },
+    state: 'active',
+    disabled: null,
+    revision: 4,
+    updatedAt: '2026-11-20T10:00:00.000Z',
+    pendingOwner: null,
+    websearch: { enabled: true }
+  },
+  {
+    id: REDUCED_ID,
+    ownership: 'user',
+    name: { en: 'Switched-off helper' },
+    icon: null,
+    color: null,
+    owner: { id: 'u-3', name: 'Bo' },
+    state: 'active',
+    permissions: { role: 'user', canUse: false },
+    disabled: { at: '2026-11-19T10:00:00.000Z', reason: 'admin' }
+  },
+  {
+    id: RETIRED_ID,
+    ownership: 'user',
+    state: 'retired',
+    publishedAs: { appId: 'faq-bot', name: { en: 'FAQ bot' }, enabled: true }
+  },
+  {
+    id: OFFERED_ID,
+    type: 'chat',
+    ownership: 'user',
+    name: { en: 'Offered app' },
+    description: { en: 'Not yours yet.' },
+    system: { en: 'You are offered.' },
+    owner: { id: 'u-4', name: 'Cy' },
+    permissions: { role: 'offered', canUse: false, canAcceptOffer: true },
+    state: 'active',
+    disabled: null
+  }
+];
+
 function apiProblem(status, data) {
   const error = new Error(`Request failed with status code ${status}`);
   error.response = { status, data };
@@ -237,6 +384,13 @@ beforeEach(async () => {
   ]);
   mockApi.createUserApp.mockImplementation(async body => ({ ...body, id: NEW_ID }));
   mockApi.generateUserApp.mockResolvedValue(DRAFT);
+  mockApi.fetchApps.mockResolvedValue(COMPANY_APPS);
+  mockApi.fetchUserApps.mockResolvedValue(PERSONAL_APPS);
+  mockApi.fetchUserApp.mockImplementation(async appId => {
+    const app = [...COMPANY_APPS, ...PERSONAL_APPS].find(item => item.id === appId);
+    if (!app) throw enhanced(404, { code: 'NOT_FOUND' });
+    return structuredClone(app);
+  });
 });
 
 // A state update outside act() means a test ended, or went on, before the page had settled.
@@ -265,9 +419,9 @@ function Where({ label }) {
   );
 }
 
-function renderCreate() {
+function renderCreate(entry = '/apps/new') {
   return render(
-    <MemoryRouter initialEntries={['/apps/new']}>
+    <MemoryRouter initialEntries={[entry]}>
       <Routes>
         <Route path="/apps" element={<Where label="LIST" />} />
         <Route
@@ -340,10 +494,22 @@ describe('the Start screen of a personal app', () => {
     expect(mockApi.fetchUserAppTemplates).toHaveBeenCalledTimes(1);
   });
 
-  it('has no copy, link or Marketplace start, and no "Other ways to start"', async () => {
+  it('offers "Copy an existing app" as the last card of the templates', async () => {
+    await openStart();
+    const cards = screen
+      .getAllByRole('listitem')
+      .filter(item => item.querySelector('button'))
+      .map(item => item.textContent);
+    expect(cards.at(-1)).toContain(CREATE.start.copy);
+    expect(cards.at(-1)).toContain(CREATE.start.copyHelp);
+    // The list is loaded when the dialog opens, not before.
+    expect(mockApi.fetchApps).not.toHaveBeenCalled();
+    expect(mockApi.fetchUserApps).not.toHaveBeenCalled();
+  });
+
+  it('has no link or Marketplace start, and no "Other ways to start"', async () => {
     await openStart();
     expect(screen.queryByRole('button', { name: CREATE.start.other })).not.toBeInTheDocument();
-    expect(screen.queryByText(CREATE.start.copy)).not.toBeInTheDocument();
     expect(screen.queryByText(CREATE.start.link.action)).not.toBeInTheDocument();
     expect(screen.queryByText(CREATE.start.marketplace)).not.toBeInTheDocument();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
@@ -625,6 +791,258 @@ describe('who gets the page', () => {
   });
 });
 
+/** Opens "Copy an existing app" and waits for its list. */
+async function openCopyDialog() {
+  await openStart();
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(`^${CREATE.start.copy}`) }));
+  });
+  const dialog = await screen.findByRole('dialog');
+  await screen.findByRole('button', { name: /FAQ bot/ });
+  return dialog;
+}
+
+/** The names of the apps the copy dialog lists. */
+const listedApps = dialog =>
+  [...dialog.querySelectorAll('ul button')].map(button => button.textContent);
+
+async function pickToCopy(name) {
+  await openCopyDialog();
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(name) }));
+  });
+  await screen.findByRole('heading', { level: 1, name: CREATE.essentials.heading.copy });
+}
+
+/** The keys a copy must never carry: identity, people, sharing, publishing, company settings. */
+const NEVER_COPIED = [
+  'id',
+  'owner',
+  'members',
+  'sharedWith',
+  'permissions',
+  'publishedAs',
+  'pendingOwner',
+  'state',
+  'revision',
+  'ownership',
+  'category',
+  'enabled',
+  'type',
+  'allowedModels',
+  'greeting',
+  'settings',
+  'requiredFeatures',
+  'websearch',
+  'upload',
+  'skillSettings',
+  'integrations',
+  'order'
+];
+
+describe('copying an existing app', () => {
+  it('the dialog lists the apps the person can copy, from the user API only', async () => {
+    const dialog = await openCopyDialog();
+    expect(mockApi.fetchApps).toHaveBeenCalledTimes(1);
+    expect(mockApi.fetchUserApps).toHaveBeenCalledWith({ scope: 'personal' });
+    const listed = listedApps(dialog);
+    expect(listed).toHaveLength(2);
+    expect(listed[0]).toContain('FAQ bot');
+    expect(listed[1]).toContain('Meeting notes');
+    // A link app, a website in a frame, a switched-off app, a reduced body, a
+    // retired app and an open offer cannot become a personal app of this person.
+    for (const name of [
+      'Intranet',
+      'Wiki in a frame',
+      'Old bot',
+      'Switched-off helper',
+      'Offered app'
+    ]) {
+      expect(dialog).not.toHaveTextContent(name);
+    }
+    // No admin route (checked after each test) and no request past the API module.
+    expect(mockClient.post).not.toHaveBeenCalled();
+  });
+
+  it('still lists the company apps when the personal apps cannot be loaded', async () => {
+    mockApi.fetchUserApps.mockRejectedValue(enhanced(503, { code: 'STORE_UNAVAILABLE' }));
+    const dialog = await openCopyDialog();
+    expect(listedApps(dialog)).toHaveLength(1);
+  });
+
+  it('picking a company app fills the form with what a personal app may hold', async () => {
+    await pickToCopy('FAQ bot');
+    // The item of the list is what the copy starts from: no second request.
+    expect(mockApi.fetchUserApp).not.toHaveBeenCalled();
+    expect(nameField()).toHaveValue('FAQ bot (copy)');
+    expect(descriptionField()).toHaveValue('Answers HR questions.');
+    expect(instructionsField()).toHaveValue('You answer HR questions.');
+    // The personal notice, not the admin one ("Everything is copied …, group access …").
+    expect(
+      screen.getByText(mockI18n.t('userApps.create.copyNote', { name: 'FAQ bot' }))
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Group access is not copied/)).not.toBeInTheDocument();
+    // The name is selected, ready to be replaced.
+    expect(document.activeElement).toBe(nameField());
+
+    await submit();
+    expect(mockApi.createUserApp).toHaveBeenCalledTimes(1);
+    const body = lastBody();
+    expect(Object.keys(body).every(key => ALLOWED_BODY_KEYS.includes(key))).toBe(true);
+    for (const key of NEVER_COPIED) expect(body).not.toHaveProperty(key);
+    expect(body).toEqual({
+      language: 'en',
+      origin: 'copy',
+      name: { en: 'FAQ bot (copy)', de: 'FAQ-Bot (Kopie)' },
+      description: { en: 'Answers HR questions.', de: 'Beantwortet Personalfragen.' },
+      system: { en: 'You answer HR questions.', de: 'Sie beantworten Personalfragen.' },
+      icon: 'question-mark-circle',
+      color: '#0EA5E9',
+      preferredModel: 'gemini-flash',
+      variables: [{ name: 'topic', label: { en: 'Topic' }, type: 'string', required: false }],
+      starterPrompts: [
+        { title: { en: 'Leave' }, message: { en: 'How many days of leave do I have?' } }
+      ],
+      // Only the actions the installation allows in an app of this person stay bound.
+      capabilities: {
+        upload: true,
+        webSearch: true,
+        skills: true,
+        integrations: [{ id: 'jira-main', actions: ['searchIssues'] }]
+      }
+    });
+    expect(where()).toBe(`EDITOR:/apps/${NEW_ID}/edit?created=1`);
+  });
+
+  it('leaves out what the installation does not allow in an app of this person', async () => {
+    mockApi.fetchUserAppsConfig.mockResolvedValue({
+      ...CONFIG,
+      capabilities: {
+        modelChoice: false,
+        upload: false,
+        webSearch: false,
+        skills: false,
+        integrations: []
+      }
+    });
+    await pickToCopy('FAQ bot');
+    await submit();
+    const body = lastBody();
+    expect(body.capabilities).toEqual({
+      upload: false,
+      webSearch: false,
+      skills: false,
+      integrations: []
+    });
+    expect(body).not.toHaveProperty('preferredModel');
+  });
+
+  it('picking a personal app copies its content and nothing of its owner or members', async () => {
+    await pickToCopy('Meeting notes');
+    expect(nameField()).toHaveValue('Meeting notes (copy)');
+    await submit();
+    const body = lastBody();
+    for (const key of NEVER_COPIED) expect(body).not.toHaveProperty(key);
+    expect(body).toMatchObject({
+      origin: 'copy',
+      name: { en: 'Meeting notes (copy)' },
+      system: { en: 'You turn notes into minutes.' },
+      capabilities: { upload: false, webSearch: true, skills: false, integrations: [] }
+    });
+  });
+
+  it('a copy needs instructions, also when the source has none', async () => {
+    const { system, ...withoutInstructions } = structuredClone(COMPANY_APPS[0]);
+    expect(system).toBeDefined();
+    mockApi.fetchApps.mockResolvedValue([withoutInstructions]);
+    await pickToCopy('FAQ bot');
+    expect(instructionsField()).toHaveValue('');
+    await submit();
+    expect(mockApi.createUserApp).not.toHaveBeenCalled();
+    expect(instructionsField()).toHaveAttribute('aria-invalid', 'true');
+  });
+
+  it('?from=<id> opens the copy at once', async () => {
+    renderCreate('/apps/new?from=faq-bot');
+    await screen.findByRole('heading', { level: 1, name: CREATE.essentials.heading.copy });
+    expect(mockApi.fetchUserApp).toHaveBeenCalledWith('faq-bot');
+    expect(nameField()).toHaveValue('FAQ bot (copy)');
+    // The copy has started: the URL no longer asks for one.
+    await waitFor(() => expect(where()).toBe('NEW:/apps/new'));
+  });
+
+  it('?from=<id> of an app a personal app cannot become says so on the Start screen', async () => {
+    renderCreate('/apps/new?from=intranet');
+    expect(await screen.findByText(USER_CREATE.copyUnsupported)).toBeInTheDocument();
+    expect(heading()).toHaveTextContent('New app');
+    expect(screen.getByRole('button', { name: 'Start empty' })).toBeInTheDocument();
+    await waitFor(() => expect(where()).toBe('NEW:/apps/new'));
+    await screen.findByRole('button', { name: /Text Summarizer/ });
+  });
+
+  it('?from=<id> of a reduced personal app is not copied either', async () => {
+    renderCreate(`/apps/new?from=${REDUCED_ID}`);
+    expect(await screen.findByText(USER_CREATE.copyUnsupported)).toBeInTheDocument();
+    await screen.findByRole('button', { name: /Text Summarizer/ });
+  });
+
+  it('?from=<id> of an app that does not exist says that it is gone', async () => {
+    renderCreate('/apps/new?from=no-such-app');
+    expect(await screen.findByText(CREATE.copy.sourceGone)).toBeInTheDocument();
+    await screen.findByRole('button', { name: /Text Summarizer/ });
+  });
+
+  it('says it in German with the formal address', async () => {
+    await mockI18n.changeLanguage('de');
+    renderCreate('/apps/new?from=intranet');
+    expect(await screen.findByText(de.userApps.create.copyUnsupported)).toBeInTheDocument();
+    expect(de.userApps.create.copyNote).not.toMatch(/\b(du|dein|deine|dir)\b/i);
+    await screen.findByRole('button', { name: /Textzusammenfassung/ });
+  });
+});
+
+describe('which apps a personal app can be copied from', () => {
+  const {
+    APP_NOT_COPYABLE,
+    copyableApps,
+    copySourceOf,
+    isCopyableAsUserApp
+  } = require('../../../client/src/features/apps/builder/userAppCopy');
+
+  it('takes chat apps that are switched on, and full personal apps the person may use', () => {
+    expect(copyableApps(COMPANY_APPS, PERSONAL_APPS).map(app => app.id)).toEqual([
+      'faq-bot',
+      OWNED_ID
+    ]);
+    expect(isCopyableAsUserApp({ id: 'plain', name: { en: 'Plain' } })).toBe(true);
+    expect(isCopyableAsUserApp(null)).toBe(false);
+    expect(isCopyableAsUserApp({ name: { en: 'No ID' } })).toBe(false);
+  });
+
+  it('lists an app once', () => {
+    expect(copyableApps([COMPANY_APPS[0]], [COMPANY_APPS[0]])).toHaveLength(1);
+    expect(copyableApps(null, undefined)).toEqual([]);
+  });
+
+  it('keeps the ID for the screens and only content keys besides', () => {
+    const source = copySourceOf(PERSONAL_APPS[0]);
+    expect(Object.keys(source).sort()).toEqual(
+      ['id', 'name', 'description', 'system', 'icon', 'color', 'capabilities'].sort()
+    );
+    expect(source.capabilities).toEqual({
+      upload: false,
+      webSearch: true,
+      skills: false,
+      integrations: []
+    });
+  });
+
+  it('rejects with the code useCopySource reads', () => {
+    const hook = require('../../../client/src/features/admin/components/app-create/useCopySource');
+    expect(APP_NOT_COPYABLE).toBe(hook.APP_NOT_COPYABLE);
+  });
+});
+
 describe('the body of POST /api/apps', () => {
   const TEMPLATE_DRAFT = {
     id: 'summarizer',
@@ -725,13 +1143,13 @@ describe('the body of POST /api/apps', () => {
 });
 
 describe('the source contract', () => {
-  it('the personal source offers describe, templates and empty, and hides ID and category', () => {
+  it('the personal source offers describe, templates, copy and empty, and hides ID and category', () => {
     expect(userAppSource.kind).toBe('personal');
     expect(userAppSource.starts).toEqual({
       describe: true,
       templates: true,
       empty: true,
-      copy: false,
+      copy: true,
       link: false,
       marketplace: false
     });
@@ -742,8 +1160,13 @@ describe('the source contract', () => {
       submit: 'admin.apps.create.submit',
       limits: 'userApps.create.limits',
       // Members can read the instructions: not the admin sentence "users do not see it".
-      instructionsHelp: 'userApps.edit.instructionsDesc'
+      instructionsHelp: 'userApps.edit.instructionsDesc',
+      copyNote: 'userApps.create.copyNote',
+      copyUnsupported: 'userApps.create.copyUnsupported'
     });
+    for (const member of ['fetchApp', 'fetchExistingApps']) {
+      expect(typeof userAppSource[member]).toBe('function');
+    }
   });
 
   it('the admin source reproduces increment 1', () => {
@@ -781,7 +1204,8 @@ describe('the source contract', () => {
   it('the personal page and its source name no admin route', () => {
     for (const file of [
       'client/src/features/apps/pages/UserAppCreatePage.jsx',
-      'client/src/features/apps/builder/userAppSource.js'
+      'client/src/features/apps/builder/userAppSource.js',
+      'client/src/features/apps/builder/userAppCopy.js'
     ]) {
       const text = fs.readFileSync(path.join(REPO, file), 'utf8');
       expect(text).not.toMatch(/from\s+['"][^'"]*adminApi['"]/);

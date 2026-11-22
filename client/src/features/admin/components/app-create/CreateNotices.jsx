@@ -7,23 +7,27 @@ import { NOTE_KEYS } from './createKeys';
 import { LINK_BUTTON_CLASS } from './createStyles';
 import DraftExtras from './DraftExtras';
 
+/** The states of a copy source the Start screen tells the author about. */
+const COPY_PROBLEMS = new Set(['gone', 'unsupported', 'failed']);
+
 /**
  * What the page says above its screens: that a draft came back after a
- * reload (either screen), and that the app to copy is gone or could not be
- * loaded (Start screen only, where the author can still choose a start).
+ * reload (either screen), and that the app to copy is gone, cannot be copied
+ * on this page, or could not be loaded (Start screen only, where the author
+ * can still choose a start).
  *
  * @param {object} props
+ * @param {object} [props.source] - What the create page offers.
+ *   `source.copy.copyUnsupported` words an app that cannot be copied here.
  * @param {object} props.state - The page's state (`useAppDraft`).
  * @param {{ status: string, retry: () => void }} props.copy - The copy source (`useCopySource`).
  * @param {() => void} props.onStartOver
  * @returns {JSX.Element|null}
  */
-function CreateNotices({ state, copy, onStartOver }) {
+function CreateNotices({ source, state, copy, onStartOver }) {
   const { t } = useTranslation();
   const copyProblem =
-    state.screen === 'start' && (copy.status === 'gone' || copy.status === 'failed')
-      ? copy.status
-      : null;
+    state.screen === 'start' && COPY_PROBLEMS.has(copy.status) ? copy.status : null;
   if (!state.restored && !copyProblem) return null;
   return (
     <div className="mb-6 space-y-3">
@@ -38,6 +42,11 @@ function CreateNotices({ state, copy, onStartOver }) {
       {copyProblem === 'gone' && (
         <p role="alert" className={CALLOUT_CLASS.warning}>
           {t('admin.apps.create.copy.sourceGone')}
+        </p>
+      )}
+      {copyProblem === 'unsupported' && (
+        <p role="alert" className={CALLOUT_CLASS.warning}>
+          {t(source?.copy?.copyUnsupported || 'admin.apps.create.copy.sourceGone')}
         </p>
       )}
       {copyProblem === 'failed' && (
@@ -59,6 +68,7 @@ function CreateNotices({ state, copy, onStartOver }) {
  *
  * @param {object} props
  * @param {object} [props.source] - What the create page offers; handed on to the draft notice.
+ *   `source.copy.copyNote` replaces the notice of a copy.
  * @param {object} props.state - The page's state (`useAppDraft`).
  * @param {string} props.language - The content language of a new draft.
  * @param {(request: object) => Promise<object>} props.generate - The draft request.
@@ -100,7 +110,8 @@ export function EssentialsNotice({
       />
     );
   }
-  const noteKey = NOTE_KEYS[state.start];
+  // A page can word the copy notice its own way: a personal copy takes less than an admin copy.
+  const noteKey = (state.start === 'copy' && source?.copy?.copyNote) || NOTE_KEYS[state.start];
   if (!noteKey) return null;
   return <p className={CALLOUT_CLASS.info}>{t(noteKey, { name: state.source?.name ?? '' })}</p>;
 }

@@ -30,13 +30,13 @@ import { USER_APP_ERROR_CODES } from '../../../shared/apiErrors.js';
 /** The keys of section 12, per table, in the order of the tables. */
 const SECTION_12 = {
   'userApps.list': [
-    'new',
     'scope.all',
     'scope.mine',
     'scope.shared',
     'badge.mine',
     'badge.offered',
     'empty.mine',
+    'empty.mineHint',
     'empty.shared',
     'menu.edit',
     'menu.share',
