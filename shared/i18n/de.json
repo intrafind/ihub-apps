@@ -1742,7 +1742,153 @@
         "markedDone": "als erledigt markiert",
         "plannerReasoning": "Begründung des Planers: {{reasoning}}",
         "availableTools": "verfügbar: {{tools}}",
-        "none": "(keine)"
+        "none": "(keine)",
+        "runTitleFallback": "Agentenlauf",
+        "tokenUsage": "Token-Verbrauch",
+        "tokenInput": "Eingabe",
+        "tokenOutput": "Ausgabe",
+        "tokenTotal": "Gesamt",
+        "llmSteps": "LLM-Schritte",
+        "tokensInOut": "{{input}} ein / {{output}} aus",
+        "round": "Runde {{round}}",
+        "roundToolCalls_one": "{{count}} Tool-Aufruf",
+        "roundToolCalls_other": "{{count}} Tool-Aufrufe",
+        "roundPlan": "Plan: {{plan}}",
+        "stepKind": {
+          "planner": "Planer",
+          "orchestrator": "Orchestrierung",
+          "agent": "Agent",
+          "dynamic": "dynamisch"
+        },
+        "stepStatus": {
+          "open": "offen",
+          "inProgress": "läuft",
+          "done": "erledigt",
+          "failed": "fehlgeschlagen"
+        },
+        "activatedBy": {
+          "planner": "Planer",
+          "llm": "LLM",
+          "unknown": "unbekannt"
+        }
+      },
+      "stepDetails": {
+        "noTranscript": "Für diesen Schritt wurde kein Protokoll erfasst (älterer Lauf, oder der Executor erzeugt keines).",
+        "role": {
+          "system": "System",
+          "user": "Benutzer",
+          "assistant": "Assistent",
+          "message": "Nachricht"
+        },
+        "appBadge": "App · {{id}}",
+        "args": "Argumente",
+        "result": "Ergebnis",
+        "appReason": {
+          "featureFlagOff": "features.appAsTool ist AUS – aktivieren Sie es in features.json (oder unter Admin → Funktionen), um Apps als Tools zuzulassen",
+          "groundingSwap": "Das native Grounding von Gemini lässt sich nicht mit Funktions-Tools kombinieren; webSearch hat diese App entfernt",
+          "appInAppGuard": "der Agent wird selbst aus einer App aufgerufen – synthetische app__*-Tools wurden entfernt",
+          "resolveFailed": "App konnte nicht aufgelöst werden (Konfiguration fehlt oder keine Berechtigung)"
+        },
+        "sourceStatus": {
+          "loaded": "geladen",
+          "cached": "aus dem Cache",
+          "unresolved": "nicht aufgelöst",
+          "error": "Fehler",
+          "unknown": "unbekannt"
+        },
+        "model": "Modell",
+        "kind": "Art",
+        "iterations": "Iterationen",
+        "tokens": "Tokens",
+        "tokenCounts": "{{input}} ein / {{output}} aus",
+        "tokenCountsTotal": "{{input}} ein / {{output}} aus / {{total}} gesamt",
+        "citationsAdded": "hinzugefügte Quellen",
+        "skillsActivated": "aktivierte Skills",
+        "plannedTasks": "geplante Aufgaben",
+        "response": "Antwort",
+        "responseChars_one": "{{count}} Zeichen",
+        "responseChars_other": "{{count}} Zeichen",
+        "reasoning": "Begründung:",
+        "groundingSwapTitle": "⚠ Funktions-Tools wurden in diesem Schritt entfernt",
+        "notRegisteredLabel": "Nicht registriert:",
+        "appsAlsoNotRegistered": "Ebenfalls nicht registrierte Apps:",
+        "groundingSwapHint": "Um Apps und Funktions-Tools mit einem Google-Modell zu nutzen, entfernen Sie webSearch aus diesem Profil (der Agent verliert dann das native Grounding) oder teilen Sie den Schritt in zwei auf – einen für die Recherche mit Grounding, einen für App- und Funktionsaufrufe.",
+        "prompts": "Prompts",
+        "toolsAvailable": "Verfügbare Tools",
+        "sourcesInjected": "In den System-Prompt eingefügte Quellen",
+        "sourcesHelp": "Diese Quellen hat die Laufzeitumgebung geladen und als {{tag}}-Block in den System-Prompt eingebettet. Sie erscheinen NICHT als Tool-Aufrufe, weil der Agent sie nicht abrufen musste – sie waren bereits im Kontext.",
+        "bytesApprox_one": "~{{count}} Byte",
+        "bytesApprox_other": "~{{count}} Byte",
+        "appsAvailable": "Verfügbare Apps",
+        "appsBlockedHelp_one": "{{registered}} von {{count}} konfigurierten App wurde in diesem Schritt als Tool registriert. Nicht registrierte Apps sind mit dem Grund aufgeführt – das Modell hat sie nie gesehen.",
+        "appsBlockedHelp_other": "{{registered}} von {{count}} konfigurierten Apps wurden in diesem Schritt als Tools registriert. Nicht registrierte Apps sind mit dem Grund aufgeführt – das Modell hat sie nie gesehen.",
+        "registered": "registriert",
+        "notRegistered": "nicht registriert",
+        "unknownReason": "unbekannter Grund",
+        "toolCalls": "Tool-Aufrufe"
+      },
+      "runTimeline": {
+        "inboxLoad": {
+          "title": "Posteingang lesen",
+          "description": "Wählt den offenen Posteingangseintrag mit der höchsten Priorität aus"
+        },
+        "planner": {
+          "title": "Planung",
+          "description": "Zerlegt den Auftrag in Teilaufgaben"
+        },
+        "agent": {
+          "decomposerTitle": "Teilaufgaben planen",
+          "answeringTitle": "Agent antwortet",
+          "runningTitle": "{{id}} wird ausgeführt",
+          "decomposerDescription": "Analysiert die Anfrage und reiht Teilaufgaben ein, die die Abarbeitungsschleife ausführt",
+          "answeringDescription": "Erzeugt die Antwort für diesen Lauf",
+          "attemptTitle": "{{title}} · Versuch {{attempt}}",
+          "revisedDescription_one": "{{description}} – nach kritischer Prüfung {{count}}-mal überarbeitet",
+          "revisedDescription_other": "{{description}} – nach kritischer Prüfung {{count}}-mal überarbeitet"
+        },
+        "verify": {
+          "title": "Kritische Prüfung",
+          "titleRounds_one": "Kritische Prüfung · {{count}} Runde",
+          "titleRounds_other": "Kritische Prüfung · {{count}} Runden",
+          "description": "Prüft das Ergebnis kritisch auf Lücken, bevor es angenommen wird",
+          "verdict_one": "{{count}} Runde – Urteil {{verdict}}",
+          "verdict_other": "{{count}} Runden – Urteil {{verdict}}",
+          "verdictForced_one": "{{count}} Runde – Urteil {{verdict}} (erzwungen: Wiederholungen ausgeschöpft)",
+          "verdictForced_other": "{{count}} Runden – Urteil {{verdict}} (erzwungen: Wiederholungen ausgeschöpft)"
+        },
+        "reviewer": {
+          "title": "Überprüfung",
+          "description": "Beurteilt, ob der Agent genügend Belege gesammelt hat",
+          "moreWork_one": "Runde {{round}}: weitere Arbeit nötig – {{count}} Lücke",
+          "moreWork_other": "Runde {{round}}: weitere Arbeit nötig – {{count}} Lücken",
+          "complete": "Runde {{round}}: vollständig – keine wesentlichen Lücken"
+        },
+        "synthesize": {
+          "title": "Abschlussbericht erstellen",
+          "description": "Fasst alle Ergebnisse der Teilaufgaben im endgültigen Artefakt zusammen"
+        },
+        "memoryCompose": {
+          "title": "Gedächtnis zusammenstellen",
+          "description": "Entscheidet, was (falls überhaupt etwas) ins Langzeitgedächtnis übernommen wird",
+          "skip": "Der Composer hat sich fürs Überspringen entschieden",
+          "skipWithSummary": "Der Composer hat sich fürs Überspringen entschieden – {{summary}}",
+          "mode": "Composer: {{mode}}",
+          "modeWithSummary": "Composer: {{mode}} – {{summary}}"
+        },
+        "memoryFinalize": {
+          "titleWritten": "Gedächtnis geschrieben",
+          "titleSkipped": "Gedächtnis übersprungen",
+          "writing": "Schreibt das Gedächtnis in die Datei des Agentenprofils",
+          "skippedReason": "Übersprungen – {{reason}}",
+          "skippedReasonSummary": "Übersprungen – {{reason}} ({{summary}})",
+          "skippedNoPending": "Übersprungen – keine ausstehenden Gedächtnisänderungen",
+          "wrote_one": "{{count}} Gedächtnisänderung geschrieben",
+          "wrote_other": "{{count}} Gedächtnisänderungen geschrieben"
+        },
+        "inboxFinalize": {
+          "title": "Posteingangseintrag als erledigt markieren",
+          "description": "Schreibt den Abschlussvermerk zurück in die Posteingangsdatei"
+        }
       }
     },
     "providers": {

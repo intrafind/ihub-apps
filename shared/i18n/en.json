@@ -1271,7 +1271,153 @@
         "markedDone": "marked done",
         "plannerReasoning": "Planner reasoning: {{reasoning}}",
         "availableTools": "available: {{tools}}",
-        "none": "(none)"
+        "none": "(none)",
+        "runTitleFallback": "Agent run",
+        "tokenUsage": "Token usage",
+        "tokenInput": "Input",
+        "tokenOutput": "Output",
+        "tokenTotal": "Total",
+        "llmSteps": "LLM steps",
+        "tokensInOut": "{{input}} in / {{output}} out",
+        "round": "Round {{round}}",
+        "roundToolCalls_one": "{{count}} tool call",
+        "roundToolCalls_other": "{{count}} tool calls",
+        "roundPlan": "plan: {{plan}}",
+        "stepKind": {
+          "planner": "planner",
+          "orchestrator": "orchestrator",
+          "agent": "agent",
+          "dynamic": "dynamic"
+        },
+        "stepStatus": {
+          "open": "open",
+          "inProgress": "in progress",
+          "done": "done",
+          "failed": "failed"
+        },
+        "activatedBy": {
+          "planner": "planner",
+          "llm": "llm",
+          "unknown": "unknown"
+        }
+      },
+      "stepDetails": {
+        "noTranscript": "No transcript captured for this step (older run, or the executor doesn’t produce one).",
+        "role": {
+          "system": "System",
+          "user": "User",
+          "assistant": "Assistant",
+          "message": "Message"
+        },
+        "appBadge": "app · {{id}}",
+        "args": "args",
+        "result": "result",
+        "appReason": {
+          "featureFlagOff": "features.appAsTool is OFF — enable it in features.json (or via Admin → Features) to allow apps as tools",
+          "groundingSwap": "Gemini native grounding cannot co-exist with function tools; webSearch dropped this app",
+          "appInAppGuard": "agent is itself invoked from an app — synthetic app__* tools were stripped",
+          "resolveFailed": "app could not be resolved (missing config or no permissions)"
+        },
+        "sourceStatus": {
+          "loaded": "loaded",
+          "cached": "cached",
+          "unresolved": "unresolved",
+          "error": "error",
+          "unknown": "unknown"
+        },
+        "model": "model",
+        "kind": "kind",
+        "iterations": "iterations",
+        "tokens": "tokens",
+        "tokenCounts": "{{input}} in / {{output}} out",
+        "tokenCountsTotal": "{{input}} in / {{output}} out / {{total}} total",
+        "citationsAdded": "citations added",
+        "skillsActivated": "skills activated",
+        "plannedTasks": "planned tasks",
+        "response": "response",
+        "responseChars_one": "{{count}} char",
+        "responseChars_other": "{{count}} chars",
+        "reasoning": "reasoning:",
+        "groundingSwapTitle": "⚠ Function tools dropped on this step",
+        "notRegisteredLabel": "Not registered:",
+        "appsAlsoNotRegistered": "Apps also not registered:",
+        "groundingSwapHint": "To use apps + function tools on a Google model, remove webSearch from this profile (the agent loses native grounding) or split the step into two — one for grounded research, one for app/function calls.",
+        "prompts": "Prompts",
+        "toolsAvailable": "Tools available",
+        "sourcesInjected": "Sources injected into system prompt",
+        "sourcesHelp": "These were loaded by the runtime and embedded as a {{tag}} block in the system prompt. They do NOT appear as tool calls because the agent did not need to fetch them — they were already in context.",
+        "bytesApprox_one": "~{{count}} byte",
+        "bytesApprox_other": "~{{count}} bytes",
+        "appsAvailable": "Apps available",
+        "appsBlockedHelp_one": "{{registered}} of {{count}} configured app was registered as a tool on this step. Apps that were not registered are listed with the reason — the model never saw them.",
+        "appsBlockedHelp_other": "{{registered}} of {{count}} configured apps were registered as tools on this step. Apps that were not registered are listed with the reason — the model never saw them.",
+        "registered": "registered",
+        "notRegistered": "not registered",
+        "unknownReason": "unknown reason",
+        "toolCalls": "Tool calls"
+      },
+      "runTimeline": {
+        "inboxLoad": {
+          "title": "Reading inbox",
+          "description": "Picking the highest-priority open inbox item"
+        },
+        "planner": {
+          "title": "Planning",
+          "description": "Decomposing the brief into sub-tasks"
+        },
+        "agent": {
+          "decomposerTitle": "Planning sub-tasks",
+          "answeringTitle": "Agent answering",
+          "runningTitle": "Running {{id}}",
+          "decomposerDescription": "Analysing the request and queueing sub-tasks for the drain loop to execute",
+          "answeringDescription": "Generating the answer for this run",
+          "attemptTitle": "{{title}} · attempt {{attempt}}",
+          "revisedDescription_one": "{{description}} — revised {{count}} time after adversarial review",
+          "revisedDescription_other": "{{description}} — revised {{count}} times after adversarial review"
+        },
+        "verify": {
+          "title": "Adversarial review",
+          "titleRounds_one": "Adversarial review · {{count}} round",
+          "titleRounds_other": "Adversarial review · {{count}} rounds",
+          "description": "Adversarially probing the deliverable for gaps before accepting it",
+          "verdict_one": "{{count}} round — verdict {{verdict}}",
+          "verdict_other": "{{count}} rounds — verdict {{verdict}}",
+          "verdictForced_one": "{{count}} round — verdict {{verdict}} (forced: retries exhausted)",
+          "verdictForced_other": "{{count}} rounds — verdict {{verdict}} (forced: retries exhausted)"
+        },
+        "reviewer": {
+          "title": "Reviewing",
+          "description": "Judging whether the agent gathered enough evidence",
+          "moreWork_one": "Round {{round}}: more work needed — {{count}} gap",
+          "moreWork_other": "Round {{round}}: more work needed — {{count}} gaps",
+          "complete": "Round {{round}}: complete — no material gaps"
+        },
+        "synthesize": {
+          "title": "Composing final report",
+          "description": "Synthesizing all sub-task results into the final artifact"
+        },
+        "memoryCompose": {
+          "title": "Composing memory",
+          "description": "Deciding what (if anything) to commit to long-term memory",
+          "skip": "Composer chose to skip",
+          "skipWithSummary": "Composer chose to skip — {{summary}}",
+          "mode": "Composer {{mode}}",
+          "modeWithSummary": "Composer {{mode}} — {{summary}}"
+        },
+        "memoryFinalize": {
+          "titleWritten": "Memory written",
+          "titleSkipped": "Memory skipped",
+          "writing": "Writing memory to the agent profile file",
+          "skippedReason": "Skipped — {{reason}}",
+          "skippedReasonSummary": "Skipped — {{reason}} ({{summary}})",
+          "skippedNoPending": "Skipped — no pending memory updates",
+          "wrote_one": "Wrote {{count}} memory update",
+          "wrote_other": "Wrote {{count}} memory updates"
+        },
+        "inboxFinalize": {
+          "title": "Marking inbox item done",
+          "description": "Writing the completion note back to the inbox file"
+        }
       }
     },
     "providers": {

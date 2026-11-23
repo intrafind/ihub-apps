@@ -91,8 +91,8 @@ export default function AgentRunDetailPage() {
   // Must run unconditionally (before the loading early-return below) to
   // satisfy the Rules of Hooks; deriveRunTimeline tolerates a null/loading run.
   const { unifiedTasks, tokenUsage, stepLogs, stepLogHistory } = useMemo(
-    () => deriveRunTimeline(run),
-    [run]
+    () => deriveRunTimeline(run, t),
+    [run, t]
   );
   function logFor(nodeId) {
     return stepLogs[nodeId] || null;
@@ -220,7 +220,7 @@ export default function AgentRunDetailPage() {
     (typeof run?.data?._title === 'string' && run.data._title.trim()) ||
     shortFallback(currentInboxItem?.text) ||
     shortFallback(run?.data?.brief) ||
-    'Agent run';
+    t('admin.agents.runDetail.runTitleFallback', 'Agent run');
 
   // Who triggered this run and how. Sourced from state.data._agent which the
   // route pre-initialises with profileId + triggeredBy.
@@ -260,6 +260,20 @@ export default function AgentRunDetailPage() {
     }
   }
   const currentTaskId = run?.data?._currentTask?.id;
+  // Display labels for the step table's Source and Status columns; an unknown
+  // value falls through and is shown as sent.
+  const stepKindLabels = {
+    planner: t('admin.agents.runDetail.stepKind.planner', 'planner'),
+    orchestrator: t('admin.agents.runDetail.stepKind.orchestrator', 'orchestrator'),
+    agent: t('admin.agents.runDetail.stepKind.agent', 'agent'),
+    dynamic: t('admin.agents.runDetail.stepKind.dynamic', 'dynamic')
+  };
+  const stepStatusLabels = {
+    open: t('admin.agents.runDetail.stepStatus.open', 'open'),
+    in_progress: t('admin.agents.runDetail.stepStatus.inProgress', 'in progress'),
+    done: t('admin.agents.runDetail.stepStatus.done', 'done'),
+    failed: t('admin.agents.runDetail.stepStatus.failed', 'failed')
+  };
   // Artifacts: prefer disk listing (real file metadata), fall back to
   // state.data._agent.artifacts (event-driven, available before disk fetch
   // completes or when disk endpoint hasn't populated yet). Dedupe by
@@ -567,11 +581,13 @@ export default function AgentRunDetailPage() {
               {tokenUsage.llmStepCount > 0 && (
                 <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
                   <h2 className="font-semibold mb-2 text-gray-900 dark:text-gray-100">
-                    Token usage
+                    {t('admin.agents.runDetail.tokenUsage', 'Token usage')}
                   </h2>
                   <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
                     <div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">Input</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        {t('admin.agents.runDetail.tokenInput', 'Input')}
+                      </div>
                       <div
                         className="font-mono text-gray-900 dark:text-gray-100"
                         title={tokenUsage.totalInput.toLocaleString()}
@@ -580,7 +596,9 @@ export default function AgentRunDetailPage() {
                       </div>
                     </div>
                     <div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">Output</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        {t('admin.agents.runDetail.tokenOutput', 'Output')}
+                      </div>
                       <div
                         className="font-mono text-gray-900 dark:text-gray-100"
                         title={tokenUsage.totalOutput.toLocaleString()}
@@ -589,7 +607,9 @@ export default function AgentRunDetailPage() {
                       </div>
                     </div>
                     <div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">Total</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        {t('admin.agents.runDetail.tokenTotal', 'Total')}
+                      </div>
                       <div
                         className="font-mono font-semibold text-gray-900 dark:text-gray-100"
                         title={tokenUsage.total.toLocaleString()}
@@ -598,7 +618,9 @@ export default function AgentRunDetailPage() {
                       </div>
                     </div>
                     <div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">LLM steps</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        {t('admin.agents.runDetail.llmSteps', 'LLM steps')}
+                      </div>
                       <div className="font-mono text-gray-900 dark:text-gray-100">
                         {tokenUsage.llmStepCount}
                       </div>
@@ -610,7 +632,14 @@ export default function AgentRunDetailPage() {
                         <div key={model} className="flex justify-between gap-4">
                           <span className="font-mono">{model}</span>
                           <span className="font-mono whitespace-nowrap">
-                            {formatTokenCount(u.input)} in / {formatTokenCount(u.output)} out
+                            {t(
+                              'admin.agents.runDetail.tokensInOut',
+                              '{{input}} in / {{output}} out',
+                              {
+                                input: formatTokenCount(u.input),
+                                output: formatTokenCount(u.output)
+                              }
+                            )}
                           </span>
                         </div>
                       ))}
@@ -713,34 +742,36 @@ export default function AgentRunDetailPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {unifiedTasks.map(t => {
+                      {unifiedTasks.map(step => {
                         const isCurrent =
-                          t.kind === 'dynamic' && currentTaskId && t.key === `dyn:${currentTaskId}`;
+                          step.kind === 'dynamic' &&
+                          currentTaskId &&
+                          step.key === `dyn:${currentTaskId}`;
                         const statusColor =
-                          t.status === 'done'
+                          step.status === 'done'
                             ? 'text-green-700 dark:text-green-400'
-                            : t.status === 'failed'
+                            : step.status === 'failed'
                               ? 'text-red-700 dark:text-red-400'
-                              : t.status === 'in_progress'
+                              : step.status === 'in_progress'
                                 ? 'text-blue-700 dark:text-blue-400'
                                 : 'text-gray-600 dark:text-gray-400';
-                        const isExpanded = expandedSteps.has(t.nodeId);
-                        const logHistory = historyFor(t.nodeId);
+                        const isExpanded = expandedSteps.has(step.nodeId);
+                        const logHistory = historyFor(step.nodeId);
                         const hasDetails = logHistory.length > 0;
-                        // Every row sets `t.log` to logFor(<its nodeId>) already,
-                        // so the old `|| logFor(t.nodeId)` fallback was a no-op.
-                        const rowTokens = t.log?.tokens;
+                        // Every row sets `step.log` to logFor(<its nodeId>) already,
+                        // so the old `|| logFor(step.nodeId)` fallback was a no-op.
+                        const rowTokens = step.log?.tokens;
                         const hasRowTokens =
                           rowTokens && (rowTokens.input > 0 || rowTokens.output > 0);
                         return (
-                          <Fragment key={t.key}>
+                          <Fragment key={step.key}>
                             <tr
                               className={`border-t border-gray-100 dark:border-gray-700 align-top ${isCurrent ? 'bg-indigo-50 dark:bg-indigo-900/20' : ''} ${
                                 hasDetails
                                   ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50'
                                   : ''
                               }`}
-                              onClick={hasDetails ? () => toggleStep(t.nodeId) : undefined}
+                              onClick={hasDetails ? () => toggleStep(step.nodeId) : undefined}
                             >
                               <td className="py-2 pr-1 text-xs text-gray-500 dark:text-gray-400 select-none">
                                 {hasDetails ? (isExpanded ? '▾' : '▸') : ''}
@@ -748,49 +779,60 @@ export default function AgentRunDetailPage() {
                               <td
                                 className="py-2 pr-3"
                                 style={
-                                  t.depth ? { paddingLeft: `${t.depth * 1.25}rem` } : undefined
+                                  step.depth
+                                    ? { paddingLeft: `${step.depth * 1.25}rem` }
+                                    : undefined
                                 }
                               >
-                                {(isCurrent || t.status === 'in_progress') && (
+                                {(isCurrent || step.status === 'in_progress') && (
                                   <span className="inline-block w-2 h-2 rounded-full bg-indigo-500 mr-2 animate-pulse" />
                                 )}
-                                <span className="font-medium">{t.title}</span>
-                                {t.description && (
+                                <span className="font-medium">{step.title}</span>
+                                {step.description && (
                                   <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                                    {t.description.length > 200
-                                      ? `${t.description.slice(0, 200)}…`
-                                      : t.description}
+                                    {step.description.length > 200
+                                      ? `${step.description.slice(0, 200)}…`
+                                      : step.description}
                                   </div>
                                 )}
                               </td>
                               <td className="py-2 pr-3 text-xs">
                                 <span
                                   className={`px-2 py-0.5 rounded ${
-                                    t.kind === 'planner'
+                                    step.kind === 'planner'
                                       ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300'
-                                      : t.kind === 'orchestrator'
+                                      : step.kind === 'orchestrator'
                                         ? 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
-                                        : t.kind === 'agent'
+                                        : step.kind === 'agent'
                                           ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-300'
                                           : 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300'
                                   }`}
                                 >
-                                  {t.kind}
+                                  {stepKindLabels[step.kind] || step.kind}
                                 </span>
                               </td>
-                              <td className={`py-2 pr-3 ${statusColor}`}>{t.status}</td>
+                              <td className={`py-2 pr-3 ${statusColor}`}>
+                                {stepStatusLabels[step.status] || step.status}
+                              </td>
                               <td className="py-2 pr-3 text-xs text-gray-600 dark:text-gray-400 whitespace-nowrap">
-                                {t.timing?.startedAt ? formatTime(t.timing.startedAt) : '—'}
+                                {step.timing?.startedAt ? formatTime(step.timing.startedAt) : '—'}
                               </td>
                               <td className="py-2 pr-3 text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
-                                {typeof t.timing?.durationMs === 'number'
-                                  ? formatDuration(t.timing.durationMs)
+                                {typeof step.timing?.durationMs === 'number'
+                                  ? formatDuration(step.timing.durationMs)
                                   : '—'}
                               </td>
                               <td className="py-2 text-xs text-gray-600 dark:text-gray-400 font-mono whitespace-nowrap">
                                 {hasRowTokens ? (
                                   <span
-                                    title={`${(rowTokens.input || 0).toLocaleString()} in / ${(rowTokens.output || 0).toLocaleString()} out`}
+                                    title={t(
+                                      'admin.agents.runDetail.tokensInOut',
+                                      '{{input}} in / {{output}} out',
+                                      {
+                                        input: (rowTokens.input || 0).toLocaleString(),
+                                        output: (rowTokens.output || 0).toLocaleString()
+                                      }
+                                    )}
                                   >
                                     {formatTokenCount(rowTokens.input || 0)} /{' '}
                                     {formatTokenCount(rowTokens.output || 0)}
@@ -814,7 +856,9 @@ export default function AgentRunDetailPage() {
                                           className="border-l-2 border-indigo-300 dark:border-indigo-700 pl-2 py-1"
                                         >
                                           <span className="font-semibold text-indigo-700 dark:text-indigo-300">
-                                            Round {entry.iteration ?? i + 1}
+                                            {t('admin.agents.runDetail.round', 'Round {{round}}', {
+                                              round: entry.iteration ?? i + 1
+                                            })}
                                           </span>
                                           {entry.verdict && (
                                             <>
@@ -836,7 +880,7 @@ export default function AgentRunDetailPage() {
                                             ? ` · ${formatDuration(entry.durationMs)}`
                                             : ''}
                                           {entry.toolCount
-                                            ? ` · ${entry.toolCount} tool calls`
+                                            ? ` · ${t('admin.agents.runDetail.roundToolCalls', '{{count}} tool calls', { count: entry.toolCount })}`
                                             : ''}
                                           {Array.isArray(entry.toolNames) &&
                                             entry.toolNames.length > 0 && (
@@ -848,10 +892,18 @@ export default function AgentRunDetailPage() {
                                           {Array.isArray(entry.planSnapshot) &&
                                             entry.planSnapshot.length > 0 && (
                                               <div className="text-gray-500 dark:text-gray-400">
-                                                plan:{' '}
-                                                {entry.planSnapshot
-                                                  .map(p => `${p.title} (${p.status})`)
-                                                  .join(' · ')}
+                                                {t(
+                                                  'admin.agents.runDetail.roundPlan',
+                                                  'plan: {{plan}}',
+                                                  {
+                                                    plan: entry.planSnapshot
+                                                      .map(
+                                                        p =>
+                                                          `${p.title} (${stepStatusLabels[p.status] || p.status})`
+                                                      )
+                                                      .join(' · ')
+                                                  }
+                                                )}
                                               </div>
                                             )}
                                           {Array.isArray(entry.failures) &&
@@ -876,7 +928,7 @@ export default function AgentRunDetailPage() {
                                   )}
                                   {/* Full transcript of the LATEST round only
                                       (one copy kept server-side). */}
-                                  <StepDetails log={logFor(t.nodeId) || logHistory.at(-1)} />
+                                  <StepDetails log={logFor(step.nodeId) || logHistory.at(-1)} />
                                 </td>
                               </tr>
                             )}
@@ -1055,7 +1107,12 @@ export default function AgentRunDetailPage() {
                                     : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
                               }`}
                             >
-                              {skill.activatedBy || 'unknown'}
+                              {skill.activatedBy === 'planner'
+                                ? t('admin.agents.runDetail.activatedBy.planner', 'planner')
+                                : skill.activatedBy === 'llm'
+                                  ? t('admin.agents.runDetail.activatedBy.llm', 'llm')
+                                  : skill.activatedBy ||
+                                    t('admin.agents.runDetail.activatedBy.unknown', 'unknown')}
                             </span>
                             {skill.activatedAt && (
                               <span className="text-xs text-gray-500 dark:text-gray-400">
