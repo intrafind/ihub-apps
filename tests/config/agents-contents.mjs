@@ -10,7 +10,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { MODELS, OTHER, TOOLS_APP, USER } from './agents-scenario.mjs';
+import { APPROVAL_APP, MODELS, OTHER, TOOLS_APP, USER } from './agents-scenario.mjs';
 import { TEST_TOOLS_INSTALLATION } from './test-tools-contents.mjs';
 
 /** The config files an overlay may change: `config/<name>.json`. */
@@ -152,13 +152,14 @@ export function seedAgentsUsers(contentsDir, { passwordHash }) {
 }
 
 /**
- * Add the suite's app with tools ({@link TOOLS_APP}) to `apps/`.
+ * Add the suite's apps to `apps/`: the app with tools ({@link TOOLS_APP}) and the
+ * same app with an approval before every tool call ({@link APPROVAL_APP}).
  *
  * @param {string} contentsDir - Absolute path
  * @returns {void}
  */
 export function seedAgentsApps(contentsDir) {
-  writeJson(path.join(contentsDir, 'apps', `${TOOLS_APP}.json`), {
+  const toolsApp = {
     id: TOOLS_APP,
     order: 2,
     name: { en: 'E2E tools', de: 'E2E-Werkzeuge' },
@@ -179,5 +180,17 @@ export function seedAgentsApps(contentsDir) {
     // `e2e_counter_read`), which exist only in a server started with the test tools.
     integrations: { ihub: {}, [TEST_TOOLS_INSTALLATION]: {} },
     enabled: true
+  };
+  writeJson(path.join(contentsDir, 'apps', `${TOOLS_APP}.json`), toolsApp);
+  writeJson(path.join(contentsDir, 'apps', `${APPROVAL_APP}.json`), {
+    ...toolsApp,
+    id: APPROVAL_APP,
+    order: 3,
+    name: { en: 'E2E approval', de: 'E2E-Freigabe' },
+    description: {
+      en: 'Chat with iHub tools that ask before every call, for the agents end-to-end suite.',
+      de: 'Chat mit iHub-Werkzeugen, die vor jedem Aufruf fragen, für die Agenten-End-to-End-Tests.'
+    },
+    toolApproval: { default: 'always' }
   });
 }

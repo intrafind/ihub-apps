@@ -396,7 +396,9 @@ export async function prepareChatApproval({
   const cancelOthers = async keepId => {
     for (const interaction of pendingList) {
       if (interaction.id === keepId) continue;
-      if (!(await authorizeInteraction(interaction, user))) continue;
+      // Superseding is the owner's own message moving on, so it takes the
+      // owner's right (`answer`), not the `cancel` an admin also holds.
+      if (!(await authorizeInteraction(interaction, user, { intent: 'answer' }))) continue;
       await interactionService.cancel(interaction.id, 'superseded').catch(() => {});
     }
   };
@@ -418,7 +420,9 @@ export async function prepareChatApproval({
   }
 
   const interaction = await interactionService.get(response.interactionId);
-  if (interaction && !(await authorizeInteraction(interaction, user))) {
+  // Only the owner of the run approves: the approved call runs with the
+  // owner's rights, so an admin does not answer in the owner's place.
+  if (interaction && !(await authorizeInteraction(interaction, user, { intent: 'answer' }))) {
     result.refusal = {
       status: 403,
       code: 'APPROVAL_FORBIDDEN',

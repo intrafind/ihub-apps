@@ -904,7 +904,7 @@ A marker in the user message scripts the stub (`tests/config/e2e-llm-stub.mjs`).
 
 A script picks its turn by counting the assistant messages in the request, not the calls it has had: a request with no assistant message gets turn 1, one with two gets turn 3. Assistant messages from earlier in the chat therefore shift the turn (start `e2e-script:two-step` after two earlier answers and the first call gets "no turn 3"), so start a script in a new chat or build the history it expects. The same request sent again gets the same turn again.
 
-Two models are seeded: `e2e-stub` (the default, without tools) and `e2e-stub-tools`, which is offered the tools of the app. The app `e2e-tools` prefers the second and offers iHub's own tools (`ask_user`, the scheduled-task tools) and the two counter tools below.
+Two models are seeded: `e2e-stub` (the default, without tools) and `e2e-stub-tools`, which is offered the tools of the app. The app `e2e-tools` prefers the second and offers iHub's own tools (`ask_user`, the scheduled-task tools) and the two counter tools below. The app `e2e-approval` is the same app with an approval before every tool call (`toolApproval.default: "always"`): send a tool call there with `toolApprovalCapable: true` in the request body, and the turn ends on a pending approval (`interaction/raised`).
 
 #### A write that can be counted, and content from outside
 

@@ -37,6 +37,13 @@ export const MODELS = { default: 'e2e-stub', tools: 'e2e-stub-tools' };
  */
 export const TOOLS_APP = 'e2e-tools';
 
+/**
+ * The app of {@link TOOLS_APP} once more, with one difference: every tool call
+ * asks for the person's approval first (`toolApproval.default: 'always'`). A spec
+ * that needs a pending approval sends its tool call here.
+ */
+export const APPROVAL_APP = 'e2e-approval';
+
 /** The default local admin of a fresh install. */
 export const ADMIN = { id: 'user_demo_admin', username: 'admin', password: 'password123' };
 /** A regular user (group `users`): owns the runs and chats the specs start. */

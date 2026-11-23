@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+import { describe, it, expect, jest, beforeAll, afterAll, beforeEach } from '@jest/globals';
 import express from 'express';
 import request from 'supertest';
 
@@ -68,15 +68,21 @@ jest.unstable_mockModule('../../services/loop/InteractionService.js', () => ({
     })
   }
 }));
-jest.unstable_mockModule('../../services/loop/runAccess.js', () => ({
-  authorizeInteraction: jest.fn(async (interaction, user) => {
-    return !interaction.source?.principalId || interaction.source.principalId === user?.id;
-  })
-}));
+// `services/loop/runAccess.js` is NOT replaced: who may answer a view's approval
+// is decided by the real check, with the intent the route passes. A stand-in
+// that ignores the intent would stay green when the route asked with `cancel`
+// (which an admin holds) or with none at all.
 jest.unstable_mockModule('../../middleware/authRequired.js', () => ({
   authRequired: (req, _res, next) => {
     if (req.headers['x-test-user']) {
-      req.user = { id: req.headers['x-test-user'], groups: ['users'], permissions: {} };
+      const admin = req.headers['x-test-admin'] === '1';
+      req.user = {
+        id: req.headers['x-test-user'],
+        groups: admin ? ['admins'] : ['users'],
+        permissions: {},
+        // As `enhanceUserWithPermissions` leaves an administrator.
+        ...(admin ? { isAdmin: true, isContentAdmin: true } : {})
+      };
     }
     next();
   }
@@ -92,6 +98,18 @@ jest.unstable_mockModule('../../utils/logger.js', () => ({
 const { default: registerMcpAppRoutes, resolveMcpApp } =
   await import('../../routes/mcpAppRoutes.js');
 const { default: errorHandler } = await import('../../middleware/errorHandler.js');
+const { startTestStorage } = await import('../helpers/testStorage.js');
+const { default: runLog } = await import('../../services/loop/RunLog.js');
+
+// The real access check looks a run up before it refuses, so it needs storage.
+let storage;
+beforeAll(async () => {
+  storage = await startTestStorage({ prefix: 'ihub-mcp-app-routes-' });
+});
+afterAll(async () => {
+  await runLog.stop();
+  await storage.stop();
+});
 
 const app = express();
 app.use(express.json());
@@ -530,10 +548,11 @@ describe('a view calling a tool that needs approval (#2945)', () => {
         .post('/api/mcp-apps/tools/call')
         .send({ ...gated, chatId: 'chat-1', toolApprovalCapable: true })
     );
-  const decide = (interactionId, decision, user = 'u1') =>
+  const decide = (interactionId, decision, user = 'u1', { admin = false } = {}) =>
     request(app)
       .post('/api/mcp-apps/tools/call/approval')
       .set('x-test-user', user)
+      .set('x-test-admin', admin ? '1' : '0')
       .send({ ...ref, interactionId, decision });
 
   it('raises an approval for the hosting chat instead of running the call', async () => {
@@ -645,5 +664,36 @@ describe('a view calling a tool that needs approval (#2945)', () => {
     );
     expect([403, 404]).toContain(otherView.status);
     expect(conn.callToolRaw).not.toHaveBeenCalled();
+  });
+
+  it('an admin does not answer another user’s approval: the call would run with that user’s rights', async () => {
+    const { interaction } = (await askApproval()).body;
+    // The real access check, asked with the intent `answer`. With `cancel` or
+    // `read` an admin would pass here.
+    for (const decision of ['approve', 'reject']) {
+      const res = await decide(interaction.id, decision, 'root', { admin: true });
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe('FORBIDDEN');
+      expect(res.headers['content-type']).toMatch(/^application\/problem\+json/);
+    }
+    expect(conn.callToolRaw).not.toHaveBeenCalled();
+    expect(interactions.get(interaction.id).status).toBe('pending');
+
+    // The user it belongs to still answers it, also when they are an admin.
+    const own = await decide(interaction.id, 'approve');
+    expect(own.status).toBe(200);
+    expect(conn.callToolRaw).toHaveBeenCalledTimes(1);
+  });
+
+  it('an admin answers an approval of their own', async () => {
+    const asked = await request(app)
+      .post('/api/mcp-apps/tools/call')
+      .set('x-test-user', 'root')
+      .set('x-test-admin', '1')
+      .send({ ...gated, chatId: 'chat-1', toolApprovalCapable: true });
+    expect(asked.status).toBe(202);
+    const res = await decide(asked.body.interaction.id, 'approve', 'root', { admin: true });
+    expect(res.status).toBe(200);
+    expect(conn.callToolRaw).toHaveBeenCalledTimes(1);
   });
 });

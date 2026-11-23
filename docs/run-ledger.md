@@ -236,20 +236,77 @@ window, not the history.
 | `GET /api/runs?from&to&kind&principalId&limit`            | admin                     | List runs from the run index                                   |
 | `GET /api/runs/:runId`                                    | owner or admin            | Run metadata                                                   |
 | `GET /api/runs/:runId/events?cursor=<c>&limit=<n>`       | owner or admin            | Read events (re-sync a live stream); the response is `{ runId, items, nextCursor }`, the cursor standing for the last raw sequence the page read; a page that read nothing has `nextCursor: null`. `404 JOURNAL_NOT_KEPT` for a finished chat or `/v1` run whose journal was deleted |
-| `DELETE /api/runs/:runId`                                 | owner or admin            | Delete the run, its spill files and its interactions (cascade) |
+| `DELETE /api/runs/:runId`                                 | owner, or admin (audited) | Delete the run, its spill files and its interactions (cascade) |
 | `GET /api/runs/:runId/interactions`                       | owner or admin            | Interactions of a run                                          |
-| `POST /api/runs/:runId/interactions/:interactionId/answer`| owner, approver or admin  | Answer a question / approval / review                          |
-| `POST /api/runs/:runId/human-events`                      | owner or admin            | Deliver a `steer`, `stop` or `feedback` event into the run     |
-| `GET /api/interactions/pending`                           | authenticated             | Queue of interactions the caller may answer                    |
+| `POST /api/runs/:runId/interactions/:interactionId/answer`| owner, or approver group  | Answer a question / approval / review                          |
+| `POST /api/runs/:runId/human-events`                      | owner; `stop` also admin (audited) | Deliver a `steer`, `stop` or `feedback` event into the run |
+| `GET /api/interactions/pending`                           | authenticated             | Queue of interactions the caller may see: their own, those of their approver groups, and for an admin all of them. An admin sees more than an admin may answer |
 
-Ownership is decided by the recorded principal in the current identity mode;
-an anonymous run is readable by whoever presents its random id (its
-interactions carry an `anonymous` marker, so the same holds for answering them
-after a restart). A run that is
+### Who may do what with a run
+
+Every route in the table above names what it is about to do, and the answer depends on it. The
+same check decides for the chat routes that answer an approval or a question, for
+`POST /api/feedback` and for the approval of an MCP app view's call. Two older groups of routes
+are not covered; see [Routes with their own check](#routes-with-their-own-check).
+
+| The caller wants to                              | Owner | Admin who is not the owner | Holds only the id of an anonymous run |
+| ------------------------------------------------ | ----- | -------------------------- | ------------------------------------- |
+| read the run, its events and its interactions    | yes   | yes                        | yes                                   |
+| stop the run                                     | yes   | yes, written to the audit log | no                                 |
+| delete the run                                   | yes   | yes, written to the audit log | no                                 |
+| rate an answer (`feedback`)                      | yes   | no                         | no                                    |
+| answer a question or an approval                 | yes   | only for a run that belongs to no person | no                      |
+| send a message into the running answer (`steer`) | yes   | no                         | no                                    |
+
+A refusal is `403 FORBIDDEN`; for a `steer` it is `403 RUN_STEER_FORBIDDEN`. A run nobody recorded
+is `404 NOT_FOUND` for every caller.
+
+- **The owner** is the principal recorded on the run, resolved in the identity mode the run was
+  written in. A message into a running answer is sent in the owner's name, so it also needs the
+  write right on the run's chat, and for an agent run the person who triggered it does not count:
+  they read, stop and answer it, and do not send a message into it.
+- **An anonymous run** has a random principal nobody can present again. Its owner is the browser
+  session that owns the run's chat: the request must carry the guest cookie the chat was started
+  with. Whoever holds the run id can still read the run and see that it waits for an answer, and
+  nothing more. A run of an anonymous caller that has no stored chat has no owner; only an admin
+  stops or deletes it.
+- **An admin** reads every run, and stops or deletes it; both are written to the audit log
+  (Admin → Audit Log, resource `run`) when the run is not the admin's own. The entry of a stop
+  says whether anything was stopped: a stop sent to a run that had already ended is recorded as
+  "Admin sent a stop to a run that is not their own; nothing was running", and
+  `details.effect` names what was stopped (`null` for nothing). An admin does not answer
+  an approval or a question of another user's run, because the approved call would run with that
+  user's rights, and does not send a message into it. Two kinds of interaction an admin still
+  answers: those that name an approver group (the group's members and admins answer them), and
+  those of a run that belongs to no person, which is an agent run under the agent's own identity
+  or a workflow run started by a trigger. Nobody else could answer the latter, and the answer
+  continues the run with that identity's rights, not with a user's.
+  `GET /api/interactions/pending` and Admin → Agents → Pending Approvals & Questions still list
+  every pending interaction for an admin, also those only their owner answers; the answer to
+  such a one is `403 FORBIDDEN`. The list carries no marker yet for which entries the caller
+  may answer.
+
+#### Routes with their own check
+
+These rules hold where the routes ask the run access check. Two groups of routes were there
+before it, decide on their own and are **not** covered:
+
+| Routes | What an admin can still do there | Audit log |
+| ------ | -------------------------------- | --------- |
+| `POST /api/workflows/executions/:executionId/_cancel`, `POST .../_restart`, `DELETE /api/workflows/executions/:executionId` | cancel, restart (run again) and delete another user's workflow run | no entry |
+| `POST /api/agents/runs/:runId/_cancel`, `POST /api/agents/runs/:runId/_resume` | cancel and resume an agent run they did not trigger | no entry |
+
+The admin pages for workflow runs and agent runs use these routes. So a statement such as "an
+admin stop is written to the audit log" is true for `POST /api/runs/:runId/human-events` and
+`DELETE /api/runs/:runId`, and not for a cancel from those pages.
+
+A run that is
 known only to the worker that started it (persistence off) is described by
 that worker over the cluster bus, so the request may land on any worker; an
 interaction is authorized from the principal recorded on it, so it stays
-answerable after a restart even when its run is no longer in memory. Workflow
+answerable after a restart even when its run is no longer in memory (an
+interaction of an anonymous run carries an `anonymous` marker and the chat id
+for the same reason). Workflow
 executions and agent runs are runs too (run id = execution id): when the
 ledger does not know one (persistence off), the launching principal — or, for
 agent runs, the human who triggered the run — is authorized through the
@@ -294,8 +351,9 @@ supplied by a model cannot stall the server. A rejected
 answer (invalid option or value, missing required form field, unauthorized
 approver, execution no longer paused on this checkpoint) returns 4xx with a
 `code` and leaves the interaction pending. A chat message that answers or
-supersedes a clarification settles only interactions whose run the sender may
-access — a chat id alone does not let anyone settle another user's question.
+supersedes a clarification settles only interactions whose run the sender
+owns — a chat id alone does not let anyone settle another user's question, and
+neither do admin rights.
 
 ## Human events
 
@@ -306,6 +364,20 @@ access — a chat id alone does not let anyone settle another user's question.
 | `steer`    | `{ message }`                             | Delivered into the running loop at its next step boundary as a `[steer]`-marked user message (queued on the worker that owns the run, relayed there in a cluster; `effect: steer_queued` / `steer_relayed`); without an active loop it is recorded only |
 | `stop`     | –                                         | Aborts the run: a chat run's active model call (and any workflow it launched), or the engine cancels the execution (relayed to the worker running it in a cluster). Only the run currently producing on its chat is aborted; a `stop` on a run that has ended, or that is no longer bound to the chat's stream, is recorded without a side effect |
 | `feedback` | `{ rating?, message?, messageId? }`       | Recorded; the chat feedback form sends the same event through `POST /api/feedback` (`runId`) |
+
+Who may send which kind: `steer` and `feedback` only the owner of the run, `stop` the owner and
+an admin (see [Who may do what with a run](#who-may-do-what-with-a-run)). Three rules apply to
+`steer` alone:
+
+- **A message is never the answer to an approval.** While the run has a pending approval the
+  event is refused with `409 RUN_NOT_ACTIVE`; nothing is recorded or queued and the approval
+  stays pending. It is answered where it is shown.
+- **30 per minute.** One caller sends at most 30 `steer` events per minute, over all runs; the
+  next one answers `429 RATE_LIMITED` with a `Retry-After` header. Refused attempts count too.
+  `stop` and `feedback` are never limited by it. The count is kept per signed-in user (per
+  address for a caller who is not signed in) and is shared by the server processes of one
+  server (`WORKERS`); several servers behind a load balancer each keep their own count.
+- **Only the owner.** Anyone else, an admin included, gets `403 RUN_STEER_FORBIDDEN`.
 
 The chat stop button records a `stop` event on the run bound to the chat
 stream; answers are recorded as `interaction/answered`, not as human events.

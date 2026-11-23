@@ -254,8 +254,10 @@ and the checkpoint is raised as an **interaction** of the run (kind `approval`,
 `policy.approverGroups` = `profile.hitl.approverGroups`): the stream carries
 `interaction/raised` + `run/paused`, the ledger records `interaction/raised`
 and the interaction shows up in the queue (`GET /api/interactions/pending?kind=approval`,
-Admin → Agents → Pending Approvals). An operator answers it through the one
-answer endpoint:
+Admin → Agents → Pending Approvals & Questions). A member of the approver groups
+or an admin answers it through the one answer endpoint; when the profile names
+no approver group, an admin and the person who triggered the run answer it
+(see [Run Ledger](run-ledger.md#who-may-do-what-with-a-run)):
 
 ```http
 POST /api/runs/:runId/interactions/:checkpointId/answer
@@ -267,8 +269,10 @@ the run pauses on a `question` checkpoint (free text, number or options,
 skippable when the model allowed it) that is answered from the run page, the
 chat that launched the run, or the queue (`kind=question`). The node then
 continues the same step with the answer as the tool result. A `steer` human
-event delivers an operator's instruction into the running loop at its next
-step boundary (see [Run Ledger](run-ledger.md#human-events)).
+event delivers an instruction into a running loop at its next step boundary,
+and only the owner of the run sends one. An agent run is owned by the agent's
+own identity, so nobody sends a `steer` into it: the person who triggered it
+reads, stops and answers it (see [Run Ledger](run-ledger.md#who-may-do-what-with-a-run)).
 
 **Who the run acts as after an answer.** A run always continues as the
 principal it started with — the agent's service account, or the user who

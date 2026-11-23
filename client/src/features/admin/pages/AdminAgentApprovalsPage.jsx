@@ -27,9 +27,14 @@ const KIND_BADGE = {
 
 /**
  * The interactions queue: every pending approval, question and review of a
- * paused agent run or workflow execution the caller may answer (admins see
- * all, approvers their groups', users their own runs'). Rows open the run
- * where the interaction is answered.
+ * paused agent run or workflow execution the caller may see (admins see all,
+ * approvers their groups', users their own runs'). Rows open the run where the
+ * interaction is answered.
+ *
+ * An admin sees more than an admin may answer: an entry of a run a user
+ * started that names no approver group is answered by that user only, and the
+ * server answers an admin with 403. The page says so above the list; the
+ * server sends no per-entry marker yet.
  */
 export default function AdminAgentApprovalsPage() {
   const { t } = useTranslation();
@@ -89,10 +94,16 @@ export default function AdminAgentApprovalsPage() {
         <h1 className="text-2xl font-bold mb-2 text-gray-900 dark:text-gray-100">
           {t('admin.interactions.title', 'Pending Approvals & Questions')}
         </h1>
-        <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
           {t(
             'admin.interactions.subtitle',
             'Every approval, question and review a paused agent run or workflow is waiting for.'
+          )}
+        </p>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+          {t(
+            'admin.interactions.whoAnswers',
+            'You can read every entry. You answer an entry that names an approver group, and one of an agent run or of a workflow that a trigger started. Any other entry is answered by the person who started the run.'
           )}
         </p>
         <div className="flex flex-wrap gap-2 mb-4" role="tablist">

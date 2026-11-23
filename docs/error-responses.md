@@ -40,6 +40,19 @@ shape, `{ "error", "error_description" }`. The OpenAI-compatible endpoints keep 
 object. The codes of the voice WebSocket (`unknown-model`, `not-permitted`, …) are protocol codes and are
 not in the registry; the read-aloud routes (`/api/voice/*`) use registry codes like every other route.
 
+## Refusals of the run routes
+
+`/api/runs/*` answers a caller who may not do what was asked with one of these. Who may do what
+is in [Run Ledger](run-ledger.md#who-may-do-what-with-a-run).
+
+| Status and code           | When                                                                                                                                             |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `404 NOT_FOUND`           | No run with this id is recorded.                                                                                                                 |
+| `403 FORBIDDEN`           | The run exists and the caller may not read, stop, delete or rate it, or may not answer its interaction. An admin gets it for a rating of another user's run, and for an answer unless the run belongs to no person. |
+| `403 RUN_STEER_FORBIDDEN` | `POST /api/runs/{runId}/human-events` with `kind: "steer"` from anyone but the owner of the run, an admin included.                               |
+| `409 RUN_NOT_ACTIVE`      | A `steer` for a run that waits for an approval. The approval stays pending.                                                                      |
+| `429 RATE_LIMITED`        | More than 30 `steer` events of one caller in a minute. `Retry-After` says how long to wait.                                                      |
+
 ## For developers
 
 Throw, do not answer. A route handler needs no `try`/`catch` for errors: Express 5 hands a thrown error or a rejected promise to the
