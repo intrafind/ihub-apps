@@ -13,8 +13,9 @@
  *
  * - scope `ui`: every text in `shared/i18n/en.json` and `de.json` (the files named by the word's
  *   `lang`), and `name` and `description` of every feature in `server/featureRegistry.js`;
- * - scope `docs`: the prose of every page under `docs/` (not code blocks, inline code or link
- *   targets), except the release notes and the glossary itself. Only words with one meaning carry
+ * - scope `docs`: the prose of every page under `docs/` (not code blocks, inline code, HTML
+ *   comments or link targets), a paragraph at a time so that a phrase broken over two lines is
+ *   found, except the release notes and the glossary itself. Only words with one meaning carry
  *   this scope: "worker", "job" and "thread" are ordinary words in technical docs.
  *
  * A word matches at word boundaries and without regard to case: "job" finds "Jobs" and "job-id",
@@ -91,48 +92,141 @@ function leafTexts(node, prefix = '') {
 /** A UI text without its `{{placeholders}}`, which name variables and are never shown. */
 const shownText = text => text.replace(/\{\{[^}]*\}\}/g, ' ');
 
-/**
- * A line without its HTML comments. Each comment is cut out by its position, so
- * that no opening mark can be left over from two that overlapped.
- */
-function withoutHtmlComments(line) {
-  let text = line;
-  let start = text.indexOf('<!--');
-  while (start !== -1) {
-    const end = text.indexOf('-->', start + 4);
-    if (end === -1) break;
-    text = `${text.slice(0, start)} ${text.slice(end + 3)}`;
-    start = text.indexOf('<!--');
+/** The column a line's text starts at, a tab counting to the next multiple of four. */
+function indentOf(line) {
+  let column = 0;
+  for (const char of line) {
+    if (char === ' ') column += 1;
+    else if (char === '\t') column += 4 - (column % 4);
+    else break;
   }
-  return text;
+  return column;
 }
 
-/** The prose lines of a Markdown page with the heading each one stands under. */
+const LIST_ITEM_RE = /^[ \t]*([-*+]|\d{1,9}[.)])( +|\t|$)/;
+/** What stands in for inline code: not a space, so no phrase is found across it. */
+const CODE = ' \u0000 ';
+const headingText = text =>
+  text
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/[`*]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+/**
+ * The prose of a Markdown page, one entry per paragraph or heading, with the heading it stands
+ * under. A paragraph is its lines joined with a space, so a phrase broken over two lines is found.
+ * Not prose: fenced code (closed by a fence of the same character, at least as long as the
+ * opener), indented code (four columns past the enclosing list item, after a blank line), HTML
+ * comments (also over several lines), inline code and link targets.
+ */
 function proseWithHeadings(markdown) {
-  const lines = [];
-  let fence = null;
+  const blocks = [];
   let heading = '';
+  let fence = null; // { char, length } of the open fence
+  let inComment = false;
+  let inIndentedCode = false;
+  let listIndent = 0; // the content column of the list item the text is in, or 0
+  let paragraph = [];
+  let afterBlank = true;
+
+  const endParagraph = () => {
+    if (paragraph.length === 0) return;
+    const text = paragraph
+      .join(' ')
+      .replace(/`[^`]*`/g, CODE)
+      .replace(/\]\([^)]*\)/g, '] ');
+    blocks.push({ heading, text });
+    paragraph = [];
+  };
+
+  /** The line without what lies in HTML comments, continuing a comment from earlier lines. */
+  const withoutComments = line => {
+    let text = '';
+    let rest = line;
+    while (rest) {
+      if (inComment) {
+        const end = rest.indexOf('-->');
+        if (end === -1) return text;
+        inComment = false;
+        rest = rest.slice(end + 3);
+        text += ' ';
+      } else {
+        const start = rest.indexOf('<!--');
+        if (start === -1) return text + rest;
+        text += rest.slice(0, start);
+        rest = rest.slice(start + 4);
+        inComment = true;
+      }
+    }
+    return text;
+  };
+
   for (const line of markdown.split(/\r?\n/)) {
-    const fenceMatch = FENCE_RE.exec(line);
-    if (fenceMatch) {
-      if (!fence) fence = fenceMatch[1][0];
-      else if (fenceMatch[1].startsWith(fence)) fence = null;
+    if (fence) {
+      const close = FENCE_RE.exec(line);
+      if (close && close[1][0] === fence.char && close[1].length >= fence.length) {
+        if (/^\s*$/.test(line.slice(close[0].length))) fence = null;
+      }
       continue;
     }
-    if (fence) continue;
-    const text = withoutHtmlComments(line.replace(/`[^`]*`/g, ' ').replace(/\]\([^)]*\)/g, '] '));
-    // The heading names the place, so it keeps the words of its inline code.
-    const headingMatch = /^#{1,6}\s+(.*?)\s*#*$/.exec(line);
-    if (headingMatch) {
-      heading = headingMatch[1]
-        .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
-        .replace(/[`*]/g, '')
-        .replace(/\s+/g, ' ')
-        .trim();
+    if (inComment) {
+      const text = withoutComments(line);
+      if (text.trim()) paragraph.push(text.trim());
+      continue;
     }
-    lines.push({ heading, text });
+    const blank = !line.trim();
+    if (blank) {
+      endParagraph();
+      afterBlank = true;
+      continue;
+    }
+    const indent = indentOf(line);
+    if (inIndentedCode && indent >= listIndent + 4) continue;
+    inIndentedCode = false;
+    if (afterBlank && paragraph.length === 0 && indent >= listIndent + 4) {
+      inIndentedCode = true;
+      continue;
+    }
+    const wasAfterBlank = afterBlank;
+    afterBlank = false;
+    const fenceMatch = FENCE_RE.exec(line);
+    if (fenceMatch) {
+      endParagraph();
+      fence = { char: fenceMatch[1][0], length: fenceMatch[1].length };
+      continue;
+    }
+    // Inline code goes first, so that a `<!--` in code does not open a comment.
+    const lineText = withoutComments(line.replace(/`[^`]*`/g, CODE));
+    const headingMatch = /^ {0,3}#{1,6}\s+(.*?)\s*#*$/.exec(line);
+    if (headingMatch) {
+      endParagraph();
+      // The heading names the place, so it keeps the words of its inline code.
+      heading = headingText(headingMatch[1]);
+      blocks.push({ heading, text: lineText });
+      listIndent = 0;
+      continue;
+    }
+    const item = LIST_ITEM_RE.exec(line);
+    if (item) {
+      endParagraph();
+      // The item's text starts after the marker and its spaces; with none, one column after it.
+      const marker = indent + item[1].length;
+      const gap = item[2] === '\t' ? 4 - (marker % 4) : item[2].length;
+      listIndent = marker + (gap >= 1 && gap <= 4 ? gap : 1);
+    } else if (wasAfterBlank && indent < listIndent) {
+      listIndent = 0; // a block that is not indented under the list item ends the list
+    }
+    if (/^ {0,3}(?:\||>)/.test(line) && !item) {
+      endParagraph(); // a table row or a quoted line stands alone
+      blocks.push({ heading, text: lineText });
+      continue;
+    }
+    if (lineText.trim()) paragraph.push(lineText.trim());
+    else endParagraph(); // a line that holds only a comment ends the paragraph
   }
-  return lines;
+  endParagraph();
+  return blocks;
 }
 
 /**
@@ -489,6 +583,105 @@ describe('the wording lint itself', () => {
     ].join('\n');
     expect(findHits(words, { docs: [['guide/page.md', page]] })).toEqual({
       'sub-task': ['docs:guide/page.md', 'docs:guide/page.md#How it works']
+    });
+  });
+
+  test('skips an HTML comment over several lines', () => {
+    const page = [
+      '# Page',
+      '',
+      'Before <!--',
+      'sub-task',
+      '--> after.',
+      '',
+      '<!--',
+      '',
+      'subtasks',
+      '-->'
+    ];
+    expect(findHits(words, { docs: [['p.md', page.join('\n')]] })).toEqual({});
+    const after = ['# Page', '', '<!-- a -->', 'The sub-task.'].join('\n');
+    expect(findHits(words, { docs: [['p.md', after]] })).toEqual({
+      'sub-task': ['docs:p.md#Page']
+    });
+  });
+
+  test('a fence closes only with a fence of its kind at least as long as the opener', () => {
+    const page = [
+      '# Page',
+      '',
+      '````md',
+      '```',
+      'sub-task',
+      '```',
+      '````',
+      '',
+      '~~~',
+      '```',
+      'subtask',
+      '~~~'
+    ];
+    expect(findHits(words, { docs: [['p.md', page.join('\n')]] })).toEqual({});
+  });
+
+  test('finds a phrase across a line break of a paragraph, under its heading', () => {
+    const page = [
+      '# Page',
+      '',
+      '## Start',
+      '',
+      'A workflow',
+      'instance starts. A workflow `x`',
+      'instance in code: `workflow',
+      'instance`.',
+      '',
+      '- A list item about a workflow',
+      '  instance.'
+    ].join('\n');
+    expect(findHits(words, { docs: [['p.md', page]] })).toEqual({
+      'workflow instance': ['docs:p.md#Start']
+    });
+    const apart = [
+      '## A',
+      '',
+      'A workflow',
+      '',
+      'instance.',
+      '',
+      '- workflow',
+      '- instance',
+      '',
+      '| workflow |',
+      '| instance |'
+    ];
+    expect(findHits(words, { docs: [['p.md', apart.join('\n')]] })).toEqual({});
+  });
+
+  test('skips an indented code block, not an indented list line or paragraph line', () => {
+    const code = [
+      '# Page',
+      '',
+      'Run this:',
+      '',
+      '    sub-task --now',
+      '',
+      '\tsubtask',
+      '',
+      'Done.'
+    ];
+    expect(findHits(words, { docs: [['p.md', code.join('\n')]] })).toEqual({});
+    const prose = [
+      '# Page',
+      '',
+      '- Item',
+      '',
+      '    The sub-task, a second paragraph of the item.',
+      '',
+      'A paragraph',
+      '    with an indented sub-task line.'
+    ].join('\n');
+    expect(findHits(words, { docs: [['p.md', prose]] })).toEqual({
+      'sub-task': ['docs:p.md#Page']
     });
   });
 
