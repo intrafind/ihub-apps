@@ -170,7 +170,7 @@ describe('runModelTest', () => {
     expect(request).toHaveBeenCalledWith('/admin/models/m%201/_test', { method: 'POST' });
   });
 
-  test('an HTTP error is a failed test with its translated headline and remedy', async () => {
+  test('an HTTP error is a failed test with its translated headline and the server details', async () => {
     const error = Object.assign(new Error('bad'), {
       response: {
         status: 502,
@@ -181,7 +181,14 @@ describe('runModelTest', () => {
       }
     });
     const result = await runModelTest('m', t, jest.fn().mockRejectedValue(error));
-    expect(result).toEqual({ success: false, message: 'Upstream said no', error: 'Check the key' });
+    // The details (remedy, status, host, code) go to ConnectionErrorDetails; `error` is the
+    // fallback when a response carries none.
+    expect(result).toEqual({
+      success: false,
+      message: 'Upstream said no',
+      details: { messageKey: 'authenticationFailed', remediation: 'Check the key' },
+      error: 'HTTP 502'
+    });
   });
 });
 
