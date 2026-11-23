@@ -8,6 +8,8 @@ import { ServiceError } from './ServiceError.js';
 import logger from './logger.js';
 import configCache from '../configCache.js';
 import { hasIdCaseInsensitive } from './resourceLookup.js';
+import { effectiveDefaultModelId } from './resourceDependants.js';
+import { DEFAULT_MODEL_TOKEN, resolveModelPermissionList } from '../../shared/modelPermissions.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -401,15 +403,54 @@ export function mapExternalGroups(externalGroups) {
 }
 
 /**
- * Get permissions for a user based on their groups
+ * The id of the platform's current default model, as the config cache has it
+ * now: the chat model flagged `default`, else the first enabled chat model
+ * (see `effectiveDefaultModelId`). Disabled models are considered too, so the
+ * answer matches the admin's model list and the access views.
+ *
+ * Read at every permission computation, so a `@default` grant
+ * (`shared/modelPermissions.js`) follows the default when an admin changes it.
+ *
+ * @returns {string|null} The model id, or null when no model is configured
+ */
+export function currentDefaultModelId() {
+  try {
+    if (typeof configCache?.getModels !== 'function') return null;
+    const { data = [] } = configCache.getModels(true) || {};
+    return effectiveDefaultModelId(Array.isArray(data) ? data : []);
+  } catch (error) {
+    logger.warn('Could not determine the default model for permission checks', {
+      component: 'Authorization',
+      error
+    });
+    return null;
+  }
+}
+
+/**
+ * Get permissions for a user based on their groups.
+ *
+ * A group's model list may hold the default-model token (`@default`, see
+ * `shared/modelPermissions.js`): it is replaced here by the id of the model
+ * that is the default right now, so every check downstream (`/api/models`,
+ * the chat request, the OpenAI-compatible proxy, …) sees a plain model id.
+ *
  * @param {string[]} userGroups - User's internal group names
  * @param {Object} groupPermissions - Group permissions configuration
+ * @param {Object} [options]
+ * @param {string|null} [options.defaultModelId] - The current default model's
+ *   id; read from the config cache when not given
  * @returns {Object} User permissions object
  */
-export function getPermissionsForUser(userGroups, groupPermissions = null) {
+export function getPermissionsForUser(userGroups, groupPermissions = null, options = {}) {
   if (!groupPermissions) {
     groupPermissions = loadGroupPermissions();
   }
+  let defaultModelId = options.defaultModelId;
+  const resolveDefaultModelId = () => {
+    if (defaultModelId === undefined) defaultModelId = currentDefaultModelId();
+    return defaultModelId;
+  };
 
   const permissions = {
     apps: new Set(),
@@ -456,7 +497,10 @@ export function getPermissionsForUser(userGroups, groupPermissions = null) {
     if (groupPerms.models?.includes('*')) {
       permissions.models.add('*');
     } else if (Array.isArray(groupPerms.models)) {
-      groupPerms.models.forEach(model => permissions.models.add(model));
+      const list = groupPerms.models.includes(DEFAULT_MODEL_TOKEN)
+        ? resolveModelPermissionList(groupPerms.models, resolveDefaultModelId())
+        : groupPerms.models;
+      list.forEach(model => permissions.models.add(model));
     }
 
     // Handle wildcards and specific permissions for workflows

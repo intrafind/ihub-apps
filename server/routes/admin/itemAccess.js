@@ -6,6 +6,7 @@ import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { contentAdminAuth } from '../../middleware/contentAdminAuth.js';
 import {
+  currentDefaultModelId,
   getDefaultAnonymousGroups,
   isAdmin,
   isAnonymousAccessAllowed
@@ -156,6 +157,8 @@ function platformContext() {
   const anonymousGroups = anonymousAllowed ? getDefaultAnonymousGroups(platform) : [];
   return {
     platform,
+    // The model `@default` in a group's model list grants right now.
+    defaultModelId: currentDefaultModelId(),
     authenticatedGroup,
     anonymousAllowed,
     anonymousGroups,
@@ -184,14 +187,16 @@ function buildView(groups, type, contentId, context) {
       type,
       contentId,
       groupIds: Object.keys(groups),
-      implicitGroups: context.implicitGroups
+      implicitGroups: context.implicitGroups,
+      defaultModelId: context.defaultModelId
     }),
     audience: describeAudience({
       groups,
       type,
       contentId,
       authenticatedGroup: context.authenticatedGroup,
-      anonymousGroups: context.anonymousGroups
+      anonymousGroups: context.anonymousGroups,
+      defaultModelId: context.defaultModelId
     }),
     wildcardGroups: wildcards,
     restrictable: RESTRICT_TYPES.includes(type) && wildcards.length > 0
@@ -233,8 +238,10 @@ function planBody(type, contentId, plan) {
  *           description: The group whose own list grants the item
  *         kind:
  *           type: string
- *           enum: [explicit, wildcard]
- *           description: The list names the item, or holds `*`
+ *           enum: [explicit, wildcard, default]
+ *           description: >-
+ *             The list names the item, holds `*`, or holds `@default` while the
+ *             item (a model) is the platform's default model
  *         path:
  *           type: array
  *           items:
@@ -386,6 +393,13 @@ function planBody(type, contentId, plan) {
  *               action:
  *                 type: string
  *                 enum: [restrict, grant]
+ *         defaultModelGroups:
+ *           type: array
+ *           description: >-
+ *             Groups whose model list holds `@default` while the restricted model is
+ *             the default model: they keep granting it, the restrict leaves `@default` alone
+ *           items:
+ *             type: string
  *     RestrictRequest:
  *       type: object
  *       properties:
@@ -597,7 +611,8 @@ export default function registerAdminItemAccessRoutes(app) {
           type === 'apps'
             ? missingAppIntegrations(item, configCache.getIntegrationContext?.() || {})
             : [],
-        filterModelsForApp
+        filterModelsForApp,
+        defaultModelId: context.defaultModelId
       });
 
       res.json({
@@ -679,7 +694,8 @@ export default function registerAdminItemAccessRoutes(app) {
         ...body,
         implicitGroups: context.implicitGroups,
         authenticatedGroup: context.authenticatedGroup,
-        anonymousGroups: context.anonymousGroups
+        anonymousGroups: context.anonymousGroups,
+        defaultModelId: context.defaultModelId
       });
       res.json(planBody(type, item.id, plan));
     }
@@ -768,7 +784,8 @@ export default function registerAdminItemAccessRoutes(app) {
           ...body,
           implicitGroups: context.implicitGroups,
           authenticatedGroup: context.authenticatedGroup,
-          anonymousGroups: context.anonymousGroups
+          anonymousGroups: context.anonymousGroups,
+          defaultModelId: context.defaultModelId
         });
         changed = plan.changes.map(change => ({
           ...change,

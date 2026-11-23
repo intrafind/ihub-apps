@@ -47,7 +47,7 @@
       "permissions": {
         "apps": ["chat"],
         "prompts": ["*"],
-        "models": ["gemini-flash-latest", "local-vllm"],
+        "models": ["@default"],
         "skills": [],
         "integrations": ["ihub", "type:web-search"],
         "adminAccess": false,

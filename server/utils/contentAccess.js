@@ -3,6 +3,7 @@
 
 import { hasIdCaseInsensitive } from './resourceLookup.js';
 import { ServiceError } from './ServiceError.js';
+import { grantsAsDefaultModel } from '../../shared/modelPermissions.js';
 
 /**
  * Which groups may use a piece of content — an app, a prompt, a skill, a tool
@@ -105,6 +106,35 @@ function listHasWildcard(list) {
 }
 
 /**
+ * Whether a list grants `contentId` through the default-model token
+ * (`@default`, `shared/modelPermissions.js`): only for `models`, and only while
+ * `contentId` is the platform's default model.
+ *
+ * @param {string[]} list
+ * @param {string} key - The canonical permission type
+ * @param {string} contentId
+ * @param {string|null|undefined} defaultModelId - The current default model's id
+ * @returns {boolean}
+ */
+function listGrantsAsDefault(list, key, contentId, defaultModelId) {
+  return key === 'models' && grantsAsDefaultModel(list, contentId, defaultModelId);
+}
+
+/**
+ * How one list grants `contentId`, or null when it does not. A wildcard wins
+ * over a name, a name over the default-model token: removing the weaker grant
+ * alone would change nothing.
+ *
+ * @returns {'wildcard'|'explicit'|'default'|null}
+ */
+function listGrantKind(list, key, contentId, defaultModelId) {
+  if (listHasWildcard(list)) return 'wildcard';
+  if (listGrants(list, contentId)) return 'explicit';
+  if (listGrantsAsDefault(list, key, contentId, defaultModelId)) return 'default';
+  return null;
+}
+
+/**
  * Every group `groupId` inherits from, directly or through other groups.
  *
  * Cycle-safe: a group is visited once, so a configuration with a cycle in it
@@ -174,7 +204,9 @@ export function collectAncestorPaths(groups, groupId) {
 
 /**
  * Every way members of `groupId` get one item: through the group's own list or
- * a list of a group it inherits from, by naming the item or by the wildcard.
+ * a list of a group it inherits from, by naming the item, by the wildcard or —
+ * for models — by the default-model token while the item is the default model
+ * (`kind: 'default'`).
  *
  * The group's own list comes first, then the ancestors nearest first. A list
  * that holds both the item and `*` counts as `wildcard`: removing the item
@@ -185,19 +217,21 @@ export function collectAncestorPaths(groups, groupId) {
  * @param {string} options.type - One of {@link GRANT_LIST_TYPES}
  * @param {string} options.contentId - The item's id (matched case-insensitively)
  * @param {string} options.groupId - The group whose members are asked about
- * @returns {Array<{groupId: string, kind: 'explicit'|'wildcard', path: string[]}>}
+ * @param {string|null} [options.defaultModelId] - The platform's current
+ *   default model; without it the default-model token grants nothing
+ * @returns {Array<{groupId: string, kind: 'explicit'|'wildcard'|'default', path: string[]}>}
  *   `groupId` is the group whose own list grants the item, `path` the chain
  *   from the asked group to it (just `[groupId]` for the group's own list)
  */
-export function describeGrantRoutes({ groups, type, contentId, groupId }) {
+export function describeGrantRoutes({ groups, type, contentId, groupId, defaultModelId = null }) {
   const key = canonicalGrantListType(type);
   if (key === undefined || !Object.hasOwn(groups || {}, groupId)) return [];
   const sources = [{ groupId, path: [groupId] }, ...collectAncestorPaths(groups, groupId)];
   const routes = [];
   for (const source of sources) {
     const list = ownList(groups[source.groupId], key);
-    if (listHasWildcard(list)) routes.push({ ...source, kind: 'wildcard' });
-    else if (listGrants(list, contentId)) routes.push({ ...source, kind: 'explicit' });
+    const kind = listGrantKind(list, key, contentId, defaultModelId);
+    if (kind) routes.push({ ...source, kind });
   }
   return routes;
 }
@@ -257,8 +291,9 @@ export function resolveManageableGroups({
  * How each manageable group stands towards one piece of content.
  *
  * `granted` is the group's own list naming the content; `wildcard` its own
- * list granting everything of that type; `inheritedFrom` the ancestors whose
- * own lists do either. `effective` is what the user in that group actually
+ * list granting everything of that type; `defaultModel` (on model rows only) its own
+ * list holding the default-model token while the content is the default
+ * model; `inheritedFrom` the ancestors whose own lists do any of these. `effective` is what the user in that group actually
  * gets, before any OAuth-client filtering.
  *
  * A row of a group that people carry without being a member of it (the group
@@ -275,34 +310,46 @@ export function resolveManageableGroups({
  * @param {string[]} options.groupIds - Groups to describe, in output order
  * @param {string[]} [options.implicitGroups] - Groups people carry without
  *   being a member; their rows get `implicit: true`
+ * @param {string|null} [options.defaultModelId] - The platform's current
+ *   default model, for the default-model token
  * `via` lists every route by which the group's members get the content (see
  * {@link describeGrantRoutes}); clients use it to say in words why a group
  * has access, e.g. "through 'all apps', inherited from Authenticated".
  *
  * @returns {Array<{id: string, name: string, description: string, granted: boolean,
- *   wildcard: boolean, inheritedFrom: string[], effective: boolean,
- *   via: Array<{groupId: string, kind: 'explicit'|'wildcard', path: string[]}>, implicit?: true}>}
+ *   wildcard: boolean, defaultModel?: boolean, inheritedFrom: string[], effective: boolean,
+ *   via: Array<{groupId: string, kind: 'explicit'|'wildcard'|'default', path: string[]}>,
+ *   implicit?: true}>}
  */
-export function describeContentAccess({ groups, type, contentId, groupIds, implicitGroups = [] }) {
+export function describeContentAccess({
+  groups,
+  type,
+  contentId,
+  groupIds,
+  implicitGroups = [],
+  defaultModelId = null
+}) {
   const key = canonicalGrantListType(type);
   return groupIds.map(groupId => {
     const group = groups[groupId];
     const list = ownList(group, key);
     const granted = listGrants(list, contentId);
     const wildcard = listHasWildcard(list);
-    const inheritedFrom = collectAncestorGroups(groups, groupId).filter(ancestorId => {
-      const ancestorList = ownList(groups[ancestorId], key);
-      return listHasWildcard(ancestorList) || listGrants(ancestorList, contentId);
-    });
+    const defaultModel = listGrantsAsDefault(list, key, contentId, defaultModelId);
+    const inheritedFrom = collectAncestorGroups(groups, groupId).filter(
+      ancestorId =>
+        listGrantKind(ownList(groups[ancestorId], key), key, contentId, defaultModelId) !== null
+    );
     return {
       id: groupId,
       name: typeof group?.name === 'string' && group.name ? group.name : groupId,
       description: typeof group?.description === 'string' ? group.description : '',
       granted,
       wildcard,
+      ...(key === 'models' ? { defaultModel } : {}),
       inheritedFrom,
-      effective: granted || wildcard || inheritedFrom.length > 0,
-      via: describeGrantRoutes({ groups, type: key, contentId, groupId }),
+      effective: granted || wildcard || defaultModel || inheritedFrom.length > 0,
+      via: describeGrantRoutes({ groups, type: key, contentId, groupId, defaultModelId }),
       ...(implicitGroups.includes(groupId) ? { implicit: true } : {})
     };
   });
@@ -330,6 +377,8 @@ export function describeContentAccess({ groups, type, contentId, groupIds, impli
  *   every signed-in user carries (`auth.authenticatedGroup`)
  * @param {string[]} [options.anonymousGroups=[]] - The groups of the anonymous
  *   principal (`anonymousAuth.defaultGroups`); empty while anonymous access is off
+ * @param {string|null} [options.defaultModelId] - The platform's current
+ *   default model, for the default-model token
  * @returns {{ allSignedIn: boolean, anonymous: boolean }}
  *
  * @example
@@ -344,16 +393,21 @@ export function describeAudience({
   type,
   contentId,
   authenticatedGroup = 'authenticated',
-  anonymousGroups = []
+  anonymousGroups = [],
+  defaultModelId = null
 }) {
   const map = groups || {};
   const grants = groupIds => {
     const existing = [...new Set(groupIds)].filter(
       id => typeof id === 'string' && Object.hasOwn(map, id)
     );
-    return describeContentAccess({ groups: map, type, contentId, groupIds: existing }).some(
-      row => row.effective
-    );
+    return describeContentAccess({
+      groups: map,
+      type,
+      contentId,
+      groupIds: existing,
+      defaultModelId
+    }).some(row => row.effective);
   };
   return {
     allSignedIn: grants([authenticatedGroup]),

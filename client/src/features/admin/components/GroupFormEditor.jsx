@@ -18,8 +18,35 @@ import useAdminFormErrors from '../hooks/useAdminFormErrors';
 import RequiredMark from './RequiredMark';
 import AdminFormErrorFrame from './AdminFormErrorFrame';
 import { CHECKBOX_CLASS, INPUT_CLASS } from './formStyles';
+import { DEFAULT_MODEL_TOKEN } from '../../../../../shared/modelPermissions.js';
 
 const NO_IDS = Object.freeze([]);
+
+/**
+ * The choices of the group's model picker: the default-model token first, as
+ * its own entry with a readable name, then every model. The token grants the
+ * model that is the platform default at the time of the check
+ * (`shared/modelPermissions.js`), so an admin can grant "the default model"
+ * without naming one.
+ *
+ * @param {Array<{id: string, name?: string|Object}>} models - The configured models
+ * @param {function} t - The translation function
+ * @returns {Array<{id: string, name: string|Object}>}
+ *
+ * @example
+ * modelPermissionChoices([{ id: 'gpt-4o', name: 'GPT-4o' }], t);
+ * // → [{ id: '@default', name: 'Default model (whichever is set as default)' }, { id: 'gpt-4o', … }]
+ */
+export function modelPermissionChoices(models, t) {
+  const list = Array.isArray(models) ? models : [];
+  return [
+    {
+      id: DEFAULT_MODEL_TOKEN,
+      name: t('admin.groups.form.defaultModelToken', 'Default model (whichever is set as default)')
+    },
+    ...list.filter(model => model?.id !== DEFAULT_MODEL_TOKEN)
+  ];
+}
 
 /** The group fields with texts of their own, by schema rule (`fieldErrors.js`). */
 const GROUP_FIELD_RULES = Object.freeze({
@@ -79,6 +106,11 @@ function GroupFormEditor({
   summaryFocusKey = 0
 }) {
   const { t } = useTranslation();
+
+  const modelChoices = useMemo(
+    () => modelPermissionChoices(resources.models, t),
+    [resources.models, t]
+  );
 
   const allErrors = useMemo(
     () => (group ? groupFieldErrors(group, jsonSchema, t, { isNewGroup, takenIds }) : {}),
@@ -533,7 +565,7 @@ function GroupFormEditor({
               {/* Models Permission */}
               <ResourceSelector
                 label={t('admin.nav.models', 'Models')}
-                resources={resources.models}
+                resources={modelChoices}
                 selectedResources={group.permissions?.models || []}
                 onSelectionChange={selected => handlePermissionChange('models', selected)}
                 placeholder={t('admin.groups.form.searchModels', 'Search models to add…')}

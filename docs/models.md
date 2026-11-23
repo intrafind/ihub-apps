@@ -111,7 +111,9 @@ model can be the default, so ticking it removes the mark from the previous defau
 ### Decide who can use the models
 
 On a new installation every signed-in user may use every model, and anonymous visitors may use
-only a few. To limit a model to some groups, see
+only the default model: the group **Anonymous** grants **Default model (whichever is set as
+default)** (`"@default"` in `groups.json`), which follows when you make another model the default.
+To limit a model to some groups, see
 [Who can use apps, models and prompts](access-control.md#limit-a-model-to-some-groups).
 
 The model editor shows **Who can use this model**: every group that may use the model, and why
