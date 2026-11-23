@@ -71,7 +71,8 @@ function IntegrationInstructionsCard({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const current = instructions || { text: '', source: null, own: null };
-  const editing = draft !== null && draft !== undefined;
+  // The draft is the text being edited; null while the card only shows the stored one.
+  const editing = typeof draft === 'string';
 
   const restoreOwn = async () => {
     setBusy(true);

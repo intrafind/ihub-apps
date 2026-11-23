@@ -64,6 +64,9 @@ function AdminPromptsPage() {
   const promptsLibraryEnabled = featureFlags.isEnabled('promptsLibrary', true);
   const defaultTab = promptsLibraryEnabled ? 'prompts' : 'variables';
   const [activeTab, setActiveTab] = useState(searchParams.get('tab') || defaultTab);
+  // The variables tab shows its content when it is the active one, and also as the fallback
+  // for an unknown tab, but never behind the hidden user tab.
+  const showVariables = activeTab !== 'prompts' && !(activeTab === 'user' && promptsLibraryEnabled);
   // The user-prompts tab stays mounted (hidden) once opened: its unsaved settings, and the page's
   // save bar and leave-guard that carry them, survive a switch to another tab.
   const [userOpened, setUserOpened] = useState(
@@ -513,7 +516,7 @@ function AdminPromptsPage() {
               action={null}
             />
           )}
-          {activeTab === 'prompts' ? (
+          {activeTab === 'prompts' && (
             <>
               <div className="mt-6 flex flex-wrap items-center gap-3">
                 <SearchInput
@@ -602,9 +605,8 @@ function AdminPromptsPage() {
                 onClose={() => setShowPromptDetails(false)}
               />
             </>
-          ) : activeTab === 'user' && promptsLibraryEnabled ? null : (
-            <VariablesTabContent />
           )}
+          {showVariables && <VariablesTabContent />}
         </div>
         <ConfirmDialog {...confirmDialogProps} />
         <SaveSectionsBar leaveGuard />
