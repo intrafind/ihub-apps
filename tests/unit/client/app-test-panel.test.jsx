@@ -44,7 +44,9 @@ jest.mock('../../../client/src/shared/components/Icon', () => ({
 }));
 jest.mock('../../../client/src/features/apps/pages/AppChat', () => ({
   __esModule: true,
-  default: () => <div data-testid="app-chat" />
+  default: ({ focusComposerOnStart }) => (
+    <div data-testid="app-chat" data-focus-on-start={String(focusComposerOnStart)} />
+  )
 }));
 
 const AppTestPanel = require('../../../client/src/features/admin/components/AppTestPanel').default;
@@ -364,5 +366,23 @@ describe('AppTestPanel without a model', () => {
       '/admin/models'
     );
     expect(screen.queryByText(NO_MODEL.actionOther)).not.toBeInTheDocument();
+  });
+});
+
+describe('AppTestPanel restarting after a save', () => {
+  test('a save keeps the focus with the page that saved; opening and Restart give it to the chat', async () => {
+    wideWindow();
+    const { rerenderWith, onClose } = renderPanel();
+    const chat = () => screen.findByTestId('app-chat');
+    expect((await chat()).dataset.focusOnStart).toBe('true');
+
+    // The editor saved (e.g. Apply in the app conversation): the restarted chat
+    // must not pull the focus off the "Applied" line.
+    rerenderWith({ onClose, reloadKey: 1 });
+    await waitFor(async () => expect((await chat()).dataset.focusOnStart).toBe('false'));
+
+    // The restart button is the author asking for a new chat: focus goes to it.
+    fireEvent.click(screen.getByRole('button', { name: TEST.restart }));
+    await waitFor(async () => expect((await chat()).dataset.focusOnStart).toBe('true'));
   });
 });
