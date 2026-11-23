@@ -187,7 +187,8 @@ describe('chat history (durable chats)', () => {
     mockChatPersistence = { persistence: false, resolving: true };
     sessionStorage.setItem('office_ihubselectedapp', JSON.stringify({ id: 'chat' }));
     renderApp();
-    expect(screen.getByRole('status')).toHaveTextContent('Loading…');
+    // The pane's announcer region is the other status on the page.
+    expect(screen.getByText('Loading…')).toHaveAttribute('role', 'status');
     expect(screen.queryByText(/CHAT chat/)).not.toBeInTheDocument();
   });
 

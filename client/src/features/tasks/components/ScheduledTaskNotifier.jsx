@@ -1,16 +1,17 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useEffect, useMemo, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { useEffect, useMemo, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import Icon from '../../../shared/components/Icon';
+import { useToasts } from '../../../shared/components/ToastHost';
 import { useScheduledTaskNotifications } from '../hooks/useScheduledTasks';
 import { runChatLink } from '../utils/taskFormat';
 
 const STORAGE_KEY = 'ihub.scheduledTasks.toastedRuns';
 const MAX_REMEMBERED = 200;
-const TOAST_MS = 12_000;
+/** Most runs toasted from one poll; the others are listed on the Tasks page. */
+const MAX_TOASTED = 3;
 
 function readToasted() {
   try {
@@ -23,7 +24,8 @@ function readToasted() {
 
 function rememberToasted(ids) {
   try {
-    const list = [...readToasted(), ...ids].slice(-MAX_REMEMBERED);
+    // A Set keeps each id once, at its first place: a repeat never pushes a real id out.
+    const list = [...new Set([...readToasted(), ...ids])].slice(-MAX_REMEMBERED);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
   } catch {
     // Private mode: the toast may show again next time, nothing worse.
@@ -34,13 +36,22 @@ function rememberToasted(ids) {
  * A toast for scheduled runs that finished while the user was away — once
  * per run and browser, on the next page load (and when the slow poll finds
  * one). The runs stay listed as new on the Tasks page until their chat is
- * opened.
+ * opened. The toasts are the page's `ToastHost`'s: a run that waits for the
+ * owner's approval stays until it is closed, the others close by themselves.
+ * Each run is toasted once per page: a navigation or a language switch does
+ * not bring back a toast the person closed.
+ *
+ * @returns {null}
  */
 export default function ScheduledTaskNotifier() {
   const { t } = useTranslation();
   const location = useLocation();
   const { items } = useScheduledTaskNotifications();
-  const [toast, setToast] = useState([]);
+  const { show } = useToasts();
+  // The runs handled since the page loaded. `fresh` changes only with the next
+  // poll, while the effect also runs on each navigation: without this a toast
+  // the person closed would come back, and be said again.
+  const handledRef = useRef(new Set());
 
   const fresh = useMemo(() => {
     const toasted = readToasted();
@@ -49,83 +60,38 @@ export default function ScheduledTaskNotifier() {
   }, [items]);
 
   useEffect(() => {
-    if (fresh.length === 0) return undefined;
+    const handled = handledRef.current;
+    const unhandled = fresh.filter(item => !handled.has(item.id));
+    if (unhandled.length === 0) return;
+    for (const item of unhandled) handled.add(item.id);
+    rememberToasted(unhandled.map(item => item.id));
     // Not on the page that already lists them.
-    if (location.pathname.startsWith('/tasks')) {
-      rememberToasted(fresh.map(item => item.id));
-      return undefined;
+    if (location.pathname.startsWith('/tasks')) return;
+    for (const item of unhandled.slice(0, MAX_TOASTED)) {
+      const waiting = item.status === 'awaiting_approval';
+      const failed = item.status === 'failed';
+      let status = t('scheduledTasks.toast.finished', 'finished');
+      if (failed) status = t('scheduledTasks.toast.failed', 'failed');
+      if (waiting) status = t('scheduledTasks.toast.awaitingApproval', 'needs your approval');
+      const chatLink = runChatLink(item.appId, item.chatId);
+      const links = [];
+      if (chatLink && !waiting) {
+        links.push({ label: t('scheduledTasks.openChat', 'Open chat'), to: chatLink });
+      }
+      links.push({ label: t('scheduledTasks.openTask', 'Open task'), to: `/tasks/${item.taskId}` });
+      show({
+        id: `scheduled-run:${item.id}`,
+        text: t('scheduledTasks.toast.title', '"{{name}}" {{status}}', {
+          name: item.taskName,
+          status
+        }),
+        tone: failed ? 'danger' : 'info',
+        icon: failed ? 'exclamation-triangle' : 'calendar',
+        links,
+        needsYou: waiting
+      });
     }
-    setToast(fresh.slice(0, 3));
-    rememberToasted(fresh.map(item => item.id));
-    const id = setTimeout(() => setToast([]), TOAST_MS);
-    return () => clearTimeout(id);
-  }, [fresh, location.pathname]);
+  }, [fresh, location.pathname, show, t]);
 
-  if (toast.length === 0) return null;
-
-  const statusText = item => {
-    if (item.status === 'failed') return t('scheduledTasks.toast.failed', 'failed');
-    if (item.status === 'awaiting_approval') {
-      return t('scheduledTasks.toast.awaitingApproval', 'needs your approval');
-    }
-    return t('scheduledTasks.toast.finished', 'finished');
-  };
-
-  return (
-    <div
-      className="fixed bottom-4 right-4 z-50 w-80 max-w-[calc(100vw-2rem)] space-y-2"
-      role="status"
-      aria-live="polite"
-    >
-      {toast.map(item => {
-        const chatLink = runChatLink(item.appId, item.chatId);
-        return (
-          <div
-            key={item.id}
-            className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-lg p-3 text-sm flex gap-3"
-          >
-            <Icon
-              name={item.status === 'failed' ? 'exclamation-triangle' : 'calendar'}
-              size="md"
-              className={item.status === 'failed' ? 'text-red-500' : 'text-indigo-500'}
-            />
-            <div className="flex-1 min-w-0">
-              <p className="text-gray-900 dark:text-gray-100">
-                {t('scheduledTasks.toast.title', '"{{name}}" {{status}}', {
-                  name: item.taskName,
-                  status: statusText(item)
-                })}
-              </p>
-              <div className="mt-1 flex gap-3">
-                {chatLink && item.status !== 'awaiting_approval' && (
-                  <Link
-                    to={chatLink}
-                    onClick={() => setToast([])}
-                    className="text-indigo-600 dark:text-indigo-400 hover:underline"
-                  >
-                    {t('scheduledTasks.openChat', 'Open chat')}
-                  </Link>
-                )}
-                <Link
-                  to={`/tasks/${item.taskId}`}
-                  onClick={() => setToast([])}
-                  className="text-indigo-600 dark:text-indigo-400 hover:underline"
-                >
-                  {t('scheduledTasks.openTask', 'Open task')}
-                </Link>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => setToast(current => current.filter(entry => entry.id !== item.id))}
-              aria-label={t('common.close', 'Close')}
-              className="text-gray-500 hover:text-gray-600"
-            >
-              <Icon name="x" size="sm" />
-            </button>
-          </div>
-        );
-      })}
-    </div>
-  );
+  return null;
 }

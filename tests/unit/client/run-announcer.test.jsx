@@ -3,9 +3,10 @@
 
 /**
  * What a screen reader is told while a turn writes a file or waits (#3534): the
- * pure script (`deriveAnnouncements`), its queue, the live region that speaks it
- * (`RunAnnouncer`), where that region sits (`ChatMessageList`), and the
- * three-dot loader standing down for the activity headline (`ChatMessage`).
+ * pure script (`deriveAnnouncements`), its queue (`RunAnnouncer`, which speaks
+ * through the page's one live region, `AnnouncerProvider`), where that region
+ * sits relative to the log (`ChatMessageList`), and the three-dot loader
+ * standing down for the activity headline (`ChatMessage`).
  */
 import { act, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
@@ -19,8 +20,10 @@ import {
   takeAnnouncement
 } from '../../../client/src/features/chat/deriveAnnouncements.js';
 import RunAnnouncer from '../../../client/src/features/chat/components/RunAnnouncer';
+import { AnnouncerProvider } from '../../../client/src/shared/announce/AnnouncerProvider';
 import ChatMessageList from '../../../client/src/features/chat/components/ChatMessageList';
 import ChatMessage from '../../../client/src/features/chat/components/ChatMessage';
+import ApprovalCard from '../../../client/src/features/chat/components/ApprovalCard';
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -283,6 +286,38 @@ describe('deriveAnnouncements', () => {
     });
   });
 
+  test('leaves a waiting call to its approval card, which speaks for it', () => {
+    const approval = env(4, 'interaction/raised', {
+      interaction: {
+        id: 'a1',
+        kind: 'approval',
+        origin: 'tool',
+        status: 'pending',
+        source: { toolCallId: 'x1' }
+      }
+    });
+    const frames = [args(2, 'x1', T0), argsEnded(3, 'x1', T0 + 900, 'ready'), approval];
+    const card = { interactionId: 'a1', status: 'pending', toolName: 'Count a write' };
+    const writing = derive(createAnnouncerState(), [assistant(frames.slice(0, 1))], T0 + 100);
+    const result = derive(
+      writing.state,
+      [assistant(frames, { loading: false, toolApproval: card })],
+      T0 + 2000
+    );
+    expect(result.announcements).toEqual([]);
+    // Counted as said: it does not come later either, when the card has gone.
+    expect(result.state.done['x1:awaiting']).toBe(true);
+    const later = derive(result.state, [assistant(frames, { loading: false })], T0 + 3000);
+    expect(later.announcements.map(a => a.key)).not.toContain('x1:awaiting');
+    // A card already decided does not speak: the announcer does as before.
+    const decided = derive(
+      writing.state,
+      [assistant(frames, { loading: false, toolApproval: { ...card, decision: 'approved' } })],
+      T0 + 2000
+    );
+    expect(decided.announcements.map(a => a.key)).toContain('x1:awaiting');
+  });
+
   test('says once that nothing has grown for a while, and looks again in time', () => {
     const frames = [args(2, 'x1', T0, { argBytes: 8192, elapsedMs: 10000 })];
     const messages = [assistant(frames)];
@@ -452,8 +487,15 @@ describe('RunAnnouncer', () => {
   const region = () => screen.getByRole('status');
   const grow = (callId = 'x1') => args(2, callId, T0, { argBytes: 12288, elapsedMs: 41000 });
 
-  test('is one polite, atomic, visually hidden status region, there from the start', () => {
-    render(<RunAnnouncer messages={[]} />);
+  test('renders no live region of its own: it speaks through the page announcer', () => {
+    const { container } = render(<RunAnnouncer messages={[]} />);
+    expect(container).toBeEmptyDOMElement();
+    render(
+      <AnnouncerProvider>
+        <RunAnnouncer messages={[]} />
+      </AnnouncerProvider>
+    );
+    expect(screen.getAllByRole('status')).toHaveLength(1);
     expect(region()).toHaveAttribute('aria-live', 'polite');
     expect(region()).toHaveAttribute('aria-atomic', 'true');
     expect(region().className).toMatch(/\bsr-only\b/);
@@ -462,7 +504,11 @@ describe('RunAnnouncer', () => {
 
   test('speaks a call once its grace period is over, and the text goes away again', () => {
     const messages = [user, assistant([grow()])];
-    render(<RunAnnouncer messages={messages} />);
+    render(
+      <AnnouncerProvider>
+        <RunAnnouncer messages={messages} />
+      </AnnouncerProvider>
+    );
     expect(region()).toBeEmptyDOMElement();
     act(() => {
       jest.advanceTimersByTime(600);
@@ -480,7 +526,11 @@ describe('RunAnnouncer', () => {
   });
 
   test('says which list it speaks for when several chats are visible (compare mode)', () => {
-    render(<RunAnnouncer messages={[user, assistant([grow()])]} label="Model B" />);
+    render(
+      <AnnouncerProvider>
+        <RunAnnouncer messages={[user, assistant([grow()])]} label="Model B" />
+      </AnnouncerProvider>
+    );
     act(() => {
       jest.advanceTimersByTime(600);
     });
@@ -489,12 +539,20 @@ describe('RunAnnouncer', () => {
 
   test('puts two events at least 1.5 s apart, the more important one first', () => {
     const frames = [grow(), argsEnded(3, 'x1', T0 + 600, 'truncated')];
-    const { rerender } = render(<RunAnnouncer messages={[assistant([grow()])]} />);
+    const { rerender } = render(
+      <AnnouncerProvider>
+        <RunAnnouncer messages={[assistant([grow()])]} />
+      </AnnouncerProvider>
+    );
     act(() => {
       jest.advanceTimersByTime(600);
     });
     expect(region()).toHaveTextContent('Creating web artifact');
-    rerender(<RunAnnouncer messages={[assistant(frames)]} />);
+    rerender(
+      <AnnouncerProvider>
+        <RunAnnouncer messages={[assistant(frames)]} />
+      </AnnouncerProvider>
+    );
     // The failure waits for its turn instead of cutting in.
     expect(region()).toHaveTextContent('Creating web artifact');
     act(() => {
@@ -507,12 +565,20 @@ describe('RunAnnouncer', () => {
     // Two files in a row get the same words: the second must not be swallowed.
     const first = [args(2, 'x1', T0)];
     const second = [args(2, 'x1', T0), args(3, 'x2', T0 + 700)];
-    const { rerender } = render(<RunAnnouncer messages={[assistant(first)]} />);
+    const { rerender } = render(
+      <AnnouncerProvider>
+        <RunAnnouncer messages={[assistant(first)]} />
+      </AnnouncerProvider>
+    );
     act(() => {
       jest.advanceTimersByTime(600);
     });
     expect(region()).toHaveTextContent('Creating web artifact');
-    rerender(<RunAnnouncer messages={[assistant(second)]} />);
+    rerender(
+      <AnnouncerProvider>
+        <RunAnnouncer messages={[assistant(second)]} />
+      </AnnouncerProvider>
+    );
     act(() => {
       jest.advanceTimersByTime(700 + 1600);
     });
@@ -522,15 +588,58 @@ describe('RunAnnouncer', () => {
     expect(region()).toHaveTextContent('Creating web artifact');
   });
 
+  test('one approval is said once: the card speaks, the run announcer does not', () => {
+    const approvalFrame = env(4, 'interaction/raised', {
+      interaction: {
+        id: 'a1',
+        kind: 'approval',
+        origin: 'tool',
+        status: 'pending',
+        source: { toolCallId: 'x1' }
+      }
+    });
+    const frames = [args(2, 'x1', T0), argsEnded(3, 'x1', T0 + 900, 'ready'), approvalFrame];
+    const card = { interactionId: 'a1', status: 'pending', toolName: 'Count a write', args: {} };
+    const said = [];
+    const listen = () => {
+      const text = region().textContent;
+      if (text && text !== said[said.length - 1]) said.push(text);
+    };
+    const page = (messages, approval) => (
+      <AnnouncerProvider>
+        <input aria-label="Search apps" />
+        <RunAnnouncer messages={messages} />
+        {approval && <ApprovalCard approval={approval} onDecide={() => {}} />}
+      </AnnouncerProvider>
+    );
+    const { rerender } = render(page([assistant(frames.slice(0, 1))], null));
+    // The person types elsewhere when the approval arrives: the card cannot take the focus.
+    screen.getByRole('textbox', { name: 'Search apps' }).focus();
+    rerender(page([assistant(frames, { loading: false, toolApproval: card })], card));
+    for (let i = 0; i < 100; i += 1) {
+      act(() => {
+        jest.advanceTimersByTime(100);
+      });
+      listen();
+    }
+    expect(said.filter(text => /approv/i.test(text))).toEqual(['Approval needed: Count a write']);
+  });
+
   test('forgets what is waiting when the next turn begins', () => {
     const { rerender } = render(
-      <RunAnnouncer messages={[assistant([grow(), argsEnded(3, 'x1', T0 + 700, 'truncated')])]} />
+      <AnnouncerProvider>
+        <RunAnnouncer messages={[assistant([grow(), argsEnded(3, 'x1', T0 + 700, 'truncated')])]} />
+      </AnnouncerProvider>
     );
     act(() => {
       jest.advanceTimersByTime(800);
     });
     // The next turn starts before the queue has been spoken.
-    rerender(<RunAnnouncer messages={[user, assistant([], { id: 'm2', toolActivity: null })]} />);
+    rerender(
+      <AnnouncerProvider>
+        <RunAnnouncer messages={[user, assistant([], { id: 'm2', toolActivity: null })]} />
+      </AnnouncerProvider>
+    );
     act(() => {
       jest.advanceTimersByTime(10000);
     });
@@ -538,7 +647,11 @@ describe('RunAnnouncer', () => {
   });
 
   test('stops its timers when it goes away', () => {
-    const { unmount } = render(<RunAnnouncer messages={[assistant([grow()])]} />);
+    const { unmount } = render(
+      <AnnouncerProvider>
+        <RunAnnouncer messages={[assistant([grow()])]} />
+      </AnnouncerProvider>
+    );
     unmount();
     expect(jest.getTimerCount()).toBe(0);
   });
@@ -547,8 +660,16 @@ describe('RunAnnouncer', () => {
 // ── where it sits, and the loader ──────────────────────────────────────────
 
 describe('ChatMessageList', () => {
-  test('puts the announcer next to the log, not inside it', () => {
-    render(<ChatMessageList messages={[user]} />);
+  test('speaks through the page announcer, whose region is outside the log', () => {
+    // Without a provider the list adds no region of its own.
+    const { unmount } = render(<ChatMessageList messages={[user]} />);
+    expect(screen.queryByRole('status')).toBeNull();
+    unmount();
+    render(
+      <AnnouncerProvider>
+        <ChatMessageList messages={[user]} />
+      </AnnouncerProvider>
+    );
     const log = screen.getByRole('log');
     expect(log).toContainElement(screen.getByText('Make a calculator'));
     expect(log).not.toContainElement(screen.getByRole('status'));

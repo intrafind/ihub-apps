@@ -27,6 +27,8 @@ import AppSidebar from './AppSidebar';
 import IHubLogo from './IHubLogo';
 import BrandTitle from './BrandTitle';
 import SkipLink from './SkipLink';
+import { AnnouncerProvider } from '../announce/AnnouncerProvider';
+import { ToastProvider } from './ToastHost';
 
 /**
  * The application shell that wraps every routed page via `<Outlet />`.
@@ -44,7 +46,7 @@ import SkipLink from './SkipLink';
  *
  * @returns {JSX.Element} The app shell around the current route's content.
  */
-function Layout() {
+function LayoutShell() {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
   const { headerColor, uiConfig, resetHeaderColor } = useUIConfig();
@@ -485,6 +487,23 @@ function Layout() {
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * The shell (`LayoutShell`) inside the page's one polite live region
+ * (`AnnouncerProvider`, which every part of a page speaks through, e.g. the run
+ * activity and the toasts) and its toasts (`ToastProvider`).
+ *
+ * @returns {JSX.Element}
+ */
+function Layout() {
+  return (
+    <AnnouncerProvider>
+      <ToastProvider>
+        <LayoutShell />
+      </ToastProvider>
+    </AnnouncerProvider>
   );
 }
 

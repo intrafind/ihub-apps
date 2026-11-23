@@ -277,7 +277,8 @@
       "dataFlow": {
         "internal": "Intern",
         "external": "Extern"
-      }
+      },
+      "waiting": "Freigabe erforderlich: {{tool}}"
     },
     "sourcePassage": {
       "more": "mehr",
@@ -288,6 +289,14 @@
     },
     "modelSelector": {
       "noModels": "Keine Modelle verfügbar"
+    },
+    "pending": {
+      "steer": "Wird beim nächsten Schritt gelesen",
+      "sendAfter": "Wird als nächste Nachricht gesendet",
+      "listLabel": "In diesem Chat ausstehend",
+      "remove": "Nachricht entfernen: {{text}}",
+      "showAll": "{{count}} ausstehend · Alle anzeigen",
+      "showLess": "Weniger anzeigen"
     }
   },
   "websearch": {
@@ -13587,7 +13596,8 @@
     "numberMax": "Maximum: {{max}}",
     "datePlaceholder": "Datum auswählen",
     "startDate": "Startdatum",
-    "endDate": "Enddatum"
+    "endDate": "Enddatum",
+    "waiting": "Der Assistent fragt: {{question}}"
   },
   "upload": {
     "fileTypeNotSupported": "Dateityp wird nicht unterstützt",
@@ -13622,6 +13632,27 @@
     "loadFailed": "Der Hinweis konnte nicht geladen werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
     "cookieBlocked": "Ihr Browser blockiert Cookies in diesem Frame, daher kann die Bestätigung hier nicht gespeichert werden. Öffnen Sie iHub in einem eigenen Tab, um zu bestätigen.",
     "openInBrowser": "iHub im Browser öffnen"
+  },
+  "runState": {
+    "queued": "In der Warteschlange",
+    "running": "Läuft",
+    "waiting": "Wartet auf Antwort",
+    "scheduled": "Geplant",
+    "done": "Erledigt",
+    "noChange": "Keine Änderung",
+    "blocked": "Blockiert",
+    "needsAttention": "Aktion erforderlich",
+    "failed": "Fehlgeschlagen",
+    "stopped": "Gestoppt",
+    "interrupted": "Unterbrochen",
+    "stalled": "Kein Fortschritt",
+    "stalledSince": "Kein Fortschritt seit {{time}}",
+    "paused": "Angehalten",
+    "skipped": "Übersprungen"
+  },
+  "toast": {
+    "region": "Benachrichtigungen",
+    "close": "Benachrichtigung schließen: {{text}}"
   },
   "userApps": {
     "list": {

@@ -565,6 +565,20 @@ describe('e2e model stub', () => {
         'E2E script two-step: step 2'
       );
     });
+
+    test('hold-then-call holds one call of the named tool until its key is released', () => {
+      const message =
+        'e2e-script:hold-then-call hold=k-1 tool=ask_user args={"question":"Which year?"}';
+      const plan = planFor({ messages: [user(message)] });
+      assert.equal(plan.hangKey, 'k-1');
+      assert.equal(plan.toolCalls.length, 1);
+      assert.equal(plan.toolCalls[0].name, 'ask_user');
+      assert.deepEqual(JSON.parse(plan.toolCalls[0].arguments), { question: 'Which year?' });
+      assert.match(
+        planFor({ messages: [user('e2e-script:hold-then-call hold=k-2 args={broken')] }).content,
+        /needs hold=<key> tool=<name> args=<json>/
+      );
+    });
   });
 
   describe('what the stub was sent', () => {

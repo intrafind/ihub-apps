@@ -32,6 +32,20 @@
         "shared/run/toolActivity.js"
       ],
       "specs": ["parallel-tools.spec.js"]
+    },
+    {
+      "paths": [
+        "client/src/shared/announce/",
+        "client/src/shared/utils/focusPolicy.js",
+        "client/src/shared/components/ToastHost.jsx",
+        "client/src/shared/components/Layout.jsx",
+        "client/src/features/chat/components/PendingWorkStrip.jsx",
+        "client/src/features/chat/components/ApprovalCard.jsx",
+        "client/src/features/chat/components/ClarificationCard.jsx",
+        "client/src/features/chat/components/ChatInput.jsx",
+        "client/src/features/chat/components/RunAnnouncer.jsx"
+      ],
+      "specs": ["focus-policy.spec.js"]
     }
   ],
   "overlays": {

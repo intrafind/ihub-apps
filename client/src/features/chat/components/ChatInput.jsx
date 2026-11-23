@@ -48,6 +48,7 @@ import { composerLineLimits } from '../utils/composerLines';
 import { submitShortcutLabel } from '../utils/submitShortcut';
 import { entryKey } from '../utils/chatFileUpload';
 import ComposerQuote from '../../workspace/components/ComposerQuote';
+import { focusIsFree, noteAutoFocus } from '../../../shared/utils/focusPolicy';
 import './ChatInput.css';
 
 /**
@@ -647,11 +648,20 @@ function ChatInput({
   voiceModeActiveRef.current = voiceModeActive;
   const autoFocusSuspendedRef = useRef(autoFocusSuspended);
   autoFocusSuspendedRef.current = autoFocusSuspended;
+  // At the end of a turn the focus comes back only when nobody else holds it
+  // (`focusIsFree`): a card that took it (an approval, a question) keeps it, and
+  // a person typing in another field (the app search) keeps typing there. The
+  // focus placed here is the page's, not the person's (`noteAutoFocus`): a card
+  // that arrives a moment later, because the turn ended to ask, still takes it.
+  const wasProcessingRef = useRef(isProcessing);
   useEffect(() => {
-    if (!isProcessing && !voiceModeActiveRef.current && !autoFocusSuspendedRef.current) {
-      focusInputAtEnd();
-    }
-  }, [isProcessing, focusInputAtEnd]);
+    const turnEnded = wasProcessingRef.current && !isProcessing;
+    wasProcessingRef.current = isProcessing;
+    if (isProcessing || voiceModeActiveRef.current || autoFocusSuspendedRef.current) return;
+    if (turnEnded && !focusIsFree()) return;
+    focusInputAtEnd();
+    noteAutoFocus(actualInputRef.current);
+  }, [isProcessing, focusInputAtEnd, actualInputRef]);
 
   // Fit the textarea to its content. The lower and upper limits are CSS
   // (ChatInput.css, from `--composer-min-lines` / `--composer-max-lines`), so
@@ -935,6 +945,9 @@ function ChatInput({
           autoComplete="off"
           // F6 cycles sidebar → chat log → composer → workspace pane.
           data-f6-region="composer"
+          // A card that appears while focus or text is in here leaves the focus
+          // alone (shared/utils/focusPolicy.js).
+          data-composer=""
           className={`flex flex-col border rounded-2xl bg-white dark:bg-gray-800 shadow-xs focus-within:ring-2 mb-1 ${
             ephemeral
               ? 'border-violet-400 dark:border-violet-500 focus-within:ring-violet-500 focus-within:border-violet-500'
