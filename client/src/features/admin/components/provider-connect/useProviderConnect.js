@@ -264,24 +264,20 @@ export default function useProviderConnect({ initialTileId = null } = {}) {
   const providerId = target.mode === 'existing' ? target.provider.id : form?.id;
 
   /**
-   * Save everything: provider (or its key), the models, the group grants.
-   * For a tile without a listing (Bedrock) only the provider is written.
+   * Save everything: provider (its key, and for Bedrock its region), the
+   * models, the group grants.
    */
   const finish = async () => {
     setRunning(true);
-    const noListing = tile.discovery === false;
     const defaultId = defaultChoice && defaultChoice !== KEEP_DEFAULT ? defaultChoice : null;
-    const modelConfigs = noListing
-      ? []
-      : buildModelConfigs({ discovery, picks, providerId, defaultId });
-    const groupUpdates =
-      noListing || !groupsFile
-        ? []
-        : planGroupUpdates(
-            groupsFile,
-            access,
-            modelConfigs.map(c => c.id)
-          );
+    const modelConfigs = buildModelConfigs({ discovery, picks, providerId, defaultId });
+    const groupUpdates = groupsFile
+      ? planGroupUpdates(
+          groupsFile,
+          access,
+          modelConfigs.map(c => c.id)
+        )
+      : [];
     const result = await runConnectPlan({
       api: makeAdminApiCall,
       errorMessage: getAdminApiErrorMessage,
@@ -302,7 +298,7 @@ export default function useProviderConnect({ initialTileId = null } = {}) {
 
   const goNext = () => {
     if (!canAdvance || !tile) return;
-    // The last step before "done" saves; Bedrock saves straight from the connection.
+    // The last step before "done" saves.
     const upcoming = nextStep(tile, step);
     if (upcoming === 'done') {
       void finish();

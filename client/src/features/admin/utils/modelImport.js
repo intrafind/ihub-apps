@@ -34,7 +34,8 @@ const API_TYPE_LABELS = {
   mistral: 'Mistral',
   'openai-responses': 'OpenAI Responses API',
   anthropic: 'Anthropic',
-  google: 'Google Gemini'
+  google: 'Google Gemini',
+  bedrock: 'AWS Bedrock'
 };
 
 export function apiTypeLabel(t, apiType) {
@@ -99,6 +100,7 @@ const DISCOVERY_ERROR_KEYS = {
   invalidUrl: 'admin.models.import.errors.invalidUrl',
   credentialsInUrl: 'admin.models.import.errors.credentialsInUrl',
   unsupportedProvider: 'admin.models.import.errors.unsupportedProvider',
+  invalidRegion: 'admin.models.import.errors.invalidRegion',
   apiKeyRequired: 'admin.models.import.errors.apiKeyRequired',
   authenticationFailed: 'admin.models.import.errors.authenticationFailed',
   accessDenied: 'admin.models.import.errors.accessDenied',

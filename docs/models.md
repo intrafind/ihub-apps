@@ -673,20 +673,33 @@ The adapter uses Bedrock's long-lived API key feature. Mint a key in the AWS con
 
 Resolution order matches every other provider: model.apiKey → providers.json → env. Keys configured via the admin UI are encrypted at rest using AES-256-GCM.
 
+The adapter needs no AWS SDK and no access key pair: the API key is sent as `Authorization: Bearer <key>` to `bedrock-runtime.<region>.amazonaws.com`, through the same proxy and SSL whitelist (`ssl.domainWhitelist`) as every other model call.
+
 ### Region configuration
 
-Each model can override the AWS Region via `config.region`. The Admin Model Editor renders a "Region" field with autocomplete suggestions. Supported values:
+The region is set on the **AWS Bedrock provider** (Admin → Models → Providers → AWS Bedrock → **AWS region**, stored as `config.region` in `providers.json`) and can be overridden per model via `config.region` in the Admin Model Editor. Both accept an AWS region code or `global`; anything else is refused when saved, and the adapter skips (with a warning) a value that is not a region rather than putting it into the host name. Values:
 
 | Value | Behavior |
 | --- | --- |
-| `eu-central-1`, `eu-west-1`, `eu-west-3` | Frankfurt / Ireland / Paris. Auto-prepends `eu.` for inference-profile-required models. |
-| `us-east-1`, `us-west-2` | Auto-prepends `us.` for inference-profile-required models. |
-| `apac-northeast-1`, `ap-…` | Auto-prepends `apac.`. |
-| `global` | Auto-prepends `global.` and routes to a supported source region. Supported by the Anthropic Claude Sonnet 4 family. |
+| `eu-central-1`, `eu-west-1`, `eu-west-3`, … | Frankfurt / Ireland / Paris. Auto-prepends `eu.` for inference-profile-required models. |
+| `us-east-1`, `us-west-2`, … | Auto-prepends `us.` for inference-profile-required models. |
+| `ap-northeast-1`, `ap-…` | Auto-prepends `apac.`. |
+| `global` | Auto-prepends `global.` and routes to the source region `eu-central-1`. Supported by the Anthropic Claude 4 family. |
 
-If you write the modelId with an explicit prefix (e.g., `us.anthropic.claude-sonnet-4-6`) the adapter honors it as-is.
+If you write the modelId with an explicit profile prefix (`us.`, `eu.`, `apac.`, `jp.`, `au.`, `ca.`, `us-gov.`, `global.`, e.g. `us.anthropic.claude-sonnet-4-6`) the adapter sends it as-is. Such a model only works while the region belongs to that geography: after changing the provider region from `eu-central-1` to `us-east-1`, re-add models that carry `eu.` ids.
 
 Fallback order: `model.config.region` → `providers.json` `bedrock.config.region` → env `AWS_REGION` / `AWS_DEFAULT_REGION` → default `eu-central-1`.
+
+### Adding models with "Connect a model provider"
+
+The **AWS Bedrock** tile of the guided flow (Admin → Models → Providers → Add provider) asks for the region and the API key (a key already stored on the provider, or `BEDROCK_API_KEY`, is used when the field is left empty), then lists the region's models:
+
+- `GET https://bedrock.<region>.amazonaws.com/foundation-models` (`ListFoundationModels`) and `GET …/inference-profiles?type=SYSTEM_DEFINED` (`ListInferenceProfiles`), with the same Bearer key. The key's IAM identity needs `bedrock:ListFoundationModels` and `bedrock:ListInferenceProfiles` (both in the `AmazonBedrockLimitedAccess` policy that Bedrock API keys get by default).
+- A model Bedrock serves on demand is offered under its own id; a model it serves only through a cross-region inference profile under the profile id of the region's geography (`eu.anthropic.claude-sonnet-4-…` for `eu-central-1`). With `global`, only models with a `global.` profile can be picked. Embedding and image models, and models without a profile in the region, are listed but cannot be picked; provisioned-throughput-only variants are not listed.
+- If the profile listing is refused, the models are still offered, with the region's prefix in front of models that need a profile.
+- A rejected key, a key without permission and an unknown region are reported as such ("The endpoint rejected the key", "access denied", "host not found" with the region named).
+
+The picked models are created as `provider: "bedrock"` configs without `url` and without a key of their own; the region the models were listed in is stored on the provider.
 
 ### Supported models (Converse-compatible families)
 
@@ -712,7 +725,7 @@ Fallback order: `model.config.region` → `providers.json` `bedrock.config.regio
 
 ### Ready-to-import example models
 
-Example configurations for the most common Bedrock models are in the **iHub Official Marketplace**. Open Admin → Marketplace and filter for "bedrock" to browse and one-click install. All examples ship `enabled: false` so you can opt-in selectively.
+Besides the guided flow above, example configurations for the most common Bedrock models are in the **iHub Official Marketplace**. Open Admin → Marketplace and filter for "bedrock" to browse and one-click install. All examples ship `enabled: false` so you can opt-in selectively.
 
 ## Transcription Models
 

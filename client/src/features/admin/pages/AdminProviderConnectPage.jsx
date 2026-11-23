@@ -17,6 +17,7 @@ import ModelsStep from '../components/provider-connect/ModelsStep';
 import TestStep from '../components/provider-connect/TestStep';
 import VendorStep from '../components/provider-connect/VendorStep';
 import useProviderConnect from '../components/provider-connect/useProviderConnect';
+import { connectionUrl } from '../utils/providerConnect';
 import { PRIMARY_BUTTON, SECONDARY_BUTTON } from '../components/provider-connect/connectStyles';
 
 /**
@@ -56,9 +57,6 @@ function AdminProviderConnectPage() {
       return t('admin.providers.connect.finish', 'Connect and add {{count}} models', {
         count: flow.picks.length
       });
-    }
-    if (step === 'connection' && tile?.discovery === false) {
-      return t('admin.providers.connect.saveKey', 'Save the key');
     }
     if (step === 'connection') return t('admin.providers.connect.testAction', 'Test connection');
     return t('admin.providers.connect.next', 'Next');
@@ -135,7 +133,7 @@ function AdminProviderConnectPage() {
                   testing={flow.testing}
                   discovery={flow.discovery}
                   error={flow.testError}
-                  url={form?.url || ''}
+                  url={tile && form ? connectionUrl(tile, form) : ''}
                   onRetry={flow.runTest}
                   onEditConnection={() => flow.setStep('connection')}
                 />
@@ -207,7 +205,6 @@ function AdminProviderConnectPage() {
                   outcome={flow.outcome}
                   smokeModelId={smokeModelId}
                   defaultId={flow.outcome.defaultId}
-                  noListing={tile?.discovery === false}
                 />
               )}
             </>

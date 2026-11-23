@@ -112,6 +112,8 @@ export function buildImportedModelConfig(
     enabled,
     default: false
   };
+  // AWS Bedrock models have no URL: the adapter builds it from the region.
+  if (!entry.url) delete config.url;
   // A model reaches a built-in provider through its API type; a link to a
   // custom provider is always stored (the server applies the same rule).
   if (providerId && !BUILT_IN_LLM_PROVIDERS.includes(providerId)) {

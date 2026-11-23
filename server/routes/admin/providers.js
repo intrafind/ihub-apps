@@ -36,6 +36,7 @@ import {
   ModelDiscoveryError,
   stripTrailingSlashes
 } from '../../services/ModelEndpointDiscovery.js';
+import { isValidBedrockRegion } from '../../../shared/bedrockRegions.js';
 import { computeGatewayDrift } from '../../services/gatewayDrift.js';
 import { applyGatewayDrift } from '../../services/gatewaySyncApply.js';
 import { logAudit } from '../../services/AuditLogService.js';
@@ -65,6 +66,40 @@ function normalizeProviderTimeouts(provider) {
       return `${key} must be a whole number of milliseconds between 0 and ${LLM_TIMEOUT_MAX_MS}`;
     }
   }
+  return null;
+}
+
+/**
+ * Validate the AWS region of the Bedrock provider (`config.region`), in place.
+ * The adapter and the model listing build the AWS host name from it, so only
+ * an AWS region code or `global` is stored. An empty value removes the key:
+ * the region then comes from `AWS_REGION` / `AWS_DEFAULT_REGION` or the
+ * default (see BedrockAdapter.resolveRegion). Other providers' `config` is
+ * left as it is.
+ *
+ * @param {Object} provider - Provider entry from the request body
+ * @returns {string|null} Error message, or null when the region is valid
+ */
+function normalizeBedrockRegion(provider) {
+  if (provider.id !== 'bedrock') return null;
+  if (provider.config === undefined || provider.config === null) {
+    delete provider.config;
+    return null;
+  }
+  if (typeof provider.config !== 'object' || Array.isArray(provider.config)) {
+    return 'Provider config must be an object';
+  }
+  const { region, ...rest } = provider.config;
+  if (region === undefined || region === null || region === '') {
+    if (Object.keys(rest).length === 0) delete provider.config;
+    else provider.config = rest;
+    return null;
+  }
+  const trimmed = typeof region === 'string' ? region.trim() : region;
+  if (!isValidBedrockRegion(trimmed)) {
+    return 'Region must be an AWS region code such as eu-central-1, or global';
+  }
+  provider.config = { ...rest, region: trimmed };
   return null;
 }
 
@@ -107,6 +142,9 @@ function normalizeProviderFields(provider) {
 
   const timeoutError = normalizeProviderTimeouts(provider);
   if (timeoutError) return timeoutError;
+
+  const regionError = normalizeBedrockRegion(provider);
+  if (regionError) return regionError;
 
   if (BUILT_IN_LLM_PROVIDERS.includes(provider.id)) {
     delete provider.apiType;

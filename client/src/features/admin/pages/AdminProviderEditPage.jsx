@@ -16,6 +16,7 @@ import {
 import ProviderFormFields from '../components/ProviderFormFields';
 import GatewaySyncDialog from '../components/GatewaySyncDialog';
 import ProviderTimeoutFields from '../components/ProviderTimeoutFields';
+import BedrockRegionField from '../components/BedrockRegionField';
 import useAdminPageAccess from '../hooks/useAdminPageAccess';
 import Icon from '../../../shared/components/Icon';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
@@ -274,6 +275,10 @@ function AdminProviderEditPage() {
               onChange={handleChange}
               inherited={inheritedTimeouts}
             />
+          )}
+
+          {providerId === 'bedrock' && (
+            <BedrockRegionField data={formData} onChange={handleChange} />
           )}
 
           {/* API Key */}

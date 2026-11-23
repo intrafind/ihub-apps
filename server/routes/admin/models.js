@@ -23,6 +23,8 @@ import { testTranscriptionModel } from '../../websocket/realtimeTranscription.js
 import { TTS_LANGUAGES } from '../../tts/language.js';
 import { llmErrorToHttpStatus, isMissingApiKeyError } from '../../services/loop/llmHttpErrors.js';
 import { discoverModels, comparableUrl } from '../../services/ModelEndpointDiscovery.js';
+import { BEDROCK_API_TYPE, discoverBedrockModels } from '../../services/BedrockModelDiscovery.js';
+import { DEFAULT_BEDROCK_REGION, isValidBedrockRegion } from '../../../shared/bedrockRegions.js';
 import {
   BUILT_IN_LLM_PROVIDERS,
   gatewayModelProvider,
@@ -106,6 +108,39 @@ function voicesError(error, action) {
  * @returns {Promise<string|null>} Path relative to `contents/`, or null when
  *   the id is not usable as a file name
  */
+/**
+ * The `_discover` answer for a listing: the entries, each flagged with the iHub
+ * model that already points at it (`existingModelId`), so the admin does not
+ * import a model twice. A model "points at" a listed one when it has the same
+ * remote model id on the same endpoint; Bedrock models have no URL (the adapter
+ * builds it from the region), so there the remote id among the Bedrock models counts.
+ *
+ * @param {Object} result - `discoverModels` / `discoverBedrockModels` result
+ * @returns {Object} Response body
+ */
+function withExistingModels(result) {
+  const { data: configured = [] } = configCache.getModels(true);
+  const bedrock = result.provider === BEDROCK_API_TYPE;
+  const keyOf = (modelId, url) => (bedrock ? modelId : `${modelId}\n${comparableUrl(url)}`);
+  const existing = new Map();
+  for (const model of configured) {
+    if (bedrock && model.provider !== BEDROCK_API_TYPE) continue;
+    existing.set(keyOf(model.modelId, model.url), model.id);
+  }
+  return {
+    apiType: result.provider,
+    modelsUrl: result.modelsUrl,
+    baseUrl: result.baseUrl,
+    azure: result.azure,
+    gateway: result.gateway || null,
+    ...(result.region ? { region: result.region } : {}),
+    models: result.models.map(model => ({
+      ...model,
+      existingModelId: existing.get(keyOf(model.id, model.url)) || null
+    }))
+  };
+}
+
 function modelPath(modelId) {
   return configStore.resolveIdToPath('models', modelId);
 }
@@ -533,6 +568,15 @@ export default function registerAdminModelsRoutes(app) {
    *       `apiType` and an optional `apiKey` describe a provider that does
    *       not exist yet.
    *
+   *       AWS Bedrock (`providerId: bedrock` or `apiType: bedrock`) is listed
+   *       per region instead of per URL: `ListFoundationModels` and
+   *       `ListInferenceProfiles` of `bedrock.<region>.amazonaws.com`, with the
+   *       Bedrock API key as Bearer token. `region` is the AWS region (or
+   *       `global`); without it the provider's `config.region`, then
+   *       `AWS_REGION` / `AWS_DEFAULT_REGION`, then `eu-central-1` apply. A
+   *       model that needs a cross-region inference profile is listed under
+   *       the profile id; the answer then carries `region`.
+   *
    *       A failure on the endpoint's side answers 502 (never 401, which would
    *       end the admin session) with `{ error, details, messageKey }`.
    *     tags:
@@ -555,8 +599,12 @@ export default function registerAdminModelsRoutes(app) {
    *                 description: Existing LLM provider whose API type and key are used
    *               apiType:
    *                 type: string
-   *                 enum: [openai, openai-responses, mistral, local, anthropic, google]
+   *                 enum: [openai, openai-responses, mistral, local, anthropic, google, bedrock]
    *                 default: openai
+   *               region:
+   *                 type: string
+   *                 example: eu-central-1
+   *                 description: Bedrock only. AWS region code or `global`.
    *               gateway:
    *                 type: string
    *                 enum: [ifinder-model-gateway]
@@ -577,12 +625,15 @@ export default function registerAdminModelsRoutes(app) {
    *         description: The endpoint could not be reached or rejected the request
    */
   app.post(buildServerPath('/api/admin/models/_discover'), adminAuth, async (req, res) => {
-    const { url, providerId, apiType = 'openai', apiKey, gateway } = req.body || {};
+    const { url, providerId, apiType = 'openai', apiKey, gateway, region } = req.body || {};
     if (url !== undefined && url !== null && typeof url !== 'string') {
       throw new ServiceError('BAD_REQUEST', 'Invalid URL');
     }
     if (apiKey !== undefined && apiKey !== null && typeof apiKey !== 'string') {
       throw new ServiceError('BAD_REQUEST', 'Invalid API key');
+    }
+    if (region !== undefined && region !== null && typeof region !== 'string') {
+      throw new ServiceError('BAD_REQUEST', 'Invalid region');
     }
 
     let discoveryUrl = (url || '').trim();
@@ -590,6 +641,8 @@ export default function registerAdminModelsRoutes(app) {
     // Set for an iFinder Model Gateway, which lists and serves models on routes of its own.
     let discoveryGateway = typeof gateway === 'string' && gateway ? gateway : undefined;
     let discoveryKey = (apiKey || '').trim();
+    // Bedrock: the provider entry's region (`config.region`), read below.
+    let providerRegion;
 
     if (providerId !== undefined && providerId !== null && providerId !== '') {
       assertValidId(providerId, 'provider');
@@ -605,8 +658,30 @@ export default function registerAdminModelsRoutes(app) {
       }
       if (!discoveryUrl) discoveryUrl = providerEntry.baseUrl || '';
       if (!discoveryKey) discoveryKey = resolveProviderApiKey(providerEntry) || '';
+      providerRegion = providerEntry.config?.region;
     } else if (typeof apiType !== 'string') {
       throw new ServiceError('BAD_REQUEST', 'Invalid API type');
+    }
+
+    // Bedrock lists its models per AWS region, not behind a URL. The region is
+    // the one typed in the wizard, else the provider's, else the environment's —
+    // the order the adapter resolves it in.
+    if (discoveryApiType === BEDROCK_API_TYPE) {
+      const discoveryRegion =
+        (region || '').trim() ||
+        providerRegion ||
+        process.env.AWS_REGION ||
+        process.env.AWS_DEFAULT_REGION ||
+        DEFAULT_BEDROCK_REGION;
+      if (!isValidBedrockRegion(discoveryRegion)) {
+        throw new ServiceError(
+          'BAD_REQUEST',
+          `"${String(discoveryRegion).slice(0, 40)}" is not an AWS region. Use a region code such as eu-central-1, or global.`
+        );
+      }
+      const result = await discoverBedrockModels({ region: discoveryRegion, apiKey: discoveryKey });
+      res.json(withExistingModels(result));
+      return;
     }
 
     if (!discoveryUrl) {
@@ -620,24 +695,7 @@ export default function registerAdminModelsRoutes(app) {
       gateway: discoveryGateway
     });
 
-    // Flag listed models an existing config already points at (same remote
-    // model id on the same endpoint), so the admin does not import twice.
-    const { data: configured = [] } = configCache.getModels(true);
-    const existing = new Map();
-    for (const model of configured) {
-      existing.set(`${model.modelId}\n${comparableUrl(model.url)}`, model.id);
-    }
-    res.json({
-      apiType: result.provider,
-      modelsUrl: result.modelsUrl,
-      baseUrl: result.baseUrl,
-      azure: result.azure,
-      gateway: result.gateway || null,
-      models: result.models.map(model => ({
-        ...model,
-        existingModelId: existing.get(`${model.id}\n${comparableUrl(model.url)}`) || null
-      }))
-    });
+    res.json(withExistingModels(result));
   });
 
   /**

@@ -69,6 +69,15 @@ flow (**Admin → Models → Providers → Add provider**):
 The models use the provider's key, and a one-prompt test at the end shows that they answer.
 **Create an app with this model** leads on to the app builder.
 
+- **AWS Bedrock** asks for the AWS region (for example `eu-central-1`, or `global`) instead of an
+  address, lists the models that region offers, and goes through the same steps. Models that
+  Bedrock only serves through a cross-region inference profile are offered under the profile of
+  the region (`eu.anthropic.claude-…`); embedding and image models are shown but cannot be picked.
+  The region is stored on the AWS Bedrock provider.
+- **The AWS Bedrock provider page has an AWS region field.** It applies to every Bedrock model
+  that sets no region of its own; left empty, `AWS_REGION` on the server (default
+  `eu-central-1`) applies as before.
+
 ## Models: What Still Uses a Model or App, and the Default in Your Hands
 
 - **Deleting a model or an app shows what still uses it** before you confirm: the apps, prompts,
