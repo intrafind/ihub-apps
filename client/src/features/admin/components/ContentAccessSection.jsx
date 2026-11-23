@@ -249,6 +249,7 @@ function ContentAccessSection({
     }
 
     const listboxId = 'content-access-listbox';
+    const wildcardNoteId = 'content-access-wildcard-note';
 
     return (
       <div className="space-y-3">
@@ -273,15 +274,8 @@ function ContentAccessSection({
                 return (
                   <span
                     key={group.id}
-                    title={
-                      group.wildcard
-                        ? t(
-                            'admin.contentAccess.wildcardHint',
-                            'Can use all {{subjectPlural}} through a wildcard. To withdraw a single one, an administrator replaces the wildcard with an explicit list in the group settings.',
-                            { subjectPlural }
-                          )
-                        : group.description || undefined
-                    }
+                    title={group.wildcard ? undefined : group.description || undefined}
+                    aria-describedby={group.wildcard ? wildcardNoteId : undefined}
                     className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
                       group.wildcard
                         ? 'bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-300'
@@ -327,6 +321,23 @@ function ContentAccessSection({
         </div>
 
         <WildcardExplanation view={access} type={resourceType} />
+        {/* Visible text, not only a tooltip: keyboard and touch users cannot open a title. */}
+        {grantedGroups.some(group => group.wildcard) && (
+          <p
+            id={wildcardNoteId}
+            className="flex items-start text-xs text-gray-600 dark:text-gray-400"
+            data-testid="content-access-wildcard-note"
+          >
+            <Icon name="lock" className="h-4 w-4 mr-1.5 shrink-0" />
+            <span>
+              {t(
+                'admin.contentAccess.wildcardNote',
+                'Groups with a lock can use all {{subjectPlural}} through a wildcard. To withdraw a single one, an administrator replaces the wildcard with an explicit list in the group settings.',
+                { subjectPlural }
+              )}
+            </span>
+          </p>
+        )}
 
         {/* Search / add */}
         <div className="relative">

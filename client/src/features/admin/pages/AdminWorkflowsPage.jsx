@@ -140,15 +140,9 @@ function AdminWorkflowsPage() {
       workflows.map(w => w.id)
     );
     try {
-      const clonedWorkflow = { ...workflow, id: cloneId };
-      if (typeof clonedWorkflow.name === 'object') {
-        const updatedName = {};
-        for (const [lang, value] of Object.entries(clonedWorkflow.name)) {
-          updatedName[lang] = `${value} (Copy)`;
-        }
-        clonedWorkflow.name = updatedName;
-      }
-      await createAdminWorkflow(clonedWorkflow);
+      // Like a cloned model or prompt, the copy keeps the name: only the ID tells
+      // the two apart (and an untranslated " (Copy)" suffix read wrong in German).
+      await createAdminWorkflow({ ...workflow, id: cloneId });
       await loadWorkflows();
     } catch (err) {
       if (getAdminApiErrorMessage(err).includes('already exists')) {

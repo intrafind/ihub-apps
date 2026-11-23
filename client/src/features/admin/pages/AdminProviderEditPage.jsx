@@ -22,6 +22,13 @@ import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import AdminLoadError from '../components/AdminLoadError';
 import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
+import {
+  HELP_CLASS,
+  INPUT_CLASS,
+  LABEL_CLASS,
+  PRIMARY_BUTTON_CLASS,
+  SECONDARY_BUTTON_CLASS
+} from '../components/formStyles';
 
 function AdminProviderEditPage() {
   const { t, i18n } = useTranslation();
@@ -208,7 +215,7 @@ function AdminProviderEditPage() {
             <Icon name="ArrowLeftIcon" className="w-4 h-4 mr-2" />
             {t('admin.providers.backToList', 'Back to Providers')}
           </button>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+          <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
             {t('admin.providers.edit.title', 'Configure Provider')}
           </h1>
           <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
@@ -253,9 +260,9 @@ function AdminProviderEditPage() {
 
           {/* API Key */}
           <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            <label htmlFor="provider-api-key" className={LABEL_CLASS}>
               {t('admin.providers.edit.apiKey', 'API Key')}
-              <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">
+              <span className="ml-2 text-xs font-normal text-gray-600 dark:text-gray-400">
                 {t(
                   'admin.providers.edit.apiKeyOptional',
                   '(Optional - leave empty to use environment variable)'
@@ -263,7 +270,9 @@ function AdminProviderEditPage() {
               </span>
             </label>
             <input
+              id="provider-api-key"
               type="password"
+              autoComplete="new-password"
               value={formData.apiKey}
               onChange={e => handleChange('apiKey', e.target.value)}
               placeholder={
@@ -274,10 +283,11 @@ function AdminProviderEditPage() {
                     )
                   : t('admin.providers.edit.apiKeyEnter', 'Enter API key')
               }
-              className="w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              aria-describedby={formData.apiKeySet ? 'provider-api-key-set' : undefined}
+              className={INPUT_CLASS}
             />
             {formData.apiKeySet && (
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              <p id="provider-api-key-set" className={HELP_CLASS}>
                 <Icon name="KeyIcon" className="w-3 h-3 inline mr-1" />
                 {t('admin.providers.edit.apiKeySet', 'An API key is currently configured')}
               </p>
@@ -305,36 +315,16 @@ function AdminProviderEditPage() {
             </div>
           </div>
 
-          {/* Enabled Toggle */}
-          <div className="mb-6">
-            <label className="flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                checked={formData.enabled}
-                onChange={e => handleChange('enabled', e.target.checked)}
-                disabled
-                className="w-4 h-4 text-blue-600 bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded-sm focus:ring-blue-500 cursor-not-allowed"
-              />
-              <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
-                {t('admin.providers.edit.enabled', 'Provider Enabled')}
-              </span>
-            </label>
-          </div>
-
           {/* Action Buttons */}
-          <div className="flex justify-end space-x-4">
+          <div className="flex flex-wrap justify-end gap-3">
             <button
               type="button"
               onClick={() => navigate('/admin/providers')}
-              className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+              className={SECONDARY_BUTTON_CLASS}
             >
               {t('admin.providers.edit.cancel', 'Cancel')}
             </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
+            <button type="submit" disabled={saving} className={PRIMARY_BUTTON_CLASS}>
               {saving
                 ? t('admin.providers.edit.saving', 'Saving...')
                 : t('admin.providers.edit.save', 'Save Changes')}

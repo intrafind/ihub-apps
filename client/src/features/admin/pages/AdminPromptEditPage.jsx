@@ -257,8 +257,8 @@ function AdminPromptEditPage() {
       }
     >
       <div className="mb-8">
-        <div className="flex items-center justify-between">
-          <div>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0">
             <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
               {isNewPrompt
                 ? t('admin.prompts.edit.createTitle', 'Create New Prompt')
@@ -270,7 +270,7 @@ function AdminPromptEditPage() {
                 : t('admin.prompts.edit.editDesc', 'Edit the prompt details and configuration')}
             </p>
           </div>
-          <div className="flex space-x-3">
+          <div className="flex flex-wrap gap-2">
             {!isNewPrompt && (
               <button
                 type="button"

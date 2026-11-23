@@ -37,6 +37,12 @@ import AdminTabs from '../components/AdminTabs';
 import AdminUserAppsTab, { useWaitingUserAppCount } from '../components/AdminUserAppsTab';
 import WaitingAppsNotice from '../components/WaitingAppsNotice';
 import DocsLink from '../components/DocsLink';
+import {
+  APP_FALLBACK_CATEGORY,
+  categoryChips,
+  categoryDisplay,
+  effectiveCategory
+} from '../utils/listCategories';
 
 /** The tabs of the page, as `?tab=` names them. */
 const APPS_TAB = 'apps';
@@ -349,7 +355,8 @@ function AdminAppsPage() {
       (filterEnabled === 'disabled' && !app.enabled);
 
     const matchesCategory =
-      selectedCategory === 'all' || (app.category || 'utility') === selectedCategory;
+      selectedCategory === 'all' ||
+      effectiveCategory(app, APP_FALLBACK_CATEGORY) === selectedCategory;
 
     return matchesSearch && matchesFilter && matchesCategory;
   });
@@ -478,11 +485,11 @@ function AdminAppsPage() {
     }
   };
 
-  const getCategoryLabel = app => {
-    if (!app.category) return null;
-    const found = uiConfig?.appsList?.categories?.list?.find(cat => cat.id === app.category);
-    return found ? getLocalizedContent(found.name, currentLanguage) : app.category;
-  };
+  /** The category the app is listed under; its own or the end-user list's fallback. */
+  const getCategory = app =>
+    categoryDisplay(app, uiConfig?.appsList?.categories?.list, APP_FALLBACK_CATEGORY, name =>
+      getLocalizedContent(name, currentLanguage)
+    );
 
   /**
    * What the table says when it has no row: that there is no app yet and what
@@ -516,16 +523,24 @@ function AdminAppsPage() {
       key: 'category',
       header: t('admin.apps.table.category', 'Category'),
       sortable: true,
-      sortAccessor: app => app.category || '',
+      sortAccessor: app => getCategory(app).label,
       hideBelow: 'md',
       render: app => {
-        const label = getCategoryLabel(app);
-        return label ? (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 dark:bg-indigo-900/50 text-indigo-800 dark:text-indigo-300">
-            {label}
+        const category = getCategory(app);
+        return category.isFallback ? (
+          <span
+            className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200"
+            title={t('admin.apps.table.categoryFallback', {
+              defaultValue: 'No category set: listed under {{category}}',
+              category: category.label
+            })}
+          >
+            {category.label}
           </span>
         ) : (
-          <span className="text-gray-500 text-sm">{t('common.notAvailable', 'N/A')}</span>
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 dark:bg-indigo-900/50 text-indigo-800 dark:text-indigo-300">
+            {category.label}
+          </span>
         );
       }
     },
@@ -577,7 +592,13 @@ function AdminAppsPage() {
       key: 'preferredModel',
       header: t('admin.apps.table.model', 'Model'),
       hideBelow: 'lg',
-      render: app => app.preferredModel || t('common.notAvailable', 'N/A')
+      // Without a preferred model the app runs on the installation's default model.
+      render: app =>
+        app.preferredModel || (
+          <span className="text-gray-600 dark:text-gray-400">
+            {t('admin.apps.table.defaultModel', 'Default model')}
+          </span>
+        )
     }
   ];
 
@@ -837,6 +858,8 @@ function AdminAppsPage() {
               {uiConfig?.appsList?.categories?.enabled && (
                 <div className="mt-4 flex flex-wrap gap-2">
                   <button
+                    type="button"
+                    aria-pressed={selectedCategory === 'all'}
                     onClick={() => setSelectedCategory('all')}
                     className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
                       selectedCategory === 'all'
@@ -846,9 +869,11 @@ function AdminAppsPage() {
                   >
                     {t('admin.apps.allCategories', 'All Categories')}
                   </button>
-                  {uiConfig.appsList.categories.list.map(category => (
+                  {categoryChips(uiConfig.appsList.categories.list).map(category => (
                     <button
                       key={category.id}
+                      type="button"
+                      aria-pressed={selectedCategory === category.id}
                       onClick={() => setSelectedCategory(category.id)}
                       className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
                         selectedCategory === category.id

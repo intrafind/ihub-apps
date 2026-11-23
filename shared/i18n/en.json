@@ -1511,7 +1511,8 @@
         "llmHelp": "An LLM provider holds one API key for all of its models. Link models to it in the model editor, or import them from its endpoint.",
         "nameRequired": "Provider name is required",
         "subtitle": "Create an LLM provider for your own endpoint, a web search provider, or a generic API key",
-        "idRequired": "Provider ID is required"
+        "idRequired": "Provider ID is required",
+        "intro": "Connect an AI endpoint of your own — a gateway, a self-hosted server or another vendor. Its models share one API key."
       },
       "info": {
         "title": "API Key Priority",
@@ -1725,7 +1726,8 @@
         "backToConnection": "Back to the connection",
         "finish_one": "Connect and add {{count}} model"
       },
-      "loadError": "Error loading providers"
+      "loadError": "Error loading providers",
+      "searchLabel": "Search providers"
     },
     "models": {
       "sync": {
@@ -4701,7 +4703,9 @@
         "category": "Category",
         "model": "Model",
         "order": "Order",
-        "status": "Status"
+        "status": "Status",
+        "categoryFallback": "No category set: listed under {{category}}",
+        "defaultModel": "Default model"
       },
       "uploading": "Uploading...",
       "details": {
@@ -6338,7 +6342,8 @@
         "moreMatches": "{{count}} more users match. Narrow the search to find them.",
         "addSelected": "Add {{count}} selected",
         "saveFirst": "Save the group first, then add its members here."
-      }
+      },
+      "clone": "Clone"
     },
     "contentAccess": {
       "title": "Group access",
@@ -6373,7 +6378,8 @@
         "skills": "skills",
         "tools": "tools",
         "workflows": "workflows"
-      }
+      },
+      "wildcardNote": "Groups with a lock can use all {{subjectPlural}} through a wildcard. To withdraw a single one, an administrator replaces the wildcard with an explicit list in the group settings."
     },
     "auditLog": {
       "title": "Audit Log",
@@ -6886,7 +6892,8 @@
       "tabs": {
         "userPrompts": "User prompts",
         "prompts": "Prompts",
-        "variables": "Variables"
+        "variables": "Variables",
+        "aria": "Prompt sections"
       },
       "edit": {
         "detectedVariables": "Detected in the text",
@@ -6991,7 +6998,10 @@
         "description": "Description",
         "order": "Order",
         "appConnected": "App Connected",
-        "status": "Status"
+        "status": "Status",
+        "categoryFallback": "No category set: listed under {{category}}",
+        "linkedApp": "App",
+        "appMissing": "Missing app: {{id}}"
       },
       "delete": "Delete",
       "searchPlaceholder": "Search prompts...",

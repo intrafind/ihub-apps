@@ -1982,7 +1982,8 @@
         "llmHelp": "Ein LLM-Anbieter hält einen API-Schlüssel für alle seine Modelle. Verknüpfen Sie Modelle im Modell-Editor mit ihm oder importieren Sie sie von seinem Endpunkt.",
         "nameRequired": "Der Name des Anbieters ist erforderlich",
         "subtitle": "Legen Sie einen LLM-Anbieter für einen eigenen Endpunkt, einen Websuche-Anbieter oder einen allgemeinen API-Schlüssel an",
-        "idRequired": "Die Anbieter-ID ist erforderlich"
+        "idRequired": "Die Anbieter-ID ist erforderlich",
+        "intro": "Verbinden Sie einen eigenen KI-Endpunkt – ein Gateway, einen selbst betriebenen Server oder einen anderen Hersteller. Seine Modelle teilen sich einen API-Schlüssel."
       },
       "info": {
         "title": "API-Schlüssel-Priorität",
@@ -2196,7 +2197,8 @@
         "back": "Zurück",
         "backToConnection": "Zurück zur Verbindung"
       },
-      "loadError": "Fehler beim Laden der Anbieter"
+      "loadError": "Fehler beim Laden der Anbieter",
+      "searchLabel": "Anbieter durchsuchen"
     },
     "models": {
       "sync": {
@@ -5198,7 +5200,9 @@
         "category": "Kategorie",
         "model": "Modell",
         "order": "Reihenfolge",
-        "status": "Status"
+        "status": "Status",
+        "categoryFallback": "Keine Kategorie festgelegt: wird unter {{category}} aufgeführt",
+        "defaultModel": "Standardmodell"
       },
       "uploading": "Wird hochgeladen...",
       "details": {
@@ -6835,7 +6839,8 @@
         "moreMatches": "{{count}} weitere Benutzer passen. Engere Suche eingeben, um sie zu finden.",
         "addSelected": "{{count}} ausgewählte hinzufügen",
         "saveFirst": "Speichern Sie zuerst die Gruppe, danach können Sie hier ihre Mitglieder hinzufügen."
-      }
+      },
+      "clone": "Klonen"
     },
     "contentAccess": {
       "title": "Gruppenzugriff",
@@ -6870,7 +6875,8 @@
         "skills": "Skills",
         "tools": "Tools",
         "workflows": "Workflows"
-      }
+      },
+      "wildcardNote": "Gruppen mit Schloss dürfen über einen Platzhalter alle {{subjectPlural}} verwenden. Um einzelne zu entziehen, ersetzt ein Administrator den Platzhalter in den Gruppeneinstellungen durch eine explizite Liste."
     },
     "auditLog": {
       "title": "Audit-Log",
@@ -7383,7 +7389,8 @@
       "tabs": {
         "userPrompts": "Benutzer-Prompts",
         "prompts": "Prompts",
-        "variables": "Variablen"
+        "variables": "Variablen",
+        "aria": "Bereiche der Prompt-Verwaltung"
       },
       "edit": {
         "detectedVariables": "Im Text erkannt",
@@ -7488,7 +7495,10 @@
         "description": "Beschreibung",
         "order": "Reihenfolge",
         "appConnected": "Mit App verknüpft",
-        "status": "Status"
+        "status": "Status",
+        "categoryFallback": "Keine Kategorie festgelegt: wird unter {{category}} aufgeführt",
+        "linkedApp": "App",
+        "appMissing": "App fehlt: {{id}}"
       },
       "delete": "Löschen",
       "searchPlaceholder": "Prompts suchen…",

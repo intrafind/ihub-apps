@@ -562,11 +562,15 @@ function PromptFormEditor({
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      <label
+                        htmlFor={`prompt-variable-name-${index}`}
+                        className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                      >
                         {t('admin.prompts.edit.variableName', 'Name')}
                         <RequiredMark />
                       </label>
                       <input
+                        id={`prompt-variable-name-${index}`}
                         type="text"
                         data-field={`variables.${index}.name`}
                         aria-required="true"
@@ -594,10 +598,14 @@ function PromptFormEditor({
                       )}
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      <label
+                        htmlFor={`prompt-variable-type-${index}`}
+                        className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                      >
                         {t('admin.prompts.edit.variableType', 'Type')}
                       </label>
                       <select
+                        id={`prompt-variable-type-${index}`}
                         value={variable.type || 'string'}
                         onChange={e => handleVariableChange(index, 'type', e.target.value)}
                         className={`${INPUT_CLASS} mt-1 block`}
@@ -623,10 +631,14 @@ function PromptFormEditor({
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      <label
+                        htmlFor={`prompt-variable-default-${index}`}
+                        className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                      >
                         {t('admin.prompts.edit.variableDefault', 'Default Value')}
                       </label>
                       <input
+                        id={`prompt-variable-default-${index}`}
                         type="text"
                         value={variable.defaultValue || ''}
                         onChange={e => handleVariableChange(index, 'defaultValue', e.target.value)}
@@ -642,12 +654,16 @@ function PromptFormEditor({
                   <div className="mt-4">
                     <div className="flex items-center">
                       <input
+                        id={`prompt-variable-required-${index}`}
                         type="checkbox"
                         checked={variable.required || false}
                         onChange={e => handleVariableChange(index, 'required', e.target.checked)}
                         className={CHECKBOX_CLASS}
                       />
-                      <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
+                      <label
+                        htmlFor={`prompt-variable-required-${index}`}
+                        className="ml-2 block text-sm text-gray-900 dark:text-gray-100"
+                      >
                         {t('admin.prompts.edit.variableRequired', 'Required')}
                       </label>
                     </div>

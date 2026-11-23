@@ -585,6 +585,20 @@ div .markdown-content .code-block-toolbar > div,
     background: #1f2937;
   }
 
+  /*
+   * The sticky `form` above is meant for the chat input. In the admin a form is
+   * the whole editor: stuck to the bottom of a phone screen it is laid over the
+   * page header (title, History, Back), which then cannot be seen or reached.
+   * `revert-layer` hands position, background and stacking back to the form's
+   * own (Tailwind) classes, e.g. a form that is itself a card.
+   */
+  [data-surface='admin'] form:not([data-surface='app'] *) {
+    position: revert-layer;
+    bottom: revert-layer;
+    background: revert-layer;
+    z-index: revert-layer;
+  }
+
   /* Ensure that the chat container doesn't grow beyond viewport */
   .flex-1.overflow-y-auto {
     flex: 1 1 0%;
