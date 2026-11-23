@@ -49,6 +49,7 @@ import { getChatRepository } from '../services/chat/ChatRepository.js';
 import { getArtifactRepository } from '../services/artifacts/ArtifactRepository.js';
 import { downloadName, sendArtifactsZip } from '../services/artifacts/artifactZip.js';
 import { servedMediaType } from '../services/artifacts/artifactPolicy.js';
+import { setUserFileContentType } from '../utils/activeContentHeaders.js';
 import { withKitLibraries } from '../services/artifacts/artifactLibraryKit.js';
 import { providerMarkingOfArtifact } from '../services/provenance/artifactProvenance.js';
 import { requireEuAiActEnabled } from '../services/euAiAct/conformity.js';
@@ -640,10 +641,11 @@ export default function registerChatShareRoutes(app) {
       throw new ServiceError('ORIGINAL_DISCARDED', 'The original file is no longer available');
     }
     const download = req.query.download === '1' || req.query.download === 'true';
-    res.setHeader('Content-Type', servedMediaType(original.mimeType));
+    // The original is what the owner uploaded, under the type they declared: an HTML or
+    // SVG file must not run in a viewer's browser when this URL is opened on its own.
+    setUserFileContentType(res, servedMediaType(original.mimeType));
     res.setHeader('Content-Length', String(original.data.length));
     res.setHeader('Cache-Control', 'private, no-store');
-    res.setHeader('X-Content-Type-Options', 'nosniff');
     if (share.mode === 'public') res.setHeader('X-Robots-Tag', 'noindex, nofollow');
     res.setHeader(
       'Content-Disposition',

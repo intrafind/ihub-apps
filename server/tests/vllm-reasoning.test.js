@@ -184,19 +184,39 @@ describe('vLLM reasoning — thinking_token_budget', () => {
     expect(req.body.thinking_token_budget).toBe(4000);
   });
 
-  test('tokenBudget without level or budgetTokens: 75% of max_tokens', async () => {
+  test('tokenBudget without level or budgetTokens: the medium budget, like reasoning_effort', async () => {
     const req = await request({ enabled: true, tokenBudget: true });
-    expect(req.body.thinking_token_budget).toBe(24576);
+    expect(req.body.thinking_token_budget).toBe(THINKING_LEVEL_BUDGETS.medium);
+    const unknown = await request({ enabled: true, level: 'max', tokenBudget: true });
+    expect(unknown.body.thinking_token_budget).toBe(THINKING_LEVEL_BUDGETS.medium);
+    expect(unknown.body.reasoning_effort).toBe('medium');
   });
 
-  test('the budget never leaves less than a quarter of max_tokens for the answer', async () => {
+  test('the budget never leaves less than half of max_tokens for the answer', async () => {
     const req = await request({ enabled: true, budgetTokens: 100000 }, { maxTokens: 8000 });
-    expect(req.body.thinking_token_budget).toBe(6000);
+    expect(req.body.thinking_token_budget).toBe(4000);
     const high = await request(
       { enabled: true, level: 'high', tokenBudget: true },
       { maxTokens: 4096 }
     );
-    expect(high.body.thinking_token_budget).toBe(3072);
+    expect(high.body.thinking_token_budget).toBe(2048);
+  });
+
+  test('every level up to high fits the default output limit of 16,384 uncapped', () => {
+    for (const level of ['minimal', 'low', 'medium', 'high']) {
+      expect(resolveThinkingTokenBudget({}, level, 16384)).toBe(THINKING_LEVEL_BUDGETS[level]);
+    }
+  });
+
+  test('xhigh: 16,384 tokens, sent as reasoning_effort high, capped at half of max_tokens', async () => {
+    const req = await request({ enabled: true, level: 'xhigh', tokenBudget: true });
+    expect(req.body.thinking_token_budget).toBe(16384);
+    expect(req.body.reasoning_effort).toBe('high');
+    const capped = await request(
+      { enabled: true, level: 'xhigh', tokenBudget: true },
+      { maxTokens: 16384 }
+    );
+    expect(capped.body.thinking_token_budget).toBe(8192);
   });
 
   test('no budget when thinking is turned off for the request', async () => {

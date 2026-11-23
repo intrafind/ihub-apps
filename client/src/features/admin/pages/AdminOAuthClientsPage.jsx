@@ -449,7 +449,9 @@ function AdminOAuthClientsPage() {
     } catch (error) {
       setMessage({
         type: 'error',
-        text: `Failed to generate token: ${error.message}`
+        text: t('admin.auth.oauth.tokenError', 'Failed to generate token: {{error}}', {
+          error: error.message
+        })
       });
       closeTokenModal();
     } finally {
@@ -756,7 +758,7 @@ function AdminOAuthClientsPage() {
             {clientsEnabled && (
               <>
                 <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                  Get started by creating a new OAuth client.
+                  {t('admin.auth.oauth.getStarted', 'Get started by creating a new OAuth client.')}
                 </p>
                 <div className="mt-6">
                   <button

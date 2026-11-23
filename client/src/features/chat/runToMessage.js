@@ -44,7 +44,7 @@ import {
  *
  * @param {Object} interaction - interaction of kind `approval` raised by a chat turn
  * @returns {Object} `{ interactionId, status, toolId, toolName, integration, sideEffect,
- *   dataFlow, args, justification, expiresAt }`
+ *   dataFlow, args, justification, expiresAt }`, plus `grants` when the event carries it
  */
 export function buildToolApproval(interaction) {
   const display = interaction.prompt?.displayData || {};
@@ -59,7 +59,9 @@ export function buildToolApproval(interaction) {
     dataFlow: display.dataFlow || 'internal',
     args: display.args && typeof display.args === 'object' ? display.args : {},
     justification: typeof display.justification === 'string' ? display.justification : '',
-    expiresAt: interaction.policy?.expiresAt || null
+    expiresAt: interaction.policy?.expiresAt || null,
+    // Sent only when the server limits "allow for this chat"; an empty list means no such button.
+    ...(Array.isArray(display.grants) ? { grants: display.grants } : {})
   };
 }
 

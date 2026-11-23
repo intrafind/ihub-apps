@@ -168,7 +168,7 @@ iHub ships with apps for the most common business workflows. Apps marked with \*
 | 📧 Outlook                 | Outlook – Reply Directly (for the [Outlook add-in](docs/outlook-add-in.md))                             |
 | 🌐 Websites                | Website Wikipedia (embedded) · Website IntraFind (external) — examples of embedded and linked websites  |
 
-All apps are **fully configurable** — prompts, variables, start forms, knowledge sources, tools, model preferences and group access. New apps can be created without coding, from a template, by uploading JSON, or from the Marketplace.
+All apps are **fully configurable** — instructions, input fields, start forms, knowledge sources, tools, model preferences and group access. Administrators and content admins create new apps without coding on one page: describe the app in a few sentences and let an AI model prepare a draft, start from a template or from an empty form, or copy an existing app. A new app starts unpublished and is tested in a chat beside its editor before anyone else sees it ([Build your first app](docs/app-quickstart.md)). Apps can also be uploaded as JSON or installed from the Marketplace.
 
 ---
 
@@ -428,7 +428,7 @@ Best for: customization, contributing, building new apps.
 - **Workflows**: Agentic multi-step automation with approvals, triggered from chat (`@workflow`), by schedule or webhook
 - **Marketplace**: One-click install of apps, skills, models, workflows and prompts from registries
 - **Group-based rollout**: Deliver apps, skills, models, and prompts to specific departments or roles
-- **No-code authoring**: Create and edit everything through the admin UI or a raw JSON editor, and test an app next to its editor
+- **No-code authoring**: Create and edit everything through the admin UI or a raw JSON editor. Describe a new app and get an AI-prepared draft, test it next to its editor, and publish it when it works
 
 ### 🛠️ Tools & Integrations
 

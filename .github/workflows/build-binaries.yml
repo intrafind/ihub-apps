@@ -13,6 +13,10 @@ on:
     branches: [main]
   pull_request:
 
+# Least privilege by default; every job below declares the scopes it needs.
+permissions:
+  contents: read
+
 jobs:
   # Quick build check job - runs on every push and pull request
   build-check:
@@ -510,14 +514,20 @@ jobs:
           subject-path: ./artifacts/**/*.*
 
       - name: Upload assets to release
-        uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
         if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
-        with:
-          files: ./artifacts/**/*.*
-          tag_name: ${{ env.VERSION }}
-          # Don't create a new release, just upload files to existing one
-          draft: false
-          # No `prerelease` input: the action then keeps whatever the release was created with,
-          # so a release candidate published as a pre-release stays one.
-          # This will update the existing release instead of creating a new one
-          overwrite_files: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        # Uploads to the existing release (never creates one) and replaces assets that are already
+        # attached (--clobber). `gh release edit` is told nothing about the prerelease flag, so a
+        # release candidate published as a pre-release stays one; it only makes sure the release is
+        # not left as a draft.
+        run: |
+          mapfile -d '' -t files < <(find ./artifacts -type f -name '*.*' -print0)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "::error::No files found in ./artifacts to upload"
+            exit 1
+          fi
+          gh release upload "$VERSION" "${files[@]}" --repo "$REPO" --clobber
+          gh release edit "$VERSION" --repo "$REPO" --draft=false
+        shell: bash

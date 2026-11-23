@@ -23,19 +23,37 @@ function GlobalPromptVariablesEditor({ value, onChange }) {
 
   // Built-in variables that cannot be modified
   const builtInVariables = [
-    { key: 'year', description: 'Current year' },
-    { key: 'month', description: 'Current month (zero-padded)' },
-    { key: 'date', description: 'Localized full date' },
-    { key: 'time', description: 'Localized time' },
-    { key: 'day_of_week', description: 'Localized day of week' },
-    { key: 'timezone', description: "User's timezone" },
-    { key: 'locale', description: 'Current language/locale' },
-    { key: 'user_name', description: "Authenticated user's display name" },
-    { key: 'user_email', description: "Authenticated user's email" },
-    { key: 'model_name', description: 'Current model being used' },
-    { key: 'tone', description: 'Selected tone/style setting' },
-    { key: 'location', description: "User's location (if configured)" },
-    { key: 'platform_context', description: 'The processed global context' }
+    { key: 'year', description: t('admin.platform.builtIn.year', 'Current year') },
+    { key: 'month', description: t('admin.platform.builtIn.month', 'Current month (zero-padded)') },
+    { key: 'date', description: t('admin.platform.builtIn.date', 'Localized full date') },
+    { key: 'time', description: t('admin.platform.builtIn.time', 'Localized time') },
+    {
+      key: 'day_of_week',
+      description: t('admin.platform.builtIn.day_of_week', 'Localized day of week')
+    },
+    { key: 'timezone', description: t('admin.platform.builtIn.timezone', "User's timezone") },
+    { key: 'locale', description: t('admin.platform.builtIn.locale', 'Current language/locale') },
+    {
+      key: 'user_name',
+      description: t('admin.platform.builtIn.user_name', "Authenticated user's display name")
+    },
+    {
+      key: 'user_email',
+      description: t('admin.platform.builtIn.user_email', "Authenticated user's email")
+    },
+    {
+      key: 'model_name',
+      description: t('admin.platform.builtIn.model_name', 'Current model being used')
+    },
+    { key: 'tone', description: t('admin.platform.builtIn.tone', 'Selected tone/style setting') },
+    {
+      key: 'location',
+      description: t('admin.platform.builtIn.location', "User's location (if configured)")
+    },
+    {
+      key: 'platform_context',
+      description: t('admin.platform.builtIn.platform_context', 'The processed global context')
+    }
   ];
 
   const handleContextChange = e => {
@@ -50,19 +68,26 @@ function GlobalPromptVariablesEditor({ value, onChange }) {
 
     // Validate variable key
     if (!newVariableKey.trim()) {
-      setError('Variable key is required');
+      setError(t('admin.platform.errors.keyRequired', 'Variable key is required'));
       return;
     }
 
     // Check if key already exists (built-in or custom)
     const keyLower = newVariableKey.toLowerCase();
     if (builtInVariables.some(v => v.key.toLowerCase() === keyLower)) {
-      setError('This variable name is reserved for built-in variables');
+      setError(
+        t(
+          'admin.platform.errors.keyReserved',
+          'This variable name is reserved for built-in variables'
+        )
+      );
       return;
     }
 
     if (variables.hasOwnProperty(newVariableKey)) {
-      setError('A custom variable with this key already exists');
+      setError(
+        t('admin.platform.errors.keyExists', 'A custom variable with this key already exists')
+      );
       return;
     }
 
@@ -133,7 +158,10 @@ function GlobalPromptVariablesEditor({ value, onChange }) {
           onChange={handleContextChange}
           rows={6}
           className="w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-md shadow-xs focus:outline-hidden focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white font-mono text-sm"
-          placeholder="e.g., Current date: {{date}}. Company: {{company}}. User: {{user_name}}"
+          placeholder={t(
+            'admin.platform.globalContextPlaceholder',
+            'e.g., Current date: {{date}}. Company: {{company}}. User: {{user_name}}'
+          )}
         />
       </div>
 
@@ -207,7 +235,10 @@ function GlobalPromptVariablesEditor({ value, onChange }) {
                   type="text"
                   value={newVariableKey}
                   onChange={e => setNewVariableKey(e.target.value)}
-                  placeholder="e.g., company, department, region"
+                  placeholder={t(
+                    'admin.platform.variableKeyPlaceholder',
+                    'e.g., company, department, region'
+                  )}
                   className="w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-md focus:outline-hidden focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                 />
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -225,7 +256,10 @@ function GlobalPromptVariablesEditor({ value, onChange }) {
                   value={newVariableValue}
                   onChange={e => setNewVariableValue(e.target.value)}
                   rows={3}
-                  placeholder="e.g., We are a leading provider of AI solutions..."
+                  placeholder={t(
+                    'admin.platform.variableValuePlaceholder',
+                    'e.g., We are a leading provider of AI solutions…'
+                  )}
                   className="w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-md focus:outline-hidden focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                 />
               </div>

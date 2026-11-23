@@ -1234,6 +1234,18 @@ describe('acknowledgements an older server wrote into users.json (rolling deploy
     expect(all.get('alice').data.aiAcknowledgements).toEqual([BOB_ENTRY]);
     expect(legacyOf('alice')).toEqual({});
   });
+
+  test('an id such as __proto__ never resolves to Object.prototype', async () => {
+    Object.prototype.aiAcknowledgements = [BOB_ENTRY]; // simulate a polluted prototype
+    try {
+      await repo().importLegacy(['__proto__', 'constructor']);
+      expect(Object.hasOwn(Object.prototype, 'aiAcknowledgements')).toBe(true);
+      expect(Object.prototype.aiAcknowledgements).toEqual([BOB_ENTRY]);
+      expect(await repo().get('__proto__')).toBeNull();
+    } finally {
+      delete Object.prototype.aiAcknowledgements;
+    }
+  });
 });
 
 describe('admin user list (GET /api/admin/auth/users)', () => {

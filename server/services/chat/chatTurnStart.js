@@ -69,6 +69,11 @@ import {
 } from './ChatRepository.js';
 import { prepareChatApproval } from './chatToolApproval.js';
 import { closeSteering, dropSteers, steerMessage } from '../loop/steering.js';
+import {
+  isUnresolvedUserAppId,
+  noteUserAppRun,
+  resolveAppForChat
+} from '../userApps/resolveApp.js';
 import { emitFailedRun } from './failedRun.js';
 import { isVoiceTurn, VOICE_INPUT_MODE } from './voiceMode.js';
 
@@ -438,12 +443,34 @@ async function scopeProjects(draft) {
   // and, when the caller's permissions are not resolved yet, resolves them on
   // it (`ensurePrincipal`). The rest of the turn runs as the principal it left.
   const principal = { user: draft.user };
+  // The app this turn runs, decided once for the turn from the signed-in user
+  // and never from the body (`resolveAppForChat`, which asks
+  // `getAppForRequest` for an admin app): the published app, or one that is
+  // not published yet when a content admin tries it. For everyone else such
+  // an app is null here, as an unknown id is, and the request builder answers
+  // APP_NOT_FOUND.
+  // Ids match regardless of case, as the request builder matches them: a
+  // missed app would skip its `userProjects` gate.
+  // A personal app (feature `userApps`) comes from its store with what the
+  // ceiling grants this caller; `personalApp` then says how tool calls are
+  // approved in it. The principal object is what the decision is memoised on.
+  const appForChat = await resolveAppForChat(request.appId, draft.user, { req: principal });
+  // A personal-shaped id that did not resolve is refused here. It must not
+  // fall through to the lookup of the request builder, which would find a
+  // config app that was given the id of a personal app.
+  if (isUnresolvedUserAppId(request.appId, appForChat)) {
+    return refused(404, 'App not found', { code: 'NOT_FOUND' });
+  }
+  draft.requestApp = appForChat?.app ?? null;
+  draft.personalApp = appForChat?.userApp ?? null;
+  // Whoever did not write a personal app cannot allow a tool for the whole
+  // chat: its instructions could repeat the tool with any arguments (design
+  // 6.3). Every other chat keeps the grant.
+  draft.chatGrants = draft.personalApp ? draft.personalApp.approval.chatGrants === true : true;
   const chatProjects = await resolveChatProjects({
     req: principal,
     chat: access.chat,
-    // Case-insensitive like the request builder, which accepts the id
-    // in any case: a missed app would skip its `userProjects` gate.
-    app: findByIdCaseInsensitive(configCache.getApps()?.data || [], request.appId) || null,
+    app: draft.requestApp,
     projectId: projectTest ? undefined : request.projectId,
     projects: projectTest ? undefined : request.projects
   });
@@ -580,7 +607,8 @@ async function prepareResumes(draft) {
     user,
     chat,
     lastMessage: request.message,
-    repository
+    repository,
+    chatGrants: draft.chatGrants
   });
   if (approvals.refusal) {
     return refused(approvals.refusal.status, approvals.refusal.message, {
@@ -616,7 +644,7 @@ async function prepareResumes(draft) {
   }
   draft.approvals = approvals;
   draft.connectResume = connectResume;
-  draft.toolApproval = { grants: approvals.grants, resume: null };
+  draft.toolApproval = { grants: approvals.grants, resume: null, chatGrants: draft.chatGrants };
   return null;
 }
 
@@ -718,7 +746,7 @@ async function resolveVariablesAndScopes(draft) {
   // storing the transcript must not start feeding it back to the
   // model. The viewer's own "Include chat history in requests" toggle
   // says the same thing for one turn (see `buildConversation`).
-  const chatApp = (configCache.getApps().data || []).find(a => a.id === request.appId);
+  const chatApp = draft.requestApp;
   // The app variables are chat state: a turn that sets them (the
   // start form's, or any turn of an app that asks for them beside the
   // chat) stores them, and a turn that does not gets the stored ones —
@@ -1042,8 +1070,13 @@ function preparedTurnOf(draft) {
       projectId: chatProjects.containerId,
       attachedProjectIds: chatProjects.attachedIds,
       ...(projectTest ? { testProjectId: projectTest.projectId } : {}),
-      integrationScopes: draft.integrationScopes
+      integrationScopes: draft.integrationScopes,
+      // The only place `resolvedApp` is set: the chat turn is the one way to
+      // run an app that is not published (see `scopeProjects`).
+      resolvedApp: draft.requestApp
     },
+    personalApp: draft.personalApp,
+    auditSubject: draft.auditSubject,
     persistence: draft.persistence,
     toolApproval: draft.toolApproval,
     commitApproval: draft.approvals.commit || null,
@@ -1438,6 +1471,15 @@ async function runModelTurn(run) {
     promptMessage?.hostContext ||
     renderMcpAppContext(mcpAppContext)
   );
+  // The turn runs a personal app: note its use, and which revision of its
+  // instructions this chat ran with (one audit entry per chat and revision).
+  if (turn.personalApp) {
+    await noteUserAppRun({
+      req: turn.auditSubject,
+      chatId: turn.chatId,
+      userApp: turn.personalApp
+    });
+  }
   const buildLogData = logDataOf(run);
   await logInteraction('chat_request', buildLogData(true));
 

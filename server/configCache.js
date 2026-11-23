@@ -7,7 +7,8 @@ import {
   resolveGroupInheritance,
   filterResourcesByPermissions,
   getPermissionsForUser,
-  isAnonymousAccessAllowed
+  isAnonymousAccessAllowed,
+  isContentAdmin
 } from './utils/authorization.js';
 import {
   announceConfigChangeAndWait,
@@ -905,6 +906,45 @@ class ConfigCache {
     }
     const hiddenIds = enabled.filter(app => !isAvailable(app)).map(app => app.id);
     return { data: available, etag: etagForIds(all.etag, hiddenIds, 'f') };
+  }
+
+  /**
+   * The app a request may run, by id (case-insensitive), or null.
+   *
+   * Published: today's rule, the app as {@link ConfigCache#getApps} lists it.
+   * Not published (`enabled === false`): only for a principal with
+   * `isContentAdmin === true`, and only if the app's required features and
+   * integrations are on, so that a content admin can try an app before
+   * publishing it. The anonymous principal, API keys, OAuth clients and agents
+   * never have that flag (`enhanceUserWithPermissions`).
+   *
+   * Group permission is not checked here; every caller keeps its own check.
+   * The decision reads `user.isContentAdmin` and `app.enabled` and nothing of
+   * the request. Only the interactive chat and the routes its page calls use
+   * this method: scheduled tasks, apps called as tools, workflows, the
+   * inference API, MCP and A2A look apps up in `getApps()`, where an
+   * unpublished app does not exist. No list contains one either.
+   *
+   * @param {string} appId
+   * @param {Object} [user] - The request principal (`req.user`)
+   * @returns {Object|null}
+   */
+  getAppForRequest(appId, user) {
+    // `getApps()` holds published apps only; `enabled` is read again so that
+    // the rule below does not depend on it.
+    const published = findByIdCaseInsensitive(this.getApps()?.data, appId);
+    if (published && published.enabled !== false) return published;
+    if (!isContentAdmin(user)) return null;
+
+    const app = findByIdCaseInsensitive(
+      (this.getApps(true)?.data || []).filter(candidate => candidate?.enabled === false),
+      appId
+    );
+    if (!app) return null;
+    const available =
+      areAppFeaturesEnabled(app, this.getFeatures()) &&
+      areAppIntegrationsEnabled(app, this.getIntegrationContext());
+    return available ? app : null;
   }
 
   /**

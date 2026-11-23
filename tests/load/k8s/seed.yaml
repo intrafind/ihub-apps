@@ -29,6 +29,8 @@ metadata:
   namespace: ihub-loadtest
 spec:
   automountServiceAccountToken: false
+  securityContext:
+    seccompProfile: { type: RuntimeDefault }
   containers:
     - name: seed
       image: alpine:3.22
@@ -37,8 +39,17 @@ spec:
         - { name: contents, mountPath: /contents }
         - { name: seed, mountPath: /seed }
       resources:
-        requests: { cpu: 100m, memory: 64Mi }
-        limits: { cpu: '1', memory: 512Mi }
+        requests: { cpu: 100m, memory: 64Mi, ephemeral-storage: 16Mi }
+        limits: { cpu: '1', memory: 512Mi, ephemeral-storage: 256Mi }
+      # Runs as root on purpose: k8s/run.sh and setup.sh `chown -R 100:101` the restored
+      # contents/ and read files iHub wrote with mode 0600. Only the capabilities that
+      # needs are kept; the pod writes nothing outside the two volumes.
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop: [ALL]
+          add: [CHOWN, DAC_OVERRIDE, FOWNER]
   volumes:
     - name: contents
       persistentVolumeClaim: { claimName: ihub-contents }

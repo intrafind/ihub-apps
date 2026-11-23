@@ -55,7 +55,7 @@ function makeCtx(dir) {
         throw error;
       }
       if (!pattern) return entries;
-      const regex = new RegExp(`^${pattern.replace(/\./g, '\\.').replace(/\*/g, '.*')}$`);
+      const regex = new RegExp(`^${pattern.replace(/[.\\]/g, '\\$&').replace(/\*/g, '.*')}$`);
       return entries.filter(entry => regex.test(entry));
     },
     log: m => logs.push(['info', m]),

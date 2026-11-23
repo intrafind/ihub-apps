@@ -1035,6 +1035,8 @@ class ChatService {
           // A turn that is not stored cannot be continued after the answer.
           headless: headless || canApproveTools === false || !persist,
           grants: toolApproval?.grants || [],
+          // `false` in a personal app someone else wrote: no grant for the chat.
+          chatGrants: toolApproval?.chatGrants,
           approvedCall:
             resume?.outcome === 'approved' && resume.call?.id
               ? { callId: resume.call.id, args: resume.args }

@@ -1,17 +1,23 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation } from 'react-router-dom';
 import { useUIConfig } from '../contexts/UIConfigContext';
 import { getLocalizedContent } from '../../utils/localizeContent';
 import { resolveTranslationRefs } from '../../utils/translationRefs';
 import { fetchAppDetails } from '../../api';
+import { useUserAppsConfig } from '../hooks/useUserApps';
+import { getScreenTitle, subscribeScreenTitle } from '../utils/screenTitle';
 
 /**
  * DocumentTitle component manages the browser tab title dynamically
- * based on UI configuration, current language, and current page/app
+ * based on UI configuration, current language, and current page/app.
+ *
+ * It is the only writer of `document.title`. A page names its current screen
+ * through `shared/utils/screenTitle`; the name goes in front
+ * ("<screen> | Admin | <platform>") and stays there when the title is rebuilt.
  */
 function DocumentTitle() {
   const { i18n, t } = useTranslation();
@@ -19,14 +25,22 @@ function DocumentTitle() {
   const location = useLocation();
   const currentLanguage = i18n.language || 'en';
   const [currentApp, setCurrentApp] = useState(null);
+  const screenTitle = useSyncExternalStore(subscribeScreenTitle, getScreenTitle);
 
   // Check if we're on an app page and extract appId manually
   const isAppPage = location.pathname.startsWith('/apps/');
   const appId = isAppPage ? location.pathname.split('/apps/')[1]?.split('/')[0] : null;
 
+  // `/apps/new` is the create page of personal apps for people who may create one, and the
+  // chat of an app with the ID `new` for everyone else. Nothing is asked while the feature is off.
+  const userApps = useUserAppsConfig({ enabled: appId === 'new' });
+  const isCreatePage =
+    appId === 'new' &&
+    (userApps.loading || (userApps.enabled && userApps.config?.canCreate === true));
+
   // Fetch app details when we're on an app page
   useEffect(() => {
-    if (isAppPage && appId) {
+    if (isAppPage && appId && !isCreatePage) {
       fetchAppDetails(appId)
         .then(appData => {
           setCurrentApp(appData);
@@ -37,7 +51,7 @@ function DocumentTitle() {
     } else {
       setCurrentApp(null);
     }
-  }, [isAppPage, appId]);
+  }, [isAppPage, appId, isCreatePage]);
 
   useEffect(() => {
     // Don't update title if UI config is still loading
@@ -89,10 +103,19 @@ function DocumentTitle() {
     }
 
     // Construct final title
-    const title = pagePrefix ? `${pagePrefix} | ${platformName}` : platformName;
+    const title = [screenTitle, pagePrefix, platformName].filter(Boolean).join(' | ');
 
     document.title = title;
-  }, [uiConfig, currentLanguage, isAppPage, currentApp, isLoading, location.pathname, t]);
+  }, [
+    uiConfig,
+    currentLanguage,
+    isAppPage,
+    currentApp,
+    isLoading,
+    location.pathname,
+    t,
+    screenTitle
+  ]);
 
   // This component doesn't render anything visible
   return null;

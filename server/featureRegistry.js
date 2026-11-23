@@ -46,6 +46,16 @@ export const featureRegistry = [
     default: true
   },
   {
+    id: 'appGenerator',
+    name: { en: 'App Drafts with AI', de: 'App-Entwürfe mit KI' },
+    description: {
+      en: 'Let people who manage apps describe a new app in a few sentences and have an AI model prepare the draft (Admin → Apps → New app). Each draft is a model call that counts against the usage limit of the person who asked for it; a person can prepare 30 drafts per hour. Turn it off to remove the description box; templates and empty apps stay available',
+      de: 'Personen, die Apps verwalten, beschreiben eine neue App in wenigen Sätzen und lassen ein KI-Modell den Entwurf vorbereiten (Admin → Apps → Neue App). Jeder Entwurf ist ein Modellaufruf, der auf das Nutzungslimit der anfragenden Person angerechnet wird; eine Person kann 30 Entwürfe pro Stunde vorbereiten. Ausschalten entfernt das Beschreibungsfeld; Vorlagen und leere Apps bleiben verfügbar'
+    },
+    category: 'content',
+    default: true
+  },
+  {
     id: 'integrations',
     name: { en: 'Integrations', de: 'Integrationen' },
     description: {
@@ -113,6 +123,17 @@ export const featureRegistry = [
     description: {
       en: 'Projects users create themselves: documents, instructions and chats, shared with roles',
       de: 'Projekte, die Benutzer selbst anlegen: Dokumente, Anweisungen und Chats, geteilt mit Rollen'
+    },
+    category: 'preview',
+    default: false,
+    preview: true
+  },
+  {
+    id: 'userApps',
+    name: { en: 'Personal apps', de: 'Persönliche Apps' },
+    description: {
+      en: 'Apps users build themselves, share with roles and publish',
+      de: 'Apps, die Benutzer selbst erstellen, mit Rollen teilen und veröffentlichen'
     },
     category: 'preview',
     default: false,

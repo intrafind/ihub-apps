@@ -1033,8 +1033,10 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
    * Evaluate a JavaScript condition string in a sandboxed VM context.
    *
    * The condition runs in strict mode with a 1-second timeout. The sandbox
-   * receives a JSON-safe copy of `data` and `index` to prevent prototype
-   * pollution or access to the host environment.
+   * receives a JSON-safe copy of `data` and `index`, parsed inside the context,
+   * to prevent prototype pollution or access to the host environment.
+   * Conditions are written by whoever authors the workflow definition; `vm` is
+   * not a hard security boundary, so they are not meant for untrusted input.
    *
    * If evaluation throws (syntax error, timeout, etc.), the loop stops
    * by returning false.
@@ -1048,8 +1050,15 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
     try {
       // VM sandbox hardening: create context with null prototype
       const sandbox = vm.createContext(Object.create(null));
-      // Break prototype chain by JSON round-tripping to prevent pollution
-      Object.assign(sandbox, JSON.parse(JSON.stringify({ data, index })));
+      // Hand the state over as a JSON string and parse it inside the context, so
+      // `data` and its nested objects belong to the sandbox's own realm. Objects
+      // parsed in the host realm would let `data.constructor.constructor(...)`
+      // reach the host's `Function` and with it `process`.
+      sandbox.stateJson = JSON.stringify({ data, index });
+      const state = vm.runInContext('JSON.parse(stateJson)', sandbox, { timeout: 1000 });
+      delete sandbox.stateJson;
+      sandbox.data = state.data;
+      sandbox.index = state.index;
 
       const result = vm.runInNewContext(`'use strict';\n${condition}`, sandbox, {
         timeout: 1000
