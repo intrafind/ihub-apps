@@ -825,6 +825,22 @@ npm run test:adapters
 node scripts/run-server-tests.js toolCalling
 ```
 
+### CI Tiers
+
+Tests run in tiers, so a pull request gets a fast answer and slow tests still run.
+
+| Tier | Workflow | What runs | When |
+|---|---|---|---|
+| Pull request gate | `unit-tests.yml` | `npm run test:quick`: the client unit tests and every server test of the `pr` tier | every pull request |
+| Integration | `integration-tests.yml` | the integration suite and a boot check of the real server | every pull request |
+| End-to-end gate | `e2e.yml`, jobs **Agents and chat (gate)** and **Golden difference list** | the `@gate` browser tests and the checks of the golden difference list | every pull request |
+| Full end-to-end | `e2e.yml`, job **Agents (full suite and transport matrix)** | every browser test of the agents suite | started by hand |
+| Nightly | none yet | the server tests of the `nightly` tier: `server/tests/faults/` and `*.nightly.test.js` | by hand with `npm run test:nightly` (`npm run test:faults` runs only the files under `server/tests/faults/`) |
+
+A server test is in the `pr` tier unless its path puts it into the `nightly` tier. `node scripts/run-server-tests.js --list` shows how many files each tier has. The nightly tier holds no test yet and no workflow runs it; put a test there only when it starts real server processes or runs for minutes.
+
+The runner tiers, the quarantine list and the test tools for runs (scripted model, fake clock, golden tests, difference list) are described in [Testing Runs](run-testing.md).
+
 ### Agents End-to-End Suite
 
 The specs in `tests/e2e-agents/` drive the chat page in a real browser against the real server. Nothing of iHub is mocked: the only stand-in is the model, a local stub that does what a marker in the message tells it. The suite starts its own server, client and stub on its own ports and its own contents directory (`contents-e2e-agents/`, deleted and seeded again on every run), so it needs no model key and no network, and it does not touch your `contents/`.

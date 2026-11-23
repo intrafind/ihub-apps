@@ -31,6 +31,7 @@ import {
   unregisterFixtureTools
 } from './integrationToolFixture.js';
 import integrationRegistry from '../../services/integrations/definitions/IntegrationRegistry.js';
+import { scriptedModel } from './scriptedModel.js';
 
 export const MODELS = [
   {
@@ -306,37 +307,38 @@ export function scriptedChatService(
   script,
   { onRequest, models = MODELS, runTool, composer = echoComposer } = {}
 ) {
-  const queue = [...script];
-  const requests = [];
   const composerRequests = [];
   const ran = [];
   const composerQueue = Array.isArray(composer) ? [...composer] : null;
-  const { client } = makeClient({
-    models,
-    runLog: ledger.runLog,
-    transport: async (req, ctx) => {
+  // The script itself is `helpers/scriptedModel.js`. This harness keeps what it
+  // has always done on top: the composer's calls are answered beside the
+  // script, and a call without a turn throws in the transport without failing
+  // the test by itself (`strict: false`). That is how this harness has always
+  // behaved and what its tests were written against; a new test calls
+  // `model.assertDone()`.
+  const model = scriptedModel(script, {
+    strict: false,
+    freezeRequests: false,
+    onRequest,
+    intercept: async req => {
       const messages = req.body?.messages || [];
-      if (String(messages[0]?.content || '').startsWith(COMPOSER_PROMPT_START)) {
-        composerRequests.push(req);
-        const message = messages[messages.length - 1].content;
-        let reply;
-        if (composerQueue) {
-          reply = composerQueue.shift();
-          if (reply === undefined) throw new Error('composer script exhausted');
-        } else {
-          reply = await composer(message, req);
-        }
-        // A reply is text, or `{ text, usage }` to report token usage as well.
-        const { text, usage } = typeof reply === 'string' ? { text: reply } : reply;
-        return sseResponse(openaiText([text], usage ? { usage } : {}));
+      if (!String(messages[0]?.content || '').startsWith(COMPOSER_PROMPT_START)) return undefined;
+      composerRequests.push(req);
+      const message = messages[messages.length - 1].content;
+      let reply;
+      if (composerQueue) {
+        reply = composerQueue.shift();
+        if (reply === undefined) throw new Error('composer script exhausted');
+      } else {
+        reply = await composer(message, req);
       }
-      requests.push(req);
-      await onRequest?.(req, ctx);
-      const next = queue.shift();
-      if (!next) throw new Error(`script exhausted after ${requests.length} calls`);
-      return sseResponse(next);
+      // A reply is text, or `{ text, usage }` to report token usage as well.
+      const { text, usage } = typeof reply === 'string' ? { text: reply } : reply;
+      return sseResponse(openaiText([text], usage ? { usage } : {}));
     }
   });
+  const requests = model.requests;
+  const { client } = makeClient({ models, runLog: ledger.runLog, transport: model.transport });
   const requestBuilder = new RequestBuilder();
   requestBuilder.apiKeyVerifier = {
     verifyApiKey: async () => ({ success: true, apiKey: 'sk-test' })
@@ -356,6 +358,7 @@ export function scriptedChatService(
   });
   return {
     service,
+    model,
     requests,
     composerRequests,
     ran,
