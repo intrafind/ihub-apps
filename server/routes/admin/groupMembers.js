@@ -175,7 +175,7 @@ export default function registerAdminGroupMemberRoutes(app) {
    *       201:
    *         description: The users that were added, as `{ items }`; `Location` is the member list
    *       400:
-   *         description: `userIds` missing, empty or malformed
+   *         description: The `userIds` list is missing, empty or malformed
    *       404:
    *         description: The group, or one of the users, does not exist
    */

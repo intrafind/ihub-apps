@@ -1724,6 +1724,9 @@
       }
     }
   },
+  "GET /api/admin/groups/:groupId/members": {
+    "skipped": "its parent list has no entry in the seed"
+  },
   "GET /api/admin/groups/resources": {
     "status": 200,
     "shape": {
