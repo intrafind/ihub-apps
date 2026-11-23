@@ -923,6 +923,27 @@ The NTLM handshake runs only on the sign-in endpoint `/api/auth/ntlm/login`. A s
 
 For detailed setup instructions see [LDAP/NTLM Authentication](ldap-ntlm-authentication.md).
 
+### **embedAuth**
+
+Lets iHub show its OpenID Connect sign-in inside a frame of another site, such as iFinder. Identity
+providers refuse to be framed, so the sign-in runs in a popup. Not set by default: the feature is
+off. The setting is edited in `platform.json` (the admin page does not show it yet) and read at
+start-up.
+
+```json
+{
+  "embedAuth": {
+    "allowedHostOrigins": ["https://ifinder.example.com"]
+  }
+}
+```
+
+- `allowedHostOrigins`: the origins of the sites that may show iHub in a frame. While the list is
+  set, iHub's pages carry `Content-Security-Policy: frame-ancestors 'self'` plus these origins.
+
+The flow, the cookie and its limits are described in
+[Embed Mode](embed-mode.md#signing-in-inside-a-frame).
+
 ### **auth.debug**
 Authentication debug logging configuration. This lives under the `auth` block
 (`auth.debug`) and is edited from the admin UI at **Platform → Logging →

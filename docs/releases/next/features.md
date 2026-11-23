@@ -133,3 +133,25 @@ When you change something on an admin edit page, a bar at the bottom of the scre
 - **The Installation page** keeps a pending approval edit when you save the Settings with Enter. Discard no longer jumps back to the Overview tab.
 - **Unsaved settings survive a tab switch.** The settings of Personal apps, User prompts and User skills, and the settings cards on Providers and Projects, no longer drop your edits when you switch tabs, and leaving the page asks first. The tab stays open in the background and the bar at the bottom saves it from either tab.
 - Credentials (a dialog) and the translation overrides keep their own Save.
+
+## Embed Mode: Sign In to iHub Inside Another Site with Microsoft Entra ID and Other OIDC Providers
+
+iHub shown in a frame of another product, such as iFinder or a portal, can now sign people in
+through OpenID Connect. Identity providers like Microsoft Entra ID refuse to be shown in a frame,
+so the frame used to end in an error page. The sign-in now opens in a popup, and the frame gets
+its own session without a token ever reaching a script.
+
+- **Opt-in.** Add the origins of the sites that may show iHub to `embedAuth.allowedHostOrigins` in
+  `platform.json`, for example `https://ifinder.example.com`. Without one, nothing changes.
+- **Only those sites can frame iHub.** While the list is set, iHub's pages carry a
+  `frame-ancestors` policy for iHub itself and the listed origins. List every other site that
+  shows iHub in a frame too.
+- **The session is an `HttpOnly` cookie of the frame** (`HttpOnly; Secure; SameSite=None;
+  Partitioned`). Current Chrome, Edge and Firefox support partitioned cookies, so it does not
+  depend on third-party cookies. It needs HTTPS and is only sent while iHub is shown by the same
+  site. iHub accepts it only for requests that the iHub page itself made.
+- **People allow the pop-up** and click **Sign in**. When they are already signed in at the
+  identity provider, the window opens and closes by itself.
+- **Signing out** in the frame ends that session.
+
+See [Embed Mode](../../embed-mode.md#signing-in-inside-a-frame).

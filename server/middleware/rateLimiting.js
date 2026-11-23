@@ -381,6 +381,18 @@ const LIMITER_FALLBACKS = Object.freeze({
   // App drafts (`POST /api/admin/apps/_generate`): every request is a paid model call, also
   // one whose answer cannot be used, so failed requests count. Code defaults only: it is not
   // in RATE_LIMITER_KEYS, so platform.json and Admin → Security do not carry it.
+  // Sign-in for iHub in a frame of another site (`routes/embedAuth.js`): the popup page and the
+  // two code endpoints share this budget. A sign-in is a few requests and the people of one
+  // company often reach the server from one address, so it is sized for real traffic. The codes
+  // cannot be guessed (384 bits, one try each): this bounds floods, not credential guessing.
+  // Code defaults only: not in RATE_LIMITER_KEYS, so platform.json and Admin → Security do not
+  // carry it.
+  embedAuthApi: {
+    limit: 300,
+    windowMs: 15 * 60 * 1000,
+    skipSuccessfulRequests: false,
+    skipFailedRequests: false
+  },
   appGeneratorApi: {
     limit: APP_GENERATOR_DRAFT_LIMIT,
     windowMs: APP_GENERATOR_DRAFT_WINDOW_MS,
@@ -504,6 +516,29 @@ export function createProvenanceVerifyLimiter(platformConfig = {}) {
   return createRateLimiter(provenanceVerifyApi, {}, 'provenance verify', undefined, {
     shared: true
   });
+}
+
+/**
+ * The limiter of the sign-in for iHub in a frame of another site: the popup page and the two code
+ * endpoints. The route file mounts it itself, one instance for all three, so they spend one
+ * budget per address, counted across cluster workers. Limit and window are code defaults
+ * (`LIMITER_FALLBACKS.embedAuthApi`); only the header settings follow `rateLimit.default`.
+ *
+ * Its 429 carries `details.limiter: 'embedAuth'`.
+ *
+ * @param {Object} platformConfig - Platform configuration object
+ * @returns {Function} Express rate limiter middleware
+ */
+export function createEmbedAuthLimiter(platformConfig = {}) {
+  const { standardHeaders = true, legacyHeaders = false } =
+    platformConfig?.rateLimit?.default || {};
+  return createRateLimiter(
+    { standardHeaders, legacyHeaders, ...LIMITER_FALLBACKS.embedAuthApi },
+    {},
+    'embed sign-in',
+    undefined,
+    { shared: true, details: { limiter: 'embedAuth' } }
+  );
 }
 
 /**
