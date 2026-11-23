@@ -132,7 +132,16 @@ function proseWithHeadings(markdown) {
   let paragraph = [];
   let afterBlank = true;
 
+  let quote = []; // the lines of the quoted paragraph being read, without their `>`
+
+  const endQuote = () => {
+    if (quote.length === 0) return;
+    blocks.push({ heading, text: withoutLinkTargets(quote.join(' ')) });
+    quote = [];
+  };
+
   const endParagraph = () => {
+    endQuote();
     if (paragraph.length === 0) return;
     const text = withoutLinkTargets(paragraph.join(' ').replace(/`[^`]*`/g, CODE));
     blocks.push({ heading, text });
@@ -221,8 +230,17 @@ function proseWithHeadings(markdown) {
     } else if (wasAfterBlank && indent < listIndent) {
       listIndent = 0; // a block that is not indented under the list item ends the list
     }
-    if (/^ {0,3}(?:\||>)/.test(line) && !item) {
-      endParagraph(); // a table row or a quoted line stands alone
+    if (/^ {0,3}>/.test(line) && !item) {
+      // The lines of a quote make one paragraph, as in prose; a bare `>` ends it.
+      if (paragraph.length) endParagraph();
+      const quoted = lineText.replace(/^ {0,3}>\s?/, '').trim();
+      if (quoted) quote.push(quoted);
+      else endQuote();
+      continue;
+    }
+    endQuote();
+    if (/^ {0,3}\|/.test(line) && !item) {
+      endParagraph(); // a table row stands alone
       blocks.push({ heading, text: withoutLinkTargets(lineText) });
       continue;
     }
@@ -681,6 +699,22 @@ describe('the wording lint itself', () => {
       '| instance |'
     ];
     expect(findHits(words, { docs: [['p.md', apart.join('\n')]] })).toEqual({});
+    // The lines of one quote are one paragraph; a bare `>` or text after the quote ends it.
+    const quoted = ['## Q', '', '> A workflow', '> instance starts.'].join('\n');
+    expect(findHits(words, { docs: [['p.md', quoted]] })).toEqual({
+      'workflow instance': ['docs:p.md#Q']
+    });
+    const quotesApart = [
+      '## Q',
+      '',
+      '> A workflow',
+      '>',
+      '> instance.',
+      '',
+      '> workflow',
+      'instance'
+    ];
+    expect(findHits(words, { docs: [['p.md', quotesApart.join('\n')]] })).toEqual({});
   });
 
   test('skips an indented code block, not an indented list line or paragraph line', () => {
