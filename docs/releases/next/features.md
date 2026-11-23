@@ -154,4 +154,4 @@ its own session without a token ever reaching a script.
   identity provider, the window opens and closes by itself.
 - **Signing out** in the frame ends that session.
 
-See [Embed Mode](embed-mode.md#signing-in-inside-a-frame).
+See [Embed Mode](../../embed-mode.md#signing-in-inside-a-frame).
