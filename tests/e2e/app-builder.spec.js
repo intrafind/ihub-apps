@@ -1142,17 +1142,27 @@ test.describe('Without a model', () => {
     browser,
     baseURL
   }) => {
-    // Every stub model goes off, or one left on still counts as a model.
+    // Every stub model goes off, or one left on still counts as a model. Each model is
+    // toggled on its own and the failures are reported together, so a failed restore of
+    // one model does not leave the other one off for the tests that follow.
     const toggleModels = async enabled => {
+      const failures = [];
       for (const model of STUB_MODELS) {
-        const response = await adminApi.post(`/api/admin/models/${model}/_toggle`, {
-          data: { enabled }
-        });
-        expect(response.ok(), `${model}: ${await response.text()}`).toBeTruthy();
+        try {
+          const response = await adminApi.post(`/api/admin/models/${model}/_toggle`, {
+            data: { enabled }
+          });
+          if (!response.ok())
+            failures.push(`${model}: ${response.status()} ${await response.text()}`);
+        } catch (error) {
+          failures.push(`${model}: ${error?.message || error}`);
+        }
       }
+      expect(failures, `toggling the stub models to enabled=${enabled}`).toEqual([]);
     };
-    await toggleModels(false);
     try {
+      // Inside the try: if only one model goes off, the finally still turns it back on.
+      await toggleModels(false);
       await page.goto('/admin/apps/new');
       const notice = page.getByRole('status').filter({ hasText: 'No AI model is set up yet' });
       await expect(notice).toBeVisible();
