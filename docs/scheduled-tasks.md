@@ -17,6 +17,12 @@ also **remember between runs**: it keeps notes, reads them and its earlier runs
 at the start of a run, and tells you only what is new
 ([Memory and earlier runs](#memory-and-earlier-runs)).
 
+**A run has the rights of its owner's groups, never admin rights.** Nobody is there while a run
+works, so the owner's admin flag does not count: a scheduled task of an admin is offered only the
+workflows and reaches only the projects its owner's groups grant, like a task of any other user.
+Every tool call is checked again when it is made; a call to an integration that was disabled or
+withdrawn from the owner's groups since the run started is refused and written to the audit log.
+
 The feature is on by default; an admin can switch it off under Admin → Platform → Features.
 
 ![The Scheduled tasks page with three tasks, their schedules, next and last runs](assets/screenshots/scheduled-tasks.png)

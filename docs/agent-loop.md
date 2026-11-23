@@ -384,11 +384,13 @@ they were never enforced; profiles that set `maxTokensPerRun` or
 `ChatService` (`server/services/chat/ChatService.js`) is the chat adapter:
 `prepareChatRequest()` resolves app, model, messages and tools through
 `RequestBuilder`; `runTurn()` runs one `kind: 'chat'` segment and projects it
-onto the chat SSE dialect. An app that runs without a client (called as a tool,
-through MCP `tools/call` or by an A2A agent) runs on the [run service](#run-service).
-There is no chat-specific model loop:
-budgets, tool execution, argument repair, compaction and abort handling are the
-loop's.
+onto the chat SSE dialect. The turn itself is the chat host
+(`server/services/run/hosts/ChatHost.js`), which hands its model part to the
+[run service](#the-run-service). A person's chat, a scheduled run and the app turns of the
+OpenAI-compatible API all run this way; so does an app that runs without a client (called
+as a tool, through MCP `tools/call` or by an A2A agent). There is no chat-specific model
+loop: budgets, tool execution, argument repair, compaction and abort handling are the
+loop's. The chat turn's policies live in `server/services/chat/chatTurnPolicies.js`.
 
 Chat policies:
 
@@ -397,7 +399,7 @@ Chat policies:
 | `budgets.maxToolRounds`  | 50 (`CHAT_MAX_TOOL_ROUNDS`); the last round is a forced tool-less final answer (a cap of 1 gets one extra tool-less call)         |
 | `tools.parallel`         | **false**: one call at a time. With the feature `parallelToolCalls` on and a model that does not opt out (`parallelToolCalls: false` in the model file): **true** with `parallelMode: 'readOnly'` and `maxParallel: 4` (`chatToolPolicies`), for a chat turn and for an app that runs as a tool. See [Read-only tool calls side by side](tool-calling.md#read-only-tool-calls-side-by-side-preview) |
 | `tools.choice`           | the app's `toolChoice` (default `auto`) |
-| `budgets.maxWallClockMs` | runs without a client only (the [run service](#run-service), default 180 s)           |
+| `budgets.maxWallClockMs` | a stored turn: 30 min (`DURABLE_TURN_WALL_CLOCK_MS`), or a scheduled task's `maxRunMinutes` when lower; an app without a client: 180 s |
 | `timeoutMs`              | hard timeout per model call (the chat route's `DEFAULT_TIMEOUT`)                      |
 | `context`                | `chatContextPolicies(model)`: threshold at 50 % of the model's `contextWindow` (at least 16,000), `strategy: 'digest'` |
 
@@ -407,7 +409,8 @@ any other key of iHub's context. Before the tools are offered, `markInteractiveT
 `ask_user` (and any tool with `requiresUserInput: true`) as `interactive: true`,
 so the built-in `questionSeam` takes clarifications over.
 
-Seams a chat turn registers (`server/services/chat/chatSeams.js`), in order:
+Seams a chat turn registers (`server/services/chat/chatSeams.js`), in order, after the
+approval seam (the first seam of every run, see [The run service](#the-run-service)):
 
 | Seam                                      | Hooks                 | Adds                                                                                                                                                                              |
 | ----------------------------------------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -431,14 +434,21 @@ execute, but nobody can answer a question, so `ask_user` gets a
 `NO_USER_AVAILABLE` error result instead of pausing the segment. The non-SSE
 POST answers with `{ messageId, model, content, finishReason, usage }`.
 
-### Run service
+### The run service
 
-`RunService.run(spec, host)` (`server/services/run/RunService.js`) runs an app
-without a client: an app called as a tool (`appToolsGateway.js`), an app called
-through MCP `tools/call` or by an A2A agent (`mcp/appInvoker.js`). The caller
-builds a run spec (`appRunSpec`) with a frozen run context (`RunContext.js`)
-and hands a host (`hosts/HeadlessHost.js`) that receives what the run
-produces.
+`RunService.run(spec, host)` (`server/services/run/RunService.js`) runs one piece of model
+work. The caller describes the run (the spec) and hands the host that watches it and receives
+what it produces. The legacy workflow engine (`PromptNodeExecutor`, `ToolNodeExecutor`) is
+outside the run service and frozen until it is replaced (#3784).
+
+**Request.** Two kinds of spec:
+
+| Spec | Built by | What the service does |
+| --- | --- | --- |
+| `app` (`appRunSpec`) | the app-as-tool gateway, the MCP and A2A app invoker | assembles the app's run (`assemble/fromApp.js`, `assembleFromApp`), opens and closes the ledger run (`kind: 'subagent'`) and runs the loop for a `HeadlessHost` |
+| `turn` (`turnRunSpec`, completed by the chat host with `turnLoopSpec`) | the chat route, the scheduler, the OpenAI-compatible API, through `assemble/fromApp.js` `assembleTurn` | runs the model part of a chat turn; the chat host opens the turn (ledger, stored question, `run/started`) and closes it (answer, terminal frames, title) |
+
+Each spec carries a frozen run context (`RunContext.js`):
 
 - **Context.** `createRunContext` freezes the context all the way down (the
   principal, its groups and permission sets, the grant): a seam that tries to
@@ -449,35 +459,86 @@ produces.
   `person` and for every principal that is not a person's account (an OAuth
   client, a personal API key, a service account); `isUnattendedCaller` in
   `utils/toolApproval.js` reads it.
-- **Refusals.** Before the model is called the service refuses a spec without a
-  context it built (`RUN_CONTEXT_INVALID`) and an app the principal may not open
-  (`APP_NOT_PERMITTED`), and writes each refusal to the audit log. The callers
-  that refuse before they reach the service (the app-as-tool gateway, the MCP
-  and A2A app invoker, the MCP handler) write theirs too
-  (`PRINCIPAL_UNRESOLVED`, `APP_NOT_PERMITTED`).
-- **Seams.** `seamProfiles.build({ interactions: 'none', host, bindings })`
-  returns the seams in order: `approval` (headless, fallback `deny`),
-  `question` (headless), `passthrough`, `image-lift`, then the host's
-  (`headless-tool-outputs`, `app-invoke-collector`). A call that needs approval
-  is refused with `APPROVAL_REQUIRED_NO_USER` and never becomes a pending
-  approval.
-- **Grant.** The run is granted the tools it offers its model, the tools tool
-  search can load and the web search fallback; every call goes through the
-  tool runner with `toolContext.run`, which re-checks the grant.
-- **Policies.** Those of a chat turn (`chatToolPolicies`, `chatContextPolicies`,
-  50 rounds), a wall-clock deadline of 180 s and 120 s per model call unless the
-  context's `budget` says otherwise (the MCP gateway: 60 s per model call).
-- **Result.** A `kind: 'subagent'` segment; the host returns
-  `{ status, finalMessage, toolCalls, sources, usage, finishReason, model, generatedFiles, images }`.
-- **Nesting.** An app called as a tool runs one level below its caller
-  (`childRunContext`, `depth` 1) and is offered no app tools of its own; the
-  caller's integration scopes apply where the called app uses the same
-  integrations (`assemble/fromApp.js`).
+- **Flags of the principal.** What the code of a run reads on its principal is derived from
+  the context and never set by a caller: `scheduledRun` (`{ taskId, runId }`) from the
+  context's `schedule`, `isInvokedViaAppAsTool` from its `depth`. A value a principal brings
+  along is replaced.
+
+**Assembly order.** For every run, in this order: the spec and the host are checked (a spec
+without a context the service built is refused, `RUN_CONTEXT_INVALID`; an app spec whose
+principal may not open the app is refused, `APP_NOT_PERMITTED`; a turn's app was checked by
+its caller before the question was stored); the request is assembled (an app spec here, a
+turn by its caller); the run is granted exactly the tools it offers its model, the tools tool
+search can load and the web search fallback (`withToolGrant`, with the run's id); the seams
+are built from the profile of who can answer; the loop runs inside the run's scope; the host
+gets the result. A refusal is written to the audit log and handed to the host as a failed run:
+a refused turn ends like any failed turn (`stream/error`, `run/ended`).
+
+**Seams.** `seamProfiles.build({ interactions, structuredOutput, host, bindings })` returns
+the seams in order: `approval`, the host's projection seams, `question`, `passthrough`,
+`image-lift`, the output contract (if any), the host's other seams. The approval seam is
+always first, so a gated call is decided before any seam announces, runs or records it.
+
+| `interactions` | Who answers | Approval | Question | Runs |
+| --- | --- | --- | --- | --- |
+| `person` | the person in the chat | the approval card; refused (`APPROVAL_REQUIRED_NO_USER`) when the client cannot draw it or the turn is not stored | pauses the run | a person's chat |
+| `owner` | the owner of a scheduled task, later | the scheduled run's own seam: the run waits for the owner | refused | a scheduled run |
+| `none` | nobody | refused (`APPROVAL_REQUIRED_NO_USER`), never pending | refused | an app turn of the OpenAI-compatible API, an app called as a tool, MCP, A2A |
+
+**Tool runner guarantees.** Every tool call of a run goes through the
+[tool runner](#tool-runner) with the run context (`toolContext.run`): the tool is one the run
+was granted, an integration's installation is still there and enabled and the principal's
+groups still grant it, a people directory is one the principal may use, an app is one the
+principal may open. A refused call never reaches the tool, the model gets the refusal as the
+tool result, and the audit log gets an entry (resource `tool`, `details.runId`).
+
+**Callers.**
+
+| Caller | Spec | Origin | Approval route | Host | Ledger kind |
+| --- | --- | --- | --- | --- | --- |
+| Chat (`chat/chatTurnStart.js`) | `turn` | `person` | `person` | chat host | `chat` |
+| Scheduled run (`scheduler/tasks/taskExecution.js`) | `turn` | `schedule` (no admin rights, `scheduledRun`) | `owner` | chat host, headless | `chat` (trigger `schedule`) |
+| `/v1/chat/completions`, `/v1/responses` with `model: "app:<id>"` (`inference/appTurn.js`) | `turn` | `person` | `deny` | chat host, headless, the API's emitter | `chat` |
+| App called as a tool (`chat/appToolsGateway.js`) | `app` | the caller's | the caller's | `HeadlessHost` | `subagent` |
+| MCP `tools/call` and A2A of an app (`mcp/appInvoker.js`) | `app` | `person` | nobody answers (`HeadlessHost`) | `HeadlessHost` | `subagent` |
+
+**Limits.**
+
+| Limit | Chat turn | Scheduled run | `/v1` app turn | App without a client |
+| --- | --- | --- | --- | --- |
+| Tool rounds | 50 | 50 | 50 | 50, or the context's `budget.maxToolRounds` |
+| Wall clock | 30 min for a stored turn; none for an unstored one (its client ends it) | the task's `maxRunMinutes`, at most 30 min | 30 min when stored | 180 s, or `budget.maxWallClockMs` |
+| Per model call | the route's timeout | `REQUEST_TIMEOUT` | the API's timeout | 120 s, or `budget.timeoutMs` (MCP: 60 s) |
+| Nesting | an app called as a tool runs one level deep (`depth` 1) and is offered no app tools | same | same | no further app |
+
+**Result.** An app spec: a `kind: 'subagent'` segment; the host returns
+`{ status, finalMessage, toolCalls, sources, usage, finishReason, model, generatedFiles, images }`.
+A turn spec: the loop's result, which the chat host projects onto the terminal frames and
+stores.
+
+**Logs, spans, gauge.** Every run runs in the scope of its ids (`server/utils/runScope.js`):
+each log line written for it carries `runId`, `parentRunId`, `kind`, `principalId`,
+`agentId`, `chatId` and `modelId` (a field the line sets itself wins), each model-call span
+carries them as attributes, and the gauge `ihub.runs.active` counts the runs in progress by
+kind and model. See [Telemetry](telemetry.md).
+
+**Kill switch.** `platform.runs.chatOnRunService: false` (not in Admin → Features; server
+restart) runs chat turns, scheduled runs and `/v1` app turns on the agent loop directly, with
+the seams they had before, and the callers keep their principals as they were (a scheduled
+run of an admin keeps the admin rights). It is removed one release after it shipped.
+
+**Architecture guards** (`server/tests/architecture/`): no `agentLoop.run(`,
+`new AgentLoop(` or `runTool(` outside `server/services/run/` except
+`runCallersAllowList.json` (the frozen legacy executors, #3784); no bare `fetch(`,
+`http(s).request(` / `.get(` or `new WebSocket(` in `server/tools` and
+`server/services/run` (only through the helpers that apply `ssl.domainWhitelist`); no
+`node:vm`, `eval(` or `new Function(` on the server except `dynamicCodeAllowList.json`.
 
 ### Tool runner
 
-Every tool call of a chat turn, of an app that runs as a tool (on the
-[run service](#run-service)), of the passthrough seam, of the MCP gateway (`tools/call` of an integration tool and
+Every tool call of a chat turn, of a scheduled run, of an app turn of the OpenAI-compatible
+API, of an app that runs as a tool (all on the
+[run service](#the-run-service)), of the passthrough seam, of the MCP gateway (`tools/call` of an integration tool and
 of a workflow) and of an inbound A2A task that starts a workflow goes through
 `ToolRunner.execute(call, { toolId, toolDef, args, signal, toolContext })`
 (`server/services/run/ToolRunner.js`). The runner applies the checks below,
@@ -495,8 +556,8 @@ alone; the runner logs every call with them.
 
 The frozen legacy workflow executors (`PromptNodeExecutor`, `ToolNodeExecutor`)
 still call `runTool` themselves and get none of these guarantees.
-`server/tests/run/runToolAllowList.json` lists them with their reason and the
-issue that removes them (#3784); `server/tests/run/runToolCallers.test.js`
+`server/tests/architecture/runCallersAllowList.json` lists them with their reason and the
+issue that removes them (#3784); `server/tests/architecture/runCallers.test.js`
 fails for any other `runTool(` call outside `server/services/run/`.
 
 | Check (test in `server/tests/run/toolRunner.checks.test.js`) | Before the runner | With the runner |
@@ -525,11 +586,10 @@ identity and re-checks the grant on every call. A refusal throws
 principal's permissions as they were when the run started: a grant withdrawn
 from a group applies to the next run (or MCP session), while a disabled or
 removed installation is refused on the next call. The rows below are tested in
-`server/tests/run/toolRunner.grant.test.js`. Callers with a run context: an app
-that runs as a tool (and its passthrough calls), the MCP gateway (`tools/call`
-of an integration and of a workflow) and an A2A task that starts a workflow.
-Chat turns and scheduled runs get the same checks when they move onto the run
-service.
+`server/tests/run/toolRunner.grant.test.js`. Callers with a run context: a chat turn, a scheduled run and an app turn of the
+OpenAI-compatible API (and their passthrough calls), an app that runs as a tool
+(and its passthrough calls), the MCP gateway (`tools/call` of an integration and
+of a workflow) and an A2A task that starts a workflow.
 
 | Check (test in `server/tests/run/toolRunner.grant.test.js`) | Before | With a run context |
 | --- | --- | --- |

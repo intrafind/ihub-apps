@@ -18,7 +18,7 @@ consumption, identify errors, and analyze performance.
 | Signal type | Examples | Where it ends up |
 | --- | --- | --- |
 | **Spans** | `chat gpt-4o`, `generate_content gemini-2.5-pro` | Jaeger, Tempo, OTLP collector |
-| **Metrics** | `gen_ai.client.token.usage`, `gen_ai.client.operation.duration`, `ihub.app.usage`, `ihub.active.users` | Prometheus, OTLP collector |
+| **Metrics** | `gen_ai.client.token.usage`, `gen_ai.client.operation.duration`, `ihub.app.usage`, `ihub.active.users`, `ihub.runs.active` | Prometheus, OTLP collector |
 | **Events**  | `gen_ai.content.prompt`, `gen_ai.content.completion`, `gen_ai.choice` | Attached to spans |
 | **Logs**    | Activity summary, structured server logs | Stdout, file, OTLP log collector |
 
@@ -159,6 +159,16 @@ iHub-specific span attributes:
 | `gen_ai.conversation.id` | Chat session id |
 | `conversation.is_follow_up` | True when the chat already had >2 messages |
 | `conversation.message_count` | Length of the message array |
+| `ihub.run.id` | The run the call belongs to (a chat turn, a scheduled run, an app turn of the OpenAI-compatible API, an app called as a tool or through MCP or A2A) |
+| `ihub.run.parent_id` | The run that started it (an app called as a tool: the chat turn that called it) |
+| `ihub.run.kind` | `chat` or `subagent` |
+| `ihub.principal.id` | Whom the run acts as |
+| `ihub.agent.id` | The agent the run belongs to (not set until agents exist) |
+
+The `ihub.run.*`, `ihub.principal.id` and `ihub.agent.id` attributes are set for every model
+call of a run on the run service. The span names are unchanged. The server's own log lines
+written for a run carry the same ids as fields (`runId`, `parentRunId`, `kind`, `principalId`,
+`agentId`, `chatId`, `modelId`), so the lines and the spans of one run can be found together.
 
 ## Metrics
 
@@ -231,6 +241,10 @@ iHub product counters & gauges:
   `com.intrafind/ifinder`), `project` for the project provider, or `unknown`; two installations
   of one integration share a label. The server sees the request, not the button, so a preview
   and a download are both `content`, and opens of an external link are not counted
+- `ihub.runs.active` - **observable gauge**, the runs on the run service in progress in this
+  process (chat turns, scheduled runs and app turns of the OpenAI-compatible API as `chat`, apps
+  called as a tool or through MCP or A2A as `subagent`), labelled by `run.kind` and
+  `gen_ai.request.model`. Per process: sum over the workers for the pod
 - `ihub.structured_output.validation` - server-side structured-output checks of
   the inference API, labelled by `structured_output.outcome` (`valid`,
   `valid_after_retry`, `invalid`, `skipped`, `not_reached`) and

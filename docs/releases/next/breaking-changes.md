@@ -75,3 +75,34 @@ them. A workflow that reads a profile's memory file (the iFinder corpus map of
 text of that workflow's **agentProfileId** start field still names the removed endpoint
 `POST /api/admin/agents/profiles/<id>/memory/from-tool`; ignore it. See
 [Agent Factory (Removed)](../../agents.md).
+
+## Unattended Runs Never Use Admin Rights
+
+A scheduled task now runs with the rights of its owner's groups and never with admin rights,
+also when the owner is an admin. Admin rights are for a person who is there; nobody is there
+while a scheduled run works. Runs started by a person (chats, the OpenAI-compatible API, MCP
+and A2A requests) keep the rights they had.
+
+What a scheduled run of an admin no longer gets:
+
+- **Workflows** that no group of the owner grants. An admin may start every workflow; the run
+  may start only the workflows the owner's groups list. The shipped `admins` group lists no
+  workflows, so on a default installation a scheduled task of an admin is offered no workflow.
+  A task whose **Tools** setting names such a workflow pauses with `TOOL_NOT_AVAILABLE`.
+- **Projects** the owner may read only as an admin (the compliance access to every project).
+  The run reaches the projects the owner owns or is a member of.
+- Anything else that checks the admin flag rather than a group permission. Apps, models and
+  integrations come from the groups and are unchanged; a scheduled task still needs the
+  **Scheduled tasks** permission of a group.
+
+Every tool call of a scheduled run, a chat and an app turn of the OpenAI-compatible API is now
+also checked against what the run may use when it is made: a call to an integration that was
+disabled or withdrawn from the owner's groups since the run started is refused, and the refusal
+is written to the audit log (**Admin → Audit Log**, resource `tool`, with the run's id).
+
+**Before upgrading:** Check the scheduled tasks of admins (**Admin → Scheduled Tasks**, or
+`GET /api/admin/scheduled-tasks`) for tasks that use workflows or projects. Grant the workflows
+to a group of the owner (for example `workflows` in the `admins` group in **Admin → Groups**),
+or add the owner to the projects. For one release, the internal switch
+`"runs": { "chatOnRunService": false }` in `platform.json` (server restart) brings the old
+behaviour back; it is removed in the next release.

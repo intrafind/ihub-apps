@@ -454,14 +454,17 @@ graph LR
 
 ```mermaid
 graph TB
-    Routes[sessionRoutes] --> ChatService[Chat Service]
+    Routes[sessionRoutes, scheduler, /v1] --> ChatService[Chat Service]
     ChatService --> RequestBuilder[Request Builder]
-    ChatService --> AgentLoop[Agent Loop]
-    ChatService --> Projection[chatChannel + chatSeams]
+    ChatService --> ChatHost[Chat Host]
+    ChatHost --> RunService[Run Service]
+    ChatHost --> Projection[chatChannel + chatSeams]
+    RunService --> AgentLoop[Agent Loop]
+    RunService --> ToolRunner[Tool Runner]
 
     RequestBuilder --> Templates[Process Templates]
     AgentLoop --> LLMClient[LLM Client]
-    AgentLoop --> Tools[runTool]
+    ToolRunner --> Tools[runTool]
     LLMClient --> LLMAdapter[LLM Adapter]
     Tools --> External[External APIs]
 
@@ -471,12 +474,24 @@ graph TB
 
 **Key Components**:
 - `ChatService.js` - One chat turn: `prepareChatRequest()`, `runTurn()`
-- `../run/RunService.js` - An app run without a client (app as a tool, MCP, A2A): `run(spec, host)`
+- `../run/hosts/ChatHost.js` - The turn itself: ledger, stored question and answer, frames; hands the
+  model part to the run service
+- `../run/RunService.js` - Every run on the agent loop: a chat turn, a scheduled run, an app turn of
+  `/v1`, an app as a tool, MCP, A2A: `run(spec, host)` with a frozen run context (`RunContext.js`)
+  and the seams of `seamProfiles.js` (see [agent-loop.md](agent-loop.md#the-run-service))
+- `../run/ToolRunner.js` - The one way a tool call reaches a tool; re-checks the run's grant
 - `RequestBuilder.js` - Resolves app, model, messages, tools and options (template processing)
 - `chatChannel.js` / `chatSeams.js` - Project loop chunks and tool events onto chat SSE events
 - `chatErrors.js` / `chatTelemetry.js` - Localized error payloads, usage and metrics per model call
 - `server/services/loop/AgentLoop.js` - The shared tool loop (see [agent-loop.md](agent-loop.md))
 - `server/services/loop/LLMClient.js` - The one way to call a model (see [llm-client.md](llm-client.md))
+
+**Rules the architecture tests enforce** (`server/tests/architecture/`): model work and tool
+calls go through the run service and the tool runner (no `agentLoop.run(`, `new AgentLoop(` or
+`runTool(` elsewhere, except the frozen legacy workflow executors); an outbound connection in
+`server/tools` or `server/services/run` goes through `httpFetch()` / `createAgent()` /
+`getWebSocketTlsOptions()` / `getTlsBypassOptions()`; no `node:vm`, `eval(` or `new Function(`
+outside a reviewed list. A new exception needs an entry with its reason in the test's allow-list.
 
 For detailed architecture information, see [docs/architecture.md](architecture.md).
 
@@ -949,6 +964,10 @@ Two rules are checked by `server/tests/e2e-agents-suite.test.js`: every test has
 - [ ] Check API documentation at http://localhost:3000/api-docs
 
 ### Load Testing
+
+A change to the chat path compares the time to first token of the base and the head commit back
+to back against the fake LLM (`tests/load/compare.mjs --base <ref>`, five repetitions each,
+medians; the head may be at most 10 % slower). See [tests/load/README.md](../tests/load/README.md).
 
 ```bash
 # Simple load test for API endpoints
