@@ -3,6 +3,7 @@
 
 import winston from 'winston';
 import { getContext } from './requestContext.js';
+import { currentRunScope } from './runScope.js';
 import { anonymizeIp } from './ipAnonymizer.js';
 
 // Default log level and format (fallback if not configured)
@@ -354,6 +355,8 @@ function processLogArgs(args) {
   // attributable without each call site having to pass them through.
   // Caller-provided fields always win.
   logData = mergeRequestContext(logData);
+  // The same for the run the line was written for (`runScope.js`): its ids.
+  logData = mergeRunScope(logData);
 
   // Redact sensitive information from the log data
   return redactSensitiveData(logData);
@@ -387,6 +390,26 @@ function mergeRequestContext(logData) {
     } else {
       merged.ip = ctx.ip;
     }
+  }
+  return merged;
+}
+
+/**
+ * Merge the ids of the run the line was written for (`utils/runScope.js`):
+ * `runId`, `parentRunId`, `kind`, `principalId`, `agentId`, `chatId`,
+ * `modelId`. A field the caller set wins. Unchanged outside a run.
+ *
+ * @param {Object} logData - Structured log data.
+ * @returns {Object}
+ */
+function mergeRunScope(logData) {
+  const scope = currentRunScope();
+  if (!scope) return logData;
+  let merged = logData;
+  for (const [key, value] of Object.entries(scope)) {
+    if (merged[key] !== undefined) continue;
+    if (merged === logData) merged = { ...logData };
+    merged[key] = value;
   }
   return merged;
 }

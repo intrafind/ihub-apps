@@ -63,7 +63,9 @@ const ALLOWED_METRIC_LABELS = new Set([
   'tool.outcome',
   'answer.kinds_bucket',
   'source.provider',
-  'source.action'
+  'source.action',
+  // runs on the run service (`ihub.runs.active`): a closed set of kinds
+  'run.kind'
 ]);
 
 function filterMetricLabels(attrs) {
@@ -129,6 +131,8 @@ let indexBuildDurationHistogram = null;
 let extractionDurationHistogram = null;
 let extractionQueueHistogram = null;
 let pendingIndexCacheProvider = null;
+let runsActiveGauge = null;
+let pendingRunsProvider = null;
 
 /**
  * Initialize metrics from a meter source. Accepts anything with a
@@ -326,7 +330,13 @@ export function initializeMetrics(meterSource) {
     advice: { explicitBucketBoundaries: WORK_DURATION_BUCKETS }
   });
 
+  runsActiveGauge = meter.createObservableGauge('ihub.runs.active', {
+    description: 'Runs on the run service in progress now, by run kind and model (per process)',
+    unit: '{run}'
+  });
+
   attachIndexCacheObservers();
+  attachRunsObserver();
 
   console.info(
     `GenAI metrics initialized - allowed labels: ${[...ALLOWED_METRIC_LABELS].join(', ')}`
@@ -422,6 +432,38 @@ function attachIndexCacheObservers() {
   pendingIndexCacheProvider = null;
   indexCacheEntriesGauge.addCallback(result => result.observe(provider.getStats().entries));
   indexCacheCharsGauge.addCallback(result => result.observe(provider.getStats().chars));
+}
+
+/**
+ * Register the provider of the active-runs gauge (`ihub.runs.active`): the
+ * runs on the run service in progress in this process, one entry per run
+ * kind and model. Kept until the gauge exists, like the index-cache provider.
+ *
+ * @param {Object} provider
+ * @param {() => Array<{kind: string, model: string, count: number}>} provider.getActiveRuns
+ */
+export function registerRunObservers(provider) {
+  if (!provider) return;
+  pendingRunsProvider = provider;
+  attachRunsObserver();
+}
+
+function attachRunsObserver() {
+  const provider = pendingRunsProvider;
+  if (!provider || !runsActiveGauge) return;
+  pendingRunsProvider = null;
+  runsActiveGauge.addCallback(result => {
+    try {
+      for (const { kind, model, count } of provider.getActiveRuns()) {
+        result.observe(
+          count,
+          filterMetricLabels({ 'run.kind': kind, 'gen_ai.request.model': model })
+        );
+      }
+    } catch (error) {
+      console.warn('Failed to observe active runs:', error.message);
+    }
+  });
 }
 
 /**

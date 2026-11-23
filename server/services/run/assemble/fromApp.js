@@ -16,6 +16,12 @@
  * Only the scopes the caller named are kept: an app called without any runs
  * without a scope binding, as before.
  *
+ * A chat turn of an app ({@link assembleTurn}: a person's chat, a scheduled
+ * run, an app turn of the inference API) comes with the request its caller
+ * built from what the person sent: its messages carry the template, and its
+ * scopes were resolved for the chat. It is prepared as it is, for the run's
+ * principal.
+ *
  * @module services/run/assemble/fromApp
  */
 
@@ -109,6 +115,26 @@ export async function assembleFromApp({
   });
   if (!prepared.success) return { ok: false, error: prepared.error };
   return { ok: true, data: prepared.data, integrationScopes: scopes.scopes };
+}
+
+/**
+ * Prepare a chat turn of an app for the principal of its run: the request
+ * the caller built (`prepareChatRequest` options without `user`), prepared as
+ * the run's principal. The principal's flags are the run context's
+ * (`RunContext.js`): a scheduled run's request is built for the owner without
+ * admin rights and with `scheduledRun`, so the tools it is offered are the
+ * ones that principal may use.
+ *
+ * @param {Object} params
+ * @param {{prepareChatRequest: Function}} params.chatService
+ * @param {Object} params.request - the options of `prepareChatRequest`; a `user` in it is
+ *   replaced by `principal`
+ * @param {Object} params.principal - the identity the run acts as (the run context's)
+ * @returns {Promise<{success: boolean, data?: Object, error?: Object}>} what
+ *   `prepareChatRequest` returns
+ */
+export async function assembleTurn({ chatService, request, principal }) {
+  return chatService.prepareChatRequest({ ...request, user: principal });
 }
 
 export default assembleFromApp;

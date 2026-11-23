@@ -69,7 +69,7 @@ export const FILE_TOOL = Object.freeze({
  */
 export async function offerFileTool(t) {
   const { runService } = await import('../../services/run/RunService.js');
-  const svc = runService.chatService;
+  const svc = await runService.chatServiceOf();
   const prepare = svc.prepareChatRequest.bind(svc);
   mock.method(svc, 'prepareChatRequest', async request => {
     const prepared = await prepare(request);

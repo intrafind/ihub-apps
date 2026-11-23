@@ -51,6 +51,7 @@ import ErrorHandler from '../../utils/ErrorHandler.js';
 import logger from '../../utils/logger.js';
 import { recordGeneratedImage, stampGeneratedImage } from '../provenance/mediaMarking.js';
 import { getGenAIInstrumentation } from '../../telemetry.js';
+import { currentRunScope } from '../../utils/runScope.js';
 import { resolveProviderName, resolveOperation } from '../../telemetry/providerMap.js';
 import runLogSingleton, { hashPayload } from './RunLog.js';
 import { LLMError, LLM_ERROR_CODES, isLLMError } from './contracts/errors.js';
@@ -1750,7 +1751,9 @@ export class LLMClient {
           chatId: telemetry.chatId || telemetry.runId,
           runId: telemetry.runId,
           messageCount: messages.length,
-          isFollowUp: messages.length > 2
+          isFollowUp: messages.length > 2,
+          // The run the call belongs to, when it runs on the run service.
+          run: currentRunScope()
         }
       );
       instrumentation.recordRequest(span, model, messages, {

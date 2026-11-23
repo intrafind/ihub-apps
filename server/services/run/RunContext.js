@@ -16,14 +16,23 @@
  * | `actor` | who acted: `{ kind, id }` |
  * | `agentId`, `agentVersion` | the agent the run belongs to; `null` until agents exist |
  * | `origin` | what started the run: `person` (a request of a person or of a program acting for one, inbound `/v1`, MCP and A2A included) or `schedule` |
+ * | `schedule` | the scheduled task and its run, for a run with the origin `schedule`: `{ taskId, runId }`; `null` otherwise |
  * | `unattended` | no person can answer: every origin other than `person`, and every principal other than `user` |
  * | `runId` | the run's own id, set by the run service when it starts the run (`withToolGrant`); `null` before |
  * | `parentRunId`, `depth` | the run that started this one (an app called as a tool) and how deep it is nested; 0 for a top-level run |
  * | `toolGrant` | the tool ids the run may call; the tool runner refuses any other (`null`: none) |
  * | `integrationGrant` | the installation ids the run may reach, or `null` for what the principal's groups grant |
- * | `approvalRoute` | who answers an approval: `person`, or `deny` where nobody can |
+ * | `approvalRoute` | who answers an approval: `person` (the person in the chat), `owner` (the owner of a scheduled task, later: the run waits), or `deny` where nobody can |
  * | `budget` | limits of the run (`maxToolRounds`, `maxWallClockMs`, `timeoutMs`) |
  * | `taint` | whether untrusted content woke the run; always `false` until the trust rules land |
+ *
+ * What the principal carries for the code a run reaches (the request builder,
+ * the tools) is derived from these fields here and nowhere else: a scheduled
+ * run's principal carries `scheduledRun` (`{ taskId, runId }`, from
+ * `schedule`), the principal of an app called as a tool carries
+ * `isInvokedViaAppAsTool` (from `depth`). A caller never sets them on a
+ * principal itself, and a value a principal brings along is replaced by the
+ * context's.
  *
  * @module services/run/RunContext
  */
@@ -34,7 +43,7 @@ import { PRINCIPAL_TYPES, principalTypeOf } from './principalTypes.js';
 export const RUN_ORIGINS = Object.freeze(['person', 'schedule']);
 
 /** Who answers an approval of the run. */
-export const APPROVAL_ROUTES = Object.freeze(['person', 'deny']);
+export const APPROVAL_ROUTES = Object.freeze(['person', 'owner', 'deny']);
 
 /** How deep a run may be nested: an app called as a tool calls no further app. */
 export const MAX_RUN_DEPTH = 1;
@@ -118,6 +127,47 @@ export function frozenCopy(value) {
   return value;
 }
 
+/**
+ * The scheduled task and run of a run with the origin `schedule`, or null.
+ *
+ * @param {unknown} schedule
+ * @param {string} origin
+ * @returns {{taskId: string, runId: string}|null}
+ */
+function scheduleOf(schedule, origin) {
+  if (schedule === null || schedule === undefined) return null;
+  if (origin !== 'schedule') {
+    throw new RunContextError(
+      RUN_CONTEXT_ERROR_CODES.INVALID,
+      'Only a run with the origin schedule names a scheduled task'
+    );
+  }
+  if (!schedule?.taskId || !schedule?.runId) {
+    throw new RunContextError(
+      RUN_CONTEXT_ERROR_CODES.INVALID,
+      'A scheduled run names its task and its run'
+    );
+  }
+  return { taskId: String(schedule.taskId), runId: String(schedule.runId) };
+}
+
+/**
+ * The principal as the code of the run sees it: the flags the context
+ * decides, never the ones the principal brought along.
+ *
+ * @param {Object} principal
+ * @param {{schedule: Object|null, depth: number}} fields
+ * @returns {Object}
+ */
+function principalWithRunFlags(principal, { schedule, depth }) {
+  const { scheduledRun: _scheduledRun, isInvokedViaAppAsTool: _invoked, ...rest } = principal;
+  return {
+    ...rest,
+    ...(schedule ? { scheduledRun: { taskId: schedule.taskId, runId: schedule.runId } } : {}),
+    ...(depth > 0 ? { isInvokedViaAppAsTool: true } : {})
+  };
+}
+
 const idList = (value, field) => {
   if (value === null || value === undefined) return null;
   if (!Array.isArray(value) && !(value instanceof Set)) {
@@ -133,6 +183,8 @@ const idList = (value, field) => {
  * @param {Object} params.principal - the resolved principal (`principalResolver.resolvePrincipal`)
  * @param {'user'|'client'|'service'} [params.principalType] - derived from the principal when left out
  * @param {'person'|'schedule'} [params.origin='person']
+ * @param {{taskId: string, runId: string}|null} [params.schedule] - the scheduled task and its
+ *   run; only with the origin `schedule`
  * @param {{kind: string, id: string}} [params.actor]
  * @param {string|null} [params.agentId]
  * @param {string|number|null} [params.agentVersion]
@@ -141,7 +193,8 @@ const idList = (value, field) => {
  * @param {number} [params.depth=0]
  * @param {Iterable<string>|null} [params.toolGrant]
  * @param {Iterable<string>|null} [params.integrationGrant]
- * @param {'person'|'deny'} [params.approvalRoute] - `deny` for an unattended run when left out
+ * @param {'person'|'owner'|'deny'} [params.approvalRoute] - `deny` for an unattended run when
+ *   left out
  * @param {Object} [params.budget]
  * @param {boolean} [params.taint=false]
  * @returns {Readonly<Object>} the context
@@ -151,6 +204,7 @@ export function createRunContext({
   principal,
   principalType,
   origin = 'person',
+  schedule = null,
   actor,
   agentId = null,
   agentVersion = null,
@@ -182,18 +236,20 @@ export function createRunContext({
       `A run is nested at most ${MAX_RUN_DEPTH} deep`
     );
   }
+  const scheduled = scheduleOf(schedule, origin);
   const unattended = origin !== 'person' || type !== 'user';
   const route = approvalRoute ?? (unattended ? 'deny' : 'person');
   if (!APPROVAL_ROUTES.includes(route)) {
     throw new RunContextError(RUN_CONTEXT_ERROR_CODES.INVALID, `Unknown approval route: ${route}`);
   }
   const context = frozenCopy({
-    principal,
+    principal: principalWithRunFlags(principal, { schedule: scheduled, depth }),
     principalType: type,
     actor: actor ?? { kind: origin === 'person' ? type : origin, id: String(principal.id ?? '') },
     agentId,
     agentVersion,
     origin,
+    schedule: scheduled,
     unattended,
     runId: runId ? String(runId) : null,
     parentRunId: parentRunId ? String(parentRunId) : null,
@@ -268,6 +324,7 @@ export function childRunContext(parent, { principal, parentRunId = null }) {
     principal,
     principalType: parent?.principalType,
     origin: parent?.origin ?? 'person',
+    schedule: parent?.schedule ?? null,
     approvalRoute: parent?.approvalRoute,
     agentId: parent?.agentId ?? null,
     agentVersion: parent?.agentVersion ?? null,

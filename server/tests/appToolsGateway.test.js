@@ -155,7 +155,7 @@ describe('invokeAppTool', () => {
       mock.restoreAll();
     });
     // What the called app's own tool calls get beside their arguments.
-    const inner = runService.chatService.toolRunner;
+    const inner = (await runService.chatServiceOf()).toolRunner;
     const innerExecute = inner.execute.bind(inner);
     const innerContexts = [];
     mock.method(inner, 'execute', (callArg, request) => {

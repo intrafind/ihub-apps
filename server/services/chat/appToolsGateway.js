@@ -318,10 +318,11 @@ export async function invokeAppTool({
   });
 
   try {
-    // The callee runs one level deep, as the caller, marked so it is offered
-    // no further app tools.
+    // The callee runs one level deep, as the caller. Its context marks its
+    // principal (`isInvokedViaAppAsTool`, from the depth), so it is offered no
+    // further app tools.
     const context = childRunContext(parentContext, {
-      principal: { ...resolved.principal, isInvokedViaAppAsTool: true },
+      principal: resolved.principal,
       parentRunId: executionId || chatId
     });
     const result = await runService.run(

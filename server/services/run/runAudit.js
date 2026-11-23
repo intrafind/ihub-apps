@@ -16,7 +16,7 @@
 import { logAudit } from '../AuditLogService.js';
 
 /** The audit source of a call, by the caller that made it. */
-const SOURCE_BY_ORIGIN = Object.freeze({ mcp: 'mcp', a2a: 'api' });
+const SOURCE_BY_ORIGIN = Object.freeze({ mcp: 'mcp', a2a: 'api', inference: 'api' });
 
 /**
  * Record a refusal in the audit log.
@@ -26,7 +26,7 @@ const SOURCE_BY_ORIGIN = Object.freeze({ mcp: 'mcp', a2a: 'api' });
  * @param {'app'|'tool'} params.resource
  * @param {string} params.resourceId
  * @param {string} params.code - why it was refused
- * @param {string} [params.origin] - the caller (`chat`, `subagent`, `mcp`, `a2a`)
+ * @param {string} [params.origin] - the caller (`chat`, `schedule`, `inference`, `subagent`, `mcp`, `a2a`)
  * @param {string|null} [params.runId] - the run the refused call belongs to
  * @param {string|null} [params.parentRunId] - the run that started that run
  * @param {string} params.summary
