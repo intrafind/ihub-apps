@@ -21,6 +21,7 @@ import SkillVersionsModal from '../../skills/components/SkillVersionsModal';
 import { skillErrorMessage } from '../../skills/utils/skillErrors';
 import { skillValidationMessage, validateSkillName } from '../../skills/utils/skillValidation';
 import { DataTable, SearchInput } from './data-table';
+import { SaveSectionsBar, SaveSectionsProvider, useSaveSection } from './SaveSections';
 
 const inputClass =
   'block w-full rounded-md border border-admin-control-border dark:border-admin-control-border-dark bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500';
@@ -194,28 +195,57 @@ function PromoteDialog({ skill, onClose, onPromoted }) {
  */
 function UserSkillSettingsPanel() {
   const { t } = useTranslation();
-  const [state, setState] = useState(null);
-  const [draft, setDraft] = useState(null);
-  const [groups, setGroups] = useState([]);
+  const [initial, setInitial] = useState(null);
   const [forbidden, setForbidden] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState(null);
-  const [saved, setSaved] = useState(false);
+  const [loadError, setLoadError] = useState(null);
 
   useEffect(() => {
     let active = true;
     fetchUserSkillSettings()
       .then(data => {
         if (!active) return;
-        const settings = normalizeSettings(data?.settings);
-        setState({ settings, storageAvailable: data?.storageAvailable !== false });
-        setDraft(settings);
+        setInitial({
+          settings: normalizeSettings(data?.settings),
+          storageAvailable: data?.storageAvailable !== false
+        });
       })
       .catch(err => {
         if (!active) return;
         if (err?.status === 403 || err?.status === 401) setForbidden(true);
-        else setError(skillErrorMessage(err, t));
+        else setLoadError(skillErrorMessage(err, t));
       });
+    return () => {
+      active = false;
+    };
+  }, [t]);
+
+  if (forbidden) return null;
+  if (!initial) {
+    return loadError ? (
+      <p className="mt-4 text-sm text-red-600 dark:text-red-400">{loadError}</p>
+    ) : null;
+  }
+  return <UserSkillSettingsForm initial={initial} />;
+}
+
+/**
+ * The loaded settings. It registers with the page's save bar and has no Save button of its
+ * own; nothing is registered (so no bar) before the settings loaded.
+ *
+ * @param {Object} props
+ * @param {{settings: Object, storageAvailable: boolean}} props.initial
+ */
+function UserSkillSettingsForm({ initial }) {
+  const { t } = useTranslation();
+  const [state, setState] = useState(initial);
+  const [draft, setDraft] = useState(initial.settings);
+  const [groups, setGroups] = useState([]);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    let active = true;
     fetchAdminGroups()
       .then(data => {
         if (active) setGroups(Object.keys(data?.groups || {}).filter(id => id !== 'anonymous'));
@@ -224,12 +254,7 @@ function UserSkillSettingsPanel() {
     return () => {
       active = false;
     };
-  }, [t]);
-
-  if (forbidden) return null;
-  if (!draft) {
-    return error ? <p className="mt-4 text-sm text-red-600 dark:text-red-400">{error}</p> : null;
-  }
+  }, []);
 
   const update = patch => {
     setDraft(prev => ({ ...prev, ...patch }));
@@ -250,12 +275,22 @@ function UserSkillSettingsPanel() {
       setState({ settings, storageAvailable: data?.storageAvailable !== false });
       setDraft(settings);
       setSaved(true);
+      return true;
     } catch (err) {
       setError(skillErrorMessage(err, t));
+      return false;
     } finally {
       setSaving(false);
     }
   };
+
+  const discard = () => {
+    setDraft(state.settings);
+    setSaved(false);
+    setError(null);
+  };
+
+  useSaveSection('user-skill-settings', { dirty, saving, error, save, discard });
 
   const toggle = (label, checked, onChange) => (
     <label className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300">
@@ -407,26 +442,12 @@ function UserSkillSettingsPanel() {
             </div>
           </fieldset>
         )}
-        {error && (
-          <p className="text-sm text-red-600 dark:text-red-400" role="alert">
-            {error}
+        {/* The save error is shown by the page's bar; Save and Discard live there too. */}
+        {saved && !dirty && (
+          <p className="text-right text-sm text-green-700 dark:text-green-400">
+            {t('admin.skills.userSkills.saved', 'Saved')}
           </p>
         )}
-        <div className="flex items-center justify-end gap-3">
-          {saved && !dirty && (
-            <span className="text-sm text-green-700 dark:text-green-400">
-              {t('admin.skills.userSkills.saved', 'Saved')}
-            </span>
-          )}
-          <button
-            type="button"
-            onClick={save}
-            disabled={!dirty || saving}
-            className="px-4 py-2 text-sm rounded-md bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
-          >
-            {t('common.save', 'Save')}
-          </button>
-        </div>
       </div>
     </details>
   );
@@ -611,140 +632,143 @@ function AdminUserSkillsTab({ onGlobalSkillsChanged }) {
   ];
 
   return (
-    <div className="mt-6">
-      <p className="text-sm text-gray-600 dark:text-gray-300">
-        {t(
-          'admin.skills.userSkills.intro',
-          'Skills users have shared with a group or with everyone. You can edit, re-share, delete or promote them to a global skill; private skills and skills shared with named users only are not listed.'
-        )}
-      </p>
-      <UserSkillSettingsPanel />
-
-      {!available && (
-        <p className="mt-4 text-sm text-amber-700 dark:text-amber-300">
+    <SaveSectionsProvider>
+      <div className="mt-6">
+        <p className="text-sm text-gray-600 dark:text-gray-300">
           {t(
-            'admin.skills.userSkills.storageDown',
-            'The storage provider is not available, so users cannot keep skills right now.'
+            'admin.skills.userSkills.intro',
+            'Skills users have shared with a group or with everyone. You can edit, re-share, delete or promote them to a global skill; private skills and skills shared with named users only are not listed.'
           )}
         </p>
-      )}
-      {notice && (
-        <div
-          role="status"
-          className="mt-4 flex items-center justify-between rounded-md bg-green-50 dark:bg-green-900/30 px-4 py-2 text-sm text-green-700 dark:text-green-300"
-        >
-          <span>{notice}</span>
-          <button
-            type="button"
-            onClick={() => setNotice(null)}
-            aria-label={t('common.close', 'Close')}
-          >
-            <Icon name="x" size="sm" />
-          </button>
-        </div>
-      )}
-      {error && (
-        <p className="mt-4 text-sm text-red-600 dark:text-red-400" role="alert">
-          {error}
-        </p>
-      )}
+        <UserSkillSettingsPanel />
 
-      <div className="mt-6 flex flex-wrap items-center gap-3">
-        <SearchInput
-          value={search}
-          onChange={setSearch}
-          placeholder={t('admin.skills.searchPlaceholder', 'Search skills...')}
-        />
-        {truncated && (
-          <span className="text-xs text-gray-500 dark:text-gray-400">
-            {t('admin.skills.userSkills.truncated', 'Showing the first skills only')}
-          </span>
+        {!available && (
+          <p className="mt-4 text-sm text-amber-700 dark:text-amber-300">
+            {t(
+              'admin.skills.userSkills.storageDown',
+              'The storage provider is not available, so users cannot keep skills right now.'
+            )}
+          </p>
         )}
-      </div>
+        {notice && (
+          <div
+            role="status"
+            className="mt-4 flex items-center justify-between rounded-md bg-green-50 dark:bg-green-900/30 px-4 py-2 text-sm text-green-700 dark:text-green-300"
+          >
+            <span>{notice}</span>
+            <button
+              type="button"
+              onClick={() => setNotice(null)}
+              aria-label={t('common.close', 'Close')}
+            >
+              <Icon name="x" size="sm" />
+            </button>
+          </div>
+        )}
+        {error && (
+          <p className="mt-4 text-sm text-red-600 dark:text-red-400" role="alert">
+            {error}
+          </p>
+        )}
 
-      <div className="mt-4">
-        <DataTable
-          columns={columns}
-          data={filtered}
-          getRowId={skill => skill.id}
-          actions={actions}
-          loading={loading}
-          onRowClick={skill => setPreview({ ...skill, scope: skill.scope || 'shared' })}
-          empty={{
-            icon: 'users',
-            title: t('admin.skills.userSkills.empty', 'No shared user skills'),
-            description: t(
-              'admin.skills.userSkills.emptyDesc',
-              'When users share skills with a group or with everyone, they show up here.'
-            )
-          }}
-        />
-      </div>
+        <div className="mt-6 flex flex-wrap items-center gap-3">
+          <SearchInput
+            value={search}
+            onChange={setSearch}
+            placeholder={t('admin.skills.searchPlaceholder', 'Search skills...')}
+          />
+          {truncated && (
+            <span className="text-xs text-gray-500 dark:text-gray-400">
+              {t('admin.skills.userSkills.truncated', 'Showing the first skills only')}
+            </span>
+          )}
+        </div>
 
-      {preview && <SkillDetailsModal skill={preview} onClose={() => setPreview(null)} />}
-      {editing && (
-        <SkillEditorModal
-          skill={editing}
-          onClose={() => setEditing(null)}
-          onSaved={() => {
-            setEditing(null);
-            done(t('skills.notices.saved', 'Skill saved'));
-          }}
+        <div className="mt-4">
+          <DataTable
+            columns={columns}
+            data={filtered}
+            getRowId={skill => skill.id}
+            actions={actions}
+            loading={loading}
+            onRowClick={skill => setPreview({ ...skill, scope: skill.scope || 'shared' })}
+            empty={{
+              icon: 'users',
+              title: t('admin.skills.userSkills.empty', 'No shared user skills'),
+              description: t(
+                'admin.skills.userSkills.emptyDesc',
+                'When users share skills with a group or with everyone, they show up here.'
+              )
+            }}
+          />
+        </div>
+
+        {preview && <SkillDetailsModal skill={preview} onClose={() => setPreview(null)} />}
+        {editing && (
+          <SkillEditorModal
+            skill={editing}
+            onClose={() => setEditing(null)}
+            onSaved={() => {
+              setEditing(null);
+              done(t('skills.notices.saved', 'Skill saved'));
+            }}
+          />
+        )}
+        {sharing && (
+          <SkillShareDialog
+            skill={sharing}
+            onClose={() => setSharing(null)}
+            onSaved={() => {
+              setSharing(null);
+              done(t('skills.notices.shared', 'Sharing updated'));
+            }}
+          />
+        )}
+        {history && (
+          <SkillVersionsModal
+            skill={history}
+            canRestore
+            onClose={() => setHistory(null)}
+            onRestored={() => {
+              setHistory(null);
+              done(t('skills.notices.restored', 'Version restored'));
+            }}
+          />
+        )}
+        {promoting && (
+          <PromoteDialog
+            skill={promoting}
+            onClose={() => setPromoting(null)}
+            onPromoted={result => {
+              setPromoting(null);
+              done(
+                t('admin.skills.userSkills.promoted', {
+                  defaultValue: 'Promoted to global skill {{name}}',
+                  name: result?.name || ''
+                })
+              );
+              onGlobalSkillsChanged?.();
+            }}
+          />
+        )}
+        <ConfirmDialog
+          isOpen={Boolean(deleting)}
+          title={t('skills.delete.title', 'Delete skill?')}
+          message={t('admin.skills.userSkills.deleteMessage', {
+            defaultValue:
+              '“{{name}}” by {{owner}} will be deleted for its owner and everyone it is shared with.',
+            name: deleting?.name || '',
+            owner: deleting?.owner?.name || deleting?.owner?.id || ''
+          })}
+          confirmLabel={t('common.delete', 'Delete')}
+          denyLabel={t('common.cancel', 'Cancel')}
+          danger
+          onConfirm={confirmDelete}
+          onDeny={() => setDeleting(null)}
         />
-      )}
-      {sharing && (
-        <SkillShareDialog
-          skill={sharing}
-          onClose={() => setSharing(null)}
-          onSaved={() => {
-            setSharing(null);
-            done(t('skills.notices.shared', 'Sharing updated'));
-          }}
-        />
-      )}
-      {history && (
-        <SkillVersionsModal
-          skill={history}
-          canRestore
-          onClose={() => setHistory(null)}
-          onRestored={() => {
-            setHistory(null);
-            done(t('skills.notices.restored', 'Version restored'));
-          }}
-        />
-      )}
-      {promoting && (
-        <PromoteDialog
-          skill={promoting}
-          onClose={() => setPromoting(null)}
-          onPromoted={result => {
-            setPromoting(null);
-            done(
-              t('admin.skills.userSkills.promoted', {
-                defaultValue: 'Promoted to global skill {{name}}',
-                name: result?.name || ''
-              })
-            );
-            onGlobalSkillsChanged?.();
-          }}
-        />
-      )}
-      <ConfirmDialog
-        isOpen={Boolean(deleting)}
-        title={t('skills.delete.title', 'Delete skill?')}
-        message={t('admin.skills.userSkills.deleteMessage', {
-          defaultValue:
-            '“{{name}}” by {{owner}} will be deleted for its owner and everyone it is shared with.',
-          name: deleting?.name || '',
-          owner: deleting?.owner?.name || deleting?.owner?.id || ''
-        })}
-        confirmLabel={t('common.delete', 'Delete')}
-        denyLabel={t('common.cancel', 'Cancel')}
-        danger
-        onConfirm={confirmDelete}
-        onDeny={() => setDeleting(null)}
-      />
-    </div>
+        <SaveSectionsBar />
+      </div>
+    </SaveSectionsProvider>
   );
 }
 

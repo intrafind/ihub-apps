@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import ApprovalCard, {
   formatApprovalArgs
@@ -23,6 +23,10 @@ import ToolApprovalConfig, {
   toolApprovalPatchFromForm
 } from '../../../client/src/features/admin/components/ToolApprovalConfig';
 import { makeAdminApiCall } from '../../../client/src/api/adminApi';
+import {
+  SaveSectionsProvider,
+  SaveSectionsBar
+} from '../../../client/src/features/admin/components/SaveSections';
 import { toolApprovalAnswer } from '../../../client/src/features/chat/toolApprovalAnswer';
 
 /**
@@ -264,8 +268,16 @@ describe('installation approval editing', () => {
             }
           }
     );
-    render(<ToolApprovalConfig />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Save' }));
+    render(
+      <SaveSectionsProvider>
+        <ToolApprovalConfig />
+        <SaveSectionsBar />
+      </SaveSectionsProvider>
+    );
+    // The page's save bar saves the card, and only once something changed.
+    fireEvent.change(await screen.findByLabelText('All tools'), { target: { value: 'always' } });
+    const barButtons = within(screen.getByRole('region')).getAllByRole('button');
+    fireEvent.click(barButtons[barButtons.length - 1]);
     // A scoped PATCH (R1): the Security page's other cards save platform.json
     // through their own routes, so a guarded POST would report a false 412.
     await waitFor(() =>
@@ -279,7 +291,7 @@ describe('installation approval editing', () => {
     );
     const save = makeAdminApiCall.mock.calls.find(([, options]) => options?.method === 'PATCH');
     expect(save[1].body).toEqual({
-      toolApproval: { defaults: { default: null, internal: null, external: 'writes' } }
+      toolApproval: { defaults: { default: 'always', internal: null, external: 'writes' } }
     });
   });
 

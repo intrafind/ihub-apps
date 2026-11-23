@@ -13,6 +13,7 @@
  *
  * @param {Object} props
  * @param {boolean} [props.disabled=false] - A save is running
+ * @param {string} [props.form] - The id of the form, when the button sits outside it
  * @returns {JSX.Element}
  *
  * @example
@@ -21,10 +22,11 @@
  *   …fields…
  * </form>
  */
-export default function ImplicitSubmit({ disabled = false }) {
+export default function ImplicitSubmit({ disabled = false, form }) {
   return (
     <button
       type="submit"
+      form={form}
       disabled={disabled}
       tabIndex={-1}
       aria-hidden="true"

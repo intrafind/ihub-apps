@@ -126,6 +126,10 @@ const AdminOAuthClientsPage =
 const AdminOAuthServerPage =
   require('../../../client/src/features/admin/pages/AdminOAuthServerPage').default;
 
+const {
+  SaveSectionsBar,
+  SaveSectionsProvider
+} = require('../../../client/src/features/admin/components/SaveSections');
 const { localizedTextPatch } = require('../../../client/src/features/admin/utils/platformPatch');
 
 const PLATFORM_URL = '/admin/configs/platform';
@@ -354,38 +358,34 @@ describe('a successful save advances the form revision', () => {
 describe('cards that share their page with other platform.json writers save with PATCH', () => {
   const patchBodies = () => server.patches.map(patch => patch.body);
 
-  test('EU AI Act: the AI notice card, then the AI acknowledgement card, both save (no 412)', async () => {
+  test('EU AI Act: one Save writes the AI notice card, then the AI acknowledgement card (no 412)', async () => {
     server.platform = {
       aiDisclosure: { firstTurnNotice: { enabled: true, text: {} } },
       aiAcknowledgement: { enabled: true, enforce: true, text: {}, policyUrl: '/policy' }
     };
     renderWithNotice(
-      <>
-        <div data-testid="notice">
-          <AiNoticeSettingsCard />
-        </div>
-        <div data-testid="ack">
-          <AiAcknowledgementSettingsCard />
-        </div>
-      </>
+      <SaveSectionsProvider>
+        <AiNoticeSettingsCard />
+        <AiAcknowledgementSettingsCard />
+        <SaveSectionsBar />
+      </SaveSectionsProvider>
     );
-    const saveIn = id => within(screen.getByTestId(id)).getByRole('button', { name: 'Save' });
-    await waitFor(() => expect(saveIn('notice')).toBeInTheDocument());
-    await waitFor(() => expect(saveIn('ack')).toBeInTheDocument());
+    const policy = () => screen.getByLabelText('AI policy link (https://… or /path)');
+    await waitFor(() => expect(policy()).toBeInTheDocument());
+    await screen.findByLabelText('Show an AI notice before the first message');
 
-    fireEvent.click(saveIn('notice'));
-    await waitFor(() => expect(server.patches).toHaveLength(1));
+    // Nothing changed: no bar.
+    expect(screen.queryByRole('region', { name: /save changes/i })).not.toBeInTheDocument();
 
-    // The admin clears the policy link: the PATCH removes it with null.
-    fireEvent.change(screen.getByLabelText('AI policy link (https://… or /path)'), {
-      target: { value: '' }
-    });
-    fireEvent.click(saveIn('ack'));
+    // The admin switches the notice off and clears the policy link (the PATCH removes it with null).
+    fireEvent.click(screen.getByLabelText('Show an AI notice before the first message'));
+    fireEvent.change(policy(), { target: { value: '' } });
+    fireEvent.click(barSave());
     await waitFor(() => expect(server.patches).toHaveLength(2));
     await act(async () => {});
 
     expect(patchBodies()[0]).toEqual({
-      aiDisclosure: { firstTurnNotice: { enabled: true, text: {} }, guardrail: { text: null } }
+      aiDisclosure: { firstTurnNotice: { enabled: false, text: {} }, guardrail: { text: null } }
     });
     expect(patchBodies()[1]).toEqual({
       aiAcknowledgement: { enabled: true, enforce: true, text: {}, policyUrl: null }
@@ -393,32 +393,33 @@ describe('cards that share their page with other platform.json writers save with
     expect(server.patches.every(patch => patch.ifMatch === null)).toBe(true);
     expect(posts()).toEqual([]);
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
-    expect(screen.getAllByText(/saved/).length).toBeGreaterThanOrEqual(2);
+    await waitFor(() =>
+      expect(screen.queryByRole('region', { name: /save changes/i })).not.toBeInTheDocument()
+    );
   });
 
-  test('Logging: the logging save, then the authentication debug save, both succeed (no 412)', async () => {
+  test('Logging: one Save writes the logging block, then the authentication debug block (no 412)', async () => {
     server.platform = { auth: { debug: { enabled: false } } };
     renderWithNotice(<AdminLoggingPage />);
-    const saveLogging = () => screen.getByRole('button', { name: 'Save Logging Configuration' });
-    const saveDebug = () =>
-      screen.getByRole('button', { name: 'Save Authentication Debug Settings' });
-    await waitFor(() => expect(saveDebug()).toBeInTheDocument());
+    const debugToggle = () => screen.getByLabelText('Enable authentication debug logging');
+    await waitFor(() => expect(debugToggle()).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByLabelText('Enable component filtering')).toBeEnabled());
 
-    fireEvent.click(saveLogging());
-    await waitFor(() => expect(server.revision).toBe(2));
-    await waitFor(() => expect(saveDebug()).not.toBeDisabled());
-    fireEvent.click(saveDebug());
+    // Two blocks changed: the logging block and the authentication debug block.
+    fireEvent.click(screen.getByLabelText('Enable component filtering'));
+    fireEvent.click(debugToggle());
+    fireEvent.click(barSave());
     await waitFor(() => expect(server.patches).toHaveLength(1));
     await act(async () => {});
 
+    // The logging PUT moved the revision first; the debug PATCH followed without a 412.
+    expect(server.revision).toBe(3);
     const [body] = patchBodies();
     expect(Object.keys(body)).toEqual(['auth']);
     expect(Object.keys(body.auth)).toEqual(['debug']);
-    expect(body.auth.debug.enabled).toBe(false);
+    expect(body.auth.debug.enabled).toBe(true);
     expect(posts()).toEqual([]);
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
-    // The message renders after the PATCH resolves, which can take more than
-    // the one flush above on a loaded runner.
     expect(
       await screen.findByText('Authentication debug configuration saved successfully')
     ).toBeInTheDocument();

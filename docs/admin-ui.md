@@ -701,7 +701,9 @@ or the close button closes it and returns focus to the **History** button.
 
 On an edit page, the bar at the bottom of the screen shows only while you have unsaved changes. It says **You have unsaved changes** and offers **Save Changes** (**Create** on the page of a new item) and **Discard**. **Discard** puts the page back to what is saved. When there is nothing to save, there is no bar.
 
-The bar is on the edit pages of apps, groups, users, models, prompts, agents, agent inboxes, workflows, document templates, providers, short links, OAuth clients, CIMD clients, custom pages and skills, and on **UI Customization**, **Disclaimer** and **Artifacts**. The settings pages **Authentication**, **Features**, **Feedback**, **Chat History**, **Localization**, **Telemetry**, **Voice Input**, **MCP Gateway**, **OAuth Server**, **Nextcloud Embed**, **Browser Extension**, **Copilot Agent** and **Office Integration** use it too. The pages with several sections (**Security**, **Logging**, the EU AI Act cards) and a few others still have their own Save button and move to the bar step by step.
+The bar is on the edit pages of apps, groups, users, models, prompts, agents, agent inboxes, workflows, document templates, providers, short links, OAuth clients, CIMD clients, custom pages and skills, and on **UI Customization**, **Disclaimer** and **Artifacts**. The settings pages **Authentication**, **Features**, **Feedback**, **Chat History**, **Localization**, **Telemetry**, **Voice Input**, **MCP Gateway**, **OAuth Server**, **Nextcloud Embed**, **Browser Extension**, **Copilot Agent** and **Office Integration** use it too.
+
+Pages and cards with several independent sections have one bar for the whole page, not one Save per section: **Security** (SSL, cookies, CORS, proxy, rate limits, SSRF and tool approval), **Logging** (logging, authentication debugging and privacy), the EU AI Act cards (AI notice, acknowledgement, provenance), **Scheduled Tasks**, the **Integration Builder**, the **Installation** page of an integration (its **Settings** tab and the approval defaults on **Overview**), the visual workflow editor, a new project, and the cards embedded in a list page (usage limits, LLM timeouts, project sharing, personal apps, user prompts and skills). **Save** stores every section with changes, in the order of the page, and stops at the first one that fails; the sections already stored stay stored, and a second **Save** sends only the rest. **Discard** puts every section back to what is saved. A section with a refused value (for example a number out of range) is not blocked by a greyed-out button: **Save** says what is wrong in the bar.
 
 - An item made from a template or a copy can be created at once; the bar is there as the page opens.
 - A refused save (for example a missing field or a taken ID) keeps your changes and the bar, and says what is wrong.
@@ -725,9 +727,9 @@ Some things never ask:
 - A page that is still loading, or whose settings could not be loaded: there is nothing of yours to lose.
 - Saving and then leaving.
 
-On pages with several sections that each have their own Save button, such as **Security**, every section with unsaved changes is marked with **Unsaved changes** next to its heading and a dot in the section list, and one dialog covers them all. On an integration's page and on **Usage Reports**, edits on the **Settings** and **Limits & quotas** tabs are kept when you switch to another tab of the same page and come back; leaving the page asks first.
+On pages with several sections, such as **Security**, every section with unsaved changes is marked with **Unsaved changes** next to its heading and a dot in the section list, and one dialog covers them all. On an integration's page and on **Usage Reports**, edits on the **Settings** and **Limits & quotas** tabs are kept when you switch to another tab of the same page and come back; leaving the page asks first.
 
-A few places do not ask yet: the app order on the **Apps** list, the global prompt variables on the **Prompts** list, and forms in dialogs (such as installing an integration).
+A few places do not ask yet: forms in dialogs (such as installing an integration or editing a credential, which keep their own **Save**), and the cards on the **Apps**, **Prompts** and **Skills** admin tabs, which unmount when you switch tabs.
 
 ### When someone else saved first
 

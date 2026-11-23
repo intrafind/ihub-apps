@@ -9,6 +9,7 @@ import { makeAdminApiCall } from '../../../api/adminApi';
 import AdminLoadGate from './AdminLoadGate';
 import { useAdminConfigLoad } from '../hooks/useAdminConfigLoad';
 import { useDirtyReport } from '../hooks/useDirtyReport';
+import { useSaveSection } from './SaveSections';
 
 const DEFAULT_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'HEAD', 'PATCH'];
 const DEFAULT_HEADERS = [
@@ -38,7 +39,7 @@ function CorsConfig({ onDirtyChange }) {
   });
   // The configuration as last loaded or saved; null until it loaded.
   const [savedConfig, setSavedConfig] = useState(null);
-  useDirtyReport(savedConfig, config, onDirtyChange);
+  const isDirty = useDirtyReport(savedConfig, config, onDirtyChange);
   const [newOrigin, setNewOrigin] = useState('');
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
@@ -84,8 +85,9 @@ function CorsConfig({ onDirtyChange }) {
     if (e.key === 'Enter') handleAddOrigin();
   };
 
+  /** Saves the section. Resolves false when it did not save, so the page's bar stops and stays. */
   const handleSaveConfig = async () => {
-    if (!ready) return;
+    if (!ready) return false;
     setSaving(true);
     setMessage('');
     try {
@@ -95,15 +97,30 @@ function CorsConfig({ onDirtyChange }) {
         type: 'success',
         text: t('admin.cors.saved', 'CORS configuration saved successfully')
       });
+      return true;
     } catch (error) {
       setMessage({
         type: 'error',
         text: error.message || t('admin.cors.saveError', 'Failed to save CORS configuration')
       });
+      return false;
     } finally {
       setSaving(false);
     }
   };
+
+  // The page's bar saves and discards the section.
+  useSaveSection('cors', {
+    dirty: isDirty,
+    saving,
+    error: message?.type === 'error' ? message.text : null,
+    save: handleSaveConfig,
+    discard: () => {
+      if (savedConfig) setConfig(savedConfig);
+      setNewOrigin('');
+      setMessage('');
+    }
+  });
 
   if (!ready) {
     return (
@@ -358,50 +375,6 @@ function CorsConfig({ onDirtyChange }) {
           }
           className="w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-md shadow-xs focus:ring-admin-accent focus:border-admin-accent dark:bg-gray-700 dark:text-gray-100 text-sm font-mono"
         />
-      </div>
-
-      {/* Save Button */}
-      <div className="flex justify-end">
-        <button
-          onClick={handleSaveConfig}
-          disabled={saving}
-          className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-xs text-white ${
-            saving
-              ? 'bg-gray-400 cursor-not-allowed'
-              : 'bg-blue-600 hover:bg-blue-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'
-          }`}
-        >
-          {saving ? (
-            <>
-              <svg
-                className="animate-spin -ml-1 mr-3 h-4 w-4 text-white"
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-              >
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="4"
-                ></circle>
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                ></path>
-              </svg>
-              {t('admin.cors.saving', 'Saving...')}
-            </>
-          ) : (
-            <>
-              <Icon name="CheckIcon" className="w-4 h-4 mr-2" />
-              {t('admin.cors.save', 'Save Configuration')}
-            </>
-          )}
-        </button>
       </div>
     </div>
   );

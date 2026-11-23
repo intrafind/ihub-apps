@@ -90,6 +90,10 @@ const AdminAdvancedPage =
   require('../../../client/src/features/admin/pages/AdminAdvancedPage').default;
 const CookieSettingsConfig =
   require('../../../client/src/features/admin/components/CookieSettingsConfig').default;
+const {
+  SaveSectionsBar,
+  SaveSectionsProvider
+} = require('../../../client/src/features/admin/components/SaveSections');
 const AdminAuthPage = require('../../../client/src/features/admin/pages/AdminAuthPage').default;
 
 const ok = (data, etag) => ({ status: 200, data, headers: etag ? { etag } : {} });
@@ -503,9 +507,18 @@ describe('scoped saves send only their own fields', () => {
         ? ok({ cookieSettings: { disableSecure: true } }, '"rev-3"')
         : ok({ cookieSettings: { disableSecure: false } }, '"rev-1"')
     );
-    render(<CookieSettingsConfig />);
+    render(
+      <SaveSectionsProvider>
+        <CookieSettingsConfig />
+        <SaveSectionsBar />
+      </SaveSectionsProvider>
+    );
     fireEvent.click(await screen.findByRole('checkbox'));
-    fireEvent.click(screen.getByRole('button', { name: 'admin.system.cookieSettings.saveConfig' }));
+    fireEvent.click(
+      within(screen.getByRole('region', { name: /saveBar|Save changes/i }))
+        .getAllByRole('button')
+        .at(-1)
+    );
 
     await waitFor(() =>
       expect(mockRequest.mock.calls.some(([config]) => config.method === 'PATCH')).toBe(true)

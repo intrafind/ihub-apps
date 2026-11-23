@@ -63,4 +63,11 @@ When you change something on an admin edit page, a bar at the bottom of the scre
 - **The Copilot Agent page** has one Save for the reference ID and the agent settings together. An invalid agent field now also blocks saving the ID, which used to save on its own.
 - **The OAuth Server page** now asks before you leave it with unsaved changes. After a save conflict, **Reload and discard my changes** shows the stored values and ends your edits instead of mixing them in.
 - **The translation overrides** on the Localization page keep their own Save for each text.
-- Pages with several sections (Security, Logging, EU AI Act) will follow.
+- **Pages with several sections have one bar for the whole page.** Security, Logging, the EU AI Act cards, Scheduled Tasks, the Integration Builder, the Installation page of an integration, the visual workflow editor and a new project no longer have a Save button per section. **Save Changes** stores every section with changes, in the order of the page; if one is refused, the ones before it stay saved and a second **Save** sends only the rest. **Discard** puts every section back.
+- **The cards inside list pages** (usage limits, LLM timeouts, project sharing, personal apps, user prompts and skills) use the bar too. A value that is out of range no longer greys the button out: **Save** names the problem in the bar.
+- **The app order** on the Apps list is saved with the bar. **Done** leaves the order mode and keeps your draft, and the bar saves or discards it.
+- **Prompt variables** on the Prompts list are saved with the bar.
+- **Provenance settings** still ask for confirmation before a change that needs it; **Cancel** in the confirmation ends the save and keeps your edits.
+- **Logging: the privacy settings** no longer write the whole logging block when you save them.
+- **The Installation page** keeps a pending approval edit when you save the Settings with Enter. Discard no longer jumps back to the Overview tab.
+- Credentials (a dialog) and the translation overrides keep their own Save.

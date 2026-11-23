@@ -21,34 +21,27 @@ const PAGES_DIR = path.resolve(__dirname, '../../../client/src/features/admin/pa
 const SAVE_CONTROL =
   /AdminSaveBar|EditorSaveBar|AdminSettingsPage|type="submit"|onSubmit=\{|onSave=\{|onClick=\{[^}]*[sS]ave[A-Za-z]*/;
 
-/** The shared bar, directly or through the settings frame that renders it for `onSave`. */
-const SAVE_BAR = /<(?:AdminSaveBar|EditorSaveBar)\b/;
+/**
+ * The shared bar, directly, as the one `SaveSectionsBar` of a page whose sections save on their
+ * own, or through the settings frame that renders it for `onSave`.
+ */
+const SAVE_BAR = /<(?:AdminSaveBar|EditorSaveBar|SaveSectionsBar)\b/;
 const SETTINGS_FRAME_WITH_BAR = source =>
   source.includes('<AdminSettingsPage') && /onSave=\{/.test(source);
 
-const CARDS = 'sections with their own Save (part 3 of the rollout)';
-const OTHER = 'edit page, still to convert';
-
 /** Pages with a save control and no bar yet. Shrink-only. */
-const BASELINE = new Map([
-  ['AdminAppsPage.jsx', `${OTHER}: app order draft (Save order)`],
-  ['AdminCredentialsPage.jsx', OTHER],
-  ['AdminInstallationPage.jsx', OTHER],
-  ['AdminIntegrationBuilderPage.jsx', OTHER],
-  ['AdminLoggingPage.jsx', CARDS],
-  ['AdminProjectEditPage.jsx', OTHER],
-  ['AdminPromptsPage.jsx', `${OTHER}: global prompt variables`],
-  ['AdminScheduledTasksPage.jsx', OTHER],
-  ['AdminSecurityPage.jsx', CARDS],
-  ['WorkflowEditorPage.jsx', `${OTHER}: the canvas editor renders its own Save`]
-]);
+const BASELINE = new Map();
 
 /**
  * Pages that match the save patterns without saving anything of their own: a dialog's
  * `onSave` only refreshes the list behind it.
  */
 const NOT_EDIT_PAGES = new Map([
-  ['AdminMarketplaceRegistriesPage.jsx', 'the Save belongs to a dialog; the page edits nothing']
+  ['AdminMarketplaceRegistriesPage.jsx', 'the Save belongs to a dialog; the page edits nothing'],
+  [
+    'AdminCredentialsPage.jsx',
+    'a credential is edited in a modal dialog with its own Save; the page holds no draft'
+  ]
 ]);
 
 const read = name => fs.readFileSync(path.join(PAGES_DIR, name), 'utf8');
@@ -80,7 +73,8 @@ describe('admin save bar coverage', () => {
     'AdminModelEditPage.jsx',
     'AdminAppEditPage.jsx',
     'AdminUICustomization.jsx',
-    'AdminArtifactsPage.jsx'
+    'AdminArtifactsPage.jsx',
+    'AdminSecurityPage.jsx'
   ])('%s shows the save bar', name => {
     const source = read(name);
     expect(SAVE_BAR.test(source) || SETTINGS_FRAME_WITH_BAR(source)).toBe(true);

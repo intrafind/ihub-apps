@@ -4775,7 +4775,8 @@
         "magicPromptInstructionsPlaceholder": "Anweisungen für die Funktion „Magic Prompt“ eingeben…"
       },
       "reorder": "Reihenfolge",
-      "reorderHelp": "Ziehen Sie eine Zeile oder nutzen Sie die Pfeile, um die Reihenfolge festzulegen, in der Apps für Benutzer erscheinen – in der App-Übersicht, auf der Startseite und in der Seitenleiste. Es werden immer alle Apps aufgelistet, Suche und Filter gelten hier nicht. Gespeichert wird erst mit „Reihenfolge speichern“.",
+      "reorderHelp": "Ziehen Sie eine Zeile oder nutzen Sie die Pfeile, um die Reihenfolge festzulegen, in der Apps für Benutzer erscheinen – in der App-Übersicht, auf der Startseite und in der Seitenleiste. Es werden immer alle Apps aufgelistet, Suche und Filter gelten hier nicht. Gespeichert wird erst, wenn Sie die neue Reihenfolge unten auf der Seite speichern.",
+      "doneReordering": "Fertig",
       "saveOrder": "Reihenfolge speichern",
       "savingOrder": "Reihenfolge wird gespeichert...",
       "openApp": "App öffnen",
@@ -8074,7 +8075,8 @@
         "allowCatalog": "Dem Projektkatalog",
         "allowCatalogHelp": "Besitzer und Bearbeiter veröffentlichen ein Projekt; alle Benutzer können den Katalog durchsuchen und es zu ihren Projekten hinzufügen. Ausschalten blendet veröffentlichte Projekte wieder aus.",
         "permissionHint": "Benutzer brauchen außerdem die Berechtigung „projectSharing“ ihrer Gruppe.",
-        "saved": "Gespeichert"
+        "saved": "Gespeichert",
+        "invalidInput": "Korrigieren Sie zuerst die markierten Felder (eine Zahl im erlaubten Bereich oder leer)."
       },
       "panel": {
         "details": "Name und Beschreibung",
@@ -9776,7 +9778,8 @@
         "choose": "Auswählen…",
         "noInstallations": "Es ist kein angebundenes System installiert.",
         "noActions": "Keine Funktionen",
-        "unblock": "Wieder einschalten"
+        "unblock": "Wieder einschalten",
+        "invalidMaxApps": "Geben Sie eine ganze Zahl für das Limit an Apps pro Benutzer ein (0 bedeutet kein Limit)."
       },
       "groups": {
         "userApps": "Persönliche Apps",

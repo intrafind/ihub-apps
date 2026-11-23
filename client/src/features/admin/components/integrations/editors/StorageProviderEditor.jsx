@@ -17,7 +17,10 @@ import {
 } from '../../formStyles';
 import { buildApiUrl } from '../../../../../utils/runtimeBasePath';
 import { fetchIntegrationConnections } from '../../../../../api/integrationsAdminApi';
-import useInstallationEditor, { useInstallationEditorDirty } from './useInstallationEditor';
+import useInstallationEditor, {
+  useInstallationEditorDirty,
+  useInstallationEditorSave
+} from './useInstallationEditor';
 import {
   AccessSection,
   ActionsSection,
@@ -229,6 +232,23 @@ function StorageProviderEditor({ instance, definition, onSaved, onCancel }) {
   const [showAdvanced, setShowAdvanced] = useState(() =>
     Boolean(instance.values?.siteUrl || instance.values?.driveId)
   );
+  const save = async () => {
+    if (!spec) return false;
+    const problem = storageValuesProblem(spec, instance.id, values);
+    if (problem) {
+      return editor.reject(
+        problem.key,
+        t(problem.messageKey, problem.messageDefault, problem.params)
+      );
+    }
+    return editor.save(storageValuesToSave(spec, values));
+  };
+  useInstallationEditorSave(editor, save);
+  const submit = event => {
+    event.preventDefault();
+    void save();
+  };
+
   if (!spec) return null;
 
   const errors = editor.fieldErrors;
@@ -242,16 +262,6 @@ function StorageProviderEditor({ instance, definition, onSaved, onCancel }) {
     values.redirectUri
   );
   const [registerKey, registerDefault] = REGISTER_HELP[spec.type];
-
-  const submit = event => {
-    event.preventDefault();
-    const problem = storageValuesProblem(spec, instance.id, values);
-    if (problem) {
-      editor.reject(problem.key, t(problem.messageKey, problem.messageDefault, problem.params));
-      return;
-    }
-    void editor.save(storageValuesToSave(spec, values));
-  };
 
   const field = (key, label, options = {}) => (
     <TextField
