@@ -8,12 +8,21 @@
  * and a server error shown on its field.
  */
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render as renderPlain, screen, waitFor, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
+
+// The card links to the credentials page, as it does inside the admin area.
+const render = ui => renderPlain(<MemoryRouter>{ui}</MemoryRouter>);
 
 const mockAdminCall = jest.fn();
 jest.mock('../../../client/src/api/adminApi', () => ({
   __esModule: true,
   makeAdminApiCall: (...a) => mockAdminCall(...a),
+  listCredentials: () =>
+    Promise.resolve([
+      { id: 'ifinder-gateway', type: 'oauth2', name: 'iFinder gateway' },
+      { id: 'basic-x', type: 'basic', name: 'Basic' }
+    ]),
   getAdminApiErrorMessage: err => err?.response?.data?.detail || err?.message || 'error'
 }));
 const t = (key, fallback, options) => {
@@ -103,7 +112,9 @@ describe('provenance settings form helpers', () => {
     expect(buildBody(form).watermark).toEqual({
       alpha: null,
       minScoredTokens: null,
-      detectorTimeoutMs: null
+      detectorTimeoutMs: null,
+      gatewayUrl: null,
+      gatewayCredentialRef: null
     });
     expect(validateForm(form)).toEqual({});
     expect(validateForm({ ...form, retentionDays: '-1' }).retentionDays).toBe('min');
@@ -181,7 +192,13 @@ describe('ProvenanceSettingsCard', () => {
       recordUser: 'none',
       verify: { access: 'authenticated' },
       media: { maxVerifyBytes: 52428800, readC2pa: true },
-      watermark: { alpha: null, minScoredTokens: 300, detectorTimeoutMs: null }
+      watermark: {
+        alpha: null,
+        minScoredTokens: 300,
+        detectorTimeoutMs: null,
+        gatewayUrl: null,
+        gatewayCredentialRef: null
+      }
     });
     expect(onSaved).toHaveBeenCalled();
     expect(screen.queryByRole('region', { name: 'Save changes' })).not.toBeInTheDocument();
@@ -268,5 +285,26 @@ describe('ProvenanceSettingsCard', () => {
     mockAdminCall.mockResolvedValue({ data: STORED });
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     expect(await screen.findByLabelText(/Keep records for/)).toBeInTheDocument();
+  });
+});
+
+describe('provenance settings: the iFinder Model Gateway', () => {
+  test('a gateway address is checked, saved with its credential, and empty means none', () => {
+    const form = toForm({
+      watermark: {
+        gatewayUrl: 'https://gateway.internal/v1/gateway/detections/text',
+        gatewayCredentialRef: 'ifinder-gateway'
+      }
+    });
+    expect(buildBody(form).watermark).toMatchObject({
+      gatewayUrl: 'https://gateway.internal/v1/gateway/detections/text',
+      gatewayCredentialRef: 'ifinder-gateway'
+    });
+    expect(validateForm({ ...form, gatewayUrl: 'ftp://gateway' })).toEqual({ gatewayUrl: 'url' });
+    // Without a gateway, a credential means nothing and is not saved.
+    expect(buildBody({ ...form, gatewayUrl: ' ' }).watermark).toMatchObject({
+      gatewayUrl: null,
+      gatewayCredentialRef: null
+    });
   });
 });

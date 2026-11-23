@@ -40,7 +40,7 @@ export default function registerAdminWatermarkDetectorRoutes(app) {
    *     tags: [Admin - Watermark]
    *     responses:
    *       200:
-   *         description: "`{ items: [{ modelId, detectorUrl, tokenizer, algorithm, prf, contextWidth, credentialRef, hasActiveKey, urlPolicyOk, urlPolicyProblem? }], nextCursor: null }`"
+   *         description: "`{ items: [{ modelId, keyHolder, detectorApi: ihub|model|gateway, detectorUrl, tokenizer, algorithm, prf, contextWidth, credentialRef, hasActiveKey, urlPolicyOk, urlPolicyProblem? }], nextCursor: null }`"
    */
   app.get(buildServerPath(base), adminAuth, async (req, res) => {
     const configs = listDetectorConfigs({ includeDisabled: true });
@@ -49,6 +49,8 @@ export default function registerAdminWatermarkDetectorRoutes(app) {
     for (const config of configs) {
       const item = {
         modelId: config.modelId,
+        keyHolder: config.keyHolder,
+        detectorApi: config.api,
         detectorUrl: config.detectorUrl,
         tokenizer: config.tokenizer,
         algorithm: config.algorithm,
@@ -120,14 +122,20 @@ export default function registerAdminWatermarkDetectorRoutes(app) {
       const model = findIhubModel(req.params.modelId);
       const result = await runSelfTest(model, { llmClient, user: req.user });
       // The overview page (#3329) shows the last result and marks it outdated after a key change.
-      await recordSelfTest(model.id, result);
+      // A model whose image holds the key does not depend on iHub's keys.
+      const modelHeld = model.contentMarking?.text?.keyHolder === 'model';
+      await recordSelfTest(model.id, result, modelHeld ? { activeKeyId: null } : {});
       await logAudit({
         req,
         action: 'execute',
         resource: 'watermarkDetector',
         resourceId: model.id,
         summary: `Watermark self-test of ${model.id}: ${result.diagnosis}`,
-        details: { diagnosis: result.diagnosis, matchedKeyId: result.matchedKeyId }
+        details: {
+          diagnosis: result.diagnosis,
+          matchedKeyId: result.matchedKeyId,
+          matchedKeyLabel: result.matchedKeyLabel
+        }
       });
       res.json(result);
     }

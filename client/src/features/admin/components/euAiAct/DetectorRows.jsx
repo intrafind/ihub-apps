@@ -24,6 +24,15 @@ function describeSelfTest(result, t) {
           { keyId: result.matchedKeyId, n }
         )
       };
+    case 'watermark_found':
+      return {
+        level: 'ok',
+        text: t(
+          'admin.euAiAct.selfTest.watermarkFound',
+          'Passed: the detector found the watermark of the key {{label}} ({{n}} tokens scored).',
+          { label: result.matchedKeyLabel || '-', n }
+        )
+      };
     case 'matches_retired_key':
       return {
         level: 'error',
@@ -145,6 +154,16 @@ function DetectorRow({ detector, modelStatus, onChanged }) {
       <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{modelId}</h4>
       <dl className="mt-2 grid grid-cols-1 sm:grid-cols-[10rem_1fr] gap-x-4 gap-y-1 text-sm">
         <dt className="text-gray-600 dark:text-gray-400">
+          {t('admin.euAiAct.detector.api', 'Detector')}
+        </dt>
+        <dd className="text-gray-900 dark:text-gray-100">
+          {detector.detectorApi === 'gateway'
+            ? t('admin.euAiAct.detector.apiGateway', 'iFinder Model Gateway')
+            : detector.detectorApi === 'model'
+              ? t('admin.euAiAct.detector.apiModel', 'Model image (holds the keys)')
+              : t('admin.euAiAct.detector.apiIhub', 'Detector service (keys from iHub)')}
+        </dd>
+        <dt className="text-gray-600 dark:text-gray-400">
           {t('admin.euAiAct.detector.url', 'Detector URL')}
         </dt>
         <dd className="text-gray-900 dark:text-gray-100 break-all font-mono text-xs">
@@ -159,11 +178,13 @@ function DetectorRow({ detector, modelStatus, onChanged }) {
           {t('admin.euAiAct.detector.credential', 'Credential')}
         </dt>
         <dd className="text-gray-900 dark:text-gray-100">
-          {detector.credentialRef
-            ? t('admin.euAiAct.detector.credentialSet', 'Set ({{ref}})', {
-                ref: detector.credentialRef
-              })
-            : t('admin.euAiAct.detector.credentialNone', 'None')}
+          {detector.detectorApi === 'model'
+            ? t('admin.euAiAct.detector.credentialModel', "The model's API key")
+            : detector.credentialRef
+              ? t('admin.euAiAct.detector.credentialSet', 'Set ({{ref}})', {
+                  ref: detector.credentialRef
+                })
+              : t('admin.euAiAct.detector.credentialNone', 'None')}
         </dd>
         <dt className="text-gray-600 dark:text-gray-400">
           {t('admin.euAiAct.detector.lastSelfTest', 'Last self-test')}

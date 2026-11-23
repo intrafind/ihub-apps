@@ -74,7 +74,9 @@ function effective(block) {
     'media.readC2pa': p.media.readC2pa,
     'watermark.alpha': w.alpha,
     'watermark.minScoredTokens': w.minScoredTokens,
-    'watermark.detectorTimeoutMs': w.detectorTimeoutMs
+    'watermark.detectorTimeoutMs': w.detectorTimeoutMs,
+    'watermark.gatewayUrl': w.gatewayUrl,
+    'watermark.gatewayCredentialRef': w.gatewayCredentialRef
   };
 }
 

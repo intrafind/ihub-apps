@@ -13,6 +13,7 @@ import {
 import AdminLoadError from '../AdminLoadError';
 import EuAiActCard from './EuAiActCard';
 import { INPUT } from './KeyDialogs';
+import { CredentialRefSelect } from '../OpenApiToolEditor';
 import {
   SERVER_FIELD,
   buildBody,
@@ -35,7 +36,8 @@ const FIELD_ORDER = [
   'maxVerifyBytes',
   'alpha',
   'minScoredTokens',
-  'detectorTimeoutMs'
+  'detectorTimeoutMs',
+  'gatewayUrl'
 ];
 // The size field shows MiB; its error key stays `maxVerifyBytes`.
 const INPUT_ID = field => `provenance-${field}`;
@@ -167,6 +169,8 @@ export default function ProvenanceSettingsCard({ onSaved }) {
               params
             )
           : t('admin.euAiAct.settings.error.min', 'Enter {{min}} or more.', params);
+      case 'url':
+        return t('admin.euAiAct.settings.error.url', 'Enter an http or https address.');
       case 'max':
         return bounds.exclusive
           ? t(
@@ -615,6 +619,47 @@ export default function ProvenanceSettingsCard({ onSaved }) {
                 className={INPUT}
               />
             </Field>
+          </Group>
+
+          <Group title={t('admin.euAiAct.settings.gateway', 'iFinder Model Gateway')}>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              {t(
+                'admin.euAiAct.settings.gatewayIntro',
+                'Only for models whose watermark key the model image holds (iFinder vLLM image). With a Model Gateway set, their watermark is detected there, with one verdict for all its detectors; without one, iHub asks each model image itself.'
+              )}
+            </p>
+            <Field
+              field="gatewayUrl"
+              label={t('admin.euAiAct.settings.gatewayUrl', 'Detection endpoint')}
+              error={errors.gatewayUrl}
+              help={t(
+                'admin.euAiAct.settings.gatewayUrlHelp',
+                'The address of …/v1/gateway/detections/text. Leave empty to ask each model image itself.'
+              )}
+            >
+              <input
+                {...fieldProps('gatewayUrl')}
+                type="url"
+                autoComplete="off"
+                spellCheck={false}
+                placeholder="https://gateway.internal/v1/gateway/detections/text"
+                value={form.gatewayUrl}
+                onChange={e => set({ gatewayUrl: e.target.value }, 'gatewayUrl')}
+                className={INPUT}
+              />
+            </Field>
+            <CredentialRefSelect
+              id={INPUT_ID('gatewayCredentialRef')}
+              value={form.gatewayCredentialRef || ''}
+              onChange={value => set({ gatewayCredentialRef: value || '' }, 'gatewayCredentialRef')}
+              types={['bearer', 'oauth2']}
+              label={t('admin.euAiAct.settings.gatewayCredential', 'Gateway credential')}
+              emptyLabel={t('admin.models.marking.credentialNone', 'None (no authentication)')}
+              help={t(
+                'admin.euAiAct.settings.gatewayCredentialHelp',
+                'A bearer token, or an OAuth2 client whose token iHub fetches (client credentials), if the gateway asks for one.'
+              )}
+            />
           </Group>
 
           <div className="flex flex-wrap items-center gap-3">

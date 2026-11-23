@@ -621,7 +621,10 @@ export const platformConfigSchema = z
           .object({
             alpha: z.number().gt(0).lt(1).optional(),
             minScoredTokens: z.number().int().min(1).optional(),
-            detectorTimeoutMs: z.number().int().min(1000).max(120000).optional()
+            detectorTimeoutMs: z.number().int().min(1000).max(120000).optional(),
+            // An iFinder Model Gateway's detection endpoint (keyHolder "model").
+            gatewayUrl: z.string().max(500).optional(),
+            gatewayCredentialRef: z.string().max(100).optional()
           })
           .passthrough()
           .optional()

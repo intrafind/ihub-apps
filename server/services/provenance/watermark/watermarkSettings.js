@@ -10,6 +10,10 @@
  *   vLLM's example detector uses 0.01, far too loose for an origin claim.
  * - `minScoredTokens` (200): below this a negative becomes "too short to tell".
  * - `detectorTimeoutMs` (15000).
+ * - `gatewayUrl`, `gatewayCredentialRef` (none): the detection endpoint of an
+ *   iFinder Model Gateway and its credential. When set, the watermark of models
+ *   whose key the model image holds (`keyHolder: "model"`) is detected there
+ *   instead of at each model's own endpoint.
  *
  * @module services/provenance/watermark/watermarkSettings
  */
@@ -28,6 +32,11 @@ export function watermarkSettings(platform = configCache.getPlatform() || {}) {
     alpha: alpha > 0 && alpha < 1 ? alpha : DEFAULT_ALPHA,
     minScoredTokens: Number.isInteger(min) && min > 0 ? min : DEFAULT_MIN_SCORED_TOKENS,
     detectorTimeoutMs:
-      Number.isInteger(timeout) && timeout >= 1000 ? timeout : DEFAULT_DETECTOR_TIMEOUT_MS
+      Number.isInteger(timeout) && timeout >= 1000 ? timeout : DEFAULT_DETECTOR_TIMEOUT_MS,
+    gatewayUrl: typeof raw.gatewayUrl === 'string' && raw.gatewayUrl ? raw.gatewayUrl : null,
+    gatewayCredentialRef:
+      typeof raw.gatewayCredentialRef === 'string' && raw.gatewayCredentialRef
+        ? raw.gatewayCredentialRef
+        : null
   };
 }

@@ -24,7 +24,9 @@ export const SERVER_FIELD = {
   'media.readC2pa': 'readC2pa',
   'watermark.alpha': 'alpha',
   'watermark.minScoredTokens': 'minScoredTokens',
-  'watermark.detectorTimeoutMs': 'detectorTimeoutMs'
+  'watermark.detectorTimeoutMs': 'detectorTimeoutMs',
+  'watermark.gatewayUrl': 'gatewayUrl',
+  'watermark.gatewayCredentialRef': 'gatewayCredentialRef'
 };
 
 const text = value => (value === undefined || value === null ? '' : String(value));
@@ -55,6 +57,8 @@ export function toForm(block = {}) {
     alpha: text(block.watermark?.alpha),
     minScoredTokens: text(block.watermark?.minScoredTokens),
     detectorTimeoutMs: text(block.watermark?.detectorTimeoutMs),
+    gatewayUrl: text(block.watermark?.gatewayUrl),
+    gatewayCredentialRef: text(block.watermark?.gatewayCredentialRef),
     // Kept so an untouched size is saved byte-exact.
     originalBytes: bytes,
     originalMib: bytesToMib(bytes)
@@ -85,8 +89,21 @@ export function toValues(form) {
 /** @returns {Object<string, string>} Problem code per form field (see `numericProblem`); empty when valid */
 export function validateForm(form) {
   const values = toValues(form);
-  return validateProvenanceValues(values);
+  const problems = validateProvenanceValues(values);
+  const url = String(form.gatewayUrl || '').trim();
+  if (url && !isHttpUrl(url)) problems.gatewayUrl = 'url';
+  return problems;
 }
+
+function isHttpUrl(value) {
+  try {
+    return ['http:', 'https:'].includes(new URL(value).protocol);
+  } catch {
+    return false;
+  }
+}
+
+const optionalText = value => String(value || '').trim() || null;
 
 /**
  * The `provenance` body to save: only what the form owns, as a partial block the
@@ -103,7 +120,12 @@ export function buildBody(form) {
     watermark: {
       alpha: v.alpha,
       minScoredTokens: v.minScoredTokens,
-      detectorTimeoutMs: v.detectorTimeoutMs
+      detectorTimeoutMs: v.detectorTimeoutMs,
+      gatewayUrl: optionalText(form.gatewayUrl),
+      // A credential without a gateway means nothing.
+      gatewayCredentialRef: optionalText(form.gatewayUrl)
+        ? optionalText(form.gatewayCredentialRef)
+        : null
     }
   };
 }

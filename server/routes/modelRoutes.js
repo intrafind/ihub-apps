@@ -32,6 +32,7 @@ function sanitizeModelForPublic(model) {
   if (clean.contentMarking?.text) {
     const {
       statementRef: _statementRef,
+      keyHolder: _keyHolder,
       detectorUrl: _detectorUrl,
       detectorCredentialRef: _detectorCredentialRef,
       tokenizer: _tokenizer,

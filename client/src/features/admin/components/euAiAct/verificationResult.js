@@ -40,7 +40,8 @@ export function summarizeVerification(result) {
         id: 'watermark',
         status: map[watermark.status] || 'info',
         state: watermark.status,
-        keyId: watermark.keyId || null,
+        // A model image or a Model Gateway names the key by its file name.
+        keyId: watermark.keyId || watermark.keyLabel || null,
         pValue: watermark.pValue ?? null,
         scoredTokens: watermark.scoredTokens ?? null,
         keysChecked: watermark.keysChecked ?? null,

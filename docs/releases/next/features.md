@@ -52,3 +52,19 @@ for the models you added from that region.
   use an application inference profile or a custom model that the listing does not name.
 - A region on the provider that is not an AWS region stops the sync with a message instead of
   reading another region.
+
+## Text Watermark With iFinder's vLLM Image
+
+iHub now works with iFinder's vLLM image, which holds its watermark keys itself. iHub then needs
+no key of its own: it records the answers as watermarked and recognises the watermark through the
+detection endpoint of the image, or through an iFinder Model Gateway where one runs.
+
+- In **Admin → Models → Output marking**, choose **Held by the model image** as watermark key. The
+  detection endpoint is found next to the model URL and called with the model's API key.
+- iHub decides from the image's results with the rule of the Model Gateway, but with its own
+  thresholds, which are stricter by default. Through a gateway, the gateway's thresholds apply.
+  **Verify** names the key file that matched.
+- **Admin → EU AI Act → Settings** takes the detection endpoint of an iFinder Model Gateway. With
+  it set, detection goes there instead of to each image; its credential can be a token or an
+  OAuth2 client.
+- The detector credential of a model can now also be an OAuth2 client (client credentials).

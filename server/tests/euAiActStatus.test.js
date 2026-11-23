@@ -214,6 +214,24 @@ describe('model checks', () => {
     expect(find(image, 'model.watermark.key')).toBeUndefined();
   });
 
+  test('a model whose image holds the key needs no iHub key and has a detector at its URL', () => {
+    const model = {
+      id: 'gemma',
+      provider: 'local',
+      url: 'https://gpu-02.example/v1/chat/completions',
+      contentMarking: { text: { by: 'ihub', scheme: 'vllm-gumbel', keyHolder: 'model' } }
+    };
+    const checks = modelChecks(model, context({ activeKeyId: null }));
+    expect(find(checks, 'model.watermark.key')).toMatchObject({
+      level: 'ok',
+      messageKey: expect.stringMatching(/\.watermark\.keyHeldByModel$/)
+    });
+    expect(level(checks, 'model.watermark.detector')).toBe('ok');
+    expect(find(checks, 'model.watermark.selftest').messageKey).toMatch(
+      /\.watermark\.selfTestPassedModel$/
+    );
+  });
+
   test('the watermark chain: key, detector and self-test levels', () => {
     const model = ihubModel();
     const run = ctx => modelChecks(model, context(ctx));

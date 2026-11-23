@@ -43,6 +43,8 @@ export function isGreedy(sampling = {}) {
  * @param {string|null} [activeKeyId]
  * @returns {null | {by: 'ihub', scheme: string, applied: boolean, keyId?: string, reason?: string}}
  *   null when the model is not marked by iHub: nothing is added to the request.
+ *   A model whose image holds the key (`keyHolder: "model"`) needs no iHub key
+ *   and names none: iHub cannot see which key the image uses.
  */
 export function planTextWatermark(model, sampling, options = {}, activeKeyId = null) {
   const marking = model?.contentMarking?.text;
@@ -55,6 +57,8 @@ export function planTextWatermark(model, sampling, options = {}, activeKeyId = n
     plan.reason = WATERMARK_REASONS.GREEDY;
   } else if (options.responseSchema || options.responseFormat === 'json') {
     plan.reason = WATERMARK_REASONS.STRUCTURED_OUTPUT;
+  } else if (marking.keyHolder === 'model') {
+    plan.applied = true;
   } else if (!activeKeyId) {
     plan.reason = WATERMARK_REASONS.NO_ACTIVE_KEY;
   } else {

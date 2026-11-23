@@ -33,7 +33,8 @@ export const SELF_TEST_STATE = Object.freeze({
  * @returns {'passed'|'failed'|'inconclusive'}
  */
 export function stateOfDiagnosis(diagnosis) {
-  if (diagnosis === 'keys_match') return SELF_TEST_STATE.PASSED;
+  // `watermark_found`: a model whose image holds the key (no iHub key to compare).
+  if (diagnosis === 'keys_match' || diagnosis === 'watermark_found') return SELF_TEST_STATE.PASSED;
   if (diagnosis === 'too_short') return SELF_TEST_STATE.INCONCLUSIVE;
   return SELF_TEST_STATE.FAILED;
 }

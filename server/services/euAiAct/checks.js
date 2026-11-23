@@ -16,6 +16,7 @@
  * @module services/euAiAct/checks
  */
 import { SELF_TEST_STATE } from './selfTestStore.js';
+import { detectorConfigOf } from '../provenance/watermark/detect.js';
 
 export const LEVEL = Object.freeze({ OK: 'ok', WARN: 'warn', ERROR: 'error' });
 const RANK = { ok: 0, warn: 1, error: 2 };
@@ -251,33 +252,42 @@ export function modelChecks(
   if (markingOf(model, 'text').by !== 'ihub') return out;
 
   // The watermark chain: key, detector, self-test. Errors: we must not claim marking we do not deliver.
+  const detector = detectorConfigOf(model);
+  const modelHeld = detector.keyHolder === 'model';
   out.push(
-    activeKeyId
+    modelHeld
       ? check(
           'model.watermark.key',
           LEVEL.OK,
-          'watermark.keyOk',
-          '{{model}}: active key {{keyId}}.',
-          {
-            ...base,
-            fix: null,
-            params: { ...params, keyId: activeKeyId }
-          }
+          'watermark.keyHeldByModel',
+          '{{model}}: the model image holds the watermark key.',
+          { ...base, fix: null, params }
         )
-      : check(
-          'model.watermark.key',
-          LEVEL.ERROR,
-          'watermark.noKey',
-          '{{model}}: no active watermark key. Output is not marked.',
-          {
-            ...base,
-            fix: FIX_KEYS,
-            params
-          }
-        )
+      : activeKeyId
+        ? check(
+            'model.watermark.key',
+            LEVEL.OK,
+            'watermark.keyOk',
+            '{{model}}: active key {{keyId}}.',
+            {
+              ...base,
+              fix: null,
+              params: { ...params, keyId: activeKeyId }
+            }
+          )
+        : check(
+            'model.watermark.key',
+            LEVEL.ERROR,
+            'watermark.noKey',
+            '{{model}}: no active watermark key. Output is not marked.',
+            {
+              ...base,
+              fix: FIX_KEYS,
+              params
+            }
+          )
   );
 
-  const marking = model.contentMarking.text;
   const detectorId = 'model.watermark.detector';
   const stId = 'model.watermark.selftest';
   const stFix = { href: '/admin/eu-ai-act#watermark-keys', labelKey: `${FIX}.runSelfTest` };
@@ -286,12 +296,19 @@ export function modelChecks(
     check(
       stId,
       LEVEL.ERROR,
-      'watermark.selfTestFailed',
-      '{{model}}: the last self-test failed. vLLM and iHub probably do not use the same key.',
+      ...(modelHeld
+        ? [
+            'watermark.selfTestFailedModel',
+            '{{model}}: the last self-test failed: the watermark was not found in the sample text.'
+          ]
+        : [
+            'watermark.selfTestFailed',
+            '{{model}}: the last self-test failed. vLLM and iHub probably do not use the same key.'
+          ]),
       stBase
     );
 
-  if (!marking.detectorUrl) {
+  if (!detector.detectorUrl) {
     // The output is still watermarked; only "is this text ours?" cannot detect
     // it. A hint, not a failure. The self-test needs a detector to run, so only
     // a failure it already recorded is still reported.
@@ -386,8 +403,9 @@ export function modelChecks(
         check(
           stId,
           LEVEL.OK,
-          'watermark.selfTestPassed',
-          '{{model}}: the self-test found the active key.',
+          ...(modelHeld
+            ? ['watermark.selfTestPassedModel', '{{model}}: the self-test found the watermark.']
+            : ['watermark.selfTestPassed', '{{model}}: the self-test found the active key.']),
           { ...stBase, fix: null }
         )
       );
