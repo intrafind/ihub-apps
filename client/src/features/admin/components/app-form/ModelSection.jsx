@@ -1,25 +1,33 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import ResourceSelector from '../ResourceSelector';
-import { getLocalizedContent } from '../../../../utils/localizeContent';
 import { HELP_CLASS, INPUT_CLASS, LABEL_CLASS } from '../formStyles';
+import { modelChoices } from './modelChoices';
 
 /**
  * ModelSection - which AI model answers in the app, which models users may
  * pick, and the format of the answer. The card of the editor's "Model" group.
  *
+ * The models come from the admin's model list, disabled ones included, and
+ * each is marked "(disabled)" or "(default)" (AI-B9).
+ *
  * @param {object} props
  * @param {object} props.app - The app as the editor holds it.
  * @param {function(object): void} props.onChange - Receives the changed app.
- * @param {Array<{id: string, name: string|object}>} [props.availableModels]
+ * @param {Array<{id: string, name: string|object, enabled?: boolean, default?: boolean}>} [props.availableModels]
  * @returns {JSX.Element}
  */
 function ModelSection({ app, onChange, availableModels = [] }) {
   const { t, i18n } = useTranslation();
   const uiLanguage = String(i18n?.language || '').split('-')[0] || 'en';
   const set = (field, value) => onChange({ ...app, [field]: value });
+  const choices = useMemo(
+    () => modelChoices(availableModels, t, uiLanguage),
+    [availableModels, t, uiLanguage]
+  );
 
   return (
     <div className="bg-white dark:bg-gray-800 shadow-sm px-4 py-5 sm:rounded-lg sm:p-6">
@@ -46,9 +54,9 @@ function ModelSection({ app, onChange, availableModels = [] }) {
                 className={INPUT_CLASS}
               >
                 <option value="">{t('admin.apps.edit.standardModel')}</option>
-                {availableModels.map(model => (
+                {choices.map(model => (
                   <option key={model.id} value={model.id}>
-                    {getLocalizedContent(model.name, uiLanguage) || model.id}
+                    {model.name}
                   </option>
                 ))}
               </select>
@@ -75,7 +83,7 @@ function ModelSection({ app, onChange, availableModels = [] }) {
             <div className="col-span-6" data-field="allowedModels">
               <ResourceSelector
                 label={t('admin.apps.edit.allowedModels')}
-                resources={availableModels}
+                resources={choices}
                 selectedResources={app.allowedModels || []}
                 onSelectionChange={selected => set('allowedModels', selected)}
                 allowWildcard={false}

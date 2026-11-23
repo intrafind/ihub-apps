@@ -7,6 +7,7 @@ import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent, DEFAULT_LANGUAGE } from '../../../utils/localizeContent';
 import {
+  assignedDefaultModelId,
   fetchMarketplaceInstallations,
   getAdminApiErrorMessage,
   makeAdminApiCall
@@ -25,6 +26,9 @@ import { UsageLimitBucketFields, normalizeLimitBucket } from '../components/Usag
 import { withoutDroppedParts } from '../utils/modelPayload';
 import useSaveAttempts from '../hooks/useSaveAttempts';
 import { FIELD_KEYS } from '../utils/fieldErrors';
+import { runModelTest } from '../utils/modelTestMessages';
+import ModelTestResult from '../components/ModelTestResult';
+import { useDeletedResourceRestore } from '../hooks/useDeletedResourceRestore';
 
 /**
  * A number field that accepts 0. `''`/null/undefined mean "not set" and drop
@@ -98,6 +102,9 @@ function AdminModelEditPage() {
   // refused save moves there; otherwise the admin sees nothing happen.
   const pageErrorRef = useRef(null);
   const [pageErrorFocusKey, setPageErrorFocusKey] = useState(0);
+  // The last test of the saved model (`{ modelId, result }`), and whether one is running.
+  const [lastTest, setLastTest] = useState(null);
+  const [testing, setTesting] = useState(false);
   // The model id the marketplace lookup found installed, so a stale answer for
   // a previous model id never shows on another one.
   const [marketplaceModelId, setMarketplaceModelId] = useState(null);
@@ -265,7 +272,9 @@ function AdminModelEditPage() {
     const url = id === 'new' ? '/admin/models' : `/admin/models/${id}`;
     const method = id === 'new' ? 'POST' : 'PUT';
 
-    await makeAdminApiCall(url, {
+    // The response carries `Default-Model-Assigned` when the save made the
+    // server pick a default model on its own; the page reads it after the save.
+    return makeAdminApiCall(url, {
       method,
       headers: {
         'Content-Type': 'application/json'
@@ -290,6 +299,23 @@ function AdminModelEditPage() {
   // A failed load leaves `data` null; the shell then shows the load error instead
   // of the form. The blank form only keeps the header expressions from crashing.
   const formData = loadedData ?? DEFAULT_MODEL_DATA;
+  // A deleted model's page offers to restore it from its change history.
+  const { restorable } = useDeletedResourceRestore({
+    resource: 'model',
+    resourceId: modelId,
+    notFound: !isNewModel && loadError?.status === 404
+  });
+
+  // A test result belongs to the model it ran on.
+  const testResult = lastTest?.modelId === modelId ? lastTest.result : null;
+
+  /** Tests the model as it is stored (unsaved edits are not part of the test). */
+  const handleTest = async () => {
+    setTesting(true);
+    const result = await runModelTest(modelId, t, makeAdminApiCall);
+    setLastTest({ modelId, result });
+    setTesting(false);
+  };
 
   useEffect(() => {
     const loadJsonSchema = async () => {
@@ -398,9 +424,11 @@ function AdminModelEditPage() {
       setSaving(true);
       setError(null);
 
-      await save();
-
-      navigate('/admin/models');
+      const response = await save();
+      // The list says which model became the default when the server picked one (AI-B13).
+      const assigned = assignedDefaultModelId(response);
+      if (assigned) navigate('/admin/models', { state: { defaultAssigned: assigned } });
+      else navigate('/admin/models');
     } catch (err) {
       // A taken ID belongs to the ID field: the form says it there and in its summary.
       // The JSON mode shows no form, so there the page says it.
@@ -422,7 +450,24 @@ function AdminModelEditPage() {
     }
   };
 
-  return (
+  const historyDrawer = (
+    <ChangeHistoryDrawer
+      isOpen={historyOpen}
+      onClose={() => setHistoryOpen(false)}
+      resource="model"
+      resourceId={modelId}
+      onRestored={
+        loadError
+          ? () => {
+              setHistoryOpen(false);
+              retryLoad();
+            }
+          : undefined
+      }
+    />
+  );
+
+  const page = (
     <AdminEditPageShell
       loading={loading}
       loadingFallback={
@@ -443,22 +488,22 @@ function AdminModelEditPage() {
             : (formData?.name?.en ?? modelId)
         }
       ]}
-      extra={
-        <ChangeHistoryDrawer
-          isOpen={historyOpen}
-          onClose={() => setHistoryOpen(false)}
-          resource="model"
-          resourceId={modelId}
-        />
-      }
+      extra={historyDrawer}
       blocker={blocker}
       loadError={loadError}
       onRetry={retryLoad}
       resourceLabel={t('admin.models.edit.resource', 'model "{{id}}"', { id: modelId })}
-      notFoundAction={{
-        label: t('admin.models.edit.backToModels'),
-        onClick: () => navigate('/admin/models')
-      }}
+      notFoundAction={
+        restorable
+          ? {
+              label: t('admin.restoreDeleted.action', 'Restore from History'),
+              onClick: () => setHistoryOpen(true)
+            }
+          : {
+              label: t('admin.models.edit.backToModels'),
+              onClick: () => navigate('/admin/models')
+            }
+      }
     >
       {/* Header */}
       <div className="mb-8">
@@ -493,6 +538,27 @@ function AdminModelEditPage() {
               >
                 <Icon name="download" className="h-4 w-4 mr-2" />
                 {t('common.download')}
+              </button>
+            )}
+            {!isNewModel && (
+              <button
+                type="button"
+                onClick={handleTest}
+                disabled={testing}
+                title={
+                  isDirty
+                    ? t(
+                        'admin.models.edit.testSavedHint',
+                        'Tests the saved model. Save first to test your changes.'
+                      )
+                    : undefined
+                }
+                className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-xs text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+              >
+                <Icon name="play" className="h-4 w-4 mr-2" />
+                {testing
+                  ? t('admin.models.edit.testing', 'Testing…')
+                  : t('admin.models.test', 'Test')}
               </button>
             )}
             {modelId !== 'new' && (
@@ -530,6 +596,20 @@ function AdminModelEditPage() {
             className="mb-6"
             action={null}
           />
+        </div>
+      )}
+
+      {testResult && (
+        <div className="mb-6 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
+          {isDirty && (
+            <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
+              {t(
+                'admin.models.edit.testSavedHint',
+                'Tests the saved model. Save first to test your changes.'
+              )}
+            </p>
+          )}
+          <ModelTestResult result={testResult} onDismiss={() => setLastTest(null)} />
         </div>
       )}
 
@@ -723,6 +803,16 @@ function AdminModelEditPage() {
         </div>
       </form>
     </AdminEditPageShell>
+  );
+
+  // The shell leaves out `extra` while the model did not load; the page of a deleted
+  // model still needs the drawer, to restore the model from its history.
+  if (!loadError) return page;
+  return (
+    <>
+      {page}
+      {historyDrawer}
+    </>
   );
 }
 

@@ -631,6 +631,26 @@ function ModelFormEditor({
     );
   }, [data.id, data.provider, data.providerId, t]);
 
+  /**
+   * The hint under the API key: where the key comes from when this field is
+   * empty, in the order the server looks (`inspectModelApiKey` in
+   * server/utils.js): this model's key, its provider's key, the model's
+   * environment variable, the provider's environment variable (AI-B23).
+   */
+  const apiKeyLookupHint = useMemo(() => {
+    const [modelEnv, providerEnv] = getEnvironmentVariableNames({
+      id: data.id,
+      provider: data.provider,
+      providerId: data.providerId
+    });
+    return t('admin.models.hints.apiKeyLookupOrder', {
+      modelEnv: modelEnv || '<MODEL_ID>_API_KEY',
+      providerEnv: providerEnv || '<PROVIDER>_API_KEY',
+      defaultValue:
+        'Optional. When it is empty the server uses the first key it finds, in this order: this model’s key, the key of its provider, the environment variable {{modelEnv}}, the environment variable {{providerEnv}}. A local server (vLLM, LM Studio, Jan.ai, Ollama) needs no key. Keys are stored encrypted.'
+    });
+  }, [data.id, data.provider, data.providerId, t]);
+
   const errorLabels = {
     id: t('admin.models.fields.id', 'Model ID'),
     name: t('admin.models.fields.name', 'Name'),
@@ -1139,10 +1159,7 @@ function ModelFormEditor({
                     />
                   </div>
                   <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                    {t(
-                      'admin.models.hints.apiKey',
-                      'API key for this model. If not provided, the system will use the environment variable for the provider. Keys are stored encrypted.'
-                    )}
+                    {apiKeyLookupHint}
                   </p>
                   {data.apiKeySet && !keyStatus && (
                     <p className="mt-2 text-sm text-blue-600 dark:text-blue-400">

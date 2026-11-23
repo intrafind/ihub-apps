@@ -8,14 +8,24 @@ import { useFilterState } from '../hooks/useFilterState';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import Icon from '../../../shared/components/Icon';
 import ModelDetailsPopup from '../../../shared/components/ModelDetailsPopup';
-import { getAdminApiErrorMessage, makeAdminApiCall, toggleModels } from '../../../api/adminApi';
+import {
+  assignedDefaultModelId,
+  fetchModelDependants,
+  getAdminApiErrorMessage,
+  makeAdminApiCall,
+  makeDefaultModel,
+  toggleModels
+} from '../../../api/adminApi';
 import { DataTable, SearchInput, FilterSelect } from '../components/data-table';
-import { translateModelTestMessage } from '../utils/modelTestMessages';
+import { runModelTest } from '../utils/modelTestMessages';
+import ModelTestResult from '../components/ModelTestResult';
+import Switch from '../../../shared/components/Switch';
+import EditorToast, { useEditorToast } from '../components/app-editor/EditorMessages';
+import { deleteWithHistoryMessage, modelDeleteConsequences } from '../utils/deleteDependants';
 import ModelImportDialog from '../components/ModelImportDialog';
 import ApiKeyStatusBadge from '../components/ApiKeyStatusBadge';
 import useApiKeyStatus from '../hooks/useApiKeyStatus';
 import AdminLoadError from '../components/AdminLoadError';
-import ConnectionErrorDetails from '../components/ConnectionErrorDetails';
 import { listCount } from '../utils/listLoadState';
 import useAdminPageAccess from '../hooks/useAdminPageAccess';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
@@ -73,16 +83,24 @@ function MarkingBadge({ marking, t }) {
   );
 }
 
-function StatusCell({ model, t }) {
+/**
+ * Whether the model is on, as a switch that turns it on or off for every user
+ * with access, and the "Default" badge. The switch does not open the row's details.
+ */
+function StatusCell({ model, name, onToggle, t }) {
   return (
     <div className="flex items-center gap-2">
-      <span
-        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-          model.enabled
-            ? 'bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300'
-            : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300'
-        }`}
-      >
+      <Switch
+        size="sm"
+        checked={Boolean(model.enabled)}
+        onChange={(_next, event) => {
+          event?.stopPropagation();
+          onToggle(model.id);
+        }}
+        aria-label={t('admin.models.enabledSwitch', { name, defaultValue: 'Enabled: {{name}}' })}
+        data-testid={`model-enabled-${model.id}`}
+      />
+      <span className="text-xs text-gray-700 dark:text-gray-300">
         {model.enabled
           ? t('admin.models.enabled', 'Enabled')
           : t('admin.models.disabled', 'Disabled')}
@@ -158,6 +176,8 @@ function AdminModelsPage() {
   const [showModelDetails, setShowModelDetails] = useState(false);
   const [uploading, setUploading] = useState(false);
   const uploadInputRef = useRef(null);
+  // Tells the admin when the server made a model the default on its own (AI-B13).
+  const [toast, showToast] = useEditorToast();
   // The Providers page opens the import dialog for one provider through
   // navigation state ({ importProviderId }).
   const [importDialog, setImportDialog] = useState(() =>
@@ -191,22 +211,74 @@ function AdminModelsPage() {
     }
   };
 
+  const modelName = model => getLocalizedContent(model.name, currentLanguage) || model.id;
+  const modelNameById = id => {
+    const model = models.find(m => m.id === id);
+    return model ? modelName(model) : id;
+  };
+
+  /**
+   * Says that the server made `modelId` the default on its own: every app that
+   * names no model answers with it now.
+   *
+   * @param {string|null|undefined} modelId
+   */
+  const announceAssignedDefault = modelId => {
+    if (!modelId) return;
+    showToast(
+      t('admin.models.defaultAssigned', {
+        name: modelNameById(modelId),
+        defaultValue: '"{{name}}" is now the default model.'
+      })
+    );
+  };
+
   useEffect(() => {
     void loadModels();
   }, []);
+
+  // The editor hands over a default the server assigned while saving.
+  const handedOverDefault = location.state?.defaultAssigned;
+  useEffect(() => {
+    if (!handedOverDefault || loading) return;
+    announceAssignedDefault(handedOverDefault);
+    navigate(location.pathname + location.search, { replace: true, state: null });
+  }, [handedOverDefault, loading]); // eslint-disable-line @eslint-react/exhaustive-deps
 
   const toggleModel = async modelId => {
     try {
       // The route sets the state it is told: flip from what the list shows.
       const enabled = !models.find(m => m.id === modelId)?.enabled;
-      await toggleModels(modelId, enabled);
-      setModels(prev => prev.map(m => (m.id === modelId ? { ...m, enabled } : m)));
+      const result = await toggleModels(modelId, enabled);
+      const assigned = result?.assignedDefaultModelId;
+      setModels(prev =>
+        prev.map(m => {
+          // A disabled model loses the default flag on the server.
+          if (m.id === modelId) return { ...m, enabled, ...(enabled ? {} : { default: false }) };
+          return assigned ? { ...m, default: m.id === assigned } : m;
+        })
+      );
+      announceAssignedDefault(assigned);
     } catch (err) {
       setError(getAdminApiErrorMessage(err));
     }
   };
 
-  const modelName = model => getLocalizedContent(model.name, currentLanguage) || model.id;
+  /** Makes an enabled chat model the default, from its row. */
+  const makeDefault = async model => {
+    try {
+      await makeDefaultModel(model.id);
+      setModels(prev => prev.map(m => ({ ...m, default: m.id === model.id })));
+      showToast(
+        t('admin.models.madeDefault', {
+          name: modelName(model),
+          defaultValue: '"{{name}}" is the default model now.'
+        })
+      );
+    } catch (err) {
+      setError(getAdminApiErrorMessage(err));
+    }
+  };
 
   /**
    * Enable All / Disable All toggle every model (`*`) for every user, so they
@@ -245,45 +317,20 @@ function AdminModelsPage() {
         extraConsequences
       }),
       action: async () => {
-        await toggleModels('*', enable);
+        const result = await toggleModels('*', enable);
         // Reload instead of patching the list: enabling makes the server pick
         // a new default model, which only the server's list shows.
         await loadModels();
+        announceAssignedDefault(result?.assignedDefaultModelId);
       }
     });
   };
 
   const testModel = async modelId => {
     setTestingModel(modelId);
-    // The test endpoint maps a provider rejecting the server's key onto 502 (not
-    // 401), so the shared admin client is safe here: a 401 really is an expired
-    // admin session and must go through the global re-authentication flow.
-    try {
-      const response = await makeAdminApiCall(`/admin/models/${modelId}/_test`, {
-        method: 'POST'
-      });
-      // A failed test is an HTTP error (the catch below); an answer is a passed test.
-      setTestResults(prev => ({
-        ...prev,
-        [modelId]: { ...(response?.data || {}), success: true }
-      }));
-    } catch (err) {
-      // Server body: { detail: headline, code, details: { messageKey, remediation,
-      // upstreamStatus?, host?, errorCode? } }
-      const body = err?.response?.data || {};
-      const fallbackMessage = body.detail || t('admin.models.testResults.failed', 'Test Failed');
-      setTestResults(prev => ({
-        ...prev,
-        [modelId]: {
-          success: false,
-          message: translateModelTestMessage(t, body.details?.messageKey, fallbackMessage),
-          details: body.details || null,
-          error: err?.response?.status ? `HTTP ${err.response.status}` : err.message
-        }
-      }));
-    } finally {
-      setTestingModel(null);
-    }
+    const result = await runModelTest(modelId, t, makeAdminApiCall);
+    setTestResults(prev => ({ ...prev, [modelId]: result }));
+    setTestingModel(null);
   };
 
   // The clone opens as a new model with the ID `<id>-copy` (or the next free one) proposed.
@@ -295,12 +342,35 @@ function AdminModelsPage() {
     navigate('/admin/models/new', { state: { templateModel: model, cloneId } });
   };
 
-  const handleDeleteModel = model => {
+  /**
+   * Opens the delete dialog once the server said what names the model (apps,
+   * workflows, groups, the default status), so the dialog can list it. A
+   * failed check still opens the dialog, which then says it could not check.
+   */
+  const handleDeleteModel = async model => {
+    const dependants = await fetchModelDependants(model.id).catch(() => null);
     requestConfirm({
-      ...deleteConfirmText({ typeKey: 'model', typeFallback: 'model', name: modelName(model), t }),
+      ...deleteConfirmText({
+        typeKey: 'model',
+        typeFallback: 'model',
+        name: modelName(model),
+        t,
+        message: deleteWithHistoryMessage({ type: 'model', path: `/admin/models/${model.id}`, t })
+      }),
+      consequences: modelDeleteConsequences(dependants, {
+        t,
+        language: currentLanguage,
+        modelName: modelNameById
+      }),
       action: async () => {
-        await makeAdminApiCall(`/admin/models/${model.id}`, { method: 'DELETE' });
-        setModels(prev => prev.filter(m => m.id !== model.id));
+        const response = await makeAdminApiCall(`/admin/models/${model.id}`, { method: 'DELETE' });
+        const assigned = assignedDefaultModelId(response);
+        setModels(prev =>
+          prev
+            .filter(m => m.id !== model.id)
+            .map(m => (assigned ? { ...m, default: m.id === assigned } : m))
+        );
+        announceAssignedDefault(assigned);
       }
     });
   };
@@ -435,7 +505,7 @@ function AdminModelsPage() {
       header: t('admin.models.table.status', 'Status'),
       sortable: true,
       sortAccessor: m => (m.enabled ? 1 : 0),
-      render: m => <StatusCell model={m} t={t} />
+      render: m => <StatusCell model={m} name={modelName(m)} onToggle={toggleModel} t={t} />
     }
   ];
 
@@ -448,11 +518,16 @@ function AdminModelsPage() {
       onClick: m => navigate(`/admin/models/${m.id}`)
     },
     {
-      id: 'toggle',
-      label: t('admin.models.toggle', 'Toggle enabled'),
-      icon: 'eye',
+      id: 'makeDefault',
+      label: t('admin.models.makeDefault', 'Make default'),
+      icon: 'star',
       priority: 'primary',
-      onClick: m => toggleModel(m.id)
+      // Only a chat model can be the default, and only one that is enabled.
+      hidden: m => m.default === true || (m.modelType || 'chat') !== 'chat',
+      disabled: m => !m.enabled,
+      title: m =>
+        m.enabled ? undefined : t('admin.models.makeDefaultDisabled', 'Enable the model first'),
+      onClick: m => makeDefault(m)
     },
     {
       id: 'test',
@@ -488,44 +563,16 @@ function AdminModelsPage() {
     return {
       expanded: true,
       content: (
-        <div className="flex items-start space-x-3">
-          {result.success ? (
-            <>
-              <Icon name="check-circle" className="h-5 w-5 text-green-500 shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <div className="text-sm font-medium text-green-800 dark:text-green-300">
-                  {t('admin.models.testResults.success', 'Test Successful')}
-                </div>
-                <div className="text-sm text-gray-700 dark:text-gray-300 mt-1">
-                  {result.response}
-                </div>
-              </div>
-            </>
-          ) : (
-            <>
-              <Icon name="exclamation-circle" className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <div className="text-sm font-medium text-red-800 dark:text-red-300">
-                  {result.message || t('admin.models.testResults.failed', 'Test Failed')}
-                </div>
-                <ConnectionErrorDetails details={result.details} fallback={result.error} />
-              </div>
-            </>
-          )}
-          <button
-            onClick={() =>
-              setTestResults(prev => {
-                const next = { ...prev };
-                delete next[model.id];
-                return next;
-              })
-            }
-            className="text-gray-500 hover:text-gray-600"
-            title={t('common.close', 'Close')}
-          >
-            <Icon name="x" className="h-5 w-5" />
-          </button>
-        </div>
+        <ModelTestResult
+          result={result}
+          onDismiss={() =>
+            setTestResults(prev => {
+              const next = { ...prev };
+              delete next[model.id];
+              return next;
+            })
+          }
+        />
       )
     };
   };
@@ -612,6 +659,7 @@ function AdminModelsPage() {
             <ModelsSetupStrip
               keyStatuses={providerKeyStatuses}
               models={models}
+              providers={providers}
               onConnect={access.providers ? () => navigate('/admin/providers/connect') : undefined}
               onImport={() => setImportDialog({ open: true, providerId: null })}
               onShowEnabled={() => setFilterEnabled('enabled')}
@@ -724,6 +772,7 @@ function AdminModelsPage() {
         )}
       </div>
       <ConfirmDialog {...confirmDialogProps} />
+      <EditorToast message={toast} />
     </div>
   );
 }

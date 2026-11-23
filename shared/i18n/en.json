@@ -1848,7 +1848,9 @@
         "configurationDesc": "Advanced configuration options for the model",
         "resource": "model \"{{id}}\"",
         "fixErrors": "Please fix the following errors",
-        "history": "History"
+        "history": "History",
+        "testSavedHint": "Tests the saved model. Save first to test your changes.",
+        "testing": "Testing…"
       },
       "fields": {
         "id": "Model ID",
@@ -1953,7 +1955,8 @@
         "markingDetectorCredentialRef": "Optional bearer token, if the detector asks for one.",
         "markingTokenizer": "The detector splits a text into the same tokens as the model to find the watermark. Leave empty to use the model ID; set a Hugging Face ID or path only if vLLM serves the model under another name.",
         "markingContextWidth": "Tokens the watermark looks back on, not the context window. Must equal context_width of vLLM (default 4).",
-        "autoDiscovery": "Automatically detect the active model from the /v1/models endpoint. Useful for local LLM providers (vLLM, LM Studio, Jan.ai) where the model can change. Only available for OpenAI-compatible providers."
+        "autoDiscovery": "Automatically detect the active model from the /v1/models endpoint. Useful for local LLM providers (vLLM, LM Studio, Jan.ai) where the model can change. Only available for OpenAI-compatible providers.",
+        "apiKeyLookupOrder": "Optional. When it is empty the server uses the first key it finds, in this order: this model’s key, the key of its provider, the environment variable {{modelEnv}}, the environment variable {{providerEnv}}. A local server (vLLM, LM Studio, Jan.ai, Ollama) needs no key. Keys are stored encrypted."
       },
       "placeholders": {
         "maxOutputTokens": "Default: {{value}}",
@@ -2141,7 +2144,8 @@
         "defaultHint": "Open a model and tick “Default” so apps without a model of their own have one.",
         "done": "(done)",
         "todo": "(to do)",
-        "connectWizardAction": "Connect a model provider"
+        "connectWizardAction": "Connect a model provider",
+        "defaultHintRow": "Choose “Make default” in the row of an enabled chat model, so apps without a model of their own have one."
       },
       "moreActions": "More model actions",
       "disableAllDefault": "The default model setting is cleared. When models are enabled again, the first chat model in the list becomes the default.",
@@ -2171,7 +2175,12 @@
       },
       "downloadError": "Failed to download model config: {{error}}",
       "uploadExists": "Model with ID \"{{id}}\" already exists",
-      "uploadError": "Failed to upload model config: {{error}}"
+      "uploadError": "Failed to upload model config: {{error}}",
+      "enabledSwitch": "Enabled: {{name}}",
+      "defaultAssigned": "\"{{name}}\" is now the default model.",
+      "madeDefault": "\"{{name}}\" is the default model now.",
+      "makeDefault": "Make default",
+      "makeDefaultDisabled": "Enable the model first"
     },
     "auth": {
       "configuration": "Authentication Configuration",
@@ -4409,7 +4418,11 @@
           "part": "{{parent}}, {{field}}",
           "language": "{{field}} — {{language}}"
         },
-        "magicPromptInstructionsPlaceholder": "Enter instructions for the magic prompt feature…"
+        "magicPromptInstructionsPlaceholder": "Enter instructions for the magic prompt feature…",
+        "modelChoice": {
+          "disabled": "{{name}} (disabled)",
+          "default": "{{name}} (default)"
+        }
       },
       "reorder": "Reorder",
       "reorderHelp": "Drag a row or use the arrows to set the order apps appear in for users — in the apps browser, on the start page and in the sidebar. Every app is listed, so search and filters do not apply here. Nothing is saved until you choose \"Save order\".",
@@ -8994,6 +9007,21 @@
         "disableMessage_other": "{{count}} of {{total}} {{items}} are enabled now and will be disabled. Users lose access right away:",
         "nothingToEnable": "All {{total}} {{items}} are already enabled.",
         "nothingToDisable": "All {{total}} {{items}} are already disabled."
+      },
+      "dependants": {
+        "modelMessage": "The model is removed for all users. A copy stays in the change history: open {{path}} again to restore it.",
+        "appMessage": "The app is removed for all users. A copy stays in the change history: open {{path}} again to restore it.",
+        "checkFailed": "Could not check what uses it. Apps, workflows or groups may still name it.",
+        "modelApps": "Apps that name it (they answer with another model): {{names}}",
+        "modelWorkflows": "Workflows that name it: {{names}}",
+        "modelGroups": "Groups that grant it by name: {{names}}",
+        "defaultMoves": "It is the default model. \"{{name}}\" becomes the default.",
+        "defaultNone": "It is the default model, and no other enabled chat model can take over. Apps without a model of their own have none until you enable one.",
+        "appPrompts": "Prompts that open in it: {{names}}",
+        "appTools": "Apps that call it as a tool: {{names}}",
+        "appChildren": "Apps that inherit from it: {{names}}",
+        "appWorkflows": "Workflows that call it: {{names}}",
+        "appGroups": "Groups that grant it by name: {{names}}"
       }
     },
     "backup": {
@@ -9773,6 +9801,9 @@
         "networkError": "The connection failed. Check that the iHub server can reach the host (firewall, VPN, outbound proxy).",
         "rateLimitExceeded": "The endpoint is limiting requests. Wait a moment and try again."
       }
+    },
+    "restoreDeleted": {
+      "action": "Restore from History"
     }
   },
   "cloudStorage": {
