@@ -59,4 +59,8 @@ When you change something on an admin edit page, a bar at the bottom of the scre
 - **A new item** says **Create** instead of **Save Changes**. An item made from a template or a copy can be created at once.
 - **Discard** puts the page back to what is saved, including the JSON view and the fields next to the form.
 - **The CIMD client editor** now asks before you leave it with unsaved changes.
-- Other settings pages will follow.
+- **The settings pages** Authentication, Features, Feedback, Chat History, Localization, Telemetry, Voice Input, MCP Gateway, OAuth Server, Nextcloud Embed, Browser Extension, Copilot Agent and Office Integration use the bar too, and it is only offered once the settings have loaded. A refused save is named in the bar.
+- **The Copilot Agent page** has one Save for the reference ID and the agent settings together. An invalid agent field now also blocks saving the ID, which used to save on its own.
+- **The OAuth Server page** now asks before you leave it with unsaved changes. After a save conflict, **Reload and discard my changes** shows the stored values and ends your edits instead of mixing them in.
+- **The translation overrides** on the Localization page keep their own Save for each text.
+- Pages with several sections (Security, Logging, EU AI Act) will follow.

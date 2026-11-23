@@ -96,7 +96,7 @@ function AdminOAuthServerPage() {
           revisionRef.current = revision;
           setOAuthEnabled(data?.oauth?.enabled?.authz || false);
           // The stored settings become the form and the saved baseline alike: a reload that
-          // takes the stored values ("Keep my changes and overwrite") ends the edits too.
+          // takes the stored values ("Reload and discard my changes" after a save conflict) ends the edits too.
           const loaded = toFormOauthConfig(data?.oauth);
           setOauthConfig(loaded);
           setSavedOauthConfig(loaded);

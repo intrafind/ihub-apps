@@ -701,10 +701,12 @@ or the close button closes it and returns focus to the **History** button.
 
 On an edit page, the bar at the bottom of the screen shows only while you have unsaved changes. It says **You have unsaved changes** and offers **Save Changes** (**Create** on the page of a new item) and **Discard**. **Discard** puts the page back to what is saved. When there is nothing to save, there is no bar.
 
-The bar is on the edit pages of apps, groups, users, models, prompts, agents, agent inboxes, workflows, document templates, providers, short links, OAuth clients, CIMD clients, custom pages and skills, and on **UI Customization**, **Disclaimer** and **Artifacts**. Other settings pages still have their own Save button and move to the bar step by step.
+The bar is on the edit pages of apps, groups, users, models, prompts, agents, agent inboxes, workflows, document templates, providers, short links, OAuth clients, CIMD clients, custom pages and skills, and on **UI Customization**, **Disclaimer** and **Artifacts**. The settings pages **Authentication**, **Features**, **Feedback**, **Chat History**, **Localization**, **Telemetry**, **Voice Input**, **MCP Gateway**, **OAuth Server**, **Nextcloud Embed**, **Browser Extension**, **Copilot Agent** and **Office Integration** use it too. The pages with several sections (**Security**, **Logging**, the EU AI Act cards) and a few others still have their own Save button and move to the bar step by step.
 
 - An item made from a template or a copy can be created at once; the bar is there as the page opens.
 - A refused save (for example a missing field or a taken ID) keeps your changes and the bar, and says what is wrong.
+- On a settings page, a refused save is also named in the bar itself, so you see it without scrolling to the top.
+- **Localization** saves the default language with the bar; the translation overrides below it keep their own **Save**, **Cancel** and **Reset** for each text.
 - **Save** and the Enter key run the same checks as before; a page with invalid JSON in its JSON mode does not save it.
 
 ## Unsaved Changes
@@ -725,7 +727,7 @@ Some things never ask:
 
 On pages with several sections that each have their own Save button, such as **Security**, every section with unsaved changes is marked with **Unsaved changes** next to its heading and a dot in the section list, and one dialog covers them all. On an integration's page and on **Usage Reports**, edits on the **Settings** and **Limits & quotas** tabs are kept when you switch to another tab of the same page and come back; leaving the page asks first.
 
-A few places do not ask yet: the **Authentication** page, the app order on the **Apps** list, the global prompt variables on the **Prompts** list, the OAuth server settings, and forms in dialogs (such as installing an integration).
+A few places do not ask yet: the app order on the **Apps** list, the global prompt variables on the **Prompts** list, and forms in dialogs (such as installing an integration).
 
 ### When someone else saved first
 
