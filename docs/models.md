@@ -29,8 +29,11 @@ which step is still open and links to it. On a new installation the setup wizard
 step for the large cloud providers (see [Getting Started](GETTING_STARTED.md#2-run-the-setup-wizard)).
 This section covers the same steps for any provider, at any time.
 
-<!-- TODO(connect-provider-wizard): describe the "Connect a provider" wizard here once it ships,
-     as the first way in; keep the manual steps below as the alternative. -->
+The quickest way in is the guided flow: **Admin → Models → Providers → Add provider**, or
+**Connect a model provider** in the **Set up your models** strip. It asks where your models run,
+takes the address and the key, tests the connection, lets you pick the models and the default
+model, and asks who may use them. At the end a one-prompt test shows that the models answer. The
+sections below describe the same steps one by one, for when you prefer to do them by hand.
 
 ### Before you start
 
@@ -101,7 +104,8 @@ provider, and **Test All** checks every provider. If a test fails, see
 ### Choose the default model
 
 Apps without a preferred model use the default model. The first chat model you enable becomes the
-default automatically. To choose another one, open the model and tick **Default Model**. Only one
+default automatically, and the Models page says so. To choose another one, click **Make default**
+in the model's row, or open the model and tick **Default Model**. Only one
 model can be the default, so ticking it removes the mark from the previous default.
 
 ### Decide who can use the models
@@ -110,8 +114,10 @@ On a new installation every signed-in user may use every model, and anonymous vi
 only a few. To limit a model to some groups, see
 [Who can use apps, models and prompts](access-control.md#limit-a-model-to-some-groups).
 
-<!-- TODO(model-access-card): once the model editor has a "Group access" card, describe it here and
-     in access-control.md instead of the group editor steps. -->
+The model editor shows **Who can use this model**: every group that may use the model, and why
+(listed by name, or through "all models", and from which group it inherits that). **Restrict
+access…** there takes the model out of the groups that grant all models, and **Why can't someone
+see this?** checks a group or a user.
 
 ### Common endpoints
 
@@ -131,8 +137,8 @@ only a few. To limit a model to some groups, see
 
 The test result names the problem in its first line. The following table lists the causes.
 
-<!-- TODO(connection-error-messages): update this table when the improved connection error
-     messages ship (status, host and TLS cases). -->
+Under the first line the result names the HTTP status the endpoint answered, its host and, for a
+network or certificate problem, the error code, followed by a line on what to check.
 
 | The test says | Likely cause | What to do |
 | --- | --- | --- |
@@ -141,9 +147,11 @@ The test result names the problem in its first line. The following table lists t
 | Access denied | The key is valid but may not use this model. | Check the key's permissions or project at the provider. |
 | Model not found | The endpoint does not know the **API Model ID**. For Azure OpenAI, the deployment name is wrong. | Correct the **API Model ID**, or import the model again. |
 | Connection refused, Service not found, Connection timeout | The **API URL** is wrong, the server is not running, or a firewall blocks the iHub server. | Check the URL. Check that the iHub server can reach the host. |
-| Network error | Often a certificate from a private certificate authority, or a missing proxy setting. | See [Before you start](#before-you-start). |
+| Certificate not trusted | The endpoint uses a certificate from a private certificate authority, or a self-signed one. | Add the host to the SSL domain whitelist under **Security** (the result links there). See [Before you start](#before-you-start). |
+| The endpoint requires an API key | A provider set up without a key answered that it needs one. | Enter the key on the provider. |
+| Network error | Often a missing proxy setting. | See [Before you start](#before-you-start). |
 | Rate limit exceeded | The provider throttles your key, or its quota is used up. | Wait, or raise the quota at the provider. |
-| Server error | The endpoint failed internally. | Try again later. |
+| Server error | The endpoint itself failed (HTTP 5xx); the configuration in iHub is probably right. | Check the status and logs of the service, or of a proxy in front of it, and try again. |
 | Stored API key cannot be decrypted | The encryption key of the installation changed since the key was saved. | Enter the API key again (see [Encryption Key Management](encryption-key-management.md)). |
 
 ## Basic Model Structure

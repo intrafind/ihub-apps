@@ -75,8 +75,20 @@ that group here, because the group grants every item. To limit the item, follow 
 Skills and workflows have the same card. Models do not have it yet: see
 [Limit a model to some groups](#limit-a-model-to-some-groups).
 
-<!-- TODO(restrict-access-helper): describe the "Restrict access" helper here once it ships. It
-     replaces the manual wildcard steps in the next section; keep those as the fallback. -->
+## Restrict access with the helper
+
+On an app's page and in the model editor, **Restrict access…** does the steps of the next two
+sections for you. It lists the groups that grant the item through "all" (also through
+inheritance), lets you pick which of them to change, and replaces "all" there with an explicit list
+of every current item except this one. Before you apply it shows who keeps access and who loses
+it. Each changed group gets an entry in its history. You can also grant the item by name to groups
+of your choice in the same step.
+
+The helper converts only "all". A group that lists the item by name keeps it; the preview says
+so. Like the manual steps, it means later items no longer appear in the changed groups by
+themselves. The helper is for administrators with full admin rights; the steps below remain the
+way to do it by hand.
+
 
 ## Limit an app to some groups
 
@@ -115,8 +127,8 @@ Each time you create an app for everyone, give **Authenticated** access to it in
 ## Limit a model to some groups
 
 Example: only the group **Data Science** may use an expensive model. The steps are the same as for
-an app, but you make every change in the group editor, because models have no **Group access**
-card yet.
+an app, but you make every change in the group editor, because a model's card shows who has
+access without editing it.
 
 1. Open **Access & Identity → Groups** and the group **Authenticated**.
 2. Under **Permissions → Models**, untick **All (\*)**.
@@ -127,8 +139,9 @@ card yet.
    **Users**, **Agent Operators**, the **Agents** group and, if you like, **Admins**.
 6. Open the group **Data Science**, add the expensive model under **Models** and click **Save Group**.
 
-<!-- TODO(model-access-card): once models have a "Group access" card, replace steps 1 to 6 with
-     the card and keep the group editor steps as the fallback. -->
+In the model editor, **Who can use this model** lists the groups and why they have access, and
+**Restrict access…** does steps 1 to 5 for you (see
+[Restrict access with the helper](#restrict-access-with-the-helper)).
 
 What users notice:
 
@@ -153,7 +166,11 @@ group **Model** limits the models users may pick in that app. It does not depend
 
 ## When someone does not see an app
 
-Check the following, in this order:
+Start with **Why can't someone see this?** on the app's page or in the model editor. Pick a group
+or type a user: it answers yes or no and lists the reasons, the same ones as in this checklist.
+For a user it knows the groups stored in iHub, not the ones an identity provider sends at sign-in.
+
+To check by hand, go through the following, in this order:
 
 1. **Published.** In **AI Workspace → Apps**, the app's status is **Published**. An app created
    with **New app** starts as **Not published**.
@@ -174,9 +191,6 @@ that one of the user's groups grants it. **Opens in app** does not hide a prompt
 
 For a **model**, check that the model is enabled, that one of the user's groups grants it, and that
 its provider has an API key (see [Set up models in the admin UI](models.md#set-up-models-in-the-admin-ui)).
-
-<!-- TODO(access-check): describe the access check ("Why can't this user see …?") here once it
-     ships, as the first step of this checklist. -->
 
 ## Related pages
 

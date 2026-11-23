@@ -232,7 +232,7 @@ app, so check the audience before you publish.
    group's chip to withdraw it. Each change here is saved at once. A locked chip marks a group
    that may use all apps; only an administrator can change that, in the group's settings.
    [Limit an app to some groups](access-control.md#limit-an-app-to-some-groups) shows how.
-   <!-- TODO(restrict-access-helper): mention the "Restrict access" helper here once it ships. -->
+   **Restrict access…** on the app's page does this for you.
 
 2. Click **Publish** in the header. The dialog says who will see the app.
 3. Read the sentence under **Who will see it**, then click **Publish**.
