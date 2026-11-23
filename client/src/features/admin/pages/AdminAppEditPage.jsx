@@ -41,6 +41,8 @@ import EditorGroup from '../components/app-form/EditorGroup';
 import EditorGroupNav from '../components/app-form/EditorGroupNav';
 import { groupOfField } from '../components/app-form/editorGroups';
 import { useEditorGroups } from '../components/app-form/useEditorGroups';
+import { hasNoUsableModel } from '../components/app-form/modelChoices';
+import { useDeletedResourceRestore } from '../hooks/useDeletedResourceRestore';
 
 /** Where the page lives and where it leads. Its parts name no page. */
 const APPS_PATH = '/admin/apps';
@@ -102,7 +104,14 @@ function AdminAppEditPage() {
   // In the reader's language, else in one the app has: a German-only name shows in an English UI.
   const appName = getLocalizedContent(app?.name, uiLanguage) || appId;
   const isChat = (app?.type || 'chat') === 'chat';
-  const noModel = Array.isArray(models) && models.length === 0 && isChat;
+  // The editor lists disabled models too: "no model" means none of them is enabled.
+  const noModel = hasNoUsableModel(models) && isChat;
+  // A deleted app's page offers to restore it from its change history.
+  const { restorable } = useDeletedResourceRestore({
+    resource: 'app',
+    resourceId: appId,
+    notFound: loadError?.status === 404
+  });
   const formMode = editingMode === 'form';
   const describeError = error => apiErrorMessage(error, t, t('admin.apps.errorTitle'));
 
@@ -218,10 +227,17 @@ function AdminAppEditPage() {
           loadError={loadError}
           onRetry={editor.retryLoad}
           resourceLabel={t('admin.apps.edit.resource', 'app "{{id}}"', { id: appId })}
-          notFoundAction={{
-            label: t('admin.apps.edit.backToApps', 'Back to Apps'),
-            onClick: () => navigate(APPS_PATH)
-          }}
+          notFoundAction={
+            restorable
+              ? {
+                  label: t('admin.restoreDeleted.action', 'Restore from History'),
+                  onClick: () => setHistoryOpen(true)
+                }
+              : {
+                  label: t('admin.apps.edit.backToApps', 'Back to Apps'),
+                  onClick: () => navigate(APPS_PATH)
+                }
+          }
         >
           <AppEditorHeader
             appId={appId}
@@ -343,6 +359,14 @@ function AdminAppEditPage() {
         onClose={() => setHistoryOpen(false)}
         resource="app"
         resourceId={appId}
+        onRestored={
+          loadError
+            ? () => {
+                setHistoryOpen(false);
+                editor.retryLoad();
+              }
+            : undefined
+        }
       />
     </div>
   );

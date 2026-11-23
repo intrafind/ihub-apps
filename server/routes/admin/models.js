@@ -34,6 +34,7 @@ import {
 import { inspectModelApiKey } from '../../utils.js';
 import { usageLimitBucketSchema } from '../../validators/common.js';
 import { sendCreated, segment } from '../../utils/created.js';
+import { effectiveDefaultModelId, findModelDependants } from '../../utils/resourceDependants.js';
 
 /** Largest voice sample accepted (Mistral needs seconds, not minutes, of audio). */
 const MAX_VOICE_SAMPLE_BYTES = 10 * 1024 * 1024;
@@ -343,6 +344,36 @@ async function ensureStoredDefault(exceptId) {
   );
   if (candidates.length > 0 && !candidates.some(model => model.default === true)) {
     await updateStoredModel(candidates[0].id, stored => ({ ...stored, default: true }));
+  }
+}
+
+/**
+ * Response header that names the model the server made the platform default on
+ * its own, without the admin asking for it (AI-B13): the first enabled chat
+ * model when there was none, or the next one when the default was disabled or
+ * deleted. Sent by create, update, `_toggle` and delete (a `204` has no body, so a
+ * body member could not carry it). The value is the model id, URI-encoded.
+ */
+export const DEFAULT_MODEL_ASSIGNED_HEADER = 'Default-Model-Assigned';
+
+/** The model that answers when an app names none, as the config cache has it now. */
+function liveDefaultModelId() {
+  const { data = [] } = configCache.getModels(true);
+  return effectiveDefaultModelId(data);
+}
+
+/**
+ * Tell the admin when the default model changed to one they did not choose.
+ * Call it after the models cache was refreshed.
+ *
+ * @param {import('express').Response} res
+ * @param {string|null} previousId - The default before the change (`liveDefaultModelId()`)
+ * @param {string|null} [chosenId] - The model the request itself made the default, if any
+ */
+function announceAssignedDefault(res, previousId, chosenId = null) {
+  const currentId = liveDefaultModelId();
+  if (currentId && currentId !== previousId && currentId !== chosenId) {
+    res.setHeader(DEFAULT_MODEL_ASSIGNED_HEADER, encodeURIComponent(currentId));
   }
 }
 
@@ -673,6 +704,7 @@ export default function registerAdminModelsRoutes(app) {
     if (limitsError) throw new ServiceError('BAD_REQUEST', limitsError);
 
     if (!isChatModel(updatedModel)) updatedModel.default = false;
+    const previousDefaultId = liveDefaultModelId();
     if (updatedModel.default === true) await clearOtherDefaults(modelId);
     // The version being replaced, as it is stored: the history's "before". Replaced under the
     // same lock a toggle takes, so the two cannot interleave.
@@ -698,6 +730,7 @@ export default function registerAdminModelsRoutes(app) {
       resourceId: modelId,
       summary: `Updated model ${modelId}`
     });
+    announceAssignedDefault(res, previousDefaultId, updatedModel.default === true ? modelId : null);
     res.json(updatedModel);
   });
 
@@ -743,6 +776,7 @@ export default function registerAdminModelsRoutes(app) {
       throw new ServiceError('CONFLICT', 'Model with this ID already exists');
     }
     if (!isChatModel(newModel)) newModel.default = false;
+    const previousDefaultId = liveDefaultModelId();
     if (newModel.default === true) await clearOtherDefaults(newModel.id);
     await configStore.writeJson(newModelPath, newModel);
     await configCache.refreshModelsCache();
@@ -753,9 +787,53 @@ export default function registerAdminModelsRoutes(app) {
       resourceId: newModel.id,
       summary: `Created model ${newModel.id}`
     });
+    announceAssignedDefault(res, previousDefaultId, newModel.default === true ? newModel.id : null);
     sendCreated(res, `/api/admin/models/${segment(newModel.id)}`, newModel);
   });
 
+  /**
+   * @swagger
+   * /admin/models/{modelIds}/_toggle:
+   *   post:
+   *     summary: Enable or disable models (Admin)
+   *     description: |
+   *       Sets `enabled` on the models named (comma-separated, or `*` for all). A disabled
+   *       model loses the default flag; when no enabled chat model is the default afterwards,
+   *       the first one becomes it, and the `Default-Model-Assigned` header names it.
+   *       Create, update and delete send the same header when they make the server pick a
+   *       new default.
+   *     tags:
+   *       - Admin - Models
+   *     security:
+   *       - bearerAuth: []
+   *       - sessionAuth: []
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required: [enabled]
+   *             properties:
+   *               enabled: { type: boolean }
+   *     responses:
+   *       200:
+   *         description: The state set and the ids it was set on
+   *         headers:
+   *           Default-Model-Assigned:
+   *             description: URI-encoded id of the model the server made the default on its own
+   *             schema:
+   *               type: string
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 enabled: { type: boolean }
+   *                 ids: { type: array, items: { type: string } }
+   *       400:
+   *         description: "`BAD_REQUEST`: missing flag or invalid id"
+   */
   app.post(buildServerPath('/api/admin/models/:modelIds/_toggle'), adminAuth, async (req, res) => {
     const { modelIds } = req.params;
     const { enabled } = req.body;
@@ -767,6 +845,7 @@ export default function registerAdminModelsRoutes(app) {
     const ids = assertValidIds(modelIds, 'model');
 
     const resolvedIds = ids.includes('*') ? (await storedModels()).map(m => m.id) : ids;
+    const previousDefaultId = liveDefaultModelId();
 
     for (const id of resolvedIds) {
       await updateStoredModel(id, stored => ({
@@ -787,6 +866,7 @@ export default function registerAdminModelsRoutes(app) {
       resourceId: resolvedIds.join(','),
       summary: `Batch ${enabled ? 'enabled' : 'disabled'} ${resolvedIds.length} models`
     });
+    announceAssignedDefault(res, previousDefaultId);
     res.json({
       enabled,
       ids: resolvedIds
@@ -803,6 +883,7 @@ export default function registerAdminModelsRoutes(app) {
     if (!model) {
       throw new ServiceError('NOT_FOUND', 'Model not found');
     }
+    const previousDefaultId = liveDefaultModelId();
     if (model.default === true) await ensureStoredDefault(modelId);
     if (!(await configStore.remove(await modelPath(modelId)))) {
       throw new ServiceError('NOT_FOUND', 'Model file not found');
@@ -825,8 +906,166 @@ export default function registerAdminModelsRoutes(app) {
       resourceId: modelId,
       summary: `Deleted model ${modelId}`
     });
+    announceAssignedDefault(res, previousDefaultId);
     res.status(204).end();
   });
+
+  /**
+   * @swagger
+   * /admin/models/{modelId}/_dependants:
+   *   get:
+   *     summary: What refers to a model (Admin)
+   *     description: |
+   *       Read-only. Lists what names the model, so the delete dialog can say what loses
+   *       its reference before the model is deleted. Nothing here blocks a delete: an app
+   *       whose model is gone falls back to the default model, a group entry naming no
+   *       model grants nothing. A delete keeps a copy in the change history, from which
+   *       the model can be restored.
+   *     tags:
+   *       - Admin - Models
+   *     security:
+   *       - bearerAuth: []
+   *       - sessionAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: modelId
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: The references
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 apps:
+   *                   type: array
+   *                   description: Apps naming the model
+   *                   items:
+   *                     type: object
+   *                     properties:
+   *                       id: { type: string }
+   *                       name: { description: "Localized name object or text" }
+   *                       references:
+   *                         type: array
+   *                         items:
+   *                           type: string
+   *                           enum: [preferredModel, allowedModels, speechRecognition, voiceMode]
+   *                 workflows:
+   *                   type: array
+   *                   items:
+   *                     type: object
+   *                     properties:
+   *                       id: { type: string }
+   *                       name: { description: "Localized name object or text" }
+   *                       references:
+   *                         type: array
+   *                         items: { type: string, enum: [defaultModel, node] }
+   *                 groups:
+   *                   type: array
+   *                   description: Groups whose model permissions list the model by id
+   *                   items:
+   *                     type: object
+   *                     properties:
+   *                       id: { type: string }
+   *                       name: { type: string }
+   *                 isDefault:
+   *                   type: boolean
+   *                   description: The model is the platform default
+   *                 nextDefaultModelId:
+   *                   type: string
+   *                   description: With isDefault, the model that becomes the default; absent when none can
+   *       400:
+   *         description: "`BAD_REQUEST`: invalid model id"
+   *       404:
+   *         description: "`NOT_FOUND`: no such model"
+   */
+  app.get(
+    buildServerPath('/api/admin/models/:modelId/_dependants'),
+    adminAuth,
+    async (req, res) => {
+      const { modelId } = req.params;
+      assertValidId(modelId, 'model');
+      const { data: models = [] } = configCache.getModels(true);
+      if (!models.some(model => model.id === modelId)) {
+        throw new ServiceError('NOT_FOUND', 'Model not found');
+      }
+      const dependants = findModelDependants(modelId, {
+        apps: configCache.getApps(true)?.data ?? [],
+        workflows: configCache.getWorkflows(true)?.data ?? [],
+        // The authored file: the cache's groups carry their parents' permissions as their own.
+        groupsConfig: await configStore.readJson('config/groups.json').catch(() => null),
+        models
+      });
+      res.setHeader('Cache-Control', 'no-store');
+      res.json(dependants);
+    }
+  );
+
+  /**
+   * @swagger
+   * /admin/models/{modelId}/_make-default:
+   *   post:
+   *     summary: Make a model the platform default (Admin)
+   *     description: |
+   *       The model answers in every app that names no model of its own. Only an enabled
+   *       chat model can be the default; the flag is taken off every other model.
+   *     tags:
+   *       - Admin - Models
+   *     security:
+   *       - bearerAuth: []
+   *       - sessionAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: modelId
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: The model as stored now, with `default` true (API key masked)
+   *       400:
+   *         description: "`BAD_REQUEST`: invalid id, or not a chat model"
+   *       404:
+   *         description: "`NOT_FOUND`: no such model"
+   *       409:
+   *         description: "`CONFLICT`: the model is disabled; enable it first"
+   */
+  app.post(
+    buildServerPath('/api/admin/models/:modelId/_make-default'),
+    adminAuth,
+    async (req, res) => {
+      const { modelId } = req.params;
+      assertValidId(modelId, 'model');
+      const file = await modelPath(modelId);
+      const stored = await configStore.readJson(file);
+      if (!stored) throw new ServiceError('NOT_FOUND', 'Model not found');
+      if (!isChatModel(stored)) {
+        throw new ServiceError('BAD_REQUEST', 'Only a chat model can be the default model');
+      }
+      if (stored.enabled === false) {
+        throw new ServiceError('CONFLICT', 'The model is disabled. Enable it first.');
+      }
+      await clearOtherDefaults(modelId);
+      const updated = await updateStoredModel(modelId, current => ({ ...current, default: true }));
+      await configCache.refreshModelsCache();
+      await logAudit({
+        req,
+        action: 'update',
+        resource: 'model',
+        resourceId: modelId,
+        summary: `Made model ${modelId} the default`
+      });
+      const { apiKey, ...visible } = updated || { ...stored, default: true };
+      res.json(
+        apiKey
+          ? { ...visible, apiKeySet: true, apiKeyMasked: '••••••••' }
+          : { ...visible, apiKeySet: false }
+      );
+    }
+  );
 
   /**
    * POST /api/admin/models/:modelId/_test

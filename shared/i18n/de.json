@@ -2189,7 +2189,9 @@
         "configurationDesc": "Erweiterte Konfigurationsoptionen für das Modell",
         "resource": "Modell „{{id}}“",
         "fixErrors": "Bitte beheben Sie die folgenden Fehler",
-        "history": "Verlauf"
+        "history": "Verlauf",
+        "testSavedHint": "Testet das gespeicherte Modell. Speichern Sie zuerst, um Ihre Änderungen zu testen.",
+        "testing": "Wird getestet…"
       },
       "fields": {
         "id": "Modell-ID",
@@ -2294,7 +2296,8 @@
         "markingDetectorCredentialRef": "Optionales Bearer-Token, falls der Detektor eines verlangt.",
         "markingTokenizer": "Der Detektor zerlegt einen Text in dieselben Tokens wie das Modell, um das Wasserzeichen zu finden. Leer lassen, um die Modell-ID zu verwenden; eine Hugging-Face-ID oder einen Pfad nur angeben, wenn vLLM das Modell unter einem anderen Namen bereitstellt.",
         "markingContextWidth": "Anzahl der vorherigen Tokens, auf die das Wasserzeichen zurückblickt, nicht das Kontextfenster. Muss context_width von vLLM entsprechen (Standard 4).",
-        "autoDiscovery": "Erkennt das aktive Modell automatisch über den Endpunkt /v1/models. Nützlich für lokale LLM-Anbieter (vLLM, LM Studio, Jan.ai), bei denen das Modell wechseln kann. Nur für OpenAI-kompatible Anbieter verfügbar."
+        "autoDiscovery": "Erkennt das aktive Modell automatisch über den Endpunkt /v1/models. Nützlich für lokale LLM-Anbieter (vLLM, LM Studio, Jan.ai), bei denen das Modell wechseln kann. Nur für OpenAI-kompatible Anbieter verfügbar.",
+        "apiKeyLookupOrder": "Optional. Ist das Feld leer, verwendet der Server den ersten Schlüssel, den er findet, in dieser Reihenfolge: den Schlüssel dieses Modells, den Schlüssel seines Anbieters, die Umgebungsvariable {{modelEnv}}, die Umgebungsvariable {{providerEnv}}. Ein lokaler Server (vLLM, LM Studio, Jan.ai, Ollama) braucht keinen Schlüssel. Schlüssel werden verschlüsselt gespeichert."
       },
       "placeholders": {
         "maxOutputTokens": "Standard: {{value}}",
@@ -2478,7 +2481,8 @@
         "enableHint": "Importieren Sie die Modelle eines Anbieters oder schalten Sie unten eines ein.",
         "defaultHint": "Öffnen Sie ein Modell und setzen Sie „Standard“, damit Apps ohne eigenes Modell eines haben.",
         "done": "(erledigt)",
-        "todo": "(offen)"
+        "todo": "(offen)",
+        "defaultHintRow": "Wählen Sie „Als Standard festlegen“ in der Zeile eines aktivierten Chat-Modells, damit Apps ohne eigenes Modell eines haben."
       },
       "moreActions": "Weitere Modell-Aktionen",
       "disableAllDefault": "Die Einstellung für das Standardmodell wird entfernt. Werden Modelle wieder aktiviert, wird das erste Chat-Modell der Liste zum Standard.",
@@ -2508,7 +2512,12 @@
       },
       "downloadError": "Die Konfiguration konnte nicht heruntergeladen werden: {{error}}",
       "uploadExists": "Ein Modell mit der ID „{{id}}“ existiert bereits",
-      "uploadError": "Die Konfiguration konnte nicht hochgeladen werden: {{error}}"
+      "uploadError": "Die Konfiguration konnte nicht hochgeladen werden: {{error}}",
+      "enabledSwitch": "Aktiviert: {{name}}",
+      "defaultAssigned": "„{{name}}“ ist jetzt das Standardmodell.",
+      "madeDefault": "„{{name}}“ ist jetzt das Standardmodell.",
+      "makeDefault": "Als Standard festlegen",
+      "makeDefaultDisabled": "Aktivieren Sie das Modell zuerst"
     },
     "chat": {
       "title": "Chat",
@@ -4772,7 +4781,11 @@
           "part": "{{parent}}, {{field}}",
           "language": "{{field}} — {{language}}"
         },
-        "magicPromptInstructionsPlaceholder": "Anweisungen für die Funktion „Magic Prompt“ eingeben…"
+        "magicPromptInstructionsPlaceholder": "Anweisungen für die Funktion „Magic Prompt“ eingeben…",
+        "modelChoice": {
+          "disabled": "{{name}} (deaktiviert)",
+          "default": "{{name}} (Standard)"
+        }
       },
       "reorder": "Reihenfolge",
       "reorderHelp": "Ziehen Sie eine Zeile oder nutzen Sie die Pfeile, um die Reihenfolge festzulegen, in der Apps für Benutzer erscheinen – in der App-Übersicht, auf der Startseite und in der Seitenleiste. Es werden immer alle Apps aufgelistet, Suche und Filter gelten hier nicht. Gespeichert wird erst mit „Reihenfolge speichern“.",
@@ -9307,6 +9320,21 @@
         "disableMessage_other": "{{count}} von {{total}} {{items}} sind derzeit aktiviert und werden deaktiviert. Benutzer verlieren sofort den Zugriff:",
         "nothingToEnable": "Alle {{total}} {{items}} sind bereits aktiviert.",
         "nothingToDisable": "Alle {{total}} {{items}} sind bereits deaktiviert."
+      },
+      "dependants": {
+        "modelMessage": "Das Modell wird für alle Benutzer entfernt. Eine Kopie bleibt im Änderungsverlauf: Öffnen Sie {{path}} erneut, um es wiederherzustellen.",
+        "appMessage": "Die App wird für alle Benutzer entfernt. Eine Kopie bleibt im Änderungsverlauf: Öffnen Sie {{path}} erneut, um sie wiederherzustellen.",
+        "checkFailed": "Es konnte nicht geprüft werden, was den Eintrag verwendet. Apps, Workflows oder Gruppen nennen ihn möglicherweise noch.",
+        "modelApps": "Apps, die es nennen (sie antworten dann mit einem anderen Modell): {{names}}",
+        "modelWorkflows": "Workflows, die es nennen: {{names}}",
+        "modelGroups": "Gruppen, die es namentlich freigeben: {{names}}",
+        "defaultMoves": "Es ist das Standardmodell. „{{name}}“ wird zum Standardmodell.",
+        "defaultNone": "Es ist das Standardmodell, und kein anderes aktiviertes Chat-Modell kann übernehmen. Apps ohne eigenes Modell haben keines, bis Sie eines aktivieren.",
+        "appPrompts": "Prompts, die sich in ihr öffnen: {{names}}",
+        "appTools": "Apps, die sie als Tool aufrufen: {{names}}",
+        "appChildren": "Apps, die von ihr erben: {{names}}",
+        "appWorkflows": "Workflows, die sie aufrufen: {{names}}",
+        "appGroups": "Gruppen, die sie namentlich freigeben: {{names}}"
       }
     },
     "backup": {
@@ -9967,6 +9995,9 @@
     },
     "integrationPages": {
       "oauthClientId": "OAuth-Client-ID:"
+    },
+    "restoreDeleted": {
+      "action": "Aus dem Verlauf wiederherstellen"
     }
   },
   "cloudStorage": {

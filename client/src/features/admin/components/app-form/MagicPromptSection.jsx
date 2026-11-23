@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { useTranslation } from 'react-i18next';
-import { getLocalizedContent } from '../../../../utils/localizeContent';
+import { modelChoices } from './modelChoices';
 import { CHECKBOX_CLASS } from '../formStyles';
 
 /**
@@ -62,9 +62,9 @@ function MagicPromptSection({ app, onChange, availableModels = [] }) {
                     className="mt-1 block w-full rounded-md border border-admin-control-border dark:border-admin-control-border-dark shadow-xs focus:border-admin-accent focus:ring-admin-accent sm:text-sm"
                   >
                     <option value="">{t('admin.apps.edit.selectModel', 'Select model...')}</option>
-                    {availableModels.map(model => (
+                    {modelChoices(availableModels, t, currentLanguage).map(model => (
                       <option key={model.id} value={model.id}>
-                        {getLocalizedContent(model.name, currentLanguage)}
+                        {model.name}
                       </option>
                     ))}
                   </select>

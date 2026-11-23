@@ -11,6 +11,7 @@ import Icon from '../../../shared/components/Icon';
 import {
   createAdminApp,
   fetchAdminApps,
+  fetchAppDependants,
   fetchAppIntegrationStatus,
   getAdminApiErrorMessage,
   makeAdminApiCall,
@@ -27,6 +28,7 @@ import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import { useConfirmAction } from '../hooks/useConfirmAction';
 import { buildBulkToggleConfirm, chunkIdsForPath } from '../utils/bulkToggleConfirm';
 import { deleteConfirmText } from '../utils/confirmText';
+import { appDeleteConsequences, deleteWithHistoryMessage } from '../utils/deleteDependants';
 import ReorderableList from '../components/ReorderableList';
 import { DataTable, SearchInput, FilterSelect } from '../components/data-table';
 import UploadConfigButton from '../components/UploadConfigButton';
@@ -313,14 +315,22 @@ function AdminAppsPage() {
     }
   };
 
-  const deleteApp = app => {
+  /**
+   * Opens the delete dialog once the server said what names the app (prompts,
+   * apps that call it as a tool or inherit from it, workflows, groups), so the
+   * dialog can list it. A failed check still opens the dialog, which says so.
+   */
+  const deleteApp = async app => {
+    const dependants = await fetchAppDependants(app.id).catch(() => null);
     requestConfirm({
       ...deleteConfirmText({
         typeKey: 'app',
         typeFallback: 'app',
         name: getLocalizedContent(app.name, currentLanguage) || app.id,
-        t
+        t,
+        message: deleteWithHistoryMessage({ type: 'app', path: `/admin/apps/${app.id}`, t })
       }),
+      consequences: appDeleteConsequences(dependants, { t, language: currentLanguage }),
       action: async () => {
         await makeAdminApiCall(`/admin/apps/${app.id}`, { method: 'DELETE' });
         setApps(prev => prev.filter(item => item.id !== app.id));

@@ -336,12 +336,81 @@ export const createPage = async pageData => {
   return response.data;
 };
 
+/**
+ * The model the server made the platform default on its own while handling a
+ * request (create, update, `_toggle`, delete of a model), read from the
+ * `Default-Model-Assigned` response header. The admin is told, because every
+ * app that names no model now answers with it.
+ *
+ * @param {{headers?: Object}|undefined} response - An axios response.
+ * @returns {string|null} The model id, or null when the default did not move on its own.
+ */
+export const assignedDefaultModelId = response => {
+  const headers = response?.headers;
+  const value =
+    typeof headers?.get === 'function'
+      ? headers.get('default-model-assigned')
+      : headers?.['default-model-assigned'];
+  if (!value) return null;
+  try {
+    return decodeURIComponent(String(value));
+  } catch {
+    return String(value);
+  }
+};
+
+/**
+ * Enables or disables models.
+ *
+ * @param {string|string[]} ids - Model ids, or `'*'` for all.
+ * @param {boolean} enabled
+ * @returns {Promise<{enabled: boolean, ids: string[], assignedDefaultModelId: string|null}>}
+ *   The server's answer plus the model it made the default on its own, if any.
+ */
 export const toggleModels = async (ids, enabled) => {
   const idParam = Array.isArray(ids) ? ids.join(',') : ids;
   const response = await makeAdminApiCall(`/admin/models/${idParam}/_toggle`, {
     method: 'POST',
     body: { enabled }
   });
+  return { ...response.data, assignedDefaultModelId: assignedDefaultModelId(response) };
+};
+
+/**
+ * Makes an enabled chat model the platform default.
+ *
+ * @param {string} modelId
+ * @returns {Promise<Object>} The model as stored now.
+ */
+export const makeDefaultModel = async modelId => {
+  const response = await makeAdminApiCall(
+    `/admin/models/${encodeURIComponent(modelId)}/_make-default`,
+    { method: 'POST' }
+  );
+  return response.data;
+};
+
+/**
+ * What names a model: `{ apps, workflows, groups, isDefault, nextDefaultModelId? }`.
+ *
+ * @param {string} modelId
+ * @returns {Promise<Object>}
+ */
+export const fetchModelDependants = async modelId => {
+  const response = await makeAdminApiCall(
+    `/admin/models/${encodeURIComponent(modelId)}/_dependants`
+  );
+  return response.data;
+};
+
+/**
+ * What names an app: `{ prompts, apps, workflows, groups }`.
+ *
+ * @param {string} appId
+ * @returns {Promise<Object>}
+ */
+export const fetchAppDependants = async appId => {
+  const response = await makeAdminApiCall(`/admin/apps/${encodeURIComponent(appId)}/_dependants`);
   return response.data;
 };
 
