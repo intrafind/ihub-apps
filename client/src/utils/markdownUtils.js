@@ -3,6 +3,7 @@
 
 import TurndownService from 'turndown';
 import { renderMarkdown } from '../config/marked.config';
+import { escapeHtml } from './markdownHelpers';
 
 const turndownService = new TurndownService();
 
@@ -20,7 +21,8 @@ export const markdownToHtml = markdown => {
     return renderMarkdown(markdown);
   } catch (error) {
     console.error('Error converting markdown to HTML:', error);
-    return markdown; // Return original text if conversion fails
+    // Never hand the raw text back as HTML: it is rendered with innerHTML by callers.
+    return `<pre>${escapeHtml(markdown)}</pre>`;
   }
 };
 

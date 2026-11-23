@@ -7,10 +7,9 @@ import { useTranslation } from 'react-i18next';
 import { useFilterState } from '../hooks/useFilterState';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import AppDetailsPopup from '../../apps/components/AppDetailsPopup';
-import AppCreationWizard from '../../apps/components/AppCreationWizard';
-import AppTemplateSelector from '../../apps/components/AppTemplateSelector';
 import Icon from '../../../shared/components/Icon';
 import {
+  createAdminApp,
   fetchAdminApps,
   fetchAppIntegrationStatus,
   getAdminApiErrorMessage,
@@ -26,13 +25,21 @@ import { buildPath } from '../../../utils/runtimeBasePath';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import { useConfirmAction } from '../hooks/useConfirmAction';
-import { buildBulkToggleConfirm } from '../utils/bulkToggleConfirm';
+import { buildBulkToggleConfirm, chunkIdsForPath } from '../utils/bulkToggleConfirm';
 import { deleteConfirmText } from '../utils/confirmText';
 import ReorderableList from '../components/ReorderableList';
 import { DataTable, SearchInput, FilterSelect } from '../components/data-table';
 import UploadConfigButton from '../components/UploadConfigButton';
 import AdminLoadError from '../components/AdminLoadError';
 import { ALL_INTEGRATIONS_KEY } from '../../../../../shared/appWildcards.js';
+import { useOptionalAuth } from '../../../shared/contexts/authContextValue';
+import AdminTabs from '../components/AdminTabs';
+import AdminUserAppsTab, { useWaitingUserAppCount } from '../components/AdminUserAppsTab';
+import WaitingAppsNotice from '../components/WaitingAppsNotice';
+
+/** The tabs of the page, as `?tab=` names them. */
+const APPS_TAB = 'apps';
+const PERSONAL_TAB = 'personal';
 
 function AppNameCell({ app, currentLanguage }) {
   return (
@@ -204,9 +211,6 @@ function AdminAppsPage() {
   const [selectedCategory, setSelectedCategory] = useFilterState('category', 'all');
   const [selectedApp, setSelectedApp] = useState(null);
   const [showAppDetails, setShowAppDetails] = useState(false);
-  const [showCreationWizard, setShowCreationWizard] = useState(false);
-  const [showTemplateSelector, setShowTemplateSelector] = useState(false);
-  const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [uiConfig, setUiConfig] = useState(null);
   const [uploading, setUploading] = useState(false);
   const { requestConfirm, dialogProps: confirmDialogProps } = useConfirmAction();
@@ -214,6 +218,21 @@ function AdminAppsPage() {
   // the pending order until it is saved, so cancelling changes nothing.
   const [orderDraft, setOrderDraft] = useState(null);
   const [savingOrder, setSavingOrder] = useState(false);
+  // The tab "Personal apps" is for full admins, whether or not the feature is
+  // on. A content admin gets the page without tabs.
+  const user = useOptionalAuth()?.user;
+  const isFullAdmin = Boolean(user?.isAdmin || user?.permissions?.adminAccess);
+  const [tabParam, setTabParam] = useFilterState('tab', APPS_TAB);
+  const showPersonal = isFullAdmin && tabParam === PERSONAL_TAB;
+  // Raised after the list publishes, unpublishes or deletes apps: the line
+  // about waiting apps and the count on the tab then read the list again.
+  const [waitingRefresh, setWaitingRefresh] = useState(0);
+  const refreshWaiting = () => setWaitingRefresh(value => value + 1);
+  const [waitingCount, setWaitingCount] = useWaitingUserAppCount(isFullAdmin, waitingRefresh);
+  // With tabs, today's page is the panel of the "Apps" tab.
+  const appsPanelProps = isFullAdmin
+    ? { role: 'tabpanel', id: `tabpanel-${APPS_TAB}`, 'aria-labelledby': `tab-${APPS_TAB}` }
+    : {};
 
   useEffect(() => {
     void loadApps();
@@ -288,31 +307,10 @@ function AdminAppsPage() {
       const enabled = !apps.find(app => app.id === appId)?.enabled;
       await toggleApps(appId, enabled);
       setApps(prev => prev.map(app => (app.id === appId ? { ...app, enabled } : app)));
+      refreshWaiting();
     } catch (err) {
       setError(getAdminApiErrorMessage(err));
     }
-  };
-
-  /**
-   * Enable All / Disable All toggle every app (`*`) for every user, so they
-   * open a confirmation that names the count and the apps first (AI-B2).
-   *
-   * @param {boolean} enable - Target state.
-   */
-  const confirmToggleAll = enable => {
-    requestConfirm({
-      ...buildBulkToggleConfirm({
-        items: apps,
-        enable,
-        itemsLabel: t('admin.confirm.plural.apps', 'apps'),
-        getName: app => getLocalizedContent(app.name, currentLanguage) || app.id,
-        t
-      }),
-      action: async () => {
-        await toggleApps('*', enable);
-        setApps(prev => prev.map(app => ({ ...app, enabled: enable })));
-      }
-    });
   };
 
   const deleteApp = app => {
@@ -326,19 +324,18 @@ function AdminAppsPage() {
       action: async () => {
         await makeAdminApiCall(`/admin/apps/${app.id}`, { method: 'DELETE' });
         setApps(prev => prev.filter(item => item.id !== app.id));
+        refreshWaiting();
       }
     });
   };
 
+  // The search as it filters: a term of only spaces does not narrow the list.
+  const query = searchTerm.trim().toLowerCase();
   const filteredApps = apps.filter(app => {
     const matchesSearch =
-      getLocalizedContent(app.name, currentLanguage)
-        .toLowerCase()
-        .includes(searchTerm.toLowerCase()) ||
-      getLocalizedContent(app.description, currentLanguage)
-        .toLowerCase()
-        .includes(searchTerm.toLowerCase()) ||
-      app.id.toLowerCase().includes(searchTerm.toLowerCase());
+      getLocalizedContent(app.name, currentLanguage).toLowerCase().includes(query) ||
+      getLocalizedContent(app.description, currentLanguage).toLowerCase().includes(query) ||
+      app.id.toLowerCase().includes(query);
 
     const matchesFilter =
       filterEnabled === 'all' ||
@@ -351,24 +348,78 @@ function AdminAppsPage() {
     return matchesSearch && matchesFilter && matchesCategory;
   });
 
-  const handleCreateApp = () => setShowTemplateSelector(true);
+  // Any narrowed view: the bulk actions then cover the rows shown and say so.
+  const isFiltered = query !== '' || filterEnabled !== 'all' || selectedCategory !== 'all';
 
-  const handleTemplateSelected = template => {
-    setSelectedTemplate(template);
-    setShowTemplateSelector(false);
-    setShowCreationWizard(true);
+  /**
+   * The label of a bulk action: "Publish all", or "Publish shown" while a
+   * filter narrows the list.
+   *
+   * @param {boolean} publish
+   * @returns {string}
+   */
+  const bulkLabel = publish => {
+    if (isFiltered) {
+      return t(publish ? 'admin.apps.list.publishShown' : 'admin.apps.list.unpublishShown');
+    }
+    return t(publish ? 'admin.apps.list.publishAll' : 'admin.apps.list.unpublishAll');
   };
 
-  const handleWizardClose = () => {
-    setShowCreationWizard(false);
-    setSelectedTemplate(null);
-    void loadApps();
+  /**
+   * "Publish all" / "Unpublish all" change what users see, and an unpublished
+   * app may be an unfinished one. So the confirmation names every app that
+   * changes, and the request carries exactly those IDs, never `*`: an app
+   * another author created in the meantime is not touched. With a filter
+   * active the action covers the rows shown.
+   *
+   * @param {boolean} publish - Target state.
+   */
+  const confirmToggleAll = publish => {
+    const label = bulkLabel(publish);
+    const { affected, ...confirmation } = buildBulkToggleConfirm({
+      items: isFiltered ? filteredApps : apps,
+      enable: publish,
+      itemsLabel: t('admin.confirm.plural.apps', 'apps'),
+      getName: app => getLocalizedContent(app.name, currentLanguage) || app.id,
+      t,
+      wording: {
+        title: label,
+        confirmLabel: label,
+        message: count =>
+          t(publish ? 'admin.apps.list.publishConfirm' : 'admin.apps.list.unpublishConfirm', {
+            count
+          }),
+        nothingToChange: t(
+          publish ? 'admin.apps.list.nothingToPublish' : 'admin.apps.list.nothingToUnpublish'
+        )
+      }
+    });
+    const ids = affected.map(app => app.id);
+    requestConfirm({
+      ...confirmation,
+      action: async () => {
+        // One request per part: every ID in one path is too long for a large
+        // installation. The list follows each part, so it matches the server
+        // when a later part fails.
+        try {
+          for (const part of chunkIdsForPath(ids)) {
+            await toggleApps(part, publish);
+            setApps(prev =>
+              prev.map(app => (part.includes(app.id) ? { ...app, enabled: publish } : app))
+            );
+          }
+        } finally {
+          // Also after a failed later part: the earlier parts were changed.
+          refreshWaiting();
+        }
+      }
+    });
   };
 
-  const handleCloneApp = app => {
-    setSelectedTemplate(app);
-    setShowCreationWizard(true);
-  };
+  // Every way to start an app is one page; a copy names its source in the URL.
+  const handleCreateApp = () => navigate('/admin/apps/new');
+
+  const handleDuplicateApp = app => navigate(`/admin/apps/new?from=${encodeURIComponent(app.id)}`);
 
   const downloadAppConfig = async appId => {
     try {
@@ -385,7 +436,7 @@ function AdminAppsPage() {
       link.remove();
       URL.revokeObjectURL(url);
     } catch (err) {
-      setError(`Failed to download app config: ${getAdminApiErrorMessage(err)}`);
+      setError(t('admin.apps.downloadError', { error: getAdminApiErrorMessage(err) }));
     }
   };
 
@@ -393,7 +444,7 @@ function AdminAppsPage() {
     const file = event.target.files[0];
     if (!file) return;
     if (!file.name.endsWith('.json')) {
-      setError('Please select a JSON file');
+      setError(t('admin.common.selectJsonFile', 'Please select a JSON file'));
       return;
     }
     setUploading(true);
@@ -404,16 +455,17 @@ function AdminAppsPage() {
       if (!appConfig.id || !appConfig.name || !appConfig.description) {
         throw new Error('Invalid app config: missing required fields (id, name, description)');
       }
-      await makeAdminApiCall('/admin/apps', { method: 'POST', body: appConfig });
+      // The file is stored as it is, with the `enabled` value it carries.
+      await createAdminApp(appConfig, { origin: 'upload' });
       await loadApps();
       event.target.value = '';
     } catch (err) {
       if (getAdminApiErrorMessage(err).includes('already exists')) {
-        setError(`App with ID "${appConfig?.id || 'unknown'}" already exists`);
+        setError(t('admin.apps.uploadExists', { id: appConfig?.id || 'unknown' }));
       } else if (err instanceof SyntaxError) {
-        setError('Invalid JSON file format');
+        setError(t('admin.common.invalidJsonFile', 'Invalid JSON file format'));
       } else {
-        setError(`Failed to upload app config: ${getAdminApiErrorMessage(err)}`);
+        setError(t('admin.apps.uploadError', { error: getAdminApiErrorMessage(err) }));
       }
     } finally {
       setUploading(false);
@@ -425,6 +477,26 @@ function AdminAppsPage() {
     const found = uiConfig?.appsList?.categories?.list?.find(cat => cat.id === app.category);
     return found ? getLocalizedContent(found.name, currentLanguage) : app.category;
   };
+
+  /**
+   * What the table says when it has no row: that there is no app yet and what
+   * an app is, that the search matched nothing, or that the filters did.
+   */
+  const emptyText = (() => {
+    if (apps.length === 0) {
+      return { title: t('admin.apps.empty.title'), description: t('admin.apps.empty.body') };
+    }
+    if (searchTerm.trim() !== '') {
+      return { title: t('admin.apps.list.noMatch', { query: searchTerm.trim() }) };
+    }
+    return {
+      title: t('admin.apps.noApps', 'No apps found'),
+      description: t(
+        'admin.apps.noAppsDescription',
+        'Try adjusting your search or filter criteria.'
+      )
+    };
+  })();
 
   const columns = [
     {
@@ -466,12 +538,10 @@ function AdminAppsPage() {
               className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                 app.enabled
                   ? 'bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300'
-                  : 'bg-red-100 dark:bg-red-900/50 text-red-800 dark:text-red-300'
+                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200'
               }`}
             >
-              {app.enabled
-                ? t('admin.apps.status.enabled', 'Enabled')
-                : t('admin.apps.status.disabled', 'Disabled')}
+              {app.enabled ? t('admin.apps.status.published') : t('admin.apps.status.notPublished')}
             </span>
             {missing.length > 0 && (
               <span className="text-xs text-amber-700 dark:text-amber-400">
@@ -507,13 +577,14 @@ function AdminAppsPage() {
 
   const actions = [
     {
-      // A new tab keeps the admin list (filters, scroll) where it was. Disabled
-      // apps aren't served to the chat UI, so there is nothing to open.
+      // A new tab keeps the admin list (filters, scroll) where it was. An app
+      // that is not published is not in the users' app list; it is tried in
+      // the editor's test chat.
       id: 'open',
       label: t('admin.apps.openApp', 'Open app'),
       title: app => {
         if (app.enabled === false) {
-          return t('admin.apps.openDisabledHint', 'Enable the app to open it');
+          return t('admin.apps.list.openNotPublishedHint');
         }
         const missing = missingRequirements(
           app,
@@ -547,16 +618,16 @@ function AdminAppsPage() {
     },
     {
       id: 'toggle',
-      label: t('admin.apps.actions.toggle', 'Toggle enabled'),
+      label: t('admin.apps.actions.toggle'),
       icon: 'eye',
       priority: 'primary',
       onClick: app => toggleApp(app.id)
     },
     {
-      id: 'clone',
-      label: t('admin.apps.actions.clone', 'Clone'),
+      id: 'duplicate',
+      label: t('admin.apps.list.duplicate'),
       icon: 'copy',
-      onClick: app => handleCloneApp(app)
+      onClick: app => handleDuplicateApp(app)
     },
     {
       id: 'download',
@@ -578,208 +649,243 @@ function AdminAppsPage() {
       <div className="sm:flex sm:items-center">
         <div className="sm:flex-auto">
           <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
-            {t('admin.apps.title', 'Apps Administration')}
+            {t('admin.apps.title')}
           </h1>
           <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
-            {t('admin.apps.subtitle', 'Manage your iHub applications')}
+            {t('admin.apps.subtitle')}
           </p>
         </div>
-        <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
-          <div className="flex flex-wrap gap-2">
-            {orderDraft ? (
-              <>
-                <button
-                  type="button"
-                  className="inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-xs hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                  onClick={saveOrder}
-                  disabled={savingOrder}
-                >
-                  {savingOrder
-                    ? t('admin.apps.savingOrder', 'Saving order...')
-                    : t('admin.apps.saveOrder', 'Save order')}
-                </button>
-                <button
-                  type="button"
-                  className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                  onClick={() => setOrderDraft(null)}
-                  disabled={savingOrder}
-                >
-                  {t('common.cancel', 'Cancel')}
-                </button>
-              </>
-            ) : (
-              <>
-                <button
-                  type="button"
-                  className="inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-xs hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:w-auto"
-                  onClick={handleCreateApp}
-                >
-                  <Icon name="plus" className="h-4 w-4 mr-2" />
-                  {t('admin.apps.createApp', 'Create App')}
-                </button>
-                <UploadConfigButton
-                  onChange={handleUploadConfig}
-                  uploading={uploading}
-                  title={t('admin.apps.uploadConfig', 'Upload App Config')}
-                  uploadingLabel={t('admin.apps.uploading', 'Uploading...')}
-                  label={t('admin.apps.uploadConfig', 'Upload Config')}
-                />
-                <button
-                  type="button"
-                  className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600"
-                  onClick={() => confirmToggleAll(true)}
-                >
-                  {t('admin.common.enableAll', 'Enable All')}
-                </button>
-                <button
-                  type="button"
-                  className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600"
-                  onClick={() => confirmToggleAll(false)}
-                >
-                  {t('admin.common.disableAll', 'Disable All')}
-                </button>
-                <button
-                  type="button"
-                  className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                  onClick={startReordering}
-                  disabled={loading || apps.length === 0}
-                >
-                  <Icon name="menu" className="h-4 w-4 mr-2" />
-                  {t('admin.apps.reorder', 'Reorder')}
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {error && <AdminLoadError message={error} framed={false} className="mt-4" action={null} />}
-
-      {orderDraft ? (
-        <div className="mt-6">
-          <p className="mb-3 text-sm text-gray-600 dark:text-gray-300">
-            {t(
-              'admin.apps.reorderHelp',
-              'Drag a row or use the arrows to set the order apps appear in for users — in the apps browser, on the start page and in the sidebar. Every app is listed, so search and filters do not apply here. Nothing is saved until you choose "Save order".'
-            )}
-          </p>
-          <ReorderableList
-            items={orderDraft}
-            onReorder={setOrderDraft}
-            getKey={app => app.id}
-            getLabel={app => getLocalizedContent(app.name, currentLanguage) || app.id}
-            renderItem={(app, index) => (
-              <div className="flex min-w-0 items-center gap-3">
-                <span className="w-8 shrink-0 text-right text-xs font-semibold text-gray-500 dark:text-gray-400">
-                  {index + 1}
-                </span>
-                <span
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white"
-                  style={{ backgroundColor: app.color || '#6B7280' }}
-                >
-                  {(getLocalizedContent(app.name, currentLanguage) || app.id)
-                    .charAt(0)
-                    .toUpperCase()}
-                </span>
-                <span className="min-w-0">
-                  <span className="block truncate text-sm font-medium text-gray-900 dark:text-gray-100">
-                    {getLocalizedContent(app.name, currentLanguage) || app.id}
-                    {app.enabled === false && (
-                      <span className="ml-2 text-xs font-normal text-gray-500 dark:text-gray-400">
-                        ({t('admin.apps.status.disabled', 'Disabled')})
-                      </span>
-                    )}
-                  </span>
-                  <span className="block truncate text-xs text-gray-500 dark:text-gray-400">
-                    {app.id}
-                  </span>
-                </span>
-              </div>
-            )}
-          />
-        </div>
-      ) : (
-        <>
-          <div className="mt-6 flex flex-wrap items-center gap-3">
-            <SearchInput
-              value={searchTerm}
-              onChange={setSearchTerm}
-              placeholder={t('admin.apps.searchPlaceholder', 'Search apps...')}
-            />
-            <FilterSelect
-              label={t('admin.apps.statusLabel', 'Status')}
-              value={filterEnabled}
-              onChange={setFilterEnabled}
-              options={[
-                { value: 'all', label: t('admin.apps.filterAll', 'All Apps') },
-                { value: 'enabled', label: t('admin.apps.filterEnabled', 'Enabled Only') },
-                { value: 'disabled', label: t('admin.apps.filterDisabled', 'Disabled Only') }
-              ]}
-            />
-          </div>
-
-          {uiConfig?.appsList?.categories?.enabled && (
-            <div className="mt-4 flex flex-wrap gap-2">
-              <button
-                onClick={() => setSelectedCategory('all')}
-                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
-                  selectedCategory === 'all'
-                    ? 'bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900'
-                    : 'text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'
-                }`}
-              >
-                {t('admin.apps.allCategories', 'All Categories')}
-              </button>
-              {uiConfig.appsList.categories.list.map(category => (
-                <button
-                  key={category.id}
-                  onClick={() => setSelectedCategory(category.id)}
-                  className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
-                    selectedCategory === category.id
-                      ? 'text-white shadow-sm'
-                      : 'text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'
-                  }`}
-                  style={{
-                    backgroundColor: selectedCategory === category.id ? category.color : undefined
-                  }}
-                >
-                  {getLocalizedContent(category.name, currentLanguage)}
-                </button>
-              ))}
-            </div>
-          )}
-
-          <div className="mt-6">
-            <DataTable
-              columns={columns}
-              data={filteredApps}
-              getRowId={app => app.id}
-              actions={actions}
-              loading={loading}
-              onRowClick={app => {
-                setSelectedApp(app);
-                setShowAppDetails(true);
-              }}
-              empty={{
-                icon: 'sparkles',
-                title: t('admin.apps.noApps', 'No apps found'),
-                description: t(
-                  'admin.apps.noAppsDescription',
-                  'Try adjusting your search or filter criteria.'
-                ),
-                action: (
+        {!showPersonal && (
+          <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
+            <div className="flex flex-wrap gap-2">
+              {orderDraft ? (
+                <>
                   <button
+                    type="button"
+                    className="inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-xs hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={saveOrder}
+                    disabled={savingOrder}
+                  >
+                    {savingOrder
+                      ? t('admin.apps.savingOrder', 'Saving order...')
+                      : t('admin.apps.saveOrder', 'Save order')}
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={() => setOrderDraft(null)}
+                    disabled={savingOrder}
+                  >
+                    {t('common.cancel', 'Cancel')}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className="inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-xs hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:w-auto"
                     onClick={handleCreateApp}
-                    className="inline-flex items-center px-4 py-2 border border-transparent shadow-xs text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                   >
                     <Icon name="plus" className="h-4 w-4 mr-2" />
-                    {t('admin.apps.createApp', 'Create App')}
+                    {t('admin.apps.createApp')}
                   </button>
-                )
-              }}
-            />
+                  <UploadConfigButton
+                    onChange={handleUploadConfig}
+                    uploading={uploading}
+                    uploadingLabel={t('admin.apps.uploading', 'Uploading...')}
+                    label={t('admin.apps.list.uploadConfig')}
+                  />
+                  <button
+                    type="button"
+                    className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600"
+                    onClick={() => confirmToggleAll(true)}
+                  >
+                    {bulkLabel(true)}
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600"
+                    onClick={() => confirmToggleAll(false)}
+                  >
+                    {bulkLabel(false)}
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={startReordering}
+                    disabled={loading || apps.length === 0}
+                  >
+                    <Icon name="menu" className="h-4 w-4 mr-2" />
+                    {t('admin.apps.reorder', 'Reorder')}
+                  </button>
+                </>
+              )}
+            </div>
           </div>
-        </>
+        )}
+      </div>
+
+      {isFullAdmin && (
+        <div className="mt-6">
+          <AdminTabs
+            ariaLabel={t('admin.apps.title')}
+            activeId={showPersonal ? PERSONAL_TAB : APPS_TAB}
+            onChange={setTabParam}
+            tabs={[
+              { id: APPS_TAB, label: t('admin.apps.title') },
+              {
+                id: PERSONAL_TAB,
+                label:
+                  waitingCount > 0
+                    ? t('admin.userApps.tabWaiting', { count: waitingCount })
+                    : t('admin.userApps.tab')
+              }
+            ]}
+          />
+        </div>
+      )}
+
+      {!showPersonal && error && (
+        <AdminLoadError message={error} framed={false} className="mt-4" action={null} />
+      )}
+
+      {/* Apps that users published and no administrator has switched on yet. */}
+      {!showPersonal && <WaitingAppsNotice refreshKey={waitingRefresh} />}
+
+      {showPersonal ? (
+        <div
+          role="tabpanel"
+          id={`tabpanel-${PERSONAL_TAB}`}
+          aria-labelledby={`tab-${PERSONAL_TAB}`}
+        >
+          <AdminUserAppsTab onWaitingChange={setWaitingCount} />
+        </div>
+      ) : (
+        <div {...appsPanelProps}>
+          {orderDraft ? (
+            <div className="mt-6">
+              <p className="mb-3 text-sm text-gray-600 dark:text-gray-300">
+                {t(
+                  'admin.apps.reorderHelp',
+                  'Drag a row or use the arrows to set the order apps appear in for users — in the apps browser, on the start page and in the sidebar. Every app is listed, so search and filters do not apply here. Nothing is saved until you choose "Save order".'
+                )}
+              </p>
+              <ReorderableList
+                items={orderDraft}
+                onReorder={setOrderDraft}
+                getKey={app => app.id}
+                getLabel={app => getLocalizedContent(app.name, currentLanguage) || app.id}
+                renderItem={(app, index) => (
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="w-8 shrink-0 text-right text-xs font-semibold text-gray-500 dark:text-gray-400">
+                      {index + 1}
+                    </span>
+                    <span
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white"
+                      style={{ backgroundColor: app.color || '#6B7280' }}
+                    >
+                      {(getLocalizedContent(app.name, currentLanguage) || app.id)
+                        .charAt(0)
+                        .toUpperCase()}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-medium text-gray-900 dark:text-gray-100">
+                        {getLocalizedContent(app.name, currentLanguage) || app.id}
+                        {app.enabled === false && (
+                          <span className="ml-2 text-xs font-normal text-gray-500 dark:text-gray-400">
+                            ({t('admin.apps.status.notPublished')})
+                          </span>
+                        )}
+                      </span>
+                      <span className="block truncate text-xs text-gray-500 dark:text-gray-400">
+                        {app.id}
+                      </span>
+                    </span>
+                  </div>
+                )}
+              />
+            </div>
+          ) : (
+            <>
+              <div className="mt-6 flex flex-wrap items-center gap-3">
+                <SearchInput
+                  value={searchTerm}
+                  onChange={setSearchTerm}
+                  placeholder={t('admin.apps.searchPlaceholder', 'Search apps...')}
+                />
+                <FilterSelect
+                  label={t('admin.apps.statusLabel', 'Status')}
+                  value={filterEnabled}
+                  onChange={setFilterEnabled}
+                  options={[
+                    { value: 'all', label: t('admin.apps.filterAll', 'All Apps') },
+                    { value: 'enabled', label: t('admin.apps.filterEnabled') },
+                    { value: 'disabled', label: t('admin.apps.filterDisabled') }
+                  ]}
+                />
+              </div>
+
+              {uiConfig?.appsList?.categories?.enabled && (
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button
+                    onClick={() => setSelectedCategory('all')}
+                    className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                      selectedCategory === 'all'
+                        ? 'bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900'
+                        : 'text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'
+                    }`}
+                  >
+                    {t('admin.apps.allCategories', 'All Categories')}
+                  </button>
+                  {uiConfig.appsList.categories.list.map(category => (
+                    <button
+                      key={category.id}
+                      onClick={() => setSelectedCategory(category.id)}
+                      className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                        selectedCategory === category.id
+                          ? 'text-white shadow-sm'
+                          : 'text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'
+                      }`}
+                      style={{
+                        backgroundColor:
+                          selectedCategory === category.id ? category.color : undefined
+                      }}
+                    >
+                      {getLocalizedContent(category.name, currentLanguage)}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <div className="mt-6">
+                <DataTable
+                  columns={columns}
+                  data={filteredApps}
+                  getRowId={app => app.id}
+                  actions={actions}
+                  loading={loading}
+                  onRowClick={app => {
+                    setSelectedApp(app);
+                    setShowAppDetails(true);
+                  }}
+                  empty={{
+                    icon: 'sparkles',
+                    ...emptyText,
+                    action: (
+                      <button
+                        onClick={handleCreateApp}
+                        className="inline-flex items-center px-4 py-2 border border-transparent shadow-xs text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                      >
+                        <Icon name="plus" className="h-4 w-4 mr-2" />
+                        {t('admin.apps.createApp')}
+                      </button>
+                    )
+                  }}
+                />
+              </div>
+            </>
+          )}
+        </div>
       )}
 
       <AppDetailsPopup
@@ -788,16 +894,6 @@ function AdminAppsPage() {
         onClose={() => setShowAppDetails(false)}
       />
 
-      {showTemplateSelector && (
-        <AppTemplateSelector
-          onSelect={handleTemplateSelected}
-          onClose={() => setShowTemplateSelector(false)}
-        />
-      )}
-
-      {showCreationWizard && (
-        <AppCreationWizard templateApp={selectedTemplate} onClose={handleWizardClose} />
-      )}
       <ConfirmDialog {...confirmDialogProps} />
     </div>
   );

@@ -6,7 +6,12 @@ import assert from 'node:assert';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { isValidId, isValidExtensionId, resolveAndValidatePath } from '../utils/pathSecurity.js';
+import {
+  isValidId,
+  isValidExtensionId,
+  resolveAndValidatePath,
+  resolveAndValidateRealPath
+} from '../utils/pathSecurity.js';
 
 describe('pathSecurity', () => {
   describe('isValidId', () => {
@@ -120,6 +125,19 @@ describe('pathSecurity', () => {
     it('refuses empty and non-string input', async () => {
       assert.strictEqual(await resolveAndValidatePath('', base), null);
       assert.strictEqual(await resolveAndValidatePath(undefined, base), null);
+    });
+
+    it('refuses NUL bytes in the path and in the base, and an unusable base', async () => {
+      assert.strictEqual(await resolveAndValidatePath('a.json\0.png', base), null);
+      assert.strictEqual(await resolveAndValidatePath('a.json', `${base}\0`), null);
+      assert.strictEqual(await resolveAndValidatePath('a.json', ''), null);
+      assert.strictEqual(await resolveAndValidatePath('a.json', undefined), null);
+    });
+
+    it('resolveAndValidateRealPath refuses the same unusable input', async () => {
+      assert.strictEqual(await resolveAndValidateRealPath('a.json\0.png', base), null);
+      assert.strictEqual(await resolveAndValidateRealPath('a.json', `${base}\0`), null);
+      assert.strictEqual(await resolveAndValidateRealPath('a.json', ''), null);
     });
   });
 });

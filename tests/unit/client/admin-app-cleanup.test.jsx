@@ -1,75 +1,19 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
- * Unit tests for cleanAppData function in AdminAppEditPage
- * Tests the cleanup of disabled feature configurations
+ * What the app editor and the create page send to `POST` and
+ * `PUT /api/admin/apps`: `cleanAppForSave` (`shared/appDefaults.js`). The
+ * form keeps switched-off blocks and empty languages in its state; the stored
+ * app does not.
  */
+import { cleanAppForSave } from '../../../shared/appDefaults.js';
+import { appConfigSchema } from '../../../server/validators/appConfigSchema.js';
 
-describe('AdminAppEditPage - cleanAppData', () => {
-  // Extract and test the cleanAppData logic
-  const cleanAppData = appData => {
-    const cleanedApp = { ...appData };
-
-    // Clean up variables - remove empty defaultValue and predefinedValues
-    if (cleanedApp.variables) {
-      cleanedApp.variables = cleanedApp.variables.map(variable => {
-        const cleanedVariable = { ...variable };
-
-        if (cleanedVariable.defaultValue) {
-          const hasNonEmptyValue = Object.values(cleanedVariable.defaultValue).some(
-            val => val && val !== ''
-          );
-          if (!hasNonEmptyValue) {
-            delete cleanedVariable.defaultValue;
-          }
-        }
-
-        if (cleanedVariable.predefinedValues && cleanedVariable.predefinedValues.length === 0) {
-          delete cleanedVariable.predefinedValues;
-        }
-
-        return cleanedVariable;
-      });
-    }
-
-    // Clean up upload configuration when disabled
-    if (cleanedApp.upload) {
-      const upload = { ...cleanedApp.upload };
-
-      if (upload.imageUpload && upload.imageUpload.enabled === false) {
-        delete upload.imageUpload;
-      }
-
-      if (upload.fileUpload && upload.fileUpload.enabled === false) {
-        delete upload.fileUpload;
-      }
-
-      if (upload.enabled === false) {
-        delete cleanedApp.upload;
-      } else {
-        cleanedApp.upload = upload;
-      }
-    }
-
-    // Clean up features configuration when disabled
-    if (cleanedApp.features) {
-      const features = { ...cleanedApp.features };
-
-      if (features.magicPrompt && features.magicPrompt.enabled === false) {
-        delete features.magicPrompt;
-      }
-
-      if (Object.keys(features).length === 0) {
-        delete cleanedApp.features;
-      } else {
-        cleanedApp.features = features;
-      }
-    }
-
-    return cleanedApp;
-  };
-
-  describe('upload configuration cleanup', () => {
-    test('should remove imageUpload when disabled', () => {
-      const appData = {
+describe('cleanAppForSave', () => {
+  describe('upload configuration', () => {
+    test('removes the image upload block when it is switched off', () => {
+      const result = cleanAppForSave({
         id: 'test-app',
         upload: {
           enabled: true,
@@ -79,242 +23,264 @@ describe('AdminAppEditPage - cleanAppData', () => {
             supportedFormats: ['image/jpeg', 'image/png']
           }
         }
-      };
+      });
 
-      const result = cleanAppData(appData);
-
-      expect(result.upload).toBeDefined();
-      expect(result.upload.imageUpload).toBeUndefined();
-      expect(result.upload.enabled).toBe(true);
+      expect(result.upload).toEqual({ enabled: true });
     });
 
-    test('should remove fileUpload when disabled', () => {
-      const appData = {
+    test('removes the file upload block when it is switched off', () => {
+      const result = cleanAppForSave({
         id: 'test-app',
         upload: {
           enabled: true,
-          fileUpload: {
-            enabled: false,
-            maxFileSizeMB: 5,
-            supportedFormats: ['text/plain']
-          }
+          fileUpload: { enabled: false, maxFileSizeMB: 5, supportedFormats: ['text/plain'] }
         }
-      };
+      });
 
-      const result = cleanAppData(appData);
-
-      expect(result.upload).toBeDefined();
-      expect(result.upload.fileUpload).toBeUndefined();
-      expect(result.upload.enabled).toBe(true);
+      expect(result.upload).toEqual({ enabled: true });
     });
 
-    test('should remove entire upload config when upload is disabled', () => {
-      const appData = {
+    test('removes the whole upload block when uploads are off', () => {
+      const result = cleanAppForSave({
         id: 'test-app',
         upload: {
           enabled: false,
-          imageUpload: {
-            enabled: true,
-            maxFileSizeMB: 10
-          },
-          fileUpload: {
-            enabled: true,
-            maxFileSizeMB: 5
-          }
+          imageUpload: { enabled: true, maxFileSizeMB: 10 },
+          fileUpload: { enabled: true, maxFileSizeMB: 5 }
         }
-      };
+      });
 
-      const result = cleanAppData(appData);
-
-      expect(result.upload).toBeUndefined();
+      expect(result).not.toHaveProperty('upload');
     });
 
-    test('should keep enabled imageUpload and fileUpload', () => {
-      const appData = {
-        id: 'test-app',
-        upload: {
-          enabled: true,
-          imageUpload: {
-            enabled: true,
-            maxFileSizeMB: 10,
-            supportedFormats: ['image/jpeg']
-          },
-          fileUpload: {
-            enabled: true,
-            maxFileSizeMB: 5,
-            supportedFormats: ['text/plain']
-          }
-        }
+    test('keeps the blocks that are switched on, and the settings beside them', () => {
+      const upload = {
+        enabled: true,
+        allowMultiple: true,
+        imageUpload: { enabled: true, maxFileSizeMB: 10, supportedFormats: ['image/jpeg'] },
+        fileUpload: { enabled: true, maxFileSizeMB: 5, supportedFormats: ['text/plain'] },
+        audioUpload: { enabled: false }
       };
 
-      const result = cleanAppData(appData);
+      const result = cleanAppForSave({ id: 'test-app', upload });
 
-      expect(result.upload).toBeDefined();
-      expect(result.upload.enabled).toBe(true);
-      expect(result.upload.imageUpload).toBeDefined();
-      expect(result.upload.imageUpload.enabled).toBe(true);
-      expect(result.upload.fileUpload).toBeDefined();
-      expect(result.upload.fileUpload.enabled).toBe(true);
+      expect(result.upload).toEqual(upload);
     });
 
-    test('should handle missing upload config', () => {
-      const appData = {
-        id: 'test-app'
-      };
-
-      const result = cleanAppData(appData);
-
-      expect(result.upload).toBeUndefined();
+    test('an app without an upload block gets none', () => {
+      expect(cleanAppForSave({ id: 'test-app' })).toEqual({ id: 'test-app' });
     });
   });
 
-  describe('features configuration cleanup', () => {
-    test('should remove magicPrompt when disabled', () => {
-      const appData = {
+  describe('features configuration', () => {
+    test('removes a switched-off magic prompt, and the features block with it', () => {
+      const result = cleanAppForSave({
         id: 'test-app',
-        features: {
-          magicPrompt: {
-            enabled: false,
-            model: 'gpt-4',
-            prompt: 'Some prompt'
-          }
-        }
-      };
+        features: { magicPrompt: { enabled: false, model: 'gpt-4', prompt: 'Some prompt' } }
+      });
 
-      const result = cleanAppData(appData);
-
-      expect(result.features).toBeUndefined();
+      expect(result).not.toHaveProperty('features');
     });
 
-    test('should keep magicPrompt when enabled', () => {
-      const appData = {
-        id: 'test-app',
-        features: {
-          magicPrompt: {
-            enabled: true,
-            model: 'gpt-4',
-            prompt: 'Improve this prompt'
-          }
-        }
+    test('keeps a switched-on magic prompt', () => {
+      const features = {
+        magicPrompt: { enabled: true, model: 'gpt-4', prompt: 'Improve this prompt' }
       };
 
-      const result = cleanAppData(appData);
-
-      expect(result.features).toBeDefined();
-      expect(result.features.magicPrompt).toBeDefined();
-      expect(result.features.magicPrompt.enabled).toBe(true);
-      expect(result.features.magicPrompt.model).toBe('gpt-4');
+      expect(cleanAppForSave({ id: 'test-app', features }).features).toEqual(features);
     });
 
-    test('should remove entire features object when empty', () => {
-      const appData = {
+    test('keeps the other feature switches when the magic prompt goes', () => {
+      const result = cleanAppForSave({
         id: 'test-app',
-        features: {
-          magicPrompt: {
-            enabled: false
-          }
-        }
-      };
+        features: { magicPrompt: { enabled: false }, feedback: false, projects: true }
+      });
 
-      const result = cleanAppData(appData);
-
-      expect(result.features).toBeUndefined();
-    });
-
-    test('should handle missing features config', () => {
-      const appData = {
-        id: 'test-app'
-      };
-
-      const result = cleanAppData(appData);
-
-      expect(result.features).toBeUndefined();
+      expect(result.features).toEqual({ feedback: false, projects: true });
     });
   });
 
-  describe('combined scenarios', () => {
-    test('should clean up both upload and features when disabled', () => {
-      const appData = {
+  describe('input fields', () => {
+    test('removes a default value that is empty in every language', () => {
+      const result = cleanAppForSave({
         id: 'test-app',
-        upload: {
-          enabled: false,
-          imageUpload: {
-            enabled: true,
-            maxFileSizeMB: 10
-          }
-        },
-        features: {
-          magicPrompt: {
-            enabled: false,
-            model: 'gpt-4'
-          }
-        }
-      };
+        variables: [{ name: 'tone', defaultValue: { en: '', de: '' } }]
+      });
 
-      const result = cleanAppData(appData);
-
-      expect(result.upload).toBeUndefined();
-      expect(result.features).toBeUndefined();
+      expect(result.variables).toEqual([{ name: 'tone' }]);
     });
 
-    test('should preserve other app properties', () => {
-      const appData = {
+    test('keeps a default value that one language sets', () => {
+      const variables = [{ name: 'tone', defaultValue: { en: 'formal', de: '' } }];
+
+      expect(cleanAppForSave({ id: 'test-app', variables }).variables).toEqual(variables);
+    });
+
+    test('removes an empty list of options and keeps a filled one', () => {
+      const option = { value: 'short', label: { en: 'Short' } };
+      const result = cleanAppForSave({
+        id: 'test-app',
+        variables: [
+          { name: 'tone', predefinedValues: [] },
+          { name: 'length', predefinedValues: [option] }
+        ]
+      });
+
+      expect(result.variables).toEqual([
+        { name: 'tone' },
+        { name: 'length', predefinedValues: [option] }
+      ]);
+    });
+  });
+
+  describe('texts in several languages', () => {
+    const app = (extra = {}) => ({
+      id: 'helper',
+      name: { en: 'Helper' },
+      description: { en: 'Answers questions' },
+      color: '#4F46E5',
+      icon: 'chat-bubbles',
+      system: { en: 'You are a helpful assistant.' },
+      ...extra
+    });
+
+    test('name, short description and instructions lose their empty languages', () => {
+      const result = cleanAppForSave(
+        app({
+          name: { en: '', de: 'Helfer' },
+          description: { en: ' ', de: 'Hilft' },
+          system: { en: '', de: 'Sie helfen.' }
+        })
+      );
+
+      expect(result.name).toEqual({ de: 'Helfer' });
+      expect(result.description).toEqual({ de: 'Hilft' });
+      expect(result.system).toEqual({ de: 'Sie helfen.' });
+    });
+
+    test('a name or short description without any text stays, so the server names the field', () => {
+      const result = cleanAppForSave(app({ name: { en: '' }, description: { en: '', de: ' ' } }));
+
+      expect(result.name).toEqual({ en: '' });
+      expect(result.description).toEqual({ en: '', de: ' ' });
+
+      const issues = appConfigSchema
+        .safeParse(result)
+        .error.issues.map(issue => issue.path.join('.'));
+      expect(issues).toEqual(expect.arrayContaining(['name.en', 'description.en']));
+    });
+
+    test('instructions without any text are left out: the schema does not require them', () => {
+      const result = cleanAppForSave(app({ system: { en: '', de: '  ' } }));
+
+      expect(result).not.toHaveProperty('system');
+      expect(appConfigSchema.safeParse(result).success).toBe(true);
+    });
+
+    test('message template and input placeholder lose their empty languages', () => {
+      const result = cleanAppForSave(
+        app({
+          messagePlaceholder: { en: 'Ask me', de: '  ' },
+          prompt: { en: '', de: '{{content}}' }
+        })
+      );
+
+      expect(result.messagePlaceholder).toEqual({ en: 'Ask me' });
+      expect(result.prompt).toEqual({ de: '{{content}}' });
+    });
+
+    test('message template and input placeholder are left out when no language has text', () => {
+      const result = cleanAppForSave(
+        app({ messagePlaceholder: { en: '' }, prompt: { en: '', de: '' } })
+      );
+
+      expect(result).not.toHaveProperty('messagePlaceholder');
+      expect(result).not.toHaveProperty('prompt');
+      expect(appConfigSchema.safeParse(result).success).toBe(true);
+    });
+
+    test('a text that is complete is not touched', () => {
+      const complete = app({
+        name: { en: 'Helper', de: 'Helfer' },
+        prompt: { en: 'Tone: {{tone}}\n{{content}}' }
+      });
+
+      expect(cleanAppForSave(complete)).toEqual(complete);
+    });
+
+    test('a text keeps its spaces and line breaks', () => {
+      const system = { en: '  Line one\n\nLine two  ' };
+
+      expect(cleanAppForSave(app({ system })).system).toEqual(system);
+    });
+  });
+
+  describe('everything else', () => {
+    test('is passed on as it is', () => {
+      const other = {
+        id: 'test-app',
+        type: 'chat',
+        enabled: false,
+        color: '#4F46E5',
+        parentId: 'chat',
+        inheritanceLevel: 1,
+        overriddenFields: ['system'],
+        websearch: { enabled: true },
+        integrations: { jira: { actions: ['searchIssues'] } },
+        greeting: { en: { title: 'Hi', subtitle: 'Ask away' } },
+        inputMode: { type: 'multiline', rows: 3 },
+        starterPrompts: [{ title: { en: 'Start' }, message: { en: 'Go' } }]
+      };
+
+      expect(cleanAppForSave(other)).toEqual(other);
+    });
+
+    test('switched-off uploads and features go together, the rest stays', () => {
+      const result = cleanAppForSave({
         id: 'test-app',
         name: { en: 'Test App' },
         description: { en: 'Test Description' },
         color: '#4F46E5',
-        upload: {
-          enabled: false
-        },
-        features: {
-          magicPrompt: {
-            enabled: false
-          }
-        }
-      };
+        upload: { enabled: false, imageUpload: { enabled: true, maxFileSizeMB: 10 } },
+        features: { magicPrompt: { enabled: false, model: 'gpt-4' } }
+      });
 
-      const result = cleanAppData(appData);
-
-      expect(result.id).toBe('test-app');
-      expect(result.name).toEqual({ en: 'Test App' });
-      expect(result.description).toEqual({ en: 'Test Description' });
-      expect(result.color).toBe('#4F46E5');
-      expect(result.upload).toBeUndefined();
-      expect(result.features).toBeUndefined();
-    });
-  });
-
-  describe('variables cleanup (existing functionality)', () => {
-    test('should remove empty defaultValue', () => {
-      const appData = {
+      expect(result).toEqual({
         id: 'test-app',
-        variables: [
-          {
-            name: 'testVar',
-            defaultValue: { en: '', de: '' }
-          }
-        ]
-      };
-
-      const result = cleanAppData(appData);
-
-      expect(result.variables[0].defaultValue).toBeUndefined();
+        name: { en: 'Test App' },
+        description: { en: 'Test Description' },
+        color: '#4F46E5'
+      });
     });
 
-    test('should remove empty predefinedValues array', () => {
-      const appData = {
+    test('the form state is not modified', () => {
+      const state = {
         id: 'test-app',
-        variables: [
-          {
-            name: 'testVar',
-            predefinedValues: []
-          }
-        ]
+        name: { en: '', de: 'Helfer' },
+        system: { en: '' },
+        prompt: { en: '' },
+        variables: [{ name: 'tone', defaultValue: { en: '' }, predefinedValues: [] }],
+        upload: { enabled: true, imageUpload: { enabled: false }, fileUpload: { enabled: false } },
+        features: { magicPrompt: { enabled: false } }
       };
+      const snapshot = JSON.parse(JSON.stringify(state));
 
-      const result = cleanAppData(appData);
+      cleanAppForSave(state);
 
-      expect(result.variables[0].predefinedValues).toBeUndefined();
+      expect(state).toEqual(snapshot);
+    });
+
+    test('cleaning twice changes nothing more', () => {
+      const once = cleanAppForSave({
+        id: 'test-app',
+        name: { en: '', de: 'Helfer' },
+        prompt: { en: ' ' },
+        variables: [{ name: 'tone', defaultValue: { en: '' } }],
+        upload: { enabled: true, imageUpload: { enabled: false } },
+        features: { magicPrompt: { enabled: false }, feedback: true }
+      });
+
+      expect(cleanAppForSave(once)).toEqual(once);
     });
   });
 });

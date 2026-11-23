@@ -8,24 +8,30 @@ import Icon from '../../../shared/components/Icon';
 
 const SHORTCUTS = [
   {
+    categoryKey: 'admin.shortcuts.navigation',
     category: 'Navigation',
     items: [
-      { keys: ['g', 'a'], label: 'Go to Apps' },
-      { keys: ['g', 'm'], label: 'Go to Models' },
-      { keys: ['g', 'p'], label: 'Go to Prompts' },
-      { keys: ['g', 'u'], label: 'Go to Users' },
-      { keys: ['g', 'g'], label: 'Go to Groups' },
-      { keys: ['g', 'j'], label: 'Go to Projects' },
-      { keys: ['g', 'l'], label: 'Go to Audit Log' }
+      { keys: ['g', 'a'], labelKey: 'admin.shortcuts.goApps', label: 'Go to Apps' },
+      { keys: ['g', 'm'], labelKey: 'admin.shortcuts.goModels', label: 'Go to Models' },
+      { keys: ['g', 'p'], labelKey: 'admin.shortcuts.goPrompts', label: 'Go to Prompts' },
+      { keys: ['g', 'u'], labelKey: 'admin.shortcuts.goUsers', label: 'Go to Users' },
+      { keys: ['g', 'g'], labelKey: 'admin.shortcuts.goGroups', label: 'Go to Groups' },
+      { keys: ['g', 'j'], labelKey: 'admin.shortcuts.goProjects', label: 'Go to Projects' },
+      { keys: ['g', 'l'], labelKey: 'admin.shortcuts.goAuditLog', label: 'Go to Audit Log' }
     ]
   },
   {
+    categoryKey: 'admin.shortcuts.actions',
     category: 'Actions',
     items: [
-      { keys: ['⌘', 'k'], label: 'Open command palette' },
-      { keys: ['⌘', 's'], label: 'Save (in the app editor)' },
-      { keys: ['?'], label: 'Toggle this cheatsheet' },
-      { keys: ['Esc'], label: 'Close dialogs / palette' }
+      { keys: ['⌘', 'k'], labelKey: 'admin.shortcuts.openPalette', label: 'Open command palette' },
+      { keys: ['⌘', 's'], labelKey: 'admin.shortcuts.save', label: 'Save (in the app editor)' },
+      {
+        keys: ['?'],
+        labelKey: 'admin.shortcuts.toggleCheatsheet',
+        label: 'Toggle this cheatsheet'
+      },
+      { keys: ['Esc'], labelKey: 'admin.shortcuts.closeDialogs', label: 'Close dialogs / palette' }
     ]
   }
 ];
@@ -83,19 +89,25 @@ function AdminShortcutsModal({ isOpen, onClose }) {
           </div>
 
           <div className="px-5 py-4 space-y-5">
-            {SHORTCUTS.map(({ category, items }) => (
+            {SHORTCUTS.map(({ category, categoryKey, items }) => (
               <div key={category}>
                 <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
-                  {category}
+                  {t(categoryKey, category)}
                 </div>
                 <div className="space-y-1.5">
-                  {items.map(({ keys, label }) => (
+                  {items.map(({ keys, label, labelKey }) => (
                     <div key={label} className="flex items-center justify-between gap-4">
-                      <span className="text-sm text-gray-600 dark:text-gray-300">{label}</span>
+                      <span className="text-sm text-gray-600 dark:text-gray-300">
+                        {t(labelKey, label)}
+                      </span>
                       <span className="flex items-center gap-1 shrink-0">
                         {keys.map((k, i) => (
                           <span key={i} className="flex items-center gap-1">
-                            {i > 0 && <span className="text-xs text-gray-500">then</span>}
+                            {i > 0 && (
+                              <span className="text-xs text-gray-500">
+                                {t('admin.shortcuts.then', 'then')}
+                              </span>
+                            )}
                             <kbd className="inline-flex items-center px-1.5 py-0.5 text-xs font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-sm border border-gray-200 dark:border-gray-600">
                               {k}
                             </kbd>

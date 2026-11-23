@@ -1,8 +1,19 @@
 {
-  "sub-task": ["docs:agents.md#Memory pipeline (memory-compose → memory-finalize)"],
+  "sub-task": [
+    "docs:agents.md#Memory pipeline (memory-compose → memory-finalize)",
+    "en:admin.agents.edit.dynamicTasksExplain",
+    "en:admin.agents.edit.dynamicTasksModel",
+    "en:admin.agents.edit.plannerExplain",
+    "en:admin.agents.runTimeline.agent.decomposerDescription",
+    "en:admin.agents.runTimeline.agent.decomposerTitle",
+    "en:admin.agents.runTimeline.planner.description",
+    "en:admin.agents.runTimeline.synthesize.description"
+  ],
   "lease": ["en:abortCauses.lease_lost"],
   "worker": [
     "de:abortCauses.lease_lost",
+    "de:admin.agents.edit.dynamicTasksModelHint",
+    "de:admin.agents.edit.skillsHint",
     "de:admin.projects.caches.hint",
     "de:admin.security.rateLimits.perAddress",
     "de:admin.systemResources.knowledge.capacity",
@@ -12,7 +23,11 @@
     "de:admin.systemResources.processes.missing",
     "de:admin.systemResources.processes.missingAlert",
     "de:admin.systemResources.processes.worker",
+    "de:admin.ui.pwa.enableHint",
+    "de:admin.ui.pwa.swNote",
     "en:abortCauses.lease_lost",
+    "en:admin.agents.edit.dynamicTasksModelHint",
+    "en:admin.agents.edit.skillsHint",
     "en:admin.projects.caches.hint",
     "en:admin.security.rateLimits.perAddress",
     "en:admin.systemResources.knowledge.capacity",
@@ -22,9 +37,21 @@
     "en:admin.systemResources.processes.missing",
     "en:admin.systemResources.processes.missingAlert",
     "en:admin.systemResources.processes.worker",
+    "en:admin.ui.pwa.enableHint",
+    "en:admin.ui.pwa.swNote",
     "features:chatPostStream.description.de",
     "features:chatPostStream.description.en"
   ],
   "automation": ["features:workflows.description.en"],
-  "Automatisierung": ["features:workflows.description.de"]
+  "Automatisierung": ["features:workflows.description.de"],
+  "Teilaufgabe": [
+    "de:admin.agents.edit.dynamicTasksExplain",
+    "de:admin.agents.edit.dynamicTasksModel",
+    "de:admin.agents.edit.plannerExplain",
+    "de:admin.agents.runTimeline.agent.decomposerDescription",
+    "de:admin.agents.runTimeline.agent.decomposerTitle",
+    "de:admin.agents.runTimeline.planner.description",
+    "de:admin.agents.runTimeline.synthesize.description"
+  ],
+  "job": ["en:userApps.list.empty.mine"]
 }

@@ -319,7 +319,7 @@ const MonacoJsonEditor = ({
             />
             <div className="ml-2">
               <h4 className="text-sm font-medium text-red-800 dark:text-red-300">
-                {t('admin.editor.validationErrors', 'Validation Errors')}
+                {t('admin.editor.validationErrors', 'Validation errors')}
               </h4>
               <div className="mt-1 text-sm text-red-700 dark:text-red-400">
                 <ul className="list-disc list-inside space-y-1">

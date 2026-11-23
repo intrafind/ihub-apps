@@ -3,6 +3,7 @@
 
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
+import { htmlToPlainText } from '../../../utils/htmlText';
 
 /**
  * Canvas Content Replacement Confirmation Modal
@@ -23,12 +24,12 @@ const CanvasContentConfirmationModal = ({
 
   // Get text content for preview (without HTML tags)
   const getCurrentTextPreview = () => {
-    const text = currentContent.replace(/<[^>]*>/g, '').trim();
+    const text = htmlToPlainText(currentContent).trim();
     return text.length > 200 ? text.substring(0, 200) + '...' : text;
   };
 
   const getNewTextPreview = () => {
-    const text = newContent.replace(/<[^>]*>/g, '').trim();
+    const text = htmlToPlainText(newContent).trim();
     return text.length > 200 ? text.substring(0, 200) + '...' : text;
   };
 

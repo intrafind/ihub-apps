@@ -20,6 +20,7 @@ export * from './endpoints/integrationPicker';
 export * from './endpoints/usage';
 export * from './endpoints/aiAcknowledgement';
 export * from './endpoints/artifactLibraries';
+export * from './endpoints/userApps';
 
 // Re-export utility functions
 export { clearApiCache, invalidateCacheByPattern } from './utils/cache';

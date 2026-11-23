@@ -1,0 +1,1 @@
+{"name":"Email summary","description":"Summarizes long emails in three sentences.","system":"You summarize emails. Answer with exactly three sentences. Keep names, dates and amounts.","icon":"mail","color":"#2563EB","category":"communication","messagePlaceholder":"Paste the email …"}

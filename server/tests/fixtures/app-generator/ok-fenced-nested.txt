@@ -1,0 +1,29 @@
+Sure! Here is the draft you asked for:
+
+```
+{
+  "name": "Release notes writer",
+  "description": "Turns a list of changes into release notes.",
+  "system": "You write release notes from a list of changes. Group the changes under the headings New, Improved and Fixed.",
+  "prompt": "Audience: {{audience}}\n\n{{content}}",
+  "variables": [
+    {
+      "name": "audience",
+      "label": "Audience",
+      "type": "select",
+      "required": true,
+      "defaultValue": "customers",
+      "predefinedValues": [
+        { "value": "customers", "label": "Customers" },
+        { "value": "developers", "label": "Developers" }
+      ]
+    }
+  ],
+  "starterPrompts": [
+    { "title": "From a change list", "message": "Here is the list of changes for this release." }
+  ],
+  "websearch": { "enabled": false }
+}
+```
+
+Let me know if you would like me to change anything.

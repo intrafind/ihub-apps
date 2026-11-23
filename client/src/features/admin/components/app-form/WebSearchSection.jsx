@@ -49,8 +49,8 @@ function WebSearchSection({ app, onChange, engines = null }) {
 
   return (
     <div className="bg-white dark:bg-gray-800 shadow-sm px-4 py-5 sm:rounded-lg sm:p-6">
-      <div className="md:grid md:grid-cols-3 md:gap-6">
-        <div className="md:col-span-1">
+      <div className="md:form-cols:grid md:form-cols:grid-cols-3 md:form-cols:gap-6">
+        <div className="md:form-cols:col-span-1">
           <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
             {t('admin.apps.edit.websearch', 'Web Search')}
           </h3>
@@ -58,7 +58,7 @@ function WebSearchSection({ app, onChange, engines = null }) {
             {t('admin.apps.edit.websearchDesc', 'Configure web search capabilities for this app')}
           </p>
         </div>
-        <div className="mt-5 md:mt-0 md:col-span-2 space-y-4">
+        <div className="mt-5 md:form-cols:mt-0 md:form-cols:col-span-2 space-y-4">
           {/* Enable Web Search toggle */}
           <div className="flex items-center justify-between">
             <label
