@@ -79,3 +79,17 @@ lost without a word.
   there first, so it keeps the other change and still grants its models.
 - For scripts: `GET /api/admin/groups` returns an `ETag`; send it as `If-Match` with
   `PUT /api/admin/groups/{groupId}` to get `412` instead of overwriting a newer change.
+
+## Chat: A Failed Model Call Says What Went Wrong
+
+When the endpoint of a model failed, the chat (and the **Test** panel of the app editor, which
+runs the same chat) only said "openai API service error" or showed a raw network error.
+
+- The chat now names the cause in the user's language: a certificate the iHub server does not
+  trust, a failure on the endpoint itself, a rejected or missing API key, a model the endpoint does
+  not offer, too many requests, an endpoint that cannot be reached or that answers too slowly.
+  Where only an administrator can fix it, users are asked to tell one; they never see the host
+  that was called.
+- In the **Test** panel, administrators also see the HTTP status, the host and the error code with
+  a line on what to check, and for an untrusted certificate a link to the SSL settings under
+  **Security**, as in the model test.

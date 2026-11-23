@@ -17,7 +17,8 @@
 import { v4 as uuidv4 } from 'uuid';
 import RequestBuilder from './RequestBuilder.js';
 import { processMessageTemplates } from '../../serverHelpers.js';
-import { logInteraction as defaultLogInteraction } from '../../utils.js';
+import { logInteraction as defaultLogInteraction, inspectModelApiKey } from '../../utils.js';
+import { isAdmin } from '../../utils/authorization.js';
 import { runTool as defaultRunTool } from '../tools/runTool.js';
 import configCache from '../../configCache.js';
 import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
@@ -87,6 +88,7 @@ import {
 } from './chatToolApproval.js';
 import { buildPendingConnect, connectResumeMessages, loopResumeOf } from './chatConnectResume.js';
 import { describeChatError } from './chatErrors.js';
+import { LLM_ERROR_CODES } from '../loop/contracts/errors.js';
 import { resolveTitleModel, scheduleChatTitle } from './chatTitles.js';
 import { chatCompactionSettings } from './chatPersistence.js';
 import { appendSchedulingContextNote } from '../scheduler/tasks/schedulingContext.js';
@@ -1631,7 +1633,14 @@ class ChatService {
         model,
         language,
         getLocalizedError,
-        timeoutMs
+        timeoutMs,
+        // Only a rejected call raises the question whether a key was sent at all.
+        keyless:
+          err?.code === LLM_ERROR_CODES.AUTH_FAILED &&
+          !!model &&
+          inspectModelApiKey(model, { quiet: true }).state === 'keyless',
+        // The host and the socket code name internals: for an administrator only.
+        revealEndpoint: isAdmin(user)
       });
       await this.telemetry.recordChatCallEnd({
         baseLog: buildLogData(streaming),
@@ -1669,17 +1678,22 @@ class ChatService {
           response: content
         })
       );
+      // The cause of a failed model call (`failureCause`, `upstreamStatus`, and for an
+      // administrator `host` / `errorCode`), on both frames: `run/ended.error`
+      // replaces what `stream/error` set on the run.
+      const failure = errorInfo.failure || {};
       stream.emit(SSE_V2_EVENTS.STREAM_ERROR, {
         code: String(errorInfo.code || 'ERROR'),
         message: errorInfo.message,
         ...(errorInfo.details !== undefined ? { details: errorInfo.details } : {}),
         retryable: false,
-        isContextWindowError: !!errorInfo.isContextWindowError
+        isContextWindowError: !!errorInfo.isContextWindowError,
+        ...failure
       });
       endRun({
         status: 'error',
         finishReason: 'error',
-        error: { code: String(errorInfo.code || 'ERROR'), message: errorInfo.message }
+        error: { code: String(errorInfo.code || 'ERROR'), message: errorInfo.message, ...failure }
       });
       return { ...summary, status: 'error', finishReason: 'error', error: err, errorInfo };
     }
