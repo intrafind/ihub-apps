@@ -5,10 +5,12 @@
  * The chat turn lives in `services/run/hosts/ChatHost.js`; `ChatService.runTurn`
  * hands it over with the service as the host's collaborator.
  *
- * `ChatHost.js` and `ChatService.js` import each other. Each is loaded first in
- * a process of its own, so a name of the cycle read while the modules are
- * evaluated, rather than while a turn runs, fails here. What a turn does is
- * pinned by `chatTurn.test.js` and the goldens.
+ * `ChatService.js` imports the chat host, and the chat host imports the run
+ * service; neither imports `ChatService.js` back (the chat turn's policies live
+ * in `chat/chatTurnPolicies.js`, and the run service loads the chat service on
+ * demand). Each module is loaded first in a process of its own, so a cycle that
+ * comes back and reads a name while the modules are evaluated fails here. What
+ * a turn does is pinned by `chatTurn.test.js` and the goldens.
  *
  * Run: node --test server/tests/run/chatHost.test.js
  */
@@ -23,6 +25,7 @@ import ChatService from '../../services/chat/ChatService.js';
 const run = promisify(execFile);
 const HOST = fileURLToPath(new URL('../../services/run/hosts/ChatHost.js', import.meta.url));
 const SERVICE = fileURLToPath(new URL('../../services/chat/ChatService.js', import.meta.url));
+const RUN_SERVICE = fileURLToPath(new URL('../../services/run/RunService.js', import.meta.url));
 
 /** Load `first` in a fresh process and report what both modules export. */
 async function loadFirst(first) {
@@ -41,12 +44,21 @@ async function loadFirst(first) {
 describe('ChatHost', () => {
   for (const [name, first] of [
     ['ChatService.js', SERVICE],
-    ['ChatHost.js', HOST]
+    ['ChatHost.js', HOST],
+    ['RunService.js', RUN_SERVICE]
   ]) {
     it(`loads when ${name} is imported first`, async () => {
       assert.deepEqual(await loadFirst(first), ['function', 'function']);
     });
   }
+
+  it('neither the chat host nor the run service imports ChatService.js', async () => {
+    const { readFile } = await import('node:fs/promises');
+    for (const file of [HOST, RUN_SERVICE]) {
+      const source = await readFile(file, 'utf8');
+      assert.doesNotMatch(source, /^import[^;]*from '[^']*\/ChatService\.js';/m, file);
+    }
+  });
 
   it('keeps the service as its collaborator', () => {
     const service = new ChatService({ runTool: async () => ({}) });
@@ -73,5 +85,21 @@ describe('ChatHost', () => {
     assert.equal(seen.length, 1);
     assert.equal(seen[0].svc, service);
     assert.equal(seen[0].given, params);
+  });
+  it('hands the approval seam whether the chat may keep a grant (a personal app of another)', () => {
+    const host = new ChatHost(new ChatService({ runTool: async () => ({}) }));
+    const turn = chatGrants => ({
+      chatId: 'c1',
+      runId: 'r1',
+      streaming: false,
+      persist: null,
+      log: () => ({}),
+      app: { id: 'a1' },
+      model: { id: 'm1' },
+      toolApproval: { grants: ['t1'], resume: null, chatGrants }
+    });
+    assert.equal(host._turnParts(turn(false)).approval.chatGrants, false);
+    assert.equal(host._turnParts(turn(true)).approval.chatGrants, true);
+    assert.deepEqual(host._turnParts(turn(false)).approval.grants, ['t1']);
   });
 });

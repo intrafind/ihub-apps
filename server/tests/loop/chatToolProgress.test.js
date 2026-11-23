@@ -209,7 +209,7 @@ function turn(service, { chatId, prepData, ...rest }) {
     streaming: true,
     buildLogData: () => ({}),
     language: 'en',
-    user: { id: 'u1', groups: ['users'] },
+    user: { id: 'u1', groups: ['users'], permissions: {} },
     getLocalizedError: async () => null,
     ...rest
   });

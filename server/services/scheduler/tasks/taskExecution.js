@@ -5,13 +5,18 @@
  * One scheduled run: a new durable chat, one headless turn of the task's app
  * as the task's owner, and the record of how it went.
  *
- * The turn is an ordinary `ChatService.runTurn` — the same request builder,
+ * The turn is an ordinary `ChatService.runTurn` — the same request builder
+ * (through `assemble/fromApp.js`, `assembleTurn`),
  * agent loop, tool execution, usage tracking, telemetry, run ledger and chat
  * persistence as a turn typed in the chat UI. What a scheduled run adds:
  *
  *   - the principal is the owner, rebuilt and re-authorized on every run
  *     (`ownerPrincipal.js`), and the app, model and tools are checked against
  *     it explicitly — `prepareChatRequest` does not check the app;
+ *   - the turn runs on the run service in a context of its own (origin
+ *     `schedule`, `principalResolver.scheduledRunContext`): the owner without
+ *     admin rights, since nobody is there, and every tool call checked
+ *     against the run's grant;
  *   - the instructions get their run-context variables (`{{run_time}}` …);
  *   - the system prompt says that nobody is there to answer questions;
  *   - `ask_user` is refused (`headless`), and tools that need approval pause
@@ -48,7 +53,8 @@ import {
 } from '../../../sse.js';
 import config from '../../../config.js';
 import { abortCause, causeOfSignal } from '../../chat/abortCause.js';
-import ChatService, { withAppPrompt } from '../../chat/ChatService.js';
+import ChatService from '../../chat/ChatService.js';
+import { withAppPrompt } from '../../chat/appPrompt.js';
 import llmClient from '../../loop/LLMClient.js';
 import { getChatRepository, normalizeChatSettings } from '../../chat/ChatRepository.js';
 import { isChatHistoryConfigured } from '../../chat/chatPersistence.js';
@@ -80,6 +86,9 @@ import { loadTaskPromptFiles, withTaskFiles } from '../../chatFiles/taskFiles.js
 import { refreshTaskFiles } from '../../chatFiles/fileSources.js';
 import { currentPolicy, deleteRunChat, pruneTaskRuns, toolsOfferedByApp } from './taskService.js';
 import { resolveRunScopes } from './taskScopes.js';
+import { assembleTurn } from '../../run/assemble/fromApp.js';
+import { scheduledRunContext } from '../../run/principalResolver.js';
+import { chatOnRunService, turnRunSpec } from '../../run/RunService.js';
 
 const COMPONENT = 'ScheduledTaskExecution';
 
@@ -109,6 +118,30 @@ class RunFailure extends Error {
     this.hold = hold;
     this.extra = extra;
   }
+}
+
+/**
+ * The principal a scheduled run acts as. On the run service: the owner
+ * without admin rights (nobody is there), carrying the task and the run
+ * (`scheduledRun`), with the run context it was built in
+ * (`principalResolver.scheduledRunContext`). With the kill switch
+ * `platform.runs.chatOnRunService` off: the owner as resolved, marked with
+ * `scheduledRun`, as before.
+ *
+ * @param {Object} owner - the owner's resolved principal
+ * @param {{taskId: string, runId: string}} schedule
+ * @returns {{user: Object, context: Readonly<Object>|null}}
+ * @throws {RunFailure} when no context can be built for the owner
+ */
+function runPrincipalOf(owner, { taskId, runId }) {
+  if (!chatOnRunService()) {
+    // Only this run's own task may be changed from inside it; see the tools.
+    owner.scheduledRun = { taskId, runId };
+    return { user: owner, context: null };
+  }
+  const scheduled = scheduledRunContext(owner, { taskId, runId });
+  if (!scheduled.ok) throw new RunFailure('failed', scheduled.code, scheduled.message);
+  return { user: scheduled.context.principal, context: scheduled.context };
 }
 
 function appendSystemNote(llmMessages, note) {
@@ -165,7 +198,10 @@ async function authorizeRun(task, user, language) {
     const offered = new Set((await toolsOfferedByApp(app, user, language)).map(tool => tool.id));
     const missing = task.enabledTools.filter(id => !offered.has(id));
     if (missing.length > 0) {
-      throw pause('TOOL_NOT_AVAILABLE', `The app no longer offers: ${missing.join(', ')}`);
+      throw pause(
+        'TOOL_NOT_AVAILABLE',
+        `The app does not offer these tools to a scheduled run: ${missing.join(', ')}`
+      );
     }
   }
   // Where the run's integrations search and whom they ask: the task's
@@ -384,8 +420,7 @@ export async function executeTaskRun({ taskId, runId }, deps = {}) {
         }
       );
     }
-    const user = owner.user;
-    const principalCheck = checkTaskPrincipal(user);
+    const principalCheck = checkTaskPrincipal(owner.user);
     if (!principalCheck.ok) {
       throw new RunFailure(
         'skipped',
@@ -400,8 +435,8 @@ export async function executeTaskRun({ taskId, runId }, deps = {}) {
         }
       );
     }
-    // Only this run's own task may be changed from inside it; see the tools.
-    user.scheduledRun = { taskId, runId };
+    // The principal the run acts as, and on the run service its context.
+    const { user, context } = runPrincipalOf(owner.user, { taskId, runId });
 
     if (!isChatHistoryConfigured(features, platform) || !getChatRepository().isAvailable()) {
       throw new RunFailure(
@@ -444,18 +479,21 @@ export async function executeTaskRun({ taskId, runId }, deps = {}) {
     const staleTaskFiles = refreshed.filter(result => result.status === 'failed');
     messages = withTaskFiles(messages, await loadTaskPromptFiles(task.id));
 
-    const prep = await service.prepareChatRequest({
-      appId: app.id,
-      modelId: task.modelId || undefined,
-      messages,
-      language,
-      user,
-      chatId: run.chatId,
-      ...(Array.isArray(task.enabledTools) ? { enabledTools: task.enabledTools } : {}),
-      ...(typeof task.websearchEnabled === 'boolean'
-        ? { websearchEnabled: task.websearchEnabled }
-        : {}),
-      ...(integrationScopes ? { integrationScopes } : {})
+    const prep = await assembleTurn({
+      chatService: service,
+      principal: user,
+      request: {
+        appId: app.id,
+        modelId: task.modelId || undefined,
+        messages,
+        language,
+        chatId: run.chatId,
+        ...(Array.isArray(task.enabledTools) ? { enabledTools: task.enabledTools } : {}),
+        ...(typeof task.websearchEnabled === 'boolean'
+          ? { websearchEnabled: task.websearchEnabled }
+          : {}),
+        ...(integrationScopes ? { integrationScopes } : {})
+      }
     });
     if (!prep.success) {
       const code = String(prep.error?.code || 'REQUEST_PREPARATION_FAILED');
@@ -467,7 +505,7 @@ export async function executeTaskRun({ taskId, runId }, deps = {}) {
     }
     const prepared = prep.data;
     // Belt and braces: the tool gate already withholds these for a principal
-    // carrying `scheduledRun`.
+    // carrying `scheduledRun` (on the run service, the run context sets it).
     prepared.tools = (prepared.tools || []).filter(
       tool => !WITHHELD_IN_SCHEDULED_RUNS.has(tool?.id)
     );
@@ -592,6 +630,9 @@ export async function executeTaskRun({ taskId, runId }, deps = {}) {
     let outcome;
     try {
       outcome = await service.runTurn({
+        ...(context ? { spec: turnRunSpec({ context, prep: prepared, caller: 'schedule' }) } : {}),
+        // The switch as `runPrincipalOf` read it: a context exactly when on.
+        onRunService: Boolean(context),
         prep: prepared,
         chatId: run.chatId,
         messageId,

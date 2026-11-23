@@ -9,7 +9,7 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import llmClient from '../services/loop/LLMClient.js';
-import { chatCompactionModel } from '../services/chat/ChatService.js';
+import { chatCompactionModel } from '../services/chat/chatTurnPolicies.js';
 import { chatCompactionSettings } from '../services/chat/chatPersistence.js';
 
 const CHAT_MODEL = { id: 'chat-model', modelType: 'chat', enabled: true };

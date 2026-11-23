@@ -132,6 +132,14 @@ App ids and model ids cannot contain `:` or `/`, so the form is unambiguous.
 - An app runs its tools on the server (web search, sources, MCP servers, workflows, …).
   `/chat/completions` returns only the final answer; `/responses` also reports each tool call as
   an `ihub_tool_call` output item.
+- An app turn runs on iHub's run service, like a chat turn in the browser: as the caller, with
+  no one who can approve a tool (a tool that needs approval is refused with
+  `APPROVAL_REQUIRED_NO_USER`, never left waiting), and every tool call is checked again when it
+  is made. A call to an integration that was disabled or withdrawn from the caller's groups since
+  the turn started is refused: the model gets the refusal as the tool's result and the audit log
+  gets an entry (resource `tool`, with the turn's run id, the `X-Run-Id` header). A caller whose
+  permissions cannot be resolved is refused before anything runs (`403`, `permission_denied`).
+  Errors keep the formats below.
 
 ### App variables: `prompt.variables`
 

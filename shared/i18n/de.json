@@ -6441,7 +6441,9 @@
         "source": {
           "web": "Web",
           "admin": "Admin",
-          "api": "API"
+          "api": "API",
+          "mcp": "MCP",
+          "schedule": "Geplante Aufgabe"
         }
       },
       "details": {

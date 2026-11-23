@@ -16,7 +16,7 @@ import assert from 'node:assert/strict';
 import {
   chatCompactThresholdTokens,
   CHAT_COMPACT_MIN_TOKENS
-} from '../../services/chat/ChatService.js';
+} from '../../services/chat/chatTurnPolicies.js';
 
 test('the threshold scales with the model context window', () => {
   assert.equal(chatCompactThresholdTokens({ contextWindow: 128_000 }), 64_000);

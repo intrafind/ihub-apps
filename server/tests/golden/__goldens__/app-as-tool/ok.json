@@ -369,7 +369,7 @@
         "kind": "subagent",
         "language": "en",
         "model": "golden-model",
-        "parentRunId": "golden-chat-concierge",
+        "parentRunId": "chat-<id:1>",
         "principal": {
           "anonymous": false,
           "id": "golden-user",
@@ -377,8 +377,8 @@
         },
         "refs": {
           "appId": "specialist",
-          "chatId": "agent:golden-chat-concierge:<id:6>",
-          "executionId": "golden-chat-concierge"
+          "chatId": "agent:chat-<id:1>:<id:6>",
+          "executionId": "chat-<id:1>"
         },
         "trigger": {
           "type": "user"
@@ -458,7 +458,7 @@
               "en": "You are the specialist."
             }
           },
-          "chatId": "agent:golden-chat-concierge:<id:6>",
+          "chatId": "agent:chat-<id:1>:<id:6>",
           "imageConfig": null,
           "integrationScopes": {},
           "language": "en",
@@ -1176,7 +1176,7 @@
     },
     {
       "app": "specialist",
-      "cid": "agent:golden-chat-concierge:<id:6>",
+      "cid": "agent:chat-<id:1>:<id:6>",
       "ct": 7,
       "grp": [
         "users"
@@ -1193,7 +1193,7 @@
       "ts": "<ts>",
       "ttft": "<ms>",
       "type": "llm_call",
-      "uid": "agent:golden-chat-concierge:<id:6>",
+      "uid": "agent:chat-<id:1>:<id:6>",
       "v": 2
     },
     {

@@ -22,7 +22,7 @@
  * type; `assertWellFormed` checks every envelope against the v2 contract
  * (`sseV2EventSchema`), a strictly increasing `seq` and the turn's `runId`.
  */
-import test, { after } from 'node:test';
+import test, { after, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import ChatService from '../../services/chat/ChatService.js';
@@ -39,6 +39,7 @@ import { initializeMetrics } from '../../telemetry/metrics.js';
 import { reportToolCallPlaces } from '../../services/sources/toolCallScope.js';
 import { getProvenanceStore } from '../../services/provenance/ProvenanceStore.js';
 import { LLM_ERROR_CODES } from '../../services/loop/contracts/errors.js';
+import installedIntegrationService from '../../services/integrations/InstalledIntegrationService.js';
 import {
   fakeResponse,
   makeClient,
@@ -233,7 +234,10 @@ function makeService(turns, { runTool, maxRetries = 0, interactionService } = {}
   return { service, requests, logInteraction, telemetry, runTool: runToolSpy, runLog };
 }
 
-const USER = { id: 'u1', groups: ['users'] };
+// A resolved principal, as the chat route hands one over: a turn on the run
+// service needs one. It may use every integration, so the grant re-check of a
+// call passes for an installation that is there.
+const USER = { id: 'u1', groups: ['users'], permissions: { integrations: ['*'] } };
 
 function newChatId(label) {
   return `chat-turn-${label}-${crypto.randomUUID().slice(0, 8)}`;
@@ -2179,8 +2183,14 @@ test('answer basis: each connected system is its own entry, under its own label'
     name: 'jira__search',
     description: 'Search Jira',
     parameters: { type: 'object', properties: {} },
-    _integration: { definition: 'com.intrafind/jira', instanceLabel: 'Jira' }
+    _integration: { instanceId: 'jira', definition: 'com.intrafind/jira', instanceLabel: 'Jira' }
   };
+  // The installation the call reaches: the grant re-check of the run reads it.
+  const installed = installedIntegrationService.get.bind(installedIntegrationService);
+  mock.method(installedIntegrationService, 'get', id =>
+    id === 'jira' ? { id: 'jira', definition: 'com.intrafind/jira', enabled: true } : installed(id)
+  );
+  t.after(() => mock.restoreAll());
   const github = {
     id: 'gh__search',
     name: 'gh__search',

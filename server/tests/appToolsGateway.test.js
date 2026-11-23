@@ -30,6 +30,9 @@ import { toolDisplayOf } from '../utils/toolDisplay.js';
 import { RUN_LOG_EVENTS } from '../../shared/runEvents.js';
 import { ToolRunner } from '../services/run/ToolRunner.js';
 import { runService } from '../services/run/RunService.js';
+import { withToolGrant } from '../services/run/RunContext.js';
+import { requestRunContext } from '../services/run/principalResolver.js';
+import { newRunId } from '../services/loop/RunLog.js';
 import { createTurnSkillLog } from '../services/chat/turnSkillLog.js';
 import {
   registerScopeProvider,
@@ -155,7 +158,7 @@ describe('invokeAppTool', () => {
       mock.restoreAll();
     });
     // What the called app's own tool calls get beside their arguments.
-    const inner = runService.chatService.toolRunner;
+    const inner = (await runService.chatServiceOf()).toolRunner;
     const innerExecute = inner.execute.bind(inner);
     const innerContexts = [];
     mock.method(inner, 'execute', (callArg, request) => {
@@ -197,6 +200,61 @@ describe('invokeAppTool', () => {
       JSON.stringify(messages),
       /integrationScopes|turnSkills|records-2026|Europe\/Berlin/
     );
+  });
+
+  /** Run `app__specialist` through the tool runner and capture its own tool calls' contexts. */
+  async function callSpecialist(t, toolContext) {
+    t.after(() => mock.restoreAll());
+    const inner = (await runService.chatServiceOf()).toolRunner;
+    const innerExecute = inner.execute.bind(inner);
+    const innerContexts = [];
+    mock.method(inner, 'execute', (callArg, request) => {
+      innerContexts.push(request.toolContext);
+      return innerExecute(callArg, request);
+    });
+    env.script(t, [
+      turn.toolCalls([{ name: 'lookup', args: { key: 'A-1' } }], { usage: USAGE }),
+      turn.text('Record A-1 is open.', { usage: USAGE })
+    ]);
+    const [toolDef] = await getAppAsTools(['specialist'], 'en', { user: toolContext.principal });
+    const result = await new ToolRunner().execute(null, {
+      toolId: 'app__specialist',
+      toolDef,
+      args: { message: 'Look up A-1.' },
+      toolContext: {
+        approval: 'seam',
+        chatId: 'chat-nested',
+        appConfig: { id: 'concierge' },
+        language: 'en',
+        turnSkills: createTurnSkillLog(),
+        ...toolContext
+      }
+    });
+    assert.equal(result.content, 'Record A-1 is open.');
+    return innerContexts;
+  }
+
+  it("names the calling turn's own run as the parent of the app it calls", async t => {
+    const runId = newRunId('chat');
+    const parent = withToolGrant(requestRunContext(everything).context, ['app__specialist'], {
+      runId
+    });
+    const [inner] = await callSpecialist(t, { origin: 'chat', principal: everything, run: parent });
+    assert.equal(inner.run.parentRunId, runId, 'the turn, not the chat');
+    assert.equal(inner.run.depth, 1);
+  });
+
+  it('keeps a scheduled run on the agent loop directly (switch off) contained: the called app belongs to it', async t => {
+    // With `platform.runs.chatOnRunService` false the scheduled run has no run
+    // context: its principal names the task and the run.
+    const owner = { ...everything, scheduledRun: { taskId: 'task-9', runId: 'run-9' } };
+    const [inner] = await callSpecialist(t, { origin: 'chat', principal: owner });
+    assert.equal(inner.run.origin, 'schedule');
+    assert.equal(inner.run.unattended, true);
+    assert.deepEqual({ ...inner.run.schedule }, { taskId: 'task-9', runId: 'run-9' });
+    // The scheduling tools of the called app still see the run it belongs to.
+    assert.deepEqual({ ...inner.run.principal.scheduledRun }, { taskId: 'task-9', runId: 'run-9' });
+    assert.equal(inner.run.principal.isInvokedViaAppAsTool, true);
   });
 
   it('hands the app’s sources to the caller as the tool-result envelope, without passages', async t => {

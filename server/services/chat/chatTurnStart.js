@@ -75,6 +75,9 @@ import {
   resolveAppForChat
 } from '../userApps/resolveApp.js';
 import { emitFailedRun } from './failedRun.js';
+import { assembleTurn } from '../run/assemble/fromApp.js';
+import { requestRunContext } from '../run/principalResolver.js';
+import { chatOnRunService, turnRunSpec } from '../run/RunService.js';
 import { isVoiceTurn, VOICE_INPUT_MODE } from './voiceMode.js';
 
 const COMPONENT = 'chatTurnStart';
@@ -1299,7 +1302,22 @@ async function commitTurn(run) {
 }
 
 /**
- * Build the model request of the turn (`ChatService.prepareChatRequest`).
+ * The run context of a person's chat turn, or null when none can be built (a
+ * principal without resolved permissions: the run service then refuses the
+ * run, and the turn ends as a failed turn).
+ *
+ * @param {Object} turn
+ * @returns {Readonly<Object>|null}
+ */
+function turnRunContext(turn) {
+  const resolved = requestRunContext(turn.user);
+  return resolved.ok ? resolved.context : null;
+}
+
+/**
+ * Build the model request of the turn (`assemble/fromApp.js`, `assembleTurn`,
+ * around `ChatService.prepareChatRequest`) and, on the run service, the run
+ * spec it runs with.
  *
  * @param {Object} run
  * @returns {Promise<TurnOutcome|null>}
@@ -1307,16 +1325,30 @@ async function commitTurn(run) {
 async function buildModelRequest(run) {
   const { turn } = run;
   const refreshStatus = new RunStreamEmitter({ streamId: turn.chatId, runId: run.runId });
-  const prep = await run.host.chatService.prepareChatRequest({
-    ...turn.requestOptions,
-    onKnowledgeRefresh: ({ total, done }) =>
-      refreshStatus.emit(SSE_V2_EVENTS.TOOL_PROGRESS, {
-        phase: KNOWLEDGE_REFRESH_PHASE,
-        data: { total, done }
-      })
+  // Whether the turn runs on the run service is decided here, once, and
+  // travels with the turn: the chat host never reads the switch again.
+  run.onRunService = chatOnRunService();
+  // On the run service the turn runs in a context of its own: the person's
+  // request, frozen. The request is still built for the request's own
+  // principal (`turn.user`): the context's is a frozen copy with the same id,
+  // and what is bound to the request's object — a guest's identity, which
+  // quota and usage are charged to (`chatOwner.guestIdOf`) — is not on it.
+  const context = run.onRunService ? turnRunContext(turn) : null;
+  const prep = await assembleTurn({
+    chatService: run.host.chatService,
+    principal: turn.user,
+    request: {
+      ...turn.requestOptions,
+      onKnowledgeRefresh: ({ total, done }) =>
+        refreshStatus.emit(SSE_V2_EVENTS.TOOL_PROGRESS, {
+          phase: KNOWLEDGE_REFRESH_PHASE,
+          data: { total, done }
+        })
+    }
   });
   if (prep.success) {
     run.prep = prep.data;
+    run.spec = context ? turnRunSpec({ context, prep: prep.data, caller: 'chat' }) : null;
     return null;
   }
   const message = await run.host.getLocalizedError(
@@ -1484,6 +1516,8 @@ async function runModelTurn(run) {
   await logInteraction('chat_request', buildLogData(true));
 
   const result = await host.chatService.runTurn({
+    ...(run.spec ? { spec: run.spec } : {}),
+    onRunService: run.onRunService,
     prep,
     chatId: turn.chatId,
     messageId: turn.messageId,
@@ -1770,7 +1804,9 @@ async function runTurnOnce(
     streamRunId: null,
     restoreApproval: null,
     restoreConnect: null,
-    connectResume: null
+    connectResume: null,
+    spec: null,
+    onRunService: false
   };
   try {
     let outcome = null;

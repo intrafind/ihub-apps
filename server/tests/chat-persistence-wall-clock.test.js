@@ -22,10 +22,11 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
-import ChatService, {
+import ChatService from '../services/chat/ChatService.js';
+import {
   CHAT_MAX_TOOL_ROUNDS,
   DURABLE_TURN_WALL_CLOCK_MS
-} from '../services/chat/ChatService.js';
+} from '../services/chat/chatTurnPolicies.js';
 import { activeRequests } from '../sse.js';
 
 /** The minimum `prep` `runTurn` reads before it calls the loop. */
@@ -79,7 +80,7 @@ async function budgetsFor(persistence) {
       prep: PREP,
       chatId,
       streaming: false,
-      user: { id: 'user-1' },
+      user: { id: 'user-1', permissions: {} },
       persistence
     });
   } finally {

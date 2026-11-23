@@ -110,14 +110,63 @@ describe('the seams of a run', () => {
     });
     assert.equal(seams[0].name, 'approval');
     assert.equal(seams.at(-1), marker);
-    assert.deepEqual(INTERACTIONS, ['none']);
+    assert.deepEqual(INTERACTIONS, ['none', 'person', 'owner']);
   });
 
-  it('refuse a profile with a person who answers: the chat host builds that one', () => {
-    assert.throws(
-      () => buildSeams({ interactions: 'person', host: {}, bindings: {} }),
-      /chat host/
+  it('put the projection seams of a chat host right after the approval seam', () => {
+    const projection = { name: 'projection-marker' };
+    const trailing = { name: 'trailing-marker' };
+    const output = { name: 'output-contract' };
+    const seams = buildSeams({
+      interactions: 'person',
+      structuredOutput: output,
+      host: { projectionSeams: () => [projection], seams: () => [trailing] },
+      bindings: {
+        chatId: 'c',
+        app: { id: 'specialist' },
+        principal: user,
+        run: childContext(),
+        buildLogData: () => ({}),
+        logInteraction: async () => {},
+        toolRunner: env.chatService.toolRunner
+      }
+    });
+    assert.deepEqual(
+      seams.map(seam => seam.name),
+      [
+        'approval',
+        'projection-marker',
+        'question',
+        'passthrough',
+        'image-lift',
+        'output-contract',
+        'trailing-marker'
+      ]
     );
+  });
+
+  it('take the approval seam of a run whose owner answers, and refuse one without it', () => {
+    const gate = { name: 'owner-approval' };
+    const bindings = {
+      chatId: 'c',
+      app: { id: 'specialist' },
+      principal: user,
+      run: childContext(),
+      buildLogData: () => ({}),
+      logInteraction: async () => {},
+      toolRunner: env.chatService.toolRunner
+    };
+    const seams = buildSeams({
+      interactions: 'owner',
+      host: {},
+      bindings: { ...bindings, approvalGate: gate }
+    });
+    assert.equal(seams[0], gate);
+    assert.throws(
+      () => buildSeams({ interactions: 'owner', host: {}, bindings }),
+      /brings its approval seam/
+    );
+    assert.throws(() => buildSeams({ interactions: 'later', host: {}, bindings }), /Unknown/);
   });
 
   it('a headless run carries the approval seam first, then its own, then the host', async t => {

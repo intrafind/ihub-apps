@@ -27,7 +27,7 @@
  *
  * Run: node --test server/tests/websearch-answer-sources.test.js
  */
-import test from 'node:test';
+import test, { mock } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 
@@ -44,6 +44,14 @@ import { resolveSearchLanguage } from '../services/search/searchLanguage.js';
 import { makePageCacheKey, setCachedPage } from '../services/pageCache.js';
 import webSearchService, { SearchProvider } from '../services/WebSearchService.js';
 import { makeClient, sseResponse, MODELS } from './loop/helpers/llmFixtures.js';
+import installedIntegrationService from '../services/integrations/InstalledIntegrationService.js';
+// The installations the tools below belong to: a turn on the run service
+// re-checks each call against them (`ToolRunner`, integration grant).
+const INSTALLED = new Set(['brave']);
+const installedOf = installedIntegrationService.get.bind(installedIntegrationService);
+mock.method(installedIntegrationService, 'get', id =>
+  INSTALLED.has(id) ? { id, enabled: true } : installedOf(id)
+);
 
 // ── the search provider and the pages behind its results ───────────────────
 
@@ -210,7 +218,7 @@ async function searchAndAnswer(answer) {
       streaming: true,
       buildLogData: () => ({ appId: 'web-chat', sessionId: chatId, streaming: true }),
       language: 'en',
-      user: { id: 'u1', groups: ['users'] },
+      user: { id: 'u1', groups: ['users'], permissions: { integrations: ['*'] } },
       getLocalizedError: async () => null
     });
     return { summary, frames: captured };

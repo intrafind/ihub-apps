@@ -6,21 +6,26 @@
  *
  * The app runs exactly as it does in the chat UI: the same
  * `ChatService.prepareChatRequest` (system prompt, sources, skills, tools,
- * model resolution) and the same `ChatService.runTurn` on the shared agent
- * loop, with its tools executed on the server. What the API adds:
+ * model resolution; through `assemble/fromApp.js`) and the same
+ * `ChatService.runTurn` on the run service, with its tools executed on the
+ * server and checked against the run's grant. What the API adds:
  *
  *   - the prompt template comes from the app config, never from the caller,
  *     and is applied only to the turn that should carry it (see
  *     {@link turnPrompt});
- *   - the turn is headless (nobody can answer a clarification) and its frames
- *     go to the caller's own emitter instead of a browser's SSE stream;
+ *   - the turn is headless (nobody can answer a clarification or an approval:
+ *     its run context routes approvals to `deny`) and its frames go to the
+ *     caller's own emitter instead of a browser's SSE stream;
  *   - the app's `outputSchema` is validated server-side, with one corrected
  *     attempt inside the run.
  *
  * @module services/inference/appTurn
  */
 import crypto from 'node:crypto';
-import { withAppPrompt } from '../chat/ChatService.js';
+import { withAppPrompt } from '../chat/appPrompt.js';
+import { assembleTurn } from '../run/assemble/fromApp.js';
+import { requestRunContext } from '../run/principalResolver.js';
+import { chatOnRunService, turnRunSpec } from '../run/RunService.js';
 import { recordStructuredOutputValidation } from '../../telemetry/metrics.js';
 import { isLLMError } from '../loop/contracts/errors.js';
 import { InferenceApiError, fromLLMError } from './errors.js';
@@ -69,6 +74,23 @@ export function turnPrompt({ firstTurn, resolved, stored = null, historyReplayed
   };
 }
 
+/**
+ * The run context of an app turn of the inference API: the caller's request,
+ * with nobody who can answer an approval. A caller without resolved
+ * permissions is refused before anything is prepared or stored.
+ *
+ * @param {Object} user
+ * @returns {Readonly<Object>}
+ * @throws {InferenceApiError}
+ */
+function turnRunContext(user) {
+  const resolved = requestRunContext(user, { approvalRoute: 'deny' });
+  if (!resolved.ok) {
+    throw new InferenceApiError(403, 'permission_denied', resolved.message);
+  }
+  return resolved.context;
+}
+
 /** HTTP status for a `prepareChatRequest` failure code. */
 function prepStatus(code) {
   if (code === 'APP_NOT_FOUND' || code === 'MODEL_NOT_FOUND') return 404;
@@ -99,8 +121,10 @@ function prepStatus(code) {
  * @param {Object} options.variables - Variables for the template and the system prompt.
  * @param {string} options.chatId
  * @param {number} [options.maxOutputTokens] - Caller's cap; the model's own cap still applies.
- * @returns {Promise<{prep: Object, app: Object, model: Object, label: string,
- *   format: Object|null, renderedContent: string}>}
+ * @returns {Promise<{prep: Object, spec: Readonly<Object>|null, onRunService: boolean,
+ *   app: Object, model: Object, label: string, format: Object|null, renderedContent: string}>}
+ *   `spec`: the run spec the turn runs with on the run service (`RunService.turnRunSpec`), null
+ *   with the kill switch off; `onRunService`: the switch as this turn read it
  * @throws {InferenceApiError}
  */
 export async function prepareAppTurn({
@@ -126,15 +150,26 @@ export async function prepareAppTurn({
     variables,
     applyTemplate ? app.prompt || null : null
   );
+  // On the run service the turn runs in a context of its own: the caller's
+  // request, which nobody can answer an approval for (`approvalRoute: 'deny'`).
+  // Decided once, here: the turn carries it to the chat host.
+  const onRunService = chatOnRunService();
+  const context = onRunService ? turnRunContext(user) : null;
   let result;
   try {
-    result = await chatService.prepareChatRequest({
-      appId: app.id,
-      modelId: target.modelId || undefined,
-      messages: promptMessages,
-      language,
-      user,
-      chatId
+    // Built for the request's own principal: a guest's identity, which quota
+    // and usage are charged to, is bound to that object, not to the
+    // context's frozen copy (same id).
+    result = await assembleTurn({
+      chatService,
+      principal: user,
+      request: {
+        appId: app.id,
+        modelId: target.modelId || undefined,
+        messages: promptMessages,
+        language,
+        chatId
+      }
     });
   } catch (error) {
     throw fromLLMError(error);
@@ -167,6 +202,8 @@ export async function prepareAppTurn({
   const renderedUser = [...prep.llmMessages].reverse().find(message => message.role === 'user');
   return {
     prep,
+    spec: context ? turnRunSpec({ context, prep, caller: 'inference' }) : null,
+    onRunService,
     app,
     model: prep.model,
     label,
@@ -228,6 +265,8 @@ export async function executeAppTurn({
   });
   await chatService.logInteraction('chat_request', buildLogData(true));
   const outcome = await chatService.runTurn({
+    ...(prepared.spec ? { spec: prepared.spec } : {}),
+    ...(typeof prepared.onRunService === 'boolean' ? { onRunService: prepared.onRunService } : {}),
     prep,
     chatId,
     messageId,

@@ -46,7 +46,7 @@ import registerSessionRoutes, { messageAttachments } from '../routes/chat/sessio
 import errorHandler from '../middleware/errorHandler.js';
 import { workflowSummary } from '../services/workflow/mentionWorkflow.js';
 
-const USER = { id: 'user-1', name: 'Ada' };
+const USER = { id: 'user-1', name: 'Ada', permissions: {} };
 const APP_ID = 'chat';
 
 /** A workflow the @mention branch will accept and then fail to start. */
@@ -868,7 +868,7 @@ describe('POST /api/apps/:appId/chat/:chatId: the server owns the history', () =
       const res = await postChat({
         chatId,
         body: { messages: [{ role: 'user', content: 'let me in' }] },
-        user: { id: 'user-2' }
+        user: { id: 'user-2', permissions: {} }
       });
 
       assert.equal(res.statusCode, 404);

@@ -174,7 +174,7 @@ function turn(service, { chatId, prepData, ...rest }) {
     streaming: true,
     buildLogData: () => ({}),
     language: 'en',
-    user: { id: 'u1', groups: ['users'] },
+    user: { id: 'u1', groups: ['users'], permissions: {} },
     getLocalizedError: async () => null,
     ...rest
   });
@@ -558,7 +558,7 @@ test('settle: the carried basis is handed to the continuation, bounded to string
   };
   const result = await settleChatApprovals({
     chatId,
-    user: { id: 'u1' },
+    user: { id: 'u1', permissions: {} },
     chat,
     lastMessage: {
       role: 'user',
@@ -617,7 +617,7 @@ test('settle: approve with "allow for this chat" answers once, records the grant
   const repository = fakeRepository();
   const result = await settleChatApprovals({
     chatId,
-    user: { id: 'u1' },
+    user: { id: 'u1', permissions: {} },
     chat: storedChat(interaction),
     lastMessage: {
       role: 'user',
@@ -644,7 +644,7 @@ test('settle: a double answer is refused and cannot run the call twice', async t
   const chat = storedChat(interaction);
   const params = () => ({
     chatId,
-    user: { id: 'u1' },
+    user: { id: 'u1', permissions: {} },
     chat,
     lastMessage: { approvalResponse: { interactionId: interaction.id, decision: 'approve' } },
     repository: fakeRepository(),
@@ -668,7 +668,7 @@ test('settle: reject, expiry and an unknown approval', async t => {
   const rejected = await raiseChatApproval(svc, rejectChat);
   const r1 = await settleChatApprovals({
     chatId: rejectChat,
-    user: { id: 'u1' },
+    user: { id: 'u1', permissions: {} },
     chat: storedChat(rejected),
     lastMessage: { approvalResponse: { interactionId: rejected.id, decision: 'reject' } },
     repository: fakeRepository(),
@@ -684,7 +684,7 @@ test('settle: reject, expiry and an unknown approval', async t => {
   });
   const r2 = await settleChatApprovals({
     chatId: expiredChat,
-    user: { id: 'u1' },
+    user: { id: 'u1', permissions: {} },
     chat: storedChat(expired),
     lastMessage: { approvalResponse: { interactionId: expired.id, decision: 'approve' } },
     repository: fakeRepository(),
@@ -695,7 +695,7 @@ test('settle: reject, expiry and an unknown approval', async t => {
 
   const r3 = await settleChatApprovals({
     chatId: 'chat-settle-none',
-    user: { id: 'u1' },
+    user: { id: 'u1', permissions: {} },
     chat: null,
     lastMessage: { approvalResponse: { interactionId: 'nope', decision: 'approve' } },
     repository: fakeRepository(),
@@ -706,7 +706,7 @@ test('settle: reject, expiry and an unknown approval', async t => {
 
   const r4 = await settleChatApprovals({
     chatId: 'chat-settle-bad',
-    user: { id: 'u1' },
+    user: { id: 'u1', permissions: {} },
     chat: null,
     lastMessage: { approvalResponse: { interactionId: 'x', decision: 'maybe' } },
     repository: fakeRepository(),
@@ -723,7 +723,7 @@ test('settle: any other message supersedes a pending approval and drops the stor
   const repository = fakeRepository();
   const result = await settleChatApprovals({
     chatId,
-    user: { id: 'u1' },
+    user: { id: 'u1', permissions: {} },
     chat: storedChat(interaction),
     lastMessage: { role: 'user', content: 'Never mind, something else.' },
     repository,

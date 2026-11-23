@@ -5943,7 +5943,9 @@
         "source": {
           "web": "Web",
           "admin": "Admin",
-          "api": "API"
+          "api": "API",
+          "mcp": "MCP",
+          "schedule": "Scheduled task"
         }
       },
       "details": {

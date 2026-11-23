@@ -195,11 +195,13 @@ export function resolveRequestPrincipal(user, { origin = 'person' } = {}) {
  * @param {Iterable<string>|null} [options.toolGrant] - the tools the request may run
  * @param {string|null} [options.parentRunId] - the caller's run id
  * @param {Object} [options.budget]
+ * @param {'person'|'deny'} [options.approvalRoute] - who answers an approval: `deny` where
+ *   nobody can (an app turn of the inference API); left out, the context decides
  * @returns {{ok: true, context: Readonly<Object>} | {ok: false, code: string, message: string}}
  */
 export function requestRunContext(
   user,
-  { toolGrant = null, parentRunId = null, budget = {} } = {}
+  { toolGrant = null, parentRunId = null, budget = {}, approvalRoute } = {}
 ) {
   const resolved = resolveRequestPrincipal(user, { origin: 'person' });
   if (!resolved.ok) return resolved;
@@ -211,7 +213,36 @@ export function requestRunContext(
       origin: 'person',
       toolGrant,
       parentRunId,
-      budget
+      budget,
+      ...(approvalRoute ? { approvalRoute } : {})
+    })
+  };
+}
+
+/**
+ * The run context of a scheduled run: the task's owner, already resolved
+ * for this run (`scheduler/tasks/ownerPrincipal.js`), with the origin
+ * `schedule`. The owner loses admin rights (nobody is there), the principal
+ * carries the task and the run (`scheduledRun`, from the context's
+ * `schedule`), and its approvals wait for the owner (`approvalRoute: 'owner'`).
+ *
+ * @param {Object} owner - the owner's resolved principal
+ * @param {Object} schedule
+ * @param {string} schedule.taskId
+ * @param {string} schedule.runId - the scheduled run's id
+ * @returns {{ok: true, context: Readonly<Object>} | {ok: false, code: string, message: string}}
+ */
+export function scheduledRunContext(owner, { taskId, runId }) {
+  const resolved = resolveRequestPrincipal(owner, { origin: 'schedule' });
+  if (!resolved.ok) return resolved;
+  return {
+    ok: true,
+    context: createRunContext({
+      principal: resolved.principal,
+      principalType: resolved.principalType,
+      origin: 'schedule',
+      schedule: { taskId, runId },
+      approvalRoute: 'owner'
     })
   };
 }

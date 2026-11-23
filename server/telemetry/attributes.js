@@ -237,6 +237,15 @@ export function buildErrorAttributes(error) {
   return attributes;
 }
 
+/** The ids of a run (`utils/runScope.js`) and the span attribute each becomes. */
+const RUN_ATTRIBUTES = Object.freeze([
+  ['runId', 'ihub.run.id'],
+  ['parentRunId', 'ihub.run.parent_id'],
+  ['kind', 'ihub.run.kind'],
+  ['principalId', 'ihub.principal.id'],
+  ['agentId', 'ihub.agent.id']
+]);
+
 /**
  * Build custom iHub-specific attributes
  * @param {Object} context - Request context
@@ -296,6 +305,14 @@ export function buildCustomAttributes(context = {}) {
   // Source usage
   if (context.sourceCount !== undefined) {
     attributes['source.count'] = Number.parseInt(context.sourceCount, 10);
+  }
+
+  // The run the call belongs to (`utils/runScope.js`), when it runs on the run service.
+  const run = context.run;
+  if (run && typeof run === 'object') {
+    for (const [key, attribute] of RUN_ATTRIBUTES) {
+      if (run[key]) attributes[attribute] = String(run[key]);
+    }
   }
 
   return attributes;

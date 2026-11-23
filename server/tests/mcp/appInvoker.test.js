@@ -74,9 +74,9 @@ describe('invokeAppNonStreaming — input validation', () => {
 });
 
 /** What the run service hands the agent loop, per run of the test. */
-function loopRequests(t) {
+async function loopRequests(t) {
   const requests = [];
-  const loop = runService.chatService.agentLoop;
+  const loop = (await runService.chatServiceOf()).agentLoop;
   const original = loop.run.bind(loop);
   mock.method(loop, 'run', request => {
     requests.push(request);
@@ -105,7 +105,7 @@ describe('invokeAppNonStreaming — what reaches the run', () => {
 
   it("without a language the platform's default language applies", async t => {
     const model = env.script(t, [turn.text('Dear Sir or Madam', { usage: USAGE })]);
-    const requests = loopRequests(t);
+    const requests = await loopRequests(t);
     await invokeAppNonStreaming({
       appId: 'translator',
       args: { message: 'hello', tone: 'formal' },
@@ -117,7 +117,7 @@ describe('invokeAppNonStreaming — what reaches the run', () => {
 
   it("the call's timeout bounds each model call; a gateway call keeps the default deadline", async t => {
     env.script(t, [turn.text('ok', { usage: USAGE })]);
-    const requests = loopRequests(t);
+    const requests = await loopRequests(t);
     await invokeAppNonStreaming({
       appId: 'specialist',
       args: { message: 'hi' },
@@ -130,7 +130,7 @@ describe('invokeAppNonStreaming — what reaches the run', () => {
 
   it('an A2A task passes its model timeout and its wall-clock deadline', async t => {
     env.script(t, [turn.text('ok', { usage: USAGE })]);
-    const requests = loopRequests(t);
+    const requests = await loopRequests(t);
     await invokeApp({
       appId: 'specialist',
       messages: [{ role: 'user', content: 'hi' }],

@@ -18,7 +18,7 @@ import assert from 'node:assert/strict';
 import { startGoldenEnv } from './harness.js';
 import { harnessConfig, runChatTurn } from './harnessCases.js';
 import { observeEmittedEnvelopes, projectLedgerEvent } from '../../services/loop/RunStream.js';
-import { chatToolPolicies } from '../../services/chat/ChatService.js';
+import { chatToolPolicies } from '../../services/chat/chatTurnPolicies.js';
 import { RunService, appRunSpec } from '../../services/run/RunService.js';
 import { HeadlessHost } from '../../services/run/hosts/HeadlessHost.js';
 import { requestRunContext } from '../../services/run/principalResolver.js';

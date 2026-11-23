@@ -38,7 +38,8 @@ export const auditActions = [
 
 export const auditResults = ['success', 'failure'];
 
-export const auditSources = ['web', 'mcp', 'api', 'admin'];
+// `schedule`: what a scheduled run did with nobody there (a tool call it was refused).
+export const auditSources = ['web', 'mcp', 'api', 'admin', 'schedule'];
 
 export const auditActorSchema = z.object({
   id: z.string().min(1),

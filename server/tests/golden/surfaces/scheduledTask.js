@@ -206,7 +206,7 @@ export const scheduledTaskCases = [
     surface: 'scheduled-task',
     name: 'admin-owner',
     title:
-      'The run of a task whose owner is an admin: the model is offered a workflow of the app that no group of the owner grants, because the owner is an administrator. The run the row "unattended-admin-rights" of the difference list is about.',
+      'The run of a task whose owner is an admin: nobody is there, so the run has the rights of the groups of the owner and none of an administrator, and the model is not offered the workflow of the app that no group of the owner grants. The run the row "unattended-admin-rights" of the difference list is about.',
     config: taskConfig,
     script: () => [turn.text('The installation is healthy.', { usage: usage(50, 6) })],
     run: env =>
