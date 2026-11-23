@@ -1956,7 +1956,13 @@
           "title": "Über Anbieter-API-Schlüssel",
           "description": "API-Schlüssel, die hier konfiguriert werden, werden als Fallback für alle Modelle dieses Anbieters verwendet, die keinen eigenen API-Schlüssel konfiguriert haben. Wenn Sie dieses Feld leer lassen, verwendet das System stattdessen die Umgebungsvariable."
         },
-        "subtitle": "Diesen Anbieter und seinen API-Schlüssel konfigurieren"
+        "subtitle": "Diesen Anbieter und seinen API-Schlüssel konfigurieren",
+        "modelUrls": {
+          "updated_one": "{{count}} verknüpftes Modell verwendet jetzt die neue Adresse.",
+          "updated_other": "{{count}} verknüpfte Modelle verwenden jetzt die neue Adresse.",
+          "skipped_one": "Dieses verknüpfte Modell wurde nicht geändert, weil seine URL nicht mit der bisherigen Basis-URL des Anbieters beginnt:",
+          "skipped_other": "Diese verknüpften Modelle wurden nicht geändert, weil ihre URL nicht mit der bisherigen Basis-URL des Anbieters beginnt:"
+        }
       },
       "create": {
         "title": "Neuen Anbieter erstellen",

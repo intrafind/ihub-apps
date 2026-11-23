@@ -171,6 +171,94 @@ async function syncLinkedModelsApiType(provider) {
   return updated;
 }
 
+/**
+ * A model URL moved from one provider base URL to another, or `null` when the
+ * URL does not sit under the old base.
+ *
+ * The old base must be a whole prefix that ends at a path boundary: with the
+ * old base `https://hub.example.com/v1`, `https://hub.example.com/v1/chat/completions`
+ * moves but `https://hub.example.com/v10/chat/completions` does not.
+ *
+ * @param {string} url - The model's API URL
+ * @param {string} oldBase - The provider's previous base URL, without trailing slashes
+ * @param {string} newBase - The provider's new base URL, without trailing slashes
+ * @returns {string|null} The URL under the new base, or `null`
+ * @example
+ * rebaseModelUrl('https://a.example/v1/chat/completions', 'https://a.example/v1', 'https://b.example/v2')
+ * // => 'https://b.example/v2/chat/completions'
+ */
+export function rebaseModelUrl(url, oldBase, newBase) {
+  if (typeof url !== 'string' || !oldBase || !url.startsWith(oldBase)) return null;
+  const rest = url.slice(oldBase.length);
+  if (rest !== '' && !['/', '?', '#'].includes(rest[0])) return null;
+  return `${newBase}${rest}`;
+}
+
+/**
+ * Point the models linked to a provider at its new base URL: every linked
+ * model whose `url` starts with the old base gets that prefix replaced by the
+ * new one. A model whose URL points elsewhere (an admin set it by hand) is left
+ * as it is and reported, so the admin can check it.
+ *
+ * Each model is changed on its stored file under the same lock a model save
+ * takes (`configStore.updateJson`), so an edit made to it meanwhile is kept,
+ * and gets a history snapshot and an audit entry like any other model update.
+ *
+ * @param {Object} params
+ * @param {string} params.providerId - The provider whose base URL changed
+ * @param {string} params.oldBase - Its previous base URL
+ * @param {string} params.newBase - Its new base URL
+ * @param {import('express').Request} params.req - The admin request, for the audit log
+ * @returns {Promise<{ updated: string[], skipped: Array<{ id: string, url: string }> }>}
+ *   Ids of the models moved, and the linked models left alone with their URL
+ */
+async function rebaseLinkedModelUrls({ providerId, oldBase, newBase, req }) {
+  const result = { updated: [], skipped: [] };
+  const { data: models = [] } = configCache.getModels(true);
+  const admin = req.user?.username ?? req.user?.name ?? req.user?.id ?? 'unknown';
+  for (const model of getLinkedModels(providerId, models)) {
+    if (typeof model.url !== 'string' || !model.url) continue;
+    const modelPath = await configStore.resolveIdToPath('models', model.id);
+    if (!modelPath) continue;
+    let before = null;
+    let after = null;
+    let skippedUrl = null;
+    // Decided on the stored model, not the cached copy, which can lag behind
+    // an edit made to the model meanwhile.
+    await configStore.updateJson(modelPath, stored => {
+      before = null;
+      after = null;
+      skippedUrl = null;
+      if (!stored) return undefined;
+      const url = rebaseModelUrl(stored.url, oldBase, newBase);
+      if (url === null) {
+        skippedUrl = typeof stored.url === 'string' ? stored.url : '';
+        return undefined;
+      }
+      before = stored;
+      after = { ...stored, url };
+      return after;
+    });
+    if (after) {
+      await saveSnapshot({ resource: 'model', id: model.id, before, after, admin });
+      await logAudit({
+        req,
+        action: 'update',
+        resource: 'model',
+        resourceId: model.id,
+        summary: `Moved model ${model.id} to the new base URL of provider ${providerId}`
+      });
+      result.updated.push(model.id);
+    } else if (skippedUrl !== null) {
+      result.skipped.push({ id: model.id, url: skippedUrl });
+    }
+  }
+  if (result.updated.length > 0) {
+    await configCache.refreshModelsCache();
+  }
+  return result;
+}
+
 /** Characters kept per echoed field, so one test cannot return a huge payload. */
 const SAMPLE_FIELD_LENGTH = 300;
 
@@ -643,6 +731,69 @@ export default function registerAdminProvidersRoutes(app) {
     res.json(maskedProvider);
   });
 
+  /**
+   * @swagger
+   * /admin/providers/{providerId}:
+   *   put:
+   *     summary: Update a provider (Admin)
+   *     description: |
+   *       Replaces a provider entry. Changing a custom LLM provider's API type moves its linked
+   *       models to it. Changing an LLM provider's base URL moves every linked model whose API
+   *       URL starts with the old base URL to the new one (the prefix is replaced); each moved
+   *       model gets a history snapshot and an audit entry. A linked model whose URL does not
+   *       start with the old base URL is left as it is and listed in `modelUrls.skipped`.
+   *     tags:
+   *       - Admin - Providers
+   *     security:
+   *       - bearerAuth: []
+   *       - sessionAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: providerId
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: The saved provider and the linked models the save changed
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 provider:
+   *                   type: object
+   *                 updatedModels:
+   *                   type: array
+   *                   description: Linked models moved to the provider's new API type
+   *                   items:
+   *                     type: string
+   *                 modelUrls:
+   *                   type: object
+   *                   description: What a change of the base URL did to the linked models
+   *                   properties:
+   *                     updated:
+   *                       type: array
+   *                       description: Linked models whose API URL now starts with the new base URL
+   *                       items:
+   *                         type: string
+   *                     skipped:
+   *                       type: array
+   *                       description: Linked models left as they are, because their API URL does not start with the old base URL
+   *                       items:
+   *                         type: object
+   *                         properties:
+   *                           id:
+   *                             type: string
+   *                           url:
+   *                             type: string
+   *       400:
+   *         description: "`BAD_REQUEST`: invalid provider entry, or the ID in the body differs"
+   *       401:
+   *         description: Admin authentication required
+   *       404:
+   *         description: "`NOT_FOUND`: no such provider"
+   */
   app.put(buildServerPath('/api/admin/providers/:providerId'), adminAuth, async (req, res) => {
     const { providerId } = req.params;
     const updatedProvider = req.body;
@@ -663,6 +814,7 @@ export default function registerAdminProvidersRoutes(app) {
     }
 
     let savedProvider;
+    let previousBaseUrl;
     await updateProviders(providers => {
       // Work on a copy: the body is reused if the step has to run again.
       const next = { ...updatedProvider };
@@ -672,6 +824,7 @@ export default function registerAdminProvidersRoutes(app) {
       if (index === -1) {
         throw new ServiceError('NOT_FOUND', 'Provider not found');
       }
+      previousBaseUrl = providers[index].baseUrl;
 
       if (keepStoredKey) {
         // The stored file, not the cache, holds the apiKey field.
@@ -723,9 +876,19 @@ export default function registerAdminProvidersRoutes(app) {
     });
     const updatedModels = await syncLinkedModelsApiType(savedProvider);
 
+    // A new base URL moves the linked models that were built from the old one.
+    const oldBase =
+      typeof previousBaseUrl === 'string' ? stripTrailingSlashes(previousBaseUrl.trim()) : '';
+    const newBase = savedProvider.baseUrl || '';
+    const modelUrls =
+      oldBase && newBase && oldBase !== newBase
+        ? await rebaseLinkedModelUrls({ providerId, oldBase, newBase, req })
+        : { updated: [], skipped: [] };
+
     res.json({
       provider: savedProvider,
-      updatedModels
+      updatedModels,
+      modelUrls
     });
   });
 
