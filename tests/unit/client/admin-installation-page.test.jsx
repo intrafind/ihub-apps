@@ -693,7 +693,10 @@ describe('installation page: action detail and instructions (#2974)', () => {
     fireEvent.change(within(card).getByRole('textbox'), {
       target: { value: 'Always link the dataset.' }
     });
-    fireEvent.click(within(card).getByRole('button', { name: 'Save' }));
+    // The card has no Save of its own: the page's bar saves it.
+    expect(within(card).queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
+    const bar = screen.getByRole('region', { name: /save changes/i });
+    fireEvent.click(within(bar).getByRole('button', { name: 'Save Changes' }));
     await waitFor(() =>
       expect(mockApi.saveIntegrationInstructions).toHaveBeenCalledWith('govdata', {
         en: 'Always link the dataset.'

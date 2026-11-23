@@ -269,7 +269,7 @@ describe('Security sections with one save bar', () => {
         <SaveSectionsBar />
       </SaveSectionsProvider>
     );
-    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
+    await screen.findByRole('alert');
     expect(screen.queryByPlaceholderText('*.intrafind.io, api.internal.company.com')).toBeNull();
     expect(bar()).not.toBeInTheDocument();
     expect(writes()).toEqual([]);

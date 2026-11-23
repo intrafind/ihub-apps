@@ -8,7 +8,7 @@
  */
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useNavigate } from 'react-router-dom';
 
 const mockApi = {
   fetchAdminProjects: jest.fn(),
@@ -216,6 +216,45 @@ describe('AdminProjectsPage', () => {
 
     expect(await screen.findByText('Review flow')).toBeInTheDocument();
     expect(screen.getByText('Website')).toBeInTheDocument();
+  });
+});
+
+describe('AdminProjectsPage – leaving with an unsaved sharing setting', () => {
+  /** A way off the page, as a sidebar link is. */
+  function GoAway() {
+    const navigate = useNavigate();
+    return (
+      <button type="button" onClick={() => navigate('/admin/groups')}>
+        go away
+      </button>
+    );
+  }
+  const renderWithExit = () =>
+    render(
+      <MemoryRouter initialEntries={['/admin/projects']}>
+        <AdminProjectsPage />
+        <GoAway />
+      </MemoryRouter>
+    );
+
+  test('asks first, and Stay keeps the edit', async () => {
+    renderWithExit();
+    fireEvent.click(await screen.findByRole('checkbox', { name: /The project catalog/ }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'go away' }));
+
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Stay' }));
+    expect(screen.getByRole('checkbox', { name: /The project catalog/ })).toBeChecked();
+  });
+
+  test('lets the admin leave when nothing changed', async () => {
+    renderWithExit();
+    await screen.findByRole('checkbox', { name: /The project catalog/ });
+
+    fireEvent.click(screen.getByRole('button', { name: 'go away' }));
+
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
   });
 });
 

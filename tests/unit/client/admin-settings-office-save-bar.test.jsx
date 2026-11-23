@@ -73,6 +73,8 @@ const STATUS = {
 const APPS = [{ id: 'summarizer', name: { en: 'Summarizer' } }];
 
 let failSave;
+// What the server holds: a successful PUT changes it, a refused one does not.
+let status;
 const configCalls = () =>
   mockApi.mock.calls.filter(
     ([url, options]) => url === '/admin/office-integration/config' && options?.method === 'PUT'
@@ -89,9 +91,14 @@ const flush = () =>
 
 const renderPage = async () => {
   mockApi.mockImplementation(async (url, options = {}) => {
-    if (url === '/admin/office-integration/status') return { data: STATUS };
+    if (url === '/admin/office-integration/status') return { data: structuredClone(status) };
     if (url === '/admin/office-integration/config' && options.method === 'PUT') {
       if (failSave) throw new Error('boom');
+      status = {
+        ...status,
+        ...options.body,
+        startPage: { ...status.startPage, ...options.body.startPage }
+      };
       return { data: {} };
     }
     throw new Error(`unexpected admin call: ${url}`);
@@ -115,6 +122,7 @@ beforeAll(() => {
 beforeEach(() => {
   jest.clearAllMocks();
   failSave = false;
+  status = structuredClone(STATUS);
 });
 
 describe('Office integration settings page', () => {
@@ -188,6 +196,10 @@ describe('Office integration settings page', () => {
     // The allowed apps were not touched, so the save does not send them.
     expect(body).not.toHaveProperty('allowedApps');
     expect(bar()).not.toBeInTheDocument();
+    // The page reloaded from what the server now holds: the saved values are shown, not the
+    // loaded ones.
+    expect(screen.getByLabelText('Default action')).toHaveValue('answer');
+    expect(screen.getByLabelText('Landing view')).toHaveValue('apps');
   });
 
   test('a failed save keeps the bar and names the error in it', async () => {

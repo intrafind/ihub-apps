@@ -820,7 +820,7 @@ function AdminProvidersPage() {
           </div>
         </div>
         <ConfirmDialog {...confirmDialogProps} />
-        <SaveSectionsBar />
+        <SaveSectionsBar leaveGuard />
       </div>
     </SaveSectionsProvider>
   );

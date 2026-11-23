@@ -344,17 +344,13 @@ function AdminFeedbackPage() {
         </div>
       </div>
 
-      {message && (
-        <p
-          role={message.type === 'error' ? 'alert' : 'status'}
-          className={`text-sm ${
-            message.type === 'error'
-              ? 'text-red-600 dark:text-red-400'
-              : 'text-green-700 dark:text-green-400'
-          }`}
-        >
+      {message?.type === 'error' && (
+        <p role="alert" className="text-sm text-red-600 dark:text-red-400">
           {message.text}
         </p>
+      )}
+      {message && message.type !== 'error' && (
+        <output className="block text-sm text-green-700 dark:text-green-400">{message.text}</output>
       )}
     </div>
   );

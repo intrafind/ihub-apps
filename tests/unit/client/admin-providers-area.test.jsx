@@ -178,3 +178,30 @@ test('without the models page there is no link to it: the count is plain text, I
   expect(screen.queryByRole('button', { name: 'Import models' })).not.toBeInTheDocument();
   expect(screen.queryByRole('tab', { name: /Models/ })).not.toBeInTheDocument();
 });
+
+test('asks before leaving the Providers page with an unsaved timeout, and not when nothing changed', async () => {
+  renderPage();
+  await screen.findByRole('tab', { name: 'Providers 5' });
+
+  // Nothing changed: the Models tab opens at once.
+  fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+  expect(screen.queryByRole('region', { name: 'Save changes' })).not.toBeInTheDocument();
+
+  fireEvent.change(screen.getByLabelText('Connect timeout (ms)'), { target: { value: '5' } });
+  fireEvent.click(screen.getByRole('tab', { name: 'Models 3' }));
+
+  expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+  expect(screen.queryByTestId('location')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Stay' }));
+  expect(screen.getByLabelText('Connect timeout (ms)')).toHaveValue(5);
+});
+
+test('lets the admin leave the Providers page when no timeout changed', async () => {
+  renderPage();
+  await screen.findByRole('tab', { name: 'Providers 5' });
+
+  fireEvent.click(screen.getByRole('tab', { name: 'Models 3' }));
+
+  expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  expect(screen.getByTestId('location')).toHaveTextContent('/admin/models');
+});

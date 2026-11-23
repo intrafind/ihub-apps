@@ -9,6 +9,7 @@
 import '@testing-library/jest-dom';
 import { useState } from 'react';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { Link, MemoryRouter, Route, Routes } from 'react-router-dom';
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key, fallback) => (typeof fallback === 'string' ? fallback : key) })
@@ -311,5 +312,99 @@ describe('sections with one save bar', () => {
 
     expect(onSave).toHaveBeenCalledWith('x');
     expect(screen.getByTestId('dirty')).toHaveTextContent('false');
+  });
+
+  describe('the page-level leave-guard', () => {
+    const renderPage = leaveGuard =>
+      render(
+        <MemoryRouter initialEntries={['/here']}>
+          <Routes>
+            <Route
+              path="/here"
+              element={
+                <SaveSectionsProvider>
+                  <Section id="one" onSave={async () => true} />
+                  <Link to="/there">leave</Link>
+                  <SaveSectionsBar leaveGuard={leaveGuard} />
+                </SaveSectionsProvider>
+              }
+            />
+            <Route path="/there" element={<p>there</p>} />
+          </Routes>
+        </MemoryRouter>
+      );
+
+    it('asks before leaving with an unsaved section, and Stay keeps the page and the edit', () => {
+      renderPage(true);
+      fireEvent.change(screen.getByLabelText('one'), { target: { value: 'x' } });
+
+      fireEvent.click(screen.getByRole('link', { name: 'leave' }));
+
+      expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Stay' }));
+      expect(screen.queryByRole('alertdialog')).toBeNull();
+      expect(screen.getByLabelText('one')).toHaveValue('x');
+    });
+
+    it('Discard changes leaves', () => {
+      renderPage(true);
+      fireEvent.change(screen.getByLabelText('one'), { target: { value: 'x' } });
+
+      fireEvent.click(screen.getByRole('link', { name: 'leave' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
+
+      expect(screen.getByText('there')).toBeInTheDocument();
+    });
+
+    it('lets the admin leave a page with nothing unsaved, and after a save', async () => {
+      renderPage(true);
+      fireEvent.change(screen.getByLabelText('one'), { target: { value: 'x' } });
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+      });
+
+      fireEvent.click(screen.getByRole('link', { name: 'leave' }));
+
+      expect(screen.queryByRole('alertdialog')).toBeNull();
+      expect(screen.getByText('there')).toBeInTheDocument();
+    });
+
+    it('does not guard a page that did not ask for it (it may guard itself)', () => {
+      renderPage(false);
+      fireEvent.change(screen.getByLabelText('one'), { target: { value: 'x' } });
+
+      fireEvent.click(screen.getByRole('link', { name: 'leave' }));
+
+      expect(screen.queryByRole('alertdialog')).toBeNull();
+    });
+  });
+
+  describe('a provider inside another provider', () => {
+    it('hands out the outer registry and draws no bar of its own: one bar for both', async () => {
+      const outerSave = jest.fn(async () => true);
+      const innerSave = jest.fn(async () => true);
+      render(
+        <SaveSectionsProvider>
+          <Section id="outer" onSave={outerSave} />
+          {/* A tab that carries its own provider and bar. */}
+          <SaveSectionsProvider>
+            <Section id="inner" onSave={innerSave} />
+            <SaveSectionsBar />
+          </SaveSectionsProvider>
+          <SaveSectionsBar />
+        </SaveSectionsProvider>
+      );
+      expect(screen.getByTestId('inner-managed')).toHaveTextContent('true');
+
+      fireEvent.change(screen.getByLabelText('inner'), { target: { value: 'x' } });
+
+      // The outer bar shows the inner section's edit, once.
+      expect(screen.getAllByRole('region', { name: 'Save changes' })).toHaveLength(1);
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+      });
+      expect(innerSave).toHaveBeenCalledWith('x');
+      expect(outerSave).not.toHaveBeenCalled();
+    });
   });
 });
