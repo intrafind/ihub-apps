@@ -34,7 +34,10 @@ jest.unstable_mockModule('../services/TokenStorageService.js', () => ({
   default: { getJwtSecret: () => SECRET, getRSAPrivateKey: () => null, getRSAPublicKey: () => null }
 }));
 jest.unstable_mockModule('../services/AuditLogService.js', () => ({ logAudit: () => {} }));
-jest.unstable_mockModule('../telemetry/metrics.js', () => ({ recordAuthEvent: () => {} }));
+jest.unstable_mockModule('../telemetry/metrics.js', () => ({
+  recordAuthEvent: () => {},
+  recordRateLimitHit: () => {}
+}));
 
 const { default: registerEmbedAuthRoutes } = await import('../routes/embedAuth.js');
 const { default: errorHandler } = await import('../middleware/errorHandler.js');
@@ -60,6 +63,9 @@ function sessionToken({ expiresInSeconds = 3600 } = {}) {
 function buildApp() {
   const app = express();
   app.use(express.json());
+  // Test harness, not a deployed app: the routes under test refuse a request another site made
+  // themselves (isSameOriginRequest), which the CSRF rule cannot see.
+  // codeql[js/missing-token-validation] -- see above
   app.use(cookieParser());
   app.use((req, res, next) => {
     const user = req.get('x-test-user');
@@ -432,5 +438,44 @@ describe(`POST ${REDEEM}`, () => {
     expect((await redeem(app, { codeVerifier: generateCodeVerifier() })).status).toBe(400);
     expect((await redeem(app, { code: 'x.y', codeVerifier: 'short' })).status).toBe(400);
     expect((await redeem(app, undefined)).status).toBe(400);
+  });
+});
+
+describe('rate limiting of the sign-in in a frame', () => {
+  const challenge = generateCodeChallenge(generateCodeVerifier());
+  // The cheapest answers of the three routes: a refusal that does no other work.
+  const requests = [
+    app => request(app).get('/embed-auth/complete?challenge=nope'),
+    app => request(app).post(ISSUE).set(SAME_ORIGIN).send({ codeChallenge: challenge }),
+    app => request(app).post(REDEEM).set(SAME_ORIGIN).send({})
+  ];
+
+  it('answers 429 once an address has used its budget, with the code RATE_LIMITED', async () => {
+    const app = buildApp();
+    for (let i = 0; i < 300; i++) await requests[i % 3](app);
+
+    const res = await requests[0](app);
+
+    expect(res.status).toBe(429);
+    expect(res.headers['content-type']).toMatch(/application\/problem\+json/);
+    expect(res.body.code).toBe('RATE_LIMITED');
+    expect(res.body.details).toEqual({ limiter: 'embedAuth' });
+    expect(res.headers['retry-after']).toBeDefined();
+  });
+
+  it('counts the three routes against one budget', async () => {
+    const app = buildApp();
+    for (let i = 0; i < 300; i++) await requests[0](app);
+
+    // The page used the whole budget; the two code endpoints are refused as well.
+    expect((await requests[1](app)).status).toBe(429);
+    expect((await requests[2](app)).status).toBe(429);
+  });
+
+  it('is not spent by a sign-in that is a few requests', async () => {
+    const app = buildApp();
+    for (let i = 0; i < 20; i++) await requests[i % 3](app);
+
+    expect((await requests[0](app)).status).not.toBe(429);
   });
 });

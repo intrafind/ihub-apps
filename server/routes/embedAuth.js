@@ -29,6 +29,7 @@ import { verifyCodeChallenge } from '../utils/pkceUtils.js';
 import { isValidId } from '../utils/pathSecurity.js';
 import { verifyJwt } from '../utils/tokenService.js';
 import { applyFrameAncestorsCsp } from '../utils/frameAncestors.js';
+import { createEmbedAuthLimiter } from '../middleware/rateLimiting.js';
 import { recordAuthEvent } from '../telemetry/metrics.js';
 import { logAudit } from '../services/AuditLogService.js';
 import {
@@ -156,6 +157,12 @@ export default function registerEmbedAuthRoutes(app) {
   const completePath = buildServerPath('/embed-auth/complete');
   const loginPath = buildServerPath('/login');
   const issuePath = buildServerPath('/api/auth/embed-codes/_issue');
+  const redeemPath = buildServerPath('/api/auth/embed-codes/_redeem');
+
+  // The popup page and the two code endpoints spend one budget per address. `/api/auth` has a
+  // limiter of its own; the page is outside it, and a limiter the route mounts itself is what
+  // the other sign-in related routes do (routes/oauth.js).
+  const limiter = createEmbedAuthLimiter(app.get('platform') || configCache.getPlatform());
 
   /**
    * The popup lands here. Signed out, it is sent to the normal login (or straight to the
@@ -166,7 +173,7 @@ export default function registerEmbedAuthRoutes(app) {
    * may redirect. It changes nothing by itself; the code is issued by the POST
    * the page makes.
    */
-  app.get(completePath, (req, res) => {
+  app.get(completePath, limiter, (req, res) => {
     const language = pickLanguage(req);
     res.set('Cache-Control', 'no-store');
     res.set('Referrer-Policy', 'no-referrer');
@@ -243,7 +250,7 @@ export default function registerEmbedAuthRoutes(app) {
    *       403:
    *         description: "`EMBED_SIGN_IN_DISABLED` or `FORBIDDEN` (not a same-origin request)"
    */
-  app.post(issuePath, async (req, res) => {
+  app.post(issuePath, limiter, async (req, res) => {
     const platform = configCache.getPlatform() || {};
     if (!isEmbedAuthEnabled(platform)) {
       throw new ServiceError(
@@ -321,7 +328,7 @@ export default function registerEmbedAuthRoutes(app) {
    *       403:
    *         description: "`EMBED_SIGN_IN_DISABLED` or `FORBIDDEN` (not a same-origin request)"
    */
-  app.post(buildServerPath('/api/auth/embed-codes/_redeem'), async (req, res) => {
+  app.post(redeemPath, limiter, async (req, res) => {
     const platform = configCache.getPlatform() || {};
     if (!isEmbedAuthEnabled(platform)) {
       throw new ServiceError(
