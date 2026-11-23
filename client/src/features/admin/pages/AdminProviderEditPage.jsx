@@ -16,6 +16,7 @@ import {
 import ProviderFormFields from '../components/ProviderFormFields';
 import GatewaySyncDialog from '../components/GatewaySyncDialog';
 import ProviderTimeoutFields from '../components/ProviderTimeoutFields';
+import BedrockRegionField from '../components/BedrockRegionField';
 import useAdminPageAccess from '../hooks/useAdminPageAccess';
 import Icon from '../../../shared/components/Icon';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
@@ -25,6 +26,8 @@ import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
 import { HELP_CLASS, INPUT_CLASS, LABEL_CLASS } from '../components/formStyles';
 import AdminSaveBar from '../components/AdminSaveBar';
 import ImplicitSubmit from '../../../shared/components/ImplicitSubmit';
+import ModelUrlChangeNotice from '../components/ModelUrlChangeNotice';
+import { summarizeModelUrlChanges } from '../utils/providerModelUrls';
 
 function AdminProviderEditPage() {
   const { t, i18n } = useTranslation();
@@ -39,6 +42,8 @@ function AdminProviderEditPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
+  // What the last save did to the linked models' URLs (`modelUrls` of the PUT response).
+  const [modelUrls, setModelUrls] = useState(null);
   const [initialData, setInitialData] = useState(null);
 
   const [formData, setFormData] = useState({
@@ -128,8 +133,10 @@ function AdminProviderEditPage() {
     if (redirectTimerRef.current) {
       clearTimeout(redirectTimerRef.current);
       redirectTimerRef.current = null;
-      setSuccess(false);
     }
+    // A save that stayed on the page (to report the linked models) left `success` set; a new
+    // edit makes the bar offer saving again.
+    setSuccess(false);
     setFormData(prev => ({
       ...prev,
       [field]: value
@@ -146,6 +153,7 @@ function AdminProviderEditPage() {
     try {
       setSaving(true);
       setError(null);
+      setModelUrls(null);
 
       // Prepare the data to send
       const dataToSend = {
@@ -176,7 +184,7 @@ function AdminProviderEditPage() {
         dataToSend.apiType = 'openai';
       }
 
-      await makeAdminApiCall(`/admin/providers/${providerId}`, {
+      const response = await makeAdminApiCall(`/admin/providers/${providerId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json'
@@ -186,6 +194,15 @@ function AdminProviderEditPage() {
 
       setSuccess(true);
       markSaved();
+
+      // A new base URL moved linked models (or left some alone): the page stays, so the
+      // admin can read which, and the list below shows them as they are now.
+      const urlChanges = summarizeModelUrlChanges(response?.data?.modelUrls);
+      if (urlChanges) {
+        setModelUrls(urlChanges);
+        void reloadModels();
+        return;
+      }
 
       // Redirect after a short delay
       redirectTimerRef.current = setTimeout(() => {
@@ -251,6 +268,8 @@ function AdminProviderEditPage() {
           </div>
         )}
 
+        {modelUrls && <ModelUrlChangeNotice changes={modelUrls} models={models} />}
+
         {/* Error Message */}
         {error && <AdminLoadError message={error} framed={false} className="mb-6" action={null} />}
 
@@ -274,6 +293,10 @@ function AdminProviderEditPage() {
               onChange={handleChange}
               inherited={inheritedTimeouts}
             />
+          )}
+
+          {providerId === 'bedrock' && (
+            <BedrockRegionField data={formData} onChange={handleChange} />
           )}
 
           {/* API Key */}

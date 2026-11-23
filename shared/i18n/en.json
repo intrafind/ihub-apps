@@ -607,6 +607,19 @@
     },
     "input": {
       "contextSection": "Message context"
+    },
+    "failureCause": {
+      "certificateUntrusted": "The AI model could not be reached securely: the iHub server does not trust the certificate of its service. Please tell your administrator.",
+      "serverError": "The service of the AI model failed to answer. The fault is on the side of the service; please try again later.",
+      "authenticationFailed": "The service of the AI model rejected the API key configured in iHub. Please tell your administrator.",
+      "accessDenied": "The service of the AI model does not allow this request with the configured API key. Please tell your administrator.",
+      "apiKeyRequired": "The service of the AI model requires an API key, but none is configured for this model. Please tell your administrator.",
+      "apiKeyNotConfigured": "No API key is configured for this AI model. Please tell your administrator.",
+      "apiKeyUndecryptable": "The API key stored for this AI model can no longer be read. Please tell your administrator.",
+      "modelNotFound": "The service does not offer the configured AI model. Please tell your administrator.",
+      "rateLimitExceeded": "The service of the AI model is receiving too many requests. Please wait a moment and try again.",
+      "unreachable": "The service of the AI model could not be reached. Please try again later, or tell your administrator if it persists.",
+      "timeout": "The service of the AI model took too long to answer. Please try again."
     }
   },
   "auth": {
@@ -1485,7 +1498,13 @@
           "title": "About Provider API Keys",
           "description": "API keys configured here are used as a fallback for all models of this provider that do not have their own API key configured. If you leave this field empty, the system will use the environment variable instead."
         },
-        "subtitle": "Configure this provider and its API key"
+        "subtitle": "Configure this provider and its API key",
+        "modelUrls": {
+          "updated_one": "{{count}} linked model now uses the new address.",
+          "updated_other": "{{count}} linked models now use the new address.",
+          "skipped_one": "This linked model was not changed, because its URL does not start with the provider's previous base URL:",
+          "skipped_other": "These linked models were not changed, because their URL does not start with the provider's previous base URL:"
+        }
       },
       "create": {
         "title": "Create New Provider",
@@ -1637,14 +1656,11 @@
           "smokeOk": "The model answered:",
           "providerFailedTitle": "The provider was not saved",
           "providerFailedHint": "Nothing else was created. Go back, fix the connection and try again.",
-          "keySavedTitle": "{{provider}} is connected",
           "title": "{{count}} models connected through {{provider}}",
-          "bedrockHint": "Bedrock has no model list iHub can read. Install ready-made Bedrock model configs from the Marketplace; they use the key stored on the provider.",
           "linked": "The models use the endpoint and key of the provider.",
           "default": "{{model}} is the default model.",
           "groups": "Granted to: {{groups}}.",
           "groupFailed": "Group {{group}}: {{error}}",
-          "marketplace": "Browse models in the Marketplace",
           "createApp": "Create an app with this model",
           "openProvider": "Open the provider",
           "openModels": "Go to models",
@@ -1694,7 +1710,7 @@
           "urlHintSelfHosted": "The API base as the iHub server reaches it (not your browser), for example {{example}}.",
           "idExists": "A provider with this ID already exists. Choose another ID, or edit that provider under Providers.",
           "title": "Connect {{provider}}",
-          "introBedrock": "Enter a Bedrock API key. It is stored encrypted on the AWS Bedrock provider. The region comes from AWS_REGION (default eu-central-1) or from each model.",
+          "introBedrock": "The AWS region iHub lists and calls the models in, and a Bedrock API key. Both are stored on the AWS Bedrock provider (the key encrypted) when you finish.",
           "intro": "Where iHub reaches the models, and the key it sends. Nothing is saved until the last step.",
           "serverKind": "Server",
           "serverKindHint": "vLLM is called with the vLLM adapter; LM Studio and Ollama with the OpenAI-compatible one.",
@@ -1704,12 +1720,14 @@
           "keyHintSelfHosted": "Leave empty if the server has no authentication. A key entered here is stored encrypted on the provider.",
           "keyHint": "Stored encrypted on the provider, not on each model.",
           "envVarHint": "Instead of storing it, you can leave this empty and set the environment variable {{envVar}} on the server.",
-          "getKey": "Where do I get a key?"
+          "getKey": "Where do I get a key?",
+          "region": "AWS region",
+          "regionHint": "An AWS region code such as eu-central-1, or \"global\" for the global cross-region inference profiles. Models that need an inference profile are offered with the profile of this region (eu. for eu-central-1).",
+          "regionInvalid": "Enter an AWS region code such as eu-central-1, or global."
         },
         "loadError": "Could not load providers and models",
         "saving": "Saving…",
         "finish": "Connect and add {{count}} models",
-        "saveKey": "Save the key",
         "testAction": "Test connection",
         "next": "Next",
         "title": "Connect a model provider",
@@ -1719,7 +1737,12 @@
         "finish_one": "Connect and add {{count}} model"
       },
       "loadError": "Error loading providers",
-      "searchLabel": "Search providers"
+      "searchLabel": "Search providers",
+      "bedrockRegion": {
+        "label": "AWS region",
+        "invalid": "Enter an AWS region code such as eu-central-1, or global.",
+        "hint": "Region the Bedrock models are called in, unless a model sets its own. Leave empty to use AWS_REGION on the server (default eu-central-1). Models whose ID starts with a profile prefix (eu., us., global.) only work in a region of that geography."
+      }
     },
     "models": {
       "sync": {
@@ -2094,7 +2117,8 @@
           "networkError": "Network error",
           "providerIdReserved": "This ID is the name of an API type. Choose another ID.",
           "serverError": "The endpoint answered with a server error",
-          "certificateUntrusted": "The certificate of the endpoint is not trusted"
+          "certificateUntrusted": "The certificate of the endpoint is not trusted",
+          "invalidRegion": "This is not an AWS region"
         },
         "unsupported": "iHub cannot run this model from this provider",
         "gatewayCheckbox": "This endpoint is an iFinder Model Gateway",
@@ -2577,6 +2601,9 @@
         "ldapLookupHelp": "When set, look up the authenticated user's group memberships in the selected LDAP provider and merge them with the groups supplied via the groups header and JWT claim. The LDAP provider must have admin credentials and group search configured."
       },
       "resource": "authentication settings",
+      "embedHintTitle": "Using iHub in an iframe of another site?",
+      "embedHintText": "Identity providers do not allow their login page in a frame. Allow the site that shows iHub, and the sign-in opens in a pop-up instead.",
+      "embedHintLink": "Set up iHub in another site",
       "subtitle": "Configure multiple authentication methods and user access settings. Enable dual authentication for maximum flexibility.",
       "saved": "Authentication configuration saved.",
       "saveFailed": "Failed to save configuration: {{error}}",
@@ -2800,6 +2827,32 @@
       "regenerateAddinIdTitle": "Generate a new add-in ID?",
       "regenerateAddinIdConsequence": "Outlook treats a manifest with a new ID as a different add-in. Everyone using the add-in must install the new manifest, and the old one keeps pointing at this server until it is removed.",
       "resource": "Office integration settings"
+    },
+    "embedAuth": {
+      "title": "iHub in another site",
+      "description": "Show iHub in an iframe of another product, such as iFinder or a portal, and let people sign in there through your identity provider.",
+      "resource": "settings for iHub in another site",
+      "statusTitle": "Sign-in in a frame",
+      "enabledLabel": "Allow sign-in when iHub is shown in another site",
+      "enabledHint": "Identity providers such as Microsoft Entra ID do not allow their login page in a frame. With this on, the sign-in opens in a pop-up window and the frame continues when it is done.",
+      "noSiteWarning": "The switch is on, but no site is allowed yet, so nothing changes. Add the site that shows iHub below.",
+      "offWithSitesNote": "The switch is off. The list is kept but not in force: the sign-in in a frame is not available, and iHub is not limited to these sites.",
+      "insecurePage": "iHub is not served over HTTPS here. The session cookie of the frame needs HTTPS, so the sign-in in a frame will not work.",
+      "originsTitle": "Sites that may show iHub",
+      "originsDesc": "While the switch is on, only these sites, and iHub itself, can show iHub in a frame. Add every site that does so, for example iFinder, an intranet portal or a Teams tab: a site that is not listed can no longer show iHub.",
+      "originLabel": "Site address",
+      "originInvalid": "Enter an origin such as https://ifinder.example.com: scheme and host, without a path.",
+      "addOrigin": "Add",
+      "noOrigins": "No site added yet.",
+      "remove": "Remove",
+      "removeOrigin": "Remove {{origin}}",
+      "httpOrigin": "{{origin}} is not served over HTTPS. The session cookie of the frame needs HTTPS, so signing in from that site will not work.",
+      "howTitle": "What people see, and what to know",
+      "how1": "People click Sign in in the frame and allow the pop-up if their browser asks. If they are already signed in at the identity provider, the window closes by itself.",
+      "how2": "Both sites need HTTPS. The session of the frame is a cookie that scripts cannot read, and it is sent only while iHub is shown by the site it was made for.",
+      "how3": "Saved settings apply at once, without a restart. Signing out in the frame ends the frame’s session only.",
+      "saved": "Settings saved. They apply at once.",
+      "saveError": "The settings could not be saved."
     },
     "nextcloudEmbed": {
       "title": "Nextcloud Embed",
@@ -4386,6 +4439,36 @@
         "modelChoice": {
           "disabled": "{{name}} (disabled)",
           "default": "{{name}} (default)"
+        },
+        "conflict": {
+          "title": "Changed by someone else",
+          "message": "Someone else saved this app after you opened it. Nothing was saved. Reload to see the current version, then make your changes again.",
+          "reload": "Reload"
+        },
+        "improve": {
+          "action": "Improve with AI",
+          "title": "Improve the instructions",
+          "hint": "Using the new text changes the form only. Save to keep it; Discard in the save bar takes it back.",
+          "inputLabel": "What should be better?",
+          "chips": {
+            "label": "Quick requests",
+            "shorter": "Shorter",
+            "formal": "More formal",
+            "steps": "Clearer steps",
+            "unsure": "Say what to do if unsure"
+          },
+          "requests": {
+            "shorter": "Make the instructions shorter without losing anything important.",
+            "formal": "Make the instructions more formal.",
+            "steps": "Write the instructions as clearer steps.",
+            "unsure": "Add what the assistant should do when it is unsure or does not know the answer."
+          },
+          "submit": "Suggest a new text",
+          "before": "Now",
+          "after": "Suggested",
+          "use": "Use this text",
+          "close": "Close",
+          "noChange": "No new text was suggested."
         }
       },
       "reorder": "Reorder",
@@ -4700,7 +4783,129 @@
       "downloadError": "Failed to download app config: {{error}}",
       "uploadExists": "App with ID \"{{id}}\" already exists",
       "uploadError": "Failed to upload app config: {{error}}",
-      "loadError": "Error loading apps"
+      "loadError": "Error loading apps",
+      "conversation": {
+        "title": "Conversation",
+        "logLabel": "Conversation with the app builder",
+        "view": {
+          "label": "Edit with",
+          "form": "Form",
+          "conversation": "Conversation"
+        },
+        "intro": "Tell me in your own words what to change in this app. I propose one change at a time, and you decide whether to apply it.",
+        "chips": {
+          "label": "Ideas to start with",
+          "shorter": "Make the answers shorter",
+          "examples": "Suggest example questions",
+          "inputs": "Ask users first for the details the app needs"
+        },
+        "you": "You",
+        "builder": "Builder",
+        "composer": {
+          "label": "Tell the builder what to change",
+          "placeholder": "For example: answer more formally",
+          "hint": "Enter sends, Shift+Enter adds a line.",
+          "send": "Send"
+        },
+        "working": "Working on it…",
+        "cancel": "Cancel",
+        "retry": "Try again",
+        "startOver": "Start over",
+        "longHint": "This conversation is getting long. Starting over often gives better answers.",
+        "toast": "Applied. Try it.",
+        "question": {
+          "other": "Something else",
+          "otherLabel": "Your answer",
+          "skip": "Skip",
+          "answer": "Answer",
+          "skipped": "Skip this question and decide for yourself."
+        },
+        "change": {
+          "heading": "Proposed change",
+          "apply": "Apply",
+          "applying": "Saving…",
+          "dismiss": "Dismiss",
+          "dismissed": "Dismissed.",
+          "stale": "The app changed since. Ask again.",
+          "conflict": "Someone else saved this app. Reload it and ask again.",
+          "failed": "The change could not be saved. {{detail}}",
+          "applied": "Applied.",
+          "appliedTest": "Applied. The test restarted.",
+          "undo": "Undo",
+          "undoing": "Undoing…",
+          "undone": "Undone. The earlier version is saved again.",
+          "alsoSaves": "Apply also saves your other unsaved changes in the form.",
+          "undoAlsoSaves": "Undo also saves your other unsaved changes in the form.",
+          "undoChanged": "This part was changed after the change was applied",
+          "removed": "removed:",
+          "added": "added:",
+          "empty": "(empty)",
+          "showUnchanged_one": "Show {{count}} unchanged line",
+          "showUnchanged_other": "Show {{count}} unchanged lines",
+          "hideUnchanged": "Hide unchanged lines",
+          "suggestions": "It could also",
+          "webSearch": "search the web",
+          "integration": "use {{name}}",
+          "languageLabel": "Language: {{language}}"
+        },
+        "field": {
+          "name": "Name",
+          "description": "Short description",
+          "system": "Instructions",
+          "prompt": "Message template",
+          "messagePlaceholder": "Hint in the message box",
+          "variables": "What users fill in first",
+          "starterPrompts": "Example questions",
+          "category": "Category",
+          "look": "Look"
+        },
+        "line": {
+          "required": "(required)",
+          "color": "Colour {{value}}",
+          "icon": "Icon {{value}}",
+          "default": "Default: {{value}}",
+          "typeBoolean": "Yes/no"
+        },
+        "warning": {
+          "otherLanguages": "Only the text in this language changed. The other languages stay as they were.",
+          "noChange": "Nothing needed to change.",
+          "dropped": "Something the model proposed could not be used and was left out.",
+          "shortened": "A text was longer than allowed and was shortened.",
+          "replaced": "A value that was not allowed was replaced by the default.",
+          "added": "Something the change needed was added.",
+          "ignored": "Parts of the answer that cannot be changed here were ignored.",
+          "other": "Check the change before you apply it."
+        },
+        "stakes": {
+          "publishedGroups": "Published: everyone in {{groups}} gets this change.",
+          "publishedEveryone": "Published: everyone gets this change, also people who are not signed in.",
+          "publishedSignedIn": "Published: everyone who signs in gets this change.",
+          "published": "Published: everyone who can use this app gets this change.",
+          "notPublished": "Not published: only you and other app managers see it.",
+          "sharedEveryone": "Everyone can use this app and gets this change.",
+          "shared_one": "You share it with {{count}} person or group; they get this change.",
+          "shared_other": "You share it with {{count}} people or groups; they get this change.",
+          "onlyYou": "Only you use this app.",
+          "integrations": "This app can use: {{names}}."
+        },
+        "error": {
+          "invalid": "The request could not be read. Start over and try again.",
+          "noModel": "No AI model is available for the app builder. Ask an administrator to set one up.",
+          "unreadable": "The AI model gave an answer that could not be used. Try again, or say it differently.",
+          "tooLong": "The instructions are too long for the app builder. Shorten them in the form first.",
+          "contentTooLong": "Some texts, input fields or conversation starters of the app are longer or more than the app builder can change. Shorten them in the form first.",
+          "quota": "You have reached your usage limit. Try again later.",
+          "off": "The app builder is switched off.",
+          "userAppsOff": "Personal apps are switched off.",
+          "model": "The AI model did not answer. Try again.",
+          "modelSetup": "The AI model cannot answer as it is set up. Ask an administrator to check it.",
+          "refused": "The AI model refused this request. Say it differently.",
+          "tooManyTurns": "You have sent many requests in the last hour. Wait a while, then try again.",
+          "busy": "The AI model is busy. Try again in a moment.",
+          "failed": "Something went wrong. {{detail}}",
+          "truncated": "The answer of the AI model was cut off. Ask for a smaller change."
+        }
+      }
     },
     "features": {
       "title": "Features",
@@ -4929,6 +5134,10 @@
           "title": "Nextcloud Embed",
           "description": "Embed iHub inside Nextcloud. Users start a chat from Nextcloud Files with documents pre-attached, similar to the Outlook add-in."
         },
+        "embedAuth": {
+          "title": "iHub in another site",
+          "description": "Show iHub in an iframe of iFinder or a portal, with sign-in through your identity provider (OIDC)."
+        },
         "copilotAgent": {
           "title": "Microsoft 365 Copilot",
           "description": "Make iHub an agent in Microsoft 365 Copilot. Copilot runs iHub's apps through the MCP gateway, signed in with the user's iHub account."
@@ -5062,7 +5271,7 @@
       "groups": {
         "clients": {
           "title": "Clients",
-          "description": "Where users work with iHub outside the web app: Outlook, the browser, Nextcloud and Microsoft 365 Copilot. Each one is set up on its own page."
+          "description": "Where users work with iHub outside the web app: Outlook, the browser, Nextcloud, Microsoft 365 Copilot and other sites that show iHub in a frame. Each one is set up on its own page."
         },
         "peopleDirectories": {
           "title": "People directories",
@@ -6246,7 +6455,12 @@
         "cancel": "Cancel",
         "save": "Save Group",
         "saving": "Saving...",
-        "create": "Create Group"
+        "create": "Create Group",
+        "conflict": {
+          "title": "Changed by someone else",
+          "message": "The groups were changed by someone else after you opened this page. Nothing was saved. Reload to see the current version, then make your changes again.",
+          "reload": "Reload"
+        }
       },
       "fields": {
         "id": "Group ID",
@@ -10241,7 +10455,10 @@
     "streamStalled": "The {provider} endpoint for model {model} stopped sending data before the answer was finished. Anything above this line is the partial answer — send the message again to retry.",
     "connectionRefused": "Connection refused when trying to access {provider} API for model {model}. Please check your connection or server configuration.",
     "dnsResolutionFailed": "Could not resolve hostname for {provider} API (model {model}). DNS lookup failed for {hostname}. If you are behind a corporate proxy, ensure HTTPS_PROXY is configured.",
+    "dnsResolutionFailedNoHost": "Could not resolve the hostname of the {provider} API (model {model}). Ask your administrator to check the model's address and the network settings.",
     "networkError": "Network error connecting to {provider} API for model {model}: {error}. Check your network connection and proxy configuration.",
+    "modelCallFailed": "The call to the {provider} API for model {model} failed. Ask your administrator to check the model configuration.",
+    "networkErrorNoDetail": "Network error connecting to {provider} API for model {model}. Check your network connection and proxy configuration.",
     "unauthorized": "Invalid API key",
     "modelAccessDenied": "API key is not allowed to use this model",
     "modelAccessDeniedForUser": "You don't have permission to use this AI model. Please contact your administrator to request access.",
@@ -13484,6 +13701,8 @@
     }
   },
   "apiErrors": {
+    "EMBED_SIGN_IN_DISABLED": "Signing in inside another site is not enabled. Ask your administrator.",
+    "EMBED_CODE_INVALID": "The sign-in could not be completed. Please try again.",
     "INTERNAL_ERROR": "An unexpected error occurred. Please try again later.",
     "BAD_REQUEST": "The request is not valid.",
     "VALIDATION_FAILED": "Some of the entered data is not valid.",
@@ -13807,6 +14026,7 @@
     "PRECONDITION_FAILED": "This configuration was changed after you opened it (by another administrator, another tab or a script). Nothing was saved, and your changes are still on the page. Reload to see the current version, then apply your changes again.",
     "APP_GENERATOR_NO_MODEL": "No AI model is available to you, so a draft cannot be prepared.",
     "APP_GENERATOR_INVALID_ANSWER": "The AI's draft could not be used.",
+    "APP_REVISE_TOO_LONG": "The instructions of this app are too long to change in a conversation (at most {{max}} characters). Shorten them in the form.",
     "USER_APPS_DISABLED": "Personal apps are switched off on this installation.",
     "USER_APPS_UNAVAILABLE": "Personal apps are not available right now. Try again later.",
     "QUOTA_USER_APPS": "The limit of personal apps is reached.",

@@ -344,7 +344,9 @@ function ModelImportDialog({ onClose, onImported, existingModelIds, initialProvi
             apiType: discovery.apiType,
             providerId: targetProviderId,
             modelsUrl: discovery.modelsUrl,
-            enabled: enableModels
+            enabled: enableModels,
+            // Bedrock: the region the models were listed in stays theirs.
+            region: discovery.region
           })
         });
         outcome.push({ id, remoteId: model.id, ok: true });

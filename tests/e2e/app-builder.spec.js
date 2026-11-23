@@ -6,6 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test as base, expect } from '@playwright/test';
 import { ADMIN, BUILDER, BUILDER_GROUP, NORMAL_USER } from '../config/app-builder-seed.mjs';
+import { REVISED_INSTRUCTIONS_MARK } from '../config/e2e-llm-stub.mjs';
 
 /**
  * End-to-end: the app builder (concepts/app-builder-rework-2026-11, section 7.3).
@@ -338,6 +339,61 @@ async function tabTo(page, target, limit = 80) {
     await page.keyboard.press('Tab');
   }
   await expect(target, `not reached with ${limit} presses of Tab`).toBeFocused();
+}
+
+/** The conversation of the editor (`?view=conversation`) and what belongs to it. */
+function conversation(page) {
+  const panel = page.getByTestId('conversation-panel');
+  return {
+    panel,
+    log: panel.getByRole('log', { name: tr('en', 'admin.apps.conversation.logLabel') }),
+    composer: panel.getByRole('textbox', {
+      name: tr('en', 'admin.apps.conversation.composer.label')
+    })
+  };
+}
+
+/** A turn of the conversation: `POST /api/admin/apps/_revise`, or the personal route. */
+const isRevise =
+  (path = '/api/admin/apps/_revise') =>
+  response =>
+    response.request().method() === 'POST' && new URL(response.url()).pathname.endsWith(path);
+
+/** The editor's save of one app. */
+const isAppSave = id => response =>
+  response.request().method() === 'PUT' &&
+  new URL(response.url()).pathname.endsWith(`/api/admin/apps/${id}`);
+
+/** The "Form | Conversation" switch of the editor's header. */
+function viewSwitch(page) {
+  const group = page.getByRole('group', { name: tr('en', 'admin.apps.conversation.view.label') });
+  return {
+    form: group.getByRole('button', { name: tr('en', 'admin.apps.conversation.view.form') }),
+    conversation: group.getByRole('button', {
+      name: tr('en', 'admin.apps.conversation.view.conversation')
+    })
+  };
+}
+
+/** Opens a group of the form when it is collapsed and returns it. */
+async function openGroup(page, id) {
+  const group = editorGroup(page, id);
+  await expect(group.header).toBeVisible();
+  if ((await group.header.getAttribute('aria-expanded')) !== 'true') await group.header.click();
+  await expect(group.header).toHaveAttribute('aria-expanded', 'true');
+  return group;
+}
+
+/**
+ * Types a request into the conversation's composer, sends it with Enter and
+ * waits for the builder's answer.
+ */
+async function askBuilder(page, text) {
+  const { composer } = conversation(page);
+  await composer.fill(text);
+  const [response] = await Promise.all([page.waitForResponse(isRevise()), composer.press('Enter')]);
+  expect(response.status(), await response.text()).toBe(200);
+  return response;
 }
 
 test.beforeEach(async ({ page }) => {
@@ -1458,5 +1514,256 @@ test.describe('Publishing', () => {
     const now = await adminApps(adminApi);
     const stillUnpublished = now.filter(app => app.enabled === false).map(app => app.id);
     expect(stillUnpublished.sort(), 'apps outside the search are untouched').toEqual(others.sort());
+  });
+});
+
+/**
+ * The chat-based app builder (#3898, concepts/app-builder-rework-2026-11/
+ * 04-chat-builder-implementation-plan.md, slices 1 and 2). With `appGenerator`
+ * (default on) and the preview `appBuilderChat` (default off), the editor shows
+ * a conversation in place of the form at `?view=conversation`, with the test
+ * chat beside it. The stub answers a turn by the `e2e-revise-*` marker in the
+ * author's latest message (`APP_REVISE_MARKERS` in e2e-llm-stub.mjs).
+ *
+ * Each case switches `appBuilderChat` on and off again. The server allows 60
+ * turns per person per hour; one run of these cases takes five.
+ */
+test.describe('The app conversation', () => {
+  const ORIGINAL = 'You answer in one sentence.';
+  const REVISED = `${ORIGINAL}\n${REVISED_INSTRUCTIONS_MARK}`;
+
+  test.beforeEach(async ({ adminApi }) => {
+    const switched = await adminApi.put('/api/admin/features', { data: { appBuilderChat: true } });
+    expect(switched.ok(), await switched.text()).toBeTruthy();
+  });
+
+  test.afterEach(async ({ adminApi }) => {
+    await adminApi.put('/api/admin/features', { data: { appBuilderChat: false } });
+  });
+
+  test('C1: a question, an answer, Apply saves the new instructions and restarts the test; Undo puts them back', async ({
+    page,
+    adminApi
+  }) => {
+    const id = 'e2e-ab-talk';
+    await createAppByApi(adminApi, id);
+
+    await page.goto(`/admin/apps/${id}?view=conversation`);
+    const talk = conversation(page);
+    await expect(talk.panel).toBeVisible();
+    await expect(viewSwitch(page).conversation).toHaveAttribute('aria-pressed', 'true');
+    await expect(talk.log).toContainText(tr('en', 'admin.apps.conversation.intro'));
+    // The conversation opens the test chat beside it; the form is not on the page.
+    await expect(testPanel(page)).toBeVisible();
+    await expect(page.locator('[id^="app-group-"][id$="-header"]')).toHaveCount(0);
+
+    // An answer in the test chat before the change, to see the chat start over.
+    await expectTestAnswer(page, 'before the change');
+
+    // The builder asks first; the focus stays in the composer.
+    await askBuilder(page, 'Make it more formal. e2e-revise-question');
+    await expect(talk.composer).toBeFocused();
+    const question = talk.log.getByRole('radiogroup', {
+      name: 'Who reads the answers of this app?'
+    });
+    // Three choices and "Something else".
+    await expect(question.getByRole('radio')).toHaveCount(4);
+    await question.getByRole('radio', { name: 'Colleagues' }).check();
+    const [answered] = await Promise.all([
+      page.waitForResponse(isRevise()),
+      talk.log
+        .getByRole('button', { name: tr('en', 'admin.apps.conversation.question.answer') })
+        .click()
+    ]);
+    expect(answered.status(), await answered.text()).toBe(200);
+    // The choice goes to the builder as the author's next message.
+    const turns = answered.request().postDataJSON().conversation;
+    expect(turns.at(-1)).toMatchObject({ role: 'author', text: 'Colleagues' });
+    expect(turns[0]).toMatchObject({ role: 'author' });
+    expect(turns[0].text).toContain('e2e-revise-question');
+
+    // The change card shows the added line; nothing is saved yet.
+    const card = talk.panel.getByTestId('change-card');
+    await expect(card).toHaveCount(1);
+    await expect(card.locator('ins')).toContainText(REVISED_INSTRUCTIONS_MARK);
+    await expect(card.getByTestId('change-stakes')).toHaveText(
+      tr('en', 'admin.apps.conversation.stakes.notPublished')
+    );
+    expect((await storedApp(adminApi, id)).system).toEqual({ en: ORIGINAL });
+
+    // Apply is the editor's own save, conditional on the revision it loaded.
+    const [saved] = await Promise.all([
+      page.waitForResponse(isAppSave(id)),
+      card.getByRole('button', { name: tr('en', 'admin.apps.conversation.change.apply') }).click()
+    ]);
+    expect(saved.status(), await saved.text()).toBe(200);
+    expect(saved.request().headers()['if-match'], 'Apply saves with If-Match').toBeTruthy();
+    const applied = card.getByTestId('change-applied');
+    await expect(applied).toHaveText(tr('en', 'admin.apps.conversation.change.appliedTest'));
+    await expect(applied).toBeFocused();
+    expect((await storedApp(adminApi, id)).system).toEqual({ en: REVISED });
+
+    // The test chat started over: the earlier answer is gone, and the next
+    // message is the first of a new chat, which runs the new instructions.
+    const panel = testPanel(page);
+    await expect(panel.getByText('E2E reply to: before the change')).toHaveCount(0);
+    await expectTestAnswer(page, 'after the change', { echo: 'after the change (turn 1)' });
+    const chat = await lastModelRequest(adminApi);
+    expect(chat.user).toContain('after the change');
+    expect(chat.system).toContain(REVISED_INSTRUCTIONS_MARK);
+
+    // Undo saves the instructions as they were before Apply.
+    const [undone] = await Promise.all([
+      page.waitForResponse(isAppSave(id)),
+      card.getByRole('button', { name: tr('en', 'admin.apps.conversation.change.undo') }).click()
+    ]);
+    expect(undone.status(), await undone.text()).toBe(200);
+    await expect(card.getByTestId('change-undone')).toHaveText(
+      tr('en', 'admin.apps.conversation.change.undone')
+    );
+    expect((await storedApp(adminApi, id)).system).toEqual({ en: ORIGINAL });
+  });
+
+  test('C2: an input field the builder adds is, once applied, stored and in the form view', async ({
+    page,
+    adminApi
+  }) => {
+    const id = 'e2e-ab-talk-field';
+    await createAppByApi(adminApi, id);
+
+    await page.goto(`/admin/apps/${id}?view=conversation`);
+    const talk = conversation(page);
+    await askBuilder(page, 'Ask for the department first. e2e-revise-variable');
+    const card = talk.panel.getByTestId('change-card');
+    await expect(card).toContainText(tr('en', 'admin.apps.conversation.field.variables'));
+    await expect(card.locator('ins').first()).toContainText('Department');
+
+    const [saved] = await Promise.all([
+      page.waitForResponse(isAppSave(id)),
+      card.getByRole('button', { name: tr('en', 'admin.apps.conversation.change.apply') }).click()
+    ]);
+    expect(saved.status(), await saved.text()).toBe(200);
+    await expect(card.getByTestId('change-applied')).toBeVisible();
+
+    const stored = await storedApp(adminApi, id);
+    expect(stored.variables).toHaveLength(1);
+    expect(stored.variables[0]).toMatchObject({
+      name: 'department',
+      type: 'select',
+      required: true
+    });
+    expect(stored.variables[0].predefinedValues.map(option => option.value)).toEqual([
+      'sales',
+      'engineering',
+      'hr'
+    ]);
+    // The server added the field's line to the message template.
+    expect(JSON.stringify(stored.prompt)).toContain('{{department}}');
+
+    // "Form" shows the same app: the field is there, and nothing is left to save.
+    await viewSwitch(page).form.click();
+    await expect(page).toHaveURL(new RegExp(`/admin/apps/${id}$`));
+    await expect(talk.panel).toHaveCount(0);
+    const { panel } = await openGroup(page, 'instructions');
+    await expect(panel.getByRole('textbox', { name: 'Field name' })).toHaveValue('Department');
+    await expect(panel.getByRole('textbox', { name: 'Placeholder' })).toHaveValue('department');
+    await expect(page.getByRole('region', { name: 'Save changes' })).toHaveCount(0);
+  });
+
+  test('C3: after a hand edit in the form, Apply is blocked and nothing is saved', async ({
+    page,
+    adminApi
+  }) => {
+    const id = 'e2e-ab-talk-stale';
+    await createAppByApi(adminApi, id);
+    const saves = [];
+    page.on('request', request => {
+      if (request.method() === 'PUT' && request.url().endsWith(`/api/admin/apps/${id}`)) {
+        saves.push(request.url());
+      }
+    });
+
+    await page.goto(`/admin/apps/${id}?view=conversation`);
+    const talk = conversation(page);
+    await askBuilder(page, 'Make it formal. e2e-revise-system');
+    const card = talk.panel.getByTestId('change-card');
+    const apply = card.getByRole('button', {
+      name: tr('en', 'admin.apps.conversation.change.apply')
+    });
+    await expect(apply).toBeEnabled();
+
+    // The author changes the instructions by hand in the form, without saving.
+    await viewSwitch(page).form.click();
+    const { panel } = await openGroup(page, 'instructions');
+    const instructions = panel.getByRole('textbox', { name: 'Instructions', exact: true });
+    await expect(instructions).toHaveValue(ORIGINAL);
+    await instructions.fill('You answer in two sentences.');
+
+    // Back in the conversation, the card was made for another text.
+    await viewSwitch(page).conversation.click();
+    await expect(talk.panel).toBeVisible();
+    await expect(card).toContainText(tr('en', 'admin.apps.conversation.change.stale'));
+    await expect(apply).toBeDisabled();
+    await expect(apply).toHaveAccessibleDescription(
+      tr('en', 'admin.apps.conversation.change.stale')
+    );
+
+    expect(saves, 'nothing was saved').toEqual([]);
+    expect((await storedApp(adminApi, id)).system).toEqual({ en: ORIGINAL });
+  });
+
+  test('C4: "Improve with AI" and "Use this text" change the form only; Save stores the text', async ({
+    page,
+    adminApi
+  }) => {
+    const id = 'e2e-ab-improve';
+    await createAppByApi(adminApi, id);
+    const saves = [];
+    page.on('request', request => {
+      if (request.method() === 'PUT' && request.url().endsWith(`/api/admin/apps/${id}`)) {
+        saves.push(request.url());
+      }
+    });
+
+    await page.goto(`/admin/apps/${id}`);
+    const { panel } = await openGroup(page, 'instructions');
+    const instructions = panel.getByRole('textbox', { name: 'Instructions', exact: true });
+    await expect(instructions).toHaveValue(ORIGINAL);
+
+    await panel.getByRole('button', { name: tr('en', 'admin.apps.edit.improve.action') }).click();
+    const dialog = page.getByRole('dialog', { name: tr('en', 'admin.apps.edit.improve.title') });
+    await expect(dialog).toBeVisible();
+    await dialog
+      .getByRole('textbox', { name: tr('en', 'admin.apps.edit.improve.inputLabel') })
+      .fill('More formal, please. e2e-revise-system');
+    const [revised] = await Promise.all([
+      page.waitForResponse(isRevise()),
+      dialog.getByRole('button', { name: tr('en', 'admin.apps.edit.improve.submit') }).click()
+    ]);
+    expect(revised.status(), await revised.text()).toBe(200);
+    // Only the instructions are asked for, and no question.
+    expect(revised.request().postDataJSON()).toMatchObject({
+      fields: ['system'],
+      allowQuestions: false
+    });
+    await expect(dialog.getByTestId('improve-before')).toHaveText(ORIGINAL);
+    await expect(dialog.getByTestId('improve-after')).toHaveText(REVISED);
+
+    await dialog.getByRole('button', { name: tr('en', 'admin.apps.edit.improve.use') }).click();
+    await expect(dialog).toBeHidden();
+    await expect(instructions).toHaveValue(REVISED);
+
+    // Into the form only: unsaved, and the stored app is unchanged.
+    const saveBar = page.getByRole('region', { name: 'Save changes' });
+    await expect(saveBar).toBeVisible();
+    expect(saves, '"Use this text" saves nothing').toEqual([]);
+    expect((await storedApp(adminApi, id)).system).toEqual({ en: ORIGINAL });
+
+    const [saved] = await Promise.all([
+      page.waitForResponse(isAppSave(id)),
+      saveBar.getByRole('button', { name: 'Save Changes' }).click()
+    ]);
+    expect(saved.status(), await saved.text()).toBe(200);
+    expect((await storedApp(adminApi, id)).system).toEqual({ en: REVISED });
   });
 });

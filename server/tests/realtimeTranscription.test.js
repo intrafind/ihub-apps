@@ -129,6 +129,43 @@ describe('extractToken', () => {
   test('returns null when no token is present', () => {
     expect(extractToken({ headers: {} })).toBeNull();
   });
+
+  describe('the session cookie of a framed iHub', () => {
+    const cookie = 'authToken=own.token.x; authTokenEmbed=framed.token.y';
+
+    test('counts for a handshake the iHub page itself made, and wins over authToken', () => {
+      const req = { headers: { cookie, 'sec-fetch-site': 'same-origin' } };
+      expect(extractToken(req)).toBe('framed.token.y');
+    });
+
+    test('is the only session when authToken is not there', () => {
+      const req = {
+        headers: { cookie: 'authTokenEmbed=framed.token.y', 'sec-fetch-site': 'same-origin' }
+      };
+      expect(extractToken(req)).toBe('framed.token.y');
+    });
+
+    test.each(['cross-site', 'same-site', 'none', undefined])(
+      'does not count when Sec-Fetch-Site is %s',
+      site => {
+        const headers = { cookie, ...(site ? { 'sec-fetch-site': site } : {}) };
+        expect(extractToken({ headers })).toBe('own.token.x');
+        expect(
+          extractToken({ headers: { ...headers, cookie: 'authTokenEmbed=framed.token.y' } })
+        ).toBeNull();
+      }
+    );
+
+    test('does not take a cookie whose name only ends the same way', () => {
+      const req = {
+        headers: {
+          cookie: 'xauthTokenEmbed=nope; authToken=own.token.x',
+          'sec-fetch-site': 'same-origin'
+        }
+      };
+      expect(extractToken(req)).toBe('own.token.x');
+    });
+  });
 });
 
 describe('authenticateUpgrade', () => {

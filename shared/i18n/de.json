@@ -287,6 +287,19 @@
     },
     "modelSelector": {
       "noModels": "Keine Modelle verfügbar"
+    },
+    "failureCause": {
+      "certificateUntrusted": "Das KI-Modell konnte nicht sicher erreicht werden: Der iHub-Server vertraut dem Zertifikat seines Dienstes nicht. Bitte wenden Sie sich an Ihren Administrator.",
+      "serverError": "Der Dienst des KI-Modells hat nicht geantwortet. Der Fehler liegt beim Dienst; bitte versuchen Sie es später erneut.",
+      "authenticationFailed": "Der Dienst des KI-Modells hat den in iHub konfigurierten API-Schlüssel abgelehnt. Bitte wenden Sie sich an Ihren Administrator.",
+      "accessDenied": "Der Dienst des KI-Modells erlaubt diese Anfrage mit dem konfigurierten API-Schlüssel nicht. Bitte wenden Sie sich an Ihren Administrator.",
+      "apiKeyRequired": "Der Dienst des KI-Modells verlangt einen API-Schlüssel, für dieses Modell ist aber keiner konfiguriert. Bitte wenden Sie sich an Ihren Administrator.",
+      "apiKeyNotConfigured": "Für dieses KI-Modell ist kein API-Schlüssel konfiguriert. Bitte wenden Sie sich an Ihren Administrator.",
+      "apiKeyUndecryptable": "Der für dieses KI-Modell gespeicherte API-Schlüssel kann nicht mehr gelesen werden. Bitte wenden Sie sich an Ihren Administrator.",
+      "modelNotFound": "Der Dienst bietet das konfigurierte KI-Modell nicht an. Bitte wenden Sie sich an Ihren Administrator.",
+      "rateLimitExceeded": "Der Dienst des KI-Modells erhält zu viele Anfragen. Bitte warten Sie einen Moment und versuchen Sie es erneut.",
+      "unreachable": "Der Dienst des KI-Modells ist nicht erreichbar. Bitte versuchen Sie es später erneut, oder wenden Sie sich an Ihren Administrator, wenn der Fehler bleibt.",
+      "timeout": "Der Dienst des KI-Modells hat zu lange für die Antwort gebraucht. Bitte versuchen Sie es erneut."
     }
   },
   "websearch": {
@@ -971,7 +984,10 @@
     "streamStalled": "Der {provider}-Endpunkt für Modell {model} hat die Übertragung abgebrochen, bevor die Antwort vollständig war. Alles oberhalb dieser Zeile ist die Teilantwort — senden Sie die Nachricht erneut, um es noch einmal zu versuchen.",
     "connectionRefused": "Verbindung verweigert beim Versuch, auf die {provider} API für Modell {model} zuzugreifen. Bitte überprüfen Sie Ihre Verbindung oder Serverkonfiguration.",
     "dnsResolutionFailed": "Der Hostname für die {provider} API (Modell {model}) konnte nicht aufgelöst werden. DNS-Lookup für {hostname} fehlgeschlagen. Wenn Sie sich hinter einem Firmen-Proxy befinden, stellen Sie sicher, dass HTTPS_PROXY konfiguriert ist.",
+    "dnsResolutionFailedNoHost": "Der Hostname der {provider} API (Modell {model}) konnte nicht aufgelöst werden. Bitten Sie Ihre Administration, die Adresse des Modells und die Netzwerkeinstellungen zu prüfen.",
     "networkError": "Netzwerkfehler bei der Verbindung zur {provider} API für Modell {model}: {error}. Überprüfen Sie Ihre Netzwerkverbindung und Proxy-Konfiguration.",
+    "modelCallFailed": "Der Aufruf der {provider} API für Modell {model} ist fehlgeschlagen. Bitten Sie Ihre Administration, die Modellkonfiguration zu prüfen.",
+    "networkErrorNoDetail": "Netzwerkfehler bei der Verbindung zur {provider} API für Modell {model}. Überprüfen Sie Ihre Netzwerkverbindung und Proxy-Konfiguration.",
     "unauthorized": "Ungültiger API-Schlüssel",
     "modelAccessDenied": "API-Schlüssel darf dieses Modell nicht verwenden",
     "modelAccessDeniedForUser": "Sie haben keine Berechtigung, dieses KI-Modell zu verwenden. Bitte wenden Sie sich an Ihren Administrator, um Zugriff anzufordern.",
@@ -1956,7 +1972,13 @@
           "title": "Über Anbieter-API-Schlüssel",
           "description": "API-Schlüssel, die hier konfiguriert werden, werden als Fallback für alle Modelle dieses Anbieters verwendet, die keinen eigenen API-Schlüssel konfiguriert haben. Wenn Sie dieses Feld leer lassen, verwendet das System stattdessen die Umgebungsvariable."
         },
-        "subtitle": "Diesen Anbieter und seinen API-Schlüssel konfigurieren"
+        "subtitle": "Diesen Anbieter und seinen API-Schlüssel konfigurieren",
+        "modelUrls": {
+          "updated_one": "{{count}} verknüpftes Modell verwendet jetzt die neue Adresse.",
+          "updated_other": "{{count}} verknüpfte Modelle verwenden jetzt die neue Adresse.",
+          "skipped_one": "Dieses verknüpfte Modell wurde nicht geändert, weil seine URL nicht mit der bisherigen Basis-URL des Anbieters beginnt:",
+          "skipped_other": "Diese verknüpften Modelle wurden nicht geändert, weil ihre URL nicht mit der bisherigen Basis-URL des Anbieters beginnt:"
+        }
       },
       "create": {
         "title": "Neuen Anbieter erstellen",
@@ -2108,15 +2130,12 @@
           "smokeOk": "Das Modell hat geantwortet:",
           "providerFailedTitle": "Der Anbieter wurde nicht gespeichert",
           "providerFailedHint": "Sonst wurde nichts angelegt. Gehen Sie zurück, korrigieren Sie die Verbindung und versuchen Sie es erneut.",
-          "keySavedTitle": "{{provider}} ist verbunden",
           "title": "{{count}} Modelle über {{provider}} verbunden",
           "title_one": "{{count}} Modell über {{provider}} verbunden",
-          "bedrockHint": "Bedrock bietet keine Modellliste, die iHub lesen kann. Installieren Sie fertige Bedrock-Modellkonfigurationen aus dem Marketplace; sie nutzen den am Anbieter gespeicherten Schlüssel.",
           "linked": "Die Modelle nutzen Endpunkt und Schlüssel des Anbieters.",
           "default": "{{model}} ist das Standardmodell.",
           "groups": "Freigegeben für: {{groups}}.",
           "groupFailed": "Gruppe {{group}}: {{error}}",
-          "marketplace": "Modelle im Marketplace ansehen",
           "createApp": "App mit diesem Modell erstellen",
           "openProvider": "Anbieter öffnen",
           "openModels": "Zu den Modellen"
@@ -2165,7 +2184,7 @@
           "urlHintSelfHosted": "Die API-Basis, wie der iHub-Server (nicht Ihr Browser) sie erreicht, zum Beispiel {{example}}.",
           "idExists": "Ein Anbieter mit dieser ID existiert bereits. Wählen Sie eine andere ID oder bearbeiten Sie diesen Anbieter unter Anbieter.",
           "title": "{{provider}} verbinden",
-          "introBedrock": "Geben Sie einen Bedrock-API-Schlüssel ein. Er wird verschlüsselt am Anbieter AWS Bedrock gespeichert. Die Region kommt aus AWS_REGION (Standard eu-central-1) oder aus dem jeweiligen Modell.",
+          "introBedrock": "Die AWS-Region, in der iHub die Modelle auflistet und aufruft, und ein Bedrock-API-Schlüssel. Beides wird beim Abschluss am Anbieter AWS Bedrock gespeichert (der Schlüssel verschlüsselt).",
           "intro": "Wo iHub die Modelle erreicht und welchen Schlüssel es sendet. Gespeichert wird erst im letzten Schritt.",
           "serverKind": "Server",
           "serverKindHint": "vLLM wird mit dem vLLM-Adapter angesprochen, LM Studio und Ollama mit dem OpenAI-kompatiblen.",
@@ -2175,13 +2194,15 @@
           "keyHintSelfHosted": "Leer lassen, wenn der Server keine Authentifizierung hat. Ein hier eingegebener Schlüssel wird verschlüsselt am Anbieter gespeichert.",
           "keyHint": "Wird verschlüsselt am Anbieter gespeichert, nicht an jedem Modell.",
           "envVarHint": "Statt ihn zu speichern, können Sie das Feld leer lassen und auf dem Server die Umgebungsvariable {{envVar}} setzen.",
-          "getKey": "Wo bekomme ich einen Schlüssel?"
+          "getKey": "Wo bekomme ich einen Schlüssel?",
+          "region": "AWS-Region",
+          "regionHint": "Ein AWS-Regionscode wie eu-central-1 oder „global“ für die globalen regionsübergreifenden Inferenzprofile. Modelle, die ein Inferenzprofil benötigen, werden mit dem Profil dieser Region angeboten (eu. für eu-central-1).",
+          "regionInvalid": "Geben Sie einen AWS-Regionscode wie eu-central-1 oder global ein."
         },
         "loadError": "Anbieter und Modelle konnten nicht geladen werden",
         "saving": "Wird gespeichert…",
         "finish": "Verbinden und {{count}} Modelle hinzufügen",
         "finish_one": "Verbinden und {{count}} Modell hinzufügen",
-        "saveKey": "Schlüssel speichern",
         "testAction": "Verbindung testen",
         "next": "Weiter",
         "title": "Modell-Anbieter verbinden",
@@ -2190,7 +2211,12 @@
         "backToConnection": "Zurück zur Verbindung"
       },
       "loadError": "Fehler beim Laden der Anbieter",
-      "searchLabel": "Anbieter durchsuchen"
+      "searchLabel": "Anbieter durchsuchen",
+      "bedrockRegion": {
+        "label": "AWS-Region",
+        "invalid": "Geben Sie einen AWS-Regionscode wie eu-central-1 oder global ein.",
+        "hint": "Region, in der die Bedrock-Modelle aufgerufen werden, sofern ein Modell keine eigene festlegt. Leer lassen, um AWS_REGION auf dem Server zu verwenden (Standard eu-central-1). Modelle, deren ID mit einem Profilpräfix beginnt (eu., us., global.), funktionieren nur in einer Region dieses Wirtschaftsraums."
+      }
     },
     "models": {
       "sync": {
@@ -2565,7 +2591,8 @@
           "networkError": "Netzwerkfehler",
           "providerIdReserved": "Diese ID ist der Name eines API-Typs. Wählen Sie eine andere ID.",
           "serverError": "Der Endpunkt hat mit einem Serverfehler geantwortet",
-          "certificateUntrusted": "Dem Zertifikat des Endpunkts wird nicht vertraut"
+          "certificateUntrusted": "Dem Zertifikat des Endpunkts wird nicht vertraut",
+          "invalidRegion": "Das ist keine AWS-Region"
         },
         "unsupported": "iHub kann dieses Modell bei diesem Anbieter nicht ausführen",
         "gatewayCheckbox": "Dieser Endpunkt ist ein iFinder Model Gateway",
@@ -3074,6 +3101,9 @@
         "ldapLookupHelp": "Wenn gesetzt, werden die Gruppenmitgliedschaften des angemeldeten Benutzers beim gewählten LDAP-Anbieter nachgeschlagen und mit den Gruppen aus dem Gruppen-Header und dem JWT-Claim zusammengeführt. Der LDAP-Anbieter benötigt Administrator-Zugangsdaten und eine konfigurierte Gruppensuche."
       },
       "resource": "Authentifizierungseinstellungen",
+      "embedHintTitle": "iHub in einem iframe einer anderen Website verwenden?",
+      "embedHintText": "Identitätsanbieter erlauben ihre Anmeldeseite nicht in einem Frame. Erlauben Sie die Website, die iHub anzeigt, dann öffnet sich die Anmeldung stattdessen in einem Pop-up.",
+      "embedHintLink": "iHub in einer anderen Website einrichten",
       "subtitle": "Konfigurieren Sie mehrere Anmeldemethoden und den Benutzerzugriff. Aktivieren Sie mehrere Methoden gleichzeitig für maximale Flexibilität.",
       "saved": "Authentifizierungskonfiguration gespeichert.",
       "saveFailed": "Konfiguration konnte nicht gespeichert werden: {{error}}",
@@ -3297,6 +3327,32 @@
       "regenerateAddinIdTitle": "Neue Add-in-ID erzeugen?",
       "regenerateAddinIdConsequence": "Outlook behandelt ein Manifest mit neuer ID als anderes Add-in. Alle Benutzer müssen das neue Manifest installieren, und das alte zeigt weiter auf diesen Server, bis es entfernt wird.",
       "resource": "Einstellungen der Office-Integration"
+    },
+    "embedAuth": {
+      "title": "iHub in einer anderen Website",
+      "description": "Zeigen Sie iHub in einem iframe eines anderen Produkts, etwa iFinder oder eines Portals, und lassen Sie die Benutzer sich dort über Ihren Identitätsanbieter anmelden.",
+      "resource": "Einstellungen für iHub in einer anderen Website",
+      "statusTitle": "Anmeldung in einem Frame",
+      "enabledLabel": "Anmeldung erlauben, wenn iHub in einer anderen Website angezeigt wird",
+      "enabledHint": "Identitätsanbieter wie Microsoft Entra ID erlauben ihre Anmeldeseite nicht in einem Frame. Ist dies aktiviert, öffnet sich die Anmeldung in einem Pop-up-Fenster, und der Frame läuft danach weiter.",
+      "noSiteWarning": "Der Schalter ist aktiviert, aber es ist noch keine Website erlaubt. Es ändert sich daher nichts. Fügen Sie unten die Website hinzu, die iHub anzeigt.",
+      "offWithSitesNote": "Der Schalter ist deaktiviert. Die Liste bleibt erhalten, gilt aber nicht: Die Anmeldung in einem Frame ist nicht verfügbar, und iHub ist nicht auf diese Websites beschränkt.",
+      "insecurePage": "iHub wird hier nicht über HTTPS ausgeliefert. Das Sitzungs-Cookie des Frames benötigt HTTPS, die Anmeldung in einem Frame funktioniert daher nicht.",
+      "originsTitle": "Websites, die iHub anzeigen dürfen",
+      "originsDesc": "Solange der Schalter aktiviert ist, können nur diese Websites und iHub selbst iHub in einem Frame anzeigen. Tragen Sie jede Website ein, die das tut, zum Beispiel iFinder, ein Intranet-Portal oder einen Teams-Tab: Eine Website, die nicht in der Liste steht, kann iHub nicht mehr anzeigen.",
+      "originLabel": "Adresse der Website",
+      "originInvalid": "Geben Sie einen Origin wie https://ifinder.example.com ein: Schema und Host, ohne Pfad.",
+      "addOrigin": "Hinzufügen",
+      "noOrigins": "Noch keine Website hinzugefügt.",
+      "remove": "Entfernen",
+      "removeOrigin": "{{origin}} entfernen",
+      "httpOrigin": "{{origin}} wird nicht über HTTPS ausgeliefert. Das Sitzungs-Cookie des Frames benötigt HTTPS, die Anmeldung von dieser Website aus funktioniert daher nicht.",
+      "howTitle": "Was Benutzer sehen und was zu beachten ist",
+      "how1": "Benutzer klicken im Frame auf Anmelden und erlauben das Pop-up, falls der Browser danach fragt. Sind sie beim Identitätsanbieter bereits angemeldet, schließt sich das Fenster von selbst.",
+      "how2": "Beide Websites benötigen HTTPS. Die Sitzung des Frames ist ein Cookie, das Skripte nicht lesen können. Es wird nur gesendet, solange iHub von der Website angezeigt wird, für die es erstellt wurde.",
+      "how3": "Gespeicherte Einstellungen gelten sofort, ohne Neustart. Das Abmelden im Frame beendet nur die Sitzung des Frames.",
+      "saved": "Einstellungen gespeichert. Sie gelten sofort.",
+      "saveError": "Die Einstellungen konnten nicht gespeichert werden."
     },
     "nextcloudEmbed": {
       "title": "Nextcloud-Embed",
@@ -4883,6 +4939,36 @@
         "modelChoice": {
           "disabled": "{{name}} (deaktiviert)",
           "default": "{{name}} (Standard)"
+        },
+        "conflict": {
+          "title": "Von jemand anderem geändert",
+          "message": "Jemand anderes hat diese App gespeichert, nachdem Sie sie geöffnet haben. Es wurde nichts gespeichert. Laden Sie neu, um die aktuelle Fassung zu sehen, und nehmen Sie Ihre Änderungen dann erneut vor.",
+          "reload": "Neu laden"
+        },
+        "improve": {
+          "action": "Mit KI verbessern",
+          "title": "Anweisungen verbessern",
+          "hint": "Der neue Text ändert nur das Formular. Speichern Sie, um ihn zu behalten; „Verwerfen“ in der Speicherleiste nimmt ihn zurück.",
+          "inputLabel": "Was soll besser werden?",
+          "chips": {
+            "label": "Schnelle Anfragen",
+            "shorter": "Kürzer",
+            "formal": "Förmlicher",
+            "steps": "Klarere Schritte",
+            "unsure": "Sagen, was bei Unsicherheit zu tun ist"
+          },
+          "requests": {
+            "shorter": "Kürzen Sie die Anweisungen, ohne etwas Wichtiges wegzulassen.",
+            "formal": "Formulieren Sie die Anweisungen förmlicher.",
+            "steps": "Schreiben Sie die Anweisungen als klarere Schritte.",
+            "unsure": "Ergänzen Sie, was der Assistent tun soll, wenn er unsicher ist oder die Antwort nicht kennt."
+          },
+          "submit": "Neuen Text vorschlagen",
+          "before": "Jetzt",
+          "after": "Vorschlag",
+          "use": "Diesen Text verwenden",
+          "close": "Schließen",
+          "noChange": "Es wurde kein neuer Text vorgeschlagen."
         }
       },
       "reorder": "Reihenfolge",
@@ -5197,7 +5283,129 @@
       "downloadError": "Die Konfiguration konnte nicht heruntergeladen werden: {{error}}",
       "uploadExists": "Eine App mit der ID „{{id}}“ existiert bereits",
       "uploadError": "Die Konfiguration konnte nicht hochgeladen werden: {{error}}",
-      "loadError": "Fehler beim Laden der Apps"
+      "loadError": "Fehler beim Laden der Apps",
+      "conversation": {
+        "title": "Unterhaltung",
+        "logLabel": "Unterhaltung mit dem App-Assistenten",
+        "view": {
+          "label": "Bearbeiten mit",
+          "form": "Formular",
+          "conversation": "Unterhaltung"
+        },
+        "intro": "Sagen Sie mir mit Ihren eigenen Worten, was sich an dieser App ändern soll. Ich schlage jeweils eine Änderung vor, und Sie entscheiden, ob Sie sie übernehmen.",
+        "chips": {
+          "label": "Ideen für den Anfang",
+          "shorter": "Antworten kürzer machen",
+          "examples": "Beispielfragen vorschlagen",
+          "inputs": "Benutzer zuerst nach den nötigen Angaben fragen"
+        },
+        "you": "Sie",
+        "builder": "Assistent",
+        "composer": {
+          "label": "Sagen Sie dem Assistenten, was sich ändern soll",
+          "placeholder": "Zum Beispiel: förmlicher antworten",
+          "hint": "Eingabetaste sendet, Umschalt+Eingabetaste fügt eine Zeile ein.",
+          "send": "Senden"
+        },
+        "working": "Wird bearbeitet …",
+        "cancel": "Abbrechen",
+        "retry": "Erneut versuchen",
+        "startOver": "Neu beginnen",
+        "longHint": "Diese Unterhaltung wird lang. Ein Neubeginn führt oft zu besseren Antworten.",
+        "toast": "Übernommen. Probieren Sie es aus.",
+        "question": {
+          "other": "Etwas anderes",
+          "otherLabel": "Ihre Antwort",
+          "skip": "Überspringen",
+          "answer": "Antworten",
+          "skipped": "Überspringen Sie diese Frage und entscheiden Sie selbst."
+        },
+        "change": {
+          "heading": "Vorgeschlagene Änderung",
+          "apply": "Übernehmen",
+          "applying": "Wird gespeichert …",
+          "dismiss": "Verwerfen",
+          "dismissed": "Verworfen.",
+          "stale": "Die App hat sich inzwischen geändert. Fragen Sie erneut.",
+          "conflict": "Jemand anderes hat diese App gespeichert. Laden Sie sie neu und fragen Sie erneut.",
+          "failed": "Die Änderung konnte nicht gespeichert werden. {{detail}}",
+          "applied": "Übernommen.",
+          "appliedTest": "Übernommen. Der Test wurde neu gestartet.",
+          "undo": "Rückgängig",
+          "undoing": "Wird rückgängig gemacht …",
+          "undone": "Rückgängig gemacht. Die vorherige Fassung ist wieder gespeichert.",
+          "alsoSaves": "Übernehmen speichert auch Ihre anderen ungespeicherten Änderungen im Formular.",
+          "undoAlsoSaves": "Rückgängig speichert auch Ihre anderen ungespeicherten Änderungen im Formular.",
+          "undoChanged": "Dieser Teil wurde geändert, nachdem die Änderung übernommen wurde",
+          "removed": "entfernt:",
+          "added": "hinzugefügt:",
+          "empty": "(leer)",
+          "showUnchanged_one": "{{count}} unveränderte Zeile anzeigen",
+          "showUnchanged_other": "{{count}} unveränderte Zeilen anzeigen",
+          "hideUnchanged": "Unveränderte Zeilen ausblenden",
+          "suggestions": "Sie könnte außerdem",
+          "webSearch": "im Web suchen",
+          "integration": "{{name}} verwenden",
+          "languageLabel": "Sprache: {{language}}"
+        },
+        "field": {
+          "name": "Name",
+          "description": "Kurzbeschreibung",
+          "system": "Anweisungen",
+          "prompt": "Nachrichtenvorlage",
+          "messagePlaceholder": "Hinweis im Nachrichtenfeld",
+          "variables": "Was Benutzer zuerst ausfüllen",
+          "starterPrompts": "Beispielfragen",
+          "category": "Kategorie",
+          "look": "Aussehen"
+        },
+        "line": {
+          "required": "(Pflichtfeld)",
+          "color": "Farbe {{value}}",
+          "icon": "Symbol {{value}}",
+          "default": "Vorgabe: {{value}}",
+          "typeBoolean": "Ja/Nein"
+        },
+        "warning": {
+          "otherLanguages": "Nur der Text in dieser Sprache wurde geändert. Die anderen Sprachen bleiben, wie sie waren.",
+          "noChange": "Es musste nichts geändert werden.",
+          "dropped": "Etwas, das das Modell vorgeschlagen hat, war nicht verwendbar und wurde weggelassen.",
+          "shortened": "Ein Text war länger als erlaubt und wurde gekürzt.",
+          "replaced": "Ein nicht zulässiger Wert wurde durch den Standardwert ersetzt.",
+          "added": "Etwas, das die Änderung brauchte, wurde ergänzt.",
+          "ignored": "Teile der Antwort, die hier nicht geändert werden können, wurden ignoriert.",
+          "other": "Prüfen Sie die Änderung, bevor Sie sie übernehmen."
+        },
+        "stakes": {
+          "publishedGroups": "Veröffentlicht: Alle in {{groups}} erhalten diese Änderung.",
+          "publishedEveryone": "Veröffentlicht: Alle erhalten diese Änderung, auch Personen, die nicht angemeldet sind.",
+          "publishedSignedIn": "Veröffentlicht: Alle, die sich anmelden, erhalten diese Änderung.",
+          "published": "Veröffentlicht: Alle, die diese App verwenden dürfen, erhalten diese Änderung.",
+          "notPublished": "Nicht veröffentlicht: Nur Sie und andere App-Verwalter sehen sie.",
+          "sharedEveryone": "Alle können diese App verwenden und erhalten diese Änderung.",
+          "shared_one": "Sie teilen sie mit {{count}} Person oder Gruppe; diese erhält die Änderung.",
+          "shared_other": "Sie teilen sie mit {{count}} Personen oder Gruppen; diese erhalten die Änderung.",
+          "onlyYou": "Nur Sie verwenden diese App.",
+          "integrations": "Diese App kann verwenden: {{names}}."
+        },
+        "error": {
+          "invalid": "Die Anfrage konnte nicht gelesen werden. Beginnen Sie neu und versuchen Sie es noch einmal.",
+          "noModel": "Für den App-Assistenten ist kein KI-Modell verfügbar. Bitten Sie eine Administratorin oder einen Administrator, eines einzurichten.",
+          "unreadable": "Das KI-Modell hat eine Antwort gegeben, die nicht verwendet werden kann. Versuchen Sie es erneut oder formulieren Sie es anders.",
+          "tooLong": "Die Anweisungen sind für den App-Assistenten zu lang. Kürzen Sie sie zuerst im Formular.",
+          "contentTooLong": "Einige Texte, Eingabefelder oder Einstiegsfragen der App sind länger oder zahlreicher, als der App-Assistent ändern kann. Kürzen Sie sie zuerst im Formular.",
+          "quota": "Sie haben Ihr Nutzungslimit erreicht. Versuchen Sie es später erneut.",
+          "off": "Der App-Assistent ist ausgeschaltet.",
+          "userAppsOff": "Persönliche Apps sind ausgeschaltet.",
+          "model": "Das KI-Modell hat nicht geantwortet. Versuchen Sie es erneut.",
+          "modelSetup": "Das KI-Modell kann so, wie es eingerichtet ist, nicht antworten. Bitten Sie eine Administratorin oder einen Administrator, es zu prüfen.",
+          "refused": "Das KI-Modell hat diese Anfrage abgelehnt. Formulieren Sie sie anders.",
+          "tooManyTurns": "Sie haben in der letzten Stunde viele Anfragen gesendet. Warten Sie eine Weile und versuchen Sie es dann erneut.",
+          "busy": "Das KI-Modell ist ausgelastet. Versuchen Sie es gleich noch einmal.",
+          "failed": "Etwas ist schiefgegangen. {{detail}}",
+          "truncated": "Die Antwort des KI-Modells wurde abgeschnitten. Bitten Sie um eine kleinere Änderung."
+        }
+      }
     },
     "features": {
       "title": "Funktionen",
@@ -5426,6 +5634,10 @@
           "title": "Nextcloud-Embed",
           "description": "iHub innerhalb von Nextcloud einbetten. Benutzer starten Chats aus Nextcloud Files mit vorausgewählten Dokumenten — analog zum Outlook-Add-in."
         },
+        "embedAuth": {
+          "title": "iHub in einer anderen Website",
+          "description": "Zeigen Sie iHub in einem iframe von iFinder oder einem Portal, mit Anmeldung über Ihren Identitätsanbieter (OIDC)."
+        },
         "copilotAgent": {
           "title": "Microsoft 365 Copilot",
           "description": "Machen Sie iHub zu einem Agenten in Microsoft 365 Copilot. Copilot führt die iHub-Apps über das MCP-Gateway aus, angemeldet mit dem iHub-Konto des Benutzers."
@@ -5559,7 +5771,7 @@
       "groups": {
         "clients": {
           "title": "Clients",
-          "description": "Wo Benutzer iHub außerhalb der Web-App nutzen: in Outlook, im Browser, in Nextcloud und in Microsoft 365 Copilot. Jeder Client wird auf seiner eigenen Seite eingerichtet."
+          "description": "Wo Benutzer iHub außerhalb der Web-App nutzen: in Outlook, im Browser, in Nextcloud, in Microsoft 365 Copilot und in anderen Websites, die iHub in einem Frame anzeigen. Jeder Client wird auf seiner eigenen Seite eingerichtet."
         },
         "peopleDirectories": {
           "title": "Personenverzeichnisse",
@@ -6743,7 +6955,12 @@
         "cancel": "Abbrechen",
         "save": "Gruppe speichern",
         "saving": "Wird gespeichert…",
-        "create": "Gruppe anlegen"
+        "create": "Gruppe anlegen",
+        "conflict": {
+          "title": "Von jemand anderem geändert",
+          "message": "Die Gruppen wurden von jemand anderem geändert, nachdem Sie diese Seite geöffnet haben. Es wurde nichts gespeichert. Laden Sie die Seite neu, um den aktuellen Stand zu sehen, und nehmen Sie Ihre Änderungen dann erneut vor.",
+          "reload": "Neu laden"
+        }
       },
       "fields": {
         "id": "Gruppen-ID",
@@ -13483,6 +13700,8 @@
     }
   },
   "apiErrors": {
+    "EMBED_SIGN_IN_DISABLED": "Die Anmeldung innerhalb einer anderen Website ist nicht aktiviert. Wenden Sie sich an Ihren Administrator.",
+    "EMBED_CODE_INVALID": "Die Anmeldung konnte nicht abgeschlossen werden. Bitte versuchen Sie es erneut.",
     "INTERNAL_ERROR": "Es ist ein unerwarteter Fehler aufgetreten. Bitte versuchen Sie es später erneut.",
     "BAD_REQUEST": "Die Anfrage ist ungültig.",
     "VALIDATION_FAILED": "Einige der eingegebenen Daten sind ungültig.",
@@ -13806,6 +14025,7 @@
     "PRECONDITION_FAILED": "Diese Konfiguration wurde geändert, nachdem Sie sie geöffnet haben (von einem anderen Administrator, in einem anderen Tab oder durch ein Skript). Es wurde nichts gespeichert, Ihre Änderungen sind noch auf der Seite. Laden Sie neu, um den aktuellen Stand zu sehen, und übernehmen Sie Ihre Änderungen dann erneut.",
     "APP_GENERATOR_NO_MODEL": "Ihnen steht kein KI-Modell zur Verfügung, daher kann kein Entwurf vorbereitet werden.",
     "APP_GENERATOR_INVALID_ANSWER": "Der Entwurf der KI ließ sich nicht verwenden.",
+    "APP_REVISE_TOO_LONG": "Die Anweisungen dieser App sind zu lang, um sie im Gespräch zu ändern (höchstens {{max}} Zeichen). Kürzen Sie sie im Formular.",
     "USER_APPS_DISABLED": "Persönliche Apps sind auf dieser Installation abgeschaltet.",
     "USER_APPS_UNAVAILABLE": "Persönliche Apps sind gerade nicht verfügbar. Versuchen Sie es später erneut.",
     "QUOTA_USER_APPS": "Die Obergrenze für persönliche Apps ist erreicht.",

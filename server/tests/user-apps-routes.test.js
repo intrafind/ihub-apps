@@ -205,6 +205,7 @@ describe('GET /api/apps/_config', () => {
       maxApps: 20,
       used: 1,
       generator: true,
+      generatorEnabled: true,
       capabilities: {
         modelChoice: true,
         upload: true,
@@ -239,6 +240,8 @@ describe('GET /api/apps/_config', () => {
       [guest.enabled, guest.canCreate, guest.canShare, guest.generator],
       [true, false, false, false]
     );
+    // Drafting with AI is on: as an editor of a shared app, Gus may change it with AI.
+    assert.equal(guest.generatorEnabled, true);
     setConfig({ userApps: { blockedOwners: ['anna'] } });
     const blocked = (await as('anna').get('/api/apps/_config')).body.userApps;
     assert.deepEqual([blocked.canCreate, blocked.canShare], [false, true]);
@@ -246,7 +249,8 @@ describe('GET /api/apps/_config', () => {
 
   it('reports the draft generator only with its feature', async () => {
     setConfig({ features: { ...FEATURES, appGenerator: false } });
-    assert.equal((await as('anna').get('/api/apps/_config')).body.userApps.generator, false);
+    const off = (await as('anna').get('/api/apps/_config')).body.userApps;
+    assert.deepEqual([off.generator, off.generatorEnabled], [false, false]);
   });
 
   it('lists only installations an admin allowed and the caller may use, with the allowed actions', async t => {

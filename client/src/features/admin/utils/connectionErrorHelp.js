@@ -10,7 +10,7 @@
  * and in the providers health check) and the model import
  * (`POST /admin/models/_discover`). Both send the cause as `details.messageKey`
  * and the facts as `details.upstreamStatus`, `details.host` and
- * `details.errorCode` (server/routes/admin/models.js `describeModelTestFailure`,
+ * `details.errorCode` (server/services/loop/llmFailureCause.js `describeLlmFailure`,
  * server/services/ModelEndpointDiscovery.js). The server decides the cause; this
  * module only translates it. Kept free of React so it can be unit tested.
  */

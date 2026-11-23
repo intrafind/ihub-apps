@@ -94,6 +94,14 @@ function TestStep({ testing, discovery, error, url, onRetry, onEditConnection })
           <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm text-green-900 dark:text-green-200">
             <dt className="font-medium">{t('admin.providers.connect.test.host', 'Host')}</dt>
             <dd className="break-all">{host}</dd>
+            {discovery.region && (
+              <>
+                <dt className="font-medium">
+                  {t('admin.providers.connect.connection.region', 'AWS region')}
+                </dt>
+                <dd>{discovery.region}</dd>
+              </>
+            )}
             <dt className="font-medium">{t('admin.providers.connect.test.models', 'Models')}</dt>
             <dd>
               {t(

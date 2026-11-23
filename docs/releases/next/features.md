@@ -51,6 +51,39 @@ Admins can now choose which AI model prepares app drafts, for admin apps and per
   available, and drafts use the automatic choice until another model is picked.
 - The **New app** page names the model the description is sent to, as before.
 
+## Apps: Change an App in a Conversation (Preview), and Improve Instructions with AI
+
+People who edit an app can now tell an AI model in their own words what to change, instead of
+editing the form. This works in the admin app editor and in the editor of personal apps, where
+everyone who may change the app gets it, also people who may not create personal apps themselves.
+
+- **Conversation (preview):** under **Edit with**, choose **Conversation**. The test chat opens
+  beside it. The builder asks a question when it needs to, or proposes one change at a time as a
+  card that shows every added and removed line and who gets the change. **Apply** saves it and
+  restarts the test chat; **Undo** saves the earlier version again. The builder changes texts,
+  input fields, conversation starters and the look only: never who can use the app, the AI
+  model, web search, connected systems or the status. After an app is created from a description,
+  the editor opens with the conversation. Switch it on under **Admin → Platform → Features →
+  Change apps in a conversation**; it is off by default and needs **App Drafts with AI**.
+- **Improve with AI:** the **Instructions** field has a button that rewrites the instructions on
+  request (shorter, more formal, clearer steps, what to do if unsure). **Use this text** changes
+  the form only; save to keep it. It is available wherever **App Drafts with AI** is on.
+- Each request is a model call that counts against the usage limit of the person who asked. A
+  person can send 60 per hour.
+- How well the builder works depends on the model; it has not yet been measured with real
+  models. Read each change before you apply it.
+
+## App Editor: Saves No Longer Overwrite Another Admin's Changes
+
+When two administrators edited the same app, the later save replaced the earlier one without a
+word. The admin app editor now saves only if the app has not changed since it was opened.
+Otherwise it says **Changed by someone else**, saves nothing and keeps your edits; **Reload**
+loads the current version. **Publish** and **Unpublish** in the editor follow the same rule. For
+scripts: `GET /api/admin/apps/{appId}` returns an `ETag`; send it as `If-Match` with
+`PUT /api/admin/apps/{appId}` or `POST /api/admin/apps/{appId}/_toggle` to get `412` instead of
+overwriting a newer change. Both answer with the new `ETag`. Without `If-Match` they work as
+before.
+
 ## Models: Connect a Provider in One Guided Flow
 
 **Add provider**, the **Set up your models** strip and the empty Models list now open a guided
@@ -68,6 +101,19 @@ flow (**Admin → Models → Providers → Add provider**):
 
 The models use the provider's key, and a one-prompt test at the end shows that they answer.
 **Create an app with this model** leads on to the app builder.
+
+- **AWS Bedrock** asks for the AWS region (for example `eu-central-1`, or `global`) instead of an
+  address, lists the models that region offers, and goes through the same steps. Models that
+  Bedrock only serves through a cross-region inference profile are offered under the profile of
+  the region (`eu.anthropic.claude-…`); embedding and image models are shown but cannot be picked.
+  Each imported model keeps the region it was listed in, so adding models from a second region
+  does not move the ones you added before. The region field starts with the region the server
+  uses today, and the AWS Bedrock provider gets it only when it has none yet.
+- **The AWS Bedrock provider page has an AWS region field.** It applies to every Bedrock model
+  that sets no region of its own; left empty, `AWS_REGION` on the server (default
+  `eu-central-1`) applies as before. A region that is set but is not a region (for example
+  `us-east1`) now stops the model call with a message that names it, instead of sending the
+  data to another region; saving a model with such a region is refused.
 
 ## Models: What Still Uses a Model or App, and the Default in Your Hands
 
@@ -133,3 +179,26 @@ When you change something on an admin edit page, a bar at the bottom of the scre
 - **The Installation page** keeps a pending approval edit when you save the Settings with Enter. Discard no longer jumps back to the Overview tab.
 - **Unsaved settings survive a tab switch.** The settings of Personal apps, User prompts and User skills, and the settings cards on Providers and Projects, no longer drop your edits when you switch tabs, and leaving the page asks first. The tab stays open in the background and the bar at the bottom saves it from either tab.
 - Credentials (a dialog) and the translation overrides keep their own Save.
+
+## Embed Mode: Sign In to iHub Inside Another Site with Microsoft Entra ID and Other OIDC Providers
+
+iHub shown in a frame of another product, such as iFinder or a portal, can now sign people in
+through OpenID Connect. Identity providers like Microsoft Entra ID refuse to be shown in a frame,
+so the frame used to end in an error page. The sign-in now opens in a popup, and the frame gets
+its own session without a token ever reaching a script.
+
+- **Opt-in, set up in the admin.** Open **Admin → Integrations → iHub in another site** (also in the
+  **Clients** section), switch it on and add the origins of the sites that may show iHub, for
+  example `https://ifinder.example.com`. Saved settings apply at once. Until then, nothing changes.
+- **Only those sites can frame iHub.** While the list is set, iHub's pages carry a
+  `frame-ancestors` policy for iHub itself and the listed origins. List every other site that
+  shows iHub in a frame too.
+- **The session is an `HttpOnly` cookie of the frame** (`HttpOnly; Secure; SameSite=None;
+  Partitioned`). Current Chrome, Edge and Firefox support partitioned cookies, so it does not
+  depend on third-party cookies. It needs HTTPS and is only sent while iHub is shown by the same
+  site. iHub accepts it only for requests that the iHub page itself made.
+- **People allow the pop-up** and click **Sign in**. When they are already signed in at the
+  identity provider, the window opens and closes by itself.
+- **Signing out** in the frame ends that session.
+
+See [Embed Mode](../../embed-mode.md#signing-in-inside-a-frame).

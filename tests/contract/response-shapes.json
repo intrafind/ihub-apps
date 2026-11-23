@@ -1528,6 +1528,14 @@
   "GET /api/admin/document-templates/:id/files/:slot": {
     "skipped": "its parent path is not a readable list"
   },
+  "GET /api/admin/embed-auth/config": {
+    "status": 200,
+    "shape": {
+      "active": "boolean",
+      "allowedHostOrigins": [],
+      "enabled": "boolean"
+    }
+  },
   "GET /api/admin/eu-ai-act/acknowledgements/_export": {
     "status": 200,
     "type": "text/csv"
@@ -3416,6 +3424,7 @@
           "chats": "object",
           "cloudStorage": "object",
           "defaultLanguage": "object",
+          "embedAuth": "object",
           "ldapAuth": "object",
           "llm": "object",
           "localAuth": "object",
@@ -4566,6 +4575,7 @@
         },
         "enabled": "boolean",
         "generator": "boolean",
+        "generatorEnabled": "boolean",
         "maxApps": "number",
         "used": "number"
       }
@@ -4662,6 +4672,7 @@
         "enabled": "boolean",
         "providers": []
       },
+      "embedSignIn": "boolean",
       "gateUI": {
         "appName": "string",
         "logoUrl": "string",
@@ -7092,6 +7103,9 @@
       "items": [],
       "nextCursor": "null"
     }
+  },
+  "GET /embed-auth/complete": {
+    "skipped": "not an API answer"
   },
   "GET /manifest.json": {
     "skipped": "not an API answer"

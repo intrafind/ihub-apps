@@ -4,7 +4,7 @@
 /**
  * Translation for `POST /admin/models/:id/_test` result headlines.
  *
- * The backend (`describeModelTestFailure` in server/routes/admin/models.js)
+ * The backend (`describeLlmFailure` in server/services/loop/llmFailureCause.js)
  * sends a stable `messageKey` alongside its English `message`/`error` text.
  * Map that key to a translation rather than the English text itself — the
  * text differs per provider/network cause and is not meant to double as an

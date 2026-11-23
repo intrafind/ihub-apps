@@ -241,6 +241,58 @@ export const generateAppDraft = async ({ description, language, signal }) => {
 };
 
 /**
+ * Ask an AI model for one change to an app, or one question about it
+ * (`POST /api/admin/apps/_revise`). Nothing is stored: the editor applies
+ * the answer's `patch` itself and saves through its normal save.
+ *
+ * @param {Object} request
+ * @param {Object} request.draft - The app's content as the editor holds it.
+ * @param {Array<{role: 'author'|'builder', kind?: string, text: string}>} request.conversation -
+ *   1 to 12 entries; the last one is the author's.
+ * @param {string} [request.language] - The content language of the app.
+ * @param {string[]} [request.fields] - Restrict the change to these content keys.
+ * @param {boolean} [request.allowQuestions] - `false`: the answer is never a question.
+ * @param {AbortSignal} [request.signal] - Aborting it cancels the request; the
+ *   server then stops the model call.
+ * @returns {Promise<{ reply: 'question'|'change'|'message', text: string, question: Object|null,
+ *   patch: Object, changed: string[], suggestions: Object, warnings: Object[], model: Object }>}
+ */
+export const reviseAdminApp = async ({
+  draft,
+  conversation,
+  language,
+  fields,
+  allowQuestions,
+  signal
+}) => {
+  const response = await makeAdminApiCall('/admin/apps/_revise', {
+    method: 'POST',
+    body: reviseBody({ draft, conversation, language, fields, allowQuestions }),
+    timeout: APP_DRAFT_TIMEOUT_MS,
+    signal
+  });
+  return response.data;
+};
+
+/**
+ * The body of a `_revise` request: the members that are set, nothing else.
+ * (`endpoints/userApps.js` builds the same body for the personal route; it
+ * must not import this module, which a person without admin rights never loads.)
+ *
+ * @param {Object} request
+ * @returns {Object}
+ */
+function reviseBody({ draft, conversation, language, fields, allowQuestions }) {
+  return {
+    draft,
+    conversation,
+    ...(language ? { language } : {}),
+    ...(Array.isArray(fields) && fields.length > 0 ? { fields } : {}),
+    ...(typeof allowQuestions === 'boolean' ? { allowQuestions } : {})
+  };
+}
+
+/**
  * Create an app (`POST /api/admin/apps`).
  *
  * @param {Object} app - The app configuration; stored as sent.
@@ -305,6 +357,25 @@ export const toggleApps = async (ids, enabled) => {
   });
   return response.data;
 };
+
+/**
+ * Publishes or unpublishes one app (`POST /api/admin/apps/{appId}/_toggle`).
+ * Unlike {@link toggleApps} it answers the whole response: for one app the
+ * server sends the app's new revision as `ETag`, and with `ifMatch` it refuses
+ * the toggle (412 `PRECONDITION_FAILED`) when the app changed since that
+ * revision was read.
+ *
+ * @param {string} appId
+ * @param {boolean} enabled
+ * @param {{ ifMatch?: string|null }} [options] - The `ETag` the toggle is based on.
+ * @returns {Promise<object>} The response, with `data` and `headers`.
+ */
+export const toggleApp = (appId, enabled, { ifMatch } = {}) =>
+  makeAdminApiCall(`/admin/apps/${encodeURIComponent(appId)}/_toggle`, {
+    method: 'POST',
+    ...(ifMatch ? { headers: { 'If-Match': ifMatch } } : {}),
+    body: { enabled }
+  });
 
 /**
  * Save the display order of apps: the first id becomes `order: 1`, the second

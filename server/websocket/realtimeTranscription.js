@@ -76,6 +76,7 @@ import { guestIdFromCookieHeader, setGuestId } from '../services/chat/chatOwner.
 import { WebSocketServer, WebSocket } from 'ws';
 import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
+import { EMBED_SESSION_COOKIE } from '../utils/embedAuth.js';
 import { isFeatureEnabled } from '../featureRegistry.js';
 import { resolveVoiceModeSettings } from '../../shared/voiceMode.js';
 import { verifyJwt } from '../utils/tokenService.js';
@@ -352,9 +353,30 @@ export function isAllowedOrigin(req, platform = configCache.getPlatform() || {})
   return configured.includes(normalized);
 }
 
+/** The value of one cookie of a raw `Cookie` header, url-decoded; null when it is not there. */
+function cookieValue(cookieHeader, name) {
+  const prefix = `${name}=`;
+  const entry = cookieHeader
+    .split(';')
+    .map(c => c.trim())
+    .find(c => c.startsWith(prefix));
+  if (!entry) return null;
+  const raw = entry.substring(prefix.length);
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+}
+
 /**
- * Extract the authToken from a raw upgrade request (Bearer header or cookie).
+ * Extract the session token from a raw upgrade request (Bearer header or cookie).
  * The upgrade request never went through Express, so cookies aren't parsed.
+ *
+ * The session cookie of a framed iHub (`authTokenEmbed`, see utils/embedAuth.js) is
+ * `SameSite=None`, so it counts only for a handshake the iHub page itself made. The
+ * cors.origin allowlist that `isAllowedOrigin` honors is not enough for it: the browser
+ * says `Sec-Fetch-Site: same-origin` only for the iHub page.
  */
 export function extractToken(req) {
   const authHeader = req.headers.authorization;
@@ -362,20 +384,12 @@ export function extractToken(req) {
     return authHeader.substring(7);
   }
   const cookieHeader = req.headers.cookie;
-  if (cookieHeader) {
-    const entry = cookieHeader
-      .split(';')
-      .map(c => c.trim())
-      .find(c => c.startsWith('authToken='));
-    if (entry) {
-      try {
-        return decodeURIComponent(entry.substring('authToken='.length));
-      } catch {
-        return entry.substring('authToken='.length);
-      }
-    }
-  }
-  return null;
+  if (!cookieHeader) return null;
+  const framed =
+    req.headers['sec-fetch-site'] === 'same-origin'
+      ? cookieValue(cookieHeader, EMBED_SESSION_COOKIE)
+      : null;
+  return framed ?? cookieValue(cookieHeader, 'authToken');
 }
 
 /**

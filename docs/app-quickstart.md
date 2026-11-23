@@ -172,6 +172,68 @@ The instructions decide most of what the app does. The following changes help mo
 Change one thing at a time, save, and send the same example again. That way you see what each
 change does.
 
+### Let the AI rewrite the instructions
+
+With the feature **App Drafts with AI** on, the **Instructions** field has a button **Improve with
+AI**.
+
+1. Click **Improve with AI**, then click a quick request (**Shorter**, **More formal**, **Clearer
+   steps**, **Say what to do if unsure**) or write under **What should be better?** what you want.
+2. Click **Suggest a new text**. The dialog shows the text **Now** and the **Suggested** text.
+3. Click **Use this text** to put the suggestion into the form, or **Close** to keep your text.
+
+**Use this text** changes the form only. Click **Save Changes** to keep it; **Discard** in the save
+bar takes it back. The suggestion is written in the language of the text you are editing; the
+other languages stay as they were.
+
+## Change the app in a conversation (preview)
+
+Instead of editing the form, you can tell an AI model in your own words what to change, next to
+the test chat. This needs the features **App Drafts with AI** and **Change apps in a
+conversation** (a preview feature, off by default) under **Admin → Platform → Features**.
+
+1. In the editor header, under **Edit with**, choose **Conversation**. The conversation takes the
+   place of the form, and the test chat opens beside it. **Form** brings the form back; both edit
+   the same app.
+2. Write what you want in the box **Tell the builder what to change**, for example "answer more
+   formally" or "ask users for their department first", and press `Enter` (`Shift+Enter` adds a
+   line). The ideas under **Ideas to start with** fill in a request for you.
+3. The builder answers in one of three ways:
+   - **A question**, when it needs to know something first, such as who uses the app. Pick an
+     answer, write your own under **Something else**, or click **Skip**. It asks at most three
+     questions in a row.
+   - **A proposed change.** The card shows each part that would change (name, short description,
+     instructions, input fields, conversation starters, look) line by line: removed lines and
+     added lines are always shown in full. A line under the card says who gets the change, for
+     example "Published: everyone in Sales gets this change". **It could also** lists web search
+     or connected systems that might help; nothing in it is switched on unless you tick it.
+   - **A message**, for example when you asked for something it cannot do here.
+4. Click **Apply** to save the change at once, or **Dismiss**. After **Apply** the test chat
+   restarts with the saved app, so you can try the change right away.
+5. **Undo** on the newest applied change saves the earlier version again.
+
+What to know about the conversation:
+
+- **Apply saves.** On a published app, the people who can use it get the change at once.
+- **Apply is blocked** with "The app changed since. Ask again" when you changed the app in the
+  form after asking. Ask again, so that the builder sees your edit.
+- **Undo is blocked** with "This part was changed after the change was applied" once that part
+  was changed again, by you or by someone else.
+- If someone else saved the app after you opened it, nothing is saved and the card says so.
+  Reload the app and ask again.
+- The builder can change texts, input fields, conversation starters, icon, color and category. It
+  never changes who can use the app, the AI model, web search, connected systems, uploads or the
+  status, and it cannot publish or share the app.
+- Only the text in the language you are editing changes; the other languages stay as they were.
+- The conversation is kept in this browser tab, up to its last 12 messages. **Start over** clears
+  it. After a long conversation the panel suggests starting over, which often gives better
+  answers.
+- Each message to the builder is an AI model call that counts against your usage limit. A person
+  can send 60 per hour.
+- After you create an app from a description, the editor opens with the conversation when the
+  feature is on.
+- On a small screen the conversation fills the page, and **Test** opens the test chat over it.
+
 **Never put passwords, API keys or other credentials into the instructions.** Instructions are
 part of the app's configuration: everyone who manages apps can read them, they are kept in the
 change history, and the AI model can repeat them in an answer. Access to another system belongs

@@ -448,7 +448,7 @@ Models → Providers → Add provider**:
 | ----- | ----------- |
 | Name, ID, Description | Plain text. The ID cannot be changed later, and cannot be the name of an API type (`openai`, `openai-responses`, …) |
 | API type | The API the endpoint speaks: `openai` (OpenAI-compatible — LLM Hub, LM Studio, …), `local` (vLLM, through the vLLM adapter), `mistral`, `openai-responses`, `anthropic` or `google` |
-| Base URL | Optional. The API base the provider's models are listed from when you import them. Chat requests do not use it: they go to each model's own **API URL** |
+| Base URL | Optional. The API base the provider's models are listed from when you import them. Chat requests do not use it: they go to each model's own **API URL**, which is built from the base URL when the model is created. Changing the base URL moves the linked models along (see below) |
 | API key | Stored encrypted on the provider and used by all of its models |
 
 Models link to the provider with `providerId`; their `provider` is the provider's API type. The
@@ -523,9 +523,15 @@ The built-in providers ship with their public API base, so importing from them n
 | OpenRouter | `https://openrouter.ai/api/v1`                     |
 
 To list models from a proxy or a regional endpoint, change the provider's base URL under
-**Admin → Models → Providers**. The base URL is only used to list and import models. Models you
-imported earlier keep their own **API URL**, so chat requests still go to the old address until
-you change each model's **API URL** or import the models again. **Local LLM** has no base URL:
+**Admin → Models → Providers**. Each model stores its own **API URL**, built from the base URL
+when it was imported or connected. When you save a new base URL, every model linked to the
+provider whose **API URL** starts with the old base URL is moved along: the old base is replaced
+by the new one and the rest of the URL is kept (`https://old.example.com/v1/chat/completions`
+becomes `https://new.example.com/v1/chat/completions`). Each moved model gets an entry in its
+change history and in the audit log. The provider page then says how many linked models now use
+the new address and lists any linked model it left alone because its **API URL** does not start
+with the old base URL (an address set by hand); change those under **Admin → Models** if they
+should move too. Models of other providers are never changed. **Local LLM** has no base URL:
 enter your server's address, such as `http://localhost:8080/v1`.
 
 [OpenRouter](https://openrouter.ai) ships as a provider (ID `openrouter`, OpenAI-compatible, base URL `https://openrouter.ai/api/v1`). Choose **OpenRouter** in the provider list, enter your OpenRouter key and load the models. When a provider has no key stored yet, the dialog asks for one: it is used for the listing and saved encrypted on the provider when you import. Leave it empty to use the provider's environment variable (`OPENROUTER_API_KEY`). The key and base URL can also be set under **Admin → Models → Providers**.
@@ -673,20 +679,33 @@ The adapter uses Bedrock's long-lived API key feature. Mint a key in the AWS con
 
 Resolution order matches every other provider: model.apiKey → providers.json → env. Keys configured via the admin UI are encrypted at rest using AES-256-GCM.
 
+The adapter needs no AWS SDK and no access key pair: the API key is sent as `Authorization: Bearer <key>` to `bedrock-runtime.<region>.amazonaws.com`, through the same proxy and SSL whitelist (`ssl.domainWhitelist`) as every other model call.
+
 ### Region configuration
 
-Each model can override the AWS Region via `config.region`. The Admin Model Editor renders a "Region" field with autocomplete suggestions. Supported values:
+The region is set on the **AWS Bedrock provider** (Admin → Models → Providers → AWS Bedrock → **AWS region**, stored as `config.region` in `providers.json`) and can be overridden per model via `config.region` in the Admin Model Editor. Both accept an AWS region code or `global`; anything else is refused when saved (`400`). A value that is set but is not a region (a hand-edited file, the legacy placeholder `apac-northeast-1`, a typo such as `us-east1`, an invalid `AWS_REGION`) is never put into the host name and never replaced by the next source or the default: the model call fails with the error code `INVALID_REQUEST` (provider code `BEDROCK_REGION_INVALID`), and the message names the value and where it is set. Administrators see it in the model test and in the chat; other users see that the model call failed. Values:
 
 | Value | Behavior |
 | --- | --- |
-| `eu-central-1`, `eu-west-1`, `eu-west-3` | Frankfurt / Ireland / Paris. Auto-prepends `eu.` for inference-profile-required models. |
-| `us-east-1`, `us-west-2` | Auto-prepends `us.` for inference-profile-required models. |
-| `apac-northeast-1`, `ap-…` | Auto-prepends `apac.`. |
-| `global` | Auto-prepends `global.` and routes to a supported source region. Supported by the Anthropic Claude Sonnet 4 family. |
+| `eu-central-1`, `eu-west-1`, `eu-west-3`, … | Frankfurt / Ireland / Paris. Auto-prepends `eu.` for inference-profile-required models. |
+| `us-east-1`, `us-west-2`, … | Auto-prepends `us.` for inference-profile-required models. |
+| `ap-northeast-1`, `ap-…` | Auto-prepends `apac.`. |
+| `global` | Auto-prepends `global.` and routes to the source region `eu-central-1`. Supported by the Anthropic Claude 4 family. |
 
-If you write the modelId with an explicit prefix (e.g., `us.anthropic.claude-sonnet-4-6`) the adapter honors it as-is.
+If you write the modelId with an explicit profile prefix (`us.`, `eu.`, `apac.`, `jp.`, `au.`, `ca.`, `us-gov.`, `global.`, e.g. `us.anthropic.claude-sonnet-4-6`) the adapter sends it as-is. Such a model only works while the region belongs to that geography: after changing the provider region from `eu-central-1` to `us-east-1`, re-add models that carry `eu.` ids.
 
-Fallback order: `model.config.region` → `providers.json` `bedrock.config.region` → env `AWS_REGION` / `AWS_DEFAULT_REGION` → default `eu-central-1`.
+Fallback order: `model.config.region` → `providers.json` `bedrock.config.region` → env `AWS_REGION` / `AWS_DEFAULT_REGION` → default `eu-central-1`. Only an empty source is skipped; the first one that is set decides.
+
+### Adding models with "Connect a model provider"
+
+The **AWS Bedrock** tile of the guided flow (Admin → Models → Providers → Add provider) asks for the region (prefilled with the region the server uses today: the provider's, else `AWS_REGION`, which `GET /api/admin/providers` sends as the read-only `effectiveRegion` of the Bedrock entry) and the API key (a key already stored on the provider, or `BEDROCK_API_KEY`, is used when the field is left empty), then lists the region's models:
+
+- `GET https://bedrock.<region>.amazonaws.com/foundation-models` (`ListFoundationModels`) and `GET …/inference-profiles?type=SYSTEM_DEFINED` (`ListInferenceProfiles`), with the same Bearer key. The key's IAM identity needs `bedrock:ListFoundationModels` and `bedrock:ListInferenceProfiles` (both in the `AmazonBedrockLimitedAccess` policy that Bedrock API keys get by default).
+- A model Bedrock serves on demand is offered under its own id; a model it serves only through a cross-region inference profile under the profile id of the region's geography (`eu.anthropic.claude-sonnet-4-…` for `eu-central-1`). With `global`, only models with a `global.` profile can be picked. Embedding and image models, and models without a profile in the region, are listed but cannot be picked; provisioned-throughput-only variants are not listed.
+- If the profile listing is refused, the models are still offered, with the region's prefix in front of models that need a profile.
+- A rejected key, a key without permission and an unknown region are reported as such ("The endpoint rejected the key", "access denied", "host not found" with the region named).
+
+The picked models are created as `provider: "bedrock"` configs without `url` and without a key of their own. Each model stores the region it was listed in as its own `config.region`, because its id is an inference profile of that region's geography. The provider's region is set to it only when the provider has none yet: a second run in another region adds models there and leaves the provider and the models imported before where they are. The **Import models** dialog of the Bedrock provider does the same.
 
 ### Supported models (Converse-compatible families)
 
@@ -712,7 +731,7 @@ Fallback order: `model.config.region` → `providers.json` `bedrock.config.regio
 
 ### Ready-to-import example models
 
-Example configurations for the most common Bedrock models are in the **iHub Official Marketplace**. Open Admin → Marketplace and filter for "bedrock" to browse and one-click install. All examples ship `enabled: false` so you can opt-in selectively.
+Besides the guided flow above, example configurations for the most common Bedrock models are in the **iHub Official Marketplace**. Open Admin → Marketplace and filter for "bedrock" to browse and one-click install. All examples ship `enabled: false` so you can opt-in selectively.
 
 ## Transcription Models
 

@@ -16,13 +16,16 @@ import { removeMarketplaceInstallation } from '../../utils/installationCleanup.j
 import { logAudit } from '../../services/AuditLogService.js';
 import { saveSnapshot } from '../../services/ChangeHistoryService.js';
 import { compareByOrderThenName } from '../../utils/resourceLoader.js';
-import llmClient, { isLLMError, LLM_ERROR_CODES } from '../../services/loop/LLMClient.js';
+import llmClient, { isLLMError } from '../../services/loop/LLMClient.js';
 import { getTtsProvider, isTtsModel } from '../../tts/index.js';
 import { isTranscriptionModel } from '../../transcription/index.js';
 import { testTranscriptionModel } from '../../websocket/realtimeTranscription.js';
 import { TTS_LANGUAGES } from '../../tts/language.js';
-import { llmErrorToHttpStatus, isMissingApiKeyError } from '../../services/loop/llmHttpErrors.js';
+import { llmErrorToHttpStatus } from '../../services/loop/llmHttpErrors.js';
+import { describeLlmFailure } from '../../services/loop/llmFailureCause.js';
 import { discoverModels, comparableUrl } from '../../services/ModelEndpointDiscovery.js';
+import { BEDROCK_API_TYPE, discoverBedrockModels } from '../../services/BedrockModelDiscovery.js';
+import { DEFAULT_BEDROCK_REGION, isValidBedrockRegion } from '../../../shared/bedrockRegions.js';
 import {
   BUILT_IN_LLM_PROVIDERS,
   gatewayModelProvider,
@@ -34,7 +37,6 @@ import {
 import { inspectModelApiKey } from '../../utils.js';
 import { usageLimitBucketSchema } from '../../validators/common.js';
 import { sendCreated, segment } from '../../utils/created.js';
-import { endpointHost, tlsCertificateErrorCode } from '../../utils/connectionErrors.js';
 import { effectiveDefaultModelId, findModelDependants } from '../../utils/resourceDependants.js';
 
 /** Largest voice sample accepted (Mistral needs seconds, not minutes, of audio). */
@@ -106,6 +108,39 @@ function voicesError(error, action) {
  * @returns {Promise<string|null>} Path relative to `contents/`, or null when
  *   the id is not usable as a file name
  */
+/**
+ * The `_discover` answer for a listing: the entries, each flagged with the iHub
+ * model that already points at it (`existingModelId`), so the admin does not
+ * import a model twice. A model "points at" a listed one when it has the same
+ * remote model id on the same endpoint; Bedrock models have no URL (the adapter
+ * builds it from the region), so there the remote id among the Bedrock models counts.
+ *
+ * @param {Object} result - `discoverModels` / `discoverBedrockModels` result
+ * @returns {Object} Response body
+ */
+function withExistingModels(result) {
+  const { data: configured = [] } = configCache.getModels(true);
+  const bedrock = result.provider === BEDROCK_API_TYPE;
+  const keyOf = (modelId, url) => (bedrock ? modelId : `${modelId}\n${comparableUrl(url)}`);
+  const existing = new Map();
+  for (const model of configured) {
+    if (bedrock && model.provider !== BEDROCK_API_TYPE) continue;
+    existing.set(keyOf(model.modelId, model.url), model.id);
+  }
+  return {
+    apiType: result.provider,
+    modelsUrl: result.modelsUrl,
+    baseUrl: result.baseUrl,
+    azure: result.azure,
+    gateway: result.gateway || null,
+    ...(result.region ? { region: result.region } : {}),
+    models: result.models.map(model => ({
+      ...model,
+      existingModelId: existing.get(keyOf(model.id, model.url)) || null
+    }))
+  };
+}
+
 function modelPath(modelId) {
   return configStore.resolveIdToPath('models', modelId);
 }
@@ -115,195 +150,6 @@ const MODEL_TEST_MESSAGE = 'Hello, can you respond with a simple "Test successfu
 
 /** Hard cap for one model test call (interactive admin request). */
 const MODEL_TEST_TIMEOUT_MS = 60000;
-
-/**
- * Socket-level failure codes (undici / Node `net`) that deserve a dedicated
- * explanation in the admin UI. Checked before the generic code mapping.
- */
-const MODEL_TEST_NETWORK_CAUSES = Object.freeze({
-  UND_ERR_CONNECT_TIMEOUT: {
-    userMessage: 'Connection timeout',
-    messageKey: 'connectionTimeout',
-    errorMessage:
-      'The model service did not respond within the timeout period. Please check if the model URL is correct and the service is running.'
-  },
-  ECONNREFUSED: {
-    userMessage: 'Connection refused',
-    messageKey: 'connectionRefused',
-    errorMessage:
-      'Unable to connect to the model service. Please verify the URL and ensure the service is running.'
-  },
-  ENOTFOUND: {
-    userMessage: 'Service not found',
-    messageKey: 'serviceNotFound',
-    errorMessage:
-      'The model service hostname could not be resolved. Please check the URL configuration.'
-  }
-});
-
-/**
- * The headline and remediation of an untrusted TLS certificate: a private CA
- * or a self-signed certificate the server has not been told to accept.
- */
-const MODEL_TEST_TLS_FAILURE = Object.freeze({
-  userMessage: 'Certificate not trusted',
-  messageKey: 'certificateUntrusted',
-  errorMessage:
-    'The TLS certificate of the model service is not trusted by the iHub server (private CA or self-signed certificate). Add the host to the SSL domain whitelist and enable "Ignore invalid SSL certificates" under Admin > Security > SSL / TLS, or install a certificate from a trusted CA on the service.'
-});
-
-/** A socket-level error code (`ECONNRESET`, `UND_ERR_SOCKET`), as opposed to a provider's own code. */
-const SOCKET_ERROR_CODE = /^(?:E[A-Z]+|UND_ERR_[A-Z_]+)$/;
-
-/**
- * The headline and remediation of a failed model test, without its facts.
- *
- * @param {import('../../services/loop/contracts/errors.js').LLMError} err
- * @param {{ keyless: boolean }} context
- * @returns {{ userMessage: string, errorMessage: string, messageKey: string }}
- */
-function describeModelTestCause(err, { keyless }) {
-  if (tlsCertificateErrorCode(err)) {
-    return MODEL_TEST_TLS_FAILURE;
-  }
-
-  // `fetch failed` wraps the socket error one level deeper (err.cause.cause);
-  // LLMClient also surfaces that code as providerCode for network failures.
-  const socketCode = String(err.providerCode || err.cause?.code || err.cause?.cause?.code || '');
-  if (MODEL_TEST_NETWORK_CAUSES[socketCode]) {
-    return MODEL_TEST_NETWORK_CAUSES[socketCode];
-  }
-
-  const fallback = {
-    userMessage: 'Model test failed',
-    messageKey: 'testFailed',
-    errorMessage: err.message || 'Unknown error occurred'
-  };
-
-  switch (err.code) {
-    case LLM_ERROR_CODES.NETWORK: {
-      const detail =
-        typeof err.details === 'string' && err.details
-          ? err.details
-          : err.cause?.message || err.message;
-      return {
-        userMessage: 'Network error',
-        messageKey: 'networkError',
-        errorMessage: `Network connection failed: ${detail}`
-      };
-    }
-    case LLM_ERROR_CODES.TIMEOUT:
-      return {
-        userMessage: 'Request timeout',
-        messageKey: 'requestTimeout',
-        errorMessage:
-          'The model service took too long to respond. Please try again or check the service status.'
-      };
-    case LLM_ERROR_CODES.AUTH_FAILED:
-      if (err.providerCode === 'API_KEY_UNDECRYPTABLE') {
-        return {
-          userMessage: 'Stored API key cannot be decrypted',
-          messageKey: 'apiKeyUndecryptable',
-          errorMessage: err.message
-        };
-      }
-      if (isMissingApiKeyError(err)) {
-        return {
-          userMessage: 'API key not configured',
-          messageKey: 'apiKeyNotConfigured',
-          errorMessage: err.message
-        };
-      }
-      // No key was sent, so none can have been rejected: the endpoint wants one.
-      if (keyless) {
-        return {
-          userMessage: 'The endpoint requires an API key',
-          messageKey: 'apiKeyRequired',
-          errorMessage:
-            'No API key is configured for this model, and the model service asked for one. Enter the key on the model or its provider and test again.'
-        };
-      }
-      if (err.status === 403) {
-        return {
-          userMessage: 'Access denied',
-          messageKey: 'accessDenied',
-          errorMessage: 'Access denied by the model service. Please check your API key permissions.'
-        };
-      }
-      return {
-        userMessage: 'Authentication failed',
-        messageKey: 'authenticationFailed',
-        errorMessage:
-          'Invalid API key or authentication credentials. Please check your model configuration.'
-      };
-    case LLM_ERROR_CODES.MODEL_NOT_FOUND:
-      return {
-        userMessage: 'Model not found',
-        messageKey: 'modelNotFound',
-        errorMessage:
-          'Nothing was found at the model URL. Check the URL path (it usually ends in /v1/chat/completions) and the model ID.'
-      };
-    case LLM_ERROR_CODES.RATE_LIMITED:
-      return {
-        userMessage: 'Rate limit exceeded',
-        messageKey: 'rateLimitExceeded',
-        errorMessage: 'Too many requests to the model service. Please try again later.'
-      };
-    default:
-      // An upstream 5xx under a code that names no cause of its own
-      // (PROVIDER_ERROR, or a provider code the client does not map).
-      if (typeof err.status === 'number' && err.status >= 500) {
-        return {
-          userMessage: 'Server error',
-          messageKey: 'serverError',
-          errorMessage:
-            'The model service itself failed to answer. Check its status and logs; the configuration in iHub is probably correct. Try again later.'
-        };
-      }
-      return fallback;
-  }
-}
-
-/**
- * Translate an `LLMError` raised by a model connectivity test into what the
- * admin UI shows: a short `userMessage` headline (English, used as a fallback
- * and in logs), an `errorMessage` with remediation hints (English; the client
- * shows its own translation per `messageKey`), a `messageKey` — a stable
- * identifier the client maps to a translated headline (see shared/i18n/*.json
- * `admin.models.testResults.messages`) — and the facts that help the admin
- * find the fault: the upstream HTTP status, the host that was called and the
- * socket or certificate error code.
- *
- * Keys off `err.code` (and the underlying socket or certificate error code for
- * network failures) — never off provider message substrings, which differ per
- * provider and language. Never returns credentials, a URL path or a query.
- *
- * @param {import('../../services/loop/contracts/errors.js').LLMError} err
- * @param {Object} [context]
- * @param {string} [context.url] - The model's endpoint URL; only its host is reported
- * @param {boolean} [context.keyless=false] - The model runs without an API key
- *   (key status `keyless`), so a 401/403 means "a key is required", not "rejected"
- * @returns {{ userMessage: string, errorMessage: string, messageKey: string,
- *   upstreamStatus: number|null, host: string|null, errorCode: string|null }}
- *
- * @example
- *   describeModelTestFailure(err, { url: 'https://llm.example.com/v1/chat/completions' })
- *   // → { messageKey: 'serverError', upstreamStatus: 503, host: 'llm.example.com', … }
- */
-function describeModelTestFailure(err, { url, keyless = false } = {}) {
-  const providerCode = typeof err.providerCode === 'string' ? err.providerCode : '';
-  const socketCode = [providerCode, err.cause?.code, err.cause?.cause?.code].find(
-    code => typeof code === 'string' && SOCKET_ERROR_CODE.test(code)
-  );
-  return {
-    ...describeModelTestCause(err, { keyless }),
-    upstreamStatus: typeof err.status === 'number' ? err.status : null,
-    host: endpointHost(url),
-    errorCode: tlsCertificateErrorCode(err) || socketCode || null
-  };
-}
-
-export { describeModelTestFailure };
 
 /**
  * Bring a model's link to a provider entry in line with that entry, in place:
@@ -458,6 +304,34 @@ function normalizeModelUsageLimits(model) {
   return null;
 }
 
+/**
+ * Validate the region of a Bedrock model (`config.region`) in place: an empty
+ * value is removed (the provider's region or the environment applies), a set
+ * one is trimmed and must be an AWS region code or `global`. The adapter
+ * refuses a set but invalid region at call time; refusing it on save tells
+ * the admin before a user hits it. Other providers' `config` is not read.
+ *
+ * @param {Object} model
+ * @returns {string|null} An error message, or null when valid
+ */
+function normalizeBedrockModelRegion(model) {
+  if (model.provider !== 'bedrock') return null;
+  const config = model.config;
+  if (!config || typeof config !== 'object' || Array.isArray(config)) return null;
+  if (!('region' in config)) return null;
+  const { region, ...rest } = config;
+  if (region === undefined || region === null || region === '') {
+    model.config = rest;
+    return null;
+  }
+  const trimmed = typeof region === 'string' ? region.trim() : region;
+  if (!isValidBedrockRegion(trimmed)) {
+    return 'config.region must be an AWS region code such as eu-central-1, or global';
+  }
+  model.config = { ...rest, region: trimmed };
+  return null;
+}
+
 export default function registerAdminModelsRoutes(app) {
   /**
    * @swagger
@@ -533,6 +407,15 @@ export default function registerAdminModelsRoutes(app) {
    *       `apiType` and an optional `apiKey` describe a provider that does
    *       not exist yet.
    *
+   *       AWS Bedrock (`providerId: bedrock` or `apiType: bedrock`) is listed
+   *       per region instead of per URL: `ListFoundationModels` and
+   *       `ListInferenceProfiles` of `bedrock.<region>.amazonaws.com`, with the
+   *       Bedrock API key as Bearer token. `region` is the AWS region (or
+   *       `global`); without it the provider's `config.region`, then
+   *       `AWS_REGION` / `AWS_DEFAULT_REGION`, then `eu-central-1` apply. A
+   *       model that needs a cross-region inference profile is listed under
+   *       the profile id; the answer then carries `region`.
+   *
    *       A failure on the endpoint's side answers 502 (never 401, which would
    *       end the admin session) with `{ error, details, messageKey }`.
    *     tags:
@@ -555,8 +438,12 @@ export default function registerAdminModelsRoutes(app) {
    *                 description: Existing LLM provider whose API type and key are used
    *               apiType:
    *                 type: string
-   *                 enum: [openai, openai-responses, mistral, local, anthropic, google]
+   *                 enum: [openai, openai-responses, mistral, local, anthropic, google, bedrock]
    *                 default: openai
+   *               region:
+   *                 type: string
+   *                 example: eu-central-1
+   *                 description: Bedrock only. AWS region code or `global`.
    *               gateway:
    *                 type: string
    *                 enum: [ifinder-model-gateway]
@@ -577,12 +464,15 @@ export default function registerAdminModelsRoutes(app) {
    *         description: The endpoint could not be reached or rejected the request
    */
   app.post(buildServerPath('/api/admin/models/_discover'), adminAuth, async (req, res) => {
-    const { url, providerId, apiType = 'openai', apiKey, gateway } = req.body || {};
+    const { url, providerId, apiType = 'openai', apiKey, gateway, region } = req.body || {};
     if (url !== undefined && url !== null && typeof url !== 'string') {
       throw new ServiceError('BAD_REQUEST', 'Invalid URL');
     }
     if (apiKey !== undefined && apiKey !== null && typeof apiKey !== 'string') {
       throw new ServiceError('BAD_REQUEST', 'Invalid API key');
+    }
+    if (region !== undefined && region !== null && typeof region !== 'string') {
+      throw new ServiceError('BAD_REQUEST', 'Invalid region');
     }
 
     let discoveryUrl = (url || '').trim();
@@ -590,6 +480,8 @@ export default function registerAdminModelsRoutes(app) {
     // Set for an iFinder Model Gateway, which lists and serves models on routes of its own.
     let discoveryGateway = typeof gateway === 'string' && gateway ? gateway : undefined;
     let discoveryKey = (apiKey || '').trim();
+    // Bedrock: the provider entry's region (`config.region`), read below.
+    let providerRegion;
 
     if (providerId !== undefined && providerId !== null && providerId !== '') {
       assertValidId(providerId, 'provider');
@@ -605,8 +497,30 @@ export default function registerAdminModelsRoutes(app) {
       }
       if (!discoveryUrl) discoveryUrl = providerEntry.baseUrl || '';
       if (!discoveryKey) discoveryKey = resolveProviderApiKey(providerEntry) || '';
+      providerRegion = providerEntry.config?.region;
     } else if (typeof apiType !== 'string') {
       throw new ServiceError('BAD_REQUEST', 'Invalid API type');
+    }
+
+    // Bedrock lists its models per AWS region, not behind a URL. The region is
+    // the one typed in the wizard, else the provider's, else the environment's —
+    // the order the adapter resolves it in.
+    if (discoveryApiType === BEDROCK_API_TYPE) {
+      const discoveryRegion =
+        (region || '').trim() ||
+        providerRegion ||
+        process.env.AWS_REGION ||
+        process.env.AWS_DEFAULT_REGION ||
+        DEFAULT_BEDROCK_REGION;
+      if (!isValidBedrockRegion(discoveryRegion)) {
+        throw new ServiceError(
+          'BAD_REQUEST',
+          `"${String(discoveryRegion).slice(0, 40)}" is not an AWS region. Use a region code such as eu-central-1, or global.`
+        );
+      }
+      const result = await discoverBedrockModels({ region: discoveryRegion, apiKey: discoveryKey });
+      res.json(withExistingModels(result));
+      return;
     }
 
     if (!discoveryUrl) {
@@ -620,24 +534,7 @@ export default function registerAdminModelsRoutes(app) {
       gateway: discoveryGateway
     });
 
-    // Flag listed models an existing config already points at (same remote
-    // model id on the same endpoint), so the admin does not import twice.
-    const { data: configured = [] } = configCache.getModels(true);
-    const existing = new Map();
-    for (const model of configured) {
-      existing.set(`${model.modelId}\n${comparableUrl(model.url)}`, model.id);
-    }
-    res.json({
-      apiType: result.provider,
-      modelsUrl: result.modelsUrl,
-      baseUrl: result.baseUrl,
-      azure: result.azure,
-      gateway: result.gateway || null,
-      models: result.models.map(model => ({
-        ...model,
-        existingModelId: existing.get(`${model.id}\n${comparableUrl(model.url)}`) || null
-      }))
-    });
+    res.json(withExistingModels(result));
   });
 
   /**
@@ -763,6 +660,8 @@ export default function registerAdminModelsRoutes(app) {
 
     const limitsError = normalizeModelUsageLimits(updatedModel);
     if (limitsError) throw new ServiceError('BAD_REQUEST', limitsError);
+    const regionError = normalizeBedrockModelRegion(updatedModel);
+    if (regionError) throw new ServiceError('BAD_REQUEST', regionError);
 
     // A disabled model answers nobody, so it cannot stay the default (the toggle
     // already clears it); the next enabled chat model takes over below.
@@ -814,6 +713,8 @@ export default function registerAdminModelsRoutes(app) {
     assertValidId(newModel.id, 'model');
     const limitsError = normalizeModelUsageLimits(newModel);
     if (limitsError) throw new ServiceError('BAD_REQUEST', limitsError);
+    const regionError = normalizeBedrockModelRegion(newModel);
+    if (regionError) throw new ServiceError('BAD_REQUEST', regionError);
 
     const providerLinkError = applyProviderLink(newModel);
     if (providerLinkError) {
@@ -1407,7 +1308,7 @@ export default function registerAdminModelsRoutes(app) {
           error: testError.message
         });
         const { userMessage, errorMessage, messageKey, upstreamStatus, host, errorCode } =
-          describeModelTestFailure(testError, {
+          describeLlmFailure(testError, {
             url: model.url,
             keyless: inspectModelApiKey(model, { quiet: true }).state === 'keyless'
           });

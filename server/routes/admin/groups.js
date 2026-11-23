@@ -19,6 +19,7 @@ import {
   assertGroupsResolvable
 } from '../../utils/adminGuards.js';
 import { withAdminInvariantLock } from '../../utils/adminInvariantLock.js';
+import { assertIfMatch, revisionOf, setRevisionHeaders } from '../../utils/configRevision.js';
 
 /** The group configuration, as a path relative to `contents/`. */
 const GROUPS_FILE = 'config/groups.json';
@@ -404,7 +405,15 @@ export default function registerAdminGroupRoutes(app) {
    *       - adminAuth: []
    *     responses:
    *       200:
-   *         description: Groups configuration successfully retrieved
+   *         description: |
+   *           Groups configuration successfully retrieved. The `ETag` header carries the
+   *           revision of the stored `groups.json`; send it as `If-Match` on
+   *           `PUT /api/admin/groups/{groupId}` to refuse a save over a newer change.
+   *         headers:
+   *           ETag:
+   *             description: Revision of the stored groups.json
+   *             schema:
+   *               type: string
    *         content:
    *           application/json:
    *             schema:
@@ -451,6 +460,9 @@ export default function registerAdminGroupRoutes(app) {
     // are gone rather than that the file cannot be parsed — and the first
     // thing it invites is a save.
     let groupsData = await configStore.readJsonStrict(GROUPS_FILE);
+    // The revision of the stored file: what `If-Match` on PUT /api/admin/groups/{id}
+    // is compared against (optimistic locking, see utils/configRevision.js).
+    setRevisionHeaders(res, revisionOf(groupsData));
     if (!groupsData) {
       logger.info('Groups file not found, returning empty list', {
         component: 'AdminGroups'
@@ -746,6 +758,14 @@ export default function registerAdminGroupRoutes(app) {
    *         schema:
    *           type: string
    *           example: "developers"
+   *       - in: header
+   *         name: If-Match
+   *         required: false
+   *         description: |
+   *           The `ETag` of the `GET /api/admin/groups` the change is based on. Optional;
+   *           without it the save behaves as before (last write wins).
+   *         schema:
+   *           type: string
    *     requestBody:
    *       required: true
    *       description: Updated group configuration (partial update)
@@ -790,8 +810,17 @@ export default function registerAdminGroupRoutes(app) {
    *           application/json:
    *             schema:
    *               $ref: '#/components/schemas/GroupOperation'
+   *         headers:
+   *           ETag:
+   *             description: Revision of groups.json after this save
+   *             schema:
+   *               type: string
    *       404:
    *         description: Group not found
+   *       412:
+   *         description: |
+   *           `PRECONDITION_FAILED`: `If-Match` does not name the stored revision; groups.json
+   *           was changed after it was read. Nothing was saved.
    *       500:
    *         description: Failed to update group
    */
@@ -810,8 +839,12 @@ export default function registerAdminGroupRoutes(app) {
     // cannot overwrite a concurrent create, delete or content-access change.
     let group;
     let oldGroup;
-    await withAdminInvariantLock(() =>
+    const { data: storedGroups } = await withAdminInvariantLock(() =>
       configStore.updateJson(GROUPS_FILE, async groupsData => {
+        // Optional optimistic lock: a save based on an older read of groups.json
+        // (another admin, another tab or the connect wizard saved in between) is
+        // refused with 412 and writes nothing. Checked on the body read under the lock.
+        assertIfMatch(req, groupsData, 'groups');
         if (!groupsData) {
           throw new ServiceError('NOT_FOUND', 'Groups file not found');
         }
@@ -866,6 +899,8 @@ export default function registerAdminGroupRoutes(app) {
       resourceId: groupId,
       summary: `Updated group ${groupId}`
     });
+    // The new revision, so a client can save again without reading first.
+    setRevisionHeaders(res, revisionOf(storedGroups));
     res.json(group);
   });
 
