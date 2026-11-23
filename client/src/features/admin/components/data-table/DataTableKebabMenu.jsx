@@ -3,6 +3,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useTranslation } from 'react-i18next';
 import Icon from '../../../../shared/components/Icon';
 
 const MENU_WIDTH = 192; // matches w-48
@@ -18,7 +19,9 @@ const MENU_WIDTH = 192; // matches w-48
  * Keyboard support: Enter/Space toggles, Esc closes and returns focus to the
  * trigger, ArrowDown/Up cycle through menu items, Tab exits the menu.
  */
-function DataTableKebabMenu({ items, label = 'More actions', row }) {
+function DataTableKebabMenu({ items, label: labelProp, row }) {
+  const { t } = useTranslation();
+  const label = labelProp ?? t('admin.dataTable.moreActions', 'More actions');
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState({ top: 0, left: 0 });
   const ref = useRef(null);

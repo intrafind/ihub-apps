@@ -397,7 +397,7 @@ function PromptFormEditor({
                   required={true}
                   placeholder={{
                     en: 'Prompt name',
-                    de: 'Prompt Name',
+                    de: 'Prompt-Name',
                     es: 'Nombre del prompt',
                     fr: 'Nom du prompt'
                   }}
@@ -554,7 +554,10 @@ function PromptFormEditor({
                             handleVariableChange(index, 'defaultValue', e.target.value)
                           }
                           className={`${INPUT_CLASS} mt-1 block`}
-                          placeholder="Default value"
+                          placeholder={t(
+                            'admin.prompts.edit.variableDefaultPlaceholder',
+                            'Default value'
+                          )}
                           autoComplete="off"
                         />
                       </div>

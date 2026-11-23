@@ -175,7 +175,7 @@ function GroupFormEditor({
                     className={`${INPUT_CLASS} mt-1 block ${
                       validationErrors.id ? 'border-red-500 dark:border-red-400' : ''
                     }`}
-                    placeholder="Enter unique group ID"
+                    placeholder={t('admin.groups.form.idPlaceholder', 'Enter unique group ID')}
                   />
                   {validationErrors.id && (
                     <p className="mt-1 text-sm text-red-600 dark:text-red-400">
@@ -204,7 +204,7 @@ function GroupFormEditor({
                     className={`${INPUT_CLASS} mt-1 block ${
                       validationErrors.name ? 'border-red-500 dark:border-red-400' : ''
                     }`}
-                    placeholder="Enter group display name"
+                    placeholder={t('admin.groups.form.namePlaceholder', 'Enter group display name')}
                   />
                   {validationErrors.name && (
                     <p className="mt-1 text-sm text-red-600 dark:text-red-400">
@@ -222,7 +222,10 @@ function GroupFormEditor({
                     onChange={e => handleInputChange('description', e.target.value)}
                     rows={3}
                     className={`${INPUT_CLASS} mt-1 block`}
-                    placeholder="Enter group description"
+                    placeholder={t(
+                      'admin.groups.form.descriptionPlaceholder',
+                      'Enter group description'
+                    )}
                   />
                 </div>
 
@@ -239,7 +242,10 @@ function GroupFormEditor({
                     </label>
                   </div>
                   <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                    Allow members of this group to access administrative functions
+                    {t(
+                      'admin.groups.form.adminAccessHelp',
+                      'Allow members of this group to access administrative functions'
+                    )}
                   </p>
                 </div>
 
@@ -485,59 +491,77 @@ function GroupFormEditor({
                 {t('admin.groups.permissions', 'Permissions')}
               </h3>
               <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                Configure which apps, models, and prompts members of this group can access
+                {t(
+                  'admin.groups.form.permissionsHelp',
+                  'Configure which apps, models, and prompts members of this group can access'
+                )}
               </p>
             </div>
             <div className="mt-5 md:col-span-2 md:mt-0">
               <div className="space-y-6">
                 {/* Apps Permission */}
                 <ResourceSelector
-                  label="Apps"
+                  label={t('admin.nav.apps', 'Apps')}
                   resources={resources.apps}
                   selectedResources={group.permissions?.apps || []}
                   onSelectionChange={selected => handlePermissionChange('apps', selected)}
-                  placeholder="Search apps to add..."
-                  emptyMessage="No apps selected - users won't see any apps"
+                  placeholder={t('admin.groups.form.searchApps', 'Search apps to add…')}
+                  emptyMessage={t(
+                    'admin.groups.form.noApps',
+                    'No apps selected – users won’t see any apps'
+                  )}
                 />
 
                 {/* Models Permission */}
                 <ResourceSelector
-                  label="Models"
+                  label={t('admin.nav.models', 'Models')}
                   resources={resources.models}
                   selectedResources={group.permissions?.models || []}
                   onSelectionChange={selected => handlePermissionChange('models', selected)}
-                  placeholder="Search models to add..."
-                  emptyMessage="No models selected - users can't use any AI models"
+                  placeholder={t('admin.groups.form.searchModels', 'Search models to add…')}
+                  emptyMessage={t(
+                    'admin.groups.form.noModels',
+                    'No models selected – users can’t use any AI models'
+                  )}
                 />
 
                 {/* Prompts Permission */}
                 <ResourceSelector
-                  label="Prompts"
+                  label={t('admin.nav.prompts', 'Prompts')}
                   resources={resources.prompts}
                   selectedResources={group.permissions?.prompts || []}
                   onSelectionChange={selected => handlePermissionChange('prompts', selected)}
-                  placeholder="Search prompts to add..."
-                  emptyMessage="No prompts selected - users can't access any prompt templates"
+                  placeholder={t('admin.groups.form.searchPrompts', 'Search prompts to add…')}
+                  emptyMessage={t(
+                    'admin.groups.form.noPrompts',
+                    'No prompts selected – users can’t access any prompt templates'
+                  )}
                 />
 
                 {/* Workflows Permission */}
                 <ResourceSelector
-                  label="Workflows"
+                  label={t('admin.nav.workflows', 'Workflows')}
                   resources={resources.workflows || []}
                   selectedResources={group.permissions?.workflows || []}
                   onSelectionChange={selected => handlePermissionChange('workflows', selected)}
-                  placeholder="Search workflows to add..."
-                  emptyMessage="No workflows selected - users can't execute any workflows"
+                  placeholder={t('admin.groups.form.searchWorkflows', 'Search workflows to add…')}
+                  emptyMessage={t(
+                    'admin.groups.form.noWorkflows',
+                    'No workflows selected – users can’t run any workflows'
+                  )}
                 />
 
                 {/* Skills Permission */}
                 <ResourceSelector
-                  label="Skills"
+                  label={t('admin.nav.skills', 'Skills')}
                   resources={resources.skills || []}
                   selectedResources={group.permissions?.skills || []}
                   onSelectionChange={selected => handlePermissionChange('skills', selected)}
-                  placeholder="Search skills to add..."
-                  emptyMessage="No skills selected - users can't use any agent skills"
+                  placeholder={t('admin.groups.form.searchSkills', 'Search skills to add…')}
+                  emptyMessage={t(
+                    'admin.groups.form.noSkills',
+                    'No skills selected – users can’t use any agent skills'
+                  )}
                 />
 
                 {/* Integrations Permission (#3093) */}
