@@ -366,13 +366,16 @@
       "com.intrafind/entra-directory": "boolean",
       "com.intrafind/ihub": "boolean",
       "com.intrafind/ldap-directory": "boolean",
+      "com.intrafind/staan-search": "boolean",
       "drawio": "boolean",
       "entra": "boolean",
       "excalidraw": "boolean",
       "ihub": "boolean",
       "mcp/drawio": "boolean",
       "mcp/excalidraw": "boolean",
+      "staan": "boolean",
       "type:people-directory": "boolean",
+      "type:web-search": "boolean",
       "x500bund": "boolean"
     }
   },
@@ -2374,6 +2377,7 @@
       "apps": [],
       "groups": [],
       "isDefault": "boolean",
+      "nextDefaultModelId": "string",
       "workflows": []
     }
   },
@@ -5621,7 +5625,7 @@
           "id": "string",
           "name": "string",
           "protocol": "string",
-          "type": "null"
+          "type": "null|string"
         }
       ]
     }
