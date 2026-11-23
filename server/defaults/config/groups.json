@@ -14,7 +14,9 @@
         "adminAccess": true,
         "scheduledTasks": true,
         "projects": true,
-        "projectSharing": true
+        "projectSharing": true,
+        "userApps": true,
+        "userAppSharing": true
       },
       "mappings": ["IT-Admin", "IT-Admins", "Platform-Admin", "Platform-Admins"]
     },
@@ -32,7 +34,9 @@
         "adminAccess": false,
         "scheduledTasks": true,
         "projects": true,
-        "projectSharing": true
+        "projectSharing": true,
+        "userApps": true,
+        "userAppSharing": true
       },
       "mappings": ["Employees", "Staff"]
     },
@@ -49,7 +53,9 @@
         "adminAccess": false,
         "scheduledTasks": false,
         "projects": false,
-        "projectSharing": false
+        "projectSharing": false,
+        "userApps": false,
+        "userAppSharing": false
       },
       "mappings": ["anonymous", "public"]
     },
@@ -67,7 +73,9 @@
         "adminAccess": false,
         "scheduledTasks": true,
         "projects": true,
-        "projectSharing": true
+        "projectSharing": true,
+        "userApps": true,
+        "userAppSharing": true
       },
       "mappings": []
     }

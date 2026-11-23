@@ -1,0 +1,65 @@
+{
+  "about": "Ratchet of server/tests/app-unpublished-access.test.js: the raw app lookups (getApps(, getAppsForUser(, getAppForUserById() left in server/routes (without server/routes/admin) and server/services/chat. It may only shrink. The app a request may run comes from configCache.getAppForRequest(appId, req.user). Personal apps (increment 2) are not in the config cache, so none of these lookups finds one; `personal` says what each site answers for an ID of the personal shape. The app a chat request may run comes from resolveAppForChat (server/services/userApps/resolveApp.js), which asks getAppForRequest for an admin app.",
+  "lookups": {
+    "server/routes/chat/feedbackRoutes.js": {
+      "calls": 1,
+      "why": "getApps(true): reads only features.feedback of the app a feedback entry names, to refuse feedback for an app that switched it off.",
+      "personal": "Resolved through resolveAppForChat: feedback is taken from a caller who can use the app and answers 404 for everyone else (user-apps-run-paths.test.js)."
+    },
+    "server/routes/chatShares.js": {
+      "calls": 1,
+      "why": "getApps(true): name, colour and icon of the app a shared chat belongs to, for the share viewer, who may have no app list at all.",
+      "personal": "Stores no app name, colour or icon for the shared chat, as for a deleted app (design 7.6). No default is applied and nothing of the personal app is read."
+    },
+    "server/routes/exports.js": {
+      "calls": 2,
+      "why": "Two helpers that take an app id and no user. Not converted on purpose (plan 5.4): an export from the test chat of an unpublished app uses the default export settings.",
+      "personal": "Not converted: an export from a chat of a personal app uses the default export settings, as for an unknown app. A personal app cannot set export settings, so the default is also what it would say."
+    },
+    "server/routes/generalRoutes.js": {
+      "calls": 2,
+      "why": "GET /api/apps is the list (getAppsForUser): it never holds an unpublished app, for admins too. GET /api/apps/:appId answers 500 while the published list cannot be read, as before; the app itself comes from getAppForRequest.",
+      "personal": "GET /api/apps without scope never lists one; with scope it lists personal apps only (listUserAppsFor). GET /api/apps/:appId answers through readUserAppFor, or 404."
+    },
+    "server/routes/mcpAppRoutes.js": {
+      "calls": 1,
+      "why": "resolveMcpApp: the app of an MCP App view, looked up in the caller's published apps. Not converted (not in plan 5.4): the view of an MCP tool does not open in the test chat of an unpublished app.",
+      "personal": "Not found: the view of an MCP tool does not open in a chat of a personal app."
+    },
+    "server/routes/promptRoutes.js": {
+      "calls": 1,
+      "why": "Whether a prompt may be bound to an app its author can open. Published apps only, on purpose (plan 5.4: the prompt routes are not converted).",
+      "personal": "Not found: a prompt cannot be bound to a personal app."
+    },
+    "server/routes/scheduledTasks.js": {
+      "calls": 2,
+      "why": "The tools an app offers a scheduled task, and the upload policy of a task's app. A scheduled task never runs an unpublished app, on purpose (plan 5.4).",
+      "personal": "Not found: a scheduled task never runs a personal app (design 7.5; user-apps-run-paths.test.js)."
+    },
+    "server/routes/voiceRoutes.js": {
+      "calls": 1,
+      "why": "Not a lookup by id: a loop over the caller's apps that collects the voices they may request. Stays a list on purpose (plan 5.4): read-aloud in the test chat of an unpublished app uses the model's voices.",
+      "personal": "Not a lookup by ID. A personal app adds no voices."
+    },
+    "server/routes/workflow/workflowRoutes.js": {
+      "calls": 1,
+      "why": "The workflow chat route. Not converted on purpose (plan 5.4): it answers for an unpublished app as for an unknown id.",
+      "personal": "Answers as for an unknown ID (design 7.5; user-apps-run-paths.test.js)."
+    },
+    "server/services/chat/ChatService.js": {
+      "calls": 1,
+      "why": "invokeAppInternal: the prompt template of an app that runs as a tool or headless. Published apps only, on purpose (plan 5.4).",
+      "personal": "invokeAppInternal answers APP_NOT_FOUND: a personal app runs neither as a tool nor headless (user-apps-run-paths.test.js)."
+    },
+    "server/services/chat/RequestBuilder.js": {
+      "calls": 1,
+      "why": "prepareChatRequest without resolvedApp: scheduled tasks, apps called as tools and the inference API keep getting 'not found' for an unpublished app (plan 5.4).",
+      "personal": "Without the app the chat route resolved it answers APP_NOT_FOUND (user-apps-run-paths.test.js)."
+    },
+    "server/services/chat/appToolsGateway.js": {
+      "calls": 1,
+      "why": "getApps(true) with its own check (isAppAvailable): an app that is not published is neither offered as a tool nor run as one, and the refusal says so.",
+      "personal": "Neither offered nor run as a tool (user-apps-run-paths.test.js)."
+    }
+  }
+}

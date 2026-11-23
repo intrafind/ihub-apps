@@ -226,7 +226,10 @@ function StyleEditor({ config, onUpdate, t }) {
 
       {/* Section Tabs */}
       <div className="border-b border-gray-200 dark:border-gray-700 mb-6">
-        <nav className="flex space-x-8" aria-label="Tabs">
+        <nav
+          className="flex space-x-8"
+          aria-label={t('admin.ui.styles.sectionsLabel', 'Style sections')}
+        >
           {[
             { id: 'theme', label: t('theme.title', 'Theme & Appearance'), icon: '🎨' },
             { id: 'css', label: t('admin.ui.styles.customCss', 'Custom CSS'), icon: '⚙️' },
@@ -415,21 +418,23 @@ function StyleEditor({ config, onUpdate, t }) {
                   color: config.theme?.textColor || '#1a1a2e'
                 }}
               >
-                <p className="text-xs font-medium mb-3 opacity-60">Light Mode</p>
+                <p className="text-xs font-medium mb-3 opacity-60">
+                  {t('admin.ui.styles.preview.lightMode', 'Light Mode')}
+                </p>
                 <div
                   className="px-4 py-2 rounded-md text-white text-sm font-medium mb-2 text-center"
                   style={{ backgroundColor: config.theme?.primaryColor || '#4f46e5' }}
                 >
-                  Primary Button
+                  {t('admin.ui.styles.preview.primaryButton', 'Primary Button')}
                 </div>
                 <div
                   className="px-4 py-2 rounded-md text-white text-sm font-medium mb-3 text-center"
                   style={{ backgroundColor: config.theme?.accentColor || '#10b981' }}
                 >
-                  Accent Button
+                  {t('admin.ui.styles.preview.accentButton', 'Accent Button')}
                 </div>
                 <p className="text-sm" style={{ color: config.theme?.textMutedColor || '#6b7280' }}>
-                  This is muted text.
+                  {t('admin.ui.styles.preview.mutedText', 'This is muted text.')}
                 </p>
               </div>
 
@@ -441,7 +446,9 @@ function StyleEditor({ config, onUpdate, t }) {
                   color: config.theme?.darkMode?.textColor || '#f5f5f5'
                 }}
               >
-                <p className="text-xs font-medium mb-3 opacity-60">Dark Mode</p>
+                <p className="text-xs font-medium mb-3 opacity-60">
+                  {t('admin.ui.styles.preview.darkMode', 'Dark Mode')}
+                </p>
                 <div
                   className="px-4 py-2 rounded-md text-white text-sm font-medium mb-2 text-center"
                   style={{
@@ -451,7 +458,7 @@ function StyleEditor({ config, onUpdate, t }) {
                       '#4f46e5'
                   }}
                 >
-                  Primary Button
+                  {t('admin.ui.styles.preview.primaryButton', 'Primary Button')}
                 </div>
                 <div
                   className="px-4 py-2 rounded-md text-white text-sm font-medium mb-3 text-center"
@@ -460,7 +467,7 @@ function StyleEditor({ config, onUpdate, t }) {
                       config.theme?.darkMode?.accentColor || config.theme?.accentColor || '#10b981'
                   }}
                 >
-                  Accent Button
+                  {t('admin.ui.styles.preview.accentButton', 'Accent Button')}
                 </div>
                 <p
                   className="text-sm"
@@ -468,7 +475,7 @@ function StyleEditor({ config, onUpdate, t }) {
                     color: config.theme?.darkMode?.textMutedColor || '#a0a0a0'
                   }}
                 >
-                  This is muted text.
+                  {t('admin.ui.styles.preview.mutedText', 'This is muted text.')}
                 </p>
               </div>
             </div>

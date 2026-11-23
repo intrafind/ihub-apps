@@ -7,15 +7,8 @@
  * file does not know (configCache.mergeLocaleData), so a key that is only in the code cannot be
  * overridden by an admin and has no German text.
  *
- * This covers the whole client, the admin area included. The admin area still uses many keys
- * that exist only as inline defaults. Those are listed by name, per file, in
- * `translation-keys-baseline.json`, and that file can only shrink:
- *
- * - A missing key that is not listed for its file fails: add it to `shared/i18n/en.json` and
- *   `shared/i18n/de.json`. Every key added from now on must be in both. Swapping a listed key for
- *   a new missing one fails too, because the list holds names, not a count.
- * - A listed key that is no longer missing also fails: remove it from the baseline (and the file
- *   entry once its list is empty), so nobody can add it back later unnoticed.
+ * This covers the whole client, the admin area included, with no exemptions: a missing key fails
+ * with its file and line. Add it to `shared/i18n/en.json` and `shared/i18n/de.json`.
  *
  * Not covered: the login gate (client/src/auth-gate has its own bundled table) and keys built at
  * run time (`t(\`a.${b}\`)`).
@@ -28,7 +21,6 @@ import path from 'path';
 import { tokenize } from 'espree';
 import en from '../../../shared/i18n/en.json';
 import de from '../../../shared/i18n/de.json';
-import baseline from './translation-keys-baseline.json';
 
 const SRC = path.resolve('client/src');
 const SKIPPED_DIRS = [path.join(SRC, 'auth-gate')];
@@ -97,18 +89,14 @@ function literalKeys(file) {
 }
 
 /**
- * Missing keys the baseline does not list for their file, as `file:line: key`.
+ * Missing keys as `file:line: key`.
  * @param {Object<string, Map<string, number>>} missingByFile
- * @param {Object<string, string[]>} listedByFile
  * @returns {string[]}
  */
-function unlistedMissingKeys(missingByFile, listedByFile) {
-  return Object.entries(missingByFile).flatMap(([file, missing]) => {
-    const listed = new Set(listedByFile[file] ?? []);
-    return [...missing]
-      .filter(([key]) => !listed.has(key))
-      .map(([key, line]) => `${file}:${line}: ${key}`);
-  });
+function formatMissingKeys(missingByFile) {
+  return Object.entries(missingByFile).flatMap(([file, missing]) =>
+    [...missing].map(([key, line]) => `${file}:${line}: ${key}`)
+  );
 }
 
 function lookup(locale, key) {
@@ -175,13 +163,6 @@ describe('finding translation keys in source', () => {
     const source = "const a = <p>Don't {t('admin.jsx.key')}</p>;";
     expect(keysInSource(source).map(({ key }) => key)).toEqual(['admin.jsx.key']);
   });
-
-  it('catches a listed missing key swapped for a new one in the same file', () => {
-    const missing = { 'a.jsx': new Map([['admin.new.key', 7]]) };
-    expect(unlistedMissingKeys(missing, { 'a.jsx': ['admin.old.key'] })).toEqual([
-      'a.jsx:7: admin.new.key'
-    ]);
-  });
 });
 
 describe('translation keys used by the frontend', () => {
@@ -192,27 +173,8 @@ describe('translation keys used by the frontend', () => {
     expect(used).toBeGreaterThan(5000);
   });
 
-  it('exist in English and German, apart from the keys listed in the baseline', () => {
-    expect(unlistedMissingKeys(missingByFile, baseline)).toEqual([]);
-  });
-
-  it('have a baseline that lists only keys still missing (remove a key once you add it)', () => {
-    const stale = Object.entries(baseline).flatMap(([file, keys]) => {
-      const missing = missingByFile[file];
-      const fixed = keys.filter(key => !missing?.has(key));
-      if (fixed.length === 0) return [];
-      return fixed.length === keys.length
-        ? [`${file}: remove the file from the baseline`]
-        : fixed.map(key => `${file}: remove ${key} from the baseline`);
-    });
-    expect(stale).toEqual([]);
-  });
-
-  it('have a baseline kept sorted, one entry per key', () => {
-    const unsorted = Object.entries(baseline)
-      .filter(([, keys]) => keys.join('\n') !== [...new Set(keys)].sort().join('\n'))
-      .map(([file]) => file);
-    expect(unsorted).toEqual([]);
+  it('exist in English and German', () => {
+    expect(formatMissingKeys(missingByFile)).toEqual([]);
   });
 });
 

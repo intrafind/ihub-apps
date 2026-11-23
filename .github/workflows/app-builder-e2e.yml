@@ -1,0 +1,114 @@
+# App builder (end to end)
+#
+# Creates apps the way an author does, in a real browser on a fresh install:
+# from the app list to the first answer in the test chat, a draft from a
+# description, a template, a copy, a link app, publishing, and the same as a
+# content admin who is not an administrator (tests/e2e/app-builder.spec.js, the
+# cases of concepts/app-builder-rework-2026-11, section 7.3).
+#
+# The suite runs on its own server, ports and contents directory
+# (tests/config/playwright.app-builder.config.js) with a local model stub, so it
+# needs no model key and no network. It has one worker and no retries: two cases
+# change the only model and the groups of that server, and a retry would hide the
+# flakiness the run is there to surface.
+#
+# A second step loads the create page and the editor cold on a deployment under
+# a path prefix (`/ihub`, tests/e2e/app-builder-subpath.spec.js): the production
+# build behind a proxy that answers only under the prefix. It names the spec, so
+# the route crawl and the short-link checks of the subpath suite do not run here.
+#
+# The main Playwright suite runs in no workflow. Without this one, a change to
+# the create page, the editor or the draft endpoint would be checked by unit
+# tests only, which replace either the server or the browser.
+#
+# There is deliberately no `paths:` filter, for the reason given in
+# api-guidelines-check.yml: a required check that a PR never triggers would block it.
+
+name: App builder (e2e)
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: app-builder-e2e-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  app-builder-e2e:
+    name: App builder (e2e)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      CI: 'true'
+      # Required by the server to boot in CI.
+      JWT_SECRET: ci-app-builder-e2e-test-secret
+      NODE_ENV: development
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm run install:all
+
+      - name: Install Playwright browsers
+        # --no-install: use the Playwright version pinned by the lockfile, never fetch one on demand.
+        run: npx --no-install playwright install --with-deps chromium
+
+      - name: Run the app builder suite
+        # The Playwright config starts the app on its own contents directory with the
+        # model stub (tests/config/e2e-server.mjs) and seeds a content admin
+        # (tests/config/app-builder-seed.mjs).
+        run: npm run test:e2e:app-builder -- --project=chromium --retries=0
+
+      - name: Keep the report of the app builder suite
+        # The subpath run below writes its report to the same directories.
+        if: always()
+        run: |
+          mkdir -p e2e-reports/app-builder
+          for dir in playwright-report test-results; do
+            if [ -d "$dir" ]; then mv "$dir" "e2e-reports/app-builder/$dir"; fi
+          done
+
+      - name: Build the client
+        # The subpath server serves the production build (tests/config/subpath-server.mjs).
+        # A production build. With the job's NODE_ENV=development Vite builds with
+        # `import.meta.env.DEV`, and the client then asks for assets at the root
+        # instead of under the prefix (buildAssetUrl in runtimeBasePath.js).
+        env:
+          NODE_ENV: production
+        run: npm run build
+        working-directory: client
+
+      - name: Run the app builder spec under a path prefix
+        run: >-
+          npx --no-install playwright test
+          --config tests/config/playwright.subpath.config.js
+          tests/e2e/app-builder-subpath.spec.js
+          tests/e2e/user-apps-subpath.spec.js
+          --project=chromium
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: app-builder-e2e-playwright-report
+          path: |
+            e2e-reports/
+            playwright-report/
+            test-results/
+          retention-days: 14

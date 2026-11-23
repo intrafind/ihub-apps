@@ -19,6 +19,7 @@ import express from 'express';
 import { ServiceError } from '../../utils/ServiceError.js';
 import { authRequired } from '../../middleware/authRequired.js';
 import configCache from '../../configCache.js';
+import { resolveAppForChat } from '../../services/userApps/resolveApp.js';
 import {
   appScopeSettings,
   applicableScopeProviders,
@@ -38,9 +39,9 @@ function isPermitted(user, kind, id) {
 
 /**
  * The app, model and user a scope request is about; throws a ServiceError for an invalid one.
- * @returns {{ app: Object, model: Object|undefined, user: Object, language: string }}
+ * @returns {Promise<{ app: Object, model: Object|undefined, user: Object, language: string }>}
  */
-function resolveContext(req) {
+async function resolveContext(req) {
   const { appId, modelId } = req.query;
   if (!isValidId(appId)) {
     throw new ServiceError('BAD_REQUEST', 'A valid appId is required');
@@ -51,8 +52,11 @@ function resolveContext(req) {
 
   // An app the user may not use answers like one that does not exist, so the
   // route cannot be used to probe app ids.
-  const app = findByIdCaseInsensitive(configCache.getApps()?.data || [], appId);
-  if (!app || app.enabled === false || !isPermitted(req.user, 'apps', app.id)) {
+  // Published, or one a content admin is trying before publishing it. A
+  // personal app is granted by its owner and its shares, not by groups.
+  const found = await resolveAppForChat(appId, req.user, { req });
+  const app = found?.app;
+  if (!app || (!found.userApp && !isPermitted(req.user, 'apps', app.id))) {
     throw new ServiceError('NOT_FOUND', 'App not found');
   }
 
@@ -141,7 +145,7 @@ function requestSignal(res) {
  *         description: App not found or not available to the user
  */
 router.get('/scopes', authRequired, async (req, res) => {
-  const context = resolveContext(req);
+  const context = await resolveContext(req);
   const signal = requestSignal(res);
   const integrations = await Promise.all(
     applicableScopeProviders(context).map(provider =>
@@ -192,7 +196,7 @@ router.get('/:integrationId/scopes', authRequired, async (req, res) => {
     ? getScopeProvider(req.params.integrationId)
     : null;
   if (!provider) throw new ServiceError('NOT_FOUND', 'Integration not found');
-  const context = resolveContext(req);
+  const context = await resolveContext(req);
   if (!applicableScopeProviders(context).includes(provider)) {
     throw new ServiceError('NOT_FOUND', 'Integration not found');
   }

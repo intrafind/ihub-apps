@@ -16,6 +16,7 @@ import { appConfigSchema } from '../../validators/appConfigSchema.js';
 import { describeIssues } from '../../validators/userPromptSchema.js';
 import { getIntegrationStatus } from '../../integrationRegistry.js';
 import { sendCreated, segment } from '../../utils/created.js';
+import { APP_CREATE_ORIGINS } from '../../../shared/appGenerator.js';
 
 /**
  * Validate an app configuration an admin is about to save, and answer 400 when
@@ -47,6 +48,28 @@ function assertValidAppConfig(appConfig) {
       }
     }
   );
+}
+
+/**
+ * The `origin` query parameter of `POST /api/admin/apps`: how the app was
+ * started (`blank`, `template`, `copy`, `generated`, `link`, `upload`). It is
+ * audit metadata and changes nothing about the app that is created.
+ *
+ * It is a query parameter because the body is the app itself: the app schema
+ * is strict and the body is stored as sent, so a body field would be refused
+ * or end up in the app file.
+ *
+ * @param {unknown} value - `req.query.origin`
+ * @returns {string|undefined} The origin, or undefined when the parameter is absent.
+ * @throws {ServiceError} `VALIDATION_FAILED` (400) for any other value
+ */
+function readCreateOrigin(value) {
+  if (value === undefined) return undefined;
+  if (typeof value === 'string' && APP_CREATE_ORIGINS.includes(value)) return value;
+  const message = `origin must be one of: ${APP_CREATE_ORIGINS.join(', ')}`;
+  throw new ServiceError('VALIDATION_FAILED', message, {
+    details: [{ path: 'origin', code: 'INVALID', message }]
+  });
 }
 
 /**
@@ -644,11 +667,29 @@ export default function registerAdminAppsRoutes(app) {
    *       **File System Operations:**
    *       - Creates new JSON file in contents/apps/ directory
    *       - Automatically refreshes cache after successful creation
+   *
+   *       The app is stored as sent. Without `enabled` in the body it is
+   *       published (`enabled` defaults to `true`). No change-history snapshot
+   *       is written on create; the first edit writes one whose "before" is
+   *       the created app.
    *     tags:
    *       - Admin
    *       - Applications
    *     security:
    *       - adminAuth: []
+   *     parameters:
+   *       - in: query
+   *         name: origin
+   *         required: false
+   *         schema:
+   *           type: string
+   *           enum: [blank, template, copy, generated, link, upload]
+   *         description: |
+   *           Audit metadata: how the app was started (empty, from a template,
+   *           as a copy, from an AI draft, as a link app, by uploading a
+   *           configuration). It is recorded in `details.origin` of the audit
+   *           entry and changes nothing about the app. An unknown value
+   *           answers 400 `VALIDATION_FAILED`.
    *     requestBody:
    *       required: true
    *       description: New application configuration
@@ -699,6 +740,10 @@ export default function registerAdminAppsRoutes(app) {
    *                 value:
    *                   error: "Invalid app configuration: iframeConfig.url: Iframe URL must use http or https"
    *                   details: []
+   *               invalidOrigin:
+   *                 summary: Unknown value of the origin query parameter (VALIDATION_FAILED)
+   *                 value:
+   *                   error: "origin must be one of: blank, template, copy, generated, link, upload"
    *       409:
    *         description: Conflict - app with ID already exists
    *         content:
@@ -711,6 +756,7 @@ export default function registerAdminAppsRoutes(app) {
    *         description: Internal server error
    */
   app.post(buildServerPath('/api/admin/apps'), contentAdminAuth, async (req, res) => {
+    const origin = readCreateOrigin(req.query?.origin);
     const newApp = req.body;
     if (!newApp.id || !newApp.name || !newApp.description) {
       throw new ServiceError('BAD_REQUEST', 'Missing required fields');
@@ -734,12 +780,15 @@ export default function registerAdminAppsRoutes(app) {
       throw new ServiceError('CONFLICT', 'App with this ID already exists');
     }
     await configCache.refreshAppsCache();
+    // No change-history snapshot on create: its rollback would have nothing to go back to.
+    // The first edit writes one whose "before" is this app.
     await logAudit({
       req,
       action: 'create',
       resource: 'app',
       resourceId: newApp.id,
-      summary: `Created app ${newApp.id}`
+      summary: `Created app ${newApp.id}`,
+      ...(origin ? { details: { origin } } : {})
     });
     sendCreated(res, `/api/admin/apps/${segment(newApp.id)}`, newApp);
   });

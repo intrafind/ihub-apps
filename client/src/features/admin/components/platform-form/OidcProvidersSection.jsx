@@ -151,7 +151,7 @@ function OidcProvidersSection({ config, onChange, t, availableGroups = [] }) {
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-6">
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-          OIDC Authentication Settings
+          {t('admin.auth.oidc.title', 'OIDC Authentication Settings')}
         </h3>
         <button
           type="button"
@@ -173,12 +173,14 @@ function OidcProvidersSection({ config, onChange, t, availableGroups = [] }) {
             className={`${CHECKBOX_CLASS} mr-2`}
           />
           <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-            Allow Self-Signup
+            {t('admin.auth.allowSelfSignup', 'Allow Self-Signup')}
           </span>
         </label>
         <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-          Allow new users to register automatically through OIDC authentication. If disabled, new
-          users must be added manually by administrators.
+          {t(
+            'admin.auth.oidc.selfSignupHelp',
+            'Allow new users to register automatically through OIDC authentication. If disabled, new users must be added manually by administrators.'
+          )}
         </p>
       </div>
 
@@ -203,11 +205,13 @@ function OidcProvidersSection({ config, onChange, t, availableGroups = [] }) {
                     className={CHECKBOX_CLASS}
                   />
                   <h4 className="text-md font-medium text-gray-900 dark:text-gray-100">
-                    {provider.displayName || provider.name || `Provider ${index + 1}`}
+                    {provider.displayName ||
+                      provider.name ||
+                      t('admin.auth.oidc.providerNumber', 'Provider {{n}}', { n: index + 1 })}
                   </h4>
                   {provider.enabled === false && (
                     <span className="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200">
-                      Disabled
+                      {t('admin.prompts.disabled', 'Disabled')}
                     </span>
                   )}
                 </div>
@@ -224,7 +228,7 @@ function OidcProvidersSection({ config, onChange, t, availableGroups = [] }) {
               >
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Provider Name
+                    {t('admin.auth.oidc.providerName', 'Provider Name')}
                   </label>
                   <input
                     type="text"
@@ -236,7 +240,7 @@ function OidcProvidersSection({ config, onChange, t, availableGroups = [] }) {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Display Name
+                    {t('admin.auth.oidc.displayName', 'Display Name')}
                   </label>
                   <input
                     type="text"
@@ -248,7 +252,7 @@ function OidcProvidersSection({ config, onChange, t, availableGroups = [] }) {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Client ID
+                    {t('admin.auth.oidc.clientId', 'Client ID')}
                   </label>
                   <input
                     type="text"
@@ -272,7 +276,7 @@ function OidcProvidersSection({ config, onChange, t, availableGroups = [] }) {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Authorization URL
+                    {t('admin.auth.oidc.authorizationUrl', 'Authorization URL')}
                   </label>
                   <input
                     type="url"
@@ -284,7 +288,7 @@ function OidcProvidersSection({ config, onChange, t, availableGroups = [] }) {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Token URL
+                    {t('admin.auth.oidc.tokenUrl', 'Token URL')}
                   </label>
                   <input
                     type="url"
@@ -296,7 +300,7 @@ function OidcProvidersSection({ config, onChange, t, availableGroups = [] }) {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    User Info URL
+                    {t('admin.auth.oidc.userInfoUrl', 'User Info URL')}
                   </label>
                   <input
                     type="url"
@@ -332,7 +336,9 @@ function OidcProvidersSection({ config, onChange, t, availableGroups = [] }) {
                   {!provider.callbackURL && provider.name && (
                     <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
                       <Icon name="information-circle" className="h-3 w-3 inline mr-1" />
-                      Auto-generated: /api/auth/oidc/{provider.name}/callback
+                      {t('admin.auth.oidc.autoCallback', 'Auto-generated: {{url}}', {
+                        url: `/api/auth/oidc/${provider.name}/callback`
+                      })}
                     </p>
                   )}
                 </div>
@@ -403,7 +409,7 @@ function OidcProvidersSection({ config, onChange, t, availableGroups = [] }) {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Groups Attribute
+                    {t('admin.auth.oidc.groupsAttribute', 'Groups Attribute')}
                   </label>
                   <input
                     type="text"
@@ -415,7 +421,7 @@ function OidcProvidersSection({ config, onChange, t, availableGroups = [] }) {
                 </div>
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Scope (comma-separated)
+                    {t('admin.auth.oidc.scope', 'Scope (comma-separated)')}
                   </label>
                   <input
                     type="text"
@@ -455,7 +461,7 @@ function OidcProvidersSection({ config, onChange, t, availableGroups = [] }) {
                       className={`${CHECKBOX_CLASS} mr-2`}
                     />
                     <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Enable PKCE
+                      {t('admin.auth.oidc.pkce', 'Enable PKCE')}
                     </span>
                   </label>
                 </div>
@@ -468,12 +474,14 @@ function OidcProvidersSection({ config, onChange, t, availableGroups = [] }) {
                       className={`${CHECKBOX_CLASS} mr-2`}
                     />
                     <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Auto-redirect
+                      {t('admin.auth.oidc.autoRedirect', 'Auto-redirect')}
                     </span>
                   </label>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Automatically redirect users to this provider when it's the only auth method
-                    enabled
+                    {t(
+                      'admin.auth.oidc.autoRedirectHelp',
+                      "Automatically redirect users to this provider when it's the only auth method enabled"
+                    )}
                   </p>
                 </div>
               </div>

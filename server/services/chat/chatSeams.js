@@ -815,6 +815,11 @@ export { sameArgs };
  * @param {Object} [options.platform]
  * @param {boolean} options.headless - nobody can answer an approval card here
  * @param {string[]} [options.grants] - tool ids the user allowed for this chat
+ * @param {boolean} [options.chatGrants] - `false`: "allow for this chat" does
+ *   not exist in this chat (a personal app someone else wrote). Stored grants
+ *   are not honoured, and the approval event says so with
+ *   `displayData.grants: []`, so the card offers no such button. Left out,
+ *   nothing changes: the grants count and the event carries no `grants`.
  * @param {{callId: string, args: Object}|null} [options.approvedCall] - the call being resumed
  * @param {Function} options.buildLogData
  * @param {Function} options.logInteraction
@@ -826,13 +831,15 @@ export function chatApprovalOptions({
   platform = null,
   headless,
   grants = [],
+  chatGrants,
   approvedCall = null,
   buildLogData,
   logInteraction,
   interactionService = defaultInteractionService,
   runLog = defaultRunLog
 }) {
-  const granted = new Set((Array.isArray(grants) ? grants : []).map(String));
+  const grantsOffered = chatGrants !== false;
+  const granted = new Set((grantsOffered && Array.isArray(grants) ? grants : []).map(String));
   const approvedOnce = oneShotGrant(approvedCall);
   return {
     headless,
@@ -851,6 +858,9 @@ export function chatApprovalOptions({
       const displayData = approvalDisplayData(info, policy, {
         justification: justificationOf(ctx, info.call)
       });
+      // The grants the card may offer. Decided here and sent with the event;
+      // the client does not infer it from the app.
+      if (!grantsOffered) displayData.grants = [];
       let interaction;
       try {
         interaction = await interactionService.raise({

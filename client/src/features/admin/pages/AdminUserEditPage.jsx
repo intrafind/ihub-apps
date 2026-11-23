@@ -338,7 +338,7 @@ function AdminUserEditPage() {
 
   const handleSave = async () => {
     if (!user.username) {
-      setSaveError('Username is required');
+      setSaveError(t('admin.users.validation.usernameRequired', 'Username is required'));
       return;
     }
 
@@ -367,7 +367,7 @@ function AdminUserEditPage() {
   };
 
   if (!loading && error) {
-    return <AdminLoadError title="Error" message={error} action={null} />;
+    return <AdminLoadError title={t('common.error', 'Error')} message={error} action={null} />;
   }
 
   return (
@@ -375,9 +375,11 @@ function AdminUserEditPage() {
       loading={loading}
       outerClassName="min-h-screen bg-gray-50 dark:bg-gray-900"
       breadcrumbs={[
-        { label: 'Admin', href: '/admin' },
-        { label: 'Users', href: '/admin/users' },
-        { label: isNewUser ? 'New User' : (user?.username ?? userId) }
+        { label: t('documentTitle.admin', 'Admin'), href: '/admin' },
+        { label: t('admin.nav.users', 'Users'), href: '/admin/users' },
+        {
+          label: isNewUser ? t('admin.breadcrumbs.newUser', 'New User') : (user?.username ?? userId)
+        }
       ]}
       blocker={blocker}
     >

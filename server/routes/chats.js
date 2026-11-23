@@ -44,8 +44,9 @@ import { buildServerPath } from '../utils/basePath.js';
 import { assertValidId } from '../utils/pathSecurity.js';
 import { buildContentDisposition } from '../utils/safeContentDisposition.js';
 import configCache from '../configCache.js';
+import { canUserAccessResource } from '../utils/authorization.js';
 import { appAllowsUserProjects } from '../../shared/appProjects.js';
-import { findByIdCaseInsensitive } from '../utils/resourceLookup.js';
+import { isUnresolvedUserAppId, resolveAppForChat } from '../services/userApps/resolveApp.js';
 import runLog from '../services/loop/RunLog.js';
 import { isAnonymousUser, resolvePrincipal } from '../services/loop/runIdentity.js';
 import { authorizeChat } from '../services/chat/chatAccess.js';
@@ -54,6 +55,7 @@ import { getChatRepository, MAX_TITLE_LENGTH } from '../services/chat/ChatReposi
 import { chatModelOf, scheduleChatTitle } from '../services/chat/chatTitles.js';
 import { getArtifactRepository } from '../services/artifacts/ArtifactRepository.js';
 import { servedMediaType } from '../services/artifacts/artifactPolicy.js';
+import { setUserFileContentType } from '../utils/activeContentHeaders.js';
 import { sendArtifactsZip } from '../services/artifacts/artifactZip.js';
 import { providerMarkingOfArtifact } from '../services/provenance/artifactProvenance.js';
 import { requireEuAiActEnabled } from '../services/euAiAct/conformity.js';
@@ -219,6 +221,40 @@ async function loadOwnedChat(chatId, user, repository, intent = 'read') {
 }
 
 /**
+ * The app whose settings apply to a chat (its upload policy, whether it takes
+ * projects), or null when there is none for this caller.
+ *
+ * A published app applies to every caller, as before: these routes act on the
+ * caller's own chat and have never checked the app's group permission. An app
+ * that is not published applies only to a content admin whose groups grant it,
+ * the one who can try it in the chat (`configCache.getAppForRequest`); for
+ * anyone else it is no app, as an unknown id is.
+ *
+ * A personal app (feature `userApps`) is the exception to "no app is fine":
+ * its id never falls back to the platform's defaults. The caller gets the app
+ * as the chat runs it for them, or the request is refused. Otherwise an app
+ * whose owner switched uploads off would take files, and a person who lost
+ * access but still holds a chat could keep uploading into it.
+ *
+ * @param {string|null|undefined} appId - The chat's app
+ * @param {import('express').Request} req - The request (`req.user`)
+ * @returns {Promise<{app: Object|null, personal: boolean}>}
+ * @throws {ServiceError} `NOT_FOUND` for a personal app the caller cannot use.
+ */
+async function appOfChat(appId, req) {
+  if (!appId) return { app: null, personal: false };
+  const found = await resolveAppForChat(appId, req.user, { req });
+  if (isUnresolvedUserAppId(appId, found)) throw new ServiceError('NOT_FOUND', 'App not found');
+  const app = found?.app || null;
+  if (!app) return { app: null, personal: false };
+  if (found.userApp) return { app, personal: true };
+  if (app.enabled === false && !canUserAccessResource(req.user, 'apps', app.id)) {
+    return { app: null, personal: false };
+  }
+  return { app, personal: false };
+}
+
+/**
  * Refuse adding `added` projects to a chat unless the caller may use every one
  * of them, user projects are switched on and the chat's app takes them.
  *
@@ -240,9 +276,9 @@ async function assertMayAttach(
   }
   // The chat's app decides too: one that takes no personal projects gets
   // none attached here either, as with a message (`resolveChatProjects`).
-  const app = chat.appId
-    ? findByIdCaseInsensitive(configCache.getApps()?.data || [], chat.appId)
-    : null;
+  // A personal app takes none (`features.projects` is off in every one), and
+  // one the caller cannot use is refused inside `appOfChat`.
+  const { app } = await appOfChat(chat.appId, req);
   if (app && !appAllowsUserProjects(app)) {
     throw new ServiceError('APP_PROJECTS_DISABLED', 'This app takes no projects');
   }
@@ -620,9 +656,12 @@ export default function registerChatRoutes(app) {
     // request must not be able to pick a looser one for somebody's chat.
     const requestedAppId =
       auth.chat?.appId || (typeof req.body?.appId === 'string' && req.body.appId) || null;
-    const chatApp = requestedAppId
-      ? findByIdCaseInsensitive(configCache.getApps()?.data || [], requestedAppId)
-      : null;
+    const { app: chatApp, personal } = await appOfChat(requestedAppId, req);
+    // A personal app says itself whether it takes files ("Users can attach
+    // files", as far as the installation and its owner allow it).
+    if (personal && chatApp.upload?.enabled !== true) {
+      throw new ServiceError('UPLOADS_DISABLED', 'Chat file uploads are disabled');
+    }
     // The user's own file storage limit (group/user `usageLimits`).
     const policy = withUserFileLimit(chatFilePolicy(chatApp), req.user);
     if (!policy.enabled) {
@@ -715,14 +754,15 @@ export default function registerChatRoutes(app) {
 
     const body = original.data;
     const download = req.query.download === '1' || req.query.download === 'true';
-    res.setHeader('Content-Type', servedMediaType(original.mimeType));
+    // The original is what the user uploaded, under the type they declared: an
+    // HTML or SVG file must not run when this URL is opened on its own.
+    setUserFileContentType(res, servedMediaType(original.mimeType));
     res.setHeader('Content-Length', String(body.length));
     res.setHeader('Cache-Control', 'private, max-age=31536000, immutable');
     res.setHeader(
       'Content-Disposition',
       download ? buildContentDisposition(original.name) : 'inline'
     );
-    res.setHeader('X-Content-Type-Options', 'nosniff');
     return res.send(body);
   });
 

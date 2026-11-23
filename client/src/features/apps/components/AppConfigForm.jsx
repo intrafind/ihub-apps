@@ -205,6 +205,7 @@ function AppConfigForm({
                   <option value="low">{t('appConfig.thinkingLevelLow', 'Low')}</option>
                   <option value="medium">{t('appConfig.thinkingLevelMedium', 'Medium')}</option>
                   <option value="high">{t('appConfig.thinkingLevelHigh', 'High')}</option>
+                  <option value="xhigh">{t('appConfig.thinkingLevelXhigh', 'Extra high')}</option>
                 </select>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                   {t(
