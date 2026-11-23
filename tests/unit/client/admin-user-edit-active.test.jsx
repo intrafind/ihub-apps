@@ -118,7 +118,7 @@ describe('AdminUserEditPage and active', () => {
       target: { value: 'new@example.com' }
     });
     expect(screen.getByLabelText('Enabled')).not.toBeChecked();
-    fireEvent.click(screen.getByRole('button', { name: 'Save User' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
 
     expect(await screen.findByText('Users list')).toBeInTheDocument();
     const [url, options] = writes()[0];
@@ -133,7 +133,7 @@ describe('AdminUserEditPage and active', () => {
     renderEditor('user_d');
 
     fireEvent.click(await screen.findByLabelText('Enabled'));
-    fireEvent.click(screen.getByRole('button', { name: 'Save User' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
 
     await waitFor(() => expect(writes()).toHaveLength(1));
     expect(writes()[0][1].body.active).toBe(false);
@@ -165,7 +165,7 @@ describe('AdminUserEditPage and active', () => {
     fireEvent.change(await screen.findByPlaceholderText('Enter email address'), {
       target: { value: 'kept@example.com' }
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Save User' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'This change would leave no active administrator who can sign in.'
@@ -221,7 +221,7 @@ describe('AdminUserEditPage: the baseline for active', () => {
     await act(async () => releaseFirst());
 
     fireEvent.click(screen.getByLabelText('Enabled'));
-    fireEvent.click(screen.getByRole('button', { name: 'Save User' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
 
     await waitFor(() => expect(writes()).toHaveLength(1));
     expect(writes()[0][0]).toBe('/admin/auth/users/user_b');
@@ -240,12 +240,12 @@ describe('AdminUserEditPage: the baseline for active', () => {
 
     // Enable; the response is lost, so the server may have stored active: true.
     fireEvent.click(await screen.findByLabelText('Enabled'));
-    fireEvent.click(screen.getByRole('button', { name: 'Save User' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
     expect(await screen.findByRole('alert')).toBeInTheDocument();
 
     // Back to disabled, which equals the loaded user: it must still be sent.
     fireEvent.click(screen.getByLabelText('Enabled'));
-    fireEvent.click(screen.getByRole('button', { name: 'Save User' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
 
     await waitFor(() => expect(writes()).toHaveLength(2));
     expect(writes()[1][1].body.active).toBe(false);
@@ -300,7 +300,7 @@ describe('AdminUserEditPage: the uncertain active flag belongs to one user', () 
 
     // Enable anna and save; the request is still running when the editor moves on.
     fireEvent.click(await screen.findByLabelText('Enabled'));
-    fireEvent.click(screen.getByRole('button', { name: 'Save User' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
     await waitFor(() => expect(writes()).toHaveLength(1));
     fireEvent.click(screen.getByRole('button', { name: 'go' }));
     const discard = screen.queryByRole('button', { name: 'Discard changes' });
@@ -315,7 +315,7 @@ describe('AdminUserEditPage: the uncertain active flag belongs to one user', () 
     fireEvent.change(screen.getByPlaceholderText('Enter email address'), {
       target: { value: 'bert@example.com' }
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Save User' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
 
     await waitFor(() => expect(writes()).toHaveLength(2));
     expect(writes()[1][0]).toBe('/admin/auth/users/user_b');

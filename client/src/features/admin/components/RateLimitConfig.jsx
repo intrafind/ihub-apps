@@ -8,6 +8,7 @@ import { makeAdminApiCall } from '../../../api/adminApi';
 import AdminLoadGate from './AdminLoadGate';
 import { useAdminConfigLoad } from '../hooks/useAdminConfigLoad';
 import { useDirtyReport } from '../hooks/useDirtyReport';
+import { useSaveSection } from './SaveSections';
 
 /** The limiters, in the order the server lists them (`RATE_LIMITER_KEYS`). */
 export const RATE_LIMITERS = [
@@ -107,7 +108,7 @@ function RateLimitConfig({ onDirtyChange }) {
   const [saved, setSaved] = useState({});
   // The form as last loaded or saved; null until it loaded.
   const [savedForm, setSavedForm] = useState(null);
-  useDirtyReport(savedForm, form, onDirtyChange);
+  const dirty = useDirtyReport(savedForm, form, onDirtyChange);
   const [running, setRunning] = useState({});
   const [restartRequired, setRestartRequired] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -140,6 +141,7 @@ function RateLimitConfig({ onDirtyChange }) {
 
   const countsLabel = counts => t(`admin.security.rateLimits.counts.${counts}`);
 
+  /** Saves the limits. Resolves `false` when nothing was saved, so the page's bar stops. */
   const handleSave = async () => {
     if (!ready) return;
     const { limiters, invalid } = toRequest(form);
@@ -150,7 +152,7 @@ function RateLimitConfig({ onDirtyChange }) {
           name: t(`admin.security.rateLimits.limiters.${invalid}.name`)
         })
       });
-      return;
+      return false;
     }
     setSaving(true);
     setMessage(null);
@@ -161,15 +163,32 @@ function RateLimitConfig({ onDirtyChange }) {
       });
       apply(response.data);
       setMessage({ type: 'success', text: t('admin.security.rateLimits.saved') });
+      return true;
     } catch (error) {
       setMessage({
         type: 'error',
         text: error.message || t('admin.security.rateLimits.saveError')
       });
+      return false;
     } finally {
       setSaving(false);
     }
   };
+
+  /** Back to the limits as last loaded or saved, without the last message. */
+  const handleDiscard = () => {
+    if (savedForm) setForm(savedForm);
+    setMessage(null);
+  };
+
+  // The page's save bar saves and discards this section; no Save button of its own.
+  useSaveSection('rate-limits', {
+    dirty,
+    saving,
+    error: message?.type === 'error' ? message.text : null,
+    save: handleSave,
+    discard: handleDiscard
+  });
 
   const inputClass =
     'w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 text-sm';
@@ -378,18 +397,6 @@ function RateLimitConfig({ onDirtyChange }) {
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-4">
             {t('admin.security.rateLimits.perAddress')}
           </p>
-
-          <div className="flex justify-end mt-4">
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={saving}
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-xs text-white bg-blue-600 hover:bg-blue-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
-            >
-              <Icon name="CheckIcon" className="w-4 h-4 mr-2" />
-              {saving ? t('admin.security.rateLimits.saving') : t('admin.security.rateLimits.save')}
-            </button>
-          </div>
         </>
       )}
     </div>

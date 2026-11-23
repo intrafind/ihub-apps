@@ -12,6 +12,11 @@ const ADMIN_PAGES = [
   { labelKey: 'admin.nav.apps', label: 'Apps', href: '/admin/apps' },
   { labelKey: 'admin.nav.models', label: 'Models', href: '/admin/models' },
   { labelKey: 'admin.nav.providers', label: 'Providers', href: '/admin/providers' },
+  {
+    labelKey: 'admin.providers.connect.title',
+    label: 'Connect a model provider',
+    href: '/admin/providers/connect'
+  },
   { labelKey: 'admin.nav.prompts', label: 'Prompts', href: '/admin/prompts' },
   { labelKey: 'admin.nav.skills', label: 'Skills', href: '/admin/skills' },
   { labelKey: 'admin.nav.projects', label: 'Projects', href: '/admin/projects' },

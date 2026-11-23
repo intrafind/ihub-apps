@@ -131,7 +131,7 @@
     {
       "data": {
         "code": "ABORTED",
-        "message": "The operation was aborted",
+        "message": "The model call was stopped",
         "providerCode": "ABORTED",
         "recoverable": false,
         "status": null,

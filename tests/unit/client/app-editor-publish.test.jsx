@@ -361,9 +361,14 @@ describe('who will see the app', () => {
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'group:access' }));
-    const search = await screen.findByRole('combobox');
+    // The access check below the card has a group picker (a select) of its own.
+    const search = await screen.findByRole('combobox', {
+      name: 'Search groups to grant access'
+    });
     fireEvent.focus(search);
-    fireEvent.click(await screen.findByRole('option', { name: /Sales/ }));
+    // The search's own list, not the options of the access check's select.
+    const listbox = await screen.findByRole('listbox');
+    fireEvent.click(await within(listbox).findByRole('option', { name: /Sales/ }));
     await waitFor(() => expect(requests('PUT', '/admin/content-access/apps/chat')).toHaveLength(1));
 
     const dialog = await askPublish();

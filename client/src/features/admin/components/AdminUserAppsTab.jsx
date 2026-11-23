@@ -30,6 +30,7 @@ import { deleteConfirmText } from '../utils/confirmText';
 import { DataTable, SearchInput } from './data-table';
 import AdminLoadError from './AdminLoadError';
 import UserAppSettingsPanel from './UserAppSettingsPanel';
+import { SaveSectionsBar, SaveSectionsProvider } from './SaveSections';
 import {
   CALLOUT_CLASS,
   INPUT_CLASS,
@@ -538,9 +539,12 @@ function AppCell({ app, now }) {
  * @param {Object} props
  * @param {(count: number) => void} [props.onWaitingChange] - Told how many
  *   published apps wait to be switched on, after each load.
+ * @param {number} [props.refreshKey] - Changes when a company app changed elsewhere on the
+ *   page (published, unpublished, deleted): the list is read again. The tab stays mounted
+ *   while hidden, so a change of this value is the only signal it gets.
  * @returns {JSX.Element}
  */
-function AdminUserAppsTab({ onWaitingChange }) {
+function AdminUserAppsTab({ onWaitingChange, refreshKey = 0 }) {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const featureOn = useFeatureFlags().isEnabled('userApps', false);
@@ -570,7 +574,7 @@ function AdminUserAppsTab({ onWaitingChange }) {
 
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, refreshKey]);
 
   const all = apps || [];
   const ofOwner = ownerId ? all.filter(app => app.owner?.id === ownerId) : all;
@@ -800,94 +804,97 @@ function AdminUserAppsTab({ onWaitingChange }) {
     : '';
 
   return (
-    <div>
-      {!featureOn && (
-        <p className={`${CALLOUT_CLASS.info} mb-4`}>
-          {t('admin.userApps.featureOff')}{' '}
-          <Link to="/admin/features" className="font-medium underline">
-            {t('admin.nav.features')}
-          </Link>
-        </p>
-      )}
-
-      <UserAppSettingsPanel />
-
-      <div className="flex flex-wrap items-center gap-3">
-        <SearchInput
-          value={search}
-          onChange={setSearch}
-          placeholder={t('admin.apps.searchPlaceholder')}
-        />
-        {ownerId && (
-          <span className="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-            {t('admin.userApps.filter.owner', { name: ownerName })}
-            <button
-              type="button"
-              onClick={() => setOwnerId('')}
-              className="text-indigo-600 dark:text-indigo-400 underline"
-            >
-              {t('admin.userApps.filter.clearOwner')}
-            </button>
-          </span>
+    <SaveSectionsProvider>
+      <div>
+        {!featureOn && (
+          <p className={`${CALLOUT_CLASS.info} mb-4`}>
+            {t('admin.userApps.featureOff')}{' '}
+            <Link to="/admin/features" className="font-medium underline">
+              {t('admin.nav.features')}
+            </Link>
+          </p>
         )}
+
+        <UserAppSettingsPanel />
+
+        <div className="flex flex-wrap items-center gap-3">
+          <SearchInput
+            value={search}
+            onChange={setSearch}
+            placeholder={t('admin.apps.searchPlaceholder')}
+          />
+          {ownerId && (
+            <span className="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+              {t('admin.userApps.filter.owner', { name: ownerName })}
+              <button
+                type="button"
+                onClick={() => setOwnerId('')}
+                className="text-indigo-600 dark:text-indigo-400 underline"
+              >
+                {t('admin.userApps.filter.clearOwner')}
+              </button>
+            </span>
+          )}
+        </div>
+
+        <div
+          role="radiogroup"
+          aria-label={t('admin.userApps.filter.label')}
+          className="mt-4 flex flex-wrap gap-2"
+        >
+          {chips.map(chip => (
+            <button
+              key={chip.id}
+              type="button"
+              {...filterRadio(chip.id)}
+              className="px-3 py-1.5 rounded-full text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 aria-checked:bg-gray-900 aria-checked:text-white dark:aria-checked:bg-gray-100 dark:aria-checked:text-gray-900"
+            >
+              {t(chip.label)} {apps ? chip.count : ''}
+            </button>
+          ))}
+        </div>
+
+        {error && <AdminLoadError message={error} framed={false} className="mt-4" action={null} />}
+        {notice && (
+          <p role="alert" className="mt-4 text-sm text-red-700 dark:text-red-300">
+            {notice}
+          </p>
+        )}
+
+        <div className="mt-6">
+          <DataTable
+            columns={columns}
+            data={shown}
+            getRowId={app => app.id}
+            actions={actions}
+            loading={apps === null}
+            empty={{
+              icon: 'sparkles',
+              title: all.length === 0 ? t('admin.userApps.empty') : t('admin.userApps.noMatch')
+            }}
+          />
+        </div>
+
+        {dialog?.kind === 'disable' && (
+          <DisableDialog app={dialog.app} onClose={closeDialog} onDone={afterChange} />
+        )}
+        {dialog?.kind === 'offer' && (
+          <OfferDialog app={dialog.app} onClose={closeDialog} onDone={afterChange} />
+        )}
+        {dialog?.kind === 'revisions' && <RevisionsDialog app={dialog.app} onClose={closeDialog} />}
+        {/* P12 MOUNT POINT (take-over dialog): rendered once `TakeOverDialog` above is set. */}
+        {TakeOverDialog && dialog?.kind === 'takeOver' && (
+          <TakeOverDialog
+            app={dialog.app}
+            onClose={closeDialog}
+            onDone={newAppId => navigate(`/admin/apps/${encodeURIComponent(newAppId)}?created=1`)}
+            onStale={() => void load()}
+          />
+        )}
+        <ConfirmDialog {...dialogProps} />
+        <SaveSectionsBar />
       </div>
-
-      <div
-        role="radiogroup"
-        aria-label={t('admin.userApps.filter.label')}
-        className="mt-4 flex flex-wrap gap-2"
-      >
-        {chips.map(chip => (
-          <button
-            key={chip.id}
-            type="button"
-            {...filterRadio(chip.id)}
-            className="px-3 py-1.5 rounded-full text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 aria-checked:bg-gray-900 aria-checked:text-white dark:aria-checked:bg-gray-100 dark:aria-checked:text-gray-900"
-          >
-            {t(chip.label)} {apps ? chip.count : ''}
-          </button>
-        ))}
-      </div>
-
-      {error && <AdminLoadError message={error} framed={false} className="mt-4" action={null} />}
-      {notice && (
-        <p role="alert" className="mt-4 text-sm text-red-700 dark:text-red-300">
-          {notice}
-        </p>
-      )}
-
-      <div className="mt-6">
-        <DataTable
-          columns={columns}
-          data={shown}
-          getRowId={app => app.id}
-          actions={actions}
-          loading={apps === null}
-          empty={{
-            icon: 'sparkles',
-            title: all.length === 0 ? t('admin.userApps.empty') : t('admin.userApps.noMatch')
-          }}
-        />
-      </div>
-
-      {dialog?.kind === 'disable' && (
-        <DisableDialog app={dialog.app} onClose={closeDialog} onDone={afterChange} />
-      )}
-      {dialog?.kind === 'offer' && (
-        <OfferDialog app={dialog.app} onClose={closeDialog} onDone={afterChange} />
-      )}
-      {dialog?.kind === 'revisions' && <RevisionsDialog app={dialog.app} onClose={closeDialog} />}
-      {/* P12 MOUNT POINT (take-over dialog): rendered once `TakeOverDialog` above is set. */}
-      {TakeOverDialog && dialog?.kind === 'takeOver' && (
-        <TakeOverDialog
-          app={dialog.app}
-          onClose={closeDialog}
-          onDone={newAppId => navigate(`/admin/apps/${encodeURIComponent(newAppId)}?created=1`)}
-          onStale={() => void load()}
-        />
-      )}
-      <ConfirmDialog {...dialogProps} />
-    </div>
+    </SaveSectionsProvider>
   );
 }
 

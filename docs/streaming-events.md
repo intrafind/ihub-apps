@@ -72,7 +72,7 @@ above, and each call row source that `message.sources` already holds sent as
 | Type                   | Payload                                                                                                                       | Meaning                                                                       |
 | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
 | `stream/connected`     | `{ runId, lastSeq, protocol: 2 }`                                                                                             | Subscription established; on a chat turn's own POST also `durable` (see below) |
-| `stream/error`         | `{ code, message, details?, retryable, isContextWindowError? }`                                                               | The run failed; always followed by `run/ended { status: 'error' }`            |
+| `stream/error`         | `{ code, message, details?, retryable, isContextWindowError?, failureCause?, upstreamStatus?, host?, errorCode? }`            | The run failed; always followed by `run/ended { status: 'error' }` (see [Failure cause](#failure-cause)) |
 | `run/started`          | `{ kind, model?, parentRunId?, refs }`                                                                                        | A run began (`kind`: chat, workflow, agent, subagent, inference, utility)     |
 | `run/ended`            | `{ status, finishReason, limitReachedIn?, usage?, context?, knowledgeSources?, answerBasis?, toolName?, output?, cause?, error? }`                       | Terminal frame of a run. `limitReachedIn` (`reasoning` \| `answer`) can be set when `finishReason` is `length`: the thinking used the whole output limit, or the answer was cut off. Absent when the cause is unknown (no answer and no reasoning token count from the provider) |
 | `run/paused`           | `{ reason: interaction \| manual \| system, interactionId? }`                                                                  | The run waits (a question, an approval)                                       |
@@ -89,6 +89,30 @@ above, and each call row source that `message.sources` already holds sent as
 | `interaction/answered` | `{ interactionId, kind, answer }`                                                                                             | The touchpoint was answered                                                   |
 | `progress/node`        | `{ executionId?, nodeId, nodeName?, nodeType?, status, iteration?, progress?, output?, error? }`                              | Workflow node progress (also chat-launched workflows)                         |
 | `meta`                 | `{ conversationId?, title?, messageId?, responseMessageId?, chatId?, executionId?, extra? }`                                   | Surface metadata that is not run semantics                                    |
+
+### Failure cause
+
+A chat turn whose model call failed names the cause on `stream/error` and on
+`run/ended.error` (which replaces what `stream/error` set on the run), decided
+on the server in `services/chat/chatErrors.js` with the keys the admin model
+test uses (`services/loop/llmFailureCause.js`):
+
+- `failureCause`: `certificateUntrusted`, `serverError`, `authenticationFailed`,
+  `accessDenied`, `apiKeyRequired`, `apiKeyNotConfigured`, `apiKeyUndecryptable`,
+  `modelNotFound`, `rateLimitExceeded`, `connectionTimeout`, `connectionRefused`,
+  `serviceNotFound`, `networkError`, `requestTimeout`. Absent for a failure that
+  is not the endpoint's (a too-long prompt, a used-up quota, a stalled stream, a
+  tool error) or whose cause is unknown.
+- `upstreamStatus`: the HTTP status the endpoint answered with.
+- `host`, `errorCode`: the host that was called and the socket or certificate
+  code. **Sent to an administrator only** (`isAdmin(user)`); an end user gets
+  the key and the status, which name nothing internal.
+
+The chat translates `failureCause` (`chat.failureCause.*`) and keeps `message`
+for a cause it does not know. The stored message keeps `failureCause` and
+`upstreamStatus` in its `error`, never `host` or `errorCode`. The admin test
+panels (`TestChat`) also show the facts and what to check
+(`ConnectionErrorDetails`).
 
 ### `tool/progress` phases
 

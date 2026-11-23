@@ -221,9 +221,12 @@ export function inspectModelApiKey(model, { quiet = false } = {}) {
  * Resolve the API key state of a model by id. See `inspectModelApiKey`.
  *
  * @param {string} modelId - The model ID
+ * @param {Object} [options]
+ * @param {boolean} [options.includeDisabled=false] - Also find a disabled model
+ *   (the admin model test calls those); otherwise it is an `unknown-model`
  * @returns {Promise<ApiKeyResolution>}
  */
-export async function resolveModelApiKey(modelId) {
+export async function resolveModelApiKey(modelId, { includeDisabled = false } = {}) {
   const unavailable = state => ({
     state,
     source: 'none',
@@ -233,7 +236,7 @@ export async function resolveModelApiKey(modelId) {
   });
 
   try {
-    const { data: models = [] } = configCache.getModels();
+    const { data: models = [] } = configCache.getModels(includeDisabled);
     const model = findByIdCaseInsensitive(models || [], modelId);
     if (!model) {
       logger.error(`Model not found: ${sanitizeForLog(modelId)}`, { component: 'Utils' });

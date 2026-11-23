@@ -1,9 +1,11 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useEffect, useRef, useState } from 'react';
+import { use, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../../../shared/components/Icon';
+import ImplicitSubmit from '../../../../../shared/components/ImplicitSubmit';
+import { EditorSaveContext } from './useInstallationEditor';
 import { Link } from 'react-router-dom';
 import IntegrationTestResults from '../../IntegrationTestResults';
 import ActionToggleList from '../ActionToggleList';
@@ -190,11 +192,15 @@ export function ActionsSection({ editor, definition, instance, idPrefix }) {
  * The error, the test results and the buttons of an editor. Save submits the
  * editor's form (`formId`).
  *
+ * On a page that hosts the editor with a save bar (`EditorSaveContext`) the bar saves and
+ * discards: the footer then has Test only, plus a hidden submit button so Enter in a field
+ * still saves.
+ *
  * @param {Object} props
  * @param {Object} props.editor
  * @param {string} props.formId - the `<form>` Save submits
  * @param {() => void} props.onTest - test the unsaved values
- * @param {() => void} props.onCancel
+ * @param {() => void} [props.onCancel] - the Cancel button; unused when the page's save bar discards
  * @param {string} [props.testHelp] - what the test does, shown next to the button
  * @param {string} [props.testTitle] - heading of the test results
  * @param {React.ReactNode} [props.testInput] - an input the test takes (a sample
@@ -202,6 +208,7 @@ export function ActionsSection({ editor, definition, instance, idPrefix }) {
  */
 export function EditorFooter({ editor, formId, onTest, onCancel, testHelp, testTitle, testInput }) {
   const { t } = useTranslation();
+  const managed = Boolean(use(EditorSaveContext));
   return (
     <div className="space-y-4">
       {editor.error && (
@@ -231,20 +238,24 @@ export function EditorFooter({ editor, formId, onTest, onCancel, testHelp, testT
           </button>
           {testHelp && <p className={`${HELP_CLASS} max-w-xl`}>{testHelp}</p>}
         </div>
-        <div className="flex gap-2">
-          <button type="button" className={SECONDARY_BUTTON_CLASS} onClick={onCancel}>
-            {t('common.cancel', 'Cancel')}
-          </button>
-          <button
-            type="submit"
-            form={formId}
-            className={PRIMARY_BUTTON_CLASS}
-            disabled={editor.saving || editor.testing}
-          >
-            <Icon name="save" size="sm" />
-            {editor.saving ? t('common.saving', 'Saving…') : t('common.save', 'Save')}
-          </button>
-        </div>
+        {managed ? (
+          <ImplicitSubmit form={formId} disabled={editor.saving || editor.testing} />
+        ) : (
+          <div className="flex gap-2">
+            <button type="button" className={SECONDARY_BUTTON_CLASS} onClick={onCancel}>
+              {t('common.cancel', 'Cancel')}
+            </button>
+            <button
+              type="submit"
+              form={formId}
+              className={PRIMARY_BUTTON_CLASS}
+              disabled={editor.saving || editor.testing}
+            >
+              <Icon name="save" size="sm" />
+              {editor.saving ? t('common.saving', 'Saving…') : t('common.save', 'Save')}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

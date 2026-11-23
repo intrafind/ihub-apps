@@ -32,6 +32,7 @@ import logger from '../../utils/logger.js';
 import { getSettings as getAcknowledgementSettings } from '../../services/aiAcknowledgement/aiAcknowledgementService.js';
 import { isEuAiActEnabled } from '../../services/euAiAct/conformity.js';
 import { artifactSettings } from '../../services/artifacts/artifactPolicy.js';
+import { appGeneratorSettings } from '../../../shared/appGenerator.js';
 
 /**
  * The default dictation model as the client sees it: its id, and whether it is
@@ -234,6 +235,15 @@ export function voiceModeClientConfig(voiceMode) {
  *           properties:
  *             pages:
  *               type: object
+ *         appGenerator:
+ *           type: object
+ *           description: |
+ *             App drafts with AI. Present only when an administrator chose the
+ *             model that prepares a draft; absent means the automatic choice.
+ *           properties:
+ *             modelId:
+ *               type: string
+ *               description: The configured draft model; used for callers who may use it
  *
  *     DataError:
  *       type: object
@@ -931,6 +941,14 @@ export default function registerDataRoutes(app) {
         enabled: getAcknowledgementSettings(platform).enabled,
         enforce: platform.aiAcknowledgement?.enforce !== false
       },
+      // App drafts with AI: the model an administrator chose, so the create
+      // page names the model a description is sent to. Only the ID; the
+      // caller's /api/models list says whether they may use it (if not, the
+      // server falls back to the automatic choice, as the page does).
+      // Absent when unset, which means the automatic choice.
+      appGenerator: appGeneratorSettings(platform).modelId
+        ? { modelId: appGeneratorSettings(platform).modelId }
+        : undefined,
       speech: platform.speech
         ? {
             defaultService: platform.speech.defaultService,

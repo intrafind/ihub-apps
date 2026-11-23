@@ -144,7 +144,17 @@
 
         // Auto-redirect to OIDC provider
         var isLogoutPage = params.get('logout') === 'true';
-        if (data.autoRedirect && !isLogoutPage && !signInFailed) {
+        // An identity provider refuses to be shown in a frame (X-Frame-Options / frame-ancestors),
+        // so inside a frame the person starts the sign-in with a click, which opens a popup. That
+        // is only so while the sign-in in a frame is set up (`embedSignIn`); without it, nothing
+        // changes and the redirect stays, for a provider that allows framing. Windows sign-in
+        // stays on this page and may redirect.
+        var framedProviderRedirect =
+          data.embedSignIn &&
+          isFramed() &&
+          data.autoRedirect &&
+          data.autoRedirect.provider !== 'ntlm';
+        if (data.autoRedirect && !isLogoutPage && !signInFailed && !framedProviderRedirect) {
           if (shouldAutoRedirect(data.autoRedirect.provider)) {
             markAutoRedirectAttempt(data.autoRedirect.provider);
             var returnUrl = getEffectiveReturnUrl();
@@ -384,6 +394,7 @@
   function showGate(options) {
     options = options || {};
     var root;
+    invalidateFramedAttempt();
 
     if (options.container) {
       // Embedded mode: render inline into the caller's container. No backdrop,
@@ -453,6 +464,7 @@
   }
 
   function hideGate() {
+    invalidateFramedAttempt();
     if (embedded) {
       embedded.container.textContent = '';
       embedded.container.classList.remove('ag-embedded');
@@ -592,6 +604,14 @@
       errDiv.setAttribute('role', 'alert');
       errDiv.textContent = currentError;
       card.appendChild(errDiv);
+    }
+
+    // A sign-in popup is open: the person finishes it there.
+    if (framedPending) {
+      var pendingDiv = createElement('div', 'ag-info');
+      pendingDiv.setAttribute('role', 'status');
+      pendingDiv.textContent = t('signInInProgress');
+      card.appendChild(pendingDiv);
     }
 
     // Helper: append OIDC provider buttons
@@ -941,6 +961,10 @@
   }
 
   function handleOidcLogin(providerName) {
+    if (isFramed() && authConfig && authConfig.embedSignIn) {
+      handleFramedOidcLogin(providerName);
+      return;
+    }
     // Store return URL
     var returnUrl = getEffectiveReturnUrl();
     try {
@@ -963,6 +987,235 @@
     var url = API_BASE + '/auth/ntlm/login?returnUrl=' + encodeURIComponent(returnUrl);
     window.location.href = url;
   }
+
+  // =========================================================================
+  // Sign-in in a frame
+  // =========================================================================
+  //
+  // An identity provider such as Microsoft Entra ID refuses to be shown in a frame, so when this
+  // page is framed (iHub inside iFinder or a portal) the sign-in runs in a popup. The popup hands
+  // this page a one-time code, and the verifier needed to redeem it never left this page. The
+  // response to the redeem request sets the session as an HttpOnly cookie that belongs to this
+  // frame: no token ever reaches script. See server/utils/embedAuth.js.
+
+  var FRAMED_MESSAGE_KIND = 'ihub.embedAuth.code';
+  var framedPrepared = null; // Promise of { verifier, challenge }
+  var framedReady = null; // the same, once it has resolved, so a click can open the popup at once
+  var framedPending = null; // { popup, verifier, timer, onMessage, closedSince } while a popup is open
+  // Which sign-in attempt is the current one. A popup, and the redeem that follows its message,
+  // belong to the gate that opened them: showing or hiding the gate starts a new count, so an
+  // earlier attempt that is still on its way ends without touching the gate that is there now.
+  var framedAttempt = 0;
+
+  function isFramed() {
+    try {
+      return window.self !== window.top;
+    } catch (e) {
+      // Reading window.top can throw in a sandboxed context; such a page is framed.
+      return true;
+    }
+  }
+
+  function currentRoot() {
+    return embedded ? embedded.container : document.getElementById(ROOT_ID);
+  }
+
+  function base64Url(bytes) {
+    var binary = '';
+    for (var i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+    return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+
+  /**
+   * Make a PKCE verifier and its S256 challenge ahead of the click. A popup only opens inside
+   * the click that asked for it, and hashing is asynchronous, so it is done before.
+   */
+  function prepareFramedSignIn() {
+    if (framedPrepared) return framedPrepared;
+    framedPrepared = new Promise(function (resolve, reject) {
+      try {
+        var bytes = new Uint8Array(32);
+        window.crypto.getRandomValues(bytes);
+        var verifier = base64Url(bytes);
+        window.crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)).then(function (
+          digest
+        ) {
+          resolve({ verifier: verifier, challenge: base64Url(new Uint8Array(digest)) });
+        }, reject);
+      } catch (e) {
+        reject(e);
+      }
+    });
+    framedPrepared.then(
+      function (prepared) {
+        framedReady = prepared;
+      },
+      function () {
+        framedPrepared = null;
+      }
+    );
+    return framedPrepared;
+  }
+
+  function showFramedError(message) {
+    currentError = message;
+    var root = currentRoot();
+    if (root && authConfig) renderAuthUI(root);
+  }
+
+  function handleFramedOidcLogin(providerName) {
+    if (framedPending) {
+      try {
+        framedPending.popup.focus();
+      } catch (e) {
+        /* ignore */
+      }
+      return;
+    }
+    if (!authConfig || !authConfig.embedSignIn) {
+      showFramedError(t('embedSignInDisabled'));
+      return;
+    }
+    if (framedReady) {
+      openFramedPopup(framedReady, providerName);
+      return;
+    }
+    prepareFramedSignIn().then(
+      function (prepared) {
+        openFramedPopup(prepared, providerName);
+      },
+      function () {
+        showFramedError(t('embedSignInUnavailable'));
+      }
+    );
+  }
+
+  function openFramedPopup(prepared, providerName) {
+    var url =
+      (window.__BASE_PATH__ || '') +
+      '/embed-auth/complete?challenge=' +
+      encodeURIComponent(prepared.challenge) +
+      (providerName ? '&provider=' + encodeURIComponent(providerName) : '');
+    var popup = null;
+    try {
+      popup = window.open(url, 'ihub-embed-signin', 'popup=yes,width=480,height=720');
+    } catch (e) {
+      popup = null;
+    }
+    if (!popup) {
+      showFramedError(t('signInPopupBlocked'));
+      return;
+    }
+
+    // A verifier is for one popup. Make the next one now, so that a second click opens its popup
+    // at once as well.
+    framedReady = null;
+    framedPrepared = null;
+    prepareFramedSignIn();
+
+    var pending = {
+      popup: popup,
+      verifier: prepared.verifier,
+      timer: null,
+      onMessage: null,
+      closedSince: 0,
+      attempt: ++framedAttempt
+    };
+    pending.onMessage = function (event) {
+      // The popup is a page of iHub itself: nobody else may hand this page a code.
+      if (event.origin !== window.location.origin || event.source !== pending.popup) return;
+      var data = event.data;
+      if (!data || data.kind !== FRAMED_MESSAGE_KIND || typeof data.code !== 'string') return;
+      endFramedPending();
+      redeemFramedCode(data.code, pending.verifier, pending.attempt);
+    };
+    window.addEventListener('message', pending.onMessage);
+    // A person who closes the popup has cancelled. The grace period lets a message that was posted
+    // just before the popup closed itself arrive first.
+    pending.timer = setInterval(function () {
+      if (!pending.popup.closed) return;
+      if (!pending.closedSince) {
+        pending.closedSince = Date.now();
+        return;
+      }
+      if (Date.now() - pending.closedSince > 1000) {
+        endFramedPending();
+        showFramedError(t('signInWindowClosed'));
+      }
+    }, 500);
+    framedPending = pending;
+
+    currentError = null;
+    var root = currentRoot();
+    if (root && authConfig) {
+      renderAuthUI(root);
+      // One popup at a time; the notice says what to do.
+      setFormDisabled(root, true);
+    }
+  }
+
+  function endFramedPending() {
+    if (!framedPending) return;
+    window.removeEventListener('message', framedPending.onMessage);
+    clearInterval(framedPending.timer);
+    framedPending = null;
+  }
+
+  /** Called when the gate is shown again or hidden: whatever sign-in attempt was running is over. */
+  function invalidateFramedAttempt() {
+    framedAttempt++;
+    endFramedPending();
+  }
+
+  function redeemFramedCode(code, verifier, attempt) {
+    // The gate this attempt belongs to may be gone by now (see framedAttempt): then the attempt
+    // ends quietly, whatever the server answered.
+    var current = function () {
+      return attempt === framedAttempt;
+    };
+    fetch(API_BASE + '/auth/embed-codes/_redeem', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ code: code, codeVerifier: verifier })
+    })
+      .then(function (res) {
+        if (!current()) return null;
+        if (!res.ok) throw new Error('redeem failed');
+        // A token left in localStorage would be sent in front of the new session cookie.
+        removeToken();
+        return fetchAuthStatus();
+      })
+      .then(function (data) {
+        if (!data || !current()) return;
+        authConfig = data;
+        if (!data.authenticated) {
+          // The code was accepted but the browser did not keep or send the cookie: a browser or
+          // policy that blocks cookies in a frame altogether.
+          showFramedError(t('embedSignInCookieBlocked'));
+          return;
+        }
+        currentError = null;
+        cleanUrlParams(['logout']);
+        if (embedded) {
+          finishEmbedded();
+          return;
+        }
+        window.dispatchEvent(new CustomEvent('authGateSuccess'));
+        var root = document.getElementById(ROOT_ID);
+        if (root && root.classList.contains('ag-overlay')) {
+          hideGate();
+        } else {
+          loadApp();
+        }
+      })
+      .catch(function () {
+        if (current()) showFramedError(t('signInFailed'));
+      });
+  }
+
+  // Have the verifier ready by the time somebody clicks.
+  if (isFramed()) prepareFramedSignIn();
 
   // =========================================================================
   // Auto-Redirect Logic

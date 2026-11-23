@@ -174,7 +174,8 @@ GET /api/conversations?limit=50&cursor=eyJ…&status=active
 - **Names** are standard headers where one exists. Custom headers are `kebab-case` and documented.
 - **Optimistic locking:** resources that are edited concurrently return an `ETag`; an update sends `If-Match`. A
   mismatch is `409` `ETAG_MISMATCH` (see [deviations](#deviations-from-zalando)). The admin configuration files
-  (`/api/admin/configs/platform`, `/api/admin/ui/config`) answer an HTTP `If-Match` that does not name the stored
+  (`/api/admin/configs/platform`, `/api/admin/ui/config`, and `groups.json` through `GET /api/admin/groups` and
+  `PUT /api/admin/groups/{groupId}`) answer an HTTP `If-Match` that does not name the stored
   revision with `412` `PRECONDITION_FAILED`, as HTTP specifies; their `ETag` is `server/utils/configRevision.js`,
   computed from the stored file and compared under the file's update lock. `If-Match` is optional there.
 - **`Idempotency-Key`** on a `POST` that must not run twice on a retry (it creates something that costs money or

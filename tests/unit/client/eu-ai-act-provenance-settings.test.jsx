@@ -30,6 +30,10 @@ jest.mock('../../../client/src/shared/components/Icon', () => ({
   default: ({ name }) => <span data-testid="icon" data-name={name} />
 }));
 
+import {
+  SaveSectionsBar,
+  SaveSectionsProvider
+} from '../../../client/src/features/admin/components/SaveSections';
 import ProvenanceSettingsCard from '../../../client/src/features/admin/components/euAiAct/ProvenanceSettingsCard';
 import {
   buildBody,
@@ -57,9 +61,29 @@ function setup(provenance = STORED.provenance) {
     return { data: { ...STORED, provenance } };
   });
   const onSaved = jest.fn();
-  render(<ProvenanceSettingsCard onSaved={onSaved} />);
+  render(<Page onSaved={onSaved} />);
   return { onSaved };
 }
+beforeAll(() => {
+  global.ResizeObserver = class {
+    observe() {}
+    disconnect() {}
+  };
+});
+
+/** The card as the EU AI Act page shows it: its save is the page's bottom bar. */
+function Page(props) {
+  return (
+    <SaveSectionsProvider>
+      <ProvenanceSettingsCard {...props} />
+      <SaveSectionsBar />
+    </SaveSectionsProvider>
+  );
+}
+const barSave = () =>
+  within(screen.getByRole('region', { name: 'Save changes' })).getByRole('button', {
+    name: 'Save Changes'
+  });
 const posts = () => mockAdminCall.mock.calls.filter(([, o]) => o?.method === 'PATCH');
 const change = (label, value) =>
   fireEvent.change(screen.getByLabelText(label), { target: { value } });
@@ -118,7 +142,8 @@ describe('ProvenanceSettingsCard', () => {
     expect(screen.getByLabelText(/Shortest text that can be judged/)).toHaveValue(300);
     expect(screen.getByLabelText(/False-positive limit/)).toHaveAttribute('placeholder', '0.0001');
     expect(screen.getByText(/No restart is needed|no restart is needed/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    // Nothing changed: no save bar.
+    expect(screen.queryByRole('region', { name: 'Save changes' })).not.toBeInTheDocument();
   });
 
   test('invalid input: field-tied errors, nothing is sent, the first bad field gets focus', async () => {
@@ -126,7 +151,7 @@ describe('ProvenanceSettingsCard', () => {
     await screen.findByLabelText(/Keep records for/);
     change(/Keep records for/, '-3');
     change(/False-positive limit/, '2');
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(barSave());
     const retention = screen.getByLabelText(/Keep records for/);
     expect(retention).toHaveAttribute('aria-invalid', 'true');
     expect(retention.getAttribute('aria-describedby')).toContain('provenance-retentionDays-error');
@@ -145,7 +170,7 @@ describe('ProvenanceSettingsCard', () => {
     const { onSaved } = setup();
     await screen.findByLabelText(/Keep records for/);
     change(/Keep records for/, '400');
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(barSave());
     await screen.findByText(/Settings saved/);
     const [[url, options]] = posts();
     expect(url).toBe('/admin/configs/platform');
@@ -159,7 +184,7 @@ describe('ProvenanceSettingsCard', () => {
       watermark: { alpha: null, minScoredTokens: 300, detectorTimeoutMs: null }
     });
     expect(onSaved).toHaveBeenCalled();
-    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    expect(screen.queryByRole('region', { name: 'Save changes' })).not.toBeInTheDocument();
   });
 
   test('who a record names: four choices, "Nobody" by default, saved as recordUser', async () => {
@@ -168,7 +193,7 @@ describe('ProvenanceSettingsCard', () => {
     expect(screen.getByLabelText('Nobody')).toBeChecked();
     fireEvent.click(screen.getByLabelText('Identified (user id)'));
     expect(screen.getByLabelText('Identified (user id)')).toBeChecked();
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(barSave());
     await screen.findByText(/Settings saved/);
     const [[, options]] = posts();
     expect(options.body.provenance.recordUser).toBe('identified');
@@ -178,7 +203,7 @@ describe('ProvenanceSettingsCard', () => {
     setup();
     await screen.findByLabelText(/Keep records for/);
     change(/Keep records for/, '30');
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(barSave());
     const dialog = screen.getByText('Save these settings?').closest('[role="alertdialog"]');
     expect(
       within(dialog).getByText(/older than 30 days are deleted at the next daily clean-up/)
@@ -186,7 +211,9 @@ describe('ProvenanceSettingsCard', () => {
     expect(within(dialog).getByText(/cannot be undone/)).toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
     expect(posts()).toHaveLength(0);
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    // Cancelling ends the bar's save: Save is offered again.
+    await waitFor(() => expect(barSave()).toBeEnabled());
+    fireEvent.click(barSave());
     fireEvent.click(
       within(screen.getByText('Save these settings?').closest('[role="alertdialog"]')).getByRole(
         'button',
@@ -201,7 +228,7 @@ describe('ProvenanceSettingsCard', () => {
     setup();
     await screen.findByLabelText(/Keep records for/);
     fireEvent.click(screen.getByLabelText('Anyone, without signing in'));
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(barSave());
     expect(
       screen.getByText(/Anyone on the internet can then check texts and files/)
     ).toBeInTheDocument();
@@ -222,11 +249,12 @@ describe('ProvenanceSettingsCard', () => {
       }
       return { data: STORED };
     });
-    render(<ProvenanceSettingsCard />);
+    render(<Page />);
     await screen.findByLabelText(/Keep records for/);
     change(/Largest file that can be checked/, '100');
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    await screen.findByText(/The settings were not saved\./);
+    fireEvent.click(barSave());
+    // Said by the card and, as the reason the bar stays, by the bar.
+    expect(await screen.findAllByText(/The settings were not saved\./)).toHaveLength(2);
     expect(document.getElementById('provenance-maxVerifyBytes-error')).toHaveTextContent(
       'Too big for this server'
     );
@@ -235,7 +263,7 @@ describe('ProvenanceSettingsCard', () => {
 
   test('a load error offers Retry', async () => {
     mockAdminCall.mockRejectedValueOnce({ message: 'down' });
-    render(<ProvenanceSettingsCard />);
+    render(<Page />);
     expect(await screen.findByText('Could not load the settings')).toBeInTheDocument();
     mockAdminCall.mockResolvedValue({ data: STORED });
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
