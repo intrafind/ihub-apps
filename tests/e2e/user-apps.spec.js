@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test as base, expect } from '@playwright/test';
 import { ADMIN, BUILDER, NORMAL_USER } from '../config/app-builder-seed.mjs';
-import { startLlmStub } from '../config/e2e-llm-stub.mjs';
+import { REVISED_INSTRUCTIONS_MARK, startLlmStub } from '../config/e2e-llm-stub.mjs';
 
 /**
  * End-to-end: personal apps (concepts/app-builder-rework-2026-11/02-personal-apps.md,
@@ -679,6 +679,77 @@ test.describe('Personal apps', () => {
     expect(new URL(owner.page.url()).pathname).toBe(`/apps/${app.id}/edit`);
     await owner.page.waitForLoadState('networkidle');
     expect(problems, 'the cold load of the editor').toEqual([]);
+  });
+
+  // The chat-based app builder (#3898): the owner revises the app in the
+  // conversation of the personal editor. Its turns and its Apply go to the
+  // personal routes only.
+  test('9: the owner applies a change in the conversation, and no request goes to an admin route', async ({
+    owner,
+    adminApi
+  }) => {
+    const { page, api } = owner;
+    const name = `${NAME_PREFIX} Conversation`;
+    const original = `You are ${name}. Answer briefly.`;
+    const app = await createApp(api, name);
+    await expectOk(
+      await adminApi.put('/api/admin/features', { data: { appBuilderChat: true } }),
+      'switching the app conversation on'
+    );
+    try {
+      // As in case 1: the app shell's admin status check reads no app.
+      const adminCalls = [];
+      page.on('request', request => {
+        const { pathname } = new URL(request.url());
+        if (pathname.includes('/api/admin/') && !pathname.endsWith('/api/admin/auth/status')) {
+          adminCalls.push(`${request.method()} ${pathname}`);
+        }
+      });
+
+      await page.goto(`/apps/${app.id}/edit?view=conversation`);
+      const talk = page.getByTestId('conversation-panel');
+      await expect(talk).toBeVisible();
+      await expect(testPanel(page)).toBeVisible();
+
+      const composer = talk.getByRole('textbox', {
+        name: tr('admin.apps.conversation.composer.label')
+      });
+      await composer.fill('Make it formal. e2e-revise-system');
+      const [turn] = await Promise.all([
+        page.waitForResponse(response => response.url().includes('/_revise')),
+        composer.press('Enter')
+      ]);
+      expect(new URL(turn.url()).pathname).toBe('/api/apps/_revise');
+      expect(turn.status(), await turn.text()).toBe(200);
+
+      const card = talk.getByTestId('change-card');
+      await expect(card.locator('ins')).toContainText(REVISED_INSTRUCTIONS_MARK);
+      await expect(card.getByTestId('change-stakes')).toHaveText(
+        tr('admin.apps.conversation.stakes.onlyYou')
+      );
+      const [saved] = await Promise.all([
+        page.waitForResponse(
+          response =>
+            response.request().method() === 'PATCH' &&
+            new URL(response.url()).pathname === `/api/apps/${app.id}`
+        ),
+        card.getByRole('button', { name: tr('admin.apps.conversation.change.apply') }).click()
+      ]);
+      expect(saved.status(), await saved.text()).toBe(200);
+      await expect(card.getByTestId('change-applied')).toHaveText(
+        tr('admin.apps.conversation.change.appliedTest')
+      );
+
+      const stored = await readApp(api, app.id);
+      expect(stored.status).toBe(200);
+      expect(stored.body.system).toEqual({ en: `${original}\n${REVISED_INSTRUCTIONS_MARK}` });
+      // The restarted test chat answers with the saved app.
+      await expectChatAnswer(testPanel(page), 'after the change');
+
+      expect(adminCalls).toEqual([]);
+    } finally {
+      await adminApi.put('/api/admin/features', { data: { appBuilderChat: false } });
+    }
   });
 });
 
