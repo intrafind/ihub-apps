@@ -209,13 +209,20 @@ The client keeps `baseSnapshot`, the content keys it sent. Apply:
    "The app changed since. Ask again" and Apply is disabled.
 2. Otherwise merge `patch` into the form (`applyRevisionPatch`, `shared/appRevision.js`).
 3. Call the editor's existing save: admin `useEditorSave.save` → `PUT /api/admin/apps/{id}`
-   (`assertValidAppConfig`, history snapshot); personal `PATCH /api/apps/{id}` with `If-Match`
-   (ceiling check, 409 on conflict).
+   with `If-Match` (`assertValidAppConfig`, history snapshot, 412 when another admin saved the app
+   since this editor loaded it); personal `PATCH /api/apps/{id}` with `If-Match` (ceiling check,
+   409 on conflict). `baseSnapshot` catches edits in this editor; `If-Match` catches saves from
+   elsewhere. On a conflict the card says "Someone else saved this app. Reload it and ask again"
+   and nothing is written. The admin `ETag` / `If-Match` is part of slice 1 (see 4), using the
+   same conditional-write pattern the group save uses.
 4. Bump `reloadKey` so the test chat restarts.
 
 A ticked suggestion joins the same save (`websearch` / `integrations` for admin apps,
 `capabilities` for personal apps); the save route stays the authority. **Undo** saves the values
-the changed keys had before Apply, offered on the newest applied card only. The route never
+the changed keys had before Apply, offered on the newest applied card only, and only while every
+changed key still holds the value that Apply set: the card keeps both the before and the applied
+values, and a key the author (or anyone, via `If-Match`) changed since disables Undo with "This
+part was changed after the change was applied". Undo goes through the same conditional save. The route never
 writes, and the model never picks an app.
 
 ### 2.5 Limits and cost
@@ -352,6 +359,7 @@ Apply a toast says "Applied. Try it". 16 px gutters, no horizontal scroll, diff 
 | `server/services/appRevision.js` (new) | `reviseApp` (2.3) |
 | `server/middleware/rateLimiting.js` | `appReviseLimiter` |
 | `server/routes/admin/appBuilder.js` | `POST /api/admin/apps/_revise`, audit, OpenAPI |
+| `server/routes/admin/apps.js` | `ETag` on `GET /api/admin/apps/{id}`; `PUT` honours `If-Match` and answers 412 with a registry code on mismatch (without the header it behaves as today); the editor's save sends it |
 | `server/routes/userAppRoutes.js` | `POST /api/apps/_revise` with the personal ceiling, audit, OpenAPI |
 | `server/featureRegistry.js` | `appBuilderChat` (preview, default off), texts that name the cost |
 
@@ -381,8 +389,11 @@ Apply a toast says "Applied. Try it". 16 px gutters, no horizontal scroll, diff 
 - Extend `server/tests/app-generator-sanitize.test.js` for the hidden-character strip.
 - Client: `app-conversation-panel`, `app-conversation-change-card`, `user-app-conversation`,
   `app-revision-patch` tests (full diff of an 8,000-character change, stakes line, Apply disabled
-  after a hand edit, Apply saves and bumps `reloadKey`, Undo, the personal editor never calls
-  `/api/admin/*`).
+  after a hand edit, Apply saves and bumps `reloadKey`, a 412/409 on Apply writes nothing and
+  shows the conflict, Undo, Undo disabled after a later edit of a changed key, the personal editor
+  never calls `/api/admin/*`).
+- `server/tests/admin-app-if-match.test.js`: `ETag` on GET, matching `If-Match` saves, a stale one
+  answers 412 and writes nothing, no header behaves as before.
 - E2E: `e2e-revise-*` markers in `tests/config/e2e-llm-stub.mjs`; in
   `tests/e2e/app-builder.spec.js` open the conversation, answer a question, apply, check the test
   chat runs the new instructions, Undo; one case each in the subpath and personal-app specs; the
@@ -421,8 +432,7 @@ question-then-draft case.
 ### Later slices (each only when authors ask for it)
 
 4. **Long instructions:** `edits` (`oldText`/`newText`) for `system` above 8,000 characters.
-5. **Admin `If-Match`:** `ETag` on `GET /api/admin/apps/{id}` and 412 on `PUT`; the
-   conversation's Apply always sends it.
+5. *(moved into slice 1: admin `If-Match` on the app save)*
 6. **Translate a change** into the app's other languages.
 7. **Option B**, only on the triggers of 2.1, reusing `reviseApp` as its engine.
 8. **Leaving preview:** the level-2 evaluation (30 descriptions, 20 change instructions, a human
@@ -438,7 +448,7 @@ question-then-draft case.
 | A weak model answers prose, not JSON | The tolerant parser; 502 `not-json` with "Try again"; the author's message is kept |
 | An injected sentence from a pasted document reached a published app | Full diff above Apply; hidden characters stripped; stakes line; no auto-apply |
 | The author typed test questions into the builder, and the reverse | Distinct labels, frames and placeholders; the brief answers test-like questions with "Try that on the right" |
-| Apply overwrote hand edits | `baseSnapshot` check; `If-Match` for personal apps; slice 5 for admin |
+| Apply or Undo overwrote edits | `baseSnapshot` check for this editor; `If-Match` on both saves for edits from elsewhere; Undo only while the applied values are unchanged |
 | Cost crept up | One bounded call per turn, 12-entry window, 60 per hour, usage quota, feature switch, configured model |
 | German changed, English did not | `OTHER_LANGUAGES_UNCHANGED`; slice 6 |
 | The conversation became a third editor | The card has no inputs except suggestion ticks; "Form" is one click away |
