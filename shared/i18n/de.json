@@ -686,8 +686,8 @@
     "plainText": "Klartext",
     "json": "JSON",
     "html": "HTML",
-    "toolsSettings": "Werkzeuge",
-    "toolsSettingsHelp": "Aktivieren oder deaktivieren Sie einzelne Werkzeuge für diese Sitzung",
+    "toolsSettings": "Tools",
+    "toolsSettingsHelp": "Aktivieren oder deaktivieren Sie einzelne Tools für diese Sitzung",
     "imageGeneration": "Bilderzeugungseinstellungen",
     "imageAspectRatio": "Seitenverhältnis",
     "imageAspectRatioHelp": "Wählen Sie das Seitenverhältnis für generierte Bilder",
@@ -745,7 +745,7 @@
     "downloadOptions": "Download-Optionen",
     "deleteMessage": "Nachricht löschen",
     "knowledgeScope": {
-      "noTools": "das Modell kann keine Werkzeuge aufrufen",
+      "noTools": "das Modell kann keine Tools aufrufen",
       "overBudget": "über dem Budget",
       "privateProject": "Privates Projekt",
       "ifinderCollection": "iFinder-Collection",
@@ -12271,7 +12271,7 @@
       "ABORTED": "Der Lauf wurde angehalten",
       "APP_NOT_ACCESSIBLE": "Sie haben keinen Zugriff mehr auf die App dieser Aufgabe",
       "APP_NOT_AVAILABLE": "Die App dieser Aufgabe existiert nicht mehr oder ist deaktiviert",
-      "APPROVAL_REJECTED": "Sie haben das Werkzeug abgelehnt, das dieser Lauf brauchte",
+      "APPROVAL_REJECTED": "Sie haben das Tool abgelehnt, das dieser Lauf brauchte",
       "APPROVAL_TIMED_OUT": "Die Freigabe wurde nicht rechtzeitig beantwortet",
       "AUTHENTICATION_REQUIRED": "Geplante Aufgaben benötigen einen angemeldeten Benutzer",
       "AWAITING_APPROVAL": "Wartet auf Ihre Freigabe",
@@ -12296,7 +12296,7 @@
       "TASK_NOT_ACTIVE": "Die Aufgabe war nicht mehr aktiv, als der Lauf fällig war",
       "TOO_MANY_APPROVALS": "Der Lauf hat zu oft um Freigabe gebeten",
       "TOO_MANY_FAILURES": "Nach zu vielen fehlgeschlagenen Läufen in Folge pausiert",
-      "TOOL_NOT_AVAILABLE": "Die App bietet ein Werkzeug dieser Aufgabe nicht mehr an"
+      "TOOL_NOT_AVAILABLE": "Die App bietet ein Tool dieser Aufgabe nicht mehr an"
     },
     "memory": {
       "title": "Gedächtnis",
@@ -12390,7 +12390,7 @@
         },
         "relevant": {
           "label": "Beste Textstellen",
-          "description": "Die angehefteten Dokumente und die besten Abschnitte zur Frage aus allen Dokumenten. Spart einen Werkzeugaufruf; für große Projekte und Modelle, die Werkzeuge schlecht aufrufen."
+          "description": "Die angehefteten Dokumente und die besten Abschnitte zur Frage aus allen Dokumenten. Spart einen Tool-Aufruf; für große Projekte und Modelle, die Tools schlecht aufrufen."
         },
         "tools": {
           "label": "Bei Bedarf nachschlagen",
