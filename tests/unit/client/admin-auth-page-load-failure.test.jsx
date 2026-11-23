@@ -386,3 +386,37 @@ describe('AdminAuthPage edits made while saving (R3)', () => {
     expect(screen.getByText('Your changes will be lost.')).toBeInTheDocument();
   });
 });
+
+describe('AdminAuthPage hint for iHub in another site', () => {
+  const hint = () => screen.queryByTestId('admin-auth-embed-hint');
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('points to the page of the sign-in in a frame while OIDC is on', async () => {
+    routeApi({
+      platform: ok({ ...PLATFORM, oidcAuth: { enabled: true, providers: [] } }),
+      groups: ok({ groups: {} }),
+      schema: () => Promise.resolve({})
+    });
+    renderPage();
+    await flush();
+
+    expect(hint()).toBeInTheDocument();
+    expect(within(hint()).getByRole('link')).toHaveAttribute('href', '/admin/embed-auth');
+  });
+
+  it('says nothing about it while OIDC is off', async () => {
+    routeApi({
+      platform: ok(PLATFORM),
+      groups: ok({ groups: {} }),
+      schema: () => Promise.resolve({})
+    });
+    renderPage();
+    await flush();
+
+    expect(screen.getByDisplayValue('480')).toBeInTheDocument();
+    expect(hint()).not.toBeInTheDocument();
+  });
+});

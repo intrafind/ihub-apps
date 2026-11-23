@@ -308,13 +308,14 @@ describe('Clients section', () => {
     await screen.findByText('GovData');
 
     const section = clientsSection();
-    expect(within(section).getByRole('heading', { level: 2 })).toHaveTextContent('Clients(4)');
+    expect(within(section).getByRole('heading', { level: 2 })).toHaveTextContent('Clients(5)');
     const cards = within(section).getAllByTestId('inbound-card');
     expect(cards.map(c => c.getAttribute('data-inbound'))).toEqual([
       'outlook',
       'browser-extension',
       'copilot-agent',
-      'nextcloud-embed'
+      'nextcloud-embed',
+      'embed-auth'
     ]);
     const card = id => cards.find(c => c.getAttribute('data-inbound') === id);
     expect(within(card('outlook')).getByRole('link')).toHaveAttribute(
@@ -332,6 +333,10 @@ describe('Clients section', () => {
     expect(within(card('copilot-agent')).getByRole('link')).toHaveAttribute(
       'href',
       '/admin/copilot-agent'
+    );
+    expect(within(card('embed-auth')).getByRole('link')).toHaveAttribute(
+      'href',
+      '/admin/embed-auth'
     );
     // The browser extension is switched on in platform.json (`browserExtension.enabled`).
     expect(await within(card('browser-extension')).findByText('On')).toBeInTheDocument();
@@ -366,7 +371,7 @@ describe('Clients section', () => {
     mockApi.fetchInstalledIntegrations.mockResolvedValue({ items: [] });
     renderPage();
     await screen.findByText('Nothing installed yet');
-    expect(within(clientsSection()).getAllByTestId('inbound-card')).toHaveLength(4);
+    expect(within(clientsSection()).getAllByTestId('inbound-card')).toHaveLength(5);
   });
 
   test('the status comes from the switches the client pages write', () => {
@@ -389,6 +394,20 @@ describe('Clients section', () => {
     expect(statusOf('outlook', { officeIntegration: { enabled: true } })).toBe('connected');
     expect(statusOf('nextcloud-embed', { nextcloudEmbed: { enabled: true } })).toBe('connected');
     expect(statusOf('copilot-agent', { copilotAgent: { enabled: true } })).toBe('connected');
+    // Switched on is not enough: without a host origin the sign-in is not active.
+    expect(statusOf('embed-auth', { embedAuth: { enabled: true, allowedHostOrigins: [] } })).toBe(
+      'available'
+    );
+    expect(
+      statusOf('embed-auth', {
+        embedAuth: { enabled: false, allowedHostOrigins: ['https://ifinder.example.com'] }
+      })
+    ).toBe('available');
+    expect(
+      statusOf('embed-auth', {
+        embedAuth: { enabled: true, allowedHostOrigins: ['https://ifinder.example.com'] }
+      })
+    ).toBe('connected');
     expect(statusOf('outlook', null)).toBe('available');
   });
 
@@ -488,6 +507,7 @@ describe('Catalog and Inbound tabs', () => {
       'browser-extension',
       'copilot-agent',
       'nextcloud-embed',
+      'embed-auth',
       'mcp-gateway'
     ]);
     const gateway = cards.find(c => c.getAttribute('data-inbound') === 'mcp-gateway');

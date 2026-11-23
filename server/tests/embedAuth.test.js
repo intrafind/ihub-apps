@@ -83,7 +83,7 @@ const signedIn = (app, method, url, token = sessionToken()) =>
 beforeEach(() => {
   state.platform = {
     jwt: { algorithm: 'HS256' },
-    embedAuth: { allowedHostOrigins: [HOST_ORIGIN] }
+    embedAuth: { enabled: true, allowedHostOrigins: [HOST_ORIGIN] }
   };
 });
 
@@ -91,6 +91,7 @@ describe('embed auth helpers', () => {
   it('reads only http(s) origins from the configuration', () => {
     const origins = embedAuth.getEmbedAuthOrigins({
       embedAuth: {
+        enabled: true,
         allowedHostOrigins: [
           'https://a.example.com/some/path',
           'http://localhost:3000',
@@ -107,10 +108,23 @@ describe('embed auth helpers', () => {
 
   it('is off without allowed origins', () => {
     expect(embedAuth.isEmbedAuthEnabled({})).toBe(false);
-    expect(embedAuth.isEmbedAuthEnabled({ embedAuth: { allowedHostOrigins: [] } })).toBe(false);
-    expect(embedAuth.isEmbedAuthEnabled({ embedAuth: { allowedHostOrigins: [HOST_ORIGIN] } })).toBe(
-      true
-    );
+    expect(embedAuth.isEmbedAuthEnabled({ embedAuth: { enabled: true } })).toBe(false);
+    expect(
+      embedAuth.isEmbedAuthEnabled({ embedAuth: { enabled: true, allowedHostOrigins: [] } })
+    ).toBe(false);
+    expect(
+      embedAuth.isEmbedAuthEnabled({
+        embedAuth: { enabled: true, allowedHostOrigins: [HOST_ORIGIN] }
+      })
+    ).toBe(true);
+  });
+
+  it('keeps the list but is off while the switch is off', () => {
+    for (const enabled of [false, undefined, 'true', 1]) {
+      const platform = { embedAuth: { enabled, allowedHostOrigins: [HOST_ORIGIN] } };
+      expect(embedAuth.getEmbedAuthOrigins(platform)).toEqual([]);
+      expect(embedAuth.isEmbedAuthEnabled(platform)).toBe(false);
+    }
   });
 
   it('writes a partitioned, HttpOnly, Secure, SameSite=None cookie', () => {

@@ -73,6 +73,7 @@ const PAGES = [
     ready: main => main.getByRole('button', { name: /^Enable$/ })
   },
   { name: 'Nextcloud embed', path: '/admin/nextcloud-embed', gets: ['/nextcloud-embed/status'] },
+  { name: 'iHub in another site', path: '/admin/embed-auth', gets: ['/embed-auth/config'] },
   { name: 'Voice input', path: '/admin/voice-input', gets: ['/configs/platform'] },
   { name: 'OAuth server', path: '/admin/oauth/server', gets: ['/configs/platform'] },
   { name: 'Feedback settings', path: '/admin/feedback', gets: ['/configs/platform'] }
