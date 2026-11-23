@@ -1017,10 +1017,7 @@ function ModelFormEditor({
                         onClick={addTtsVoiceLanguage}
                         className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline"
                       >
-                        {t(
-                          'admin.models.actions.addTtsVoiceLanguage',
-                          '+ Add a voice for a language'
-                        )}
+                        {t('admin.models.ttsVoices.addLanguage', '+ Add a voice for a language')}
                       </button>
                     )}
                     {data.provider === 'mistral' &&
@@ -1342,7 +1339,7 @@ function ModelFormEditor({
                 <div className="col-span-6">
                   <fieldset>
                     <legend className="text-base font-medium text-gray-900 dark:text-gray-100">
-                      Options
+                      {t('admin.models.sections.options', 'Options')}
                     </legend>
                     <div className="mt-4 space-y-4">
                       <div className="flex items-start">
@@ -1920,6 +1917,9 @@ function ModelFormEditor({
                               <option value="high">
                                 {t('admin.models.fields.thinkingLevelHigh', 'High')}
                               </option>
+                              <option value="xhigh">
+                                {t('admin.models.fields.thinkingLevelXhigh', 'Extra high')}
+                              </option>
                             </select>
                             <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                               {t(
@@ -1990,7 +1990,7 @@ function ModelFormEditor({
                                   <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                                     {t(
                                       'admin.models.hints.thinkingBudgetTokens',
-                                      'Empty uses the reasoning effort: minimal 512, low 2,048, medium 8,192, high 16,384 tokens (none set: 75% of the output limit). Never more than 75% of the output limit.'
+                                      'Empty uses the reasoning effort: minimal 512, low 1,024, medium 2,048, high 8,192, extra high 16,384 tokens (none set: medium). Never more than half of the output limit.'
                                     )}
                                   </p>
                                 </div>
@@ -2234,16 +2234,24 @@ function ModelFormEditor({
                             }
                             className="mt-1 block w-full py-2 px-3 border border-admin-control-border dark:border-admin-control-border-dark bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-xs focus:outline-hidden focus:ring-admin-accent focus:border-admin-accent sm:text-sm"
                           >
-                            <option value="1:1">1:1 (Square)</option>
-                            <option value="16:9">16:9 (Landscape)</option>
-                            <option value="9:16">9:16 (Portrait)</option>
+                            <option value="1:1">
+                              {t('admin.models.aspectRatio.r1x1', '1:1 (Square)')}
+                            </option>
+                            <option value="16:9">
+                              {t('admin.models.aspectRatio.r16x9', '16:9 (Landscape)')}
+                            </option>
+                            <option value="9:16">
+                              {t('admin.models.aspectRatio.r9x16', '9:16 (Portrait)')}
+                            </option>
                             <option value="5:4">5:4</option>
                             <option value="4:5">4:5</option>
                             <option value="3:2">3:2</option>
                             <option value="2:3">2:3</option>
                             <option value="3:4">3:4</option>
                             <option value="4:3">4:3</option>
-                            <option value="21:9">21:9 (Ultrawide)</option>
+                            <option value="21:9">
+                              {t('admin.models.aspectRatio.r21x9', '21:9 (Ultrawide)')}
+                            </option>
                           </select>
                         </div>
 

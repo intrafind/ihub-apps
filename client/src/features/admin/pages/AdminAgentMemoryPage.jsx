@@ -226,7 +226,10 @@ export default function AdminAgentMemoryPage() {
                       className="w-full px-2 py-1 border border-admin-control-border dark:border-admin-control-border-dark rounded-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                       value={builderSection}
                       onChange={e => setBuilderSection(e.target.value)}
-                      placeholder="iFinder corpus map"
+                      placeholder={t(
+                        'admin.agents.memory.builder.sectionPlaceholder',
+                        'iFinder corpus map'
+                      )}
                     />
                   </div>
                   <div>

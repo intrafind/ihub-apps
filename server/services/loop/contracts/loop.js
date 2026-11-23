@@ -139,7 +139,18 @@ export const llmCallOptionsSchema = z
     toolChoice: z.any().optional(),
     thinkingEnabled: z.boolean().optional(),
     thinkingLevel: z
-      .enum(['minimal', 'low', 'medium', 'high', 'MINIMAL', 'LOW', 'MEDIUM', 'HIGH'])
+      .enum([
+        'minimal',
+        'low',
+        'medium',
+        'high',
+        'xhigh',
+        'MINIMAL',
+        'LOW',
+        'MEDIUM',
+        'HIGH',
+        'XHIGH'
+      ])
       .optional(),
     thinkingThoughts: z.boolean().optional(),
     nativeWebSearch: z.any().nullable().optional(),

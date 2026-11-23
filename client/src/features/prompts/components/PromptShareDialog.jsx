@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Modal from '../../../shared/components/Modal';
 import Icon from '../../../shared/components/Icon';
@@ -42,8 +42,9 @@ function TargetIcon({ type }) {
  *   Saves the share list; defaults to the prompt shares.
  * @param {(error: Error, t: Function) => string} [props.errorMessage] - Turns a
  *   failed call into a message; defaults to the prompt wording.
- * @param {{title?: string, private?: string, help?: string}} [props.labels] -
- *   Texts that name the kind of item; each defaults to the prompt text.
+ * @param {{title?: string, private?: string, help?: string, canUse?: string, canEdit?: string,
+ *   everyone?: string}} [props.labels] - Texts that name the kind of item and its roles; each
+ *   defaults to the prompt text.
  */
 function PromptShareDialog({
   prompt,
@@ -65,6 +66,7 @@ function PromptShareDialog({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const searchRef = useRef(null);
+  const titleId = useId();
 
   useEffect(() => {
     let active = true;
@@ -121,7 +123,9 @@ function PromptShareDialog({
   };
 
   const describe = share => {
-    if (share.type === 'everyone') return t('prompts.share.everyone', 'Everyone signed in');
+    if (share.type === 'everyone') {
+      return labels.everyone || t('prompts.share.everyone', 'Everyone signed in');
+    }
     return share.name || share.id;
   };
 
@@ -140,10 +144,16 @@ function PromptShareDialog({
     : [];
 
   return (
-    <Modal isOpen onClose={onClose} maxWidthClassName="max-w-xl" initialFocusRef={searchRef}>
+    <Modal
+      isOpen
+      onClose={onClose}
+      maxWidthClassName="max-w-xl"
+      initialFocusRef={searchRef}
+      labelledBy={titleId}
+    >
       <div className="flex items-start justify-between p-5 border-b border-gray-200 dark:border-gray-700">
         <div className="min-w-0">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+          <h2 id={titleId} className="text-lg font-semibold text-gray-900 dark:text-gray-100">
             {labels.title || t('prompts.share.title', 'Share prompt')}
           </h2>
           <p className="text-sm text-gray-500 dark:text-gray-400 truncate">{prompt.name}</p>
@@ -257,8 +267,12 @@ function PromptShareDialog({
                       aria-label={t('prompts.share.permission', 'Permission')}
                       onChange={e => setPermission(key, e.target.value)}
                     >
-                      <option value="use">{t('prompts.share.canUse', 'Can use')}</option>
-                      <option value="edit">{t('prompts.share.canEdit', 'Can edit')}</option>
+                      <option value="use">
+                        {labels.canUse || t('prompts.share.canUse', 'Can use')}
+                      </option>
+                      <option value="edit">
+                        {labels.canEdit || t('prompts.share.canEdit', 'Can edit')}
+                      </option>
                     </select>
                     <button
                       type="button"

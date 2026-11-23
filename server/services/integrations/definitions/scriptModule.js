@@ -35,7 +35,10 @@ export const CODE_FILE_PATTERN = /\.(m?js|cjs)$/i;
  * A plain text check over the source, comments and strings included, so a
  * module that mentions one in a comment is refused too; the error says so.
  */
-const RELATIVE_IMPORT_PATTERN = /\b(?:from|import|require)\s*\(?\s*['"`](\.{1,2}\/[^'"`]*)['"`]/g;
+// `\s*(?:\(\s*)?` accepts exactly what `\s*\(?\s*` did, but the whitespace runs are no longer
+// adjacent, so a long run of blanks cannot be split between them in many ways (quadratic time).
+const RELATIVE_IMPORT_PATTERN =
+  /\b(?:from|import|require)\s*(?:\(\s*)?['"`](\.{1,2}\/[^'"`]*)['"`]/g;
 
 /**
  * The relative imports a source names, each once.

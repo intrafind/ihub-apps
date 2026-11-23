@@ -1,15 +1,12 @@
 # Fixes — Unreleased
 
-## Thinking models no longer fail as "endpoint unreachable"
+## The Admin Area Is Fully Translated into German
 
-Gemini models with a large prompt or a high thinking level, and image models, could fail with
-"could not be reached: it did not answer the connection attempt" although the endpoint was fine.
-The connect timeout also counted the time the model thought before its first chunk, because
-Google sends no response until then.
+The admin area is fully translated into German. Many labels, hints, breadcrumbs, dialogs and
+messages still appeared in English when the admin language was German, including the "History"
+button of the model editor and the user, group and authentication settings.
 
-- The connect timeout (`connectTimeoutMs`) now covers only establishing the connection: DNS, TCP,
-  TLS, or the proxy tunnel. Waiting for the model's first chunk falls under the overall request
-  deadline.
-- A raised `connectTimeoutMs` on a model, added only to keep a slow model from timing out, is no
-  longer needed and can be removed.
-- The error now reads "Could not connect to provider … within N ms".
+- German text uses one term per concept, matching the admin navigation: "Anbieter" for model
+  providers, "Tool" for the functions a model calls, "Benutzer" for users.
+- These texts can now also be changed under **Admin → Customization → Localization**, which only
+  offers keys that exist in the built-in translations.

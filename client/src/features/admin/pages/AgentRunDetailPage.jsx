@@ -91,8 +91,8 @@ export default function AgentRunDetailPage() {
   // Must run unconditionally (before the loading early-return below) to
   // satisfy the Rules of Hooks; deriveRunTimeline tolerates a null/loading run.
   const { unifiedTasks, tokenUsage, stepLogs, stepLogHistory } = useMemo(
-    () => deriveRunTimeline(run),
-    [run]
+    () => deriveRunTimeline(run, t),
+    [run, t]
   );
   function logFor(nodeId) {
     return stepLogs[nodeId] || null;
@@ -220,7 +220,7 @@ export default function AgentRunDetailPage() {
     (typeof run?.data?._title === 'string' && run.data._title.trim()) ||
     shortFallback(currentInboxItem?.text) ||
     shortFallback(run?.data?.brief) ||
-    'Agent run';
+    t('admin.agents.runDetail.runTitleFallback', 'Agent run');
 
   // Who triggered this run and how. Sourced from state.data._agent which the
   // route pre-initialises with profileId + triggeredBy.
@@ -260,6 +260,20 @@ export default function AgentRunDetailPage() {
     }
   }
   const currentTaskId = run?.data?._currentTask?.id;
+  // Display labels for the step table's Source and Status columns; an unknown
+  // value falls through and is shown as sent.
+  const stepKindLabels = {
+    planner: t('admin.agents.runDetail.stepKind.planner', 'planner'),
+    orchestrator: t('admin.agents.runDetail.stepKind.orchestrator', 'orchestrator'),
+    agent: t('admin.agents.runDetail.stepKind.agent', 'agent'),
+    dynamic: t('admin.agents.runDetail.stepKind.dynamic', 'dynamic')
+  };
+  const stepStatusLabels = {
+    open: t('admin.agents.runDetail.stepStatus.open', 'open'),
+    in_progress: t('admin.agents.runDetail.stepStatus.inProgress', 'in progress'),
+    done: t('admin.agents.runDetail.stepStatus.done', 'done'),
+    failed: t('admin.agents.runDetail.stepStatus.failed', 'failed')
+  };
   // Artifacts: prefer disk listing (real file metadata), fall back to
   // state.data._agent.artifacts (event-driven, available before disk fetch
   // completes or when disk endpoint hasn't populated yet). Dedupe by
@@ -339,7 +353,7 @@ export default function AgentRunDetailPage() {
                   <>
                     <span className="text-gray-300 dark:text-gray-600">·</span>
                     <span>
-                      triggered by{' '}
+                      {t('admin.agents.runDetail.triggeredBy', 'triggered by')}{' '}
                       <span className="font-medium text-gray-800 dark:text-gray-200">
                         {triggeredBy.userId}
                       </span>
@@ -355,7 +369,7 @@ export default function AgentRunDetailPage() {
                   <>
                     <span className="text-gray-300 dark:text-gray-600">·</span>
                     <span>
-                      total{' '}
+                      {t('admin.agents.runDetail.total', 'total')}{' '}
                       <span className="font-medium text-gray-800 dark:text-gray-200">
                         {formatDuration(totalDurationMs)}
                       </span>
@@ -373,7 +387,11 @@ export default function AgentRunDetailPage() {
                           : 'bg-gray-400'
                     }`}
                   />
-                  {connected ? 'Live' : isInFlight ? 'Reconnecting…' : 'Disconnected'}
+                  {connected
+                    ? t('admin.agents.runDetail.live', 'Live')
+                    : isInFlight
+                      ? t('admin.agents.runDetail.reconnecting', 'Reconnecting…')
+                      : t('admin.agents.runDetail.disconnected', 'Disconnected')}
                 </span>
               </div>
             </div>
@@ -382,7 +400,7 @@ export default function AgentRunDetailPage() {
                 onClick={() => navigate(-1)}
                 className="px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 rounded-sm text-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
               >
-                Back
+                {t('admin.agents.runDetail.back', 'Back')}
               </button>
               {status === 'running' && (
                 <button
@@ -423,20 +441,30 @@ export default function AgentRunDetailPage() {
 
           {run?.data?._inboxEmpty === true && (
             <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-sm text-sm text-gray-700 dark:text-gray-300">
-              <span className="font-medium">No work to do.</span> The inbox was empty when this run
-              started, so the planner and synthesizer were skipped. The next trigger will pick up
-              new items.
+              <span className="font-medium">
+                {t('admin.agents.runDetail.inboxEmptyTitle', 'No work to do.')}
+              </span>{' '}
+              {t(
+                'admin.agents.runDetail.inboxEmpty',
+                'The inbox was empty when this run started, so the planner and synthesizer were skipped. The next trigger will pick up new items.'
+              )}
             </div>
           )}
 
           {run?.data?._verificationOutcome === 'not_passed' && (
             <div className="mb-6 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 rounded-sm text-sm text-amber-900 dark:text-amber-200">
-              <span className="font-medium">Review not passed.</span> The adversarial verifier still
-              found gaps after every revision, so this run did not pass review. The deliverable
-              below is preserved for inspection and the inbox item was left open.
+              <span className="font-medium">
+                {t('admin.agents.runDetail.reviewFailedTitle', 'Review not passed.')}
+              </span>{' '}
+              {t(
+                'admin.agents.runDetail.reviewFailed',
+                'The adversarial verifier still found gaps after every revision, so this run did not pass review. The deliverable below is preserved for inspection and the inbox item was left open.'
+              )}
               {run?.data?.verificationResult?.feedback && (
                 <div className="mt-2 text-xs text-amber-800 dark:text-amber-300">
-                  Last review: {run.data.verificationResult.feedback}
+                  {t('admin.agents.runDetail.lastReview', 'Last review: {{feedback}}', {
+                    feedback: run.data.verificationResult.feedback
+                  })}
                 </div>
               )}
             </div>
@@ -445,7 +473,9 @@ export default function AgentRunDetailPage() {
           {isFailed && runErrors.length > 0 && (
             <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-700 rounded-sm">
               <h2 className="font-semibold text-red-900 dark:text-red-300 mb-2">
-                Run failed ({runErrors.length} error{runErrors.length === 1 ? '' : 's'})
+                {t('admin.agents.runDetail.runFailed', 'Run failed ({{count}} errors)', {
+                  count: runErrors.length
+                })}
               </h2>
               <ul className="text-sm text-red-800 dark:text-red-300 space-y-3">
                 {runErrors.map((err, i) => (
@@ -455,7 +485,7 @@ export default function AgentRunDetailPage() {
                   >
                     {err.nodeId && (
                       <div className="text-xs text-red-700 dark:text-red-400 font-mono mb-0.5">
-                        node: {err.nodeId}
+                        {t('admin.agents.runDetail.node', 'node: {{id}}', { id: err.nodeId })}
                         {err.code && (
                           <span className="ml-2 text-red-600 dark:text-red-400">[{err.code}]</span>
                         )}
@@ -496,7 +526,7 @@ export default function AgentRunDetailPage() {
           {isPaused && pendingCheckpoint && !isQuestionCheckpoint(pendingCheckpoint) && (
             <div className="mb-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-700 rounded-sm">
               <h2 className="font-semibold text-yellow-900 dark:text-yellow-300 mb-2">
-                ⏸ Awaiting approval
+                {t('admin.agents.runDetail.awaitingApproval', '⏸ Awaiting approval')}
               </h2>
               <p className="text-sm text-yellow-800 dark:text-yellow-300 mb-3">
                 {pendingCheckpoint.message}
@@ -504,8 +534,8 @@ export default function AgentRunDetailPage() {
               <div className="flex gap-2">
                 {(
                   pendingCheckpoint.options || [
-                    { value: 'approve', label: 'Approve' },
-                    { value: 'reject', label: 'Reject' }
+                    { value: 'approve', label: t('admin.agents.runDetail.approve', 'Approve') },
+                    { value: 'reject', label: t('admin.agents.runDetail.reject', 'Reject') }
                   ]
                 ).map(opt => (
                   <button
@@ -529,17 +559,20 @@ export default function AgentRunDetailPage() {
           <div className="grid grid-cols-1 gap-6">
             <div className="space-y-4">
               <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-                <h2 className="font-semibold mb-2 text-gray-900 dark:text-gray-100">Status</h2>
+                <h2 className="font-semibold mb-2 text-gray-900 dark:text-gray-100">
+                  {t('common.status', 'Status')}
+                </h2>
                 <div className="text-sm text-gray-700 dark:text-gray-300">
                   <div>
-                    Status: <span className="font-mono">{status}</span>
+                    {t('admin.agents.runDetail.statusLabel', 'Status:')}{' '}
+                    <span className="font-mono">{status}</span>
                   </div>
                   <div>
-                    Current nodes:{' '}
+                    {t('admin.agents.runDetail.currentNodes', 'Current nodes:')}{' '}
                     <span className="font-mono">{(run?.currentNodes || []).join(', ') || '—'}</span>
                   </div>
                   <div>
-                    Completed:{' '}
+                    {t('admin.agents.runDetail.completed', 'Completed:')}{' '}
                     <span className="font-mono">{(run?.completedNodes || []).length}</span>
                   </div>
                 </div>
@@ -548,11 +581,13 @@ export default function AgentRunDetailPage() {
               {tokenUsage.llmStepCount > 0 && (
                 <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
                   <h2 className="font-semibold mb-2 text-gray-900 dark:text-gray-100">
-                    Token usage
+                    {t('admin.agents.runDetail.tokenUsage', 'Token usage')}
                   </h2>
                   <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
                     <div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">Input</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        {t('admin.agents.runDetail.tokenInput', 'Input')}
+                      </div>
                       <div
                         className="font-mono text-gray-900 dark:text-gray-100"
                         title={tokenUsage.totalInput.toLocaleString()}
@@ -561,7 +596,9 @@ export default function AgentRunDetailPage() {
                       </div>
                     </div>
                     <div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">Output</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        {t('admin.agents.runDetail.tokenOutput', 'Output')}
+                      </div>
                       <div
                         className="font-mono text-gray-900 dark:text-gray-100"
                         title={tokenUsage.totalOutput.toLocaleString()}
@@ -570,7 +607,9 @@ export default function AgentRunDetailPage() {
                       </div>
                     </div>
                     <div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">Total</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        {t('admin.agents.runDetail.tokenTotal', 'Total')}
+                      </div>
                       <div
                         className="font-mono font-semibold text-gray-900 dark:text-gray-100"
                         title={tokenUsage.total.toLocaleString()}
@@ -579,7 +618,9 @@ export default function AgentRunDetailPage() {
                       </div>
                     </div>
                     <div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">LLM steps</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        {t('admin.agents.runDetail.llmSteps', 'LLM steps')}
+                      </div>
                       <div className="font-mono text-gray-900 dark:text-gray-100">
                         {tokenUsage.llmStepCount}
                       </div>
@@ -591,14 +632,24 @@ export default function AgentRunDetailPage() {
                         <div key={model} className="flex justify-between gap-4">
                           <span className="font-mono">{model}</span>
                           <span className="font-mono whitespace-nowrap">
-                            {formatTokenCount(u.input)} in / {formatTokenCount(u.output)} out
+                            {t(
+                              'admin.agents.runDetail.tokensInOut',
+                              '{{input}} in / {{output}} out',
+                              {
+                                input: formatTokenCount(u.input),
+                                output: formatTokenCount(u.output)
+                              }
+                            )}
                           </span>
                         </div>
                       ))}
                     </div>
                   )}
                   <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 italic">
-                    Input is summed across each step&apos;s agent iterations, not a single prompt.
+                    {t(
+                      'admin.agents.runDetail.inputSummed',
+                      "Input is summed across each step's agent iterations, not a single prompt."
+                    )}
                   </p>
                 </div>
               )}
@@ -606,10 +657,10 @@ export default function AgentRunDetailPage() {
               {currentInboxItem && (
                 <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
                   <h2 className="font-semibold mb-2 flex items-center gap-2 text-gray-900 dark:text-gray-100">
-                    Inbox item
+                    {t('admin.agents.runDetail.inboxItem', 'Inbox item')}
                     {currentInboxItem._markedDone && (
                       <span className="text-xs font-normal px-2 py-0.5 bg-green-100 text-green-800 rounded-sm">
-                        marked done
+                        {t('admin.agents.runDetail.markedDone', 'marked done')}
                       </span>
                     )}
                   </h2>
@@ -635,11 +686,23 @@ export default function AgentRunDetailPage() {
                   </div>
                   {(inboxMeta?.inboxId || currentInboxItem.line != null) && (
                     <div className="mt-2 text-xs text-gray-500 dark:text-gray-400 font-mono">
-                      {inboxMeta?.inboxId && <span>inbox: {inboxMeta.inboxId}</span>}
+                      {inboxMeta?.inboxId && (
+                        <span>
+                          {t('admin.agents.runDetail.inboxId', 'inbox: {{id}}', {
+                            id: inboxMeta.inboxId
+                          })}
+                        </span>
+                      )}
                       {inboxMeta?.inboxId && currentInboxItem.line != null && (
                         <span className="mx-1">·</span>
                       )}
-                      {currentInboxItem.line != null && <span>line {currentInboxItem.line}</span>}
+                      {currentInboxItem.line != null && (
+                        <span>
+                          {t('admin.agents.runDetail.line', 'line {{line}}', {
+                            line: currentInboxItem.line
+                          })}
+                        </span>
+                      )}
                     </div>
                   )}
                 </div>
@@ -647,52 +710,68 @@ export default function AgentRunDetailPage() {
 
               <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
                 <h2 className="font-semibold mb-2 text-gray-900 dark:text-gray-100">
-                  Steps ({unifiedTasks.length})
+                  {t('admin.agents.runDetail.steps', 'Steps ({{count}})', {
+                    count: unifiedTasks.length
+                  })}
                 </h2>
                 {unifiedTasks.length === 0 ? (
-                  <p className="text-sm text-gray-500 dark:text-gray-400">No steps yet.</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    {t('admin.agents.runDetail.noSteps', 'No steps yet.')}
+                  </p>
                 ) : (
                   <table className="min-w-full text-sm">
                     <thead>
                       <tr className="text-xs text-gray-500 dark:text-gray-400 uppercase">
                         <th className="text-left py-1 w-6"></th>
-                        <th className="text-left py-1">Step</th>
-                        <th className="text-left py-1">Source</th>
-                        <th className="text-left py-1">Status</th>
-                        <th className="text-left py-1 whitespace-nowrap">Started</th>
-                        <th className="text-left py-1 whitespace-nowrap">Duration</th>
-                        <th className="text-left py-1 whitespace-nowrap">Tokens (in/out)</th>
+                        <th className="text-left py-1">
+                          {t('admin.agents.runDetail.colStep', 'Step')}
+                        </th>
+                        <th className="text-left py-1">
+                          {t('admin.agents.runDetail.colSource', 'Source')}
+                        </th>
+                        <th className="text-left py-1">{t('common.status', 'Status')}</th>
+                        <th className="text-left py-1 whitespace-nowrap">
+                          {t('admin.agents.runs.col.started', 'Started')}
+                        </th>
+                        <th className="text-left py-1 whitespace-nowrap">
+                          {t('admin.workflowExecutions.table.duration', 'Duration')}
+                        </th>
+                        <th className="text-left py-1 whitespace-nowrap">
+                          {t('admin.agents.runDetail.colTokens', 'Tokens (in/out)')}
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
-                      {unifiedTasks.map(t => {
+                      {unifiedTasks.map(step => {
                         const isCurrent =
-                          t.kind === 'dynamic' && currentTaskId && t.key === `dyn:${currentTaskId}`;
+                          step.kind === 'dynamic' &&
+                          currentTaskId &&
+                          step.key === `dyn:${currentTaskId}`;
                         const statusColor =
-                          t.status === 'done'
+                          step.status === 'done'
                             ? 'text-green-700 dark:text-green-400'
-                            : t.status === 'failed'
+                            : step.status === 'failed'
                               ? 'text-red-700 dark:text-red-400'
-                              : t.status === 'in_progress'
+                              : step.status === 'in_progress'
                                 ? 'text-blue-700 dark:text-blue-400'
                                 : 'text-gray-600 dark:text-gray-400';
-                        const isExpanded = expandedSteps.has(t.nodeId);
-                        const logHistory = historyFor(t.nodeId);
+                        const isExpanded = expandedSteps.has(step.nodeId);
+                        const logHistory = historyFor(step.nodeId);
                         const hasDetails = logHistory.length > 0;
-                        // Every row sets `t.log` to logFor(<its nodeId>) already,
-                        // so the old `|| logFor(t.nodeId)` fallback was a no-op.
-                        const rowTokens = t.log?.tokens;
+                        // Every row sets `step.log` to logFor(<its nodeId>) already,
+                        // so the old `|| logFor(step.nodeId)` fallback was a no-op.
+                        const rowTokens = step.log?.tokens;
                         const hasRowTokens =
                           rowTokens && (rowTokens.input > 0 || rowTokens.output > 0);
                         return (
-                          <Fragment key={t.key}>
+                          <Fragment key={step.key}>
                             <tr
                               className={`border-t border-gray-100 dark:border-gray-700 align-top ${isCurrent ? 'bg-indigo-50 dark:bg-indigo-900/20' : ''} ${
                                 hasDetails
                                   ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50'
                                   : ''
                               }`}
-                              onClick={hasDetails ? () => toggleStep(t.nodeId) : undefined}
+                              onClick={hasDetails ? () => toggleStep(step.nodeId) : undefined}
                             >
                               <td className="py-2 pr-1 text-xs text-gray-500 dark:text-gray-400 select-none">
                                 {hasDetails ? (isExpanded ? '▾' : '▸') : ''}
@@ -700,49 +779,60 @@ export default function AgentRunDetailPage() {
                               <td
                                 className="py-2 pr-3"
                                 style={
-                                  t.depth ? { paddingLeft: `${t.depth * 1.25}rem` } : undefined
+                                  step.depth
+                                    ? { paddingLeft: `${step.depth * 1.25}rem` }
+                                    : undefined
                                 }
                               >
-                                {(isCurrent || t.status === 'in_progress') && (
+                                {(isCurrent || step.status === 'in_progress') && (
                                   <span className="inline-block w-2 h-2 rounded-full bg-indigo-500 mr-2 animate-pulse" />
                                 )}
-                                <span className="font-medium">{t.title}</span>
-                                {t.description && (
+                                <span className="font-medium">{step.title}</span>
+                                {step.description && (
                                   <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                                    {t.description.length > 200
-                                      ? `${t.description.slice(0, 200)}…`
-                                      : t.description}
+                                    {step.description.length > 200
+                                      ? `${step.description.slice(0, 200)}…`
+                                      : step.description}
                                   </div>
                                 )}
                               </td>
                               <td className="py-2 pr-3 text-xs">
                                 <span
                                   className={`px-2 py-0.5 rounded ${
-                                    t.kind === 'planner'
+                                    step.kind === 'planner'
                                       ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300'
-                                      : t.kind === 'orchestrator'
+                                      : step.kind === 'orchestrator'
                                         ? 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
-                                        : t.kind === 'agent'
+                                        : step.kind === 'agent'
                                           ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-300'
                                           : 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300'
                                   }`}
                                 >
-                                  {t.kind}
+                                  {stepKindLabels[step.kind] || step.kind}
                                 </span>
                               </td>
-                              <td className={`py-2 pr-3 ${statusColor}`}>{t.status}</td>
+                              <td className={`py-2 pr-3 ${statusColor}`}>
+                                {stepStatusLabels[step.status] || step.status}
+                              </td>
                               <td className="py-2 pr-3 text-xs text-gray-600 dark:text-gray-400 whitespace-nowrap">
-                                {t.timing?.startedAt ? formatTime(t.timing.startedAt) : '—'}
+                                {step.timing?.startedAt ? formatTime(step.timing.startedAt) : '—'}
                               </td>
                               <td className="py-2 pr-3 text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
-                                {typeof t.timing?.durationMs === 'number'
-                                  ? formatDuration(t.timing.durationMs)
+                                {typeof step.timing?.durationMs === 'number'
+                                  ? formatDuration(step.timing.durationMs)
                                   : '—'}
                               </td>
                               <td className="py-2 text-xs text-gray-600 dark:text-gray-400 font-mono whitespace-nowrap">
                                 {hasRowTokens ? (
                                   <span
-                                    title={`${(rowTokens.input || 0).toLocaleString()} in / ${(rowTokens.output || 0).toLocaleString()} out`}
+                                    title={t(
+                                      'admin.agents.runDetail.tokensInOut',
+                                      '{{input}} in / {{output}} out',
+                                      {
+                                        input: (rowTokens.input || 0).toLocaleString(),
+                                        output: (rowTokens.output || 0).toLocaleString()
+                                      }
+                                    )}
                                   >
                                     {formatTokenCount(rowTokens.input || 0)} /{' '}
                                     {formatTokenCount(rowTokens.output || 0)}
@@ -766,7 +856,9 @@ export default function AgentRunDetailPage() {
                                           className="border-l-2 border-indigo-300 dark:border-indigo-700 pl-2 py-1"
                                         >
                                           <span className="font-semibold text-indigo-700 dark:text-indigo-300">
-                                            Round {entry.iteration ?? i + 1}
+                                            {t('admin.agents.runDetail.round', 'Round {{round}}', {
+                                              round: entry.iteration ?? i + 1
+                                            })}
                                           </span>
                                           {entry.verdict && (
                                             <>
@@ -788,7 +880,7 @@ export default function AgentRunDetailPage() {
                                             ? ` · ${formatDuration(entry.durationMs)}`
                                             : ''}
                                           {entry.toolCount
-                                            ? ` · ${entry.toolCount} tool calls`
+                                            ? ` · ${t('admin.agents.runDetail.roundToolCalls', '{{count}} tool calls', { count: entry.toolCount })}`
                                             : ''}
                                           {Array.isArray(entry.toolNames) &&
                                             entry.toolNames.length > 0 && (
@@ -800,10 +892,18 @@ export default function AgentRunDetailPage() {
                                           {Array.isArray(entry.planSnapshot) &&
                                             entry.planSnapshot.length > 0 && (
                                               <div className="text-gray-500 dark:text-gray-400">
-                                                plan:{' '}
-                                                {entry.planSnapshot
-                                                  .map(p => `${p.title} (${p.status})`)
-                                                  .join(' · ')}
+                                                {t(
+                                                  'admin.agents.runDetail.roundPlan',
+                                                  'plan: {{plan}}',
+                                                  {
+                                                    plan: entry.planSnapshot
+                                                      .map(
+                                                        p =>
+                                                          `${p.title} (${stepStatusLabels[p.status] || p.status})`
+                                                      )
+                                                      .join(' · ')
+                                                  }
+                                                )}
                                               </div>
                                             )}
                                           {Array.isArray(entry.failures) &&
@@ -828,7 +928,7 @@ export default function AgentRunDetailPage() {
                                   )}
                                   {/* Full transcript of the LATEST round only
                                       (one copy kept server-side). */}
-                                  <StepDetails log={logFor(t.nodeId) || logHistory.at(-1)} />
+                                  <StepDetails log={logFor(step.nodeId) || logHistory.at(-1)} />
                                 </td>
                               </tr>
                             )}
@@ -840,7 +940,13 @@ export default function AgentRunDetailPage() {
                 )}
                 {run?.data?.planCreated?.reasoning && (
                   <p className="mt-3 text-xs text-gray-500 dark:text-gray-400 italic">
-                    Planner reasoning: {run.data.planCreated.reasoning}
+                    {t(
+                      'admin.agents.runDetail.plannerReasoning',
+                      'Planner reasoning: {{reasoning}}',
+                      {
+                        reasoning: run.data.planCreated.reasoning
+                      }
+                    )}
                   </p>
                 )}
               </div>
@@ -849,10 +955,14 @@ export default function AgentRunDetailPage() {
                   primary deliverable, citations are supporting evidence. */}
               <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
                 <h2 className="font-semibold mb-2 text-gray-900 dark:text-gray-100">
-                  Artifacts ({displayArtifacts.length})
+                  {t('admin.agents.runDetail.artifacts', 'Artifacts ({{count}})', {
+                    count: displayArtifacts.length
+                  })}
                 </h2>
                 {displayArtifacts.length === 0 ? (
-                  <p className="text-sm text-gray-500 dark:text-gray-400">No artifacts produced.</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    {t('admin.agents.runDetail.noArtifacts', 'No artifacts produced.')}
+                  </p>
                 ) : (
                   <ul className="text-sm space-y-1">
                     {displayArtifacts.map((a, i) => (
@@ -861,7 +971,7 @@ export default function AgentRunDetailPage() {
                           type="button"
                           onClick={() => setViewingArtifact(a.name)}
                           className="text-indigo-600 dark:text-indigo-400 hover:underline font-medium"
-                          title="Open viewer"
+                          title={t('admin.agents.runDetail.openViewer', 'Open viewer')}
                         >
                           {a.name}
                         </button>
@@ -883,7 +993,9 @@ export default function AgentRunDetailPage() {
                         />
                         {typeof a.bytes === 'number' && (
                           <span className="text-xs text-gray-500 dark:text-gray-400">
-                            {a.bytes} bytes
+                            {t('admin.agents.runDetail.bytes', '{{count}} bytes', {
+                              count: a.bytes
+                            })}
                           </span>
                         )}
                         {a.writtenAt && (
@@ -900,13 +1012,15 @@ export default function AgentRunDetailPage() {
               {dedupedCitations.length > 0 && (
                 <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
                   <h2 className="font-semibold mb-2 text-gray-900 dark:text-gray-100">
-                    Citations ({dedupedCitations.length})
+                    {t('admin.agents.runDetail.citations', 'Citations ({{count}})', {
+                      count: dedupedCitations.length
+                    })}
                   </h2>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                    URLs the agent actually consulted during this run, captured from every search /
-                    extract tool call. The synthesizer cites these by number in the final report.
-                    Distinct from the projects linked to the profile — citations are what was
-                    visited, projects are what could be queried.
+                    {t(
+                      'admin.agents.runDetail.citationsHelp',
+                      'URLs the agent actually consulted during this run, captured from every search / extract tool call. The synthesizer cites these by number in the final report. Distinct from the projects linked to the profile — citations are what was visited, projects are what could be queried.'
+                    )}
                   </p>
                   <ol className="text-sm space-y-1 list-decimal list-inside">
                     {(citationsExpanded
@@ -948,8 +1062,12 @@ export default function AgentRunDetailPage() {
                       className="mt-2 text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
                     >
                       {citationsExpanded
-                        ? `Show less`
-                        : `Show all ${dedupedCitations.length} citations`}
+                        ? t('admin.agents.runDetail.showLess', 'Show less')
+                        : t(
+                            'admin.agents.runDetail.showAllCitations',
+                            'Show all {{count}} citations',
+                            { count: dedupedCitations.length }
+                          )}
                     </button>
                   )}
                 </div>
@@ -958,12 +1076,15 @@ export default function AgentRunDetailPage() {
               {activatedSkillNames.length > 0 && (
                 <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
                   <h2 className="font-semibold mb-2 text-gray-900 dark:text-gray-100">
-                    Activated skills ({activatedSkillNames.length})
+                    {t('admin.agents.runDetail.activatedSkills', 'Activated skills ({{count}})', {
+                      count: activatedSkillNames.length
+                    })}
                   </h2>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                    Skills loaded into the agent's context during this run. The full SKILL.md body
-                    of each activated skill is folded into the system prompt of every subsequent
-                    prompt node.
+                    {t(
+                      'admin.agents.runDetail.activatedSkillsHelp',
+                      "Skills loaded into the agent's context during this run. The full SKILL.md body of each activated skill is folded into the system prompt of every subsequent prompt node."
+                    )}
                   </p>
                   <ul className="text-sm space-y-2">
                     {activatedSkillNames.map(name => {
@@ -986,7 +1107,12 @@ export default function AgentRunDetailPage() {
                                     : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
                               }`}
                             >
-                              {skill.activatedBy || 'unknown'}
+                              {skill.activatedBy === 'planner'
+                                ? t('admin.agents.runDetail.activatedBy.planner', 'planner')
+                                : skill.activatedBy === 'llm'
+                                  ? t('admin.agents.runDetail.activatedBy.llm', 'llm')
+                                  : skill.activatedBy ||
+                                    t('admin.agents.runDetail.activatedBy.unknown', 'unknown')}
                             </span>
                             {skill.activatedAt && (
                               <span className="text-xs text-gray-500 dark:text-gray-400">
@@ -1009,11 +1135,15 @@ export default function AgentRunDetailPage() {
               {childExecutionIds.length > 0 && (
                 <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
                   <h2 className="font-semibold mb-2 text-gray-900 dark:text-gray-100">
-                    Child runs ({childExecutionIds.length})
+                    {t('admin.agents.runDetail.childRuns', 'Child runs ({{count}})', {
+                      count: childExecutionIds.length
+                    })}
                   </h2>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                    Sub-workflow executions spawned by this run (one per planner decomposition).
-                    Open one to see its per-task LLM history.
+                    {t(
+                      'admin.agents.runDetail.childRunsHelp',
+                      'Sub-workflow executions spawned by this run (one per planner decomposition). Open one to see its per-task LLM history.'
+                    )}
                   </p>
                   <ul className="text-sm space-y-1">
                     {childExecutionIds.map(childId => (
@@ -1033,11 +1163,15 @@ export default function AgentRunDetailPage() {
               {toolErrors.length > 0 && (
                 <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
                   <h2 className="font-semibold mb-2 text-amber-800 dark:text-amber-400">
-                    Tool issues ({toolErrors.length})
+                    {t('admin.agents.runDetail.toolIssues', 'Tool issues ({{count}})', {
+                      count: toolErrors.length
+                    })}
                   </h2>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                    The agent attempted to call tools it does not have access to. Each attempt was
-                    returned to the model as a tool-error so it can self-correct.
+                    {t(
+                      'admin.agents.runDetail.toolIssuesHelp',
+                      'The agent attempted to call tools it does not have access to. Each attempt was returned to the model as a tool-error so it can self-correct.'
+                    )}
                   </p>
                   <ul className="text-xs space-y-2">
                     {toolErrors.slice(-10).map((e, i) => (
@@ -1051,7 +1185,11 @@ export default function AgentRunDetailPage() {
                           </span>
                         </div>
                         <div className="text-gray-500 dark:text-gray-400">
-                          available: {(e.availableTools || []).join(', ') || '(none)'}
+                          {t('admin.agents.runDetail.availableTools', 'available: {{tools}}', {
+                            tools:
+                              (e.availableTools || []).join(', ') ||
+                              t('admin.agents.runDetail.none', '(none)')
+                          })}
                         </div>
                       </li>
                     ))}

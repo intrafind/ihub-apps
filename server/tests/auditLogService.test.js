@@ -66,6 +66,26 @@ describe('AuditLogService.logAudit', () => {
     expect(entry.resourceId).toBe('bob');
   });
 
+  test('coerces array/object identifiers so they cannot bypass email masking', () => {
+    const entry = logAudit({
+      action: 'login',
+      resource: 'auth',
+      result: 'failure',
+      resourceId: ['bob@example.com', 'x'],
+      actor: { id: ['attacker@evil.com'], username: { toString: 'x' }, authenticated: false }
+    });
+    expect(entry.resourceId).toBe('');
+    expect(entry.actor.id).toBe('unknown');
+    expect(entry.actor.username).toBe('unknown');
+    expect(typeof entry.actor.name).toBe('string');
+    expect(typeof entry.resourceId).toBe('string');
+  });
+
+  test('stringifies numeric identifiers', () => {
+    const entry = logAudit({ action: 'create', resource: 'app', resourceId: 42 });
+    expect(entry.resourceId).toBe('42');
+  });
+
   test('masks the explicit failed-login actor (attacker-supplied email)', () => {
     const entry = logAudit({
       action: 'login',

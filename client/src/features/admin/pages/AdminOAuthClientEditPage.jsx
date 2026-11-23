@@ -442,9 +442,13 @@ function AdminOAuthClientEditPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
           <AdminBreadcrumb
             crumbs={[
-              { label: 'Admin', href: '/admin' },
-              { label: 'OAuth', href: '/admin/oauth/clients' },
-              { label: isNew ? 'New Client' : (formData?.name ?? clientId) }
+              { label: t('documentTitle.admin', 'Admin'), href: '/admin' },
+              { label: t('admin.nav.oauth', 'OAuth'), href: '/admin/oauth/clients' },
+              {
+                label: isNew
+                  ? t('admin.breadcrumbs.newClient', 'New Client')
+                  : (formData?.name ?? clientId)
+              }
             ]}
           />
         </div>
@@ -465,7 +469,10 @@ function AdminOAuthClientEditPage() {
                     : t('admin.auth.oauth.editClient', 'Edit OAuth Client')}
                 </h1>
                 <p className="text-gray-600 dark:text-gray-400 mt-1">
-                  Configure client credentials and permissions for external API access
+                  {t(
+                    'admin.auth.oauth.editSubtitle',
+                    'Configure client credentials and permissions for external API access'
+                  )}
                 </p>
               </div>
             </div>
@@ -566,7 +573,10 @@ function AdminOAuthClientEditPage() {
                     className="mt-1 block w-full border border-admin-control-border rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                   />
                   <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                    Default: 60 minutes, Maximum: 1440 minutes (24 hours)
+                    {t(
+                      'admin.auth.oauth.tokenExpirationHelp',
+                      'Default: 60 minutes, Maximum: 1440 minutes (24 hours)'
+                    )}
                   </p>
                 </div>
 
