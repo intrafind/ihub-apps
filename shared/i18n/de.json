@@ -287,6 +287,19 @@
     },
     "modelSelector": {
       "noModels": "Keine Modelle verfügbar"
+    },
+    "failureCause": {
+      "certificateUntrusted": "Das KI-Modell konnte nicht sicher erreicht werden: Der iHub-Server vertraut dem Zertifikat seines Dienstes nicht. Bitte wenden Sie sich an Ihren Administrator.",
+      "serverError": "Der Dienst des KI-Modells hat nicht geantwortet. Der Fehler liegt beim Dienst; bitte versuchen Sie es später erneut.",
+      "authenticationFailed": "Der Dienst des KI-Modells hat den in iHub konfigurierten API-Schlüssel abgelehnt. Bitte wenden Sie sich an Ihren Administrator.",
+      "accessDenied": "Der Dienst des KI-Modells erlaubt diese Anfrage mit dem konfigurierten API-Schlüssel nicht. Bitte wenden Sie sich an Ihren Administrator.",
+      "apiKeyRequired": "Der Dienst des KI-Modells verlangt einen API-Schlüssel, für dieses Modell ist aber keiner konfiguriert. Bitte wenden Sie sich an Ihren Administrator.",
+      "apiKeyNotConfigured": "Für dieses KI-Modell ist kein API-Schlüssel konfiguriert. Bitte wenden Sie sich an Ihren Administrator.",
+      "apiKeyUndecryptable": "Der für dieses KI-Modell gespeicherte API-Schlüssel kann nicht mehr gelesen werden. Bitte wenden Sie sich an Ihren Administrator.",
+      "modelNotFound": "Der Dienst bietet das konfigurierte KI-Modell nicht an. Bitte wenden Sie sich an Ihren Administrator.",
+      "rateLimitExceeded": "Der Dienst des KI-Modells erhält zu viele Anfragen. Bitte warten Sie einen Moment und versuchen Sie es erneut.",
+      "unreachable": "Der Dienst des KI-Modells ist nicht erreichbar. Bitte versuchen Sie es später erneut, oder wenden Sie sich an Ihren Administrator, wenn der Fehler bleibt.",
+      "timeout": "Der Dienst des KI-Modells hat zu lange für die Antwort gebraucht. Bitte versuchen Sie es erneut."
     }
   },
   "websearch": {

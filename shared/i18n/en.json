@@ -607,6 +607,19 @@
     },
     "input": {
       "contextSection": "Message context"
+    },
+    "failureCause": {
+      "certificateUntrusted": "The AI model could not be reached securely: the iHub server does not trust the certificate of its service. Please tell your administrator.",
+      "serverError": "The service of the AI model failed to answer. The fault is on the side of the service; please try again later.",
+      "authenticationFailed": "The service of the AI model rejected the API key configured in iHub. Please tell your administrator.",
+      "accessDenied": "The service of the AI model does not allow this request with the configured API key. Please tell your administrator.",
+      "apiKeyRequired": "The service of the AI model requires an API key, but none is configured for this model. Please tell your administrator.",
+      "apiKeyNotConfigured": "No API key is configured for this AI model. Please tell your administrator.",
+      "apiKeyUndecryptable": "The API key stored for this AI model can no longer be read. Please tell your administrator.",
+      "modelNotFound": "The service does not offer the configured AI model. Please tell your administrator.",
+      "rateLimitExceeded": "The service of the AI model is receiving too many requests. Please wait a moment and try again.",
+      "unreachable": "The service of the AI model could not be reached. Please try again later, or tell your administrator if it persists.",
+      "timeout": "The service of the AI model took too long to answer. Please try again."
     }
   },
   "auth": {

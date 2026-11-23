@@ -7,6 +7,7 @@ import Icon from '../../../shared/components/Icon';
 import { buildPath } from '../../../utils/runtimeBasePath';
 import { fetchAppDetails } from '../../../api';
 import AppChat from '../../apps/pages/AppChat';
+import ChatDiagnosticsContext from '../../chat/contexts/ChatDiagnosticsContext';
 import useOverlayPanel from '../../../shared/hooks/useOverlayPanel';
 import NoModelNotice from './app-create/NoModelNotice';
 import TestNoAccessMessage from './app-editor/TestNoAccessMessage';
@@ -111,15 +112,18 @@ export function TestChat({ appId, testProjectId = null, renderLoadError }) {
   }
 
   // `data-surface="app"`: the end-user chat keeps its end-user look inside the admin (App.css
-  // scopes the admin's form-control styles out of this subtree).
+  // scopes the admin's form-control styles out of this subtree). A failed model call shows
+  // the admin what to check (ChatDiagnosticsContext); the end-user chat does not.
   return (
     <div data-surface="app" className="flex flex-col flex-1 min-h-0">
-      <AppChat
-        embedded
-        appId={appId}
-        preloadedApp={testProjectId ? projectTestApp(state.app) : state.app}
-        testProjectId={testProjectId}
-      />
+      <ChatDiagnosticsContext.Provider value={true}>
+        <AppChat
+          embedded
+          appId={appId}
+          preloadedApp={testProjectId ? projectTestApp(state.app) : state.app}
+          testProjectId={testProjectId}
+        />
+      </ChatDiagnosticsContext.Provider>
     </div>
   );
 }

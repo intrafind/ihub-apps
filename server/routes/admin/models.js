@@ -16,12 +16,13 @@ import { removeMarketplaceInstallation } from '../../utils/installationCleanup.j
 import { logAudit } from '../../services/AuditLogService.js';
 import { saveSnapshot } from '../../services/ChangeHistoryService.js';
 import { compareByOrderThenName } from '../../utils/resourceLoader.js';
-import llmClient, { isLLMError, LLM_ERROR_CODES } from '../../services/loop/LLMClient.js';
+import llmClient, { isLLMError } from '../../services/loop/LLMClient.js';
 import { getTtsProvider, isTtsModel } from '../../tts/index.js';
 import { isTranscriptionModel } from '../../transcription/index.js';
 import { testTranscriptionModel } from '../../websocket/realtimeTranscription.js';
 import { TTS_LANGUAGES } from '../../tts/language.js';
-import { llmErrorToHttpStatus, isMissingApiKeyError } from '../../services/loop/llmHttpErrors.js';
+import { llmErrorToHttpStatus } from '../../services/loop/llmHttpErrors.js';
+import { describeLlmFailure } from '../../services/loop/llmFailureCause.js';
 import { discoverModels, comparableUrl } from '../../services/ModelEndpointDiscovery.js';
 import {
   BUILT_IN_LLM_PROVIDERS,
@@ -34,7 +35,6 @@ import {
 import { inspectModelApiKey } from '../../utils.js';
 import { usageLimitBucketSchema } from '../../validators/common.js';
 import { sendCreated, segment } from '../../utils/created.js';
-import { endpointHost, tlsCertificateErrorCode } from '../../utils/connectionErrors.js';
 import { effectiveDefaultModelId, findModelDependants } from '../../utils/resourceDependants.js';
 
 /** Largest voice sample accepted (Mistral needs seconds, not minutes, of audio). */
@@ -115,195 +115,6 @@ const MODEL_TEST_MESSAGE = 'Hello, can you respond with a simple "Test successfu
 
 /** Hard cap for one model test call (interactive admin request). */
 const MODEL_TEST_TIMEOUT_MS = 60000;
-
-/**
- * Socket-level failure codes (undici / Node `net`) that deserve a dedicated
- * explanation in the admin UI. Checked before the generic code mapping.
- */
-const MODEL_TEST_NETWORK_CAUSES = Object.freeze({
-  UND_ERR_CONNECT_TIMEOUT: {
-    userMessage: 'Connection timeout',
-    messageKey: 'connectionTimeout',
-    errorMessage:
-      'The model service did not respond within the timeout period. Please check if the model URL is correct and the service is running.'
-  },
-  ECONNREFUSED: {
-    userMessage: 'Connection refused',
-    messageKey: 'connectionRefused',
-    errorMessage:
-      'Unable to connect to the model service. Please verify the URL and ensure the service is running.'
-  },
-  ENOTFOUND: {
-    userMessage: 'Service not found',
-    messageKey: 'serviceNotFound',
-    errorMessage:
-      'The model service hostname could not be resolved. Please check the URL configuration.'
-  }
-});
-
-/**
- * The headline and remediation of an untrusted TLS certificate: a private CA
- * or a self-signed certificate the server has not been told to accept.
- */
-const MODEL_TEST_TLS_FAILURE = Object.freeze({
-  userMessage: 'Certificate not trusted',
-  messageKey: 'certificateUntrusted',
-  errorMessage:
-    'The TLS certificate of the model service is not trusted by the iHub server (private CA or self-signed certificate). Add the host to the SSL domain whitelist and enable "Ignore invalid SSL certificates" under Admin > Security > SSL / TLS, or install a certificate from a trusted CA on the service.'
-});
-
-/** A socket-level error code (`ECONNRESET`, `UND_ERR_SOCKET`), as opposed to a provider's own code. */
-const SOCKET_ERROR_CODE = /^(?:E[A-Z]+|UND_ERR_[A-Z_]+)$/;
-
-/**
- * The headline and remediation of a failed model test, without its facts.
- *
- * @param {import('../../services/loop/contracts/errors.js').LLMError} err
- * @param {{ keyless: boolean }} context
- * @returns {{ userMessage: string, errorMessage: string, messageKey: string }}
- */
-function describeModelTestCause(err, { keyless }) {
-  if (tlsCertificateErrorCode(err)) {
-    return MODEL_TEST_TLS_FAILURE;
-  }
-
-  // `fetch failed` wraps the socket error one level deeper (err.cause.cause);
-  // LLMClient also surfaces that code as providerCode for network failures.
-  const socketCode = String(err.providerCode || err.cause?.code || err.cause?.cause?.code || '');
-  if (MODEL_TEST_NETWORK_CAUSES[socketCode]) {
-    return MODEL_TEST_NETWORK_CAUSES[socketCode];
-  }
-
-  const fallback = {
-    userMessage: 'Model test failed',
-    messageKey: 'testFailed',
-    errorMessage: err.message || 'Unknown error occurred'
-  };
-
-  switch (err.code) {
-    case LLM_ERROR_CODES.NETWORK: {
-      const detail =
-        typeof err.details === 'string' && err.details
-          ? err.details
-          : err.cause?.message || err.message;
-      return {
-        userMessage: 'Network error',
-        messageKey: 'networkError',
-        errorMessage: `Network connection failed: ${detail}`
-      };
-    }
-    case LLM_ERROR_CODES.TIMEOUT:
-      return {
-        userMessage: 'Request timeout',
-        messageKey: 'requestTimeout',
-        errorMessage:
-          'The model service took too long to respond. Please try again or check the service status.'
-      };
-    case LLM_ERROR_CODES.AUTH_FAILED:
-      if (err.providerCode === 'API_KEY_UNDECRYPTABLE') {
-        return {
-          userMessage: 'Stored API key cannot be decrypted',
-          messageKey: 'apiKeyUndecryptable',
-          errorMessage: err.message
-        };
-      }
-      if (isMissingApiKeyError(err)) {
-        return {
-          userMessage: 'API key not configured',
-          messageKey: 'apiKeyNotConfigured',
-          errorMessage: err.message
-        };
-      }
-      // No key was sent, so none can have been rejected: the endpoint wants one.
-      if (keyless) {
-        return {
-          userMessage: 'The endpoint requires an API key',
-          messageKey: 'apiKeyRequired',
-          errorMessage:
-            'No API key is configured for this model, and the model service asked for one. Enter the key on the model or its provider and test again.'
-        };
-      }
-      if (err.status === 403) {
-        return {
-          userMessage: 'Access denied',
-          messageKey: 'accessDenied',
-          errorMessage: 'Access denied by the model service. Please check your API key permissions.'
-        };
-      }
-      return {
-        userMessage: 'Authentication failed',
-        messageKey: 'authenticationFailed',
-        errorMessage:
-          'Invalid API key or authentication credentials. Please check your model configuration.'
-      };
-    case LLM_ERROR_CODES.MODEL_NOT_FOUND:
-      return {
-        userMessage: 'Model not found',
-        messageKey: 'modelNotFound',
-        errorMessage:
-          'Nothing was found at the model URL. Check the URL path (it usually ends in /v1/chat/completions) and the model ID.'
-      };
-    case LLM_ERROR_CODES.RATE_LIMITED:
-      return {
-        userMessage: 'Rate limit exceeded',
-        messageKey: 'rateLimitExceeded',
-        errorMessage: 'Too many requests to the model service. Please try again later.'
-      };
-    default:
-      // An upstream 5xx under a code that names no cause of its own
-      // (PROVIDER_ERROR, or a provider code the client does not map).
-      if (typeof err.status === 'number' && err.status >= 500) {
-        return {
-          userMessage: 'Server error',
-          messageKey: 'serverError',
-          errorMessage:
-            'The model service itself failed to answer. Check its status and logs; the configuration in iHub is probably correct. Try again later.'
-        };
-      }
-      return fallback;
-  }
-}
-
-/**
- * Translate an `LLMError` raised by a model connectivity test into what the
- * admin UI shows: a short `userMessage` headline (English, used as a fallback
- * and in logs), an `errorMessage` with remediation hints (English; the client
- * shows its own translation per `messageKey`), a `messageKey` — a stable
- * identifier the client maps to a translated headline (see shared/i18n/*.json
- * `admin.models.testResults.messages`) — and the facts that help the admin
- * find the fault: the upstream HTTP status, the host that was called and the
- * socket or certificate error code.
- *
- * Keys off `err.code` (and the underlying socket or certificate error code for
- * network failures) — never off provider message substrings, which differ per
- * provider and language. Never returns credentials, a URL path or a query.
- *
- * @param {import('../../services/loop/contracts/errors.js').LLMError} err
- * @param {Object} [context]
- * @param {string} [context.url] - The model's endpoint URL; only its host is reported
- * @param {boolean} [context.keyless=false] - The model runs without an API key
- *   (key status `keyless`), so a 401/403 means "a key is required", not "rejected"
- * @returns {{ userMessage: string, errorMessage: string, messageKey: string,
- *   upstreamStatus: number|null, host: string|null, errorCode: string|null }}
- *
- * @example
- *   describeModelTestFailure(err, { url: 'https://llm.example.com/v1/chat/completions' })
- *   // → { messageKey: 'serverError', upstreamStatus: 503, host: 'llm.example.com', … }
- */
-function describeModelTestFailure(err, { url, keyless = false } = {}) {
-  const providerCode = typeof err.providerCode === 'string' ? err.providerCode : '';
-  const socketCode = [providerCode, err.cause?.code, err.cause?.cause?.code].find(
-    code => typeof code === 'string' && SOCKET_ERROR_CODE.test(code)
-  );
-  return {
-    ...describeModelTestCause(err, { keyless }),
-    upstreamStatus: typeof err.status === 'number' ? err.status : null,
-    host: endpointHost(url),
-    errorCode: tlsCertificateErrorCode(err) || socketCode || null
-  };
-}
-
-export { describeModelTestFailure };
 
 /**
  * Bring a model's link to a provider entry in line with that entry, in place:
@@ -1407,7 +1218,7 @@ export default function registerAdminModelsRoutes(app) {
           error: testError.message
         });
         const { userMessage, errorMessage, messageKey, upstreamStatus, host, errorCode } =
-          describeModelTestFailure(testError, {
+          describeLlmFailure(testError, {
             url: model.url,
             keyless: inspectModelApiKey(model, { quiet: true }).state === 'keyless'
           });
