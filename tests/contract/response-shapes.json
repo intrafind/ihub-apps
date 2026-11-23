@@ -26,6 +26,12 @@
   "GET /a2a/skills/:skillId/.well-known/agent-card.json": {
     "skipped": "an external specification"
   },
+  "GET /api/admin/access/:type/:id": {
+    "skipped": "its parent path is not a readable list"
+  },
+  "GET /api/admin/access/:type/:id/verdict": {
+    "skipped": "its parent path is not a readable list"
+  },
   "GET /api/admin/agents/inboxes": {
     "status": 200,
     "shape": {
