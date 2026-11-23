@@ -63,7 +63,7 @@ export const NOT_REQUESTED = [
   ],
   [/^\/api\/admin\/(update|version\/check)|^\/api\/admin\/marketplace/, 'reaches the network'],
   [
-    /^\/s\/|^\/share\/|^\/office\/|^\/nextcloud\/|^\/manifest|^\/sw\.js|^\/uploads|^\/$|\*/,
+    /^\/s\/|^\/share\/|^\/office\/|^\/nextcloud\/|^\/embed-auth\/|^\/manifest|^\/sw\.js|^\/uploads|^\/$|\*/,
     'not an API answer'
   ]
 ];

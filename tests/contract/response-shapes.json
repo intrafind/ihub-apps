@@ -3416,6 +3416,7 @@
           "chats": "object",
           "cloudStorage": "object",
           "defaultLanguage": "object",
+          "embedAuth": "object",
           "ldapAuth": "object",
           "llm": "object",
           "localAuth": "object",
@@ -4663,6 +4664,7 @@
         "enabled": "boolean",
         "providers": []
       },
+      "embedSignIn": "boolean",
       "gateUI": {
         "appName": "string",
         "logoUrl": "string",
@@ -7093,6 +7095,9 @@
       "items": [],
       "nextCursor": "null"
     }
+  },
+  "GET /embed-auth/complete": {
+    "skipped": "not an API answer"
   },
   "GET /manifest.json": {
     "skipped": "not an API answer"

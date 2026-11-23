@@ -500,8 +500,17 @@ export const USER_APP_ERROR_CODES = Object.freeze({
   USER_APP_ACCESS_CHANGED: 403
 });
 
+/** Codes of the sign-in for iHub in a frame of another site (`server/routes/embedAuth.js`). */
+export const EMBED_AUTH_ERROR_CODES = Object.freeze({
+  /** No host origin is allowed in `embedAuth.allowedHostOrigins`, so the feature is off. */
+  EMBED_SIGN_IN_DISABLED: 403,
+  /** The one-time code is unknown, already used, expired, or does not match the verifier. */
+  EMBED_CODE_INVALID: 400
+});
+
 /** Every code, with its default HTTP status. */
 export const API_ERROR_CODES = Object.freeze({
+  ...EMBED_AUTH_ERROR_CODES,
   ...GENERIC_ERROR_CODES,
   ...STORAGE_ERROR_CODES,
   ...LLM_API_ERROR_CODES,

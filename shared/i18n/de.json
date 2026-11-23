@@ -13667,6 +13667,8 @@
     }
   },
   "apiErrors": {
+    "EMBED_SIGN_IN_DISABLED": "Die Anmeldung innerhalb einer anderen Website ist nicht aktiviert. Wenden Sie sich an Ihren Administrator.",
+    "EMBED_CODE_INVALID": "Die Anmeldung konnte nicht abgeschlossen werden. Bitte versuchen Sie es erneut.",
     "INTERNAL_ERROR": "Es ist ein unerwarteter Fehler aufgetreten. Bitte versuchen Sie es später erneut.",
     "BAD_REQUEST": "Die Anfrage ist ungültig.",
     "VALIDATION_FAILED": "Einige der eingegebenen Daten sind ungültig.",

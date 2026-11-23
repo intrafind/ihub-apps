@@ -13668,6 +13668,8 @@
     }
   },
   "apiErrors": {
+    "EMBED_SIGN_IN_DISABLED": "Signing in inside another site is not enabled. Ask your administrator.",
+    "EMBED_CODE_INVALID": "The sign-in could not be completed. Please try again.",
     "INTERNAL_ERROR": "An unexpected error occurred. Please try again later.",
     "BAD_REQUEST": "The request is not valid.",
     "VALIDATION_FAILED": "Some of the entered data is not valid.",
