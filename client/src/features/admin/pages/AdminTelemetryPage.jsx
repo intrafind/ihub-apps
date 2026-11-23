@@ -588,7 +588,10 @@ function AdminTelemetryPage() {
               </p>
               <ul className="list-disc list-inside space-y-1 text-xs">
                 <li>
-                  OpenTelemetry Gen-AI semantic conventions:{' '}
+                  {t(
+                    'admin.telemetry.genAiConventions',
+                    'OpenTelemetry Gen-AI semantic conventions:'
+                  )}{' '}
                   <a
                     href="https://opentelemetry.io/docs/specs/semconv/gen-ai/"
                     target="_blank"

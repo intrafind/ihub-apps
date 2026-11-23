@@ -89,6 +89,15 @@ function hasLegacyFields(user) {
   );
 }
 
+/**
+ * A user's record by id, read only when it is an own property: an id such as
+ * `__proto__` or `constructor` must never resolve to `Object.prototype` or a
+ * built-in, which `importLegacy` would then mutate.
+ */
+function ownRecord(users, id) {
+  return Object.hasOwn(users, id) ? users[id] : undefined;
+}
+
 /** A record's acknowledgement fields, comparable as a string. */
 function legacyFingerprint(user) {
   return JSON.stringify([user?.aiAcknowledgements, user?.aiAcknowledgementsClearedAt]);
@@ -185,16 +194,16 @@ export class AiAcknowledgementRepository {
     if (!this.usersFilePath) return;
     const usersFile = this.usersFilePath();
     const users = loadUsers(usersFile).users || {};
-    const ids = (userIds || Object.keys(users)).filter(id => hasLegacyFields(users[id]));
+    const ids = (userIds || Object.keys(users)).filter(id => hasLegacyFields(ownRecord(users, id)));
     for (const id of ids) {
-      const record = users[id];
+      const record = ownRecord(users, id);
       const fingerprint = legacyFingerprint(record);
       try {
         if (await this._update(id, current => mergeLegacy(current, record))) {
           forgetAcknowledgement(id);
         }
         await updateUsersFile(usersFile, usersConfig => {
-          const user = usersConfig.users[id];
+          const user = ownRecord(usersConfig.users, id);
           if (!hasLegacyFields(user) || legacyFingerprint(user) !== fingerprint) return false;
           delete user.aiAcknowledgements;
           delete user.aiAcknowledgementsClearedAt;

@@ -174,7 +174,7 @@ describe('IntegrationTestPanel', () => {
     expect(screen.getByRole('option', { name: 'Off app (disabled)' })).toBeInTheDocument();
     fireEvent.change(select, { target: { value: 'off-app' } });
     expect(screen.queryByTestId('test-chat')).not.toBeInTheDocument();
-    expect(screen.getByTestId('panel-message')).toHaveTextContent(/This app is disabled/);
+    expect(screen.getByTestId('panel-message')).toHaveTextContent(/This app is not published/);
     expect(document.body).not.toHaveTextContent('MISSING:');
   });
 
@@ -199,7 +199,9 @@ describe('IntegrationTestPanel', () => {
     );
     await waitFor(() => expect(onAppCreated).toHaveBeenCalled());
     // Created disabled: the panel says how to test it.
-    expect(await screen.findByTestId('panel-message')).toHaveTextContent(/This app is disabled/);
+    expect(await screen.findByTestId('panel-message')).toHaveTextContent(
+      /This app is not published/
+    );
     expect(document.body).not.toHaveTextContent('MISSING:');
   });
 

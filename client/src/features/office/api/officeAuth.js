@@ -8,6 +8,7 @@
  */
 
 import { getOfficeRemote } from '../utilities/officeRemote';
+import { getHttpBaseUrl } from '../../../utils/httpUrl';
 
 export const OFFICE_TOKEN_KEY = 'office_ihubtoken';
 export const OFFICE_REFRESH_TOKEN_KEY = 'office_ihub_refresh_token';
@@ -35,13 +36,20 @@ export function getRefreshToken() {
   }
 }
 
+// Access and refresh tokens are JWTs or opaque random strings: visible ASCII
+// without whitespace. Anything else in a token response is not stored, so a
+// malformed response cannot put arbitrary data under the token keys.
+const MAX_TOKEN_LENGTH = 8192;
+const isStorableToken = value =>
+  typeof value === 'string' && value.length <= MAX_TOKEN_LENGTH && /^[\x21-\x7e]+$/.test(value);
+
 export function storeTokenResponse(data) {
   try {
     const token = data?.token ?? data?.access_token ?? data?.accessToken ?? null;
-    if (token) localStorage.setItem(OFFICE_TOKEN_KEY, token);
+    if (isStorableToken(token)) localStorage.setItem(OFFICE_TOKEN_KEY, token);
 
     const refreshToken = data?.refresh_token ?? data?.refreshToken ?? null;
-    if (refreshToken) localStorage.setItem(OFFICE_REFRESH_TOKEN_KEY, refreshToken);
+    if (isStorableToken(refreshToken)) localStorage.setItem(OFFICE_REFRESH_TOKEN_KEY, refreshToken);
   } catch {
     // ignore storage errors
   }
@@ -119,6 +127,25 @@ export const parseAuthCodeFromUrl = url => {
 // OAuth URL builders (require runtime config)
 // ---------------------------------------------------------------------------
 
+/**
+ * An endpoint of the iHub server named in `config.baseUrl`.
+ *
+ * The address comes from the add-in's runtime configuration, and tokens are
+ * sent to it, so it must be an absolute http(s) URL: anything else (a
+ * `javascript:` or `data:` URL, a relative path) is refused instead of being
+ * requested.
+ *
+ * @param {{ baseUrl: string }} config
+ * @param {string} path - Path below the base URL, starting with `/`.
+ * @returns {string}
+ * @throws {Error} When `config.baseUrl` is not an absolute http(s) URL.
+ */
+function serverUrl(config, path) {
+  const base = getHttpBaseUrl(config?.baseUrl);
+  if (!base) throw new Error('The iHub server address is not a valid http(s) URL.');
+  return `${base}${path}`;
+}
+
 export function getAuthorizeUrl(config, { codeChallenge, state }) {
   const params = new URLSearchParams({
     response_type: 'code',
@@ -129,11 +156,11 @@ export function getAuthorizeUrl(config, { codeChallenge, state }) {
     code_challenge: codeChallenge,
     code_challenge_method: 'S256'
   });
-  return `${config.baseUrl}/api/oauth/authorize?${params.toString()}`;
+  return `${serverUrl(config, '/api/oauth/authorize')}?${params.toString()}`;
 }
 
 export function getTokenUrl(config) {
-  return `${config.baseUrl}/api/oauth/token`;
+  return serverUrl(config, '/api/oauth/token');
 }
 
 // ---------------------------------------------------------------------------
@@ -293,7 +320,7 @@ export async function authenticatedFetch(config, url, options = {}) {
 // ---------------------------------------------------------------------------
 
 export const fetchUserInfo = async config => {
-  const response = await authenticatedFetch(config, `${config.baseUrl}/api/oauth/userinfo`, {
+  const response = await authenticatedFetch(config, serverUrl(config, '/api/oauth/userinfo'), {
     method: 'GET',
     headers: { Accept: 'application/json' }
   });

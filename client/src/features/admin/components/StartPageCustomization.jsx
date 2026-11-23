@@ -500,7 +500,7 @@ function StartPageCustomization({ config, pages, onUpdate, t }) {
                     )}
                     {item.app?.enabled === false && (
                       <span className="ml-1 text-xs text-gray-500 dark:text-gray-400">
-                        ({t('admin.apps.status.disabled', 'Disabled')})
+                        ({t('admin.apps.status.notPublished', 'Not published')})
                       </span>
                     )}
                   </span>

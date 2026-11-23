@@ -56,14 +56,6 @@ jest.mock('../../../client/src/features/apps/components/AppDetailsPopup', () => 
   __esModule: true,
   default: () => null
 }));
-jest.mock('../../../client/src/features/apps/components/AppCreationWizard', () => ({
-  __esModule: true,
-  default: () => null
-}));
-jest.mock('../../../client/src/features/apps/components/AppTemplateSelector', () => ({
-  __esModule: true,
-  default: () => null
-}));
 jest.mock('../../../client/src/features/admin/components/UploadConfigButton', () => ({
   __esModule: true,
   default: () => null

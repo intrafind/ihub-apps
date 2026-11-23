@@ -1,0 +1,33 @@
+```json
+{
+  "id": "email-composer",
+  "name": { "en": "Email Composer", "de": "E-Mail-Verfasser" },
+  "description": { "en": "Draft professional emails", "de": "Professionelle E-Mails entwerfen" },
+  "color": "#2563EB",
+  "icon": "mail",
+  "category": "business",
+  "system": { "en": "You are an email writing assistant.", "de": "Sie sind ein Assistent für E-Mails." },
+  "preferredModel": "gpt-4",
+  "preferredOutputFormat": "text",
+  "preferredStyle": "professional",
+  "sendChatHistory": false,
+  "prompt": { "en": "Write a {{type}} email to {{recipient}}.\n\n{{content}}", "de": "Schreiben Sie eine {{type}} E-Mail an {{recipient}}.\n\n{{content}}" },
+  "variables": [
+    {
+      "name": "type",
+      "label": { "en": "Email Type", "de": "E-Mail-Typ" },
+      "type": "string",
+      "defaultValue": { "en": "professional", "de": "professionell" },
+      "required": true,
+      "predefinedValues": [
+        { "label": { "en": "Professional", "de": "Professionell" }, "value": "professional" },
+        { "label": { "en": "Follow-up", "de": "Nachverfolgung" }, "value": "follow-up" }
+      ]
+    },
+    { "name": "recipient", "label": { "en": "Recipient", "de": "Empfänger" }, "type": "string", "required": true }
+  ],
+  "allowEmptyContent": true,
+  "websearch": { "enabled": true },
+  "integrations": [{ "id": "jira", "actions": ["searchIssues"] }]
+}
+```

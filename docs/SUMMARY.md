@@ -19,12 +19,14 @@
 
 # Build apps and agents
 
+- [Build your first app](app-quickstart.md)
 - [Apps](apps.md)
   - [Custom Response Renderers](custom-renderers.md)
   - [Structured Output](structured-output.md)
   - [Magic Prompt](magic-prompt-feature.md)
   - [Compare Mode](compare-mode.md)
   - [Feedback](feedback-feature.md)
+- [Personal apps](personal-apps.md)
 - [Prompt Library](prompts.md)
 - [Styles](styles.md)
 - [Skills](skills.md)

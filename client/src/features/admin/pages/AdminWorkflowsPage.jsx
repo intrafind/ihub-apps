@@ -149,8 +149,9 @@ function AdminWorkflowsPage() {
         setActionError(
           t(
             'admin.workflows.cloneExists',
-            'A workflow with ID "${id}" already exists. Please rename before cloning.'
-          ).replace('${id}', `${workflow.id}-copy`)
+            'A workflow with ID "{{id}}" already exists. Please rename it before cloning.',
+            { id: `${workflow.id}-copy` }
+          )
         );
       } else {
         setActionError(getAdminApiErrorMessage(err));
@@ -173,7 +174,7 @@ function AdminWorkflowsPage() {
       link.remove();
       URL.revokeObjectURL(url);
     } catch (err) {
-      setError(`Failed to download workflow config: ${getAdminApiErrorMessage(err)}`);
+      setError(t('admin.workflows.downloadError', { error: getAdminApiErrorMessage(err) }));
     }
   };
 
@@ -181,7 +182,7 @@ function AdminWorkflowsPage() {
     const file = event.target.files[0];
     if (!file) return;
     if (!file.name.endsWith('.json')) {
-      setError('Please select a JSON file');
+      setError(t('admin.common.selectJsonFile', 'Please select a JSON file'));
       return;
     }
     setUploading(true);
@@ -197,11 +198,11 @@ function AdminWorkflowsPage() {
       event.target.value = '';
     } catch (err) {
       if (getAdminApiErrorMessage(err).includes('already exists')) {
-        setError(`Workflow with ID "${workflowConfig?.id || 'unknown'}" already exists`);
+        setError(t('admin.workflows.uploadExists', { id: workflowConfig?.id || 'unknown' }));
       } else if (err instanceof SyntaxError) {
-        setError('Invalid JSON file format');
+        setError(t('admin.common.invalidJsonFile', 'Invalid JSON file format'));
       } else {
-        setError(`Failed to upload workflow config: ${getAdminApiErrorMessage(err)}`);
+        setError(t('admin.workflows.uploadError', { error: getAdminApiErrorMessage(err) }));
       }
     } finally {
       setUploading(false);
@@ -368,7 +369,7 @@ function AdminWorkflowsPage() {
               <UploadConfigButton
                 onChange={handleUploadConfig}
                 uploading={uploading}
-                title={t('admin.workflows.uploadConfig', 'Upload Workflow Config')}
+                title={t('admin.workflows.uploadConfigTitle', 'Upload Workflow Config')}
                 uploadingLabel={t('admin.workflows.uploading', 'Uploading...')}
                 label={t('admin.workflows.uploadConfig', 'Upload Config')}
               />

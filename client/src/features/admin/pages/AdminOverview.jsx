@@ -467,7 +467,7 @@ function PlatformInfoSection({ info, systemPagesVisible }) {
         />
         <InfoRow
           icon={KeyIcon}
-          label={t('admin.overview.oauth', 'OAuth')}
+          label={t('admin.overview.oauthLabel', 'OAuth')}
           value={oauthLabel()}
           href="/admin/oauth"
         />

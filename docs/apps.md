@@ -12,6 +12,8 @@ This comprehensive guide covers how to configure and customize AI applications i
 ## Table of Contents
 
 - [Quick Start](#quick-start)
+  - [Creating an app as a file](#creating-an-app-as-a-file)
+  - [Reserved IDs](#reserved-ids)
 - [App Types](#app-types)
   - [Chat Apps](#chat-apps-default)
   - [Redirect Apps](#redirect-apps)
@@ -31,11 +33,19 @@ This comprehensive guide covers how to configure and customize AI applications i
 
 ## Quick Start
 
-Create your first AI app in under 5 minutes with this minimal configuration.
+The quickest way to a first app is the admin UI: **Admin → Apps → New app**. You describe the app
+in a few sentences or pick a template, test the app in a chat beside the editor and publish it
+when it works. [Build your first app](app-quickstart.md) walks through these steps without any
+JSON.
 
-### Minimal App Configuration
+The rest of this page is the reference for every setting, with the JSON field names. The admin
+UI uses its own words for some fields; the
+[glossary of the quickstart](app-quickstart.md#glossary-ui-terms-and-their-json-fields) maps
+them.
 
-Add this to your `contents/apps/my-first-app.json`:
+### Creating an app as a file
+
+An app can also be a file. Add this to `contents/apps/my-first-app.json`:
 
 ```json
 {
@@ -60,6 +70,26 @@ That's it! Your app will:
 - Use the default AI model configured in your system
 - Provide a standard chat interface
 - Apply the system prompt to guide AI behavior
+
+A file without `enabled` is a published app: users whose groups may use it see it as soon as the
+file is loaded. Set `"enabled": false` to keep it out of sight while you work on it. An app
+created with **New app** in the admin UI starts with `"enabled": false`.
+
+### Reserved IDs
+
+`contents/apps/` holds the apps that administrators manage, and only those. The apps users build
+themselves ([Personal apps](personal-apps.md)) are runtime data in the storage provider and never
+appear in this directory.
+
+An app ID of the form `uap_` followed by 32 hexadecimal characters (for example
+`uap_3f9c2a0b1d4e5f60718293a4b5c6d7e8`) is reserved for personal apps. The admin UI, the admin
+API, a Marketplace install and the example apps of an integration refuse it with "This ID is
+reserved for personal apps". An ID that only starts with `uap_`, such as `uap_helper`, is not
+affected.
+
+An existing file with such an ID still loads, with a validation warning in the server log. Rename
+it: if a personal app is ever minted with the same ID, the ID answers "not found" for everyone
+until the file is renamed or the personal app is deleted.
 
 ### Quick Examples by Use Case
 
@@ -444,19 +474,21 @@ These fields are required for **all** app types (chat, redirect, iframe):
 
 | Field         | Type   | Description                                                  | Example                                       |
 | ------------- | ------ | ------------------------------------------------------------ | --------------------------------------------- |
-| `id`          | String | Unique identifier (alphanumeric, dots, hyphens, underscores) | `"my-app"`                                    |
+| `id`          | String | Unique identifier: lowercase letters, digits, dots, hyphens and underscores, at most 50 characters | `"my-app"`                                    |
 | `name`        | Object | Localized app names                                          | `{"en": "My App", "de": "Meine App"}`         |
 | `description` | Object | Localized descriptions                                       | `{"en": "Description", "de": "Beschreibung"}` |
 | `color`       | String | Hex color code                                               | `"#4F46E5"`                                   |
 | `icon`        | String | Icon identifier                                              | `"chat"`                                      |
 
-### Chat Apps (Additional Required Fields)
+### Chat Apps (Recommended Field)
 
-Chat apps require these additional fields:
+A chat app should have instructions. The app schema does not require them, so a file or an API
+call without `system` is accepted, and the app then behaves like a plain chat. The admin UI asks
+for instructions when a chat app is created or saved.
 
-| Field    | Type   | Description              | Example                                  |
-| -------- | ------ | ------------------------ | ---------------------------------------- |
-| `system` | Object | Localized system prompts | `{"en": "You are a helpful assistant."}` |
+| Field    | Type   | Description                                                   | Example                                  |
+| -------- | ------ | ------------------------------------------------------------- | ---------------------------------------- |
+| `system` | Object | Localized instructions (system prompt). Recommended.          | `{"en": "You are a helpful assistant."}` |
 
 Optional fields include: `preferredModel`, `preferredStyle`, `integrations`, `variables`, `settings`, etc.
 
@@ -486,7 +518,7 @@ These optional fields work for all app types:
 
 | Field                  | Type    | Default | Description                                                                                                                                                                                                                                                                                                                                                           |
 | ---------------------- | ------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `enabled`              | Boolean | `true`  | Whether the app is enabled                                                                                                                                                                                                                                                                                                                                            |
+| `enabled`              | Boolean | `true`  | Whether the app is published (**Published** / **Not published** in the admin UI) |
 | `order`                | Number  | -       | Display order in the apps browser, the start page and the sidebar. Editable by drag and drop under Admin → Apps → Reorder                                                                                                                                                                                                                                             |
 | `category`             | String  | -       | App category for grouping                                                                                                                                                                                                                                                                                                                                             |
 | `requiredFeatures`     | Array   | -       | Feature ids (Admin → Features) the app needs, e.g. `["skills"]`. While one of them is off, users do not get the app at all, as if it were disabled; Admin → Apps still lists it, marked as hidden. Only ids of existing features are accepted; an unknown id counts as off                                                                                            |
@@ -538,15 +570,15 @@ Each app is defined with the following essential properties:
 
 | Property                 | Type    | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | ------------------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `id`                     | String  | **Required.** Unique identifier for the app                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `id`                     | String  | **Required.** Unique identifier for the app: lowercase letters, digits, dots, hyphens and underscores, at most 50 characters. The admin UI derives it from the name and does not allow changing it after the app is created                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `name`                   | Object  | **Required.** Localized names for the app                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `description`            | Object  | **Required.** Localized descriptions of app functionality                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `color`                  | String  | **Required.** Hex color code for app theming                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `icon`                   | String  | **Required.** Icon identifier for the app (see [Available Icons](#available-icons))                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `system`                 | Object  | **Required for chat type.** Localized system prompts/instructions for the AI model                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `system`                 | Object  | **Recommended for chat type** (the admin UI asks for it; the schema does not require it). Localized instructions (system prompt) for the AI model                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `type`                   | String  | Optional. App type: `"chat"` (default), `"redirect"`, or `"iframe"`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `order`                  | Number  | Optional. Display order in the apps browser, the start page and the sidebar. Editable by drag and drop under Admin → Apps → Reorder                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `enabled`                | Boolean | Optional. Whether the app is enabled. Default: `true`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `enabled`                | Boolean | Optional. Whether the app is published (`true`) or not published (`false`). Default: `true`. An app created with **New app** in the admin UI starts with `false`. Administrators and content admins can open and test an app that is not published in the chat; for everyone else, and for scheduled tasks, apps as tools, workflows and the inference API, it does not exist                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `requiredFeatures`       | Array   | Optional. Feature ids the app needs (e.g. `["skills"]`). While one is off, users do not get the app, as if it were disabled                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `requiredIntegrations`   | Array   | Retired (V198). Bind installations, or a whole definition such as `com.intrafind/ldap-directory`, under `integrations` |
 | `integrations`           | Object  | Optional. Installed integrations the app binds, with their actions and scope settings. See [Integrations](#integrations-binding-an-installed-integration) below                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
@@ -574,10 +606,10 @@ Each app is defined with the following essential properties:
 | `apps`                   | Array   | Optional. Array of app IDs this app may invoke as tools (`app__<id>`). Requires the `appAsTool` platform feature. See [Apps as Tools](#apps-as-tools-concierge-pattern) below                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `websearch`              | Object  | Optional. Unified web search configuration. See [Web Search Configuration](#web-search-configuration) below                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `projects`               | Array   | Optional. Admin projects linked to the app — a project id, or `{ "id", "mode": "auto" \| "context" \| "tools", "write" }`. Replaces the former `sources`. See [Projects → Linking a project](projects.md#linking-a-project). `features.projects` / `features.userProjects` (`false`) switch projects or personal projects off for this app, see [Switching projects off for an app](projects.md#switching-projects-off-for-an-app)                                                                                                                                                                                                                                                                                                                                                   |
-| `allowInheritance`       | Boolean | Optional. Allow child apps to inherit configuration from this app. Default: `false`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `parentId`               | String  | Optional. ID of the parent app to inherit configuration from                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `inheritanceLevel`       | Number  | Optional. Depth of the inheritance chain                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `overriddenFields`       | Array   | Optional. Fields that have been explicitly overridden from the parent app                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `allowInheritance`       | Boolean | Optional. Stored, but not applied: no app inherits configuration from another app. Default: `false`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `parentId`               | String  | Optional. Stored, but not applied. Older versions of the admin UI wrote it when an app was cloned; **Duplicate** creates an independent copy without it                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `inheritanceLevel`       | Number  | Optional. Stored, but not applied                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `overriddenFields`       | Array   | Optional. Stored, but not applied                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 
 Apps do not set a temperature or any other sampling parameter. Those come from the model's `sampling` configuration; when it is unset the provider's default applies. See [Sampling Parameters](models.md#sampling-parameters).
 
@@ -682,7 +714,14 @@ Two limits to keep in mind: headings in a PDF are only marked when the file tell
 
 - Global prompt variables such as `{{user_name}}` are expanded in the typed text of a message only when the app has no `prompt` template.
 
+<a id="input-fields"></a>
+
 #### Variables
+
+In the admin UI: **Input fields**. In the JSON: `variables`. Each input field has a **Field name**
+(`label`), a **Placeholder** (`name`, written `{{name}}` in a text) and a **Kind of field**
+(`type`). A field has an effect only when its placeholder appears in `system` or `prompt`; the
+editor marks a field that no text uses and offers **Add to message template**.
 
 The `variables` property defines customizable inputs for the app:
 
@@ -791,9 +830,9 @@ A new chat, or clearing the chat, shows the form again. Starter prompts and `aut
 - **Compare mode**: one form below the panels' model pickers, so the form has no model selector of its own; sending it sends the message to every panel.
 - **Outlook add-in and browser extension**: the task pane and the side panel open the app with the same form; the email or page stays in view and goes along with the message.
 
-Admins switch it on under **Admin → Apps → (app) → Variables → Start chats with a form**, where the button label is edited per language like the app's other texts.
+Admins switch it on under **Admin → Apps → (app) → Instructions and inputs → Input fields → Start chats with a form**, where the button label is edited per language like the app's other texts.
 
-![App editor: Variables section with "Start chats with a form" and the send button label](assets/screenshots/admin-app-editor-start-form.png)
+![App editor: the end of the Input fields section with "Start chats with a form" and the send button label](assets/screenshots/admin-app-editor-start-form.png)
 
 #### Settings Configuration
 
@@ -922,7 +961,12 @@ Both formats are supported for backward compatibility. The extended format allow
 
 Welcome messages are displayed as informational cards above the input area, not as chat messages. They take priority over example prompts but are hidden if starter prompts are configured.
 
+<a id="conversation-starters"></a>
+
 #### Starter Prompts
+
+In the admin UI: **Conversation starters**. In the JSON: `starterPrompts`, with **Text on the
+button** as `title` and **Message** as `message`.
 
 Apps can offer clickable starter prompts shown when the chat has no messages.
 Each prompt can optionally set initial values for input variables:
@@ -1323,7 +1367,7 @@ The `thinking` property enables extended thinking for models that support it (e.
 | Property            | Type    | Default  | Description                                                                                         |
 | ------------------- | ------- | -------- | --------------------------------------------------------------------------------------------------- |
 | `thinking.enabled`  | Boolean | `false`  | Enable extended thinking mode                                                                       |
-| `thinking.level`    | String  | `medium` | Reasoning effort: `minimal`, `low`, `medium` or `high`. More effort is slower and costs more tokens |
+| `thinking.level`    | String  | `medium` | Reasoning effort: `minimal`, `low`, `medium`, `high` or `xhigh`. More effort is slower and costs more tokens |
 | `thinking.thoughts` | Boolean | `false`  | When `true`, the model's internal thinking steps are included and displayed in the response         |
 
 An app's `thinking` block overrides the model's for that app. `thinking.budget`
@@ -1532,7 +1576,8 @@ Here are some practical examples of how to configure the settings for different 
 Apps reload by themselves when a file or the admin editor changes them; a restart is not needed.
 If a user does not see an app, check in this order:
 
-1. **Enabled:** the app's switch in **Admin → Apps** is on.
+1. **Published:** the app's status in **Admin → Apps** is **Published** (`"enabled": true`). An
+   app created with **New app** starts as **Not published**.
 2. **Access:** one of the user's groups grants the app (**Admin → Groups**, the group's apps: its id
    or `*`). Grants add up through `inherits`; anonymous visitors get what
    `anonymousAuth.defaultGroups` grant.
@@ -1568,10 +1613,10 @@ If a user does not see an app, check in this order:
   is not saved. The message names each field that failed, for example
   `redirectConfig.url: Redirect URL must use http or https`.
 - `Unrecognized keys` means the configuration contains fields that are not part of an app;
-  remove them in the JSON editor. (The unused fields older versions of the app creation wizard
-  saved — `useAI`, `useTemplate`, `useManual`, `aiGenerated`, `aiPrompt`, a top-level
-  `imageUpload` and `"parentId": null` — are removed from app files on the server by the
-  upgrade.)
+  remove them in the JSON editor. (The unused fields that older versions of the admin UI saved
+  when an app was created — `useAI`, `useTemplate`, `useManual`, `aiGenerated`, `aiPrompt`, a
+  top-level `imageUpload` and `"parentId": null` — are removed from app files on the server by
+  the upgrade.)
 - App files on the server that do not pass still load; the server log reports them as
   "Resource validation issues".
 

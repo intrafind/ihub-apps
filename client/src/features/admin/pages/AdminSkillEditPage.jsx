@@ -126,7 +126,9 @@ function AdminSkillEditPage() {
       await loadSkill();
     } catch (err) {
       console.error('Error saving skill overrides:', err);
-      setError(err.message || 'Failed to save configuration');
+      setError(
+        err.message || t('admin.browserExtension.saveError', 'Failed to save configuration')
+      );
     } finally {
       setSaving(false);
     }
@@ -139,7 +141,9 @@ function AdminSkillEditPage() {
     try {
       exportSkill(skillName);
     } catch (err) {
-      setError(`Failed to export skill: ${err.message}`);
+      setError(
+        t('admin.skills.exportError', 'Failed to export skill: {{error}}', { error: err.message })
+      );
     }
   };
 
@@ -235,8 +239,8 @@ function AdminSkillEditPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <AdminBreadcrumb
           crumbs={[
-            { label: 'Admin', href: '/admin' },
-            { label: 'Skills', href: '/admin/skills' },
+            { label: t('documentTitle.admin', 'Admin'), href: '/admin' },
+            { label: t('admin.nav.skills', 'Skills'), href: '/admin/skills' },
             { label: skill?.displayName ?? skill?.name ?? skillName }
           ]}
         />

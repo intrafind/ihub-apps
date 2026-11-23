@@ -21,6 +21,7 @@ jest.unstable_mockModule('../configCache.js', () => ({
     getPlatform: () => state.platform,
     getFeatures: () => ({}),
     getApps: () => ({ data: state.apps }),
+    getAppForRequest: appId => state.apps.find(app => app.id === appId) || null,
     getModels: () => ({ data: state.models })
   }
 }));

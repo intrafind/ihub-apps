@@ -633,6 +633,9 @@ export function setupMiddleware(app, platformConfig = {}) {
   // (adminApiRateLimitKey), so admins behind one NAT address or proxy do not
   // share one budget; requests without a sign-in count per address.
   app.use(buildApiPath('/admin'), rateLimiters.adminApiLimiter);
+  // `POST /api/completions` is a content-admin route outside `/api/admin`: it calls a model on
+  // the server's credentials and had no limiter. It shares the admin budget.
+  app.use(buildApiPath('/completions'), rateLimiters.adminApiLimiter);
 
   // Track every authenticated request for the activity-summary log line and
   // the ihub.active.users observable gauge. Active *chats* are still only

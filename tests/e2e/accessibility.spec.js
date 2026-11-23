@@ -74,9 +74,16 @@ function formatViolationSummary(violations) {
  * @param {Record<string, number>} [known] - axe rule → number of elements this
  *   page is known to fail it on. Up to that many are logged but not failed;
  *   one more element, or any other rule, fails the test.
+ * @param {Object} [options]
+ * @param {string[]} [options.exclude] - Selectors of parts axe does not look at.
+ *   For a part that an open layer covers; the caller says why at the call.
  */
-async function expectNoBlockingViolations(page, label, known = {}) {
-  const results = await createAxeScanner(page).analyze();
+async function expectNoBlockingViolations(page, label, known = {}, { exclude = [] } = {}) {
+  const scanner = exclude.reduce(
+    (builder, selector) => builder.exclude(selector),
+    createAxeScanner(page)
+  );
+  const results = await scanner.analyze();
   const blocking = getBlockingViolations(results.violations).filter(
     v => v.nodes.length > (known[v.id] ?? 0)
   );
@@ -322,9 +329,15 @@ const KNOWN_VIOLATIONS = {
   '/admin/telemetry': { label: 4 },
   '/admin/backup': { label: 1 },
   '/admin/tools/ocr-ai': { label: 1 },
-  '/admin/tools/jobs': { label: 1 },
-  '/admin/apps/new': { 'label-title-only': 1, label: 19, 'select-name': 8 }
+  '/admin/tools/jobs': { label: 1 }
 };
+
+// The app editor with every group of its form expanded (see the test
+// "Accessibility — the app editor" below). A plain load of the editor shows two
+// of its eight groups, and axe does not look into a collapsed one, so the
+// editor is not in the lists above: its counts are measured with everything
+// open. They may only shrink.
+const KNOWN_APP_EDITOR_VIOLATIONS = { label: 7, 'select-name': 4 };
 
 // Pages that currently have no critical or serious violation. They are held at
 // zero, so a regression anywhere in this list fails the pull request. Together
@@ -376,7 +389,9 @@ const CLEAN_PAGES = [
   '/admin/eu-ai-act',
   '/admin/updates',
   '/admin/advanced',
-  '/admin/models/new'
+  '/admin/models/new',
+  // "New app" opens on its Start screen; its other states are scanned below.
+  '/admin/apps/new'
 ];
 
 // Most of the product sits behind a login: the chat UI, the prompt library and
@@ -476,6 +491,525 @@ test.describe('Accessibility — the integration action detail', () => {
     await expect(drawer).toBeVisible();
     await expect(drawer.getByTestId('action-test-panel')).toBeVisible();
     await expectNoBlockingViolations(page, 'Integration action detail');
+  });
+});
+
+// "New app" (concepts/app-builder-rework-2026-11): one page with two screens,
+// Start and Essentials, and several states a plain load does not show. Each is
+// opened the way an author opens it and held at zero.
+test.describe('Accessibility — the New app page', () => {
+  test.beforeEach(async ({ page }) => {
+    await signInAsAdmin(page);
+    // The first-run disclaimer would cover the page and take every click.
+    await page.addInitScript(() => {
+      window.localStorage.setItem('ihub-disclaimer-acknowledged', 'true');
+    });
+  });
+
+  /** The Start screen, loaded and settled. */
+  async function openStart(page) {
+    await gotoSettled(page, '/admin/apps/new');
+    await expect(page.getByRole('heading', { level: 1, name: 'New app' })).toBeVisible();
+  }
+
+  /** The Essentials screen of an empty start. */
+  async function openEssentials(page) {
+    await openStart(page);
+    await page.getByRole('button', { name: 'Start empty' }).click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Describe your app' })).toBeVisible();
+  }
+
+  test('Start: the other ways to start and the app picker', async ({ page }) => {
+    test.setTimeout(150_000);
+    await openStart(page);
+    await page.getByRole('button', { name: 'Other ways to start' }).click();
+    await expect(page.getByRole('button', { name: 'Create a link app' })).toBeVisible();
+    await expectNoBlockingViolations(page, 'New app — other ways to start');
+
+    await page.getByRole('button', { name: 'Copy an existing app' }).click();
+    const picker = page.getByRole('dialog');
+    await expect(
+      picker.getByRole('heading', { name: 'Which app do you want to copy?' })
+    ).toBeVisible();
+    await expect(picker.getByRole('button').nth(1)).toBeVisible();
+    await expectNoBlockingViolations(page, 'New app — app picker');
+  });
+
+  test('Essentials: empty, with details and tips open, the icon list, after a failed submit', async ({
+    page
+  }) => {
+    test.setTimeout(150_000);
+    await openEssentials(page);
+    await expectNoBlockingViolations(page, 'New app — Essentials');
+
+    await page.getByRole('button', { name: 'More details' }).click();
+    await expect(page.getByRole('textbox', { name: 'App ID' })).toBeVisible();
+    await page.getByRole('button', { name: 'Tips for good instructions' }).click();
+    await expectNoBlockingViolations(page, 'New app — Essentials, details and tips open');
+
+    // The icon list opens over the page and covers two colour swatches except
+    // for a strip at their upper edge. While the list is open, a layer above
+    // the page takes every click beside it, so that strip is no target: a
+    // click on it closes the list and changes no colour. axe compares a
+    // control only with neighbours of the same positioning and does not see
+    // that layer (it is fixed), so it would report the strip as too small a
+    // target. The colour group is therefore left out of this one scan; every
+    // other scan of the screen includes it.
+    const iconButton = page.getByRole('button', { name: /^Icon/ });
+    const iconSearch = page.getByPlaceholder('Search icons…');
+    const colours = page.getByRole('group', { name: 'Color' });
+    await iconButton.click();
+    await expect(iconSearch).toBeVisible();
+    const orange = await colours.getByRole('button', { name: 'Orange' }).boundingBox();
+    await page.mouse.click(orange.x + orange.width / 2, orange.y + 1);
+    await expect(iconSearch).toBeHidden();
+    await expect(colours.getByRole('button', { name: 'Indigo' })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+    await iconButton.click();
+    await expect(iconSearch).toBeVisible();
+    await expectNoBlockingViolations(
+      page,
+      'New app — icon list',
+      {},
+      {
+        exclude: ['[role="group"]:has(button[aria-label="Orange"])']
+      }
+    );
+    await page.keyboard.press('Escape');
+    await expect(iconSearch).toBeHidden();
+
+    // Nothing typed: every required field is marked and named in the summary.
+    await page.getByRole('button', { name: 'Create and test' }).click();
+    await expect(page.getByText('3 fields need your attention.')).toBeVisible();
+    await expectNoBlockingViolations(page, 'New app — Essentials with errors');
+  });
+
+  test('Essentials: a template, a link app, and the question before input is lost', async ({
+    page
+  }) => {
+    test.setTimeout(150_000);
+    await openStart(page);
+    await page.getByRole('button', { name: /^Translator/ }).click();
+    await expect(
+      page.getByRole('heading', { level: 1, name: 'Adjust the template' })
+    ).toBeVisible();
+    await expectNoBlockingViolations(page, 'New app — Essentials from a template');
+
+    await page.getByRole('textbox', { name: 'Name' }).fill('Accessibility check');
+    await page.getByRole('button', { name: 'Back', exact: true }).click();
+    const dialog = page.getByRole('alertdialog');
+    await expect(dialog).toContainText('Discard this app?');
+    await expectNoBlockingViolations(page, 'New app — discard dialog');
+    await dialog.getByRole('button', { name: 'Discard', exact: true }).click();
+
+    await page.getByRole('button', { name: 'Other ways to start' }).click();
+    await page.getByRole('button', { name: 'Create a link app' }).click();
+    await expect(
+      page.getByRole('heading', { level: 1, name: 'Set up your link app' })
+    ).toBeVisible();
+    await expectNoBlockingViolations(page, 'New app — Essentials for a link app');
+  });
+
+  test('a draft from a description: the failure message and the draft notice', async ({ page }) => {
+    test.setTimeout(150_000);
+    await openStart(page);
+    const description = page.getByRole('textbox', { name: 'Your description' });
+    // The box is there when a model is. In CI the suite's own server has the stub
+    // model (tests/config/e2e-llm-stub.mjs), so a missing box is a failure there
+    // and not a skip, which the workflow would report as green. A reused dev
+    // server may have no model.
+    if (process.env.CI) {
+      await expect(description).toBeVisible();
+    } else {
+      test.skip(
+        !(await description.isVisible()),
+        'No AI model on this server, so the page offers no draft'
+      );
+    }
+    const prepare = page.getByRole('button', { name: 'Prepare draft' });
+
+    // The stub answers a plain description with a sentence, which is no draft.
+    await description.fill('An app that summarizes a text.');
+    await prepare.click();
+    await expect(page.getByText("The AI's draft could not be used. Try again.")).toBeVisible();
+    await expectNoBlockingViolations(page, 'New app — draft failed');
+
+    // The marker makes the stub answer with the draft of an app.
+    await description.fill('Rewrite a text in a chosen tone. e2e-app-json');
+    await prepare.click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Check your draft' })).toBeVisible();
+    await expect(page.getByRole('checkbox', { name: /^Web search/ })).toBeVisible();
+    await expectNoBlockingViolations(page, 'New app — draft notice');
+  });
+});
+
+// The app editor (concepts/app-builder-rework-2026-11, section 3.5): its form
+// has eight groups, of which two are open on a plain load. axe does not look
+// into a collapsed group, so a scan of the plain page would miss most of the
+// form. "Expand all" opens every group; that state is what is measured.
+test.describe('Accessibility — the app editor', () => {
+  test.beforeEach(async ({ page }) => {
+    await signInAsAdmin(page);
+    await page.addInitScript(() => {
+      window.localStorage.setItem('ihub-disclaimer-acknowledged', 'true');
+    });
+  });
+
+  test('has no new critical or serious violations with every group expanded', async ({ page }) => {
+    test.setTimeout(150_000);
+    await gotoSettled(page, '/admin/apps/chat');
+    const headers = page.locator('[id^="app-group-"][id$="-header"]');
+    await expect(headers).toHaveCount(8);
+    await page.getByRole('button', { name: 'Expand all' }).click();
+    await expect(
+      page.locator('[id^="app-group-"][id$="-header"][aria-expanded="true"]')
+    ).toHaveCount(8);
+    // The access group loads its groups after it opens.
+    await expect(page.getByTestId('content-access-section')).toBeVisible();
+    await page.waitForLoadState('networkidle');
+    await expectNoBlockingViolations(
+      page,
+      'App editor — every group expanded',
+      KNOWN_APP_EDITOR_VIOLATIONS
+    );
+  });
+
+  // "Create a link app" ends in an editor with two groups, whose configuration
+  // card (the website address and how it opens) no chat app shows. Held at zero.
+  for (const [kind, appId] of [
+    ['a link app', 'external-website-intrafind'],
+    ['an embedded website', 'embedded-website-wikipedia']
+  ]) {
+    test(`has no critical or serious violations in the editor of ${kind}`, async ({ page }) => {
+      test.setTimeout(150_000);
+      await gotoSettled(page, `/admin/apps/${appId}`);
+      const headers = page.locator('[id^="app-group-"][id$="-header"]');
+      await expect(headers).toHaveCount(2);
+      await page.getByRole('button', { name: 'Expand all' }).click();
+      await expect(
+        page.locator('[id^="app-group-"][id$="-header"][aria-expanded="true"]')
+      ).toHaveCount(2);
+      await expect(page.getByTestId('content-access-section')).toBeVisible();
+      await page.waitForLoadState('networkidle');
+      // Every control of the card has a name of its own, not its placeholder.
+      await expect(page.getByRole('textbox', { name: /^(Redirect URL|Iframe URL)/ })).toBeVisible();
+      await expectNoBlockingViolations(page, `App editor — ${kind}, every group expanded`);
+    });
+  }
+
+  // WCAG 2.2, 2.4.11 Focus Not Obscured: the save bar sticks to the bottom of
+  // the form's scroll area, which is where a browser scrolls a newly focused
+  // control to. The bar reserves its height there, so no control reached with
+  // Tab lies entirely under it; on a phone the bar wraps to several rows.
+  for (const viewport of [
+    { width: 1440, height: 800 },
+    { width: 360, height: 640 }
+  ]) {
+    test(`the save bar covers no focused field at ${viewport.width}px`, async ({ page }) => {
+      test.setTimeout(150_000);
+      await page.setViewportSize(viewport);
+      await gotoSettled(page, '/admin/apps/chat');
+      await page.getByRole('button', { name: 'Expand all' }).click();
+      await expect(page.getByTestId('content-access-section')).toBeVisible();
+      await page.waitForLoadState('networkidle');
+
+      const name = page.locator('[data-field="name"] input').first();
+      await name.fill('A name that was changed');
+      const bar = page.getByRole('region', { name: 'Save changes' });
+      await expect(bar).toBeVisible();
+
+      const covered = [];
+      let reached = 0;
+      for (let step = 0; step < 160; step += 1) {
+        await page.keyboard.press('Tab');
+        const state = await page.evaluate(() => {
+          const active = document.activeElement;
+          const region = document.querySelector('[role="region"][aria-label="Save changes"]');
+          if (!active || active === document.body || !region) return null;
+          if (region.contains(active)) return { inBar: true };
+          const rect = active.getBoundingClientRect();
+          const barTop = region.getBoundingClientRect().top;
+          return {
+            inBar: false,
+            hidden: rect.height > 0 && rect.top >= barTop - 1,
+            what: `${active.tagName.toLowerCase()}#${active.id || active.name || '?'}`
+          };
+        });
+        if (!state) continue;
+        // The bar's own buttons come after the form: every field was passed.
+        if (state.inBar) break;
+        reached += 1;
+        if (state.hidden) covered.push(state.what);
+      }
+      expect(reached).toBeGreaterThan(40);
+      expect(covered, 'controls that got the focus entirely under the save bar').toEqual([]);
+    });
+  }
+
+  test('has no critical or serious violations with the test panel open', async ({ page }) => {
+    test.setTimeout(150_000);
+    await gotoSettled(page, '/admin/apps/chat');
+    await page.getByRole('button', { name: 'Test', exact: true }).click();
+    await expect(page.getByRole('complementary', { name: 'Test app' })).toBeVisible();
+    await page.waitForLoadState('networkidle');
+    await expectNoBlockingViolations(page, 'App editor — test panel open');
+  });
+});
+
+// Personal apps (concepts/app-builder-rework-2026-11/02-personal-apps.md, 11.10):
+// the apps page with its scope chips, "New app" and the editor for a user, the
+// chat notice of an app someone else owns, and the admin tab. The feature
+// ships switched off and a fresh contents/ has no personal app, so the tests
+// switch it on, create what they scan, and put both back. Every screen is held
+// at zero.
+test.describe('Accessibility — personal apps', () => {
+  // Each test switches the feature on and off again: one after the other, in
+  // one worker, so that no test switches it off under another one.
+  test.describe.configure({ mode: 'serial' });
+
+  const NAME = 'Accessibility check app';
+  let featureWasOn;
+  let ownAppId;
+  let foreignAppId;
+  let foreign;
+
+  test.beforeEach(async ({ page, playwright, baseURL }) => {
+    test.setTimeout(150_000);
+    await signInAsAdmin(page);
+    await page.addInitScript(() => {
+      window.localStorage.setItem('ihub-disclaimer-acknowledged', 'true');
+    });
+    const features = await page.request.get('/api/admin/features');
+    featureWasOn = (await features.json()).features?.find(f => f.id === 'userApps')?.enabled;
+    await page.request.put('/api/admin/features', { data: { userApps: true } });
+
+    const content = name => ({
+      language: 'en',
+      origin: 'blank',
+      name: { en: name },
+      description: { en: 'Rewrites a text in a friendlier tone.' },
+      system: { en: 'You rewrite the text the user sends. Keep every fact.' },
+      variables: [{ name: 'tone', label: { en: 'Tone' }, type: 'string', required: false }],
+      starterPrompts: [{ title: { en: 'Rewrite an email' }, message: { en: 'Rewrite this.' } }]
+    });
+    // One app of the signed-in administrator, to edit and share.
+    const own = await page.request.post('/api/apps', { data: content(NAME) });
+    expect(own.status(), await own.text()).toBe(201);
+    ownAppId = (await own.json()).id;
+    // One app of the default user, shared with nobody: the administrator reads
+    // it as someone who does not own it, with the notice.
+    foreign = await playwright.request.newContext({ baseURL });
+    const login = await foreign.post('/api/auth/local/login', {
+      data: { username: 'user', password: 'password123' }
+    });
+    expect(login.status(), await login.text()).toBe(200);
+    const other = await foreign.post('/api/apps', { data: content(`${NAME} of a colleague`) });
+    expect(other.status(), await other.text()).toBe(201);
+    foreignAppId = (await other.json()).id;
+  });
+
+  test.afterEach(async ({ page }) => {
+    for (const id of [ownAppId, foreignAppId]) {
+      if (id) await page.request.delete(`/api/admin/user-apps/${id}`);
+    }
+    ownAppId = foreignAppId = null;
+    await foreign?.dispose();
+    if (featureWasOn !== true) {
+      await page.request.put('/api/admin/features', { data: { userApps: false } });
+    }
+  });
+
+  test('the apps page: the scope chips, "My apps" with a tile and its menu', async ({ page }) => {
+    await gotoSettled(page, '/apps');
+    const chips = page.getByRole('radiogroup', { name: 'Which apps to show' });
+    await expect(chips.getByRole('radio')).toHaveCount(3);
+    await expectNoBlockingViolations(page, 'Apps page — with personal apps');
+
+    await page.getByTestId('apps-scope-mine').click();
+    await expect(page.getByTestId('apps-scope-mine')).toHaveAttribute('aria-checked', 'true');
+    await expect(page.getByTestId('user-app-badge').first()).toBeVisible();
+    // The chip changes colour with a transition; scan the colours it ends on.
+    await page.waitForTimeout(500);
+    await expectNoBlockingViolations(page, 'Apps page — My apps');
+
+    await page.getByRole('button', { name: `Actions for "${NAME}"` }).click();
+    await expect(page.getByRole('menuitem', { name: 'Share' })).toBeVisible();
+    await expectNoBlockingViolations(page, 'Apps page — the menu of a tile');
+    await page.keyboard.press('Escape');
+
+    // Nothing shared with the administrator: the empty state of that chip.
+    await page.getByTestId('apps-scope-shared').click();
+    await expect(page.getByTestId('user-apps-empty')).toBeVisible();
+    await page.waitForTimeout(500);
+    await expectNoBlockingViolations(page, 'Apps page — Shared with me, empty');
+  });
+
+  test('"New app" for a user: Start and Essentials', async ({ page }) => {
+    await gotoSettled(page, '/apps/new');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
+    await expect(page.getByRole('textbox', { name: 'Your description' })).toBeVisible();
+    await expectNoBlockingViolations(page, 'New personal app — Start');
+
+    await page.getByRole('button', { name: 'Start empty' }).click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Describe your app' })).toBeVisible();
+    await expect(page.getByText('Only you can see the app until you share it.')).toBeVisible();
+    await expectNoBlockingViolations(page, 'New personal app — Essentials');
+
+    // After a submit with empty fields: the messages next to the fields.
+    await page.getByRole('button', { name: 'Create and test' }).click();
+    await expectNoBlockingViolations(page, 'New personal app — Essentials after a failed submit');
+  });
+
+  test('the editor: every group open, the menu, and the hand-over and share dialogs', async ({
+    page
+  }) => {
+    await gotoSettled(page, `/apps/${ownAppId}/edit`);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
+    await expect(page.getByTestId('user-app-state')).toHaveText('Only you');
+    // Open every group of the form: axe does not look into a collapsed one.
+    for (let closed = 0; closed < 12; closed++) {
+      const header = page.locator('main button[aria-expanded="false"][aria-controls]').first();
+      if (!(await header.count())) break;
+      await header.click();
+    }
+    await expect(page.getByTestId('user-app-extras')).toBeVisible();
+    await expectNoBlockingViolations(page, 'Personal app editor — every group open');
+
+    const more = page.locator('main button[aria-haspopup]').first();
+    await more.click();
+    await expect(page.getByRole('menuitem', { name: 'Hand over' })).toBeVisible();
+    await expectNoBlockingViolations(page, 'Personal app editor — the menu');
+
+    await page.getByRole('menuitem', { name: 'Hand over' }).click();
+    await expect(page.getByPlaceholder('Search people')).toBeVisible();
+    await expectNoBlockingViolations(page, 'Personal app editor — hand over');
+    await page.keyboard.press('Escape');
+
+    await gotoSettled(page, `/apps/${ownAppId}/edit?dialog=share`);
+    const dialog = page.getByRole('dialog');
+    await expect(dialog).toContainText(`Share "${NAME}"`);
+    await expectNoBlockingViolations(page, 'Personal app editor — share dialog');
+  });
+
+  test('the chat of an app someone else owns: the notice, collapsed, and the instructions', async ({
+    page
+  }) => {
+    await gotoSettled(page, `/apps/${foreignAppId}`);
+    const notice = page.getByTestId('personal-app-notice');
+    await expect(notice).toContainText('owns this app. Administrators have not checked it.');
+    await expectNoBlockingViolations(page, 'Personal app chat — the notice');
+
+    await notice.getByRole('button', { name: 'Show instructions' }).click();
+    await expect(page.getByTestId('personal-app-instructions')).toBeVisible();
+    await expectNoBlockingViolations(page, 'Personal app chat — the instructions');
+    await page.keyboard.press('Escape');
+
+    await notice.getByRole('button', { name: 'Show less' }).click();
+    await expect(notice.getByRole('button', { name: /Personal app by/ })).toBeVisible();
+    await expectNoBlockingViolations(page, 'Personal app chat — the notice collapsed');
+    // Remembered per app for the tab: put it back for whoever reads the page next.
+    await notice.getByRole('button', { name: /Personal app by/ }).click();
+  });
+
+  test('the admin tab: the list, the menu of a row, the settings and the switch-off dialog', async ({
+    page
+  }) => {
+    await gotoSettled(page, '/admin/apps?tab=personal');
+    const row = page.getByRole('row').filter({ hasText: `${NAME} of a colleague` });
+    await expect(row).toBeVisible();
+    await expectNoBlockingViolations(page, 'Admin — personal apps');
+
+    await page.getByText('Personal app settings').click();
+    await expect(page.locator('#user-app-settings-allowPublish')).toBeVisible();
+    await expectNoBlockingViolations(page, 'Admin — personal app settings');
+    await page.getByText('Personal app settings').click();
+
+    await row.getByRole('button', { name: 'More actions' }).click();
+    await expect(page.getByRole('menuitem').first()).toBeVisible();
+    await expectNoBlockingViolations(page, 'Admin — the menu of a personal app');
+    await page.getByRole('menuitem', { name: 'Switch off', exact: true }).click();
+    const dialog = page.getByRole('dialog').or(page.getByRole('alertdialog')).first();
+    await expect(dialog).toBeVisible();
+    await expectNoBlockingViolations(page, 'Admin — switch a personal app off');
+  });
+
+  test('the admin offer and take-over dialogs, the receiver of an offer, publishing and the retired app', async ({
+    page
+  }) => {
+    const settingsBefore = await (await page.request.get('/api/admin/user-apps/_settings')).json();
+    const setPublish = allowPublish =>
+      page.request.put('/api/admin/user-apps/_settings', { data: { sharing: { allowPublish } } });
+    let companyAppId = null;
+    try {
+      expect((await setPublish(true)).status()).toBe(200);
+
+      // Admin: the offer dialog with people listed, and the take-over dialog. Someone
+      // to list besides the owner and the administrator, who are never offered.
+      const users = Object.values(
+        (await (await page.request.get('/api/admin/auth/users')).json()).users || {}
+      );
+      if (!users.some(user => user.username === 'e2e-a11y-receiver')) {
+        const created = await page.request.post('/api/admin/auth/users', {
+          data: {
+            username: 'e2e-a11y-receiver',
+            password: 'receiver-a11y-pass-1',
+            name: 'Demo Receiver',
+            email: 'receiver@example.com',
+            internalGroups: ['users'],
+            active: true
+          }
+        });
+        expect(created.ok(), await created.text()).toBe(true);
+      }
+      await gotoSettled(page, '/admin/apps?tab=personal');
+      const row = page.getByRole('row').filter({ hasText: `${NAME} of a colleague` });
+      await row.getByRole('button', { name: 'More actions' }).click();
+      await page.getByRole('menuitem', { name: 'Offer to a new owner' }).click();
+      const offer = page.getByRole('dialog');
+      await offer.getByRole('searchbox', { name: 'Find a person' }).fill('Demo');
+      await expect(offer.getByRole('radio').first()).toBeVisible();
+      await expectNoBlockingViolations(page, 'Admin — offer a personal app, people listed');
+      await page.keyboard.press('Escape');
+
+      await row.getByRole('button', { name: 'More actions' }).click();
+      await page.getByRole('menuitem', { name: 'Take over as app…' }).click();
+      await expect(page.getByLabel('App ID')).toBeVisible();
+      await expectNoBlockingViolations(page, 'Admin — take a personal app over as an app');
+      await page.keyboard.press('Escape');
+
+      // The receiver of an offer: the colleague offers their app to the administrator.
+      const adminId = (await (await page.request.get(`/api/apps/${ownAppId}`)).json()).owner.id;
+      const foreignApp = await (await foreign.get(`/api/apps/${foreignAppId}`)).json();
+      const offered = await foreign.put(`/api/apps/${foreignAppId}/owner-offer`, {
+        data: { ownerId: adminId },
+        headers: { 'If-Match': `"${foreignApp.revision}"` }
+      });
+      expect(offered.status(), await offered.text()).toBe(200);
+      await gotoSettled(page, `/apps/${foreignAppId}/edit`);
+      await expect(page.getByTestId('user-app-offer')).toBeVisible();
+      await expectNoBlockingViolations(page, 'Personal app editor — the receiver of an offer');
+
+      // The owner publishes an app without tools: the dialog, then the page of the retired app.
+      await gotoSettled(page, `/apps/${ownAppId}/edit`);
+      await page.getByRole('button', { name: 'More' }).click();
+      await page.getByRole('menuitem', { name: 'Publish' }).click();
+      const publish = page.getByRole('alertdialog');
+      await expect(publish).toContainText(`Publish "${NAME}"`);
+      await expectNoBlockingViolations(page, 'Personal app editor — publish dialog');
+      const [published] = await Promise.all([
+        page.waitForResponse(response => response.url().endsWith(`/${ownAppId}/_publish`)),
+        publish.getByRole('button', { name: 'Publish' }).click()
+      ]);
+      expect(published.status(), await published.text()).toBe(200);
+      companyAppId = (await published.json()).publishedAs?.appId ?? null;
+      await expect(page.getByText('This app is now a company app.')).toBeVisible();
+      await expectNoBlockingViolations(page, 'Personal app — the page of a retired app');
+    } finally {
+      if (companyAppId) await page.request.delete(`/api/admin/apps/${companyAppId}`);
+      await setPublish(settingsBefore?.sharing?.allowPublish === true);
+    }
   });
 });
 

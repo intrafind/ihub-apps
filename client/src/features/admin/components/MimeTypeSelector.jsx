@@ -4,6 +4,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { fetchMimetypesConfig } from '../../../api/endpoints/config';
+import { getLocalizedContent } from '../../../utils/localizeContent';
 
 /**
  * MimeTypeSelector - Component for selecting MIME types by category or individually
@@ -22,7 +23,7 @@ function MimeTypeSelector({
   defaultFormats = [],
   selectEntireCategory = false
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [mimetypesConfig, setMimetypesConfig] = useState(null);
   const [loading, setLoading] = useState(true);
   // The entire category is on when it is all selected, until the admin unchecks it to pick formats
@@ -50,20 +51,12 @@ function MimeTypeSelector({
   }, [selectEntireCategory, categoryMimeTypes, onChange]);
 
   if (loading || !mimetypesConfig) {
-    return (
-      <div className="text-xs text-gray-500">
-        {t('admin.apps.edit.loadingFormats', 'Loading available formats...')}
-      </div>
-    );
+    return <div className="text-xs text-gray-500">{t('admin.apps.edit.loadingFormats')}</div>;
   }
 
   const category = mimetypesConfig.categories[categoryType];
   if (!category) {
-    return (
-      <div className="text-xs text-red-500">
-        {t('admin.apps.edit.categoryNotFound', 'Category not found')}
-      </div>
-    );
+    return <div className="text-xs text-red-500">{t('admin.apps.edit.categoryNotFound')}</div>;
   }
 
   const availableMimeTypes = category.mimeTypes || [];
@@ -101,17 +94,16 @@ function MimeTypeSelector({
           className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded-sm"
         />
         <label className="ml-2 block text-xs font-medium text-indigo-900">
-          {t(
-            'admin.apps.edit.useEntireCategory',
-            `Use entire ${category.name?.en || categoryType} category`
-          )}
+          {t('admin.apps.edit.useEntireCategory', {
+            category: getLocalizedContent(category.name, i18n.language) || categoryType
+          })}
         </label>
       </div>
 
       {!useCategory && (
         <div className="space-y-1">
           <p className="text-xs text-gray-500 mb-2">
-            {t('admin.apps.edit.selectIndividualFormats', 'Or select individual formats:')}
+            {t('admin.apps.edit.selectIndividualFormats')}
           </p>
           {availableMimeTypes.map(mimeType => {
             const mimeTypeDetails = mimetypesConfig.mimeTypes[mimeType];

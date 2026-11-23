@@ -776,6 +776,66 @@ export const platformConfigSchema = z
       })
       .passthrough()
       .prefault({}),
+    // Personal apps (feature `userApps`): apps users build themselves. The
+    // parts `limits` and `sharing` follow `projects`; `maxAppsPerUser` of zero
+    // means no limit and `ownerSnapshotMaxAgeDays` of zero never distrusts an
+    // owner's stored groups. `capabilities` says what a personal app may use
+    // at all; `capabilities.integrations` names each installation with its
+    // actions, and never the installation `ihub`. Read through
+    // `services/userApps/userAppSettings.js`.
+    userApps: z
+      .object({
+        limits: z
+          .object({
+            maxAppsPerUser: z.number().int().prefault(20),
+            maxOpenOffersPerUser: z.number().int().prefault(5),
+            ownerSnapshotMaxAgeDays: z.number().int().prefault(30)
+          })
+          .passthrough()
+          .prefault({}),
+        sharing: z
+          .object({
+            allowUsers: z.boolean().prefault(true),
+            allowGroups: z.boolean().prefault(true),
+            allowEveryone: z.boolean().prefault(false),
+            allowPublish: z.boolean().prefault(false)
+          })
+          .passthrough()
+          .prefault({}),
+        capabilities: z
+          .object({
+            modelChoice: z.boolean().prefault(true),
+            upload: z.boolean().prefault(true),
+            webSearch: z.boolean().prefault(false),
+            skills: z.boolean().prefault(false),
+            integrations: z
+              .array(
+                z
+                  .object({
+                    id: z
+                      .string()
+                      .min(1)
+                      .refine(id => id !== 'ihub', {
+                        message: 'The installation "ihub" cannot be allowed for personal apps'
+                      }),
+                    actions: z.array(z.string().min(1)).min(1)
+                  })
+                  .strict()
+              )
+              .prefault([])
+          })
+          .passthrough()
+          .prefault({}),
+        publishing: z
+          .object({
+            adminEnables: z.enum(['withTools', 'always']).prefault('withTools')
+          })
+          .passthrough()
+          .prefault({}),
+        blockedOwners: z.array(z.string()).prefault([])
+      })
+      .passthrough()
+      .prefault({}),
     // Artifacts: what a run produced that is worth keeping in its own right —
     // a chat turn's generated image today, a workflow's report or an agent's
     // output next. One store for every producer, so this block is not under
@@ -1167,5 +1227,3 @@ export const platformConfigSchema = z
       .optional()
   })
   .passthrough();
-
-export const knownPlatformKeys = Object.keys(platformConfigSchema.shape);
