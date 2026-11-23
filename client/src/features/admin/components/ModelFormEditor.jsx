@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { useState, useEffect, useMemo } from 'react';
+import { withoutDroppedParts } from '../utils/modelPayload';
 import { useTranslation } from 'react-i18next';
 import { DEFAULT_LANGUAGE, getLocalizedContent } from '../../../utils/localizeContent';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
@@ -283,7 +284,10 @@ const MODEL_FIELD_RULES = Object.freeze({
  * @param {string[]} options.takenIds - IDs of the existing models.
  * @returns {Object<string, string>}
  */
-export function modelFieldErrors(model, schema, t, { isNewModel, takenIds }) {
+export function modelFieldErrors(formModel, schema, t, { isNewModel, takenIds }) {
+  // What the save sends: parts it drops (empty hint languages, voices without
+  // an ID, a leftover tts block) do not block it.
+  const model = withoutDroppedParts(formModel);
   const errors = schema
     ? schemaFieldErrors(model, schema, t, {
         rules: MODEL_FIELD_RULES,

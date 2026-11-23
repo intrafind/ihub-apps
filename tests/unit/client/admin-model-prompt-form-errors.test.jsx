@@ -757,3 +757,83 @@ describe('save attempts and refusals per resource', () => {
     expect(await screen.findByText(en.admin.formErrors.field.idTaken)).toBeInTheDocument();
   });
 });
+
+describe('the parts a model save drops never block it', () => {
+  const { withoutDroppedParts } = require('../../../client/src/features/admin/utils/modelPayload');
+  const {
+    modelFieldErrors
+  } = require('../../../client/src/features/admin/components/ModelFormEditor');
+  const passKey = key => key;
+
+  /** The part of the model schema these cases touch: non-empty texts and voices. */
+  const SCHEMA = {
+    type: 'object',
+    required: ['id'],
+    properties: {
+      id: { type: 'string', minLength: 1 },
+      hint: {
+        type: 'object',
+        properties: {
+          message: { type: 'object', additionalProperties: { type: 'string', minLength: 1 } }
+        }
+      },
+      tts: {
+        type: 'object',
+        properties: {
+          voices: { type: 'object', additionalProperties: { type: 'string', minLength: 1 } }
+        }
+      }
+    }
+  };
+
+  const base = { id: 'gpt', provider: 'openai', url: 'https://api.example.com', modelType: 'chat' };
+
+  describe('withoutDroppedParts', () => {
+    test('drops the tts block of a model that is not text-to-speech', () => {
+      expect(withoutDroppedParts({ ...base, tts: { voices: { de: '' } } })).not.toHaveProperty(
+        'tts'
+      );
+    });
+
+    test('drops voices without an ID, and the voices when none is left', () => {
+      const tts = { ...base, modelType: 'tts', tts: { voices: { de: '', en: 'alloy' } } };
+      expect(withoutDroppedParts(tts).tts.voices).toEqual({ en: 'alloy' });
+      const empty = { ...base, modelType: 'tts', tts: { voices: { de: '' } } };
+      expect(withoutDroppedParts(empty).tts).toEqual({});
+    });
+
+    test('drops hint languages without text, and the hint without any text', () => {
+      const hint = { message: { en: 'Use for drafts', de: '' }, level: 'info' };
+      expect(withoutDroppedParts({ ...base, hint }).hint.message).toEqual({ en: 'Use for drafts' });
+      expect(withoutDroppedParts({ ...base, hint: { message: { en: '' } } })).not.toHaveProperty(
+        'hint'
+      );
+    });
+
+    test('leaves the form state unchanged', () => {
+      const model = { ...base, hint: { message: { en: 'x', de: '' } } };
+      withoutDroppedParts(model);
+      expect(model.hint.message).toEqual({ en: 'x', de: '' });
+    });
+  });
+
+  describe('modelFieldErrors validates what the save sends', () => {
+    const options = { isNewModel: false, takenIds: [] };
+
+    test('an English hint with an added, empty German language does not block the save', () => {
+      const model = { ...base, hint: { message: { en: 'Use for drafts', de: '' }, level: 'info' } };
+      expect(modelFieldErrors(model, SCHEMA, passKey, options)).toEqual({});
+    });
+
+    test('a leftover empty voice on a chat model does not block the save', () => {
+      const model = { ...base, tts: { voices: { de: '' } } };
+      expect(modelFieldErrors(model, SCHEMA, passKey, options)).toEqual({});
+    });
+
+    test('a real error still blocks it', () => {
+      expect(
+        Object.keys(modelFieldErrors({ ...base, id: '' }, SCHEMA, passKey, options))
+      ).toContain('id');
+    });
+  });
+});

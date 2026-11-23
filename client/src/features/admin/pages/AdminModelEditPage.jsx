@@ -21,7 +21,7 @@ import AdminEditPageShell from '../../../shared/components/AdminEditPageShell';
 import MarketplaceModelReviewNotice from '../components/marketplace/MarketplaceModelReviewNotice';
 import AdminLoadError from '../components/AdminLoadError';
 import { UsageLimitBucketFields, normalizeLimitBucket } from '../components/UsageLimitsEditor';
-import { normalizeModelHint } from '../components/ModelHintSection';
+import { withoutDroppedParts } from '../utils/modelPayload';
 import useSaveAttempts from '../hooks/useSaveAttempts';
 import { FIELD_KEYS } from '../utils/fieldErrors';
 
@@ -221,9 +221,6 @@ function AdminModelEditPage() {
     // Remove helper fields that shouldn't be sent to backend
     delete dataToSend.apiKeySet;
     delete dataToSend.apiKeyMasked;
-    // The `tts` block is only valid on a text-to-speech model (the schema
-    // rejects it elsewhere): switching the type away leaves it behind.
-    if (dataToSend.modelType !== 'tts') delete dataToSend.tts;
     // Only a chat model can be the default; the checkbox is hidden for the
     // other types, so a flag left over from before the type changed goes.
     if ((dataToSend.modelType || 'chat') !== 'chat') dataToSend.default = false;
@@ -240,15 +237,14 @@ function AdminModelEditPage() {
     // previously saved budget; a new model simply leaves it out.
     dataToSend.usageLimits =
       normalizeLimitBucket(data.usageLimits) || (id === 'new' ? undefined : {});
-    // Empty languages are dropped; a hint without any text is removed.
-    dataToSend.hint = normalizeModelHint(data.hint);
-    // A language added without a voice yet means nothing to save.
-    if (dataToSend.tts?.voices) {
-      const voices = Object.entries(dataToSend.tts.voices).filter(([, voice]) => voice);
-      dataToSend.tts = { ...dataToSend.tts };
-      if (voices.length) dataToSend.tts.voices = Object.fromEntries(voices);
-      else delete dataToSend.tts.voices;
-    }
+    // A `tts` block on a model that is no longer text-to-speech, voices without
+    // an ID and hint languages without text are dropped; the form validates the
+    // same result (withoutDroppedParts), so they never block a save.
+    const cleaned = withoutDroppedParts(dataToSend);
+    delete dataToSend.tts;
+    delete dataToSend.hint;
+    if (cleaned.tts) dataToSend.tts = cleaned.tts;
+    dataToSend.hint = cleaned.hint;
 
     // Remove empty and undefined fields (but preserve API key placeholder)
     Object.keys(dataToSend).forEach(key => {
