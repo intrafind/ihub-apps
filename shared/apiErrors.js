@@ -473,7 +473,12 @@ export const APP_GENERATOR_ERROR_CODES = Object.freeze({
   /** No chat model the caller may use can write the draft. */
   APP_GENERATOR_NO_MODEL: 503,
   /** The model's answer is not JSON, is cut off, or leaves nothing usable (`details.reason`). */
-  APP_GENERATOR_INVALID_ANSWER: 502
+  APP_GENERATOR_INVALID_ANSWER: 502,
+  /**
+   * The instructions of the app are longer than a conversation turn can revise
+   * (`POST /api/admin/apps/_revise`, `POST /api/apps/_revise`; `details: { field, max }`).
+   */
+  APP_REVISE_TOO_LONG: 400
 });
 
 /**

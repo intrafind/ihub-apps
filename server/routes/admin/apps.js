@@ -7,6 +7,12 @@ import { contentAdminAuth } from '../../middleware/contentAdminAuth.js';
 import { ServiceError } from '../../utils/ServiceError.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { responseEtag } from '../../utils/etag.js';
+import {
+  assertIfMatch,
+  parseIfMatch,
+  revisionOf,
+  setRevisionHeaders
+} from '../../utils/configRevision.js';
 import { assertValidId, assertValidIds } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
 import { removeMarketplaceInstallation } from '../../utils/installationCleanup.js';
@@ -49,6 +55,19 @@ function assertValidAppConfig(appConfig) {
       }
     }
   );
+}
+
+/**
+ * The stored body of an app file, for its revision (`ETag`). `null` when the
+ * file cannot be found or read: its revision is then that of a missing file,
+ * which a later `If-Match` save refuses unless the file is still missing.
+ *
+ * @param {string} appId - A valid app ID.
+ * @returns {Promise<object|null>}
+ */
+async function readStoredApp(appId) {
+  const appFilePath = await configStore.resolveIdToPath('apps', appId, { createIfMissing: false });
+  return appFilePath ? configStore.readJson(appFilePath) : null;
 }
 
 /**
@@ -595,6 +614,43 @@ export default function registerAdminAppsRoutes(app) {
     }
   );
 
+  /**
+   * @swagger
+   * /api/admin/apps/{appId}:
+   *   get:
+   *     summary: Get one application
+   *     description: |
+   *       The app as the server runs it. The `ETag` header carries the revision of
+   *       the stored app file; send it as `If-Match` on `PUT /api/admin/apps/{appId}`
+   *       to refuse a save over a change someone else saved in the meantime.
+   *     tags:
+   *       - Admin
+   *       - Applications
+   *     security:
+   *       - adminAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: appId
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: The app
+   *         headers:
+   *           ETag:
+   *             description: Revision of the stored app file
+   *             schema:
+   *               type: string
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/AdminApplication'
+   *       400:
+   *         description: "`BAD_REQUEST`: invalid app id"
+   *       404:
+   *         description: "`NOT_FOUND`: no such app"
+   */
   app.get(buildServerPath('/api/admin/apps/:appId'), contentAdminAuth, async (req, res) => {
     const { appId } = req.params;
 
@@ -608,6 +664,9 @@ export default function registerAdminAppsRoutes(app) {
       throw new ServiceError('NOT_FOUND', 'App not found');
     }
 
+    // The revision of the stored file, not of the cached app: what `If-Match` on
+    // PUT /api/admin/apps/{appId} is compared against (utils/configRevision.js).
+    setRevisionHeaders(res, revisionOf(await readStoredApp(appId)));
     res.json(app);
   });
 
@@ -641,6 +700,14 @@ export default function registerAdminAppsRoutes(app) {
    *         schema:
    *           type: string
    *           example: "chat-assistant"
+   *       - in: header
+   *         name: If-Match
+   *         required: false
+   *         schema:
+   *           type: string
+   *         description: |
+   *           The `ETag` of the `GET /api/admin/apps/{appId}` the change is based on.
+   *           Optional; without it the save behaves as before (the last save wins).
    *     requestBody:
    *       required: true
    *       description: Updated application configuration
@@ -662,7 +729,12 @@ export default function registerAdminAppsRoutes(app) {
    *             enabled: true
    *     responses:
    *       200:
-   *         description: Application successfully updated
+   *         description: Application successfully updated. The `ETag` header carries the new revision.
+   *         headers:
+   *           ETag:
+   *             description: Revision of the stored app file after the save
+   *             schema:
+   *               type: string
    *         content:
    *           application/json:
    *             schema:
@@ -693,6 +765,8 @@ export default function registerAdminAppsRoutes(app) {
    *                 value:
    *                   error: "Invalid app configuration: redirectConfig.url: Redirect URL must use http or https"
    *                   details: []
+   *       412:
+   *         description: "`PRECONDITION_FAILED` (`details.resource` `app`): `If-Match` does not name the stored revision; someone saved the app after it was read. Nothing was written."
    *       500:
    *         description: Internal server error
    */
@@ -720,7 +794,17 @@ export default function registerAdminAppsRoutes(app) {
     }
     const { data: currentApps } = configCache.getApps(true);
     const oldApp = currentApps.find(a => a.id === appId);
-    await configStore.writeJson(appFilePath, updatedApp);
+    if (parseIfMatch(req.get('If-Match')) === null) {
+      // Without If-Match: the last save wins, as before.
+      await configStore.writeJson(appFilePath, updatedApp);
+    } else {
+      // The comparison runs under the file's update lock, on the body the write replaces,
+      // so no other save can land in between. A mismatch throws 412 and writes nothing.
+      await configStore.updateJson(appFilePath, stored => {
+        assertIfMatch(req, stored, 'app');
+        return updatedApp;
+      });
+    }
     await configCache.refreshAppsCache();
     if (oldApp) {
       await saveSnapshot({
@@ -738,6 +822,8 @@ export default function registerAdminAppsRoutes(app) {
       resourceId: appId,
       summary: `Updated app ${appId}`
     });
+    // The stored body is the body sent, so its revision is the next save's If-Match.
+    setRevisionHeaders(res, revisionOf(updatedApp));
     res.json(updatedApp);
   });
 

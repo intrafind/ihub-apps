@@ -13839,6 +13839,7 @@
     "PRECONDITION_FAILED": "This configuration was changed after you opened it (by another administrator, another tab or a script). Nothing was saved, and your changes are still on the page. Reload to see the current version, then apply your changes again.",
     "APP_GENERATOR_NO_MODEL": "No AI model is available to you, so a draft cannot be prepared.",
     "APP_GENERATOR_INVALID_ANSWER": "The AI's draft could not be used.",
+    "APP_REVISE_TOO_LONG": "The instructions of this app are too long to change in a conversation (at most {{max}} characters). Shorten them in the form.",
     "USER_APPS_DISABLED": "Personal apps are switched off on this installation.",
     "USER_APPS_UNAVAILABLE": "Personal apps are not available right now. Try again later.",
     "QUOTA_USER_APPS": "The limit of personal apps is reached.",
