@@ -26,7 +26,6 @@ const SAVE_BAR = /<(?:AdminSaveBar|EditorSaveBar)\b/;
 const SETTINGS_FRAME_WITH_BAR = source =>
   source.includes('<AdminSettingsPage') && /onSave=\{/.test(source);
 
-const SETTINGS = 'settings page (part 2 of the rollout)';
 const CARDS = 'sections with their own Save (part 3 of the rollout)';
 const OTHER = 'edit page, still to convert';
 
