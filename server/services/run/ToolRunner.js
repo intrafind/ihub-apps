@@ -27,7 +27,7 @@
  *
  * The legacy workflow executors (`PromptNodeExecutor`, `ToolNodeExecutor`) are
  * frozen and still call `runTool` themselves; they are the entries of
- * `server/tests/run/runToolAllowList.json`.
+ * `server/tests/architecture/runCallersAllowList.json`.
  *
  * @module services/run/ToolRunner
  */

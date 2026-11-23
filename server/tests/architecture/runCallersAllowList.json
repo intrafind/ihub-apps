@@ -1,0 +1,17 @@
+{
+  "description": "Every file outside server/services/run/ that runs the agent loop (agentLoop.run), builds one (new AgentLoop) or calls a tool past the tool runner (runTool), with the rules it may break, the reason and the issue that removes it. server/tests/architecture/runCallers.test.js fails for a file that is not listed and for a listed rule the file no longer breaks.",
+  "entries": [
+    {
+      "path": "services/workflow/executors/PromptNodeExecutor.js",
+      "rules": ["agentLoop.run", "new AgentLoop", "runTool"],
+      "reason": "Frozen legacy workflow executor: a legacy prompt node runs its own agent loop (built per executor) and executeToolCall runs its tools (sha256 in workflow-legacy-frozen.test.js). Legacy workflow runs get none of the run service's or the tool runner's guarantees in the first release.",
+      "removal": "#3784"
+    },
+    {
+      "path": "services/workflow/executors/ToolNodeExecutor.js",
+      "rules": ["runTool"],
+      "reason": "Frozen legacy workflow executor: a legacy tool node runs the tool the workflow author chose, not one a model picked (sha256 in workflow-legacy-frozen.test.js).",
+      "removal": "#3784"
+    }
+  ]
+}

@@ -15,7 +15,7 @@
  * The tool runner (`services/run/ToolRunner.js`) is the consumer of
  * {@link RESERVED_TOOL_CONTEXT_KEYS}: it drops them from the call's arguments
  * and sets the trusted values after them. A new caller of a tool goes through
- * it, not through `runTool` (`server/tests/run/runToolCallers.test.js`):
+ * it, not through `runTool` (`server/tests/architecture/runCallers.test.js`):
  *
  * @example
  *   await toolRunner.execute(null, {

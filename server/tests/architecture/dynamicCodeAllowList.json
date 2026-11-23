@@ -1,0 +1,29 @@
+{
+  "description": "Every file of the server that loads node:vm or calls eval( or new Function(, with the rules it may break and the reason. An entry with a removal issue goes with that issue; an entry without one (null) stays, and its reason says why it runs no input as code. server/tests/architecture/dynamicCode.test.js fails for a file that is not listed and for a listed rule the file no longer breaks. The vendored browser libraries of server/artifactLibraries/ are served to the browser and never run on the server; they are not scanned.",
+  "entries": [
+    {
+      "path": "services/workflow/executors/LoopNodeExecutor.js",
+      "rules": ["vm"],
+      "reason": "Frozen legacy workflow executor: a legacy loop node evaluates the condition the workflow author wrote in a fresh vm context with a time limit. The new workflow steps (#3774) evaluate no author code.",
+      "removal": "#3784"
+    },
+    {
+      "path": "services/inference/structuredOutput.js",
+      "rules": ["vm"],
+      "reason": "A pattern of an output schema is tested with a time limit: the vm context only runs re.test(text) on a compiled RegExp, so a catastrophic pattern cannot block the event loop. No input runs as code.",
+      "removal": null
+    },
+    {
+      "path": "services/documents/webArtifacts/webArtifactTools.js",
+      "rules": ["vm"],
+      "reason": "The script of a web artifact is compiled with vm.Script to report a syntax error to the model; it is parsed, never run.",
+      "removal": null
+    },
+    {
+      "path": "utils/safeRegex.js",
+      "rules": ["vm"],
+      "reason": "A regular expression from configuration is run with a time limit: the vm context only runs re.test(text) on a compiled RegExp, so a catastrophic pattern cannot block the event loop. No input runs as code.",
+      "removal": null
+    }
+  ]
+}

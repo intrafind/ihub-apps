@@ -248,8 +248,8 @@ test('a definition migration that renames an action keeps its approval', () => {
 // ── pre-mortem #4: every runTool caller is known ────────────────────────────
 //
 // Every call of `runTool(` outside `server/services/run/` is an entry of
-// `server/tests/run/runToolAllowList.json`, with its reason and the issue that
-// removes it: server/tests/run/runToolCallers.test.js.
+// `server/tests/architecture/runCallersAllowList.json`, with its reason and the issue that
+// removes it: server/tests/architecture/runCallers.test.js.
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const serverRoot = path.resolve(here, '../..');
