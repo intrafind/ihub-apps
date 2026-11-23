@@ -66,6 +66,13 @@ export default function registerStaticRoutes(app, { isPackaged, rootDir, basePat
         if (isHashedAsset(staticPath, filePath)) {
           res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
         }
+        // `/index.html` asked for by name is served from here, not by the SPA handler below, and
+        // is the same page: it gets the same framing policy. Other HTML files keep what their
+        // own routes say (the Nextcloud embed pages set theirs).
+        if (filePath === path.join(staticPath, 'index.html')) {
+          const framingOrigins = getEmbedAuthOrigins(configCache.getPlatform());
+          if (framingOrigins.length > 0) applyFrameAncestorsCsp(res, framingOrigins);
+        }
       }
     };
     if (basePath) {

@@ -19,6 +19,9 @@
 
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
 import jwt from 'jsonwebtoken';
+import express from 'express';
+import cookieParser from 'cookie-parser';
+import supertest from 'supertest';
 
 const SECRET = 'embed-session-cookie-secret';
 process.env.JWT_SECRET = SECRET;
@@ -51,7 +54,14 @@ jest.unstable_mockModule('../services/TokenStorageService.js', () => ({
   default: { getJwtSecret: () => SECRET, getRSAPrivateKey: () => null, getRSAPublicKey: () => null }
 }));
 
+jest.unstable_mockModule('../services/AuditLogService.js', () => ({ logAudit: () => {} }));
+jest.unstable_mockModule('../telemetry/metrics.js', () => ({
+  recordAuthEvent: () => {},
+  recordRateLimitHit: () => {}
+}));
+
 const { default: jwtAuth } = await import('../middleware/jwtAuth.js');
+const { default: registerEmbedAuthRoutes } = await import('../routes/embedAuth.js');
 
 function sign(claims, { expiresInSeconds = 3600 } = {}) {
   const now = Math.floor(Date.now() / 1000);
@@ -231,5 +241,56 @@ describe('the session cookie of a framed iHub', () => {
     expect(value).toMatch(/^authTokenEmbed=;/);
     expect(value).toContain('Max-Age=0');
     expect(value).toContain('Partitioned');
+  });
+});
+
+describe('the popup page of the sign-in in a frame, as the server really serves it', () => {
+  // The auth chain of middleware/setup.js skips every path without a file extension that is not
+  // under /api (the pages of the single-page app), so nothing authenticates /embed-auth/complete
+  // for it. This app is built the same way: cookies are parsed, no authentication runs first.
+  const challenge = 'A'.repeat(43);
+  const page = () => {
+    const app = express();
+    // Test harness, not a deployed app: the page changes nothing by itself and its two code
+    // endpoints refuse requests another site made (isSameOriginRequest), which the CSRF rule
+    // cannot see.
+    // codeql[js/missing-token-validation] -- see above
+    app.use(cookieParser());
+    app.use(express.json());
+    registerEmbedAuthRoutes(app);
+    return supertest(app).get(`/embed-auth/complete?challenge=${challenge}`);
+  };
+
+  beforeEach(() => {
+    state.platform.embedAuth = { allowedHostOrigins: ['https://ifinder.example.com'] };
+  });
+
+  it('shows the page that asks for the code to a visitor with a valid session cookie', async () => {
+    const res = await page()
+      .set('Cookie', `authToken=${session('jane')}`)
+      .redirects(0);
+
+    // Before it authenticated itself, this was a redirect to the login, and from there back here, for ever.
+    expect(res.status).toBe(200);
+    expect(res.headers.location).toBeUndefined();
+    expect(res.text).toContain(`data-challenge="${challenge}"`);
+  });
+
+  it('sends a visitor without a session to the login and back', async () => {
+    const res = await page().redirects(0);
+
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toMatch(/^\/login\?returnUrl=/);
+  });
+
+  it('sends a visitor whose account was deleted to the login, not to a JSON answer', async () => {
+    const res = await page()
+      .set('Cookie', `authToken=${session('user-that-was-deleted')}`)
+      .redirects(0);
+
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toMatch(/^\/login\?returnUrl=/);
+    // The dead session is dropped on the way, so the login is not met by it again.
+    expect(res.headers['set-cookie'].join(';')).toMatch(/authToken=;/);
   });
 });

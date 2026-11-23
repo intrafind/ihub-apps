@@ -145,10 +145,15 @@
         // Auto-redirect to OIDC provider
         var isLogoutPage = params.get('logout') === 'true';
         // An identity provider refuses to be shown in a frame (X-Frame-Options / frame-ancestors),
-        // so inside a frame the person starts the sign-in with a click, which opens a popup. Windows
-        // sign-in stays on this page and may redirect.
+        // so inside a frame the person starts the sign-in with a click, which opens a popup. That
+        // is only so while the sign-in in a frame is set up (`embedSignIn`); without it, nothing
+        // changes and the redirect stays, for a provider that allows framing. Windows sign-in
+        // stays on this page and may redirect.
         var framedProviderRedirect =
-          isFramed() && data.autoRedirect && data.autoRedirect.provider !== 'ntlm';
+          data.embedSignIn &&
+          isFramed() &&
+          data.autoRedirect &&
+          data.autoRedirect.provider !== 'ntlm';
         if (data.autoRedirect && !isLogoutPage && !signInFailed && !framedProviderRedirect) {
           if (shouldAutoRedirect(data.autoRedirect.provider)) {
             markAutoRedirectAttempt(data.autoRedirect.provider);
@@ -389,6 +394,7 @@
   function showGate(options) {
     options = options || {};
     var root;
+    invalidateFramedAttempt();
 
     if (options.container) {
       // Embedded mode: render inline into the caller's container. No backdrop,
@@ -458,6 +464,7 @@
   }
 
   function hideGate() {
+    invalidateFramedAttempt();
     if (embedded) {
       embedded.container.textContent = '';
       embedded.container.classList.remove('ag-embedded');
@@ -954,7 +961,7 @@
   }
 
   function handleOidcLogin(providerName) {
-    if (isFramed()) {
+    if (isFramed() && authConfig && authConfig.embedSignIn) {
       handleFramedOidcLogin(providerName);
       return;
     }
@@ -995,6 +1002,10 @@
   var framedPrepared = null; // Promise of { verifier, challenge }
   var framedReady = null; // the same, once it has resolved, so a click can open the popup at once
   var framedPending = null; // { popup, verifier, timer, onMessage, closedSince } while a popup is open
+  // Which sign-in attempt is the current one. A popup, and the redeem that follows its message,
+  // belong to the gate that opened them: showing or hiding the gate starts a new count, so an
+  // earlier attempt that is still on its way ends without touching the gate that is there now.
+  var framedAttempt = 0;
 
   function isFramed() {
     try {
@@ -1107,7 +1118,8 @@
       verifier: prepared.verifier,
       timer: null,
       onMessage: null,
-      closedSince: 0
+      closedSince: 0,
+      attempt: ++framedAttempt
     };
     pending.onMessage = function (event) {
       // The popup is a page of iHub itself: nobody else may hand this page a code.
@@ -1115,7 +1127,7 @@
       var data = event.data;
       if (!data || data.kind !== FRAMED_MESSAGE_KIND || typeof data.code !== 'string') return;
       endFramedPending();
-      redeemFramedCode(data.code, pending.verifier);
+      redeemFramedCode(data.code, pending.verifier, pending.attempt);
     };
     window.addEventListener('message', pending.onMessage);
     // A person who closes the popup has cancelled. The grace period lets a message that was posted
@@ -1149,7 +1161,18 @@
     framedPending = null;
   }
 
-  function redeemFramedCode(code, verifier) {
+  /** Called when the gate is shown again or hidden: whatever sign-in attempt was running is over. */
+  function invalidateFramedAttempt() {
+    framedAttempt++;
+    endFramedPending();
+  }
+
+  function redeemFramedCode(code, verifier, attempt) {
+    // The gate this attempt belongs to may be gone by now (see framedAttempt): then the attempt
+    // ends quietly, whatever the server answered.
+    var current = function () {
+      return attempt === framedAttempt;
+    };
     fetch(API_BASE + '/auth/embed-codes/_redeem', {
       method: 'POST',
       credentials: 'include',
@@ -1157,12 +1180,14 @@
       body: JSON.stringify({ code: code, codeVerifier: verifier })
     })
       .then(function (res) {
+        if (!current()) return null;
         if (!res.ok) throw new Error('redeem failed');
         // A token left in localStorage would be sent in front of the new session cookie.
         removeToken();
         return fetchAuthStatus();
       })
       .then(function (data) {
+        if (!data || !current()) return;
         authConfig = data;
         if (!data.authenticated) {
           // The code was accepted but the browser did not keep or send the cookie: a browser or
@@ -1185,7 +1210,7 @@
         }
       })
       .catch(function () {
-        showFramedError(t('signInFailed'));
+        if (current()) showFramedError(t('signInFailed'));
       });
   }
 

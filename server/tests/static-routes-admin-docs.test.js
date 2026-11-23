@@ -136,6 +136,32 @@ describe('who may show the app in a frame', () => {
     expect(res.headers['content-security-policy']).toBeUndefined();
   });
 
+  test('applies to the shell asked for by name as well', async () => {
+    platform.embedAuth = { allowedHostOrigins: [ORIGIN] };
+
+    const res = await request(buildApp()).get('/index.html');
+
+    expect(res.status).toBe(200);
+    expect(res.headers['content-security-policy']).toBe(`frame-ancestors 'self' ${ORIGIN}`);
+  });
+
+  test('leaves other HTML files to the routes that serve them', async () => {
+    platform.embedAuth = { allowedHostOrigins: [ORIGIN] };
+    fs.writeFileSync(path.join(rootDir, 'public', 'other.html'), '<!doctype html><p>other</p>');
+
+    const res = await request(buildApp()).get('/other.html');
+
+    expect(res.status).toBe(200);
+    expect(res.headers['content-security-policy']).toBeUndefined();
+  });
+
+  test('does not restrict the shell asked for by name while no host origin is configured', async () => {
+    const res = await request(buildApp()).get('/index.html');
+
+    expect(res.status).toBe(200);
+    expect(res.headers['content-security-policy']).toBeUndefined();
+  });
+
   test('is limited to iHub and the configured origins once the sign-in in a frame is set up', async () => {
     platform.embedAuth = { allowedHostOrigins: [ORIGIN, 'not a url'] };
 

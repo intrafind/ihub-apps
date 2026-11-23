@@ -30,6 +30,7 @@ import { isValidId } from '../utils/pathSecurity.js';
 import { verifyJwt } from '../utils/tokenService.js';
 import { applyFrameAncestorsCsp } from '../utils/frameAncestors.js';
 import { createEmbedAuthLimiter } from '../middleware/rateLimiting.js';
+import jwtAuthMiddleware from '../middleware/jwtAuth.js';
 import { recordAuthEvent } from '../telemetry/metrics.js';
 import { logAudit } from '../services/AuditLogService.js';
 import {
@@ -173,7 +174,11 @@ export default function registerEmbedAuthRoutes(app) {
    * may redirect. It changes nothing by itself; the code is issued by the POST
    * the page makes.
    */
-  app.get(completePath, limiter, (req, res) => {
+  // The auth chain (middleware/setup.js) skips every path without a file extension that is not
+  // under /api: those are the pages of the single-page app. This page is one of them, so on its
+  // own `req.user` would never be set and a signed-in visitor would be sent to the login, and
+  // back here, for ever. It reads the session cookie itself, like the auth chain would.
+  app.get(completePath, limiter, jwtAuthMiddleware, (req, res) => {
     const language = pickLanguage(req);
     res.set('Cache-Control', 'no-store');
     res.set('Referrer-Policy', 'no-referrer');

@@ -287,17 +287,32 @@ test('lets a message that arrives just before the popup closes win over the clos
   expect(document.querySelector('.ag-error')).toBeNull();
 });
 
-test('says so when signing in inside another site is not enabled', async () => {
-  global.fetch = jest.fn(async () => ({
-    ok: true,
-    json: async () => ({ ...STATUS_ANONYMOUS, embedSignIn: false })
-  }));
-  await runGate();
+describe('without the sign-in in a frame set up (embedSignIn off), nothing changes', () => {
+  const statusWithout = extra => ({ ...STATUS_ANONYMOUS, embedSignIn: false, ...extra });
+  const serveStatus = body => {
+    global.fetch = jest.fn(async () => ({ ok: true, json: async () => body }));
+  };
 
-  clickProvider();
+  test('a framed page still redirects to the only provider, which may allow framing', async () => {
+    serveStatus(statusWithout());
 
-  expect(window.open).not.toHaveBeenCalled();
-  expect(document.querySelector('.ag-error').textContent).toBe('embedSignInDisabled');
+    await runGate();
+
+    // The redirect branch ran (it notes the attempt), so no login is painted and no popup opened.
+    expect(sessionStorage.getItem('autoRedirect_corp')).not.toBeNull();
+    expect(document.querySelector('.ag-btn')).toBeNull();
+    expect(window.open).not.toHaveBeenCalled();
+  });
+
+  test('a click on a provider does not open a popup', async () => {
+    serveStatus(statusWithout({ autoRedirect: null }));
+    await runGate();
+
+    clickProvider();
+
+    expect(window.open).not.toHaveBeenCalled();
+    expect(document.querySelector('.ag-error')).toBeNull();
+  });
 });
 
 test('says so when the code is refused', async () => {
@@ -337,6 +352,63 @@ test('uses a new verifier for every popup', async () => {
   const [first, second] = window.open.mock.calls.map(([url]) =>
     new URL(url, 'https://ihub.example.com').searchParams.get('challenge')
   );
-  expect(second).toBeDefined();
+  expect(first).toMatch(/^[A-Za-z0-9_-]{43}$/);
+  expect(second).toMatch(/^[A-Za-z0-9_-]{43}$/);
   expect(second).not.toBe(first);
+});
+
+describe('a sign-in attempt belongs to the gate that started it', () => {
+  const codeMessage = { kind: 'ihub.embedAuth.code', code: 'handle.secret' };
+  const redeemCalls = calls => calls.filter(c => String(c.url).endsWith('/_redeem'));
+
+  test('a popup that is still open when the gate is shown again hands nothing to the new gate', async () => {
+    const calls = installServer();
+    await runGate();
+    clickProvider();
+
+    window.__authGate.show({ overlay: true });
+    await settle();
+    popupSays(codeMessage);
+    await settle();
+
+    expect(redeemCalls(calls)).toHaveLength(0);
+  });
+
+  test('a redeem that is on its way when the gate is hidden ends without a trace', async () => {
+    // The answer to the redeem is held back, so the gate is hidden while it is in flight.
+    let answerRedeem;
+    let statusCalls = 0;
+    global.fetch = jest.fn(async url => {
+      if (String(url).endsWith('/_redeem')) {
+        await new Promise(resolve => {
+          answerRedeem = resolve;
+        });
+        return { ok: true, json: async () => ({ expiresInSeconds: 3600 }) };
+      }
+      // The first status call is the gate's own, signed out; a second would be the check after the
+      // redeem, which would sign in.
+      statusCalls += 1;
+      return {
+        ok: true,
+        json: async () => (statusCalls === 1 ? STATUS_ANONYMOUS : STATUS_SIGNED_IN)
+      };
+    });
+    const succeeded = jest.fn();
+    window.addEventListener('authGateSuccess', succeeded);
+    await runGate();
+    clickProvider();
+    popupSays(codeMessage);
+    await settle();
+    expect(answerRedeem).toBeDefined();
+
+    window.__authGate.hide();
+    answerRedeem();
+    await settle();
+    jest.advanceTimersByTime(300);
+
+    expect(statusCalls).toBe(1);
+    expect(succeeded).not.toHaveBeenCalled();
+    expect(document.querySelector('.ag-error')).toBeNull();
+    window.removeEventListener('authGateSuccess', succeeded);
+  });
 });

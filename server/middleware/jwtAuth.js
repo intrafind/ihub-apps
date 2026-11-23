@@ -48,7 +48,9 @@ function rejectDeletedUser(req, res, next, source, userId, dropCookie) {
     userId
   });
   dropCookie();
-  if (req.path.startsWith('/api/auth/')) {
+  // The sign-in endpoints, and the popup page of the sign-in in a frame, carry on as if there
+  // were no token: they are where a person signs in again.
+  if (req.path.startsWith('/api/auth/') || req.path.startsWith('/embed-auth/')) {
     return next();
   }
   return res.status(401).json({
