@@ -6334,7 +6334,8 @@
         "searchSkills": "Search skills to add…",
         "noSkills": "No skills selected – users can’t use any agent skills",
         "allWildcard": "All (*)",
-        "allWildcardFor": "{{label}}: All (*)"
+        "allWildcardFor": "{{label}}: All (*)",
+        "defaultModelToken": "Default model (whichever is set as default)"
       },
       "members": {
         "title": "Members",
@@ -9696,7 +9697,9 @@
         "ownWildcard": "Everyone in {{group}} sees this through “all {{items}}”.",
         "inheritedWildcard": "Everyone in {{group}} sees this through “all {{items}}” (inherited from {{source}}: {{chain}}).",
         "ownExplicit": "{{group}} is granted this by name.",
-        "inheritedExplicit": "Everyone in {{group}} gets this by name from {{source}} ({{chain}})."
+        "inheritedExplicit": "Everyone in {{group}} gets this by name from {{source}} ({{chain}}).",
+        "ownDefault": "{{group}} gets this as the default model (“Default model” in its model list).",
+        "inheritedDefault": "Everyone in {{group}} gets this as the default model, through “Default model” of {{source}} ({{chain}})."
       },
       "card": {
         "title": "Who can use this model",
@@ -9774,7 +9777,8 @@
         "stillEveryone": "Everyone who signs in can still use it:",
         "newItemsWarning": "New {{items}} you add later no longer appear automatically in the groups you convert. Add them to those groups when you create them. The change is recorded in each group's history.",
         "error": "Access could not be restricted.",
-        "apply": "Restrict access"
+        "apply": "Restrict access",
+        "stillDefaultModel": "{{name}} is the default model, and {{groups}} grant “Default model”: they keep using it. Remove that entry in the group settings, or make another model the default."
       }
     },
     "connectionErrors": {

@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { fetchAdminModels, makeAdminApiCall } from '../../../api/adminApi';
 import { localizedName } from '../../../shared/utils/usageFormat';
 import Icon from '../../../shared/components/Icon';
+import { DEFAULT_MODEL_TOKEN } from '../../../../../shared/modelPermissions.js';
 import { HELP_CLASS, INPUT_CLASS, LABEL_CLASS } from './formStyles';
 
 /**
@@ -138,6 +139,10 @@ export function mbInputToBytes(raw) {
  * expands to every model and adds the "All other models" row), plus any model
  * that already has an entry so a stale one can still be cleared.
  *
+ * The default-model token (`@default`) is not a model a limit can be set on:
+ * it stands for the model that is the default now, so that model's row is
+ * shown in its place.
+ *
  * @param {Array<string>|undefined} modelIds - e.g. a group's `permissions.models`
  * @param {Array<Object>} models - All model configs
  * @param {Object|undefined} limitModels - The current `usageLimits.models`
@@ -148,6 +153,10 @@ export function limitModelRows(modelIds, models, limitModels) {
   const wildcard = ids.includes('*') || Boolean(limitModels?.['*']);
   const byId = new Map(models.map(m => [m.id, m]));
   const wanted = new Set(ids.includes('*') ? models.map(m => m.id) : ids);
+  if (wanted.delete(DEFAULT_MODEL_TOKEN)) {
+    const defaultModel = models.find(m => m.default === true);
+    if (defaultModel) wanted.add(defaultModel.id);
+  }
   for (const id of Object.keys(limitModels || {})) wanted.add(id);
   wanted.delete('*');
   const rows = [...wanted].map(id => ({ id, model: byId.get(id) || null }));

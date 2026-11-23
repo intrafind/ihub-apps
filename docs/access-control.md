@@ -45,7 +45,7 @@ Three rules decide what a user may use:
 
 | Group | Inherits from | Apps | Models | Prompts |
 | --- | --- | --- | --- | --- |
-| **Anonymous** (`anonymous`) | — | Chat | A few named models | All (\*) |
+| **Anonymous** (`anonymous`) | — | Chat | The default model | All (\*) |
 | **Authenticated** (`authenticated`) | Anonymous | All (\*) | All (\*) | All (\*) |
 | **Users** (`users`) | Authenticated | All (\*) | All (\*) | All (\*) |
 | **Admins** (`admins`) | Users | All (\*) | All (\*) | All (\*) |
@@ -57,6 +57,25 @@ They inherit from **Users** or **Authenticated** and add no apps of their own.
 
 Because **Authenticated** holds **All (\*)**, a published app is visible to every signed-in user.
 This is what the publish dialog means with "Everyone who signs in can use this app."
+
+### The default model as a grant
+
+Anonymous visitors may use the Chat app and **the default model**: whichever model is marked as
+the default on the Models page (see [Models](models.md#set-up-models-in-the-admin-ui)). The group
+editor shows it as the entry **Default model (whichever is set as default)** under **Models**;
+in `groups.json` it is `"@default"`:
+
+```json
+"anonymous": { "permissions": { "apps": ["chat"], "models": ["@default"] } }
+```
+
+- When you make another model the default, the grant moves with it. You do not edit the group.
+- It grants only that one model. **All (\*)** still grants every model.
+- Any group can hold it. Add or remove it under **Permissions → Models** like a model.
+
+Every signed-in user inherits **Anonymous** (through **Authenticated**), so every signed-in user
+may use the default model too. Before this entry existed, **Anonymous** named its models, and
+those models could not be limited to a smaller group.
 
 ## Give a group access to an app or a prompt
 
@@ -142,6 +161,12 @@ access without editing it.
 In the model editor, **Who can use this model** lists the groups and why they have access, and
 **Restrict access…** does steps 1 to 5 for you (see
 [Restrict access with the helper](#restrict-access-with-the-helper)).
+
+The default model is a special case: every group with **Default model** grants it, and on a new
+installation that is **Anonymous**, which every signed-in user inherits. **Who can use this
+model** shows such a group with "as the default model". **Restrict access…** leaves that entry
+alone and says so in its preview. To limit the default model, make another model the default
+first, or remove **Default model** from those groups.
 
 What users notice:
 

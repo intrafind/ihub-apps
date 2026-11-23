@@ -11,7 +11,8 @@
  *
  * - group grants: the `permissions.<type>` lists with `*` and `inherits`, read
  *   the way `resolveGroupInheritance` + `getPermissionsForUser` read them
- *   (see `describeGrantRoutes` in `contentAccess.js`);
+ *   (see `describeGrantRoutes` in `contentAccess.js`); a model list's
+ *   `@default` grants the platform's current default model;
  * - an app is offered only while it is enabled and its required features and
  *   integrations are on (`configCache.getApps`);
  * - a chat app answers only with a model the app allows, that is enabled and
@@ -32,6 +33,8 @@ import {
   describeGrantRoutes
 } from './contentAccess.js';
 import { ServiceError } from './ServiceError.js';
+import { effectiveDefaultModelId } from './resourceDependants.js';
+import { grantsAsDefaultModel } from '../../shared/modelPermissions.js';
 
 /** The item types the access check answers for. */
 export const ACCESS_CHECK_TYPES = Object.freeze(['apps', 'models']);
@@ -130,11 +133,18 @@ export function resolveSubject({
  * @param {string} options.type
  * @param {string} options.contentId
  * @param {string[]} options.subjectGroups
- * @returns {Array<{groupId: string, kind: 'explicit'|'wildcard', path: string[]}>}
+ * @param {string|null} [options.defaultModelId] - The platform's current default model
+ * @returns {Array<{groupId: string, kind: 'explicit'|'wildcard'|'default', path: string[]}>}
  */
-export function subjectGrantRoutes({ groups, type, contentId, subjectGroups }) {
+export function subjectGrantRoutes({
+  groups,
+  type,
+  contentId,
+  subjectGroups,
+  defaultModelId = null
+}) {
   const all = subjectGroups
-    .flatMap(groupId => describeGrantRoutes({ groups, type, contentId, groupId }))
+    .flatMap(groupId => describeGrantRoutes({ groups, type, contentId, groupId, defaultModelId }))
     // Stable: equally short routes keep the order of the subject's groups.
     .sort((a, b) => a.path.length - b.path.length);
   const seen = new Set();
@@ -187,6 +197,8 @@ function modelCause({ modelId, models, appModelIds, grantedTo }) {
  * @param {string[]} [options.integrationsOff=[]] - The app's integrations that are off
  * @param {(models: object[], app: object) => object[]} [options.filterModelsForApp] -
  *   The server's model filter for an app (`RequestBuilder.filterModelsForApp`)
+ * @param {string|null} [options.defaultModelId] - The platform's current default
+ *   model, for `@default` grants; worked out from `models` when not given
  * @returns {{verdict: 'available'|'unavailable', reasons: object[]}}
  */
 export function checkAccess({
@@ -197,7 +209,8 @@ export function checkAccess({
   models = [],
   featuresOff = [],
   integrationsOff = [],
-  filterModelsForApp = list => list
+  filterModelsForApp = list => list,
+  defaultModelId = effectiveDefaultModelId(models)
 }) {
   const reasons = [];
   const add = (code, status, values = {}) => reasons.push({ code, status, ...values });
@@ -222,13 +235,25 @@ export function checkAccess({
   }
 
   const subjectGroups = subject.groups;
-  const routes = subjectGrantRoutes({ groups, type, contentId: item.id, subjectGroups });
+  const routes = subjectGrantRoutes({
+    groups,
+    type,
+    contentId: item.id,
+    subjectGroups,
+    defaultModelId
+  });
   if (routes.length > 0) add('granted', 'ok', { routes });
   else add('notGranted', 'blocked');
 
   if (type === 'apps' && (item.type || 'chat') === 'chat') {
     const grantedTo = modelId =>
-      subjectGrantRoutes({ groups, type: 'models', contentId: modelId, subjectGroups }).length > 0;
+      subjectGrantRoutes({
+        groups,
+        type: 'models',
+        contentId: modelId,
+        subjectGroups,
+        defaultModelId
+      }).length > 0;
     const enabledModels = models.filter(model => model && model.enabled !== false);
     const forApp = filterModelsForApp(enabledModels, item);
     const appModelIds = new Set(forApp.map(model => lower(model.id)));
@@ -327,6 +352,12 @@ export function explicitListWithout(list, allIds, contentId) {
  * no longer visible in that group by default. The plan carries that fact for
  * the client to say; it does not decide it.
  *
+ * The default-model token (`@default`) is left alone: a converted list keeps
+ * it, and so does every other group. When the model being restricted is the
+ * platform's default model, the groups whose own list (after the change)
+ * holds the token still grant it; `defaultModelGroups` names them so the
+ * client can say so.
+ *
  * @param {object} options
  * @param {Object<string, object>} options.groups - `groups` map; not changed
  * @param {string} options.type - One of {@link RESTRICT_TYPES}
@@ -338,6 +369,7 @@ export function explicitListWithout(list, allIds, contentId) {
  *   being members, marked on the rows of `groupsAfter`
  * @param {string} [options.authenticatedGroup='authenticated']
  * @param {string[]} [options.anonymousGroups=[]]
+ * @param {string|null} [options.defaultModelId] - The platform's current default model
  * @returns {{
  *   candidates: Array<{id: string, name: string, itemCount: number, currentCount: number,
  *     passesTo: string[], selected: boolean}>,
@@ -348,7 +380,8 @@ export function explicitListWithout(list, allIds, contentId) {
  *   audienceBefore: {allSignedIn: boolean, anonymous: boolean},
  *   audienceAfter: {allSignedIn: boolean, anonymous: boolean},
  *   updatedGroups: Object<string, object>,
- *   changes: Array<{groupId: string, action: 'restrict'|'grant'}>
+ *   changes: Array<{groupId: string, action: 'restrict'|'grant'}>,
+ *   defaultModelGroups: string[]
  * }} `updatedGroups` is a changed copy of `groups`, ready to write
  * @throws {ServiceError} 400 for a group in `groupIds` that holds no wildcard
  *   or a malformed list, 404 for an unknown group
@@ -362,7 +395,8 @@ export function planRestriction({
   grantGroupIds = [],
   implicitGroups = [],
   authenticatedGroup = 'authenticated',
-  anonymousGroups = []
+  anonymousGroups = [],
+  defaultModelId = null
 }) {
   const key = RESTRICT_TYPES.find(candidate => candidate === type);
   if (key === undefined) {
@@ -399,7 +433,8 @@ export function planRestriction({
       type: key,
       contentId,
       groupIds: Object.keys(groupMap),
-      implicitGroups
+      implicitGroups,
+      defaultModelId
     });
   const audienceOf = groupMap =>
     describeAudience({
@@ -407,7 +442,8 @@ export function planRestriction({
       type: key,
       contentId,
       authenticatedGroup,
-      anonymousGroups
+      anonymousGroups,
+      defaultModelId
     });
 
   const before = describe(map);
@@ -469,6 +505,12 @@ export function planRestriction({
     audienceBefore: audienceOf(map),
     audienceAfter: audienceOf(updatedGroups),
     updatedGroups,
-    changes
+    changes,
+    defaultModelGroups:
+      key === 'models'
+        ? Object.keys(updatedGroups).filter(groupId =>
+            grantsAsDefaultModel(ownList(updatedGroups[groupId], key), contentId, defaultModelId)
+          )
+        : []
   };
 }

@@ -6831,7 +6831,8 @@
         "searchSkills": "Skills zum Hinzufügen suchen…",
         "noSkills": "Keine Skills ausgewählt – Benutzer können keine Agenten-Skills verwenden",
         "allWildcard": "Alle (*)",
-        "allWildcardFor": "{{label}}: Alle (*)"
+        "allWildcardFor": "{{label}}: Alle (*)",
+        "defaultModelToken": "Standardmodell (das jeweils als Standard festgelegte)"
       },
       "members": {
         "title": "Mitglieder",
@@ -10193,7 +10194,9 @@
         "ownWildcard": "Alle in {{group}} sehen dies über „alle {{items}}“.",
         "inheritedWildcard": "Alle in {{group}} sehen dies über „alle {{items}}“ (geerbt von {{source}}: {{chain}}).",
         "ownExplicit": "{{group}} ist dies namentlich freigegeben.",
-        "inheritedExplicit": "Alle in {{group}} erhalten dies namentlich von {{source}} ({{chain}})."
+        "inheritedExplicit": "Alle in {{group}} erhalten dies namentlich von {{source}} ({{chain}}).",
+        "ownDefault": "{{group}} erhält dies als Standardmodell („Standardmodell“ in der Modellliste).",
+        "inheritedDefault": "Alle in {{group}} erhalten dies als Standardmodell, über „Standardmodell“ von {{source}} ({{chain}})."
       },
       "card": {
         "title": "Wer dieses Modell verwenden darf",
@@ -10271,7 +10274,8 @@
         "stillEveryone": "Alle angemeldeten Benutzer dürfen es weiterhin verwenden:",
         "newItemsWarning": "Neue {{items}}, die Sie später hinzufügen, erscheinen in den umgestellten Gruppen nicht mehr automatisch. Fügen Sie sie diesen Gruppen beim Anlegen hinzu. Die Änderung wird im Verlauf jeder Gruppe festgehalten.",
         "error": "Der Zugriff konnte nicht eingeschränkt werden.",
-        "apply": "Zugriff einschränken"
+        "apply": "Zugriff einschränken",
+        "stillDefaultModel": "{{name}} ist das Standardmodell, und {{groups}} geben „Standardmodell“ frei: Sie verwenden es weiterhin. Entfernen Sie diesen Eintrag in den Gruppeneinstellungen oder legen Sie ein anderes Modell als Standard fest."
       }
     },
     "connectionErrors": {

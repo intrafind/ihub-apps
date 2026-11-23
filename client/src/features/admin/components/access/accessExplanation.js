@@ -29,7 +29,16 @@ export const ROUTE_KEYS = Object.freeze({
   ownWildcard: 'admin.access.explain.ownWildcard',
   inheritedWildcard: 'admin.access.explain.inheritedWildcard',
   ownExplicit: 'admin.access.explain.ownExplicit',
-  inheritedExplicit: 'admin.access.explain.inheritedExplicit'
+  inheritedExplicit: 'admin.access.explain.inheritedExplicit',
+  ownDefault: 'admin.access.explain.ownDefault',
+  inheritedDefault: 'admin.access.explain.inheritedDefault'
+});
+
+/** The route kinds, by the word that names them in {@link ROUTE_KEYS}. */
+const ROUTE_KIND_NAMES = Object.freeze({
+  wildcard: 'Wildcard',
+  explicit: 'Explicit',
+  default: 'Default'
 });
 
 /** The sentences of the access check, by reason code. */
@@ -83,7 +92,7 @@ export function groupNamer(rows) {
  *
  * @param {{via?: object[]}} row
  * @param {boolean} [wildcardOnly=false]
- * @returns {{groupId: string, kind: 'explicit'|'wildcard', path: string[]}|null}
+ * @returns {{groupId: string, kind: 'explicit'|'wildcard'|'default', path: string[]}|null}
  */
 export function primaryRoute(row, wildcardOnly = false) {
   const routes = Array.isArray(row?.via) ? row.via : [];
@@ -92,7 +101,9 @@ export function primaryRoute(row, wildcardOnly = false) {
 }
 
 /**
- * The sentence for one route of one group.
+ * The sentence for one route of one group. A `default` route is a model list
+ * holding `@default` while the model is the platform's default model: the
+ * sentence says the group gets it "as the default model".
  *
  * @param {object} options
  * @param {string} options.groupName - The group the sentence is about
@@ -114,14 +125,8 @@ export function primaryRoute(row, wildcardOnly = false) {
  */
 export function routeSentence({ groupName, route, type, nameOf }) {
   const inherited = route.path.length > 1;
-  const wildcard = route.kind === 'wildcard';
-  const name = inherited
-    ? wildcard
-      ? 'inheritedWildcard'
-      : 'inheritedExplicit'
-    : wildcard
-      ? 'ownWildcard'
-      : 'ownExplicit';
+  const kindName = ROUTE_KIND_NAMES[route.kind] || ROUTE_KIND_NAMES.explicit;
+  const name = `${inherited ? 'inherited' : 'own'}${kindName}`;
   return {
     key: ROUTE_KEYS[name],
     values: {
@@ -163,6 +168,20 @@ export function wildcardSentences(view, type) {
 export function coveredByWildcard(view) {
   const rows = Array.isArray(view?.groups) ? view.groups : [];
   return rows.some(row => row?.effective && primaryRoute(row, true));
+}
+
+/**
+ * The groups that, per the server's plan, keep granting a model as the
+ * platform's default model (`@default`) after a restrict: the restrict leaves
+ * the token alone, so the admin is told the model stays reachable that way.
+ *
+ * @param {{defaultModelGroups?: string[], groupsAfter?: object[]}|null|undefined} plan
+ * @returns {string[]} The groups' names, in the plan's order
+ */
+export function defaultModelGroupNames(plan) {
+  const ids = Array.isArray(plan?.defaultModelGroups) ? plan.defaultModelGroups : [];
+  const nameOf = groupNamer(plan?.groupsAfter);
+  return ids.map(nameOf);
 }
 
 /**

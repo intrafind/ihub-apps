@@ -19,6 +19,7 @@ import {
 } from '../formStyles';
 import {
   ITEM_KEYS,
+  defaultModelGroupNames,
   formatSentence,
   groupNamer,
   primaryRoute,
@@ -144,6 +145,9 @@ function RestrictAccessBody({ type, id, itemName, groups, onClose, onApplied, ti
     .map(row => ({ row, route: primaryRoute(row) }))
     .filter(({ route }) => route);
   const changes = Array.isArray(plan?.changes) ? plan.changes : [];
+  // Groups that keep the model as "the default model" (`@default`): the
+  // restrict leaves that entry alone.
+  const defaultModelGroups = defaultModelGroupNames(plan);
 
   const toggleCandidate = groupId => {
     const next = new Set(selectedIds);
@@ -304,6 +308,14 @@ function RestrictAccessBody({ type, id, itemName, groups, onClose, onApplied, ti
                     </li>
                   ))}
                 </ul>
+              </li>
+            )}
+            {defaultModelGroups.length > 0 && (
+              <li data-testid="restrict-still-default-model">
+                {t('admin.access.restrict.stillDefaultModel', {
+                  name: itemName,
+                  groups: defaultModelGroups.join(LIST_SEPARATOR)
+                })}
               </li>
             )}
           </ul>
