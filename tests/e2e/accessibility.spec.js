@@ -376,6 +376,7 @@ const CLEAN_PAGES = [
   '/admin/integrations/jira',
   '/admin/office-integration',
   '/admin/nextcloud-embed',
+  '/admin/embed-auth',
   '/admin/localization',
   '/admin/pages',
   '/admin/shortlinks',

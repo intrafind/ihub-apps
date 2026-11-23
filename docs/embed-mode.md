@@ -126,22 +126,26 @@ allowed to show its page. The frame then gets its own session, and no token reac
 
 ### Set it up
 
-Name the sites that may show iHub in `contents/config/platform.json`:
+Open **Admin → Integrations → iHub in another site** (the card is in the **Clients** section of the
+Installed tab and on the Inbound tab), switch the sign-in on, and add the origin of every site that
+shows iHub in a frame, for example `https://ifinder.example.com`. Saved settings apply at once, without
+a restart.
+
+The page writes this block to `contents/config/platform.json`, which you can also edit by hand:
 
 ```json
 {
   "embedAuth": {
+    "enabled": true,
     "allowedHostOrigins": ["https://ifinder.example.com"]
   }
 }
 ```
 
-| Setting                          | Effect                                                                                                                          |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `embedAuth.allowedHostOrigins`   | Origins (scheme, host, port) of the sites that may show iHub in a frame. Empty or missing: the feature is off.                  |
-
-Restart the server after changing it: platform settings are read at start-up. The setting has no
-admin page yet; the admin settings pages keep it when they save.
+| Setting                        | Effect                                                                                                                                                   |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `embedAuth.enabled`            | The switch. Not `true` (or missing): the feature is off, whatever the list says, and the list is kept.                                                   |
+| `embedAuth.allowedHostOrigins` | Origins (scheme, host, port, no path) of the sites that may show iHub in a frame, at most 50. Empty: the feature is off, as the switch alone does nothing. |
 
 - Use HTTPS on both sites. The session cookie is `Secure`.
 - Register nothing new at the identity provider: the popup uses the redirect address iHub already

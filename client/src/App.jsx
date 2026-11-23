@@ -163,6 +163,7 @@ const AdminCopilotAgentPage = lazyWithRetry(
 const AdminNextcloudEmbedPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminNextcloudEmbedPage')
 );
+const AdminEmbedAuthPage = lazyWithRetry(() => import('./features/admin/pages/AdminEmbedAuthPage'));
 const AdminInstallationPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminInstallationPage')
 );
@@ -818,6 +819,7 @@ function App() {
               path="nextcloud-embed"
               element={<LazyAdminRoute component={AdminNextcloudEmbedPage} />}
             />
+            <Route path="embed-auth" element={<LazyAdminRoute component={AdminEmbedAuthPage} />} />
 
             {/* Customization */}
             {showAdminPage('ui') && (

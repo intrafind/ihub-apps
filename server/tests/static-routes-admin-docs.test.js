@@ -137,7 +137,7 @@ describe('who may show the app in a frame', () => {
   });
 
   test('applies to the shell asked for by name as well', async () => {
-    platform.embedAuth = { allowedHostOrigins: [ORIGIN] };
+    platform.embedAuth = { enabled: true, allowedHostOrigins: [ORIGIN] };
 
     const res = await request(buildApp()).get('/index.html');
 
@@ -146,10 +146,19 @@ describe('who may show the app in a frame', () => {
   });
 
   test('leaves other HTML files to the routes that serve them', async () => {
-    platform.embedAuth = { allowedHostOrigins: [ORIGIN] };
+    platform.embedAuth = { enabled: true, allowedHostOrigins: [ORIGIN] };
     fs.writeFileSync(path.join(rootDir, 'public', 'other.html'), '<!doctype html><p>other</p>');
 
     const res = await request(buildApp()).get('/other.html');
+
+    expect(res.status).toBe(200);
+    expect(res.headers['content-security-policy']).toBeUndefined();
+  });
+
+  test('is not restricted while the switch is off, whatever the list holds', async () => {
+    platform.embedAuth = { enabled: false, allowedHostOrigins: [ORIGIN] };
+
+    const res = await request(buildApp()).get('/apps');
 
     expect(res.status).toBe(200);
     expect(res.headers['content-security-policy']).toBeUndefined();
@@ -163,7 +172,7 @@ describe('who may show the app in a frame', () => {
   });
 
   test('is limited to iHub and the configured origins once the sign-in in a frame is set up', async () => {
-    platform.embedAuth = { allowedHostOrigins: [ORIGIN, 'not a url'] };
+    platform.embedAuth = { enabled: true, allowedHostOrigins: [ORIGIN, 'not a url'] };
 
     const res = await request(buildApp()).get('/apps');
 
