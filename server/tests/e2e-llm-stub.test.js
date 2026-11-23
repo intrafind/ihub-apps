@@ -184,6 +184,22 @@ describe('e2e model stub', () => {
       assert.equal(after.status, 401);
     });
 
+    test('ignores the words in the arguments of every tool marker, not only the first', async () => {
+      const second = await post({
+        messages: [user('e2e-tool:a:{"q":"x"} and e2e-tool:lookup:{"q":"e2e-auth"}')]
+      });
+      assert.equal(second.status, 200);
+      const parallel = await post({
+        messages: [user('e2e-tool:a:{} e2e-tools-parallel:b,c:[{"q":"e2e-auth"},{}]')]
+      });
+      assert.equal(parallel.status, 200);
+
+      const outside = await post({
+        messages: [user('e2e-tool:a:{} e2e-tool:b:{"q":"y"} e2e-auth')]
+      });
+      assert.equal(outside.status, 401);
+    });
+
     test('a timed e2e-slow it cannot read gets no bare e2e-slow delay', async () => {
       const previous = process.env.E2E_LLM_SLOW_MS;
       process.env.E2E_LLM_SLOW_MS = '600000';
@@ -245,6 +261,8 @@ describe('e2e model stub', () => {
   describe('parseMarker', () => {
     test('reads every marker', () => {
       assert.deepEqual(parseMarker('e2e-slow:200:5'), { kind: 'slow', ms: 200, count: 5 });
+      assert.deepEqual(parseMarker('e2e-slow:60000:2'), { kind: 'slow', ms: 60000, count: 2 });
+      assert.deepEqual(parseMarker('e2e-slow:240:500'), { kind: 'slow', ms: 240, count: 500 });
       assert.deepEqual(parseMarker('please e2e-hang:k1 now'), { kind: 'hang', key: 'k1' });
       assert.deepEqual(parseMarker('e2e-script:two-step'), { kind: 'script', name: 'two-step' });
       assert.deepEqual(parseMarker('e2e-tool:read_url'), {
@@ -279,6 +297,12 @@ describe('e2e model stub', () => {
       assert.equal(parseMarker('e2e-hang:.'), null);
       assert.equal(parseMarker('e2e-hang:..'), null);
       assert.deepEqual(parseMarker('e2e-hang:...'), { kind: 'hang', key: '...' });
+    });
+
+    test('refuses a timed reply longer than two minutes in all', () => {
+      assert.equal(parseMarker('e2e-slow:60000:3'), null);
+      assert.equal(parseMarker('e2e-slow:60000:500'), null);
+      assert.equal(parseMarker('e2e-slow:241:500'), null);
     });
 
     test('returns null without a marker', () => {
@@ -318,6 +342,8 @@ describe('e2e model stub', () => {
     test('without streaming, answers after the whole time', async () => {
       const call = open({ messages: [user('e2e-slow:200:3')] });
       await until(() => timers.queue.length === 1, 'the wait');
+      // Headers sent ahead of the clock would reach the client in these turns.
+      for (let turn = 0; turn < 20; turn++) await new Promise(resolve => setImmediate(resolve));
       assert.equal(call.status, null, 'nothing is sent before the time has passed');
       assert.equal(timers.fire().ms, 600);
       await until(() => call.ended, 'the answer');
@@ -347,6 +373,7 @@ describe('e2e model stub', () => {
       assert.equal(HANG_AUTO_RELEASE_MS, 120_000);
       const call = open({ messages: [user('e2e-hang:forgotten')] });
       await until(() => timers.queue.length === 1, 'the automatic release timer');
+      for (let turn = 0; turn < 20; turn++) await new Promise(resolve => setImmediate(resolve));
       assert.equal(call.status, null);
 
       assert.equal(timers.fire().ms, HANG_AUTO_RELEASE_MS);
@@ -607,7 +634,14 @@ describe('e2e model stub', () => {
           let text = '';
           res.setEncoding('utf8');
           res.on('data', data => (text += data));
-          res.on('end', () => resolve({ status: res.statusCode, body: JSON.parse(text) }));
+          res.on('error', reject);
+          res.on('end', () => {
+            try {
+              resolve({ status: res.statusCode, body: JSON.parse(text) });
+            } catch (error) {
+              reject(new Error(`HTTP ${res.statusCode}, body is no JSON: ${error.message}`));
+            }
+          });
         });
         req.on('error', reject);
         req.end();
