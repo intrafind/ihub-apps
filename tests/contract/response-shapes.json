@@ -298,6 +298,20 @@
       "type": "string"
     }
   },
+  "GET /api/admin/apps/:appId/_dependants": {
+    "status": 200,
+    "shape": {
+      "apps": [],
+      "groups": [
+        {
+          "id": "string",
+          "name": "string"
+        }
+      ],
+      "prompts": [],
+      "workflows": []
+    }
+  },
   "GET /api/admin/apps/:appId/inheritance": {
     "status": 200,
     "shape": {
@@ -2343,6 +2357,15 @@
       "supportsImageGeneration": "boolean",
       "supportsTools": "string",
       "url": "string"
+    }
+  },
+  "GET /api/admin/models/:modelId/_dependants": {
+    "status": 200,
+    "shape": {
+      "apps": [],
+      "groups": [],
+      "isDefault": "boolean",
+      "workflows": []
     }
   },
   "GET /api/admin/models/:modelId/tts/voices": {

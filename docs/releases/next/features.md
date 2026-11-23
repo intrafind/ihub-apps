@@ -50,3 +50,61 @@ Admins can now choose which AI model prepares app drafts, for admin apps and per
   drafts with the automatic choice. A chosen model that is disabled or deleted is marked as not
   available, and drafts use the automatic choice until another model is picked.
 - The **New app** page names the model the description is sent to, as before.
+
+## Models: Connect a Provider in One Guided Flow
+
+**Add provider**, the **Set up your models** strip and the empty Models list now open a guided
+flow (**Admin → Models → Providers → Add provider**):
+
+1. Pick where your models run: OpenAI, Azure OpenAI, Anthropic, Google, Mistral, AWS Bedrock,
+   OpenRouter, an OpenAI-compatible gateway, a self-hosted server (vLLM, LM Studio, Ollama) or
+   the iFinder Model Gateway.
+2. Enter the address and the key, or use the named environment variable instead.
+3. **Test the connection.** It shows the host and how many models it found, or why it failed and
+   what to fix, for example a link to the SSL whitelist when the server uses a private
+   certificate authority.
+4. Pick the models, choose the default model (nothing is preselected), and decide who can use
+   them: everyone who signs in, or only some groups.
+
+The models use the provider's key, and a one-prompt test at the end shows that they answer.
+**Create an app with this model** leads on to the app builder.
+
+## Models: What Still Uses a Model or App, and the Default in Your Hands
+
+- **Deleting a model or an app shows what still uses it** before you confirm: the apps, prompts,
+  workflows and groups that name it, and for a model whether it is the default and which model
+  takes over. A copy stays in the change history, and the page of a deleted model or app offers
+  **Restore from History**.
+- **Make default** in a model's row sets the platform default directly, and a switch in each row
+  turns a model on or off.
+- **When iHub picks a default model by itself**, for example after you disable or delete the
+  current default, the Models page tells you which model it chose.
+- **The app editor offers every chat model**, also disabled ones (marked "disabled"), so you can
+  choose a model for an app before switching it on for everyone.
+- **The model editor has a Test button**, and the API key help names the order in which iHub
+  looks for a key: the model's key, the provider's key, then the environment variables.
+- The **Set up your models** strip counts a self-hosted endpoint that needs no key as connected.
+
+## Access: See Who Can Use an App or a Model, and Why
+
+- **Access through "all" is explained in words.** The group card on apps, prompts, skills and
+  workflows says when a group gets the item through "all apps" (or "all prompts", …) and from
+  which group it inherits that.
+- **Models get a "Who can use this model" card** in the editor, with each group and why it has
+  access.
+- **"Why can't someone see this?"** on the app and model pages checks a group or a user and gives
+  the reasons: the item is disabled, a feature is off, the group does not grant it, or the user
+  may use no model the app allows.
+- **Restrict access** replaces "all" in the groups you pick with an explicit list without this
+  item, shows who keeps access before you apply, and records the change in each group's history.
+  Items added later then no longer appear in those groups by themselves.
+
+The access check and **Restrict access** are for administrators with full admin rights.
+
+## Documentation: Help Links and Guides for the Admin UI
+
+- The Models, Providers, Apps and Prompts pages have a **?** next to the title that opens the
+  matching section of the documentation.
+- New guides: **Set up models in the admin UI** (connect a provider, import, test, choose the
+  default, what a failed test means) and **Who can use apps, models and prompts** (groups,
+  wildcards, limiting an app or a model to some groups).
