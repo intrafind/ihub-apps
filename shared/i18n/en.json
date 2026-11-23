@@ -3093,14 +3093,6 @@
         "removeFailed": "Could not remove the confirmation",
         "exportFailed": "Could not export the CSV"
       },
-      "validation": {
-        "usernameRequired": "Username is required",
-        "usernameInvalid": "Username can only contain letters, numbers, periods, hyphens, and underscores",
-        "emailInvalid": "Please enter a valid email address",
-        "passwordRequired": "A password is required for local authentication",
-        "passwordTooShort": "Password must be at least 6 characters long",
-        "passwordMismatch": "Passwords do not match"
-      },
       "fields": {
         "username": "Username",
         "email": "Email",
@@ -4602,7 +4594,15 @@
       "preview": "Preview",
       "loadError": "Failed to load features",
       "saveError": "Failed to save features",
-      "saved": "Features updated successfully"
+      "saved": "Features updated successfully",
+      "appGeneratorModel": {
+        "label": "Model for drafts",
+        "automatic": "Automatic (recommended)",
+        "automaticCurrent": "Automatic (recommended): currently {{model}}",
+        "unavailableOption": "{{model}} (not available)",
+        "help": "The description of a new app is sent to this model, for admin apps and personal apps. It is used only for people whose groups may use it; everyone else gets the automatic choice: the standard chat model among the models they may use.",
+        "unavailable": "The model {{model}} is not an enabled chat model. Drafts use the automatic choice until you pick another model."
+      }
     },
     "iFinder": {
       "testResults": {
@@ -9113,7 +9113,44 @@
     "formErrors": {
       "title": "Please fix the following errors",
       "count_one": "({{count}} error)",
-      "count_other": "({{count}} errors)"
+      "count_other": "({{count}} errors)",
+      "rule": {
+        "required": "Fill in this field.",
+        "choose": "Choose a value.",
+        "minLength": "Enter at least {{min}} characters.",
+        "maxLength": "At most {{max}} characters.",
+        "minimum": "Enter a number of at least {{limit}}.",
+        "maximum": "Enter a number of at most {{limit}}.",
+        "exclusiveMinimum": "Enter a number greater than {{limit}}.",
+        "exclusiveMaximum": "Enter a number less than {{limit}}.",
+        "number": "Enter a number.",
+        "integer": "Enter a whole number.",
+        "pattern": "This value has the wrong format.",
+        "uri": "Enter a full web address, such as https://example.com.",
+        "email": "Enter a valid email address.",
+        "enum": "Choose one of the offered values.",
+        "uniqueItems": "Remove the duplicate entries.",
+        "additionalProperties": "This setting is not supported here. Remove it in the JSON editor.",
+        "languageText": "Enter a text for this language or remove the language.",
+        "invalid": "Check this value."
+      },
+      "field": {
+        "idRequired": "Enter an ID.",
+        "idFormat": "Use only lowercase letters, numbers, dots, underscores and hyphens.",
+        "idTaken": "This ID is already taken.",
+        "groupIdFormat": "Use only letters, numbers, dots, underscores and hyphens.",
+        "nameRequired": "Enter a name.",
+        "descriptionRequired": "Enter a description.",
+        "modelIdRequired": "Enter the model ID the provider uses.",
+        "providerRequired": "Choose a provider.",
+        "urlRequired": "Enter the API URL.",
+        "promptRequired": "Enter the prompt text.",
+        "usernameRequired": "Enter a username.",
+        "usernameFormat": "Use only letters, numbers, dots, underscores and hyphens.",
+        "passwordRequired": "Enter a password.",
+        "passwordMinLength": "Enter a password of at least {{min}} characters.",
+        "passwordMismatch": "Enter the same password again."
+      }
     },
     "resourceSelector": {
       "placeholder": "Search and select...",

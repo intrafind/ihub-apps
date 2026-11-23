@@ -363,6 +363,27 @@ Defaults for PDF exports. PDFs are rendered on the server (see [PDF Generation &
   - **opacity** (number) – Opacity level (0.0-1.0)
 - **templates** (object) – Names and descriptions of the available templates
 
+### **appGenerator**
+The AI model that prepares app drafts (feature **App Drafts with AI**; **New app** in the admin
+area and the personal **New app** page). Edited under **Admin → Platform → Features**, below the
+switch **App Drafts with AI**.
+
+```json
+{
+  "appGenerator": {
+    "modelId": "gpt-4o-mini"
+  }
+}
+```
+
+- **modelId** (string, optional) – ID of a chat model. Unset or empty: the automatic choice, the
+  standard chat model among the models the author may use (the behaviour before this setting).
+  The configured model is used only when it is enabled, is a chat model (no image model, no
+  iAssistant conversation) and the author's groups may use it. Otherwise the draft falls back to
+  the automatic choice, so authors who may not use the configured model can still prepare drafts
+  with a model they may use. A configured model that is missing or disabled is logged as a
+  warning on each draft. The draft's answer and its audit entry name the model that was used.
+
 ### **shortLinks**
 A short link (feature `shortLinks`) may redirect to a path on this server (`/apps/chat`) or to an
 absolute `http`/`https` URL whose host is on the SSRF allowlist (`ssrf.allowedHosts`, **Admin →
@@ -572,7 +593,8 @@ section that has its own admin page with its own checks (`ssl`, `ssrf`, `cors`, 
 - **`POST`** replaces each section the body names, from a fixed list (`auth`, `anonymousAuth`,
   `localAuth`, `oidcAuth`, `ldapAuth`, `ntlmAuth`, `proxyAuth`, `authorization`, `oauth`,
   `defaultLanguage`, `setup`, `aiDisclosure`, `aiAcknowledgement`, `provenance`, `mcpServer`,
-  `telemetry`, `speech`, `globalPromptVariables`, `cookieSettings`, `toolApproval`); every other
+  `telemetry`, `speech`, `globalPromptVariables`, `cookieSettings`, `toolApproval`,
+  `appGenerator`); every other
   key keeps its stored value. The body of a `GET` can be sent back unchanged: it leaves the file as
   it was.
 - **`PATCH`** is a JSON Merge Patch (RFC 7396) over the same sections and changes only the fields

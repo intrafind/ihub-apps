@@ -17,3 +17,15 @@ Changes to the preview feature **Personal apps** since 5.7.4:
   start after the update, so they stay published.
 - **Copy an existing app** on the personal **New app** page no longer lists apps connected to
   the iAssistant, because a copy would lose the connection.
+
+## App Drafts with AI: Choose the Model That Prepares Drafts
+
+Admins can now choose which AI model prepares app drafts, for admin apps and personal apps:
+**Admin → Platform → Features → Model for drafts**, below the switch **App Drafts with AI**.
+
+- **Automatic (recommended)** keeps the previous behaviour: the standard chat model among the
+  models the author may use. The option names the model it currently picks.
+- A chosen model is used only for authors whose groups may use it; everyone else keeps preparing
+  drafts with the automatic choice. A chosen model that is disabled or deleted is marked as not
+  available, and drafts use the automatic choice until another model is picked.
+- The **New app** page names the model the description is sent to, as before.

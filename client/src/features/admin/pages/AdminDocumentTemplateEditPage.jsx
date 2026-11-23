@@ -390,6 +390,8 @@ export default function AdminDocumentTemplateEditPage() {
             onChange={value => update(null, 'name', value)}
             required
             error={errors.name}
+            // No error summary here: the line announces itself.
+            announceError
           />
           <DynamicLanguageEditor
             label={t('admin.documentTemplates.edit.description', 'Description')}

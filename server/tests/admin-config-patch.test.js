@@ -501,6 +501,32 @@ describe('PATCH /api/admin/configs/platform: allowlist', () => {
   });
 });
 
+describe('PATCH /api/admin/configs/platform: the app-draft model', () => {
+  test('sets, changes and removes appGenerator.modelId; every other key stays', async () => {
+    await patch({ appGenerator: { modelId: 'small-model' } }).expect(200);
+    const { appGenerator, ...rest } = await readPlatform();
+    expect(appGenerator).toEqual({ modelId: 'small-model' });
+    expect(rest).toEqual(PLATFORM);
+
+    await patch({ appGenerator: { modelId: null } }).expect(200);
+    expect((await readPlatform()).appGenerator).toEqual({});
+  });
+
+  test('a model ID that is not a string is refused and nothing is written', async () => {
+    const before = await readText();
+    const response = await patch({ appGenerator: { modelId: 42 } });
+    expect(response.status).toBe(400);
+    expect(response.body.detail).toMatch(/appGenerator/);
+    expect(await readText()).toBe(before);
+  });
+
+  test('the section cannot be removed as a whole', async () => {
+    const response = await patch({ appGenerator: null });
+    expect(response.status).toBe(400);
+    expect(response.body.code).toBe('VALIDATION_FAILED');
+  });
+});
+
 describe('PATCH /api/admin/configs/platform: the POST checks apply', () => {
   test('section validators run on the patched section', async () => {
     const response = await patch({ cookieSettings: { disableSecure: 'yes' } });

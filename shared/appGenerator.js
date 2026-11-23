@@ -109,3 +109,19 @@ export function integrationsFromAnswer(picked, installed) {
   }
   return Object.keys(bindings).length > 0 ? bindings : undefined;
 }
+
+/**
+ * The app-draft settings of `platform.appGenerator`, read defensively: the
+ * block is optional and a hand-edited file may hold anything. Used by the
+ * server (which model prepares a draft) and by the public platform config.
+ *
+ * @param {object} [platform] - The platform configuration.
+ * @returns {{ modelId: string }} `modelId` empty means the automatic choice.
+ * @example
+ * appGeneratorSettings({ appGenerator: { modelId: ' gpt-4o ' } }); // → { modelId: 'gpt-4o' }
+ * appGeneratorSettings({}); // → { modelId: '' }
+ */
+export function appGeneratorSettings(platform) {
+  const modelId = platform?.appGenerator?.modelId;
+  return { modelId: typeof modelId === 'string' ? modelId.trim() : '' };
+}

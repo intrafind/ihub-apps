@@ -22,10 +22,12 @@ import { getSchemaByType } from '../../../utils/schemaService';
 import AdminLoadError from '../components/AdminLoadError';
 import UsageLimitsEditor from '../components/UsageLimitsEditor';
 import { buildUserSavePayload } from '../utils/userSavePayload';
+import { FIELD_KEYS } from '../utils/fieldErrors';
 import { apiErrorMessage } from '../../../utils/apiErrorMessage';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import QuotaBar from '../../../shared/components/QuotaBar';
 import { windowLabel, localizedName } from '../../../shared/utils/usageFormat';
+import useSaveAttempts from '../hooks/useSaveAttempts';
 
 /**
  * Bytes as "12.3 MB" for the file storage bar.
@@ -230,6 +232,13 @@ function AdminUserEditPage() {
   // save that fails after the editor moved on to another user does not force
   // `active` into that user's save (and one that succeeds does not clear it).
   const activeUncertainRef = useRef(null);
+  // What the form reports (`{ isValid, errors }`) and in which mode the editor is: a save
+  // from the form waits until the form is valid.
+  const [formValidation, setFormValidation] = useState({ isValid: true, errors: [] });
+  const [editorMode, setEditorMode] = useState('form');
+  // Save attempts that the form refused; from the first one on every error shows.
+  // Counted per resource: another resource or a blank "new" form opens without errors.
+  const [saveAttempts, countSaveAttempt] = useSaveAttempts(userId);
 
   // Generate a unique ID for new users
   const generateUserId = () => `user_${crypto.randomUUID().replaceAll('-', '_')}`;
@@ -337,8 +346,14 @@ function AdminUserEditPage() {
   };
 
   const handleSave = async () => {
+    // The form names what is missing at its fields and in its summary.
+    if (editorMode === 'form' && !formValidation.isValid) {
+      countSaveAttempt();
+      return;
+    }
+
     if (!user.username) {
-      setSaveError(t('admin.users.validation.usernameRequired', 'Username is required'));
+      setSaveError(t(FIELD_KEYS.usernameRequired));
       return;
     }
 
@@ -450,13 +465,18 @@ function AdminUserEditPage() {
         </div>
       )}
 
-      <form onSubmit={handleFormSubmit} className="space-y-8">
+      {/* noValidate: the form's own messages come first (see handleSave). */}
+      <form onSubmit={handleFormSubmit} noValidate className="space-y-8">
         <DualModeEditor
           value={user}
           onChange={handleDataChange}
           formComponent={UserFormEditor}
+          onValidationChange={setFormValidation}
+          onModeChange={setEditorMode}
           formProps={{
             isNewUser,
+            showAllErrors: saveAttempts > 0,
+            summaryFocusKey: saveAttempts,
             isSelf: !isNewUser && Boolean(currentUser?.id) && currentUser.id === user?.id,
             jsonSchema,
             availableGroups

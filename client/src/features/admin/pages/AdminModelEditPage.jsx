@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { fetchUsageBreakdown } from '../../../api/usageReportsAdminApi';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -21,7 +21,9 @@ import AdminEditPageShell from '../../../shared/components/AdminEditPageShell';
 import MarketplaceModelReviewNotice from '../components/marketplace/MarketplaceModelReviewNotice';
 import AdminLoadError from '../components/AdminLoadError';
 import { UsageLimitBucketFields, normalizeLimitBucket } from '../components/UsageLimitsEditor';
-import { normalizeModelHint } from '../components/ModelHintSection';
+import { withoutDroppedParts } from '../utils/modelPayload';
+import useSaveAttempts from '../hooks/useSaveAttempts';
+import { FIELD_KEYS } from '../utils/fieldErrors';
 
 /**
  * A number field that accepts 0. `''`/null/undefined mean "not set" and drop
@@ -99,6 +101,21 @@ function AdminModelEditPage() {
   const [apps, setApps] = useState([]);
   const [usage, setUsage] = useState(null);
   const [jsonSchema, setJsonSchema] = useState(null);
+  // What the form reports (`{ isValid, errors }`) and in which mode the editor is: a save
+  // from the form waits until the form is valid; the JSON mode keeps the server's check.
+  const [formValidation, setFormValidation] = useState({ isValid: true, errors: [] });
+  const [editorMode, setEditorMode] = useState('form');
+  // Save attempts that the form refused; from the first one on every error shows.
+  // Counted per resource: another resource or a blank "new" form opens without errors.
+  const [saveAttempts, countSaveAttempt] = useSaveAttempts(modelId);
+  // IDs of the existing models, so a new model hears "taken" before it is saved, and the ID
+  // the server refused as taken (409) after a save.
+  const [existingIds, setExistingIds] = useState([]);
+  const [refusedId, setRefusedId] = useState(null);
+  const takenIds = useMemo(
+    () => (refusedId ? [...existingIds, refusedId] : existingIds),
+    [existingIds, refusedId]
+  );
 
   const makeDefault = useCallback(() => {
     if (location.state?.templateModel) {
@@ -106,7 +123,8 @@ function AdminModelEditPage() {
       return {
         ...DEFAULT_MODEL_DATA,
         ...tpl,
-        id: '',
+        // A clone from the list proposes `<id>-copy` (or the next free one).
+        id: location.state.cloneId ?? '',
         enabled: tpl.enabled !== undefined ? tpl.enabled : true,
         default: false
       };
@@ -203,9 +221,6 @@ function AdminModelEditPage() {
     // Remove helper fields that shouldn't be sent to backend
     delete dataToSend.apiKeySet;
     delete dataToSend.apiKeyMasked;
-    // The `tts` block is only valid on a text-to-speech model (the schema
-    // rejects it elsewhere): switching the type away leaves it behind.
-    if (dataToSend.modelType !== 'tts') delete dataToSend.tts;
     // Only a chat model can be the default; the checkbox is hidden for the
     // other types, so a flag left over from before the type changed goes.
     if ((dataToSend.modelType || 'chat') !== 'chat') dataToSend.default = false;
@@ -222,15 +237,14 @@ function AdminModelEditPage() {
     // previously saved budget; a new model simply leaves it out.
     dataToSend.usageLimits =
       normalizeLimitBucket(data.usageLimits) || (id === 'new' ? undefined : {});
-    // Empty languages are dropped; a hint without any text is removed.
-    dataToSend.hint = normalizeModelHint(data.hint);
-    // A language added without a voice yet means nothing to save.
-    if (dataToSend.tts?.voices) {
-      const voices = Object.entries(dataToSend.tts.voices).filter(([, voice]) => voice);
-      dataToSend.tts = { ...dataToSend.tts };
-      if (voices.length) dataToSend.tts.voices = Object.fromEntries(voices);
-      else delete dataToSend.tts.voices;
-    }
+    // A `tts` block on a model that is no longer text-to-speech, voices without
+    // an ID and hint languages without text are dropped; the form validates the
+    // same result (withoutDroppedParts), so they never block a save.
+    const cleaned = withoutDroppedParts(dataToSend);
+    delete dataToSend.tts;
+    delete dataToSend.hint;
+    if (cleaned.tts) dataToSend.tts = cleaned.tts;
+    dataToSend.hint = cleaned.hint;
 
     // Remove empty and undefined fields (but preserve API key placeholder)
     Object.keys(dataToSend).forEach(key => {
@@ -288,6 +302,23 @@ function AdminModelEditPage() {
     void loadJsonSchema();
   }, [modelId, isNewModel]); // eslint-disable-line @eslint-react/exhaustive-deps
 
+  // A new model's ID must not be taken; the list is checked while the admin types.
+  useEffect(() => {
+    if (!isNewModel) return undefined;
+    let cancelled = false;
+    makeAdminApiCall('/admin/models')
+      .then(response => {
+        const items = response?.data?.items;
+        if (!cancelled && Array.isArray(items)) setExistingIds(items.map(model => model.id));
+      })
+      .catch(() => {
+        // Without the list the server still refuses a taken ID on save.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isNewModel]);
+
   // Models installed from the marketplace ask to be reviewed before they are
   // tested or enabled. Without the marketplace (feature off) there is nothing to show.
   useEffect(() => {
@@ -331,8 +362,19 @@ function AdminModelEditPage() {
     setFormData(newData);
   };
 
+  /**
+   * The form saves only when it is valid: otherwise every error shows, with the summary on
+   * top. Checks the form leaves to the browser (`required` of provider-specific fields) come
+   * next, with the browser's own message.
+   */
   const handleFormSubmit = async e => {
     e.preventDefault();
+    if (editorMode === 'form' && !formValidation.isValid) {
+      countSaveAttempt();
+      return;
+    }
+    if (typeof e.currentTarget?.reportValidity === 'function' && !e.currentTarget.reportValidity())
+      return;
     await handleSave();
   };
 
@@ -345,8 +387,19 @@ function AdminModelEditPage() {
 
       navigate('/admin/models');
     } catch (err) {
+      // A taken ID belongs to the ID field: the form says it there and in its summary.
+      // The JSON mode shows no form, so there the page says it.
+      if (isNewModel && err?.response?.status === 409) {
+        setRefusedId(formData.id);
+        countSaveAttempt();
+        if (editorMode === 'form') return;
+        setError(t(FIELD_KEYS.idTaken));
+        return;
+      }
+      // Shown on the page (an alert above the form); the edits stay. Not re-thrown: the
+      // submit handler is the last one to see it, and a re-throw ends as an unhandled
+      // rejection in the console.
       setError(getAdminApiErrorMessage(err));
-      throw err; // Re-throw to let DualModeEditor handle it
     } finally {
       setSaving(false);
     }
@@ -458,15 +511,21 @@ function AdminModelEditPage() {
 
       {fromMarketplace && <MarketplaceModelReviewNotice className="mb-6" />}
 
-      <form onSubmit={handleFormSubmit} className="space-y-8">
+      {/* noValidate: the form's own messages come first (see handleFormSubmit). */}
+      <form onSubmit={handleFormSubmit} noValidate className="space-y-8">
         <div className="space-y-8">
           {/* Main Form Editor */}
           <DualModeEditor
             value={formData}
             onChange={handleDataChange}
             formComponent={ModelFormEditor}
+            onValidationChange={setFormValidation}
+            onModeChange={setEditorMode}
             formProps={{
               isNewModel,
+              showAllErrors: saveAttempts > 0,
+              summaryFocusKey: saveAttempts,
+              takenIds,
               apps,
               usage,
               jsonSchema,

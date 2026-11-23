@@ -63,7 +63,9 @@ use less than an app built here: for example, it cannot answer from a project.
 ![New app, step 1: the description box, the templates and "Start empty"](assets/screenshots/admin-app-new-start.png)
 
 The line beside the button names the AI model your description is sent to. The model receives
-the description the same way it receives a chat message.
+the description the same way it receives a chat message. An administrator can choose this model
+under **Admin → Platform → Features → Model for drafts**; if your groups may not use that model,
+the standard chat model among the models you may use prepares the draft instead.
 
 4. The page now shows **Check your draft**. The AI has filled in **Name**, **Short description**
    and **Instructions**. Read them and change what does not fit.

@@ -117,7 +117,9 @@ export default function registerAdminAppBuilderRoutes(app, { llmClient } = {}) {
    *       the author reviews first.
    *
    *       The server decides everything about the model call. The model is the
-   *       standard chat model among the models the caller may use. The brief is
+   *       one an administrator set in `platform.appGenerator.modelId` when the
+   *       caller may use it, otherwise the standard chat model among the models
+   *       the caller may use. The brief is
    *       always the server's own, followed by its output rules. The call
    *       counts against the caller's usage limit.
    *

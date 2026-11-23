@@ -776,6 +776,18 @@ export const platformConfigSchema = z
       })
       .passthrough()
       .prefault({}),
+    // App drafts with AI (feature `appGenerator`): `modelId` names the chat
+    // model that prepares a draft, for admin and personal apps alike. Unset or
+    // empty means the automatic choice (the standard chat model among those the
+    // caller may use). A configured model is used only for callers whose groups
+    // may use it; everyone else gets the automatic choice. Read through
+    // `services/appGenerator.js` (`appGeneratorSettings`).
+    appGenerator: z
+      .object({
+        modelId: z.string().max(200).optional()
+      })
+      .passthrough()
+      .optional(),
     // Personal apps (feature `userApps`): apps users build themselves. The
     // parts `limits` and `sharing` follow `projects`; `maxAppsPerUser` of zero
     // means no limit and `ownerSnapshotMaxAgeDays` of zero never distrusts an

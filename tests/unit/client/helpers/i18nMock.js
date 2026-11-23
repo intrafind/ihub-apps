@@ -20,8 +20,37 @@
  * });
  */
 const en = require('../../../../shared/i18n/en.json');
+const de = require('../../../../shared/i18n/de.json');
+
+/**
+ * A `t` like `enT` over another dictionary.
+ *
+ * @param {Object} dictionary - The parsed `shared/i18n/<lang>.json`.
+ * @returns {function(string, (string|Object)=, Object=): string}
+ */
+function makeT(dictionary) {
+  const lookup = key => key.split('.').reduce((node, part) => node?.[part], dictionary);
+  return function translate(key, fallbackOrOptions, maybeOptions) {
+    const options =
+      fallbackOrOptions && typeof fallbackOrOptions === 'object'
+        ? fallbackOrOptions
+        : maybeOptions || {};
+    const fallback =
+      typeof fallbackOrOptions === 'string' ? fallbackOrOptions : options.defaultValue;
+    let text = lookup(key);
+    if (typeof text !== 'string' && typeof options.count === 'number') {
+      text = lookup(`${key}_${options.count === 1 ? 'one' : 'other'}`);
+    }
+    if (typeof text !== 'string') text = fallback;
+    if (typeof text !== 'string') return key;
+    return text.replace(/\{\{(\w+)\}\}/g, (_, name) => String(options[name] ?? ''));
+  };
+}
 
 const lookup = key => key.split('.').reduce((node, part) => node?.[part], en);
+
+/** Like `enT`, with the German strings of `shared/i18n/de.json`. */
+const deT = makeT(de);
 
 /**
  * @param {string} key
@@ -44,4 +73,4 @@ function enT(key, fallbackOrOptions, maybeOptions) {
   return text.replace(/\{\{(\w+)\}\}/g, (_, name) => String(options[name] ?? ''));
 }
 
-module.exports = { enT };
+module.exports = { enT, deT, makeT };
