@@ -53,6 +53,7 @@ import logger from '../../utils/logger.js';
 import { isValidReturnUrl } from '../../utils/oauthReturnUrl.js';
 import { SAFE_ID_PATTERN, isValidId, sanitizeLanguageCode } from '../../utils/pathSecurity.js';
 import configCache from '../../configCache.js';
+import { resolveAppForChat } from '../../services/userApps/resolveApp.js';
 import installedIntegrationService from '../../services/integrations/InstalledIntegrationService.js';
 import { mayUseIntegration } from '../../services/integrations/integrationAccess.js';
 import {
@@ -80,7 +81,6 @@ import {
   effectivePreferences,
   getIntegrationPreferencesRepository
 } from '../../services/integrations/IntegrationPreferencesRepository.js';
-import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
 
 const COMPONENT = 'UserIntegrations';
 
@@ -291,15 +291,18 @@ router.get('/', requireFeature('integrations'), authRequired, async (req, res) =
  * the response sent. An app the user may not open answers like one that does
  * not exist, so app ids cannot be probed.
  *
- * @returns {Object} The app; throws a ServiceError otherwise
+ * @returns {Promise<Object>} The app; throws a ServiceError otherwise
  */
-function appOfRequest(req) {
+async function appOfRequest(req) {
   const appId = req.query.app;
   if (typeof appId !== 'string' || !isValidId(appId)) {
     throw new ServiceError('INVALID_APP', 'A valid app is required');
   }
-  const app = findByIdCaseInsensitive(configCache.getApps()?.data || [], appId);
-  if (!app || app.enabled === false || !canUserAccessResource(req.user, 'apps', app.id)) {
+  // Published, or one a content admin is trying before publishing it. A
+  // personal app is granted by its owner and its shares, not by groups.
+  const found = await resolveAppForChat(appId, req.user, { req });
+  const app = found?.app;
+  if (!app || (!found.userApp && !canUserAccessResource(req.user, 'apps', app.id))) {
     throw new ServiceError('APP_NOT_FOUND', 'App not found');
   }
   return app;
@@ -328,7 +331,7 @@ function appOfRequest(req) {
  *         description: Not an app the user may open
  */
 router.get('/picker', authRequired, async (req, res) => {
-  const app = appOfRequest(req);
+  const app = await appOfRequest(req);
   const rows = await pickerRowsForApp({ app, user: req.user, language: languageOf(req) });
   res.setHeader('Cache-Control', 'private, no-store');
   return res.json({ app: app.id, rows });
@@ -381,7 +384,7 @@ router.get('/picker', authRequired, async (req, res) => {
  *         description: No storage to keep it in
  */
 router.get('/preferences', authRequired, async (req, res) => {
-  const app = appOfRequest(req);
+  const app = await appOfRequest(req);
   const defaults = appIntegrationDefaults(app);
   res.setHeader('Cache-Control', 'private, no-store');
   // A guest has no default of their own: new chats start with the app's.
@@ -415,7 +418,7 @@ router.put('/preferences', authRequired, async (req, res) => {
   if (!req.is('application/json')) {
     throw new ServiceError('JSON_REQUIRED', 'Send a JSON body');
   }
-  const app = appOfRequest(req);
+  const app = await appOfRequest(req);
   const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? req.body : {};
   const repository = getIntegrationPreferencesRepository();
   if (!repository.isAvailable()) {

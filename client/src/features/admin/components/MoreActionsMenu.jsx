@@ -12,7 +12,8 @@ import Icon from '../../../shared/components/Icon';
  * and returns focus to the button, Tab closes. Clicking outside closes.
  *
  * @param {Object} props
- * @param {Array<{ id: string, label: string, onSelect: () => void, destructive?: boolean, disabled?: boolean }>} props.items
+ * @param {Array<{ id: string, label: string, onSelect: () => void, destructive?: boolean, disabled?: boolean, hint?: string }>} props.items
+ *   `hint`: a short line under the label, for example why an entry is disabled.
  * @param {string} [props.label] Accessible name of the button
  */
 function MoreActionsMenu({ items, label }) {
@@ -58,7 +59,9 @@ function MoreActionsMenu({ items, label }) {
   };
 
   return (
-    <div className="relative" ref={rootRef}>
+    // While open the menu lifts itself above its neighbours: a row of menus
+    // (the tiles of the apps page) must not paint the next trigger over it.
+    <div className={open ? 'relative z-30' : 'relative'} ref={rootRef}>
       <button
         ref={buttonRef}
         type="button"
@@ -102,6 +105,9 @@ function MoreActionsMenu({ items, label }) {
               }`}
             >
               {item.label}
+              {item.hint && (
+                <span className="block text-xs text-gray-600 dark:text-gray-400">{item.hint}</span>
+              )}
             </button>
           ))}
         </div>

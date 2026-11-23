@@ -46,6 +46,11 @@ import {
   USER_PROJECTS_NAMESPACE,
   USER_PROJECT_SHARES_NAMESPACE
 } from '../services/projects/ProjectRepository.js';
+import {
+  USER_APPS_NAMESPACE,
+  USER_APP_SHARES_NAMESPACE,
+  USER_APP_REVISIONS_NAMESPACE
+} from '../services/userApps/UserAppRepository.js';
 import { MCP_TOOL_CATALOG_NAMESPACE } from '../services/mcp/mcpToolCatalogStore.js';
 import { CHAT_FILES_NAMESPACE } from '../services/chatFiles/ChatFileRepository.js';
 
@@ -90,6 +95,9 @@ describe('storage namespaces', () => {
       ['ProjectRepository.USER_PROJECTS_NAMESPACE', USER_PROJECTS_NAMESPACE],
       ['ProjectRepository.USER_PROJECT_SHARES_NAMESPACE', USER_PROJECT_SHARES_NAMESPACE],
       ['ProjectRepository.PROJECT_CHATS_NAMESPACE', PROJECT_CHATS_NAMESPACE],
+      ['UserAppRepository.USER_APPS_NAMESPACE', USER_APPS_NAMESPACE],
+      ['UserAppRepository.USER_APP_SHARES_NAMESPACE', USER_APP_SHARES_NAMESPACE],
+      ['UserAppRepository.USER_APP_REVISIONS_NAMESPACE', USER_APP_REVISIONS_NAMESPACE],
       ['ChatFileRepository.CHAT_FILES_NAMESPACE', CHAT_FILES_NAMESPACE]
     ]) {
       assert.ok(declared.has(ns), `${label} is '${ns}', which RUNTIME_NAMESPACES does not declare`);

@@ -1,0 +1,1 @@
+{"name": "Only a name", "description": "No instructions at all", "system": "   "}

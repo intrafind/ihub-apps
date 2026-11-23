@@ -32,6 +32,7 @@
     "@nextcloud/vite-config": {
       "vite": "$vite"
     },
-    "fast-uri": "^3.1.9"
+    "fast-uri": "^3.1.9",
+    "minimatch": "^11.0.1"
   }
 }

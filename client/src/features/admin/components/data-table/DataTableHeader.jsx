@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import Icon from '../../../../shared/components/Icon';
+import { useTranslation } from 'react-i18next';
 import { nextSort } from './useTableSort';
 
 const HIDE_BELOW = {
@@ -37,6 +38,7 @@ function SortIndicator({ active, direction }) {
 }
 
 function DataTableHeader({ columns, sort, onSortChange, hasActions, stickyHeader = true }) {
+  const { t } = useTranslation();
   const handleSortClick = column => {
     if (!column.sortable || !onSortChange) return;
     onSortChange(nextSort(sort, column.sortKey ?? column.key));
@@ -93,7 +95,7 @@ function DataTableHeader({ columns, sort, onSortChange, hasActions, stickyHeader
             scope="col"
             className="sticky right-0 z-20 bg-gray-50 dark:bg-gray-800/60 px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 whitespace-nowrap shadow-[inset_1px_0_0_rgba(0,0,0,0.12)] dark:shadow-[inset_1px_0_0_rgba(255,255,255,0.14)]"
           >
-            <span className="sr-only">Actions</span>
+            <span className="sr-only">{t('admin.common.actions', 'Actions')}</span>
           </th>
         )}
       </tr>

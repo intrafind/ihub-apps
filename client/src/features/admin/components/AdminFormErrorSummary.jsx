@@ -1,8 +1,10 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
+import { languageNamer } from '../../../shared/utils/languageName';
 
 /**
  * Validation error summary banner for admin forms.
@@ -20,16 +22,18 @@ import Icon from '../../../shared/components/Icon';
  *
  * @param {Object} props
  * @param {Object<string,string>|Array<{field?: string, fieldId?: string, message: string, label?: string}>} [props.errors]
- * @param {string} [props.title='Please fix the following errors']
+ * @param {string} [props.title] The heading; by default "Please fix the following errors"
  * @param {Object<string,string>} [props.labels] Optional `{ fieldId: 'Human label' }` map
- * @param {Object<string,string>} [props.languageDisplayNames] Optional override of language code → name
+ * @param {Object<string,string>} [props.languageDisplayNames] Optional override of language
+ *   code → name. Without it a language is named in the UI language (`Intl.DisplayNames`).
  */
-function AdminFormErrorSummary({
-  errors,
-  title = 'Please fix the following errors',
-  labels = {},
-  languageDisplayNames = DEFAULT_LANGUAGE_NAMES
-}) {
+function AdminFormErrorSummary({ errors, title, labels = {}, languageDisplayNames }) {
+  const { t, i18n } = useTranslation();
+  const uiLanguage = i18n?.language;
+  const nameLanguage = useMemo(
+    () => languageNamer(uiLanguage, languageDisplayNames),
+    [uiLanguage, languageDisplayNames]
+  );
   const containerRef = useRef(null);
   const entries = normalizeErrors(errors);
   const fieldIdsKey = entries
@@ -102,14 +106,14 @@ function AdminFormErrorSummary({
             />
             <div className="flex-1 min-w-0">
               <h3 className="text-sm font-semibold text-red-800 dark:text-red-200">
-                {title}
+                {title ?? t('admin.formErrors.title')}
                 <span className="ml-1 font-normal">
-                  ({entries.length} {entries.length === 1 ? 'error' : 'errors'})
+                  {t('admin.formErrors.count', { count: entries.length })}
                 </span>
               </h3>
               <ul className="mt-2 space-y-1 text-sm text-red-700 dark:text-red-300 list-disc list-inside">
                 {entries.map(e => {
-                  const label = e.label ?? buildLabel(e.fieldId, labels, languageDisplayNames);
+                  const label = e.label ?? buildLabel(e.fieldId, labels, nameLanguage);
                   const key = e.fieldId ?? `m-${e.message}`;
                   return (
                     <li key={key}>
@@ -189,40 +193,21 @@ function flashHighlight(el) {
   }, 1500);
 }
 
-const DEFAULT_LANGUAGE_NAMES = {
-  en: 'English',
-  de: 'German',
-  fr: 'French',
-  es: 'Spanish',
-  it: 'Italian',
-  nl: 'Dutch',
-  pt: 'Portuguese',
-  pl: 'Polish',
-  cs: 'Czech',
-  ja: 'Japanese',
-  ko: 'Korean',
-  zh: 'Chinese',
-  'zh-CN': 'Chinese (Simplified)',
-  'zh-TW': 'Chinese (Traditional)',
-  ru: 'Russian',
-  ar: 'Arabic',
-  tr: 'Turkish',
-  uk: 'Ukrainian'
-};
-
 /**
- * `description.en` → "Description — English" when `labels.description` is "Description".
+ * `description.en` → "Description — English" when `labels.description` is
+ * "Description". The longest labelled start of the path names the field:
+ * with `labels['iframeConfig.url']`, `iframeConfig.url` is that label.
  */
-function buildLabel(fieldId, labels, languageDisplayNames) {
+function buildLabel(fieldId, labels, nameLanguage) {
   if (!fieldId) return '';
   if (labels[fieldId]) return labels[fieldId];
-  const dot = fieldId.indexOf('.');
-  if (dot === -1) return humanize(fieldId);
-  const head = fieldId.slice(0, dot);
-  const tail = fieldId.slice(dot + 1);
-  const headLabel = labels[head] || humanize(head);
-  const tailLabel = languageDisplayNames[tail] || tail;
-  return `${headLabel} — ${tailLabel}`;
+  const parts = fieldId.split('.');
+  for (let length = parts.length - 1; length > 0; length -= 1) {
+    const headLabel = labels[parts.slice(0, length).join('.')];
+    if (headLabel) return `${headLabel} — ${nameLanguage(parts.slice(length).join('.'))}`;
+  }
+  if (parts.length === 1) return humanize(fieldId);
+  return `${humanize(parts[0])} — ${nameLanguage(parts.slice(1).join('.'))}`;
 }
 
 function humanize(name) {

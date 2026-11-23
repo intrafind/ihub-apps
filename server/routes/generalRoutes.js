@@ -11,10 +11,15 @@ import { authRequired } from '../middleware/authRequired.js';
 import { buildServerPath, getRelativeRequestPath } from '../utils/basePath.js';
 import { ServiceError } from '../utils/ServiceError.js';
 import { responseEtag } from '../utils/etag.js';
-import { findByIdCaseInsensitive } from '../utils/resourceLookup.js';
 import { getStorage, isStorageReady } from '../storage/bootstrap.js';
 import { describeWebSearchAvailability } from '../services/tools/webSearchResolver.js';
 import { withoutUsageGuideContent } from '../utils/appUsageGuide.js';
+import { isUserAppId } from '../../shared/userAppContent.js';
+import {
+  USER_APP_SCOPES,
+  listUserAppsFor,
+  readUserAppFor
+} from '../services/userApps/resolveApp.js';
 
 /**
  * @swagger
@@ -101,6 +106,20 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
    *       - bearerAuth: []
    *       - cookieAuth: []
    *       - anonymousAuth: []
+   *     parameters:
+   *       - in: query
+   *         name: scope
+   *         required: false
+   *         description: |
+   *           Lists personal apps instead of the apps of the installation
+   *           (feature `userApps`). `mine`: the apps the caller owns and the
+   *           apps offered to them. `shared`: the apps shared with the caller,
+   *           newest first, at most 200. `personal`: both. The answer is then
+   *           `{ items, nextCursor: null }` and carries no `ETag`. It is empty
+   *           while the feature is off. Any other value answers 400.
+   *         schema:
+   *           type: string
+   *           enum: [mine, shared, personal]
    *     responses:
    *       200:
    *         description: List of applications successfully retrieved
@@ -182,6 +201,20 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
       req.user = enhanceUserWithPermissions(null, authConfig, platformConfig);
     }
 
+    // `scope` asks for personal apps only (feature `userApps`). Without it the
+    // answer below is the one it always was, byte for byte.
+    if (req.query.scope !== undefined) {
+      const { scope } = req.query;
+      if (typeof scope !== 'string' || !USER_APP_SCOPES.includes(scope)) {
+        throw new ServiceError('VALIDATION_FAILED', 'scope must be mine, shared or personal', {
+          details: [{ path: 'scope', code: 'invalid_value', message: 'Unknown scope' }]
+        });
+      }
+      // What a caller may see changes with every share: never from a cache.
+      res.setHeader('Cache-Control', 'no-store');
+      return res.json({ items: await listUserAppsFor(req.user, scope), nextCursor: null });
+    }
+
     // Use centralized method to get filtered apps with user-specific ETag
     const { data: apps, etag: userSpecificEtag } = await configCache.getAppsForUser(
       req.user,
@@ -205,6 +238,15 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
    *       Retrieves detailed information for a specific application by its ID.
    *       The user must have permission to access the requested application.
    *       Returns a 404 error if the app doesn't exist or the user lacks permission.
+   *
+   *       A personal app (feature `userApps`, an ID of the form `uap_…`) is
+   *       answered for its owner, the people it is shared with, the receiver
+   *       of an open offer and full admins, with `ownership: "user"`, `owner`,
+   *       `permissions`, `capabilities`, `approval` and an `ETag` that holds
+   *       its revision. A caller who may see the app but not use it (switched
+   *       off, sharing suspended) gets a reduced body without instructions; a
+   *       caller who may use the company app it was published as gets
+   *       `{ id, ownership, state: "retired", publishedAs }`.
    *     tags:
    *       - Applications
    *     security:
@@ -339,13 +381,35 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
     const defaultLang = platform?.defaultLanguage || 'en';
     const language = req.headers['accept-language']?.split(',')[0] || defaultLang;
 
-    // Try to get apps from cache first
-    const { data: apps } = configCache.getApps();
-
-    if (!apps) {
+    if (!configCache.getApps()?.data) {
       throw new ServiceError('INTERNAL_ERROR', 'Failed to load apps configuration');
     }
-    const appData = findByIdCaseInsensitive(apps, appId);
+    // A personal app: its owner and its shares decide, not the group
+    // permission `apps`. Unknown, forbidden and "the feature is off" are one
+    // 404. A config app that happens to have such an ID goes on below.
+    if (isUserAppId(appId)) {
+      const personal = await readUserAppFor(appId, req.user, { req });
+      if (!personal) {
+        const errorMessage = await getLocalizedError('appNotFound', {}, language);
+        throw new ServiceError('NOT_FOUND', errorMessage);
+      }
+      if (!personal.configApp) {
+        if (personal.etag) res.setHeader('ETag', personal.etag);
+        res.setHeader('Cache-Control', 'no-store');
+        // Whether web search can work, per model, as for every app the chat opens.
+        const availability =
+          personal.kind === 'full'
+            ? await describeWebSearchAvailability(personal.body, req.user)
+            : null;
+        return res.json(
+          availability ? { ...personal.body, websearchAvailability: availability } : personal.body
+        );
+      }
+    }
+    // A content admin also gets an app that is not published yet, to try it
+    // (`getAppForRequest`); for everyone else it does not exist. The group
+    // permission below applies to both.
+    const appData = configCache.getAppForRequest(appId, req.user);
     if (!appData) {
       const errorMessage = await getLocalizedError('appNotFound', {}, language);
       throw new ServiceError('NOT_FOUND', errorMessage);

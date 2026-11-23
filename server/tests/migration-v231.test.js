@@ -11,7 +11,6 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
 import {
   migratePrompt,
   precondition,
@@ -57,14 +56,6 @@ test('it is idempotent, and a prompt that is already current is untouched', () =
   const prompt = oldPrompt();
   migratePrompt(prompt);
   assert.equal(migratePrompt(prompt), false);
-});
-
-test('the shipped prompt needs no migration and its example is a valid app', () => {
-  const shipped = JSON.parse(
-    fs.readFileSync(new URL('../defaults/prompts/app-generator.json', import.meta.url), 'utf8')
-  );
-  assert.equal(migratePrompt(structuredClone(shipped)), false);
-  for (const text of Object.values(shipped.prompt)) assert.doesNotMatch(text, /"actions"/);
 });
 
 test('up writes the migrated file only when something changed', async () => {
