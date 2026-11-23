@@ -191,6 +191,9 @@ describe('AdminProjectEditPage – create', () => {
   test('validates the id before sending anything', async () => {
     renderAt('/admin/projects/new');
 
+    // The bar is there once something is typed (here a tag, so id and name stay empty).
+    expect(screen.queryByRole('button', { name: 'Create and add items' })).toBeNull();
+    fireEvent.change(screen.getByLabelText('Tags'), { target: { value: 'hr' } });
     fireEvent.click(screen.getByRole('button', { name: 'Create and add items' }));
     expect(await screen.findByText('The project ID is required.')).toBeInTheDocument();
     expect(screen.getByText('A name is required.')).toBeInTheDocument();
@@ -258,6 +261,52 @@ describe('AdminProjectEditPage – create', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Create and add items' }));
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
     expect(screen.getByTestId('location')).toHaveTextContent('/admin/projects/handbook');
+  });
+
+  test('the bar shows once something is typed; Discard empties the form and the derived id', async () => {
+    renderAt('/admin/projects/new');
+    expect(screen.queryByRole('region', { name: 'Save changes' })).toBeNull();
+
+    fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Handbook' } });
+    const bar = screen.getByRole('region', { name: 'Save changes' });
+    expect(within(bar).getByRole('button', { name: 'Create and add items' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Project ID *')).toHaveValue('handbook');
+    // An id typed by hand stops the name from filling it: Discard must end that too.
+    fireEvent.change(screen.getByLabelText('Project ID *'), { target: { value: 'hr' } });
+
+    fireEvent.click(within(bar).getByRole('button', { name: 'Discard' }));
+    expect(screen.queryByRole('region', { name: 'Save changes' })).toBeNull();
+    expect(screen.getByLabelText('Project name')).toHaveValue('');
+    expect(screen.getByLabelText('Project ID *')).toHaveValue('');
+    // The id follows the name again, as on a fresh page.
+    fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Other' } });
+    expect(screen.getByLabelText('Project ID *')).toHaveValue('other');
+  });
+
+  test('text typed into Tags counts as a change even when it parses to no tag', () => {
+    renderAt('/admin/projects/new');
+    fireEvent.change(screen.getByLabelText('Tags'), { target: { value: ',' } });
+    expect(screen.getByRole('region', { name: 'Save changes' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
+    expect(screen.getByLabelText('Tags')).toHaveValue('');
+  });
+
+  test('Enter in a field creates the project, like the bar', async () => {
+    mockApi.createAdminProject.mockResolvedValue(makeProject([]));
+    mockApi.fetchAdminProject.mockResolvedValue(makeProject([]));
+    renderAt('/admin/projects/new');
+    fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Handbook' } });
+    fireEvent.click(screen.getByTestId('implicit-submit'));
+    await waitFor(() => expect(mockApi.createAdminProject).toHaveBeenCalledTimes(1));
+  });
+
+  test('a failed create keeps the bar and shows the reason in it', async () => {
+    mockApi.createAdminProject.mockRejectedValue(new Error('Disk full'));
+    renderAt('/admin/projects/new');
+    fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Handbook' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create and add items' }));
+    const bar = await screen.findByRole('region', { name: 'Save changes' });
+    await waitFor(() => expect(within(bar).getByText('Disk full')).toBeInTheDocument());
   });
 
   test('shows the server message when the id is taken', async () => {
@@ -762,7 +811,7 @@ describe('AdminProjectEditPage – try in chat', () => {
 
   test('offers no chat while the project does not exist yet', async () => {
     renderAt('/admin/projects/new');
-    await screen.findByRole('button', { name: 'Create and add items' });
+    await screen.findByLabelText('Project name');
     expect(screen.queryByRole('button', { name: 'Try in chat' })).toBeNull();
   });
 });

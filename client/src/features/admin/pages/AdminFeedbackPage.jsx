@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useMemo } from 'react';
+import { useRef, useState } from 'react';
 import { fetchUsageFeedbackSummary } from '../../../api/usageReportsAdminApi';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
@@ -23,6 +23,7 @@ import AdminLoadGate from '../components/AdminLoadGate';
 import { useAdminConfigLoad } from '../hooks/useAdminConfigLoad';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
+import AdminSaveBar from '../components/AdminSaveBar';
 
 const TRACKING_MODES = ['anonymous', 'pseudonymous', 'identified'];
 
@@ -59,6 +60,14 @@ function AdminFeedbackPage() {
   const [activeTab, setActiveTab] = useState('settings');
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
+  // The last save of the settings failed. The server's state can then be unknown (a response
+  // lost after the write), so the bar stays until a save succeeds or the edits are discarded,
+  // even if the switches were put back to what was loaded.
+  const [saveFailed, setSaveFailed] = useState(false);
+  // The setting whose request failed: the server may hold its new value although the page
+  // still counts the old one as saved (a lost response). The next save sends it again, also
+  // when the admin put the field back to what was loaded, so that value reaches the server.
+  const uncertainFieldsRef = useRef(new Set());
 
   // Saved state, as it came from the server
   const [saved, setSaved] = useState({
@@ -71,7 +80,7 @@ function AdminFeedbackPage() {
   // Whether the settings loaded; until then (or after a failed load) the page
   // never counts as holding unsaved edits.
   const [hasLoaded, setHasLoaded] = useState(false);
-  const { blocker } = useUnsavedChanges(hasLoaded ? saved : null, draft);
+  const { blocker, isDirty } = useUnsavedChanges(hasLoaded ? saved : null, draft);
   const [apps, setApps] = useState([]);
   const [appSaving, setAppSaving] = useState(null);
   const [usage, setUsage] = useState(null);
@@ -120,14 +129,6 @@ function AdminFeedbackPage() {
   });
   const ready = settingsLoad.status === 'ready';
 
-  const hasChanges = useMemo(
-    () =>
-      draft.collectionEnabled !== saved.collectionEnabled ||
-      draft.storageEnabled !== saved.storageEnabled ||
-      draft.trackingMode !== saved.trackingMode,
-    [draft, saved]
-  );
-
   const handleSave = async () => {
     if (!ready) return;
     // The three settings are saved by three requests. Each one's baseline
@@ -135,12 +136,22 @@ function AdminFeedbackPage() {
     // (the platform save, say) the page compares against what the
     // server now holds, and a retry does not resend what was already saved.
     const target = draft;
-    const markSaved = field => setSaved(prev => ({ ...prev, [field]: target[field] }));
+    const markSaved = field => {
+      uncertainFieldsRef.current.delete(field);
+      setSaved(prev => ({ ...prev, [field]: target[field] }));
+    };
+    // Whether `field` is to be written: it differs from what is saved, or a write of it failed
+    // and has not succeeded since (every such field is kept, not only the latest).
+    const wanted = field => target[field] !== saved[field] || uncertainFieldsRef.current.has(field);
+    // Names the setting being written, so a failure can mark it uncertain.
+    let writing = null;
     try {
       setSaving(true);
+      setSaveFailed(false);
       setMessage(null);
 
-      if (target.collectionEnabled !== saved.collectionEnabled) {
+      if (wanted('collectionEnabled')) {
+        writing = 'collectionEnabled';
         await makeAdminApiCall('/admin/features', {
           method: 'PUT',
           body: { feedback: target.collectionEnabled }
@@ -148,7 +159,8 @@ function AdminFeedbackPage() {
         markSaved('collectionEnabled');
       }
 
-      if (target.storageEnabled !== saved.storageEnabled) {
+      if (wanted('storageEnabled')) {
+        writing = 'storageEnabled';
         // A scoped PATCH of this one switch, never a full-config POST: the
         // tracking-mode save below writes platform.json too, and a guarded POST
         // would report it as a conflict. (A POST also never writes `features`.)
@@ -159,14 +171,18 @@ function AdminFeedbackPage() {
         markSaved('storageEnabled');
       }
 
-      if (target.trackingMode !== saved.trackingMode) {
+      if (wanted('trackingMode')) {
+        writing = 'trackingMode';
         await updateAdminUsageTrackingMode(target.trackingMode);
         markSaved('trackingMode');
       }
 
+      uncertainFieldsRef.current.clear();
       setMessage({ type: 'success', text: t('admin.feedback.saved', 'Feedback settings saved') });
       refreshConfig();
     } catch (error) {
+      if (writing) uncertainFieldsRef.current.add(writing);
+      setSaveFailed(true);
       setMessage({
         type: 'error',
         text:
@@ -176,6 +192,14 @@ function AdminFeedbackPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  // Back to what was loaded or last saved. The per-app switches save at once and stay.
+  const handleDiscard = () => {
+    setDraft(saved);
+    uncertainFieldsRef.current.clear();
+    setSaveFailed(false);
+    setMessage(null);
   };
 
   const handleAppToggle = async (appId, enabled) => {
@@ -320,32 +344,14 @@ function AdminFeedbackPage() {
         </div>
       </div>
 
-      <div className="flex items-center justify-between pt-2">
-        <div>
-          {message && (
-            <p
-              className={`text-sm ${
-                message.type === 'error'
-                  ? 'text-red-600 dark:text-red-400'
-                  : 'text-green-700 dark:text-green-400'
-              }`}
-            >
-              {message.text}
-            </p>
-          )}
-        </div>
-        <button
-          onClick={handleSave}
-          disabled={!hasChanges || saving}
-          className={`px-6 py-2 rounded-lg text-sm font-medium text-white transition-colors ${
-            hasChanges && !saving
-              ? 'bg-indigo-600 hover:bg-indigo-700 cursor-pointer'
-              : 'bg-gray-300 dark:bg-gray-600 cursor-not-allowed'
-          }`}
-        >
-          {saving ? t('common.saving', 'Saving...') : t('common.saveChanges', 'Save Changes')}
-        </button>
-      </div>
+      {message?.type === 'error' && (
+        <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+          {message.text}
+        </p>
+      )}
+      {message && message.type !== 'error' && (
+        <output className="block text-sm text-green-700 dark:text-green-400">{message.text}</output>
+      )}
     </div>
   );
 
@@ -424,6 +430,14 @@ function AdminFeedbackPage() {
           </>
         )}
       </div>
+      {/* Nothing to save while the settings are loading or could not be loaded. */}
+      <AdminSaveBar
+        dirty={ready && (isDirty || saveFailed)}
+        saving={saving}
+        onSave={() => void handleSave()}
+        onDiscard={handleDiscard}
+        message={saveFailed && message?.type === 'error' ? message.text : undefined}
+      />
       <UnsavedChangesDialog blocker={blocker} />
     </div>
   );

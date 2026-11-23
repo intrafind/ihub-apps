@@ -144,7 +144,10 @@ describe('Getting started checklist on the Overview', () => {
     );
     expect(within(admin).getByText(/still signs in with the shipped password/)).toBeInTheDocument();
     // No usable credential on an enabled model: the provider step is open as well.
-    expect(within(step('provider')).getByRole('link')).toHaveAttribute('href', '/admin/providers');
+    expect(within(step('provider')).getByRole('link')).toHaveAttribute(
+      'href',
+      '/admin/providers/connect'
+    );
     // 27 apps: no "create your first app" step that would tick for apps nobody created.
     expect(step('app')).toBeNull();
     // The platform status card is still shown next to it.

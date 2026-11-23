@@ -30,6 +30,25 @@ jest.mock('react-i18next', () => ({
 
 const SSLConfig = require('../../../client/src/features/admin/components/SSLConfig').default;
 const SsrfConfig = require('../../../client/src/features/admin/components/SsrfConfig').default;
+const {
+  SaveSectionsBar,
+  SaveSectionsProvider
+} = require('../../../client/src/features/admin/components/SaveSections');
+
+const SAVE_BAR_NAME = /saveBar|Save changes/i;
+/** The page's one save bar: sections register with it, so tests render them under it. */
+const withSaveBar = ui => (
+  <SaveSectionsProvider>
+    {ui}
+    <SaveSectionsBar />
+  </SaveSectionsProvider>
+);
+const clickBarSave = () =>
+  fireEvent.click(
+    within(screen.getByRole('region', { name: SAVE_BAR_NAME }))
+      .getAllByRole('button')
+      .at(-1)
+  );
 
 function answer(routes) {
   mockMakeAdminApiCall.mockReset();
@@ -121,10 +140,12 @@ describe('SSRF card', () => {
       return { data: {} };
     });
     render(
-      <>
-        <SSLConfig />
-        <SsrfConfig />
-      </>
+      withSaveBar(
+        <>
+          <SSLConfig />
+          <SsrfConfig />
+        </>
+      )
     );
 
     const section = await screen.findByTestId('ssrf-tls-trusted-hosts');
@@ -137,7 +158,7 @@ describe('SSRF card', () => {
     // Added on the SSL card, not saved yet: the SSRF card does not show it.
     expect(within(section).queryByText('new.internal')).toBeNull();
 
-    fireEvent.click(screen.getByText('admin.system.ssl.saveConfig'));
+    clickBarSave();
     await waitFor(() => expect(within(section).getByText('new.internal')).toBeInTheDocument());
   });
 });

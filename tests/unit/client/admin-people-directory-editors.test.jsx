@@ -532,7 +532,7 @@ describe('People directory (LDAP) editor', () => {
     await within(editor).findByLabelText('Sign-in provider');
 
     fireEvent.click(within(editor).getByLabelText('Connect directly'));
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
     expect(await screen.findByText('Please check these fields')).toBeInTheDocument();
     expect(mockApi.updateInstalledIntegration).not.toHaveBeenCalled();
 
@@ -543,7 +543,7 @@ describe('People directory (LDAP) editor', () => {
       target: { value: 'dc=example,dc=org' }
     });
     fireEvent.click(within(editor).getByLabelText('External'));
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
 
     await waitFor(() => expect(mockApi.updateInstalledIntegration).toHaveBeenCalledTimes(1));
     const [id, body] = mockApi.updateInstalledIntegration.mock.calls[0];
@@ -597,7 +597,7 @@ describe('LDAP browser editor', () => {
       target: { value: 'ou=groups,dc=corp,dc=example' }
     });
     fireEvent.click(within(editor).getByLabelText('An account of its own'));
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
     expect(await screen.findByText('Please check these fields')).toBeInTheDocument();
     expect(mockApi.updateInstalledIntegration).not.toHaveBeenCalled();
 
@@ -607,7 +607,7 @@ describe('LDAP browser editor', () => {
     fireEvent.change(within(editor).getByTestId('credential-lb-bind-password-ref'), {
       target: { value: 'ldap-reader' }
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
     await waitFor(() => expect(mockApi.updateInstalledIntegration).toHaveBeenCalledTimes(1));
     const [id, body] = mockApi.updateInstalledIntegration.mock.calls[0];
     expect(id).toBe('corp-browser');
@@ -639,7 +639,7 @@ describe('Entra ID directory editor', () => {
       target: { value: ' 11111111-2222-3333-4444-555555555555 ' }
     });
     expect(within(editor).queryByTestId('entra-missing')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
     await waitFor(() => expect(mockApi.updateInstalledIntegration).toHaveBeenCalledTimes(1));
     const [id, body] = mockApi.updateInstalledIntegration.mock.calls[0];
     expect(id).toBe('entra');

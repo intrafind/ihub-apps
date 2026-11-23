@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { makeAdminApiCall, getAdminApiErrorMessage } from '../../../../api/adminApi';
 import Switch from '../../../../shared/components/Switch';
-import { CHECKBOX_CLASS, HELP_CLASS, SECONDARY_BUTTON_CLASS } from '../formStyles';
+import { CHECKBOX_CLASS, HELP_CLASS, SECONDARY_BUTTON_CLASS, INPUT_CLASS } from '../formStyles';
 import { RequiredCheckbox } from './IntegrationBindingOptions';
 import { implicitActionNames, selectedActionNames, toggleBindingAction } from './bindingActions';
 import {
@@ -19,9 +19,6 @@ import {
 
 const BINDING_KEY = 'iassistant';
 const ASK_ACTION = 'ask';
-
-const INPUT_CLASS =
-  'mt-1 block w-full rounded-md border-admin-control-border shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-admin-control-border-dark dark:text-white disabled:opacity-60 disabled:cursor-not-allowed';
 
 /**
  * IAssistantSection - iAssistant integration configuration card for the App form.
@@ -201,7 +198,10 @@ function IAssistantSection({
 
               {/* Profile ID */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                <label
+                  htmlFor="app-iassistant-profile-id"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                >
                   {t('admin.apps.edit.iassistantProfileId', 'Profile ID')}
                 </label>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
@@ -211,12 +211,13 @@ function IAssistantSection({
                   )}
                 </p>
                 <input
+                  id="app-iassistant-profile-id"
                   type="text"
                   value={app.iassistant?.profileId ?? ''}
                   onChange={e => handleIAssistantChange({ profileId: e.target.value })}
                   placeholder="iassistant-workspace"
                   disabled={usesAssistant}
-                  className={INPUT_CLASS}
+                  className={`${INPUT_CLASS} mt-1`}
                 />
                 {usesAssistant && (
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -227,7 +228,10 @@ function IAssistantSection({
 
               {/* Search Profile */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                <label
+                  htmlFor="app-iassistant-search-profile"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                >
                   {t('admin.apps.edit.iassistantSearchProfile', 'Search Profile')}
                 </label>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
@@ -237,12 +241,13 @@ function IAssistantSection({
                   )}
                 </p>
                 <input
+                  id="app-iassistant-search-profile"
                   type="text"
                   value={app.iassistant?.searchProfile ?? ''}
                   onChange={e => handleIAssistantChange({ searchProfile: e.target.value })}
                   placeholder="searchprofile-standard"
                   disabled={usesAssistant || allSearchProfiles}
-                  className={INPUT_CLASS}
+                  className={`${INPUT_CLASS} mt-1`}
                 />
                 {usesAssistant && (
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -282,7 +287,10 @@ function IAssistantSection({
 
               {/* Extra Context */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                <label
+                  htmlFor="app-iassistant-extra-context"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                >
                   {t('admin.apps.edit.iassistantExtraContext', 'Extra Context')}
                 </label>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
@@ -292,16 +300,20 @@ function IAssistantSection({
                   )}
                 </p>
                 <textarea
+                  id="app-iassistant-extra-context"
                   value={app.iassistant?.extraContext ?? ''}
                   onChange={e => handleIAssistantChange({ extraContext: e.target.value })}
                   rows={3}
-                  className="mt-1 block w-full rounded-md border border-admin-control-border shadow-xs focus:border-admin-accent focus:ring-admin-accent sm:text-sm dark:bg-gray-700 dark:border-admin-control-border-dark dark:text-white"
+                  className={`${INPUT_CLASS} mt-1`}
                 />
               </div>
 
               {/* System Prompt Preamble */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                <label
+                  htmlFor="app-iassistant-system-prompt-preamble"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                >
                   {t('admin.apps.edit.iassistantSystemPromptPreamble', 'System Prompt Preamble')}
                 </label>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
@@ -311,10 +323,11 @@ function IAssistantSection({
                   )}
                 </p>
                 <textarea
+                  id="app-iassistant-system-prompt-preamble"
                   value={app.iassistant?.systemPromptPreamble ?? ''}
                   onChange={e => handleIAssistantChange({ systemPromptPreamble: e.target.value })}
                   rows={3}
-                  className="mt-1 block w-full rounded-md border border-admin-control-border shadow-xs focus:border-admin-accent focus:ring-admin-accent sm:text-sm dark:bg-gray-700 dark:border-admin-control-border-dark dark:text-white"
+                  className={`${INPUT_CLASS} mt-1`}
                 />
               </div>
 
@@ -333,7 +346,7 @@ function IAssistantSection({
                     </label>
                     <select
                       id="iassistant-picker-mode"
-                      className={INPUT_CLASS}
+                      className={`${INPUT_CLASS} mt-1`}
                       value={mode}
                       onChange={e =>
                         onBindingChange(applyPickerMode(binding, e.target.value, app.iassistant))

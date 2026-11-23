@@ -14,6 +14,7 @@ import PromptVersionsModal from '../../prompts/components/PromptVersionsModal';
 import { promptErrorMessage } from '../../prompts/utils/promptErrors';
 import { highlightVariables } from '../../../utils/highlightVariables';
 import { DataTable, SearchInput } from './data-table';
+import { SaveSectionsBar, SaveSectionsProvider, useSaveSection } from './SaveSections';
 
 const inputClass =
   'block w-full rounded-md border border-admin-control-border dark:border-admin-control-border-dark bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500';
@@ -199,28 +200,51 @@ function PreviewDialog({ prompt, onClose }) {
  * with. Full admins only — a content admin sees the list but not this form.
  */
 function UserPromptSettingsPanel() {
-  const { t } = useTranslation();
-  const [state, setState] = useState(null);
-  const [draft, setDraft] = useState(null);
-  const [groups, setGroups] = useState([]);
+  const [initial, setInitial] = useState(null);
   const [forbidden, setForbidden] = useState(false);
+  const [loadError, setLoadError] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+    makeAdminApiCall('/admin/prompts/user-settings')
+      .then(response => {
+        if (active) setInitial(response.data);
+      })
+      .catch(err => {
+        if (!active) return;
+        if (err?.response?.status === 403 || err?.response?.status === 401) setForbidden(true);
+        else setLoadError(getAdminApiErrorMessage(err));
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  if (forbidden) return null;
+  if (!initial) {
+    return loadError ? <p className="text-sm text-red-600 dark:text-red-400">{loadError}</p> : null;
+  }
+  return <UserPromptSettingsForm initial={initial} />;
+}
+
+/**
+ * The loaded settings. It registers with the page's save bar and has no Save button of its
+ * own; nothing is registered (so no bar) before the settings loaded.
+ *
+ * @param {Object} props
+ * @param {Object} props.initial - `GET /admin/prompts/user-settings` as returned
+ */
+function UserPromptSettingsForm({ initial }) {
+  const { t } = useTranslation();
+  const [state, setState] = useState(initial);
+  const [draft, setDraft] = useState(initial.settings);
+  const [groups, setGroups] = useState([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     let active = true;
-    makeAdminApiCall('/admin/prompts/user-settings')
-      .then(response => {
-        if (!active) return;
-        setState(response.data);
-        setDraft(response.data.settings);
-      })
-      .catch(err => {
-        if (!active) return;
-        if (err?.response?.status === 403 || err?.response?.status === 401) setForbidden(true);
-        else setError(getAdminApiErrorMessage(err));
-      });
     fetchAdminGroups()
       .then(data => {
         if (active) setGroups(Object.keys(data?.groups || {}).filter(id => id !== 'anonymous'));
@@ -230,11 +254,6 @@ function UserPromptSettingsPanel() {
       active = false;
     };
   }, []);
-
-  if (forbidden) return null;
-  if (!draft) {
-    return error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null;
-  }
 
   const update = patch => {
     setDraft(prev => ({ ...prev, ...patch }));
@@ -257,12 +276,22 @@ function UserPromptSettingsPanel() {
       setState(response.data);
       setDraft(response.data.settings);
       setSaved(true);
+      return true;
     } catch (err) {
       setError(getAdminApiErrorMessage(err));
+      return false;
     } finally {
       setSaving(false);
     }
   };
+
+  const discard = () => {
+    setDraft(state.settings);
+    setSaved(false);
+    setError(null);
+  };
+
+  useSaveSection('user-prompt-settings', { dirty, saving, error, save, discard });
 
   const toggle = (label, checked, onChange, help) => (
     <label className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300">
@@ -392,26 +421,12 @@ function UserPromptSettingsPanel() {
             </div>
           </fieldset>
         )}
-        {error && (
-          <p className="text-sm text-red-600 dark:text-red-400" role="alert">
-            {error}
+        {/* The save error is shown by the page's bar; Save and Discard live there too. */}
+        {saved && !dirty && (
+          <p className="text-right text-sm text-green-700 dark:text-green-400">
+            {t('admin.prompts.userPrompts.saved', 'Saved')}
           </p>
         )}
-        <div className="flex items-center justify-end gap-3">
-          {saved && !dirty && (
-            <span className="text-sm text-green-700 dark:text-green-400">
-              {t('admin.prompts.userPrompts.saved', 'Saved')}
-            </span>
-          )}
-          <button
-            type="button"
-            onClick={save}
-            disabled={!dirty || saving}
-            className="px-4 py-2 text-sm rounded-md bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
-          >
-            {t('common.save', 'Save')}
-          </button>
-        </div>
       </div>
     </details>
   );
@@ -589,139 +604,142 @@ function AdminUserPromptsTab() {
   ];
 
   return (
-    <div className="mt-6">
-      <p className="text-sm text-gray-600 dark:text-gray-300">
-        {t(
-          'admin.prompts.userPrompts.intro',
-          'Prompts users have shared with a group or with everyone. You can edit, re-share, delete or promote them to a global prompt; private prompts and prompts shared with named users only are not listed.'
-        )}
-      </p>
-      <UserPromptSettingsPanel />
-
-      {!available && (
-        <p className="mt-4 text-sm text-amber-700 dark:text-amber-300">
+    <SaveSectionsProvider>
+      <div className="mt-6">
+        <p className="text-sm text-gray-600 dark:text-gray-300">
           {t(
-            'admin.prompts.userPrompts.storageDown',
-            'The storage provider is not available, so users cannot keep prompts right now.'
+            'admin.prompts.userPrompts.intro',
+            'Prompts users have shared with a group or with everyone. You can edit, re-share, delete or promote them to a global prompt; private prompts and prompts shared with named users only are not listed.'
           )}
         </p>
-      )}
-      {notice && (
-        <div
-          role="status"
-          className="mt-4 flex items-center justify-between rounded-md bg-green-50 dark:bg-green-900/30 px-4 py-2 text-sm text-green-700 dark:text-green-300"
-        >
-          <span>{notice}</span>
-          <button
-            type="button"
-            onClick={() => setNotice(null)}
-            aria-label={t('common.close', 'Close')}
-          >
-            <Icon name="x" size="sm" />
-          </button>
-        </div>
-      )}
-      {error && (
-        <p className="mt-4 text-sm text-red-600 dark:text-red-400" role="alert">
-          {error}
-        </p>
-      )}
+        <UserPromptSettingsPanel />
 
-      <div className="mt-6 flex flex-wrap items-center gap-3">
-        <SearchInput
-          value={search}
-          onChange={setSearch}
-          placeholder={t('admin.prompts.searchPlaceholder', 'Search prompts...')}
-        />
-        {truncated && (
-          <span className="text-xs text-gray-500 dark:text-gray-400">
-            {t('admin.prompts.userPrompts.truncated', 'Showing the first prompts only')}
-          </span>
+        {!available && (
+          <p className="mt-4 text-sm text-amber-700 dark:text-amber-300">
+            {t(
+              'admin.prompts.userPrompts.storageDown',
+              'The storage provider is not available, so users cannot keep prompts right now.'
+            )}
+          </p>
         )}
-      </div>
+        {notice && (
+          <div
+            role="status"
+            className="mt-4 flex items-center justify-between rounded-md bg-green-50 dark:bg-green-900/30 px-4 py-2 text-sm text-green-700 dark:text-green-300"
+          >
+            <span>{notice}</span>
+            <button
+              type="button"
+              onClick={() => setNotice(null)}
+              aria-label={t('common.close', 'Close')}
+            >
+              <Icon name="x" size="sm" />
+            </button>
+          </div>
+        )}
+        {error && (
+          <p className="mt-4 text-sm text-red-600 dark:text-red-400" role="alert">
+            {error}
+          </p>
+        )}
 
-      <div className="mt-4">
-        <DataTable
-          columns={columns}
-          data={filtered}
-          getRowId={prompt => prompt.id}
-          actions={actions}
-          loading={loading}
-          onRowClick={prompt => setPreview(prompt)}
-          empty={{
-            icon: 'users',
-            title: t('admin.prompts.userPrompts.empty', 'No shared user prompts'),
-            description: t(
-              'admin.prompts.userPrompts.emptyDesc',
-              'When users share prompts with a group or with everyone, they show up here.'
-            )
-          }}
-        />
-      </div>
+        <div className="mt-6 flex flex-wrap items-center gap-3">
+          <SearchInput
+            value={search}
+            onChange={setSearch}
+            placeholder={t('admin.prompts.searchPlaceholder', 'Search prompts...')}
+          />
+          {truncated && (
+            <span className="text-xs text-gray-500 dark:text-gray-400">
+              {t('admin.prompts.userPrompts.truncated', 'Showing the first prompts only')}
+            </span>
+          )}
+        </div>
 
-      {preview && <PreviewDialog prompt={preview} onClose={() => setPreview(null)} />}
-      {editing && (
-        <PromptEditorModal
-          prompt={editing}
-          onClose={() => setEditing(null)}
-          onSaved={() => {
-            setEditing(null);
-            done(t('prompts.notices.saved', 'Prompt saved'));
-          }}
+        <div className="mt-4">
+          <DataTable
+            columns={columns}
+            data={filtered}
+            getRowId={prompt => prompt.id}
+            actions={actions}
+            loading={loading}
+            onRowClick={prompt => setPreview(prompt)}
+            empty={{
+              icon: 'users',
+              title: t('admin.prompts.userPrompts.empty', 'No shared user prompts'),
+              description: t(
+                'admin.prompts.userPrompts.emptyDesc',
+                'When users share prompts with a group or with everyone, they show up here.'
+              )
+            }}
+          />
+        </div>
+
+        {preview && <PreviewDialog prompt={preview} onClose={() => setPreview(null)} />}
+        {editing && (
+          <PromptEditorModal
+            prompt={editing}
+            onClose={() => setEditing(null)}
+            onSaved={() => {
+              setEditing(null);
+              done(t('prompts.notices.saved', 'Prompt saved'));
+            }}
+          />
+        )}
+        {sharing && (
+          <PromptShareDialog
+            prompt={sharing}
+            onClose={() => setSharing(null)}
+            onSaved={() => {
+              setSharing(null);
+              done(t('prompts.notices.shared', 'Sharing updated'));
+            }}
+          />
+        )}
+        {history && (
+          <PromptVersionsModal
+            prompt={history}
+            canRestore
+            onClose={() => setHistory(null)}
+            onRestored={() => {
+              setHistory(null);
+              done(t('prompts.notices.restored', 'Version restored'));
+            }}
+          />
+        )}
+        {promoting && (
+          <PromoteDialog
+            prompt={promoting}
+            onClose={() => setPromoting(null)}
+            onPromoted={globalPrompt => {
+              setPromoting(null);
+              done(
+                t('admin.prompts.userPrompts.promoted', {
+                  defaultValue: 'Promoted to global prompt {{id}}',
+                  id: globalPrompt?.id || ''
+                })
+              );
+            }}
+          />
+        )}
+        <ConfirmDialog
+          isOpen={Boolean(deleting)}
+          title={t('prompts.delete.title', 'Delete prompt?')}
+          message={t('admin.prompts.userPrompts.deleteMessage', {
+            defaultValue:
+              '“{{name}}” by {{owner}} will be deleted for its owner and everyone it is shared with.',
+            name: deleting?.name || '',
+            owner: deleting?.owner?.name || deleting?.owner?.id || ''
+          })}
+          confirmLabel={t('common.delete', 'Delete')}
+          denyLabel={t('common.cancel', 'Cancel')}
+          danger
+          onConfirm={confirmDelete}
+          onDeny={() => setDeleting(null)}
         />
-      )}
-      {sharing && (
-        <PromptShareDialog
-          prompt={sharing}
-          onClose={() => setSharing(null)}
-          onSaved={() => {
-            setSharing(null);
-            done(t('prompts.notices.shared', 'Sharing updated'));
-          }}
-        />
-      )}
-      {history && (
-        <PromptVersionsModal
-          prompt={history}
-          canRestore
-          onClose={() => setHistory(null)}
-          onRestored={() => {
-            setHistory(null);
-            done(t('prompts.notices.restored', 'Version restored'));
-          }}
-        />
-      )}
-      {promoting && (
-        <PromoteDialog
-          prompt={promoting}
-          onClose={() => setPromoting(null)}
-          onPromoted={globalPrompt => {
-            setPromoting(null);
-            done(
-              t('admin.prompts.userPrompts.promoted', {
-                defaultValue: 'Promoted to global prompt {{id}}',
-                id: globalPrompt?.id || ''
-              })
-            );
-          }}
-        />
-      )}
-      <ConfirmDialog
-        isOpen={Boolean(deleting)}
-        title={t('prompts.delete.title', 'Delete prompt?')}
-        message={t('admin.prompts.userPrompts.deleteMessage', {
-          defaultValue:
-            '“{{name}}” by {{owner}} will be deleted for its owner and everyone it is shared with.',
-          name: deleting?.name || '',
-          owner: deleting?.owner?.name || deleting?.owner?.id || ''
-        })}
-        confirmLabel={t('common.delete', 'Delete')}
-        denyLabel={t('common.cancel', 'Cancel')}
-        danger
-        onConfirm={confirmDelete}
-        onDeny={() => setDeleting(null)}
-      />
-    </div>
+        <SaveSectionsBar />
+      </div>
+    </SaveSectionsProvider>
   );
 }
 

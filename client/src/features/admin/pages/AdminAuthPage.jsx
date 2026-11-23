@@ -3,11 +3,13 @@
 
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 import Icon from '../../../shared/components/Icon';
 import DualModeEditor from '../../../shared/components/DualModeEditor';
 import PlatformFormEditor from '../components/PlatformFormEditor';
 import AdminLoadGate from '../components/AdminLoadGate';
 import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
+import AdminSaveBar from '../components/AdminSaveBar';
 import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import { getSchemaByType } from '../../../utils/schemaService';
@@ -76,7 +78,7 @@ function AdminAuthPage() {
   });
   const ready = load.status === 'ready';
 
-  const { blocker } = useUnsavedChanges(savedConfig, config);
+  const { blocker, isDirty } = useUnsavedChanges(savedConfig, config);
 
   const handleSave = async () => {
     // Never save what was not loaded: the form is not shown then, and a stale
@@ -118,6 +120,12 @@ function AdminAuthPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  // Back to what was loaded or last saved: every edit and the message of a refused save go.
+  const handleDiscard = () => {
+    setConfig(savedConfig);
+    setMessage('');
   };
 
   // "Use for people search" leaves this page: offer it only for providers
@@ -206,9 +214,34 @@ function AdminAuthPage() {
                 </div>
               )}
 
+              {config?.oidcAuth?.enabled && (
+                <div
+                  role="note"
+                  data-testid="admin-auth-embed-hint"
+                  className="mb-6 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-300"
+                >
+                  <p className="font-medium">
+                    {t('admin.auth.embedHintTitle', 'Using iHub in an iframe of another site?')}
+                  </p>
+                  <p className="mt-1">
+                    {t(
+                      'admin.auth.embedHintText',
+                      'Identity providers do not allow their login page in a frame. Allow the site that shows iHub, and the sign-in opens in a pop-up instead.'
+                    )}{' '}
+                    <Link
+                      to="/admin/embed-auth"
+                      className="font-medium underline hover:no-underline"
+                    >
+                      {t('admin.auth.embedHintLink', 'Set up iHub in another site')}
+                    </Link>
+                  </p>
+                </div>
+              )}
+
               <DualModeEditor
                 value={config}
                 onChange={setConfig}
+                savedValue={savedConfig}
                 formComponent={PlatformFormEditor}
                 formProps={{
                   availableGroups: load.data.groups || [],
@@ -218,29 +251,21 @@ function AdminAuthPage() {
                 jsonSchema={load.data.schema || null}
                 title={title}
               />
-
-              {/* Save buttons */}
-              <div className="flex justify-end space-x-4 mt-8">
-                <button
-                  type="button"
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="px-4 py-2 border border-transparent rounded-md shadow-xs text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-                >
-                  {saving ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2 inline-block"></div>
-                      {t('admin.auth.saving', 'Saving...')}
-                    </>
-                  ) : (
-                    t('admin.auth.save', 'Save Configuration')
-                  )}
-                </button>
-              </div>
             </>
           )}
         </AdminLoadGate>
       </div>
+
+      {/* No bar while loading or after a failed load: nothing was loaded to save. After a failed
+          save the bar stays: the server may hold the changes (a lost response), so putting a
+          field back to what was loaded must still be savable. */}
+      <AdminSaveBar
+        dirty={ready && (isDirty || message?.type === 'error')}
+        saving={saving}
+        onSave={() => void handleSave()}
+        onDiscard={handleDiscard}
+        message={message?.type === 'error' ? message.text : undefined}
+      />
 
       <UnsavedChangesDialog blocker={blocker} />
     </div>

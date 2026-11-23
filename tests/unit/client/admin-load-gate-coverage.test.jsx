@@ -123,6 +123,7 @@ describe('admin config pages gate their form on a successful load', () => {
     const source = fs.readFileSync(path.join(ADMIN_ROOT, file), 'utf8');
     expect(source).toMatch(/useAdminConfigLoad\(/);
     expect(source).toMatch(/<AdminLoadGate\b/);
-    expect(source).toMatch(/if \(!ready(?: \|\| !\w+)?\) return;/);
+    // A section registered with the page's save bar returns `false` when it did not save.
+    expect(source).toMatch(/if \(!ready(?: \|\| !\w+)?\) return(?: false)?;/);
   });
 });

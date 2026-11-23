@@ -112,6 +112,16 @@ const savedBody = () =>
 /** The card itself: app names also appear in the start page's pickers further down. */
 const availableAppsCard = () => screen.getByText('Available Apps').closest('div.rounded-xl');
 
+/** The save bar: there only while something is unsaved. Its last button is Save. */
+const saveBar = () => screen.queryByRole('region', { name: 'Save changes' });
+const saveFromBar = () => {
+  const buttons = within(saveBar()).getAllByRole('button');
+  fireEvent.click(buttons[buttons.length - 1]);
+};
+/** An edit that has nothing to do with the allowed apps. */
+const editUnrelatedField = () =>
+  fireEvent.change(screen.getByLabelText('Default action'), { target: { value: 'answer' } });
+
 const allAppsRadio = () => screen.getByLabelText('All apps the user can access');
 const limitedRadio = () => screen.getByLabelText('Only selected apps');
 
@@ -189,10 +199,12 @@ describe('saving app access', () => {
     // The list also lives on the OAuth client, where it may have changed since the page loaded.
     await renderPage(statusWith({ appAccess: { mode: 'limited', appIds: ['summarizer'] } }));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    editUnrelatedField();
+    saveFromBar();
 
     await waitFor(() => expect(savedBody()).toBeDefined());
     expect(savedBody()).not.toHaveProperty('allowedApps');
+    expect(savedBody().defaultMailAction).toBe('answer');
   });
 
   test('going back and forth between the modes is not an edit', async () => {
@@ -201,8 +213,11 @@ describe('saving app access', () => {
     fireEvent.click(limitedRadio());
     fireEvent.click(allAppsRadio());
     expect(screen.queryByText(/Unsaved change/)).not.toBeInTheDocument();
+    // Nothing changed, so there is nothing to save and no bar.
+    expect(saveBar()).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    editUnrelatedField();
+    saveFromBar();
     await waitFor(() => expect(savedBody()).toBeDefined());
     expect(savedBody()).not.toHaveProperty('allowedApps');
   });
@@ -216,7 +231,7 @@ describe('saving app access', () => {
     fireEvent.click(await within(availableAppsCard()).findByRole('button', { name: /HR Bot/ }));
 
     expect(screen.getByText(/Unsaved change/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    saveFromBar();
 
     await waitFor(() => expect(savedBody()).toBeDefined());
     expect(savedBody().allowedApps).toEqual(['hr-bot']);
@@ -226,7 +241,7 @@ describe('saving app access', () => {
     await renderPage(statusWith({ appAccess: { mode: 'limited', appIds: ['summarizer'] } }));
 
     fireEvent.click(allAppsRadio());
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    saveFromBar();
 
     await waitFor(() => expect(savedBody()).toBeDefined());
     expect(savedBody().allowedApps).toEqual(['*']);
@@ -238,9 +253,11 @@ describe('saving app access', () => {
 
     fireEvent.click(limitedRadio());
     expect(screen.getByText(/Select at least one app before saving/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    saveFromBar();
 
-    expect(await screen.findByText(/Select at least one app, or choose/)).toBeInTheDocument();
+    // The refusal is on the page and next to the bar, where the admin pressed Save.
+    expect(await screen.findAllByText(/Select at least one app, or choose/)).toHaveLength(2);
+    expect(within(saveBar()).getByText(/Select at least one app, or choose/)).toBeInTheDocument();
     expect(savedBody()).toBeUndefined();
   });
 
@@ -248,7 +265,8 @@ describe('saving app access', () => {
     // Untouched, so it is not this save's business — only an edit is validated.
     await renderPage(statusWith({ appAccess: { mode: 'limited', appIds: [] } }));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    editUnrelatedField();
+    saveFromBar();
 
     await waitFor(() => expect(savedBody()).toBeDefined());
     expect(savedBody()).not.toHaveProperty('allowedApps');

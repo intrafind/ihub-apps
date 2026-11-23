@@ -132,9 +132,13 @@ function secretsMatch(a, b) {
  * @param {string} [data.codeChallenge] - PKCE code challenge (S256).
  * @param {string} [data.codeChallengeMethod] - PKCE method, must be 'S256'.
  * @param {string} [data.nonce] - Nonce for ID token binding.
+ * @param {Object} [options]
+ * @param {number} [options.ttlMs] - Lifetime of this code; the OAuth default
+ *   (10 minutes) when omitted. A code that only crosses from a popup to the
+ *   page that opened it asks for far less.
  * @returns {void}
  */
-export function storeCode(code, data) {
+export function storeCode(code, data, { ttlMs = CODE_TTL_MS } = {}) {
   const parts = splitCode(code);
   if (!parts) {
     logger.warn('Refusing to store a malformed authorization code', {
@@ -146,7 +150,7 @@ export function storeCode(code, data) {
   codeStore.set(parts.handle, {
     secret: parts.secret,
     data,
-    expiresAt: Date.now() + CODE_TTL_MS
+    expiresAt: Date.now() + ttlMs
   });
 }
 

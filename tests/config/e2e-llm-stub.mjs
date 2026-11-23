@@ -21,6 +21,12 @@
  *   (`POST /api/admin/apps/_generate`, see {@link APP_DRAFT_MARKERS}): the author's
  *   description is the whole user message there, so a spec picks the answer by
  *   what it types into the description box.
+ * - A revision turn of an app conversation (`POST /api/admin/apps/_revise`,
+ *   `POST /api/apps/_revise`) is recognised by its `LATEST_REQUEST` block, and is
+ *   always answered with JSON in the revise format, by the `e2e-revise-*` marker in
+ *   the author's latest message (see {@link APP_REVISE_MARKERS}). The other markers
+ *   above (`e2e-slow`, `e2e-fail`, …) still apply to such a request, and match
+ *   anywhere in its user message, earlier turns included.
  * - `GET /v1/models` lists the stub's models.
  * - `GET /__last-request` returns the body of the last chat request the stub got
  *   (`{ body, aborted }`, or `{ body: null, aborted: false }`), so a spec can assert
@@ -234,6 +240,120 @@ export const APP_DRAFT_MARKERS = {
 function draftFor(last, body) {
   const marker = Object.keys(APP_DRAFT_MARKERS).find(name => last.includes(name));
   return marker ? APP_DRAFT_MARKERS[marker](body) : null;
+}
+
+/**
+ * The data blocks of a revision request (`buildRevisionMessages` in
+ * server/services/appGeneratorBrief.js): the app as it is now (JSON), the
+ * earlier turns (JSON) and the author's latest message.
+ */
+const REVISE_CURRENT = /<<<CURRENT_APP\n([\s\S]*?)\nCURRENT_APP>>>/;
+const REVISE_EARLIER = /<<<EARLIER_TURNS\n([\s\S]*?)\nEARLIER_TURNS>>>/;
+const REVISE_LATEST = /<<<LATEST_REQUEST\n([\s\S]*?)\nLATEST_REQUEST>>>/;
+
+/** The parsed JSON of a block, or `fallback` when it is missing or not JSON. */
+function blockJson(text, pattern, fallback) {
+  try {
+    return JSON.parse(text.match(pattern)?.[1] ?? '');
+  } catch {
+    return fallback;
+  }
+}
+
+/** The line every `e2e-revise-system` change appends to the instructions; a spec looks for it. */
+export const REVISED_INSTRUCTIONS_MARK = 'Address the reader formally. (e2e-revised)';
+
+/**
+ * The answers to a revision turn, by the marker in the author's latest message.
+ * Each gets the parsed revision (`{ current, earlier, latest }`) and returns the
+ * raw text a model would send; the server parses and checks it
+ * (server/services/appRevision.js).
+ *
+ * - `e2e-revise-question`: a question with three choices. The next turn, whatever
+ *   the author answers (a choice, "Something else", a skip), gets the change of
+ *   `e2e-revise-system`: an earlier `e2e-revise-question` turn counts as asked.
+ * - `e2e-revise-system`: a change of the instructions only: the current
+ *   instructions plus the line {@link REVISED_INSTRUCTIONS_MARK}.
+ * - `e2e-revise-variable`: a change that adds the dropdown input field
+ *   `department` (Sales, Engineering, HR) to the current fields. The server adds
+ *   its line to the message template, so `prompt` changes with it.
+ * - `e2e-revise-message`: a message, no change ("cannot publish here").
+ * - `e2e-revise-nochange`: a change that repeats the current instructions; the
+ *   server answers it as a message with the warning `NO_CHANGE`.
+ * - No marker: a message that echoes the latest request, so every revision turn
+ *   gets valid JSON.
+ *
+ * @type {Record<string, (revision: { current: Object, earlier: Object[], latest: string }) => string>}
+ */
+export const APP_REVISE_MARKERS = {
+  'e2e-revise-question': () =>
+    JSON.stringify({
+      reply: 'question',
+      text: '',
+      question: {
+        text: 'Who reads the answers of this app?',
+        choices: ['Customers', 'Colleagues', 'Managers']
+      }
+    }),
+  'e2e-revise-system': ({ current }) =>
+    JSON.stringify({
+      reply: 'change',
+      text: 'The instructions now ask for a formal tone.',
+      change: {
+        system: [current.system, REVISED_INSTRUCTIONS_MARK].filter(Boolean).join('\n')
+      }
+    }),
+  'e2e-revise-variable': ({ current }) =>
+    JSON.stringify({
+      reply: 'change',
+      text: 'Users now pick their department first.',
+      change: {
+        variables: [
+          ...(Array.isArray(current.variables) ? current.variables : []),
+          {
+            name: 'department',
+            label: 'Department',
+            type: 'select',
+            required: true,
+            predefinedValues: [
+              { value: 'sales', label: 'Sales' },
+              { value: 'engineering', label: 'Engineering' },
+              { value: 'hr', label: 'HR' }
+            ]
+          }
+        ]
+      }
+    }),
+  'e2e-revise-message': () =>
+    JSON.stringify({
+      reply: 'message',
+      text: 'I cannot publish the app here. Use the Publish button of the editor.'
+    }),
+  'e2e-revise-nochange': ({ current }) =>
+    JSON.stringify({ reply: 'change', text: 'Done.', change: { system: current.system } })
+};
+
+/**
+ * The scripted answer to a revision turn, or `null` when the request is no
+ * revision (its user message has no `LATEST_REQUEST` block).
+ *
+ * @param {string} last - The last user message
+ * @returns {string|null}
+ */
+function revisionFor(last) {
+  if (!REVISE_LATEST.test(last)) return null;
+  const revision = {
+    current: blockJson(last, REVISE_CURRENT, {}),
+    earlier: blockJson(last, REVISE_EARLIER, []),
+    latest: last.match(REVISE_LATEST)[1]
+  };
+  const marker = Object.keys(APP_REVISE_MARKERS).find(name => revision.latest.includes(name));
+  if (marker) return APP_REVISE_MARKERS[marker](revision);
+  const asked = revision.earlier.some(
+    turn => turn?.role === 'author' && String(turn.text).includes('e2e-revise-question')
+  );
+  if (asked) return APP_REVISE_MARKERS['e2e-revise-system'](revision);
+  return JSON.stringify({ reply: 'message', text: `E2E revise reply to: ${revision.latest}` });
 }
 
 /**
@@ -840,7 +960,7 @@ export function startLlmStub(
       const slowMs = Number(process.env.E2E_LLM_SLOW_MS) || DEFAULT_SLOW_MS;
       if (!(await waitUnlessClosed(res, slowMs))) return;
     }
-    const reply = draftFor(last, body) ?? echo;
+    const reply = revisionFor(last) ?? draftFor(last, body) ?? echo;
 
     const plan = planFor(body, scripts);
     if (plan) {

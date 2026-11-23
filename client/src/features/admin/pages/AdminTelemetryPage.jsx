@@ -10,6 +10,7 @@ import AdminLoadGate from '../components/AdminLoadGate';
 import { useAdminConfigLoad } from '../hooks/useAdminConfigLoad';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
+import AdminSaveBar from '../components/AdminSaveBar';
 
 const DEFAULT_TELEMETRY = {
   enabled: false,
@@ -68,11 +69,14 @@ function deepMerge(base, overlay) {
 function AdminTelemetryPage() {
   const { t } = useTranslation();
   const [saving, setSaving] = useState(false);
+  // A failed save keeps the bar (to retry or discard) even when the form is back at its saved
+  // state: the write may have gone through and only its answer been lost.
+  const [saveFailed, setSaveFailed] = useState(false);
   const [message, setMessage] = useState('');
   const [config, setConfig] = useState(DEFAULT_TELEMETRY);
   // The configuration as last loaded or saved; null until it loaded.
   const [savedConfig, setSavedConfig] = useState(null);
-  const { blocker } = useUnsavedChanges(savedConfig, config);
+  const { blocker, isDirty } = useUnsavedChanges(savedConfig, config);
   // The revision of platform.json this form was loaded from (then: last saved).
   // Its save sends exactly this as If-Match; a 412 leaves it as it is, so the
   // next save is refused again until the page reloads or the admin chooses
@@ -108,6 +112,7 @@ function AdminTelemetryPage() {
     if (!ready) return;
     try {
       setSaving(true);
+      setSaveFailed(false);
       setMessage('');
       // Read-modify-write for the sections this page does not show. This read
       // does not change the revision the save sends (the one the form loaded).
@@ -128,6 +133,7 @@ function AdminTelemetryPage() {
         )
       });
     } catch (error) {
+      setSaveFailed(true);
       setMessage({
         type: 'error',
         text:
@@ -136,6 +142,13 @@ function AdminTelemetryPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  // Back to the configuration as loaded or last saved, with the banner of a refused save gone.
+  const handleDiscard = () => {
+    setConfig(savedConfig);
+    setSaveFailed(false);
+    setMessage('');
   };
 
   const updateField = (path, value) => {
@@ -560,16 +573,6 @@ function AdminTelemetryPage() {
                     )}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg transition-colors font-medium"
-                >
-                  {saving
-                    ? t('common.saving', 'Saving...')
-                    : t('admin.telemetry.save', 'Save Telemetry Settings')}
-                </button>
               </div>
             </div>
           </>
@@ -618,6 +621,16 @@ function AdminTelemetryPage() {
           </div>
         </div>
       </div>
+      {/* No bar until the platform config loaded: the defaults must never be saved over it. */}
+      {ready && (
+        <AdminSaveBar
+          dirty={isDirty || saveFailed}
+          saving={saving}
+          onSave={() => void handleSave()}
+          onDiscard={handleDiscard}
+          message={message?.type === 'error' ? message.text : undefined}
+        />
+      )}
       <UnsavedChangesDialog blocker={blocker} />
     </div>
   );

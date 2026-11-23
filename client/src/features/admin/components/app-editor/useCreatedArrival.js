@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { hideNextSteps, nextStepsShown, showNextSteps } from './nextSteps';
+import { CONVERSATION_VIEW, VIEW_PARAM } from '../app-conversation/useAppBuilderChat';
 
 /** The marker the "New app" page puts into the editor's URL: `?created=1`. */
 const CREATED_PARAM = 'created';
@@ -18,10 +19,16 @@ const CREATED_PARAM = 'created';
  * The card then stays for this app, across visits, until the author hides it;
  * that is remembered per app in the browser (`nextSteps.js`).
  *
+ * After a create from a description, with the conversation switched on, the
+ * create page adds `view=conversation` (owner decision 4 of the chat builder
+ * plan). The hook keeps that parameter and tells `onArrive`, so the page opens
+ * the conversation beside the test chat instead of the form.
+ *
  * @param {object} options
  * @param {string} options.appId
  * @param {boolean} options.ready - The app has loaded.
- * @param {() => void} options.onArrive - Called once per arrival.
+ * @param {(arrival: { conversation: boolean }) => void} options.onArrive - Called once per
+ *   arrival; `conversation` is true when the editor opens with the conversation.
  * @returns {{stepsShown: boolean, focusSteps: boolean, dismissSteps: () => void}}
  *   `focusSteps` is true when the author just arrived: the card's heading then
  *   takes the focus.
@@ -46,8 +53,9 @@ export function useCreatedArrival({ appId, ready, onArrive }) {
     // The URL is outside React: this is the one place it turns into state.
     // eslint-disable-next-line @eslint-react/set-state-in-effect
     setSteps({ appId, shown: true, arrived: true });
-    latest.onArrive();
     const params = new URLSearchParams(latest.location.search);
+    latest.onArrive({ conversation: params.get(VIEW_PARAM) === CONVERSATION_VIEW });
+    // `view` stays: the editor shows what the create page asked for, also after a reload.
     params.delete(CREATED_PARAM);
     const search = params.toString();
     latest.navigate(

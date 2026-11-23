@@ -3,13 +3,13 @@
 
 import { useState, useId, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import Switch from '../../../shared/components/Switch';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import AdminLoadGate from '../components/AdminLoadGate';
 import { useAdminConfigLoad } from '../hooks/useAdminConfigLoad';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
+import AdminSaveBar from '../components/AdminSaveBar';
 
 /** One settings row: label and description on the left, the switch on the right. */
 function Toggle({ checked, onChange, label, description }) {
@@ -43,9 +43,12 @@ function AdminMcpGatewayPage() {
   const [platform, setPlatform] = useState(null);
   const [message, setMessage] = useState(null);
   const [saving, setSaving] = useState(false);
+  // A failed save keeps the bar (to retry or discard) even when the form is back at its saved
+  // state: the write may have gone through and only its answer been lost.
+  const [saveFailed, setSaveFailed] = useState(false);
   // The platform config as last loaded or saved; null until it loaded.
   const [savedPlatform, setSavedPlatform] = useState(null);
-  const { blocker } = useUnsavedChanges(savedPlatform, platform);
+  const { blocker, isDirty } = useUnsavedChanges(savedPlatform, platform);
   // The revision of the configuration this form loaded (or last saved): its
   // save sends exactly this as If-Match, whatever other reads in the tab saw.
   const revisionRef = useRef(null);
@@ -147,6 +150,7 @@ function AdminMcpGatewayPage() {
   const save = async () => {
     if (!ready || !platform) return;
     setSaving(true);
+    setSaveFailed(false);
     try {
       await makeAdminApiCall('/admin/configs/platform', {
         method: 'POST',
@@ -157,6 +161,7 @@ function AdminMcpGatewayPage() {
       setSavedPlatform(platform);
       setMessage({ type: 'success', text: t('admin.mcp.common.saved', 'Saved') });
     } catch (err) {
+      setSaveFailed(true);
       setMessage({
         type: 'error',
         text: t('admin.mcp.gateway.saveError', 'Save failed: {{error}}', {
@@ -166,6 +171,13 @@ function AdminMcpGatewayPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  // Back to the configuration as loaded or last saved, with the banner of a refused save gone.
+  const handleDiscard = () => {
+    setPlatform(savedPlatform);
+    setSaveFailed(false);
+    setMessage(null);
   };
 
   return (
@@ -591,24 +603,17 @@ function AdminMcpGatewayPage() {
               </p>
             </section>
           )}
-
-          <div className="flex justify-end">
-            <button
-              onClick={save}
-              disabled={saving}
-              className="inline-flex items-center px-4 py-2 rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
-            >
-              {saving ? (
-                <>
-                  <LoadingSpinner size="sm" className="mr-2" />
-                  {t('admin.mcp.common.saving', 'Saving...')}
-                </>
-              ) : (
-                t('common.save', 'Save')
-              )}
-            </button>
-          </div>
         </div>
+      )}
+      {/* No bar until the platform config loaded: saving would drop the rest of `mcpServer` and `oauth`. */}
+      {ready && (
+        <AdminSaveBar
+          dirty={isDirty || saveFailed}
+          saving={saving}
+          onSave={() => void save()}
+          onDiscard={handleDiscard}
+          message={message?.type === 'error' ? message.text : undefined}
+        />
       )}
       <UnsavedChangesDialog blocker={blocker} />
     </div>

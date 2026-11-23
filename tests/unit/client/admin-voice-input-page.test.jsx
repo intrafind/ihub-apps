@@ -189,6 +189,13 @@ beforeEach(() => {
 const voiceInput = () => screen.getByLabelText('Speech recognition');
 const optionValues = select => [...select.querySelectorAll('option')].map(o => o.value);
 
+// The page saves through the shared bottom bar, which shows only while something changed.
+const saveBar = () => screen.getByRole('region', { name: /save changes/i });
+const saveButton = () => {
+  const buttons = within(saveBar()).getAllByRole('button');
+  return buttons[buttons.length - 1];
+};
+
 async function renderPage() {
   render(<AdminVoiceInputPage />);
   await screen.findByLabelText('Speech recognition');
@@ -203,7 +210,7 @@ describe('voice input', () => {
 
     fireEvent.change(voiceInput(), { target: { value: 'browser' } });
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+      fireEvent.click(saveButton());
     });
 
     await screen.findByText('Voice input settings saved.');
@@ -226,7 +233,7 @@ describe('voice input', () => {
     fireEvent.change(voiceInput(), { target: { value: 'model:voxtral' } });
     expect(screen.getByText(/The microphone streams through the iHub server/)).toBeInTheDocument();
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+      fireEvent.click(saveButton());
     });
 
     await screen.findByText('Voice input settings saved.');
@@ -276,7 +283,7 @@ describe('voice input', () => {
 const voiceModeSection = () => within(screen.getByTestId('voice-mode-section'));
 const saveForm = async () => {
   await act(async () => {
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(saveButton());
   });
   await screen.findByText('Voice input settings saved.');
 };
@@ -393,13 +400,15 @@ describe('voice mode', () => {
     expect(mockRefreshConfig).toHaveBeenCalled();
   });
 
-  test('saving an untouched form writes the defaults and keeps keys it does not know', async () => {
+  test('saving writes the voice mode defaults and keeps keys it does not know', async () => {
     platformOnDisk.speech.voiceMode = {
       enabled: true,
       futureSetting: 'keep me',
       systemPrompt: { fr: 'Réponds brièvement.' }
     };
     await renderPage();
+    // Another setting changes (the bar is for changes); voice mode itself is left alone.
+    fireEvent.change(voiceInput(), { target: { value: 'browser' } });
     await saveForm();
 
     expect(platformOnDisk.speech.voiceMode).toEqual({
@@ -575,9 +584,11 @@ test('Azure: tests the unsaved form values on the server', async () => {
 describe('test panel', () => {
   test('points out that the tests run against the saved configuration', async () => {
     await renderPage();
-    expect(screen.queryByText(/You have unsaved changes/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/These tests use the saved configuration/)).not.toBeInTheDocument();
     fireEvent.change(voiceInput(), { target: { value: 'browser' } });
-    expect(screen.getByText(/You have unsaved changes/)).toBeInTheDocument();
+    // The panel's note, and the save bar's own "You have unsaved changes".
+    expect(screen.getByText(/These tests use the saved configuration/)).toBeInTheDocument();
+    expect(within(saveBar()).getByText('You have unsaved changes')).toBeInTheDocument();
   });
 
   test('live dictation: preselects the platform default and shows the transcript', async () => {

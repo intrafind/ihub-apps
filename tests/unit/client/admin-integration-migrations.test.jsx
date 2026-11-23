@@ -526,7 +526,8 @@ describe('installation page: migration failed', () => {
     expect(fieldset).toBeDisabled();
     expect(fieldset).toHaveAccessibleDescription(/read-only until the migration state/);
     expect(within(form).getByLabelText(/Portal URL/)).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    // The page's save bar never shows: nothing can be edited, and the editor has no Save of its own.
+    expect(screen.queryByRole('button', { name: /^Save/ })).not.toBeInTheDocument();
     expectNoMissingKeys();
   });
 
@@ -561,7 +562,8 @@ describe('installation page: migration failed', () => {
     const editor = await screen.findByTestId('web-search-engine-editor');
     expect(screen.getByTestId('settings-read-only')).toBeInTheDocument();
     expect(within(editor).getByLabelText('Label')).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    // The page's save bar never shows: nothing can be edited, and the editor has no Save of its own.
+    expect(screen.queryByRole('button', { name: /^Save/ })).not.toBeInTheDocument();
   });
 
   test('the migration log on Overview lists the runs newest first', async () => {

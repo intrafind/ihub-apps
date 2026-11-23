@@ -11,6 +11,7 @@ import EuAiActCard from './euAiAct/EuAiActCard';
 import EuAiActStateNote from './euAiAct/EuAiActStateNote';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import UnsavedChangesDialog from './UnsavedChangesDialog';
+import { useSaveSection } from './SaveSections';
 
 /**
  * Platform side of the AI disclosure (EU AI Act Art. 50(1)): the first-turn
@@ -29,7 +30,7 @@ function AiNoticeSettingsCard({ onSaved }) {
   // The notice and guardrail text as last loaded or saved; null until loaded.
   const [savedValues, setSavedValues] = useState(null);
   const editedValues = useMemo(() => ({ notice, guardrailText }), [notice, guardrailText]);
-  const { blocker } = useUnsavedChanges(savedValues, editedValues);
+  const { blocker, isDirty } = useUnsavedChanges(savedValues, editedValues);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
   const [loadFailed, setLoadFailed] = useState(false);
@@ -57,6 +58,7 @@ function AiNoticeSettingsCard({ onSaved }) {
     };
   }, [loadAttempt]);
 
+  // Saved by the page's save bar; resolves `false` when nothing was saved.
   const save = async () => {
     setSaving(true);
     setMessage(null);
@@ -81,6 +83,7 @@ function AiNoticeSettingsCard({ onSaved }) {
       setMessage({ type: 'success', text: t('admin.aiDisclosure.saved', 'AI notice saved') });
       refreshConfig();
       onSaved?.();
+      return true;
     } catch (error) {
       setMessage({
         type: 'error',
@@ -88,10 +91,23 @@ function AiNoticeSettingsCard({ onSaved }) {
           t('admin.aiDisclosure.saveError', 'Failed to save the AI notice') +
           (error.message ? `: ${error.message}` : '')
       });
+      return false;
     } finally {
       setSaving(false);
     }
   };
+
+  useSaveSection('ai-notice', {
+    dirty: isDirty,
+    saving,
+    error: message?.type === 'error' ? message.text : null,
+    save,
+    discard: () => {
+      setNotice(savedValues.notice);
+      setGuardrailText(savedValues.guardrailText);
+      setMessage(null);
+    }
+  });
 
   return (
     <EuAiActCard
@@ -171,14 +187,6 @@ function AiNoticeSettingsCard({ onSaved }) {
               )}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={save}
-            disabled={saving}
-            className="px-4 py-2 rounded-lg font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {t('common.save', 'Save')}
-          </button>
         </>
       )}
       {message && (

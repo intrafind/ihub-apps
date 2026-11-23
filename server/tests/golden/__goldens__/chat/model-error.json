@@ -19,7 +19,6 @@
     {
       "data": {
         "code": "INVALID_REQUEST",
-        "details": "{\"error\":{\"message\":\"The request was refused\",\"code\":\"bad\"}}",
         "isContextWindowError": false,
         "message": "Invalid request sent to openai API. Please check your input and try again.",
         "retryable": false
@@ -63,7 +62,7 @@
             "error": {
               "at": "<ts>",
               "code": "INVALID_REQUEST",
-              "message": "Invalid request sent to openai API. Please check your input and try again.",
+              "message": "The model call failed (INVALID_REQUEST)",
               "providerCode": "INVALID_REQUEST",
               "status": 400,
               "step": 1
@@ -118,7 +117,7 @@
           {
             "at": "<ts>",
             "code": "INVALID_REQUEST",
-            "message": "Invalid request sent to openai API. Please check your input and try again.",
+            "message": "The model call failed (INVALID_REQUEST)",
             "providerCode": "INVALID_REQUEST",
             "status": 400,
             "step": 1
@@ -225,7 +224,6 @@
           {
             "data": {
               "code": "INVALID_REQUEST",
-              "details": "{\"error\":{\"message\":\"The request was refused\",\"code\":\"bad\"}}",
               "isContextWindowError": false,
               "message": "Invalid request sent to openai API. Please check your input and try again.",
               "retryable": false
@@ -641,7 +639,7 @@
     {
       "data": {
         "code": "INVALID_REQUEST",
-        "message": "Invalid request sent to openai API. Please check your input and try again.",
+        "message": "The model call failed (INVALID_REQUEST)",
         "providerCode": "INVALID_REQUEST",
         "recoverable": false,
         "status": 400,

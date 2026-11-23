@@ -28,8 +28,8 @@ import WebSearchEngineEditor from './WebSearchEngineEditor';
  * | ------------ | ------------------------- | ------- |
  * | `instance`   | `Object`                  | The installation as `GET /api/admin/integrations/installed/:id` returns it in `instance` (`id`, `definition`, `labelLocalized`, `description`, `enabled`, `auth`, `actions`, …), with `values` replaced by the **effective** values (`values` of the response: defaults applied, sensitive fields left out) and `liveActions` set to the response's `actions` (what the system lists now, for MCP / A2A). |
  * | `definition` | `Object`                  | The definition detail (`definition` of the same response): `install` fields, `actions`, `authModes`, `dynamicActions`, `name`, … |
- * | `onSaved`    | `(saved: Object) => void` | Called with the stored installation after a successful `PUT …/installed/:id`. |
- * | `onCancel`   | `() => void`              | The admin discards the edits. |
+ * | `onSaved`    | `(saved: Object) => void \| Promise<void>` | Called with the stored installation after a successful `PUT …/installed/:id`; awaited, so the page has reloaded when the save resolves. |
+ * | `onCancel`   | `() => void`              | The admin discards the edits. Only the editor's own Cancel button calls it; on a page with a save bar (below) the bar discards. |
  *
  * An editor owns its install values and nothing else: `useInstallationEditor`
  * keeps the label, description, groups and action switches, tests the unsaved
@@ -37,6 +37,17 @@ import WebSearchEngineEditor from './WebSearchEngineEditor';
  * body built by `buildInstallationPayload`, which sends back every part the
  * editor did not change). `InstallationEditorParts` has the shared sections
  * (name, who may use it, actions, footer).
+ *
+ * ## Saving from the page's save bar
+ *
+ * `AdminInstallationPage` hosts the editor with `EditorSaveContext`. An editor
+ * gives the page its save with `useInstallationEditorSave(editor, save)`, where
+ * `save` checks the values and resolves whether the installation was stored
+ * (`editor.save` and `editor.reject` do; return what they return). The page's
+ * bar then saves and discards, and `EditorFooter` leaves out Save and Cancel.
+ * Without a host (an editor rendered on its own) the footer keeps both buttons.
+ * `useInstallationEditorDirty` tells the page the editor has unsaved edits, so
+ * the bar shows only after a change.
  *
  * ## Adding an editor
  *
@@ -95,7 +106,7 @@ export function hasDedicatedEditor(definitionId) {
  * @param {Object} props.instance
  * @param {Object} props.definition
  * @param {(saved: Object) => void} props.onSaved
- * @param {() => void} props.onCancel
+ * @param {() => void} [props.onCancel] - the editor's own Cancel button (unmanaged editors)
  * @returns {React.ReactElement|null}
  */
 export function InstallationEditor({ definitionId, ...props }) {
