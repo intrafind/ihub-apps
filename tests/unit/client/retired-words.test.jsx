@@ -170,7 +170,12 @@ function proseWithHeadings(markdown) {
       continue;
     }
     if (inComment) {
-      const text = withoutComments(line);
+      // Inside a comment backticks are not code: find its end in the line as written,
+      // then treat the rest as text, with inline code going first as below.
+      const end = line.indexOf('-->');
+      if (end === -1) continue;
+      inComment = false;
+      const text = withoutComments(line.slice(end + 3).replace(/`[^`]*`/g, CODE));
       if (text.trim()) paragraph.push(text.trim());
       continue;
     }
@@ -616,6 +621,13 @@ describe('the wording lint itself', () => {
     expect(findHits(words, { docs: [['p.md', page.join('\n')]] })).toEqual({});
     const after = ['# Page', '', '<!-- a -->', 'The sub-task.'].join('\n');
     expect(findHits(words, { docs: [['p.md', after]] })).toEqual({
+      'sub-task': ['docs:p.md#Page']
+    });
+    // After a comment closes, a `<!--` in inline code on the same line opens nothing.
+    const codeAfterClose = ['# Page', '', 'Before <!--', 'comment', '--> `<!--` sub-task'].join(
+      '\n'
+    );
+    expect(findHits(words, { docs: [['p.md', codeAfterClose]] })).toEqual({
       'sub-task': ['docs:p.md#Page']
     });
   });
