@@ -287,7 +287,13 @@ export default function useProviderConnect({ initialTileId = null } = {}) {
       errorMessage: getAdminApiErrorMessage,
       providerWrite: buildProviderWrite(tile, form, target, discovery),
       modelConfigs,
-      groupUpdates
+      groupUpdates,
+      // The group lists as they are now, not as the flow loaded them minutes ago: the
+      // write replaces a group's model list, and another admin may have changed it.
+      replanGroups: async createdIds => {
+        const fresh = await makeAdminApiCall('/admin/groups');
+        return planGroupUpdates(fresh.data, access, createdIds);
+      }
     });
     setOutcome({ ...result, defaultId });
     setRunning(false);

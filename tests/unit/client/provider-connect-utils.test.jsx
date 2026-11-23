@@ -408,6 +408,45 @@ describe('runConnectPlan', () => {
     });
   });
 
+  it('plans the group writes again from the groups as they are now', async () => {
+    const api = jest.fn().mockResolvedValue({ data: {} });
+    // Another admin added "legal-model" to HR while the flow was open.
+    const replanGroups = jest.fn(async created =>
+      planGroupUpdates(
+        { groups: { hr: { permissions: { models: ['old', 'legal-model'] } } } },
+        { mode: 'groups', groupIds: ['hr'] },
+        created
+      )
+    );
+    await runConnectPlan({
+      api,
+      errorMessage,
+      providerWrite: null,
+      modelConfigs: [{ id: 'a' }],
+      groupUpdates: [{ groupId: 'hr', models: ['old', 'a'] }],
+      replanGroups
+    });
+    expect(replanGroups).toHaveBeenCalledWith(['a']);
+    const groupCall = api.mock.calls.find(([path]) => path === '/admin/groups/hr');
+    expect(groupCall[1].body.permissions.models).toEqual(['old', 'legal-model', 'a']);
+  });
+
+  it('falls back to the loaded plan when the groups cannot be read again', async () => {
+    const api = jest.fn().mockResolvedValue({ data: {} });
+    await runConnectPlan({
+      api,
+      errorMessage,
+      providerWrite: null,
+      modelConfigs: [{ id: 'a' }],
+      groupUpdates: [{ groupId: 'hr', models: ['old', 'a'] }],
+      replanGroups: async () => {
+        throw new Error('offline');
+      }
+    });
+    const groupCall = api.mock.calls.find(([path]) => path === '/admin/groups/hr');
+    expect(groupCall[1].body.permissions.models).toEqual(['old', 'a']);
+  });
+
   it('creates no model when the provider cannot be written', async () => {
     const api = jest.fn().mockRejectedValue(new Error('exists'));
     const outcome = await runConnectPlan({

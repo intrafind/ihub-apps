@@ -628,7 +628,12 @@ export function buildModelConfigs({ discovery, picks, providerId, defaultId }) {
  * @param {(err: unknown) => string} params.errorMessage - `getAdminApiErrorMessage`
  * @param {{ method: string, path: string, body: Object }|null} params.providerWrite
  * @param {Object[]} params.modelConfigs
- * @param {Array<{ groupId: string, models: string[] }>} params.groupUpdates
+ * @param {Array<{ groupId: string, models: string[] }>} params.groupUpdates - The plan made
+ *   from the groups as the flow loaded them
+ * @param {(createdIds: string[]) => Promise<Array<{ groupId: string, models: string[] }>>} [params.replanGroups]
+ *   Plans the group writes again from the groups as they are now, right before writing
+ *   them, so an edit another admin made to those groups while the flow was open is kept.
+ *   When it fails, the plan from `groupUpdates` is used.
  * @returns {Promise<{ providerError: string|null, models: Array<{ id: string, ok: boolean, error?: string }>, groups: Array<{ groupId: string, ok: boolean, error?: string }> }>}
  */
 export async function runConnectPlan({
@@ -636,7 +641,8 @@ export async function runConnectPlan({
   errorMessage,
   providerWrite,
   modelConfigs,
-  groupUpdates
+  groupUpdates,
+  replanGroups
 }) {
   const outcome = { providerError: null, models: [], groups: [] };
   if (providerWrite) {
@@ -656,7 +662,15 @@ export async function runConnectPlan({
     }
   }
   const created = new Set(outcome.models.filter(m => m.ok).map(m => m.id));
-  for (const update of groupUpdates) {
+  let updates = groupUpdates;
+  if (replanGroups && groupUpdates.length > 0) {
+    try {
+      updates = await replanGroups([...created]);
+    } catch {
+      updates = groupUpdates;
+    }
+  }
+  for (const update of updates) {
     // Grant only what exists: a model that failed to be created is not listed.
     const models = update.models.filter(
       id => created.has(id) || !modelConfigs.some(c => c.id === id)
