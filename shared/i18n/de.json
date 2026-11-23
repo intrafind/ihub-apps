@@ -6577,9 +6577,9 @@
       "integrations": {
         "title": "Integrationen",
         "help": "Welche installierten Integrationen Mitglieder nutzen dürfen. Eine App, die eine Integration einbindet, bietet sie nur Mitgliedern einer Gruppe an, die sie gewährt. Gruppen, die diese Gruppe erben, erhalten dasselbe.",
-        "inheritedHelp": "Angehakt und ausgegraut: von einer geerbten Gruppe gewährt. Dort ändern.",
+        "inheritedHelp": "Von einer geerbten Gruppe gewährt. Dort ändern.",
         "all": "Alle Integrationen",
-        "allHelp": "Jede installierte Integration, auch später installierte.",
+        "allHelp": "„Alle Integrationen“ umfasst jede installierte Integration, auch später installierte.",
         "none": "Mitglieder dieser Gruppe dürfen keine Integration nutzen.",
         "loading": "Integrationen werden geladen…",
         "loadError": "Die installierten Integrationen konnten nicht geladen werden: {{error}}",
@@ -6604,7 +6604,10 @@
         "with": "mit {{name}}",
         "other": "Weitere Einträge",
         "otherHelp": "Einträge, die die Liste oben nicht zeigt: Definitions-IDs oder Installationen, die es nicht mehr gibt.",
-        "remove": "{{key}} entfernen"
+        "remove": "{{key}} entfernen",
+        "addLabel": "Integration hinzufügen",
+        "addPlaceholder": "Integration hinzufügen…",
+        "nothingToAdd": "Alles Installierte ist hinzugefügt."
       },
       "deleteBlockedTitle": "Gruppe kann nicht gelöscht werden",
       "deleteFailed": "Die Gruppe konnte nicht gelöscht werden.",
@@ -6679,6 +6682,26 @@
         "noSkills": "Keine Skills ausgewählt – Benutzer können keine Agenten-Skills verwenden",
         "allWildcard": "Alle (*)",
         "allWildcardFor": "{{label}}: Alle (*)"
+      },
+      "members": {
+        "title": "Mitglieder",
+        "description": "Benutzer, die zu dieser Gruppe gehören. Hinzufügen und Entfernen wirken sofort; die Gruppe muss dafür nicht gespeichert werden.",
+        "externalNote": "Benutzer, die diese Gruppe über die Zuordnungen von einem externen Anbieter erhalten, werden hier nicht aufgeführt.",
+        "loading": "Mitglieder werden geladen…",
+        "loadError": "Die Mitglieder konnten nicht geladen werden.",
+        "addError": "Die Benutzer konnten nicht hinzugefügt werden.",
+        "removeError": "Der Benutzer konnte nicht entfernt werden.",
+        "empty": "Diese Gruppe hat noch keine Mitglieder.",
+        "inactive": "Inaktiv",
+        "remove": "{{name}} aus der Gruppe entfernen",
+        "removeShort": "Entfernen",
+        "addLabel": "Benutzer hinzufügen",
+        "searchPlaceholder": "Nach Name, Benutzername oder E-Mail suchen",
+        "noMatches": "Keine Benutzer entsprechen der Suche.",
+        "allAdded": "Alle Benutzer sind bereits Mitglied.",
+        "moreMatches": "{{count}} weitere Benutzer passen. Engere Suche eingeben, um sie zu finden.",
+        "addSelected": "{{count}} ausgewählte hinzufügen",
+        "saveFirst": "Speichern Sie zuerst die Gruppe, danach können Sie hier ihre Mitglieder hinzufügen."
       }
     },
     "contentAccess": {
@@ -8709,7 +8732,7 @@
       "modelColumn": "Modell",
       "unknownModel": "Modell nicht gefunden",
       "otherModels": "Alle anderen Modelle",
-      "otherModelsHint": "Jedes Modell ohne eigenen Eintrag oben",
+      "otherModelsHint": "Jedes Modell ohne eigenes Limit",
       "placeholderCeiling": "max. {{limit}}",
       "placeholderNoLimit": "kein Limit",
       "noEffectModel": "Ohne Wirkung – das Modell erlaubt höchstens {{limit}}",
@@ -8737,7 +8760,17 @@
         "dayShort": "Täglich",
         "weekShort": "Wöchentlich",
         "monthShort": "Monatlich"
-      }
+      },
+      "removeLimit": "Limit entfernen: {{name}}",
+      "addLabel": "Limit hinzufügen",
+      "addPlaceholder": "Limit hinzufügen…",
+      "addGeneral": "Allgemein",
+      "addModel": "Pro Modell",
+      "addAllModels": "Alle Modelle zusammen",
+      "addFileStorage": "Dateispeicher",
+      "nothingToAdd": "Alle Limits sind hinzugefügt.",
+      "emptyGroup": "Für diese Gruppe sind keine Limits gesetzt.",
+      "emptyUser": "Es sind keine persönlichen Limits gesetzt."
     },
     "unsavedChanges": {
       "title": "Ohne Speichern verlassen?",

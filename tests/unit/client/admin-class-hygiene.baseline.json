@@ -9,7 +9,6 @@
     "components/AuditEntryDetailDrawer.jsx": 1,
     "components/FooterCustomization.jsx": 2,
     "components/GatewaySyncDialog.jsx": 1,
-    "components/GroupIntegrationsSection.jsx": 1,
     "components/HeaderCustomization.jsx": 1,
     "components/IntegrationTestResults.jsx": 1,
     "components/MergeProjectsDialog.jsx": 1,

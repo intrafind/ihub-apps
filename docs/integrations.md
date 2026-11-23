@@ -314,7 +314,7 @@ For developers: an editor is a React component registered under its definition i
 
 ## Who may use an integration
 
-The groups decide, like for apps (#3093). `groups.json` → `permissions.integrations` lists what the members of a group may use, edited under **Admin → Groups → a group → Integrations**:
+The groups decide, like for apps (#3093). `groups.json` → `permissions.integrations` lists what the members of a group may use, edited under **Admin → Groups → a group → Integrations**. The section lists only what the group has been given, as chips, and **Add an integration** offers the rest (an installation, a definition, a type, or **All integrations**). **All integrations** (`*`) is shown as one chip and hides the individual entries. What the group inherits is shown read-only, with the group it comes from:
 
 | Entry | Grants |
 | --- | --- |
