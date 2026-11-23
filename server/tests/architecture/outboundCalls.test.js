@@ -67,8 +67,12 @@ function bareCall(code, pattern, helpers) {
 
 /** The rules of this guard. */
 export const RULES = Object.freeze({
-  // `fetch(` itself, not `httpFetch(`, `safeFetch(` or a method `.fetch(`.
-  fetch: code => bareCall(code, /(?<![\w$.])fetch\s*\(/g, null),
+  // `fetch(` itself, and the same global reached through `globalThis.`,
+  // `global.` or `window.`; not `httpFetch(`, `safeFetch(` or another object's
+  // method `.fetch(`.
+  fetch: code =>
+    bareCall(code, /(?<![\w$.])fetch\s*\(/g, null) ||
+    bareCall(code, /(?<![\w$.])(?:globalThis|global|window)\s*\.\s*fetch\s*\(/g, null),
   // Allowed with an agent of `createAgent()` or the options of `getTlsBypassOptions()`.
   'http.request': code =>
     bareCall(
@@ -110,7 +114,11 @@ test('the check sees each bare call, and not the helpers, a method or a comment'
   assert.equal(breaks('fetch', 'return fetch(`${base}/x`, { method: "POST" });'), true);
   assert.equal(breaks('fetch', 'const res = await httpFetch(url, options);'), false);
   assert.equal(breaks('fetch', 'const res = await safeFetch(url);'), false);
+  assert.equal(breaks('fetch', 'const res = await globalThis.fetch(url);'), true);
+  assert.equal(breaks('fetch', 'const res = await global.fetch(url);'), true);
+  assert.equal(breaks('fetch', 'return window . fetch(url);'), true);
   assert.equal(breaks('fetch', 'await cache.fetch(key);'), false);
+  assert.equal(breaks('fetch', 'await myglobal.fetch(key);'), false);
   assert.equal(breaks('fetch', '// fetch(url) skips the whitelist'), false);
   assert.equal(breaks('http.request', 'const req = https.request(options, onResponse);'), true);
   assert.equal(breaks('http.request', 'http.get(url, cb);'), true);
@@ -146,12 +154,17 @@ test('a bare call in a scratch file under the guarded directories fails the guar
     "new WebSocket('wss://whitelisted.example.com', { ...getWebSocketTlsOptions('wss://whitelisted.example.com') });\n"
   );
   await write('tools/helperOnly.js', "await httpFetch('https://search.example.com/api');\n");
+  await write(
+    'tools/scratchGlobal.js',
+    "await globalThis.fetch('https://untrusted.example.net/api');\n"
+  );
   // Outside the guarded directories the guard does not look.
   await write('services/elsewhere/ok.js', "await fetch('https://example.com');\n");
   const found = await scan(root, RULES, { under: GUARDED_DIRS });
   assert.deepEqual(compareWithAllowList(found, []).unlisted, [
     'services/run/scratchProbe.js: http.request',
     'services/run/scratchProbe.js: new WebSocket',
+    'tools/scratchGlobal.js: fetch',
     'tools/scratchSearch.js: fetch'
   ]);
 });

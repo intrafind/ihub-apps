@@ -137,6 +137,20 @@ function interactionsOf({ approvalGate, headless }) {
   return headless ? 'none' : 'person';
 }
 
+/**
+ * Whether a turn runs on the run service: as its caller decided (a caller
+ * with a spec decided on), else as the switch reads now — for a caller that
+ * builds no spec of its own.
+ *
+ * @param {boolean|undefined} decided
+ * @param {Object|null} spec
+ * @returns {boolean}
+ */
+function onRunServiceOf(decided, spec) {
+  if (spec) return true;
+  return typeof decided === 'boolean' ? decided : chatOnRunService();
+}
+
 /** Who answers an approval of a turn, by who can answer its interactions. */
 const APPROVAL_ROUTE_OF = Object.freeze({ owner: 'owner', none: 'deny', person: 'person' });
 
@@ -153,6 +167,9 @@ const APPROVAL_ROUTE_OF = Object.freeze({ owner: 'owner', none: 'deny', person: 
  */
 function turnContextOf(spec, user, interactions) {
   if (isRunContext(spec?.context)) return spec.context;
+  // A scheduled run's context is its caller's (origin `schedule`, without
+  // admin rights): never a person's request built here instead.
+  if (interactions === 'owner') return null;
   const resolved = resolveRequestPrincipal(user, { origin: 'person' });
   if (!resolved.ok) return null;
   return createRunContext({
@@ -354,6 +371,9 @@ export class ChatHost {
    * @param {Object} [params.spec] - the run spec the caller built (`RunService.turnRunSpec`):
    *   the run context and the assembled request. Its `prep` stands for `params.prep`. Without
    *   one the turn runs with a context for `user`, a person's request.
+   * @param {boolean} [params.onRunService] - whether the turn runs on the run service, as the
+   *   caller read the switch `platform.runs.chatOnRunService` (once per turn); a spec means
+   *   on; left out, the switch is read when the turn starts
    * @param {Object} params.prep - `prepareChatRequest().data`
    * @param {string} params.chatId
    * @param {string} [params.messageId] - client exchange id of the assistant placeholder
@@ -641,6 +661,11 @@ export class ChatHost {
       runId: givenRunId && isValidRunId(givenRunId) ? givenRunId : newRunId('chat'),
       refs: { chatId, appId: app?.id, ...(messageId ? { messageId } : {}) },
       interactions: interactionsOf({ approvalGate, headless }),
+      // Decided once per turn: by the caller (`onRunService`; a spec means on),
+      // else here. Never read again while the turn runs.
+      onRunService: onRunServiceOf(params.onRunService, spec),
+      // Who asked, for the log and the audit log of the turn's tool calls.
+      caller: spec?.caller ?? 'chat',
       // Whether the chat is in the store: only then does a generated file go
       // there as soon as its tool finishes (the card links to it).
       chatStored: false
@@ -1012,7 +1037,9 @@ export class ChatHost {
    */
   _toolContext(turn, parts, info) {
     return {
-      origin: 'chat',
+      // The caller of the turn (`chat`, `schedule`, `inference`): the tool
+      // runner logs it and audits a refused call under it.
+      origin: turn.caller,
       // The approval seam is the first seam of the turn.
       approval: 'seam',
       principal: turn.user,
@@ -1058,7 +1085,7 @@ export class ChatHost {
    * @private
    */
   async _runModel(turn, parts, start) {
-    if (!chatOnRunService()) return this._runOnLoop(turn, parts, start);
+    if (!turn.onRunService) return this._runOnLoop(turn, parts, start);
     return this._runOnService(turn, parts, start);
   }
 
@@ -1079,7 +1106,7 @@ export class ChatHost {
         context,
         prep: turn.prep,
         appId: turn.app?.id ?? null,
-        caller: turn.spec?.caller ?? 'chat'
+        caller: turn.caller
       },
       this._loopInputs(turn, start)
     );

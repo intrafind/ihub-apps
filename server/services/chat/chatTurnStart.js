@@ -1292,12 +1292,18 @@ function turnRunContext(turn) {
 async function buildModelRequest(run) {
   const { turn } = run;
   const refreshStatus = new RunStreamEmitter({ streamId: turn.chatId, runId: run.runId });
+  // Whether the turn runs on the run service is decided here, once, and
+  // travels with the turn: the chat host never reads the switch again.
+  run.onRunService = chatOnRunService();
   // On the run service the turn runs in a context of its own: the person's
-  // request, frozen, and the request is built for that context's principal.
-  const context = chatOnRunService() ? turnRunContext(turn) : null;
+  // request, frozen. The request is still built for the request's own
+  // principal (`turn.user`): the context's is a frozen copy with the same id,
+  // and what is bound to the request's object — a guest's identity, which
+  // quota and usage are charged to (`chatOwner.guestIdOf`) — is not on it.
+  const context = run.onRunService ? turnRunContext(turn) : null;
   const prep = await assembleTurn({
     chatService: run.host.chatService,
-    principal: context?.principal ?? turn.user,
+    principal: turn.user,
     request: {
       ...turn.requestOptions,
       onKnowledgeRefresh: ({ total, done }) =>
@@ -1469,6 +1475,7 @@ async function runModelTurn(run) {
 
   const result = await host.chatService.runTurn({
     ...(run.spec ? { spec: run.spec } : {}),
+    onRunService: run.onRunService,
     prep,
     chatId: turn.chatId,
     messageId: turn.messageId,
@@ -1756,7 +1763,8 @@ async function runTurnOnce(
     restoreApproval: null,
     restoreConnect: null,
     connectResume: null,
-    spec: null
+    spec: null,
+    onRunService: false
   };
   try {
     let outcome = null;

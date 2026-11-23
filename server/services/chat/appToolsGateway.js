@@ -201,6 +201,19 @@ export function stripAppToolsForAgent(tools, user) {
 }
 
 /**
+ * The scheduled run a principal names (`scheduledRun`), or null.
+ *
+ * @param {Object|null|undefined} user
+ * @returns {{taskId: string, runId: string}|null}
+ */
+function scheduleOfPrincipal(user) {
+  const scheduled = user?.scheduledRun;
+  return scheduled?.taskId && scheduled?.runId
+    ? { taskId: String(scheduled.taskId), runId: String(scheduled.runId) }
+    : null;
+}
+
+/**
  * Invoke a synthetic app tool. Called by the tool runner
  * (`services/run/ToolRunner.js`) for chat apps and by
  * PromptNodeExecutor.executeToolCall for agent runs when the tool id matches
@@ -279,6 +292,14 @@ export async function invokeAppTool({
   // caller without resolved permissions gets nothing.
   // Both refusals are written to the audit log: no run starts, so the run
   // service never sees them.
+  // The run that starts this one: the calling run's own id when it runs on
+  // the run service, else what the caller names.
+  const parentRunId = parentContext?.runId || executionId || chatId;
+  // A scheduled run on the agent loop directly (the kill switch off) has no
+  // run context: its principal names the task and the run, and the callee
+  // belongs to that run like the caller.
+  const schedule = parentContext ? null : scheduleOfPrincipal(user);
+  const origin = parentContext?.origin ?? (schedule ? 'schedule' : 'person');
   const refuse = (code, message) => {
     auditRefusal({
       principal: user,
@@ -286,7 +307,7 @@ export async function invokeAppTool({
       resourceId: app.id,
       code,
       origin: 'subagent',
-      parentRunId: executionId || chatId,
+      parentRunId,
       summary: `Refused to run app ${app.id}: ${message}`
     });
     return { error: true, message };
@@ -300,7 +321,7 @@ export async function invokeAppTool({
     );
   }
 
-  const resolved = resolveRequestPrincipal(user, { origin: parentContext?.origin ?? 'person' });
+  const resolved = resolveRequestPrincipal(user, { origin });
   if (!resolved.ok) return refuse(resolved.code, resolved.message);
 
   const messageBody = args.message || JSON.stringify(args);
@@ -313,7 +334,7 @@ export async function invokeAppTool({
     appId,
     callerAppId: callerAppId || null,
     callerUserId: user?.id,
-    runId: executionId || chatId,
+    runId: parentRunId,
     modelOverride: modelOverride || null
   });
 
@@ -323,7 +344,8 @@ export async function invokeAppTool({
     // further app tools.
     const context = childRunContext(parentContext, {
       principal: resolved.principal,
-      parentRunId: executionId || chatId
+      parentRunId,
+      schedule
     });
     const result = await runService.run(
       appRunSpec({

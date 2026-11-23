@@ -26,6 +26,8 @@ import { scriptedModel, turn } from './helpers/scriptedModel.js';
 import { fixtureInstallation, fixtureTool } from './helpers/integrationToolFixture.js';
 import { prepareTurn, principalRefOf, runPreparedTurn } from '../services/chat/chatTurnStart.js';
 import { getChatRepository } from '../services/chat/ChatRepository.js';
+import { guestOwnerId, setGuestId } from '../services/chat/chatOwner.js';
+import { quotaUserKey } from '../services/quota/quotaService.js';
 import {
   registerScopeProvider,
   unregisterScopeProvider
@@ -375,6 +377,42 @@ test('without a stream of its own, a caller answers before the turn lets go of t
   assert.equal(outcome.status, 'ran');
   assert.deepEqual(answered, [{ status: 'ran', held: true }]);
   assert.equal(isChatDurable(request.chatId), false);
+});
+
+test("a guest's turn is charged to the guest, for both positions of the run-service switch", async t => {
+  // Usage limits count a guest under its own key (`guest-<hash>`): the model
+  // calls of the turn must carry the request's own principal object, which
+  // the guest's identity is bound to, not a copy of it.
+  const secret = 'd'.repeat(64);
+  const guest = env.principal({ id: 'anonymous', name: 'Anonymous', groups: ['users'] });
+  setGuestId(guest, secret);
+  const charged = [];
+  const quota = env.llmClient.quota;
+  env.llmClient.quota = {
+    assert: async principal => {
+      charged.push(quotaUserKey(principal));
+    }
+  };
+  const platform = env.configCache.getPlatform();
+  t.after(() => {
+    env.llmClient.quota = quota;
+    env.configCache.setCacheEntry('config/platform.json', platform);
+  });
+  for (const onRunService of [true, false]) {
+    env.configCache.setCacheEntry('config/platform.json', {
+      ...platform,
+      runs: { chatOnRunService: onRunService }
+    });
+    const model = scriptedModel([turn.text('Hello, guest.')]);
+    env.model = model;
+    const request = turnRequest({ principalRef: principalRefOf(guest) });
+    const prepared = await prepareTurn(request, host({ user: guest }));
+    assert.equal(prepared.refusal, undefined, JSON.stringify(prepared.refusal));
+    const outcome = await runPreparedTurn(prepared.turn, runHost());
+    assert.equal(outcome.status, 'ran');
+    model.assertDone();
+  }
+  assert.deepEqual(charged, [guestOwnerId(secret), guestOwnerId(secret)]);
 });
 
 test('a model request that cannot be built fails the turn as a run, and the outcome carries the message', async () => {

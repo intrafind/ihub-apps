@@ -491,7 +491,10 @@ calls go through the run service and the tool runner (no `agentLoop.run(`, `new 
 `runTool(` elsewhere, except the frozen legacy workflow executors); an outbound connection in
 `server/tools` or `server/services/run` goes through `httpFetch()` / `createAgent()` /
 `getWebSocketTlsOptions()` / `getTlsBypassOptions()`; no `node:vm`, `eval(` or `new Function(`
-outside a reviewed list. A new exception needs an entry with its reason in the test's allow-list.
+outside a reviewed list. The run-caller and dynamic-code guards take reviewed exceptions: an
+entry with its reason in `runCallersAllowList.json` or `dynamicCodeAllowList.json`. The
+outbound-connection guard has no allow-list: a flagged call is changed to use the
+`server/utils/httpConfig.js` helpers.
 
 For detailed architecture information, see [docs/architecture.md](architecture.md).
 

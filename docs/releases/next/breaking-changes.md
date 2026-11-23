@@ -87,8 +87,10 @@ What a scheduled run of an admin no longer gets:
 
 - **Workflows** that no group of the owner grants. An admin may start every workflow; the run
   may start only the workflows the owner's groups list. The shipped `admins` group lists no
-  workflows, so on a default installation a scheduled task of an admin is offered no workflow.
-  A task whose **Tools** setting names such a workflow pauses with `TOOL_NOT_AVAILABLE`.
+  workflows, so on a default installation a scheduled task of an admin is offered no workflow:
+  the task form no longer lists them. A task saved earlier whose **Tools** setting names such a
+  workflow pauses with `TOOL_NOT_AVAILABLE` ("The app does not offer these tools to a scheduled
+  run: …").
 - **Projects** the owner may read only as an admin (the compliance access to every project).
   The run reaches the projects the owner owns or is a member of.
 - Anything else that checks the admin flag rather than a group permission. Apps, models and
@@ -98,7 +100,9 @@ What a scheduled run of an admin no longer gets:
 Every tool call of a scheduled run, a chat and an app turn of the OpenAI-compatible API is now
 also checked against what the run may use when it is made: a call to an integration that was
 disabled or withdrawn from the owner's groups since the run started is refused, and the refusal
-is written to the audit log (**Admin → Audit Log**, resource `tool`, with the run's id).
+is written to the audit log (**Admin → Audit Log**, resource `tool`, with the run's id; source
+**Scheduled task** for a scheduled run, **API** for the OpenAI-compatible API, **Web** for a
+chat).
 
 **Before upgrading:** Check the scheduled tasks of admins (**Admin → Scheduled Tasks**, or
 `GET /api/admin/scheduled-tasks`) for tasks that use workflows or projects. Grant the workflows

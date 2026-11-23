@@ -75,6 +75,7 @@ import { validateTaskScopes } from './taskScopes.js';
 import { copyTaskFiles, deleteTaskFiles, taskFileScope } from '../../chatFiles/taskFiles.js';
 import { requiresApproval } from './runSeams.js';
 import { ServiceError } from '../../../utils/ServiceError.js';
+import { withoutAdminRights } from '../../run/principalResolver.js';
 
 const COMPONENT = 'ScheduledTaskService';
 
@@ -171,18 +172,34 @@ function localizedName(value, language) {
 }
 
 /**
- * The tools an app offers a user, as a run loads them (with their `_mcp`,
- * `_integration`, … internals), without the scheduling tools: those are not
- * something a task picks for its own runs.
+ * The principal a scheduled run of this owner acts as, for what its tools
+ * are: on the run service, the owner without admin rights (nobody is there,
+ * `principalResolver.scheduledRunContext`), so the task editor offers and a
+ * save accepts exactly the tools a run gets. With the kill switch
+ * `platform.runs.chatOnRunService` off, the owner as they are.
+ *
+ * @param {Object} user
+ * @returns {Promise<Object>}
+ */
+async function scheduledRunPrincipalOf(user) {
+  const { chatOnRunService } = await import('../../run/RunService.js');
+  return chatOnRunService() && user ? withoutAdminRights(user) : user;
+}
+
+/**
+ * The tools an app offers a scheduled run of the user, as a run loads them
+ * (with their `_mcp`, `_integration`, … internals), without the scheduling
+ * tools: those are not something a task picks for its own runs.
  *
  * @param {Object} app
- * @param {Object} user
+ * @param {Object} user - the owner (a run's principal already has no admin rights)
  * @param {string} language
  * @returns {Promise<Object[]>}
  */
 async function offeredToolsOf(app, user, language) {
   const { getToolsForApp } = await import('../../tools/appTools.js');
-  const tools = await getToolsForApp(app, language, { user, language });
+  const runPrincipal = await scheduledRunPrincipalOf(user);
+  const tools = await getToolsForApp(app, language, { user: runPrincipal, language });
   const seen = new Set();
   const out = [];
   for (const tool of Array.isArray(tools) ? tools : []) {
@@ -411,7 +428,7 @@ export async function validateTaskFields(
           fieldError(
             'enabledTools',
             'TOOL_NOT_AVAILABLE',
-            `The app does not offer: ${resolved.unknown.join(', ')}`
+            `The app does not offer these tools to a scheduled run: ${resolved.unknown.join(', ')}`
           )
         );
       }

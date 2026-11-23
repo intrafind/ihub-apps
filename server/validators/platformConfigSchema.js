@@ -825,8 +825,8 @@ export const platformConfigSchema = z
     // Admin → Features: false runs chat turns, scheduled runs and the app
     // turns of the inference API on the agent loop directly, as before they
     // moved onto the run service (and a scheduled run of an admin keeps the
-    // admin rights). Absent means true. Needs a server restart; removed one
-    // release after it shipped.
+    // admin rights). Absent means true. Needs a server restart (each turn
+    // reads it once, when it starts); removed one release after it shipped.
     runs: z
       .object({
         chatOnRunService: z.boolean().prefault(true)

@@ -121,9 +121,10 @@ function prepStatus(code) {
  * @param {Object} options.variables - Variables for the template and the system prompt.
  * @param {string} options.chatId
  * @param {number} [options.maxOutputTokens] - Caller's cap; the model's own cap still applies.
- * @returns {Promise<{prep: Object, spec: Readonly<Object>|null, app: Object, model: Object,
- *   label: string, format: Object|null, renderedContent: string}>} `spec`: the run spec the
- *   turn runs with on the run service (`RunService.turnRunSpec`), null with the kill switch off
+ * @returns {Promise<{prep: Object, spec: Readonly<Object>|null, onRunService: boolean,
+ *   app: Object, model: Object, label: string, format: Object|null, renderedContent: string}>}
+ *   `spec`: the run spec the turn runs with on the run service (`RunService.turnRunSpec`), null
+ *   with the kill switch off; `onRunService`: the switch as this turn read it
  * @throws {InferenceApiError}
  */
 export async function prepareAppTurn({
@@ -151,12 +152,17 @@ export async function prepareAppTurn({
   );
   // On the run service the turn runs in a context of its own: the caller's
   // request, which nobody can answer an approval for (`approvalRoute: 'deny'`).
-  const context = chatOnRunService() ? turnRunContext(user) : null;
+  // Decided once, here: the turn carries it to the chat host.
+  const onRunService = chatOnRunService();
+  const context = onRunService ? turnRunContext(user) : null;
   let result;
   try {
+    // Built for the request's own principal: a guest's identity, which quota
+    // and usage are charged to, is bound to that object, not to the
+    // context's frozen copy (same id).
     result = await assembleTurn({
       chatService,
-      principal: context?.principal ?? user,
+      principal: user,
       request: {
         appId: app.id,
         modelId: target.modelId || undefined,
@@ -197,6 +203,7 @@ export async function prepareAppTurn({
   return {
     prep,
     spec: context ? turnRunSpec({ context, prep, caller: 'inference' }) : null,
+    onRunService,
     app,
     model: prep.model,
     label,
@@ -259,6 +266,7 @@ export async function executeAppTurn({
   await chatService.logInteraction('chat_request', buildLogData(true));
   const outcome = await chatService.runTurn({
     ...(prepared.spec ? { spec: prepared.spec } : {}),
+    ...(typeof prepared.onRunService === 'boolean' ? { onRunService: prepared.onRunService } : {}),
     prep,
     chatId,
     messageId,

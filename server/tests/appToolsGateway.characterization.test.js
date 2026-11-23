@@ -218,14 +218,16 @@ test('from a chat turn: the calling model gets the result as the tool message of
     finishReason: 'stop'
   });
 
-  // Two runs: the chat turn and, linked to the chat by its id, the app call.
+  // Two runs: the chat turn and, linked to the turn's run by its id, the app
+  // call (the turn runs on the run service; golden difference row
+  // `nested-run-parent`).
   const starts = eventsOf(RUN_LOG_EVENTS.RUN_START);
   assert.deepEqual(
     starts.map(start => start.data.kind),
     ['chat', 'subagent']
   );
-  assert.equal(starts[1].data.parentRunId, CHAT);
-  assert.notEqual(starts[1].data.parentRunId, starts[0].runId);
+  assert.equal(starts[1].data.parentRunId, starts[0].runId);
+  assert.notEqual(starts[1].data.parentRunId, CHAT);
 
   // What the user's stream shows of the call: one tool row, nothing of the specialist's run.
   const frames = env.envelopes.map(entry => entry.envelope);

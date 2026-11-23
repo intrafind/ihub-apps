@@ -198,7 +198,10 @@ async function authorizeRun(task, user, language) {
     const offered = new Set((await toolsOfferedByApp(app, user, language)).map(tool => tool.id));
     const missing = task.enabledTools.filter(id => !offered.has(id));
     if (missing.length > 0) {
-      throw pause('TOOL_NOT_AVAILABLE', `The app no longer offers: ${missing.join(', ')}`);
+      throw pause(
+        'TOOL_NOT_AVAILABLE',
+        `The app does not offer these tools to a scheduled run: ${missing.join(', ')}`
+      );
     }
   }
   // Where the run's integrations search and whom they ask: the task's
@@ -628,6 +631,8 @@ export async function executeTaskRun({ taskId, runId }, deps = {}) {
     try {
       outcome = await service.runTurn({
         ...(context ? { spec: turnRunSpec({ context, prep: prepared, caller: 'schedule' }) } : {}),
+        // The switch as `runPrincipalOf` read it: a context exactly when on.
+        onRunService: Boolean(context),
         prep: prepared,
         chatId: run.chatId,
         messageId,

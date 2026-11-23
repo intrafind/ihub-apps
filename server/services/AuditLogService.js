@@ -166,7 +166,7 @@ export async function flushAuditLog() {
  * @param {string} [options.resourceId] - ID of the affected resource
  * @param {string} [options.summary] - Human-readable summary of the action
  * @param {'success'|'failure'} [options.result='success'] - Outcome of the action
- * @param {string} [options.source] - 'web' | 'mcp' | 'api' | 'admin' (derived from req when omitted)
+ * @param {string} [options.source] - 'web' | 'mcp' | 'api' | 'admin' | 'schedule' (derived from req when omitted)
  * @param {Object} [options.actor] - Explicit actor for pre-auth events (e.g. failed login)
  * @param {string} [options.requestId] - Explicit request id (used by the middleware,
  *   whose res 'finish' callback may run outside the request's async context)

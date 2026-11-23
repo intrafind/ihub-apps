@@ -264,7 +264,8 @@ export class ToolRunner {
    * @param {AbortSignal} [request.signal] - The caller's abort signal; reaches integration
    *   tools and an app run as a tool
    * @param {Object} request.toolContext - What the caller vouches for:
-   * @param {string} request.toolContext.origin - `chat`, `subagent`, `mcp`, `a2a` (logged)
+   * @param {string} request.toolContext.origin - `chat`, `schedule`, `inference`, `subagent`, `mcp`,
+   *   `a2a` (logged, and the audit source of a refused call)
    * @param {'seam'|'refuse'|'caller'} request.toolContext.approval - who decides approval,
    *   see {@link APPROVAL_DECIDERS}
    * @param {Object} [request.toolContext.principal] - the identity the tool runs as

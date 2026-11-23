@@ -15,8 +15,16 @@
 
 import { logAudit } from '../AuditLogService.js';
 
-/** The audit source of a call, by the caller that made it. */
-const SOURCE_BY_ORIGIN = Object.freeze({ mcp: 'mcp', a2a: 'api', inference: 'api' });
+/**
+ * The audit source of a call, by the caller that made it: a person's chat (and
+ * an app it called as a tool) is `web`, a scheduled run is `schedule`.
+ */
+const SOURCE_BY_ORIGIN = Object.freeze({
+  mcp: 'mcp',
+  a2a: 'api',
+  inference: 'api',
+  schedule: 'schedule'
+});
 
 /**
  * Record a refusal in the audit log.

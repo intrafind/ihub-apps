@@ -306,29 +306,34 @@ export function withToolGrant(context, toolIds, { runId } = {}) {
  * same origin and attendance, one level deeper, under the parent's id, with
  * the principal the child acts as and no tools until the child's are known.
  *
- * Without a parent context (a chat turn, which does not run on the run service
- * yet) the parent is a top-level run of a person with this principal.
+ * Without a parent context (a turn on the agent loop directly, the kill switch
+ * `platform.runs.chatOnRunService` off) the parent is a top-level run with this
+ * principal: a person's, or — with `schedule` — the scheduled run it belongs to.
  *
  * @param {Object|null} parent - the parent's run context, or null
  * @param {Object} params
  * @param {Object} params.principal - the principal the child acts as
- * @param {string|null} [params.parentRunId]
+ * @param {string|null} [params.parentRunId] - the parent's run id; left out, the parent's own
+ *   `runId`, then its `parentRunId`
+ * @param {{taskId: string, runId: string}|null} [params.schedule] - without a parent context:
+ *   the scheduled run the child belongs to (origin `schedule`); ignored with one
  * @returns {Readonly<Object>}
  * @throws {RunContextError} past {@link MAX_RUN_DEPTH}, or a principal without permissions
  */
-export function childRunContext(parent, { principal, parentRunId = null }) {
+export function childRunContext(parent, { principal, parentRunId = null, schedule = null }) {
   if (parent && !isRunContext(parent)) {
     throw new RunContextError(RUN_CONTEXT_ERROR_CODES.INVALID, 'Not a run context');
   }
+  const scheduled = parent ? (parent.schedule ?? null) : schedule;
   return createRunContext({
     principal,
     principalType: parent?.principalType,
-    origin: parent?.origin ?? 'person',
-    schedule: parent?.schedule ?? null,
+    origin: parent?.origin ?? (scheduled ? 'schedule' : 'person'),
+    schedule: scheduled,
     approvalRoute: parent?.approvalRoute,
     agentId: parent?.agentId ?? null,
     agentVersion: parent?.agentVersion ?? null,
-    parentRunId: parentRunId ?? parent?.parentRunId ?? null,
+    parentRunId: parentRunId ?? parent?.runId ?? parent?.parentRunId ?? null,
     depth: (parent?.depth ?? 0) + 1,
     integrationGrant: parent?.integrationGrant ?? null,
     budget: parent?.budget ?? {},

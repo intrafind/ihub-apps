@@ -94,7 +94,8 @@ function approvalFor(interactions, bindings) {
  * @param {Function} params.bindings.buildLogData
  * @param {Function} params.bindings.logInteraction
  * @param {Object} params.bindings.toolRunner
- * @param {string} [params.bindings.origin='subagent'] - the run kind, for the runner's log
+ * @param {string} [params.bindings.origin='subagent'] - the caller, for the runner's log and the
+ *   audit log of a refused call
  * @param {Object} [params.bindings.approval] - the chat's approval state: `grants`,
  *   `approvedCall`, `interactionService`, `runLog`, and `headless` when the person cannot
  *   approve (`person` only)

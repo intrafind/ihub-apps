@@ -20,8 +20,10 @@ at the start of a run, and tells you only what is new
 **A run has the rights of its owner's groups, never admin rights.** Nobody is there while a run
 works, so the owner's admin flag does not count: a scheduled task of an admin is offered only the
 workflows and reaches only the projects its owner's groups grant, like a task of any other user.
-Every tool call is checked again when it is made; a call to an integration that was disabled or
-withdrawn from the owner's groups since the run started is refused and written to the audit log.
+The task form's **Tools** list shows the same tools a run gets, so an admin is not offered a
+workflow the run could not start. Every tool call is checked again when it is made; a call to an
+integration that was disabled or withdrawn from the owner's groups since the run started is
+refused and written to the audit log (source **Scheduled task**).
 
 The feature is on by default; an admin can switch it off under Admin → Platform → Features.
 

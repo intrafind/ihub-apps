@@ -314,6 +314,7 @@ function finish(code) {
         }
       }
     })
+    .catch(error => console.error(`[compare] cleanup failed: ${error.message}`))
     .finally(() => process.exit(code));
 }
 for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => finish(130));

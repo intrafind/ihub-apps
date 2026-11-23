@@ -666,7 +666,9 @@ export class RunService {
         buildLogData: host.buildLogData,
         logInteraction: svc.logInteraction,
         toolRunner: svc.toolRunner,
-        origin: 'chat',
+        // Who asked (`chat`, `schedule`, `inference`): the runner logs it and
+        // audits a refused passthrough call under it.
+        origin: spec.caller || 'chat',
         ...host.interactionBindings
       }
     });
@@ -713,7 +715,7 @@ export class RunService {
                 toolDef,
                 args,
                 signal,
-                toolContext: { ...host.toolContext(info), run }
+                toolContext: { ...host.toolContext(info), origin: spec.caller || 'chat', run }
               })
           })
       );

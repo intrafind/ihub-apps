@@ -490,7 +490,9 @@ always first, so a gated call is decided before any seam announces, runs or reco
 was granted, an integration's installation is still there and enabled and the principal's
 groups still grant it, a people directory is one the principal may use, an app is one the
 principal may open. A refused call never reaches the tool, the model gets the refusal as the
-tool result, and the audit log gets an entry (resource `tool`, `details.runId`).
+tool result, and the audit log gets an entry (resource `tool`, `details.runId`, and the
+turn's caller as `details.origin` and `source`: `chat` / `web`, `schedule` / `schedule`,
+`inference` / `api`).
 
 **Callers.**
 
@@ -525,7 +527,8 @@ kind and model. See [Telemetry](telemetry.md).
 **Kill switch.** `platform.runs.chatOnRunService: false` (not in Admin → Features; server
 restart) runs chat turns, scheduled runs and `/v1` app turns on the agent loop directly, with
 the seams they had before, and the callers keep their principals as they were (a scheduled
-run of an admin keeps the admin rights). It is removed one release after it shipped.
+run of an admin keeps the admin rights). Each turn reads the switch once, when its caller
+starts it, and keeps that answer to its end. It is removed one release after it shipped.
 
 **Architecture guards** (`server/tests/architecture/`): no `agentLoop.run(`,
 `new AgentLoop(` or `runTool(` outside `server/services/run/` except

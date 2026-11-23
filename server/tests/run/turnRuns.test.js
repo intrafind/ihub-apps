@@ -38,6 +38,8 @@ import { openAiErrorObject } from '../../services/inference/errors.js';
 import { queryAuditLog } from '../../services/AuditLogService.js';
 import { currentRunScope } from '../../utils/runScope.js';
 import { buildCustomAttributes } from '../../telemetry/attributes.js';
+import { guestOwnerId, setGuestId } from '../../services/chat/chatOwner.js';
+import { quotaUserKey } from '../../services/quota/quotaService.js';
 
 let env;
 let user;
@@ -106,8 +108,11 @@ function scriptRefusedLookup(t) {
   ]);
 }
 
-/** The refusal reached the model, the tool never ran, and the audit log names the run. */
-async function assertRefusedAndAudited(model, runId, since) {
+/**
+ * The refusal reached the model, the tool never ran, and the audit log names
+ * the run and its caller (`details.origin`, and the `source` it maps to).
+ */
+async function assertRefusedAndAudited(model, runId, since, { origin, source }) {
   assert.equal(toolRuns.lookup.length, 0, 'the refused tool never ran');
   const toolMessage = model.requests[1].body.messages.find(message => message.role === 'tool');
   assert.match(toolMessage.content, /not permitted for this caller/);
@@ -116,6 +121,8 @@ async function assertRefusedAndAudited(model, runId, since) {
   assert.equal(entries[0].details.code, TOOL_REFUSAL_CODES.NOT_GRANTED);
   assert.equal(entries[0].details.runId, runId);
   assert.equal(entries[0].actor.id, 'u-turn');
+  assert.equal(entries[0].details.origin, origin);
+  assert.equal(entries[0].source, source);
 }
 
 describe('a tool call outside the grant of a turn is refused and audited', () => {
@@ -128,7 +135,7 @@ describe('a tool call outside the grant of a turn is refused and audited', () =>
     const summary = await runTurn({ spec: turnRunSpec({ context, prep }), chatId, prep });
     assert.equal(summary.status, 'completed');
     assert.equal(summary.content, 'I could not look it up.');
-    await assertRefusedAndAudited(model, summary.runId, since);
+    await assertRefusedAndAudited(model, summary.runId, since, { origin: 'chat', source: 'web' });
   });
 
   it('a scheduled run', async t => {
@@ -146,7 +153,10 @@ describe('a tool call outside the grant of a turn is refused and audited', () =>
       approvalGate: approvalSeam({ headless: true, fallback: 'park' })
     });
     assert.equal(summary.status, 'completed');
-    await assertRefusedAndAudited(model, summary.runId, since);
+    await assertRefusedAndAudited(model, summary.runId, since, {
+      origin: 'schedule',
+      source: 'schedule'
+    });
   });
 
   it('an app turn of the inference API', async t => {
@@ -177,7 +187,7 @@ describe('a tool call outside the grant of a turn is refused and audited', () =>
       emitter: new RunStreamEmitter({ streamId: chatId, runId, deliver: () => true })
     });
     assert.equal(outcome.status, 'completed');
-    await assertRefusedAndAudited(model, runId, since);
+    await assertRefusedAndAudited(model, runId, since, { origin: 'inference', source: 'api' });
   });
 });
 
@@ -244,6 +254,129 @@ describe('the run context of a turn', () => {
       () => createRunContext({ principal: user, schedule: { taskId: 't', runId: 'r' } }),
       /origin schedule/
     );
+  });
+});
+
+describe('the kill switch is read once per turn', () => {
+  const capturingSeam = seen => ({
+    name: 'capture-run',
+    preStep(ctx) {
+      seen.push(ctx.meta.run ?? null);
+    }
+  });
+
+  /** Set `platform.runs.chatOnRunService` for one test. */
+  function switchTo(t, on) {
+    const platform = env.configCache.getPlatform();
+    env.configCache.setCacheEntry('config/platform.json', {
+      ...platform,
+      runs: { chatOnRunService: on }
+    });
+    t.after(() => env.configCache.setCacheEntry('config/platform.json', platform));
+  }
+
+  it('a turn its caller started on the run service stays there when the switch is turned off meanwhile', async t => {
+    env.script(t, [turn.text('Done.', { usage: USAGE })]);
+    const { context } = requestRunContext(user);
+    const chatId = newChatId('switch-on');
+    const prep = await prepared(context, chatId);
+    switchTo(t, false);
+    const seen = [];
+    await runTurn({
+      spec: turnRunSpec({ context, prep }),
+      chatId,
+      prep,
+      extraSeams: [capturingSeam(seen)]
+    });
+    assert.ok(isRunContext(seen[0]), 'ran on the run service');
+  });
+
+  it('a turn its caller started on the agent loop stays there when the switch is turned on meanwhile', async t => {
+    env.script(t, [turn.text('Done.', { usage: USAGE })]);
+    const { context } = requestRunContext(user);
+    const chatId = newChatId('switch-off');
+    const prep = await prepared(context, chatId);
+    switchTo(t, true);
+    const seen = [];
+    const summary = await env.chatService.runTurn({
+      prep,
+      onRunService: false,
+      chatId,
+      streaming: false,
+      buildLogData: () => ({}),
+      language: 'en',
+      user,
+      getLocalizedError: async () => null,
+      extraSeams: [capturingSeam(seen)]
+    });
+    assert.equal(summary.status, 'completed');
+    assert.equal(seen[0], null, 'ran on the agent loop');
+  });
+
+  it("a scheduled turn without its caller's context is refused, never run as a person's request", async t => {
+    env.script(t, []);
+    const { context } = scheduledRunContext(user, { taskId: 'task-1', runId: 'run-1' });
+    const chatId = newChatId('owner-no-spec');
+    const prep = await prepared(context, chatId);
+    const summary = await env.chatService.runTurn({
+      prep,
+      onRunService: true,
+      chatId,
+      streaming: false,
+      headless: true,
+      approvalGate: approvalSeam({ headless: true, fallback: 'park' }),
+      buildLogData: () => ({}),
+      language: 'en',
+      user: context.principal,
+      getLocalizedError: async () => null
+    });
+    assert.equal(summary.status, 'error');
+    assert.equal(summary.errorInfo.code, RUN_REFUSAL_CODES.CONTEXT_INVALID);
+  });
+});
+
+describe("a guest's app turn of the inference API", () => {
+  it('is charged to the guest: the request is built for the request’s own principal', async t => {
+    const secret = 'e'.repeat(64);
+    const guest = env.principal({ id: 'anonymous', name: 'Anonymous', groups: ['users'] });
+    setGuestId(guest, secret);
+    const charged = [];
+    const quota = env.llmClient.quota;
+    env.llmClient.quota = {
+      assert: async principal => {
+        charged.push(quotaUserKey(principal));
+      }
+    };
+    t.after(() => {
+      env.llmClient.quota = quota;
+    });
+    env.script(t, [turn.text('Hello, guest.', { usage: USAGE })]);
+    const chatId = newChatId('v1-guest');
+    const ready = await prepareAppTurn({
+      chatService: env.chatService,
+      target: { app: env.configCache.getApps().data.find(a => a.id === 'specialist') },
+      user: guest,
+      language: 'en',
+      messages: [{ role: 'user', content: 'Hello.' }],
+      applyTemplate: true,
+      variables: {},
+      chatId
+    });
+    assert.equal(ready.onRunService, true);
+    assert.equal(ready.prep.llmOptions.user, guest);
+    const runId = newRunId('chat');
+    const outcome = await executeAppTurn({
+      chatService: env.chatService,
+      prepared: ready,
+      chatId,
+      runId,
+      user: guest,
+      language: 'en',
+      validate: false,
+      emitter: new RunStreamEmitter({ streamId: chatId, runId, deliver: () => true })
+    });
+    assert.equal(outcome.status, 'completed');
+    assert.deepEqual(charged, [guestOwnerId(secret)]);
   });
 });
 
