@@ -679,7 +679,7 @@ export class UserAppService {
    * @param {boolean} [options.publishAvailable=false] - Whether the publish route is registered.
    * @returns {Promise<{enabled: boolean, canCreate: boolean, canShare: boolean,
    *   canPublish: boolean, maxApps: number, used: number, generator: boolean,
-   *   capabilities: {modelChoice: boolean, upload: boolean, webSearch: boolean, skills: boolean,
+   *   generatorEnabled: boolean, capabilities: {modelChoice: boolean, upload: boolean, webSearch: boolean, skills: boolean,
    *   integrations: Array<{id: string, label: string,
    *   actions: Array<{name: string, description: string}>}>}}>}
    */
@@ -709,6 +709,9 @@ export class UserAppService {
       maxApps: settings.limits.maxAppsPerUser,
       used,
       generator: canCreate && isFeatureEnabled('appGenerator', features),
+      // Whether drafting with AI is on for personal apps, create rights aside: an
+      // editor of a shared app gets the conversation and "Improve with AI" with it.
+      generatorEnabled: enabled && isFeatureEnabled('appGenerator', features),
       capabilities: canCreate
         ? {
             modelChoice: settings.capabilities.modelChoice,

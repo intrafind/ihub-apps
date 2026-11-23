@@ -71,6 +71,7 @@ import {
 } from '../components/user-app/userAppErrors';
 import {
   formFromApp,
+  offersAiChanges,
   patchFor,
   readOnlyReason,
   userAppStateChip,
@@ -403,10 +404,13 @@ function UserAppEditPage() {
     }
   };
 
-  // The conversation (`?view=conversation`) needs the preview feature, drafts for personal
-  // apps, and an author who may edit the app.
-  const conversationOffered =
-    features.chat && config?.generator === true && status === 'ready' && Boolean(form) && !readOnly;
+  // The conversation and "Improve with AI" need drafts for personal apps and an author who may
+  // edit this app; create rights are not needed (owner decision of 2026-11-23).
+  const aiOffered = offersAiChanges(config, app);
+  // Every turn names the app: the server answers an editor without create rights by it.
+  const refine = useCallback(request => userAppSource.refineDraft({ ...request, appId }), [appId]);
+  // The conversation (`?view=conversation`) also needs the preview feature.
+  const conversationOffered = features.chat && aiOffered && status === 'ready' && Boolean(form);
   const conversationView =
     conversationOffered &&
     new URLSearchParams(location.search).get(VIEW_PARAM) === CONVERSATION_VIEW;
@@ -676,7 +680,7 @@ function UserAppEditPage() {
                 target="personal"
                 form={form}
                 language={contentLanguage}
-                refine={userAppSource.refineDraft}
+                refine={refine}
                 persist={persistFromConversation}
                 stakes={stakes}
                 testOpen={testOpen && wide}
@@ -715,11 +719,7 @@ function UserAppEditPage() {
                     description={t('userApps.edit.instructionsDesc')}
                     readOnly={formDisabled}
                     // "Improve with AI" over `POST /api/apps/_revise`, with drafts for personal apps.
-                    onImprove={
-                      config?.generator === true && !formDisabled
-                        ? () => setImproveOpen(true)
-                        : undefined
-                    }
+                    onImprove={aiOffered ? () => setImproveOpen(true) : undefined}
                   />
                   <VariablesSection app={form} onChange={applySections} showStartOptions={false} />
                   <StarterPromptsSection app={form} onChange={applySections} showAutoSend={false} />
@@ -783,7 +783,7 @@ function UserAppEditPage() {
         <ImproveInstructionsDialog
           isOpen={improveOpen}
           onClose={() => setImproveOpen(false)}
-          refine={userAppSource.refineDraft}
+          refine={refine}
           draft={draftOf(form, 'personal')}
           language={contentLanguage}
           // Into the form only: Save keeps it, Discard takes it back.

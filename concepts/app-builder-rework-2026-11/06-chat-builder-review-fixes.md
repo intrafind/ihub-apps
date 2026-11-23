@@ -67,8 +67,9 @@ A request over a limit gets `400 APP_REVISE_TOO_LONG` with `details.field` (the 
 `details.max`, before the limiter counts it, on both routes. The client shows the old sentence for
 `system` and a new one (`admin.apps.conversation.error.contentTooLong`) for every other key.
 
-**Open point.** The admin limits are a choice made here, not a product decision. If an admin app
-legitimately needs more (say, 15 input fields), raise the number in `REVISE_CONTENT_LIMITS.admin`.
+**Open point (closed).** The admin limits were a choice made here; the owner confirmed them on
+2026-11-23 (see "Owner decisions" below). If an admin app legitimately needs more (say, 15 input
+fields), raise the number in `REVISE_CONTENT_LIMITS.admin`.
 
 **Tests.** `server/tests/app-revision.test.js` ("the limits of the content a turn reads"),
 `server/tests/app-revise-route.test.js`.
@@ -119,5 +120,31 @@ The behaviour is unchanged; the existing tests of `app-revision.test.js` guard i
 
 ## Not changed
 
-The personal route's `mayCreate` gate stays as it is; whether it should apply to revising is a
-product question for the owner.
+The personal route's `mayCreate` gate stayed as it was in this round; the owner decided the
+question afterwards (next section).
+
+## Owner decisions (2026-11-23)
+
+1. **Editors of shared personal apps get the conversation and "Improve with AI"**, even when they
+   may not create personal apps themselves.
+   - Server: `POST /api/apps/_revise` takes an optional `appId` (a personal app ID, else
+     `400 VALIDATION_FAILED` with the pointer `/appId`). A caller who may create personal apps
+     is answered as before. Anyone else needs `appId`, and is checked as
+     `PATCH /api/apps/{appId}` checks: `userAppAccessRequired('view')` (now with an `appIdOf`
+     option, so it reads the ID from the body) and then `requireLevel(req, 'edit')`. An app the
+     caller cannot see answers the `404 NOT_FOUND` of an unknown ID; one they may only use,
+     `403 PERMISSION_DENIED` (`details.required: 'edit'`); no `appId`, the old
+     `403 PERMISSION_DENIED` (`details.required: 'userApps'`). The order is gate,
+     `appGenerator`, body, access, limiter, so a refused request is never counted. The audit
+     entry carries `appId`, never a text. The personal ceiling for suggestions is unchanged.
+   - `GET /api/apps/_config` gained `generatorEnabled` (drafting with AI is on for personal
+     apps, create rights aside). `generator` is unchanged and still drives the create page.
+   - Client: the personal editor shows both features when `generatorEnabled` is on and the
+     caller may edit the app (`offersAiChanges` in `userAppForm.js`), and sends `appId` with
+     every turn (`refineDraft({ ...request, appId })`).
+   - Tests: `server/tests/app-revise-route-personal.test.js` ("a turn for an app the caller may
+     edit"), `tests/unit/client/user-app-conversation.test.jsx` ("an editor of a shared app who
+     may not create personal apps"), `tests/unit/client/app-editor-improve.test.jsx` ("in the
+     personal editor"), e2e case 10 of `tests/e2e/user-apps.spec.js`.
+2. **The admin content limits of a revision turn** (`REVISE_CONTENT_LIMITS` in
+   `shared/appRevision.js`) are confirmed as chosen in section 4.

@@ -11,6 +11,8 @@
  *   `If-Match`) and restarts the test chat; a 409 writes nothing and says so.
  * - Undo saves the values from before.
  * - A person who cannot edit the app gets no conversation.
+ * - An editor of a shared app who may not create apps gets the conversation
+ *   and "Improve with AI"; every turn names the app (`appId`).
  *
  * The page, its parts and the conversation are the real ones; the API module
  * is a stub, and every call past it or to the admin API is recorded and fails.
@@ -220,6 +222,7 @@ test('a turn goes to the personal route with the content a personal app has', as
   expect(mockApi.reviseUserApp).toHaveBeenCalledTimes(1);
   const [request] = mockApi.reviseUserApp.mock.calls[0];
   expect(request.conversation).toEqual([{ role: 'author', text: 'More formal, please' }]);
+  expect(request.appId).toBe(APP_ID);
   expect(request.language).toBe('en');
   expect(request.signal).toBeInstanceOf(AbortSignal);
   const allowed = appRevisionKeys('personal');
@@ -310,7 +313,7 @@ test('"Improve with AI" goes to the personal route and writes into the form only
   await click(screen.getByRole('button', { name: en.admin.apps.edit.improve.chips.formal }));
 
   const [request] = mockApi.reviseUserApp.mock.calls[0];
-  expect(request).toMatchObject({ fields: ['system'], allowQuestions: false });
+  expect(request).toMatchObject({ appId: APP_ID, fields: ['system'], allowQuestions: false });
   expect(request.conversation).toHaveLength(1);
   await click(screen.getByRole('button', { name: en.admin.apps.edit.improve.use }));
 
@@ -320,9 +323,68 @@ test('"Improve with AI" goes to the personal route and writes into the form only
 });
 
 test('without drafts for personal apps there is no "Improve with AI"', async () => {
-  mockUserApps.config = { ...CONFIG, generator: false };
+  mockUserApps.config = { ...CONFIG, generator: false, generatorEnabled: false };
   await renderEditor({ path: `/apps/${APP_ID}/edit` });
   expect(
     screen.queryByRole('button', { name: en.admin.apps.edit.improve.action })
   ).not.toBeInTheDocument();
+});
+
+describe('an editor of a shared app who may not create personal apps', () => {
+  /** What `GET /api/apps/_config` answers a person without create rights. */
+  const NO_CREATE = {
+    ...CONFIG,
+    canCreate: false,
+    canShare: false,
+    generator: false,
+    generatorEnabled: true
+  };
+  const EDITOR = { ...EDITOR_PERMISSIONS, canShare: false };
+  const READER = { ...EDITOR_PERMISSIONS, canEdit: false, canShare: false, role: 'user' };
+
+  beforeEach(() => {
+    mockUserApps.config = NO_CREATE;
+  });
+
+  test('gets the conversation, and every turn names the app', async () => {
+    mockApi.fetchUserApp.mockResolvedValue(userApp({ permissions: EDITOR }));
+    mockApi.reviseUserApp.mockResolvedValue(CHANGE);
+    await renderEditor();
+    expect(screen.getByTestId('conversation-panel')).toBeInTheDocument();
+    await say('More formal, please');
+    expect(mockApi.reviseUserApp).toHaveBeenCalledTimes(1);
+    expect(mockApi.reviseUserApp.mock.calls[0][0].appId).toBe(APP_ID);
+  });
+
+  test('gets "Improve with AI", and its turn names the app', async () => {
+    mockApi.fetchUserApp.mockResolvedValue(userApp({ permissions: EDITOR }));
+    mockApi.reviseUserApp.mockResolvedValue(CHANGE);
+    await renderEditor({ path: `/apps/${APP_ID}/edit` });
+    await click(screen.getByRole('button', { name: en.admin.apps.edit.improve.action }));
+    await click(screen.getByRole('button', { name: en.admin.apps.edit.improve.chips.formal }));
+    expect(mockApi.reviseUserApp.mock.calls[0][0]).toMatchObject({
+      appId: APP_ID,
+      fields: ['system']
+    });
+  });
+
+  test('a reader gets neither', async () => {
+    mockApi.fetchUserApp.mockResolvedValue(userApp({ permissions: READER }));
+    await renderEditor();
+    expect(screen.queryByTestId('conversation-panel')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: en.admin.apps.edit.improve.action })
+    ).not.toBeInTheDocument();
+    expect(mockApi.reviseUserApp).not.toHaveBeenCalled();
+  });
+
+  test('gets neither while drafting with AI is off', async () => {
+    mockUserApps.config = { ...NO_CREATE, generatorEnabled: false };
+    mockApi.fetchUserApp.mockResolvedValue(userApp({ permissions: EDITOR }));
+    await renderEditor();
+    expect(screen.queryByTestId('conversation-panel')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: en.admin.apps.edit.improve.action })
+    ).not.toBeInTheDocument();
+  });
 });

@@ -53,7 +53,9 @@ export const ifMatch = revision =>
  * @param {{language?: string}} [options]
  * @returns {Promise<{enabled: boolean, canCreate: boolean, canShare: boolean,
  *   canPublish: boolean, maxApps: number, used: number, generator: boolean,
- *   capabilities: Object}>} The `userApps` block of the answer.
+ *   generatorEnabled: boolean, capabilities: Object}>} The `userApps` block of the
+ *   answer. `generator` needs create rights; `generatorEnabled` says only that
+ *   drafting with AI is on, for the editor of an app the caller may change.
  */
 export const fetchUserAppsConfig = async ({ language } = {}) => {
   const data = await call(() =>
@@ -121,6 +123,8 @@ export const generateUserApp = ({ description, language, signal } = {}) =>
  * signal cancels the request, and the server then stops the model call.
  *
  * @param {Object} request
+ * @param {string} [request.appId] - The personal app the turn is for. The editor
+ *   always sends it: a caller who may edit the app but not create apps needs it.
  * @param {Object} request.draft - The app's content as the editor holds it.
  * @param {Array<{role: 'author'|'builder', kind?: string, text: string}>} request.conversation
  * @param {string} [request.language] - The content language of the app.
@@ -130,6 +134,7 @@ export const generateUserApp = ({ description, language, signal } = {}) =>
  * @returns {Promise<Object>} `{ reply, text, question, patch, changed, suggestions, warnings, model }`
  */
 export const reviseUserApp = ({
+  appId,
   draft,
   conversation,
   language,
@@ -141,6 +146,7 @@ export const reviseUserApp = ({
     apiClient.post(
       `${APPS_PATH}/_revise`,
       {
+        ...(appId ? { appId } : {}),
         draft,
         conversation,
         ...(language ? { language } : {}),

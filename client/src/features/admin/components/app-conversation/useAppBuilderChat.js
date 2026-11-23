@@ -34,8 +34,10 @@ export function arrivalQuery(origin, flags) {
  * (`useFeatureFlags().isEnabled`).
  *
  * The conversation needs `appBuilderChat` (preview, default off). The admin
- * editor also needs `appGenerator` (default on); the personal editor reads
- * that one from `GET /api/apps/_config` (`generator`), as its create page does.
+ * editor also needs `appGenerator` (default on). The personal pages read it
+ * from `GET /api/apps/_config`: the create page from `generator` (create
+ * rights), the editor from `generatorEnabled` together with the caller's
+ * edit rights on the app (`offersAiChanges` in `userAppForm.js`).
  *
  * @returns {{ chat: boolean, generator: boolean }}
  */

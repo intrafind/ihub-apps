@@ -12,6 +12,10 @@
  *   before and after, and "Use this text" hands the whole new value to the
  *   form. It saves nothing.
  *
+ * - The personal editor offers it to whoever may edit the app while drafting
+ *   with AI is on (`offersAiChanges`), create rights aside, and the request
+ *   names the app (`appId`).
+ *
  * The personal editor's wiring (over `POST /api/apps/_revise`) is in
  * user-app-conversation.test.jsx.
  */
@@ -45,6 +49,13 @@ const SystemInstructionsSection =
   require('../../../client/src/features/admin/components/app-form/SystemInstructionsSection').default;
 const ImproveInstructionsDialog =
   require('../../../client/src/features/admin/components/app-form/ImproveInstructionsDialog').default;
+
+const {
+  offersAiChanges
+} = require('../../../client/src/features/apps/components/user-app/userAppForm');
+const { apiClient } = require('../../../client/src/api/client');
+const { reviseUserApp } = require('../../../client/src/api/endpoints/userApps');
+const { userApp, EDITOR_PERMISSIONS } = require('./helpers/userAppEditorHarness');
 
 const IMPROVE = en.admin.apps.edit.improve;
 const SYSTEM = { en: 'Answer questions.', de: 'Beantworte Fragen.' };
@@ -228,5 +239,47 @@ describe('the dialog', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(
       en.admin.apps.conversation.error.tooManyTurns
     );
+  });
+});
+
+describe('in the personal editor', () => {
+  /** `GET /api/apps/_config` for a person who may not create personal apps. */
+  const NO_CREATE = { enabled: true, canCreate: false, generator: false, generatorEnabled: true };
+  const editorsApp = userApp({ permissions: { ...EDITOR_PERMISSIONS, canShare: false } });
+  const readersApp = userApp({
+    permissions: { ...EDITOR_PERMISSIONS, canEdit: false, canShare: false, role: 'user' }
+  });
+
+  test('is offered to an editor without create rights, and not to a reader', () => {
+    expect(offersAiChanges(NO_CREATE, editorsApp)).toBe(true);
+    expect(offersAiChanges(NO_CREATE, readersApp)).toBe(false);
+  });
+
+  test('is not offered while drafting with AI is off, or before the app is loaded', () => {
+    expect(offersAiChanges({ ...NO_CREATE, generatorEnabled: false }, editorsApp)).toBe(false);
+    // `generator` alone (create rights) is not what the editor reads.
+    expect(offersAiChanges({ generator: true }, editorsApp)).toBe(false);
+    expect(offersAiChanges(NO_CREATE, null)).toBe(false);
+    expect(offersAiChanges(null, editorsApp)).toBe(false);
+  });
+
+  test('the request names the app', async () => {
+    apiClient.post = jest.fn(async () => ({ data: { reply: 'message' } }));
+    await reviseUserApp({
+      appId: 'uap_3f9c2a0b1d4e5f60718293a4b5c6d7e8',
+      draft: { system: SYSTEM },
+      conversation: [{ role: 'author', text: 'Shorter' }],
+      fields: ['system'],
+      allowQuestions: false
+    });
+    expect(apiClient.post).toHaveBeenCalledTimes(1);
+    const [url, body] = apiClient.post.mock.calls[0];
+    expect(url).toBe('/apps/_revise');
+    expect(body).toMatchObject({
+      appId: 'uap_3f9c2a0b1d4e5f60718293a4b5c6d7e8',
+      fields: ['system'],
+      allowQuestions: false
+    });
+    delete apiClient.post;
   });
 });

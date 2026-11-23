@@ -54,7 +54,8 @@ Admins can now choose which AI model prepares app drafts, for admin apps and per
 ## Apps: Change an App in a Conversation (Preview), and Improve Instructions with AI
 
 People who edit an app can now tell an AI model in their own words what to change, instead of
-editing the form. This works in the admin app editor and in the editor of personal apps.
+editing the form. This works in the admin app editor and in the editor of personal apps, where
+everyone who may change the app gets it, also people who may not create personal apps themselves.
 
 - **Conversation (preview):** under **Edit with**, choose **Conversation**. The test chat opens
   beside it. The builder asks a question when it needs to, or proposes one change at a time as a

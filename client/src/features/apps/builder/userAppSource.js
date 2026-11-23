@@ -190,8 +190,12 @@ const generateDraft = ({ description, language, signal }) =>
  * One turn of the app builder's conversation (`POST /api/apps/_revise`):
  * request and response are those of the admin route. Nothing is stored.
  *
- * @param {{ draft: object, conversation: object[], language?: string, fields?: string[],
- *   allowQuestions?: boolean, signal?: AbortSignal }} request
+ * The editor of an existing app passes its `appId`: with it, a person who may
+ * edit the app but not create apps of their own is answered too. The create
+ * page has no app yet and sends none.
+ *
+ * @param {{ appId?: string, draft: object, conversation: object[], language?: string,
+ *   fields?: string[], allowQuestions?: boolean, signal?: AbortSignal }} request
  * @returns {Promise<{ reply: string, text: string, question: object|null, patch: object,
  *   changed: string[], suggestions: object, warnings: object[], model: object }>}
  */

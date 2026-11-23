@@ -90,7 +90,7 @@ engine unchanged.
 | Route | Who | Gate |
 |---|---|---|
 | `POST /api/admin/apps/_revise` | Content admins (`contentAdminAuth`; machine and delegated principals get 403) | `requireFeature('appGenerator')`, then the revise limiter |
-| `POST /api/apps/_revise` | Signed-in people who may hold personal apps (the existing gate in `userAppRoutes.js`) | `userApps`, `appGenerator`, then the revise limiter |
+| `POST /api/apps/_revise` | Signed-in people who may hold personal apps (the existing gate in `userAppRoutes.js`) and who may create personal apps or edit the app `appId` names (owner decision 2026-11-23) | `userApps`, `appGenerator`, the body, the access check, then the revise limiter |
 
 - Register both before the `/:appId` routes, as `_generate` is.
 - `_generate` stays as it is. `_revise` gets its own OpenAPI block and its own audit purpose.
@@ -247,13 +247,15 @@ the client derives none of them. The test chat keeps its normal run events.
 | Where | Who | What |
 |---|---|---|
 | Admin editor `/admin/apps/{id}/edit?view=conversation` | Content admins | Conversation in the left column, test chat on the right |
-| Personal editor `/apps/{id}/edit?view=conversation` | Owner and editors of the app | Same |
+| Personal editor `/apps/{id}/edit?view=conversation` | Owner and editors of the app, whether or not they may create personal apps (owner decision 2026-11-23); every turn sends `appId` | Same |
 | After create from a description (both create pages) | As above | The editor opens with the conversation and the test chat |
 | Start screen link "Build it in a conversation" | Slice 3 | Conversation before the first draft |
 
 No new top-level route (`view` is a query parameter), so `KNOWN_ROUTES` and `index.html` stay
 unchanged. Shown only when `appGenerator` and `appBuilderChat` are on and the author has a model;
-in the personal editor only when the caller may edit.
+in the personal editor only when the caller may edit this app (`generatorEnabled` of
+`GET /api/apps/_config` and the app's `permissions`); create rights are not needed. "Improve with
+AI" follows the same rule.
 
 ### 2.8 Prompt injection and safety
 

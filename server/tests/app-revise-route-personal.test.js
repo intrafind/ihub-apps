@@ -6,9 +6,9 @@
  * personal app (issue #3898).
  *
  * The gate of the personal routes (signed in, feature `userApps`, a sign-in
- * that can hold personal apps, the right to create them), the feature
- * `appGenerator`, the personal content keys and ceiling, and the revise limit
- * shared with the admin route.
+ * that can hold personal apps, the right to create them or to edit the app
+ * `appId` names), the feature `appGenerator`, the personal content keys and
+ * ceiling, and the revise limit shared with the admin route.
  *
  * The real user routes and services run over the harness of personal apps
  * (`helpers/userAppRoutesApi.js`). The only stub is the model client.
@@ -21,7 +21,7 @@ import assert from 'node:assert/strict';
 import installedIntegrationService from '../services/integrations/InstalledIntegrationService.js';
 import { resetAppReviseLimiter } from '../middleware/rateLimiting.js';
 import { flushAuditLog, queryAuditLog } from '../services/AuditLogService.js';
-import { FEATURES, setConfig } from './helpers/userAppsHarness.js';
+import { FEATURES, UNKNOWN_PERSONAL_ID, member, setConfig } from './helpers/userAppsHarness.js';
 import { USERS, startUserAppRoutesApi } from './helpers/userAppRoutesApi.js';
 
 /** Every call of the stubbed model, and what it answers. */
@@ -44,8 +44,8 @@ before(async () => {
   ({ as } = api);
 });
 after(() => api.stop());
-beforeEach(() => {
-  api.reset();
+beforeEach(async () => {
+  await api.reset();
   llm.calls = [];
   llm.answer = { reply: 'change', text: 'Done.', change: { system: 'You write short job ads.' } };
 });
@@ -205,6 +205,156 @@ describe('a turn on a personal app', () => {
     });
     assert.equal(JSON.stringify(entry).includes('AUDIT-AUTHOR-mark'), false);
     assert.equal(JSON.stringify(entry).includes('job ads'), false);
+  });
+});
+
+describe('a turn for an app the caller may edit (appId)', () => {
+  /** A person of the group `guests`: they may neither create nor share personal apps. */
+  const addGuest = id =>
+    api.addPerson(id, { id, name: `Guest ${id}`, authMode: 'oidc', groups: ['guests'] });
+
+  /** An app of Anna, shared with `editor` ("Can edit") and `reader` ("Can use"). */
+  const sharedApp = ({ editor = 'gus', reader = 'ben' } = {}) =>
+    api.createApp('anna', { members: [member(editor, 'editor'), member(reader, 'user')] });
+
+  beforeEach(() => {
+    addGuest('gus');
+    addGuest('gwen');
+  });
+
+  it('answers an editor who may not create personal apps, with the appId', async () => {
+    const record = await sharedApp();
+    // Without the app Gus is refused: he may not create personal apps.
+    assert.deepEqual(problem(await revise('gus')), [403, 'PERMISSION_DENIED']);
+
+    const res = await revise('gus', BODY({ appId: record.id }));
+    assert.equal(res.status, 200, res.text);
+    assert.deepEqual(res.body.patch, { system: { en: 'You write short job ads.' } });
+    assert.equal(llm.calls.length, 1);
+
+    // The audit entry names the app, never a text.
+    const { entries } = await queryAuditLog({ resource: 'userApp', limit: 1000 });
+    const entry = entries.find(
+      candidate =>
+        candidate.details?.purpose === 'app-revise' && candidate.details?.appId === record.id
+    );
+    assert.ok(entry);
+    assert.equal(entry.result, 'success');
+    assert.equal(JSON.stringify(entry).includes('Make it shorter'), false);
+  });
+
+  it('answers the owner with the appId, as without it', async () => {
+    const record = await sharedApp();
+    const res = await revise('anna', BODY({ appId: record.id }));
+    assert.equal(res.status, 200, res.text);
+  });
+
+  it('refuses a reader of a shared app as PATCH does', async () => {
+    const record = await sharedApp({ reader: 'gwen' });
+    const res = await revise('gwen', BODY({ appId: record.id }));
+    assert.deepEqual(problem(res), [403, 'PERMISSION_DENIED']);
+    assert.deepEqual(res.body.details, { required: 'edit' });
+    const patch = await as('gwen')
+      .patch(`/api/apps/${record.id}`)
+      .send({ name: { en: 'x' } });
+    assert.deepEqual(problem(patch), problem(res));
+    assert.equal(llm.calls.length, 0);
+  });
+
+  it('answers an unknown app and an app the caller cannot see alike: the 404 of an unknown ID', async () => {
+    // Shared with Gus and Ben, not with Gwen.
+    const hidden = await sharedApp();
+    const unknown = await revise('gwen', BODY({ appId: UNKNOWN_PERSONAL_ID }));
+    const notShared = await revise('gwen', BODY({ appId: hidden.id }));
+    assert.deepEqual(problem(unknown), [404, 'NOT_FOUND']);
+    assert.deepEqual(problem(notShared), problem(unknown));
+    assert.deepEqual(notShared.body.detail, unknown.body.detail);
+    // The same answer as PATCH gives for it.
+    const patch = await as('gwen')
+      .patch(`/api/apps/${hidden.id}`)
+      .send({ name: { en: 'x' } });
+    assert.deepEqual(problem(patch), problem(unknown));
+    assert.equal(llm.calls.length, 0);
+  });
+
+  it('refuses a caller who may not create and sends no appId, with the code of today', async () => {
+    const res = await revise('gwen');
+    assert.deepEqual(problem(res), [403, 'PERMISSION_DENIED']);
+    assert.deepEqual(res.body.details, { required: 'userApps' });
+  });
+
+  it('still answers a caller who may create personal apps without an appId', async () => {
+    assert.equal((await revise('carol')).status, 200);
+  });
+
+  it('refuses a malformed appId with 400 and a pointer, before the access check', async () => {
+    for (const appId of ['chat', 'uap_XYZ', 42, '', { id: 'x' }]) {
+      const res = await revise('gwen', BODY({ appId }));
+      assert.deepEqual(problem(res), [400, 'VALIDATION_FAILED'], JSON.stringify(appId));
+      assert.deepEqual(
+        res.body.errors.map(entry => entry.pointer),
+        ['/appId']
+      );
+    }
+    assert.equal(llm.calls.length, 0);
+  });
+
+  it('keeps the gate of the feature switches', async () => {
+    const record = await sharedApp();
+    setConfig({ features: { ...FEATURES, appGenerator: false } });
+    assert.deepEqual(problem(await revise('gus', BODY({ appId: record.id }))), [
+      403,
+      'FEATURE_DISABLED'
+    ]);
+    setConfig({ features: { ...FEATURES, userApps: false } });
+    assert.deepEqual(problem(await revise('gus', BODY({ appId: record.id }))), [
+      403,
+      'USER_APPS_DISABLED'
+    ]);
+  });
+
+  it('suggests only what personal apps may use and the editor may use', async t => {
+    const JIRA = { id: 'jira', definition: 'jira', enabled: true };
+    t.mock.method(installedIntegrationService, 'resolveAllEnabled', async () => [
+      {
+        instance: JIRA,
+        label: 'Jira',
+        definition: { name: { en: 'Jira' }, actions: [{ name: 'search' }, { name: 'delete' }] }
+      }
+    ]);
+    setConfig({
+      integrations: { installed: [JIRA], security: { blockPrivateIps: true, allowedHosts: [] } },
+      userApps: { capabilities: { integrations: [{ id: 'jira', actions: ['search'] }] } }
+    });
+    // Nora's group grants no integration; she edits Anna's app.
+    const record = await sharedApp({ editor: 'nora' });
+    llm.answer = {
+      reply: 'change',
+      text: 'Done.',
+      change: { system: 'You look up issues.', integrations: [{ id: 'jira' }] }
+    };
+    const anna = await revise('anna', BODY({ appId: record.id }));
+    assert.deepEqual(anna.body.suggestions.integrations, [
+      { id: 'jira', label: 'Jira', actions: ['search'] }
+    ]);
+    const nora = await revise('nora', BODY({ appId: record.id }));
+    assert.equal(nora.status, 200, nora.text);
+    assert.deepEqual(nora.body.suggestions.integrations, []);
+  });
+
+  it('does not count refused requests against the revise limit', async () => {
+    addGuest('gil');
+    const editable = await sharedApp({ editor: 'gil' });
+    const readable = await sharedApp({ editor: 'gus', reader: 'gil' });
+    // More refusals than the limit allows turns: none of them is counted.
+    for (let index = 0; index < 61; index += 1) {
+      const refused = index % 2 === 0 ? BODY({ appId: readable.id }) : BODY();
+      assert.equal((await revise('gil', refused)).status, 403);
+    }
+    assert.equal((await revise('gil', BODY({ appId: UNKNOWN_PERSONAL_ID }))).status, 404);
+    const res = await revise('gil', BODY({ appId: editable.id }));
+    assert.equal(res.status, 200, res.text);
+    assert.equal(llm.calls.length, 1);
   });
 });
 
