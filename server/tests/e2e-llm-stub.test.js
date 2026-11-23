@@ -91,6 +91,11 @@ describe('e2e model stub', () => {
       () => {
         throw new Error('a bug in the script');
       }
+    ],
+    throwsNull: [
+      () => {
+        throw null;
+      }
     ]
   };
 
@@ -166,6 +171,54 @@ describe('e2e model stub', () => {
       assert.equal(res.text, '{"error":{"message":"The stub model refused this request."}}');
     });
 
+    test('reads e2e-fail and e2e-auth outside tool arguments only', async () => {
+      const inArguments = await answerOf([user('e2e-tool:lookup:{"q":"e2e-fail e2e-auth"}')]);
+      assert.equal(
+        inArguments.message.tool_calls[0].function.arguments,
+        '{"q":"e2e-fail e2e-auth"}'
+      );
+      const parallel = await answerOf([user('e2e-tools-parallel:a,b:[{"q":"e2e-auth"},{}]')]);
+      assert.equal(parallel.message.tool_calls.length, 2);
+
+      const after = await post({ messages: [user('e2e-tool:lookup:{"q":"x"} e2e-auth')] });
+      assert.equal(after.status, 401);
+    });
+
+    test('ignores the words in the arguments of every tool marker, not only the first', async () => {
+      const second = await post({
+        messages: [user('e2e-tool:a:{"q":"x"} and e2e-tool:lookup:{"q":"e2e-auth"}')]
+      });
+      assert.equal(second.status, 200);
+      const parallel = await post({
+        messages: [user('e2e-tool:a:{} e2e-tools-parallel:b,c:[{"q":"e2e-auth"},{}]')]
+      });
+      assert.equal(parallel.status, 200);
+
+      const outside = await post({
+        messages: [user('e2e-tool:a:{} e2e-tool:b:{"q":"y"} e2e-auth')]
+      });
+      assert.equal(outside.status, 401);
+    });
+
+    test('a timed e2e-slow it cannot read gets no bare e2e-slow delay', async () => {
+      const previous = process.env.E2E_LLM_SLOW_MS;
+      process.env.E2E_LLM_SLOW_MS = '600000';
+      try {
+        for (const text of ['e2e-slow:abc:2', 'e2e-slow:fast:3', 'e2e-slow:100']) {
+          const res = await fetch(`${base}/v1/chat/completions`, {
+            method: 'POST',
+            body: JSON.stringify({ messages: [user(text)] }),
+            signal: AbortSignal.timeout(5000)
+          });
+          const answer = (await res.json()).choices[0].message.content;
+          assert.equal(answer, `E2E reply to: ${text} (turn 1)`);
+        }
+      } finally {
+        if (previous === undefined) delete process.env.E2E_LLM_SLOW_MS;
+        else process.env.E2E_LLM_SLOW_MS = previous;
+      }
+    });
+
     test('answers a marker it cannot read like any other message', async () => {
       for (const text of [
         'e2e-unknown:thing',
@@ -173,6 +226,8 @@ describe('e2e model stub', () => {
         'e2e-slow:100:0',
         'e2e-slow:100',
         'e2e-hang:',
+        'e2e-hang:.',
+        'e2e-hang:..',
         'e2e-tool:lookup:not-json',
         'e2e-tool:lookup:[1,2]',
         'e2e-tools-parallel:only_one',
@@ -206,6 +261,8 @@ describe('e2e model stub', () => {
   describe('parseMarker', () => {
     test('reads every marker', () => {
       assert.deepEqual(parseMarker('e2e-slow:200:5'), { kind: 'slow', ms: 200, count: 5 });
+      assert.deepEqual(parseMarker('e2e-slow:60000:2'), { kind: 'slow', ms: 60000, count: 2 });
+      assert.deepEqual(parseMarker('e2e-slow:240:500'), { kind: 'slow', ms: 240, count: 500 });
       assert.deepEqual(parseMarker('please e2e-hang:k1 now'), { kind: 'hang', key: 'k1' });
       assert.deepEqual(parseMarker('e2e-script:two-step'), { kind: 'script', name: 'two-step' });
       assert.deepEqual(parseMarker('e2e-tool:read_url'), {
@@ -233,6 +290,19 @@ describe('e2e model stub', () => {
         { name: 'a', args: { q: 1 } },
         { name: 'b', args: {} }
       ]);
+    });
+
+    test('takes dotted hang keys, but not . or ..', () => {
+      assert.deepEqual(parseMarker('e2e-hang:run.1'), { kind: 'hang', key: 'run.1' });
+      assert.equal(parseMarker('e2e-hang:.'), null);
+      assert.equal(parseMarker('e2e-hang:..'), null);
+      assert.deepEqual(parseMarker('e2e-hang:...'), { kind: 'hang', key: '...' });
+    });
+
+    test('refuses a timed reply longer than two minutes in all', () => {
+      assert.equal(parseMarker('e2e-slow:60000:3'), null);
+      assert.equal(parseMarker('e2e-slow:60000:500'), null);
+      assert.equal(parseMarker('e2e-slow:241:500'), null);
     });
 
     test('returns null without a marker', () => {
@@ -272,6 +342,8 @@ describe('e2e model stub', () => {
     test('without streaming, answers after the whole time', async () => {
       const call = open({ messages: [user('e2e-slow:200:3')] });
       await until(() => timers.queue.length === 1, 'the wait');
+      // Headers sent ahead of the clock would reach the client in these turns.
+      for (let turn = 0; turn < 20; turn++) await new Promise(resolve => setImmediate(resolve));
       assert.equal(call.status, null, 'nothing is sent before the time has passed');
       assert.equal(timers.fire().ms, 600);
       await until(() => call.ended, 'the answer');
@@ -301,6 +373,7 @@ describe('e2e model stub', () => {
       assert.equal(HANG_AUTO_RELEASE_MS, 120_000);
       const call = open({ messages: [user('e2e-hang:forgotten')] });
       await until(() => timers.queue.length === 1, 'the automatic release timer');
+      for (let turn = 0; turn < 20; turn++) await new Promise(resolve => setImmediate(resolve));
       assert.equal(call.status, null);
 
       assert.equal(timers.fire().ms, HANG_AUTO_RELEASE_MS);
@@ -587,6 +660,16 @@ describe('e2e model stub', () => {
       );
     });
 
+    test('filters past a body whose messages are no list or hold null', async () => {
+      for (const body of [{ messages: {} }, { messages: [null, user('needle here')] }, {}]) {
+        await fetch(`${base}/v1/chat/completions`, { method: 'POST', body: JSON.stringify(body) });
+      }
+      const filtered = await fetch(`${base}/__requests?marker=needle`);
+      assert.equal(filtered.status, 200);
+      assert.deepEqual((await filtered.json()).items, [{ messages: [null, user('needle here')] }]);
+      assert.equal((await get('/__requests')).items.length, 3);
+    });
+
     test('empties the list on POST /__requests and on POST /__reset', async () => {
       await post({ messages: [user('one')] });
       assert.deepEqual(await control('/__requests'), { items: [] });
@@ -610,7 +693,14 @@ describe('e2e model stub', () => {
           let text = '';
           res.setEncoding('utf8');
           res.on('data', data => (text += data));
-          res.on('end', () => resolve({ status: res.statusCode, body: JSON.parse(text) }));
+          res.on('error', reject);
+          res.on('end', () => {
+            try {
+              resolve({ status: res.statusCode, body: JSON.parse(text) });
+            } catch (error) {
+              reject(new Error(`HTTP ${res.statusCode}, body is no JSON: ${error.message}`));
+            }
+          });
         });
         req.on('error', reject);
         req.end();
@@ -655,6 +745,40 @@ describe('e2e model stub', () => {
         'E2E reply to: still there? (turn 1)'
       );
     });
+
+    test('a script that throws null fails its own request with HTTP 500', async () => {
+      const failed = await post({ messages: [user('e2e-script:throwsNull')] });
+      assert.equal(failed.status, 500);
+      assert.equal(JSON.parse(failed.text).error.message, 'The stub model failed: null');
+      assert.equal(
+        (await answerOf([user('still there?')])).message.content,
+        'E2E reply to: still there? (turn 1)'
+      );
+    });
+  });
+});
+
+describe('e2e model stub that breaks off an answer itself', () => {
+  test('does not count it as a request the caller closed', async () => {
+    // A tool call the stub cannot serialise, found after the headers are out.
+    const script = () => ({ content: 'x', toolCalls: [{ id: 1n, name: 'n', arguments: '{}' }] });
+    const server = await startLlmStub(0, { script });
+    const base = `http://127.0.0.1:${server.address().port}`;
+    try {
+      await assert.rejects(async () => {
+        const res = await fetch(`${base}/v1/chat/completions`, {
+          method: 'POST',
+          body: JSON.stringify({ stream: true, messages: [user('hi')] })
+        });
+        await res.text();
+      });
+      const stats = await (await fetch(`${base}/__stats`)).json();
+      assert.deepEqual(stats, { aborted: 0, hanging: [] });
+      assert.equal((await (await fetch(`${base}/__last-request`)).json()).aborted, false);
+    } finally {
+      server.closeAllConnections();
+      await new Promise(resolve => server.close(resolve));
+    }
   });
 });
 

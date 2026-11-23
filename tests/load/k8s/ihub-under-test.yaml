@@ -43,6 +43,16 @@ spec:
       # nodeSelector:
       #   kubernetes.io/hostname: <idle-node>
       automountServiceAccountToken: false
+      # The image's `ihub` user is uid 100, gid 101 (docker/Dockerfile; k8s/run.sh restores
+      # snapshots as 100:101 by default). A named USER cannot satisfy runAsNonRoot, so the
+      # ids are numeric here. fsGroup makes a fresh contents volume writable for it.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 100
+        runAsGroup: 101
+        fsGroup: 101
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile: { type: RuntimeDefault }
       containers:
         - name: ihub
           # The build under test. Use a fixed tag so reruns compare the same code; the
@@ -74,16 +84,30 @@ spec:
           # One Kubernetes CPU is one hyperthread, not a physical core. There is no swap:
           # the memory limit is a hard ceiling (OOM kill), unlike Docker Desktop.
           resources:
-            requests: { cpu: '7', memory: 8Gi }
-            limits: { cpu: '7', memory: 8Gi }
+            # ephemeral-storage covers the writable layers and the emptyDirs below (logs,
+            # temp files); contents/ is the volume and is not counted.
+            requests: { cpu: '7', memory: 8Gi, ephemeral-storage: 1Gi }
+            limits: { cpu: '7', memory: 8Gi, ephemeral-storage: 10Gi }
+          # The root filesystem is read-only: iHub writes only to contents/ (volume),
+          # logs/ and the temp directory.
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
           volumeMounts:
             - { name: contents, mountPath: /app/contents }
+            - { name: logs, mountPath: /app/logs }
+            - { name: tmp, mountPath: /tmp }
           readinessProbe:
             httpGet: { path: /api/health, port: http }
             periodSeconds: 5
       volumes:
         - name: contents
           persistentVolumeClaim: { claimName: ihub-contents }
+        - name: logs
+          emptyDir: { sizeLimit: 5Gi }
+        - name: tmp
+          emptyDir: { sizeLimit: 5Gi }
 ---
 apiVersion: v1
 kind: Service

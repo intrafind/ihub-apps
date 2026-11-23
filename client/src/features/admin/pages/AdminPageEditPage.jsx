@@ -123,9 +123,13 @@ function AdminPageEditPage() {
       <div className="max-w-4xl mx-auto px-4 py-8">
         <AdminBreadcrumb
           crumbs={[
-            { label: 'Admin', href: '/admin' },
-            { label: 'Pages', href: '/admin/pages' },
-            { label: isNew ? 'New Page' : (page?.title?.en ?? pageId) }
+            { label: t('documentTitle.admin', 'Admin'), href: '/admin' },
+            { label: t('admin.nav.pages', 'Pages'), href: '/admin/pages' },
+            {
+              label: isNew
+                ? t('admin.breadcrumbs.newPage', 'New Page')
+                : (page?.title?.en ?? pageId)
+            }
           ]}
         />
         <form onSubmit={handleSubmit} className="space-y-6">

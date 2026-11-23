@@ -85,6 +85,8 @@ export function apiDocGlobs(routesDir, sep = path.sep) {
       'oauth.js',
       'oauthRegister.js',
       'projectRoutes.js',
+      'userAppRoutes.js',
+      'userAppPublishRoutes.js',
       'promptRoutes.js',
       'runs.js',
       'usageRoutes.js',

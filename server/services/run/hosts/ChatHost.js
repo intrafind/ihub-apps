@@ -1002,6 +1002,8 @@ export class ChatHost {
         // A turn that is not stored cannot be continued after the answer.
         headless: turn.headless || turn.canApproveTools === false || !persist,
         grants: turn.toolApproval?.grants || [],
+        // `false` in a personal app someone else wrote: no grant for the chat.
+        chatGrants: turn.toolApproval?.chatGrants,
         approvedCall:
           resume?.outcome === 'approved' && resume.call?.id
             ? { callId: resume.call.id, args: resume.args }
@@ -1152,6 +1154,7 @@ export class ChatHost {
           platform: configCache.getPlatform?.() || null,
           headless: parts.approval.headless,
           grants: parts.approval.grants,
+          chatGrants: parts.approval.chatGrants,
           approvedCall: parts.approval.approvedCall,
           buildLogData: log,
           logInteraction: svc.logInteraction,

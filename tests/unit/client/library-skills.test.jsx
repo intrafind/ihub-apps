@@ -180,6 +180,24 @@ test('New is a menu with New prompt and New skill', async () => {
   expect(screen.queryByRole('menu')).not.toBeInTheDocument();
 });
 
+test("the sidebar's Create menu opens the prompt or the skill editor once", async () => {
+  const { unmount } = renderLibrary({ pathname: '/prompts', state: { create: 'skill' } });
+  await waitFor(() => expect(mockSkillActions.create).toHaveBeenCalledTimes(1));
+  expect(mockPromptActions.create).not.toHaveBeenCalled();
+  unmount();
+
+  renderLibrary({ pathname: '/prompts', state: { create: 'prompt' } });
+  await waitFor(() => expect(mockPromptActions.create).toHaveBeenCalledTimes(1));
+  expect(mockSkillActions.create).toHaveBeenCalledTimes(1);
+});
+
+test("the Create menu's skill request is ignored without personal skills", async () => {
+  mockPlatformConfig = { userPrompts: { enabled: true }, userSkills: { enabled: false } };
+  renderLibrary({ pathname: '/prompts', state: { create: 'skill' } });
+  await waitFor(() => expect(screen.getAllByTestId('skill-card').length).toBeGreaterThan(0));
+  expect(mockSkillActions.create).not.toHaveBeenCalled();
+});
+
 const SKILL_BUILDER = {
   id: 'skill-builder',
   name: 'skill-builder',

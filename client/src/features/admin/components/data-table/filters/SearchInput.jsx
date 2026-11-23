@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import Icon from '../../../../../shared/components/Icon';
 
 /**
@@ -12,12 +13,14 @@ import Icon from '../../../../../shared/components/Icon';
 function SearchInput({
   value,
   onChange,
-  placeholder = 'Search…',
+  placeholder: placeholderProp,
   debounceMs = 200,
   className = '',
   autoFocus = false,
   ariaLabel
 }) {
+  const { t } = useTranslation();
+  const placeholder = placeholderProp ?? t('admin.dataTable.search', 'Search…');
   const [local, setLocal] = useState(value);
 
   // Sync external value into the local debounced state.
@@ -51,7 +54,7 @@ function SearchInput({
             setLocal('');
             onChange('');
           }}
-          aria-label="Clear search"
+          aria-label={t('admin.dataTable.clearSearch', 'Clear search')}
           className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
         >
           <Icon name="x" size="sm" />

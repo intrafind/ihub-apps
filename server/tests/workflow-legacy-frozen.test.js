@@ -79,7 +79,7 @@ const FROZEN = Object.freeze({
   'server/services/workflow/executors/JoinNodeExecutor.js':
     '14f2b925be60dd3989daef3ba50671d6e43073afe6d70d2de2150040b504dc6b',
   'server/services/workflow/executors/LoopNodeExecutor.js':
-    '872cba159f830f8314ac292d3f2d950c02138b6a6800a419baba46358e9969b8',
+    '391602c87132f787db98367216921dea4bd531a256163a0a9418c71340a9ec9e',
   'server/services/workflow/executors/MemoryFinalizeNodeExecutor.js':
     'aef1f68e8935490cee59f6bb4de45a91ecac9ce6913c6f495457817be6c4a62d',
   'server/services/workflow/executors/MemoryNodeExecutor.js':

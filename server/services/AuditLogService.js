@@ -67,11 +67,28 @@ function getAuditConfig() {
   }
 }
 
-function maskEmail(value) {
-  if (isEmailShaped(value)) {
-    return value.slice(0, value.indexOf('@'));
+/**
+ * Reduce a caller-supplied identifier to a string. Identifiers such as a login
+ * username or a resource id can originate in request input, where Express
+ * yields an array or object for `?id=a&id=b` or a JSON body; such a value would
+ * slip past string-based email masking and corrupt the entry. Strings pass
+ * through, numbers and booleans are stringified, anything else becomes the
+ * fallback.
+ */
+function toIdentifier(value, fallback = '') {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
+    return String(value);
   }
-  return value;
+  return fallback;
+}
+
+function maskEmail(value) {
+  const text = toIdentifier(value);
+  if (isEmailShaped(text)) {
+    return text.slice(0, text.indexOf('@'));
+  }
+  return text;
 }
 
 /**
@@ -83,11 +100,11 @@ function maskEmail(value) {
 function buildActor(req, explicitActor) {
   const includeEmail = getAuditConfig().includeEmail === true;
   const src = explicitActor || req?.user || {};
-  let id = src.id ?? 'unknown';
-  let username = src.username ?? src.name ?? src.id ?? 'unknown';
+  let id = toIdentifier(src.id, 'unknown');
+  let username = toIdentifier(src.username ?? src.name ?? src.id, 'unknown');
   // Human-readable name, kept separately from the login identifier so the log
   // can show one consistent label per person (see resolveActorLabel).
-  let name = src.name ?? src.displayName ?? username;
+  let name = toIdentifier(src.name ?? src.displayName, username);
   // Mask email-shaped identifiers in id, username and name so includeEmail:false
   // actually prevents email storage (login actors set id = the attempted email,
   // and OIDC names fall back to the email address).
@@ -192,7 +209,7 @@ export function logAudit({
     const includeEmail = auditCfg.includeEmail === true;
     // resourceId can carry the attempted identifier (e.g. a login id that is an
     // email), so honor the same masking as the actor.
-    const safeResourceId = includeEmail ? resourceId || '' : maskEmail(resourceId || '');
+    const safeResourceId = includeEmail ? toIdentifier(resourceId) : maskEmail(resourceId);
     // Honor audit.anonymizeIp:
     //   'mask'        -> mask the host bits (/24 IPv4, /48 IPv6)
     //   'drop'        -> omit the `ip` property from the entry entirely

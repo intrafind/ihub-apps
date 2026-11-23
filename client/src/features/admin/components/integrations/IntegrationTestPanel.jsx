@@ -452,7 +452,7 @@ function IntegrationTestPanel({ instance, boundApps, apps, reloadKey, onAppCreat
         <PanelMessage icon="eye-slash">
           {t(
             'admin.integrations.testChat.appDisabled',
-            'This app is disabled, so it cannot be opened in the chat. Enable it in the app editor to test it.'
+            'This app is not published, so it cannot be opened in the chat. Publish it in the app editor to test it.'
           )}
         </PanelMessage>
       )}

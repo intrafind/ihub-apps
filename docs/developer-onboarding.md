@@ -502,6 +502,14 @@ For detailed architecture information, see [docs/architecture.md](architecture.m
 
 ### Adding a New AI Application
 
+The usual way is the admin UI: **Admin → Apps → New app** creates the app, opens its editor and
+lets you test it in a chat beside the form (see [Build your first app](app-quickstart.md)). The
+code of that page is in `client/src/features/admin/pages/AdminAppCreatePage.jsx` and
+`client/src/features/admin/components/app-create/`; the draft endpoint is
+`POST /api/admin/apps/_generate` (`server/routes/admin/appBuilder.js`).
+
+To add an app as a file instead:
+
 1. **Create App Configuration** (e.g., `contents/apps/my-new-app.json`):
 ```json
 {
@@ -518,13 +526,16 @@ For detailed architecture information, see [docs/architecture.md](architecture.m
     "en": "You are a helpful assistant that...",
     "de": "Du bist ein hilfreicher Assistent, der..."
   },
-  "color": "blue",
+  "color": "#4F46E5",
   "icon": "lightbulb"
 }
 ```
 
+   The `id` allows lowercase letters, digits, dots, hyphens and underscores, at most 50
+   characters. A file without `enabled` is a published app.
+
 2. **Test the App**:
-   - Restart development server: `npm run dev`
+   - Apps reload by themselves; a restart is not needed
    - Navigate to http://localhost:5173
    - Find your new app in the list
    - Test chat functionality
@@ -668,6 +679,32 @@ export const sourceHandlers = [
 ```
 
 ## Debugging and Troubleshooting
+
+### Dependencies Out of Date After a Pull
+
+**Symptom**: after pulling, a page fails to open in the dev server, and Vite shows an overlay such
+as:
+
+```text
+[plugin:vite:import-analysis] Failed to resolve import "highlight.js/lib/languages/bash"
+from "src/features/admin/utils/docsHighlight.js". Does the file exist?
+```
+
+The admin Documentation and What's New pages, for example, need `highlight.js`. The rest of the
+app still works, so the cause is easy to miss: a dependency was added to `client/package.json` (or
+the root or server `package.json`) since your last install.
+
+**Fix**: install the dependencies of all three packages again, then restart the dev server:
+
+```bash
+npm run install:all
+npm run dev
+```
+
+`npm run dev` checks this before it starts (`scripts/check-installed-deps.js`, run as `predev`).
+When a declared package is missing, or installed in a version outside its range, it lists the
+packages per `package.json` and stops with the command above. The check is skipped when `CI` is
+set or `NODE_ENV=production`; set `SKIP_DEPS_CHECK=1` to start anyway.
 
 ### Server Debugging
 
@@ -877,12 +914,14 @@ A marker in the user message scripts the stub (`tests/config/e2e-llm-stub.mjs`).
 
 | Marker | The model then |
 |---|---|
-| `e2e-slow:<ms>:<n>` | writes `slow-1` … `slow-<n>`, one word every `<ms>` milliseconds |
+| `e2e-slow:<ms>:<n>` | writes `slow-1` … `slow-<n>`, one word every `<ms>` milliseconds (at most 60 000 ms, 500 words, two minutes in all) |
 | `e2e-hang:<key>` | starts the answer and waits until the spec calls `stub.release('<key>')`; a hang nobody releases ends after two minutes |
 | `e2e-tool:<name>:<json-args>` | calls the tool once and then answers `E2E tool result seen: <start of the result>` |
 | `e2e-tools-parallel:<a>,<b>` | calls the tools in one step (arguments: an optional JSON array, `:[{…},{…}]`) |
-| `e2e-script:<name>` | follows the named script in `tests/config/e2e-scripts.mjs`, one turn per model call |
-| `e2e-fail` | fails with HTTP 400 |
+| `e2e-script:<name>` | follows the named script in `tests/config/e2e-scripts.mjs` (see below) |
+| `e2e-fail` | fails with HTTP 400 (not when the word stands inside the JSON arguments of `e2e-tool:`) |
+
+A script picks its turn by counting the assistant messages in the request, not the calls it has had: a request with no assistant message gets turn 1, one with two gets turn 3. Assistant messages from earlier in the chat therefore shift the turn (start `e2e-script:two-step` after two earlier answers and the first call gets "no turn 3"), so start a script in a new chat or build the history it expects. The same request sent again gets the same turn again.
 
 Two models are seeded: `e2e-stub` (the default, without tools) and `e2e-stub-tools`, which is offered the tools of the app. The app `e2e-tools` prefers the second and offers iHub's own tools (`ask_user`, the scheduled-task tools) and the two counter tools below. The app `e2e-approval` is the same app with an approval before every tool call (`toolApproval.default: "always"`): send a tool call there with `toolApprovalCapable: true` in the request body, and the turn ends on a pending approval (`interaction/raised`).
 
@@ -930,7 +969,7 @@ Every test carries a tag: `test('…', { tag: '@gate' }, async ({ page }) => { �
 | `@matrix` | in the full run, once per overlay in `tests/config/agents-spec-map.json` |
 | `@slow` | in the full run; never in the pull request job |
 
-The pull request job (`.github/workflows/e2e.yml`, 10 minutes) runs the `@gate` tests, every test of a spec that `agents-spec-map.json` maps to a path the pull request touches, and `tests/e2e/chat.spec.js`. When you add a spec for a feature, add a row that maps the feature's directories to it. A test in the gate should finish in well under a minute.
+The pull request job (`.github/workflows/e2e.yml`, 10 minutes) runs the `@gate` tests, the tests of every spec that `agents-spec-map.json` maps to a path the pull request touches (except those tagged `@slow`), and `tests/e2e/chat.spec.js`. When you add a spec for a feature, add a row that maps the feature's directories to it. A test in the gate should finish in well under a minute.
 
 The full run is the `full` job of the same workflow: every test of the suite, then the `@matrix` tests once per overlay. The nightly workflow runs it every night. Start it by hand as well (Actions, **End-to-end**, **Run workflow**) before a slice of the agents epic is merged, and whenever you add or change a `@slow` test or a test that depends on an overlay: the pull request job runs no `@slow` test and starts no server with an overlay.
 

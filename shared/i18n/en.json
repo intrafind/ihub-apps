@@ -196,7 +196,22 @@
       "notCopiedWarning": "You haven't copied the secret yet. Close anyway?",
       "closeAnyway": "Close anyway"
     },
-    "note": "Note"
+    "note": "Note",
+    "add": "Add",
+    "actions": "Actions",
+    "previous": "Previous",
+    "next": "Next",
+    "moveUp": "Move up",
+    "moveDown": "Move down",
+    "create": "Create",
+    "status": "Status",
+    "saveChanges": "Save Changes",
+    "disable": "Disable",
+    "enable": "Enable",
+    "basicInfo": "Basic Information",
+    "copiedToClipboard": "Copied to clipboard",
+    "copyToClipboard": "Copy to Clipboard",
+    "view": "View"
   },
   "chatActions": {
     "menu": "Actions menu",
@@ -933,7 +948,8 @@
           "keyless": "No subscription key: keyless mode. Browsers connect straight to the host, so verify it with the live dictation test below.",
           "notConfigured": "Neither a subscription key nor a host is set. Azure cloud needs a key and region; an on-prem container needs a host.",
           "invalidKey": "Azure rejected the key (HTTP 401): it is invalid or belongs to a different region.",
-          "tokenFailed": "Token request failed: {{detail}}"
+          "tokenFailed": "Token request failed: {{detail}}",
+          "noResponse": "No response"
         }
       },
       "notEnabled": "not enabled",
@@ -1140,7 +1156,8 @@
         "saving": "Creating...",
         "llmHelp": "An LLM provider holds one API key for all of its models. Link models to it in the model editor, or import them from its endpoint.",
         "nameRequired": "Provider name is required",
-        "subtitle": "Create an LLM provider for your own endpoint, a web search provider, or a generic API key"
+        "subtitle": "Create an LLM provider for your own endpoint, a web search provider, or a generic API key",
+        "idRequired": "Provider ID is required"
       },
       "info": {
         "title": "API Key Priority",
@@ -1305,7 +1322,25 @@
         "tokens": "Tokens",
         "editModel": "Edit Model",
         "requests30d": "Requests (30 days)",
-        "tokens30d": "Tokens (30 days)"
+        "tokens30d": "Tokens (30 days)",
+        "status": "Status",
+        "default": "Default",
+        "description": "Description",
+        "technicalDetails": "Technical Details",
+        "provider": "Provider",
+        "modelId": "Model ID",
+        "contextWindow": "Context Window",
+        "maxOutputTokens": "Max Output Tokens",
+        "supportsTools": "Supports Tools",
+        "concurrency": "Concurrency",
+        "requestDelay": "Request Delay",
+        "apiConfiguration": "API Configuration",
+        "apiUrl": "API URL",
+        "usageStats": "Usage Statistics",
+        "appsUsingModel": "Apps Using This Model",
+        "noUsageData": "No usage data available",
+        "noApps": "No apps are using this model as their preferred choice",
+        "close": "Close"
       },
       "edit": {
         "title": "Edit Model",
@@ -1327,7 +1362,9 @@
         "basicInfoDesc": "Basic information about the model",
         "configuration": "Configuration",
         "configurationDesc": "Advanced configuration options for the model",
-        "resource": "model \"{{id}}\""
+        "resource": "model \"{{id}}\"",
+        "fixErrors": "Please fix the following errors",
+        "history": "History"
       },
       "fields": {
         "id": "Model ID",
@@ -1368,6 +1405,7 @@
         "thinkingLevelLow": "Low",
         "thinkingLevelMedium": "Medium",
         "thinkingLevelHigh": "High",
+        "thinkingLevelXhigh": "Extra high",
         "thinkingThoughts": "Show reasoning",
         "thinkingBudgetTokens": "Reasoning budget",
         "thinkingBudgetTokensPlaceholder": "From reasoning effort",
@@ -1385,7 +1423,8 @@
         "ttsVoice": "Voice",
         "ttsVoices": "Voices per language",
         "ttsVoiceLanguage": "Language",
-        "customProviders": "Custom providers"
+        "customProviders": "Custom providers",
+        "autoDiscovery": "Auto Discovery"
       },
       "toolSupport": {
         "none": "No tools",
@@ -1415,7 +1454,7 @@
         "thinkingLevel": "Sent as reasoning_effort (OpenAI, vLLM) or thinkingLevel (Gemini). Servers that do not support it ignore the value. On vLLM with \"Limit reasoning in tokens\" it also sets the reasoning budget.",
         "thinkingThoughts": "Surface the reasoning to users behind the \"Show thinking\" toggle. Turn off to keep it hidden.",
         "thinkingTokenBudget": "Sends thinking_token_budget, so the model stops thinking and answers once the budget is spent. The vLLM server needs a reasoning parser with start and end markers (for example qwen3) or --reasoning-config; otherwise every request fails.",
-        "thinkingBudgetTokens": "Empty uses the reasoning effort: minimal 512, low 2,048, medium 8,192, high 16,384 tokens (none set: 75% of the output limit). Never more than 75% of the output limit.",
+        "thinkingBudgetTokens": "Empty uses the reasoning effort: minimal 512, low 1,024, medium 2,048, high 8,192, extra high 16,384 tokens (none set: medium). Never more than half of the output limit.",
         "maxOutputTokens": "Empty means the default ({{value}}), not unlimited. Reasoning models spend their thinking tokens from this limit, so keep it well above the longest answer you expect.",
         "sampling": "Optional. Leave a field empty to use the model's or provider's own default; nothing is sent for it. A value set here applies to every request to this model.",
         "marking": "Whether this model marks the text it generates as AI generated. Choose \"Provider marks the output\" only when the provider confirmed that in writing; iHub cannot check it. While the EU AI Act features are on, every output still gets a provenance record, whatever you choose here.",
@@ -1431,7 +1470,8 @@
         "markingDetectorUrl": "Optional. Without a detector the output is still watermarked, but Verify cannot recognise it and the self-test cannot run.",
         "markingDetectorCredentialRef": "Optional bearer token, if the detector asks for one.",
         "markingTokenizer": "The detector splits a text into the same tokens as the model to find the watermark. Leave empty to use the model ID; set a Hugging Face ID or path only if vLLM serves the model under another name.",
-        "markingContextWidth": "Tokens the watermark looks back on, not the context window. Must equal context_width of vLLM (default 4)."
+        "markingContextWidth": "Tokens the watermark looks back on, not the context window. Must equal context_width of vLLM (default 4).",
+        "autoDiscovery": "Automatically detect the active model from the /v1/models endpoint. Useful for local LLM providers (vLLM, LM Studio, Jan.ai) where the model can change. Only available for OpenAI-compatible providers."
       },
       "placeholders": {
         "maxOutputTokens": "Default: {{value}}",
@@ -1452,7 +1492,8 @@
         "sampling": "Sampling",
         "marking": "Output marking",
         "imageMarking": "Image marking",
-        "thinking": "Reasoning"
+        "thinking": "Reasoning",
+        "options": "Options"
       },
       "errors": {
         "invalidJson": "Invalid JSON"
@@ -1633,7 +1674,18 @@
         "dismissible": "Users can dismiss it",
         "message": "Message",
         "preview": "Preview"
-      }
+      },
+      "toggle": "Toggle enabled",
+      "statusLabel": "Status",
+      "aspectRatio": {
+        "r1x1": "1:1 (Square)",
+        "r16x9": "16:9 (Landscape)",
+        "r9x16": "9:16 (Portrait)",
+        "r21x9": "21:9 (Ultrawide)"
+      },
+      "downloadError": "Failed to download model config: {{error}}",
+      "uploadExists": "Model with ID \"{{id}}\" already exists",
+      "uploadError": "Failed to upload model config: {{error}}"
     },
     "auth": {
       "configuration": "Authentication Configuration",
@@ -1880,10 +1932,17 @@
           "cimdDesc": "Their client ID is the URL of a document they publish. They are listed here because people are connected through them — and because this is where you can disconnect all of them at once."
         },
         "tabs": {
-          "connections": "Connections"
+          "connections": "Connections",
+          "overview": "Overview",
+          "server": "Authorization Server",
+          "clients": "Clients",
+          "aria": "OAuth sections"
         },
         "overview": {
-          "connectionsDesc": "See which users have granted which applications access, and revoke any of those grants."
+          "connectionsDesc": "See which users have granted which applications access, and revoke any of those grants.",
+          "subtitle": "Manage the OAuth 2.0 authorization server and client applications",
+          "serverDesc": "Configure the OAuth 2.0 authorization server, endpoints, token settings, and grant types.",
+          "clientsDesc": "Create and manage OAuth 2.0 client applications for external API access."
         },
         "cimd": {
           "allowedGroups": "Allowed groups",
@@ -1932,7 +1991,27 @@
         "secretReveal": {
           "title": "New secret for \"{{name}}\"",
           "createdTitle": "Client \"{{name}}\" created"
-        }
+        },
+        "authCodeSection": "OAuth 2.0 Authorization Code Flow",
+        "clientType": "Client Type",
+        "clientTypeConfidential": "Confidential (server-side apps with client secret)",
+        "clientTypePublic": "Public (SPAs, mobile apps – PKCE required)",
+        "grantTypes": "Grant Types",
+        "grantClientCredentials": "Client Credentials (machine-to-machine)",
+        "grantAuthorizationCode": "Authorization Code (user login with PKCE)",
+        "grantRefreshToken": "Refresh Token (long-lived sessions)",
+        "redirectUris": "Redirect URIs",
+        "redirectUriPlaceholder": "https://yourapp.com/callback",
+        "redirectUriHint": "Must use HTTPS (or http://localhost for development)",
+        "postLogoutRedirectUris": "Post-Logout Redirect URIs",
+        "postLogoutUriPlaceholder": "https://yourapp.com/logged-out",
+        "trustedClient": "Trusted client (skip consent screen)",
+        "deleteTitle": "Delete OAuth Client",
+        "badgeAuthCode": "auth-code",
+        "editSubtitle": "Configure client credentials and permissions for external API access",
+        "tokenExpirationHelp": "Default: 60 minutes, Maximum: 1440 minutes (24 hours)",
+        "getStarted": "Get started by creating a new OAuth client.",
+        "tokenError": "Failed to generate token: {{error}}"
       },
       "ldap": {
         "title": "LDAP Authentication Settings",
@@ -2006,14 +2085,116 @@
         "trustedProxiesHelp": "Addresses or subnets the proxy connects from, comma-separated (for example loopback, 10.0.0.5 or 10.0.0.0/8). The headers are used only on connections from these addresses. The default, loopback, covers a proxy on the same host or in the same pod; if other local processes (such as a service-mesh sidecar) forward traffic to iHub, set a shared secret as well.",
         "sharedSecretHeaderLabel": "Shared Secret Header",
         "sharedSecretLabel": "Shared Secret",
-        "sharedSecretHelp": "A secret the proxy sends in the shared secret header. When set, the headers are used only on requests that carry it. Together with trusted proxies, both must match: for a proxy elsewhere, add its address above or clear the list to rely on the secret alone."
+        "sharedSecretHelp": "A secret the proxy sends in the shared secret header. When set, the headers are used only on requests that carry it. Together with trusted proxies, both must match: for a proxy elsewhere, add its address above or clear the list to rely on the secret alone.",
+        "settingsTitle": "Proxy/JWT Authentication Settings",
+        "settingsHelp": "Configure header-based authentication from reverse proxy and/or JWT token validation for pure JWT authentication.",
+        "userHeader": "User Header",
+        "groupsHeader": "Groups Header",
+        "selfSignupHelp": "Allow new users to register automatically through proxy authentication. If disabled, new users must be added manually by administrators.",
+        "ldapLookupNone": "None (use header/JWT groups only)",
+        "ldapLookupHelp": "When set, look up the authenticated user's group memberships in the selected LDAP provider and merge them with the groups supplied via the groups header and JWT claim. The LDAP provider must have admin credentials and group search configured."
       },
       "resource": "authentication settings",
       "subtitle": "Configure multiple authentication methods and user access settings. Enable dual authentication for maximum flexibility.",
       "save": "Save Configuration",
       "saving": "Saving...",
       "saved": "Authentication configuration saved.",
-      "saveFailed": "Failed to save configuration: {{error}}"
+      "saveFailed": "Failed to save configuration: {{error}}",
+      "noConfigData": "No configuration data available",
+      "debugMovedTitle": "Authentication debug logging moved",
+      "debugMovedHelp": "All authentication debug settings (OIDC/LDAP/NTLM tracing, token masking, raw data) now live in one place: Platform → Logging → Authentication Debug Logging.",
+      "oidc": {
+        "clientSecret": "Client Secret",
+        "clientSecretHelp": "Select a stored credential profile holding the OIDC client secret.",
+        "title": "OIDC Authentication Settings",
+        "selfSignupHelp": "Allow new users to register automatically through OIDC authentication. If disabled, new users must be added manually by administrators.",
+        "providerNumber": "Provider {{n}}",
+        "providerName": "Provider Name",
+        "displayName": "Display Name",
+        "clientId": "Client ID",
+        "authorizationUrl": "Authorization URL",
+        "tokenUrl": "Token URL",
+        "userInfoUrl": "User Info URL",
+        "autoCallback": "Auto-generated: {{url}}",
+        "groupsAttribute": "Groups Attribute",
+        "scope": "Scope (comma-separated)",
+        "pkce": "Enable PKCE",
+        "autoRedirect": "Auto-redirect",
+        "autoRedirectHelp": "Automatically redirect users to this provider when it's the only auth method enabled"
+      },
+      "mode": {
+        "title": "Primary Authentication Mode",
+        "help": "Select the primary authentication mode for default behavior and routing.",
+        "proxy": "Proxy Mode",
+        "proxyDesc": "Authentication via reverse proxy or JWT tokens",
+        "local": "Local Mode",
+        "localDesc": "Built-in username/password authentication",
+        "oidc": "OIDC Mode",
+        "oidcDesc": "OpenID Connect with external providers",
+        "ldap": "LDAP Mode",
+        "ldapDesc": "LDAP/Active Directory authentication",
+        "ntlm": "NTLM Mode",
+        "ntlmDesc": "Windows Integrated Authentication (NTLM/Kerberos)",
+        "anonymous": "Anonymous Mode",
+        "anonymousDesc": "No authentication required (default)"
+      },
+      "methodsHelp": "Enable multiple authentication methods simultaneously. Users can choose their preferred login method.",
+      "methodNames": {
+        "proxy": "Proxy/JWT Authentication",
+        "proxyDesc": "Headers or JWT tokens from reverse proxy",
+        "local": "Local Authentication",
+        "oidc": "OIDC Authentication",
+        "oidcDesc": "OpenID Connect providers (Google, etc.)",
+        "ldap": "LDAP Authentication",
+        "ldapDesc": "LDAP/Active Directory authentication with multiple providers",
+        "ntlm": "NTLM Authentication",
+        "ntlmDesc": "Windows Integrated Authentication (NTLM)",
+        "anonymousDesc": "Allow users to access without authentication"
+      },
+      "allowSelfSignup": "Allow Self-Signup",
+      "ldapGroupLookup": {
+        "provider": "LDAP Group Lookup Provider",
+        "cacheTtl": "LDAP Group Cache TTL (seconds)",
+        "cacheTtlHelp": "How long to cache LDAP group results per user. Set to 0 to disable caching."
+      },
+      "jwt": {
+        "help": "Configure JWT token validation for pure JWT authentication (no headers required)",
+        "addProvider": "Add Provider",
+        "provider": "JWT Provider",
+        "namePlaceholder": "Provider name",
+        "headerPlaceholder": "Header name",
+        "issuerPlaceholder": "Issuer URL",
+        "audiencePlaceholder": "Audience",
+        "jwkPlaceholder": "JWK URL"
+      },
+      "local": {
+        "jwtSecretHelp": "Use the environment variable {{name}} for security",
+        "title": "Local Authentication Settings",
+        "usersFile": "Users File Path",
+        "jwtSecret": "JWT Secret",
+        "showDemoAccounts": "Show Demo Accounts in Login Form",
+        "showDemoAccountsHelp": "Display demo account credentials on the login form for development/testing",
+        "lockout": "Lock accounts after repeated failed sign-ins",
+        "lockoutHelp": "While an account is locked, sign-in is refused without checking the password",
+        "lockoutMaxAttempts": "Failed Sign-ins Before Lockout",
+        "lockoutDuration": "Lockout Duration (minutes)"
+      },
+      "sessionTimeout": "Session Timeout (minutes)",
+      "ntlm": {
+        "title": "NTLM Authentication Settings",
+        "help": "Configure Windows Integrated Authentication (NTLM) for domain users.",
+        "domain": "Domain Name",
+        "domainHelp": "Windows domain name (e.g., EXAMPLE, MUC)",
+        "domainController": "Domain Controller URL",
+        "domainControllerHelp": "LDAP URL of the domain controller that checks the sign-in (e.g., ldaps://dc.example.com:636, or ldap://dc.example.com:389 for an unencrypted connection)",
+        "sessionTimeoutHelp": "JWT token expiration time",
+        "debug": "Enable Debug Logging",
+        "debugHelp": "Log detailed NTLM authentication information",
+        "selfSigned": "Allow self-signed / internal CA certificates (ldaps://)",
+        "selfSignedHelp": "Enable when the domain controller uses a certificate from a private or internal CA. Required for most on-premise ldaps:// setups.",
+        "ldapLookupNone": "None (default groups only)",
+        "ldapLookupHelp": "NTLM sign-in returns no groups. To give NTLM users their directory groups, pick an LDAP provider with admin credentials and group search configured; without one, NTLM users get only the default groups."
+      }
     },
     "officeIntegration": {
       "title": "Office Integration",
@@ -2402,7 +2583,8 @@
       "forceRefreshConfirmKept": "The disclaimer acceptance is kept; other settings stored only in the browser are cleared.",
       "forceRefreshConfirmSignIn": "Users whose sign-in is stored in the browser may have to sign in again.",
       "forceRefreshConfirmAction": "Force refresh",
-      "forceRefreshDone": "Force refresh triggered. Every browser clears its cached files and reloads the next time iHub is loaded in it."
+      "forceRefreshDone": "Force refresh triggered. Every browser clears its cached files and reloads the next time iHub is loaded in it.",
+      "rollbackTitle": "Rollback Update"
     },
     "security": {
       "description": "SSL, CORS, cookie settings, rate limits, outbound proxy, and encryption configuration",
@@ -2502,7 +2684,8 @@
         "never": "Never",
         "lastModified": "Last Modified",
         "connections": "Connected applications",
-        "manageConnections": "Manage"
+        "manageConnections": "Manage",
+        "notFound": "User not found"
       },
       "edit": {
         "createTitle": "Create New User",
@@ -2514,7 +2697,9 @@
         "save": "Save User",
         "saving": "Saving...",
         "selfDeactivateHint": "You cannot deactivate your own account.",
-        "saveFailedTitle": "Could not save the user"
+        "saveFailedTitle": "Could not save the user",
+        "noUserData": "No user data available",
+        "fixErrors": "Please fix the following errors"
       },
       "groups": "Groups",
       "groupsPlaceholder": "Search groups or type a name…",
@@ -2555,6 +2740,83 @@
         "removeAllDone": "All confirmations removed.",
         "removeFailed": "Could not remove the confirmation",
         "exportFailed": "Could not export the CSV"
+      },
+      "validation": {
+        "usernameRequired": "Username is required",
+        "usernameInvalid": "Username can only contain letters, numbers, periods, hyphens, and underscores",
+        "emailInvalid": "Please enter a valid email address",
+        "passwordRequired": "A password is required for local authentication",
+        "passwordTooShort": "Password must be at least 6 characters long",
+        "passwordMismatch": "Passwords do not match"
+      },
+      "fields": {
+        "username": "Username",
+        "email": "Email",
+        "name": "Name",
+        "password": "Password",
+        "confirmPassword": "Confirm Password"
+      },
+      "basicInformation": "Basic Information",
+      "basicUserConfiguration": "Basic user configuration and contact information",
+      "username": "Username",
+      "usernameCannotBeChanged": "Username cannot be changed after creation",
+      "email": "Email",
+      "fullName": "Full Name",
+      "enabled": "Enabled",
+      "authMethods": "Authentication Method",
+      "authMethod": {
+        "local": "Local (Username/Password)",
+        "ntlm": "NTLM (Windows Domain)",
+        "ldap": "LDAP",
+        "oidc": "OIDC (OpenID Connect)",
+        "proxy": "Proxy (Header-based)"
+      },
+      "authMethodHelp": "How this user will authenticate. Local users need a password.",
+      "authMethodReadOnly": "Authentication method cannot be changed after creation",
+      "noAuthMethod": "No authentication method set",
+      "passwordSettings": "Password Settings",
+      "passwordOptionalExternal": "Optional - user authenticates via external provider",
+      "setInitialPassword": "Set the initial password for this user",
+      "changePassword": "Leave blank to keep current password",
+      "password": "Password",
+      "newPassword": "New Password",
+      "confirmPassword": "Confirm Password",
+      "deleteTitle": "Delete User",
+      "list": {
+        "noGroups": "No groups",
+        "never": "Never",
+        "deleted": "User deleted.",
+        "colUser": "User",
+        "colAuthMethod": "Auth Method",
+        "colLastActive": "Last Active",
+        "viewUser": "View user",
+        "editUser": "Edit user",
+        "deleteUser": "Delete user",
+        "title": "User Management",
+        "subtitle": "Manage local authentication users and their permissions",
+        "addUser": "Add User",
+        "searchPlaceholder": "Search by ID, name, email, group, or auth method…",
+        "allMethods": "All Methods",
+        "allGroups": "All Groups",
+        "allStatus": "All Statuses",
+        "anyTime": "Any Time",
+        "last7": "Last 7 days",
+        "last30": "Last 30 days",
+        "last90": "Last 90 days",
+        "daysAgo_one": "{{count}} day ago",
+        "daysAgo_other": "{{count}} days ago",
+        "enabled": "User enabled.",
+        "disabled": "User disabled.",
+        "loadError": "Failed to load users: {{error}}",
+        "deleteError": "Failed to delete user: {{error}}",
+        "statusError": "Failed to update user status: {{error}}"
+      },
+      "form": {
+        "usernamePlaceholder": "Enter username",
+        "emailPlaceholder": "Enter email address",
+        "fullNamePlaceholder": "Enter full name",
+        "enabledHelp": "Disabled users cannot log in or access the system",
+        "passwordHelp": "Password must be at least 6 characters long and should contain a mix of letters, numbers, and special characters."
       }
     },
     "logging": {
@@ -2648,7 +2910,11 @@
         }
       },
       "resource": "logging settings",
-      "currentLevel": "Current Level"
+      "currentLevel": "Current Level",
+      "title": "Logging Configuration",
+      "description": "Configure logging levels, components, metadata, and debug settings",
+      "authDebugDescription": "The single place to trace authentication flows — OIDC redirects, token exchange, group mapping, NTLM handshakes. Traces are written at the \"info\" level, so they appear at the default log level without any further changes and take effect immediately (no restart needed).",
+      "includeRawDataWarning": "Security risk: logs the full user-info payload and access tokens. Leave off unless actively debugging; disable again afterwards."
     },
     "nav": {
       "chatHistory": "Chat History",
@@ -2756,7 +3022,9 @@
         "resource": "MCP gateway settings",
         "discoveryLabel": "Discovery:",
         "endpointLabel": "Endpoint:",
-        "transportStateless": "Stateless mode"
+        "transportStateless": "Stateless mode",
+        "transportStatelessDesc": "Handle every Streamable HTTP request independently instead of keeping MCP sessions in memory. Enable when iHub runs behind a load balancer that spreads requests across several pods, where a session opened on one pod is unknown to the next. Trade-off: no server-initiated SSE stream.",
+        "connectionHint": "Authenticate with an OAuth client (see /admin/oauth/clients) that grants the relevant mcp:* scopes."
       }
     },
     "telemetry": {
@@ -2800,7 +3068,8 @@
       "referenceTitle": "Reference",
       "refEnvHint": "Standard OTEL_* environment variables (OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_SERVICE_NAME, ...) are honored at startup.",
       "refMetricsHint": "Custom iHub metrics: ihub.app.usage, ihub.prompt.usage, ihub.errors, ihub.conversations, ihub.active.users, ihub.active.chats.",
-      "resource": "telemetry settings"
+      "resource": "telemetry settings",
+      "genAiConventions": "OpenTelemetry Gen-AI semantic conventions:"
     },
     "systemResources": {
       "title": "System resources",
@@ -3036,7 +3305,8 @@
           "content": "Content",
           "files": "Files ({{count}})",
           "releases": "Releases"
-        }
+        },
+        "source": "Source"
       },
       "files": {
         "listLabel": "Files of this skill",
@@ -3099,6 +3369,16 @@
       "versionPolicy": {
         "pinned": "Pinned to {{pin}}",
         "offered": "offered here: v{{version}}"
+      },
+      "registry": {
+        "auth": {
+          "token": "Token",
+          "username": "Username",
+          "password": "Password",
+          "headerName": "Header Name",
+          "headerValue": "Header Value"
+        },
+        "namePlaceholder": "My Registry"
       }
     },
     "apps": {
@@ -3106,25 +3386,18 @@
         "autoStart": "Auto-start conversation",
         "autoStartHelp": "When enabled, the app will automatically start the conversation when the chat is opened or reset",
         "startForm": "Start chats with a form",
-        "startFormHelp": "A new chat opens with these variables as a form instead of the chat input, with a message field, a model selector when users may pick the model, and a drop zone for files when uploads are enabled. Sending the form fills the prompt template once and sends it as the first message; the conversation then continues without the template.",
+        "startFormHelp": "A new chat opens with the input fields as a form instead of the message box, with a drop zone for files when uploads are on. Sending the form fills the message template once and sends it as the first message. The conversation then continues without the template.",
         "startFormSubmitLabel": "Send button label",
-        "variablesPanelPinned": "Pin the input parameters by default",
-        "variablesPanelPinnedHelp": "Pinned, the input parameters stay open beside the chat. Unpinned, they collapse each time a message is sent and can be expanded again. Users can collapse, expand and pin the panel themselves; this sets where it starts.",
+        "variablesPanelPinned": "Keep the input fields open beside the chat",
+        "variablesPanelPinnedHelp": "Open, the input fields stay beside the chat. Otherwise they collapse each time a message is sent and can be opened again. Users can change this themselves; the setting says where it starts.",
         "ephemeral": "Ephemeral chat",
         "ephemeralHelp": "When enabled, the chat is never stored. Messages exist only while the chat is open and are discarded when you switch apps or reload.",
         "test": "Test",
         "hideTest": "Hide test",
         "testHint": "Chat with the saved app next to the editor",
-        "openDisabledHint": "Enable the app and save to open it",
-        "save": "Save",
-        "saveAndExit": "Save & Exit",
-        "saveHint": "Save and keep editing (Ctrl+S / ⌘S)",
-        "saving": "Saving...",
         "saved": "App saved",
-        "created": "App created",
-        "idRequired": "App ID is required",
         "integrations": {
-          "title": "Integrations",
+          "title": "Connected systems",
           "desc": "Bind installed integrations. Narrow them to some actions, and set the scope users start with.",
           "none": "No integration is installed yet.",
           "openCatalog": "Open the catalog",
@@ -3366,7 +3639,7 @@
         "documentTemplateFree": "The default template applies; the model may use another template when the user asks for it.",
         "documentTemplatesLink": "Manage document templates",
         "documentTemplateMissing": "The template \"{{id}}\" does not exist; the default template applies.",
-        "addLanguage": "Add Language",
+        "addLanguage": "Add a translation",
         "selectLanguage": "Select...",
         "languageCode": "Language code (e.g., en, de, es)",
         "invalidLanguageCode": "Use a two-letter language code, optionally with a region: \"de\", \"pt-BR\".",
@@ -3385,7 +3658,279 @@
         "toolSearchBudgetHelp": "Tokens the tool definitions of one request may take before integrations are left to the search. Default 6000; never more than a tenth of the model's context window.",
         "selectCategory": "Select category...",
         "resource": "app \"{{id}}\"",
-        "backToApps": "Back to Apps"
+        "backToApps": "Back to Apps",
+        "publish": {
+          "action": "Publish",
+          "title": "Publish \"{{name}}\"?",
+          "who": "Who will see it",
+          "everyone": "Everyone can use this app, including people who are not signed in.",
+          "everyoneSignedIn": "Everyone who signs in can use this app.",
+          "groups": "Members of these groups can use it: {{groups}}.",
+          "noGroups": "No group can use this app yet. Choose groups under \"Who can use this app\".",
+          "partial": "You see only the groups you manage. Other people may also be able to use it; ask an administrator.",
+          "noOwnGroups": "None of the groups you manage can use this app yet. Other people may be able to use it; ask an administrator.",
+          "savesFirst": "Your unsaved changes are saved first.",
+          "noModel": "No AI model is available. Users will see \"No models available\".",
+          "notSignedIn": "People who are not signed in can use this app."
+        },
+        "unpublish": {
+          "action": "Unpublish",
+          "title": "Unpublish \"{{name}}\"?",
+          "body": "Users can no longer open the app."
+        },
+        "notPublishedHint": "Not published. Only you and others who manage apps can open and test this app.",
+        "testNoAccess": {
+          "title": "Your groups cannot use this app yet",
+          "body": "Give one of your groups access, then test it."
+        },
+        "access": {
+          "everyoneSignedIn": "Everyone who signs in",
+          "everyone": "Everyone, including people who are not signed in",
+          "notSignedIn": "People who are not signed in"
+        },
+        "liveHint": "Users get the change as soon as you save.",
+        "fieldsNeedAttention_one": "1 field needs your attention.",
+        "fieldsNeedAttention_other": "{{count}} fields need your attention.",
+        "showFirstError": "Show",
+        "more": "More",
+        "expandAll": "Expand all",
+        "collapseAll": "Collapse all",
+        "jump": "Jump to section",
+        "jumpGo": "Go",
+        "groups": {
+          "basics": "Basics",
+          "instructions": "Instructions and inputs",
+          "model": "Model",
+          "knowledge": "Knowledge and tools",
+          "chat": "Chat features",
+          "input": "Input and voice",
+          "userSettings": "What users can change",
+          "access": "Who can use this app"
+        },
+        "systemInstructions": "Instructions",
+        "systemInstructionsDesc": "Tell the AI what its task is and how it should answer. It reads this before every chat; users do not see it. (Also called the system prompt.)",
+        "prompt": "Message template",
+        "promptHelp": "Optional. Text that is sent together with every message of a user. Write one placeholder for each input field. Write {{content}} where the user's message should go; without it, the message is added at the end.",
+        "messagePlaceholder": "Hint in the message box",
+        "messagePlaceholderHelp": "Grey text in the empty message box, for example \"Paste your text here\".",
+        "variables": "Input fields",
+        "variablesDesc": "Fields users fill in before they send, for example a language or a tone. Each field has a placeholder. What a user enters replaces the placeholder in the instructions and in the message template.",
+        "variablesEmpty": "No input fields. Users write a message, nothing else.",
+        "variable": "Input field",
+        "addVariable": "Add input field",
+        "variableLabel": "Field name",
+        "variableLabelHelp": "The text users see above the field.",
+        "variableName": "Placeholder",
+        "variableNameHelp": "Write {{placeholder}} in the instructions or the message template. It is replaced by what the user enters.",
+        "variableUnused": "This field is not used yet. The AI does not receive what users enter.",
+        "variableAddToTemplate": "Add to message template",
+        "variableType": "Kind of field",
+        "typeString": "Short text",
+        "typeText": "Long text",
+        "typeSelect": "Dropdown (choose one)",
+        "typeDate": "Date",
+        "typeNumber": "Number",
+        "required": "Users must fill this in",
+        "defaultValue": "Prefilled value",
+        "predefinedValues": "Options",
+        "option": "Option",
+        "value": "Text the AI receives",
+        "addOption": "Add option",
+        "starterPrompts": "Conversation starters",
+        "starterPromptsDesc": "Buttons in an empty chat. A click puts the text into the message box.",
+        "starterPrompt": "Conversation starter",
+        "addStarterPrompt": "Add conversation starter",
+        "title": "Text on the button",
+        "message": "Message",
+        "description": "Short description",
+        "moreDetails": "More details",
+        "appType": "App type",
+        "order": "Position in the app list",
+        "systemPrompt": "Instructions",
+        "validation": {
+          "systemRequired": "Enter instructions. One sentence is enough to start.",
+          "colorInvalid": "Color must be a valid hex code",
+          "colorRequired": "Color is required",
+          "descriptionRequired": "App description is required",
+          "iconRequired": "Icon is required",
+          "idInvalid": "App ID can only contain letters, numbers, hyphens, and underscores",
+          "idRequired": "App ID is required",
+          "nameRequired": "App name is required",
+          "empty": "This field is empty. Enter a text.",
+          "required": "This entry is missing. Fill it in.",
+          "minLength_one": "This text is too short. Enter at least {{count}} character.",
+          "minLength_other": "This text is too short. Enter at least {{count}} characters.",
+          "maxLength_one": "This text is too long. Shorten it to {{count}} character.",
+          "maxLength_other": "This text is too long. Shorten it to {{count}} characters.",
+          "minimum": "This number is too small. Enter a number that is at least {{limit}}.",
+          "maximum": "This number is too large. Enter a number that is at most {{limit}}.",
+          "exclusiveMinimum": "This number is too small. Enter a number greater than {{limit}}.",
+          "exclusiveMaximum": "This number is too large. Enter a number less than {{limit}}.",
+          "pattern": "This entry does not have the required form. Check it for characters that are not allowed.",
+          "uri": "This is not a complete web address. Enter one that starts with https:// or http://.",
+          "email": "This is not an e-mail address. Enter one like name@example.com.",
+          "enum": "This value is not offered. Choose one of: {{values}}.",
+          "uniqueItems": "This list contains an entry twice. Remove the duplicate.",
+          "type": "This value has the wrong kind (for example a text where a number belongs). Correct it.",
+          "invalid": "This value is not valid. Check it.",
+          "variableName": "This placeholder is not allowed. Start with a letter or an underscore, and use only letters, digits, hyphens and underscores."
+        },
+        "groupChanged": "changed",
+        "settings": "What users can change",
+        "settingsDesc": "Each switch shows or hides one control in the chat.",
+        "enableModelSelection": "Users can choose the AI model",
+        "enableOutputFormat": "Users can choose the answer format",
+        "enableChatHistory": "Users can switch off \"Include chat history in requests\"",
+        "enableStyleControl": "Users can choose the response style",
+        "skillsTitle": "Skills",
+        "workflowsTitle": "Workflows",
+        "skills": {
+          "noResults": "No skills match your search",
+          "noSkills": "No skills available"
+        },
+        "workflows": {
+          "noResults": "No workflows match your search",
+          "noWorkflows": "No workflows available"
+        },
+        "allowFullscreen": "Allow Fullscreen",
+        "allowScripts": "Allow Scripts (required for most interactive content)",
+        "allowSameOrigin": "Allow Same Origin (enables localStorage, cookies)",
+        "allowForms": "Allow Forms (enable form submission)",
+        "allowPopups": "Allow Popups",
+        "allowModals": "Allow Modals (alert, confirm, etc.)",
+        "allowTopNavigation": "Allow Top Navigation (navigate parent window)",
+        "enableImageUpload": "Enable Image Upload",
+        "maxImageSize": "Max Image Size (MB)",
+        "supportedImageFormats": "Supported Image Formats",
+        "resizeImages": "Resize Images",
+        "enableFileUpload": "Enable File Upload",
+        "maxFileSize": "Max File Size (MB)",
+        "supportedFormats": "Supported File Formats",
+        "enableAudioUpload": "Enable Audio Upload",
+        "maxAudioSize": "Max Audio File Size (MB)",
+        "supportedAudioFormats": "Supported Audio Formats",
+        "allowMultiple": "Allow Multiple Files",
+        "allowedModels": "Allowed Models",
+        "allowedModelsHint": "Restrict which models users can select for this app. Leave empty to allow all models.",
+        "appId": "App ID",
+        "appTypeHint": "Chat apps use AI models, Iframe apps embed external content, Redirect apps open external links",
+        "autoSendPrompt": "Send immediately when clicked",
+        "automaticMode": "Automatic (Voice Activation)",
+        "azureService": "Azure Speech",
+        "basicInfo": "Basic Information",
+        "basicInfoDesc": "Basic app configuration and metadata",
+        "category": "Category",
+        "color": "Color",
+        "compareMode": "Compare Mode",
+        "compareModeDesc": "Allow users to query two models simultaneously and compare their responses side-by-side",
+        "compareModeNote": "When enabled, users can activate compare mode to send their input to two different models and view the responses side-by-side. The platform-level compare mode feature must also be enabled for this to work.",
+        "customService": "Custom Service",
+        "customServiceHost": "Custom Service Host",
+        "enableCompareMode": "Enable Compare Mode",
+        "enableExport": "Enable Export",
+        "enableMagicPrompt": "Enable Magic Prompt",
+        "enableMicrophone": "Enable Microphone",
+        "enableUpload": "Enable Upload",
+        "enabled": "Enabled",
+        "export": "Export",
+        "exportDesc": "Control whether users can export conversations from this app",
+        "exportNote": "When disabled, users cannot export conversations in any format (JSON, Markdown, PDF, etc.). The platform-level export setting must also be enabled for export to work.",
+        "fixErrors": "Please fix the following errors",
+        "history": "History",
+        "icon": "Icon",
+        "iframeConfig": "Iframe Configuration",
+        "iframeConfigDesc": "Configure the embedded iframe content",
+        "iframeUrl": "Iframe URL",
+        "inputMode": "Input Mode & Microphone",
+        "inputModeDesc": "Configure input methods and voice recognition",
+        "inputType": "Input Type",
+        "magicPrompt": "Magic Prompt",
+        "magicPromptDesc": "AI-powered prompt enhancement feature",
+        "magicPromptInstructions": "Magic Prompt Instructions",
+        "magicPromptModel": "Magic Prompt Model",
+        "magicPromptPlaceholder": "Use {{prompt}} to reference the user's original prompt",
+        "manualMode": "Manual (Click to Record)",
+        "microphoneMode": "Microphone Mode",
+        "multiLine": "Multi Line",
+        "name": "Name",
+        "noAppData": "No app data available",
+        "noModelsSelected": "No restriction — all available models can be used with this app",
+        "openInNewTab": "Open in New Tab",
+        "outputFormat": "Answer format",
+        "predefinedValuesHint": "Optional suggested values that can be used as autocomplete options.",
+        "predefinedValuesHintSelect": "Options that will be available in the dropdown menu.",
+        "preferredModel": "AI model",
+        "redirectConfig": "Redirect Configuration",
+        "redirectConfigDesc": "Configure the redirect behavior",
+        "redirectUrl": "Redirect URL",
+        "sandboxPermissions": "Sandbox Permissions",
+        "sandboxPermissionsDesc": "Control what the embedded content is allowed to do. Uncheck options to restrict permissions for better security.",
+        "searchModels": "Search models to add...",
+        "searchSkills": "Search skills to add...",
+        "searchWorkflows": "Search workflows to add...",
+        "selectModel": "Select model...",
+        "showTranscript": "Show Transcript",
+        "showWarning": "Show Warning Before Redirect",
+        "singleLine": "Single Line",
+        "skillsDesc": "Configure which agent skills are available for this app",
+        "skillsHelper": "Search and select skills to add to this app. Click on selected skills to remove them.",
+        "speechRecognitionService": "Speech Recognition Service",
+        "tools": "Tools",
+        "toolsDesc": "How the model uses the tools of the integrations this app binds",
+        "typeChat": "Chat",
+        "typeIframe": "Iframe",
+        "typeRedirect": "Redirect",
+        "upload": "Upload Configuration",
+        "uploadDesc": "Configure file and image upload capabilities",
+        "validationErrorsExist": "Please fix validation errors before saving",
+        "workflowsDesc": "Attach workflows to this app. Users can trigger them in chat with @workflow-id.",
+        "workflowsHelper": "Search and select workflows to make available in this app. Users can trigger them with @workflow-id in chat.",
+        "selectIcon": "Select an icon",
+        "searchIcons": "Search icons…",
+        "noIconsFound": "No icons found",
+        "iconCount": "{{count}} icons available",
+        "iconCountFiltered": "{{filtered}} of {{total}} icons",
+        "summary": {
+          "standardModel": "Standard model",
+          "webSearchOn": "Web search on",
+          "webSearchOff": "Web search off",
+          "connectedSystems_one": "{{count}} connected system",
+          "connectedSystems_other": "{{count}} connected systems",
+          "allConnectedSystems": "all connected systems",
+          "uploadOn": "Upload on",
+          "uploadOff": "Upload off",
+          "featuresOn": "{{features}} on",
+          "featureExport": "export",
+          "featureFeedback": "feedback",
+          "singleLine": "Single line",
+          "multiLine": "Multi-line",
+          "microphoneOn": "microphone on",
+          "microphoneOff": "microphone off",
+          "settingsOn": "{{on}} of {{total}} on",
+          "groups_one": "{{count}} group",
+          "groups_other": "{{count}} groups",
+          "noGroups": "No group yet",
+          "ownGroups_one": "{{count}} of the groups you manage",
+          "ownGroups_other": "{{count}} of the groups you manage",
+          "noOwnGroups": "None of the groups you manage"
+        },
+        "modelTitle": "AI model",
+        "modelDesc": "Which AI model answers in this app, and in which format.",
+        "chatBehaviour": "Chat behavior",
+        "chatBehaviourDesc": "How a chat with this app starts and whether it is stored.",
+        "standardModel": "Standard model",
+        "loadingFormats": "Loading the available formats...",
+        "categoryNotFound": "This kind of file is not set up on this installation.",
+        "useEntireCategory": "Use the entire {{category}} category",
+        "selectIndividualFormats": "Or select individual formats:",
+        "errorLabel": {
+          "variable": "Input field {{number}}",
+          "starterPrompt": "Conversation starter {{number}}",
+          "option": "Option {{number}}",
+          "part": "{{parent}}, {{field}}",
+          "language": "{{field}} — {{language}}"
+        },
+        "magicPromptInstructionsPlaceholder": "Enter instructions for the magic prompt feature…"
       },
       "reorder": "Reorder",
       "reorderHelp": "Drag a row or use the arrows to set the order apps appear in for users — in the apps browser, on the start page and in the sidebar. Every app is listed, so search and filters do not apply here. Nothing is saved until you choose \"Save order\".",
@@ -3393,7 +3938,6 @@
       "savingOrder": "Saving order...",
       "openApp": "Open app",
       "openAppHint": "Open the app in a new tab",
-      "openDisabledHint": "Enable the app to open it",
       "openMissingFeaturesHint": "Turn on {{features}} to open it",
       "missingInstalledIntegration": "Installed integration \"{{id}}\"",
       "missingWebSearchEngine": "A web search engine",
@@ -3406,11 +3950,12 @@
         "close": "Close test panel",
         "unsavedHint": "You have unsaved changes. Save to test them — the test restarts after every save.",
         "chatOnly": "Testing here works for chat apps. Use Open app to try this app.",
-        "disabled": "This app is disabled, so it cannot be opened in the chat. Enable it and save to test it."
+        "disabled": "This app is not published, so it cannot be opened in the chat. Publish it to test it."
       },
       "status": {
-        "disabled": "Disabled",
-        "hiddenUntilFeature": "Hidden from users until {{features}} is on"
+        "hiddenUntilFeature": "Hidden from users until {{features}} is on",
+        "published": "Published",
+        "notPublished": "Not published"
       },
       "integrationNames": {
         "jira": "Jira integration",
@@ -3433,7 +3978,270 @@
         "custom": "Custom notice",
         "off": "No notice for this app",
         "text": "Notice text"
-      }
+      },
+      "create": {
+        "title": "New app",
+        "stepOf": "Step {{current}} of {{total}}: {{name}}",
+        "steps": {
+          "start": "Start",
+          "essentials": "Essentials"
+        },
+        "back": "Back",
+        "cancel": "Cancel",
+        "submit": "Create and test",
+        "submitting": "Creating app…",
+        "requiredHint": "Fields marked with * are required.",
+        "restored": "Your unfinished draft was restored.",
+        "startOver": "Start over",
+        "discard": {
+          "title": "Discard this app?",
+          "body": "You have not created the app yet. What you entered will be lost.",
+          "confirm": "Discard",
+          "keep": "Keep editing"
+        },
+        "start": {
+          "heading": "What should your app do?",
+          "label": "Your description",
+          "placeholder": "Example: An assistant that rewrites a difficult text in plain language. The user pastes the text and chooses a reading level.",
+          "help": "Say who uses the app, what they put in and what they should get back. Two or three sentences are enough.",
+          "examples": {
+            "label": "Examples:",
+            "summary": {
+              "chip": "Plain-language summary",
+              "text": "An assistant that rewrites a difficult text in plain language. The user pastes the text and chooses a reading level."
+            },
+            "reply": {
+              "chip": "Reply to a customer",
+              "text": "An assistant that drafts a reply to a customer email. The user pastes the email and chooses a tone: friendly, neutral or formal."
+            },
+            "translate": {
+              "chip": "Translate a text",
+              "text": "An assistant that translates a text and keeps its tone and formatting. The user chooses the target language."
+            }
+          },
+          "generate": "Prepare draft",
+          "generating": "Preparing your draft. This can take up to a minute.",
+          "privacy": "Your description is sent to the AI model {{model}}.",
+          "or": "or start from",
+          "templates": {
+            "heading": "Templates",
+            "loadError": "The templates could not be loaded."
+          },
+          "badge": {
+            "inputFields": "Input fields"
+          },
+          "copy": "Copy an existing app",
+          "copyHelp": "Start from a copy of an app that already exists.",
+          "blank": "Start empty",
+          "other": "Other ways to start",
+          "link": {
+            "help": "A link to a website, or a page shown inside iHub.",
+            "action": "Create a link app"
+          },
+          "marketplace": "More apps in the Marketplace"
+        },
+        "noModel": {
+          "title": "No AI model is set up yet",
+          "body": "You can prepare the app, but it cannot answer until a model is connected.",
+          "actionAdmin": "Set up a model",
+          "actionOther": "Ask an administrator to set up a model."
+        },
+        "generatorOff": "Drafting with AI is switched off on this installation.",
+        "copy": {
+          "heading": "Which app do you want to copy?",
+          "search": "Search apps",
+          "noMatch": "No app matches \"{{query}}\".",
+          "none": "There is no app to copy yet. Choose another way to start.",
+          "loadError": "The apps could not be loaded.",
+          "sourceGone": "The app you wanted to copy no longer exists.",
+          "nameSuffix": "{{name}} (copy)",
+          "note": "Copied from \"{{name}}\". Everything is copied, including connected systems and file settings. Group access is not copied.",
+          "languagesNote": "You changed texts that also exist in other languages. Those other versions are removed, so that all users get your new text. You can add translations in the editor."
+        },
+        "retry": "Try again",
+        "template": {
+          "note": "Started from the template \"{{name}}\". Change anything you like."
+        },
+        "essentials": {
+          "heading": {
+            "blank": "Describe your app",
+            "draft": "Check your draft",
+            "copy": "Adjust your copy",
+            "template": "Adjust the template",
+            "link": "Set up your link app"
+          },
+          "name": "Name",
+          "namePlaceholder": "Plain-language summary",
+          "nameHelp": "Users see the name in the app list.",
+          "nameExists": "An app named \"{{name}}\" already exists. You can still use the name.",
+          "description": "Short description",
+          "descriptionPlaceholder": "Rewrites a text so that everyone understands it.",
+          "descriptionHelp": "One sentence under the name. It tells users when to pick this app.",
+          "instructions": "Instructions",
+          "instructionsPlaceholder": "You rewrite texts in plain language. Use short sentences and common words. Keep all facts. Answer in the language of the text.",
+          "instructionsHelp": "Tell the AI what its task is and how it should answer. It reads this before every chat; users do not see it. (Also called the system prompt.)",
+          "tips": {
+            "toggle": "Tips for good instructions",
+            "role": "Say what the app does: \"You summarize meeting notes.\"",
+            "form": "Say what the answer looks like: \"Five bullet points at most.\"",
+            "limits": "Say what it must not do: \"Do not add facts that are not in the text.\""
+          },
+          "icon": "Icon",
+          "color": "Color",
+          "colorCustom": "Custom color",
+          "details": "More details",
+          "id": "App ID",
+          "idHelp": "Part of the app's link. Lowercase letters, digits and hyphens. It cannot be changed after the app is created.",
+          "idFree": "Available",
+          "category": "Category",
+          "categoryHelp": "Users can filter the app list by category.",
+          "language": "You are writing in {{language}}. You can add other languages in the editor.",
+          "audience": "The app starts as \"Not published\". Only you and others who manage apps can open and test it until you publish it.",
+          "audienceLive": "Everyone who may use apps through their group sees it as soon as you create it.",
+          "colors": {
+            "indigo": "Indigo",
+            "blue": "Blue",
+            "teal": "Teal",
+            "green": "Green",
+            "orange": "Orange",
+            "red": "Red",
+            "pink": "Pink",
+            "gray": "Gray"
+          }
+        },
+        "draft": {
+          "intro": "The AI prepared this draft. Check the text; you can change everything.",
+          "also": "Also in this draft",
+          "inputFields": "Input fields: {{names}}",
+          "fieldsLocked": "The instructions use these fields. You can remove them in the editor.",
+          "suggestions": "The app could also use",
+          "suggestionsHelp": "Nothing here is switched on unless you tick it.",
+          "webSearch": "Web search: the app can search the internet.",
+          "system": "{{name}}: {{actions}}",
+          "systemAll": "{{name}}: all functions",
+          "leftOut": "Some parts of the answer could not be used and were left out.",
+          "regenerate": "Prepare a new draft",
+          "regenerateWarning": "A new draft replaces the current one, including your changes.",
+          "arrived": {
+            "title": "The new draft is ready",
+            "body": "You changed the current draft while the new one was being prepared. The new draft replaces it, including your changes.",
+            "use": "Use the new draft",
+            "keep": "Keep my changes"
+          }
+        },
+        "link": {
+          "url": "Website address",
+          "urlHelp": "The full address, starting with https://",
+          "mode": "How should it open?",
+          "redirect": "Open the website",
+          "iframe": "Show the website inside iHub",
+          "iframeHelp": "Some websites do not allow being shown inside other pages."
+        },
+        "done": {
+          "toast": "App \"{{name}}\" created",
+          "heading": "Your app is ready to test",
+          "body": "Write a message in the test chat on the right. Change the instructions, save, and try again.",
+          "steps": {
+            "test": "Test it with a real example",
+            "inputFields": "Add input fields, if users should choose something (optional)",
+            "starters": "Add conversation starters (optional)",
+            "access": "Check who can use the app",
+            "publish": "Publish"
+          },
+          "dismiss": "Hide these steps",
+          "guide": "Guide: Build your first app"
+        },
+        "error": {
+          "noModel": "No AI model is available to you, so a draft cannot be prepared. Start from a template or start empty, or ask an administrator to set up a model.",
+          "unreadable": "The AI's draft could not be used. Try again.",
+          "model": "The AI model did not answer. Try again in a moment.",
+          "modelSetup": "The AI model is not set up correctly. Ask an administrator. You can still start from a template or start empty.",
+          "quota": "You have reached your usage limit, so a draft cannot be prepared now. Ask an administrator, or start from a template or start empty.",
+          "refused": "The AI model refused this description. Change the wording and try again.",
+          "tooManyDrafts": "You have prepared many drafts in the last hour. Try again later, or start from a template or start empty.",
+          "busy": "Too many requests right now. Wait a moment and try again.",
+          "failed": "The draft could not be prepared. {{detail}}",
+          "empty": "Describe the app first.",
+          "tooLong": "Shorten your description to at most 2,000 characters.",
+          "nameRequired": "Enter a name.",
+          "descriptionRequired": "Enter a short description.",
+          "instructionsRequired": "Enter instructions. One sentence is enough to start.",
+          "idRequired": "Enter an app ID.",
+          "idFormat": "Use only lowercase letters, digits, hyphens, dots and underscores, without spaces. Example: {{example}}",
+          "idTooLong": "The app ID can have at most 50 characters.",
+          "idTaken": "An app with the ID \"{{id}}\" already exists. Choose another ID.",
+          "idReserved": "\"{{id}}\" cannot be used as an app ID. Choose another ID.",
+          "urlFormat": "Enter the full website address, starting with https://",
+          "summary_one": "1 field needs your attention.",
+          "summary_other": "{{count}} fields need your attention.",
+          "validation": "The app could not be created because these entries are not accepted: {{fields}}.",
+          "forbidden": "You are not allowed to create apps. Ask an administrator.",
+          "offline": "The server cannot be reached. Your entries are still here. Try again.",
+          "unknown": "The app could not be created. {{detail}}"
+        }
+      },
+      "title": "Apps",
+      "subtitle": "Assistants your users can open.",
+      "createApp": "New app",
+      "list": {
+        "duplicate": "Duplicate",
+        "uploadConfig": "Upload a config file",
+        "publishAll": "Publish all",
+        "unpublishAll": "Unpublish all",
+        "publishShown": "Publish shown",
+        "unpublishShown": "Unpublish shown",
+        "publishConfirm_one": "This app becomes visible to its users:",
+        "publishConfirm_other": "These {{count}} apps become visible to their users:",
+        "unpublishConfirm_one": "Users can no longer open this app:",
+        "unpublishConfirm_other": "Users can no longer open these {{count}} apps:",
+        "noMatch": "No app matches \"{{query}}\".",
+        "nothingToPublish": "All of these apps are already published.",
+        "nothingToUnpublish": "None of these apps is published.",
+        "openNotPublishedHint": "Not published. Open the editor to test the app."
+      },
+      "empty": {
+        "title": "No apps yet",
+        "body": "An app is an assistant for one task, for example \"Summarize a text\" or \"Answer questions about our travel policy\"."
+      },
+      "actions": {
+        "delete": "Delete",
+        "download": "Download Config",
+        "edit": "Edit",
+        "toggle": "Publish or unpublish"
+      },
+      "allCategories": "All Categories",
+      "errorTitle": "Error",
+      "filterAll": "All Apps",
+      "filterDisabled": "Not published only",
+      "filterEnabled": "Published only",
+      "loading": "Loading...",
+      "noApps": "No apps found",
+      "noAppsDescription": "Try adjusting your search or filter criteria.",
+      "searchPlaceholder": "Search apps...",
+      "statusLabel": "Status",
+      "table": {
+        "app": "App",
+        "category": "Category",
+        "model": "Model",
+        "order": "Order",
+        "status": "Status"
+      },
+      "uploading": "Uploading...",
+      "details": {
+        "status": "Status",
+        "description": "Short description",
+        "systemInstructions": "Instructions",
+        "technicalDetails": "Details",
+        "model": "AI model",
+        "order": "Position in the app list",
+        "variables": "Input fields",
+        "starterPrompts": "Conversation starters",
+        "editApp": "Edit app",
+        "close": "Close"
+      },
+      "downloadError": "Failed to download app config: {{error}}",
+      "uploadExists": "App with ID \"{{id}}\" already exists",
+      "uploadError": "Failed to upload app config: {{error}}"
     },
     "features": {
       "title": "Features",
@@ -4398,7 +5206,7 @@
         "installationDisabled": "This installation is disabled: an app that requires it is hidden, others run without its actions. Enable it to test.",
         "notGranted": "Your groups do not grant this installation, so the chat runs without its actions. Grant it under Admin → Groups.",
         "openGroups": "Open groups",
-        "appDisabled": "This app is disabled, so it cannot be opened in the chat. Enable it in the app editor to test it."
+        "appDisabled": "This app is not published, so it cannot be opened in the chat. Publish it in the app editor to test it."
       },
       "actionReview": {
         "new": "New",
@@ -4679,8 +5487,28 @@
       "header": {
         "colorHint": "Use hex colors (#4f46e5) or rgb values (rgb(79, 70, 229)). The colour applies to the classic top header (Teams, Office and Nextcloud embeds, ?sidebar=false); the sidebar layout does not use it.",
         "title": "Header",
-        "description": "The navigation links and the color of the classic top header."
+        "description": "The navigation links and the color of the classic top header.",
+        "titleLight": "Light part (e.g. \"iHub\")",
+        "titleBold": "Bold part (e.g. \" Apps\")",
+        "tagline": "Tagline",
+        "logoUrl": "Logo URL",
+        "logoUrlHint": "Enter the path to your logo file (e.g., /header_company_logo.svg)",
+        "logoAlt": "Logo Alt Text",
+        "favicon": "Favicon URL",
+        "faviconHint": "Path to the browser tab icon (e.g., /favicon.ico or an uploaded asset). Leave empty to use the default.",
+        "color": "Header Color",
+        "navigationLinks": "Navigation Links",
+        "addLink": "Add Link",
+        "link": "Link",
+        "linkText": "Link Text",
+        "linkUrl": "URL",
+        "linkEnabled": "Enabled",
+        "samePage": "Same Page",
+        "newPage": "New Page",
+        "noLinks": "No navigation links configured",
+        "addFirstLink": "Click \"Add Link\" to get started"
       },
+      "save": "Save Changes",
       "saveBar": {
         "label": "Save changes",
         "saving": "Saving…",
@@ -4693,15 +5521,75 @@
       "assets": {
         "savedNotice": "Uploads and deletions here take effect immediately; they are not part of the unsaved changes. Use the path of an uploaded file in the other tabs.",
         "deleteConsequence": "Pages, styles and settings that link to this file show a broken link.",
-        "deleted": "Asset deleted successfully"
+        "deleted": "Asset deleted successfully",
+        "loading": "Loading assets...",
+        "title": "Asset Management",
+        "uploading": "Uploading...",
+        "uploadPrompt": "Upload a new asset",
+        "supportedFormats": "SVG, PNG, JPG, ICO files up to 2MB",
+        "usage": {
+          "title": "How to Use Uploaded Assets",
+          "headerLogo": "1. Header Logo:",
+          "headerLogoDesc": "Copy the asset URL and paste it in Header → Logo URL field",
+          "favicon": "2. Favicon:",
+          "faviconDesc": "Upload an ICO file and use the URL in your HTML head section",
+          "custom": "3. Custom Content:",
+          "customDesc": "Reference assets in custom CSS, pages, or app configurations using the URL",
+          "example": "Example:"
+        },
+        "uploaded": "Uploaded Assets",
+        "description": "Manage your uploaded assets and copy their URLs for use in your application",
+        "addNew": "Add New Asset",
+        "noAssets": "No assets uploaded yet",
+        "uploadFirst": "Upload your first asset above to get started",
+        "filename": "Filename",
+        "type": "Type",
+        "size": "Size",
+        "url": "URL",
+        "copyUrl": "Copy URL",
+        "delete": "Delete asset",
+        "uploadedColumn": "Uploaded",
+        "invalidType": "Invalid file type. Only SVG, PNG, JPG, and ICO files are allowed.",
+        "tooLarge": "The file must be smaller than 2 MB",
+        "copyFailed": "Failed to copy to clipboard"
       },
       "footer": {
         "title": "Footer",
-        "description": "The footer text and its links."
+        "description": "The footer text and its links.",
+        "enabled": "Enable Footer",
+        "enabledHint": "Uncheck to hide the footer from all pages",
+        "text": "Footer Text",
+        "textHint": "This text will appear in the footer. You can use basic HTML tags.",
+        "links": "Footer Links",
+        "addLink": "Add Link",
+        "link": "Link",
+        "linkText": "Link Text",
+        "linkUrl": "URL",
+        "linkEnabled": "Enabled",
+        "samePage": "Same Page",
+        "newPage": "New Page",
+        "noLinks": "No footer links configured",
+        "addFirstLink": "Click \"Add Link\" to get started"
       },
       "content": {
         "appsListPage": "Apps List Page",
-        "pagesDescription": "Title, subtitle and logo of the apps browser (/apps), and whether it offers search and categories."
+        "pagesDescription": "Title, subtitle and logo of the apps browser (/apps), and whether it offers search and categories.",
+        "appsListTitle": "Page Title",
+        "appsListSubtitle": "Page Subtitle",
+        "appsListLogo": "Page Logo",
+        "appsListLogoPlaceholder": "/uploads/assets/my-logo.svg",
+        "appsListLogoHint": "Upload an icon in the Assets tab, then paste the URL here. Leave empty for the default icon.",
+        "preview": "Preview",
+        "iconPreviewError": "Failed to load icon preview",
+        "enableSearch": "Enable Search",
+        "enableCategories": "Enable Categories",
+        "disclaimerEnabled": "Enable Disclaimer Popup",
+        "disclaimerEnabledHint": "Show disclaimer popup to first-time visitors",
+        "disclaimerTitle": "Disclaimer Title",
+        "disclaimerText": "Disclaimer Text",
+        "disclaimerVersion": "Disclaimer Version",
+        "disclaimerUpdated": "Last Updated",
+        "appsListLogoAlt": "Apps List Logo"
       },
       "nameField": {
         "follow": "Use the product name (default)",
@@ -4728,7 +5616,39 @@
       },
       "pwa": {
         "maxChars60": "(max 60 chars)",
-        "colorPicker": "{{name}} (color picker)"
+        "colorPicker": "{{name}} (color picker)",
+        "title": "Progressive Web App (PWA)",
+        "subtitle": "Allow users to install the app on their device home screen and enable offline fallback.",
+        "enable": "Enable PWA",
+        "enableHint": "Injects web app manifest link and meta tags into all pages. Registers a service worker for offline fallback.",
+        "identity": "App Identity",
+        "name": "App Name",
+        "nameHint": "Shown on install prompt and app list",
+        "shortName": "Short Name",
+        "shortNameHint": "Shown under the home screen icon",
+        "description": "Description",
+        "colors": "Colors",
+        "themeColor": "Theme Color",
+        "themeColorHint": "Browser chrome / status bar color on Android",
+        "backgroundColor": "Background Color",
+        "backgroundColorHint": "Splash screen background before the app paints",
+        "display": "Display Mode",
+        "displayHint": "\"standalone\" recommended — hides browser chrome for an app-like experience",
+        "icons": "Icons",
+        "iconsHint": "Upload PNG icons via the Assets tab, then paste the URL below. Default icons are used when left empty.",
+        "required": "required",
+        "liveNote": "PWA is active",
+        "manifestNote": "Manifest is live at",
+        "swNote": "Service worker is registered at /sw.js using a network-first strategy.",
+        "icon192": "192×192 Icon",
+        "icon192Hint": "Required for Android home screen. Upload via Assets tab, paste URL here.",
+        "icon512": "512×512 Icon",
+        "icon512Hint": "Required for splash screen. Should be a high-resolution version of your logo.",
+        "iconApple": "Apple Touch Icon",
+        "iconAppleHint": "Used by iOS Safari when saving to home screen (180×180 recommended).",
+        "iconPreview": "{{label}} preview",
+        "shortNameMax": "(max 15 chars)",
+        "descriptionPlaceholder": "AI-powered applications platform"
       },
       "linkTarget": "Open link in",
       "styles": {
@@ -4736,11 +5656,42 @@
         "variableName": "Name (without --)",
         "variableValue": "Value",
         "addVariableRequired": "Enter a name and a value for the variable.",
-        "addVariableConfirm": "Add variable"
+        "addVariableConfirm": "Add variable",
+        "title": "Style Configuration",
+        "customCss": "Custom CSS",
+        "cssVariables": "CSS Variables",
+        "lightModeColors": "Light Mode Colors",
+        "customCssTitle": "Custom CSS",
+        "customCssDescription": "Add custom CSS that will be injected into the page head.",
+        "warning": "Warning",
+        "cssWarning": "Custom CSS can affect the entire application. Test changes carefully and always back up your configuration before making significant changes.",
+        "cssVariablesTitle": "CSS Variables",
+        "cssVariablesDescription": "Define CSS custom properties that can be used in your custom CSS.",
+        "addVariable": "Add Variable",
+        "noVariables": "No CSS variables defined",
+        "addFirstVariable": "Click \"Add Variable\" to get started",
+        "generatedCss": "Generated CSS",
+        "sectionsLabel": "Style sections",
+        "preview": {
+          "lightMode": "Light Mode",
+          "darkMode": "Dark Mode",
+          "primaryButton": "Primary Button",
+          "accentButton": "Accent Button",
+          "mutedText": "This is muted text."
+        }
       },
       "resource": "UI settings",
       "title": "UI Customization",
-      "description": "Customize the appearance and branding of $t(product.name)"
+      "description": "Customize the appearance and branding of $t(product.name)",
+      "cancel": "Cancel",
+      "errorPages": {
+        "title": "Error & Empty-State Messages",
+        "subtitle": "Customize the localized text shown on error and empty-state screens. Leave a field empty to use the built-in default text."
+      },
+      "remove": "Remove",
+      "error": "Failed to load configuration",
+      "loading": "Loading UI configuration...",
+      "backup": "Backup Config"
     },
     "groupSelect": {
       "placeholder": "Search groups or type a name…",
@@ -4806,7 +5757,79 @@
         "remove": "Remove {{key}}"
       },
       "deleteBlockedTitle": "Cannot delete group",
-      "deleteFailed": "The group could not be deleted."
+      "deleteFailed": "The group could not be deleted.",
+      "validation": {
+        "idRequired": "Group ID is required",
+        "idInvalid": "Group ID can only contain letters, numbers, hyphens, and underscores",
+        "nameRequired": "Group name is required",
+        "idAndNameRequired": "Group ID and name are required"
+      },
+      "edit": {
+        "noGroupData": "No group data available",
+        "fixErrors": "Please fix the following errors",
+        "createTitle": "Create New Group",
+        "editTitle": "Edit Group",
+        "createDesc": "Create a new user group with permissions and external mappings",
+        "editDesc": "Edit group settings, permissions, and external mappings",
+        "backToList": "Back to Groups",
+        "cancel": "Cancel",
+        "save": "Save Group",
+        "saving": "Saving...",
+        "create": "Create Group"
+      },
+      "fields": {
+        "id": "Group ID",
+        "name": "Name",
+        "description": "Description",
+        "group": "Group",
+        "permissions": "Permissions",
+        "mappings": "External Mappings"
+      },
+      "basicInformation": "Basic Information",
+      "basicGroupConfiguration": "Basic group configuration and metadata",
+      "groupId": "Group ID",
+      "protectedSystemGroup": "This is a protected system group",
+      "groupName": "Group Name",
+      "description": "Description",
+      "adminAccess": "Admin Access",
+      "enabled": "Enabled",
+      "permissions": "Permissions",
+      "apps": "Apps:",
+      "noMappings": "No mappings",
+      "deleteTitle": "Delete Group",
+      "deleteConfirm": "Are you sure you want to delete the group \"{{name}}\"?",
+      "management": "Group Management",
+      "subtitle": "Manage user groups, permissions, and external group mappings",
+      "noGroupsFound": "No groups found",
+      "createFirstGroup": "Create your first group to get started",
+      "count_one": "{{count}} group",
+      "count_other": "{{count}} groups",
+      "list": {
+        "allApps": "All Apps (*)",
+        "deleted": "Group deleted.",
+        "addGroup": "Add Group",
+        "more": "+{{count}} more",
+        "loadError": "Failed to load groups: {{error}}"
+      },
+      "form": {
+        "idPlaceholder": "Enter unique group ID",
+        "namePlaceholder": "Enter group display name",
+        "descriptionPlaceholder": "Enter group description",
+        "adminAccessHelp": "Allow members of this group to access administrative functions",
+        "permissionsHelp": "Configure which apps, models, and prompts members of this group can access",
+        "searchApps": "Search apps to add…",
+        "noApps": "No apps selected – users won’t see any apps",
+        "searchModels": "Search models to add…",
+        "noModels": "No models selected – users can’t use any AI models",
+        "searchPrompts": "Search prompts to add…",
+        "noPrompts": "No prompts selected – users can’t access any prompt templates",
+        "searchWorkflows": "Search workflows to add…",
+        "noWorkflows": "No workflows selected – users can’t run any workflows",
+        "searchSkills": "Search skills to add…",
+        "noSkills": "No skills selected – users can’t use any agent skills",
+        "allWildcard": "All (*)",
+        "allWildcardFor": "{{label}}: All (*)"
+      }
     },
     "contentAccess": {
       "title": "Group access",
@@ -5042,7 +6065,8 @@
         "unavailable": "Feedback statistics are not available.",
         "range": "Ratings of the last 90 days."
       },
-      "resource": "feedback settings"
+      "resource": "feedback settings",
+      "tabsLabel": "Feedback sections"
     },
     "usage": {
       "reviewFeedback": "Review feedback",
@@ -5289,6 +6313,31 @@
         "anonymous": "Anonymous",
         "pseudonymous": "Pseudonymous",
         "identified": "Identified"
+      },
+      "feedbackEntries": "User Feedback Entries",
+      "totalEntries": "total entries",
+      "noFeedback": "No feedback available",
+      "noFeedbackDesc": "No user feedback has been submitted yet.",
+      "feedbackComment": "Comment",
+      "previous": "Previous",
+      "pageInfo": "Page {{page}} of {{totalPages}}",
+      "next": "Next",
+      "sections": {
+        "userFeedbackActivity": "User Feedback Activity",
+        "feedbackByApplication": "Feedback by Application",
+        "feedbackByModel": "Feedback by Model"
+      },
+      "feedback": {
+        "averageRating_one": "Average Rating ({{count}} rating)",
+        "averageRating_other": "Average Rating ({{count}} ratings)",
+        "totalResponses_one": "Total feedback: {{count}} response",
+        "totalResponses_other": "Total feedback: {{count}} responses",
+        "responses_one": "{{count}} response",
+        "responses_other": "{{count}} responses",
+        "user": "User: {{id}}",
+        "app": "App: {{id}}",
+        "model": "Model: {{id}}",
+        "noRatings": "No user ratings have been submitted yet."
       }
     },
     "localization": {
@@ -5328,7 +6377,9 @@
     },
     "prompts": {
       "tabs": {
-        "userPrompts": "User prompts"
+        "userPrompts": "User prompts",
+        "prompts": "Prompts",
+        "variables": "Variables"
       },
       "edit": {
         "detectedVariables": "Detected in the text",
@@ -5337,7 +6388,47 @@
         "variablesDescPlaceholders": "Placeholders written as {{name}} in the prompt text are asked for when the prompt is used. Describe them here to set a label, type, default value or options. {{content}} marks where the user’s own text goes; global variables such as {{user_name}} fill in by themselves.",
         "appId": "Opens in app",
         "noApp": "Default chat app",
-        "appIdDesc": "The prompt library opens this prompt in this app and lists it first there. It does not limit who sees the prompt."
+        "appIdDesc": "The prompt library opens this prompt in this app and lists it first there. It does not limit who sees the prompt.",
+        "fixErrors": "Please fix the following errors",
+        "basicInfo": "Basic Information",
+        "basicInfoDesc": "Basic prompt identification and metadata",
+        "id": "ID",
+        "idDesc": "Unique identifier using lowercase letters, numbers, and hyphens",
+        "icon": "Icon",
+        "iconDesc": "Heroicon name for the prompt",
+        "order": "Order",
+        "orderDesc": "Display order in the prompts list",
+        "category": "Category",
+        "selectCategory": "Select category...",
+        "categoryDesc": "Category for organizing prompts",
+        "enabled": "Enabled",
+        "enabledDesc": "Whether this prompt is visible to users",
+        "content": "Content",
+        "contentDesc": "Localized content for different languages",
+        "name": "Name",
+        "description": "Description",
+        "prompt": "Prompt",
+        "variables": "Variables",
+        "variable": "Variable {{index}}",
+        "variableName": "Name",
+        "variableType": "Type",
+        "variableLabel": "Label",
+        "variableDefault": "Default Value",
+        "variableRequired": "Required",
+        "addVariable": "Add Variable",
+        "loadError": "Error loading prompt",
+        "backToList": "Back to Prompts",
+        "createTitle": "Create New Prompt",
+        "editTitle": "Edit Prompt",
+        "createDesc": "Create a new prompt for your $t(product.name)",
+        "editDesc": "Edit the prompt details and configuration",
+        "history": "History",
+        "cancel": "Cancel",
+        "save": "Save Prompt",
+        "saving": "Saving...",
+        "searchApps": "Search apps...",
+        "noAppsFound": "No apps found",
+        "variableDefaultPlaceholder": "Default value"
       },
       "userPrompts": {
         "allowEveryone": "Everyone signed in",
@@ -5376,8 +6467,69 @@
         "userCount": "{{count}} user(s)"
       },
       "details": {
-        "linkedApp": "Opens in app"
-      }
+        "linkedApp": "Opens in app",
+        "status": "Status",
+        "description": "Description",
+        "promptContent": "Prompt Content",
+        "technicalDetails": "Technical Details",
+        "order": "Order",
+        "variables": "Variables",
+        "availableLanguages": "Available Languages",
+        "editPrompt": "Edit Prompt",
+        "close": "Close"
+      },
+      "table": {
+        "name": "Name",
+        "category": "Category",
+        "description": "Description",
+        "order": "Order",
+        "appConnected": "App Connected",
+        "status": "Status"
+      },
+      "delete": "Delete",
+      "searchPlaceholder": "Search prompts...",
+      "variableTypes": {
+        "string": "String",
+        "number": "Number",
+        "boolean": "Boolean",
+        "select": "Select",
+        "textarea": "Textarea"
+      },
+      "fields": {
+        "id": "Prompt ID",
+        "name": "Name",
+        "description": "Description",
+        "icon": "Icon",
+        "order": "Order",
+        "prompt": "Prompt"
+      },
+      "errorTitle": "Error",
+      "enabled": "Enabled",
+      "disabled": "Disabled",
+      "toggle": "Toggle enabled",
+      "clone": "Clone",
+      "download": "Download Config",
+      "loadError": "Error loading prompts",
+      "title": "Prompt Management",
+      "subtitle": "Create, edit, and manage prompts for your $t(product.name)",
+      "createNew": "Create New Prompt",
+      "uploading": "Uploading...",
+      "uploadConfig": "Upload Config",
+      "statusLabel": "Status",
+      "filterAll": "All Prompts",
+      "filterEnabled": "Enabled Only",
+      "filterDisabled": "Disabled Only",
+      "allCategories": "All Categories",
+      "noPrompts": "No prompts found",
+      "noPromptsDesc": "Get started by creating a new prompt.",
+      "status": {
+        "enabled": "Enabled",
+        "disabled": "Disabled"
+      },
+      "uploadConfigTitle": "Upload Prompt Config",
+      "downloadError": "Failed to download prompt config: {{error}}",
+      "uploadExists": "Prompt with ID \"{{id}}\" already exists",
+      "uploadError": "Failed to upload prompt config: {{error}}"
     },
     "skills": {
       "delete": "Delete",
@@ -5385,12 +6537,19 @@
       "searchPlaceholder": "Search skills...",
       "subtitle": "Install, configure, and manage skills for your $t(product.name)",
       "table": {
-        "name": "Name"
+        "name": "Name",
+        "description": "Description",
+        "version": "Version",
+        "status": "Status",
+        "actions": "Actions"
       },
       "tabs": {
         "label": "Skill views",
         "skills": "Skills",
-        "userSkills": "User skills"
+        "userSkills": "User skills",
+        "overview": "Overview",
+        "files": "Files",
+        "configuration": "Configuration"
       },
       "title": "Skill Management",
       "userSkills": {
@@ -5437,7 +6596,51 @@
       "systemNotice": "This is a system skill delivered with iHub. It is updated with iHub and cannot be changed or deleted here. Enable it for an app in the app’s Skills settings.",
       "providedTools": "Tools this skill provides:",
       "view": "View",
-      "deletedNamed": "Skill \"{{name}}\" deleted."
+      "deletedNamed": "Skill \"{{name}}\" deleted.",
+      "saveSuccess": "Skill configuration saved successfully",
+      "notFound": "Skill not found",
+      "notFoundDescription": "The requested skill could not be loaded.",
+      "backToList": "Back to Skills",
+      "disable": "Disable",
+      "enable": "Enable",
+      "export": "Export",
+      "enabled": "Enabled",
+      "disabled": "Disabled",
+      "metadata": "Skill Metadata",
+      "field": {
+        "name": "Name",
+        "displayName": "Display Name",
+        "description": "Description",
+        "author": "Author",
+        "version": "Version",
+        "license": "License",
+        "compatibility": "Compatibility",
+        "minVersion": "Min",
+        "maxVersion": "Max",
+        "customDescription": "Custom Description",
+        "customDescriptionPlaceholder": "Enter a custom description to override the default..."
+      },
+      "documentation": "Documentation (SKILL.md)",
+      "fileList": "Skill Files",
+      "fileListDescription": "References, scripts, and assets included in this skill package.",
+      "noFiles": "No files",
+      "noFilesDescription": "This skill does not contain any listed files.",
+      "configOverrides": "Configuration Overrides",
+      "configOverridesDescription": "Override default skill settings. These values take precedence over the packaged defaults.",
+      "invalidFileType": "Please select a .zip file",
+      "importAlreadyExists": "A skill with this name already exists",
+      "importFailed": "Failed to import skill",
+      "loadError": "Error loading skills",
+      "uploading": "Uploading...",
+      "importSkill": "Import Skill",
+      "filterAll": "All Skills",
+      "filterEnabled": "Enabled Only",
+      "filterDisabled": "Disabled Only",
+      "noSkills": "No skills found",
+      "noSkillsDescription": "Get started by importing a skill package.",
+      "importSkillTitle": "Import Skill (.zip)",
+      "exportTitle": "Export Skill",
+      "exportError": "Failed to export skill: {{error}}"
     },
     "scheduledTasks": {
       "saved": "Settings saved",
@@ -5511,10 +6714,19 @@
       },
       "stats": {
         "projects": "Projects",
-        "modelCalls": "Model calls"
+        "modelCalls": "Model calls",
+        "apps": "Apps",
+        "prompts": "Prompts",
+        "users": "Users",
+        "version": "Version"
       },
       "actions": {
-        "manageProjects": "Manage Projects"
+        "manageProjects": "Manage Projects",
+        "newApp": "New App",
+        "addModel": "Add Model",
+        "viewUsage": "View Usage",
+        "inviteUser": "Invite User",
+        "managePrompts": "Manage Prompts"
       },
       "integrations": {
         "label": "Integrations",
@@ -5522,7 +6734,8 @@
         "incompatible": "{{count}} installations cannot run on this iHub version"
       },
       "users": {
-        "active": "{{count}} active (30d)"
+        "active": "{{count}} active (30d)",
+        "noSessions": "no session data"
       },
       "gettingStarted": "Getting started",
       "setup": {
@@ -5539,7 +6752,47 @@
       "apps": {
         "unavailable": "not loaded",
         "enabledCount": "{{count}} enabled"
-      }
+      },
+      "prompts": {
+        "label": "prompts"
+      },
+      "chats": {
+        "period": "last 30d"
+      },
+      "version": {
+        "node": "Node {{version}}"
+      },
+      "updateAvailable": "v{{version}} available",
+      "viewDetails": "View details",
+      "shortcuts": "Common pages",
+      "auth": {
+        "local": "Local",
+        "oidc": "OIDC ({{count}})",
+        "ldap": "LDAP ({{count}})",
+        "proxy": "Proxy",
+        "anonymous": "Anonymous",
+        "none": "None"
+      },
+      "oauth": {
+        "serverAndClients": "Server + Clients",
+        "server": "Server",
+        "clientsOnly": "Clients only",
+        "disabled": "Disabled"
+      },
+      "platformInfo": "Platform status",
+      "providers": "Providers",
+      "enabledOfTotal": "{{enabled}} / {{total}}",
+      "models": "Models",
+      "groups": "Groups",
+      "authMode": "Authentication",
+      "recentActivity": "Recent activity",
+      "viewAll": "View all",
+      "noActivity": "No admin actions recorded yet.",
+      "title": "{{name}} — Admin",
+      "contentSubtitle": "Manage apps, prompts, and projects",
+      "quickActions": "Quick actions",
+      "subtitle": "Platform overview and quick actions",
+      "oauthLabel": "OAuth"
     },
     "copilotAgent": {
       "copied": "Copied",
@@ -5656,8 +6909,59 @@
       },
       "table": {
         "visibleTo": "Visible to",
-        "adminsOnly": "Admins only"
-      }
+        "adminsOnly": "Admins only",
+        "name": "Name",
+        "version": "Version",
+        "nodes": "Nodes",
+        "status": "Status"
+      },
+      "invalidJson": "Please fix JSON errors before saving",
+      "idRequired": "Workflow ID is required",
+      "nameRequired": "Workflow name is required",
+      "createNew": "Create New Workflow",
+      "editWorkflow": "Edit Workflow",
+      "createDescription": "Create a new agentic workflow definition",
+      "editDescription": "Edit workflow configuration and permissions",
+      "openVisualEditor": "Open visual editor",
+      "metadata": "Workflow Metadata",
+      "field": {
+        "id": "Workflow ID",
+        "version": "Version",
+        "name": "Name",
+        "description": "Description"
+      },
+      "idReadOnly": "Workflow ID cannot be changed after creation",
+      "maxExecutionTime": "Max execution time (seconds)",
+      "maxExecutionTimeHelp": "The workflow is cancelled if it runs longer than this. Default 300 s (5 min), max 3600 s (1 h).",
+      "enabled": "Enabled",
+      "disabled": "Disabled",
+      "jsonEditor": "JSON Editor",
+      "jsonEditorHelp": "Edit the complete workflow configuration as JSON. Changes here will override the metadata fields above.",
+      "jsonValidationError": "JSON Validation Error:",
+      "cloneExists": "A workflow with ID \"{{id}}\" already exists. Please rename it before cloning.",
+      "edit": "Edit",
+      "visualEditor": "Visual editor",
+      "toggle": "Toggle enabled",
+      "clone": "Clone",
+      "download": "Download Config",
+      "delete": "Delete",
+      "loadError": "Error loading workflows",
+      "title": "Workflow Management",
+      "subtitle": "Create, edit, and manage agentic workflows for your $t(product.name)",
+      "viewExecutions": "View Executions",
+      "uploading": "Uploading...",
+      "uploadConfig": "Upload Config",
+      "searchPlaceholder": "Search workflows...",
+      "statusLabel": "Status",
+      "filterAll": "All Workflows",
+      "filterEnabled": "Enabled Only",
+      "filterDisabled": "Disabled Only",
+      "noWorkflows": "No workflows found",
+      "noWorkflowsDescription": "Get started by creating a new workflow.",
+      "uploadConfigTitle": "Upload Workflow Config",
+      "downloadError": "Failed to download workflow config: {{error}}",
+      "uploadExists": "Workflow with ID \"{{id}}\" already exists",
+      "uploadError": "Failed to upload workflow config: {{error}}"
     },
     "projects": {
       "knowledgeModes": {
@@ -6128,7 +7432,12 @@
         "slideFooter": "Slide footer",
         "slideNumbers": "Slide numbers",
         "preview": "Preview",
-        "previewHelp": "Sample documents with the saved template. Pending changes are saved first."
+        "previewHelp": "Sample documents with the saved template. Pending changes are saved first.",
+        "themes": {
+          "default": "Default",
+          "professional": "Professional",
+          "minimal": "Minimal"
+        }
       },
       "files": {
         "uploaded": "\"{{name}}\" uploaded.",
@@ -6266,7 +7575,36 @@
       "ssrfLink": "Admin → Security → SSRF Allowlist",
       "urlEmptyHint": "Leave it empty to open the app or path above.",
       "paramsLeftOut": "These params are not added to the link while “Include Params” is off.",
-      "targetPreview": "Opens:"
+      "targetPreview": "Opens:",
+      "invalidParams": "Invalid parameters JSON",
+      "new": "Create Short Link",
+      "code": "Code",
+      "userId": "User ID",
+      "path": "Path",
+      "url": "Redirect URL",
+      "includeParams": "Include Parameters",
+      "expiresAt": "Expires",
+      "deleteTitle": "Delete Short Link",
+      "deleteConfirm": "Delete this link?",
+      "appId": "App ID",
+      "usage": "Usage",
+      "createdAt": "Created",
+      "copyLink": "Copy link",
+      "testLink": "Test link",
+      "delete": "Delete",
+      "loadError": "Error loading short links",
+      "title": "Short Links Management",
+      "subtitle": "Manage and monitor short links for your applications",
+      "addNew": "Add New Link",
+      "filterByAppId": "Filter by App ID",
+      "filterByUser": "Filter by User",
+      "noLinks": "No short links found",
+      "noLinksDesc": "Short links will appear here when created by users.",
+      "params": "Parameters",
+      "test": "Test",
+      "edit": "Edit",
+      "editTitle": "Edit Short Link",
+      "paramsJson": "Params (JSON)"
     },
     "toolApproval": {
       "mode": {
@@ -7081,7 +8419,13 @@
     },
     "common": {
       "enableAll": "Enable All",
-      "disableAll": "Disable All"
+      "disableAll": "Disable All",
+      "actions": "Actions",
+      "viewJson": "JSON",
+      "viewForm": "Form",
+      "viewRaw": "Raw",
+      "selectJsonFile": "Please select a JSON file",
+      "invalidJsonFile": "Invalid JSON file format"
     },
     "confirm": {
       "deleteTitle": "Delete {{type}} \"{{name}}\"?",
@@ -7130,7 +8474,8 @@
         "signIn": "Users, passwords and keys come from the file: you may have to sign in again.",
         "typeHost": "To confirm, type this server's address",
         "action": "Import and replace"
-      }
+      },
+      "description": "Export and import your platform configuration"
     },
     "credentials": {
       "usageUnknown": "Couldn't check which integrations use \"{{id}}\".",
@@ -7149,7 +8494,46 @@
         "refresh": "Refresh list",
         "loadError": "Failed to load credentials: {{error}}",
         "createNew": "+ Create new credential"
-      }
+      },
+      "types": {
+        "oauth2": "OAuth2",
+        "bearer": "Bearer token",
+        "basic": "Basic (username/password)",
+        "apiKeyHeader": "API key (header)",
+        "apiKeyQuery": "API key (query)",
+        "secret": "Secret (opaque value)"
+      },
+      "form": {
+        "secretHint": "Encrypted at rest. Leave as ***REDACTED*** to keep the current value.",
+        "value": "Secret value",
+        "token": "Token",
+        "username": "Username",
+        "password": "Password",
+        "headerName": "Header name",
+        "paramName": "Query parameter name",
+        "key": "Key",
+        "tokenUrl": "Token URL",
+        "clientId": "Client ID",
+        "clientSecret": "Client secret",
+        "grantType": "Grant type",
+        "scope": "Scope (optional)",
+        "refreshToken": "Refresh token",
+        "id": "ID",
+        "name": "Name",
+        "description": "Description",
+        "type": "Type",
+        "typeLocked": "Type cannot be changed after creation. Delete and recreate to change type.",
+        "details": "Credential details"
+      },
+      "loadError": "Failed to load credentials: {{error}}",
+      "saved": "Credential saved",
+      "saveError": "Save failed: {{error}}",
+      "title": "Credentials",
+      "subtitle": "Named, encrypted auth profiles referenced by tools and integrations via credentialRef.",
+      "create": "Add credential",
+      "empty": "No credentials configured",
+      "editTitle": "Edit credential {{id}}",
+      "createTitle": "Create credential"
     },
     "editor": {
       "resetTitle": "Reset all changes?",
@@ -7158,15 +8542,53 @@
       "switchToFormTitle": "Switch to the form editor?",
       "switchAction": "Switch editor",
       "resetConsequence": "Your unsaved changes are discarded.",
-      "switchConsequence": "You have unsaved changes. Switching editors may lose some of them."
+      "switchConsequence": "You have unsaved changes. Switching editors may lose some of them.",
+      "formMode": "Form",
+      "jsonMode": "JSON",
+      "unsavedChanges": "Unsaved changes",
+      "validationErrors": "Validation errors",
+      "allValid": "All valid",
+      "reset": "Reset",
+      "noFormComponent": "No Form Component",
+      "noFormComponentDesc": "No form component provided for this editor.",
+      "validationSummary": "Validation Summary",
+      "errorCount": "{{count}} error(s) found:",
+      "moreErrors": "... and {{count}} more",
+      "jsonEditor": "JSON Editor",
+      "invalidJson": "Invalid JSON",
+      "formatJson": "Format JSON",
+      "format": "Format",
+      "validateJson": "Validate JSON",
+      "validate": "Validate",
+      "loadingEditor": "Loading editor...",
+      "errorAtLine": "Line {{line}}: {{message}}"
     },
     "pages": {
       "fields": {
         "allowedGroups": "Allowed Groups",
         "allowedGroupsPlaceholder": "admins, users or *",
         "allowedGroupsHelp": "Group IDs, separated by commas, exactly as in Admin → Groups. Leave empty or enter * to allow everyone. Only members of a listed group see the page; an ID that does not exist matches nobody.",
-        "idRequired": "ID is required"
-      }
+        "idRequired": "ID is required",
+        "id": "Page ID",
+        "title": "Title",
+        "content": "Content",
+        "contentType": "Content Type",
+        "authRequired": "Authentication Required"
+      },
+      "contentTypes": {
+        "markdown": "Markdown (.md)",
+        "reactComponent": "React Component (.jsx)",
+        "jsxDescription": "Write JSX code that will be compiled and rendered as a React component",
+        "markdownDescription": "Write standard markdown content with syntax highlighting support"
+      },
+      "deleteTitle": "Delete Page",
+      "confirmDelete": "Delete this page?",
+      "access": "Access",
+      "title": "Pages Administration",
+      "subtitle": "Manage static pages displayed in the application",
+      "create": "Create Page",
+      "empty": "No pages yet",
+      "emptyDescription": "Create your first page to display custom content in the app."
     },
     "settingsPage": {
       "sectionsNav": "Settings sections",
@@ -7187,10 +8609,95 @@
       "resourceFallback": "this item"
     },
     "browserExtension": {
-      "resource": "browser extension settings"
+      "resource": "browser extension settings",
+      "loadError": "Failed to load Browser Extension status",
+      "disabled": "Browser Extension integration disabled",
+      "enabled": "Browser Extension integration enabled successfully. OAuth client has been created.",
+      "toggleError": "Failed to update Browser Extension integration",
+      "downloadError": "Failed to download {{format}} package: ",
+      "signingKeyGenerated": "Signing key generated. You can now download the packaged extension.",
+      "rotateKeyOk": "Signing key rotated; new extension ID issued.",
+      "rotateKeyError": "Failed to rotate key: ",
+      "rotateKeyTitle": "Generate New Signing Key",
+      "rotateKeyConfirm": "Generate a new signing key? The extension ID will change and existing installed copies will need to be reinstalled (or use the previous-ID grace window).",
+      "saved": "Configuration saved",
+      "saveError": "Failed to save configuration",
+      "invalidExtensionId": "Extension IDs must be 8–128 characters and contain only letters, digits, dots, dashes, or underscores.",
+      "title": "Browser Extension",
+      "description": "Configure the iHub browser extension, its OAuth client, and which users can install it.",
+      "statusTitle": "Integration Status",
+      "statusEnabled": "The browser extension integration is enabled. Users can sign in via the extension.",
+      "statusDisabled": "Enable to auto-create the OAuth client and allow users to sign in from the extension.",
+      "disable": "Disable",
+      "enable": "Enable",
+      "viewClient": "View OAuth Client",
+      "configUrl": "Runtime config URL",
+      "signingKeyMissingTitle": "Set up packaged downloads (optional)",
+      "signingKeyMissingDesc": "Generate an RSA signing key to unlock the packaged ZIP / CRX download flow. The key fixes the extension ID so a single build works for everyone in your organisation. You only need this for end-user distribution — for unpacked dev installs use the \"Additional unpacked extension IDs\" textarea below to register each developer's Chrome-assigned ID.",
+      "generateSigningKey": "Generate signing key",
+      "packageTitle": "Packaged Extension",
+      "packageDesc": "Download a customised extension build for this iHub deployment. The base URL, OAuth client ID and starter prompts are baked in, so end users just install and sign in — no setup required. The extension ID is fixed by the signing key, so the same package works for everyone.",
+      "extensionId": "Extension ID",
+      "previousExtensionId": "Previous ID (grace)",
+      "keyCreated": "Key created",
+      "downloadZip": "Download ZIP",
+      "downloadCrx": "Download CRX",
+      "rotateKey": "Rotate signing key",
+      "packageHint": "ZIP: unzip and \"Load unpacked\" in chrome://extensions, or distribute via enterprise policy. CRX: drag-and-drop install or enterprise policy. Rotate the key only when you need to invalidate every installed copy.",
+      "idsTitle": "Allowed extension IDs",
+      "idsDesc": "Each entry registers https://<id>.chromiumapp.org/cb (Chrome / Edge) and https://<id>.extensions.allizom.org/cb (Firefox) on the OAuth client and adds chrome-extension://<id> + moz-extension://<id> to the CORS allowlist. The packaged-download ID, when a signing key is configured, is registered automatically and is shown below for reference — you only need entries here for developers side-loading their own unpacked builds (each gets a different Chrome-assigned ID).",
+      "idsManagedByKey": "Managed by signing key (auto-registered)",
+      "idsPackagedBuild": "Packaged build",
+      "idsPreviousBuild": "Previous build (grace)",
+      "idsManualHeading": "Additional unpacked extension IDs",
+      "idsEmpty": "No additional extension IDs registered.",
+      "idsRemove": "Remove",
+      "idsAdd": "Add",
+      "groupsTitle": "Allowed Groups",
+      "groupsDesc": "Pick which internal groups can sign in via the extension. Defaults to the \"browser-extension\" group. Pick \"All (*)\" to skip the group check entirely. Users not in any allowed group see an access-denied page during sign-in.",
+      "groupsSearch": "Search groups to add...",
+      "groupsEmpty": "No groups selected — sign-in is unrestricted (any authenticated user can use the extension)",
+      "displayTitle": "Display Settings",
+      "displayName": "Display Name",
+      "descriptionLabel": "Description",
+      "starterPromptsTitle": "Default Starter Prompts",
+      "starterPromptsDesc": "Prompts shown in the extension side panel when the selected app has no starter prompts of its own.",
+      "addPrompt": "Add prompt",
+      "noPrompts": "No default starter prompts configured.",
+      "promptIndex": "Prompt #{{n}}",
+      "moveUp": "Move up",
+      "moveDown": "Move down",
+      "remove": "Remove",
+      "promptTitle": "Title",
+      "promptMessage": "Message",
+      "save": "Save",
+      "setupTitle": "Distribution Instructions",
+      "step1": "Load the extension folder under /browser-extension into Chrome via chrome://extensions → Developer mode → Load unpacked, or package and distribute via the Chrome Web Store.",
+      "step2": "Copy the extension ID Chrome assigns and add it to the \"Extension IDs\" list above; save.",
+      "step3": "In the extension options page, point the extension at this iHub instance and sign in with PKCE.",
+      "step4": "Add eligible users to the \"browser-extension\" group (or whichever group(s) you listed above) so they can sign in."
     },
     "cors": {
-      "title": "CORS Configuration"
+      "title": "CORS Configuration",
+      "saved": "CORS configuration saved successfully",
+      "saveError": "Failed to save CORS configuration",
+      "description": "Configure which external origins (web apps, browser extensions, mobile apps) are allowed to make requests to this server.",
+      "allowedOrigins": "Allowed Origins",
+      "allowedOriginsDesc": "Add origins that are permitted to access this API. Leave empty to block all cross-origin requests.",
+      "originPlaceholder": "https://example.com or chrome-extension://abc123...",
+      "addOrigin": "Add Origin",
+      "envVarHint": "Tip: You can also use the ALLOWED_ORIGINS environment variable (comma-separated) for dynamic configuration.",
+      "noOrigins": "No origins configured — cross-origin requests are blocked.",
+      "credentials": "Allow Credentials",
+      "credentialsDesc": "Allow cross-origin requests to include cookies and authorization headers. Required for authenticated API calls.",
+      "maxAge": "Preflight Cache (seconds)",
+      "maxAgeDesc": "How long browsers should cache preflight responses. Default is 86400 (24 hours).",
+      "methods": "Allowed Methods",
+      "methodsDesc": "Comma-separated list of HTTP methods to allow.",
+      "allowedHeaders": "Allowed Headers",
+      "allowedHeadersDesc": "Comma-separated list of HTTP request headers clients are allowed to send.",
+      "saving": "Saving...",
+      "save": "Save Configuration"
     },
     "artifacts": {
       "hosts": {
@@ -7245,6 +8752,322 @@
       "conflict": "Someone else changed the artifact settings after you opened this page, so nothing was saved. Your edits are still here: load the current settings, then make your change again.",
       "reload": "Load the current settings",
       "reloadError": "The current settings could not be loaded."
+    },
+    "formErrors": {
+      "title": "Please fix the following errors",
+      "count_one": "({{count}} error)",
+      "count_other": "({{count}} errors)"
+    },
+    "resourceSelector": {
+      "placeholder": "Search and select...",
+      "noneSelected": "Nothing selected",
+      "all": "All (*)",
+      "noMatches": "Nothing matches your search.",
+      "startTyping": "Type to search."
+    },
+    "userApps": {
+      "tab": "Personal apps",
+      "tabWaiting_one": "Personal apps · {{count}} waiting",
+      "tabWaiting_other": "Personal apps · {{count}} waiting",
+      "featureOff": "Personal apps are switched off. Switch them on under Features.",
+      "featureOn": "Personal apps are switched on.",
+      "filter": {
+        "all": "All",
+        "everyone": "Shared with everyone",
+        "ownerInactive": "Owner inactive",
+        "ownerStale": "Owner rights stale",
+        "waiting": "Published, not switched on",
+        "label": "Show",
+        "clash": "ID clash",
+        "owner": "Owner: {{name}}",
+        "clearOwner": "Show all owners"
+      },
+      "waiting": {
+        "row": "Published {{age}} ago, not switched on",
+        "open": "Open company app",
+        "notice_one": "{{count}} app published by a user is not switched on yet.",
+        "notice_other": "{{count}} apps published by users are not switched on yet."
+      },
+      "takeOver": {
+        "action": "Take over as app…",
+        "title": "Take over \"{{name}}\" as an app?",
+        "willUse": "The new app will be able to:",
+        "dropped": "Not taken over: {{list}}",
+        "plain": "The owner's rights could not be checked. The new app is created without web search, files, skills and connected systems.",
+        "notPublished": "The app is created as \"Not published\". You test it and publish it in the app editor.",
+        "owner": "{{owner}} can no longer change the personal app.",
+        "users_one": "{{count}} person uses the personal app today. It keeps working for this person until they can use the new app.",
+        "users_other": "{{count}} people use the personal app today. It keeps working for each of them until they can use the new app.",
+        "submit": "Take over",
+        "noCategory": "No category",
+        "groups_one": "The personal app is shared with {{count}} group. It keeps working for its members until they can use the new app.",
+        "groups_other": "The personal app is shared with {{count}} groups. It keeps working for their members until they can use the new app.",
+        "everyone": "The personal app is shared with everyone signed in. It keeps working for them until they can use the new app.",
+        "alreadyPublished": "The app was published in the meantime and cannot be taken over.",
+        "unavailable": "What a take-over would write could not be worked out. Close the dialog and try again later."
+      },
+      "noAccess_one": "{{count}} of {{total}} members cannot use the company app.",
+      "noAccess_other": "{{count}} of {{total}} members cannot use the company app.",
+      "release": {
+        "action": "Give back to the owner",
+        "published": "Unpublish or delete the company app first.",
+        "title": "Give \"{{name}}\" back to the owner?",
+        "body": "{{owner}} can change the personal app again. The company app stays."
+      },
+      "changed": "The app changed since you opened it. Check it again.",
+      "disable": {
+        "action": "Switch off",
+        "body": "Nobody can use the app while it is switched off. The owner and everyone the app is shared with see your reason.",
+        "title": "Switch off \"{{name}}\"?",
+        "reason": "Reason (the owner and members see it)"
+      },
+      "enable": {
+        "action": "Switch on"
+      },
+      "offerOwner": "Offer to a new owner",
+      "revisions": "Earlier versions",
+      "clash": "ID clash: an app file has the same ID. Rename the file or delete this app.",
+      "settings": {
+        "title": "Personal app settings",
+        "shareWith": "Users may share their apps with",
+        "allowUsers": "Specific users",
+        "allowGroups": "Groups",
+        "allowEveryone": "Everyone signed in",
+        "allowPublish": "Publishing as a company app",
+        "allowPublishHelp": "Owners publish an app with one click. It becomes an app that administrators manage. An app with web search, skills or a connected system stays switched off until an administrator switches it on.",
+        "adminEnablesAlways": "Every published app stays switched off until an administrator switches it on",
+        "permissionHint": "Users also need the \"userAppSharing\" permission of their group.",
+        "groupsCreate": "Groups with \"Personal apps\": {{list}}",
+        "groupsShare": "Groups with \"Sharing personal apps\": {{list}}",
+        "limits": "Limits of personal apps",
+        "max": "Apps per person",
+        "mayUse": "Personal apps may use",
+        "integrationsHelp": "A personal app can use the functions you tick here, for people whose groups may use that system. People who did not write the app are asked before every step.",
+        "blocked": "People whose apps are switched off",
+        "none": "none",
+        "change": "Change",
+        "notAvailable": "Not available yet",
+        "maxHelp": "0 means no limit.",
+        "choose": "Choose…",
+        "noInstallations": "No connected system is installed.",
+        "noActions": "No functions",
+        "unblock": "Switch on again"
+      },
+      "groups": {
+        "userApps": "Personal apps",
+        "userAppSharing": "Sharing personal apps",
+        "userAppsHint": "Allow members to create apps of their own (needs the Personal apps feature). Inherited by groups that inherit this one.",
+        "userAppSharingHint": "Allow members to share the apps they own or edit, and to publish the apps they own."
+      },
+      "user": {
+        "count": "Personal apps: {{count}} ({{shared}} shared)",
+        "block": "Switch off all apps of this person",
+        "blockBody": "The person's apps stop for everyone, and the person cannot create new ones. You can undo this in the settings.",
+        "blocked": "The apps of this person are switched off."
+      },
+      "capability": {
+        "model": "A chosen AI model",
+        "upload": "Files"
+      },
+      "empty": "No personal apps yet.",
+      "noMatch": "No personal app matches.",
+      "offer": {
+        "title": "Offer \"{{name}}\" to a new owner",
+        "body": "The person is asked to take the app over. Until they accept, nothing changes.",
+        "search": "Find a person",
+        "results": "People found",
+        "me": "{{name}} (you)"
+      },
+      "revision": {
+        "empty": "No earlier versions are stored.",
+        "item": "Version {{revision}}, saved {{date}} by {{name}}",
+        "instructions": "Instructions"
+      },
+      "shared": {
+        "none": "Only the owner",
+        "users_one": "{{count}} person",
+        "users_other": "{{count}} people",
+        "groups_one": "{{count}} group",
+        "groups_other": "{{count}} groups"
+      },
+      "table": {
+        "owner": "Owner",
+        "sharedWith": "Shared with",
+        "mayUse": "May use",
+        "lastUsed": "Last used"
+      }
+    },
+    "commandPalette": {
+      "recent": "Recent",
+      "pages": "Pages",
+      "actions": "Actions",
+      "entities": "Entities",
+      "placeholder": "Search pages, actions, entities...",
+      "noResults": "No results found.",
+      "typeToSearch": "Start typing to search...",
+      "searching": "Searching...",
+      "navigate": "navigate",
+      "select": "select",
+      "close": "close",
+      "actionNewApp": "New app",
+      "actionViewAuditLog": "View Audit Log",
+      "actionRunBackup": "Run Backup",
+      "actionCheckUpdates": "Check for Updates"
+    },
+    "skipToContent": "Skip to content",
+    "checkingAuth": "Checking authentication...",
+    "accessRequired": "Admin Access Required",
+    "accessRequiredDesc": "Admin access requires authentication with admin privileges.",
+    "noAdminAccess": "Your account does not have admin access. Contact your administrator.",
+    "pleaseLogin": "Please log in with an admin account to access the admin panel.",
+    "returnToLogin": "← Return to login",
+    "shortcuts": {
+      "title": "Keyboard Shortcuts",
+      "hint": "Shortcuts are disabled when typing in inputs",
+      "goApps": "Go to Apps",
+      "goModels": "Go to Models",
+      "goPrompts": "Go to Prompts",
+      "goUsers": "Go to Users",
+      "goGroups": "Go to Groups",
+      "goProjects": "Go to Projects",
+      "goAuditLog": "Go to Audit Log",
+      "openPalette": "Open command palette",
+      "save": "Save (in the app editor)",
+      "toggleCheatsheet": "Toggle this cheatsheet",
+      "closeDialogs": "Close dialogs / palette",
+      "then": "then",
+      "navigation": "Navigation",
+      "actions": "Actions"
+    },
+    "changeHistory": {
+      "noDiffData": "No diff data available.",
+      "emptyObjects": "Both objects are empty.",
+      "before": "Before",
+      "after": "After",
+      "confirmRollbackTitle": "Confirm Rollback",
+      "confirmRollbackMessage": "Are you sure you want to roll back to this snapshot? This will restore the configuration to the state it was in at:",
+      "changedBy": "Changed by",
+      "rollbackWarning": "This action will create a new change entry and cannot be undone except by another rollback.",
+      "cancel": "Cancel",
+      "rollback": "Rollback",
+      "fetchError": "Failed to load change history.",
+      "detailError": "Failed to load snapshot details.",
+      "rollbackError": "Failed to roll back.",
+      "title": "Change History",
+      "close": "Close",
+      "retry": "Try again",
+      "noChanges": "No changes recorded yet.",
+      "noChangesHint": "Changes will appear here when this resource is modified.",
+      "by": "by",
+      "backToList": "Back to list",
+      "rollbackToThis": "Roll back to this version",
+      "changes": "Changes"
+    },
+    "platform": {
+      "globalContext": "Global Context",
+      "globalContextDescription": "This context is automatically prepended to all system prompts. You can use variables here by wrapping them in double curly braces, e.g., {{date}} or {{company}}.",
+      "builtInVariables": "Built-in Variables",
+      "builtInVariablesDescription": "These variables are automatically available and populated by the system.",
+      "customVariables": "Custom Variables",
+      "addVariable": "Add Variable",
+      "customVariablesDescription": "Create custom variables that can be used across all apps and prompts. For example, create a {{company}} variable with your company description.",
+      "variableKey": "Variable Key",
+      "variableKeyHelp": "Use lowercase letters, numbers, and underscores. Must start with a letter or underscore.",
+      "variableValue": "Variable Value",
+      "noCustomVariables": "No custom variables defined yet. Click \"Add Variable\" to create one.",
+      "usageExample": "Usage Example",
+      "usageExampleText": "Once you create a custom variable like {{company}}, you can use it in app system prompts, the global context above, or in any app prompt template. The variable will be replaced with its value automatically.",
+      "builtIn": {
+        "year": "Current year",
+        "month": "Current month (zero-padded)",
+        "date": "Localized full date",
+        "time": "Localized time",
+        "day_of_week": "Localized day of week",
+        "timezone": "User's timezone",
+        "locale": "Current language/locale",
+        "user_name": "Authenticated user's display name",
+        "user_email": "Authenticated user's email",
+        "model_name": "Current model being used",
+        "tone": "Selected tone/style setting",
+        "location": "User's location (if configured)",
+        "platform_context": "The processed global context"
+      },
+      "globalContextPlaceholder": "e.g., Current date: {{date}}. Company: {{company}}. User: {{user_name}}",
+      "variableKeyPlaceholder": "e.g., company, department, region",
+      "variableValuePlaceholder": "e.g., We are a leading provider of AI solutions…",
+      "errors": {
+        "keyRequired": "Variable key is required",
+        "keyReserved": "This variable name is reserved for built-in variables",
+        "keyExists": "A custom variable with this key already exists"
+      }
+    },
+    "dashboard": {
+      "feedbackOverview": "Feedback Overview"
+    },
+    "advanced": {
+      "description": "Advanced system operations and maintenance tools"
+    },
+    "title": "Admin",
+    "promptVariables": {
+      "title": "Global Prompt Variables",
+      "subtitle": "Manage custom variables for use across all apps and prompts",
+      "loadError": "Error loading configuration",
+      "error": "Error"
+    },
+    "workflowExecutions": {
+      "cancelTitle": "Cancel Execution",
+      "cancelConfirm": "Are you sure you want to cancel this execution?",
+      "cancelError": "Failed to cancel execution: {{message}}",
+      "backToWorkflows": "Back to Workflows",
+      "title": "Workflow Executions",
+      "subtitle": "Monitor and manage workflow executions across all users.",
+      "totalCount": "{{count}} total",
+      "autoRefresh": "Auto-refresh",
+      "refresh": "Refresh",
+      "searchPlaceholder": "Search by user or workflow name...",
+      "filterAll": "All Statuses",
+      "status": {
+        "running": "Running",
+        "paused": "Paused",
+        "completed": "Completed",
+        "failed": "Failed",
+        "cancelled": "Cancelled"
+      },
+      "table": {
+        "executionId": "Execution ID",
+        "workflow": "Workflow",
+        "user": "User",
+        "status": "Status",
+        "startedAt": "Started At",
+        "duration": "Duration",
+        "currentNode": "Current Node",
+        "actions": "Actions"
+      },
+      "inspect": "View / Inspect",
+      "cancel": "Cancel Execution",
+      "noExecutions": "No executions found",
+      "noExecutionsFiltered": "No executions match the current filters. Try adjusting your search criteria.",
+      "noExecutionsYet": "No workflow executions have been recorded yet."
+    },
+    "breadcrumbLabel": "Breadcrumb",
+    "breadcrumbs": {
+      "inboxes": "Inboxes",
+      "newGroup": "New Group",
+      "newModel": "New Model",
+      "newClient": "New Client",
+      "newPage": "New Page",
+      "newPrompt": "New Prompt",
+      "newShortLink": "New Short Link",
+      "newUser": "New User",
+      "newWorkflow": "New Workflow"
+    },
+    "dataTable": {
+      "moreActions": "More actions",
+      "clearSearch": "Clear search",
+      "search": "Search…"
+    },
+    "integrationPages": {
+      "oauthClientId": "OAuth Client ID:"
     }
   },
   "cloudStorage": {
@@ -7514,6 +9337,7 @@
     "thinkingLevelLow": "Low",
     "thinkingLevelMedium": "Medium",
     "thinkingLevelHigh": "High",
+    "thinkingLevelXhigh": "Extra high",
     "settingsDisabled": "Settings have been disabled for this application.",
     "includeChatHistory": "Include chat history in requests",
     "thinkingSettings": "Thinking Settings",
@@ -8967,7 +10791,16 @@
     "chatsUnavailable": "Chats could not be loaded",
     "unseenBadge": "{{count}} new",
     "tasks": "Scheduled tasks",
-    "projects": "Projects"
+    "projects": "Projects",
+    "create": {
+      "label": "Create",
+      "menu": "Create new",
+      "app": "App",
+      "project": "Project",
+      "skill": "Skill",
+      "prompt": "Prompt",
+      "task": "Scheduled task"
+    }
   },
   "chatHistory": {
     "title": "Your chats",
@@ -11011,7 +12844,7 @@
     "SHORT_LINK_HOST_NOT_ALLOWED": "Short links may not lead to this website. An administrator can allow its host on the SSRF allowlist under Admin → Security → SSRF Allowlist.",
     "SCHEDULED_TASKS_UNAVAILABLE": "Scheduled tasks are not available on this installation.",
     "INTERACTIVE_USER_REQUIRED": "Scheduled tasks need a signed-in person, not a token or agent.",
-    "PERMISSION_DENIED": "You are not allowed to use scheduled tasks.",
+    "PERMISSION_DENIED": "You are not allowed to do this.",
     "TASK_NOT_FOUND": "The scheduled task was not found.",
     "RUN_NOT_FOUND": "The run was not found.",
     "TASK_LIMIT_REACHED": "You have reached the maximum number of scheduled tasks.",
@@ -11280,7 +13113,15 @@
     "SELF_LOCKOUT": "You cannot deactivate or delete your own account. Ask another administrator to do it.",
     "GROUP_IN_USE": "The group \"{{groupId}}\" cannot be deleted because other groups inherit from it. Remove it from their inherited groups first.",
     "ADMIN_CHECK_FAILED": "Could not verify that an administrator keeps access, so nothing was changed. Please try again.",
-    "PRECONDITION_FAILED": "This configuration was changed after you opened it (by another administrator, another tab or a script). Nothing was saved, and your changes are still on the page. Reload to see the current version, then apply your changes again."
+    "PRECONDITION_FAILED": "This configuration was changed after you opened it (by another administrator, another tab or a script). Nothing was saved, and your changes are still on the page. Reload to see the current version, then apply your changes again.",
+    "APP_GENERATOR_NO_MODEL": "No AI model is available to you, so a draft cannot be prepared.",
+    "APP_GENERATOR_INVALID_ANSWER": "The AI's draft could not be used.",
+    "USER_APPS_DISABLED": "Personal apps are switched off on this installation.",
+    "USER_APPS_UNAVAILABLE": "Personal apps are not available right now. Try again later.",
+    "QUOTA_USER_APPS": "The limit of personal apps is reached.",
+    "QUOTA_USER_APP_OFFERS": "Too many open offers.",
+    "USER_APP_CAPABILITY_DENIED": "The app cannot use this. Remove it and save again.",
+    "USER_APP_ACCESS_CHANGED": "Your access to this app changed. Reload the page."
   },
   "workspace": {
     "backTo": "Back to {{name}}",
@@ -11436,5 +13277,225 @@
   "toast": {
     "region": "Notifications",
     "close": "Close notification: {{text}}"
+  },
+  "userApps": {
+    "list": {
+      "scope": {
+        "all": "All",
+        "mine": "My apps",
+        "shared": "Shared with me",
+        "label": "Which apps to show"
+      },
+      "badge": {
+        "mine": "Mine",
+        "offered": "Offered to you"
+      },
+      "empty": {
+        "mine": "You have no apps of your own yet. An app is an assistant for one task, for example \"Write a job ad from my notes\".",
+        "mineHint": "To create one, open + in the sidebar and choose App.",
+        "shared": "Nobody has shared an app with you yet."
+      },
+      "menu": {
+        "edit": "Edit",
+        "share": "Share",
+        "duplicate": "Duplicate",
+        "delete": "Delete",
+        "leave": "Leave",
+        "label": "Actions for \"{{name}}\"",
+        "viewOffer": "View offer"
+      },
+      "limitReached": "You have {{max}} apps, which is the limit. Delete one to create a new one.",
+      "status": {
+        "left": "You left \"{{name}}\".",
+        "deleted": "\"{{name}}\" deleted."
+      }
+    },
+    "create": {
+      "stateLine": "Only you can see the app until you share it.",
+      "limits": "An app of your own cannot use a document collection yet. It can work with text you paste or a file a user attaches.",
+      "created": "App \"{{name}}\" created",
+      "copyNote": "Copied from \"{{name}}\". The texts, input fields and conversation starters are copied. Who the app is shared with is not copied, and what apps of your own may not use is left out.",
+      "copyUnsupported": "This app cannot be copied into an app of your own."
+    },
+    "edit": {
+      "state": {
+        "private": "Only you",
+        "everyone": "Shared with everyone",
+        "promoted": "Now with the administrators",
+        "offered": "Offered to {{owner}}",
+        "disabled": "Switched off by an administrator",
+        "shared": "Shared with {{list}}",
+        "people_one": "{{count}} person",
+        "people_other": "{{count}} people",
+        "groups_one": "{{count}} group",
+        "groups_other": "{{count}} groups"
+      },
+      "extras": {
+        "title": "What the app may use",
+        "model": "AI model",
+        "upload": "Users can attach files",
+        "webSearch": "Web search",
+        "webSearchHelp": "Each person switches web search on in their chat. Other people are asked before every search and every page the app opens.",
+        "skills": "Skills",
+        "integrations": "Connected systems",
+        "approvalHelp": "When someone else uses your app, it asks them before every step in a connected system. In your own chats it asks before it changes something.",
+        "gone": "{{capability}} is no longer available for your apps. The app runs without it.",
+        "remove": "Remove"
+      },
+      "conflict": "Someone else changed this app. Reload to see the changes.",
+      "readOnly": {
+        "ownerBlocked": "An administrator blocked your apps. You can no longer change, share or delete them.",
+        "ownerInactive": "The owner's account is inactive. Only an administrator can change this app.",
+        "promoted": "This app became a company app on {{date}}. Administrators manage it now. You can no longer change it here.",
+        "disabled": "An administrator switched this app off: {{reason}}",
+        "capability": "This app uses {{capability}}, which you may not use. You can use the app but not change it."
+      },
+      "delete": {
+        "title": "Delete \"{{name}}\"?",
+        "body": "The app is removed for you and for everyone you shared it with. Chats stay in the chat history and cannot be continued."
+      },
+      "breadcrumb": "Breadcrumb",
+      "reload": "Reload",
+      "steps": {
+        "share": "Share it (optional)"
+      },
+      "capability": {
+        "model": "The chosen AI model",
+        "upload": "File upload",
+        "webSearch": "Web search",
+        "skills": "Skills"
+      },
+      "saveFirst": "Save your changes first",
+      "instructionsDesc": "Tell the AI what its task is and how it should answer. It reads this before every chat. People you share the app with can read it. (Also called the system prompt.)",
+      "capabilityNoun": {
+        "model": "the chosen AI model",
+        "upload": "file upload",
+        "webSearch": "web search",
+        "skills": "skills"
+      }
+    },
+    "share": {
+      "title": "Share \"{{name}}\"",
+      "help": "People you share with can use the app and read its instructions. The app can do for them only what you and they are both allowed to do. Before it searches the web or uses a connected system for them, it asks them.",
+      "private": "Not shared. Only you can use this app.",
+      "role": {
+        "user": "Can use",
+        "editor": "Can edit"
+      },
+      "everyone": "Everyone signed in",
+      "copyLink": "Copy link",
+      "linkCopied": "Link copied",
+      "notAllowed": "You cannot share apps. Ask an administrator.",
+      "changed": "Someone changed the app in the meantime. If you save again, the list shown here replaces the stored one."
+    },
+    "publish": {
+      "action": "Publish",
+      "titleNow": "Publish \"{{name}}\" for everyone?",
+      "titleLater": "Publish \"{{name}}\"?",
+      "bodyNow": "The app becomes a company app. Everyone who may use the company's apps sees it right away.",
+      "bodyLaterTools": "The app becomes a company app. Because it uses {{list}}, an administrator checks it and switches it on.",
+      "bodyLaterAlways": "The app becomes a company app. An administrator checks it and switches it on.",
+      "willUse": "The company app will be able to:",
+      "dropped": "Not taken over: {{list}}",
+      "plain": "Your rights could not be checked. The company app is created without web search, files, skills and connected systems.",
+      "managed": "From now on administrators manage the app. You can no longer change it, and you cannot take it back.",
+      "membersNow": "People you shared it with are sent to the company app.",
+      "membersLater": "Your app keeps working for you and the people you shared it with until they can use the company app.",
+      "submit": "Publish",
+      "waiting": "Published on {{date}}. An administrator has not switched the company app on yet. Your app keeps working until then.",
+      "changed": "Someone else changed this app. Reload and check it before you publish.",
+      "retired": {
+        "title": "This app is now a company app.",
+        "open": "Open \"{{name}}\"",
+        "chats": "Your earlier chats stay in your chat history."
+      },
+      "can": {
+        "model": "use the AI model {{model}}",
+        "upload": "take files from users",
+        "webSearch": "search the web",
+        "skills": "use the skills: {{list}}",
+        "skillsNone": "use skills",
+        "integration": "{{name}}: {{actions}}",
+        "none": "answer in the chat, and nothing else"
+      },
+      "tool": {
+        "webSearch": "web search",
+        "skills": "skills",
+        "integrations": "a connected system"
+      },
+      "droppedItem": "{{name}} ({{reason}})",
+      "reason": {
+        "offOnInstallation": "no longer allowed for personal apps",
+        "ownerMayNot": "the owner may not use it",
+        "youMayNot": "you may not use it",
+        "ownerInactive": "the owner's account is inactive",
+        "ownerStale": "the owner's rights are out of date"
+      }
+    },
+    "transfer": {
+      "action": "Hand over",
+      "title": "Hand over \"{{name}}\" to {{owner}}?",
+      "line1": "{{owner}} is asked to take the app over. Until {{owner}} accepts, you stay the owner and nothing changes.",
+      "line2": "After that, {{owner}} can change, share and delete the app. Everyone with \"Can edit\" gets \"Can use\".",
+      "line3": "You keep no access unless {{owner}} shares it with you.",
+      "submit": "Ask {{owner}}",
+      "withdraw": "Withdraw",
+      "received": "{{from}} wants to hand this app over to you.",
+      "receivedDuty": "As the owner you answer for what it does. Read the instructions below.",
+      "receivedMembers": "It is shared with: {{list}}",
+      "receivedEditors": "People with \"Can edit\" will only be able to use it.",
+      "try": "Try it",
+      "decline": "Decline",
+      "accept": "Take over",
+      "changed": "The app was changed after you opened it. Read it again.",
+      "tooMany": "You have {{max}} open offers. Withdraw one first.",
+      "pickHint": "Choose who should take the app over. You confirm in the next step.",
+      "search": "Search people",
+      "next": "Next",
+      "receivedMore": "{{count}} more…",
+      "showAll": "Show all"
+    },
+    "notice": {
+      "ownedBy": "{{owner}} owns this app. Administrators have not checked it.",
+      "mayUse": "It may use: {{list}}.",
+      "switchOn": "you switch it on in the chat",
+      "asksFirst": "It asks you before every search and every page it opens.",
+      "asksFirstSystems": "It asks you before every step in a connected system.",
+      "notForYou": "Not available to you here: {{list}}.",
+      "unavailable": "Not available in this app right now: {{list}}.",
+      "showInstructions": "Show instructions",
+      "collapsed": "Personal app by {{owner}}",
+      "suspended": "This app is not available at the moment. Ask {{owner}} or an administrator.",
+      "capability": {
+        "model": "the preferred AI model",
+        "upload": "files you attach",
+        "webSearch": "web search",
+        "skills": "skills"
+      },
+      "expand": "Show details",
+      "collapse": "Show less",
+      "instructionsTitle": "Instructions of \"{{name}}\"",
+      "instructionsSystem": "Instructions",
+      "instructionsTemplate": "Message template",
+      "instructionsTemplateHelp": "Each message you send is put into this text before it reaches the AI. {{placeholder}} stands for your message.",
+      "instructionsOptions": "What a choice sends",
+      "instructionsOption": "{{variable}}: “{{label}}” sends “{{value}}”",
+      "viewOffer": "View the offer"
+    },
+    "conflict": {
+      "owner": "As the owner you cannot leave your own app.",
+      "noDirectShare": "The app is shared with you through a group or with everyone. You cannot leave it yourself.",
+      "promoted": "The app is with the administrators now and cannot be changed.",
+      "disabled": "An administrator switched the app off. It cannot be changed or duplicated.",
+      "published": "Unpublish or delete the company app first.",
+      "idTaken": "An app with this ID already exists."
+    },
+    "denied": {
+      "publish": "You may not publish this app. Publishing is switched off, or your account lacks the permission.",
+      "edit": "You may no longer change this app. Your role in it may have changed.",
+      "userApps": "You may not create personal apps.",
+      "share": "You may not share personal apps.",
+      "ownerMayNotShare": "The owner of this app may not share it, so it cannot be shared."
+    }
   }
 }

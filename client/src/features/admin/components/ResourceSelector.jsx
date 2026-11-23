@@ -2,8 +2,25 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { useId, useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
+import { getLocalizedContent } from '../../../utils/localizeContent';
 import { CHECKBOX_CLASS } from './formStyles';
+
+/**
+ * The text a resource is shown and searched by. A name is either a plain text
+ * (models, groups) or one text per language (apps, prompts); an app written in
+ * one language has only that language, so `name.en` may not exist.
+ *
+ * @param {{ id: string, name?: string | Record<string, string> }} resource
+ * @param {string} [language] - The base language of the UI, such as `de`.
+ * @returns {string} The name in that language, else in another language the
+ *   resource has, else the ID.
+ */
+function resourceLabel(resource, language) {
+  const name = getLocalizedContent(resource.name, language);
+  return typeof name === 'string' && name.trim() !== '' ? name : String(resource.id);
+}
 
 function ResourceSelector({
   label,
@@ -11,9 +28,12 @@ function ResourceSelector({
   selectedResources,
   onSelectionChange,
   allowWildcard = true,
-  placeholder = 'Search and select...',
-  emptyMessage = 'No items selected'
+  placeholder,
+  emptyMessage
 }) {
+  const { t, i18n } = useTranslation();
+  // Localized names are stored under base languages, so `de-DE` reads `de`.
+  const uiLanguage = i18n.language?.split('-')[0] || undefined;
   const [searchTerm, setSearchTerm] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
   // The field label names the search input; the "All (*)" checkbox is named
@@ -23,35 +43,35 @@ function ResourceSelector({
 
   const isWildcard = selectedResources.includes('*');
 
+  // Every resource with the one text it is shown and searched by.
+  const namedResources = useMemo(
+    () =>
+      resources.map(resource => ({ id: resource.id, name: resourceLabel(resource, uiLanguage) })),
+    [resources, uiLanguage]
+  );
+
   // Filter available resources based on search term and exclude already selected
   const filteredResources = useMemo(() => {
     if (isWildcard) return [];
 
-    return resources.filter(resource => {
-      const name = resource.name?.en || resource.name || resource.id;
-      const matchesSearch = name.toLowerCase().includes(searchTerm.toLowerCase());
-      const notSelected = !selectedResources.includes(resource.id);
-      return matchesSearch && notSelected;
-    });
-  }, [resources, searchTerm, selectedResources, isWildcard]);
+    const term = searchTerm.toLowerCase();
+    return namedResources.filter(
+      resource =>
+        resource.name.toLowerCase().includes(term) && !selectedResources.includes(resource.id)
+    );
+  }, [namedResources, searchTerm, selectedResources, isWildcard]);
 
   // Get display names for selected resources
   const selectedResourcesWithNames = useMemo(() => {
-    if (isWildcard) return [{ id: '*', name: 'All (*)', isWildcard: true }];
+    if (isWildcard) return [{ id: '*', name: t('admin.resourceSelector.all'), isWildcard: true }];
 
     return selectedResources
       .map(id => {
-        const resource = resources.find(r => r.id === id);
-        return resource
-          ? {
-              id,
-              name: resource.name?.en || resource.name || resource.id,
-              isWildcard: false
-            }
-          : null;
+        const resource = namedResources.find(r => r.id === id);
+        return resource ? { id, name: resource.name, isWildcard: false } : null;
       })
       .filter(Boolean);
-  }, [selectedResources, resources, isWildcard]);
+  }, [selectedResources, namedResources, isWildcard, t]);
 
   const handleWildcardToggle = checked => {
     if (checked) {
@@ -103,10 +123,16 @@ function ResourceSelector({
               type="checkbox"
               checked={isWildcard}
               onChange={e => handleWildcardToggle(e.target.checked)}
-              aria-label={typeof label === 'string' && label ? `${label}: All (*)` : undefined}
+              aria-label={
+                typeof label === 'string' && label
+                  ? t('admin.groups.form.allWildcardFor', '{{label}}: All (*)', { label })
+                  : undefined
+              }
               className={`${CHECKBOX_CLASS} mr-2`}
             />
-            <span className="text-sm text-gray-700 dark:text-gray-300">All (*)</span>
+            <span className="text-sm text-gray-700 dark:text-gray-300">
+              {t('admin.groups.form.allWildcard', 'All (*)')}
+            </span>
           </label>
         )}
       </div>
@@ -136,7 +162,9 @@ function ResourceSelector({
             ))}
           </div>
         ) : (
-          <p className="text-sm text-gray-500 dark:text-gray-400 italic">{emptyMessage}</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400 italic">
+            {emptyMessage ?? t('admin.resourceSelector.noneSelected')}
+          </p>
         )}
       </div>
 
@@ -151,7 +179,7 @@ function ResourceSelector({
               onChange={e => setSearchTerm(e.target.value)}
               onFocus={handleSearchFocus}
               onBlur={handleSearchBlur}
-              placeholder={placeholder}
+              placeholder={placeholder ?? t('admin.resourceSelector.placeholder')}
               className="w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-md shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-admin-accent focus:border-admin-accent sm:text-sm placeholder-gray-500 dark:placeholder-gray-300"
             />
             <Icon
@@ -178,15 +206,15 @@ function ResourceSelector({
                         size="sm"
                         className="mr-2 text-green-700 dark:text-green-400"
                       />
-                      <span className="text-gray-900 dark:text-gray-100">
-                        {resource.name?.en || resource.name || resource.id}
-                      </span>
+                      <span className="text-gray-900 dark:text-gray-100">{resource.name}</span>
                     </div>
                   </button>
                 ))
               ) : (
                 <div className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">
-                  {searchTerm ? 'No matching items found' : 'Start typing to search...'}
+                  {searchTerm
+                    ? t('admin.resourceSelector.noMatches')
+                    : t('admin.resourceSelector.startTyping')}
                 </div>
               )}
             </div>
