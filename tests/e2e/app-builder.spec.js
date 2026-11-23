@@ -616,6 +616,9 @@ test.describe('Creating an app', () => {
     await page.goto('/admin/apps');
     await expect(page.getByRole('button', { name: 'New app' })).toBeVisible();
     await page.keyboard.press('ControlOrMeta+k');
+    // The palette focuses its input on the next animation frame. Keys typed
+    // before that are lost, and the rest ("ew app") matches the page "Apps".
+    await expect(page.getByPlaceholder('Search pages, actions, entities...')).toBeFocused();
     await page.keyboard.type('New app');
     await page.keyboard.press('Enter');
     await expect(page).toHaveURL(/\/admin\/apps\/new$/);
