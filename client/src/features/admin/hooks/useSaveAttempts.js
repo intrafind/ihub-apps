@@ -20,6 +20,11 @@ import { useCallback, useState } from 'react';
  */
 export default function useSaveAttempts(resourceId) {
   const [attempts, setAttempts] = useState({ resourceId, count: 0 });
+  // A new resource starts from 0 and the old count is dropped, so coming back
+  // to the first resource (say "new") does not bring its refused saves back.
+  if (attempts.resourceId !== resourceId) {
+    setAttempts({ resourceId, count: 0 });
+  }
   const count = attempts.resourceId === resourceId ? attempts.count : 0;
   const countSaveAttempt = useCallback(
     () =>

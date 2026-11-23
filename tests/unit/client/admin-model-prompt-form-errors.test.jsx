@@ -715,6 +715,31 @@ describe('save attempts and refusals per resource', () => {
     expect(await findSummaries(en.admin.formErrors.title)).toHaveLength(1);
   });
 
+  test('coming back to a blank form does not bring back its refused save', async () => {
+    render(
+      <MemoryRouter initialEntries={['/admin/prompts/new']}>
+        <GoTo path="/admin/prompts/summarize" />
+        <GoTo path="/admin/prompts/new" />
+        <Routes>
+          <Route path="/admin/prompts/:promptId" element={<AdminPromptEditPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+    await screen.findByLabelText(/^ID/);
+    await settle();
+    submit();
+    expect(await findSummaries(en.admin.formErrors.title)).toHaveLength(1);
+
+    // Away to a stored prompt, without saving it, and back to the blank form.
+    fireEvent.click(screen.getByRole('button', { name: 'go to /admin/prompts/summarize' }));
+    await waitFor(() => expect(screen.getByLabelText(/^ID/)).toHaveValue('summarize'));
+    await settle();
+    fireEvent.click(screen.getByRole('button', { name: 'go to /admin/prompts/new' }));
+    await waitFor(() => expect(screen.getByLabelText(/^ID/)).toHaveValue(''));
+    await settle();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
   test('a taken ID refused in the JSON mode is said on the page', async () => {
     mockApi.fetchAdminPrompts.mockResolvedValue([]);
     mockApi.createPrompt.mockRejectedValue(
